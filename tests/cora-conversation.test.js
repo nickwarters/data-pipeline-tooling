@@ -1,7 +1,12 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { installDom, findByClass, findAllByClass } from './_dom-stub.js';
+import {
+  installDom,
+  findByClass,
+  findAllByClass,
+  waitForRender,
+} from './_dom-stub.js';
 
 installDom();
 
@@ -484,7 +489,7 @@ test('CORAConversation: visibilitychange fires _refresh when document is not hid
   const handlers = docListeners['visibilitychange'] ?? [];
   for (const h of handlers) h();
 
-  await /** @type {any} */ (el).whenIdle();
+  await waitForRender(/** @type {any} */ (el));
 
   assert.equal(
     findAllByClass(el, 'cora-conversation-message').length,
@@ -570,7 +575,6 @@ test('CORAConversation: visibilitychange does NOT call _refresh when document is
   const handlers = docListeners['visibilitychange'] ?? [];
   for (const h of handlers) h();
 
-  await /** @type {any} */ (el).whenIdle();
   // Messages should NOT be updated since document is hidden
   assert.equal(
     findAllByClass(el, 'cora-conversation-message').length,

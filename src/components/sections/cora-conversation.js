@@ -3,7 +3,6 @@ import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
 import { EmptyState } from '../../lib/empty-state.js';
 import { DEFAULT_SECTION_HEADINGS } from '../../lib/section-labels.js';
-import { trackAsyncTasks } from '../../lib/async-tasks.js';
 
 /** @typedef {import('../../sharepoint-client.js').Message} Message */
 /** @typedef {import('../../sharepoint-client.js').SharePointClient} SharePointClient */
@@ -191,7 +190,6 @@ export class CORAConversation extends ShellElement {
     this.access = 'edit';
     /** @type {string} Section heading (overridable via `CaseTypeConfig.sectionLabels.conversation`). */
     this.heading = DEFAULT_SECTION_HEADINGS.conversation;
-    this._trackAsync = trackAsyncTasks(this);
   }
 
   connectedCallback() {
@@ -200,8 +198,9 @@ export class CORAConversation extends ShellElement {
       typeof document !== 'undefined' &&
       typeof document.addEventListener === 'function'
     ) {
-      const binding = bindConversationVisibility(document, () =>
-        this._trackAsync(this._refresh())
+      const binding = bindConversationVisibility(
+        document,
+        () => void this._refresh()
       );
       this._visibilityHandler = binding.handler;
       this._unbindVisibility = binding.disconnect;

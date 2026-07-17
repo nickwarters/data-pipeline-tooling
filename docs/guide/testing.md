@@ -68,12 +68,13 @@ also refuses list names without the configured `uat_` prefix.
 
 ## Deterministic Async Tests
 
-Asynchronously loaded views expose `whenIdle()` through the shared
-`trackAsyncTasks()` helper. Tests should await that completion signal (or the
-operation promise returned by the API they called) rather than sleeping for a
-fixed duration, polling a deadline, or flushing an arbitrary number of event
-loop turns. Timer behavior uses Node's mock timers; the one real timer-adapter
-test may replace `setTimeout` and invoke its callback directly.
+Tests should await the operation promise returned by the API they called or use
+the DOM stub's event-driven `waitFor(() => observableCondition)` helper. Keep
+completion detection in the test: production views should not expose test-only
+idle state or register their promises with a task tracker. Do not sleep for a
+fixed duration, poll a deadline, or flush an arbitrary number of event-loop
+turns. Timer behavior uses Node's mock timers; the one real timer-adapter test
+may replace `setTimeout` and invoke its callback directly.
 
 `tests/timing-assumptions-contract.test.js` prevents real-time sleeps and
 deadline polling from being added to JavaScript tests.
@@ -222,8 +223,12 @@ test('root route: renders home sections', () => {
 Await the operation that represents completion. Do not settle a test with a
 fixed delay or by guessing how many microtasks an implementation needs.
 
-- Async views should expose `whenIdle()` through `trackAsyncTasks()`; DOM tests
-  can await the subtree with `whenIdle(host)` from `tests/_dom-stub.js`.
+- DOM tests should use `waitFor(() => observableCondition)` from
+  `tests/_dom-stub.js`; the predicate should name the rendered state or external
+  call the test asserts, rather than a private task queue.
+- Use `waitForRender(host)` only when one reactive render is itself the
+  completion boundary. Multi-stage work should wait for its final observable
+  state with `waitFor()`.
 - `SaveQueue.whenIdle()` observes the real debounce/retry chain without forcing
   an early flush. Inject `setTimer`, `clearTimer`, or `sleep` when a test needs
   to control a debounce or retry boundary precisely.

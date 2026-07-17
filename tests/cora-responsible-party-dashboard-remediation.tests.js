@@ -9,7 +9,7 @@ import {
   makeCase,
   oneSource,
   makeClient,
-  whenIdle,
+  waitForRender,
 } from './helpers/cora-responsible-party-dashboard.js';
 
 // Capability: open remediation actions, filters, and ordering.
@@ -36,7 +36,7 @@ test('ResponsiblePartyDashboard: remediation table includes cases with uncomplet
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await whenIdle(host);
+  await waitForRender(host);
   const table = caseTableInSection(host, 'cora-rp-remediation');
   assert.ok(table, 'remediation table should exist');
   assert.equal(table.cases.length, 1);
@@ -62,7 +62,7 @@ test('ResponsiblePartyDashboard: remediation table excludes cases where all acti
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await whenIdle(host);
+  await waitForRender(host);
   const table = caseTableInSection(host, 'cora-rp-remediation');
   assert.ok(table, 'remediation table should exist');
   assert.equal(table.cases.length, 0);
@@ -100,7 +100,7 @@ test('ResponsiblePartyDashboard: remediation table renders row for each case wit
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await whenIdle(host);
+  await waitForRender(host);
   const rows = findAll(host, 'tr').filter((r) =>
     r.className.includes('cora-remediation-row')
   );
@@ -141,7 +141,7 @@ test('ResponsiblePartyDashboard: remediation row is flagged as overdue when dueD
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await whenIdle(host);
+  await waitForRender(host);
   const rows = findAll(host, 'tr').filter((r) =>
     r.className.includes('cora-remediation-row')
   );
@@ -181,7 +181,7 @@ test('ResponsiblePartyDashboard: remediation table filterable by case type via s
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await whenIdle(host);
+  await waitForRender(host);
 
   const select = /** @type {any} */ (
     findAll(host, 'select').find(
@@ -238,7 +238,7 @@ test('ResponsiblePartyDashboard: sort by due date ascending puts earliest due fi
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await whenIdle(host);
+  await waitForRender(host);
   const rows = findAll(host, 'tr').filter((r) =>
     r.className.includes('cora-remediation-row')
   );
@@ -264,7 +264,7 @@ test('ResponsiblePartyDashboard: select change with null e.target falls back to 
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await whenIdle(host);
+  await waitForRender(host);
 
   const select = /** @type {any} */ (
     findAll(host, 'select').find(
@@ -313,7 +313,7 @@ test('ResponsiblePartyDashboard: remediation and messages tables fall back to ca
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await whenIdle(host);
+  await waitForRender(host);
 
   const remediationTable = caseTableInSection(host, 'cora-rp-remediation');
   assert.ok(remediationTable, 'remediation table should exist');
@@ -359,7 +359,7 @@ test('ResponsiblePartyDashboard: getOpenActions treats an answer with no remedia
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await whenIdle(host);
+  await waitForRender(host);
 
   const remediationTable = caseTableInSection(host, 'cora-rp-remediation');
   assert.ok(remediationTable, 'remediation table should exist');

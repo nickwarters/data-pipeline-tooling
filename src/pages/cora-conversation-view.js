@@ -2,7 +2,6 @@
 import { signal } from '../lib/signal.js';
 import { reactive } from '../lib/view.js';
 import { h } from '../lib/html.js';
-import { trackAsyncTasks } from '../lib/async-tasks.js';
 import {
   UnknownCaseTypeError,
   loadCaseTypeConfig,
@@ -73,7 +72,7 @@ export function ConversationView({
       caseListOptions: caseListOptions.get(),
     })
   );
-  trackAsyncTasks(host)(fetchData());
+  void fetchData();
   return host;
 }
 

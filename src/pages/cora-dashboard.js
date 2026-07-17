@@ -2,7 +2,6 @@
 import { signal } from '../lib/signal.js';
 import { reactive } from '../lib/view.js';
 import { h } from '../lib/html.js';
-import { trackAsyncTasks } from '../lib/async-tasks.js';
 import { caseRouteFor, conversationRouteFor } from '../lib/case-route-links.js';
 import '../components/collections/cora-case-table.js';
 import '../components/sections/cora-allocation.js';
@@ -52,8 +51,6 @@ export function DashboardPage({
   allCaseSources = [],
   allocationSources = [],
 }) {
-  /** @type {<T>(task: Promise<T>) => Promise<T>} */
-  let track = (task) => task;
   /** @type {import('../lib/signal.js').Signal<CaseRow[]>} */
   const cases = signal(/** @type {CaseRow[]} */ ([]));
 
@@ -80,12 +77,11 @@ export function DashboardPage({
       allocationSources,
       cases: cases.get(),
       onAllocated: () => {
-        track(fetchData());
+        void fetchData();
       },
     })
   );
-  track = trackAsyncTasks(host);
-  track(fetchData());
+  void fetchData();
   return host;
 }
 

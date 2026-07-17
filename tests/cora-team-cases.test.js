@@ -1,7 +1,13 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { installDom, StubEl, useElementClass, whenIdle } from './_dom-stub.js';
+import {
+  installDom,
+  StubEl,
+  useElementClass,
+  waitFor,
+  waitForRender,
+} from './_dom-stub.js';
 import { assertAllCoraElementsDefined } from './helpers/assert-defined-elements.js';
 
 installDom();
@@ -99,7 +105,7 @@ test('cora-team-cases: renders heading', async () => {
     queryString: '?manager=me&role=reviewer-manager',
   });
 
-  await whenIdle(host);
+  await waitForRender(host);
   assert.ok(hasText(host, 'Team Cases'), 'should render "Team Cases" heading');
 });
 
@@ -115,7 +121,7 @@ test('cora-team-cases: renders empty state when no cases returned', async () => 
     queryString: '?manager=me&role=reviewer-manager',
   });
 
-  await whenIdle(host);
+  await waitForRender(host);
   assert.ok(
     hasText(host, 'No cases match the selected filters.'),
     'should render empty-state message'
@@ -139,7 +145,7 @@ test('cora-team-cases: renders cora-case-table with cases when results returned'
     queryString: '?manager=me&role=reviewer-manager',
   });
 
-  await whenIdle(host);
+  await waitForRender(host);
   const table = findTag(host, 'cora-case-table');
   assert.ok(table, 'should render cora-case-table');
   assert.deepEqual(table.cases, cases, 'should pass cases to table');
@@ -162,7 +168,7 @@ test('cora-team-cases: passes query-string params to fetcher (caseType scoping)'
     queryString: '?manager=me&role=reviewer-manager&caseType=example-review',
   });
 
-  await whenIdle(host);
+  await waitForRender(host);
   assert.equal(calls.length, 1, 'should query only the specified caseType');
   assert.equal(calls[0].caseType, 'example-review');
 });
@@ -182,7 +188,7 @@ test('cora-team-cases: passes an explicit { listName } to the fetcher', async ()
     queryString: '?manager=me&role=reviewer-manager',
   });
 
-  await whenIdle(host);
+  await waitForRender(host);
   assert.equal(opts.length, 1);
   assert.equal(opts[0].listName, 'ExampleReviews');
 });
@@ -199,7 +205,7 @@ test('cora-team-cases: renders back link to #/reports', async () => {
     queryString: '',
   });
 
-  await whenIdle(host);
+  await waitForRender(host);
   const link = findTag(host, 'a');
   assert.ok(link, 'should render back link');
   assert.equal(link._attrs['href'], '#/reports');
@@ -213,7 +219,6 @@ test('cora-team-cases: renders heading and back link without fetching when clien
     queryString: '',
   });
 
-  await whenIdle(host);
   assert.ok(hasText(host, 'Team Cases'), 'should still render heading');
   assert.ok(
     !findTag(host, 'cora-case-table'),
@@ -259,7 +264,10 @@ test('cora-team-cases: applies Case Type dashboardColumns when filtered to a sin
       queryString: `?manager=me&role=reviewer-manager&caseType=${fixtureSlug}`,
     });
 
-    await whenIdle(host);
+    await waitFor(
+      () => Array.isArray(findTag(host, 'cora-case-table')?.columns),
+      'Case Type dashboard columns'
+    );
     const table = findTag(host, 'cora-case-table');
     assert.ok(table, 'should render cora-case-table');
     assert.ok(
@@ -304,7 +312,7 @@ test('cora-team-cases: keeps default columns when the filtered Case Type declare
     queryString: '?manager=me&role=reviewer-manager&caseType=example-review',
   });
 
-  await whenIdle(host);
+  await waitForRender(host);
   const table = findTag(host, 'cora-case-table');
   assert.ok(table, 'should render cora-case-table');
   assert.strictEqual(
@@ -327,7 +335,7 @@ test('cora-team-cases: ignores dashboardColumns lookup for an unknown Case Type 
     queryString: '?manager=me&role=reviewer-manager&caseType=nope',
   });
 
-  await whenIdle(host);
+  await waitForRender(host);
   const table = findTag(host, 'cora-case-table');
   assert.ok(table, 'should still render cora-case-table');
   assert.strictEqual(
@@ -351,7 +359,7 @@ test('cora-team-cases: does NOT apply dashboardColumns in a mixed multi-Case-Typ
     queryString: '?manager=me&role=reviewer-manager',
   });
 
-  await whenIdle(host);
+  await waitForRender(host);
   const table = findTag(host, 'cora-case-table');
   assert.ok(table, 'should render cora-case-table');
   assert.strictEqual(
@@ -383,7 +391,6 @@ test('cora-team-cases: renders heading and back link without fetching when curre
     queryString: '',
   });
 
-  await whenIdle(host);
   assert.ok(hasText(host, 'Team Cases'), 'should still render heading');
   assert.ok(
     !findTag(host, 'cora-case-table'),

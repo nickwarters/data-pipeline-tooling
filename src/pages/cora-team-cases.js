@@ -2,7 +2,6 @@
 import { signal } from '../lib/signal.js';
 import { reactive } from '../lib/view.js';
 import { h } from '../lib/html.js';
-import { trackAsyncTasks } from '../lib/async-tasks.js';
 import { parseTeamCasesParams } from '../services/team-cases-params.js';
 import { fetchTeamCases } from '../services/team-cases-fetcher.js';
 import { caseRouteFor } from '../lib/case-route-links.js';
@@ -91,7 +90,7 @@ export function TeamCasesPage({
       dashboardColumns: dashboardColumns.get(),
     })
   );
-  trackAsyncTasks(host)(fetchData());
+  void fetchData();
   return host;
 }
 

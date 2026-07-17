@@ -1,7 +1,7 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { installDom, whenIdle } from './_dom-stub.js';
+import { installDom, waitForRender } from './_dom-stub.js';
 import { initRouter, routeRegistrationSpy } from './helpers/router.js';
 
 installDom();
@@ -121,7 +121,7 @@ test('routes-team-cases: passes query string from location hash to the page', as
     })
   );
   await router.navigate('#/team-cases?manager=me&status=overdue');
-  await whenIdle(mounted[0]);
+  await waitForRender(mounted[0]);
 
   assert.equal(mounted.length, 1);
   assert.equal(calls.length, 1, 'should fetch using the parsed query string');

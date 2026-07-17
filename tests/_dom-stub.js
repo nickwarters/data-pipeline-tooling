@@ -1,6 +1,13 @@
 // @ts-check
 import { isolateBrowserGlobals } from './helpers/browser-globals.js';
 
+/** @type {Set<() => void>} */
+const domMutationObservers = new Set();
+
+function notifyDomMutation() {
+  for (const observer of [...domMutationObservers]) observer();
+}
+
 /**
  * Shared DOM stub for tests of `cora-*` components and route modules.
  *
@@ -121,6 +128,7 @@ export class StubEl {
     for (const c of this._children) c.parentNode = null;
     this._children = [];
     for (const c of cs) this.appendChild(c);
+    notifyDomMutation();
   }
   addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
     (this._listeners[t] ??= []).push(h);
@@ -312,36 +320,54 @@ export async function flush() {
 }
 
 /**
- * Await every explicit async-view completion signal in a stub DOM subtree.
- * Repeat after each wait because a parent load may replace its children with
- * newly-created async views.
+ * Wait until an observable test condition becomes true. The predicate is
+ * checked immediately and after every stub-DOM render, so success is driven by
+ * the state the test cares about rather than a delay or a production-only
+ * promise registry. The timer only bounds a broken test; it never settles a
+ * successful one.
  *
- * @param {any} root
+ * @param {() => boolean} predicate
+ * @param {string} [description]
+ * @returns {Promise<void>}
  */
-export async function whenIdle(root) {
-  /** @returns {any[]} */
-  const collect = () => {
-    /** @type {any[]} */
-    const nodes = typeof root.whenIdle === 'function' ? [root] : [];
-    walk(root, (node) => {
-      const candidate = /** @type {any} */ (node);
-      if (typeof candidate.whenIdle === 'function') nodes.push(candidate);
-    });
-    return nodes;
-  };
+export function waitFor(predicate, description = 'DOM condition') {
+  if (predicate()) return Promise.resolve();
 
-  let nodes = collect();
-  while (true) {
-    await Promise.all(nodes.map((node) => node.whenIdle()));
-    const next = collect();
-    if (
-      next.length === nodes.length &&
-      next.every((node, index) => node === nodes[index])
-    ) {
-      return;
-    }
-    nodes = next;
-  }
+  return new Promise((resolve, reject) => {
+    const cleanup = () => {
+      clearTimeout(timeout);
+      domMutationObservers.delete(check);
+    };
+    const check = () => {
+      if (!predicate()) return;
+      cleanup();
+      resolve();
+    };
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error(`Timed out waiting for ${description}`));
+    }, 5000);
+
+    domMutationObservers.add(check);
+  });
+}
+
+/**
+ * Wait for a reactive host to replace its current children. Capture happens at
+ * the call site, so synchronous setup is ignored and the next render is the
+ * completion event. Prefer `waitFor()` when the expected state is clearer than
+ * a render boundary.
+ *
+ * @param {HTMLElement} host
+ * @returns {Promise<void>}
+ */
+export function waitForRender(host) {
+  const stub = /** @type {StubEl} */ (/** @type {unknown} */ (host));
+  const children = stub._children;
+  return waitFor(
+    () => stub._children !== children,
+    `${stub._tagName || stub.tagName || 'host'} to render`
+  );
 }
 
 /**

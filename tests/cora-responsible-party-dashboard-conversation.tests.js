@@ -9,7 +9,7 @@ import {
   makeCase,
   oneSource,
   makeClient,
-  whenIdle,
+  waitForRender,
 } from './helpers/cora-responsible-party-dashboard.js';
 
 // Capability: unread conversations and open actions.
@@ -39,7 +39,7 @@ test('ResponsiblePartyDashboard: unread messages includes cases with reviewer me
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await whenIdle(host);
+  await waitForRender(host);
   const table = caseTableInSection(host, 'cora-rp-messages');
   assert.ok(table);
   assert.equal(table.cases.length, 1);
@@ -64,7 +64,7 @@ test('ResponsiblePartyDashboard: unread messages includes cases with reviewer me
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await whenIdle(host);
+  await waitForRender(host);
   const table = caseTableInSection(host, 'cora-rp-messages');
   assert.ok(table);
   assert.equal(table.cases.length, 1);
@@ -93,7 +93,7 @@ test('ResponsiblePartyDashboard: unread messages excludes cases where RP replied
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await whenIdle(host);
+  await waitForRender(host);
   const table = caseTableInSection(host, 'cora-rp-messages');
   assert.ok(table);
   assert.equal(table.cases.length, 0);
@@ -106,7 +106,7 @@ test('ResponsiblePartyDashboard: unread messages excludes cases with empty conve
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await whenIdle(host);
+  await waitForRender(host);
   const table = caseTableInSection(host, 'cora-rp-messages');
   assert.ok(table);
   assert.equal(table.cases.length, 0);
@@ -143,7 +143,7 @@ test('ResponsiblePartyDashboard: unread messages section uses cora-case-table wi
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await whenIdle(host);
+  await waitForRender(host);
   const allTables = findCaseTables(host);
   assert.equal(
     allTables.length,
@@ -180,7 +180,7 @@ test('ResponsiblePartyDashboard: cora-case-open on unread table invokes onOpenCo
     allCaseSources: oneSource,
     onOpenConversation: (caseRow) => opened.push(caseRow),
   });
-  await whenIdle(host);
+  await waitForRender(host);
 
   const unreadTable = caseTableInSection(host, 'cora-rp-messages');
   assert.ok(unreadTable, 'unread section should contain a cora-case-table');
@@ -210,7 +210,7 @@ test('ResponsiblePartyDashboard: cora-case-open with no onOpenConversation prop 
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await whenIdle(host);
+  await waitForRender(host);
 
   const unreadTable = caseTableInSection(host, 'cora-rp-messages');
   const handler = unreadTable._listeners['cora-case-open']?.[0];
@@ -240,7 +240,7 @@ test('ResponsiblePartyDashboard: Open button click invokes onOpenConversation wi
     allCaseSources: oneSource,
     onOpenConversation: (caseRow) => opened.push(caseRow),
   });
-  await whenIdle(host);
+  await waitForRender(host);
 
   const messagesSection = findAll(host, 'section').find(
     (s) => s.className === 'cora-rp-messages'
@@ -277,7 +277,7 @@ test('ResponsiblePartyDashboard: Open button click with no onOpenConversation pr
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await whenIdle(host);
+  await waitForRender(host);
 
   const messagesSection = findAll(host, 'section').find(
     (s) => s.className === 'cora-rp-messages'
@@ -309,7 +309,7 @@ test('ResponsiblePartyDashboard: lastMessage column falls back to null/em-dash w
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await whenIdle(host);
+  await waitForRender(host);
 
   const messagesTable = caseTableInSection(host, 'cora-rp-messages');
   assert.ok(messagesTable, 'messages table should exist');

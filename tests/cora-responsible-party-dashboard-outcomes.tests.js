@@ -10,7 +10,7 @@ import {
   outcomeTotal,
   outcomeCount,
   outcomeMonthRow,
-  whenIdle,
+  waitForRender,
 } from './helpers/cora-responsible-party-dashboard.js';
 
 // Capability: twelve-month outcome summaries.
@@ -37,7 +37,7 @@ test('ResponsiblePartyDashboard: outcome summary includes completed cases within
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await whenIdle(host);
+  await waitForRender(host);
   assert.equal(outcomeTotal(host), 2);
 });
 
@@ -65,7 +65,7 @@ test('ResponsiblePartyDashboard: outcome summary excludes completed cases older 
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await whenIdle(host);
+  await waitForRender(host);
   assert.equal(outcomeTotal(host), 1, 'only the recent case counts');
 });
 
@@ -84,7 +84,7 @@ test('ResponsiblePartyDashboard: outcome summary excludes in-progress cases', as
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await whenIdle(host);
+  await waitForRender(host);
   assert.equal(outcomeTotal(host), 1);
 });
 
@@ -114,7 +114,7 @@ test('ResponsiblePartyDashboard: outcome summary groups by outcome type', async 
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await whenIdle(host);
+  await waitForRender(host);
   assert.equal(outcomeCount(host, 'Pass'), 2);
   assert.equal(outcomeCount(host, 'Fail'), 1);
 });
@@ -143,7 +143,7 @@ test('ResponsiblePartyDashboard: two completed cases in same month+outcome incre
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await whenIdle(host);
+  await waitForRender(host);
 
   assert.equal(outcomeTotal(host), 2);
   assert.equal(
@@ -178,7 +178,7 @@ test('ResponsiblePartyDashboard: case with null outcome uses "Unknown" label', a
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await whenIdle(host);
+  await waitForRender(host);
 
   assert.equal(
     outcomeCount(host, 'Unknown'),
@@ -234,7 +234,7 @@ test('ResponsiblePartyDashboard: months are sorted chronologically and a month m
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await whenIdle(host);
+  await waitForRender(host);
 
   const middleRow = outcomeMonthRow(
     host,

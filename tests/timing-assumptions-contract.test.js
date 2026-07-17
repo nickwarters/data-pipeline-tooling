@@ -36,7 +36,7 @@ test('tests do not wait for real timers to guess when async work finished', () =
   assert.deepEqual(
     offenders,
     [],
-    'await an operation/whenIdle(), or advance Node mock timers explicitly'
+    'await an operation/waitFor observable state, or advance Node mock timers explicitly'
   );
 });
 
@@ -62,6 +62,6 @@ test('tests do not yield to setImmediate to guess when async work finished', () 
   assert.deepEqual(
     offenders,
     [],
-    'await an operation promise or whenIdle() instead of yielding a turn'
+    'await an operation promise or waitFor observable state instead of yielding a turn'
   );
 });

@@ -1,7 +1,7 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { installDom, whenIdle } from './_dom-stub.js';
+import { installDom, waitForRender } from './_dom-stub.js';
 /** @typedef {import('./_dom-stub.js').StubEl} StubEl */
 
 installDom();
@@ -114,7 +114,7 @@ test('ControlsDashboard: reads the indexed open-appeal set server-side, oldest r
     allCaseSources: oneSource,
     onOpenCase: () => {},
   });
-  await whenIdle(host);
+  await waitForRender(host);
 
   assert.ok(calls.length >= 1, 'should query the case list');
   for (const { filter } of calls) {
@@ -185,8 +185,7 @@ test('ControlsDashboard: pages until a short page, accumulating every open appea
     allCaseSources: oneSource,
     onOpenCase: () => {},
   });
-  await whenIdle(host);
-  await whenIdle(host);
+  await waitForRender(host);
 
   const section = findSection(host, 'cora-controls-appeals');
   const table = /** @type {any} */ (findAll(section, 'cora-case-table')[0]);
@@ -251,8 +250,7 @@ test('ControlsDashboard: fans out across multiple sources, pages each to exhaust
     allCaseSources: sources,
     onOpenCase: () => {},
   });
-  await whenIdle(host);
-  await whenIdle(host);
+  await waitForRender(host);
 
   assert.deepEqual(
     [...new Set(calls.map((c) => c.opts.listName))].sort(),
@@ -306,7 +304,7 @@ test('ControlsDashboard: merge sort covers equal timestamps and a row with no op
     allCaseSources: sources,
     onOpenCase: () => {},
   });
-  await whenIdle(host);
+  await waitForRender(host);
 
   const section = findSection(host, 'cora-controls-appeals');
   const table = /** @type {any} */ (findAll(section, 'cora-case-table')[0]);
@@ -320,7 +318,6 @@ test('ControlsDashboard: merge sort covers equal timestamps and a row with no op
 
 test('ControlsDashboard: renders nothing and does not throw when client is null', async () => {
   const host = ControlsDashboard({ client: null, onOpenCase: () => {} });
-  await whenIdle(host);
   assert.equal(/** @type {any} */ (host)._children.length, 0);
 });
 
@@ -342,7 +339,7 @@ test('ControlsDashboard: columns expose appeal detail and render reference/raise
     allCaseSources: oneSource,
     onOpenCase: (/** @type {CaseRow} */ c) => opened.push(c),
   });
-  await whenIdle(host);
+  await waitForRender(host);
 
   const section = findSection(host, 'cora-controls-appeals');
   const table = /** @type {any} */ (findAll(section, 'cora-case-table')[0]);
@@ -392,7 +389,7 @@ test('ControlsDashboard: appeal columns fall back to empty/em-dash when no open 
     allCaseSources: oneSource,
     onOpenCase: () => {},
   });
-  await whenIdle(host);
+  await waitForRender(host);
 
   const section = findSection(host, 'cora-controls-appeals');
   const table = /** @type {any} */ (findAll(section, 'cora-case-table')[0]);
@@ -426,7 +423,7 @@ test('ControlsDashboard: reference getValue falls back to id, and open is a no-o
     client: /** @type {any} */ (client),
     allCaseSources: oneSource,
   });
-  await whenIdle(host);
+  await waitForRender(host);
 
   const section = findSection(host, 'cora-controls-appeals');
   const table = /** @type {any} */ (findAll(section, 'cora-case-table')[0]);
@@ -463,7 +460,7 @@ test('ControlsDashboard: Open button invokes onOpenCase with the case row', asyn
     allCaseSources: oneSource,
     onOpenCase: (/** @type {CaseRow} */ c) => opened.push(c),
   });
-  await whenIdle(host);
+  await waitForRender(host);
 
   const section = findSection(host, 'cora-controls-appeals');
   const table = findAll(section, 'cora-case-table')[0];

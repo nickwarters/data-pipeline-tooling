@@ -2,7 +2,7 @@
 import './_register-example-review.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { installDom, flush, whenIdle } from './_dom-stub.js';
+import { installDom, flush, waitForRender } from './_dom-stub.js';
 import { initRouter, routeRegistrationSpy } from './helpers/router.js';
 
 installDom();
@@ -165,7 +165,7 @@ test('case route: source-key route passes caseType through to the page', async (
 
   register(router, makeContext(calls));
   await router.navigate('#/case/example-review/456');
-  await whenIdle(mounted[0]);
+  await waitForRender(mounted[0]);
 
   assert.equal(mounted.length, 1, 'route mounts a single page host');
   assert.equal(mounted[0].className, 'cora-case-review');

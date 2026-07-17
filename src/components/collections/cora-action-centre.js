@@ -2,7 +2,6 @@
 import { signal } from '../../lib/signal.js';
 import { reactive } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
-import { trackAsyncTasks } from '../../lib/async-tasks.js';
 import { EmptyState } from '../../lib/empty-state.js';
 import { caseRouteFor } from '../../lib/case-route-links.js';
 import {
@@ -292,8 +291,6 @@ export function ActionCentre({
   onOpenCase,
   now = new Date(),
 }) {
-  /** @type {<T>(task: Promise<T>) => Promise<T>} */
-  let track = (task) => task;
   const allReasons = reasonsForCapabilities(capabilities);
 
   const needsActionNow = signal(true);
@@ -402,13 +399,13 @@ export function ActionCentre({
     } else {
       next.add(reason.id);
       expanded.set(next);
-      track(loadPage(reason, 0));
+      void loadPage(reason, 0);
     }
   }
 
   /** @param {Reason} reason */
   function showMore(reason) {
-    track(loadPage(reason, pages.get()[reason.id].length));
+    void loadPage(reason, pages.get()[reason.id].length);
   }
 
   /** @param {boolean} value */
@@ -418,7 +415,7 @@ export function ActionCentre({
     pages.set({});
     await loadCounts();
     for (const reason of currentReasons()) {
-      if (expanded.get().has(reason.id)) track(loadPage(reason, 0));
+      if (expanded.get().has(reason.id)) void loadPage(reason, 0);
     }
   }
 
@@ -436,7 +433,7 @@ export function ActionCentre({
       },
       {
         onToggleNeedsAction: (value) => {
-          track(toggleNeedsAction(value));
+          void toggleNeedsAction(value);
         },
         onToggleGroup: toggleGroup,
         onShowMore: showMore,
@@ -444,8 +441,6 @@ export function ActionCentre({
       }
     )
   );
-  track = trackAsyncTasks(host);
-
   async function init() {
     if (!client || typeof client.countCases !== 'function') return;
     await loadCounts();
@@ -458,6 +453,6 @@ export function ActionCentre({
   // dependency to — an enclosing render effect such as the dashboard's. Without
   // this, toggling the Action Centre would re-render the whole dashboard and
   // rebuild a fresh Action Centre, discarding the toggle.
-  track(Promise.resolve().then(init));
+  void Promise.resolve().then(init);
   return host;
 }

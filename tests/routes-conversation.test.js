@@ -2,7 +2,7 @@
 import './_register-example-review.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { installDom, whenIdle } from './_dom-stub.js';
+import { installDom, waitForRender } from './_dom-stub.js';
 import { initRouter, routeRegistrationSpy } from './helpers/router.js';
 
 installDom();
@@ -151,7 +151,7 @@ test('conversation route: source-key route passes caseType through to the fetche
     })
   );
   await router.navigate('#/conversation/example-review/123');
-  await whenIdle(rendered[0]);
+  await waitForRender(rendered[0]);
 
   assert.equal(getCaseCalls.length, 1);
   assert.equal(getCaseCalls[0][0], '123');

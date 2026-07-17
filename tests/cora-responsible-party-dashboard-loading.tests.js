@@ -8,7 +8,7 @@ import {
   makeCase,
   oneSource,
   makeClient,
-  whenIdle,
+  waitForRender,
 } from './helpers/cora-responsible-party-dashboard.js';
 
 // Capability: loading prerequisites and source fan-out.
@@ -21,7 +21,6 @@ test('ResponsiblePartyDashboard: renders nothing when client is null', async () 
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await whenIdle(host);
   assert.equal(/** @type {any} */ (host)._children.length, 0);
 });
 
@@ -30,7 +29,6 @@ test('ResponsiblePartyDashboard: renders nothing when currentUserId is empty', a
     client: /** @type {any} */ (makeClient([])),
     currentUserId: '',
   });
-  await whenIdle(host);
   assert.equal(/** @type {any} */ (host)._children.length, 0);
 });
 
@@ -42,7 +40,7 @@ test('ResponsiblePartyDashboard: calls listCases with responsibleParty filter an
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await whenIdle(host);
+  await waitForRender(host);
   assert.equal(calls.length, 1);
   assert.deepEqual(calls[0].filter, { responsibleParty: 'user-rp' });
   assert.equal(calls[0].opts.listName, 'Cases-ExampleReview');
@@ -76,7 +74,7 @@ test('ResponsiblePartyDashboard: fans out one listCases per source (with its lis
     currentUserId: 'user-rp',
     allCaseSources: sources,
   });
-  await whenIdle(host);
+  await waitForRender(host);
 
   assert.deepEqual(
     calls.map((c) => c.opts.listName).sort(),
@@ -95,7 +93,7 @@ test('ResponsiblePartyDashboard: renders 3 sections after fetch resolves', async
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await whenIdle(host);
+  await waitForRender(host);
   // outcome section + remediation section + messages section
   assert.equal(/** @type {any} */ (host)._children.length, 3);
 });

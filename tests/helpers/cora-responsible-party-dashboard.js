@@ -8,7 +8,7 @@ import {
   installDom,
   ConnectingStubEl,
   useElementClass,
-  whenIdle,
+  waitForRender,
 } from '../_dom-stub.js';
 
 installDom();
@@ -158,4 +158,4 @@ export function outcomeMonthRow(host, month) {
   return counts;
 }
 
-export { whenIdle };
+export { waitForRender };

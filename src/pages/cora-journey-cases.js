@@ -2,7 +2,6 @@
 import { signal } from '../lib/signal.js';
 import { reactive } from '../lib/view.js';
 import { h } from '../lib/html.js';
-import { trackAsyncTasks } from '../lib/async-tasks.js';
 import { caseRouteFor } from '../lib/case-route-links.js';
 import { fetchJourneyCases } from '../services/journey-cases-fetcher.js';
 import '../components/collections/cora-case-table.js';
@@ -33,7 +32,7 @@ export function JourneyCasesPage({ client, journeyCaseSources }) {
   const host = reactive(() =>
     renderJourneyCases({ client, cases: cases.get() })
   );
-  trackAsyncTasks(host)(fetchData());
+  void fetchData();
   return host;
 }
 

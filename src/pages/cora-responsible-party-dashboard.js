@@ -2,7 +2,6 @@
 import { signal } from '../lib/signal.js';
 import { reactive } from '../lib/view.js';
 import { h } from '../lib/html.js';
-import { trackAsyncTasks } from '../lib/async-tasks.js';
 import { caseRouteFor } from '../lib/case-route-links.js';
 import '../components/collections/cora-case-table.js';
 import { CASE_STATUS } from '../lib/case-statuses.js';
@@ -70,7 +69,7 @@ export function ResponsiblePartyDashboard({
     ];
   });
 
-  trackAsyncTasks(host)(fetchData());
+  void fetchData();
   return host;
 }
 

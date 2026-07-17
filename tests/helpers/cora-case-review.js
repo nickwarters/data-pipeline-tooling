@@ -5,7 +5,7 @@ import {
   StubEl,
   useElementClass,
   flush,
-  whenIdle,
+  waitForRender,
 } from '../_dom-stub.js';
 import { assertAllCoraElementsDefined } from './assert-defined-elements.js';
 import {
@@ -97,7 +97,8 @@ class CaseReviewHarness {
       currentUserId: this.currentUserId,
       capabilities: this.capabilities,
     });
-    await whenIdle(this._host);
+    if (!this.client || !this.saveQueue || !this.caseId) return;
+    await waitForRender(this._host);
   }
 
   get root() {
