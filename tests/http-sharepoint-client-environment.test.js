@@ -75,7 +75,7 @@ test('listPrefix: per-Case-Type opts.listName overrides are prefixed too', async
   assert.match(calls[0].url, /getbytitle\('uat_complaints'\)/);
 });
 
-test('listPrefix: listCases, countCases and getQuestionDefinitions are prefixed', async () => {
+test('listPrefix: listCases and countCases are prefixed', async () => {
   const { fetch, calls } = makeFetch((call) =>
     call.url.endsWith('/$count') ? ok('0') : ok(JSON.stringify({ value: [] }))
   );
@@ -87,11 +87,9 @@ test('listPrefix: listCases, countCases and getQuestionDefinitions are prefixed'
 
   await client.listCases({}, { listName: 'Cases-ExampleReview' });
   await client.countCases({}, { listName: 'complaints' });
-  await client.getQuestionDefinitions(['q1']);
 
   assert.match(calls[0].url, /getbytitle\('uat_Cases-ExampleReview'\)/);
   assert.match(calls[1].url, /getbytitle\('uat_complaints'\)/);
-  assert.match(calls[2].url, /getbytitle\('uat_QuestionDefinitions'\)/);
 });
 
 test('listPrefix: patchCase writes to the prefixed list', async () => {

@@ -302,7 +302,6 @@
  * @typedef {{
  * getCase: (id: string, opts?: CaseListOptions) => Promise<CaseRow|null>,
  * patchCase: (id: string, fields: Partial<CaseRow>, etag: string, opts?: CaseListOptions) => Promise<PatchResult>,
- * getQuestionDefinitions: (ids: string[]) => Promise<QuestionDefinition[]>,
  * listCases: (filter: ListCasesFilter, opts?: CaseListOptions) => Promise<CaseRow[]>,
  * countCases: (filter: ListCasesFilter, opts?: CaseListOptions) => Promise<number>,
  * getCurrentUserGroups: () => Promise<string[]>,

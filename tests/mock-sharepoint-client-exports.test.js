@@ -4,7 +4,6 @@ import assert from 'node:assert/strict';
 import {
   LIST,
   CASES,
-  QUESTION_DEFS,
   PERSONAS,
   makeClient,
   VERSIONED_EXPORT,
@@ -18,7 +17,6 @@ import {
 test('MockSharePointClient: getExportHash returns the configured hash for a known slug', async () => {
   const client = new MockSharePointClient({
     lists: { [LIST]: CASES },
-    questionDefinitions: QUESTION_DEFS,
     personas: PERSONAS,
     exportHashes: { 'example-review': 'sha256:abc123' },
   });
@@ -35,7 +33,6 @@ test('MockSharePointClient: getExportHash returns null when slug has no configur
 test('MockSharePointClient: getVersionedExport returns the matching export for a known hash (ADR-0021 Step 4)', async () => {
   const client = new MockSharePointClient({
     lists: { [LIST]: CASES },
-    questionDefinitions: QUESTION_DEFS,
     personas: PERSONAS,
     versionedExports: { [VERSIONED_EXPORT.hash]: VERSIONED_EXPORT },
   });

@@ -1,7 +1,6 @@
 // @ts-check
 
 /** @typedef {import('../../src/sharepoint-client.js').CaseRow} CaseRow */
-/** @typedef {import('../../src/sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 
 import { MockSharePointClient } from '../../src/services/mock-sharepoint-client.js';
 
@@ -53,29 +52,6 @@ export const CASES = [
   },
 ];
 
-/** @type {QuestionDefinition[]} */
-export const QUESTION_DEFS = [
-  {
-    id: 'q-welcome',
-    text: 'Was the customer greeted professionally?',
-    responseType: 'yes-no-na',
-    deprecated: false,
-  },
-  {
-    id: 'q-needs',
-    text: "Were the customer's needs identified?",
-    responseType: 'yes-no-na',
-    deprecated: false,
-  },
-  {
-    id: 'q-resolve',
-    text: 'Was the issue resolved?',
-    responseType: 'yes-no-na',
-    showWhen: { questionId: 'q-needs', equals: 'Yes' },
-    deprecated: false,
-  },
-];
-
 export const PERSONAS = {
   reviewer: { groups: ['Reviewers'] },
   owner: { groups: ['Reviewers', 'CaseTypeOwners'] },
@@ -85,7 +61,6 @@ export const PERSONAS = {
 export function makeClient(persona = 'reviewer') {
   return new MockSharePointClient({
     lists: { [LIST]: CASES },
-    questionDefinitions: QUESTION_DEFS,
     personas: PERSONAS,
     persona,
   });
@@ -131,7 +106,6 @@ export const PEOPLE = [
 export function makePeopleClient(people = PEOPLE) {
   return new MockSharePointClient({
     lists: { [LIST]: CASES },
-    questionDefinitions: QUESTION_DEFS,
     personas: PERSONAS,
     people,
   });
@@ -205,7 +179,6 @@ export function makeReasonClient() {
         reasonCase('plain-1', {}),
       ],
     },
-    questionDefinitions: [],
     personas: PERSONAS,
   });
 }

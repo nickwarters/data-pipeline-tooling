@@ -20,7 +20,6 @@ test('createSharePointClient: returns an object satisfying SharePointClient when
   assert.equal(typeof client.getCase, 'function');
   assert.equal(typeof client.listCases, 'function');
   assert.equal(typeof client.patchCase, 'function');
-  assert.equal(typeof client.getQuestionDefinitions, 'function');
 });
 
 test('createSharePointClient: returns a MockSharePointClient when mock=1', async () => {

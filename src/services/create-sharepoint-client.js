@@ -23,14 +23,12 @@ export async function createSharePointClient(
       { MockSharePointClient },
       { loadCaseTypeConfig },
       { cases },
-      { questionDefinitions },
       { personas },
       { people },
     ] = await Promise.all([
       import('./mock-sharepoint-client.js'),
       import('../../case-types/manifest.js'),
       import('../../dev/fixtures/cases.js'),
-      import('../../dev/fixtures/question-definitions.js'),
       import('../../dev/fixtures/personas.js'),
       import('../../dev/fixtures/people.js'),
     ]);
@@ -46,7 +44,6 @@ export async function createSharePointClient(
     );
 
     return new MockSharePointClient({
-      questionDefinitions,
       personas,
       persona,
       people,

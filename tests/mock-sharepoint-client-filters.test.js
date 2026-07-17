@@ -5,7 +5,6 @@ import assert from 'node:assert/strict';
 import {
   LIST,
   CASES,
-  QUESTION_DEFS,
   PERSONAS,
   makeClient,
   completedCase,
@@ -74,7 +73,6 @@ test('MockSharePointClient: listCases scopes to the named list — a Case in one
   });
   const client = new MockSharePointClient({
     lists: { [LIST]: CASES, complaints: [listCase] },
-    questionDefinitions: QUESTION_DEFS,
     personas: PERSONAS,
   });
 
@@ -147,7 +145,6 @@ test('MockSharePointClient: listCases filters by effectiveOutcome server-side (A
         { ...CASES[2], id: 'r-fail2', effectiveOutcome: 'fail' },
       ],
     },
-    questionDefinitions: QUESTION_DEFS,
     personas: PERSONAS,
     persona: 'reviewer',
   });
@@ -171,7 +168,6 @@ test('MockSharePointClient: listCases filters by outcomeOverridden server-side (
         { ...CASES[2], id: 'corrected', outcomeOverridden: true },
       ],
     },
-    questionDefinitions: QUESTION_DEFS,
     personas: PERSONAS,
     persona: 'reviewer',
   });
@@ -251,7 +247,6 @@ test('MockSharePointClient: listCases with overdue:true returns only In-progress
     lists: {
       [LIST]: [overdueCase, onTimeCase, completedLateCase, noDueDateCase],
     },
-    questionDefinitions: [],
     personas: PERSONAS,
   });
 
@@ -279,7 +274,6 @@ test('MockSharePointClient: completedAfter is an inclusive CompletedAt lower bou
         completedCase('c', '2026-07-03T00:00:00.000Z'),
       ],
     },
-    questionDefinitions: [],
     personas: PERSONAS,
   });
   const rows = await client.listCases(
@@ -302,7 +296,6 @@ test('MockSharePointClient: completedBefore is an exclusive CompletedAt upper bo
         completedCase('c', '2026-07-03T00:00:00.000Z'),
       ],
     },
-    questionDefinitions: [],
     personas: PERSONAS,
   });
   const rows = await client.listCases(
@@ -324,7 +317,6 @@ test('MockSharePointClient: a never-completed Case is excluded from any Complete
         completedCase('done', '2026-07-02T00:00:00.000Z'),
       ],
     },
-    questionDefinitions: [],
     personas: PERSONAS,
   });
   const afterOnly = await client.listCases(
@@ -354,7 +346,6 @@ test('MockSharePointClient: countCases counts a bounded CompletedAt day-slice', 
         completedCase('c', '2026-07-03T00:00:00.000Z'),
       ],
     },
-    questionDefinitions: [],
     personas: PERSONAS,
   });
   const n = await client.countCases(
@@ -376,7 +367,6 @@ test('MockSharePointClient: listCases filters by assignedReviewerManager', async
         reasonCase('m-2', { assignedReviewerManager: 'mgr-b' }),
       ],
     },
-    questionDefinitions: [],
     personas: PERSONAS,
   });
   const rows = await client.listCases(
@@ -418,7 +408,6 @@ test('MockSharePointClient: filters by the reviewRequired flag', async () => {
         reasonCase('plain', {}),
       ],
     },
-    questionDefinitions: [],
     personas: PERSONAS,
   });
   assert.equal(

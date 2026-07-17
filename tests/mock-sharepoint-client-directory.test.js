@@ -24,22 +24,6 @@ test('MockSharePointClient: getCurrentUserGroups returns owner groups for owner 
   assert.deepEqual(groups, ['Reviewers', 'CaseTypeOwners']);
 });
 
-// --- getQuestionDefinitions ---
-
-test('MockSharePointClient: getQuestionDefinitions returns matching definitions', async () => {
-  const client = makeClient();
-  const defs = await client.getQuestionDefinitions(['q-welcome', 'q-needs']);
-  assert.equal(defs.length, 2);
-  assert.ok(defs.some((d) => d.id === 'q-welcome'));
-  assert.ok(defs.some((d) => d.id === 'q-needs'));
-});
-
-test('MockSharePointClient: getQuestionDefinitions returns empty array for unknown ids', async () => {
-  const client = makeClient();
-  const defs = await client.getQuestionDefinitions(['q-unknown']);
-  assert.equal(defs.length, 0);
-});
-
 test('MockSharePointClient: getCurrentUserGroups returns empty array for unknown persona', async () => {
   const client = makeClient('unknown-persona'); // not in PERSONAS
   const groups = await client.getCurrentUserGroups();

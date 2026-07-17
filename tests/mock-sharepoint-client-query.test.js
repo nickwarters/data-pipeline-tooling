@@ -69,7 +69,6 @@ test('MockSharePointClient: orderBy sorts ties stably and treats a missing key a
         reasonCase('no-key', {}), // no reopenedAt → sorts first ascending
       ],
     },
-    questionDefinitions: [],
     personas: PERSONAS,
   });
   const rows = await client.listCases(
@@ -87,7 +86,6 @@ test('MockSharePointClient: orderBy treats two rows that both lack the sort key 
     lists: {
       [LIST]: [reasonCase('no-key-a', {}), reasonCase('no-key-b', {})],
     },
-    questionDefinitions: [],
     personas: PERSONAS,
   });
   const rows = await client.listCases(
@@ -114,7 +112,6 @@ test('MockSharePointClient: countCases with anyOf ORs sub-filters, deduped acros
         reasonCase('none', {}),
       ],
     },
-    questionDefinitions: [],
     personas: PERSONAS,
   });
 

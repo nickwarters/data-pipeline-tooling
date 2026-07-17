@@ -269,7 +269,6 @@ const clients = [
     (seed) =>
       new MockSharePointClient({
         lists: { [LIST]: seed.cases ?? [] },
-        questionDefinitions: [],
         personas: { reviewer: { groups: [] } },
         people: seed.people ?? [],
         exportHashes: seed.exportHashes ?? {},

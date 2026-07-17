@@ -1,7 +1,6 @@
 // @ts-check
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
-/** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../sharepoint-client.js').PersonResult} PersonResult */
 /** @typedef {import('../sharepoint-client.js').VersionedExport} VersionedExport */
 /** @typedef {import('../services/permissions.js').Capabilities} Capabilities */
@@ -23,7 +22,6 @@ import { loadCaseTypeConfig } from '../../case-types/manifest.js';
 /**
  * @typedef {{
  * lists?: Record<string, CaseRow[]>,
- * questionDefinitions?: QuestionDefinition[],
  * personas?: Record<string, { groups: string[], userId?: string, displayName?: string }>,
  * people?: PersonResult[],
  * exportHashes?: Record<string, string>,
@@ -117,7 +115,6 @@ const DEFAULT_PERSONAS = {
  */
 export function createMockClientFromState(state, opts = {}) {
   return new MockSharePointClient({
-    questionDefinitions: state.questionDefinitions ?? [],
     personas: state.personas ?? DEFAULT_PERSONAS,
     persona: opts.persona ?? 'reviewer',
     people: state.people ?? [],

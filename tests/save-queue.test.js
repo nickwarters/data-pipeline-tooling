@@ -99,9 +99,6 @@ function makeClient({ patchResponses = [], getCaseRow } = {}) {
       return getCaseRow !== undefined ? getCaseRow : { ...liveRow };
     },
     getCalls,
-    async getQuestionDefinitions() {
-      return [];
-    },
     async listCases() {
       return [];
     },

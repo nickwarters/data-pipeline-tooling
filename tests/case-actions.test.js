@@ -21,7 +21,6 @@ test('saveCaseNotes persists through SaveQueue and dispatches the saved mock row
     etag: '1',
   };
   const client = new MockSharePointClient({
-    questionDefinitions: [],
     personas: {},
     lists: { Cases: [row] },
   });
@@ -46,7 +45,6 @@ test('saveCaseNotes persists through SaveQueue and dispatches the saved mock row
 
 test('saveCaseNotes rejects when the case does not exist', async () => {
   const client = new MockSharePointClient({
-    questionDefinitions: [],
     personas: {},
     lists: { Cases: [] },
   });

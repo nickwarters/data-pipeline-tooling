@@ -4,7 +4,6 @@ import { CASE_STATUS } from '../lib/case-statuses.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').PersonResult} PersonResult */
-/** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../sharepoint-client.js').ListCasesFilter} ListCasesFilter */
 /** @typedef {import('../sharepoint-client.js').CaseListOptions} CaseListOptions */
 /** @typedef {import('../sharepoint-client.js').PatchResult} PatchResult */
@@ -19,7 +18,6 @@ import { CASE_STATUS } from '../lib/case-statuses.js';
 /**
  * @typedef {{
  * webUrl?: string,
- * questionDefinitionsListName?: string,
  * listPrefix?: string,
  * exportBasePath?: string,
  * fetchImpl?: FetchImpl,
@@ -38,8 +36,6 @@ export class HttpSharePointClient {
     // There is no default Case list: every Case read/write must name its list
     // explicitly via `opts.listName` (a Case Type's declared `listName`), so a
     // caller that forgets fails loudly rather than silently hitting one list.
-    this._qDefListName =
-      opts.questionDefinitionsListName ?? 'QuestionDefinitions';
     // Environment scoping (ADR-0033): the prefix is applied centrally in
     // _listItemUrl/_listItemsUrl so every list access — including per-Case-Type
     // `opts.listName` overrides — lands in the environment's lists. Empty for prod.
@@ -117,19 +113,6 @@ export class HttpSharePointClient {
       const status = /** @type {any} */ (err).status || 500;
       return { ok: false, status };
     }
-  }
-
-  /** @param {string[]} ids @returns {Promise<QuestionDefinition[]>} */
-  async getQuestionDefinitions(ids) {
-    if (ids.length === 0) return [];
-    const filter = ids
-      .map((id) => `QuestionId eq '${escapeOData(id)}'`)
-      .join(' or ');
-    const url =
-      this._listItemsUrl(this._qDefListName) +
-      `?$filter=${encodeURIComponent(filter)}`;
-    const items = await this._getAllPages(url);
-    return items.map(qDefFromItem);
   }
 
   /**
@@ -812,45 +795,4 @@ function parseJsonField(raw, fallback) {
   } catch {
     return fallback;
   }
-}
-
-/**
- * @param {unknown} raw
- * @returns {QuestionDefinition}
- */
-function qDefFromItem(raw) {
-  const item = /** @type {Record<string, unknown>} */ (raw);
-  const responseType =
-    item?.ResponseType === 'single-choice' ||
-    item?.ResponseType === 'multi-choice' ||
-    item?.ResponseType === 'outcome'
-      ? item.ResponseType
-      : 'yes-no-na';
-  const opts = parseJsonField(item?.Options, undefined);
-  const showWhen = parseJsonField(item?.ShowWhen, undefined);
-  const remediation = parseJsonField(item?.RemediationActions, undefined);
-  const optionOutcomes = parseJsonField(item?.OptionOutcomes, undefined);
-  return {
-    id: String(item?.QuestionId ?? item?.Id ?? ''),
-    text: String(item?.QuestionText ?? item?.Title ?? ''),
-    responseType:
-      /** @type {'yes-no-na'|'single-choice'|'multi-choice'|'outcome'} */ (
-        responseType
-      ),
-    options: Array.isArray(opts) ? /** @type {string[]} */ (opts) : undefined,
-    optionOutcomes:
-      optionOutcomes && typeof optionOutcomes === 'object'
-        ? /** @type {Record<string, string>} */ (optionOutcomes)
-        : undefined,
-    showWhen:
-      showWhen && typeof showWhen === 'object'
-        ? /** @type {Record<string, unknown>} */ (showWhen)
-        : undefined,
-    remediationActions: Array.isArray(remediation)
-      ? /** @type {import('../sharepoint-client.js').QuestionDefinition['remediationActions']} */ (
-          remediation
-        )
-      : undefined,
-    deprecated: Boolean(item?.Deprecated ?? false),
-  };
 }

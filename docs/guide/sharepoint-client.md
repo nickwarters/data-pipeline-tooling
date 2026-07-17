@@ -12,7 +12,6 @@ just the function and the `client` it was handed.
 // The interface (src/sharepoint-client.js):
 // getCase(id) → Promise<CaseRow | null>
 // patchCase(id, fields, etag) → Promise<PatchResult>
-// getQuestionDefinitions(ids) → Promise<QuestionDefinition[]>
 // listCases(filter) → Promise<CaseRow[]>
 // getCurrentUser() → Promise<CurrentUser>
 // getCurrentUserGroups() → Promise<string[]>

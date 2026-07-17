@@ -4,7 +4,6 @@ import assert from 'node:assert/strict';
 import {
   LIST,
   CASES,
-  QUESTION_DEFS,
   PERSONAS,
   makeClient,
   MockSharePointClient,
@@ -48,7 +47,6 @@ test('MockSharePointClient: getCase round-trips the details JSON blob (issue #21
         },
       ],
     },
-    questionDefinitions: QUESTION_DEFS,
     personas: PERSONAS,
   });
   const c = await client.getCase('case-d', { listName: LIST });
@@ -167,7 +165,6 @@ test('MockSharePointClient: getCase and patchCase can target a supplied listName
   };
   const client = new MockSharePointClient({
     lists: { [LIST]: CASES, complaints: [complaints] },
-    questionDefinitions: QUESTION_DEFS,
     personas: PERSONAS,
   });
 

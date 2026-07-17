@@ -2,7 +2,6 @@
 import { CASE_STATUS } from '../lib/case-statuses.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
-/** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../sharepoint-client.js').ListCasesFilter} ListCasesFilter */
 /** @typedef {import('../sharepoint-client.js').CaseListOptions} CaseListOptions */
 /** @typedef {import('../sharepoint-client.js').PatchResult} PatchResult */
@@ -13,7 +12,6 @@ import { CASE_STATUS } from '../lib/case-statuses.js';
 export class MockSharePointClient {
   /**
    * @param {{
-   * questionDefinitions: QuestionDefinition[],
    * personas: Record<string, { groups: string[], userId?: string, displayName?: string }>,
    * persona?: string,
    * people?: PersonResult[],
@@ -23,7 +21,6 @@ export class MockSharePointClient {
    * }} opts
    */
   constructor({
-    questionDefinitions,
     personas,
     persona = 'reviewer',
     people = [],
@@ -31,7 +28,6 @@ export class MockSharePointClient {
     versionedExports = /** @type {Record<string, VersionedExport>} */ ({}),
     lists = /** @type {Record<string, CaseRow[]>} */ ({}),
   }) {
-    this._questionDefinitions = questionDefinitions.slice();
     this._personas = personas;
     this._persona = persona;
     this._people = people.slice();
@@ -123,14 +119,6 @@ export class MockSharePointClient {
       );
     }
     return this._lists[opts.listName] ?? [];
-  }
-
-  /**
-   * @param {string[]} ids
-   * @returns {Promise<QuestionDefinition[]>}
-   */
-  async getQuestionDefinitions(ids) {
-    return this._questionDefinitions.filter((q) => ids.includes(q.id));
   }
 
   /**

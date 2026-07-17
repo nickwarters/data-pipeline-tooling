@@ -451,7 +451,6 @@ test('HttpSharePointClient: assignable to SharePointClient interface', () => {
   assert.equal(typeof c.getCase, 'function');
   assert.equal(typeof c.patchCase, 'function');
   assert.equal(typeof c.listCases, 'function');
-  assert.equal(typeof c.getQuestionDefinitions, 'function');
   assert.equal(typeof c.getCurrentUserGroups, 'function');
   assert.equal(typeof c.getCurrentUser, 'function');
   assert.equal(typeof c.searchPeople, 'function');
