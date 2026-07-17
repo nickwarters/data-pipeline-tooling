@@ -591,13 +591,30 @@ test('widget-review fixtures: the Completed Case answers compute to its frozen o
 
 Add whatever is distinctive about your type on top (appeal routing, section
 set, Question Group spread — see the complaints tests for the fuller menu).
+
+**You must also update the pinned known-slug tests.** Three existing tests in
+[tests/case-type-manifest.test.js](../../tests/case-type-manifest.test.js)
+deliberately pin the manifest's slug list (`['complaints']`) — the
+known-slugs assertion, the `UnknownCaseTypeError` message assertion, and the
+`CaseReviewViewModel` unknown-slug error-state assertion. Adding your slug to
+the manifest fails all three until you extend the expected list. This is by
+design: the live Case Type set is a reviewed contract, not an incidental
+side effect of the registry.
+
 Then run the whole gate:
 
 ```sh
 npm run check        # tsc --checkJs over the JSDoc types
-node --test          # the full suite — existing manifest/eligibility tests now cover your slug too
+node --test          # the full suite
 npm run test:coverage  # 95% global floor over src/ and case-types/
 ```
+
+The suite is also your safety net for the earlier steps:
+[tests/case-type-eligibility-consistency.test.js](../../tests/case-type-eligibility-consistency.test.js)
+fails if a manifest slug is missing from `permissions.caseTypes` (Step 4), if
+the two `displayName`s disagree (Steps 2/4), or if the module declares no
+`listName` (Step 2) — so a forgotten wiring step surfaces as a named test
+failure, not as a silently empty dashboard.
 
 Your module counts toward the coverage floor the moment it exists under
 `case-types/`, which is one reason the outcome tests above are not optional.

@@ -15,7 +15,11 @@ export const personas = {
   reviewer: {
     userId: 'user-reviewer',
     displayName: 'Alex Reviewer',
-    groups: ['Reviewers'],
+    // The bare `Reviewers` functional group grants no per-type list access
+    // (grilling D2); the derived `Reviewers - Complaints` group is what makes
+    // the complaints fixture Cases (all assigned to user-reviewer) visible on
+    // this persona's dashboard.
+    groups: ['Reviewers', 'Reviewers - Complaints'],
   },
   owner: {
     userId: 'user-owner',
