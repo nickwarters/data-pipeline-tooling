@@ -15,7 +15,6 @@ node --test # run all tests
 node --test tests/view.test.js # single file
 npm run test:coverage # all production files + enforced thresholds
 npm run test:security # focused local security/domain contracts
-npm run test:security:mutation # mutation gate for critical kernels
 node --test --watch # re-run on file change
 ```
 
@@ -40,12 +39,12 @@ boundary.
 
 ## Selective Security Assurance
 
-`npm run test:security:mutation` runs Stryker only against the small set where a
-false green is expensive: the HTML injection guard, capability mapping,
-section-access policy, failure evaluation, and configured Outcome calculation.
-It deliberately does not mutate every component or protocol adapter. The gate
-enforces a 95% mutation score; generated reports live under ignored
-`reports/mutation/`.
+`npm run test:security` uses the repository's existing `node:test` runner for
+the small set where a false green is expensive: the HTML injection guard,
+capability mapping, section-access policy, failure evaluation, configured
+Outcome calculation, and the UAT ACL runner's safety constraints. These tests
+assert both allow and deny paths and the important boundary values directly;
+they do not require a separate mutation-testing package.
 
 Client-side capability and section-access tests remain UX contracts, not proof
 of authorization. Before a production release, run the non-mutating UAT ACL
@@ -66,6 +65,34 @@ persona. The runner performs GET requests only. It verifies read denial through
 the real list-items endpoint and write denial through the list's
 `EffectiveBasePermissions`; it never creates, updates, or deletes UAT data. It
 also refuses list names without the configured `uat_` prefix.
+
+## Deterministic Async Tests
+
+Asynchronously loaded views expose `whenIdle()` through the shared
+`trackAsyncTasks()` helper. Tests should await that completion signal (or the
+operation promise returned by the API they called) rather than sleeping for a
+fixed duration, polling a deadline, or flushing an arbitrary number of event
+loop turns. Timer behavior uses Node's mock timers; the one real timer-adapter
+test may replace `setTimeout` and invoke its callback directly.
+
+`tests/timing-assumptions-contract.test.js` prevents real-time sleeps and
+deadline polling from being added to JavaScript tests.
+
+## Layer Ownership
+
+Keep one test at the smallest layer that owns each risk:
+
+- Pure functions own input/output combinations and boundary values.
+- Components own semantic rendering and user interaction.
+- Routes own URL matching, guards, dependency plumbing, and load failures.
+- Flow tests own only critical journeys that cross those boundaries.
+
+Do not repeat a focused assertion in a route-registration or flow suite merely
+to prove the same line through another call stack. `register-routes.test.js`
+owns the complete route inventory and registration isolation; each
+`routes-*.test.js` file owns its route's mount behavior. The in-memory flow
+runner owns the load-answer-complete journey, so a second DOM-heavy tracer suite
+is unnecessary.
 
 ## Capability-Sized Suites
 

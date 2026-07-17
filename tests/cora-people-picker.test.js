@@ -127,7 +127,8 @@ test('CORAPeoplePicker: with no client a non-empty query renders no options', as
   assert.equal(results(el)._children.length, 0);
 });
 
-test('CORAPeoplePicker: typing debounces and routes the query through client.searchPeople', async () => {
+test('CORAPeoplePicker: typing debounces and routes the query through client.searchPeople', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   const client = makeClient([
     { loginName: 'jsmith', displayName: 'John Smith' },
   ]);
@@ -135,33 +136,35 @@ test('CORAPeoplePicker: typing debounces and routes the query through client.sea
   el.debounceMs = 0;
 
   input(el)._fire('input', { target: { value: 'jo' } });
-  await new Promise((r) => setTimeout(r));
+  t.mock.timers.tick(0);
   await el._searchPromise;
 
   assert.deepEqual(client.queries, ['jo']);
   assert.equal(results(el)._children[0].textContent, 'John Smith — jsmith');
 });
 
-test('CORAPeoplePicker: typing resets the debounce timer so only the latest query fires', async () => {
+test('CORAPeoplePicker: typing resets the debounce timer so only the latest query fires', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   const client = makeClient([]);
   const el = mount(client);
   el.debounceMs = 5;
 
   input(el)._fire('input', { target: { value: 'jo' } });
   input(el)._fire('input', { target: { value: 'john' } });
-  await new Promise((r) => setTimeout(r, 10));
+  t.mock.timers.tick(5);
   await el._searchPromise;
 
   assert.deepEqual(client.queries, ['john']);
 });
 
-test('CORAPeoplePicker: input with a null target value is treated as empty string', async () => {
+test('CORAPeoplePicker: input with a null target value is treated as empty string', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   const client = makeClient([]);
   const el = mount(client);
   el.debounceMs = 0;
 
   input(el)._fire('input', { target: { value: null } });
-  await new Promise((r) => setTimeout(r));
+  t.mock.timers.tick(0);
   await el._searchPromise;
 
   assert.equal(
@@ -204,7 +207,8 @@ test('CORAPeoplePicker: honours a custom placeholder', () => {
   assert.equal(input(el).placeholder, 'Attribute to…');
 });
 
-test('CORAPeoplePicker: disconnectedCallback clears the pending debounce timer', async () => {
+test('CORAPeoplePicker: disconnectedCallback clears the pending debounce timer', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   const client = makeClient([
     { loginName: 'jsmith', displayName: 'John Smith' },
   ]);
@@ -213,7 +217,7 @@ test('CORAPeoplePicker: disconnectedCallback clears the pending debounce timer',
 
   input(el)._fire('input', { target: { value: 'jo' } });
   el.disconnectedCallback();
-  await new Promise((r) => setTimeout(r, 10));
+  t.mock.timers.tick(5);
 
   assert.equal(
     client.queries.length,

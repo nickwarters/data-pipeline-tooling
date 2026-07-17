@@ -484,8 +484,7 @@ test('CORAConversation: visibilitychange fires _refresh when document is not hid
   const handlers = docListeners['visibilitychange'] ?? [];
   for (const h of handlers) h();
 
-  // _refresh is async; wait for it
-  await new Promise((resolve) => setImmediate(resolve));
+  await /** @type {any} */ (el).whenIdle();
 
   assert.equal(
     findAllByClass(el, 'cora-conversation-message').length,
@@ -571,7 +570,7 @@ test('CORAConversation: visibilitychange does NOT call _refresh when document is
   const handlers = docListeners['visibilitychange'] ?? [];
   for (const h of handlers) h();
 
-  await new Promise((resolve) => setImmediate(resolve));
+  await /** @type {any} */ (el).whenIdle();
   // Messages should NOT be updated since document is hidden
   assert.equal(
     findAllByClass(el, 'cora-conversation-message').length,

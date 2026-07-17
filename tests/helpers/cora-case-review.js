@@ -1,6 +1,12 @@
 // @ts-check
 import '../_register-example-review.js';
-import { installDom, StubEl, useElementClass, flush } from '../_dom-stub.js';
+import {
+  installDom,
+  StubEl,
+  useElementClass,
+  flush,
+  whenIdle,
+} from '../_dom-stub.js';
 import { assertAllCoraElementsDefined } from './assert-defined-elements.js';
 import {
   fireEvent,
@@ -60,15 +66,6 @@ const { completeCase } =
   await import('../../src/pages/cora-case-review/completion-controller.js');
 
 /**
- * Settle the CaseReviewPage async load: getCase/getCurrentUser, the dynamic
- * import() of the Case Type config, and the attributed-party resolution round
- * all resolve across a few macrotask turns.
- */
-async function settle() {
-  for (let i = 0; i < 6; i++) await new Promise((r) => setTimeout(r, 0));
-}
-
-/**
  * Thin test harness around the CaseReviewPage function component. The page is a
  * plain function returning a reactive() host; this adapter keeps the historic
  * "set fields, then connect" ergonomics while exposing the rendered host as a
@@ -100,7 +97,7 @@ class CaseReviewHarness {
       currentUserId: this.currentUserId,
       capabilities: this.capabilities,
     });
-    await settle();
+    await whenIdle(this._host);
   }
 
   get root() {
@@ -305,7 +302,6 @@ export {
   questionSectionOf,
   remediationOf,
   rootOf,
-  settle,
   summaryOf,
   tabFor,
   tabsOf,

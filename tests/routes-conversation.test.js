@@ -2,7 +2,7 @@
 import './_register-example-review.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { installDom } from './_dom-stub.js';
+import { installDom, whenIdle } from './_dom-stub.js';
 import { initRouter, routeRegistrationSpy } from './helpers/router.js';
 
 installDom();
@@ -30,13 +30,6 @@ function makeContext(opts = {}) {
     saveQueue: /** @type {any} */ ({}),
     currentUser: /** @type {any} */ ({ id: 'u1' }),
   };
-}
-
-async function settleRouteLoad() {
-  for (let i = 0; i < 5; i++) {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    await Promise.resolve();
-  }
 }
 
 test('conversation route: register calls router.register with #/conversation/:id', () => {
@@ -157,11 +150,8 @@ test('conversation route: source-key route passes caseType through to the fetche
       currentUser: { id: 'u42' },
     })
   );
-  router.navigate('#/conversation/example-review/123');
-
-  // loadCaseTypeConfig() performs a real dynamic import() of the case-type
-  // module, and the module now reads the bank artifact before export.
-  await settleRouteLoad();
+  await router.navigate('#/conversation/example-review/123');
+  await whenIdle(rendered[0]);
 
   assert.equal(getCaseCalls.length, 1);
   assert.equal(getCaseCalls[0][0], '123');

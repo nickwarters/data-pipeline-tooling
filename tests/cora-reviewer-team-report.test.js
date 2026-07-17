@@ -1,7 +1,7 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { installDom } from './_dom-stub.js';
+import { installDom, whenIdle } from './_dom-stub.js';
 /** @typedef {import('./_dom-stub.js').StubEl} StubEl */
 
 installDom();
@@ -102,20 +102,13 @@ function makeCase(overrides) {
   };
 }
 
-/** Flush the microtask queue enough times for fetchData()'s awaits to settle. */
-async function flush() {
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
-}
-
 test('ReviewerTeamReportPage: renders a heading', async () => {
   const host = ReviewerTeamReportPage({
     client: makeClient(),
     currentUser: { id: 'user-rm', displayName: 'Morgan Manager' },
     caseSources: [].map((s) => src(s)),
   });
-  await flush();
+  await whenIdle(host);
   assert.ok(
     hasText(host, 'Reviewer Team Performance'),
     'should render a heading'
@@ -128,7 +121,7 @@ test('ReviewerTeamReportPage: renders nothing extra when client is null', async 
     currentUser: { id: 'user-rm', displayName: 'Morgan Manager' },
     caseSources: [].map((s) => src(s)),
   });
-  await flush();
+  await whenIdle(host);
   assert.ok(hasText(host, 'Reviewer Team Performance'));
   assert.equal(findByClass(host, 'cora-kpi-tile').length, 0);
 });
@@ -139,7 +132,7 @@ test('ReviewerTeamReportPage: renders nothing extra when currentUser is null', a
     currentUser: null,
     caseSources: [].map((s) => src(s)),
   });
-  await flush();
+  await whenIdle(host);
   assert.ok(hasText(host, 'Reviewer Team Performance'));
   assert.equal(findByClass(host, 'cora-kpi-tile').length, 0);
 });
@@ -150,7 +143,7 @@ test('ReviewerTeamReportPage: renders a back link to #/reports', async () => {
     currentUser: { id: 'user-rm', displayName: 'Morgan Manager' },
     caseSources: [].map((s) => src(s)),
   });
-  await flush();
+  await whenIdle(host);
   assert.ok(
     findLink(host, '#/reports'),
     'should render back link to #/reports'
@@ -185,7 +178,7 @@ test('ReviewerTeamReportPage: renders 4 KPI tiles with correct counts', async ()
     currentUser: { id: 'user-rm', displayName: 'Morgan Manager' },
     caseSources: ['example-review'].map((s) => src(s)),
   });
-  await flush();
+  await whenIdle(host);
 
   const tiles = findByClass(host, 'cora-kpi-tile');
   assert.equal(tiles.length, 4, 'should render 4 KPI tiles');
@@ -216,7 +209,7 @@ test('ReviewerTeamReportPage: renders breakdown table rows per case type', async
     currentUser: { id: 'user-rm', displayName: 'Morgan Manager' },
     caseSources: ['example-review', 'product-sale-review'].map((s) => src(s)),
   });
-  await flush();
+  await whenIdle(host);
 
   const rows = findByClass(host, 'cora-breakdown-row');
   assert.equal(rows.length, 2, 'should render one row per case type with data');
@@ -244,7 +237,7 @@ test('ReviewerTeamReportPage: drill-through links navigate to #/team-cases with 
     currentUser: { id: 'user-rm', displayName: 'Morgan Manager' },
     caseSources: ['example-review'].map((s) => src(s)),
   });
-  await flush();
+  await whenIdle(host);
 
   const link = findLinkWhere(
     host,
@@ -267,7 +260,7 @@ test('ReviewerTeamReportPage: passes an explicit { listName } to the fetcher', a
     currentUser: { id: 'user-rm', displayName: 'Morgan Manager' },
     caseSources: [src('example-review', 'ExampleReviews')],
   });
-  await flush();
+  await whenIdle(host);
   assert.equal(optsLog.length, 1);
   assert.equal(optsLog[0].listName, 'ExampleReviews');
 });
@@ -278,7 +271,7 @@ test('ReviewerTeamReportPage: empty state when no cases', async () => {
     currentUser: { id: 'user-rm', displayName: 'Morgan Manager' },
     caseSources: ['example-review'].map((s) => src(s)),
   });
-  await flush();
+  await whenIdle(host);
 
   const tiles = findByClass(host, 'cora-kpi-tile');
   assert.equal(tiles.length, 4, 'should still render 4 tiles');

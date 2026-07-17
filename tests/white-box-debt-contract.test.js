@@ -81,7 +81,6 @@ const BASELINE = {
   'tests/routes-root.test.js': [3, 0, 0],
   'tests/routes-team-cases.test.js': [1, 0, 0],
   'tests/simulate-panel.test.js': [1, 0, 0],
-  'tests/tracer-bullet.test.js': [4, 4, 0],
   'tests/uat-banner.test.js': [2, 0, 0],
   'tests/view.test.js': [19, 0, 0],
 };

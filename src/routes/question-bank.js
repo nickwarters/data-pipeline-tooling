@@ -29,7 +29,7 @@ export function register(router, context) {
       // the editor is usable while (or if never) it resolves.
       const { simulatorEnabled } =
         await import('../pages/question-bank/question-bank-flags.js');
-      if (simulatorEnabled()) loadSamples();
+      if (simulatorEnabled()) await loadSamples();
     },
     unmount() {
       context.appEl.classList.remove('cora-fullbleed');

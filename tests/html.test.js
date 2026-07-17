@@ -45,6 +45,26 @@ _doc.createElement = (/** @type {string} */ tag) =>
 
 const { h, unsafeHTML } = await import('../src/lib/html.js');
 
+/**
+ * Run the exact microtasks scheduled by h() without guessing how many event-loop
+ * turns are needed. The queue is restored before the assertion runs.
+ * @param {() => void} action
+ */
+function runDeferredElementChecks(action) {
+  const originalQueueMicrotask = globalThis.queueMicrotask;
+  /** @type {Function[]} */
+  const queued = [];
+  globalThis.queueMicrotask = (callback) => {
+    queued.push(callback);
+  };
+  try {
+    action();
+    while (queued.length > 0) queued.shift()?.();
+  } finally {
+    globalThis.queueMicrotask = originalQueueMicrotask;
+  }
+}
+
 // ===== TESTS =====
 
 test('h: a <select> reflects a value that matches an option appended after it', () => {
@@ -120,17 +140,13 @@ test('h: non-button tags are not given a type', () => {
 
 // ===== DEV-MODE WARNING FOR UNREGISTERED cora-* ELEMENTS =====
 
-test('h: warns once when a cora-* tag has no registered custom element', async () => {
+test('h: warns once when a cora-* tag has no registered custom element', () => {
   /** @type {any[][]} */
   const calls = [];
   const originalWarn = console.warn;
   console.warn = (/** @type {any[]} */ ...args) => calls.push(args);
   try {
-    h('cora-nonexistent-element', {});
-    // The check is deferred to a microtask so a defining module that is
-    // still mid-import in the same tick isn't flagged as a false positive.
-    await Promise.resolve();
-    await Promise.resolve();
+    runDeferredElementChecks(() => h('cora-nonexistent-element', {}));
   } finally {
     console.warn = originalWarn;
   }
@@ -139,24 +155,24 @@ test('h: warns once when a cora-* tag has no registered custom element', async (
   assert.match(calls[0][0], /is not defined/);
 });
 
-test('h: warns exactly once per unknown tag even when rendered repeatedly', async () => {
+test('h: warns exactly once per unknown tag even when rendered repeatedly', () => {
   /** @type {any[][]} */
   const calls = [];
   const originalWarn = console.warn;
   console.warn = (/** @type {any[]} */ ...args) => calls.push(args);
   try {
-    h('cora-repeatedly-missing', {});
-    h('cora-repeatedly-missing', {});
-    h('cora-repeatedly-missing', {});
-    await Promise.resolve();
-    await Promise.resolve();
+    runDeferredElementChecks(() => {
+      h('cora-repeatedly-missing', {});
+      h('cora-repeatedly-missing', {});
+      h('cora-repeatedly-missing', {});
+    });
   } finally {
     console.warn = originalWarn;
   }
   assert.equal(calls.length, 1);
 });
 
-test('h: does not warn for a registered cora-* custom element', async () => {
+test('h: does not warn for a registered cora-* custom element', () => {
   /** @type {any} */ (globalThis).customElements.define(
     'cora-registered-fixture',
     class extends /** @type {any} */ (globalThis).HTMLElement {}
@@ -166,46 +182,44 @@ test('h: does not warn for a registered cora-* custom element', async () => {
   const originalWarn = console.warn;
   console.warn = (/** @type {any[]} */ ...args) => calls.push(args);
   try {
-    h('cora-registered-fixture', {});
-    await Promise.resolve();
-    await Promise.resolve();
+    runDeferredElementChecks(() => h('cora-registered-fixture', {}));
   } finally {
     console.warn = originalWarn;
   }
   assert.equal(calls.length, 0);
 });
 
-test('h: does not warn for non cora-* tags, even if unregistered', async () => {
+test('h: does not warn for non cora-* tags, even if unregistered', () => {
   /** @type {any[][]} */
   const calls = [];
   const originalWarn = console.warn;
   console.warn = (/** @type {any[]} */ ...args) => calls.push(args);
   try {
-    h('div', {});
-    h('some-other-widget', {});
-    await Promise.resolve();
-    await Promise.resolve();
+    runDeferredElementChecks(() => {
+      h('div', {});
+      h('some-other-widget', {});
+    });
   } finally {
     console.warn = originalWarn;
   }
   assert.equal(calls.length, 0);
 });
 
-test('h: a cora-* element registered before the microtask check runs is not warned about', async () => {
+test('h: a cora-* element registered before the microtask check runs is not warned about', () => {
   /** @type {any[][]} */
   const calls = [];
   const originalWarn = console.warn;
   console.warn = (/** @type {any[]} */ ...args) => calls.push(args);
   try {
-    h('cora-registers-late', {});
-    // Simulate the defining module finishing registration in the same tick,
-    // before the deferred check fires.
-    /** @type {any} */ (globalThis).customElements.define(
-      'cora-registers-late',
-      class extends /** @type {any} */ (globalThis).HTMLElement {}
-    );
-    await Promise.resolve();
-    await Promise.resolve();
+    runDeferredElementChecks(() => {
+      h('cora-registers-late', {});
+      // Simulate the defining module finishing registration in the same tick,
+      // before the deferred check fires.
+      /** @type {any} */ (globalThis).customElements.define(
+        'cora-registers-late',
+        class extends /** @type {any} */ (globalThis).HTMLElement {}
+      );
+    });
   } finally {
     console.warn = originalWarn;
   }

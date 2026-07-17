@@ -18,11 +18,6 @@ const windowListeners = {};
 import { Router } from '../src/lib/router.js';
 import { register } from '../src/routes/question-bank.js';
 
-/** @returns {Promise<void>} */
-async function tick() {
-  await Promise.resolve();
-}
-
 test('question-bank route: register calls router.register with #/question-bank', () => {
   const registration = routeRegistrationSpy();
   const appEl = { classList: { add() {}, remove() {} } };
@@ -125,8 +120,7 @@ test('question-bank route: mount adds cora-fullbleed to appEl', async () => {
         loadQuestionBankEditor: () => Promise.resolve(),
       })
     );
-    router.navigate('#/question-bank');
-    await tick();
+    await router.navigate('#/question-bank');
     assert.ok(
       added.includes('cora-fullbleed'),
       'cora-fullbleed should be added on mount'
@@ -172,9 +166,8 @@ test('question-bank route: unmount removes cora-fullbleed from appEl', async () 
       })
     );
     router2.register('#/dashboard', { mount() {}, unmount() {} });
-    router2.navigate('#/question-bank');
-    await tick();
-    router2.navigate('#/dashboard');
+    await router2.navigate('#/question-bank');
+    await router2.navigate('#/dashboard');
     assert.ok(
       removed.includes('cora-fullbleed'),
       'cora-fullbleed should be removed on unmount'
@@ -213,8 +206,7 @@ test('question-bank route: mount creates cora-bank-editor element', async () => 
         loadQuestionBankEditor: () => Promise.resolve(),
       })
     );
-    router.navigate('#/question-bank');
-    await tick();
+    await router.navigate('#/question-bank');
     assert.ok(
       created.includes('cora-bank-editor'),
       'cora-bank-editor should be created on mount'
@@ -299,8 +291,7 @@ test('question-bank route: sample cases are not loaded without ?simulate=1', asy
         },
       })
     );
-    router.navigate('#/question-bank');
-    await tick();
+    await router.navigate('#/question-bank');
     assert.equal(samplesLoaded, 0);
   } finally {
     /** @type {any} */ (globalThis).document = origDoc;
@@ -356,14 +347,7 @@ test('question-bank route: default sample loader fetches through context.client'
         loadQuestionBankEditor: () => Promise.resolve(),
       })
     );
-    router.navigate('#/question-bank');
-    // Let the dynamic import + listCases round-trips settle. The import chain
-    // includes real file I/O (the bank artifact behind question-bank-source),
-    // so wait on a deadline rather than a fixed number of ticks.
-    const deadline = Date.now() + 2000;
-    while (asked.length === 0 && Date.now() < deadline) {
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    }
+    await router.navigate('#/question-bank');
     assert.ok(asked.includes('example-review'));
     assert.equal(
       opts[0]?.listName,

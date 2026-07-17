@@ -2,6 +2,7 @@
 import { signal } from '../lib/signal.js';
 import { reactive } from '../lib/view.js';
 import { h } from '../lib/html.js';
+import { trackAsyncTasks } from '../lib/async-tasks.js';
 import { fetchReviewerTeamCases } from '../services/reviewer-team-fetcher.js';
 import { aggregateReviewerTeamData } from '../evaluators/reviewer-team-aggregator.js';
 import { computeTimeWindows } from '../evaluators/time-windows.js';
@@ -48,7 +49,7 @@ export function ReviewerTeamReportPage({ client, currentUser, caseSources }) {
   const host = reactive(() =>
     renderReviewerTeamReport({ data: data.get(), windows: windows.get() })
   );
-  fetchData();
+  trackAsyncTasks(host)(fetchData());
   return host;
 }
 

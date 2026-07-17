@@ -2,7 +2,7 @@
 import './_register-example-review.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { installDom } from './_dom-stub.js';
+import { installDom, whenIdle } from './_dom-stub.js';
 /** @typedef {import('./_dom-stub.js').StubEl} StubEl */
 
 installDom();
@@ -57,17 +57,6 @@ function makeStubClient(caseRow = BASE_CASE) {
   };
 }
 
-/** Flush the microtask queue enough times for fetchData()'s awaits to settle. */
-async function flush() {
-  // loadCaseTypeConfig() performs a real dynamic import() of the case-type
-  // module and the module performs a top-level bank-file read, so allow a few
-  // macrotask turns in addition to microtask flushes.
-  for (let i = 0; i < 5; i++) {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    await Promise.resolve();
-  }
-}
-
 // ===== TESTS =====
 
 test('ConversationView: renders nothing when client is null', async () => {
@@ -78,7 +67,7 @@ test('ConversationView: renders nothing when client is null', async () => {
     caseType: null,
     currentUser: null,
   });
-  await flush();
+  await whenIdle(host);
   assert.deepEqual(
     childrenOf(host),
     [],
@@ -94,7 +83,7 @@ test('ConversationView: renders nothing when caseId is empty', async () => {
     caseType: null,
     currentUser: null,
   });
-  await flush();
+  await whenIdle(host);
   assert.deepEqual(
     childrenOf(host),
     [],
@@ -110,7 +99,7 @@ test('ConversationView: renders nothing when getCase returns null', async () => 
     caseType: null,
     currentUser: null,
   });
-  await flush();
+  await whenIdle(host);
   assert.deepEqual(
     childrenOf(host),
     [],
@@ -126,7 +115,7 @@ test('ConversationView: renders header at children[0] and conversationEl at chil
     caseType: null,
     currentUser: null,
   });
-  await flush();
+  await whenIdle(host);
 
   assert.equal(
     childrenOf(host).length,
@@ -153,7 +142,7 @@ test('ConversationView: header has className cora-conversation-view-header', asy
     caseType: null,
     currentUser: null,
   });
-  await flush();
+  await whenIdle(host);
 
   const header = childrenOf(host)[0];
   assert.equal(header.className, 'cora-conversation-view-header');
@@ -167,7 +156,7 @@ test('ConversationView: header children are backBtn then h1', async () => {
     caseType: null,
     currentUser: null,
   });
-  await flush();
+  await whenIdle(host);
 
   const header = childrenOf(host)[0];
   assert.equal(header._children.length, 2, 'header should have two children');
@@ -193,7 +182,7 @@ test('ConversationView: h1 text uses caseRow.title when present', async () => {
     caseType: null,
     currentUser: null,
   });
-  await flush();
+  await whenIdle(host);
 
   const header = childrenOf(host)[0];
   const h1 = header._children[1];
@@ -210,7 +199,7 @@ test('ConversationView: h1 text falls back to caseRow.id when title is falsy', a
     caseType: null,
     currentUser: null,
   });
-  await flush();
+  await whenIdle(host);
 
   const header = childrenOf(host)[0];
   const h1 = header._children[1];
@@ -225,7 +214,7 @@ test('ConversationView: back button has correct className, type, and text', asyn
     caseType: null,
     currentUser: null,
   });
-  await flush();
+  await whenIdle(host);
 
   const header = childrenOf(host)[0];
   const backBtn = header._children[0];
@@ -242,7 +231,7 @@ test('ConversationView: back button click sets location.hash to #/my-reviews', a
     caseType: null,
     currentUser: null,
   });
-  await flush();
+  await whenIdle(host);
 
   const header = childrenOf(host)[0];
   const backBtn = header._children[0];
@@ -262,7 +251,7 @@ test('ConversationView: cora-conversation element receives client, saveQueue, ca
     caseType: null,
     currentUser: CURRENT_USER,
   });
-  await flush();
+  await whenIdle(host);
 
   const conversationEl = childrenOf(host)[1];
   assert.equal(
@@ -298,7 +287,7 @@ test('ConversationView: cora-conversation is passed messages from caseRow', asyn
     caseType: null,
     currentUser: null,
   });
-  await flush();
+  await whenIdle(host);
 
   const conversationEl = childrenOf(host)[1];
   assert.deepEqual(
@@ -317,14 +306,14 @@ test('ConversationView: loadCase is called on saveQueue with the fetched case ro
       loadCalls.push([row, opts]);
     },
   };
-  ConversationView({
+  const host = ConversationView({
     client: /** @type {any} */ (client),
     saveQueue: /** @type {any} */ (saveQueue),
     caseId: 'case-1',
     caseType: null,
     currentUser: null,
   });
-  await flush();
+  await whenIdle(host);
 
   assert.equal(loadCalls.length, 1, 'saveQueue.loadCase should be called');
   assert.equal(loadCalls[0][0].id, 'case-1');
@@ -347,7 +336,7 @@ test('ConversationView: resolves caseType config and passes listName as opts', a
     caseType: 'example-review',
     currentUser: null,
   });
-  await flush();
+  await whenIdle(host);
 
   assert.equal(getCaseCalls.length, 1);
   assert.equal(getCaseCalls[0][0], 'case-1');
@@ -366,7 +355,7 @@ test('ConversationView: cora-conversation element receives caseListOptions resol
     caseType: 'example-review',
     currentUser: null,
   });
-  await flush();
+  await whenIdle(host);
 
   const conversationEl = childrenOf(host)[1];
   assert.deepEqual(conversationEl.caseListOptions, {
@@ -384,7 +373,7 @@ test('ConversationView: cora-conversation element caseListOptions carries the li
     caseType: 'complaints',
     currentUser: null,
   });
-  await flush();
+  await whenIdle(host);
 
   const conversationEl = childrenOf(host)[1];
   assert.deepEqual(conversationEl.caseListOptions, {
@@ -401,7 +390,7 @@ test('ConversationView: cora-conversation element caseListOptions defaults to {}
     caseType: null,
     currentUser: null,
   });
-  await flush();
+  await whenIdle(host);
 
   const conversationEl = childrenOf(host)[1];
   assert.deepEqual(conversationEl.caseListOptions, {});
@@ -415,7 +404,7 @@ test('ConversationView: renders nothing when caseType is unknown', async () => {
     caseType: 'totally-unknown-case-type',
     currentUser: null,
   });
-  await flush();
+  await whenIdle(host);
 
   assert.deepEqual(
     childrenOf(host),

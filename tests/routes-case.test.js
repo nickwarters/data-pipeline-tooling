@@ -2,7 +2,7 @@
 import './_register-example-review.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { installDom, flush } from './_dom-stub.js';
+import { installDom, flush, whenIdle } from './_dom-stub.js';
 import { initRouter, routeRegistrationSpy } from './helpers/router.js';
 
 installDom();
@@ -41,13 +41,6 @@ function makeClient(calls) {
       return {};
     },
   };
-}
-
-async function settleRouteLoad() {
-  for (let i = 0; i < 5; i++) {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    await flush();
-  }
 }
 
 /** @param {Array<{ id: string, opts: any }>} [calls] */
@@ -171,10 +164,8 @@ test('case route: source-key route passes caseType through to the page', async (
   );
 
   register(router, makeContext(calls));
-  router.navigate('#/case/example-review/456');
-  // The source-key route resolves the Case Type config via dynamic import()
-  // before fetching; the module also reads the bank artifact.
-  await settleRouteLoad();
+  await router.navigate('#/case/example-review/456');
+  await whenIdle(mounted[0]);
 
   assert.equal(mounted.length, 1, 'route mounts a single page host');
   assert.equal(mounted[0].className, 'cora-case-review');

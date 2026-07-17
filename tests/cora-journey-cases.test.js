@@ -1,7 +1,7 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { installDom, StubEl, useElementClass, flush } from './_dom-stub.js';
+import { installDom, StubEl, useElementClass, whenIdle } from './_dom-stub.js';
 
 installDom();
 
@@ -83,7 +83,7 @@ test('cora-journey-cases: renders heading', async () => {
     journeyCaseSources: ['complaints'].map((s) => src(s)),
   });
 
-  await flush();
+  await whenIdle(host);
   assert.ok(hasText(host, 'Journey Cases'), 'should render heading');
 });
 
@@ -97,7 +97,7 @@ test('cora-journey-cases: renders empty state when no cases', async () => {
     journeyCaseSources: ['complaints'].map((s) => src(s)),
   });
 
-  await flush();
+  await whenIdle(host);
   assert.ok(
     hasText(host, 'No cases of your Case Type(s) yet.'),
     'should render empty-state message'
@@ -122,7 +122,7 @@ test('cora-journey-cases: fans out across owned Case Types and lists cases', asy
     journeyCaseSources: ['complaints', 'example-review'].map((s) => src(s)),
   });
 
-  await flush();
+  await whenIdle(host);
   assert.equal(calls.length, 2, 'one bounded query per owned Case Type');
   const table = findTag(host, 'cora-case-table');
   assert.ok(table, 'should render cora-case-table');
@@ -146,7 +146,7 @@ test('cora-journey-cases: passes an explicit { listName } for every listCases ca
     ],
   });
 
-  await flush();
+  await whenIdle(host);
   assert.equal(opts.length, 2);
   assert.ok(opts.some((o) => o.listName === 'Complaints'));
   assert.ok(opts.some((o) => o.listName === 'ExampleReviews'));
@@ -162,7 +162,7 @@ test('cora-journey-cases: columns expose reference/caseType/status and Summary l
     journeyCaseSources: ['complaints'].map((s) => src(s)),
   });
 
-  await flush();
+  await whenIdle(host);
   const table = findTag(host, 'cora-case-table');
   /** @param {string} key */
   const col = (key) =>
@@ -188,7 +188,7 @@ test('cora-journey-cases: Reference falls back to id when title is empty', async
     journeyCaseSources: ['complaints'].map((s) => src(s)),
   });
 
-  await flush();
+  await whenIdle(host);
   const table = findTag(host, 'cora-case-table');
   const refCol = table.columns.find(
     (/** @type {any} */ c) => c.key === 'reference'
@@ -204,7 +204,7 @@ test('cora-journey-cases: renders heading without fetching when client is null',
     journeyCaseSources: ['complaints'].map((s) => src(s)),
   });
 
-  await flush();
+  await whenIdle(host);
   assert.ok(hasText(host, 'Journey Cases'), 'should still render heading');
   assert.ok(!findTag(host, 'cora-case-table'), 'should not render table');
 });

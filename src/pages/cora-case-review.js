@@ -1,6 +1,7 @@
 // @ts-check
 import { reactive, on } from '../lib/view.js';
 import { h } from '../lib/html.js';
+import { trackAsyncTasks } from '../lib/async-tasks.js';
 import { CaseReviewViewModel } from '../lib/case-review-view-model.js';
 import { updateCaseReviewHeader } from './cora-case-review/header-controller.js';
 import {
@@ -210,6 +211,6 @@ export function CaseReviewPage({
     new URLSearchParams(searchStr).get('conversation') ?? 'popover';
   host.setAttribute('data-conversation-mode', panelMode);
 
-  viewModel.load();
+  trackAsyncTasks(host)(viewModel.load());
   return host;
 }
