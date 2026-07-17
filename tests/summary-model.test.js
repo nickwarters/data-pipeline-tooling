@@ -13,7 +13,7 @@ const catalogue = [
     text: 'Greeted?',
     questionGroup: 'Opening',
     responseType: 'yes-no-na',
-    failureCriteria: 'No',
+    failureValues: ['No'],
     deprecated: false,
   },
   {
@@ -21,7 +21,7 @@ const catalogue = [
     text: 'Needs found?',
     questionGroup: 'Discovery',
     responseType: 'yes-no-na',
-    failureCriteria: 'No',
+    failureValues: ['No'],
     remediationActions: ['Retrain agent.'],
     deprecated: false,
   },
@@ -31,11 +31,11 @@ const catalogue = [
     questionGroup: 'Discovery',
     responseType: 'yes-no-na',
     showWhen: { 'q-needs': { equals: 'Yes' } },
-    failureCriteria: 'No',
+    failureValues: ['No'],
     remediationActions: ['Escalate.', 'Follow up.'],
     deprecated: false,
   },
-  // Informational (no failureCriteria) — excluded from pass/fail counts.
+  // Informational (no failureValues) — excluded from pass/fail counts.
   {
     id: 'q-channel',
     text: 'Channel?',
@@ -68,7 +68,7 @@ test('buildSummaryModel: excludes deprecated questions and unanswered scorable q
       text: 'Live?',
       questionGroup: 'A',
       responseType: 'yes-no-na',
-      failureCriteria: 'No',
+      failureValues: ['No'],
       deprecated: false,
     },
     {
@@ -76,7 +76,7 @@ test('buildSummaryModel: excludes deprecated questions and unanswered scorable q
       text: 'Old?',
       questionGroup: 'A',
       responseType: 'yes-no-na',
-      failureCriteria: 'No',
+      failureValues: ['No'],
       deprecated: true,
     },
     {
@@ -84,7 +84,7 @@ test('buildSummaryModel: excludes deprecated questions and unanswered scorable q
       text: 'Blank?',
       questionGroup: 'A',
       responseType: 'yes-no-na',
-      failureCriteria: 'No',
+      failureValues: ['No'],
       deprecated: false,
     },
   ];
@@ -161,7 +161,7 @@ test('buildSummaryModel: failure with a multi-choice value joins selections for 
       text: 'Defects?',
       responseType: 'multi-choice',
       options: ['A', 'B', 'C'],
-      failureCriteria: 'B',
+      failureValues: ['B'],
       remediationActions: ['Fix B.'],
       deprecated: false,
     },
@@ -193,7 +193,7 @@ test('buildSummaryModel: reads sent Remediation Actions from a failed Answer cap
       id: 'q-prod',
       text: 'Defects?',
       responseType: 'yes-no-na',
-      failureCriteria: 'No',
+      failureValues: ['No'],
       deprecated: false,
     },
   ];

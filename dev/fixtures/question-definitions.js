@@ -14,7 +14,6 @@ export const questionDefinitions = [
     questionGroup: 'Opening',
     responseType: 'yes-no-na',
     optionOutcomes: { No: 'fail' },
-    failureCriteria: 'No',
     deprecated: false,
   },
   {
@@ -23,7 +22,6 @@ export const questionDefinitions = [
     questionGroup: 'Discovery',
     responseType: 'yes-no-na',
     optionOutcomes: { No: 'fail' },
-    failureCriteria: 'No',
     remediationActions: ['Retrain agent on needs-identification protocol.'],
     deprecated: false,
   },
@@ -34,7 +32,6 @@ export const questionDefinitions = [
     responseType: 'yes-no-na',
     showWhen: { 'q-needs': { equals: 'Yes' } },
     optionOutcomes: { No: 'fail' },
-    failureCriteria: 'No',
     remediationActions: ['Escalate unresolved case to senior agent.'],
     deprecated: false,
   },

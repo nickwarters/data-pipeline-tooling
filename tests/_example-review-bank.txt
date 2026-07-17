@@ -6,32 +6,39 @@
       "id": "q-welcome",
       "text": "Was the customer greeted professionally?",
       "questionGroup": "Opening",
-      "labelIds": ["lbl-coaching"],
+      "labelIds": [
+        "lbl-coaching"
+      ],
       "responseType": "yes-no-na",
       "optionOutcomes": {
         "No": "fail"
       },
-      "failureCriteria": "No",
       "deprecated": false
     },
     {
       "id": "q-needs",
       "text": "Were the customer's needs identified before proceeding?",
       "questionGroup": "Discovery",
-      "labelIds": ["lbl-coaching", "lbl-regulatory"],
+      "labelIds": [
+        "lbl-coaching",
+        "lbl-regulatory"
+      ],
       "responseType": "yes-no-na",
       "optionOutcomes": {
         "No": "fail"
       },
-      "failureCriteria": "No",
-      "remediationActions": ["Retrain agent on needs-identification protocol."],
+      "remediationActions": [
+        "Retrain agent on needs-identification protocol."
+      ],
       "deprecated": false
     },
     {
       "id": "q-resolve",
       "text": "Was the issue resolved to the customer's satisfaction?",
       "questionGroup": "Resolution",
-      "labelIds": ["lbl-regulatory"],
+      "labelIds": [
+        "lbl-regulatory"
+      ],
       "responseType": "yes-no-na",
       "showWhen": {
         "q-needs": {
@@ -41,22 +48,31 @@
       "optionOutcomes": {
         "No": "fail"
       },
-      "failureCriteria": "No",
-      "remediationActions": ["Escalate unresolved case to senior agent."],
+      "remediationActions": [
+        "Escalate unresolved case to senior agent."
+      ],
       "deprecated": false
     },
     {
       "id": "q-channel",
       "text": "Which channel was the customer using?",
       "responseType": "single-choice",
-      "options": ["Phone", "Email", "Chat"],
+      "options": [
+        "Phone",
+        "Email",
+        "Chat"
+      ],
       "deprecated": false
     },
     {
       "id": "q-products",
       "text": "Which products were discussed during the interaction?",
       "responseType": "multi-choice",
-      "options": ["Account", "Billing", "Support"],
+      "options": [
+        "Account",
+        "Billing",
+        "Support"
+      ],
       "deprecated": false
     }
   ],

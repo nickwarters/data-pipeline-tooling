@@ -97,7 +97,6 @@ The file must satisfy the `QuestionBank` typedef in
       "labelIds": ["lbl-regulatory"],
       "responseType": "yes-no-na",
       "optionOutcomes": { "No": "fail" },
-      "failureCriteria": "No",
       "remediationActions": [
         "Rework the widget to the agreed specification and re-submit."
       ],
@@ -109,7 +108,6 @@ The file must satisfy the `QuestionBank` typedef in
       "questionGroup": "Build",
       "responseType": "yes-no-na",
       "optionOutcomes": { "No": "refer" },
-      "failureCriteria": "No",
       "remediationActions": ["Run the standard test suite and record results."],
       "deprecated": false
     },
@@ -120,7 +118,6 @@ The file must satisfy the `QuestionBank` typedef in
       "responseType": "yes-no-na",
       "showWhen": { "q-wr-tested": { "equals": "Yes" } },
       "optionOutcomes": { "No": "refer" },
-      "failureCriteria": "No",
       "deprecated": false
     },
     {
@@ -150,16 +147,17 @@ Field-by-field, the parts that carry behaviour:
 - **`responseType`** — one of `yes-no-na`, `single-choice`, `multi-choice`,
   `outcome`. Choice types must carry a non-empty `options` array.
 - **`optionOutcomes`** — maps a response option to an Outcome id. Unmapped
-  options contribute nothing (the default Outcome stands).
+  options contribute nothing (the default Outcome stands). The same mapping
+  drives failure: every option mapped to a non-default Outcome marks the
+  Answer as a failure, feeding the Issues list, remediation, and (if the
+  module sets `attributeFailures`) failure attribution to a person. The
+  universal N/A response is never a failure.
 - **`showWhen`** — the applicability graph. A question with
   `"showWhen": { "q-wr-tested": { "equals": "Yes" } }` is only an Applicable
   Question when that answer holds. The graph must be acyclic —
   `detectCycles` in
   [src/evaluators/applicability-evaluator.js](../../src/evaluators/applicability-evaluator.js)
   is asserted in tests (Step 7).
-- **`failureCriteria`** — the response value that marks the Answer as a
-  failure. Failures feed the Issues list, remediation, and (if the module sets
-  `attributeFailures`) failure attribution to a person.
 - **`remediationActions`** — the Remediation Actions offered when that
   question fails.
 - **`labels` / `labelIds`** — reporting metadata only; Labels never affect

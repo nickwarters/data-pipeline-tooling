@@ -66,7 +66,6 @@ test('compileBank: includes bank metadata and question content only', () => {
         text: 'Was the required check completed?',
         responseType: 'yes-no-na',
         optionOutcomes: { No: 'fail' },
-        failureCriteria: 'No',
         labelIds: ['lbl-a'],
         remediationActions: ['Customer impact identified'],
         allowFreeFormRemediation: true,
@@ -89,7 +88,6 @@ test('compileBank: includes bank metadata and question content only', () => {
     text: 'Was the required check completed?',
     responseType: 'yes-no-na',
     optionOutcomes: { No: 'fail' },
-    failureCriteria: 'No',
     labelIds: ['lbl-a'],
     remediationActions: ['Customer impact identified'],
     allowFreeFormRemediation: true,
@@ -206,7 +204,7 @@ const exportBank = {
       text: 'Was the agent polite?',
       category: 'Conduct',
       responseType: /** @type {const} */ ('yes-no-na'),
-      failureCriteria: 'No',
+      optionOutcomes: { No: 'fail' },
       deprecated: false,
     },
     {
@@ -365,7 +363,7 @@ test('compileExport: key order in question objects does not affect hash', async 
     text: q.text,
     deprecated: q.deprecated,
     id: q.id,
-    failureCriteria: q.failureCriteria,
+    optionOutcomes: q.optionOutcomes,
     category: q.category,
     responseType: q.responseType,
   };
@@ -524,7 +522,6 @@ test('compileExport: absent optional question fields are emitted as null', async
   assert.equal(q.options, null);
   assert.equal(q.optionOutcomes, null);
   assert.equal(q.showWhen, null);
-  assert.equal(q.failureCriteria, null);
   assert.equal(q.remediationActions, null);
 });
 
@@ -532,7 +529,7 @@ test('compileExport: present optional question fields are carried through', asyn
   const result = await compileExport(exportBank);
   const q0 = result.questions[0];
   assert.equal(q0.category, 'Conduct');
-  assert.equal(q0.failureCriteria, 'No');
+  assert.deepEqual(q0.optionOutcomes, { No: 'fail' });
   const q1 = result.questions[1];
   assert.deepEqual(q1.options, ['Phone', 'Email']);
 });

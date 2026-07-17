@@ -336,7 +336,7 @@ const COUNT_CATALOGUE = [
     text: 'Greeted?',
     questionGroup: 'Opening',
     responseType: 'yes-no-na',
-    failureCriteria: 'No',
+    failureValues: ['No'],
     deprecated: false,
   },
   {
@@ -344,7 +344,7 @@ const COUNT_CATALOGUE = [
     text: 'Needs found?',
     questionGroup: 'Discovery',
     responseType: 'yes-no-na',
-    failureCriteria: 'No',
+    failureValues: ['No'],
     remediationActions: ['Retrain.'],
     deprecated: false,
   },
@@ -493,7 +493,7 @@ test('CORASummary: a failed Answer without a Question Group renders just the que
       id: 'q-bare',
       text: 'No category?',
       responseType: 'yes-no-na',
-      failureCriteria: 'No',
+      failureValues: ['No'],
       deprecated: false,
     },
   ]);

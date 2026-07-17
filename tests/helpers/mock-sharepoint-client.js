@@ -152,7 +152,7 @@ export const VERSIONED_EXPORT = {
       responseType: 'yes-no-na',
       options: null,
       showWhen: null,
-      failureCriteria: 'No',
+      failureValues: ['No'],
       deprecated: false,
     },
   ],

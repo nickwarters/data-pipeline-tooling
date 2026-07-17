@@ -30,14 +30,13 @@ test('SimulatePanel: reports impact per sample Case', () => {
   const q = /** @type {any} */ (
     draft.questions.find((/** @type {any} */ x) => x.id === 'q-welcome')
   );
-  q.failureCriteria = 'NA';
-  q.optionOutcomes = { NA: 'fail' };
+  q.optionOutcomes = { No: 'fail', Yes: 'fail' };
   const panel = /** @type {any} */ (
     SimulatePanel(published, draft, [
       {
         id: 'case-1',
         title: 'First Case',
-        answers: { 'q-welcome': { value: 'NA' } },
+        answers: { 'q-welcome': { value: 'Yes' } },
       },
       { id: 'case-2', title: 'Second Case', answers: {} },
     ])

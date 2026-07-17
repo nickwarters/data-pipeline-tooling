@@ -201,9 +201,11 @@
  * `NA` option to the Reviewer (`src/lib/response-options.js`); it is never
  * authorable and never maps to an Outcome. `optionOutcomes` maps each response option label to a
  * configured Outcome id (`OutcomeOption.id`); it is what drives the Outcome —
- * the highest-scoring applicable mapped Outcome wins. `failureCriteria` is
- * unrelated to the Outcome: it flags a failed Answer for the Issues/Remediation
- * flow.
+ * the highest-scoring applicable mapped Outcome wins. The same mapping drives
+ * the Issues/Remediation flow: every option mapped to a non-default Outcome is
+ * a failure. `failureValues` is that derived list — stamped at load by
+ * `withDerivedFailureValues` (evaluators/failure-evaluator.js), never authored
+ * or stored. The universal N/A never fails.
  *
  * `labelIds` references the owning Case Type's `labels` by id. It is
  * reporting metadata only and does not affect how a question is presented.
@@ -225,7 +227,7 @@
  * options?: string[],
  * optionOutcomes?: Record<string, string>,
  * showWhen?: Record<string, unknown>,
- * failureCriteria?: string,
+ * failureValues?: string[],
  * remediationActions?: Array<string | RemediationActionDefinition>,
  * allowFreeFormRemediation?: boolean,
  * deprecated: boolean
@@ -284,7 +286,6 @@
  * options: string[] | null,
  * optionOutcomes?: Record<string, string> | null,
  * showWhen: Record<string, unknown> | null,
- * failureCriteria: string | null,
  * remediationActions?: Array<RemediationActionDefinition> | null,
  * deprecated: boolean,
  * labelIds?: string[],

@@ -36,7 +36,6 @@ import { QUESTION_BANK_IMPORTERS } from '../../../case-types/manifest.js';
  *   options?: string[],
  *   optionOutcomes?: Record<string, string>,
  *   showWhen?: Record<string, unknown>,
- *   failureCriteria?: string,
  *   remediationActions?: Array<string | RemediationActionDefinition>,
  *   allowFreeFormRemediation?: boolean,
  *   deprecated: boolean,

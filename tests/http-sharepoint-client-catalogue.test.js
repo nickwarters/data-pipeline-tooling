@@ -216,7 +216,6 @@ test('HttpSharePointClient: getVersionedExport fetches {slug}.{hash}.json and re
         responseType: 'yes-no-na',
         options: null,
         showWhen: null,
-        failureCriteria: null,
         deprecated: false,
       },
     ],
@@ -365,7 +364,7 @@ test('HttpSharePointClient: getQuestionDefinitions falls all the way to empty st
   assert.equal(def.text, '');
 });
 
-test('HttpSharePointClient: getQuestionDefinitions parses OptionOutcomes, ShowWhen and FailureCriteria', async () => {
+test('HttpSharePointClient: getQuestionDefinitions parses OptionOutcomes and ShowWhen, ignoring FailureCriteria', async () => {
   const { fetch } = makeFetch([
     {
       when: (c) => c.method === 'GET',
@@ -396,6 +395,8 @@ test('HttpSharePointClient: getQuestionDefinitions parses OptionOutcomes, ShowWh
   const [def] = await client.getQuestionDefinitions(['q-full']);
   assert.deepEqual(def.optionOutcomes, { Yes: 'pass', No: 'fail' });
   assert.deepEqual(def.showWhen, { questionId: 'q-x', equals: 'Yes' });
-  assert.equal(def.failureCriteria, 'No');
+  // FailureCriteria list columns are ignored: failure derives from the
+  // outcome mapping at load, never from stored criteria.
+  assert.equal('failureCriteria' in def, false);
   assert.equal(def.deprecated, true);
 });

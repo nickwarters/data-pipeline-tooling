@@ -9,7 +9,7 @@ import {
 
 /**
  * Baseline bank used across the scenarios: q-a gates q-b via showWhen; q-a
- * carries failureCriteria 'No' mapped to the 'fail' Outcome.
+ * maps 'No' to the 'fail' Outcome, so 'No' is its derived failure value.
  *
  * @returns {any}
  */
@@ -28,7 +28,6 @@ function baselineBank() {
         text: 'Was the customer greeted?',
         responseType: 'yes-no-na',
         optionOutcomes: { No: 'fail' },
-        failureCriteria: 'No',
         deprecated: false,
       },
       {
@@ -99,12 +98,12 @@ test('diffBanks: newly deprecated counts as removed, un-deprecated as added', ()
 test('diffBanks: lists changed field names on modified questions', () => {
   const base = baselineBank();
   const draft = draftFrom(base, (b) => {
-    b.questions[0].failureCriteria = 'NA';
+    b.questions[0].optionOutcomes = { Yes: 'fail' };
     b.questions[0].text = 'Was the customer greeted warmly?';
   });
   const d = diffBanks(base, draft);
   assert.deepEqual(d.changed, [
-    { id: 'q-a', fields: ['text', 'failureCriteria'] },
+    { id: 'q-a', fields: ['text', 'optionOutcomes', 'failureValues'] },
   ]);
 });
 
@@ -130,7 +129,7 @@ test('diffBanks: outcome-type questions compare derived options', () => {
   const d = diffBanks(base, draft);
   assert.equal(d.outcomeConfigChanged, true);
   assert.deepEqual(d.changed, [
-    { id: 'q-outcome', fields: ['options', 'optionOutcomes'] },
+    { id: 'q-outcome', fields: ['options', 'optionOutcomes', 'failureValues'] },
   ]);
 });
 
@@ -243,13 +242,14 @@ test('simulate: downstream applicability changes attribute the upstream changed 
   assert.deepEqual(qc?.causedBy, ['q-b']);
 });
 
-test('simulate: changed failure criteria reports added and removed Issues', () => {
+test('simulate: changed outcome mapping reports added and removed Issues', () => {
   const base = baselineBank();
   const draft = draftFrom(base, (b) => {
-    b.questions[0].failureCriteria = 'NA';
+    b.questions[0].optionOutcomes = { Yes: 'fail' };
   });
   const failing = simulateBankImpact(base, draft, [
     sampleCase({ 'q-a': { value: 'No' } }, 'case-no'),
+    sampleCase({ 'q-a': { value: 'Yes' } }, 'case-yes'),
     sampleCase({ 'q-a': { value: 'NA' } }, 'case-na'),
   ]);
   assert.deepEqual(failing.cases[0].issuesRemoved, [
@@ -258,11 +258,14 @@ test('simulate: changed failure criteria reports added and removed Issues', () =
   assert.deepEqual(failing.cases[1].issuesAdded, [
     { id: 'q-a', causedBy: ['q-a'] },
   ]);
+  // N/A is never an Issue under either bank.
+  assert.deepEqual(failing.cases[2].issuesAdded, []);
+  assert.deepEqual(failing.cases[2].issuesRemoved, []);
   assert.equal(failing.totals.issuesAdded, 1);
   assert.equal(failing.totals.issuesRemoved, 1);
 });
 
-test('simulate: multi-choice failure criteria matches any selected value', () => {
+test('simulate: multi-choice failure value matches any selected value', () => {
   const base = baselineBank();
   const draft = draftFrom(base, (b) => {
     b.questions.push({
@@ -270,7 +273,7 @@ test('simulate: multi-choice failure criteria matches any selected value', () =>
       text: 'Concerns?',
       responseType: 'multi-choice',
       options: ['None', 'Vulnerability'],
-      failureCriteria: 'Vulnerability',
+      optionOutcomes: { Vulnerability: 'fail' },
       deprecated: false,
     });
   });
@@ -385,13 +388,13 @@ test('simulate: sample Cases without answers simulate against an empty Answer se
 test('simulate: result carries the bank diff and case titles', () => {
   const base = baselineBank();
   const draft = draftFrom(base, (b) => {
-    b.questions[0].failureCriteria = 'NA';
+    b.questions[0].optionOutcomes = { No: 'fail', Yes: 'pass' };
   });
   const result = simulateBankImpact(base, draft, [
     sampleCase({}, 'case-9', 'Ninth Case'),
   ]);
   assert.deepEqual(result.diff.changed, [
-    { id: 'q-a', fields: ['failureCriteria'] },
+    { id: 'q-a', fields: ['optionOutcomes'] },
   ]);
   assert.equal(result.cases[0].caseId, 'case-9');
   assert.equal(result.cases[0].title, 'Ninth Case');
@@ -400,7 +403,7 @@ test('simulate: result carries the bank diff and case titles', () => {
 test('simulate: is read-only — inputs are not mutated', () => {
   const base = baselineBank();
   const draft = draftFrom(base, (b) => {
-    b.questions[0].failureCriteria = 'NA';
+    b.questions[0].optionOutcomes = { Yes: 'fail' };
     b.questions.push({
       id: 'q-new',
       text: 'New?',

@@ -571,8 +571,8 @@ const versionedCatalogue = [
     category: 'Context',
     responseType: 'yes-no-na',
     options: null,
+    optionOutcomes: { No: 'fail' },
     showWhen: null,
-    failureCriteria: 'No',
     deprecated: false,
   },
   {
@@ -582,7 +582,6 @@ const versionedCatalogue = [
     responseType: 'yes-no-na',
     options: null,
     showWhen: null,
-    failureCriteria: null,
     deprecated: true,
   },
 ];
@@ -663,7 +662,6 @@ test('CaseReviewViewModel.load(): versioned catalogue mapping normalises null op
             responseType: 'yes-no-na',
             options: null,
             showWhen: null,
-            failureCriteria: null,
             deprecated: false,
           },
         ],
@@ -681,7 +679,61 @@ test('CaseReviewViewModel.load(): versioned catalogue mapping normalises null op
   assert.equal(q.category, undefined);
   assert.equal(q.options, undefined);
   assert.equal(q.showWhen, undefined);
-  assert.equal(q.failureCriteria, undefined);
+  assert.equal('failureCriteria' in q, false);
+});
+
+test('CaseReviewViewModel.load(): live catalogue derives failureValues from the config outcome mapping', async () => {
+  const vm = new CaseReviewViewModel({
+    client: makeStep4Client(),
+    saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
+    caseId: 'c1',
+    currentUserId: 'u1',
+    capabilities: null,
+  });
+
+  await vm.load();
+
+  const q = vm.catalogue.find((x) => x.id === 'q-welcome');
+  assert.deepEqual(q?.failureValues, ['No']);
+});
+
+test('CaseReviewViewModel.load(): frozen catalogue derives failureValues against the snapshot default Outcome', async () => {
+  const vm = new CaseReviewViewModel({
+    client: makeStep4Client({
+      status: 'Completed',
+      questionBankVersion: 'sha256:abc123',
+      versionedExport: {
+        slug: 'example-review',
+        questions: [
+          {
+            id: 'q1',
+            text: 'T',
+            category: null,
+            responseType: 'yes-no-na',
+            options: null,
+            optionOutcomes: { No: 'bad', Yes: 'good' },
+            showWhen: null,
+            deprecated: false,
+          },
+        ],
+        outcomeOptions: [
+          { id: 'good', wording: 'Good', severity: 0 },
+          { id: 'bad', wording: 'Bad', severity: 100 },
+        ],
+        // Differs from the live config's default ('pass') — the snapshot's
+        // vocabulary governs the as-reviewed failure semantics.
+        defaultOutcomeId: 'good',
+      },
+    }),
+    saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
+    caseId: 'c1',
+    currentUserId: 'u1',
+    capabilities: null,
+  });
+
+  await vm.load();
+
+  assert.deepEqual(vm.catalogue[0].failureValues, ['No']);
 });
 
 test('CaseReviewViewModel.load(): versioned catalogue carries labelIds when present', async () => {
@@ -699,7 +751,6 @@ test('CaseReviewViewModel.load(): versioned catalogue carries labelIds when pres
             responseType: 'yes-no-na',
             options: null,
             showWhen: null,
-            failureCriteria: null,
             deprecated: false,
             labelIds: ['lbl-a'],
           },
@@ -871,7 +922,6 @@ test('CaseReviewViewModel.load(): a pre-#390 versioned export maps its category 
             responseType: 'yes-no-na',
             options: null,
             showWhen: null,
-            failureCriteria: null,
             deprecated: false,
           },
         ],
@@ -905,7 +955,6 @@ test('CaseReviewViewModel.load(): a #390 versioned export keeps category and que
             responseType: 'yes-no-na',
             options: null,
             showWhen: null,
-            failureCriteria: null,
             deprecated: false,
           },
           {
@@ -916,7 +965,6 @@ test('CaseReviewViewModel.load(): a #390 versioned export keeps category and que
             responseType: 'yes-no-na',
             options: null,
             showWhen: null,
-            failureCriteria: null,
             deprecated: false,
           },
         ],

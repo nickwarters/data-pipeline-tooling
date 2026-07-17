@@ -11,7 +11,6 @@
       "optionOutcomes": {
         "No": "fail"
       },
-      "failureCriteria": "No",
       "remediationActions": [
         "Acknowledge the complaint in writing within the regulatory timeframe."
       ],
@@ -32,7 +31,6 @@
         "Acknowledgement letter includes inaccurate information or incorrect structure used, which could impact the customer's understanding/actions and/or is a regulatory requirement": "refer",
         "Acknowledgement letter includes inaccurate information or incorrect structure used, which could impact the customer's understanding/actions and/or is a regulatory requirement, and this led to harm": "fail"
       },
-      "failureCriteria": "Acknowledgement letter includes inaccurate information or incorrect structure used, which could impact the customer's understanding/actions and/or is a regulatory requirement, and this led to harm",
       "remediationActions": [
         "Reissue the acknowledgement letter using the correct complaint letter structure."
       ],
@@ -47,7 +45,6 @@
       "optionOutcomes": {
         "No": "fail"
       },
-      "failureCriteria": "No",
       "remediationActions": [
         "Complete a full investigation covering every point the customer raised."
       ],
@@ -67,7 +64,6 @@
       "optionOutcomes": {
         "No": "refer"
       },
-      "failureCriteria": "No",
       "deprecated": false
     },
     {
@@ -86,7 +82,6 @@
       "optionOutcomes": {
         "No": "refer"
       },
-      "failureCriteria": "No",
       "remediationActions": [
         "Recalculate and offer appropriate redress to the customer."
       ],
@@ -101,7 +96,6 @@
       "optionOutcomes": {
         "No": "refer"
       },
-      "failureCriteria": "No",
       "deprecated": false
     }
   ],

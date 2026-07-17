@@ -9,7 +9,10 @@
 import { signal, computed } from './signal.js';
 import { withPreservedScroll } from './preserve-scroll.js';
 import { evaluate } from '../evaluators/applicability-evaluator.js';
-import { materializeRemediationActions } from '../evaluators/failure-evaluator.js';
+import {
+  materializeRemediationActions,
+  withDerivedFailureValues,
+} from '../evaluators/failure-evaluator.js';
 import {
   captureValue,
   validateCaptureGroups,
@@ -250,9 +253,6 @@ export class CaseReviewViewModel {
             ? { optionOutcomes: q.optionOutcomes }
             : {}),
           ...(q.showWhen !== null ? { showWhen: q.showWhen } : {}),
-          ...(q.failureCriteria !== null
-            ? { failureCriteria: q.failureCriteria }
-            : {}),
           ...(q.labelIds ? { labelIds: q.labelIds } : {}),
           deprecated: q.deprecated,
         }));
@@ -263,6 +263,17 @@ export class CaseReviewViewModel {
       }
       this.catalogue = config.questions.filter((q) => !q.deprecated);
     }
+
+    // Failure is derived, not authored: annotate the catalogue with each
+    // question's failing response values (every option mapped to a non-default
+    // Outcome). A frozen Case derives against its snapshot's default so the
+    // as-reviewed failure semantics hold even if the live config moves on.
+    this.catalogue = withDerivedFailureValues(
+      this.catalogue,
+      (versionHash && versionedExport
+        ? (versionedExport.defaultOutcomeId ?? config.defaultOutcomeId)
+        : config.defaultOutcomeId) ?? ''
+    );
 
     this.catalogueById = new Map(this.catalogue.map((q) => [q.id, q]));
 

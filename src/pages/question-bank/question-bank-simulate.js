@@ -11,7 +11,7 @@
  * (published) and draft banks and diffs the results:
  * - applicability paths gained/lost (`evaluate` over each bank's showWhen graph)
  * - newly required Answers (now applicable but unanswered)
- * - Issues added/removed (`isFailure` against each bank's failureCriteria)
+ * - Issues added/removed (`isFailure` against each bank's derived failure values)
  * - the configured Outcome before/after
  * Every per-case change carries `causedBy`: the changed Question Definitions
  * that explain it, walking showWhen references upstream for indirect effects.
@@ -22,7 +22,10 @@
 /** @typedef {import('./question-bank-source.js').QuestionBank} QuestionBank */
 
 import { evaluate } from '../../evaluators/applicability-evaluator.js';
-import { isFailure } from '../../evaluators/failure-evaluator.js';
+import {
+  isFailure,
+  withDerivedFailureValues,
+} from '../../evaluators/failure-evaluator.js';
 import { computeConfiguredOutcome } from '../../evaluators/configured-outcome.js';
 import { resolveCompiledOptions } from './question-bank-compile.js';
 
@@ -67,7 +70,7 @@ const COMPARED_FIELDS = /** @type {const} */ ([
   'options',
   'optionOutcomes',
   'showWhen',
-  'failureCriteria',
+  'failureValues',
 ]);
 
 /**
@@ -79,7 +82,7 @@ const COMPARED_FIELDS = /** @type {const} */ ([
  * @returns {QuestionDefinition[]}
  */
 function activeRuntimeQuestions(bank) {
-  return bank.questions
+  const questions = bank.questions
     .filter((q) => !q.deprecated)
     .map((q) => {
       const resolved = resolveCompiledOptions(q, bank.outcomeOptions ?? []);
@@ -89,6 +92,9 @@ function activeRuntimeQuestions(bank) {
         optionOutcomes: resolved.optionOutcomes ?? undefined,
       });
     });
+  // Failure is derived from the outcome mapping against this bank's default,
+  // so an Issues diff picks up default-Outcome changes too.
+  return withDerivedFailureValues(questions, bank.defaultOutcomeId ?? '');
 }
 
 /**

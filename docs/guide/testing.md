@@ -292,4 +292,5 @@ Standard checks for every Case Type:
 - All `showWhen` references point to questions in the catalogue.
 - No cycles in the `showWhen` graph.
 - `computeOutcome` returns the correct result for pass, fail, and refer cases.
-- Informational questions without `failureCriteria` do not affect the outcome.
+- Informational questions without an `optionOutcomes` mapping do not affect
+  the outcome and raise no Issues.

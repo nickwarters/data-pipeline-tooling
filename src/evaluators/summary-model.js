@@ -38,9 +38,10 @@ export function buildSummaryModel(catalogue, answers, captureGroups = []) {
   /** @type {Map<string, GroupCount>} */
   const counts = new Map();
   for (const q of applicable) {
-    // Only failure-scorable questions (those with a failureCriteria) contribute
+    // Only failure-scorable questions (those with derived failureValues, i.e.
+    // at least one response mapping to a non-default Outcome) contribute
     // pass/fail counts; informational questions are excluded.
-    if (!q.failureCriteria) continue;
+    if (!q.failureValues?.length) continue;
     const answer = answers[q.id];
     const v = answer?.value;
     const answered = Array.isArray(v) ? v.length > 0 : !!v;

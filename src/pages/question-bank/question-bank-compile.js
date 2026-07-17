@@ -78,8 +78,12 @@ function compileBankQuestions(bank) {
       question,
       bank.outcomeOptions ?? []
     );
+    // Failure is derived from optionOutcomes at load, never stored: shed any
+    // legacy authored `failureCriteria` still present in an old artifact.
+    const { failureCriteria: _dropLegacy, ...rest } =
+      /** @type {DraftQuestion & { failureCriteria?: string }} */ (question);
     return {
-      ...question,
+      ...rest,
       options: resolved.options ?? undefined,
       optionOutcomes: resolved.optionOutcomes ?? undefined,
     };
@@ -161,7 +165,7 @@ function canonicalise(value) {
  * Returns the function-free projection of the bank: slug, label, generatedAt,
  * a full SHA-256 hash (stable over questions+slug only, including labelIds),
  * a questions array that carries id/text/category/questionGroup/responseType/options/
- * optionOutcomes/showWhen/failureCriteria/remediationActions/labelIds/deprecated,
+ * optionOutcomes/showWhen/remediationActions/labelIds/deprecated,
  * case-type outcomeOptions/defaultOutcomeId, and a labels table. Excluded: computeOutcome,
  * allowFreeFormRemediation, eligibleGroups.
  *
@@ -180,7 +184,6 @@ function canonicalise(value) {
  * options: string[] | null,
  * optionOutcomes: Record<string, string> | null,
  * showWhen: Record<string, unknown> | null,
- * failureCriteria: string | null,
  * remediationActions: Array<import('../../sharepoint-client.js').RemediationActionDefinition> | null,
  * deprecated: boolean,
  * labelIds?: string[],
@@ -194,7 +197,7 @@ export async function compileExport(bank) {
   const outcomeOptions = bank.outcomeOptions ?? [];
   const questions = bank.questions.map((q) => {
     const resolved = resolveCompiledOptions(q, outcomeOptions);
-    /** @type {{ id: string, text: string, category: string|null, questionGroup: string|null, responseType: string, options: string[]|null, optionOutcomes: Record<string, string>|null, showWhen: Record<string,unknown>|null, failureCriteria: string|null, remediationActions: Array<import('../../sharepoint-client.js').RemediationActionDefinition>|null, deprecated: boolean, labelIds?: string[] }} */
+    /** @type {{ id: string, text: string, category: string|null, questionGroup: string|null, responseType: string, options: string[]|null, optionOutcomes: Record<string, string>|null, showWhen: Record<string,unknown>|null, remediationActions: Array<import('../../sharepoint-client.js').RemediationActionDefinition>|null, deprecated: boolean, labelIds?: string[] }} */
     const out = {
       id: q.id,
       text: q.text,
@@ -204,7 +207,6 @@ export async function compileExport(bank) {
       options: resolved.options,
       optionOutcomes: resolved.optionOutcomes,
       showWhen: q.showWhen ?? null,
-      failureCriteria: q.failureCriteria ?? null,
       remediationActions: q.remediationActions
         ? q.remediationActions.map((action, index) =>
             typeof action === 'string'

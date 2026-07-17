@@ -28,14 +28,14 @@ const CATALOGUE = [
     id: 'q-welcome',
     text: 'Greeted professionally?',
     responseType: 'yes-no-na',
-    failureCriteria: 'No',
+    failureValues: ['No'],
     deprecated: false,
   },
   {
     id: 'q-needs',
     text: 'Needs identified?',
     responseType: 'yes-no-na',
-    failureCriteria: 'No',
+    failureValues: ['No'],
     deprecated: false,
   },
   {
@@ -43,7 +43,7 @@ const CATALOGUE = [
     text: 'Issue resolved?',
     responseType: 'yes-no-na',
     showWhen: { 'q-needs': { equals: 'Yes' } },
-    failureCriteria: 'No',
+    failureValues: ['No'],
     deprecated: false,
   },
 ];

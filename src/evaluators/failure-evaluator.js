@@ -1,28 +1,74 @@
 // @ts-check
+import { NA_VALUE } from '../lib/response-options.js';
+
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
 
 /**
- * Returns true if the Answer matches the QuestionDefinition's failureCriteria.
- * For string values: equality match.
- * For string[] values (multi-choice): true if any element matches.
+ * Derives the response values that count as failures for a question: every
+ * option whose `optionOutcomes` entry maps to an Outcome other than the Case
+ * Type's default. Unmapped options resolve to the default Outcome and so never
+ * fail; the universal N/A is never a failure, even when a legacy bank maps it.
+ *
+ * @param {QuestionDefinition} question
+ * @param {string} defaultOutcomeId
+ * @returns {string[]}
+ */
+export function deriveFailureValues(question, defaultOutcomeId) {
+  return Object.entries(question.optionOutcomes ?? {})
+    .filter(
+      ([value, outcomeId]) =>
+        value !== NA_VALUE && outcomeId !== defaultOutcomeId
+    )
+    .map(([value]) => value);
+}
+
+/**
+ * Annotates a catalogue with each question's derived `failureValues`. Called
+ * wherever questions are materialised alongside their Case Type's
+ * `defaultOutcomeId` (view-model load, bank simulation); consumers then call
+ * `isFailure(question, answer)` without needing the outcome configuration.
+ * Questions that cannot fail are passed through untouched (any stale
+ * annotation is stripped); the input array is never mutated.
+ *
+ * @param {QuestionDefinition[]} questions
+ * @param {string} defaultOutcomeId
+ * @returns {QuestionDefinition[]}
+ */
+export function withDerivedFailureValues(questions, defaultOutcomeId) {
+  return questions.map((question) => {
+    const failureValues = deriveFailureValues(question, defaultOutcomeId);
+    if (failureValues.length) return { ...question, failureValues };
+    if ('failureValues' in question) {
+      const { failureValues: _drop, ...rest } = question;
+      return rest;
+    }
+    return question;
+  });
+}
+
+/**
+ * Returns true if the Answer selects any of the question's derived
+ * `failureValues` — i.e. any response mapping to a non-default Outcome.
+ * For string[] values (multi-choice): true if any element matches. The
+ * universal N/A never fails.
  *
  * @param {QuestionDefinition} question
  * @param {Answer | undefined} answer
  * @returns {boolean}
  */
 export function isFailure(question, answer) {
-  if (!question.failureCriteria) return false;
-  if (!answer) return false;
+  const failing = question.failureValues;
+  if (!failing?.length || !answer) return false;
   const v = answer.value;
-  if (Array.isArray(v)) return v.includes(question.failureCriteria);
-  return v === question.failureCriteria;
+  const values = Array.isArray(v) ? v : [v];
+  return values.some((value) => value !== NA_VALUE && failing.includes(value));
 }
 
 /**
- * Counts answers that match a configured failureCriteria. Questions with no
- * failureCriteria are informational for Outcome purposes, even when answered
- * with values like "No".
+ * Counts answers selecting a derived failure value. Questions with no
+ * non-default outcome mapping are informational, even when answered with
+ * values like "No".
  *
  * @param {QuestionDefinition[]} questions
  * @param {Record<string, Answer>} answers

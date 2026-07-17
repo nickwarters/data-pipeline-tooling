@@ -846,10 +846,6 @@ function qDefFromItem(raw) {
       showWhen && typeof showWhen === 'object'
         ? /** @type {Record<string, unknown>} */ (showWhen)
         : undefined,
-    failureCriteria:
-      typeof item?.FailureCriteria === 'string'
-        ? item.FailureCriteria
-        : undefined,
     remediationActions: Array.isArray(remediation)
       ? /** @type {import('../sharepoint-client.js').QuestionDefinition['remediationActions']} */ (
           remediation

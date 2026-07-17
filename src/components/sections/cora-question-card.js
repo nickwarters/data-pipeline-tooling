@@ -7,7 +7,6 @@ import {
   moveQuestion,
   moveQuestionWithinGroup,
 } from '../../lib/question-order.js';
-import { NA_VALUE } from '../../lib/response-options.js';
 
 /**
  * One Question Definition's editing card. The active bank, the baseline
@@ -82,25 +81,11 @@ export function QuestionCard(props) {
       )
     )
   );
-  if (q.responseType === 'yes-no-na') {
-    grid.appendChild(
-      questionCardField(
-        'Failure Criteria',
-        questionCardSelect(
-          // NA_VALUE is the canonical stored literal — the Reviewer's option
-          // stores 'NA', so the criteria must too or it can never match (#391).
-          ['—', 'Yes', 'No', NA_VALUE],
-          q.failureCriteria || '—',
-          (/** @type {string} */ v) =>
-            setQuestionFailureCriteria(onCommit, q, v)
-        )
-      )
-    );
-  }
-
   // Every response type maps its options to Outcomes (the response drives the
   // Outcome), so the options editor renders for all types — read-only for
   // `outcome`, fixed-option for `yes-no-na`, editable for single/multi-choice.
+  // Failure needs no editor of its own: every option mapped to a non-default
+  // Outcome is a failure (derived at load, see evaluators/failure-evaluator.js).
   const bodyChildren = [
     wording,
     grid,
@@ -317,13 +302,6 @@ export function setQuestionResponseType(onCommit, q, responseType) {
     else if (!q.options) q.options = ['Option A', 'Option B'];
     // `outcome`-type option→Outcome mapping is derived read-only, never stored.
     if (responseType === 'outcome') delete q.optionOutcomes;
-  });
-}
-
-/** @param {(fn: () => void) => void} onCommit @param {any} q @param {string} failureCriteria */
-export function setQuestionFailureCriteria(onCommit, q, failureCriteria) {
-  onCommit(() => {
-    q.failureCriteria = failureCriteria === '—' ? undefined : failureCriteria;
   });
 }
 

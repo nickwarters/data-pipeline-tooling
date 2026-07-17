@@ -18,14 +18,14 @@ const CATALOGUE = [
     text: 'Greeted?',
     category: 'Opening',
     responseType: 'yes-no-na',
-    failureCriteria: 'No',
+    failureValues: ['No'],
     deprecated: false,
   },
   {
     id: 'q2',
     text: 'Resolved?',
     responseType: 'yes-no-na',
-    failureCriteria: 'No',
+    failureValues: ['No'],
     deprecated: false,
   },
 ];

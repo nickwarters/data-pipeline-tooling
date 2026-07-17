@@ -106,14 +106,14 @@ const FAIL_CATALOGUE = [
     id: 'q-greet',
     text: 'Greeted?',
     responseType: 'yes-no-na',
-    failureCriteria: 'No',
+    failureValues: ['No'],
     deprecated: false,
   },
   {
     id: 'q-close',
     text: 'Closed well?',
     responseType: 'yes-no-na',
-    failureCriteria: 'No',
+    failureValues: ['No'],
     deprecated: false,
   },
 ];

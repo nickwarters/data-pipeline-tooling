@@ -153,7 +153,6 @@ const config = {{
       questionGroup: 'Evidence',
       responseType: 'yes-no-na',
       optionOutcomes: {{ No: 'fail' }},
-      failureCriteria: 'No',
       remediationActions: ['Provide the missing evidence and record the source.'],
       deprecated: false,
     }},
@@ -163,7 +162,6 @@ const config = {{
       questionGroup: 'Decisioning',
       responseType: 'yes-no-na',
       optionOutcomes: {{ No: 'refer' }},
-      failureCriteria: 'No',
       remediationActions: ['Document the rationale for the case decision.'],
       deprecated: false,
     }},
@@ -200,6 +198,7 @@ import {{ test }} from 'node:test';
 import assert from 'node:assert/strict';
 import config from '../case-types/{opts.slug}.js';
 import {{ detectCycles }} from '../src/evaluators/applicability-evaluator.js';
+import {{ deriveFailureValues }} from '../src/evaluators/failure-evaluator.js';
 import {{ cases }} from '../dev/fixtures/cases.js';
 
 /** @typedef {{import('../src/sharepoint-client.js').Answer}} Answer */
@@ -221,8 +220,8 @@ test('{opts.slug}: every choice question carries a non-empty options[]', () => {
   }}
 }});
 
-test('{opts.slug}: at least one question has failureCriteria and remediationActions', () => {{
-  assert.ok(config.questions.some((q) => q.failureCriteria != null && q.remediationActions?.length));
+test('{opts.slug}: at least one question maps a failing response and has remediationActions', () => {{
+  assert.ok(config.questions.some((q) => deriveFailureValues(q, config.defaultOutcomeId).length > 0 && q.remediationActions?.length));
 }});
 
 test('{opts.slug}: no cycles in showWhen graph', () => {{

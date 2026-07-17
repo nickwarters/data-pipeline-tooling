@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import config from '../case-types/complaints.js';
 import { detectCycles } from '../src/evaluators/applicability-evaluator.js';
+import { deriveFailureValues } from '../src/evaluators/failure-evaluator.js';
 import { cases } from '../dev/fixtures/cases.js';
 
 /** @typedef {import('../src/sharepoint-client.js').Answer} Answer */
@@ -58,10 +59,10 @@ test('complaints: at least one question has a showWhen rule referencing the cata
   }
 });
 
-test('complaints: at least one question has failureCriteria and remediationActions', () => {
+test('complaints: at least one question maps a failing response and has remediationActions', () => {
   const withBoth = config.questions.filter(
     (q) =>
-      q.failureCriteria != null &&
+      deriveFailureValues(q, config.defaultOutcomeId).length > 0 &&
       q.remediationActions &&
       q.remediationActions.length > 0
   );
@@ -209,8 +210,12 @@ test('complaints computeOutcome: letter-structure grades map to pass, refer and 
     config.computeOutcome({ 'q-cm-letter-structure': ans(harm) }).outcome,
     'fail'
   );
-  // Only the harm grade flags a failed Answer for the Issues/Remediation flow.
-  assert.equal(q.failureCriteria, harm);
+  // Every grade mapping to a non-default Outcome flags a failed Answer for
+  // the Issues/Remediation flow — the refer grade included.
+  assert.deepEqual(deriveFailureValues(q, config.defaultOutcomeId), [
+    couldImpact,
+    harm,
+  ]);
 });
 
 // --- fixtures ---

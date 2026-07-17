@@ -68,11 +68,12 @@ test('CORAQuestionCard: no question → nothing renders', () => {
   assert.equal(e.childElementCount, 0);
 });
 
-test('CORAQuestionCard: yes-no-na shows failure-criteria field + fixed-option outcome mapping', () => {
+test('CORAQuestionCard: yes-no-na shows fixed-option outcome mapping and no failure-criteria control', () => {
   const bank = freshExampleReviewBank();
   const e = mount(bank, 0);
   assert.ok(control(e, 'Response Type'));
-  assert.ok(control(e, 'Failure Criteria'));
+  // Failure derives from the outcome mapping — there is nothing to author.
+  assert.equal(queryByRole(e, 'combobox', { name: 'Failure Criteria' }), null);
   assert.ok(getByTag(e, 'cora-options-editor'));
 });
 
@@ -128,14 +129,6 @@ test('CORAQuestionCard: category text commits to undefined when emptied', () => 
   const catInput = getByRole(e, 'textbox', { name: 'Category' });
   change(catInput, '');
   assert.equal(q.category, undefined);
-});
-
-test('CORAQuestionCard: failure-criteria — selecting "—" clears the field', () => {
-  const bank = freshExampleReviewBank();
-  const q = bank.questions[0]; // failureCriteria: 'No'
-  const e = mount(bank, 0);
-  change(control(e, 'Failure Criteria'), '—');
-  assert.equal(q.failureCriteria, undefined);
 });
 
 test('CORAQuestionCard: deprecate / undeprecate icon toggles state', () => {

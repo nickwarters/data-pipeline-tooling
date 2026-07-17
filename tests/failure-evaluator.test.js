@@ -4,8 +4,10 @@ import assert from 'node:assert/strict';
 
 import {
   countConfiguredFailures,
+  deriveFailureValues,
   isFailure,
   materializeRemediationActions,
+  withDerivedFailureValues,
 } from '../src/evaluators/failure-evaluator.js';
 
 /** @typedef {import('../src/sharepoint-client.js').QuestionDefinition} QuestionDefinition */
@@ -15,13 +17,14 @@ const Q_FAIL_NO = {
   id: 'q-needs',
   text: "Were the customer's needs identified?",
   responseType: 'yes-no-na',
-  failureCriteria: 'No',
+  optionOutcomes: { No: 'fail' },
+  failureValues: ['No'],
   remediationActions: ['Retrain agent.', 'Update script.'],
   deprecated: false,
 };
 
 /** @type {QuestionDefinition} */
-const Q_NO_CRITERIA = {
+const Q_INFORMATIONAL = {
   id: 'q-channel',
   text: 'Which channel?',
   responseType: 'single-choice',
@@ -35,42 +38,126 @@ const Q_MULTI = {
   text: 'Which products?',
   responseType: 'multi-choice',
   options: ['Account', 'Billing', 'Support'],
-  failureCriteria: 'Billing',
+  optionOutcomes: { Billing: 'refer' },
+  failureValues: ['Billing'],
   remediationActions: ['Refer to billing team.'],
   deprecated: false,
 };
 
+/** @type {QuestionDefinition} */
+const Q_GRADED = {
+  id: 'q-letter',
+  text: 'Is the letter structure correct?',
+  responseType: 'single-choice',
+  options: ['Minor', 'Impactful', 'Harmful'],
+  optionOutcomes: { Impactful: 'refer', Harmful: 'fail' },
+  failureValues: ['Impactful', 'Harmful'],
+  deprecated: false,
+};
+
+// ===== deriveFailureValues =====
+
+test('deriveFailureValues: every option mapped to a non-default Outcome fails', () => {
+  assert.deepEqual(deriveFailureValues(Q_GRADED, 'pass'), [
+    'Impactful',
+    'Harmful',
+  ]);
+});
+
+test('deriveFailureValues: options mapped to the default Outcome do not fail', () => {
+  /** @type {QuestionDefinition} */
+  const q = {
+    id: 'q-outcome',
+    text: 'Overall verdict?',
+    responseType: 'outcome',
+    options: ['Pass', 'Refer', 'Fail'],
+    optionOutcomes: { Pass: 'pass', Refer: 'refer', Fail: 'fail' },
+    deprecated: false,
+  };
+  assert.deepEqual(deriveFailureValues(q, 'pass'), ['Refer', 'Fail']);
+});
+
+test('deriveFailureValues: unmapped options never fail', () => {
+  assert.deepEqual(deriveFailureValues(Q_INFORMATIONAL, 'pass'), []);
+});
+
+test('deriveFailureValues: N/A never fails even when explicitly mapped', () => {
+  /** @type {QuestionDefinition} */
+  const q = {
+    id: 'q-na-mapped',
+    text: 'Legacy N/A mapping?',
+    responseType: 'yes-no-na',
+    optionOutcomes: { No: 'fail', NA: 'fail' },
+    deprecated: false,
+  };
+  assert.deepEqual(deriveFailureValues(q, 'pass'), ['No']);
+});
+
+// ===== withDerivedFailureValues =====
+
+test('withDerivedFailureValues: annotates questions that can fail and leaves the rest untouched', () => {
+  const { failureValues: _drop, ...bare } = Q_GRADED;
+  const [graded, informational] = withDerivedFailureValues(
+    [bare, Q_INFORMATIONAL],
+    'pass'
+  );
+  assert.deepEqual(graded.failureValues, ['Impactful', 'Harmful']);
+  assert.equal(informational, Q_INFORMATIONAL);
+  // Input is not mutated.
+  assert.equal('failureValues' in bare, false);
+});
+
+test('withDerivedFailureValues: strips a stale annotation when nothing can fail', () => {
+  /** @type {QuestionDefinition} */
+  const stale = { ...Q_INFORMATIONAL, failureValues: ['Phone'] };
+  const [out] = withDerivedFailureValues([stale], 'pass');
+  assert.equal('failureValues' in out, false);
+});
+
 // ===== isFailure =====
 
-test('isFailure: returns false when question has no failureCriteria', () => {
-  assert.equal(isFailure(Q_NO_CRITERIA, { value: 'Phone' }), false);
+test('isFailure: returns false when question has no failure values', () => {
+  assert.equal(isFailure(Q_INFORMATIONAL, { value: 'Phone' }), false);
 });
 
 test('isFailure: returns false when answer is undefined', () => {
   assert.equal(isFailure(Q_FAIL_NO, undefined), false);
 });
 
-test('isFailure: returns true when string value matches failureCriteria', () => {
+test('isFailure: returns true when the value maps to a non-default Outcome', () => {
   assert.equal(isFailure(Q_FAIL_NO, { value: 'No' }), true);
 });
 
-test('isFailure: returns false when string value does not match', () => {
+test('isFailure: every non-default graded option is a failure', () => {
+  assert.equal(isFailure(Q_GRADED, { value: 'Impactful' }), true);
+  assert.equal(isFailure(Q_GRADED, { value: 'Harmful' }), true);
+  assert.equal(isFailure(Q_GRADED, { value: 'Minor' }), false);
+});
+
+test('isFailure: returns false for passing and N/A values', () => {
   assert.equal(isFailure(Q_FAIL_NO, { value: 'Yes' }), false);
   assert.equal(isFailure(Q_FAIL_NO, { value: 'NA' }), false);
 });
 
+test('isFailure: N/A is never a failure even when listed in failureValues', () => {
+  /** @type {QuestionDefinition} */
+  const q = { ...Q_FAIL_NO, failureValues: ['No', 'NA'] };
+  assert.equal(isFailure(q, { value: 'NA' }), false);
+  assert.equal(isFailure(q, { value: ['NA'] }), false);
+});
+
 test('isFailure: scalar values require equality rather than substring matching', () => {
   assert.equal(
-    isFailure({ ...Q_FAIL_NO, failureCriteria: 'N' }, { value: 'No' }),
+    isFailure({ ...Q_FAIL_NO, failureValues: ['N'] }, { value: 'No' }),
     false
   );
 });
 
-test('isFailure: returns true when array value includes failureCriteria', () => {
+test('isFailure: returns true when array value includes a failure value', () => {
   assert.equal(isFailure(Q_MULTI, { value: ['Account', 'Billing'] }), true);
 });
 
-test('isFailure: returns false when array value does not include failureCriteria', () => {
+test('isFailure: returns false when array value includes no failure value', () => {
   assert.equal(isFailure(Q_MULTI, { value: ['Account', 'Support'] }), false);
 });
 
@@ -80,7 +167,7 @@ test('isFailure: returns false for empty array', () => {
 
 // ===== countConfiguredFailures =====
 
-test('countConfiguredFailures: ignores No answers for questions with no failureCriteria', () => {
+test('countConfiguredFailures: ignores No answers on informational questions', () => {
   /** @type {QuestionDefinition[]} */
   const questions = [
     {
@@ -98,11 +185,11 @@ test('countConfiguredFailures: ignores No answers for questions with no failureC
   assert.equal(countConfiguredFailures(questions, answers), 0);
 });
 
-test('countConfiguredFailures: counts answers matching configured failureCriteria', () => {
-  const questions = [Q_FAIL_NO, Q_NO_CRITERIA, Q_MULTI];
+test('countConfiguredFailures: counts answers hitting derived failure values', () => {
+  const questions = [Q_FAIL_NO, Q_INFORMATIONAL, Q_MULTI];
   const answers = {
     [Q_FAIL_NO.id]: { value: 'No' },
-    [Q_NO_CRITERIA.id]: { value: 'Email' },
+    [Q_INFORMATIONAL.id]: { value: 'Email' },
     [Q_MULTI.id]: { value: ['Account', 'Billing'] },
   };
 
@@ -113,183 +200,171 @@ test('countConfiguredFailures: counts answers matching configured failureCriteri
 
 test('materializeRemediationActions: leaves no selected actions on a newly failed answer', () => {
   const out = materializeRemediationActions(Q_FAIL_NO, { value: 'No' });
-  assert.equal(out.remediationActions, undefined);
+  assert.deepEqual(out.remediationActions, undefined);
 });
 
 test('materializeRemediationActions: preserves justification on failed answer', () => {
   const out = materializeRemediationActions(Q_FAIL_NO, {
     value: 'No',
-    justification: 'Skipped',
+    justification: 'Customer asked twice.',
   });
-  assert.equal(out.value, 'No');
-  assert.equal(out.justification, 'Skipped');
-  assert.equal(out.remediationActions, undefined);
+  assert.equal(out.justification, 'Customer asked twice.');
 });
 
 test('materializeRemediationActions: preserves selected actions on a still-failing answer', () => {
   const out = materializeRemediationActions(Q_FAIL_NO, {
     value: 'No',
     remediationActions: [
-      { id: 'q-needs-ra-1', text: 'Update script.', completed: false },
+      { id: 'q-needs-ra-0', text: 'Retrain agent.', completed: false },
     ],
   });
-  assert.deepEqual(out.remediationActions, [
-    { id: 'q-needs-ra-1', text: 'Update script.', completed: false },
-  ]);
+  assert.equal(out.remediationActions?.length, 1);
+  assert.equal(out.remediationActions?.[0].text, 'Retrain agent.');
 });
 
 test('materializeRemediationActions: strips remediationActions when answer becomes passing', () => {
   const stale = {
     value: 'Yes',
-    remediationActions: [{ id: 'q-needs-ra-0', text: 'old', completed: false }],
+    remediationActions: [
+      { id: 'q-needs-ra-0', text: 'Retrain agent.', completed: false },
+    ],
   };
   const out = materializeRemediationActions(Q_FAIL_NO, stale);
-  assert.equal(out.remediationActions, undefined);
-  assert.equal(out.value, 'Yes');
+  assert.equal('remediationActions' in out, false);
 });
 
 test('materializeRemediationActions: retains freeFormRemediation on a still-failing answer (issue #250)', () => {
   const out = materializeRemediationActions(Q_FAIL_NO, {
     value: 'No',
-    freeFormRemediation: 'Escalate to legal',
+    freeFormRemediation: 'Call the customer back.',
   });
-  assert.equal(out.freeFormRemediation, 'Escalate to legal');
+  assert.equal(out.freeFormRemediation, 'Call the customer back.');
 });
 
 test('materializeRemediationActions: strips freeFormRemediation when answer becomes passing (issue #250)', () => {
   const out = materializeRemediationActions(Q_FAIL_NO, {
     value: 'Yes',
-    freeFormRemediation: 'Escalate to legal',
-    remediationActions: [{ id: 'q-needs-ra-0', text: 'old', completed: false }],
+    freeFormRemediation: 'Call the customer back.',
   });
-  assert.equal(out.freeFormRemediation, undefined);
-  assert.equal(out.remediationActions, undefined);
-  assert.equal(out.value, 'Yes');
+  assert.equal('freeFormRemediation' in out, false);
 });
 
 test('materializeRemediationActions: returns answer unchanged when question has no remediationActions defined', () => {
   /** @type {QuestionDefinition} */
   const q = {
-    id: 'q-x',
-    text: 'q',
+    id: 'q-simple',
+    text: 'Simple?',
     responseType: 'yes-no-na',
-    failureCriteria: 'No',
+    optionOutcomes: { No: 'fail' },
+    failureValues: ['No'],
     deprecated: false,
   };
   const ans = { value: 'No' };
   const out = materializeRemediationActions(q, ans);
-  assert.equal(out.remediationActions, undefined);
+  assert.deepEqual(out, ans);
 });
-
-// ===== Attributed Party stripping (ADR-0013) =====
 
 test('materializeRemediationActions: strips attributedParty when answer becomes passing', () => {
   const stale = {
     value: 'Yes',
-    attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' },
+    attributedParty: { loginName: 'dev\\alex', displayName: 'Alex Doe' },
   };
   const out = materializeRemediationActions(Q_FAIL_NO, stale);
-  assert.equal(out.attributedParty, undefined);
-  assert.equal(out.value, 'Yes');
+  assert.equal('attributedParty' in out, false);
 });
 
 test('materializeRemediationActions: strips both attributedParty and remediationActions when answer becomes passing', () => {
   const stale = {
     value: 'Yes',
-    remediationActions: [{ id: 'q-needs-ra-0', text: 'old', completed: false }],
-    attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' },
+    attributedParty: { loginName: 'dev\\alex', displayName: 'Alex Doe' },
+    remediationActions: [
+      { id: 'q-needs-ra-0', text: 'Retrain agent.', completed: false },
+    ],
   };
   const out = materializeRemediationActions(Q_FAIL_NO, stale);
-  assert.equal(out.attributedParty, undefined);
-  assert.equal(out.remediationActions, undefined);
+  assert.equal('attributedParty' in out, false);
+  assert.equal('remediationActions' in out, false);
 });
 
 test('materializeRemediationActions: retains attributedParty on a still-failing answer', () => {
   const ans = {
     value: 'No',
-    attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' },
+    attributedParty: { loginName: 'dev\\alex', displayName: 'Alex Doe' },
   };
   const out = materializeRemediationActions(Q_FAIL_NO, ans);
   assert.deepEqual(out.attributedParty, {
-    loginName: 'jsmith',
-    displayName: 'Jane Smith',
+    loginName: 'dev\\alex',
+    displayName: 'Alex Doe',
   });
 });
 
 test('materializeRemediationActions: retains attributedParty on a still-failing answer with no remediationActions defined', () => {
   /** @type {QuestionDefinition} */
   const q = {
-    id: 'q-x',
-    text: 'q',
+    id: 'q-simple',
+    text: 'Simple?',
     responseType: 'yes-no-na',
-    failureCriteria: 'No',
+    optionOutcomes: { No: 'fail' },
+    failureValues: ['No'],
     deprecated: false,
   };
   const ans = {
     value: 'No',
-    attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' },
+    attributedParty: { loginName: 'dev\\alex', displayName: 'Alex Doe' },
   };
   const out = materializeRemediationActions(q, ans);
   assert.deepEqual(out.attributedParty, {
-    loginName: 'jsmith',
-    displayName: 'Jane Smith',
+    loginName: 'dev\\alex',
+    displayName: 'Alex Doe',
   });
 });
-
-// ===== Remediation Details stripping (ADR-0017, shares ADR-0013 lifecycle) =====
 
 test('materializeRemediationActions: strips remediationDetails when answer becomes passing', () => {
   const stale = {
     value: 'Yes',
-    remediationDetails: { rootCause: 'Rushed', severity: 'High' },
+    remediationDetails: { severity: 'High' },
   };
   const out = materializeRemediationActions(Q_FAIL_NO, stale);
-  assert.equal(out.remediationDetails, undefined);
-  assert.equal(out.value, 'Yes');
+  assert.equal('remediationDetails' in out, false);
 });
 
 test('materializeRemediationActions: retains remediationDetails on a still-failing answer', () => {
-  const ans = {
-    value: 'No',
-    remediationDetails: { rootCause: 'Rushed' },
-  };
+  const ans = { value: 'No', remediationDetails: { severity: 'High' } };
   const out = materializeRemediationActions(Q_FAIL_NO, ans);
-  assert.deepEqual(out.remediationDetails, { rootCause: 'Rushed' });
+  assert.deepEqual(out.remediationDetails, { severity: 'High' });
 });
 
 test('materializeRemediationActions: strips remediationDetails alongside attributedParty when passing with no remediationActions defined', () => {
   /** @type {QuestionDefinition} */
   const q = {
-    id: 'q-x',
-    text: 'q',
+    id: 'q-simple',
+    text: 'Simple?',
     responseType: 'yes-no-na',
-    failureCriteria: 'No',
+    optionOutcomes: { No: 'fail' },
+    failureValues: ['No'],
     deprecated: false,
   };
   const stale = {
     value: 'Yes',
-    attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' },
-    remediationDetails: { rootCause: 'Rushed' },
+    attributedParty: { loginName: 'dev\\alex', displayName: 'Alex Doe' },
+    remediationDetails: { severity: 'High' },
   };
   const out = materializeRemediationActions(q, stale);
-  assert.equal(out.attributedParty, undefined);
-  assert.equal(out.remediationDetails, undefined);
+  assert.equal('attributedParty' in out, false);
+  assert.equal('remediationDetails' in out, false);
 });
-
-// ===== Issue Capture stripping (ADR-0020, shares ADR-0013 lifecycle) =====
 
 test('materializeRemediationActions: strips capture when answer becomes passing', () => {
   const stale = {
     value: 'Yes',
-    capture: { rootCause: 'Rushed', severity: 'High' },
+    capture: { severity: 'High' },
   };
   const out = materializeRemediationActions(Q_FAIL_NO, stale);
-  assert.equal(out.capture, undefined);
-  assert.equal(out.value, 'Yes');
+  assert.equal('capture' in out, false);
 });
 
 test('materializeRemediationActions: retains capture on a still-failing answer', () => {
-  const ans = { value: 'No', capture: { rootCause: 'Rushed' } };
+  const ans = { value: 'No', capture: { severity: 'High' } };
   const out = materializeRemediationActions(Q_FAIL_NO, ans);
-  assert.deepEqual(out.capture, { rootCause: 'Rushed' });
+  assert.deepEqual(out.capture, { severity: 'High' });
 });

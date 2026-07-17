@@ -28,7 +28,7 @@ test('compileBank: emits the standalone editable bank artifact', () => {
           labelIds: ['lbl-a'],
           responseType: 'yes-no-na',
           optionOutcomes: { No: 'fail' },
-          failureCriteria: 'No',
+
           deprecated: false,
         },
       ],

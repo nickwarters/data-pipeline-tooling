@@ -254,7 +254,7 @@ test('CORARemediationSection: failed question without remediationActions renders
       id: 'q1',
       text: 'Q1',
       responseType: 'yes-no-na',
-      failureCriteria: 'No',
+      failureValues: ['No'],
       deprecated: false,
     },
   ];

@@ -143,7 +143,7 @@ test('CORARemediationActionsEditor: failed questions get no Outcome selector (re
     id: 'q',
     text: '',
     responseType: 'yes-no-na',
-    failureCriteria: 'No',
+    failureValues: ['No'],
     deprecated: false,
   };
   const editor = renderEditor(q);

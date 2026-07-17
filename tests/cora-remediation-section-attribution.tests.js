@@ -19,7 +19,7 @@ test('CORARemediationSection: renders Attributed Party displayName read-only whe
       id: 'q1',
       text: 'Greeted?',
       responseType: 'yes-no-na',
-      failureCriteria: 'No',
+      failureValues: ['No'],
       deprecated: false,
     },
   ];
@@ -47,7 +47,7 @@ test('CORARemediationSection: does not render Attributed Party when attributeFai
       id: 'q1',
       text: 'Greeted?',
       responseType: 'yes-no-na',
-      failureCriteria: 'No',
+      failureValues: ['No'],
       deprecated: false,
     },
   ];
@@ -73,7 +73,7 @@ test('CORARemediationSection: no Attributed Party surface when failure has none,
       id: 'q1',
       text: 'Greeted?',
       responseType: 'yes-no-na',
-      failureCriteria: 'No',
+      failureValues: ['No'],
       deprecated: false,
     },
   ];

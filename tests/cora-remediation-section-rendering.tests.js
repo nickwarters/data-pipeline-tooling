@@ -42,7 +42,7 @@ test('CORARemediationSection: lists a failed answer that has no remediationActio
       id: 'q1',
       text: 'No actions defined?',
       responseType: 'yes-no-na',
-      failureCriteria: 'No',
+      failureValues: ['No'],
       deprecated: false,
     },
   ];
@@ -132,7 +132,7 @@ test('CORARemediationSection: multi-choice answer renders array as comma-joined'
       text: 'Products?',
       responseType: 'multi-choice',
       options: ['Account', 'Billing', 'Support'],
-      failureCriteria: 'Billing',
+      failureValues: ['Billing'],
       remediationActions: ['Refer to billing.'],
       deprecated: false,
     },

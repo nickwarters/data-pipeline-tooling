@@ -14,30 +14,32 @@ and.
 - You need **two inputs**: the per-Case-Type **export** (`case-types/{slug}.json`
   for current, `case-types/{slug}.{hash}.json` for versioned) and the **Case
   rows** (read from the per-Case-Type SharePoint list).
-- A question **failed** when its stored answer value matches the question's
-  `failureCriteria`. That's it — no JS, no functions.
+- A question **failed** when its stored answer value maps (via the question's
+  `optionOutcomes`) to an Outcome other than the export's `defaultOutcomeId`.
+  The universal `NA` answer never fails. That's it — no JS, no functions.
 - For a **case-level verdict** (pass / refer / fail), read the
   `outcomeAtCompletion` column on the Case row. **Do not** try to recompute it.
 - For **Completed Cases with a `questionBankVersion`**: use the versioned file
-  (`{slug}.{hash}.json`) for the question catalogue and `failureCriteria` — this
-  gives you the as-reviewed snapshot and avoids drift from later bank edits.
+  (`{slug}.{hash}.json`) for the question catalogue and its `optionOutcomes` /
+  `defaultOutcomeId` — this gives you the as-reviewed snapshot and avoids drift
+  from later bank edits.
 
 ## What you do _not_ need
 
 - **The compiled `case-types/{slug}.js` module.** It contains `computeOutcome`, a
   JS function you cannot parse. Ignore it. Read the `.json` sibling instead.
 - **The outcome function, in any form.** Per-question failure is data
-  (`failureCriteria`); case verdicts are a stored snapshot (`outcomeAtCompletion`).
-  Reporting never executes Case Type logic.
+  (`optionOutcomes` vs `defaultOutcomeId`); case verdicts are a stored snapshot
+  (`outcomeAtCompletion`). Reporting never executes Case Type logic.
 
 ## Input 1 — the Case Type export
 
 Two variants live in the Style Library beside the `.js` module:
 
-| File                 | Contents                                                                                                      | When to use                                                                                                                 |
-| -------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `{slug}.json`        | **Current** export — always the latest bank version. Carries the `labels` table.                              | In-progress Cases; any report that reads only the latest bank.                                                              |
-| `{slug}.{hash}.json` | **Versioned** export — immutable snapshot. Carries frozen `labelIds` per question but not the `labels` table. | Completed Cases with a `questionBankVersion` — use this file to get as-reviewed wording, `failureCriteria`, and `showWhen`. |
+| File                 | Contents                                                                                                      | When to use                                                                                                                |
+| -------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `{slug}.json`        | **Current** export — always the latest bank version. Carries the `labels` table.                              | In-progress Cases; any report that reads only the latest bank.                                                             |
+| `{slug}.{hash}.json` | **Versioned** export — immutable snapshot. Carries frozen `labelIds` per question but not the `labels` table. | Completed Cases with a `questionBankVersion` — use this file to get as-reviewed wording, `optionOutcomes`, and `showWhen`. |
 
 Fetch by URL over the same NTLM/Kerberos auth as everything else, e.g.
 `/Style Library/case-review/case-types/complaint-review.json` or
@@ -92,30 +94,28 @@ definitions — see **Label resolution** below.
       }
     ]
   },
-  "failureCriteria": "No",
   "labelIds": ["lbl-coaching"],
   "deprecated": false
 }
 ```
 
-| Field             | Type                                                          | Use in reporting                                                                                                                                                                |
-| ----------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`              | string                                                        | Key into the Case row's `answers` map.                                                                                                                                          |
-| `text`            | string                                                        | Display label for the report.                                                                                                                                                   |
-| `category`        | string \| absent                                              | Group / roll up (e.g. failure rate per section).                                                                                                                                |
-| `responseType`    | `yes-no-na` \| `single-choice` \| `multi-choice` \| `outcome` | **Selects the failure test** (scalar equality vs array-includes). `outcome` is single-choice over the Case Type's Outcomes.                                                     |
-| `options`         | string[] \| absent                                            | Valid choices; useful for labelling, not required for failure.                                                                                                                  |
-| `optionOutcomes`  | object \| null                                                | Maps each response option label to a configured Outcome id. **Drives the case verdict** — the highest-scoring applicable mapped Outcome wins. Independent of `failureCriteria`. |
-| `showWhen`        | object \| absent                                              | Applicability rule. Only needed for _denominators_ (see below); not for counting failures.                                                                                      |
-| `failureCriteria` | string \| absent                                              | The value that marks a failed Answer for the **Issues/Remediation** flow. **Absent ⇒ the question raises no Issue.** Does not by itself drive the Outcome.                      |
-| `labelIds`        | string[] \| absent                                            | IDs of labels assigned to this question (frozen in versioned files). Resolve to names via `labels` in the current file.                                                         |
-| `deprecated`      | boolean                                                       | Question retired from the bank; may still appear on older Cases — label or exclude as your report requires.                                                                     |
+| Field            | Type                                                          | Use in reporting                                                                                                                                                                                                          |
+| ---------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`             | string                                                        | Key into the Case row's `answers` map.                                                                                                                                                                                    |
+| `text`           | string                                                        | Display label for the report.                                                                                                                                                                                             |
+| `category`       | string \| absent                                              | Group / roll up (e.g. failure rate per section).                                                                                                                                                                          |
+| `responseType`   | `yes-no-na` \| `single-choice` \| `multi-choice` \| `outcome` | **Selects the failure test** (scalar equality vs array-includes). `outcome` is single-choice over the Case Type's Outcomes.                                                                                               |
+| `options`        | string[] \| absent                                            | Valid choices; useful for labelling, not required for failure.                                                                                                                                                            |
+| `optionOutcomes` | object \| null                                                | Maps each response option label to a configured Outcome id. **Drives the case verdict** (highest-scoring applicable mapped Outcome wins) **and per-question failure** (any option mapped to a non-default Outcome fails). |
+| `showWhen`       | object \| absent                                              | Applicability rule. Only needed for _denominators_ (see below); not for counting failures.                                                                                                                                |
+| `labelIds`       | string[] \| absent                                            | IDs of labels assigned to this question (frozen in versioned files). Resolve to names via `labels` in the current file.                                                                                                   |
+| `deprecated`     | boolean                                                       | Question retired from the bank; may still appear on older Cases — label or exclude as your report requires.                                                                                                               |
 
 Maintainers can use this to add informational Question Bank questions. For
-example, a required `General` yes/no question with no `failureCriteria` still
-appears in the Review tab and counts toward completion, but a `No` answer is
-outcome-neutral and must not create an Issue or Remediation. Outcome functions
-should therefore derive failures from configured `failureCriteria`, not from raw
+example, a required `General` yes/no question with no `optionOutcomes` mapping
+still appears in the Review tab and counts toward completion, but a `No` answer
+is outcome-neutral and must not create an Issue or Remediation. Reports must
+therefore derive failures from the `optionOutcomes` mapping, not from raw
 answer values across every question.
 
 Intentionally **absent**: `computeOutcome` (code), `remediationActions` /
@@ -236,16 +236,24 @@ export, find the Answer by `id` → apply the failure test. This replicates
 `isFailure()` in `src/evaluators/failure-evaluator.js` exactly:
 
 ```python
-def is_failure(question, answer):
- fc = question.get("failureCriteria")
- if fc is None: # question can never fail
+def failure_values(question, default_outcome_id):
+ mapping = question.get("optionOutcomes") or {}
+ return {
+ value
+ for value, outcome_id in mapping.items()
+ if value != "NA" and outcome_id != default_outcome_id
+ }
+
+def is_failure(question, answer, default_outcome_id):
+ failing = failure_values(question, default_outcome_id)
+ if not failing: # question can never fail
  return False
  if answer is None: # unanswered
  return False
  value = answer["value"]
  if isinstance(value, list): # multi-choice
- return fc in value # array-includes
- return value == fc # scalar equality
+ return any(v in failing for v in value if v != "NA")
+ return value != "NA" and value in failing # scalar
 ```
 
 > **The branch on `responseType` is implicit in `value`'s type**, but keep
@@ -265,7 +273,7 @@ for case in cases_modified_yesterday: # filter on completedAt
  by_id = {q["id"]: q for q in export["questions"]}
  for qid, answer in case["answers"].items():
  q = by_id.get(qid)
- if q and is_failure(q, answer):
+ if q and is_failure(q, answer, export.get("defaultOutcomeId")):
  tally[(case["caseType"], qid, q["text"], q.get("category"))] += 1
 
 # tally, sorted descending, is your "top failed questions" report
@@ -276,7 +284,7 @@ for case in cases_modified_yesterday: # filter on completedAt
 1. **Use versioned exports for Completed Cases.** When a Case row
    carries a `questionBankVersion`, fetch `{slug}.{hash}.json` for that hash
    instead of `{slug}.json`. This gives you the exact questions, wording, and
-   `failureCriteria` that were in force at review time. Cases completed before
+   `optionOutcomes` / `defaultOutcomeId` that were in force at review time. Cases completed before
    the architecture decision was deployed have no `questionBankVersion`; fall back to the current
    `{slug}.json` for those (same behaviour as before).
 

@@ -9,10 +9,10 @@
  * N/A value must import it from here; #391 happened because the literal was
  * duplicated and drifted.
  *
- * N/A is inert by default: it appears in no `optionOutcomes` mapping (the
+ * N/A is inert, always: it appears in no `optionOutcomes` mapping (the
  * bank editor never offers one), so `computeConfiguredOutcome` skips it, and
- * `isFailure` only matches it when an author deliberately configures
- * `failureCriteria: 'NA'`.
+ * the failure evaluator excludes it outright — an N/A Answer is never a
+ * failure, even against a legacy bank that mapped it.
  */
 
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */

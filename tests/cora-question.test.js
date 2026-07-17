@@ -211,7 +211,7 @@ test('CORAQuestion: failed answer with no selected actions shows an empty remedi
   const q = {
     ...Q_YES_NO,
     remediationActions: ['Action 1'],
-    failureCriteria: 'No',
+    failureValues: ['No'],
   };
   const el = new CORAQuestion();
   el.question = q;
@@ -229,7 +229,7 @@ test('CORAQuestion: failed answer with no selected actions shows an empty remedi
 
 test('CORAQuestion: renders the selected actions + free-form read-only beneath a failed answer (issue #250)', () => {
   const el = new CORAQuestion();
-  el.question = { ...Q_YES_NO, failureCriteria: 'No' };
+  el.question = { ...Q_YES_NO, failureValues: ['No'] };
   el.currentValue = 'No';
   el.selectedActions = ['Retrain agent.', 'Update script.'];
   el.freeFormRemediation = 'Escalate to legal';
@@ -255,7 +255,7 @@ test('CORAQuestion: renders the selected actions + free-form read-only beneath a
 
 test('CORAQuestion: syncRemediation refreshes the read-only display without rebuilding inputs (issue #250)', () => {
   const el = new CORAQuestion();
-  el.question = { ...Q_YES_NO, failureCriteria: 'No' };
+  el.question = { ...Q_YES_NO, failureValues: ['No'] };
   el.currentValue = 'No';
   el.connectedCallback();
 
@@ -297,7 +297,7 @@ test('CORAQuestion: a passing answer shows an empty remediation container', () =
   el.question = {
     ...Q_YES_NO,
     remediationActions: ['Act'],
-    failureCriteria: 'No',
+    failureValues: ['No'],
   };
   el.currentValue = 'Yes';
   el.selectedActions = [];
