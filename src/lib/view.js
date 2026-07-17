@@ -115,11 +115,34 @@ export function normalizeRenderResult(content) {
 /**
  * Replace a host element's children with a normalized render result.
  *
+ * When the normalized result is node-for-node identical to the host's current
+ * children, the write is skipped: `replaceChildren()` detaches and re-inserts
+ * even an unchanged child list, which disconnects/reconnects every custom
+ * element in it — remounting whole Sections when a reactive page re-renders
+ * with the same long-lived nodes (issue #308). Skipping the no-op write keeps
+ * those subtrees connected, so the control the user is editing survives.
+ *
  * @param {HTMLElement} host
  * @param {ViewRenderResult} content
  */
 export function replaceHostChildren(host, content) {
-  host.replaceChildren(...normalizeRenderResult(content));
+  const nodes = normalizeRenderResult(content);
+  if (sameChildList(host, nodes)) return;
+  host.replaceChildren(...nodes);
+}
+
+/**
+ * @param {HTMLElement} host
+ * @param {Node[]} nodes
+ * @returns {boolean}
+ */
+function sameChildList(host, nodes) {
+  const current = host.childNodes;
+  if (!current || current.length !== nodes.length) return false;
+  for (let i = 0; i < nodes.length; i++) {
+    if (current[i] !== nodes[i]) return false;
+  }
+  return true;
 }
 
 /**

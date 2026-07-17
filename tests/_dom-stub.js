@@ -116,9 +116,29 @@ export class StubEl {
   get childElementCount() {
     return this._children.filter((child) => child.tagName !== '#text').length;
   }
+  get childNodes() {
+    return [...this._children];
+  }
   appendChild(/** @type {StubEl} */ c) {
     c.parentNode = this;
     this._children.push(c);
+    return c;
+  }
+  removeChild(/** @type {StubEl} */ c) {
+    const i = this._children.indexOf(c);
+    if (i < 0) throw new Error('removeChild: node is not a child');
+    this._children.splice(i, 1);
+    c.parentNode = null;
+    notifyDomMutation();
+    return c;
+  }
+  insertBefore(/** @type {StubEl} */ c, /** @type {StubEl|null} */ ref) {
+    const i = ref ? this._children.indexOf(ref) : -1;
+    if (ref && i < 0) throw new Error('insertBefore: reference is not a child');
+    c.parentNode = this;
+    if (ref) this._children.splice(i, 0, c);
+    else this._children.push(c);
+    notifyDomMutation();
     return c;
   }
   append(/** @type {StubEl[]} */ ...cs) {
@@ -223,6 +243,11 @@ export class ConnectingStubEl extends StubEl {
   replaceChildren(/** @type {StubEl[]} */ ...cs) {
     super.replaceChildren(...cs);
     for (const c of cs) /** @type {any} */ (c).connectedCallback?.();
+  }
+  insertBefore(/** @type {StubEl} */ c, /** @type {StubEl|null} */ ref) {
+    super.insertBefore(c, ref);
+    /** @type {any} */ (c).connectedCallback?.();
+    return c;
   }
 }
 

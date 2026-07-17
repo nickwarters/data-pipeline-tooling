@@ -34,6 +34,10 @@ export class StubEl extends EventTarget {
     this.selectionEnd = 0;
   }
 
+  get childNodes() {
+    return [...this._children];
+  }
+
   appendChild(/** @type {StubEl} */ child) {
     child.parentNode = this;
     this._children.push(child);

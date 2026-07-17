@@ -37,14 +37,26 @@ import { normaliseConfiguredActions } from '../../evaluators/configured-outcome.
  */
 
 /**
+ * The Applicable Questions whose Answers currently fail, in catalogue order.
+ * This ordered id set is what decides between a full list rebuild and an
+ * in-place item patch (issue #308).
+ *
+ * @param {RemediationSectionProps} props
+ * @returns {QuestionDefinition[]}
+ */
+export function failedQuestions(props) {
+  const applicable = evaluate(props.catalogue, props.answers);
+  return props.catalogue.filter(
+    (q) => applicable.has(q.id) && isFailure(q, props.answers[q.id])
+  );
+}
+
+/**
  * @param {RemediationSectionProps} props
  * @returns {Node[]}
  */
 export function RemediationSection(props) {
-  const applicable = evaluate(props.catalogue, props.answers);
-  const failed = props.catalogue.filter(
-    (q) => applicable.has(q.id) && isFailure(q, props.answers[q.id])
-  );
+  const failed = failedQuestions(props);
 
   const heading = h('h2', {}, 'Failures');
 
@@ -69,34 +81,78 @@ export function RemediationSection(props) {
  */
 export function renderRemediationItem(props, q) {
   const li = h('li', { class: 'cora-remediation-item' });
+  const { before, after } = buildItemContent(props, q);
 
-  if (q.questionGroup) {
-    li.appendChild(
-      h('p', { class: 'cora-remediation-group' }, q.questionGroup)
-    );
-  }
-
-  li.appendChild(h('p', { class: 'cora-remediation-question' }, q.text));
-
-  const v = props.answers[q.id]?.value;
-  const ansText = `Answer: ${Array.isArray(v) ? v.join(', ') : (v ?? '')}`;
-  li.appendChild(h('p', { class: 'cora-remediation-answer' }, ansText));
-
-  if (props.attributeFailures) {
-    renderRemediationAttribution(props, li, q);
-  }
-
-  if (props.remediationFields?.length) {
-    renderRemediationDetails(props, li, q);
-  }
-
+  for (const node of before) li.appendChild(node);
   if (props.captureGroups?.length) {
     renderRemediationCapture(props, li, q);
   }
-
-  renderRemediationActions(props, li, q);
+  for (const node of after) li.appendChild(node);
 
   return li;
+}
+
+/**
+ * Builds a failed item's content around its capture slot: `before` is
+ * everything rendered above the `cora-capture-groups` element (question,
+ * answer, attribution, details), `after` everything below (Remediation
+ * Actions). Split out so {@link updateRemediationItem} can refresh both sides
+ * in place without ever detaching the reused capture element between them
+ * (issue #308).
+ *
+ * @param {RemediationSectionProps} props
+ * @param {QuestionDefinition} q
+ * @returns {{ before: Node[], after: Node[] }}
+ */
+function buildItemContent(props, q) {
+  const before = h('div', {});
+  if (q.questionGroup) {
+    before.appendChild(
+      h('p', { class: 'cora-remediation-group' }, q.questionGroup)
+    );
+  }
+  before.appendChild(h('p', { class: 'cora-remediation-question' }, q.text));
+
+  const v = props.answers[q.id]?.value;
+  const ansText = `Answer: ${Array.isArray(v) ? v.join(', ') : (v ?? '')}`;
+  before.appendChild(h('p', { class: 'cora-remediation-answer' }, ansText));
+
+  if (props.attributeFailures) {
+    renderRemediationAttribution(props, before, q);
+  }
+  if (props.remediationFields?.length) {
+    renderRemediationDetails(props, before, q);
+  }
+
+  const after = h('div', {});
+  renderRemediationActions(props, after, q);
+
+  return { before: [...before.childNodes], after: [...after.childNodes] };
+}
+
+/**
+ * Refreshes an already-rendered failed item in place. The reused
+ * `cora-capture-groups` element stays attached to its `<li>` throughout — its
+ * own `update()` syncs new values into the live controls — while the plain
+ * content on either side is rebuilt. Keeping the capture subtree connected is
+ * what preserves the Reviewer's focus and the browser's scroll anchoring
+ * across an autosave re-render (issue #308).
+ *
+ * @param {RemediationSectionProps} props
+ * @param {HTMLElement} li
+ * @param {QuestionDefinition} q
+ */
+export function updateRemediationItem(props, li, q) {
+  const cg = props.captureGroups?.length ? syncCaptureElement(props, q) : null;
+  const { before, after } = buildItemContent(props, q);
+
+  const anchor = cg && cg.parentNode === li ? cg : null;
+  for (const child of [...li.childNodes]) {
+    if (child !== anchor) li.removeChild(child);
+  }
+  for (const node of before) li.insertBefore(node, anchor);
+  if (cg && !anchor) li.appendChild(cg);
+  for (const node of after) li.appendChild(node);
 }
 
 /**
@@ -305,6 +361,20 @@ export function renderRemediationDetails(props, li, q) {
  * @param {QuestionDefinition} q
  */
 export function renderRemediationCapture(props, li, q) {
+  li.appendChild(/** @type {any} */ (syncCaptureElement(props, q)));
+}
+
+/**
+ * Gets (or lazily creates) the question's reused `cora-capture-groups`
+ * instance and pushes the current capture state into it. Separated from
+ * {@link renderRemediationCapture} so the in-place patch can refresh the
+ * element without re-appending it (issue #308).
+ *
+ * @param {RemediationSectionProps} props
+ * @param {QuestionDefinition} q
+ * @returns {import('./cora-capture-groups.js').CORACaptureGroups}
+ */
+function syncCaptureElement(props, q) {
   let cg = props.captureEls.get(q.id);
   if (!cg) {
     cg = /** @type {import('./cora-capture-groups.js').CORACaptureGroups} */ (
@@ -325,7 +395,7 @@ export function renderRemediationCapture(props, li, q) {
   cg.capture = capture;
   cg.canCapture = props.canCapture;
   cg.update?.(props.captureGroups, capture, props.canCapture);
-  li.appendChild(/** @type {any} */ (cg));
+  return cg;
 }
 
 export class CORARemediationSection extends ShellElement {
@@ -391,6 +461,50 @@ export class CORARemediationSection extends ShellElement {
      * @type {Map<string, import('./cora-capture-groups.js').CORACaptureGroups>}
      */
     this._captureEls = new Map();
+    /**
+     * The rendered `<li>` per failed question id, reused by the in-place patch
+     * (issue #308).
+     * @type {Map<string, HTMLElement>}
+     */
+    this._items = new Map();
+    /**
+     * The Answer reference each item was last rendered with; an unchanged
+     * reference means the item needs no patch (answers updates are immutable).
+     * @type {Map<string, Answer | undefined>}
+     */
+    this._renderedAnswers = new Map();
+    /**
+     * Structure signature of the last full render, `null` before the first.
+     * A matching signature on the next render means only Answer values can
+     * have changed, so items are patched in place instead of rebuilt.
+     * @type {string | null}
+     */
+    this._renderedStructure = null;
+  }
+
+  /**
+   * A stable string describing the list *structure*: the ordered failed
+   * question ids plus every prop that changes an item's internal shape. While
+   * two renders share a signature, a re-render can only mean changed Answer
+   * values, which the in-place patch handles without detaching the reused
+   * `cora-capture-groups` elements (issue #308).
+   *
+   * @param {RemediationSectionProps} props
+   * @param {QuestionDefinition[]} failed
+   * @returns {string}
+   */
+  _structureSignature(props, failed) {
+    return JSON.stringify([
+      failed.map((q) => q.id),
+      props.attributeFailures,
+      props.canAttribute,
+      props.canCaptureDetails,
+      props.canCapture,
+      props.canSelectRemediation,
+      (props.remediationFields ?? []).length,
+      (props.captureGroups ?? []).length,
+      props.responsibleParty?.loginName ?? null,
+    ]);
   }
 
   /**
@@ -409,13 +523,74 @@ export class CORARemediationSection extends ShellElement {
    * Survives (not routed through `this._shellRenderNow`): several tests call
    * `update()` before `connectedCallback()`, so this must render unconditionally
    * rather than being a no-op pre-connection like the base `update()`.
+   *
+   * While the structure signature is unchanged, changed items are patched in
+   * place — the reused `cora-capture-groups` elements are never detached, so
+   * the Reviewer's focus and the browser's scroll anchoring survive a
+   * capture-value autosave (issue #308). Any structural change (the failed set,
+   * or a shape-changing prop) falls back to the full rebuild.
    */
   _render() {
+    const props = this._buildProps();
+    const failed = failedQuestions(props);
+    if (
+      this._renderedStructure !== null &&
+      this._renderedStructure === this._structureSignature(props, failed)
+    ) {
+      this._patchItems(props, failed);
+      return;
+    }
     replaceHostChildren(this, this.render());
   }
 
   render() {
-    return RemediationSection(this._buildProps());
+    const props = this._buildProps();
+    const failed = failedQuestions(props);
+    const nodes = RemediationSection(props);
+    this._indexItems(props, failed, nodes);
+    return nodes;
+  }
+
+  /**
+   * Records what a full render produced — the `<li>` per failed question, the
+   * Answer each was rendered with, and the structure signature — so the next
+   * `_render()` can patch in place.
+   *
+   * @param {RemediationSectionProps} props
+   * @param {QuestionDefinition[]} failed
+   * @param {Node[]} nodes
+   */
+  _indexItems(props, failed, nodes) {
+    this._items.clear();
+    this._renderedAnswers.clear();
+    const lis = nodes.flatMap((node) => [
+      .../** @type {HTMLElement} */ (node).querySelectorAll(
+        '.cora-remediation-item'
+      ),
+    ]);
+    failed.forEach((q, i) => {
+      this._items.set(q.id, /** @type {HTMLElement} */ (lis[i]));
+      this._renderedAnswers.set(q.id, props.answers[q.id]);
+    });
+    this._renderedStructure = this._structureSignature(props, failed);
+  }
+
+  /**
+   * In-place update path: refresh only the items whose Answer reference
+   * changed, leaving every other item's DOM untouched.
+   *
+   * @param {RemediationSectionProps} props
+   * @param {QuestionDefinition[]} failed
+   */
+  _patchItems(props, failed) {
+    for (const q of failed) {
+      const li = this._items.get(q.id);
+      if (!li || props.answers[q.id] === this._renderedAnswers.get(q.id)) {
+        continue;
+      }
+      updateRemediationItem(props, li, q);
+      this._renderedAnswers.set(q.id, props.answers[q.id]);
+    }
   }
 
   /**

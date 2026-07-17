@@ -312,6 +312,58 @@ test('replaceHostChildren: clears the host when the render result is undefined',
   assert.equal(host._children.length, 0);
 });
 
+test('replaceHostChildren: skips the DOM write when the child list is unchanged (issue #308)', () => {
+  // replaceChildren() detaches and re-inserts even an identical child list,
+  // remounting every custom element in it. When a reactive view returns the
+  // same persistent nodes, the write must be skipped entirely.
+  const host = new StubEl('div');
+  const first = /** @type {any} */ (new StubEl('section'));
+  const second = /** @type {any} */ (new StubEl('p'));
+  replaceHostChildren(/** @type {any} */ (host), [first, second]);
+
+  let writes = 0;
+  const write = host.replaceChildren.bind(host);
+  host.replaceChildren = (/** @type {any[]} */ ...nodes) => {
+    writes++;
+    write(...nodes);
+  };
+
+  replaceHostChildren(/** @type {any} */ (host), [first, second]);
+  assert.equal(writes, 0, 'identical children are not re-appended');
+
+  replaceHostChildren(/** @type {any} */ (host), [second, first]);
+  assert.equal(writes, 1, 'a reordered list still replaces');
+
+  replaceHostChildren(/** @type {any} */ (host), [second]);
+  assert.equal(writes, 2, 'a shorter list still replaces');
+});
+
+test('reactive: a re-render returning the same persistent nodes leaves them attached (issue #308)', () => {
+  // The Case Review page returns the same long-lived Section nodes on every
+  // answers change; re-rendering must not detach/re-mount them (which would
+  // rebuild every Section and lose the control the Reviewer is editing).
+  const persistent = /** @type {any} */ (new StubEl('section'));
+  const tick = signal(0);
+  const host = /** @type {any} */ (
+    reactive(() => {
+      tick.get();
+      return [persistent];
+    })
+  );
+
+  let writes = 0;
+  const write = host.replaceChildren.bind(host);
+  host.replaceChildren = (/** @type {any[]} */ ...nodes) => {
+    writes++;
+    write(...nodes);
+  };
+
+  tick.set(1);
+
+  assert.equal(writes, 0, 'the persistent node list is not re-written');
+  assert.equal(persistent.parentNode, host, 'the node never left the host');
+});
+
 class ShellTestEl extends ShellElement {
   /** @type {(props: any) => any} */
   static renderer = () => undefined;

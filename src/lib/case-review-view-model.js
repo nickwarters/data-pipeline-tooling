@@ -359,11 +359,11 @@ export class CaseReviewViewModel {
       ...current,
       [questionId]: captureValue(existing, field, value),
     };
-    // Setting the answers signal synchronously re-renders the Issues list, which
-    // rebuilds DOM above the viewport and resets the page scroll. Snapshot and
-    // restore the scroll around that synchronous re-render so capturing an Issue
-    // detail doesn't throw the Reviewer back to the top. No-op outside a browser.
-    this._withPreservedScroll(() => this.answersSignal.set(newAnswers));
+    // No scroll workaround here (unlike the remediation-action handlers below):
+    // the Issues list patches changed items in place on a capture change, so the
+    // control being edited is never detached and focus/scroll survive natively
+    // (issue #308).
+    this.answersSignal.set(newAnswers);
     this.saveQueue.enqueue(this.caseId, 'answers', newAnswers);
   }
 
@@ -371,12 +371,12 @@ export class CaseReviewViewModel {
    * Runs `mutate` (a synchronous signal update that triggers a re-render) while
    * holding the scroll position steady across the resulting DOM churn.
    *
-   * The re-render tears down and rebuilds the Issues list — including the very
-   * control the Reviewer is editing — which both breaks the browser's scroll
-   * anchoring and provokes a focus-restore `.focus()` that scrolls the refocused
-   * control into view. Snapshotting and restoring the scroll around the whole
-   * synchronous re-render undoes both, so capturing an Issue detail leaves the
-   * page exactly where it was.
+   * Since issue #308 the Issues list patches changed items in place, so capture
+   * value changes no longer need this. It remains for the remediation-action
+   * and free-form handlers: those controls live in the plain item content the
+   * patch rebuilds, so the control the Reviewer just used is still replaced,
+   * which can break the browser's scroll anchoring. Snapshotting and restoring
+   * the scroll around the synchronous re-render keeps the page where it was.
    *
    * Delegates to the shared `withPreservedScroll` helper (`./preserve-scroll.js`)
    * so the same protection is available outside the view model (e.g. the
