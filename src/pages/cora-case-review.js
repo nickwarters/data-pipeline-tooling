@@ -210,6 +210,6 @@ export function CaseReviewPage({
     new URLSearchParams(searchStr).get('conversation') ?? 'popover';
   host.setAttribute('data-conversation-mode', panelMode);
 
-  void viewModel.load();
+  viewModel.load();
   return host;
 }

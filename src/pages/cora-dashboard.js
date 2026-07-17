@@ -76,12 +76,10 @@ export function DashboardPage({
       allCaseSources,
       allocationSources,
       cases: cases.get(),
-      onAllocated: () => {
-        void fetchData();
-      },
+      onAllocated: fetchData,
     })
   );
-  void fetchData();
+  fetchData();
   return host;
 }
 

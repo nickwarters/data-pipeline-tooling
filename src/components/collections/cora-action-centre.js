@@ -399,13 +399,13 @@ export function ActionCentre({
     } else {
       next.add(reason.id);
       expanded.set(next);
-      void loadPage(reason, 0);
+      loadPage(reason, 0);
     }
   }
 
   /** @param {Reason} reason */
   function showMore(reason) {
-    void loadPage(reason, pages.get()[reason.id].length);
+    loadPage(reason, pages.get()[reason.id].length);
   }
 
   /** @param {boolean} value */
@@ -415,7 +415,7 @@ export function ActionCentre({
     pages.set({});
     await loadCounts();
     for (const reason of currentReasons()) {
-      if (expanded.get().has(reason.id)) void loadPage(reason, 0);
+      if (expanded.get().has(reason.id)) loadPage(reason, 0);
     }
   }
 
@@ -432,15 +432,14 @@ export function ActionCentre({
         now,
       },
       {
-        onToggleNeedsAction: (value) => {
-          void toggleNeedsAction(value);
-        },
+        onToggleNeedsAction: toggleNeedsAction,
         onToggleGroup: toggleGroup,
         onShowMore: showMore,
         onOpenCase: (row) => onOpenCase?.(row),
       }
     )
   );
+
   async function init() {
     if (!client || typeof client.countCases !== 'function') return;
     await loadCounts();
@@ -453,6 +452,6 @@ export function ActionCentre({
   // dependency to — an enclosing render effect such as the dashboard's. Without
   // this, toggling the Action Centre would re-render the whole dashboard and
   // rebuild a fresh Action Centre, discarding the toggle.
-  void Promise.resolve().then(init);
+  queueMicrotask(init);
   return host;
 }

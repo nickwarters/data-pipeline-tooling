@@ -32,7 +32,7 @@ export function JourneyCasesPage({ client, journeyCaseSources }) {
   const host = reactive(() =>
     renderJourneyCases({ client, cases: cases.get() })
   );
-  void fetchData();
+  fetchData();
   return host;
 }
 

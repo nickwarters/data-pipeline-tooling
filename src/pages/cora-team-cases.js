@@ -90,7 +90,7 @@ export function TeamCasesPage({
       dashboardColumns: dashboardColumns.get(),
     })
   );
-  void fetchData();
+  fetchData();
   return host;
 }
 

@@ -105,7 +105,7 @@ export function ControlsDashboard({ client, allCaseSources = [], onOpenCase }) {
     return [buildAppealsSection(appealCases.get(), onOpenCase)];
   });
 
-  void fetchData();
+  fetchData();
   return host;
 }
 

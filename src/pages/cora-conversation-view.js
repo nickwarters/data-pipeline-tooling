@@ -72,7 +72,7 @@ export function ConversationView({
       caseListOptions: caseListOptions.get(),
     })
   );
-  void fetchData();
+  fetchData();
   return host;
 }
 

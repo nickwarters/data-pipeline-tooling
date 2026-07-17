@@ -69,7 +69,7 @@ export function ResponsiblePartyDashboard({
     ];
   });
 
-  void fetchData();
+  fetchData();
   return host;
 }
 

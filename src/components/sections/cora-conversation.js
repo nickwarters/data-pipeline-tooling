@@ -198,9 +198,8 @@ export class CORAConversation extends ShellElement {
       typeof document !== 'undefined' &&
       typeof document.addEventListener === 'function'
     ) {
-      const binding = bindConversationVisibility(
-        document,
-        () => void this._refresh()
+      const binding = bindConversationVisibility(document, () =>
+        this._refresh()
       );
       this._visibilityHandler = binding.handler;
       this._unbindVisibility = binding.disconnect;

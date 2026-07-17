@@ -48,7 +48,7 @@ export function ReviewerTeamReportPage({ client, currentUser, caseSources }) {
   const host = reactive(() =>
     renderReviewerTeamReport({ data: data.get(), windows: windows.get() })
   );
-  void fetchData();
+  fetchData();
   return host;
 }
 
