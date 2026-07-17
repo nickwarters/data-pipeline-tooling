@@ -1232,7 +1232,7 @@ cora-status-banner {
 
 /* Inline failure-attribution control: always visible under a failed
    Answer's remediation — no disclosure button, no floating popover. */
-cora-attribute-menu {
+.cora-attribute-menu {
   display: block;
   margin: var(--cora-space-2) 0;
   padding: var(--cora-space-3);

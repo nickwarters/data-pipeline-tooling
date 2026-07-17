@@ -108,7 +108,7 @@ test('CORARemediationSection: read-only viewer (canAttribute off) shows display 
     'displayName still shown read-only'
   );
   assert.equal(
-    findByTag(el, 'cora-attribute-menu'),
+    findByClass(el, 'cora-attribute-menu'),
     null,
     'no editable menu when not editable'
   );
@@ -182,7 +182,7 @@ test('CORARemediationSection: editable surface is suppressed when attributeFailu
   el.update(FAIL_CAT, { q1: { value: 'No' } }, false);
 
   assert.equal(
-    findByTag(el, 'cora-attribute-menu'),
+    findByClass(el, 'cora-attribute-menu'),
     null,
     'menu only appears when attributeFailures is on'
   );

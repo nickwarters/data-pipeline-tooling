@@ -40,6 +40,16 @@ function mount(props = {}) {
 
 // ===== TESTS =====
 
+test('AttributeMenu: root is a plain classed div, not an unregistered custom element', () => {
+  const { host } = mount();
+
+  // A `cora-*` element tag without a customElements.define() trips the
+  // dev-mode warning in lib/html.js. The menu is a plain view function, so
+  // its root must be an ordinary div carrying the class for styling.
+  assert.equal(host._tagName, 'div');
+  assert.equal(host.className, 'cora-attribute-menu');
+});
+
 test('AttributeMenu: renders the inline "Attribute failure to" title', () => {
   const { host } = mount();
 

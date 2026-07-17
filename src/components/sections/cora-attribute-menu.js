@@ -94,5 +94,5 @@ export function AttributeMenu({
     children.push(picker);
   }
 
-  return h('cora-attribute-menu', {}, ...children);
+  return h('div', { className: 'cora-attribute-menu' }, ...children);
 }
