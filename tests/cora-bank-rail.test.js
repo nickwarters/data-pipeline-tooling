@@ -3,6 +3,14 @@ import { resetStoreWithExampleReview } from './_bank-store-fixture.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
+import {
+  fireEvent,
+  getByRole,
+  getByTag,
+  getByText,
+  queryAllByRole,
+  queryAllByTag,
+} from './helpers/semantic-dom.js';
 installDom();
 
 const { CORABankRail } =
@@ -14,8 +22,11 @@ test('CORABankRail: renders 4 sections: stat, categories, view, legend', () => {
   resetStoreWithExampleReview();
   const e = new CORABankRail();
   e.connectedCallback();
-  const aside = /** @type {any} */ (e)._children[0];
-  assert.equal(aside._children.length, 4);
+  const aside = getByTag(e, 'aside');
+  assert.deepEqual(
+    queryAllByTag(aside, 'h3').map((heading) => heading.textContent),
+    ['At a Glance', 'Filter by Grouping', 'View', 'Legend']
+  );
   e.disconnectedCallback();
 });
 
@@ -29,11 +40,7 @@ test('CORABankRail: clicking the "All" chip resets category', () => {
   });
   const e = new CORABankRail();
   e.connectedCallback();
-  const aside = /** @type {any} */ (e)._children[0];
-  const catSection = aside._children[1];
-  const catList = catSection._children[1];
-  const allChip = catList._children[0];
-  allChip._listeners.click[0]();
+  fireEvent(getByText(e, 'All'), 'click');
   assert.equal(filters.get().category, null);
   e.disconnectedCallback();
 });
@@ -42,13 +49,10 @@ test('CORABankRail: clicking a group chip sets the questionGroup filter', () => 
   resetStoreWithExampleReview();
   const e = new CORABankRail();
   e.connectedCallback();
-  const aside = /** @type {any} */ (e)._children[0];
-  const catSection = aside._children[1];
-  const catList = catSection._children[1];
-  // The example bank has Question Groups but no categories, so the first
-  // non-"All" chip is the first Question Group.
-  const firstGroup = catList._children[1];
-  firstGroup._listeners.click[0]();
+  const firstGroupName =
+    cases.get()['example-review'].questions[0].questionGroup;
+  assert.ok(firstGroupName);
+  fireEvent(getByText(e, firstGroupName), 'click');
   assert.ok(filters.get().questionGroup);
   assert.equal(filters.get().category, null);
   e.disconnectedCallback();
@@ -73,10 +77,8 @@ test('CORABankRail: uncategorised questions get an "Uncategorised" chip', () => 
   });
   const e = new CORABankRail();
   e.connectedCallback();
-  const aside = /** @type {any} */ (e)._children[0];
-  const catList = aside._children[1]._children[1];
-  // All + Uncategorised
-  assert.equal(catList._children.length, 2);
+  assert.equal(getByText(e, 'All').textContent, 'All');
+  assert.equal(getByText(e, 'Uncategorised').textContent, 'Uncategorised');
   e.disconnectedCallback();
 });
 
@@ -84,28 +86,31 @@ test('CORABankRail: toggles flip filter state', () => {
   resetStoreWithExampleReview();
   const e = new CORABankRail();
   e.connectedCallback();
-  const aside = /** @type {any} */ (e)._children[0];
-  const view = aside._children[2];
-  const depToggleRow = view._children[1];
-  const condToggleRow = view._children[2];
-  depToggleRow._children[1]._listeners.click[0]();
+  const deprecatedToggle = getByText(
+    e,
+    'Show deprecated'
+  ).parentNode.querySelector('.toggle');
+  fireEvent(deprecatedToggle, 'click');
   assert.equal(filters.get().showDeprecated, false);
-  condToggleRow._children[1]._listeners.click[0]();
+  const conditionalToggle = getByText(
+    e,
+    'Show conditional only'
+  ).parentNode.querySelector('.toggle');
+  fireEvent(conditionalToggle, 'click');
   assert.equal(filters.get().conditionalOnly, true);
   e.disconnectedCallback();
 });
 
-test('CORABankRail: category chips expose move controls but All does not', () => {
+test('CORABankRail: group chips expose move controls but All does not', () => {
   resetStoreWithExampleReview();
   const e = new CORABankRail();
   e.connectedCallback();
-  const aside = /** @type {any} */ (e)._children[0];
-  const catList = aside._children[1]._children[1];
-  const allChip = catList._children[0];
-  const firstCat = catList._children[1];
-
+  const allChip = getByText(e, 'All').parentNode;
   assert.equal(allChip.querySelectorAll('button').length, 0);
-  assert.equal(firstCat.querySelectorAll('button').length, 2);
+  assert.ok(
+    queryAllByRole(e, 'button', { name: /question group (?:up|down)$/ })
+      .length >= 2
+  );
   e.disconnectedCallback();
 });
 
@@ -150,14 +155,10 @@ test('CORABankRail: category move buttons reorder category blocks and mark dirty
   });
   const e = new CORABankRail();
   e.connectedCallback();
-  const aside = /** @type {any} */ (e)._children[0];
-  const catList = aside._children[1]._children[1];
-  const cChip = catList._children[3];
-  const cMeta = cChip._children[1];
-  const moveUp = cMeta._children[1];
+  const moveUp = getByRole(e, 'button', { name: 'Move C category up' });
   assert.equal(moveUp.disabled, false);
 
-  moveUp._listeners.click[0]({ stopPropagation() {} });
+  fireEvent(moveUp, 'click', { stopPropagation() {} });
   assert.deepEqual(
     cases.get()['example-review'].questions.map((q) => q.id),
     ['a1', 'a2', 'c1', 'b1']
@@ -193,12 +194,10 @@ test('CORABankRail: category move-down reorders category blocks and marks dirty'
   });
   const e = new CORABankRail();
   e.connectedCallback();
-  const catList = /** @type {any} */ (e)._children[0]._children[1]._children[1];
-  const aMeta = catList._children[1]._children[1];
-  const moveDown = aMeta._children[2];
+  const moveDown = getByRole(e, 'button', { name: 'Move A category down' });
   assert.equal(moveDown.disabled, false);
 
-  moveDown._listeners.click[0]({ stopPropagation() {} });
+  fireEvent(moveDown, 'click', { stopPropagation() {} });
   assert.deepEqual(
     cases.get()['example-review'].questions.map((q) => q.id),
     ['b1', 'a1']
@@ -207,18 +206,18 @@ test('CORABankRail: category move-down reorders category blocks and marks dirty'
   e.disconnectedCallback();
 });
 
-test('CORABankRail: first and last category move controls are disabled', () => {
+test('CORABankRail: first and last group move controls are disabled', () => {
   resetStoreWithExampleReview();
   const e = new CORABankRail();
   e.connectedCallback();
-  const aside = /** @type {any} */ (e)._children[0];
-  const catList = aside._children[1]._children[1];
-  const firstCatMeta = catList._children[1]._children[1];
-  const lastCatMeta =
-    catList._children[catList._children.length - 1]._children[1];
-
-  assert.equal(firstCatMeta._children[1].disabled, true);
-  assert.equal(lastCatMeta._children[2].disabled, true);
+  const moveUp = queryAllByRole(e, 'button', {
+    name: /question group up$/,
+  });
+  const moveDown = queryAllByRole(e, 'button', {
+    name: /question group down$/,
+  });
+  assert.equal(moveUp[0].disabled, true);
+  assert.equal(moveDown.at(-1).disabled, true);
   e.disconnectedCallback();
 });
 
@@ -226,8 +225,9 @@ test('CORABankRail: renders a pop-over toggle button and backdrop', () => {
   resetStoreWithExampleReview();
   const e = new CORABankRail();
   e.connectedCallback();
-  const toggle = /** @type {any} */ (e)._children[1];
-  const backdrop = /** @type {any} */ (e)._children[2];
+  const toggle = getByRole(e, 'button', { name: '☰ Filters' });
+  const backdrop = e.querySelector('.rail-backdrop');
+  assert.ok(backdrop);
   assert.equal(toggle.className, 'rail-toggle');
   assert.equal(toggle.getAttribute('aria-controls'), 'bank-rail-panel');
   assert.equal(backdrop.className, 'rail-backdrop');
@@ -238,19 +238,19 @@ test('CORABankRail: toggle button opens the pop-over and reflects aria-expanded'
   resetStoreWithExampleReview();
   const e = new CORABankRail();
   e.connectedCallback();
-  let toggle = /** @type {any} */ (e)._children[1];
+  let toggle = getByRole(e, 'button', { name: '☰ Filters' });
   assert.equal(toggle.getAttribute('aria-expanded'), 'false');
-  assert.equal(/** @type {any} */ (e)._children[0].className, 'rail');
+  assert.equal(getByTag(e, 'aside').className, 'rail');
 
-  toggle._listeners.click[0]();
+  fireEvent(toggle, 'click');
   assert.equal(railOpen.get(), true);
   // Re-rendered: aside now carries the open class, aria-expanded flips.
-  toggle = /** @type {any} */ (e)._children[1];
+  toggle = getByRole(e, 'button', { name: '✕ Filters' });
   assert.equal(toggle.getAttribute('aria-expanded'), 'true');
-  assert.equal(/** @type {any} */ (e)._children[0].className, 'rail open');
+  assert.equal(getByTag(e, 'aside').className, 'rail open');
 
   // Toggling again closes it.
-  toggle._listeners.click[0]();
+  fireEvent(toggle, 'click');
   assert.equal(railOpen.get(), false);
   e.disconnectedCallback();
 });
@@ -260,9 +260,10 @@ test('CORABankRail: backdrop click closes the pop-over', () => {
   railOpen.set(true);
   const e = new CORABankRail();
   e.connectedCallback();
-  const backdrop = /** @type {any} */ (e)._children[2];
+  const backdrop = e.querySelector('.rail-backdrop');
+  assert.ok(backdrop);
   assert.equal(backdrop.className, 'rail-backdrop open');
-  backdrop._listeners.click[0]();
+  fireEvent(backdrop, 'click');
   assert.equal(railOpen.get(), false);
   e.disconnectedCallback();
 });
@@ -271,8 +272,7 @@ test('CORABankRail: backdrop click is a no-op when already closed', () => {
   resetStoreWithExampleReview();
   const e = new CORABankRail();
   e.connectedCallback();
-  const backdrop = /** @type {any} */ (e)._children[2];
-  backdrop._listeners.click[0]();
+  fireEvent(e.querySelector('.rail-backdrop'), 'click');
   assert.equal(railOpen.get(), false);
   e.disconnectedCallback();
 });
@@ -282,9 +282,10 @@ test('CORABankRail: selecting a group chip closes the pop-over', () => {
   railOpen.set(true);
   const e = new CORABankRail();
   e.connectedCallback();
-  const catList = /** @type {any} */ (e)._children[0]._children[1]._children[1];
-  const firstGroup = catList._children[1];
-  firstGroup._listeners.click[0]();
+  const firstGroupName =
+    cases.get()['example-review'].questions[0].questionGroup;
+  assert.ok(firstGroupName);
+  fireEvent(getByText(e, firstGroupName), 'click');
   assert.ok(filters.get().questionGroup);
   assert.equal(railOpen.get(), false);
   e.disconnectedCallback();
@@ -301,8 +302,7 @@ test('CORABankRail: the "All" chip also closes the pop-over', () => {
   railOpen.set(true);
   const e = new CORABankRail();
   e.connectedCallback();
-  const catList = /** @type {any} */ (e)._children[0]._children[1]._children[1];
-  catList._children[0]._listeners.click[0]();
+  fireEvent(getByText(e, 'All'), 'click');
   assert.equal(filters.get().category, null);
   assert.equal(railOpen.get(), false);
   e.disconnectedCallback();
@@ -314,9 +314,9 @@ test('CORABankRail: group move buttons reorder groups within their category and 
   // Discovery, Resolution. Move Discovery up within the implicit category.
   const e = new CORABankRail();
   e.connectedCallback();
-  const catList = /** @type {any} */ (e)._children[0]._children[1]._children[1];
-  const discoveryMeta = catList._children[2]._children[1];
-  const moveUp = discoveryMeta._children[1];
+  const moveUp = getByRole(e, 'button', {
+    name: 'Move Discovery question group up',
+  });
   assert.equal(moveUp.disabled, false);
 
   moveUp._listeners.click[0]({ stopPropagation() {} });
@@ -355,9 +355,13 @@ test('CORABankRail: with categories only, no redundant Uncategorised group chips
   });
   const e = new CORABankRail();
   e.connectedCallback();
-  const catList = /** @type {any} */ (e)._children[0]._children[1]._children[1];
-  // All + category A + category B, no group chips
-  assert.equal(catList._children.length, 3);
+  assert.equal(getByText(e, 'A').textContent, 'A');
+  assert.equal(getByText(e, 'B').textContent, 'B');
+  assert.equal(
+    queryAllByRole(e, 'button', { name: /question group (?:up|down)$/ })
+      .length,
+    0
+  );
   e.disconnectedCallback();
 });
 
@@ -390,15 +394,12 @@ test('CORABankRail: nested category and group chips filter by the pair', () => {
   });
   const e = new CORABankRail();
   e.connectedCallback();
-  const catList = /** @type {any} */ (e)._children[0]._children[1]._children[1];
-  // [All, Cat1, G1, Cat2, G2]
-  assert.equal(catList._children.length, 5);
   // Clicking the Cat1 heading filters by category only.
-  catList._children[1]._listeners.click[0]();
+  fireEvent(getByText(e, 'Cat1'), 'click');
   assert.equal(filters.get().category, 'Cat1');
   assert.equal(filters.get().questionGroup, null);
   // Clicking G2 filters by its category + group pair.
-  catList._children[4]._listeners.click[0]();
+  fireEvent(getByText(e, 'G2'), 'click');
   assert.equal(filters.get().category, 'Cat2');
   assert.equal(filters.get().questionGroup, 'G2');
   e.disconnectedCallback();

@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { isolateBrowserGlobals } from './helpers/browser-globals.js';
+import { initRouter, routeRegistrationSpy } from './helpers/router.js';
 
 isolateBrowserGlobals();
 
@@ -62,10 +63,9 @@ const src = (slug, listName = `${slug}-list`) => ({
 });
 
 test('reports route: registers #/reports and #/reports/reviewer-team', () => {
-  const router = new Router();
-  router._container = /** @type {any} */ ({});
+  const registration = routeRegistrationSpy();
   register(
-    router,
+    /** @type {any} */ (registration.router),
     /** @type {any} */ ({
       capabilities: { isReviewerManager: false },
       client: {},
@@ -73,21 +73,14 @@ test('reports route: registers #/reports and #/reports/reviewer-team', () => {
       caseSources: [].map((s) => src(s)),
     })
   );
-  assert.ok(
-    router._routes.some((r) => r.re.test('#/reports')),
-    '#/reports should be registered'
-  );
-  assert.ok(
-    router._routes.some((r) => r.re.test('#/reports/reviewer-team')),
-    '#/reports/reviewer-team should be registered'
-  );
+  assert.equal(registration.has('#/reports'), true);
+  assert.equal(registration.has('#/reports/reviewer-team'), true);
 });
 
 test('reports route: #/reports unmount is a no-op (does not throw)', () => {
-  const router = new Router();
-  router._container = /** @type {any} */ ({});
+  const registration = routeRegistrationSpy();
   register(
-    router,
+    /** @type {any} */ (registration.router),
     /** @type {any} */ ({
       capabilities: { isReviewerManager: false },
       client: {},
@@ -95,16 +88,13 @@ test('reports route: #/reports unmount is a no-op (does not throw)', () => {
       caseSources: [].map((s) => src(s)),
     })
   );
-  const route = router._routes.find((r) => r.re.test('#/reports'));
-  assert.ok(route, 'route should exist');
-  assert.doesNotThrow(() => route.handler.unmount());
+  assert.doesNotThrow(() => registration.handlerFor('#/reports').unmount());
 });
 
 test('reports route: #/reports/reviewer-team unmount is a no-op (does not throw)', () => {
-  const router = new Router();
-  router._container = /** @type {any} */ ({});
+  const registration = routeRegistrationSpy();
   register(
-    router,
+    /** @type {any} */ (registration.router),
     /** @type {any} */ ({
       capabilities: { isReviewerManager: false },
       client: {},
@@ -112,11 +102,9 @@ test('reports route: #/reports/reviewer-team unmount is a no-op (does not throw)
       caseSources: [].map((s) => src(s)),
     })
   );
-  const route = router._routes.find((r) =>
-    r.re.test('#/reports/reviewer-team')
+  assert.doesNotThrow(() =>
+    registration.handlerFor('#/reports/reviewer-team').unmount()
   );
-  assert.ok(route, 'route should exist');
-  assert.doesNotThrow(() => route.handler.unmount());
 });
 
 test('reports route: #/reports renders ReportsIndexPage directly', async () => {
@@ -129,7 +117,7 @@ test('reports route: #/reports renders ReportsIndexPage directly', async () => {
       rendered.splice(0, rendered.length, ...children);
     },
   };
-  router._container = /** @type {any} */ (container);
+  initRouter(router, /** @type {any} */ (container));
   register(
     router,
     /** @type {any} */ ({
@@ -157,7 +145,7 @@ test('reports/reviewer-team route: redirects to #/reports when not a Reviewer Ma
   try {
     const router = new Router();
     const container = { replaceChildren(/** @type {any[]} */ ...args) {} };
-    router._container = /** @type {any} */ (container);
+    initRouter(router, /** @type {any} */ (container));
     register(
       router,
       /** @type {any} */ ({
@@ -191,7 +179,7 @@ test('reports route: #/reports renders a cora-route-error panel when the index p
         rendered.splice(0, rendered.length, ...children);
       },
     };
-    router._container = /** @type {any} */ (container);
+    initRouter(router, /** @type {any} */ (container));
     register(
       router,
       /** @type {any} */ ({
@@ -231,7 +219,7 @@ test('reports/reviewer-team route: mounts ReviewerTeamReportPage with client, cu
         rendered.splice(0, rendered.length, ...children);
       },
     };
-    router._container = /** @type {any} */ (container);
+    initRouter(router, /** @type {any} */ (container));
     register(
       router,
       /** @type {any} */ ({
@@ -269,7 +257,7 @@ test('reports/reviewer-team route: renders a cora-route-error panel when the rev
         rendered.splice(0, rendered.length, ...children);
       },
     };
-    router._container = /** @type {any} */ (container);
+    initRouter(router, /** @type {any} */ (container));
     register(
       router,
       /** @type {any} */ ({

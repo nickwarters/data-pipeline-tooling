@@ -6,6 +6,12 @@ import {
   freshExampleReviewBank,
   commitSpy,
 } from './_example-review-fixture.js';
+import {
+  fireEvent,
+  getByRole,
+  getByText,
+  queryAllByTag,
+} from './helpers/semantic-dom.js';
 installDom();
 
 const { CORAQuestionLabels, makeLabelId, DEFAULT_LABEL_COLOR } =
@@ -21,31 +27,19 @@ function mount(/** @type {any} */ q, /** @type {any} */ bank) {
   return /** @type {any} */ (e);
 }
 
-/** The four children of the labels block: [label, help, pillRow, addRow]. */
-function parts(/** @type {any} */ e) {
-  const block = e._children[0];
-  return {
-    block,
-    pillRow: block._children[2],
-    addRow: block._children[3],
-  };
-}
-
 test('CORAQuestionLabels: no question → nothing renders', () => {
   const e = /** @type {any} */ (new CORAQuestionLabels());
   e.connectedCallback();
-  assert.equal(e._children.length, 0);
+  assert.equal(e.childElementCount, 0);
 });
 
 test('CORAQuestionLabels: renders a pill per assigned label', () => {
   const bank = freshExampleReviewBank();
   const q = bank.questions[1]; // two labels
   const e = mount(q, bank);
-  const { pillRow } = parts(e);
-  assert.equal(pillRow._children.length, 2);
-  const names = pillRow._children.map(
-    (/** @type {any} */ p) => p._children[1].textContent
-  );
+  const names = e
+    .querySelectorAll('.label-pill-name')
+    .map((/** @type {any} */ name) => name.textContent);
   assert.deepEqual(names, ['Coaching', 'Regulatory']);
 });
 
@@ -62,8 +56,7 @@ test('CORAQuestionLabels: label names render as text, not HTML', () => {
   q.labelIds = ['lbl-danger'];
 
   const e = mount(q, bank);
-  const { pillRow } = parts(e);
-  const name = pillRow._children[0]._children[1];
+  const name = e.querySelector('.label-pill-name');
   assert.equal(name.textContent, '<img src=x onerror=alert(1)>');
   assert.equal(name.innerHTML, '');
 });
@@ -72,21 +65,19 @@ test('CORAQuestionLabels: shows an empty hint when no labels assigned', () => {
   const bank = freshExampleReviewBank();
   const q = bank.questions[3]; // q-channel, no labels
   const e = mount(q, bank);
-  const { pillRow } = parts(e);
-  assert.equal(pillRow._children.length, 1);
-  assert.equal(pillRow._children[0].className, 'cora-empty label-empty');
+  assert.equal(
+    e.querySelector('.label-empty').className,
+    'cora-empty label-empty'
+  );
 });
 
 test('CORAQuestionLabels: an unassigned bank label shows as an add chip', () => {
   const bank = freshExampleReviewBank();
   const q = /** @type {any} */ (bank.questions[0]); // only lbl-coaching
   const e = mount(q, bank);
-  const { addRow } = parts(e);
-  // [chip(Regulatory), create-control]
-  assert.equal(addRow._children.length, 2);
-  const chip = addRow._children[0];
+  const chip = getByRole(e, 'button', { name: 'Regulatory' });
   assert.equal(chip.className, 'label-add-chip');
-  chip._listeners.click[0]();
+  fireEvent(chip, 'click');
   assert.equal(/** @type {any} */ (e.onCommit).calls, 1);
   assert.deepEqual(q.labelIds, ['lbl-coaching', 'lbl-regulatory']);
 });
@@ -95,9 +86,7 @@ test('CORAQuestionLabels: pill × unassigns and drops empty labelIds', () => {
   const bank = freshExampleReviewBank();
   const q = /** @type {any} */ (bank.questions[0]); // single label
   const e = mount(q, bank);
-  const { pillRow } = parts(e);
-  const x = pillRow._children[0]._children[2];
-  x._listeners.click[0]();
+  fireEvent(getByText(e, '×'), 'click');
   assert.equal('labelIds' in q, false);
   assert.equal(/** @type {any} */ (e.onCommit).calls, 1);
 });
@@ -106,9 +95,8 @@ test('CORAQuestionLabels: editing a pill colour recolours the shared label', () 
   const bank = freshExampleReviewBank();
   const q = bank.questions[1];
   const e = mount(q, bank);
-  const { pillRow } = parts(e);
-  const colorInput = pillRow._children[0]._children[0];
-  colorInput._listeners.change[0]({ target: { value: '#00ff00' } });
+  const colorInput = e.querySelector('.label-pill-color');
+  fireEvent(colorInput, 'change', { target: { value: '#00ff00' } });
   const label = /** @type {any[]} */ (bank.labels ?? []).find(
     (/** @type {any} */ l) => l.id === 'lbl-coaching'
   );
@@ -119,11 +107,11 @@ test('CORAQuestionLabels: creating a label adds it to the bank and assigns it', 
   const bank = freshExampleReviewBank();
   const q = /** @type {any} */ (bank.questions[3]); // no labels
   const e = mount(q, bank);
-  const create = parts(e).addRow._children.at(-1);
-  const [nameInput, colorInput, addBtn] = create._children;
+  const nameInput = e.querySelector('.label-new-name');
+  const colorInput = e.querySelector('.label-new-color');
   nameInput.value = 'Escalation';
   colorInput.value = '#777777';
-  addBtn._listeners.click[0]();
+  fireEvent(getByRole(e, 'button', { name: '+ new label' }), 'click');
 
   const created = /** @type {any[]} */ (bank.labels ?? []).find(
     (/** @type {any} */ l) => l.name === 'Escalation'
@@ -139,11 +127,10 @@ test('CORAQuestionLabels: creating with a blank name is a no-op', () => {
   const bank = freshExampleReviewBank();
   const q = bank.questions[3];
   const e = mount(q, bank);
-  const create = parts(e).addRow._children.at(-1);
-  const [nameInput, , addBtn] = create._children;
+  const nameInput = e.querySelector('.label-new-name');
   const before = (bank.labels ?? []).length;
   nameInput.value = '   ';
-  addBtn._listeners.click[0]();
+  fireEvent(getByRole(e, 'button', { name: '+ new label' }), 'click');
   assert.equal((bank.labels ?? []).length, before);
   assert.equal(/** @type {any} */ (e.onCommit).calls, 0);
 });
@@ -152,11 +139,11 @@ test('CORAQuestionLabels: a created label falls back to the default colour', () 
   const bank = freshExampleReviewBank();
   const q = bank.questions[3];
   const e = mount(q, bank);
-  const create = parts(e).addRow._children.at(-1);
-  const [nameInput, colorInput, addBtn] = create._children;
+  const nameInput = e.querySelector('.label-new-name');
+  const colorInput = e.querySelector('.label-new-color');
   nameInput.value = 'Trend';
   colorInput.value = '';
-  addBtn._listeners.click[0]();
+  fireEvent(getByRole(e, 'button', { name: '+ new label' }), 'click');
   const created = /** @type {any[]} */ (bank.labels ?? []).find(
     (/** @type {any} */ l) => l.name === 'Trend'
   );
@@ -168,9 +155,8 @@ test('CORAQuestionLabels: ids referencing a missing label are skipped', () => {
   const q = /** @type {any} */ (bank.questions[3]);
   q.labelIds = ['lbl-ghost'];
   const e = mount(q, bank);
-  const { pillRow } = parts(e);
-  assert.equal(pillRow._children.length, 1);
-  assert.equal(pillRow._children[0].className, 'cora-empty label-empty');
+  assert.ok(e.querySelector('.label-empty'));
+  assert.equal(e.querySelectorAll('.label-pill').length, 0);
 });
 
 test('CORAQuestionLabels: tolerates a bank with no labels array', () => {
@@ -190,13 +176,14 @@ test('CORAQuestionLabels: tolerates a bank with no labels array', () => {
   };
   const q = bank.questions[0];
   const e = mount(q, bank);
-  // No bank labels → no add chips, just the create control.
-  assert.equal(parts(e).addRow._children.length, 1);
+  assert.deepEqual(
+    queryAllByTag(e, 'button').map((button) => button.textContent),
+    ['+ new label']
+  );
   // Creating a label initialises the bank's labels array.
-  const create = parts(e).addRow._children.at(-1);
-  const [nameInput, , addBtn] = create._children;
+  const nameInput = e.querySelector('.label-new-name');
   nameInput.value = 'First';
-  addBtn._listeners.click[0]();
+  fireEvent(getByRole(e, 'button', { name: '+ new label' }), 'click');
   assert.equal(bank.labels.length, 1);
 });
 

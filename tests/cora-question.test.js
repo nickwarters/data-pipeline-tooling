@@ -2,6 +2,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
+import {
+  fireEvent,
+  getByRole,
+  getByTag,
+  queryAllByRole,
+  queryAllByTag,
+} from './helpers/semantic-dom.js';
 
 installDom();
 
@@ -49,19 +56,17 @@ test('Question: outcome-type renders a radiogroup of outcome options and emits t
   });
   const fieldset = /** @type {any} */ (nodes[0]);
   assert.equal(fieldset.role, 'radiogroup');
-  // legend + 3 option labels + universal N/A
-  assert.equal(fieldset._children.length, 5);
-  const referRadio = fieldset._children[2]._children[0];
+  assert.equal(queryAllByRole(fieldset, 'radio').length, 4);
+  const referRadio = getByRole(fieldset, 'radio', { name: 'Refer' });
   assert.equal(referRadio.checked, true);
-  const failRadio = fieldset._children[3]._children[0];
-  failRadio._listeners.change[0]();
+  fireEvent(getByRole(fieldset, 'radio', { name: 'Fail' }), 'change');
   assert.deepEqual(answers.at(-1), { questionId: 'q3', value: 'Fail' });
 });
 
 test('CORAQuestion: renders nothing if question is missing', () => {
   const el = new CORAQuestion();
   el.connectedCallback();
-  assert.equal(/** @type {any} */ (el)._children.length, 0);
+  assert.equal(el.childElementCount, 0);
 });
 
 test('Question: plain function renders no nodes when question is missing', () => {
@@ -87,13 +92,13 @@ test('Question: plain function renders answers and emits through onAnswer', () =
 
   const fieldset = /** @type {any} */ (nodes[0]);
   assert.equal(fieldset.className, 'cora-question');
-  const yesRadio = fieldset._children[1]._children[0];
-  const noRadio = fieldset._children[2]._children[0];
+  const yesRadio = getByRole(fieldset, 'radio', { name: 'Yes' });
+  const noRadio = getByRole(fieldset, 'radio', { name: 'No' });
 
   assert.equal(yesRadio.checked, false);
   assert.equal(noRadio.checked, true);
 
-  yesRadio._listeners['change'][0]();
+  fireEvent(yesRadio, 'change');
   assert.deepEqual(answers, [{ questionId: 'q1', value: 'Yes' }]);
 });
 
@@ -102,10 +107,9 @@ test('CORAQuestion: renders yes-no-na options', () => {
   el.question = Q_YES_NO;
   el.connectedCallback();
 
-  const fieldset = /** @type {any} */ (el)._children[0];
+  const fieldset = getByTag(el, 'fieldset');
   assert.equal(fieldset.className, 'cora-question');
-  // legend + 3 labels
-  assert.equal(fieldset._children.length, 4);
+  assert.equal(queryAllByRole(fieldset, 'radio').length, 3);
 });
 
 test('CORAQuestion: renders multi-choice options', () => {
@@ -113,10 +117,9 @@ test('CORAQuestion: renders multi-choice options', () => {
   el.question = Q_MULTI;
   el.connectedCallback();
 
-  const fieldset = /** @type {any} */ (el)._children[0];
+  const fieldset = getByTag(el, 'fieldset');
   assert.equal(fieldset.getAttribute('role'), 'group');
-  // legend + 2 labels + universal N/A
-  assert.equal(fieldset._children.length, 4);
+  assert.equal(queryAllByRole(fieldset, 'checkbox').length, 3);
 });
 
 test('CORAQuestion: single-choice radio change dispatches event', () => {
@@ -131,11 +134,7 @@ test('CORAQuestion: single-choice radio change dispatches event', () => {
     return true;
   };
 
-  const fieldset = /** @type {any} */ (el)._children[0];
-  const firstLabel = fieldset._children[1];
-  const radio = firstLabel._children[0];
-
-  radio._listeners['change'][0]();
+  fireEvent(getByRole(el, 'radio', { name: 'Yes' }), 'change');
 
   assert.equal(events.length, 1);
   assert.equal(events[0].type, 'cora-answer');
@@ -155,22 +154,19 @@ test('CORAQuestion: multi-choice change handler exercises both checked branches'
     return true;
   };
 
-  const fieldset = /** @type {any} */ (el)._children[0];
-  const firstLabel = fieldset._children[1];
-  const checkbox = firstLabel._children[0];
+  const checkbox = getByRole(el, 'checkbox', { name: 'A' });
 
   // Branch: checkbox.checked = true
   checkbox.checked = true;
-  checkbox._listeners['change'][0]({ target: checkbox });
+  fireEvent(checkbox, 'change', { target: checkbox });
   assert.deepEqual(events[0].detail.value, ['A']);
 
   // Branch: checkbox.checked = false
   // We need to re-render or update state to simulate the next state where 'A' is selected
   el.update({ currentValue: ['A'] });
-  const nextFieldset = /** @type {any} */ (el)._children[0];
-  const nextCheckbox = nextFieldset._children[1]._children[0];
+  const nextCheckbox = getByRole(el, 'checkbox', { name: 'A' });
   nextCheckbox.checked = false;
-  nextCheckbox._listeners['change'][0]({ target: nextCheckbox });
+  fireEvent(nextCheckbox, 'change', { target: nextCheckbox });
   assert.deepEqual(events[1].detail.value, []);
 });
 
@@ -180,8 +176,7 @@ test('CORAQuestion: read-only access disables inputs', () => {
   el.access = 'read-only';
   el.connectedCallback();
 
-  const fieldset = /** @type {any} */ (el)._children[0];
-  const radio = fieldset._children[1]._children[0];
+  const radio = getByRole(el, 'radio', { name: 'Yes' });
   assert.equal(radio.disabled, true);
 
   /** @type {any[]} */
@@ -190,7 +185,7 @@ test('CORAQuestion: read-only access disables inputs', () => {
     events.push(e);
     return true;
   };
-  radio._listeners['change'][0]();
+  fireEvent(radio, 'change');
   assert.equal(events.length, 0);
 });
 
@@ -200,8 +195,7 @@ test('CORAQuestion: multi-choice read-only access ignores changes', () => {
   el.access = 'read-only';
   el.connectedCallback();
 
-  const fieldset = /** @type {any} */ (el)._children[0];
-  const checkbox = fieldset._children[1]._children[0];
+  const checkbox = getByRole(el, 'checkbox', { name: 'A' });
 
   /** @type {any[]} */
   const events = [];
@@ -209,7 +203,7 @@ test('CORAQuestion: multi-choice read-only access ignores changes', () => {
     events.push(e);
     return true;
   };
-  checkbox._listeners['change'][0]();
+  fireEvent(checkbox, 'change');
   assert.equal(events.length, 0);
 });
 
@@ -226,11 +220,11 @@ test('CORAQuestion: failed answer with no selected actions shows an empty remedi
 
   // The Review tab mirrors only *selected* actions; with none selected it shows
   // the question fieldset plus an empty remediation container (no action list).
-  const children = /** @type {any} */ (el)._children;
-  assert.equal(children.length, 2);
-  assert.equal(children[0].className, 'cora-question');
-  assert.equal(children[1].className, 'cora-question-remediation');
-  assert.equal(children[1]._children.length, 0, 'no selected actions shown');
+  assert.equal(el.childElementCount, 2);
+  assert.equal(getByTag(el, 'fieldset').className, 'cora-question');
+  const remediation = el.querySelector('.cora-question-remediation');
+  assert.ok(remediation);
+  assert.equal(remediation.childElementCount, 0, 'no selected actions shown');
 });
 
 test('CORAQuestion: renders the selected actions + free-form read-only beneath a failed answer (issue #250)', () => {
@@ -241,17 +235,20 @@ test('CORAQuestion: renders the selected actions + free-form read-only beneath a
   el.freeFormRemediation = 'Escalate to legal';
   el.connectedCallback();
 
-  const rem = /** @type {any} */ (el)._children[1];
+  const rem = el.querySelector('.cora-question-remediation');
+  assert.ok(rem);
   assert.equal(rem.className, 'cora-question-remediation');
-  const label = rem._children[0];
+  const label = rem.querySelector('.cora-question-remediation-label');
+  assert.ok(label);
   assert.equal(label.className, 'cora-question-remediation-label');
-  const list = rem._children[1];
+  const list = getByTag(rem, 'ul');
   assert.equal(list.className, 'cora-question-remediation-actions');
   assert.deepEqual(
-    list._children.map((/** @type {any} */ li) => li.textContent),
+    queryAllByTag(list, 'li').map((li) => li.textContent),
     ['Retrain agent.', 'Update script.']
   );
-  const free = rem._children[2];
+  const free = rem.querySelector('.cora-question-remediation-freeform');
+  assert.ok(free);
   assert.equal(free.className, 'cora-question-remediation-freeform');
   assert.equal(free.textContent, 'Escalate to legal');
 });
@@ -262,22 +259,22 @@ test('CORAQuestion: syncRemediation refreshes the read-only display without rebu
   el.currentValue = 'No';
   el.connectedCallback();
 
-  const fieldsetBefore = /** @type {any} */ (el)._children[0];
+  const fieldsetBefore = getByTag(el, 'fieldset');
   el.syncRemediation(['Retrain agent.'], '');
-  const fieldsetAfter = /** @type {any} */ (el)._children[0];
+  const fieldsetAfter = getByTag(el, 'fieldset');
   assert.equal(
     fieldsetAfter,
     fieldsetBefore,
     'the question inputs are not rebuilt'
   );
 
-  const rem = /** @type {any} */ (el)._children[1];
-  assert.equal(rem._children[1].className, 'cora-question-remediation-actions');
-  assert.equal(rem._children[1]._children[0].textContent, 'Retrain agent.');
+  const rem = el.querySelector('.cora-question-remediation');
+  assert.ok(rem);
+  assert.equal(getByTag(rem, 'li').textContent, 'Retrain agent.');
 
   // Clearing the selection empties the container in place.
   el.syncRemediation([], '');
-  assert.equal(/** @type {any} */ (el)._children[1]._children.length, 0);
+  assert.equal(rem.childElementCount, 0);
 });
 
 test('CORAQuestion: renders single-choice with custom options', () => {
@@ -289,14 +286,10 @@ test('CORAQuestion: renders single-choice with custom options', () => {
   };
   el.connectedCallback();
 
-  const fieldset = /** @type {any} */ (el)._children[0];
+  const fieldset = getByTag(el, 'fieldset');
   assert.equal(fieldset.getAttribute('role'), 'radiogroup');
-  // legend + 1 label + universal N/A
-  assert.equal(fieldset._children.length, 3);
-  // label text is in the second child (span) of the label
-  const label = fieldset._children[1];
-  const span = label._children[1];
-  assert.equal(span.textContent, ' Maybe');
+  assert.equal(queryAllByRole(fieldset, 'radio').length, 2);
+  assert.equal(getByRole(fieldset, 'radio', { name: 'Maybe' }).value, 'Maybe');
 });
 
 test('CORAQuestion: a passing answer shows an empty remediation container', () => {
@@ -309,56 +302,53 @@ test('CORAQuestion: a passing answer shows an empty remediation container', () =
   el.currentValue = 'Yes';
   el.selectedActions = [];
   el.connectedCallback();
-  const children = /** @type {any} */ (el)._children;
-  assert.equal(children.length, 2);
-  assert.equal(children[1].className, 'cora-question-remediation');
-  assert.equal(children[1]._children.length, 0);
+  assert.equal(el.childElementCount, 2);
+  const remediation = el.querySelector('.cora-question-remediation');
+  assert.ok(remediation);
+  assert.equal(remediation.childElementCount, 0);
 });
 
-test('CORAQuestion: _renderSingleChoice handles non-string currentValue', () => {
+test('CORAQuestion: single choice ignores a null current value', () => {
   const el = new CORAQuestion();
   el.question = Q_YES_NO;
   // @ts-ignore
   el.currentValue = null;
   el.connectedCallback();
 
-  const fieldset = /** @type {any} */ (el)._children[0];
-  const radio = fieldset._children[1]._children[0];
+  const radio = getByRole(el, 'radio', { name: 'Yes' });
   assert.equal(radio.checked, false);
 });
 
-test('CORAQuestion: _renderSingleChoice handles array currentValue', () => {
+test('CORAQuestion: single choice ignores an array current value', () => {
   const el = new CORAQuestion();
   el.question = Q_YES_NO;
   // @ts-ignore
   el.currentValue = ['Yes'];
   el.connectedCallback();
 
-  const fieldset = /** @type {any} */ (el)._children[0];
-  const radio = fieldset._children[1]._children[0];
+  const radio = getByRole(el, 'radio', { name: 'Yes' });
   assert.equal(radio.checked, false);
 });
 
-test('CORAQuestion: _renderMultiChoice handles missing options', () => {
+test('CORAQuestion: multi choice renders only universal N/A when options are missing', () => {
   const el = new CORAQuestion();
   el.question = { ...Q_MULTI, options: undefined };
   el.connectedCallback();
 
-  const fieldset = /** @type {any} */ (el)._children[0];
-  // legend + universal N/A
-  assert.equal(fieldset._children.length, 2);
+  assert.deepEqual(
+    queryAllByRole(el, 'checkbox').map((checkbox) => checkbox.value),
+    ['NA']
+  );
 });
 
-test('CORAQuestion: _renderMultiChoice handles non-array currentValue', () => {
+test('CORAQuestion: multi choice ignores a non-array current value', () => {
   const el = new CORAQuestion();
   el.question = Q_MULTI;
   // @ts-ignore
   el.currentValue = 'A';
   el.connectedCallback();
 
-  const fieldset = /** @type {any} */ (el)._children[0];
-  const firstLabel = fieldset._children[1];
-  const checkbox = firstLabel._children[0];
+  const checkbox = getByRole(el, 'checkbox', { name: 'A' });
   // selected Set will be empty because 'A' is not an array, so checkbox should be unchecked
   assert.equal(checkbox.checked, false);
 });
@@ -368,13 +358,7 @@ test('CORAQuestion: focus() forwards to input', () => {
   el.question = Q_YES_NO;
   el.connectedCallback();
 
-  // Create a mock input that we can find
-  const fieldset = /** @type {any} */ (el)._children[0];
-  const firstLabel = fieldset._children[1];
-  const radio = firstLabel._children[0];
-
-  // Override querySelector to return our radio
-  el.querySelector = () => /** @type {any} */ (radio);
+  const radio = getByRole(el, 'radio', { name: 'Yes' });
 
   /** @type {any} */ (globalThis)._lastFocused = null;
   el.focus();
@@ -383,11 +367,7 @@ test('CORAQuestion: focus() forwards to input', () => {
 
 test('CORAQuestion: focus() does nothing if no input found', () => {
   const el = new CORAQuestion();
-  el.question = Q_YES_NO;
   el.connectedCallback();
-
-  // Override querySelector to return null
-  el.querySelector = () => null;
 
   /** @type {any} */ (globalThis)._lastFocused = 'initial';
   el.focus();
@@ -435,7 +415,7 @@ test('Question: single-choice option labels carry the cora-question-option class
     onAnswer() {},
   });
   const fieldset = /** @type {any} */ (nodes[0]);
-  const firstLabel = fieldset._children[1];
+  const firstLabel = getByRole(fieldset, 'radio', { name: 'Yes' }).parentNode;
   assert.equal(firstLabel.className, 'cora-question-option');
 });
 
@@ -465,12 +445,10 @@ test('CORAQuestion: single-choice with no options renders empty fieldset (covers
     options: undefined,
   };
   el.connectedCallback();
-  // With options: undefined, falls back to [], leaving only the universal N/A
-  const fieldset = /** @type {any} */ (el)._children[0];
-  assert.equal(
-    fieldset._children.length,
-    2,
-    'undefined options falls back to [] → legend + universal N/A'
+  assert.deepEqual(
+    queryAllByRole(el, 'radio').map((radio) => radio.value),
+    ['NA'],
+    'undefined options falls back to the universal N/A control'
   );
 });
 
@@ -487,11 +465,9 @@ test('CORAQuestion: multi-choice N/A is exclusive — selecting it clears real a
     return true;
   };
 
-  const fieldset = /** @type {any} */ (el)._children[0];
-  // legend, A, B, NA
-  const naCheckbox = fieldset._children[3]._children[0];
+  const naCheckbox = getByRole(el, 'checkbox', { name: 'NA' });
   naCheckbox.checked = true;
-  naCheckbox._listeners['change'][0]({ target: naCheckbox });
+  fireEvent(naCheckbox, 'change');
   assert.deepEqual(events[0].detail.value, ['NA']);
 });
 
@@ -508,10 +484,9 @@ test('CORAQuestion: multi-choice selecting a real answer clears N/A', () => {
     return true;
   };
 
-  const fieldset = /** @type {any} */ (el)._children[0];
-  const aCheckbox = fieldset._children[1]._children[0];
+  const aCheckbox = getByRole(el, 'checkbox', { name: 'A' });
   aCheckbox.checked = true;
-  aCheckbox._listeners['change'][0]({ target: aCheckbox });
+  fireEvent(aCheckbox, 'change');
   assert.deepEqual(events[0].detail.value, ['A']);
 });
 
@@ -528,10 +503,9 @@ test('CORAQuestion: multi-choice unticking N/A leaves an empty answer', () => {
     return true;
   };
 
-  const fieldset = /** @type {any} */ (el)._children[0];
-  const naCheckbox = fieldset._children[3]._children[0];
+  const naCheckbox = getByRole(el, 'checkbox', { name: 'NA' });
   naCheckbox.checked = false;
-  naCheckbox._listeners['change'][0]({ target: naCheckbox });
+  fireEvent(naCheckbox, 'change');
   assert.deepEqual(events[0].detail.value, []);
 });
 
@@ -539,9 +513,8 @@ test('CORAQuestion: yes-no-na renders Yes/No/NA exactly as before (universal N/A
   const el = new CORAQuestion();
   el.question = Q_YES_NO;
   el.connectedCallback();
-  const fieldset = /** @type {any} */ (el)._children[0];
-  const labels = fieldset._children
-    .slice(1)
-    .map((/** @type {any} */ l) => l._children[1].textContent);
-  assert.deepEqual(labels, [' Yes', ' No', ' NA']);
+  assert.deepEqual(
+    queryAllByRole(el, 'radio').map((radio) => radio.value),
+    ['Yes', 'No', 'NA']
+  );
 });

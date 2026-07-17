@@ -1,6 +1,7 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { fireEvent } from './helpers/semantic-dom.js';
 import {
   QUESTIONS,
   RecordingEl,
@@ -133,7 +134,7 @@ test('bindQuestionPanel: cora-group-verdict writes to applicable outcome-type qu
   });
 
   bindQuestionPanel(/** @type {any} */ (context));
-  questionsPanel._listeners['cora-group-verdict'][0]({
+  fireEvent(questionsPanel, 'cora-group-verdict', {
     detail: { group: 'Basics', value: 'Fail' },
   });
 
@@ -163,7 +164,7 @@ test('bindQuestionPanel: a N/A group verdict also writes only outcome-type quest
   });
 
   bindQuestionPanel(/** @type {any} */ (context));
-  questionsPanel._listeners['cora-group-verdict'][0]({
+  fireEvent(questionsPanel, 'cora-group-verdict', {
     detail: { group: 'G', value: 'NA' },
   });
 
@@ -179,7 +180,7 @@ test('bindQuestionPanel: an ungrouped outcome question answers to the General ve
   });
 
   bindQuestionPanel(/** @type {any} */ (context));
-  questionsPanel._listeners['cora-group-verdict'][0]({
+  fireEvent(questionsPanel, 'cora-group-verdict', {
     detail: { group: 'General', value: 'Pass' },
   });
 

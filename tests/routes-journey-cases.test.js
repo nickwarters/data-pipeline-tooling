@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
+import { initRouter, routeRegistrationSpy } from './helpers/router.js';
 
 installDom();
 
@@ -50,13 +51,9 @@ const ctx = (journeySlugs) =>
   });
 
 test('routes-journey-cases: registers #/journey-cases route', () => {
-  const router = new Router();
-  router._container = /** @type {any} */ ({});
-  register(router, ctx(['complaints']));
-  assert.ok(
-    router._routes.some((r) => r.re.test('#/journey-cases')),
-    '#/journey-cases should be registered'
-  );
+  const registration = routeRegistrationSpy();
+  register(/** @type {any} */ (registration.router), ctx(['complaints']));
+  assert.equal(registration.has('#/journey-cases'), true);
 });
 
 test('routes-journey-cases: mounts JourneyCasesPage output when owned types exist', async () => {
@@ -68,7 +65,7 @@ test('routes-journey-cases: mounts JourneyCasesPage output when owned types exis
       mounted = args;
     },
   };
-  router._container = /** @type {any} */ (container);
+  initRouter(router, /** @type {any} */ (container));
   register(router, ctx(['complaints', 'example-review']));
   await router.navigate('#/journey-cases');
 
@@ -86,7 +83,7 @@ test('routes-journey-cases: non-Journey-Owner is redirected to #/ and no view mo
       mounted = args;
     },
   };
-  router._container = /** @type {any} */ (container);
+  initRouter(router, /** @type {any} */ (container));
   register(router, ctx([]));
   router.navigate('#/journey-cases');
 
@@ -96,12 +93,11 @@ test('routes-journey-cases: non-Journey-Owner is redirected to #/ and no view mo
 });
 
 test('routes-journey-cases: unmount is a no-op (does not throw)', () => {
-  const router = new Router();
-  router._container = /** @type {any} */ ({});
-  register(router, ctx(['complaints']));
-  const route = router._routes.find((r) => r.re.test('#/journey-cases'));
-  assert.ok(route, 'route should exist');
-  assert.doesNotThrow(() => route.handler.unmount());
+  const registration = routeRegistrationSpy();
+  register(/** @type {any} */ (registration.router), ctx(['complaints']));
+  assert.doesNotThrow(() =>
+    registration.handlerFor('#/journey-cases').unmount()
+  );
 });
 
 test('routes-journey-cases: a rejecting page load renders a cora-route-error panel', async () => {
@@ -116,7 +112,7 @@ test('routes-journey-cases: a rejecting page load renders a cora-route-error pan
         mounted = args;
       },
     };
-    router._container = /** @type {any} */ (container);
+    initRouter(router, /** @type {any} */ (container));
     register(router, ctx(['complaints']), () =>
       Promise.reject(new Error('boom'))
     );

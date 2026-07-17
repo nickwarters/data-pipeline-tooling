@@ -3,6 +3,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
 import { commitSpy } from './_example-review-fixture.js';
+import {
+  fireEvent,
+  getByRole,
+  queryAllByRole,
+  queryAllByText,
+} from './helpers/semantic-dom.js';
 installDom();
 
 const {
@@ -51,11 +57,12 @@ test('OptionsEditor: single-choice renders a row per option + add button', () =>
     onAddOption: () => {},
     onSetOptionOutcome: () => {},
   });
-  const list = /** @type {any} */ (node)._children[1];
-  // 2 option rows + add button
-  assert.equal(list._children.length, 3);
-  // each row: label, outcome select, remove x
-  assert.equal(list._children[0]._children.length, 3);
+  assert.equal(queryAllByRole(node, 'combobox').length, 2);
+  assert.equal(queryAllByText(node, '×').length, 2);
+  assert.equal(
+    getByRole(node, 'button', { name: '+ option' }).tagName,
+    'BUTTON'
+  );
 });
 
 test('effectiveOptions: yes-no-na has fixed options and no add/remove', () => {
@@ -86,13 +93,11 @@ test('OptionsEditor: yes-no-na shows no add button but editable outcome selects'
     onAddOption: () => {},
     onSetOptionOutcome: () => {},
   });
-  const list = /** @type {any} */ (node)._children[1];
-  // exactly the 2 fixed options (N/A is universal, never authorable), no add button
-  assert.equal(list._children.length, 2);
-  // row: label + outcome select only (no remove x)
-  assert.equal(list._children[0]._children.length, 2);
-  const select = list._children[0]._children[1];
-  assert.equal(select.disabled, false);
+  const selects = queryAllByRole(node, 'combobox');
+  assert.equal(selects.length, 2);
+  assert.equal(queryAllByText(node, '×').length, 0);
+  assert.equal(queryAllByRole(node, 'button').length, 0);
+  assert.equal(selects[0].disabled, false);
 });
 
 test('OptionsEditor: outcome-type outcome selects are disabled (read-only)', () => {
@@ -103,15 +108,13 @@ test('OptionsEditor: outcome-type outcome selects are disabled (read-only)', () 
     onAddOption: () => {},
     onSetOptionOutcome: () => {},
   });
-  const list = /** @type {any} */ (node)._children[1];
-  const select = list._children[0]._children[1];
-  assert.equal(select.disabled, true);
+  assert.equal(queryAllByRole(node, 'combobox')[0].disabled, true);
 });
 
 test('CORAOptionsEditor: renders nothing when no question set', () => {
   const e = new CORAOptionsEditor();
   e.connectedCallback();
-  assert.equal(/** @type {any} */ (e)._children.length, 0);
+  assert.equal(e.childElementCount, 0);
 });
 
 test('CORAOptionsEditor: clicking tag-x removes the option and its outcome mapping', () => {
@@ -125,10 +128,7 @@ test('CORAOptionsEditor: clicking tag-x removes the option and its outcome mappi
     deprecated: false,
   };
   const e = mount(q);
-  const list = /** @type {any} */ (e)._children[0]._children[1];
-  const firstRow = list._children[0];
-  const xSpan = firstRow._children[2];
-  xSpan._listeners.click[0]();
+  fireEvent(queryAllByText(e, '×')[0], 'click');
   assert.deepEqual(q.options, ['B']);
   assert.equal('optionOutcomes' in q, false);
 });
@@ -143,9 +143,9 @@ test('CORAOptionsEditor: selecting an option outcome writes optionOutcomes', () 
     deprecated: false,
   };
   const e = mount(q);
-  const list = /** @type {any} */ (e)._children[0]._children[1];
-  const select = list._children[0]._children[1];
-  select._listeners.change[0]({ target: { value: 'fail' } });
+  fireEvent(queryAllByRole(e, 'combobox')[0], 'change', {
+    target: { value: 'fail' },
+  });
   assert.deepEqual(q.optionOutcomes, { A: 'fail' });
 });
 
@@ -160,9 +160,9 @@ test('CORAOptionsEditor: clearing an option outcome deletes the mapping', () => 
     deprecated: false,
   };
   const e = mount(q);
-  const list = /** @type {any} */ (e)._children[0]._children[1];
-  const select = list._children[0]._children[1];
-  select._listeners.change[0]({ target: { value: '' } });
+  fireEvent(queryAllByRole(e, 'combobox')[0], 'change', {
+    target: { value: '' },
+  });
   assert.equal('optionOutcomes' in q, false);
 });
 
@@ -177,9 +177,7 @@ test('CORAOptionsEditor: add button calls prompt and appends', () => {
     deprecated: false,
   };
   const e = mount(q);
-  const list = /** @type {any} */ (e)._children[0]._children[1];
-  const addBtn = list._children[list._children.length - 1];
-  addBtn._listeners.click[0]();
+  fireEvent(getByRole(e, 'button', { name: '+ option' }), 'click');
   assert.deepEqual(q.options, ['A', 'Maybe']);
 });
 
@@ -194,9 +192,7 @@ test('CORAOptionsEditor: add button ignores empty prompt value', () => {
     deprecated: false,
   };
   const e = mount(q);
-  const list = /** @type {any} */ (e)._children[0]._children[1];
-  const addBtn = list._children[list._children.length - 1];
-  addBtn._listeners.click[0]();
+  fireEvent(getByRole(e, 'button', { name: '+ option' }), 'click');
   assert.deepEqual(q.options, ['A']);
 });
 
@@ -210,9 +206,7 @@ test('CORAOptionsEditor: add button initialises options array if missing', () =>
     deprecated: false,
   };
   const e = mount(q);
-  const list = /** @type {any} */ (e)._children[0]._children[1];
-  const addBtn = list._children[list._children.length - 1];
-  addBtn._listeners.click[0]();
+  fireEvent(getByRole(e, 'button', { name: '+ option' }), 'click');
   assert.deepEqual(q.options, ['X']);
 });
 
@@ -236,9 +230,7 @@ test('CORAOptionsEditor: add button rejects an option longer than 250 characters
     deprecated: false,
   };
   const e = mount(q);
-  const list = /** @type {any} */ (e)._children[0]._children[1];
-  const addBtn = list._children[list._children.length - 1];
-  addBtn._listeners.click[0]();
+  fireEvent(getByRole(e, 'button', { name: '+ option' }), 'click');
   assert.deepEqual(q.options, ['A']);
   assert.equal(alerts.length, 1);
   assert.match(alerts[0], /250/);
@@ -259,9 +251,7 @@ test('CORAOptionsEditor: add button accepts an option of exactly 250 characters'
     deprecated: false,
   };
   const e = mount(q);
-  const list = /** @type {any} */ (e)._children[0]._children[1];
-  const addBtn = list._children[list._children.length - 1];
-  addBtn._listeners.click[0]();
+  fireEvent(getByRole(e, 'button', { name: '+ option' }), 'click');
   assert.deepEqual(q.options, ['A', exactly250]);
 });
 
@@ -276,9 +266,7 @@ test('CORAOptionsEditor: tolerates missing global prompt', () => {
     deprecated: false,
   };
   const e = mount(q);
-  const list = /** @type {any} */ (e)._children[0]._children[1];
-  const addBtn = list._children[list._children.length - 1];
-  addBtn._listeners.click[0](); // does not throw
+  fireEvent(getByRole(e, 'button', { name: '+ option' }), 'click');
   assert.deepEqual(q.options, []);
 });
 
@@ -292,9 +280,9 @@ test('CORAOptionsEditor: mutations flow through the onCommit prop', () => {
     deprecated: false,
   };
   const e = mount(q);
-  const list = /** @type {any} */ (e)._children[0]._children[1];
-  const select = list._children[0]._children[1];
-  select._listeners.change[0]({ target: { value: 'fail' } });
+  fireEvent(queryAllByRole(e, 'combobox')[0], 'change', {
+    target: { value: 'fail' },
+  });
   assert.equal(/** @type {any} */ (e.onCommit).calls, 1);
   assert.deepEqual(q.optionOutcomes, { A: 'fail' });
 });

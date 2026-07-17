@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { isolateBrowserGlobals } from './helpers/browser-globals.js';
+import { initRouter, routeRegistrationSpy } from './helpers/router.js';
 
 isolateBrowserGlobals();
 
@@ -18,13 +19,9 @@ import { Router } from '../src/lib/router.js';
 import { register } from '../src/routes/root.js';
 
 test('root route: register calls router.register with #/', () => {
-  const router = new Router();
-  router._container = /** @type {any} */ ({});
-  register(router, /** @type {any} */ ({}));
-  assert.ok(
-    router._routes.some((r) => r.re.test('#/')),
-    '#/ should be registered'
-  );
+  const registration = routeRegistrationSpy();
+  register(/** @type {any} */ (registration.router), /** @type {any} */ ({}));
+  assert.equal(registration.has('#/'), true);
 });
 
 test('root route: mount renders HomePage sections with capabilities from context (no redirect)', async () => {
@@ -86,7 +83,7 @@ test('root route: mount renders HomePage sections with capabilities from context
 
   try {
     const router = new Router();
-    router._container = /** @type {any} */ ({});
+    initRouter(router, /** @type {any} */ ({}));
     register(router, /** @type {any} */ ({ capabilities, appEl }));
     await router.navigate('#/');
 
@@ -129,7 +126,7 @@ test('root route: rejecting loadPage renders cora-route-error into the router co
 
   try {
     const router = new Router();
-    router._container = /** @type {any} */ (container);
+    initRouter(router, /** @type {any} */ (container));
     const appEl = { replaceChildren() {} };
     const capabilities = {
       isVisitor: true,
@@ -174,7 +171,7 @@ test('root route: unmount clears appEl', async () => {
 
   try {
     const router = new Router();
-    router._container = /** @type {any} */ ({});
+    initRouter(router, /** @type {any} */ ({}));
     register(
       router,
       /** @type {any} */ ({

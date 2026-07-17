@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { isolateBrowserGlobals } from './helpers/browser-globals.js';
+import { initRouter } from './helpers/router.js';
 
 isolateBrowserGlobals();
 
@@ -20,12 +21,15 @@ test('Router: mount is called with a forwarding container handle and the route p
   const router = new Router();
   /** @type {any[]} */
   const writes = [];
-  router._container = /** @type {any} */ ({
-    tagName: 'DIV',
-    replaceChildren(/** @type {any[]} */ ...els) {
-      writes.push(...els);
-    },
-  });
+  initRouter(
+    router,
+    /** @type {any} */ ({
+      tagName: 'DIV',
+      replaceChildren(/** @type {any[]} */ ...els) {
+        writes.push(...els);
+      },
+    })
+  );
   const calls =
     /** @type {Array<{el: any, params: Record<string, string>, tag: string}>} */ ([]);
 
@@ -50,7 +54,7 @@ test('Router: mount is called with a forwarding container handle and the route p
 
 test('Router: named param is extracted from hash pattern', () => {
   const router = new Router();
-  router._container = /** @type {any} */ ({});
+  initRouter(router, /** @type {any} */ ({}));
   /** @type {Record<string, string> | null} */
   let captured = null;
 
@@ -67,7 +71,7 @@ test('Router: named param is extracted from hash pattern', () => {
 
 test('Router: named params are decoded from hash path segments', () => {
   const router = new Router();
-  router._container = /** @type {any} */ ({});
+  initRouter(router, /** @type {any} */ ({}));
   /** @type {Record<string, string> | null} */
   let captured = null;
 
@@ -84,7 +88,7 @@ test('Router: named params are decoded from hash path segments', () => {
 
 test('Router: multiple named params are extracted', () => {
   const router = new Router();
-  router._container = /** @type {any} */ ({});
+  initRouter(router, /** @type {any} */ ({}));
   /** @type {Record<string, string> | null} */
   let captured = null;
 
@@ -101,7 +105,7 @@ test('Router: multiple named params are extracted', () => {
 
 test('Router: navigating away calls unmount before the next mount', () => {
   const router = new Router();
-  router._container = /** @type {any} */ ({});
+  initRouter(router, /** @type {any} */ ({}));
   /** @type {string[]} */
   const log = [];
 
@@ -129,14 +133,14 @@ test('Router: navigating away calls unmount before the next mount', () => {
 
 test('Router: navigating to an unregistered hash is a no-op', () => {
   const router = new Router();
-  router._container = /** @type {any} */ ({});
+  initRouter(router, /** @type {any} */ ({}));
 
   assert.doesNotThrow(() => router.navigate('#/not-registered'));
 });
 
 test('Router: unregistered hash does not unmount the current view', () => {
   const router = new Router();
-  router._container = /** @type {any} */ ({});
+  initRouter(router, /** @type {any} */ ({}));
   /** @type {string[]} */
   const log = [];
 
@@ -168,7 +172,6 @@ test('Router: init sets container, registers hashchange listener, and navigates 
   /** @type {any} */ (globalThis).location.hash = '#/';
   router.init(container);
 
-  assert.equal(router._container, container);
   assert.ok(
     windowListeners['hashchange']?.length > 0,
     'hashchange listener should be registered'
@@ -197,7 +200,7 @@ test('Router: init with empty hash navigates to #/', () => {
 
 test('Router: route matches hash that has query params appended', () => {
   const router = new Router();
-  router._container = /** @type {any} */ ({});
+  initRouter(router, /** @type {any} */ ({}));
   const calls =
     /** @type {Array<{el: unknown, params: Record<string, string>}>} */ ([]);
 
@@ -221,7 +224,7 @@ test('Router: a rejecting async mount renders a cora-route-error panel into the 
       children.splice(0, children.length, ...els);
     },
   });
-  router._container = container;
+  initRouter(router, container);
   const origCreateElement = /** @type {any} */ (globalThis).document
     ?.createElement;
   /** @type {any} */ (globalThis).document = {
@@ -267,7 +270,7 @@ test('Router: a rejecting async mount renders a cora-route-error panel into the 
 test('Router: a rejecting async mount logs the failure via console.error mentioning the hash', async () => {
   const router = new Router();
   const container = /** @type {any} */ ({ replaceChildren() {} });
-  router._container = container;
+  initRouter(router, container);
   const origCreateElement = /** @type {any} */ (globalThis).document
     ?.createElement;
   /** @type {any} */ (globalThis).document = {
@@ -327,7 +330,7 @@ test('Router: an async mount that resolves renders normally with no error panel'
       children.splice(0, children.length, ...els);
     },
   });
-  router._container = container;
+  initRouter(router, container);
 
   router.register('#/ok', {
     mount: async (el) => {
@@ -352,7 +355,7 @@ test('Router: a stale rejecting navigate does not clobber a newer successful nav
       children.splice(0, children.length, ...els);
     },
   });
-  router._container = container;
+  initRouter(router, container);
   const origConsoleError = console.error;
   console.error = () => {};
 
@@ -400,7 +403,7 @@ test('Router: a stale resolving navigate does not clobber a newer successful nav
       children.splice(0, children.length, ...els);
     },
   });
-  router._container = container;
+  initRouter(router, container);
 
   /** @type {() => void} */
   let releaseSlow = () => {};
@@ -451,7 +454,7 @@ test('Router: a throwing unmount is isolated and does not block the next mount',
       children.splice(0, children.length, ...els);
     },
   });
-  router._container = container;
+  initRouter(router, container);
   const origConsoleError = console.error;
   /** @type {any[]} */
   const errorCalls = [];
@@ -495,7 +498,7 @@ test('Router: a mount that throws synchronously also renders a cora-route-error 
       children.splice(0, children.length, ...els);
     },
   });
-  router._container = container;
+  initRouter(router, container);
   const origCreateElement = /** @type {any} */ (globalThis).document
     ?.createElement;
   /** @type {any} */ (globalThis).document = {

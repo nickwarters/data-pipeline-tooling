@@ -33,8 +33,18 @@ export function textContent(element) {
 
 /** @param {any} element */
 function accessibleName(element) {
+  const wrappingLabel =
+    element.parentNode?.tagName === 'LABEL' ? element.parentNode : null;
+  const labelText = wrappingLabel
+    ? textContent(
+        wrappingLabel._children?.find(
+          (/** @type {any} */ child) => child !== element
+        ) ?? wrappingLabel
+      )
+    : '';
   return (
     element.getAttribute?.('aria-label') ||
+    labelText ||
     textContent(element) ||
     element.getAttribute?.('title') ||
     ''

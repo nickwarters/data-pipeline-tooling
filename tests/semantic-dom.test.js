@@ -99,3 +99,14 @@ test('semantic DOM helpers use title as a fallback name and query test ids', () 
   );
   assert.equal(getByTestId(root, 'conditional-indicator').tagName, 'DIV');
 });
+
+test('semantic DOM helpers derive a control name from its wrapping label', () => {
+  const root = new StubEl('div');
+  root.append(
+    /** @type {any} */ (
+      h('label', {}, h('input', { type: 'radio' }), h('span', {}, 'Refer'))
+    )
+  );
+
+  assert.equal(getByRole(root, 'radio', { name: 'Refer' }).type, 'radio');
+});

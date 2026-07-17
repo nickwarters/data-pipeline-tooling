@@ -27,6 +27,7 @@ export function ShowwhenLeaf(props) {
     h(
       'select',
       {
+        'aria-label': 'Condition question',
         onchange: (/** @type {any} */ e) =>
           setShowwhenLeafQuestion(onCommit, q, leaf, e.target.value),
       },
@@ -42,6 +43,7 @@ export function ShowwhenLeaf(props) {
       'select',
       {
         class: 'leaf-op',
+        'aria-label': 'Condition operator',
         onchange: (/** @type {any} */ e) =>
           setShowwhenLeafOperator(onCommit, q, leaf, e.target.value),
       },
@@ -55,6 +57,7 @@ export function ShowwhenLeaf(props) {
     ),
     leaf.op !== 'answered'
       ? h('input', {
+          'aria-label': 'Condition value',
           style: 'min-width:120px;',
           placeholder: leaf.op === 'in' ? 'A, B, C' : 'Yes',
           value: Array.isArray(leaf.value)

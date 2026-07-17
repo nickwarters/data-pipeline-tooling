@@ -3,6 +3,11 @@ import { resetStoreWithExampleReview } from './_bank-store-fixture.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
+import {
+  fireEvent,
+  getByRole,
+  queryAllByRole,
+} from './helpers/semantic-dom.js';
 installDom();
 
 const { CORAOutcomeOptionsEditor } =
@@ -14,10 +19,8 @@ test('CORAOutcomeOptionsEditor: renders one row per case-type outcome option', (
   resetStoreWithExampleReview();
   const e = new CORAOutcomeOptionsEditor();
   e.connectedCallback();
-  const section = /** @type {any} */ (e)._children[0];
-  const list = section._children[2];
   assert.equal(
-    list._children.length,
+    queryAllByRole(e, 'textbox', { name: 'Id' }).length,
     cases.get()['example-review'].outcomeOptions?.length
   );
 });
@@ -26,10 +29,9 @@ test('CORAOutcomeOptionsEditor: edits the case-type default outcome', () => {
   resetStoreWithExampleReview();
   const e = new CORAOutcomeOptionsEditor();
   e.connectedCallback();
-  const section = /** @type {any} */ (e)._children[0];
-  const defaultSelect = section._children[1]._children[0]._children[1];
-
-  defaultSelect._listeners.change[0]({ target: { value: 'fail' } });
+  fireEvent(getByRole(e, 'combobox', { name: 'Default outcome' }), 'change', {
+    target: { value: 'fail' },
+  });
 
   assert.equal(cases.get()['example-review'].defaultOutcomeId, 'fail');
 });
@@ -38,12 +40,9 @@ test('CORAOutcomeOptionsEditor: edits wording on the shared outcome option', () 
   resetStoreWithExampleReview();
   const e = new CORAOutcomeOptionsEditor();
   e.connectedCallback();
-  const section = /** @type {any} */ (e)._children[0];
-  const list = section._children[2];
-  const firstRow = list._children[0];
-  const wordingInput = firstRow._children[1]._children[1];
-
-  wordingInput._listeners.change[0]({ target: { value: 'A' } });
+  fireEvent(queryAllByRole(e, 'textbox', { name: 'Wording' })[0], 'change', {
+    target: { value: 'A' },
+  });
 
   assert.equal(cases.get()['example-review'].outcomeOptions?.[0].wording, 'A');
 });
@@ -52,12 +51,9 @@ test('CORAOutcomeOptionsEditor: edits severity on the shared outcome option', ()
   resetStoreWithExampleReview();
   const e = new CORAOutcomeOptionsEditor();
   e.connectedCallback();
-  const section = /** @type {any} */ (e)._children[0];
-  const list = section._children[2];
-  const firstRow = list._children[0];
-  const severityInput = firstRow._children[2]._children[1];
-
-  severityInput._listeners.change[0]({ target: { value: '25' } });
+  fireEvent(queryAllByRole(e, 'textbox', { name: 'Severity' })[0], 'change', {
+    target: { value: '25' },
+  });
 
   assert.equal(cases.get()['example-review'].outcomeOptions?.[0].severity, 25);
 });
@@ -70,14 +66,11 @@ test('CORAOutcomeOptionsEditor: renaming an outcome id updates option-outcome ma
   bank.defaultOutcomeId = 'fail';
   const e = new CORAOutcomeOptionsEditor();
   e.connectedCallback();
-  const section = /** @type {any} */ (e)._children[0];
-  const list = section._children[2];
-  const failIndex = bank.outcomeOptions?.findIndex((o) => o.id === 'fail');
-  assert.notEqual(failIndex, -1);
-  const failRow = list._children[/** @type {number} */ (failIndex)];
-  const idInput = failRow._children[0]._children[1];
-
-  idInput._listeners.change[0]({ target: { value: 'fail-impact' } });
+  const idInput = e.querySelector(
+    '[data-focus-key="outcome:example-review:fail:id"]'
+  );
+  assert.ok(idInput);
+  fireEvent(idInput, 'change', { target: { value: 'fail-impact' } });
 
   assert.equal(bank.questions[0].optionOutcomes?.No, 'fail-impact');
   assert.equal(bank.questions[1].optionOutcomes?.No, 'fail-impact');
@@ -90,11 +83,7 @@ test('CORAOutcomeOptionsEditor: adds an outcome option to the active case type',
   const before = cases.get()['example-review'].outcomeOptions?.length ?? 0;
   const e = new CORAOutcomeOptionsEditor();
   e.connectedCallback();
-  const section = /** @type {any} */ (e)._children[0];
-  const head = section._children[0];
-  const add = head._children[1];
-
-  add._listeners.click[0]();
+  fireEvent(getByRole(e, 'button', { name: '+ outcome' }), 'click');
 
   assert.equal(
     cases.get()['example-review'].outcomeOptions?.length,
@@ -111,12 +100,7 @@ test('CORAOutcomeOptionsEditor: removes an outcome option', () => {
   bank.defaultOutcomeId = 'pass';
   const e = new CORAOutcomeOptionsEditor();
   e.connectedCallback();
-  const section = /** @type {any} */ (e)._children[0];
-  const list = section._children[2];
-  const firstRow = list._children[0];
-  const remove = firstRow._children[3];
-
-  remove._listeners.click[0]();
+  fireEvent(queryAllByRole(e, 'button', { name: '×' })[0], 'click');
 
   assert.equal(
     cases.get()['example-review'].outcomeOptions?.length,

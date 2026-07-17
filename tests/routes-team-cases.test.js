@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
+import { initRouter, routeRegistrationSpy } from './helpers/router.js';
 
 installDom();
 
@@ -38,20 +39,16 @@ function findTag(node, tag) {
 }
 
 test('routes-team-cases: registers #/team-cases route', () => {
-  const router = new Router();
-  router._container = /** @type {any} */ ({});
+  const registration = routeRegistrationSpy();
   register(
-    router,
+    /** @type {any} */ (registration.router),
     /** @type {any} */ ({
       client: {},
       currentUser: { id: 'u1' },
       caseSources: [].map((s) => src(s)),
     })
   );
-  assert.ok(
-    router._routes.some((r) => r.re.test('#/team-cases')),
-    '#/team-cases should be registered'
-  );
+  assert.equal(registration.has('#/team-cases'), true);
 });
 
 test('routes-team-cases: mounts TeamCasesPage output with client, currentUser, caseSources', async () => {
@@ -71,7 +68,7 @@ test('routes-team-cases: mounts TeamCasesPage output with client, currentUser, c
       mounted = args;
     },
   };
-  router._container = /** @type {any} */ (container);
+  initRouter(router, /** @type {any} */ (container));
   register(router, /** @type {any} */ ({ client, currentUser, caseSources }));
   await router.navigate('#/team-cases');
 
@@ -80,19 +77,16 @@ test('routes-team-cases: mounts TeamCasesPage output with client, currentUser, c
 });
 
 test('routes-team-cases: unmount is a no-op (does not throw)', () => {
-  const router = new Router();
-  router._container = /** @type {any} */ ({});
+  const registration = routeRegistrationSpy();
   register(
-    router,
+    /** @type {any} */ (registration.router),
     /** @type {any} */ ({
       client: {},
       currentUser: { id: 'u1' },
       caseSources: [].map((s) => src(s)),
     })
   );
-  const route = router._routes.find((r) => r.re.test('#/team-cases'));
-  assert.ok(route, 'route should exist');
-  assert.doesNotThrow(() => route.handler.unmount());
+  assert.doesNotThrow(() => registration.handlerFor('#/team-cases').unmount());
 });
 
 test('routes-team-cases: passes query string from location hash to the page', async () => {
@@ -117,7 +111,7 @@ test('routes-team-cases: passes query string from location hash to the page', as
       mounted = args;
     },
   };
-  router._container = /** @type {any} */ (container);
+  initRouter(router, /** @type {any} */ (container));
   register(
     router,
     /** @type {any} */ ({
@@ -147,7 +141,7 @@ test('routes-team-cases: rejecting loadPage renders a route error panel', async 
       mounted = args;
     },
   };
-  router._container = /** @type {any} */ (container);
+  initRouter(router, /** @type {any} */ (container));
   register(
     router,
     /** @type {any} */ ({

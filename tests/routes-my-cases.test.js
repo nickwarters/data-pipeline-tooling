@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
+import { initRouter, routeRegistrationSpy } from './helpers/router.js';
 
 installDom();
 
@@ -27,16 +28,12 @@ function findTag(node, tag) {
 }
 
 test('routes-my-cases: registers #/my-cases route', () => {
-  const router = new Router();
-  router._container = /** @type {any} */ ({});
+  const registration = routeRegistrationSpy();
   register(
-    router,
+    /** @type {any} */ (registration.router),
     /** @type {any} */ ({ client: {}, currentUser: { id: 'u1' } })
   );
-  assert.ok(
-    router._routes.some((r) => r.re.test('#/my-cases')),
-    '#/my-cases should be registered'
-  );
+  assert.equal(registration.has('#/my-cases'), true);
 });
 
 test('routes-my-cases: mounts ResponsiblePartyDashboard output', async () => {
@@ -55,7 +52,7 @@ test('routes-my-cases: mounts ResponsiblePartyDashboard output', async () => {
       mounted = args;
     },
   };
-  router._container = /** @type {any} */ (container);
+  initRouter(router, /** @type {any} */ (container));
   register(router, /** @type {any} */ ({ client, currentUser }));
   await router.navigate('#/my-cases');
 
@@ -72,7 +69,7 @@ test('routes-my-cases: a rejecting loadPage renders cora-route-error via the rou
       mounted = args;
     },
   };
-  router._container = /** @type {any} */ (container);
+  initRouter(router, /** @type {any} */ (container));
   register(
     router,
     /** @type {any} */ ({ client: {}, currentUser: { id: 'u1' } }),
@@ -95,15 +92,12 @@ test('routes-my-cases: a rejecting loadPage renders cora-route-error via the rou
 });
 
 test('routes-my-cases: unmount is a no-op (does not throw)', () => {
-  const router = new Router();
-  router._container = /** @type {any} */ ({});
+  const registration = routeRegistrationSpy();
   register(
-    router,
+    /** @type {any} */ (registration.router),
     /** @type {any} */ ({ client: {}, currentUser: { id: 'u1' } })
   );
-  const route = router._routes.find((r) => r.re.test('#/my-cases'));
-  assert.ok(route, 'route should exist');
-  assert.doesNotThrow(() => route.handler.unmount());
+  assert.doesNotThrow(() => registration.handlerFor('#/my-cases').unmount());
 });
 
 test('routes-my-cases: passes client and currentUserId through to the page without wiring onOpenConversation (matches previous behaviour)', async () => {
@@ -132,7 +126,7 @@ test('routes-my-cases: passes client and currentUserId through to the page witho
       mounted = args;
     },
   };
-  router._container = /** @type {any} */ (container);
+  initRouter(router, /** @type {any} */ (container));
   register(router, /** @type {any} */ ({ client, currentUser, caseSources }));
   await router.navigate('#/my-cases');
 
@@ -167,7 +161,7 @@ test('routes-my-cases: threads context.caseSources into the page (fans out acros
 
   const router = new Router();
   const container = { replaceChildren() {} };
-  router._container = /** @type {any} */ (container);
+  initRouter(router, /** @type {any} */ (container));
   register(router, /** @type {any} */ ({ client, currentUser, caseSources }));
   await router.navigate('#/my-cases');
 

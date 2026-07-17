@@ -6,6 +6,12 @@ import {
   freshExampleReviewBank,
   commitSpy,
 } from './_example-review-fixture.js';
+import {
+  fireEvent,
+  getByRole,
+  getByText,
+  queryAllByRole,
+} from './helpers/semantic-dom.js';
 installDom();
 
 const { CORAShowwhenLeaf } =
@@ -24,7 +30,7 @@ function mkLeaf(over = {}) {
 test('CORAShowwhenLeaf: no question/leaf → renders nothing', () => {
   const e = new CORAShowwhenLeaf();
   e.connectedCallback();
-  assert.equal(/** @type {any} */ (e)._children.length, 0);
+  assert.equal(e.childElementCount, 0);
 });
 
 test('CORAShowwhenLeaf: equals op renders qId select, op select, and value input', () => {
@@ -38,9 +44,9 @@ test('CORAShowwhenLeaf: equals op renders qId select, op select, and value input
   e.parent = parent;
   e.leaf = leaf;
   e.connectedCallback();
-  const row = /** @type {any} */ (e)._children[0];
-  // qId select, op select, value input, leaf-x
-  assert.equal(row._children.length, 4);
+  assert.equal(queryAllByRole(e, 'combobox').length, 2);
+  assert.equal(queryAllByRole(e, 'textbox').length, 1);
+  assert.equal(getByText(e, '×').textContent, '×');
 });
 
 test('CORAShowwhenLeaf: answered op renders hint instead of value input', () => {
@@ -56,9 +62,9 @@ test('CORAShowwhenLeaf: answered op renders hint instead of value input', () => 
   e.parent = parent;
   e.leaf = leaf;
   e.connectedCallback();
-  const row = /** @type {any} */ (e)._children[0];
-  const third = row._children[2];
-  assert.equal(third.className, 'leaf-answered-hint');
+  const hint = e.querySelector('.leaf-answered-hint');
+  assert.ok(hint);
+  assert.equal(hint.textContent, '— any non-empty answer');
 });
 
 test('CORAShowwhenLeaf: in op renders comma-joined value', () => {
@@ -74,8 +80,7 @@ test('CORAShowwhenLeaf: in op renders comma-joined value', () => {
   e.parent = parent;
   e.leaf = leaf;
   e.connectedCallback();
-  const row = /** @type {any} */ (e)._children[0];
-  const valInput = row._children[2];
+  const valInput = getByRole(e, 'textbox', { name: 'Condition value' });
   assert.equal(valInput.value, 'A, B');
 });
 
@@ -92,9 +97,8 @@ test('CORAShowwhenLeaf: changing qId select updates leaf.qId', () => {
   e.parent = parent;
   e.leaf = leaf;
   e.connectedCallback();
-  const row = /** @type {any} */ (e)._children[0];
-  const qSel = row._children[0];
-  qSel._listeners.change[0]({ target: { value: 'q-channel' } });
+  const qSel = getByRole(e, 'combobox', { name: 'Condition question' });
+  fireEvent(qSel, 'change', { target: { value: 'q-channel' } });
   assert.equal(leaf.qId, 'q-channel');
 });
 
@@ -111,19 +115,18 @@ test('CORAShowwhenLeaf: changing op to answered, in, equals normalises value', (
   e.parent = parent;
   e.leaf = leaf;
   e.connectedCallback();
-  const row = /** @type {any} */ (e)._children[0];
-  const opSel = row._children[1];
+  const opSel = getByRole(e, 'combobox', { name: 'Condition operator' });
 
-  opSel._listeners.change[0]({ target: { value: 'answered' } });
+  fireEvent(opSel, 'change', { target: { value: 'answered' } });
   assert.equal(leaf.op, 'answered');
   assert.equal(leaf.value, true);
 
-  opSel._listeners.change[0]({ target: { value: 'in' } });
+  fireEvent(opSel, 'change', { target: { value: 'in' } });
   assert.equal(leaf.op, 'in');
   assert.deepEqual(leaf.value, []);
 
   // Once op is 'in' and value is [], switching to equals coerces value to ''
-  opSel._listeners.change[0]({ target: { value: 'equals' } });
+  fireEvent(opSel, 'change', { target: { value: 'equals' } });
   assert.equal(leaf.op, 'equals');
   assert.equal(leaf.value, '');
 });
@@ -141,9 +144,8 @@ test('CORAShowwhenLeaf: in→in change preserves array; equals→in coerces stri
   e.parent = parent;
   e.leaf = leaf;
   e.connectedCallback();
-  const row = /** @type {any} */ (e)._children[0];
-  const opSel = row._children[1];
-  opSel._listeners.change[0]({ target: { value: 'in' } });
+  const opSel = getByRole(e, 'combobox', { name: 'Condition operator' });
+  fireEvent(opSel, 'change', { target: { value: 'in' } });
   assert.deepEqual(leaf.value, ['A']);
 });
 
@@ -160,9 +162,8 @@ test('CORAShowwhenLeaf: typed value commits — split for in, plain for equals',
   e.parent = parent;
   e.leaf = leaf;
   e.connectedCallback();
-  let row = /** @type {any} */ (e)._children[0];
-  let val = row._children[2];
-  val._listeners.change[0]({ target: { value: 'X, Y, ,Z' } });
+  let val = getByRole(e, 'textbox', { name: 'Condition value' });
+  fireEvent(val, 'change', { target: { value: 'X, Y, ,Z' } });
   assert.deepEqual(leaf.value, ['X', 'Y', 'Z']);
 
   // Switch to equals
@@ -175,9 +176,8 @@ test('CORAShowwhenLeaf: typed value commits — split for in, plain for equals',
   e2.parent = parent;
   e2.leaf = leaf2;
   e2.connectedCallback();
-  row = /** @type {any} */ (e2)._children[0];
-  val = row._children[2];
-  val._listeners.change[0]({ target: { value: 'No' } });
+  val = getByRole(e2, 'textbox', { name: 'Condition value' });
+  fireEvent(val, 'change', { target: { value: 'No' } });
   assert.equal(leaf2.value, 'No');
 });
 
@@ -194,9 +194,7 @@ test('CORAShowwhenLeaf: × removes self from parent', () => {
   e.parent = parent;
   e.leaf = leaf;
   e.connectedCallback();
-  const row = /** @type {any} */ (e)._children[0];
-  const x = row._children[row._children.length - 1];
-  x._listeners.click[0]();
+  fireEvent(getByText(e, '×'), 'click');
   assert.equal(parent.children.length, 0);
 });
 
@@ -213,8 +211,7 @@ test('CORAShowwhenLeaf: leaf.value undefined falls through to empty string', () 
   e.parent = parent;
   e.leaf = leaf;
   e.connectedCallback();
-  const row = /** @type {any} */ (e)._children[0];
-  const valInput = row._children[2];
+  const valInput = getByRole(e, 'textbox', { name: 'Condition value' });
   assert.equal(valInput.value, '');
 });
 
@@ -231,9 +228,8 @@ test('CORAShowwhenLeaf: mutations flow through the onCommit prop', () => {
   e.parent = parent;
   e.leaf = leaf;
   e.connectedCallback();
-  const row = /** @type {any} */ (e)._children[0];
-  const qSel = row._children[0];
-  qSel._listeners.change[0]({ target: { value: 'q-channel' } });
+  const qSel = getByRole(e, 'combobox', { name: 'Condition question' });
+  fireEvent(qSel, 'change', { target: { value: 'q-channel' } });
   assert.equal(/** @type {any} */ (e.onCommit).calls, 1);
   assert.equal(leaf.qId, 'q-channel');
 });

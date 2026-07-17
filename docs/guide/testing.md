@@ -100,6 +100,9 @@ Prefer `getByRole()`, `queryByRole()`, and `fireEvent()` from
 `data-testid` is acceptable when the UI has no user-facing semantic to query.
 Route tests should use `register()`, `init()`, and `navigate()`, or a public
 registration spy; do not inspect `_routes` or assign `_container` directly.
+The router-internal baseline is now zero and must remain zero. Use
+`initRouter()` and `routeRegistrationSpy()` from `tests/helpers/router.js` for
+real-navigation and registration-only tests respectively.
 
 ## Function Component Tests
 

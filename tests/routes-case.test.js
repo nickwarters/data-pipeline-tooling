@@ -3,6 +3,7 @@ import './_register-example-review.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom, flush } from './_dom-stub.js';
+import { initRouter, routeRegistrationSpy } from './helpers/router.js';
 
 installDom();
 
@@ -60,28 +61,20 @@ function makeContext(calls = []) {
 }
 
 test('case route: register calls router.register with #/case/:id', () => {
-  const router = new Router();
-  router._container = /** @type {any} */ ({});
-  register(router, makeContext());
-  assert.ok(
-    router._routes.some((r) => r.re.test('#/case/99')),
-    '#/case/:id should be registered'
-  );
+  const registration = routeRegistrationSpy();
+  register(/** @type {any} */ (registration.router), makeContext());
+  assert.equal(registration.has('#/case/:id'), true);
 });
 
 test('case route: registers source-key case route', () => {
-  const router = new Router();
-  router._container = /** @type {any} */ ({});
-  register(router, makeContext());
-  assert.ok(
-    router._routes.some((r) => r.re.test('#/case/example-review/99')),
-    '#/case/:caseType/:id should be registered'
-  );
+  const registration = routeRegistrationSpy();
+  register(/** @type {any} */ (registration.router), makeContext());
+  assert.equal(registration.has('#/case/:caseType/:id'), true);
 });
 
 test('case route: navigating away runs the case route unmount cleanly', async () => {
   const router = new Router();
-  router._container = /** @type {any} */ ({ replaceChildren() {} });
+  initRouter(router, /** @type {any} */ ({ replaceChildren() {} }));
   register(router, makeContext());
   let elsewhereMounted = false;
   router.register('#/elsewhere', {
@@ -110,11 +103,14 @@ test('case route: mount composes CaseReviewPage and fetches the id from the rout
   /** @type {any[]} */
   let mounted = [];
   const router = new Router();
-  router._container = /** @type {any} */ ({
-    replaceChildren(/** @type {any} */ ...args) {
-      mounted = args;
-    },
-  });
+  initRouter(
+    router,
+    /** @type {any} */ ({
+      replaceChildren(/** @type {any} */ ...args) {
+        mounted = args;
+      },
+    })
+  );
 
   register(router, makeContext(calls));
   await router.navigate('#/case/456');
@@ -140,11 +136,14 @@ test('case route: renders a cora-route-error panel when the page module fails to
     /** @type {any[]} */
     let mounted = [];
     const router = new Router();
-    router._container = /** @type {any} */ ({
-      replaceChildren(/** @type {any} */ ...args) {
-        mounted = args;
-      },
-    });
+    initRouter(
+      router,
+      /** @type {any} */ ({
+        replaceChildren(/** @type {any} */ ...args) {
+          mounted = args;
+        },
+      })
+    );
 
     register(router, makeContext(), () => Promise.reject(new Error('boom')));
     await router.navigate('#/case/99');
@@ -162,11 +161,14 @@ test('case route: source-key route passes caseType through to the page', async (
   /** @type {any[]} */
   let mounted = [];
   const router = new Router();
-  router._container = /** @type {any} */ ({
-    replaceChildren(/** @type {any} */ ...args) {
-      mounted = args;
-    },
-  });
+  initRouter(
+    router,
+    /** @type {any} */ ({
+      replaceChildren(/** @type {any} */ ...args) {
+        mounted = args;
+      },
+    })
+  );
 
   register(router, makeContext(calls));
   router.navigate('#/case/example-review/456');

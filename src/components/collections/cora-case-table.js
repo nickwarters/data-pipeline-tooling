@@ -94,15 +94,14 @@ export function CaseTableToolbar({ onFilterText, onStatusFilter }) {
       type: 'text',
       placeholder: 'Filter cases…',
       'aria-label': 'Filter cases',
-      oninput: (/** @type {any} */ e) => onFilterText(e.target?.value ?? ''),
+      oninput: (/** @type {any} */ e) => onFilterText(e.target.value),
     }),
     h(
       'select',
       {
         className: 'cora-case-table-status-filter',
         'aria-label': 'Filter by status',
-        onchange: (/** @type {any} */ e) =>
-          onStatusFilter(e.target?.value ?? ''),
+        onchange: (/** @type {any} */ e) => onStatusFilter(e.target.value),
       },
       h('option', { value: '' }, 'All statuses'),
       h('option', { value: CASE_STATUS.IN_PROGRESS }, 'In Progress'),

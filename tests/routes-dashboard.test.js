@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
+import { initRouter, routeRegistrationSpy } from './helpers/router.js';
 
 installDom();
 
@@ -27,10 +28,9 @@ function findTag(node, tag) {
 }
 
 test('routes-dashboard: registers #/dashboard route', () => {
-  const router = new Router();
-  router._container = /** @type {any} */ ({});
+  const registration = routeRegistrationSpy();
   register(
-    router,
+    /** @type {any} */ (registration.router),
     /** @type {any} */ ({
       client: {},
       currentUser: { id: 'u1' },
@@ -42,10 +42,7 @@ test('routes-dashboard: registers #/dashboard route', () => {
       caseSources: [],
     })
   );
-  assert.ok(
-    router._routes.some((r) => r.re.test('#/dashboard')),
-    '#/dashboard should be registered'
-  );
+  assert.equal(registration.has('#/dashboard'), true);
 });
 
 test('routes-dashboard: mounts DashboardPage output for a reviewer', async () => {
@@ -76,7 +73,7 @@ test('routes-dashboard: mounts DashboardPage output for a reviewer', async () =>
       mounted = args;
     },
   };
-  router._container = /** @type {any} */ (container);
+  initRouter(router, /** @type {any} */ (container));
   register(
     router,
     /** @type {any} */ ({
@@ -116,7 +113,7 @@ test('routes-dashboard: passes allocationSources from context through to the cor
       mounted = args;
     },
   };
-  router._container = /** @type {any} */ (container);
+  initRouter(router, /** @type {any} */ (container));
   register(
     router,
     /** @type {any} */ ({
@@ -134,10 +131,9 @@ test('routes-dashboard: passes allocationSources from context through to the cor
 });
 
 test('routes-dashboard: unmount is a no-op (does not throw)', () => {
-  const router = new Router();
-  router._container = /** @type {any} */ ({});
+  const registration = routeRegistrationSpy();
   register(
-    router,
+    /** @type {any} */ (registration.router),
     /** @type {any} */ ({
       client: {},
       currentUser: { id: 'u1' },
@@ -148,9 +144,7 @@ test('routes-dashboard: unmount is a no-op (does not throw)', () => {
       },
     })
   );
-  const route = router._routes.find((r) => r.re.test('#/dashboard'));
-  assert.ok(route, 'route should exist');
-  assert.doesNotThrow(() => route.handler.unmount());
+  assert.doesNotThrow(() => registration.handlerFor('#/dashboard').unmount());
 });
 
 test('routes-dashboard: renders a cora-route-error panel when the page module fails to load', async () => {
@@ -165,7 +159,7 @@ test('routes-dashboard: renders a cora-route-error panel when the page module fa
         mounted = args;
       },
     };
-    router._container = /** @type {any} */ (container);
+    initRouter(router, /** @type {any} */ (container));
     register(
       router,
       /** @type {any} */ ({
@@ -209,7 +203,7 @@ test('routes-dashboard: passes currentUserId and capabilities through to the pag
       mounted = args;
     },
   };
-  router._container = /** @type {any} */ (container);
+  initRouter(router, /** @type {any} */ (container));
   register(
     router,
     /** @type {any} */ ({

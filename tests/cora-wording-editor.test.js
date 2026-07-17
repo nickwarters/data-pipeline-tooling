@@ -6,6 +6,7 @@ import {
   freshExampleReviewBank,
   commitSpy,
 } from './_example-review-fixture.js';
+import { fireEvent, getByRole, getByText } from './helpers/semantic-dom.js';
 installDom();
 
 const { CORAWordingEditor, WordingEditor } =
@@ -50,29 +51,26 @@ test('WordingEditor: plain function renders textarea and char count', () => {
     onTextInput: () => {},
   });
 
-  const textarea = /** @type {any} */ (node)._children[1];
-  const foot = /** @type {any} */ (node)._children[2];
+  const textarea = getByRole(node, 'textbox', { name: 'Question wording' });
   assert.equal(textarea.value, 'Question text');
-  assert.equal(foot._children[1].textContent, '13 chars');
+  assert.equal(getByText(node, '13 chars').textContent, '13 chars');
 });
 
 test('CORAWordingEditor: no question → renders nothing', () => {
   const e = new CORAWordingEditor();
   e.connectedCallback();
-  assert.equal(/** @type {any} */ (e)._children.length, 0);
+  assert.equal(e.childElementCount, 0);
 });
 
 test('CORAWordingEditor: renders edit mark, textarea, status pill, char count', () => {
   const q = freshExampleReviewBank().questions[0];
   const e = mount(q, structuredClone(q));
-  const wrap = /** @type {any} */ (e)._children[0];
+  const wrap = e.querySelector('.wording');
+  assert.ok(wrap);
   assert.equal(wrap.className, 'wording');
-  // edit-mark span, textarea, wording-foot
-  assert.equal(wrap._children.length, 3);
-  const txt = wrap._children[1];
+  const txt = getByRole(wrap, 'textbox', { name: 'Question wording' });
   assert.equal(txt.value, q.text);
-  const foot = wrap._children[2];
-  assert.ok(foot._children[0].textContent.includes('Unchanged'));
+  assert.ok(getByText(wrap, /Unchanged/));
 });
 
 test('CORAWordingEditor: shows "Edited" when text diverges from baseline', () => {
@@ -80,9 +78,7 @@ test('CORAWordingEditor: shows "Edited" when text diverges from baseline', () =>
   const q = structuredClone(baseline);
   q.text = 'CHANGED';
   const e = mount(q, baseline);
-  const wrap = /** @type {any} */ (e)._children[0];
-  const foot = wrap._children[2];
-  assert.ok(foot._children[0]._children[0].textContent.includes('Edited'));
+  assert.ok(getByText(e, /Edited/));
 });
 
 test('CORAWordingEditor: shows "New draft" when no baseline match', () => {
@@ -94,9 +90,7 @@ test('CORAWordingEditor: shows "New draft" when no baseline match', () => {
     deprecated: false,
   };
   const e = mount(q, undefined);
-  const wrap = /** @type {any} */ (e)._children[0];
-  const foot = wrap._children[2];
-  assert.ok(foot._children[0]._children[0].textContent.includes('New draft'));
+  assert.ok(getByText(e, /New draft/));
 });
 
 test('CORAWordingEditor: char count warns over 180', () => {
@@ -108,9 +102,8 @@ test('CORAWordingEditor: char count warns over 180', () => {
     deprecated: false,
   };
   const e = mount(q, undefined);
-  const wrap = /** @type {any} */ (e)._children[0];
-  const foot = wrap._children[2];
-  const cc = foot._children[1];
+  const cc = e.querySelector('.charcount');
+  assert.ok(cc);
   assert.equal(cc.className, 'charcount warn');
 });
 
@@ -123,22 +116,22 @@ test('CORAWordingEditor: deprecated question adds deprecated-text class', () => 
     deprecated: true,
   };
   const e = mount(q, undefined);
-  const wrap = /** @type {any} */ (e)._children[0];
-  const txt = wrap._children[1];
+  const txt = getByRole(e, 'textbox', { name: 'Question wording' });
   assert.ok(txt.className.includes('deprecated-text'));
 });
 
 test('CORAWordingEditor: focus/blur toggle "focused" class; input commits via onCommit', () => {
   const q = freshExampleReviewBank().questions[0];
   const e = mount(q, structuredClone(q));
-  const wrap = /** @type {any} */ (e)._children[0];
-  const txt = wrap._children[1];
-  txt._listeners.focus[0]();
+  const wrap = e.querySelector('.wording');
+  assert.ok(wrap);
+  const txt = getByRole(e, 'textbox', { name: 'Question wording' });
+  fireEvent(txt, 'focus');
   assert.equal(wrap.className, 'wording focused');
-  txt._listeners.blur[0]();
+  fireEvent(txt, 'blur');
   assert.equal(wrap.className, 'wording');
   // Input event commits the new text through the onCommit prop
-  txt._listeners.input[0]({ target: { value: 'new wording' } });
+  fireEvent(txt, 'input', { target: { value: 'new wording' } });
   assert.equal(q.text, 'new wording');
   assert.equal(/** @type {any} */ (e.onCommit).calls, 1);
 });
@@ -149,8 +142,6 @@ test('CORAWordingEditor: long baseline text gets ellipsis', () => {
   const q = structuredClone(baseline);
   q.text = 'short';
   const e = mount(q, baseline);
-  const wrap = /** @type {any} */ (e)._children[0];
-  const foot = wrap._children[2];
-  const status = foot._children[0]._children[0].textContent;
+  const status = getByText(e, /Edited/).textContent;
   assert.ok(status.includes('…'));
 });

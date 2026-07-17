@@ -3,6 +3,12 @@ import { resetStoreWithExampleReview } from './_bank-store-fixture.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
+import {
+  fireEvent,
+  getByRole,
+  getByTag,
+  queryAllByTag,
+} from './helpers/semantic-dom.js';
 installDom();
 
 const { CORABankList } =
@@ -14,13 +20,12 @@ test('CORABankList: renders dirty pill + question cards + add button', () => {
   resetStoreWithExampleReview();
   const e = new CORABankList();
   e.connectedCallback();
-  const section = /** @type {any} */ (e)._children[0];
-  // editor-head, outcome-options, listRoot, add-card
-  assert.equal(section._children.length, 4);
+  assert.ok(e.querySelector('.editor-head'));
+  assert.ok(getByTag(e, 'cora-outcome-options-editor'));
+  assert.ok(getByRole(e, 'button', { name: /Draft a new question/ }));
   // With default filters all live example-review questions are visible.
-  const listRoot = section._children[2];
   assert.equal(
-    listRoot._children.length,
+    queryAllByTag(e, 'cora-question-card').length,
     cases.get()['example-review'].questions.length
   );
   e.disconnectedCallback();
@@ -52,9 +57,10 @@ test('CORABankList: empty-state when no question passes filters', () => {
   });
   const e = new CORABankList();
   e.connectedCallback();
-  const section = /** @type {any} */ (e)._children[0];
-  const listRoot = section._children[2];
-  assert.equal(listRoot._children[0].className, 'empty');
+  const empty = e.querySelector('.empty');
+  assert.ok(empty);
+  assert.equal(empty.className, 'empty');
+  assert.equal(queryAllByTag(e, 'cora-question-card').length, 0);
   e.disconnectedCallback();
 });
 
@@ -68,10 +74,8 @@ test('CORABankList: Question Group filter hides non-matching questions', () => {
   });
   const e = new CORABankList();
   e.connectedCallback();
-  const section = /** @type {any} */ (e)._children[0];
-  const listRoot = section._children[2];
   // Only q-welcome is in 'Opening'
-  assert.equal(listRoot._children.length, 1);
+  assert.equal(queryAllByTag(e, 'cora-question-card').length, 1);
   e.disconnectedCallback();
 });
 
@@ -85,10 +89,8 @@ test('CORABankList: conditionalOnly hides unconditional questions', () => {
   });
   const e = new CORABankList();
   e.connectedCallback();
-  const section = /** @type {any} */ (e)._children[0];
-  const listRoot = section._children[2];
   // Only q-resolve has showWhen in example-review
-  assert.equal(listRoot._children.length, 1);
+  assert.equal(queryAllByTag(e, 'cora-question-card').length, 1);
   e.disconnectedCallback();
 });
 
@@ -98,9 +100,7 @@ test('CORABankList: + Draft a new question appends a draft', () => {
   const before = cases.get()['example-review'].questions.length;
   const e = new CORABankList();
   e.connectedCallback();
-  const section = /** @type {any} */ (e)._children[0];
-  const addBtn = section._children[3];
-  addBtn._listeners.click[0]();
+  fireEvent(getByRole(e, 'button', { name: /Draft a new question/ }), 'click');
   assert.equal(cases.get()['example-review'].questions.length, before + 1);
   e.disconnectedCallback();
 });
@@ -112,9 +112,7 @@ test('CORABankList: + Draft falls back to immediate scroll when no rAF', () => {
   /** @type {any} */ (globalThis).requestAnimationFrame = undefined;
   const e = new CORABankList();
   e.connectedCallback();
-  const section = /** @type {any} */ (e)._children[0];
-  const addBtn = section._children[3];
-  addBtn._listeners.click[0](); // exercises the else branch
+  fireEvent(getByRole(e, 'button', { name: /Draft a new question/ }), 'click');
   /** @type {any} */ (globalThis).requestAnimationFrame = saved;
   e.disconnectedCallback();
 });
@@ -123,9 +121,8 @@ test('CORABankList: dirty pill reflects isDirty', () => {
   resetStoreWithExampleReview();
   const e = new CORABankList();
   e.connectedCallback();
-  const section = /** @type {any} */ (e)._children[0];
-  const head = section._children[0];
-  const dirty = head._children[1];
+  const dirty = e.querySelector('.dirty-indicator');
+  assert.ok(dirty);
   // Initially clean
   assert.equal(dirty.className, 'dirty-indicator');
   e.disconnectedCallback();
@@ -145,10 +142,9 @@ test('CORABankList: bank label and slug render as text, not HTML', () => {
 
   const e = new CORABankList();
   e.connectedCallback();
-  const section = /** @type {any} */ (e)._children[0];
-  const heading = section._children[0]._children[0];
-  const label = heading._children[0];
-  const meta = heading._children[1];
+  const heading = getByTag(e, 'h2');
+  const label = queryAllByTag(heading, 'span')[0];
+  const meta = heading.querySelector('.meta');
 
   assert.equal(label.textContent, '<img src=x onerror=alert(1)>');
   assert.equal(

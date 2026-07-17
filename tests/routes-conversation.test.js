@@ -3,6 +3,7 @@ import './_register-example-review.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
+import { initRouter, routeRegistrationSpy } from './helpers/router.js';
 
 installDom();
 
@@ -39,32 +40,32 @@ async function settleRouteLoad() {
 }
 
 test('conversation route: register calls router.register with #/conversation/:id', () => {
-  const router = new Router();
-  router._container = /** @type {any} */ ({});
-  register(router, /** @type {any} */ (makeContext()));
-  assert.ok(
-    router._routes.some((r) => r.re.test('#/conversation/99')),
-    '#/conversation/:id should be registered'
+  const registration = routeRegistrationSpy();
+  register(
+    /** @type {any} */ (registration.router),
+    /** @type {any} */ (makeContext())
   );
+  assert.equal(registration.has('#/conversation/:id'), true);
 });
 
 test('conversation route: registers source-key conversation route', () => {
-  const router = new Router();
-  router._container = /** @type {any} */ ({});
-  register(router, /** @type {any} */ (makeContext()));
-  assert.ok(
-    router._routes.some((r) => r.re.test('#/conversation/example-review/99')),
-    '#/conversation/:caseType/:id should be registered'
+  const registration = routeRegistrationSpy();
+  register(
+    /** @type {any} */ (registration.router),
+    /** @type {any} */ (makeContext())
   );
+  assert.equal(registration.has('#/conversation/:caseType/:id'), true);
 });
 
 test('conversation route: unmount is a no-op (does not throw)', () => {
-  const router = new Router();
-  router._container = /** @type {any} */ ({});
-  register(router, /** @type {any} */ (makeContext()));
-  const route = router._routes.find((r) => r.re.test('#/conversation/99'));
-  assert.ok(route, 'route should exist');
-  assert.doesNotThrow(() => route.handler.unmount());
+  const registration = routeRegistrationSpy();
+  register(
+    /** @type {any} */ (registration.router),
+    /** @type {any} */ (makeContext())
+  );
+  assert.doesNotThrow(() =>
+    registration.handlerFor('#/conversation/:id').unmount()
+  );
 });
 
 test('conversation route: mount renders ConversationView output into the container', async () => {
@@ -85,7 +86,7 @@ test('conversation route: mount renders ConversationView output into the contain
   };
 
   const router = new Router();
-  router._container = /** @type {any} */ (container);
+  initRouter(router, /** @type {any} */ (container));
 
   register(router, /** @type {any} */ ({ client, saveQueue, currentUser }));
   await router.navigate('#/conversation/123');
@@ -113,7 +114,7 @@ test('conversation route: renders a cora-route-error panel when the page module 
     };
 
     const router = new Router();
-    router._container = /** @type {any} */ (container);
+    initRouter(router, /** @type {any} */ (container));
 
     register(router, /** @type {any} */ (makeContext()), () =>
       Promise.reject(new Error('boom'))
@@ -146,7 +147,7 @@ test('conversation route: source-key route passes caseType through to the fetche
   };
 
   const router = new Router();
-  router._container = /** @type {any} */ (container);
+  initRouter(router, /** @type {any} */ (container));
 
   register(
     router,

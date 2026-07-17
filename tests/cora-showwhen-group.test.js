@@ -6,6 +6,13 @@ import {
   freshExampleReviewBank,
   commitSpy,
 } from './_example-review-fixture.js';
+import {
+  fireEvent,
+  getByRole,
+  getByTag,
+  getByText,
+  queryAllByRole,
+} from './helpers/semantic-dom.js';
 installDom();
 
 const { CORAShowwhenGroup } =
@@ -37,13 +44,14 @@ function mount(q, g, opts = {}) {
 test('CORAShowwhenGroup: missing question/group → no children', () => {
   const e = new CORAShowwhenGroup();
   e.connectedCallback();
-  assert.equal(/** @type {any} */ (e)._children.length, 0);
+  assert.equal(e.childElementCount, 0);
 });
 
 test('CORAShowwhenGroup: empty AND group renders head + empty children container', () => {
   const questions = freshExampleReviewBank().questions;
   const e = mount(questions[2], mkGroup(), { bankQuestions: questions });
-  assert.equal(/** @type {any} */ (e)._children.length, 2);
+  assert.ok(e.querySelector('.group-head'));
+  assert.ok(e.querySelector('.group-children'));
   assert.ok(e.className.includes('op-and'));
 });
 
@@ -57,14 +65,11 @@ test('CORAShowwhenGroup: + condition appends a leaf, alerts when no other questi
   };
   const g = mkGroup();
   const e = mount(lonely, g, { bankQuestions: [lonely] });
-  const head = /** @type {any} */ (e)._children[0];
-  const actions = head._children[1];
   /** @type {any[]} */
   const alerts = [];
   /** @type {any} */ (globalThis).alert = (/** @type {string} */ m) =>
     alerts.push(m);
-  const addCondBtn = actions._children[0];
-  addCondBtn._listeners.click[0]();
+  fireEvent(getByRole(e, 'button', { name: '+ condition' }), 'click');
   assert.equal(alerts.length, 1);
   assert.equal(g.children.length, 0);
   assert.equal(/** @type {any} */ (e.onCommit).calls, 0);
@@ -74,9 +79,7 @@ test('CORAShowwhenGroup: + condition appends a leaf when others exist', () => {
   const questions = freshExampleReviewBank().questions;
   const g = mkGroup();
   const e = mount(questions[2], g, { bankQuestions: questions });
-  const head = /** @type {any} */ (e)._children[0];
-  const actions = head._children[1];
-  actions._children[0]._listeners.click[0]();
+  fireEvent(getByRole(e, 'button', { name: '+ condition' }), 'click');
   assert.equal(g.children.length, 1);
   assert.equal(g.children[0].type, 'leaf');
   assert.equal(/** @type {any} */ (e.onCommit).calls, 1);
@@ -86,9 +89,7 @@ test('CORAShowwhenGroup: + group adds a flipped-op sub-group', () => {
   const questions = freshExampleReviewBank().questions;
   const g = mkGroup({ op: 'and' });
   const e = mount(questions[2], g, { bankQuestions: questions });
-  const head = /** @type {any} */ (e)._children[0];
-  const actions = head._children[1];
-  actions._children[1]._listeners.click[0]();
+  fireEvent(getByRole(e, 'button', { name: '+ OR group' }), 'click');
   assert.equal(g.children[0].type, 'group');
   assert.equal(g.children[0].op, 'or');
 });
@@ -97,9 +98,7 @@ test('CORAShowwhenGroup: op toggle flips AND ↔ OR', () => {
   const questions = freshExampleReviewBank().questions;
   const g = mkGroup();
   const e = mount(questions[2], g, { bankQuestions: questions });
-  const head = /** @type {any} */ (e)._children[0];
-  const toggle = head._children[0];
-  toggle._listeners.click[0]();
+  fireEvent(e.querySelector('.op-toggle'), 'click');
   assert.equal(g.op, 'or');
   assert.equal(/** @type {any} */ (e.onCommit).calls, 1);
 });
@@ -111,10 +110,10 @@ test('CORAShowwhenGroup: non-root shows × group button', () => {
     isRoot: false,
     bankQuestions: questions,
   });
-  const head = /** @type {any} */ (e)._children[0];
-  const actions = head._children[1];
-  // 3 children: + condition, + group, × group
-  assert.equal(actions._children.length, 3);
+  assert.deepEqual(
+    queryAllByRole(e, 'button').map((button) => button.textContent),
+    ['+ condition', '+ OR group', '× group']
+  );
 });
 
 test('CORAShowwhenGroup: × group on non-root removes self from parent tree', async () => {
@@ -138,10 +137,7 @@ test('CORAShowwhenGroup: × group on non-root removes self from parent tree', as
   );
   const before = root.children.length;
   const e = mount(q, innerOr, { isRoot: false, bankQuestions: questions });
-  const head = /** @type {any} */ (e)._children[0];
-  const actions = head._children[1];
-  const removeBtn = actions._children[2];
-  removeBtn._listeners.click[0]();
+  fireEvent(getByRole(e, 'button', { name: '× group' }), 'click');
   assert.equal(root.children.length, before - 1);
 });
 
@@ -155,10 +151,9 @@ test('CORAShowwhenGroup: renders conjunctions between children + leaf/group mix'
     ],
   });
   const e = mount(questions[2], g, { bankQuestions: questions });
-  const childrenContainer = /** @type {any} */ (e)._children[1];
-  // child0 (leaf), conjunction, child1 (group)
-  assert.equal(childrenContainer._children.length, 3);
-  assert.equal(childrenContainer._children[1].className, 'conjunction');
+  assert.ok(getByTag(e, 'cora-showwhen-leaf'));
+  assert.ok(getByTag(e, 'cora-showwhen-group'));
+  assert.equal(getByText(e, 'OR').parentNode.className, 'conjunction');
 });
 
 test('CORAShowwhenGroup: forwards bankQuestions + onCommit to child leaves and groups', () => {
@@ -171,9 +166,8 @@ test('CORAShowwhenGroup: forwards bankQuestions + onCommit to child leaves and g
     ],
   });
   const e = mount(questions[2], g, { bankQuestions: questions });
-  const childrenContainer = /** @type {any} */ (e)._children[1];
-  const leafEl = childrenContainer._children[0];
-  const groupEl = childrenContainer._children[2];
+  const leafEl = getByTag(e, 'cora-showwhen-leaf');
+  const groupEl = getByTag(e, 'cora-showwhen-group');
   assert.equal(leafEl.bankQuestions, questions);
   assert.equal(leafEl.onCommit, e.onCommit);
   assert.equal(groupEl.bankQuestions, questions);

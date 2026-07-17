@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { isolateBrowserGlobals } from './helpers/browser-globals.js';
+import { initRouter, routeRegistrationSpy } from './helpers/router.js';
 
 isolateBrowserGlobals();
 
@@ -23,14 +24,13 @@ async function tick() {
 }
 
 test('question-bank route: register calls router.register with #/question-bank', () => {
-  const router = new Router();
-  router._container = /** @type {any} */ ({});
+  const registration = routeRegistrationSpy();
   const appEl = { classList: { add() {}, remove() {} } };
-  register(router, /** @type {any} */ ({ appEl }));
-  assert.ok(
-    router._routes.some((r) => r.re.test('#/question-bank')),
-    '#/question-bank should be registered'
+  register(
+    /** @type {any} */ (registration.router),
+    /** @type {any} */ ({ appEl })
   );
+  assert.equal(registration.has('#/question-bank'), true);
 });
 
 test('question-bank route: a rejecting editor loader yields cora-route-error', async () => {
@@ -64,11 +64,14 @@ test('question-bank route: a rejecting editor loader yields cora-route-error', a
     /** @type {any[]} */
     const rendered = [];
     const router = new Router();
-    router._container = /** @type {any} */ ({
-      replaceChildren(/** @type {any} */ ...els) {
-        rendered.push(...els);
-      },
-    });
+    initRouter(
+      router,
+      /** @type {any} */ ({
+        replaceChildren(/** @type {any} */ ...els) {
+          rendered.push(...els);
+        },
+      })
+    );
     register(
       router,
       /** @type {any} */ ({
@@ -114,7 +117,7 @@ test('question-bank route: mount adds cora-fullbleed to appEl', async () => {
 
   try {
     const router = new Router();
-    router._container = /** @type {any} */ ({ replaceChildren() {} });
+    initRouter(router, /** @type {any} */ ({ replaceChildren() {} }));
     register(
       router,
       /** @type {any} */ ({
@@ -160,7 +163,7 @@ test('question-bank route: unmount removes cora-fullbleed from appEl', async () 
 
   try {
     const router2 = new Router();
-    router2._container = /** @type {any} */ ({ replaceChildren() {} });
+    initRouter(router2, /** @type {any} */ ({ replaceChildren() {} }));
     register(
       router2,
       /** @type {any} */ ({
@@ -202,7 +205,7 @@ test('question-bank route: mount creates cora-bank-editor element', async () => 
 
   try {
     const router = new Router();
-    router._container = /** @type {any} */ ({ replaceChildren() {} });
+    initRouter(router, /** @type {any} */ ({ replaceChildren() {} }));
     register(
       router,
       /** @type {any} */ ({
@@ -244,7 +247,7 @@ test('question-bank route: mount loads simulator sample cases after the editor',
   try {
     let samplesLoaded = 0;
     const router = new Router();
-    router._container = /** @type {any} */ ({ replaceChildren() {} });
+    initRouter(router, /** @type {any} */ ({ replaceChildren() {} }));
     register(
       router,
       /** @type {any} */ ({
@@ -284,7 +287,7 @@ test('question-bank route: sample cases are not loaded without ?simulate=1', asy
   try {
     let samplesLoaded = 0;
     const router = new Router();
-    router._container = /** @type {any} */ ({ replaceChildren() {} });
+    initRouter(router, /** @type {any} */ ({ replaceChildren() {} }));
     register(
       router,
       /** @type {any} */ ({
@@ -343,7 +346,7 @@ test('question-bank route: default sample loader fetches through context.client'
       },
     ];
     const router = new Router();
-    router._container = /** @type {any} */ ({ replaceChildren() {} });
+    initRouter(router, /** @type {any} */ ({ replaceChildren() {} }));
     register(
       router,
       /** @type {any} */ ({

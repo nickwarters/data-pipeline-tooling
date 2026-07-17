@@ -6,6 +6,12 @@ import {
   freshExampleReviewBank,
   commitSpy,
 } from './_example-review-fixture.js';
+import {
+  fireEvent,
+  getByRole,
+  getByTag,
+  textContent,
+} from './helpers/semantic-dom.js';
 installDom();
 
 const { CORAShowwhenEditor } =
@@ -15,17 +21,12 @@ const { CORAShowwhenEditor } =
 await import('../src/components/sections/cora-showwhen-group.js');
 
 /** @param {any} el @returns {any} */
-const wrapOf = (el) => el._children[0];
-/** @param {any} el @returns {any} */
-const selectOf = (el) =>
-  wrapOf(el)._children[0]._children.find(
-    (/** @type {any} */ child) => child.className === 'showwhen-mode'
-  );
+const selectOf = (el) => getByRole(el, 'combobox', { name: 'Show when' });
 /** Fire a change on the mode select. @param {any} el @param {string} value */
 function selectMode(el, value) {
   const select = selectOf(el);
   select.value = value;
-  select.dispatchEvent({ type: 'change', target: select });
+  fireEvent(select, 'change', { target: select });
 }
 
 /** Mount an editor over a question with props + an onCommit spy (no store). */
@@ -41,14 +42,14 @@ function mount(/** @type {any} */ q, /** @type {any[]} */ bankQuestions = []) {
 test('CORAShowwhenEditor: no question → renders nothing', () => {
   const e = new CORAShowwhenEditor();
   e.connectedCallback();
-  assert.equal(/** @type {any} */ (e)._children.length, 0);
+  assert.equal(e.childElementCount, 0);
 });
 
 test('CORAShowwhenEditor: question without conditions defaults to Always and hides the section', () => {
   const q = freshExampleReviewBank().questions[0];
   const e = mount(q);
-  const wrap = wrapOf(e);
-  assert.equal(wrap._children.length, 1); // header only
+  assert.equal(e.querySelector('cora-showwhen-group'), null);
+  assert.equal(e.querySelector('.showwhen-empty'), null);
   assert.equal(selectOf(e).value, 'always');
 });
 
@@ -56,8 +57,7 @@ test('CORAShowwhenEditor: question with conditions defaults to Conditional and s
   const bank = freshExampleReviewBank();
   const q = bank.questions[2]; // has showWhen
   const e = mount(q, bank.questions);
-  const wrap = wrapOf(e);
-  assert.equal(wrap._children.length, 2); // header + group
+  assert.ok(getByTag(e, 'cora-showwhen-group'));
   assert.equal(selectOf(e).value, 'conditional');
 });
 
@@ -67,10 +67,10 @@ test('CORAShowwhenEditor: selecting Conditional on an empty question reveals the
 
   selectMode(e, 'conditional');
 
-  const wrap = wrapOf(e);
-  // header + empty-state note + group
-  assert.equal(wrap._children.length, 3);
-  assert.equal(wrap._children[1].className, 'cora-empty showwhen-empty');
+  const empty = e.querySelector('.showwhen-empty');
+  assert.ok(empty);
+  assert.equal(empty.className, 'cora-empty showwhen-empty');
+  assert.ok(getByTag(e, 'cora-showwhen-group'));
   assert.equal(selectOf(e).value, 'conditional');
 });
 
@@ -83,8 +83,8 @@ test('CORAShowwhenEditor: selecting Always clears the conditions and hides the s
 
   assert.equal('showWhen' in q, false); // conditions cleared outright
   assert.equal(/** @type {any} */ (e.onCommit).calls, 1);
-  const wrap = wrapOf(e);
-  assert.equal(wrap._children.length, 1); // section hidden
+  assert.equal(e.querySelector('cora-showwhen-group'), null);
+  assert.equal(e.querySelector('.showwhen-empty'), null);
   assert.equal(selectOf(e).value, 'always');
 });
 
@@ -93,10 +93,12 @@ test('CORAShowwhenEditor: toggling Conditional then back to Always hides an empt
   const e = mount(q);
 
   selectMode(e, 'conditional');
-  assert.equal(wrapOf(e)._children.length, 3);
+  assert.ok(getByTag(e, 'cora-showwhen-group'));
+  assert.ok(e.querySelector('.showwhen-empty'));
 
   selectMode(e, 'always');
-  assert.equal(wrapOf(e)._children.length, 1);
+  assert.equal(e.querySelector('cora-showwhen-group'), null);
+  assert.equal(e.querySelector('.showwhen-empty'), null);
   assert.equal('showWhen' in q, false);
 });
 
@@ -115,26 +117,21 @@ test('CORAShowwhenEditor: nested tree reports depth in header desc when conditio
     ],
   };
   const e = mount(q, bank.questions);
-  const header = wrapOf(e)._children[0];
-  const desc = header._children.find(
-    (/** @type {any} */ child) => child.className === 'showwhen-desc'
-  );
-  const txt = desc._children[0]?.textContent ?? desc.textContent;
+  const header = e.querySelector('.showwhen-header');
+  assert.ok(header);
+  const desc = header.querySelector('.showwhen-desc');
+  assert.ok(desc);
+  const txt = textContent(desc);
   assert.ok(txt.includes('conditions'));
   assert.ok(txt.includes('levels'));
-  assert.equal(
-    header._children.at(-1),
-    selectOf(e),
-    'the mode select stays at the header end when a conditional description is shown'
-  );
+  assert.equal(selectOf(e).parentNode, header);
 });
 
 test('CORAShowwhenEditor: forwards bankQuestions + onCommit to the condition tree', () => {
   const bank = freshExampleReviewBank();
   const q = bank.questions[2]; // has showWhen
   const e = mount(q, bank.questions);
-  const wrap = wrapOf(e);
-  const grp = /** @type {any} */ (wrap._children[1]);
+  const grp = getByTag(e, 'cora-showwhen-group');
   assert.equal(grp.bankQuestions, bank.questions);
   assert.equal(grp.onCommit, e.onCommit);
 });

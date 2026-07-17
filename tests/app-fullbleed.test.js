@@ -16,6 +16,7 @@ const windowListeners = {};
 /** @type {any} */ (globalThis).location = { hash: '' };
 
 import { Router } from '../src/lib/router.js';
+import { initRouter } from './helpers/router.js';
 
 /**
  * Simulate what app.js does for the #/question-bank route:
@@ -25,7 +26,7 @@ test('app: cora-fullbleed is added to appEl when #/question-bank mounts', () => 
   const appEl = { classList: new Set() };
   const container = /** @type {any} */ ({});
   const router = new Router();
-  router._container = container;
+  initRouter(router, container);
 
   router.register('#/question-bank', {
     mount() {
@@ -47,7 +48,7 @@ test('app: cora-fullbleed is removed from appEl when navigating away from #/ques
   const appEl = { classList: new Set() };
   const container = /** @type {any} */ ({});
   const router = new Router();
-  router._container = container;
+  initRouter(router, container);
 
   router.register('#/question-bank', {
     mount() {
@@ -76,7 +77,7 @@ test('app: other routes do not add cora-fullbleed to appEl', () => {
   const appEl = { classList: new Set() };
   const container = /** @type {any} */ ({});
   const router = new Router();
-  router._container = container;
+  initRouter(router, container);
 
   router.register('#/dashboard', {
     mount() {},
