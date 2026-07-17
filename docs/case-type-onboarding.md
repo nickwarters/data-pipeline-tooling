@@ -42,6 +42,10 @@ personas, mock Cases, and a test file. Work through the generated
 `TODO(case-type)` markers (Question Bank, Outcome vocabulary, appeal raiser, Case
 Details fields, SLA hours), then `npm run check && node --test`.
 
+For the manual, code-only path — every file the scaffold touches, what each
+edit does, and a full dev-harness verification tour — see
+[docs/guide/case-type-onboarding-code.md](guide/case-type-onboarding-code.md).
+
 ### 2. Provision the SharePoint list
 
 - [ ] Create the `Cases-{slug}` list.
