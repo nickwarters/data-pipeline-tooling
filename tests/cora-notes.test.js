@@ -218,6 +218,53 @@ test('CORANotes: Case Justification textarea has its own placeholder when empty'
   assert.equal(justificationInput(el).placeholder, 'Add Case Justification…');
 });
 
+test('CORANotes: Case-Type-configured placeholders override the defaults', () => {
+  const el = new CORANotes();
+  el.notes = '';
+  el.caseJustification = '';
+  el.placeholders = {
+    notes: 'Record anything the report should carry…',
+    caseJustification: 'Why is this Outcome right?',
+  };
+  el.saveQueue = /** @type {any} */ (makeQueue());
+  el.caseId = 'case-1';
+  el.connectedCallback();
+
+  assert.equal(
+    noteInput(el).placeholder,
+    'Record anything the report should carry…'
+  );
+  assert.equal(
+    justificationInput(el).placeholder,
+    'Why is this Outcome right?'
+  );
+});
+
+test('CORANotes: a partial placeholders config leaves the other default intact', () => {
+  const el = new CORANotes();
+  el.notes = '';
+  el.caseJustification = '';
+  el.placeholders = { notes: 'Custom notes hint' };
+  el.saveQueue = /** @type {any} */ (makeQueue());
+  el.caseId = 'case-1';
+  el.connectedCallback();
+
+  assert.equal(noteInput(el).placeholder, 'Custom notes hint');
+  assert.equal(justificationInput(el).placeholder, 'Add Case Justification…');
+});
+
+test('CORANotes: an explicitly empty placeholder blanks the field hint', () => {
+  const el = new CORANotes();
+  el.notes = '';
+  el.caseJustification = '';
+  el.placeholders = { notes: '' };
+  el.saveQueue = /** @type {any} */ (makeQueue());
+  el.caseId = 'case-1';
+  el.connectedCallback();
+
+  assert.equal(noteInput(el).placeholder, '');
+});
+
 test('CORANotes: Case Justification input enqueues save of caseJustification field independently', () => {
   const saveQueue = makeQueue('case-3');
   const el = new CORANotes();

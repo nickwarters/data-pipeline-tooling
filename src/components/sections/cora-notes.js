@@ -5,6 +5,7 @@ import { DEFAULT_SECTION_HEADINGS } from '../../lib/section-labels.js';
 
 /** @typedef {import('../../services/save-queue.js').SaveQueue} SaveQueue */
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
+/** @typedef {import('../../sharepoint-client.js').Placeholders} Placeholders */
 
 /**
  * @typedef {object} NotesProps
@@ -15,6 +16,7 @@ import { DEFAULT_SECTION_HEADINGS } from '../../lib/section-labels.js';
  * @property {'edit'|'read-only'|'hidden'} access
  * @property {CaseRow | null} [caseRow]
  * @property {string} [heading] Section heading; defaults to the standard copy so the component stays usable standalone.
+ * @property {Placeholders} [placeholders] Per-field hint text (overridable via `CaseTypeConfig.placeholders`); absent keys keep the defaults.
  */
 
 /**
@@ -27,7 +29,7 @@ export function Notes(props) {
     ...notesBox({
       label: 'Case notes',
       className: 'cora-notes-input',
-      placeholder: 'Add notes…',
+      placeholder: props.placeholders?.notes ?? 'Add notes…',
       value: props.notes,
       fieldName: 'notes',
       props,
@@ -35,7 +37,8 @@ export function Notes(props) {
     ...notesBox({
       label: 'Case Justification',
       className: 'cora-case-justification-input',
-      placeholder: 'Add Case Justification…',
+      placeholder:
+        props.placeholders?.caseJustification ?? 'Add Case Justification…',
       value: props.caseJustification,
       fieldName: 'caseJustification',
       props,
@@ -110,6 +113,8 @@ export class CORANotes extends ShellElement {
     this.caseRow = null;
     /** @type {string} Section heading (overridable via `CaseTypeConfig.sectionLabels.notes`). */
     this.heading = DEFAULT_SECTION_HEADINGS.notes;
+    /** @type {Placeholders} Per-field hint text (overridable via `CaseTypeConfig.placeholders`). */
+    this.placeholders = {};
   }
 
   render() {
@@ -124,6 +129,7 @@ export class CORANotes extends ShellElement {
       access: this.access,
       caseRow,
       heading: this.heading,
+      placeholders: this.placeholders,
     });
   }
 }

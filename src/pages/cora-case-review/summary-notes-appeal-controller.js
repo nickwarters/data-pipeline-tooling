@@ -48,6 +48,7 @@ export function updateSummaryNotesAppeal(context) {
     caseId: caseRow.id,
     access: context.displayMode(access.notes),
     heading: headings.notes,
+    placeholders: config.placeholders ?? {},
   });
 
   Object.assign(appeal, {

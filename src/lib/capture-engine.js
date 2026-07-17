@@ -71,6 +71,7 @@ export function buildCaptureControl(
     return h('textarea', {
       className,
       value: currentValue,
+      placeholder: fieldConfig.placeholder,
       onchange: onChangeHandler,
     });
   }
@@ -79,6 +80,7 @@ export function buildCaptureControl(
     className,
     type: 'text',
     value: currentValue,
+    placeholder: fieldConfig.placeholder,
     onchange: onChangeHandler,
   });
 }

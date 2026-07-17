@@ -165,6 +165,27 @@ test('updateSummaryNotesAppeal: threads resolved section headings to Summary, No
   assert.equal(headings.summary, 'Summary');
 });
 
+test('updateSummaryNotesAppeal: threads Case-Type-configured placeholders to Notes', () => {
+  const { context, notes } = makeSummaryNotesAppealContext();
+  /** @type {any} */ (context.viewModel).config.placeholders = {
+    notes: 'Record anything the report should carry…',
+  };
+
+  updateSummaryNotesAppeal(/** @type {any} */ (context));
+
+  assert.deepEqual(/** @type {any} */ (notes).placeholders, {
+    notes: 'Record anything the report should carry…',
+  });
+});
+
+test('updateSummaryNotesAppeal: defaults placeholders to an empty object when the Case Type declares none', () => {
+  const { context, notes } = makeSummaryNotesAppealContext();
+
+  updateSummaryNotesAppeal(/** @type {any} */ (context));
+
+  assert.deepEqual(/** @type {any} */ (notes).placeholders, {});
+});
+
 test('updateSummaryNotesAppeal: defaults the section headings when no sectionLabels declared', () => {
   const { context, summary, notes, appeal } = makeSummaryNotesAppealContext();
 

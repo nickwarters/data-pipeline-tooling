@@ -37,7 +37,7 @@
  * One shared set applies to every failed Answer; `select` values are validated
  * against `options` at capture time.
  *
- * @typedef {{ key: string, label: string, type: 'text' | 'select', options?: string[], required?: boolean }} RemediationField
+ * @typedef {{ key: string, label: string, type: 'text' | 'select', options?: string[], required?: boolean, placeholder?: string }} RemediationField
  */
 
 /**
@@ -48,9 +48,10 @@
  * (validated at capture time). `required` participates in the completion gate
  * only while the field is visible. `role` is an optional cross-Case-Type
  * reporting tag (not yet built). `showWhen` conditions on a sibling field on the
- * same Answer (not yet built).
+ * same Answer (not yet built). `placeholder` is optional hint text shown while a
+ * `text`/`textarea` control is empty; ignored for choice types, blank when absent.
  *
- * @typedef {{ key: string, label: string, type: 'text' | 'textarea' | 'select' | 'radio' | 'person' | 'actions', options?: string[], required?: boolean, role?: string, showWhen?: Record<string, unknown> }} CaptureField
+ * @typedef {{ key: string, label: string, type: 'text' | 'textarea' | 'select' | 'radio' | 'person' | 'actions', options?: string[], required?: boolean, role?: string, showWhen?: Record<string, unknown>, placeholder?: string }} CaptureField
  */
 
 /**
@@ -338,6 +339,16 @@
  */
 
 /**
+ * Per-Case-Type placeholder text for the framework's fixed free-text fields,
+ * mirroring the `sectionLabels` override pattern: absent keys keep the
+ * framework default; an explicit `''` blanks the hint. (Config-declared
+ * fields — Issue Capture Fields, Remediation Fields — carry their own
+ * `placeholder` inline on the field definition instead.)
+ *
+ * @typedef {{ notes?: string, caseJustification?: string }} Placeholders
+ */
+
+/**
  * Per-Question-Group configuration declared by a Case Type, keyed by the
  * `questionGroup` name (#390 Part 3). `allowBulkOutcome` opts the group into
  * the Reviewer-facing bulk-verdict control: one selection writes the chosen
@@ -369,6 +380,7 @@
  * defaultOutcomeId: string,
  * labels?: Label[],
  * sectionLabels?: SectionLabels,
+ * placeholders?: Placeholders,
  * eligibleGroups?: string[],
  * listName?: string,
  * reviewerGroup?: string,
