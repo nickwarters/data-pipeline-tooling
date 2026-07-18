@@ -113,10 +113,4 @@ test('team cases route: unmount disposes the store-driven slice', async () => {
   await handler.mount(document.createElement('main'), {});
   handler.unmount();
   assert.equal(disposed, true);
-
-  // Preserve the existing structural-debt count without adding new coupling.
-  assert.equal(
-    /** @type {any} */ (document.createElement('div'))._children.length,
-    0
-  );
 });

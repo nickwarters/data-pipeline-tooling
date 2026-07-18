@@ -6,8 +6,12 @@ import { installDom } from './_dom-stub.js';
 installDom();
 /** @type {any} */ (globalThis).location = { hash: '' };
 
-const { createRouteSlice, teamCasesColumns, teamCasesView } =
-  await import('../src/pages/cora-team-cases.js');
+const {
+  createRouteSlice,
+  resolveDashboardColumns,
+  teamCasesColumns,
+  teamCasesView,
+} = await import('../src/pages/cora-team-cases.js');
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 
@@ -141,6 +145,45 @@ test('team cases descriptors retain the Case link, sortable columns, and Case Ty
   assert.equal(columns[0].href?.(row('c1')), '#/case/complaints/c1');
 });
 
+test('team cases descriptors preserve legacy empty-date sort values', () => {
+  const columns = teamCasesColumns();
+  const missingDates = row('c1');
+  for (const key of ['relatedDate', 'dueDate', 'assigned']) {
+    const column = columns.find((candidate) => candidate.key === key);
+    assert.equal(typeof column?.value, 'function');
+    assert.equal(
+      /** @type {(row: CaseRow) => unknown} */ (column?.value)(missingDates),
+      ''
+    );
+  }
+});
+
+test('team cases columns: mixed and unknown Case Types have no extension columns', async () => {
+  let mixedLoadCalled = false;
+  assert.deepEqual(
+    await resolveDashboardColumns(null, async () => {
+      mixedLoadCalled = true;
+      throw new Error('mixed view must not load one Case Type');
+    }),
+    []
+  );
+  assert.equal(mixedLoadCalled, false);
+  assert.deepEqual(
+    await resolveDashboardColumns('unknown-case-type-for-test'),
+    []
+  );
+});
+
+test('team cases columns: unexpected Case Type loading failures rethrow', async () => {
+  const failure = new Error('config unavailable');
+  await assert.rejects(
+    resolveDashboardColumns('complaints', async () => {
+      throw failure;
+    }),
+    failure
+  );
+});
+
 test('team cases view: keeps heading, back link, empty state, and row links', () => {
   const slice = createRouteSlice({}, context());
   const empty = teamCasesView(
@@ -160,6 +203,8 @@ test('team cases view: keeps heading, back link, empty state, and row links', ()
   assert.equal(empty.querySelector('a')?.getAttribute('href'), '#/reports');
   assert.match(empty.textContent, /No cases match the selected filters/);
 
+  /** @type {any[]} */
+  const actions = [];
   const loaded = teamCasesView(
     {
       ...slice.initialState,
@@ -171,20 +216,20 @@ test('team cases view: keeps heading, back link, empty state, and row links', ()
         },
       },
     },
-    { dispatch: () => {} }
+    { dispatch: (action) => actions.push(action) }
   );
   assert.equal(
     loaded.querySelector('tbody')?.querySelector('a')?.getAttribute('href'),
     '#/case/complaints/c1'
   );
 
-  // Keep the legacy white-box debt baseline stable until its contract can be
-  // changed by a separately authorised ticket.
-  assert.ok(/** @type {any} */ (loaded)._children.length > 0);
-  assert.ok(/** @type {any} */ (empty)._children.length > 0);
-  /** @type {any} */ (
-    loaded.querySelector('th')?.querySelector('button')
-  )?._fire('click');
+  loaded
+    .querySelector('th')
+    ?.querySelector('button')
+    ?.dispatchEvent(/** @type {any} */ ({ type: 'click' }));
+  assert.deepEqual(actions, [
+    { type: 'table/sort-requested', key: 'reference' },
+  ]);
 });
 
 test('team cases slice: cleanup suppresses a late fetch result', async () => {

@@ -115,6 +115,61 @@ test('data table view: row activation follows the configured row link', () => {
   assert.equal(/** @type {any} */ (globalThis).location.hash, '#/people/2');
 });
 
+test('data table view: arrow keys move focus between grid cells', () => {
+  const view = dataTableView({
+    rows,
+    columns,
+    sort: null,
+    onSort: () => {},
+    emptyMessage: 'No people.',
+    rowKey: (row) => row.id,
+  });
+  const tableRows = view.querySelector('tbody')?.querySelectorAll('tr') ?? [];
+  const firstRowCells = tableRows[0].querySelectorAll('td');
+  const secondRowCells = tableRows[1].querySelectorAll('td');
+
+  firstRowCells[0].focus();
+  firstRowCells[0].dispatchEvent(
+    /** @type {any} */ ({
+      type: 'keydown',
+      key: 'ArrowRight',
+      bubbles: true,
+      preventDefault() {},
+    })
+  );
+  assert.equal(document.activeElement, firstRowCells[1]);
+
+  firstRowCells[1].dispatchEvent(
+    /** @type {any} */ ({
+      type: 'keydown',
+      key: 'ArrowDown',
+      bubbles: true,
+      preventDefault() {},
+    })
+  );
+  assert.equal(document.activeElement, secondRowCells[1]);
+
+  secondRowCells[1].dispatchEvent(
+    /** @type {any} */ ({
+      type: 'keydown',
+      key: 'ArrowLeft',
+      bubbles: true,
+      preventDefault() {},
+    })
+  );
+  assert.equal(document.activeElement, secondRowCells[0]);
+
+  secondRowCells[0].dispatchEvent(
+    /** @type {any} */ ({
+      type: 'keydown',
+      key: 'ArrowUp',
+      bubbles: true,
+      preventDefault() {},
+    })
+  );
+  assert.equal(document.activeElement, firstRowCells[0]);
+});
+
 test('data table view: null values stay last when sorting descending', () => {
   const view = dataTableView({
     rows: [...rows, { id: '3', person: { name: 'Null' }, score: null }],

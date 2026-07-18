@@ -94,13 +94,13 @@ export function teamCasesColumns(dashboardColumns = []) {
     {
       key: 'relatedDate',
       label: 'Related Date',
-      value: 'relatedDate',
+      value: (row) => /** @type {any} */ (row).relatedDate || '',
       sortable: true,
     },
     {
       key: 'dueDate',
       label: 'Due Date',
-      value: 'dueDate',
+      value: (row) => row.dueDate || '',
       sortable: true,
     },
     {
@@ -112,7 +112,7 @@ export function teamCasesColumns(dashboardColumns = []) {
     {
       key: 'assigned',
       label: 'Assigned',
-      value: 'created',
+      value: (row) => row.created || '',
       sortable: true,
     },
     {

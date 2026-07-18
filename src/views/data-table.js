@@ -68,13 +68,52 @@ function columnValue(row, column) {
 /**
  * @param {unknown} a
  * @param {unknown} b
+ * @param {'asc' | 'desc'} direction
  * @returns {number}
  */
-function compareValues(a, b) {
+function compareValues(a, b, direction) {
   if (a == null && b == null) return 0;
   if (a == null) return 1;
   if (b == null) return -1;
-  return a < b ? -1 : a > b ? 1 : 0;
+  const comparison = a < b ? -1 : a > b ? 1 : 0;
+  return direction === 'desc' ? -comparison : comparison;
+}
+
+/**
+ * Preserve the legacy grid's cell-to-cell arrow navigation without relying on
+ * test-only DOM internals. Body cells are programmatically focusable but stay
+ * out of the Tab sequence; rows remain the Tab stops.
+ *
+ * @param {HTMLElement} table
+ * @param {KeyboardEvent} event
+ */
+function moveGridFocus(table, event) {
+  if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key))
+    return;
+  const target = /** @type {HTMLTableCellElement | null} */ (
+    /** @type {any} */ (event.target)?.closest?.('td') ?? null
+  );
+  const body = table.querySelector('tbody');
+  if (!target || !body) return;
+
+  const rows = [...body.querySelectorAll('tr')];
+  const rowIndex = rows.findIndex((row) => row === target.parentNode);
+  if (rowIndex < 0) return;
+  const rowCells = [...rows[rowIndex].querySelectorAll('td')];
+  const columnIndex = rowCells.indexOf(target);
+  if (columnIndex < 0) return;
+
+  let nextRow = rowIndex;
+  let nextColumn = columnIndex;
+  if (event.key === 'ArrowRight') nextColumn += 1;
+  else if (event.key === 'ArrowLeft') nextColumn -= 1;
+  else if (event.key === 'ArrowDown') nextRow += 1;
+  else if (event.key === 'ArrowUp') nextRow -= 1;
+
+  const next = rows[nextRow]?.querySelectorAll('td')[nextColumn];
+  if (!next) return;
+  event.preventDefault();
+  /** @type {HTMLElement} */ (next).focus();
 }
 
 /**
@@ -105,17 +144,20 @@ export function dataTableView({
     ? [...rows].sort((a, b) => {
         const aValue = columnValue(a, sortColumn);
         const bValue = columnValue(b, sortColumn);
-        if (aValue == null && bValue == null) return 0;
-        if (aValue == null) return 1;
-        if (bValue == null) return -1;
-        const comparison = compareValues(aValue, bValue);
-        return sort?.dir === 'desc' ? -comparison : comparison;
+        return compareValues(aValue, bValue, sort?.dir ?? 'asc');
       })
     : rows;
 
-  return h(
+  /** @type {HTMLElement} */
+  let table;
+  table = h(
     'table',
-    { className: 'cora-data-table', role: 'grid' },
+    {
+      className: 'cora-data-table',
+      role: 'grid',
+      onkeydown: (/** @type {KeyboardEvent} */ event) =>
+        moveGridFocus(table, event),
+    },
     h(
       'thead',
       {},
@@ -185,10 +227,11 @@ export function dataTableView({
                   formatted
                 )
               : formatted;
-            return h('td', { key: column.key }, content);
+            return h('td', { key: column.key, tabindex: '-1' }, content);
           })
         );
       })
     )
   );
+  return table;
 }
