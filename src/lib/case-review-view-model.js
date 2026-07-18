@@ -73,6 +73,7 @@ function caseTypeLoadErrorMessage(error, caseType, isRouteCaseType) {
  * @property {string} currentUserId
  * @property {Capabilities | null} capabilities
  * @property {string | null} [caseType]
+ * @property {((answers: Record<string, Answer>) => void) | null} [onAnswersChanged]
  */
 
 export class CaseReviewViewModel {
@@ -84,6 +85,7 @@ export class CaseReviewViewModel {
     currentUserId,
     capabilities,
     caseType = null,
+    onAnswersChanged = null,
   }) {
     this.client = client;
     this.saveQueue = saveQueue;
@@ -91,6 +93,7 @@ export class CaseReviewViewModel {
     this.currentUserId = currentUserId;
     this.capabilities = capabilities;
     this.caseType = caseType;
+    this._onAnswersChanged = onAnswersChanged;
     /** @type {CaseListOptions} */
     this.caseListOptions = {};
 
@@ -153,6 +156,54 @@ export class CaseReviewViewModel {
 
     this.activeTab = signal('');
     this.conversationHidden = signal(true);
+  }
+
+  /**
+   * Install or replace the store-driven Answer effect bridge. Legacy callers
+   * leave this unset and retain the existing direct SaveQueue behaviour.
+   *
+   * @param {((answers: Record<string, Answer>) => void) | null} handler
+   */
+  setAnswerChangeHandler(handler) {
+    this._onAnswersChanged = handler;
+  }
+
+  /**
+   * Plain snapshot consumed by the CASE-1 route store. The view model remains
+   * the loading/domain adapter while the store becomes the UI state owner.
+   */
+  toStoreSnapshot() {
+    return {
+      loaded: this.loaded.get(),
+      error: this.error.get(),
+      accessDenied: this.accessDenied.get(),
+      caseRow: this.caseRow,
+      currentUser: this.currentUser,
+      config: this.config,
+      catalogue: this.catalogue,
+      answers: this.answersSignal.get(),
+      applicableQuestions: this.applicableQuestions.get(),
+      allAnswered: this.allAnswered.get(),
+      machine: this.machine,
+      access: this.access,
+      roles: this.roles,
+      summarySections: this.summarySections,
+      sectionLabels: this.sectionLabels,
+      sectionHeadings: this.sectionHeadings,
+      versionWarning: this.versionWarning.get(),
+      exportHash: this.exportHash,
+      caseListOptions: this.caseListOptions,
+      conversationHidden: this.conversationHidden.get(),
+    };
+  }
+
+  /** @param {Record<string, Answer>} answers */
+  _persistAnswers(answers) {
+    if (this._onAnswersChanged) {
+      this._onAnswersChanged(answers);
+      return;
+    }
+    this.saveQueue.enqueue(this.caseId, 'answers', answers);
   }
 
   async load() {
@@ -350,7 +401,7 @@ export class CaseReviewViewModel {
     }
 
     this.answersSignal.set(newAnswers);
-    this.saveQueue.enqueue(this.caseId, 'answers', newAnswers);
+    this._persistAnswers(newAnswers);
   }
 
   /**
@@ -375,7 +426,7 @@ export class CaseReviewViewModel {
     // control being edited is never detached and focus/scroll survive natively
     // (issue #308).
     this.answersSignal.set(newAnswers);
-    this.saveQueue.enqueue(this.caseId, 'answers', newAnswers);
+    this._persistAnswers(newAnswers);
   }
 
   /**
@@ -417,7 +468,7 @@ export class CaseReviewViewModel {
     }
     const newAnswers = { ...current, [questionId]: nextAnswer };
     this.answersSignal.set(newAnswers);
-    this.saveQueue.enqueue(this.caseId, 'answers', newAnswers);
+    this._persistAnswers(newAnswers);
   }
 
   /**
@@ -456,7 +507,7 @@ export class CaseReviewViewModel {
     }
     const newAnswers = { ...current, [questionId]: nextAnswer };
     this._withPreservedScroll(() => this.answersSignal.set(newAnswers));
-    this.saveQueue.enqueue(this.caseId, 'answers', newAnswers);
+    this._persistAnswers(newAnswers);
   }
 
   /**
@@ -482,7 +533,7 @@ export class CaseReviewViewModel {
     }
     const newAnswers = { ...current, [questionId]: nextAnswer };
     this._withPreservedScroll(() => this.answersSignal.set(newAnswers));
-    this.saveQueue.enqueue(this.caseId, 'answers', newAnswers);
+    this._persistAnswers(newAnswers);
   }
 
   /**
@@ -533,7 +584,7 @@ export class CaseReviewViewModel {
     };
     const newAnswers = { ...current, [questionId]: newAnswer };
     this.answersSignal.set(newAnswers);
-    this.saveQueue.enqueue(this.caseId, 'answers', newAnswers);
+    this._persistAnswers(newAnswers);
   }
 
   async _resolveAttributedParties() {

@@ -2,7 +2,7 @@
 import './_register-example-review.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { installDom, flush, waitForRender } from './_dom-stub.js';
+import { installDom, flush } from './_dom-stub.js';
 import { initRouter, routeRegistrationSpy } from './helpers/router.js';
 
 installDom();
@@ -45,11 +45,23 @@ function makeClient(calls) {
 
 /** @param {Array<{ id: string, opts: any }>} [calls] */
 function makeContext(calls = []) {
+  const currentUser = { id: 'u7', displayName: 'User 7' };
+  const capabilities = { isReviewer: true, ownedCaseTypes: [] };
   return /** @type {any} */ ({
     client: makeClient(calls),
-    saveQueue: { loadCase() {} },
-    currentUser: { id: 'u7' },
-    capabilities: { isReviewer: true, ownedCaseTypes: [] },
+    saveQueue: {
+      status: { get: () => 'saved' },
+      loadCase() {},
+      enqueue() {},
+    },
+    currentUser,
+    capabilities,
+    chrome: {
+      toasts: [],
+      nav: { currentHash: '' },
+      currentUser,
+      permissions: capabilities,
+    },
   });
 }
 
@@ -67,7 +79,7 @@ test('case route: registers source-key case route', () => {
 
 test('case route: navigating away runs the case route unmount cleanly', async () => {
   const router = new Router();
-  initRouter(router, /** @type {any} */ ({ replaceChildren() {} }));
+  initRouter(router, document.createElement('main'));
   register(router, makeContext());
   let elsewhereMounted = false;
   router.register('#/elsewhere', {
@@ -93,25 +105,21 @@ test('case route: navigating away runs the case route unmount cleanly', async ()
 test('case route: mount composes CaseReviewPage and fetches the id from the route', async () => {
   /** @type {Array<{ id: string, opts: any }>} */
   const calls = [];
-  /** @type {any[]} */
-  let mounted = [];
+  const container = document.createElement('main');
   const router = new Router();
-  initRouter(
-    router,
-    /** @type {any} */ ({
-      replaceChildren(/** @type {any} */ ...args) {
-        mounted = args;
-      },
-    })
-  );
+  initRouter(router, container);
 
   register(router, makeContext(calls));
   await router.navigate('#/case/456');
   await flush();
 
-  assert.equal(mounted.length, 1, 'route mounts a single page host');
   assert.equal(
-    mounted[0].className,
+    container.childNodes.length,
+    1,
+    'route mounts a single page host'
+  );
+  assert.equal(
+    /** @type {any} */ (container.childNodes[0]).className,
     'cora-case-review',
     'the host is the Case Review page shell'
   );
@@ -149,31 +157,38 @@ test('case route: renders a cora-route-error panel when the page module fails to
 });
 
 test('case route: source-key route passes caseType through to the page', async () => {
-  /** @type {Array<{ id: string, opts: any }>} */
-  const calls = [];
-  /** @type {any[]} */
-  let mounted = [];
+  /** @type {Record<string, string> | null} */
+  let receivedParams = null;
+  const container = document.createElement('main');
   const router = new Router();
-  initRouter(
+  initRouter(router, container);
+
+  register(
     router,
-    /** @type {any} */ ({
-      replaceChildren(/** @type {any} */ ...args) {
-        mounted = args;
-      },
-    })
+    makeContext(),
+    /** @type {any} */ (
+      async () => ({
+        createRouteSlice(/** @type {Record<string, string>} */ params) {
+          receivedParams = params;
+          return {
+            initialState: {},
+            reducer: (/** @type {any} */ state) => state,
+            view: () => document.createElement('section'),
+          };
+        },
+      })
+    )
   );
-
-  register(router, makeContext(calls));
   await router.navigate('#/case/example-review/456');
-  await waitForRender(mounted[0]);
 
-  assert.equal(mounted.length, 1, 'route mounts a single page host');
-  assert.equal(mounted[0].className, 'cora-case-review');
-  // The example-review Case Type config loads and its listName (none) yields an
-  // empty options object; the :id still reaches the fetch through the page.
+  assert.equal(
+    container.childNodes.length,
+    1,
+    'route mounts a single page host'
+  );
   assert.deepEqual(
-    calls.map((c) => c.id),
-    ['456'],
-    'the :id param reaches the view-model fetch on the source-key route'
+    receivedParams,
+    { caseType: 'example-review', id: '456' },
+    'the source-key and id params reach the store-driven slice'
   );
 });

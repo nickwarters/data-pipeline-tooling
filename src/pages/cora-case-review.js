@@ -2,6 +2,13 @@
 import { reactive, on } from '../lib/view.js';
 import { h } from '../lib/html.js';
 import { CaseReviewViewModel } from '../lib/case-review-view-model.js';
+import { tabEntries } from '../lib/section-registry.js';
+import { caseDetailsView } from './cora-case-review/details-view.js';
+import {
+  createCaseReviewSaveEffect,
+  observeSaveStatus,
+} from './cora-case-review/case-actions.js';
+import { createCaseReviewInterimAdapter } from './cora-case-review/interim-adapter.js';
 import { updateCaseReviewHeader } from './cora-case-review/header-controller.js';
 import {
   bindQuestionPanel,
@@ -48,6 +55,535 @@ import '../components/base/cora-tabs.js';
 /** @typedef {import('../services/permissions.js').Capabilities} Capabilities */
 /** @typedef {import('../services/section-access.js').Mode} Mode */
 /** @typedef {import('./cora-case-review/types.js').CaseReviewShellContext} CaseReviewShellContext */
+/** @typedef {'saved'|'saving'|'reconnecting'|'conflict'} SaveStatus */
+
+/**
+ * @typedef {Object} CaseReviewSnapshot
+ * @property {boolean} loaded
+ * @property {string | null} error
+ * @property {boolean} accessDenied
+ * @property {import('../sharepoint-client.js').CaseRow | null} caseRow
+ * @property {import('../sharepoint-client.js').CurrentUser | null} currentUser
+ * @property {import('../sharepoint-client.js').CaseTypeConfig | null} config
+ * @property {Record<string, import('../sharepoint-client.js').Answer>} answers
+ * @property {Record<import('../services/section-access.js').Section, import('../services/section-access.js').Mode>} access
+ * @property {Required<import('../sharepoint-client.js').SectionLabels>} sectionLabels
+ */
+
+/**
+ * @typedef {Object} CaseReviewState
+ * @property {import('../core/chrome-state.js').ChromeState} chrome
+ * @property {{ caseReview: {
+ *   activeTab: string,
+ *   panelMode: string,
+ *   saveStatus: SaveStatus,
+ *   snapshot: CaseReviewSnapshot | null,
+ * } }} routes
+ */
+
+/**
+ * @param {import('../core/chrome-state.js').ChromeState} chrome
+ * @param {string} panelMode
+ * @returns {CaseReviewState}
+ */
+export function createInitialCaseReviewState(chrome, panelMode) {
+  return {
+    chrome,
+    routes: {
+      caseReview: {
+        activeTab: '',
+        panelMode,
+        saveStatus: 'saved',
+        snapshot: null,
+      },
+    },
+  };
+}
+
+/** @param {CaseReviewSnapshot | null} snapshot */
+function visibleCaseTabs(snapshot) {
+  if (!snapshot) return [];
+  return tabEntries().filter((entry) => snapshot.access[entry.id] !== 'hidden');
+}
+
+/**
+ * Preserve the generic tab shell's left/right keyboard contract while the
+ * selected id lives in route state.
+ *
+ * @param {KeyboardEvent} event
+ * @param {ReturnType<typeof visibleCaseTabs>} tabs
+ * @param {string} activeTab
+ * @param {(action: {type: 'case/tab-selected', id: string}) => unknown} dispatch
+ */
+function selectAdjacentTab(event, tabs, activeTab, dispatch) {
+  const step =
+    event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+  if (!step || tabs.length === 0) return;
+  event.preventDefault();
+  const current = Math.max(
+    0,
+    tabs.findIndex((entry) => entry.id === activeTab)
+  );
+  const next = (current + step + tabs.length) % tabs.length;
+  const nextId = tabs[next].id;
+  dispatch({ type: 'case/tab-selected', id: nextId });
+  queueMicrotask(() => {
+    const parent = /** @type {any} */ (event.target)?.parentNode;
+    const button = Array.from(parent?.childNodes ?? []).find(
+      (/** @type {any} */ node) =>
+        node.getAttribute?.('id') === `case-tab-${nextId}`
+    );
+    /** @type {any} */ (button)?.focus?.();
+  });
+}
+
+/**
+ * @param {CaseReviewState} state
+ * @param {any} action
+ * @returns {CaseReviewState}
+ */
+export function caseReviewReducer(state, action) {
+  const route = state.routes.caseReview;
+  if (action.type === 'case/load-finished') {
+    const tabs = visibleCaseTabs(action.snapshot);
+    return {
+      ...state,
+      routes: {
+        caseReview: {
+          ...route,
+          snapshot: action.snapshot,
+          activeTab: tabs[0]?.id ?? '',
+        },
+      },
+    };
+  }
+  if (action.type === 'case/model-changed') {
+    const tabs = visibleCaseTabs(action.snapshot);
+    const activeTab = tabs.some((entry) => entry.id === route.activeTab)
+      ? route.activeTab
+      : (tabs[0]?.id ?? '');
+    return {
+      ...state,
+      routes: {
+        caseReview: { ...route, snapshot: action.snapshot, activeTab },
+      },
+    };
+  }
+  if (action.type === 'case/answers-edited' && route.snapshot) {
+    const snapshot = {
+      ...route.snapshot,
+      answers: action.answers,
+      caseRow: route.snapshot.caseRow
+        ? { ...route.snapshot.caseRow, answers: action.answers }
+        : null,
+    };
+    return {
+      ...state,
+      routes: { caseReview: { ...route, snapshot } },
+    };
+  }
+  if (action.type === 'case/tab-selected') {
+    const visible = visibleCaseTabs(route.snapshot).some(
+      (entry) => entry.id === action.id
+    );
+    if (!visible || action.id === route.activeTab) return state;
+    return {
+      ...state,
+      routes: { caseReview: { ...route, activeTab: action.id } },
+    };
+  }
+  if (action.type === 'case/save-status-changed') {
+    if (action.status === route.saveStatus) return state;
+    return {
+      ...state,
+      routes: { caseReview: { ...route, saveStatus: action.status } },
+    };
+  }
+  return state;
+}
+
+/**
+ * @param {SaveStatus} status
+ * @returns {HTMLElement | null}
+ */
+function saveStatusView(status) {
+  if (status === 'saved') return null;
+  if (status === 'conflict') {
+    return h(
+      'div',
+      {
+        className: 'cora-banner cora-banner-conflict',
+        role: 'alert',
+        'aria-live': 'assertive',
+      },
+      h(
+        'p',
+        { className: 'cora-banner-text' },
+        'This Case was edited in another tab. Reload to continue.'
+      ),
+      h(
+        'button',
+        {
+          className: 'cora-banner-reload',
+          onClick: () => location.reload(),
+        },
+        'Reload'
+      )
+    );
+  }
+  return h(
+    'div',
+    {
+      className: `cora-banner cora-banner-${status}`,
+      role: 'status',
+      'aria-live': 'polite',
+    },
+    status === 'saving' ? 'Saving…' : 'Reconnecting…'
+  );
+}
+
+/**
+ * Store-driven Case Review shell. The tab structure and Details panel are pure;
+ * unconverted Section nodes are supplied by the interim adapter.
+ *
+ * @param {CaseReviewState} state
+ * @param {{
+ *   dispatch: (action: any) => unknown,
+ *   panels?: Record<string, Node>,
+ *   conversation?: Node | null,
+ *   conversationToggle?: Node | null,
+ *   completeButton?: Node | null,
+ * }} tools
+ * @returns {HTMLElement}
+ */
+export function caseReviewView(state, tools) {
+  const route = state.routes.caseReview;
+  const snapshot = route.snapshot;
+  if (!snapshot) {
+    return h('div', { className: 'cora-case-review' }, 'Loading...');
+  }
+  if (snapshot.error) {
+    return h('div', { className: 'cora-case-review' }, snapshot.error);
+  }
+  if (snapshot.accessDenied) {
+    return h(
+      'section',
+      { className: 'cora-case-review cora-access-denied' },
+      h('h2', {}, 'Access denied'),
+      h('p', {}, 'You do not have access to this case.')
+    );
+  }
+  if (!snapshot.loaded || !snapshot.caseRow || !snapshot.config) {
+    return h('div', { className: 'cora-case-review' }, 'Loading...');
+  }
+
+  const tabs = visibleCaseTabs(snapshot);
+  /** @type {Record<string, Node>} */
+  const panels = {
+    ...(tools.panels ?? {}),
+    details: caseDetailsView(
+      snapshot.caseRow,
+      snapshot.config.detailFields ?? []
+    ),
+  };
+
+  const tabButtons = tabs.map((entry) => {
+    const selected = route.activeTab === entry.id;
+    return h(
+      'button',
+      {
+        key: `tab-${entry.id}`,
+        className: 'cora-tabs-tab',
+        role: 'tab',
+        id: `case-tab-${entry.id}`,
+        'aria-controls': `case-panel-${entry.id}`,
+        'aria-selected': String(selected),
+        tabindex: selected ? '0' : '-1',
+        onClick: () =>
+          tools.dispatch({ type: 'case/tab-selected', id: entry.id }),
+        onKeyDown: (/** @type {KeyboardEvent} */ event) =>
+          selectAdjacentTab(event, tabs, route.activeTab, tools.dispatch),
+      },
+      snapshot.sectionLabels[entry.id]
+    );
+  });
+  const tabPanels = tabs.map((entry) => {
+    const panel = h(
+      'div',
+      {
+        key: `panel-${entry.id}`,
+        className: 'cora-tabs-panel',
+        role: 'tabpanel',
+        id: `case-panel-${entry.id}`,
+        'aria-labelledby': `case-tab-${entry.id}`,
+        tabindex: '0',
+        hidden: route.activeTab !== entry.id,
+      },
+      panels[entry.id] ?? null
+    );
+    return panel;
+  });
+
+  return h(
+    'div',
+    {
+      className: 'cora-case-review',
+      'data-conversation-mode': route.panelMode,
+    },
+    saveStatusView(route.saveStatus),
+    h(
+      'header',
+      {},
+      h('h1', {}, snapshot.caseRow.title),
+      h('p', {}, `Reviewer: ${snapshot.caseRow.assignedReviewer}`),
+      tools.conversationToggle ?? null
+    ),
+    h(
+      'div',
+      { className: 'cora-tabs' },
+      h('div', { role: 'tablist', className: 'cora-tabs-list' }, tabButtons),
+      tabPanels
+    ),
+    tools.conversation ?? null,
+    tools.completeButton ?? null
+  );
+}
+
+/**
+ * CASE-1 route slice. The view model adapts existing loading/domain behaviour
+ * into store snapshots; the interim adapter owns only the unconverted Section
+ * components.
+ *
+ * @param {Record<string, string>} params
+ * @param {import('../setup/register-routes.js').AppContext} context
+ */
+export function createRouteSlice(params, context) {
+  const search = typeof location === 'undefined' ? '' : (location.search ?? '');
+  const panelMode =
+    new URLSearchParams(search).get('conversation') ?? 'popover';
+  let dispatch = (/** @type {any} */ _action) => {};
+  const viewModel = new CaseReviewViewModel({
+    client: context.client,
+    saveQueue: context.saveQueue,
+    caseId: params.id,
+    caseType: params.caseType ?? null,
+    currentUserId:
+      context.chrome.currentUser?.id ?? context.currentUser?.id ?? '',
+    capabilities: context.chrome.permissions ?? context.capabilities,
+  });
+  const adapter = createCaseReviewInterimAdapter({
+    viewModel,
+    client: context.client,
+    saveQueue: context.saveQueue,
+    modelChanged() {
+      dispatch({
+        type: 'case/model-changed',
+        snapshot: viewModel.toStoreSnapshot(),
+      });
+    },
+  });
+  /** @type {null | {
+   *   root: HTMLElement,
+   *   status: HTMLElement,
+   *   header: HTMLElement,
+   *   tablist: HTMLElement,
+   *   panels: Record<string, HTMLElement>,
+   *   conversation: HTMLElement,
+   *   completion: HTMLElement,
+   * }} */
+  let shell = null;
+
+  /** @param {Element} container @param {any} tools */
+  function ensureShell(container, tools) {
+    if (shell) return shell;
+    const status = h('div', { className: 'cora-case-review__save-status' });
+    const header = h('header');
+    const tablist = h('div', {
+      role: 'tablist',
+      className: 'cora-tabs-list',
+    });
+    /** @type {Record<string, HTMLElement>} */
+    const panels = {};
+    for (const entry of tabEntries()) {
+      panels[entry.id] = h('div', {
+        className: 'cora-tabs-panel',
+        role: 'tabpanel',
+        id: `case-panel-${entry.id}`,
+        'aria-labelledby': `case-tab-${entry.id}`,
+        tabindex: '0',
+        hidden: true,
+      });
+    }
+    const conversation = h('div', {
+      className: 'cora-case-review__conversation',
+    });
+    const completion = h('div', {
+      className: 'cora-case-review__completion',
+    });
+    const root = h(
+      'div',
+      {
+        className: 'cora-case-review',
+        'data-conversation-mode': panelMode,
+      },
+      status,
+      header,
+      h('div', { className: 'cora-tabs' }, tablist, ...Object.values(panels)),
+      conversation,
+      completion
+    );
+    tools.morph(container, root);
+    shell = { root, status, header, tablist, panels, conversation, completion };
+    return shell;
+  }
+
+  /** @param {CaseReviewState} state @param {any} tools @param {Element} container */
+  function renderRoute(state, tools, container) {
+    const parts = ensureShell(container, tools);
+    const route = state.routes.caseReview;
+    const snapshot = route.snapshot;
+    tools.morph(parts.status, saveStatusView(route.saveStatus));
+
+    if (!snapshot) {
+      tools.morph(parts.header, h('p', {}, 'Loading...'));
+      return;
+    }
+    if (snapshot.error) {
+      tools.morph(parts.header, h('p', {}, snapshot.error));
+      return;
+    }
+    if (snapshot.accessDenied) {
+      tools.morph(
+        parts.header,
+        h(
+          'section',
+          { className: 'cora-access-denied' },
+          h('h2', {}, 'Access denied'),
+          h('p', {}, 'You do not have access to this case.')
+        )
+      );
+      return;
+    }
+    if (!snapshot.loaded || !snapshot.caseRow || !snapshot.config) return;
+
+    adapter.update();
+    tools.morph(parts.header, [
+      h('h1', {}, snapshot.caseRow.title),
+      h('p', {}, `Reviewer: ${snapshot.caseRow.assignedReviewer}`),
+    ]);
+    const toggle = adapter.conversationToggle;
+    if (toggle && toggle.parentNode !== parts.header) {
+      parts.header.appendChild(toggle);
+    }
+
+    const tabs = visibleCaseTabs(snapshot);
+    tools.morph(
+      parts.tablist,
+      tabs.map((entry) => {
+        const selected = route.activeTab === entry.id;
+        return h(
+          'button',
+          {
+            key: `tab-${entry.id}`,
+            className: 'cora-tabs-tab',
+            role: 'tab',
+            id: `case-tab-${entry.id}`,
+            'aria-controls': `case-panel-${entry.id}`,
+            'aria-selected': String(selected),
+            tabindex: selected ? '0' : '-1',
+            onClick: () =>
+              tools.dispatch({ type: 'case/tab-selected', id: entry.id }),
+            onKeyDown: (/** @type {KeyboardEvent} */ event) =>
+              selectAdjacentTab(event, tabs, route.activeTab, tools.dispatch),
+          },
+          snapshot.sectionLabels[entry.id]
+        );
+      })
+    );
+
+    const legacyPanels = adapter.panels;
+    for (const entry of tabEntries()) {
+      const panel = parts.panels[entry.id];
+      const visible = snapshot.access[entry.id] !== 'hidden';
+      panel.hidden = !visible || route.activeTab !== entry.id;
+      if (entry.id === 'details') {
+        tools.morph(
+          panel,
+          visible
+            ? caseDetailsView(
+                snapshot.caseRow,
+                snapshot.config.detailFields ?? []
+              )
+            : null
+        );
+        continue;
+      }
+      const node = legacyPanels[entry.id];
+      if (!node) continue;
+      if (visible && node.parentNode !== panel) panel.appendChild(node);
+      if (!visible && node.parentNode === panel) panel.removeChild(node);
+    }
+
+    const conversationNode = adapter.conversation;
+    if (
+      conversationNode &&
+      snapshot.access.conversation !== 'hidden' &&
+      conversationNode.parentNode !== parts.conversation
+    ) {
+      parts.conversation.appendChild(conversationNode);
+    } else if (
+      conversationNode &&
+      snapshot.access.conversation === 'hidden' &&
+      conversationNode.parentNode === parts.conversation
+    ) {
+      parts.conversation.removeChild(conversationNode);
+    }
+    const completeButton = adapter.completeButton;
+    if (completeButton && completeButton.parentNode !== parts.completion) {
+      parts.completion.appendChild(completeButton);
+    }
+  }
+
+  return {
+    initialState: createInitialCaseReviewState(context.chrome, panelMode),
+    reducer: caseReviewReducer,
+    render(
+      /** @type {Element} */ container,
+      /** @type {CaseReviewState} */ state,
+      /** @type {any} */ tools
+    ) {
+      renderRoute(state, tools, container);
+    },
+    start(/** @type {any} */ tools) {
+      dispatch = tools.dispatch;
+      const save = createCaseReviewSaveEffect({
+        saveQueue: context.saveQueue,
+        caseId: params.id,
+        dispatch: tools.dispatch,
+      });
+      viewModel.setAnswerChangeHandler((answers) =>
+        save.answersEdited(answers)
+      );
+      const disposeSaveStatus = observeSaveStatus(
+        context.saveQueue,
+        tools.dispatch
+      );
+      if (typeof document !== 'undefined') {
+        tools.listen(document, 'keydown', adapter.handleKeydown);
+      }
+      void viewModel.load().then(() => {
+        tools.dispatch({
+          type: 'case/load-finished',
+          snapshot: viewModel.toStoreSnapshot(),
+        });
+      });
+      return () => {
+        viewModel.setAnswerChangeHandler(null);
+        disposeSaveStatus();
+      };
+    },
+  };
+}
 
 /**
  * Case Review route shell. A plain function component: it owns the

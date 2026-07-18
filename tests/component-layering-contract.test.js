@@ -150,6 +150,7 @@ test('layering: new-style store route modules expose slices without importing th
     'src/pages/dev-performance-harness.js',
     'src/pages/home.js',
     'src/pages/reports-index.js',
+    'src/pages/cora-case-review.js',
   ];
   const forbiddenDependency =
     /(?:^|\/)(?:core\/(?:store-route|store|morph)|lib\/router|services\/(?:save-queue|sharepoint-client))\.js$/;
