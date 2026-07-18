@@ -139,6 +139,36 @@ test('store route: unmount during a lazy load discards the stale slice before it
   assert.equal(container.childNodes.length, 0);
 });
 
+test('store route: a slice without view() or render() rejects the initial mount and disposes cleanly', async () => {
+  let listenerRemoved = false;
+  const events = new EventTarget();
+  const container = document.createElement('div');
+  const handler = createStoreRoute({
+    load: async () => ({
+      createRouteSlice: () => ({
+        initialState: {},
+        reducer: (/** @type {any} */ state) => state,
+        start: ({ listen }) => {
+          listen(events, 'route-event', () => {});
+          return () => {
+            listenerRemoved = true;
+          };
+        },
+      }),
+    }),
+    context: /** @type {any} */ ({}),
+  });
+
+  await assert.rejects(async () => {
+    await handler.mount(container, {});
+  }, TypeError);
+
+  // The initial-render failure must be handled by mount()'s own catch (which
+  // rethrows for the router to show its panel), not by the post-mount path,
+  // so start() never ran and there is nothing to dispose.
+  assert.equal(listenerRemoved, false);
+});
+
 test('store route: a broken new-style module rejects through the router mount contract', async () => {
   const failure = new Error('broken view module');
   const handler = createStoreRoute({
@@ -177,6 +207,82 @@ test('store route: a broken lazy module renders the existing router error panel'
       /** @type {any} */ (container.childNodes[0]).className,
       'cora-route-error'
     );
+  } finally {
+    console.error = originalError;
+  }
+});
+
+test('store route: a view that throws on a scheduled render after mount shows the error panel and stops further renders (#437)', async () => {
+  const container = document.createElement('div');
+  let dispatch = /** @type {any} */ (null);
+  let renders = 0;
+  let cleanupCalls = 0;
+  let eventFired = 0;
+  const events = new EventTarget();
+  const failure = new Error('broken second render');
+  const originalError = console.error;
+  /** @type {any[]} */
+  const errorCalls = [];
+  console.error = (...args) => errorCalls.push(args);
+
+  const handler = createStoreRoute({
+    load: async () => ({
+      createRouteSlice: () => ({
+        initialState: { count: 0 },
+        reducer: (state, action) =>
+          action.type === 'increment' ? { count: state.count + 1 } : state,
+        view: (state) => {
+          renders += 1;
+          if (state.count > 0) throw failure;
+          const el = document.createElement('p');
+          el.textContent = String(state.count);
+          return el;
+        },
+        start: ({ dispatch: d, listen }) => {
+          dispatch = d;
+          listen(events, 'route-event', () => {
+            eventFired += 1;
+          });
+          return () => {
+            cleanupCalls += 1;
+          };
+        },
+      }),
+    }),
+    context: /** @type {any} */ ({}),
+  });
+
+  try {
+    await handler.mount(container, {});
+    assert.equal(renders, 1);
+    assert.equal(container.textContent, '0');
+
+    dispatch({ type: 'increment' });
+    await Promise.resolve();
+
+    assert.equal(renders, 2, 'the throwing render was attempted');
+    assert.equal(container.childNodes.length, 1);
+    assert.equal(
+      /** @type {any} */ (container.childNodes[0]).className,
+      'cora-route-error'
+    );
+    assert.equal(cleanupCalls, 1, 'slice cleanup ran on the render failure');
+    assert.ok(
+      errorCalls.some(
+        (call) => typeof call[0] === 'string' && call[0].includes('[CORA]')
+      ),
+      'the failure was logged via the [CORA] console.error convention'
+    );
+
+    // A direct dispatch call must not schedule any more renders after
+    // teardown, and the route-event listener registered via listen() must
+    // have been removed as part of that teardown.
+    dispatch({ type: 'increment' });
+    await Promise.resolve();
+    assert.equal(renders, 2, 'no further renders are attempted once disposed');
+
+    events.dispatchEvent(new Event('route-event'));
+    assert.equal(eventFired, 0, 'the route listener was removed on failure');
   } finally {
     console.error = originalError;
   }

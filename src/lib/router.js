@@ -2,6 +2,7 @@
 // A route handler is a plain `{ mount, unmount }` pair. `mount` composes
 // function components and calls `container.replaceChildren(...)`; the router
 // never owns a custom element per route.
+import { createRouteErrorPanel } from './route-error-panel.js';
 
 /**
  * @typedef {{ mount: (el: Element, params: Record<string, string>) => void | Promise<void>, unmount: () => void }} RouteHandler
@@ -87,16 +88,7 @@ export class Router {
     } catch (err) {
       if (token !== this._navSeq) return;
       console.error(`[CORA] route mount failed for "${hash}"`, err);
-      const panel = document.createElement('div');
-      panel.className = 'cora-route-error';
-      const heading = document.createElement('p');
-      heading.textContent = 'This page failed to load';
-      const body = document.createElement('p');
-      body.textContent =
-        'Use the navigation to go somewhere else, or reload to retry.';
-      panel.appendChild(heading);
-      panel.appendChild(body);
-      container.replaceChildren(panel);
+      container.replaceChildren(createRouteErrorPanel());
     }
   }
 

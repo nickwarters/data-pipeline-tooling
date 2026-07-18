@@ -2,6 +2,7 @@
 import { morph } from './morph.js';
 import { createMemo } from './memo.js';
 import { createStore } from './store.js';
+import { createRouteErrorPanel } from '../lib/route-error-panel.js';
 
 /**
  * Adapt a lazy store-driven view module to the existing Router handler shape.
@@ -40,6 +41,14 @@ export function createStoreRoute({ load, context }) {
       const removeListeners = [];
       /** @type {ReturnType<typeof createStore<any, any>>} */
       let store;
+      // Set once the initial synchronous render (inside the try/catch below)
+      // has succeeded. Before that point a render failure is left to
+      // propagate to mount()'s own catch, which disposes and rethrows so the
+      // router's existing ADR-0002 containment handles it. After that point
+      // renders run on a schedule (see createStore's queueMicrotask
+      // coalescing) with no other try/catch on the path, so this render
+      // callback must contain failures itself (#437).
+      let mounted = false;
       const tools = {
         dispatch: (/** @type {any} */ action) => store.dispatch(action),
         memo,
@@ -62,16 +71,24 @@ export function createStoreRoute({ load, context }) {
         initialState: slice.initialState,
         reducer: slice.reducer,
         render: (state) => {
-          if (slice.render) {
-            slice.render(container, state, tools);
-            return;
+          try {
+            if (slice.render) {
+              slice.render(container, state, tools);
+              return;
+            }
+            if (!slice.view) {
+              throw new TypeError(
+                'Store route slice must define view() or render()'
+              );
+            }
+            morph(container, slice.view(state, tools));
+          } catch (error) {
+            if (!mounted) throw error;
+            console.error('[CORA] route render failed after mount', error);
+            disposeMountedSlice?.();
+            disposeMountedSlice = null;
+            container.replaceChildren(createRouteErrorPanel());
           }
-          if (!slice.view) {
-            throw new TypeError(
-              'Store route slice must define view() or render()'
-            );
-          }
-          morph(container, slice.view(state, tools));
         },
       });
 
@@ -87,6 +104,7 @@ export function createStoreRoute({ load, context }) {
       };
       try {
         store.render();
+        mounted = true;
         disposeListeners = slice.start?.(tools);
       } catch (error) {
         disposeMountedSlice();
