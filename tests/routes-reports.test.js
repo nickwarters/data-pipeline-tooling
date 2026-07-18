@@ -59,9 +59,11 @@ test('reports route: #/reports unmount disposes the store-driven slice', async (
     }),
     {
       loadIndex: async () => ({
+        reportsIndexView: () => document.createElement('section'),
         createRouteSlice: () => ({
-          initialState: {},
-          reducer: (/** @type {any} */ state) => state,
+          initialState: { isReviewerManager: false },
+          reducer: (/** @type {{ isReviewerManager: boolean }} */ state) =>
+            state,
           view: () => document.createElement('section'),
           start: () => () => {
             disposed = true;
@@ -164,7 +166,10 @@ test('reports route: #/reports renders a cora-route-error panel when the index p
     await router.navigate('#/reports');
 
     assert.equal(container.childNodes.length, 1);
-    assert.equal(container.childNodes[0].className, 'cora-route-error');
+    assert.equal(
+      /** @type {HTMLElement} */ (container.childNodes[0]).className,
+      'cora-route-error'
+    );
   } finally {
     console.error = origConsoleError;
   }
@@ -199,9 +204,15 @@ test('reports/reviewer-team route: mounts ReviewerTeamReportPage with client, cu
       1,
       'ReviewerTeamReportPage host should be mounted'
     );
-    assert.equal(container.childNodes[0].tagName, 'DIV');
+    assert.equal(
+      /** @type {HTMLElement} */ (container.childNodes[0]).tagName,
+      'DIV'
+    );
     // The router error panel is also a DIV; assert this is the real page.
-    assert.notEqual(container.childNodes[0].className, 'cora-route-error');
+    assert.notEqual(
+      /** @type {HTMLElement} */ (container.childNodes[0]).className,
+      'cora-route-error'
+    );
   } finally {
     /** @type {any} */ (globalThis).location = { hash: '' };
   }
@@ -227,7 +238,10 @@ test('reports/reviewer-team route: renders a cora-route-error panel when the rev
     await router.navigate('#/reports/reviewer-team');
 
     assert.equal(container.childNodes.length, 1);
-    assert.equal(container.childNodes[0].className, 'cora-route-error');
+    assert.equal(
+      /** @type {HTMLElement} */ (container.childNodes[0]).className,
+      'cora-route-error'
+    );
   } finally {
     console.error = origConsoleError;
     /** @type {any} */ (globalThis).location = { hash: '' };

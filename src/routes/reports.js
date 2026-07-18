@@ -17,10 +17,7 @@ export function register(
     loadReviewerTeam = () => import('../pages/cora-reviewer-team-report.js'),
   } = {}
 ) {
-  router.register(
-    '#/reports',
-    createStoreRoute({ load: loadIndex, context })
-  );
+  router.register('#/reports', createStoreRoute({ load: loadIndex, context }));
 
   router.register('#/reports/reviewer-team', {
     async mount(container) {

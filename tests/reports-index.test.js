@@ -5,11 +5,10 @@ import { installDom } from './_dom-stub.js';
 
 installDom();
 
-const { createRouteSlice, reportsIndexView } = await import(
-  '../src/pages/reports-index.js'
-);
+const { createRouteSlice, reportsIndexView } =
+  await import('../src/pages/reports-index.js');
 
-/** @returns {import('../src/services/permissions.js').Capabilities} */
+/** @param {boolean} isReviewerManager @returns {import('../src/services/permissions.js').Capabilities} */
 function capabilities(isReviewerManager) {
   return {
     isReviewer: false,
@@ -61,8 +60,7 @@ test('reports index slice: derives route state from resolved capabilities', () =
     'the read-only route has no state transition actions'
   );
   assert.equal(
-    managerSlice.view(managerSlice.initialState, /** @type {any} */ ({}))
-      .textContent,
+    managerSlice.view(managerSlice.initialState).textContent,
     'Reviewer Team PerformanceView report'
   );
 });
