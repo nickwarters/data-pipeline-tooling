@@ -34,9 +34,7 @@ function state(permissionOverrides = {}) {
       currentUser: { id: 'u1', displayName: 'A User' },
       permissions: capabilities(permissionOverrides),
     },
-    routes: {
-      home: { eligibleCaseTypes: [], eligibleJourneyCaseTypes: [] },
-    },
+    routes: { home: {} },
   };
 }
 
@@ -102,26 +100,12 @@ test('home view: no capabilities render an empty page tree', () => {
   assert.equal(view.childNodes.length, 0);
 });
 
-test('home slice: stores shared chrome and the already-resolved Case Type sources', () => {
+test('home slice: stores shared chrome without speculative route state', () => {
   const chrome = state({ ownedCaseTypes: ['complaints'] }).chrome;
-  const eligibleCaseTypes = [
-    { slug: 'complaints', listName: 'Cases', displayName: 'Complaints' },
-  ];
-  const eligibleJourneyCaseTypes = [eligibleCaseTypes[0]];
-  const slice = createRouteSlice(
-    {},
-    /** @type {any} */ ({
-      chrome,
-      caseSources: eligibleCaseTypes,
-      journeyCaseSources: eligibleJourneyCaseTypes,
-    })
-  );
+  const slice = createRouteSlice({}, /** @type {any} */ ({ chrome }));
 
   assert.equal(slice.initialState.chrome, chrome);
-  assert.deepEqual(slice.initialState.routes.home, {
-    eligibleCaseTypes,
-    eligibleJourneyCaseTypes,
-  });
+  assert.deepEqual(slice.initialState.routes.home, {});
   assert.equal(
     slice.reducer(slice.initialState, { type: 'ignored' }),
     slice.initialState

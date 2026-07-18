@@ -22,8 +22,22 @@ Every converted route exports `createRouteSlice(params, context)` and returns
 `chrome` is created once at boot by `createChromeState()` and is the defined
 home for toasts, navigation state, the current user, and permissions. Do not
 copy those values into a route slice. Route-owned state belongs under
-`routes.<routeName>`. Pass already-resolved Case sources through `AppContext`;
-do not repeat Case Type eligibility logic inside a page.
+`routes.<routeName>`. Legacy routes still receive `currentUser` and
+`capabilities` directly through `AppContext`; new store-driven code reads them
+through `chrome`.
+
+During the strangler migration, `context.chrome` is one boot-owned object
+shared by reference across route-local stores. Route reducers treat it as
+read-only: they must not replace `state.chrome` or mutate it directly. Named
+helpers in `core/chrome-state.js` own shared writes, so later route mounts see
+the current values. If a mounted view consumes a changing chrome field, its
+effect calls the helper and dispatches a route action to schedule that view's
+render. This bridge remains until the route-local stores converge into the
+single app-store owner described by ADR-0034.
+
+Pass already-resolved Case sources through `AppContext`; do not repeat Case
+Type eligibility logic inside a page. Copy them into route state only when the
+route's current view or actions consume them.
 
 Views are synchronous and pure: state in, an `h()` tree out. They do not import
 the router, store, `SaveQueue`, or a SharePoint client. Effects and external
@@ -60,7 +74,8 @@ floors must hold.
 - The old page file, old tests, and old wiring are deleted in the same change.
 - The new page exports `createRouteSlice` and a pure view and is added to the
   store-route layering ledger.
-- Shared chrome and resolved Case sources come from `AppContext`.
+- Shared chrome and any consumed, already-resolved Case sources come from
+  `AppContext`.
 - Focused tests, type checks, the full suite, coverage, formatting, and
   `git diff --check` pass.
 - The PR explains the state boundary, effects/data-loading boundary, and proof

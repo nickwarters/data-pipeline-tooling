@@ -1,8 +1,14 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { isolateBrowserGlobals } from './helpers/browser-globals.js';
 
-import { createChromeState } from '../src/core/chrome-state.js';
+isolateBrowserGlobals();
+
+import {
+  bindChromeNavigation,
+  createChromeState,
+} from '../src/core/chrome-state.js';
 
 test('createChromeState: defines the shared store home for app chrome', () => {
   const currentUser = { id: 'u1', displayName: 'A User' };
@@ -24,4 +30,49 @@ test('createChromeState: captures the current route for nav state', () => {
   });
 
   assert.equal(chrome.nav.currentHash, '#/reports');
+});
+
+test('bindChromeNavigation: keeps nav state current and removes its listener', () => {
+  const target = new EventTarget();
+  let currentHash = '#/';
+  const chrome = createChromeState({
+    currentUser: { id: 'u1', displayName: 'A User' },
+    permissions: /** @type {any} */ ({}),
+  });
+  const dispose = bindChromeNavigation(chrome, {
+    target,
+    readHash: () => currentHash,
+  });
+
+  currentHash = '#/reports';
+  target.dispatchEvent(new Event('hashchange'));
+  assert.equal(chrome.nav.currentHash, '#/reports');
+
+  dispose();
+  currentHash = '#/dashboard';
+  target.dispatchEvent(new Event('hashchange'));
+  assert.equal(chrome.nav.currentHash, '#/reports');
+});
+
+test('bindChromeNavigation: default browser binding normalises an empty hash', () => {
+  const originalWindow = /** @type {any} */ (globalThis).window;
+  const originalLocation = /** @type {any} */ (globalThis).location;
+  const target = new EventTarget();
+  /** @type {any} */ (globalThis).window = target;
+  /** @type {any} */ (globalThis).location = { hash: '' };
+  const chrome = createChromeState({
+    currentUser: { id: 'u1', displayName: 'A User' },
+    permissions: /** @type {any} */ ({}),
+    currentHash: '#/reports',
+  });
+
+  try {
+    const dispose = bindChromeNavigation(chrome);
+    target.dispatchEvent(new Event('hashchange'));
+    assert.equal(chrome.nav.currentHash, '#/');
+    dispose();
+  } finally {
+    /** @type {any} */ (globalThis).window = originalWindow;
+    /** @type {any} */ (globalThis).location = originalLocation;
+  }
 });

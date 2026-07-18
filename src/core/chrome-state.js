@@ -34,3 +34,26 @@ export function createChromeState({
     permissions,
   };
 }
+
+/**
+ * Keep the boot-owned navigation state in sync for the application lifetime.
+ * Chrome is shared by reference during the route-by-route migration, so named
+ * helpers own its writes; route reducers treat the object as read-only.
+ *
+ * @param {ChromeState} chrome
+ * @param {{
+ *   target?: EventTarget,
+ *   readHash?: () => string,
+ * }} [options]
+ * @returns {() => void}
+ */
+export function bindChromeNavigation(
+  chrome,
+  { target = window, readHash = () => location.hash || '#/' } = {}
+) {
+  const sync = () => {
+    chrome.nav.currentHash = readHash() || '#/';
+  };
+  target.addEventListener('hashchange', sync);
+  return () => target.removeEventListener('hashchange', sync);
+}

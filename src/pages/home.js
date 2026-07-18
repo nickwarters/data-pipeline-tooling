@@ -2,21 +2,15 @@
 import { h } from '../lib/html.js';
 
 /** @typedef {import('../core/chrome-state.js').ChromeState} ChromeState */
-/** @typedef {import('../setup/resolve-eligible-case-types.js').CaseSource} CaseSource */
 
 /**
  * @typedef {Object} HomeState
  * @property {ChromeState} chrome
- * @property {{ home: {
- *   eligibleCaseTypes: CaseSource[],
- *   eligibleJourneyCaseTypes: CaseSource[],
- * } }} routes
+ * @property {{ home: Record<string, never> }} routes
  */
 
 /**
- * Role-gated landing page. Permissions come from the shared chrome slice;
- * eligible Case Type sources stay in the Home route slice for later Home
- * actions without re-running the app-wide resolution rule.
+ * Role-gated landing page. Permissions come from the shared chrome slice.
  *
  * @param {HomeState} state
  * @returns {HTMLElement}
@@ -102,12 +96,7 @@ export function createRouteSlice(_params, context) {
   return {
     initialState: {
       chrome: context.chrome,
-      routes: {
-        home: {
-          eligibleCaseTypes: context.caseSources,
-          eligibleJourneyCaseTypes: context.journeyCaseSources,
-        },
-      },
+      routes: { home: {} },
     },
     reducer: (state) => state,
     view: homeView,
