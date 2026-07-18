@@ -6,12 +6,9 @@
 // real browser, not only in `node --test`. Reachable at #/dev/morph under
 // dev/?mock=1 (see src/routes/dev-morph.js); it ships nowhere else.
 //
-// This is deliberately store-less: the store/dispatch primitive is CORE-3. The
-// harness owns a tiny local state and calls morph() directly, which is all that
-// is needed to exercise the reconciler.
-
 import { h } from '../lib/html.js';
 import { morph } from '../core/morph.js';
+import { createStore } from '../core/store.js';
 
 /** @typedef {{ key: string, label: string }} Item */
 
@@ -91,15 +88,23 @@ export function harnessView(state, onQuery) {
  * @returns {() => void} cleanup
  */
 export function mountDevMorphHarness(container) {
-  const state = { query: '' };
-  const render = () => {
-    morph(container, harnessView(state, onQuery));
+  const store = createStore({
+    initialState: { query: '' },
+    reducer: (state, action) =>
+      action.type === 'query/changed'
+        ? { ...state, query: action.query }
+        : state,
+    render: (state) =>
+      morph(
+        container,
+        harnessView(state, (query) =>
+          store.dispatch({ type: 'query/changed', query })
+        )
+      ),
+  });
+  store.render();
+  return () => {
+    store.dispose();
+    container.replaceChildren();
   };
-  /** @param {string} next */
-  function onQuery(next) {
-    state.query = next;
-    render();
-  }
-  render();
-  return () => container.replaceChildren();
 }

@@ -1,6 +1,6 @@
 // @ts-check
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -51,4 +51,19 @@ test('framework contract: global component registry stays deleted', () => {
 
   assert.doesNotMatch(app, /registerComponents|register-components/);
   assert.doesNotMatch(routes, /registerComponents|register-components/);
+});
+
+test('framework contract: views do not import persistence services', () => {
+  const pageFiles = readdirSync(new URL('src/pages/', ROOT), {
+    recursive: true,
+  }).filter((path) => String(path).endsWith('.js'));
+
+  for (const path of pageFiles) {
+    const source = read(`src/pages/${path}`);
+    assert.doesNotMatch(
+      source,
+      /from\s+['"][^'"]*(?:save-queue|sharepoint-client)\.js['"]/i,
+      String(path)
+    );
+  }
 });

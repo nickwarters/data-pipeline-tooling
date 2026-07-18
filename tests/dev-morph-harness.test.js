@@ -51,7 +51,7 @@ test('harnessView: renders the controlled input and a keyed row per visible item
   assert.equal(rows.length, 8, 'all default items shown');
 });
 
-test('mountDevMorphHarness: typing re-renders the list while keeping the input focused', () => {
+test('mountDevMorphHarness: typing re-renders the list while keeping the input focused', async () => {
   const container = G.document.createElement('div');
   const cleanup = mountDevMorphHarness(container);
 
@@ -64,6 +64,7 @@ test('mountDevMorphHarness: typing re-renders the list while keeping the input f
   assert.equal(G.document.activeElement, input);
   input.value = 'o';
   input.dispatchEvent(new G.CustomEvent('input'));
+  await Promise.resolve();
 
   // The list re-rendered (fewer rows), and the same input still holds focus.
   const after = findAllByClass(container, 'cora-morph-harness__item');
