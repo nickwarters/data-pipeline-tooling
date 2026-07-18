@@ -3,6 +3,7 @@
 // *only* under the ?mock=1 dev loop, so it never appears in a deployed
 // SharePoint environment. There is no nav link — it is reached by URL from the
 // dev harness (dev/?mock=1#/dev/morph).
+import { createStoreRoute } from '../core/store-route.js';
 
 /**
  * @returns {boolean} whether the ?mock=1 dev loop is active
@@ -16,7 +17,7 @@ function isDevMockLoop() {
  * @param {import('../lib/router.js').Router} router
  * @param {import('../setup/register-routes.js').AppContext} _context
  * @param {{
- *   load?: () => Promise<typeof import('../pages/dev-morph-harness.js')>,
+ *   load?: () => Promise<{ createRouteSlice: typeof import('../pages/dev-morph-harness.js').createRouteSlice }>,
  *   isDev?: () => boolean,
  * }} [options]
  */
@@ -29,11 +30,5 @@ export function register(
   } = {}
 ) {
   if (!isDev()) return;
-  router.register('#/dev/morph', {
-    async mount(container) {
-      const { mountDevMorphHarness } = await load();
-      mountDevMorphHarness(container);
-    },
-    unmount() {},
-  });
+  router.register('#/dev/morph', createStoreRoute({ load, context: _context }));
 }

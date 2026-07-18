@@ -7,8 +7,6 @@
 // dev/?mock=1 (see src/routes/dev-morph.js); it ships nowhere else.
 //
 import { h } from '../lib/html.js';
-import { morph } from '../core/morph.js';
-import { createStore } from '../core/store.js';
 
 /** @typedef {{ key: string, label: string }} Item */
 
@@ -83,28 +81,22 @@ export function harnessView(state, onQuery) {
 }
 
 /**
- * Mount the harness into a container and wire the keystroke → re-render loop.
- * @param {any} container
- * @returns {() => void} cleanup
+ * New-style route module contract: create route-local state and a pure view.
+ * The standard store-route adapter owns rendering and teardown.
+ * @returns {{
+ *   initialState: { query: string },
+ *   reducer: (state: { query: string }, action: any) => { query: string },
+ *   view: (state: { query: string }, tools: { dispatch: (action: any) => any }) => HTMLElement,
+ * }}
  */
-export function mountDevMorphHarness(container) {
-  const store = createStore({
+export function createRouteSlice() {
+  return {
     initialState: { query: '' },
     reducer: (state, action) =>
       action.type === 'query/changed'
         ? { ...state, query: action.query }
         : state,
-    render: (state) =>
-      morph(
-        container,
-        harnessView(state, (query) =>
-          store.dispatch({ type: 'query/changed', query })
-        )
-      ),
-  });
-  store.render();
-  return () => {
-    store.dispose();
-    container.replaceChildren();
+    view: (state, { dispatch }) =>
+      harnessView(state, (query) => dispatch({ type: 'query/changed', query })),
   };
 }

@@ -142,6 +142,26 @@ test('layering: no static page import outside src/pages/; dynamic page import() 
   );
 });
 
+test('layering: new-style store route modules expose slices without importing the router', () => {
+  const newStylePages = srcFiles.filter((rel) => {
+    if (!rel.startsWith('src/pages/')) return false;
+    return /export function createRouteSlice\s*\(/.test(readCode(rel));
+  });
+  const offenders = newStylePages.filter((rel) =>
+    importSpecifiers(rel).some((spec) => /(?:^|\/)lib\/router\.js$/.test(spec))
+  );
+
+  assert.ok(
+    newStylePages.includes('src/pages/dev-morph-harness.js'),
+    'the CORE-2/3 dev harness is registered as a new-style route module'
+  );
+  assert.deepEqual(
+    offenders,
+    [],
+    'new-style page modules expose createRouteSlice() and stay independent of the router'
+  );
+});
+
 /**
  * Rule (b): route modules are `setup/register-routes.js`'s private detail —
  * nothing else imports them (statically or dynamically).

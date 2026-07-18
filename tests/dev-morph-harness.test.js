@@ -5,8 +5,9 @@ import { installDom, findByTag, findAllByClass } from './_dom-stub.js';
 
 installDom();
 
-const { visibleItems, harnessView, mountDevMorphHarness } =
+const { visibleItems, harnessView, createRouteSlice } =
   await import('../src/pages/dev-morph-harness.js');
+const { createStoreRoute } = await import('../src/core/store-route.js');
 
 const G = /** @type {any} */ (globalThis);
 
@@ -51,9 +52,13 @@ test('harnessView: renders the controlled input and a keyed row per visible item
   assert.equal(rows.length, 8, 'all default items shown');
 });
 
-test('mountDevMorphHarness: typing re-renders the list while keeping the input focused', async () => {
+test('dev morph route slice: typing re-renders the list while keeping the input focused', async () => {
   const container = G.document.createElement('div');
-  const cleanup = mountDevMorphHarness(container);
+  const handler = createStoreRoute({
+    load: async () => ({ createRouteSlice }),
+    context: {},
+  });
+  await handler.mount(container, {});
 
   const input = findByTag(container, 'input');
   const before = findAllByClass(container, 'cora-morph-harness__item').length;
@@ -79,6 +84,5 @@ test('mountDevMorphHarness: typing re-renders the list while keeping the input f
     'focus not lost across re-render'
   );
 
-  cleanup();
-  assert.equal(container.childNodes.length, 0, 'cleanup empties the container');
+  handler.unmount();
 });

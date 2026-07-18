@@ -3,8 +3,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { isolateBrowserGlobals } from './helpers/browser-globals.js';
 import { routeRegistrationSpy } from './helpers/router.js';
+import { installDom } from './_dom-stub.js';
 
 isolateBrowserGlobals();
+installDom();
 /** @type {any} */ (globalThis).location = { hash: '', search: '' };
 
 import { register } from '../src/routes/dev-morph.js';
@@ -27,30 +29,46 @@ test('dev-morph route: registers nothing when the dev loop is inactive', () => {
 
 test('dev-morph route: mount loads the harness and mounts it into the container', async () => {
   const registration = routeRegistrationSpy();
-  let mountedInto = null;
+  let sliceCreated = false;
   register(/** @type {any} */ (registration.router), /** @type {any} */ ({}), {
     isDev: () => true,
     load: async () => ({
-      mountDevMorphHarness: (/** @type {any} */ c) => {
-        mountedInto = c;
-        return () => {};
+      createRouteSlice: () => {
+        sliceCreated = true;
+        return {
+          initialState: { query: '' },
+          reducer: (/** @type {{ query: string }} */ state) => state,
+          view: () => document.createElement('section'),
+        };
       },
-      // Unused exports, present so the module shape matches.
-      visibleItems: () => [],
-      harnessView: () => /** @type {any} */ ({}),
     }),
   });
-  const container = { id: 'container' };
+  const container = document.createElement('div');
   await registration.handlerFor('#/dev/morph').mount(container);
-  assert.equal(mountedInto, container);
+  assert.equal(sliceCreated, true);
+  assert.equal(/** @type {any} */ (container.childNodes[0]).tagName, 'SECTION');
 });
 
-test('dev-morph route: unmount is a no-op (does not throw)', () => {
+test('dev-morph route: unmount disposes the mounted new-style slice', async () => {
   const registration = routeRegistrationSpy();
+  let disposed = false;
   register(/** @type {any} */ (registration.router), /** @type {any} */ ({}), {
     isDev: () => true,
+    load: async () => ({
+      createRouteSlice: () => ({
+        initialState: { query: '' },
+        reducer: (/** @type {{ query: string }} */ state) => state,
+        view: () => document.createElement('section'),
+        setup: () => () => {
+          disposed = true;
+        },
+      }),
+    }),
   });
-  assert.doesNotThrow(() => registration.handlerFor('#/dev/morph').unmount());
+  const handler = registration.handlerFor('#/dev/morph');
+  await handler.mount(document.createElement('div'), {});
+  handler.unmount();
+  assert.equal(disposed, true);
 });
 
 test('dev-morph route: the default gate follows the ?mock=1 dev loop', () => {
