@@ -169,7 +169,7 @@ src/
     reports-index.js             # store-driven pure view (Palimpsest PILOT-1)
     cora-responsible-party-dashboard.js
     cora-reviewer-team-report.js
-    cora-team-cases.js
+    cora-team-cases.js          # store-driven Team Cases slice + table descriptors (GRID-1)
     question-bank/              # question bank editor subsystem ("just another page", #382)
       cora-bank-dock.js
       cora-bank-editor.js       # page shell; owns the ONLY store imports + child wiring
@@ -182,6 +182,9 @@ src/
       question-bank-source.js
       question-bank-store.js    # bank-editor state singleton (re-exports lib/toast.js)
       simulate-panel.js         # impact-simulation panel fed to cora-compile-drawer via props
+
+  views/                        # generic store-driven pure renderers
+    data-table.js               # descriptor-driven table view (value, sort, format, links)
 
   routes/                       # route handler modules, one per hash route
     case.js

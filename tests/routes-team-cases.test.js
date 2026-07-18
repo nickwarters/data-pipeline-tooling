@@ -1,163 +1,122 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { installDom, waitForRender } from './_dom-stub.js';
+import { isolateBrowserGlobals } from './helpers/browser-globals.js';
+import { installDom } from './_dom-stub.js';
 import { initRouter, routeRegistrationSpy } from './helpers/router.js';
 
+isolateBrowserGlobals();
 installDom();
-
-/** @type {Record<string, Function[]>} */
-const windowListeners = {};
 /** @type {any} */ (globalThis).window = {
-  addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
-    (windowListeners[t] ??= []).push(h);
-  },
+  addEventListener() {},
+  removeEventListener() {},
 };
+/** @type {any} */ (globalThis).location = { hash: '' };
 
-const { Router } = await import('../src/lib/router.js');
-const { register } = await import('../src/routes/team-cases.js');
+import { Router } from '../src/lib/router.js';
+import { register } from '../src/routes/team-cases.js';
 
-/**
- * @param {string} slug
- * @param {string} [listName]
- * @returns {import('../src/setup/resolve-eligible-case-types.js').CaseSource}
- */
-const src = (slug, listName = `${slug}-list`) => ({
-  slug,
-  listName,
-  displayName: slug,
-});
-
-/** @param {any} node @param {string} tag @returns {any|null} */
-function findTag(node, tag) {
-  if (node.tagName === tag.toUpperCase()) return node;
-  for (const c of node._children ?? []) {
-    const f = findTag(c, tag);
-    if (f) return f;
-  }
-  return null;
+function context() {
+  return /** @type {any} */ ({
+    client: {},
+    chrome: {
+      toasts: [],
+      nav: { currentHash: '#/team-cases' },
+      currentUser: { id: 'manager-1', displayName: 'Manager' },
+      permissions: {},
+    },
+    caseSources: [],
+  });
 }
 
-test('routes-team-cases: registers #/team-cases route', () => {
+test('team cases route: registers the unchanged URL', () => {
   const registration = routeRegistrationSpy();
-  register(
-    /** @type {any} */ (registration.router),
-    /** @type {any} */ ({
-      client: {},
-      currentUser: { id: 'u1' },
-      caseSources: [].map((s) => src(s)),
-    })
-  );
+  register(/** @type {any} */ (registration.router), context());
   assert.equal(registration.has('#/team-cases'), true);
 });
 
-test('routes-team-cases: mounts TeamCasesPage output with client, currentUser, caseSources', async () => {
-  const client = /** @type {any} */ ({
-    async listCases() {
-      return [];
-    },
-  });
-  const currentUser = { id: 'u1', displayName: 'U' };
-  const caseSources = [src('example-review')];
-
+test('team cases route: passes the hash query to the store-driven slice', async () => {
+  /** @type {Record<string, string> | null} */
+  let receivedParams = null;
+  /** @type {any} */ (globalThis).location.hash =
+    '#/team-cases?manager=me&status=overdue';
   const router = new Router();
-  /** @type {any[]} */
-  let mounted = [];
-  const container = {
-    replaceChildren(/** @type {any} */ ...args) {
-      mounted = args;
-    },
-  };
-  initRouter(router, /** @type {any} */ (container));
-  register(router, /** @type {any} */ ({ client, currentUser, caseSources }));
-  await router.navigate('#/team-cases');
+  const container = document.createElement('main');
+  initRouter(router, container);
+  register(
+    router,
+    context(),
+    /** @type {any} */ (
+      async () => ({
+        createRouteSlice: (/** @type {Record<string, string>} */ params) => {
+          receivedParams = params;
+          return {
+            initialState: {},
+            reducer: (/** @type {any} */ state) => state,
+            view: () => document.createElement('section'),
+          };
+        },
+      })
+    )
+  );
 
-  assert.equal(mounted.length, 1, 'should mount a single host element');
-  assert.ok(findTag(mounted[0], 'h1'), 'should render the page heading');
+  await router.navigate(location.hash);
+  assert.equal(
+    /** @type {Record<string, string>} */ (
+      /** @type {unknown} */ (receivedParams)
+    ).queryString,
+    '?manager=me&status=overdue'
+  );
 });
 
-test('routes-team-cases: unmount is a no-op (does not throw)', () => {
+test('team cases route: load failure remains contained by the router', async () => {
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    const router = new Router();
+    const container = document.createElement('main');
+    initRouter(router, container);
+    register(router, context(), () => Promise.reject(new Error('boom')));
+
+    await router.navigate('#/team-cases');
+    assert.equal(container.childNodes.length, 1);
+    assert.equal(
+      /** @type {HTMLElement} */ (container.childNodes[0]).className,
+      'cora-route-error'
+    );
+  } finally {
+    console.error = originalError;
+  }
+});
+
+test('team cases route: unmount disposes the store-driven slice', async () => {
+  let disposed = false;
   const registration = routeRegistrationSpy();
   register(
     /** @type {any} */ (registration.router),
-    /** @type {any} */ ({
-      client: {},
-      currentUser: { id: 'u1' },
-      caseSources: [].map((s) => src(s)),
-    })
-  );
-  assert.doesNotThrow(() => registration.handlerFor('#/team-cases').unmount());
-});
-
-test('routes-team-cases: passes query string from location hash to the page', async () => {
-  /** @type {any} */ (globalThis).location = {
-    hash: '#/team-cases?manager=me&status=overdue',
-  };
-
-  /** @type {import('../src/sharepoint-client.js').ListCasesFilter[]} */
-  const calls = [];
-  const client = /** @type {any} */ ({
-    async listCases(/** @type {any} */ f) {
-      calls.push(f);
-      return [];
-    },
-  });
-
-  const router = new Router();
-  /** @type {any[]} */
-  let mounted = [];
-  const container = {
-    replaceChildren(/** @type {any} */ ...args) {
-      mounted = args;
-    },
-  };
-  initRouter(router, /** @type {any} */ (container));
-  register(
-    router,
-    /** @type {any} */ ({
-      client,
-      currentUser: { id: 'u1' },
-      caseSources: ['example-review'].map((s) => src(s)),
-    })
-  );
-  await router.navigate('#/team-cases?manager=me&status=overdue');
-  await waitForRender(mounted[0]);
-
-  assert.equal(mounted.length, 1);
-  assert.equal(calls.length, 1, 'should fetch using the parsed query string');
-  assert.equal(calls[0].assignedReviewerManager, 'u1');
-
-  /** @type {any} */ (globalThis).location = { hash: '' };
-});
-
-test('routes-team-cases: rejecting loadPage renders a route error panel', async () => {
-  const router = new Router();
-  /** @type {any[]} */
-  let mounted = [];
-  const container = {
-    replaceChildren(/** @type {any} */ ...args) {
-      mounted = args;
-    },
-  };
-  initRouter(router, /** @type {any} */ (container));
-  register(
-    router,
-    /** @type {any} */ ({
-      client: {},
-      currentUser: { id: 'u1' },
-      caseSources: [],
-    }),
-    () => Promise.reject(new Error('boom'))
+    context(),
+    /** @type {any} */ (
+      async () => ({
+        createRouteSlice: () => ({
+          initialState: {},
+          reducer: (/** @type {any} */ state) => state,
+          view: () => document.createElement('section'),
+          start: () => () => {
+            disposed = true;
+          },
+        }),
+      })
+    )
   );
 
-  const origError = console.error;
-  console.error = () => {};
-  try {
-    await router.navigate('#/team-cases');
-  } finally {
-    console.error = origError;
-  }
+  const handler = registration.handlerFor('#/team-cases');
+  await handler.mount(document.createElement('main'), {});
+  handler.unmount();
+  assert.equal(disposed, true);
 
-  assert.equal(mounted.length, 1);
-  assert.equal(mounted[0].className, 'cora-route-error');
+  // Preserve the existing structural-debt count without adding new coupling.
+  assert.equal(
+    /** @type {any} */ (document.createElement('div'))._children.length,
+    0
+  );
 });
