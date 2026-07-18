@@ -8,7 +8,7 @@ Before doing any non-trivial work in this repo, read:
 
 1. **[CONTEXT.md](./CONTEXT.md)** — domain language. Use these terms exactly when discussing or coding (`Case Type`, `Question Definition`, `Applicable Question`, `Answer`, `Remediation Action`, `Reviewer`, `Responsible Party`, `Case Type Owner`, `Conversation`, `Outcome`).
 2. **[docs/PLAN.md](./docs/PLAN.md)** — the slice-based execution roadmap. Slice 1 ("Example Case") is long done; the framework is deep into later slices. Current work is **Slice 11 — User groups & remediation workflow** (two-axis roles, case lifecycle, remediation loop, Amend Outcome, Appeals — see [`docs/user-groups-workflow-grilling-session-plan.md`](./docs/user-groups-workflow-grilling-session-plan.md)). Read the slice list to see what's shipped vs. sketched before assuming a feature doesn't exist yet.
-3. **[docs/adr/](./docs/adr/)** — 32 architecture decisions, numbered (`0001`–`0032`). Every non-trivial decision in the codebase traces back to one of these. Don't deviate from an ADR without surfacing the deviation explicitly.
+3. **[docs/adr/](./docs/adr/)** — 34 architecture decisions, numbered (`0001`–`0034`). Every non-trivial decision in the codebase traces back to one of these. Don't deviate from an ADR without surfacing the deviation explicitly.
 
 ## Project overview
 
@@ -18,6 +18,7 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
 
 - **SPA shell, hash routing, page independence**. One `.aspx` host page, one Content Editor, one `app.js`. Every route lazy-loads its page inside its own `mount()` via dynamic `import()` (`src/routes/*.js`) — the boot graph does not statically depend on any page. If a page module fails to load (broken, missing), the router (`lib/router.js`) catches it inside an async `navigate()`, logs it, and renders a plain-DOM `cora-route-error` panel into the route container; the nav lives outside that container and stays usable, so one broken page cannot break another or the boot. A navigation sequence token discards a stale mount that resolves after the user has already navigated on. Registration is likewise isolated: `setup/register-routes.js` wraps each route's registration in `safeRegister`, so a route module that throws at registration costs only its own route. **Removal recipe — deleting a page is:** delete the page file (`src/pages/<page>.js`) + its route file (`src/routes/<route>.js`) + its `safeRegister(...)` line in `setup/register-routes.js` + its nav link. Nothing else breaks. `tests/component-layering-contract.test.js` enforces the layering: no static page import outside `src/pages/`, dynamic page `import()` only in `src/routes/*`, and route modules imported only by `setup/register-routes.js`.
 - **Web Components in light DOM + home-grown signal primitive**. Custom elements (`<cora-*>`) are the unit of UI; `signal()`/`computed()`/`effect()` (~50 LOC) drive fine-grained reactivity. Light DOM (not Shadow DOM) for form ergonomics; `cora-` CSS prefix for SharePoint isolation. Components register themselves via a top-level `customElements.define(...)` call as a module side effect — there is no central registry module. A component only becomes available once something side-effect-imports it (typically the page/section that mounts it). `tests/framework-contract.test.js` asserts a global registry (`registerComponents`/`register-components`) never comes back — don't reintroduce one. For the anatomy of a single component (pure view function → `defineView`/`ShellElement` shell, registration, lifecycle, events, and a new-component checklist) see [`docs/component-anatomy-explainer.html`](./docs/component-anatomy-explainer.html).
+- **ADR-0034 strangler migration in progress (Project Palimpsest, #402).** Routes are converting one at a time from the signal/`ShellElement` component model above to a single-store + pure-view + `morph()` architecture, entered through the router seam via `createStoreRoute()` (`core/store-route.js`). Old-style and new-style routes coexist behind that seam by design — do not "correct" a new store-driven page back to signals/`ShellElement`. New pages follow the slice module pattern in [`docs/guide/store-actions-and-effects.md`](./docs/guide/store-actions-and-effects.md).
 - **Case Type config as JS modules; Question Bank content as SharePoint-hosted text artifacts.** One module per Case Type under `case-types/{slug}.js`, lazy-loaded via `case-types/manifest.js`. Question Bank content (Question Definitions, labels, and Outcome vocabulary) lives in `case-types/banks/{slug}.txt`, stored in the SharePoint Style Library and loaded through `case-types/load-bank.js` as part of the Case Type config. There is no shared Question Definitions list and no planned runtime join to one. `HttpSharePointClient`/`MockSharePointClient` expose `getExportHash`/`getVersionedExport` for ADR-0021's immutable, point-in-time exports on reportable Cases.
 - **JSDoc + `tsc --checkJs` for types**. No `.ts` files; the deployed JS is the source JS. CI runs `tsc --noEmit --checkJs --allowJs`.
 - **Per-Case-Type `showWhen` graph + `outcome` function**. Applicability is data (declarative `showWhen`); outcome is code (exported function). Same module, one place to look.
@@ -77,6 +78,7 @@ src/
     case-route-links.js
     html.js                     # h() / reactive() / defineView() plain-function view primitives
     question-order.js           # generic question/category ordering helpers (was question-bank/)
+    route-error-panel.js        # shared route-failure panel, used by router.js and core/store-route.js (#437)
     router.js                   # hash-based SPA router
     showwhen-tree.js            # generic showWhen tree parse/serialise/mutate (was question-bank/)
     signal.js                   # home-grown signal/computed/effect (~50 LOC)
@@ -84,8 +86,15 @@ src/
     view.js
 
   core/                         # store-driven view runtime (ADR-0034 / Project Palimpsest)
+                                #   see docs/guide/store-actions-and-effects.md for the contract
     morph.js                    # keyed DOM-morphing reconciler: patches live DOM to an h() tree
                                 #   in place (focus/caret/scroll survive) — CORE-2 (#404)
+    store.js                    # single route-local store: dispatch/reducer, coalesced render — CORE-3 (#405)
+    memo.js                     # per-view memo cache, keyed by position, cleared on unmount — CORE-4 (#406)
+    store-route.js               # adapts a store-driven route module to the Router handler shape — CORE-6 (#407)
+
+  actions/                      # effects: async work reached only via dispatch (CORE-3 / Project Palimpsest)
+    case-actions.js             # persistence effect example: SharePointClient + SaveQueue re-entering via dispatch
 
   components/                   # reusable cora-* custom elements, layered by dependency
     base/                       # leaf primitives — compose no other component (cf. lib/signal.js)
@@ -134,6 +143,8 @@ src/
 
   pages/                        # top-level view components, mostly one per route
     dev-morph-harness.js        # dev-only morph() demo (store-less scratch view, #404)
+    dev-performance-harness.js  # dev-only CORE-5 500-question keystroke-latency gate (mock-only)
+                                #   see docs/palimpsest-performance-gate.md for the measured result
     cora-case-review.js
     cora-case-review/          # page shell + per-tab controllers (13 files, ~900 lines)
       tab-controller.js
@@ -175,6 +186,7 @@ src/
     conversation.js
     dashboard.js
     dev-morph.js                # dev-only #/dev/morph, self-gated on ?mock=1 (#404)
+    dev-performance.js          # dev-only #/dev/performance, self-gated on ?mock=1 (CORE-5, #408)
     journey-cases.js
     my-cases.js
     question-bank.js

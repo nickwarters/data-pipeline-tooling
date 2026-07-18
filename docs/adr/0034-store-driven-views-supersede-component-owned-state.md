@@ -166,7 +166,12 @@ explicit decision, not an aspiration:
 
 The CORE-5 measurements are recorded in the
 [Palimpsest 500-question performance gate report](../palimpsest-performance-gate.md).
-The technical latency gate passes; the human go/no-go decision remains pending.
+The technical latency gate passes: headed Edge steady-state keystroke p95 was
+**0.30 ms** against the ~5 ms tripwire. The go decision was signed off by the
+project owner via the acceptance checkbox on PR #433, recorded on issue #408
+on 2026-07-18. The macOS arm64 measurement environment was accepted on the
+basis of the ~16x headroom between the measured p95 and the tripwire, without
+a Windows confirmation run.
 
 ## Considered alternatives
 
