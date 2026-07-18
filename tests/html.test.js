@@ -262,6 +262,13 @@ test('getProps: returns the props h() built a node with', () => {
   assert.deepEqual(getProps(el), { 'aria-label': 'x', class: 'c' });
 });
 
+test('getProps: recorded props are insulated from later caller mutation', () => {
+  const props = { class: 'before' };
+  const el = h('div', props);
+  props.class = 'after';
+  assert.deepEqual(getProps(el), { class: 'before' });
+});
+
 test('getProps: is undefined for a node h() never built', () => {
   const raw = /** @type {any} */ (globalThis).document.createElement('div');
   assert.equal(getProps(raw), undefined);
@@ -333,6 +340,12 @@ test('removeProp: resets a boolean property to false', () => {
   const input = /** @type {any} */ (h('input', { disabled: true }));
   removeProp(input, 'disabled', true);
   assert.equal(input.disabled, false);
+});
+
+test('removeProp: resets a numeric property to zero', () => {
+  const el = /** @type {any} */ (h('div', { tabIndex: -1 }));
+  removeProp(el, 'tabIndex', -1);
+  assert.equal(el.tabIndex, 0);
 });
 
 test('removeProp: resets a non-boolean property to empty string', () => {

@@ -530,6 +530,22 @@ test('morph: a fragment-like root spreads its childNodes', () => {
   assert.deepEqual(texts(root), ['a', 'b']);
 });
 
+test('morph: rejects a string root with an actionable error', () => {
+  const root = container();
+  assert.throws(
+    () => morph(root, 'text'),
+    /morph\(\): view returned a string; wrap it in an element/
+  );
+});
+
+test('morph: rejects a string nested in a root array', () => {
+  const root = container();
+  assert.throws(
+    () => morph(root, [h('p', {}, 'valid'), ['text']]),
+    /morph\(\): view returned a string; wrap it in an element/
+  );
+});
+
 // ===== LIS COVERAGE: a reorder exercising multi-length increasing runs =====
 
 test('morph: a complex reorder lands in the right order with minimal disruption', () => {

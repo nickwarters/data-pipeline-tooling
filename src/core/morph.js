@@ -202,6 +202,7 @@ function patch(oldNode, newNode, stats) {
  */
 function patchChildren(parent, newChildren, stats) {
   const oldNodes = Array.from(parent.childNodes);
+  const oldIndex = new Map(oldNodes.map((node, index) => [node, index]));
 
   /** @type {Map<string, any>} */
   const oldByKey = new Map();
@@ -236,7 +237,7 @@ function patchChildren(parent, newChildren, stats) {
     if (match) {
       used.add(match);
       result[i] = patch(match, nv, stats);
-      source[i] = oldNodes.indexOf(match);
+      source[i] = /** @type {number} */ (oldIndex.get(match));
     } else {
       result[i] = nv;
       source[i] = -1;
@@ -341,6 +342,11 @@ function longestIncreasingSubsequence(source) {
  */
 function normalizeRoot(tree) {
   if (tree == null || tree === false) return [];
+  if (typeof tree === 'string') {
+    throw new TypeError(
+      'morph(): view returned a string; wrap it in an element'
+    );
+  }
   if (Array.isArray(tree)) {
     /** @type {any[]} */
     const out = [];

@@ -144,7 +144,15 @@ export function removeProp(el, key, prevValue) {
   } else if (key === 'value' && 'value' in el) {
     el.value = '';
   } else if (key in el) {
-    el[key] = typeof prevValue === 'boolean' ? false : '';
+    // There is no generic IDL-property reset primitive. Use the neutral value
+    // for the authored type; callers that need a property-specific default
+    // should author it explicitly on the next tree.
+    el[key] =
+      typeof prevValue === 'boolean'
+        ? false
+        : typeof prevValue === 'number'
+          ? 0
+          : '';
   } else {
     el.removeAttribute(key);
   }
@@ -223,7 +231,7 @@ export function h(tag, props = {}, ...children) {
   }
 
   // Record the authored props so morph() can diff them on the next render.
-  NODE_PROPS.set(el, props);
+  NODE_PROPS.set(el, { ...props });
 
   return el;
 }
