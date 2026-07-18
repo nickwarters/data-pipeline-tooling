@@ -1,5 +1,15 @@
 # Web Components (light DOM) + home-grown signals
 
+## Status
+
+**Superseded by [ADR-0034](./0034-store-driven-views-supersede-component-owned-state.md)** (Project Palimpsest, 2026-07-18).
+
+The app layer is moving to a single store + pure view functions + a keyed
+DOM-morphing reconciler; app-layer signals and component-owned state are retired.
+The rationale below is preserved — its requirements (light-DOM form ergonomics,
+fine-grained updates on a 500-question page, CSS isolation via the `cora-`
+prefix) still hold and are satisfied differently under ADR-0034.
+
 The framework's UI primitives are **custom elements rendered into light DOM**, with a small home-grown reactivity layer (`signal`, `computed`, `effect`) built into the framework itself. No third-party libraries — vanilla is a hard rule from the README.
 
 Custom elements were chosen for their built-in lifecycle hooks (`connectedCallback` / `disconnectedCallback`), which map cleanly onto SPA mount/unmount and let signal subscriptions auto-clean up. **Light DOM** was chosen over Shadow DOM because the app is forms-heavy (the question engine is mostly inputs, validation, and a possible parent `<form>`); Shadow DOM makes form participation, native validation, and autofill awkward. CSS isolation from SharePoint is achieved instead with a strict `cora-` prefix on every class plus a scoped reset.
