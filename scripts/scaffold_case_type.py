@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from dataclasses import dataclass
@@ -20,7 +21,12 @@ class ScaffoldOptions:
     display_name: str
 
 
-def parse_args(argv: list[str]) -> ScaffoldOptions:
+@dataclass(frozen=True)
+class PerformanceBankOptions:
+    root: Path
+
+
+def parse_args(argv: list[str]) -> ScaffoldOptions | PerformanceBankOptions:
     parser = argparse.ArgumentParser(
         description="Scaffold a new Case Type module, wiring, fixtures, tests, and ADR."
     )
@@ -32,17 +38,29 @@ def parse_args(argv: list[str]) -> ScaffoldOptions:
     )
     parser.add_argument(
         "--slug",
-        required=True,
         help="Kebab-case Case Type slug, e.g. widget-review.",
     )
     parser.add_argument(
         "--display",
-        required=True,
         dest="display_name",
         help='Human-readable display name, e.g. "Widget Review".',
     )
+    parser.add_argument(
+        "--performance-bank",
+        action="store_true",
+        help="Generate the permanent synthetic 500-question performance bank.",
+    )
     args = parser.parse_args(argv)
 
+    if args.performance_bank:
+        if args.slug or args.display_name:
+            parser.error("--performance-bank cannot be combined with --slug or --display")
+        return PerformanceBankOptions(root=args.root.resolve())
+
+    if not args.slug:
+        parser.error("--slug is required unless --performance-bank is used")
+    if not args.display_name:
+        parser.error("--display is required unless --performance-bank is used")
     if not re.fullmatch(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*", args.slug):
         parser.error(
             f'Invalid --slug "{args.slug}". Use kebab-case starting with a lowercase letter.'
@@ -55,6 +73,93 @@ def parse_args(argv: list[str]) -> ScaffoldOptions:
         slug=args.slug,
         display_name=args.display_name,
     )
+
+
+def performance_bank() -> dict[str, object]:
+    """Build the deterministic bank used by the Palimpsest performance gate."""
+    question_count = 500
+    group_size = 25
+    fan_out_count = 125
+    gate_id = "q-perf-fan-out-gate"
+    text_answer_id = "q-perf-steady-state-text"
+    questions: list[dict[str, object]] = []
+
+    for index in range(question_count):
+        number = index + 1
+        group_number = index // group_size + 1
+        question_id = f"q-perf-{number:03d}"
+        question: dict[str, object] = {
+            "id": question_id,
+            "text": f"Synthetic review check {number:03d}",
+            "category": f"Review area {(group_number - 1) // 4 + 1}",
+            "questionGroup": f"Question Group {group_number:02d}",
+            "responseType": "yes-no-na",
+            "deprecated": False,
+        }
+
+        if index == 0:
+            question.update(
+                {
+                    "id": gate_id,
+                    "text": "Enable the worst-case downstream review checks?",
+                }
+            )
+        elif index == 1:
+            question.update(
+                {
+                    "id": text_answer_id,
+                    "text": "Record the steady-state performance Answer",
+                    "responseType": "text",
+                }
+            )
+        elif index % 5 == 0:
+            question.update(
+                {
+                    "responseType": "single-choice",
+                    "options": ["Clear", "Needs review", "Not observed"],
+                }
+            )
+
+        if index >= question_count - fan_out_count:
+            question["showWhen"] = {gate_id: {"equals": "Yes"}}
+
+        questions.append(question)
+
+    return {
+        "slug": "performance-500",
+        "label": "Palimpsest 500-question performance bank",
+        "questions": questions,
+        "labels": [],
+        "outcomeOptions": [],
+        "performanceProfile": {
+            "questionCount": question_count,
+            "questionGroupCount": question_count // group_size,
+            "questionsPerGroup": group_size,
+            "textAnswerQuestionId": text_answer_id,
+            "fanOutGateQuestionId": gate_id,
+            "fanOutQuestionCount": fan_out_count,
+        },
+    }
+
+
+def generate_performance_bank(opts: PerformanceBankOptions) -> Path:
+    output = opts.root / "case-types" / "banks" / "performance-500.txt"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    serialized = json.dumps(performance_bank(), indent=2)
+    serialized = serialized.replace(
+        '      "options": [\n'
+        '        "Clear",\n'
+        '        "Needs review",\n'
+        '        "Not observed"\n'
+        "      ]",
+        '      "options": ["Clear", "Needs review", "Not observed"]',
+    )
+    output.write_text(
+        serialized + "\n",
+        encoding="utf-8",
+    )
+    print(f"Generated 500-question performance bank at {output.relative_to(opts.root)}")
+    return output
 
 
 def escape_regexp(source: str) -> str:
@@ -411,9 +516,9 @@ def scaffold(opts: ScaffoldOptions) -> None:
     manifest_path = opts.root / "case-types" / "manifest.js"
     manifest = manifest_path.read_text(encoding="utf-8")
     if not re.search(rf"['\"]{escape_regexp(opts.slug)}['\"]\s*:", manifest):
-        manifest = insert_before(
+        manifest = insert_after_match(
             manifest,
-            "};\n\nexport class UnknownCaseTypeError",
+            r"export const CASE_TYPE_IMPORTERS = \{\n",
             f"  '{opts.slug}': () => import('./{opts.slug}.js'),\n",
             manifest_path,
         )
@@ -422,11 +527,24 @@ def scaffold(opts: ScaffoldOptions) -> None:
     permissions_path = opts.root / "src" / "services" / "permissions.js"
     permissions = permissions_path.read_text(encoding="utf-8")
     if f"slug: '{opts.slug}'" not in permissions:
-        permissions = insert_before(
-            permissions,
-            "  ],\n};",
-            f"    {{ slug: '{opts.slug}', displayName: '{opts.display_name}' }},\n",
-            permissions_path,
+        array_anchor = "  caseTypes: ["
+        array_start = permissions.find(array_anchor)
+        if array_start == -1:
+            raise RuntimeError(
+                f"Could not find insertion anchor in {permissions_path}: {array_anchor}"
+            )
+        entries_start = array_start + len(array_anchor)
+        entries_end = permissions.find("],", entries_start)
+        if entries_end == -1:
+            raise RuntimeError(
+                f"Could not find caseTypes array end in {permissions_path}"
+            )
+        existing_entries = permissions[entries_start:entries_end].strip()
+        entry = f"{{ slug: '{opts.slug}', displayName: '{opts.display_name}' }}"
+        entries = f"{existing_entries},\n    {entry}" if existing_entries else entry
+        permissions = (
+            f"{permissions[:entries_start]}\n    {entries},\n  "
+            f"{permissions[entries_end:]}"
         )
         permissions_path.write_text(permissions, encoding="utf-8")
 
@@ -478,7 +596,11 @@ def scaffold(opts: ScaffoldOptions) -> None:
 
 def main(argv: list[str]) -> int:
     try:
-        scaffold(parse_args(argv))
+        options = parse_args(argv)
+        if isinstance(options, PerformanceBankOptions):
+            generate_performance_bank(options)
+        else:
+            scaffold(options)
     except Exception as error:
         print(error, file=sys.stderr)
         return 1

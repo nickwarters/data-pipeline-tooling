@@ -9,6 +9,7 @@ import { register as registerTeamCases } from '../routes/team-cases.js';
 import { register as registerMyCases } from '../routes/my-cases.js';
 import { register as registerJourneyCases } from '../routes/journey-cases.js';
 import { register as registerDevMorph } from '../routes/dev-morph.js';
+import { register as registerDevPerformance } from '../routes/dev-performance.js';
 
 /**
  * @typedef {Object} AppContext
@@ -60,4 +61,5 @@ export function registerRoutes(router, context) {
   safeRegister('journey-cases', registerJourneyCases, router, context);
   // Dev-only: self-gates on ?mock=1, so it registers nothing in production.
   safeRegister('dev-morph', registerDevMorph, router, context);
+  safeRegister('dev-performance', registerDevPerformance, router, context);
 }

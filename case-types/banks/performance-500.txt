@@ -1,0 +1,4740 @@
+{
+  "slug": "performance-500",
+  "label": "Palimpsest 500-question performance bank",
+  "questions": [
+    {
+      "id": "q-perf-fan-out-gate",
+      "text": "Enable the worst-case downstream review checks?",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 01",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-steady-state-text",
+      "text": "Record the steady-state performance Answer",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 01",
+      "responseType": "text",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-003",
+      "text": "Synthetic review check 003",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 01",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-004",
+      "text": "Synthetic review check 004",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 01",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-005",
+      "text": "Synthetic review check 005",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 01",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-006",
+      "text": "Synthetic review check 006",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 01",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-007",
+      "text": "Synthetic review check 007",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 01",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-008",
+      "text": "Synthetic review check 008",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 01",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-009",
+      "text": "Synthetic review check 009",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 01",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-010",
+      "text": "Synthetic review check 010",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 01",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-011",
+      "text": "Synthetic review check 011",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 01",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-012",
+      "text": "Synthetic review check 012",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 01",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-013",
+      "text": "Synthetic review check 013",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 01",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-014",
+      "text": "Synthetic review check 014",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 01",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-015",
+      "text": "Synthetic review check 015",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 01",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-016",
+      "text": "Synthetic review check 016",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 01",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-017",
+      "text": "Synthetic review check 017",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 01",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-018",
+      "text": "Synthetic review check 018",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 01",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-019",
+      "text": "Synthetic review check 019",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 01",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-020",
+      "text": "Synthetic review check 020",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 01",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-021",
+      "text": "Synthetic review check 021",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 01",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-022",
+      "text": "Synthetic review check 022",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 01",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-023",
+      "text": "Synthetic review check 023",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 01",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-024",
+      "text": "Synthetic review check 024",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 01",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-025",
+      "text": "Synthetic review check 025",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 01",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-026",
+      "text": "Synthetic review check 026",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 02",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-027",
+      "text": "Synthetic review check 027",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 02",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-028",
+      "text": "Synthetic review check 028",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 02",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-029",
+      "text": "Synthetic review check 029",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 02",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-030",
+      "text": "Synthetic review check 030",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 02",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-031",
+      "text": "Synthetic review check 031",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 02",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-032",
+      "text": "Synthetic review check 032",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 02",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-033",
+      "text": "Synthetic review check 033",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 02",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-034",
+      "text": "Synthetic review check 034",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 02",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-035",
+      "text": "Synthetic review check 035",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 02",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-036",
+      "text": "Synthetic review check 036",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 02",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-037",
+      "text": "Synthetic review check 037",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 02",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-038",
+      "text": "Synthetic review check 038",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 02",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-039",
+      "text": "Synthetic review check 039",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 02",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-040",
+      "text": "Synthetic review check 040",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 02",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-041",
+      "text": "Synthetic review check 041",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 02",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-042",
+      "text": "Synthetic review check 042",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 02",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-043",
+      "text": "Synthetic review check 043",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 02",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-044",
+      "text": "Synthetic review check 044",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 02",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-045",
+      "text": "Synthetic review check 045",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 02",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-046",
+      "text": "Synthetic review check 046",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 02",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-047",
+      "text": "Synthetic review check 047",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 02",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-048",
+      "text": "Synthetic review check 048",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 02",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-049",
+      "text": "Synthetic review check 049",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 02",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-050",
+      "text": "Synthetic review check 050",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 02",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-051",
+      "text": "Synthetic review check 051",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 03",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-052",
+      "text": "Synthetic review check 052",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 03",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-053",
+      "text": "Synthetic review check 053",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 03",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-054",
+      "text": "Synthetic review check 054",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 03",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-055",
+      "text": "Synthetic review check 055",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 03",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-056",
+      "text": "Synthetic review check 056",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 03",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-057",
+      "text": "Synthetic review check 057",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 03",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-058",
+      "text": "Synthetic review check 058",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 03",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-059",
+      "text": "Synthetic review check 059",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 03",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-060",
+      "text": "Synthetic review check 060",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 03",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-061",
+      "text": "Synthetic review check 061",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 03",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-062",
+      "text": "Synthetic review check 062",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 03",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-063",
+      "text": "Synthetic review check 063",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 03",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-064",
+      "text": "Synthetic review check 064",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 03",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-065",
+      "text": "Synthetic review check 065",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 03",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-066",
+      "text": "Synthetic review check 066",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 03",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-067",
+      "text": "Synthetic review check 067",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 03",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-068",
+      "text": "Synthetic review check 068",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 03",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-069",
+      "text": "Synthetic review check 069",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 03",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-070",
+      "text": "Synthetic review check 070",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 03",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-071",
+      "text": "Synthetic review check 071",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 03",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-072",
+      "text": "Synthetic review check 072",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 03",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-073",
+      "text": "Synthetic review check 073",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 03",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-074",
+      "text": "Synthetic review check 074",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 03",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-075",
+      "text": "Synthetic review check 075",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 03",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-076",
+      "text": "Synthetic review check 076",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 04",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-077",
+      "text": "Synthetic review check 077",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 04",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-078",
+      "text": "Synthetic review check 078",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 04",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-079",
+      "text": "Synthetic review check 079",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 04",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-080",
+      "text": "Synthetic review check 080",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 04",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-081",
+      "text": "Synthetic review check 081",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 04",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-082",
+      "text": "Synthetic review check 082",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 04",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-083",
+      "text": "Synthetic review check 083",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 04",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-084",
+      "text": "Synthetic review check 084",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 04",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-085",
+      "text": "Synthetic review check 085",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 04",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-086",
+      "text": "Synthetic review check 086",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 04",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-087",
+      "text": "Synthetic review check 087",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 04",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-088",
+      "text": "Synthetic review check 088",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 04",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-089",
+      "text": "Synthetic review check 089",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 04",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-090",
+      "text": "Synthetic review check 090",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 04",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-091",
+      "text": "Synthetic review check 091",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 04",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-092",
+      "text": "Synthetic review check 092",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 04",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-093",
+      "text": "Synthetic review check 093",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 04",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-094",
+      "text": "Synthetic review check 094",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 04",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-095",
+      "text": "Synthetic review check 095",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 04",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-096",
+      "text": "Synthetic review check 096",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 04",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-097",
+      "text": "Synthetic review check 097",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 04",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-098",
+      "text": "Synthetic review check 098",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 04",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-099",
+      "text": "Synthetic review check 099",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 04",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-100",
+      "text": "Synthetic review check 100",
+      "category": "Review area 1",
+      "questionGroup": "Question Group 04",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-101",
+      "text": "Synthetic review check 101",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 05",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-102",
+      "text": "Synthetic review check 102",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 05",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-103",
+      "text": "Synthetic review check 103",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 05",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-104",
+      "text": "Synthetic review check 104",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 05",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-105",
+      "text": "Synthetic review check 105",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 05",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-106",
+      "text": "Synthetic review check 106",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 05",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-107",
+      "text": "Synthetic review check 107",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 05",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-108",
+      "text": "Synthetic review check 108",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 05",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-109",
+      "text": "Synthetic review check 109",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 05",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-110",
+      "text": "Synthetic review check 110",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 05",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-111",
+      "text": "Synthetic review check 111",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 05",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-112",
+      "text": "Synthetic review check 112",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 05",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-113",
+      "text": "Synthetic review check 113",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 05",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-114",
+      "text": "Synthetic review check 114",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 05",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-115",
+      "text": "Synthetic review check 115",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 05",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-116",
+      "text": "Synthetic review check 116",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 05",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-117",
+      "text": "Synthetic review check 117",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 05",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-118",
+      "text": "Synthetic review check 118",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 05",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-119",
+      "text": "Synthetic review check 119",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 05",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-120",
+      "text": "Synthetic review check 120",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 05",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-121",
+      "text": "Synthetic review check 121",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 05",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-122",
+      "text": "Synthetic review check 122",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 05",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-123",
+      "text": "Synthetic review check 123",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 05",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-124",
+      "text": "Synthetic review check 124",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 05",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-125",
+      "text": "Synthetic review check 125",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 05",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-126",
+      "text": "Synthetic review check 126",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 06",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-127",
+      "text": "Synthetic review check 127",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 06",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-128",
+      "text": "Synthetic review check 128",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 06",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-129",
+      "text": "Synthetic review check 129",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 06",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-130",
+      "text": "Synthetic review check 130",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 06",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-131",
+      "text": "Synthetic review check 131",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 06",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-132",
+      "text": "Synthetic review check 132",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 06",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-133",
+      "text": "Synthetic review check 133",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 06",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-134",
+      "text": "Synthetic review check 134",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 06",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-135",
+      "text": "Synthetic review check 135",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 06",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-136",
+      "text": "Synthetic review check 136",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 06",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-137",
+      "text": "Synthetic review check 137",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 06",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-138",
+      "text": "Synthetic review check 138",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 06",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-139",
+      "text": "Synthetic review check 139",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 06",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-140",
+      "text": "Synthetic review check 140",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 06",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-141",
+      "text": "Synthetic review check 141",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 06",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-142",
+      "text": "Synthetic review check 142",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 06",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-143",
+      "text": "Synthetic review check 143",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 06",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-144",
+      "text": "Synthetic review check 144",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 06",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-145",
+      "text": "Synthetic review check 145",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 06",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-146",
+      "text": "Synthetic review check 146",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 06",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-147",
+      "text": "Synthetic review check 147",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 06",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-148",
+      "text": "Synthetic review check 148",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 06",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-149",
+      "text": "Synthetic review check 149",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 06",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-150",
+      "text": "Synthetic review check 150",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 06",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-151",
+      "text": "Synthetic review check 151",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 07",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-152",
+      "text": "Synthetic review check 152",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 07",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-153",
+      "text": "Synthetic review check 153",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 07",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-154",
+      "text": "Synthetic review check 154",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 07",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-155",
+      "text": "Synthetic review check 155",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 07",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-156",
+      "text": "Synthetic review check 156",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 07",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-157",
+      "text": "Synthetic review check 157",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 07",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-158",
+      "text": "Synthetic review check 158",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 07",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-159",
+      "text": "Synthetic review check 159",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 07",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-160",
+      "text": "Synthetic review check 160",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 07",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-161",
+      "text": "Synthetic review check 161",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 07",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-162",
+      "text": "Synthetic review check 162",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 07",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-163",
+      "text": "Synthetic review check 163",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 07",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-164",
+      "text": "Synthetic review check 164",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 07",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-165",
+      "text": "Synthetic review check 165",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 07",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-166",
+      "text": "Synthetic review check 166",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 07",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-167",
+      "text": "Synthetic review check 167",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 07",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-168",
+      "text": "Synthetic review check 168",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 07",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-169",
+      "text": "Synthetic review check 169",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 07",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-170",
+      "text": "Synthetic review check 170",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 07",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-171",
+      "text": "Synthetic review check 171",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 07",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-172",
+      "text": "Synthetic review check 172",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 07",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-173",
+      "text": "Synthetic review check 173",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 07",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-174",
+      "text": "Synthetic review check 174",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 07",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-175",
+      "text": "Synthetic review check 175",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 07",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-176",
+      "text": "Synthetic review check 176",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 08",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-177",
+      "text": "Synthetic review check 177",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 08",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-178",
+      "text": "Synthetic review check 178",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 08",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-179",
+      "text": "Synthetic review check 179",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 08",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-180",
+      "text": "Synthetic review check 180",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 08",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-181",
+      "text": "Synthetic review check 181",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 08",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-182",
+      "text": "Synthetic review check 182",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 08",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-183",
+      "text": "Synthetic review check 183",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 08",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-184",
+      "text": "Synthetic review check 184",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 08",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-185",
+      "text": "Synthetic review check 185",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 08",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-186",
+      "text": "Synthetic review check 186",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 08",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-187",
+      "text": "Synthetic review check 187",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 08",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-188",
+      "text": "Synthetic review check 188",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 08",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-189",
+      "text": "Synthetic review check 189",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 08",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-190",
+      "text": "Synthetic review check 190",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 08",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-191",
+      "text": "Synthetic review check 191",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 08",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-192",
+      "text": "Synthetic review check 192",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 08",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-193",
+      "text": "Synthetic review check 193",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 08",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-194",
+      "text": "Synthetic review check 194",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 08",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-195",
+      "text": "Synthetic review check 195",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 08",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-196",
+      "text": "Synthetic review check 196",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 08",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-197",
+      "text": "Synthetic review check 197",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 08",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-198",
+      "text": "Synthetic review check 198",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 08",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-199",
+      "text": "Synthetic review check 199",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 08",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-200",
+      "text": "Synthetic review check 200",
+      "category": "Review area 2",
+      "questionGroup": "Question Group 08",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-201",
+      "text": "Synthetic review check 201",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 09",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-202",
+      "text": "Synthetic review check 202",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 09",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-203",
+      "text": "Synthetic review check 203",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 09",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-204",
+      "text": "Synthetic review check 204",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 09",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-205",
+      "text": "Synthetic review check 205",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 09",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-206",
+      "text": "Synthetic review check 206",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 09",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-207",
+      "text": "Synthetic review check 207",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 09",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-208",
+      "text": "Synthetic review check 208",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 09",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-209",
+      "text": "Synthetic review check 209",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 09",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-210",
+      "text": "Synthetic review check 210",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 09",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-211",
+      "text": "Synthetic review check 211",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 09",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-212",
+      "text": "Synthetic review check 212",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 09",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-213",
+      "text": "Synthetic review check 213",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 09",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-214",
+      "text": "Synthetic review check 214",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 09",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-215",
+      "text": "Synthetic review check 215",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 09",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-216",
+      "text": "Synthetic review check 216",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 09",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-217",
+      "text": "Synthetic review check 217",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 09",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-218",
+      "text": "Synthetic review check 218",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 09",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-219",
+      "text": "Synthetic review check 219",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 09",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-220",
+      "text": "Synthetic review check 220",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 09",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-221",
+      "text": "Synthetic review check 221",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 09",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-222",
+      "text": "Synthetic review check 222",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 09",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-223",
+      "text": "Synthetic review check 223",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 09",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-224",
+      "text": "Synthetic review check 224",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 09",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-225",
+      "text": "Synthetic review check 225",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 09",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-226",
+      "text": "Synthetic review check 226",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 10",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-227",
+      "text": "Synthetic review check 227",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 10",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-228",
+      "text": "Synthetic review check 228",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 10",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-229",
+      "text": "Synthetic review check 229",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 10",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-230",
+      "text": "Synthetic review check 230",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 10",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-231",
+      "text": "Synthetic review check 231",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 10",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-232",
+      "text": "Synthetic review check 232",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 10",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-233",
+      "text": "Synthetic review check 233",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 10",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-234",
+      "text": "Synthetic review check 234",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 10",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-235",
+      "text": "Synthetic review check 235",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 10",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-236",
+      "text": "Synthetic review check 236",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 10",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-237",
+      "text": "Synthetic review check 237",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 10",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-238",
+      "text": "Synthetic review check 238",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 10",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-239",
+      "text": "Synthetic review check 239",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 10",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-240",
+      "text": "Synthetic review check 240",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 10",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-241",
+      "text": "Synthetic review check 241",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 10",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-242",
+      "text": "Synthetic review check 242",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 10",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-243",
+      "text": "Synthetic review check 243",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 10",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-244",
+      "text": "Synthetic review check 244",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 10",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-245",
+      "text": "Synthetic review check 245",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 10",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-246",
+      "text": "Synthetic review check 246",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 10",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-247",
+      "text": "Synthetic review check 247",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 10",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-248",
+      "text": "Synthetic review check 248",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 10",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-249",
+      "text": "Synthetic review check 249",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 10",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-250",
+      "text": "Synthetic review check 250",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 10",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-251",
+      "text": "Synthetic review check 251",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 11",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-252",
+      "text": "Synthetic review check 252",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 11",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-253",
+      "text": "Synthetic review check 253",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 11",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-254",
+      "text": "Synthetic review check 254",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 11",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-255",
+      "text": "Synthetic review check 255",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 11",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-256",
+      "text": "Synthetic review check 256",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 11",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-257",
+      "text": "Synthetic review check 257",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 11",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-258",
+      "text": "Synthetic review check 258",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 11",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-259",
+      "text": "Synthetic review check 259",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 11",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-260",
+      "text": "Synthetic review check 260",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 11",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-261",
+      "text": "Synthetic review check 261",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 11",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-262",
+      "text": "Synthetic review check 262",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 11",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-263",
+      "text": "Synthetic review check 263",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 11",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-264",
+      "text": "Synthetic review check 264",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 11",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-265",
+      "text": "Synthetic review check 265",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 11",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-266",
+      "text": "Synthetic review check 266",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 11",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-267",
+      "text": "Synthetic review check 267",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 11",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-268",
+      "text": "Synthetic review check 268",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 11",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-269",
+      "text": "Synthetic review check 269",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 11",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-270",
+      "text": "Synthetic review check 270",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 11",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-271",
+      "text": "Synthetic review check 271",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 11",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-272",
+      "text": "Synthetic review check 272",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 11",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-273",
+      "text": "Synthetic review check 273",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 11",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-274",
+      "text": "Synthetic review check 274",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 11",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-275",
+      "text": "Synthetic review check 275",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 11",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-276",
+      "text": "Synthetic review check 276",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 12",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-277",
+      "text": "Synthetic review check 277",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 12",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-278",
+      "text": "Synthetic review check 278",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 12",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-279",
+      "text": "Synthetic review check 279",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 12",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-280",
+      "text": "Synthetic review check 280",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 12",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-281",
+      "text": "Synthetic review check 281",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 12",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-282",
+      "text": "Synthetic review check 282",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 12",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-283",
+      "text": "Synthetic review check 283",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 12",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-284",
+      "text": "Synthetic review check 284",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 12",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-285",
+      "text": "Synthetic review check 285",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 12",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-286",
+      "text": "Synthetic review check 286",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 12",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-287",
+      "text": "Synthetic review check 287",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 12",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-288",
+      "text": "Synthetic review check 288",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 12",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-289",
+      "text": "Synthetic review check 289",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 12",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-290",
+      "text": "Synthetic review check 290",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 12",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-291",
+      "text": "Synthetic review check 291",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 12",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-292",
+      "text": "Synthetic review check 292",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 12",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-293",
+      "text": "Synthetic review check 293",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 12",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-294",
+      "text": "Synthetic review check 294",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 12",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-295",
+      "text": "Synthetic review check 295",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 12",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-296",
+      "text": "Synthetic review check 296",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 12",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-297",
+      "text": "Synthetic review check 297",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 12",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-298",
+      "text": "Synthetic review check 298",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 12",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-299",
+      "text": "Synthetic review check 299",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 12",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-300",
+      "text": "Synthetic review check 300",
+      "category": "Review area 3",
+      "questionGroup": "Question Group 12",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-301",
+      "text": "Synthetic review check 301",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 13",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-302",
+      "text": "Synthetic review check 302",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 13",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-303",
+      "text": "Synthetic review check 303",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 13",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-304",
+      "text": "Synthetic review check 304",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 13",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-305",
+      "text": "Synthetic review check 305",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 13",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-306",
+      "text": "Synthetic review check 306",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 13",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-307",
+      "text": "Synthetic review check 307",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 13",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-308",
+      "text": "Synthetic review check 308",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 13",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-309",
+      "text": "Synthetic review check 309",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 13",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-310",
+      "text": "Synthetic review check 310",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 13",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-311",
+      "text": "Synthetic review check 311",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 13",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-312",
+      "text": "Synthetic review check 312",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 13",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-313",
+      "text": "Synthetic review check 313",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 13",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-314",
+      "text": "Synthetic review check 314",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 13",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-315",
+      "text": "Synthetic review check 315",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 13",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-316",
+      "text": "Synthetic review check 316",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 13",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-317",
+      "text": "Synthetic review check 317",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 13",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-318",
+      "text": "Synthetic review check 318",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 13",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-319",
+      "text": "Synthetic review check 319",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 13",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-320",
+      "text": "Synthetic review check 320",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 13",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-321",
+      "text": "Synthetic review check 321",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 13",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-322",
+      "text": "Synthetic review check 322",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 13",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-323",
+      "text": "Synthetic review check 323",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 13",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-324",
+      "text": "Synthetic review check 324",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 13",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-325",
+      "text": "Synthetic review check 325",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 13",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-326",
+      "text": "Synthetic review check 326",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 14",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-327",
+      "text": "Synthetic review check 327",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 14",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-328",
+      "text": "Synthetic review check 328",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 14",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-329",
+      "text": "Synthetic review check 329",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 14",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-330",
+      "text": "Synthetic review check 330",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 14",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-331",
+      "text": "Synthetic review check 331",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 14",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-332",
+      "text": "Synthetic review check 332",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 14",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-333",
+      "text": "Synthetic review check 333",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 14",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-334",
+      "text": "Synthetic review check 334",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 14",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-335",
+      "text": "Synthetic review check 335",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 14",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-336",
+      "text": "Synthetic review check 336",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 14",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-337",
+      "text": "Synthetic review check 337",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 14",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-338",
+      "text": "Synthetic review check 338",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 14",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-339",
+      "text": "Synthetic review check 339",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 14",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-340",
+      "text": "Synthetic review check 340",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 14",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-341",
+      "text": "Synthetic review check 341",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 14",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-342",
+      "text": "Synthetic review check 342",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 14",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-343",
+      "text": "Synthetic review check 343",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 14",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-344",
+      "text": "Synthetic review check 344",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 14",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-345",
+      "text": "Synthetic review check 345",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 14",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-346",
+      "text": "Synthetic review check 346",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 14",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-347",
+      "text": "Synthetic review check 347",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 14",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-348",
+      "text": "Synthetic review check 348",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 14",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-349",
+      "text": "Synthetic review check 349",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 14",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-350",
+      "text": "Synthetic review check 350",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 14",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-351",
+      "text": "Synthetic review check 351",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 15",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-352",
+      "text": "Synthetic review check 352",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 15",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-353",
+      "text": "Synthetic review check 353",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 15",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-354",
+      "text": "Synthetic review check 354",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 15",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-355",
+      "text": "Synthetic review check 355",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 15",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-356",
+      "text": "Synthetic review check 356",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 15",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-357",
+      "text": "Synthetic review check 357",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 15",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-358",
+      "text": "Synthetic review check 358",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 15",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-359",
+      "text": "Synthetic review check 359",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 15",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-360",
+      "text": "Synthetic review check 360",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 15",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-361",
+      "text": "Synthetic review check 361",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 15",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-362",
+      "text": "Synthetic review check 362",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 15",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-363",
+      "text": "Synthetic review check 363",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 15",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-364",
+      "text": "Synthetic review check 364",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 15",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-365",
+      "text": "Synthetic review check 365",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 15",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-366",
+      "text": "Synthetic review check 366",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 15",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-367",
+      "text": "Synthetic review check 367",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 15",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-368",
+      "text": "Synthetic review check 368",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 15",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-369",
+      "text": "Synthetic review check 369",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 15",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-370",
+      "text": "Synthetic review check 370",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 15",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-371",
+      "text": "Synthetic review check 371",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 15",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"]
+    },
+    {
+      "id": "q-perf-372",
+      "text": "Synthetic review check 372",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 15",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-373",
+      "text": "Synthetic review check 373",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 15",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-374",
+      "text": "Synthetic review check 374",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 15",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-375",
+      "text": "Synthetic review check 375",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 15",
+      "responseType": "yes-no-na",
+      "deprecated": false
+    },
+    {
+      "id": "q-perf-376",
+      "text": "Synthetic review check 376",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 16",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"],
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-377",
+      "text": "Synthetic review check 377",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 16",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-378",
+      "text": "Synthetic review check 378",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 16",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-379",
+      "text": "Synthetic review check 379",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 16",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-380",
+      "text": "Synthetic review check 380",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 16",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-381",
+      "text": "Synthetic review check 381",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 16",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"],
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-382",
+      "text": "Synthetic review check 382",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 16",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-383",
+      "text": "Synthetic review check 383",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 16",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-384",
+      "text": "Synthetic review check 384",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 16",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-385",
+      "text": "Synthetic review check 385",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 16",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-386",
+      "text": "Synthetic review check 386",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 16",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"],
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-387",
+      "text": "Synthetic review check 387",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 16",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-388",
+      "text": "Synthetic review check 388",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 16",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-389",
+      "text": "Synthetic review check 389",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 16",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-390",
+      "text": "Synthetic review check 390",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 16",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-391",
+      "text": "Synthetic review check 391",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 16",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"],
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-392",
+      "text": "Synthetic review check 392",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 16",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-393",
+      "text": "Synthetic review check 393",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 16",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-394",
+      "text": "Synthetic review check 394",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 16",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-395",
+      "text": "Synthetic review check 395",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 16",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-396",
+      "text": "Synthetic review check 396",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 16",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"],
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-397",
+      "text": "Synthetic review check 397",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 16",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-398",
+      "text": "Synthetic review check 398",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 16",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-399",
+      "text": "Synthetic review check 399",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 16",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-400",
+      "text": "Synthetic review check 400",
+      "category": "Review area 4",
+      "questionGroup": "Question Group 16",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-401",
+      "text": "Synthetic review check 401",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 17",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"],
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-402",
+      "text": "Synthetic review check 402",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 17",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-403",
+      "text": "Synthetic review check 403",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 17",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-404",
+      "text": "Synthetic review check 404",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 17",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-405",
+      "text": "Synthetic review check 405",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 17",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-406",
+      "text": "Synthetic review check 406",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 17",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"],
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-407",
+      "text": "Synthetic review check 407",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 17",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-408",
+      "text": "Synthetic review check 408",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 17",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-409",
+      "text": "Synthetic review check 409",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 17",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-410",
+      "text": "Synthetic review check 410",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 17",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-411",
+      "text": "Synthetic review check 411",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 17",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"],
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-412",
+      "text": "Synthetic review check 412",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 17",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-413",
+      "text": "Synthetic review check 413",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 17",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-414",
+      "text": "Synthetic review check 414",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 17",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-415",
+      "text": "Synthetic review check 415",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 17",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-416",
+      "text": "Synthetic review check 416",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 17",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"],
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-417",
+      "text": "Synthetic review check 417",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 17",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-418",
+      "text": "Synthetic review check 418",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 17",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-419",
+      "text": "Synthetic review check 419",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 17",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-420",
+      "text": "Synthetic review check 420",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 17",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-421",
+      "text": "Synthetic review check 421",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 17",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"],
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-422",
+      "text": "Synthetic review check 422",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 17",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-423",
+      "text": "Synthetic review check 423",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 17",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-424",
+      "text": "Synthetic review check 424",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 17",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-425",
+      "text": "Synthetic review check 425",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 17",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-426",
+      "text": "Synthetic review check 426",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 18",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"],
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-427",
+      "text": "Synthetic review check 427",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 18",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-428",
+      "text": "Synthetic review check 428",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 18",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-429",
+      "text": "Synthetic review check 429",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 18",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-430",
+      "text": "Synthetic review check 430",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 18",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-431",
+      "text": "Synthetic review check 431",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 18",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"],
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-432",
+      "text": "Synthetic review check 432",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 18",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-433",
+      "text": "Synthetic review check 433",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 18",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-434",
+      "text": "Synthetic review check 434",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 18",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-435",
+      "text": "Synthetic review check 435",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 18",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-436",
+      "text": "Synthetic review check 436",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 18",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"],
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-437",
+      "text": "Synthetic review check 437",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 18",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-438",
+      "text": "Synthetic review check 438",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 18",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-439",
+      "text": "Synthetic review check 439",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 18",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-440",
+      "text": "Synthetic review check 440",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 18",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-441",
+      "text": "Synthetic review check 441",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 18",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"],
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-442",
+      "text": "Synthetic review check 442",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 18",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-443",
+      "text": "Synthetic review check 443",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 18",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-444",
+      "text": "Synthetic review check 444",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 18",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-445",
+      "text": "Synthetic review check 445",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 18",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-446",
+      "text": "Synthetic review check 446",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 18",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"],
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-447",
+      "text": "Synthetic review check 447",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 18",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-448",
+      "text": "Synthetic review check 448",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 18",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-449",
+      "text": "Synthetic review check 449",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 18",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-450",
+      "text": "Synthetic review check 450",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 18",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-451",
+      "text": "Synthetic review check 451",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 19",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"],
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-452",
+      "text": "Synthetic review check 452",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 19",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-453",
+      "text": "Synthetic review check 453",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 19",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-454",
+      "text": "Synthetic review check 454",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 19",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-455",
+      "text": "Synthetic review check 455",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 19",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-456",
+      "text": "Synthetic review check 456",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 19",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"],
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-457",
+      "text": "Synthetic review check 457",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 19",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-458",
+      "text": "Synthetic review check 458",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 19",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-459",
+      "text": "Synthetic review check 459",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 19",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-460",
+      "text": "Synthetic review check 460",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 19",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-461",
+      "text": "Synthetic review check 461",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 19",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"],
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-462",
+      "text": "Synthetic review check 462",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 19",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-463",
+      "text": "Synthetic review check 463",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 19",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-464",
+      "text": "Synthetic review check 464",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 19",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-465",
+      "text": "Synthetic review check 465",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 19",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-466",
+      "text": "Synthetic review check 466",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 19",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"],
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-467",
+      "text": "Synthetic review check 467",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 19",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-468",
+      "text": "Synthetic review check 468",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 19",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-469",
+      "text": "Synthetic review check 469",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 19",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-470",
+      "text": "Synthetic review check 470",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 19",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-471",
+      "text": "Synthetic review check 471",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 19",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"],
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-472",
+      "text": "Synthetic review check 472",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 19",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-473",
+      "text": "Synthetic review check 473",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 19",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-474",
+      "text": "Synthetic review check 474",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 19",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-475",
+      "text": "Synthetic review check 475",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 19",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-476",
+      "text": "Synthetic review check 476",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 20",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"],
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-477",
+      "text": "Synthetic review check 477",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 20",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-478",
+      "text": "Synthetic review check 478",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 20",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-479",
+      "text": "Synthetic review check 479",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 20",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-480",
+      "text": "Synthetic review check 480",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 20",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-481",
+      "text": "Synthetic review check 481",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 20",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"],
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-482",
+      "text": "Synthetic review check 482",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 20",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-483",
+      "text": "Synthetic review check 483",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 20",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-484",
+      "text": "Synthetic review check 484",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 20",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-485",
+      "text": "Synthetic review check 485",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 20",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-486",
+      "text": "Synthetic review check 486",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 20",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"],
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-487",
+      "text": "Synthetic review check 487",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 20",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-488",
+      "text": "Synthetic review check 488",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 20",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-489",
+      "text": "Synthetic review check 489",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 20",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-490",
+      "text": "Synthetic review check 490",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 20",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-491",
+      "text": "Synthetic review check 491",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 20",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"],
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-492",
+      "text": "Synthetic review check 492",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 20",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-493",
+      "text": "Synthetic review check 493",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 20",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-494",
+      "text": "Synthetic review check 494",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 20",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-495",
+      "text": "Synthetic review check 495",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 20",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-496",
+      "text": "Synthetic review check 496",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 20",
+      "responseType": "single-choice",
+      "deprecated": false,
+      "options": ["Clear", "Needs review", "Not observed"],
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-497",
+      "text": "Synthetic review check 497",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 20",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-498",
+      "text": "Synthetic review check 498",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 20",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-499",
+      "text": "Synthetic review check 499",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 20",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    },
+    {
+      "id": "q-perf-500",
+      "text": "Synthetic review check 500",
+      "category": "Review area 5",
+      "questionGroup": "Question Group 20",
+      "responseType": "yes-no-na",
+      "deprecated": false,
+      "showWhen": {
+        "q-perf-fan-out-gate": {
+          "equals": "Yes"
+        }
+      }
+    }
+  ],
+  "labels": [],
+  "outcomeOptions": [],
+  "performanceProfile": {
+    "questionCount": 500,
+    "questionGroupCount": 20,
+    "questionsPerGroup": 25,
+    "textAnswerQuestionId": "q-perf-steady-state-text",
+    "fanOutGateQuestionId": "q-perf-fan-out-gate",
+    "fanOutQuestionCount": 125
+  }
+}

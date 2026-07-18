@@ -70,6 +70,32 @@ test('store route: navigation removes real listeners and disposes store renders 
   assert.equal(renders, 3, 'disposed store schedules no later renders');
 });
 
+test('store route: a slice renderer can morph only the containers selected by state', async () => {
+  const container = document.createElement('div');
+  /** @type {string[][]} */
+  const renderedGroups = [];
+  let dispatch = /** @type {any} */ (null);
+  const handler = createStoreRoute({
+    load: async () => ({
+      createRouteSlice: () => ({
+        initialState: { dirtyGroups: ['group-1', 'group-2'] },
+        reducer: (_state, action) => ({ dirtyGroups: action.dirtyGroups }),
+        render: (_container, state, tools) => {
+          renderedGroups.push([...state.dirtyGroups]);
+          dispatch = tools.dispatch;
+        },
+      }),
+    }),
+    context: {},
+  });
+
+  await handler.mount(container, {});
+  dispatch({ dirtyGroups: ['group-2'] });
+  await Promise.resolve();
+
+  assert.deepEqual(renderedGroups, [['group-1', 'group-2'], ['group-2']]);
+});
+
 test('store route: unmount during a lazy load discards the stale slice before its effect starts', async () => {
   let release = /** @type {(value: any) => void} */ (() => {});
   const loading = new Promise((resolve) => {

@@ -145,7 +145,10 @@ test('layering: no static page import outside src/pages/; dynamic page import() 
 test('layering: new-style store route modules expose slices without importing the router', () => {
   // This explicit set is the strangler ledger: add each page when its route is
   // converted, and remove the test only when every route is store-driven.
-  const STORE_ROUTE_MODULES = ['src/pages/dev-morph-harness.js'];
+  const STORE_ROUTE_MODULES = [
+    'src/pages/dev-morph-harness.js',
+    'src/pages/dev-performance-harness.js',
+  ];
   const forbiddenDependency =
     /(?:^|\/)(?:core\/(?:store-route|store|morph)|lib\/router|services\/(?:save-queue|sharepoint-client))\.js$/;
   /** @type {string[]} */

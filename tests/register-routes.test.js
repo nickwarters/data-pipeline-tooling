@@ -132,6 +132,7 @@ test('registerRoutes: adds the store-driven dev harness through the same registr
       '#/my-cases',
       '#/journey-cases',
       '#/dev/morph',
+      '#/dev/performance',
     ]);
   } finally {
     if (originalLocation === undefined) {

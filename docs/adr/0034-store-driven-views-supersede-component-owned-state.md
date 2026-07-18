@@ -164,6 +164,10 @@ explicit decision, not an aspiration:
 - CORE-5 is itself HITL: a human signs off the measured result before PILOT-1
   starts.
 
+The CORE-5 measurements are recorded in the
+[Palimpsest 500-question performance gate report](../palimpsest-performance-gate.md).
+The technical latency gate passes; the human go/no-go decision remains pending.
+
 ## Considered alternatives
 
 - **Keep ADR-0003 (signals + component-owned state), refactor incrementally.**
