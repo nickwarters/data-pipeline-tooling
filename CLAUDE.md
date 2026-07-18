@@ -164,7 +164,7 @@ src/
     cora-dashboard.js
     cora-home.js
     cora-journey-cases.js
-    cora-reports-index.js
+    reports-index.js             # store-driven pure view (Palimpsest PILOT-1)
     cora-responsible-party-dashboard.js
     cora-reviewer-team-report.js
     cora-team-cases.js

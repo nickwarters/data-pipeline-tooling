@@ -3,8 +3,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { isolateBrowserGlobals } from './helpers/browser-globals.js';
 import { initRouter, routeRegistrationSpy } from './helpers/router.js';
+import { installDom } from './_dom-stub.js';
 
 isolateBrowserGlobals();
+installDom();
 
 /** @type {Record<string, Function[]>} */
 const windowListeners = {};
@@ -14,39 +16,6 @@ const windowListeners = {};
   },
 };
 /** @type {any} */ (globalThis).location = { hash: '' };
-
-/** @returns {{ created: string[] }} */
-function makeDocSpy() {
-  const created = /** @type {string[]} */ ([]);
-  /** @type {any} */ (globalThis).document = {
-    createElement(/** @type {string} */ tag) {
-      const el = /** @type {any} */ ({
-        tag,
-        tagName: tag.toUpperCase(),
-        textContent: '',
-        className: '',
-        href: '',
-        _children: [],
-        appendChild(/** @type {any} */ child) {
-          this._children.push(child);
-          return child;
-        },
-        setAttribute() {},
-        replaceChildren() {},
-      });
-      created.push(tag);
-      return el;
-    },
-    createTreeWalker() {
-      return {
-        nextNode() {
-          return null;
-        },
-      };
-    },
-  };
-  return { created };
-}
 
 import { Router } from '../src/lib/router.js';
 import { register } from '../src/routes/reports.js';
@@ -77,8 +46,9 @@ test('reports route: registers #/reports and #/reports/reviewer-team', () => {
   assert.equal(registration.has('#/reports/reviewer-team'), true);
 });
 
-test('reports route: #/reports unmount is a no-op (does not throw)', () => {
+test('reports route: #/reports unmount disposes the store-driven slice', async () => {
   const registration = routeRegistrationSpy();
+  let disposed = false;
   register(
     /** @type {any} */ (registration.router),
     /** @type {any} */ ({
@@ -86,9 +56,25 @@ test('reports route: #/reports unmount is a no-op (does not throw)', () => {
       client: {},
       currentUser: { id: 'u1' },
       caseSources: [].map((s) => src(s)),
-    })
+    }),
+    {
+      loadIndex: async () => ({
+        createRouteSlice: () => ({
+          initialState: {},
+          reducer: (/** @type {any} */ state) => state,
+          view: () => document.createElement('section'),
+          start: () => () => {
+            disposed = true;
+          },
+        }),
+      }),
+    }
   );
-  assert.doesNotThrow(() => registration.handlerFor('#/reports').unmount());
+  const handler = registration.handlerFor('#/reports');
+  await handler.mount(document.createElement('main'), {});
+  handler.unmount();
+
+  assert.equal(disposed, true);
 });
 
 test('reports route: #/reports/reviewer-team unmount is a no-op (does not throw)', () => {
@@ -107,17 +93,10 @@ test('reports route: #/reports/reviewer-team unmount is a no-op (does not throw)
   );
 });
 
-test('reports route: #/reports renders ReportsIndexPage directly', async () => {
-  makeDocSpy();
-  const rendered = /** @type {any[]} */ ([]);
-
+test('reports route: #/reports mounts the store-driven Reports index', async () => {
   const router = new Router();
-  const container = {
-    replaceChildren(/** @type {any[]} */ ...children) {
-      rendered.splice(0, rendered.length, ...children);
-    },
-  };
-  initRouter(router, /** @type {any} */ (container));
+  const container = document.createElement('main');
+  initRouter(router, container);
   register(
     router,
     /** @type {any} */ ({
@@ -130,22 +109,19 @@ test('reports route: #/reports renders ReportsIndexPage directly', async () => {
 
   await router.navigate('#/reports');
 
-  assert.equal(rendered.length, 1, 'reports index should render one card');
-  assert.equal(rendered[0].tagName, 'DIV');
-  // The router error panel is also a DIV; assert this is the real page.
-  assert.notEqual(rendered[0].className, 'cora-route-error');
+  assert.equal(container.childNodes.length, 1);
+  assert.equal(container.textContent, 'Reviewer Team PerformanceView report');
   assert.equal(
-    rendered[0]._children[0].textContent,
-    'Reviewer Team Performance'
+    container.querySelector('a')?.getAttribute('href'),
+    '#/reports/reviewer-team'
   );
 });
 
 test('reports/reviewer-team route: redirects to #/reports when not a Reviewer Manager', async () => {
-  makeDocSpy();
   try {
     const router = new Router();
-    const container = { replaceChildren(/** @type {any[]} */ ...args) {} };
-    initRouter(router, /** @type {any} */ (container));
+    const container = document.createElement('main');
+    initRouter(router, container);
     register(
       router,
       /** @type {any} */ ({
@@ -167,19 +143,13 @@ test('reports/reviewer-team route: redirects to #/reports when not a Reviewer Ma
 });
 
 test('reports route: #/reports renders a cora-route-error panel when the index page module fails to load', async () => {
-  makeDocSpy();
   const origConsoleError = console.error;
   console.error = () => {};
-  const rendered = /** @type {any[]} */ ([]);
 
   try {
     const router = new Router();
-    const container = {
-      replaceChildren(/** @type {any[]} */ ...children) {
-        rendered.splice(0, rendered.length, ...children);
-      },
-    };
-    initRouter(router, /** @type {any} */ (container));
+    const container = document.createElement('main');
+    initRouter(router, container);
     register(
       router,
       /** @type {any} */ ({
@@ -193,15 +163,14 @@ test('reports route: #/reports renders a cora-route-error panel when the index p
 
     await router.navigate('#/reports');
 
-    assert.equal(rendered.length, 1);
-    assert.equal(rendered[0].className, 'cora-route-error');
+    assert.equal(container.childNodes.length, 1);
+    assert.equal(container.childNodes[0].className, 'cora-route-error');
   } finally {
     console.error = origConsoleError;
   }
 });
 
 test('reports/reviewer-team route: mounts ReviewerTeamReportPage with client, currentUser, caseSources for Reviewer Manager', async () => {
-  makeDocSpy();
   try {
     const client = {
       id: 'mock-client',
@@ -211,15 +180,9 @@ test('reports/reviewer-team route: mounts ReviewerTeamReportPage with client, cu
     };
     const currentUser = { id: 'user-rm', displayName: 'Morgan Manager' };
     const caseSources = [src('example-review')];
-    const rendered = /** @type {any[]} */ ([]);
-
     const router = new Router();
-    const container = {
-      replaceChildren(/** @type {any[]} */ ...children) {
-        rendered.splice(0, rendered.length, ...children);
-      },
-    };
-    initRouter(router, /** @type {any} */ (container));
+    const container = document.createElement('main');
+    initRouter(router, container);
     register(
       router,
       /** @type {any} */ ({
@@ -232,32 +195,25 @@ test('reports/reviewer-team route: mounts ReviewerTeamReportPage with client, cu
     await router.navigate('#/reports/reviewer-team');
 
     assert.equal(
-      rendered.length,
+      container.childNodes.length,
       1,
       'ReviewerTeamReportPage host should be mounted'
     );
-    assert.equal(rendered[0].tagName, 'DIV');
+    assert.equal(container.childNodes[0].tagName, 'DIV');
     // The router error panel is also a DIV; assert this is the real page.
-    assert.notEqual(rendered[0].className, 'cora-route-error');
+    assert.notEqual(container.childNodes[0].className, 'cora-route-error');
   } finally {
     /** @type {any} */ (globalThis).location = { hash: '' };
   }
 });
 
 test('reports/reviewer-team route: renders a cora-route-error panel when the reviewer-team page module fails to load', async () => {
-  makeDocSpy();
   const origConsoleError = console.error;
   console.error = () => {};
   try {
-    const rendered = /** @type {any[]} */ ([]);
-
     const router = new Router();
-    const container = {
-      replaceChildren(/** @type {any[]} */ ...children) {
-        rendered.splice(0, rendered.length, ...children);
-      },
-    };
-    initRouter(router, /** @type {any} */ (container));
+    const container = document.createElement('main');
+    initRouter(router, container);
     register(
       router,
       /** @type {any} */ ({
@@ -270,8 +226,8 @@ test('reports/reviewer-team route: renders a cora-route-error panel when the rev
     );
     await router.navigate('#/reports/reviewer-team');
 
-    assert.equal(rendered.length, 1);
-    assert.equal(rendered[0].className, 'cora-route-error');
+    assert.equal(container.childNodes.length, 1);
+    assert.equal(container.childNodes[0].className, 'cora-route-error');
   } finally {
     console.error = origConsoleError;
     /** @type {any} */ (globalThis).location = { hash: '' };
