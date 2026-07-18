@@ -83,6 +83,10 @@ src/
     toast.js                    # transient toast primitive (toastMsg signal + showToast)
     view.js
 
+  core/                         # store-driven view runtime (ADR-0034 / Project Palimpsest)
+    morph.js                    # keyed DOM-morphing reconciler: patches live DOM to an h() tree
+                                #   in place (focus/caret/scroll survive) — CORE-2 (#404)
+
   components/                   # reusable cora-* custom elements, layered by dependency
     base/                       # leaf primitives — compose no other component (cf. lib/signal.js)
       cora-data-table.js
@@ -129,6 +133,7 @@ src/
     working-days.js
 
   pages/                        # top-level view components, mostly one per route
+    dev-morph-harness.js        # dev-only morph() demo (store-less scratch view, #404)
     cora-case-review.js
     cora-case-review/          # page shell + per-tab controllers (13 files, ~900 lines)
       tab-controller.js
@@ -169,6 +174,7 @@ src/
     case.js
     conversation.js
     dashboard.js
+    dev-morph.js                # dev-only #/dev/morph, self-gated on ?mock=1 (#404)
     journey-cases.js
     my-cases.js
     question-bank.js

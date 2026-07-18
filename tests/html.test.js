@@ -43,7 +43,8 @@ const _baseCreate = _doc.createElement.bind(_doc);
 _doc.createElement = (/** @type {string} */ tag) =>
   tag === 'select' ? new StubSelect() : _baseCreate(tag);
 
-const { h, unsafeHTML } = await import('../src/lib/html.js');
+const { h, unsafeHTML, applyProp, removeProp, getProps, setProps } =
+  await import('../src/lib/html.js');
 
 /**
  * Run the exact microtasks scheduled by h() without guessing how many event-loop
@@ -248,4 +249,100 @@ test('h: a camelCase on* prop with no matching property still becomes a listener
   const fn = () => {};
   const el = /** @type {any} */ (h('div', { onClick: fn }));
   assert.deepEqual(el._listeners.click, [fn]);
+});
+
+// ===== RECONCILER SUPPORT: getProps / setProps / applyProp / removeProp =====
+//
+// These back morph() (src/core/morph.js): h() records the props it built an
+// element with, and applyProp/removeProp are the single source of truth for how
+// one prop maps onto the DOM (used at build time and when a prop changes).
+
+test('getProps: returns the props h() built a node with', () => {
+  const el = h('div', { 'aria-label': 'x', class: 'c' });
+  assert.deepEqual(getProps(el), { 'aria-label': 'x', class: 'c' });
+});
+
+test('getProps: is undefined for a node h() never built', () => {
+  const raw = /** @type {any} */ (globalThis).document.createElement('div');
+  assert.equal(getProps(raw), undefined);
+});
+
+test('setProps: overwrites the recorded props', () => {
+  const el = h('div', { class: 'a' });
+  setProps(el, { class: 'b' });
+  assert.deepEqual(getProps(el), { class: 'b' });
+});
+
+test('applyProp: sets a value property directly on a form control', () => {
+  const input = h('input', {});
+  applyProp(input, 'value', 'typed');
+  assert.equal(/** @type {any} */ (input).value, 'typed');
+});
+
+test('applyProp: throws on innerHTML', () => {
+  const el = h('div', {});
+  assert.throws(() => applyProp(el, 'innerHTML', '<b>x</b>'), /innerHTML/);
+});
+
+test('removeProp: innerHTML is a no-op', () => {
+  const el = h('div', {});
+  assert.doesNotThrow(() => removeProp(el, 'innerHTML', '<b>x</b>'));
+});
+
+test('removeProp: unbinds an addEventListener-style handler', () => {
+  let calls = 0;
+  const fn = () => (calls += 1);
+  const el = /** @type {any} */ (h('button', { onClick: fn }));
+  removeProp(el, 'onClick', fn);
+  el.dispatchEvent(new /** @type {any} */ (globalThis).CustomEvent('click'));
+  assert.equal(calls, 0, 'handler no longer fires after removal');
+});
+
+test('removeProp: clears an on[A-Z] callback property', () => {
+  class Host extends StubEl {
+    constructor() {
+      super('cora-remove-prop-host');
+      /** @type {any} */
+      this.onCommit = () => {};
+    }
+  }
+  /** @type {any} */ (globalThis).customElements.define(
+    'cora-remove-prop-host',
+    Host
+  );
+  const el = /** @type {any} */ (
+    h('cora-remove-prop-host', { onCommit: () => {} })
+  );
+  removeProp(el, 'onCommit', el.onCommit);
+  assert.equal(el.onCommit, null);
+});
+
+test('removeProp: clears className', () => {
+  const el = /** @type {any} */ (h('div', { class: 'c' }));
+  removeProp(el, 'class', 'c');
+  assert.equal(el.className, '');
+});
+
+test('removeProp: clears a value property', () => {
+  const input = /** @type {any} */ (h('input', { value: 'x' }));
+  removeProp(input, 'value', 'x');
+  assert.equal(input.value, '');
+});
+
+test('removeProp: resets a boolean property to false', () => {
+  const input = /** @type {any} */ (h('input', { disabled: true }));
+  removeProp(input, 'disabled', true);
+  assert.equal(input.disabled, false);
+});
+
+test('removeProp: resets a non-boolean property to empty string', () => {
+  const el = /** @type {any} */ (h('a', { title: 'hint' }));
+  removeProp(el, 'title', 'hint');
+  assert.equal(el.title, '');
+});
+
+test('removeProp: removes a plain attribute', () => {
+  const el = /** @type {any} */ (h('div', { 'aria-label': 'x' }));
+  removeProp(el, 'aria-label', 'x');
+  assert.equal(el.getAttribute('aria-label'), null);
 });

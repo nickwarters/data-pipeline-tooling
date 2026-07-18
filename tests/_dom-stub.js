@@ -35,7 +35,8 @@ export class StubEl {
     this._attrs = {};
     /** @type {StubEl|null} */
     this.parentNode = null;
-    this.textContent = '';
+    /** Backing store for a text node's own text (see textContent get/set). */
+    this._text = '';
     this.className = '';
     this.innerHTML = '';
     /** @type {any} */
@@ -54,6 +55,35 @@ export class StubEl {
     this.scrollHeight = 24;
     this.selectionStart = 0;
     this.selectionEnd = 0;
+  }
+  // Text content, modelled like the real DOM: on a text node it is the node's
+  // own string; on an element, assigning it replaces the children with a single
+  // `#text` child, and reading it concatenates descendant text. Elements built
+  // by h() with a single string child therefore expose that text as a real
+  // child node, which is what morph() diffs.
+  /** @returns {string} */
+  get textContent() {
+    if (this._tagName === '#text') return this._text;
+    return this._children
+      .map((/** @type {StubEl} */ c) => c.textContent)
+      .join('');
+  }
+  set textContent(v) {
+    const s = v == null ? '' : String(v);
+    if (this._tagName === '#text') {
+      this._text = s;
+      return;
+    }
+    for (const c of this._children) c.parentNode = null;
+    this._children = [];
+    if (s !== '') {
+      const t = new StubEl('#text');
+      t._tagName = '#text';
+      t.tagName = '#text';
+      t._text = s;
+      t.parentNode = this;
+      this._children.push(t);
+    }
   }
   // Attribute-reflected properties, mirroring the real DOM: setting the
   // property is visible through getAttribute() and vice versa, so tests can
@@ -113,6 +143,12 @@ export class StubEl {
   set placeholder(v) {
     this._attrs['placeholder'] = String(v);
   }
+  // Real nodes expose nodeName on every node type (uppercase tag for elements,
+  // '#text' for text); the stub mirrors it off tagName so reconciler code can
+  // classify nodes the same way in tests and the browser.
+  get nodeName() {
+    return this.tagName;
+  }
   get childElementCount() {
     return this._children.filter((child) => child.tagName !== '#text').length;
   }
@@ -133,6 +169,13 @@ export class StubEl {
     return c;
   }
   insertBefore(/** @type {StubEl} */ c, /** @type {StubEl|null} */ ref) {
+    // Mirror the real DOM: inserting a node that already has a parent moves it
+    // (detaches from its current position first) rather than duplicating it.
+    // morph() relies on this for keyed reorders.
+    if (c.parentNode) {
+      const cur = c.parentNode._children.indexOf(c);
+      if (cur >= 0) c.parentNode._children.splice(cur, 1);
+    }
     const i = ref ? this._children.indexOf(ref) : -1;
     if (ref && i < 0) throw new Error('insertBefore: reference is not a child');
     c.parentNode = this;

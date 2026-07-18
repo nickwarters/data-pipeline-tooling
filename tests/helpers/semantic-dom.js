@@ -24,10 +24,24 @@ function implicitRole(element) {
   return 'textbox';
 }
 
-/** @param {any} element */
+/**
+ * Accessible-name-style text of an element: leaf/text nodes contribute their
+ * own text; a node with children contributes its children's text, space-joined
+ * (so sibling contributions read as separate words). The stub now models text
+ * as real `#text` child nodes, so we recurse into children rather than reading
+ * a node's aggregated `.textContent` (which would double-count).
+ * @param {any} element
+ * @returns {string}
+ */
 export function textContent(element) {
-  const parts = [element.textContent || ''];
-  for (const child of element._children ?? []) parts.push(textContent(child));
+  const kids = element._children ?? [];
+  if (kids.length === 0) {
+    return String(element.textContent || '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+  const parts = [];
+  for (const child of kids) parts.push(textContent(child));
   return parts.join(' ').replace(/\s+/g, ' ').trim();
 }
 
