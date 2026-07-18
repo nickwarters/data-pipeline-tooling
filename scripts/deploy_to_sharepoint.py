@@ -53,6 +53,22 @@ DEFAULT_INCLUDE_ROOTS = ("src", "case-types", "host")
 # (e.g. a generated .map or an editor backup) is not deployed.
 DEFAULT_INCLUDE_SUFFIXES = (".js", ".css", ".html", ".aspx")
 
+# Question Bank artifacts are JSON stored as .txt (see CLAUDE.md "Gotchas":
+# SharePoint SE can block/mis-serve real .json files). `case-types/load-bank.js`
+# fetches `./banks/{slug}.txt` relative to its deployed module URL at runtime, so
+# these files must ship too. Unlike DEFAULT_INCLUDE_SUFFIXES this is scoped to
+# BANKS_DIR only — a stray .txt tool artefact elsewhere under an include root
+# (e.g. src/notes.txt) must still be excluded (#435).
+BANKS_DIR = "case-types/banks"
+BANK_ARTIFACT_SUFFIX = ".txt"
+
+# Dev-only synthetic Question Bank fixtures that must never ship to prod/UAT:
+# they exist purely to feed the mock-only performance harness
+# (`src/pages/dev-performance-harness.js`, reachable only behind ?mock=1) and
+# have no production consumer. Named explicitly rather than by a "performance-*"
+# glob so a genuine future bank can't accidentally collide with the convention.
+DEV_ONLY_BANK_FILENAMES = frozenset({"performance-500.txt"})
+
 # Suffixes whose content is templated at deploy time (see HOST_BASE_TOKEN).
 TEMPLATED_SUFFIXES = (".html", ".aspx")
 
@@ -225,6 +241,11 @@ def collect_local_files(
     Files are read from ``root/<include_root>/**`` and keyed *including* the
     include-root prefix, so ``src/lib/signal.js`` deploys to
     ``<target>/src/lib/signal.js`` and the layout is preserved.
+
+    Question Bank artifacts (``case-types/banks/*.txt``) are collected as a
+    scoped special case (see :data:`BANKS_DIR`), not via ``include_suffixes`` —
+    a ``.txt`` file anywhere else under an include root is still excluded.
+    Dev-only synthetic banks (:data:`DEV_ONLY_BANK_FILENAMES`) never ship.
     """
     suffixes = tuple(include_suffixes)
     files: dict[str, LocalFile] = {}
@@ -233,9 +254,16 @@ def collect_local_files(
         if not base.is_dir():
             continue
         for path in sorted(base.rglob("*")):
-            if not path.is_file() or path.suffix not in suffixes:
+            if not path.is_file():
                 continue
             rel = PurePosixPath(path.relative_to(root).as_posix())
+            is_bank_artifact = (
+                path.suffix == BANK_ARTIFACT_SUFFIX
+                and rel.parent == PurePosixPath(BANKS_DIR)
+                and path.name not in DEV_ONLY_BANK_FILENAMES
+            )
+            if not is_bank_artifact and path.suffix not in suffixes:
+                continue
             files[str(rel)] = LocalFile(str(rel), path.read_bytes())
     return files
 

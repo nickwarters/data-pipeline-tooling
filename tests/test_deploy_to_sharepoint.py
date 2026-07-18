@@ -1,8 +1,9 @@
-"""Tests for the --env environment support in deploy_to_sharepoint (ADR-0033)."""
+"""Tests for deploy_to_sharepoint: --env support (ADR-0033) and file collection."""
 
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -13,6 +14,7 @@ from deploy_to_sharepoint import (  # noqa: E402
     ENV_TOKEN,
     HOST_BASE_TOKEN,
     LocalFile,
+    collect_local_files,
     parse_args,
     render_templated_files,
 )
@@ -70,6 +72,41 @@ class RenderTemplatedFilesTest(unittest.TestCase):
             {original.path: original}, {ENV_TOKEN: "uat"}
         )
         self.assertIs(rendered[original.path], original)
+
+
+class CollectLocalFilesBankArtifactTest(unittest.TestCase):
+    """Question Bank .txt artifacts (#435): scoped to case-types/banks/, and
+    dev-only synthetic banks excluded."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+
+    def _write(self, rel: str, content: str = "content") -> None:
+        path = self.root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
+
+    def test_bank_txt_artifact_is_collected(self) -> None:
+        self._write("case-types/banks/complaints.txt", '{"ok": true}')
+        self._write("case-types/manifest.js", "export default {};")
+        files = collect_local_files(self.root)
+        self.assertIn("case-types/banks/complaints.txt", files)
+
+    def test_dev_only_performance_bank_is_excluded(self) -> None:
+        self._write("case-types/banks/complaints.txt", '{"ok": true}')
+        self._write("case-types/banks/performance-500.txt", '{"huge": true}')
+        files = collect_local_files(self.root)
+        self.assertIn("case-types/banks/complaints.txt", files)
+        self.assertNotIn("case-types/banks/performance-500.txt", files)
+
+    def test_txt_outside_banks_dir_is_still_excluded(self) -> None:
+        self._write("src/notes.txt", "stray tool artefact")
+        self._write("case-types/banks/complaints.txt", '{"ok": true}')
+        files = collect_local_files(self.root)
+        self.assertNotIn("src/notes.txt", files)
+        self.assertIn("case-types/banks/complaints.txt", files)
 
 
 if __name__ == "__main__":

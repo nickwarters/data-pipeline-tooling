@@ -75,10 +75,17 @@ read-only persona.
 ## 2. Question Bank artifacts
 
 Do **not** provision a `QuestionDefinitions` list. Each Case Type owns a
-`case-types/banks/{slug}.txt` file containing JSON text. The deployment uploads
-that file to the SharePoint Style Library alongside the Case Type module, and
+`case-types/banks/{slug}.txt` file containing JSON text. `deploy_to_sharepoint.py`
+uploads every file under `case-types/banks/` to the SharePoint Style Library
+alongside the Case Type module (a scoped exception to its normal suffix
+allowlist, since `.txt` elsewhere in the tree is still excluded), and
 `case-types/load-bank.js` loads it as part of the config. Keep the `.txt`
 extension: SharePoint SE can block or mis-serve `.json` files.
+
+Dev-only synthetic performance banks (e.g. `case-types/banks/performance-500.txt`,
+which feeds the mock-only performance harness) are **not** deployed — the deploy
+script excludes them explicitly (`DEV_ONLY_BANK_FILENAMES` in
+`scripts/deploy_to_sharepoint.py`) since they have no production consumer.
 
 The Question Bank editor compiles the same artifact. Publish immutable versioned
 exports as described by ADR-0021 so reportable Cases can resolve their
