@@ -9,9 +9,10 @@ installDom();
 const { createStoreRoute } = await import('../src/core/store-route.js');
 const { Router } = await import('../src/lib/router.js');
 
-test('store route: mounts a rendered slice and disposes its store, memo cache, and listeners', async () => {
+test('store route: navigation removes real listeners and disposes store renders and memo entries', async () => {
   const container = document.createElement('div');
-  let listenerDisposed = false;
+  const events = new EventTarget();
+  let eventCount = 0;
   let renders = 0;
   let memoSizeAtDispose = -1;
   let memoAfterMount = /** @type {any} */ (null);
@@ -31,12 +32,15 @@ test('store route: mounts a rendered slice and disposes its store, memo cache, a
             return el;
           });
         },
-        setup: ({ dispatch, memo }) => {
+        start: ({ dispatch, memo, listen }) => {
           memoAfterMount = memo;
           dispatchAfterMount = dispatch;
+          listen(events, 'route-event', () => {
+            eventCount += 1;
+            dispatch({ type: 'increment' });
+          });
           dispatch({ type: 'increment' });
           return () => {
-            listenerDisposed = true;
             memoSizeAtDispose = memo.size;
           };
         },
@@ -48,19 +52,25 @@ test('store route: mounts a rendered slice and disposes its store, memo cache, a
   await handler.mount(container, {});
   await Promise.resolve();
 
-  assert.equal(renders, 2, 'initial render plus the setup dispatch');
+  assert.equal(renders, 2, 'initial render plus the route-effect dispatch');
   assert.equal(container.textContent, '1');
+  events.dispatchEvent(new Event('route-event'));
+  await Promise.resolve();
+  assert.equal(eventCount, 1);
+  assert.equal(renders, 3);
 
   handler.unmount();
-  assert.equal(listenerDisposed, true, 'slice listener cleanup ran');
   assert.equal(memoSizeAtDispose, 1, 'cleanup runs before memo eviction');
   assert.equal(memoAfterMount.size, 0, 'memo cache is empty after unmount');
+  events.dispatchEvent(new Event('route-event'));
+  await Promise.resolve();
+  assert.equal(eventCount, 1, 'the route listener was removed on navigation');
   dispatchAfterMount({ type: 'increment' });
   await Promise.resolve();
-  assert.equal(renders, 2, 'disposed store schedules no later renders');
+  assert.equal(renders, 3, 'disposed store schedules no later renders');
 });
 
-test('store route: unmount during a lazy load discards the stale slice before setup', async () => {
+test('store route: unmount during a lazy load discards the stale slice before its effect starts', async () => {
   let release = /** @type {(value: any) => void} */ (() => {});
   const loading = new Promise((resolve) => {
     release = resolve;
@@ -82,7 +92,7 @@ test('store route: unmount during a lazy load discards the stale slice before se
         initialState: {},
         reducer: (/** @type {any} */ state) => state,
         view: () => document.createElement('p'),
-        setup: () => {
+        start: () => {
           listenersCreated += 1;
         },
       };

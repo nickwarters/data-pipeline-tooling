@@ -1,6 +1,9 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { isolateBrowserGlobals } from './helpers/browser-globals.js';
+
+isolateBrowserGlobals();
 
 const { Router } = await import('../src/lib/router.js');
 const { registerRoutes, safeRegister } =
@@ -106,4 +109,35 @@ test('registerRoutes: registers the complete public route contract', () => {
     '#/my-cases',
     '#/journey-cases',
   ]);
+});
+
+test('registerRoutes: adds the store-driven dev harness through the same registration seam in the mock loop', () => {
+  const originalLocation = /** @type {any} */ (globalThis).location;
+  try {
+    /** @type {any} */ (globalThis).location = {
+      hash: '',
+      search: '?mock=1',
+    };
+    assert.deepEqual(registeredPatterns(), [
+      '#/',
+      '#/dashboard',
+      '#/conversation/:caseType/:id',
+      '#/conversation/:id',
+      '#/question-bank',
+      '#/case/:caseType/:id',
+      '#/case/:id',
+      '#/reports',
+      '#/reports/reviewer-team',
+      '#/team-cases',
+      '#/my-cases',
+      '#/journey-cases',
+      '#/dev/morph',
+    ]);
+  } finally {
+    if (originalLocation === undefined) {
+      delete (/** @type {any} */ (globalThis).location);
+    } else {
+      /** @type {any} */ (globalThis).location = originalLocation;
+    }
+  }
 });

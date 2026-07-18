@@ -143,22 +143,27 @@ test('layering: no static page import outside src/pages/; dynamic page import() 
 });
 
 test('layering: new-style store route modules expose slices without importing the router', () => {
-  const newStylePages = srcFiles.filter((rel) => {
-    if (!rel.startsWith('src/pages/')) return false;
-    return /export function createRouteSlice\s*\(/.test(readCode(rel));
-  });
-  const offenders = newStylePages.filter((rel) =>
-    importSpecifiers(rel).some((spec) => /(?:^|\/)lib\/router\.js$/.test(spec))
-  );
+  // This explicit set is the strangler ledger: add each page when its route is
+  // converted, and remove the test only when every route is store-driven.
+  const STORE_ROUTE_MODULES = ['src/pages/dev-morph-harness.js'];
+  const forbiddenDependency =
+    /(?:^|\/)(?:core\/(?:store-route|store|morph)|lib\/router|services\/(?:save-queue|sharepoint-client))\.js$/;
+  /** @type {string[]} */
+  const offenders = [];
+  for (const rel of STORE_ROUTE_MODULES) {
+    const source = readCode(rel);
+    if (!/export function createRouteSlice\s*\(/.test(source)) {
+      offenders.push(`${rel} -> missing createRouteSlice export`);
+    }
+    for (const spec of importSpecifiers(rel)) {
+      if (forbiddenDependency.test(spec)) offenders.push(`${rel} -> ${spec}`);
+    }
+  }
 
-  assert.ok(
-    newStylePages.includes('src/pages/dev-morph-harness.js'),
-    'the CORE-2/3 dev harness is registered as a new-style route module'
-  );
   assert.deepEqual(
     offenders,
     [],
-    'new-style page modules expose createRouteSlice() and stay independent of the router'
+    'store-route modules expose route state + a pure view; the route adapter owns store, morph, router, and persistence boundaries'
   );
 });
 

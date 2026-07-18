@@ -25,3 +25,20 @@ client, enqueue a write through the existing `SaveQueue`, and await completion.
 Its only route back into application state is another dispatch. `SaveQueue`
 continues to own ADR-0008 debounce, retry, and ETag concurrency behaviour; the
 store does not duplicate or replace any of it.
+
+## Store-driven route modules
+
+A converted page exports `createRouteSlice(params, context)`. The factory
+returns the route's initial state, reducer, and pure view. It may also return a
+`start(tools)` route effect for edge wiring such as browser events or starting
+an action module; lifecycle work does not belong in the view.
+
+The route stays responsible for its lazy dynamic import and passes that loader
+to `createStoreRoute({ load, context })`. The standard adapter creates the
+route-local store and memo cache, renders the view through `morph()`, and
+returns the existing Router `{ mount, unmount }` handler shape.
+
+Use the adapter's `listen(target, type, listener)` tool inside the route effect
+for external listeners. The adapter removes every registered listener before
+disposing the route effect, store, and memo cache on navigation. Do not call
+`addEventListener()` directly in a view.

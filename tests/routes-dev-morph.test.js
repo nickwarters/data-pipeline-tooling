@@ -59,7 +59,7 @@ test('dev-morph route: unmount disposes the mounted new-style slice', async () =
         initialState: { query: '' },
         reducer: (/** @type {{ query: string }} */ state) => state,
         view: () => document.createElement('section'),
-        setup: () => () => {
+        start: () => () => {
           disposed = true;
         },
       }),

@@ -13,7 +13,7 @@ import { createStore } from './store.js';
  *     initialState: any,
  *     reducer: (state: any, action: any) => any,
  *     view: (state: any, tools: { dispatch: (action: any) => any, memo: any, params: Record<string, string>, context: Context }) => any,
- *     setup?: (tools: { dispatch: (action: any) => any, memo: any, params: Record<string, string>, context: Context }) => void | (() => void),
+ *     start?: (tools: { dispatch: (action: any) => any, memo: any, params: Record<string, string>, context: Context, listen: (target: EventTarget, type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions) => void }) => void | (() => void),
  *   } }>,
  *   context: Context,
  * }} options
@@ -35,6 +35,8 @@ export function createStoreRoute({ load, context }) {
 
       const slice = module.createRouteSlice(params, context);
       const memo = createMemo();
+      /** @type {Array<() => void>} */
+      const removeListeners = [];
       /** @type {ReturnType<typeof createStore<any, any>>} */
       let store;
       const tools = {
@@ -42,6 +44,17 @@ export function createStoreRoute({ load, context }) {
         memo,
         params,
         context,
+        listen(
+          /** @type {EventTarget} */ target,
+          /** @type {string} */ type,
+          /** @type {EventListenerOrEventListenerObject} */ listener,
+          /** @type {boolean | AddEventListenerOptions | undefined} */ options
+        ) {
+          target.addEventListener(type, listener, options);
+          removeListeners.push(() =>
+            target.removeEventListener(type, listener, options)
+          );
+        },
       };
       store = createStore({
         initialState: slice.initialState,
@@ -52,13 +65,16 @@ export function createStoreRoute({ load, context }) {
       /** @type {void | (() => void)} */
       let disposeListeners;
       disposeMountedSlice = () => {
+        for (const removeListener of removeListeners.splice(0)) {
+          removeListener();
+        }
         if (typeof disposeListeners === 'function') disposeListeners();
         store.dispose();
         memo.clear();
       };
       try {
         store.render();
-        disposeListeners = slice.setup?.(tools);
+        disposeListeners = slice.start?.(tools);
       } catch (error) {
         disposeMountedSlice();
         disposeMountedSlice = null;

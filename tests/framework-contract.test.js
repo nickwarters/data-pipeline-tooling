@@ -67,3 +67,13 @@ test('framework contract: views do not import persistence services', () => {
     );
   }
 });
+
+test('framework contract: the store-route module boundary is documented', () => {
+  const doc = read('docs/guide/store-actions-and-effects.md');
+
+  assert.match(doc, /createRouteSlice/);
+  assert.match(doc, /createStoreRoute/);
+  assert.match(doc, /listen\(target, type, listener\)/);
+  assert.match(doc, /route effect/);
+  assert.match(doc, /pure view/);
+});
