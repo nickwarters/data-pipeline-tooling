@@ -58,18 +58,19 @@ test('reports route: #/reports unmount disposes the store-driven slice', async (
       caseSources: [].map((s) => src(s)),
     }),
     {
-      loadIndex: async () => ({
-        reportsIndexView: () => document.createElement('section'),
-        createRouteSlice: () => ({
-          initialState: { isReviewerManager: false },
-          reducer: (/** @type {{ isReviewerManager: boolean }} */ state) =>
-            state,
-          view: () => document.createElement('section'),
-          start: () => () => {
-            disposed = true;
-          },
-        }),
-      }),
+      loadIndex: /** @type {any} */ (
+        async () => ({
+          reportsIndexView: () => document.createElement('section'),
+          createRouteSlice: () => ({
+            initialState: {},
+            reducer: (/** @type {any} */ state) => state,
+            view: () => document.createElement('section'),
+            start: () => () => {
+              disposed = true;
+            },
+          }),
+        })
+      ),
     }
   );
   const handler = registration.handlerFor('#/reports');
@@ -103,6 +104,12 @@ test('reports route: #/reports mounts the store-driven Reports index', async () 
     router,
     /** @type {any} */ ({
       capabilities: { isReviewerManager: true, ownedCaseTypes: [] },
+      chrome: {
+        toasts: [],
+        nav: { currentHash: '#/reports' },
+        currentUser: { id: 'u1' },
+        permissions: { isReviewerManager: true, ownedCaseTypes: [] },
+      },
       client: {},
       currentUser: { id: 'u1' },
       caseSources: [].map((s) => src(s)),

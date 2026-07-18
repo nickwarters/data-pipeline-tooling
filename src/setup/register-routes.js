@@ -17,6 +17,7 @@ import { register as registerDevPerformance } from '../routes/dev-performance.js
  * @property {import('../services/save-queue.js').SaveQueue} saveQueue
  * @property {import('../sharepoint-client.js').CurrentUser} currentUser
  * @property {import('../services/permissions.js').Capabilities} capabilities
+ * @property {import('../core/chrome-state.js').ChromeState} chrome
  * @property {import('./resolve-eligible-case-types.js').CaseSource[]} caseSources
  * @property {import('./resolve-eligible-case-types.js').CaseSource[]} journeyCaseSources
  * @property {import('./resolve-eligible-case-types.js').AllocationSource[]} allocationSources

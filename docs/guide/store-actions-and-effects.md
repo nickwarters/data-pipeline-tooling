@@ -1,15 +1,26 @@
 # Store, actions, and effects
 
-Each converted route owns one store and one app-state object. State has one
-slice per route, plus shared `chrome` state for toasts, the command palette,
-and the current user's identity and permissions:
+During the route-by-route migration, each converted route owns one store and
+one app-state object. Every object follows the same shape: route state under
+`routes`, plus the shared `chrome` state created once at boot by
+`createChromeState()` for toasts, navigation, and the current user's identity
+and permissions:
 
 ```js
 {
-  routes: { reports: {}, caseReview: {} },
-  chrome: { toasts: [], palette: {}, currentUser: null, permissions: [] }
+  routes: { reports: {} },
+  chrome: {
+    toasts: [],
+    nav: { currentHash: '#/reports' },
+    currentUser: null,
+    permissions: {}
+  }
 }
 ```
+
+Do not duplicate chrome values inside route slices. Pass already-resolved Case
+sources through `AppContext` and store them under the owning route; a page must
+not rerun Case Type eligibility rules.
 
 Actions use `domain/event` names such as `query/changed` or `case/saved`.
 `dispatch(action)` runs the reducer synchronously. Rendering happens in a

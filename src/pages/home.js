@@ -1,21 +1,28 @@
 // @ts-check
 import { h } from '../lib/html.js';
 
-/** @typedef {import('../services/permissions.js').Capabilities} Capabilities */
+/** @typedef {import('../core/chrome-state.js').ChromeState} ChromeState */
+/** @typedef {import('../setup/resolve-eligible-case-types.js').CaseSource} CaseSource */
 
 /**
- * Role-gated landing page. Renders one structural section per capability the
- * current user holds, each with a primary link to that role's main surface.
- * Visitors (no role) get an explainer only; access is managed out-of-band by
- * their team, so there is no in-app access-request affordance.
- * @param {{ capabilities: Capabilities | null }} props
- * @returns {Node[]}
+ * @typedef {Object} HomeState
+ * @property {ChromeState} chrome
+ * @property {{ home: {
+ *   eligibleCaseTypes: CaseSource[],
+ *   eligibleJourneyCaseTypes: CaseSource[],
+ * } }} routes
  */
-export function HomePage({ capabilities }) {
-  if (!capabilities) {
-    return [];
-  }
 
+/**
+ * Role-gated landing page. Permissions come from the shared chrome slice;
+ * eligible Case Type sources stay in the Home route slice for later Home
+ * actions without re-running the app-wide resolution rule.
+ *
+ * @param {HomeState} state
+ * @returns {HTMLElement}
+ */
+export function homeView(state) {
+  const capabilities = state.chrome.permissions;
   /** @type {Node[]} */
   const sections = [];
 
@@ -49,7 +56,7 @@ export function HomePage({ capabilities }) {
     sections.push(visitorSection());
   }
 
-  return sections;
+  return h('div', { className: 'cora-home' }, ...sections);
 }
 
 /**
@@ -80,4 +87,29 @@ function visitorSection() {
       'tools will appear here.'
     )
   );
+}
+
+/**
+ * @param {Record<string, string>} _params
+ * @param {import('../setup/register-routes.js').AppContext} context
+ * @returns {{
+ *   initialState: HomeState,
+ *   reducer: (state: HomeState, action: unknown) => HomeState,
+ *   view: (state: HomeState) => HTMLElement,
+ * }}
+ */
+export function createRouteSlice(_params, context) {
+  return {
+    initialState: {
+      chrome: context.chrome,
+      routes: {
+        home: {
+          eligibleCaseTypes: context.caseSources,
+          eligibleJourneyCaseTypes: context.journeyCaseSources,
+        },
+      },
+    },
+    reducer: (state) => state,
+    view: homeView,
+  };
 }

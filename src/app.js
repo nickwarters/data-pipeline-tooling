@@ -30,6 +30,12 @@ async function boot() {
     client.getCurrentUserGroups(),
   ]);
   const capabilities = resolveCapabilities(userGroups);
+  const { createChromeState } = await import('./core/chrome-state.js');
+  const chrome = createChromeState({
+    currentUser,
+    permissions: capabilities,
+    currentHash: location.hash || '#/',
+  });
 
   const { resolveAppCaseSources } =
     await import('./setup/resolve-eligible-case-types.js');
@@ -66,6 +72,7 @@ async function boot() {
     saveQueue,
     currentUser,
     capabilities,
+    chrome,
     caseSources,
     journeyCaseSources,
     allocationSources,

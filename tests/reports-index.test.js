@@ -24,8 +24,21 @@ function capabilities(isReviewerManager) {
   };
 }
 
+/** @param {boolean} isReviewerManager */
+function state(isReviewerManager) {
+  return {
+    chrome: {
+      toasts: [],
+      nav: { currentHash: '#/reports' },
+      currentUser: { id: 'u1', displayName: 'A User' },
+      permissions: capabilities(isReviewerManager),
+    },
+    routes: { reports: {} },
+  };
+}
+
 test('reports index view: Reviewer Manager sees the team performance report link', () => {
-  const view = reportsIndexView({ isReviewerManager: true });
+  const view = reportsIndexView(state(true));
 
   assert.equal(view.textContent, 'Reviewer Team PerformanceView report');
   assert.equal(
@@ -35,7 +48,7 @@ test('reports index view: Reviewer Manager sees the team performance report link
 });
 
 test('reports index view: user without report access sees the empty state', () => {
-  const view = reportsIndexView({ isReviewerManager: false });
+  const view = reportsIndexView(state(false));
 
   assert.equal(view.tagName, 'P');
   assert.equal(view.textContent, "You don't have access to any reports");
@@ -43,17 +56,20 @@ test('reports index view: user without report access sees the empty state', () =
 });
 
 test('reports index slice: derives route state from resolved capabilities', () => {
+  const managerChrome = state(true).chrome;
+  const nonManagerChrome = state(false).chrome;
   const managerSlice = createRouteSlice(
     {},
-    /** @type {any} */ ({ capabilities: capabilities(true) })
+    /** @type {any} */ ({ chrome: managerChrome })
   );
   const nonManagerSlice = createRouteSlice(
     {},
-    /** @type {any} */ ({ capabilities: capabilities(false) })
+    /** @type {any} */ ({ chrome: nonManagerChrome })
   );
 
-  assert.deepEqual(managerSlice.initialState, { isReviewerManager: true });
-  assert.deepEqual(nonManagerSlice.initialState, { isReviewerManager: false });
+  assert.equal(managerSlice.initialState.chrome, managerChrome);
+  assert.equal(nonManagerSlice.initialState.chrome, nonManagerChrome);
+  assert.deepEqual(managerSlice.initialState.routes, { reports: {} });
   assert.equal(
     managerSlice.reducer(managerSlice.initialState, { type: 'ignored' }),
     managerSlice.initialState,

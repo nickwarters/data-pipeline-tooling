@@ -49,7 +49,7 @@ function importsQuestionBank(rel) {
 
 /**
  * Read a source file with whole-line comments removed, so JSDoc type references
- * like `@param {() => Promise<typeof import('../pages/cora-home.js')>}` and
+ * like `@param {() => Promise<typeof import('../pages/home.js')>}` and
  * `// import('../pages/…')` do not trip the page/route import rules below. Only
  * real (non-comment) import statements remain.
  * @param {string} rel @returns {string}
@@ -148,6 +148,7 @@ test('layering: new-style store route modules expose slices without importing th
   const STORE_ROUTE_MODULES = [
     'src/pages/dev-morph-harness.js',
     'src/pages/dev-performance-harness.js',
+    'src/pages/home.js',
     'src/pages/reports-index.js',
   ];
   const forbiddenDependency =

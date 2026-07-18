@@ -1,7 +1,11 @@
 // @ts-check
 import { h } from '../lib/html.js';
 
-/** @typedef {{ isReviewerManager: boolean }} ReportsIndexState */
+/**
+ * @typedef {Object} ReportsIndexState
+ * @property {import('../core/chrome-state.js').ChromeState} chrome
+ * @property {{ reports: Record<string, never> }} routes
+ */
 
 /**
  * Pure Reports index view. Report data is loaded by each report route; the
@@ -11,7 +15,7 @@ import { h } from '../lib/html.js';
  * @returns {HTMLElement}
  */
 export function reportsIndexView(state) {
-  if (state.isReviewerManager) {
+  if (state.chrome.permissions.isReviewerManager) {
     return h(
       'div',
       { className: 'cora-report-card' },
@@ -39,7 +43,8 @@ export function reportsIndexView(state) {
 export function createRouteSlice(_params, context) {
   return {
     initialState: {
-      isReviewerManager: context.capabilities.isReviewerManager,
+      chrome: context.chrome,
+      routes: { reports: {} },
     },
     reducer: (state) => state,
     view: reportsIndexView,
