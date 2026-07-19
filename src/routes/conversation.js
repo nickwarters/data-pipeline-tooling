@@ -1,4 +1,5 @@
 // @ts-check
+import { createStoreRoute } from '../core/store-route.js';
 
 /**
  * @param {import('../lib/router.js').Router} router
@@ -10,22 +11,7 @@ export function register(
   context,
   loadPage = () => import('../pages/cora-conversation-view.js')
 ) {
-  /** @type {import('../lib/router.js').RouteHandler} */
-  const handler = {
-    async mount(container, params) {
-      const { ConversationView } = await loadPage();
-      container.replaceChildren(
-        ConversationView({
-          client: context.client,
-          saveQueue: context.saveQueue,
-          caseId: params.id,
-          caseType: params.caseType ?? null,
-          currentUser: context.currentUser,
-        })
-      );
-    },
-    unmount() {},
-  };
+  const handler = createStoreRoute({ load: loadPage, context });
 
   router.register('#/conversation/:caseType/:id', handler);
   router.register('#/conversation/:id', handler);

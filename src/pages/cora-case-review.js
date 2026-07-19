@@ -14,6 +14,12 @@ import {
   createQuestionPanelView,
   questionGroupsOf,
 } from './cora-case-review/question-panel-view.js';
+import {
+  conversationView,
+  postConversationMessage,
+  refreshConversation,
+} from './cora-case-review/conversation-view.js';
+import { notesView } from './cora-case-review/notes-view.js';
 import { updateCaseReviewHeader } from './cora-case-review/header-controller.js';
 import {
   bindQuestionPanel,
@@ -76,6 +82,8 @@ import '../components/base/cora-tabs.js';
  * @property {Record<import('../services/section-access.js').Section, import('../services/section-access.js').Mode>} access
  * @property {Required<import('../sharepoint-client.js').SectionLabels>} sectionLabels
  * @property {Required<import('../sharepoint-client.js').SectionLabels>} sectionHeadings
+ * @property {import('../lib/case-machine.js').CaseMachine | null} machine
+ * @property {import('../sharepoint-client.js').CaseListOptions} caseListOptions
  */
 
 /**
@@ -86,6 +94,7 @@ import '../components/base/cora-tabs.js';
  *   panelMode: string,
  *   saveStatus: SaveStatus,
  *   activeQuestionGroup: string,
+ *   conversationHidden: boolean,
  *   snapshot: CaseReviewSnapshot | null,
  * } }} routes
  */
@@ -104,6 +113,7 @@ export function createInitialCaseReviewState(chrome, panelMode) {
         panelMode,
         saveStatus: 'saved',
         activeQuestionGroup: '',
+        conversationHidden: true,
         snapshot: null,
       },
     },
@@ -165,6 +175,7 @@ export function caseReviewReducer(state, action) {
           snapshot: action.snapshot,
           activeTab: tabs[0]?.id ?? '',
           activeQuestionGroup: groups[0] ?? '',
+          conversationHidden: action.snapshot.conversationHidden ?? true,
         },
       },
     };
@@ -230,6 +241,48 @@ export function caseReviewReducer(state, action) {
       ...state,
       routes: {
         caseReview: { ...route, activeQuestionGroup: action.group },
+      },
+    };
+  }
+  if (action.type === 'case/conversation-toggled') {
+    if (route.snapshot?.access.conversation === 'hidden') return state;
+    return {
+      ...state,
+      routes: {
+        caseReview: {
+          ...route,
+          conversationHidden: !route.conversationHidden,
+        },
+      },
+    };
+  }
+  if (action.type === 'case/conversation-changed' && route.snapshot?.caseRow) {
+    const caseRow = {
+      ...route.snapshot.caseRow,
+      conversation: action.messages,
+    };
+    return {
+      ...state,
+      routes: {
+        caseReview: {
+          ...route,
+          snapshot: { ...route.snapshot, caseRow },
+        },
+      },
+    };
+  }
+  if (action.type === 'case/field-edited' && route.snapshot?.caseRow) {
+    const caseRow = {
+      ...route.snapshot.caseRow,
+      [action.field]: action.value,
+    };
+    return {
+      ...state,
+      routes: {
+        caseReview: {
+          ...route,
+          snapshot: { ...route.snapshot, caseRow },
+        },
       },
     };
   }
@@ -407,17 +460,34 @@ export function createRouteSlice(params, context) {
       );
       return;
     }
-    if (!snapshot.loaded || !snapshot.caseRow || !snapshot.config) return;
+    if (
+      !snapshot.loaded ||
+      !snapshot.caseRow ||
+      !snapshot.config ||
+      !snapshot.currentUser
+    ) {
+      return;
+    }
+    const currentUser = snapshot.currentUser;
 
     adapter.update();
     tools.morph(parts.header, [
       h('h1', {}, snapshot.caseRow.title),
       h('p', {}, `Reviewer: ${snapshot.caseRow.assignedReviewer}`),
+      snapshot.machine?.canToggleConversation
+        ? h(
+            'button',
+            {
+              className: 'cora-conversation-toggle-btn',
+              'aria-expanded': String(!route.conversationHidden),
+              'aria-label': 'Toggle conversation panel (⌥C / Alt+C)',
+              onClick: () =>
+                tools.dispatch({ type: 'case/conversation-toggled' }),
+            },
+            snapshot.sectionHeadings.conversation
+          )
+        : null,
     ]);
-    const toggle = adapter.conversationToggle;
-    if (toggle && toggle.parentNode !== parts.header) {
-      parts.header.appendChild(toggle);
-    }
 
     const tabs = visibleCaseTabs(snapshot);
     tools.morph(
@@ -485,26 +555,63 @@ export function createRouteSlice(params, context) {
         );
         continue;
       }
+      if (entry.id === 'notes') {
+        tools.morph(
+          panel,
+          visible
+            ? notesView({
+                notes: snapshot.caseRow.notes,
+                caseJustification: snapshot.caseRow.caseJustification ?? '',
+                access: snapshot.access.notes,
+                heading: snapshot.sectionHeadings.notes,
+                placeholders: snapshot.config.placeholders ?? {},
+                onFieldInput: (field, value) => {
+                  tools.dispatch({
+                    type: 'case/field-edited',
+                    field,
+                    value,
+                  });
+                  context.saveQueue.enqueue(params.id, field, value);
+                },
+              })
+            : null
+        );
+        continue;
+      }
       const node = legacyPanels[entry.id];
       if (!node) continue;
       if (visible && node.parentNode !== panel) panel.appendChild(node);
       if (!visible && node.parentNode === panel) panel.removeChild(node);
     }
 
-    const conversationNode = adapter.conversation;
-    if (
-      conversationNode &&
-      snapshot.access.conversation !== 'hidden' &&
-      conversationNode.parentNode !== parts.conversation
-    ) {
-      parts.conversation.appendChild(conversationNode);
-    } else if (
-      conversationNode &&
-      snapshot.access.conversation === 'hidden' &&
-      conversationNode.parentNode === parts.conversation
-    ) {
-      parts.conversation.removeChild(conversationNode);
-    }
+    parts.conversation.hidden =
+      snapshot.access.conversation === 'hidden' || route.conversationHidden;
+    tools.morph(
+      parts.conversation,
+      snapshot.access.conversation === 'hidden'
+        ? null
+        : conversationView({
+            messages: snapshot.caseRow.conversation,
+            access: snapshot.access.conversation,
+            heading: snapshot.sectionHeadings.conversation,
+            onSend: async (body) => {
+              await postConversationMessage({
+                client: context.client,
+                saveQueue: context.saveQueue,
+                caseId: params.id,
+                messages: snapshot.caseRow?.conversation ?? [],
+                currentUser,
+                caseListOptions: snapshot.caseListOptions,
+                body,
+                onMessages: (messages) =>
+                  tools.dispatch({
+                    type: 'case/conversation-changed',
+                    messages,
+                  }),
+              });
+            },
+          })
+    );
     const completeButton = adapter.completeButton;
     if (completeButton && completeButton.parentNode !== parts.completion) {
       parts.completion.appendChild(completeButton);
@@ -536,7 +643,30 @@ export function createRouteSlice(params, context) {
         tools.dispatch
       );
       if (typeof document !== 'undefined') {
-        tools.listen(document, 'keydown', adapter.handleKeydown);
+        tools.listen(
+          document,
+          'keydown',
+          (/** @type {KeyboardEvent} */ event) => {
+            if (event.altKey && event.code === 'KeyC') {
+              tools.dispatch({ type: 'case/conversation-toggled' });
+            }
+          }
+        );
+        tools.listen(document, 'visibilitychange', () => {
+          if (document.hidden) return;
+          void refreshConversation({
+            client: context.client,
+            caseId: params.id,
+            caseListOptions: viewModel.caseListOptions,
+          }).then((row) => {
+            if (row) {
+              tools.dispatch({
+                type: 'case/conversation-changed',
+                messages: row.conversation,
+              });
+            }
+          });
+        });
       }
       void viewModel.load().then(() => {
         tools.dispatch({

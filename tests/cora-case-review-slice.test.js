@@ -166,6 +166,7 @@ test('CASE-1 state: route state owns loading, save status, and selected tab unde
   assert.deepEqual(initial.routes.caseReview, {
     activeTab: '',
     activeQuestionGroup: '',
+    conversationHidden: true,
     panelMode: 'popover',
     saveStatus: 'saved',
     snapshot: null,

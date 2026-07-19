@@ -2,408 +2,180 @@
 import './_register-example-review.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { installDom, waitFor, waitForRender } from './_dom-stub.js';
-/** @typedef {import('./_dom-stub.js').StubEl} StubEl */
+import { installDom } from './_dom-stub.js';
+import { fireEvent } from './helpers/semantic-dom.js';
 
 installDom();
 
-// ===== IMPORTS (after stubs) =====
-const { ConversationView } =
+const { conversationPageView, createRouteSlice } =
   await import('../src/pages/cora-conversation-view.js');
+const { conversationView, postConversationMessage, refreshConversation } =
+  await import('../src/pages/cora-case-review/conversation-view.js');
 
-// ===== FIXTURES =====
-
-/** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
-/** @typedef {import('../src/sharepoint-client.js').CurrentUser} CurrentUser */
-
-/** @type {CurrentUser} */
-const CURRENT_USER = { id: 'user-reviewer', displayName: 'Alex Reviewer' };
-
-/** @type {CaseRow} */
-const BASE_CASE = {
+const CURRENT_USER = { id: 'reviewer', displayName: 'Alex Reviewer' };
+/** @type {import('../src/sharepoint-client.js').CaseRow} */
+const CASE_ROW = {
   id: 'case-1',
   caseType: 'example-review',
   title: 'Example Review #1',
   status: 'In-progress',
-  assignedReviewer: 'user-reviewer',
-  responsibleParty: 'user-agent',
+  assignedReviewer: 'reviewer',
+  responsibleParty: 'agent',
   answers: {},
   conversation: [],
   notes: '',
   completedAt: null,
-  etag: 'etag-c1-v1',
+  etag: 'v1',
 };
 
-// ===== HELPERS =====
-
-/**
- * @param {HTMLElement} host
- * @returns {any[]}
- */
-function childrenOf(host) {
-  return /** @type {any[]} */ (
-    /** @type {StubEl} */ (/** @type {unknown} */ (host))._children
-  );
-}
-
-/**
- * @param {{ title?: string, id?: string, conversation?: any[] } | null} [caseRow]
- */
-function makeStubClient(caseRow = BASE_CASE) {
-  return {
-    async getCase(/** @type {string} */ _id) {
-      return caseRow;
-    },
+test('CASE-3 conversation view renders messages and gates composition by access', () => {
+  /** @type {string[]} */
+  const sent = [];
+  const message = {
+    author: 'Taylor',
+    timestamp: '2026-07-19T08:00:00.000Z',
+    body: 'Please review this evidence.',
   };
-}
-
-// ===== TESTS =====
-
-test('ConversationView: renders nothing when client is null', async () => {
-  const host = ConversationView({
-    client: null,
-    saveQueue: null,
-    caseId: 'case-1',
-    caseType: null,
-    currentUser: null,
+  const editable = conversationView({
+    messages: [message],
+    access: 'edit',
+    heading: 'Conversation',
+    onSend: (body) => {
+      sent.push(body);
+    },
   });
-  assert.deepEqual(
-    childrenOf(host),
-    [],
-    'should not render anything when client is null'
-  );
+  const textarea = editable.querySelector('textarea');
+  assert.ok(textarea);
+  textarea.value = '  New message  ';
+  fireEvent(editable.querySelector('button'), 'click');
+
+  assert.match(editable.textContent, /Taylor/);
+  assert.match(editable.textContent, /Please review this evidence/);
+  assert.deepEqual(sent, ['New message']);
+
+  const readOnly = conversationView({
+    messages: [],
+    access: 'read-only',
+    heading: 'Conversation',
+    onSend() {},
+  });
+  assert.match(readOnly.textContent, /No messages yet/);
+  assert.equal(readOnly.querySelector('textarea'), null);
 });
 
-test('ConversationView: renders nothing when caseId is empty', async () => {
-  const host = ConversationView({
-    client: /** @type {any} */ (makeStubClient()),
-    saveQueue: null,
-    caseId: '',
-    caseType: null,
-    currentUser: null,
-  });
-  assert.deepEqual(
-    childrenOf(host),
-    [],
-    'should not render anything when caseId is empty'
-  );
-});
-
-test('ConversationView: renders nothing when getCase returns null', async () => {
-  const host = ConversationView({
-    client: /** @type {any} */ (makeStubClient(null)),
-    saveQueue: null,
-    caseId: 'case-1',
-    caseType: null,
-    currentUser: null,
-  });
-  assert.deepEqual(
-    childrenOf(host),
-    [],
-    'should not render anything when getCase returns null'
-  );
-});
-
-test('ConversationView: renders header at children[0] and conversationEl at children[1]', async () => {
-  const host = ConversationView({
-    client: /** @type {any} */ (makeStubClient()),
-    saveQueue: null,
-    caseId: 'case-1',
-    caseType: null,
-    currentUser: null,
-  });
-  await waitForRender(host);
-
-  assert.equal(
-    childrenOf(host).length,
-    2,
-    'should have exactly two top-level children'
-  );
-  assert.equal(
-    childrenOf(host)[0]._tagName,
-    'header',
-    'first child should be a header'
-  );
-  assert.equal(
-    childrenOf(host)[1]._tagName,
-    'cora-conversation',
-    'second child should be cora-conversation'
-  );
-});
-
-test('ConversationView: header has className cora-conversation-view-header', async () => {
-  const host = ConversationView({
-    client: /** @type {any} */ (makeStubClient()),
-    saveQueue: null,
-    caseId: 'case-1',
-    caseType: null,
-    currentUser: null,
-  });
-  await waitForRender(host);
-
-  const header = childrenOf(host)[0];
-  assert.equal(header.className, 'cora-conversation-view-header');
-});
-
-test('ConversationView: header children are backBtn then h1', async () => {
-  const host = ConversationView({
-    client: /** @type {any} */ (makeStubClient()),
-    saveQueue: null,
-    caseId: 'case-1',
-    caseType: null,
-    currentUser: null,
-  });
-  await waitForRender(host);
-
-  const header = childrenOf(host)[0];
-  assert.equal(header._children.length, 2, 'header should have two children');
-  assert.equal(
-    header._children[0]._tagName,
-    'button',
-    'first header child should be button'
-  );
-  assert.equal(
-    header._children[1]._tagName,
-    'h1',
-    'second header child should be h1'
-  );
-});
-
-test('ConversationView: h1 text uses caseRow.title when present', async () => {
-  const host = ConversationView({
-    client: /** @type {any} */ (
-      makeStubClient({ ...BASE_CASE, title: 'My Case Title' })
-    ),
-    saveQueue: null,
-    caseId: 'case-1',
-    caseType: null,
-    currentUser: null,
-  });
-  await waitForRender(host);
-
-  const header = childrenOf(host)[0];
-  const h1 = header._children[1];
-  assert.equal(h1.textContent, 'My Case Title');
-});
-
-test('ConversationView: h1 text falls back to caseRow.id when title is falsy', async () => {
-  const host = ConversationView({
-    client: /** @type {any} */ (
-      makeStubClient({ ...BASE_CASE, title: '', id: 'case-fallback-id' })
-    ),
-    saveQueue: null,
-    caseId: 'case-fallback-id',
-    caseType: null,
-    currentUser: null,
-  });
-  await waitForRender(host);
-
-  const header = childrenOf(host)[0];
-  const h1 = header._children[1];
-  assert.equal(h1.textContent, 'case-fallback-id');
-});
-
-test('ConversationView: back button has correct className, type, and text', async () => {
-  const host = ConversationView({
-    client: /** @type {any} */ (makeStubClient()),
-    saveQueue: null,
-    caseId: 'case-1',
-    caseType: null,
-    currentUser: null,
-  });
-  await waitForRender(host);
-
-  const header = childrenOf(host)[0];
-  const backBtn = header._children[0];
-  assert.equal(backBtn.className, 'cora-back-btn');
-  assert.equal(backBtn.type, 'button');
-  assert.equal(backBtn.textContent, '← My Reviews');
-});
-
-test('ConversationView: back button click sets location.hash to #/my-reviews', async () => {
-  const host = ConversationView({
-    client: /** @type {any} */ (makeStubClient()),
-    saveQueue: null,
-    caseId: 'case-1',
-    caseType: null,
-    currentUser: null,
-  });
-  await waitForRender(host);
-
-  const header = childrenOf(host)[0];
-  const backBtn = header._children[0];
-  // reset hash
-  /** @type {any} */ (globalThis).location.hash = '';
-  backBtn._listeners['click'][0]();
-  assert.equal(/** @type {any} */ (globalThis).location.hash, '#/my-reviews');
-});
-
-test('ConversationView: cora-conversation element receives client, saveQueue, caseId, currentUser from view', async () => {
-  const client = makeStubClient();
-  const saveQueue = { dummy: true };
-  const host = ConversationView({
-    client: /** @type {any} */ (client),
-    saveQueue: /** @type {any} */ (saveQueue),
-    caseId: 'case-1',
-    caseType: null,
-    currentUser: CURRENT_USER,
-  });
-  await waitForRender(host);
-
-  const conversationEl = childrenOf(host)[1];
-  assert.equal(
-    conversationEl.client,
-    client,
-    'client should be set on conversation element'
-  );
-  assert.equal(
-    conversationEl.saveQueue,
-    saveQueue,
-    'saveQueue should be set on conversation element'
-  );
-  assert.equal(
-    conversationEl.caseId,
-    'case-1',
-    'caseId should be set on conversation element'
-  );
-  assert.equal(
-    conversationEl.currentUser,
-    CURRENT_USER,
-    'currentUser should be set on conversation element'
-  );
-});
-
-test('ConversationView: cora-conversation is passed messages from caseRow', async () => {
-  const conversation = [
-    { author: 'Alice', timestamp: '2026-05-01T10:00:00Z', body: 'Hello!' },
-  ];
-  const host = ConversationView({
-    client: /** @type {any} */ (makeStubClient({ ...BASE_CASE, conversation })),
-    saveQueue: null,
-    caseId: 'case-1',
-    caseType: null,
-    currentUser: null,
-  });
-  await waitForRender(host);
-
-  const conversationEl = childrenOf(host)[1];
-  assert.deepEqual(
-    /** @type {any} */ (conversationEl)._messages,
-    conversation,
-    'messages should be set from caseRow.conversation'
-  );
-});
-
-test('ConversationView: loadCase is called on saveQueue with the fetched case row', async () => {
-  const client = makeStubClient();
+test('CASE-3 posting preserves JSON-blob PATCH, ETag, list routing, and queue refresh', async () => {
   /** @type {any[]} */
-  const loadCalls = [];
+  const calls = [];
+  const saved = { ...CASE_ROW, etag: 'v2' };
   const saveQueue = {
-    loadCase(/** @type {any} */ row, /** @type {any} */ opts) {
-      loadCalls.push([row, opts]);
+    getEtag(/** @type {string} */ id) {
+      assert.equal(id, 'case-1');
+      return 'v1';
+    },
+    loadCase(/** @type {any} */ row, /** @type {any} */ options) {
+      calls.push(['loadCase', row, options]);
     },
   };
-  const host = ConversationView({
+  const client = {
+    async patchCase(
+      /** @type {string} */ id,
+      /** @type {any} */ fields,
+      /** @type {string} */ etag,
+      /** @type {any} */ options
+    ) {
+      calls.push(['patchCase', id, fields, etag, options]);
+      return { ok: true, data: saved };
+    },
+  };
+  /** @type {import('../src/sharepoint-client.js').Message[]} */
+  let optimistic = [];
+
+  const result = await postConversationMessage({
     client: /** @type {any} */ (client),
     saveQueue: /** @type {any} */ (saveQueue),
     caseId: 'case-1',
-    caseType: null,
-    currentUser: null,
+    messages: [],
+    currentUser: CURRENT_USER,
+    caseListOptions: { listName: 'Example Cases' },
+    body: 'New message',
+    onMessages: (messages) => {
+      optimistic = messages;
+    },
   });
-  await waitForRender(host);
 
-  assert.equal(loadCalls.length, 1, 'saveQueue.loadCase should be called');
-  assert.equal(loadCalls[0][0].id, 'case-1');
-  assert.deepEqual(loadCalls[0][1], {});
+  assert.equal(result.messages[0].author, 'Alex Reviewer');
+  assert.equal(optimistic[0].body, 'New message');
+  assert.equal(calls[0][0], 'patchCase');
+  assert.equal(calls[0][1], 'case-1');
+  assert.deepEqual(calls[0][2], { conversation: result.messages });
+  assert.equal(calls[0][3], 'v1');
+  assert.deepEqual(calls[0][4], { listName: 'Example Cases' });
+  assert.deepEqual(calls[1], [
+    'loadCase',
+    saved,
+    { listName: 'Example Cases' },
+  ]);
 });
 
-test('ConversationView: resolves caseType config and passes listName as opts', async () => {
-  /** @type {any[]} */
-  const getCaseCalls = [];
-  const client = {
-    async getCase(/** @type {string} */ id, /** @type {any} */ opts) {
-      getCaseCalls.push([id, opts]);
-      return BASE_CASE;
+test('CASE-3 standalone page and reducer render store state without a custom element', () => {
+  const state = {
+    chrome: /** @type {any} */ ({}),
+    routes: {
+      conversation: {
+        caseRow: CASE_ROW,
+        access: /** @type {const} */ ('edit'),
+        caseListOptions: {},
+        error: null,
+      },
     },
   };
-  const host = ConversationView({
-    client: /** @type {any} */ (client),
-    saveQueue: null,
-    caseId: 'case-1',
-    caseType: 'example-review',
-    currentUser: null,
-  });
-  await waitForRender(host);
+  const node = conversationPageView(state, { dispatch() {} }, () => {});
+  assert.match(node.textContent, /Example Review #1/);
+  assert.equal(node.querySelector('cora-conversation'), null);
 
-  assert.equal(getCaseCalls.length, 1);
-  assert.equal(getCaseCalls[0][0], 'case-1');
-  // example-review case type module is expected to exist in the manifest;
-  // opts is either {} or { listName } depending on its config.
-  assert.ok(typeof getCaseCalls[0][1] === 'object');
-  assert.ok(childrenOf(host).length >= 0);
-});
-
-test('ConversationView: cora-conversation element receives caseListOptions resolved from the Case Type config', async () => {
-  const client = makeStubClient();
-  const host = ConversationView({
-    client: /** @type {any} */ (client),
-    saveQueue: null,
-    caseId: 'case-1',
-    caseType: 'example-review',
-    currentUser: null,
-  });
-  await waitFor(() => childrenOf(host).length === 2, 'conversation content');
-
-  const conversationEl = childrenOf(host)[1];
-  assert.deepEqual(conversationEl.caseListOptions, {
-    listName: 'Cases-ExampleReview',
-  });
-});
-
-test('ConversationView: cora-conversation element caseListOptions carries the listName for a list-backed Case Type', async () => {
-  const client = makeStubClient();
-  const host = ConversationView({
-    client: /** @type {any} */ (client),
-    saveQueue: null,
-    caseId: 'case-1',
-    // complaints declares Cases-Complaints (case-types/complaints.js).
-    caseType: 'complaints',
-    currentUser: null,
-  });
-  await waitFor(() => childrenOf(host).length === 2, 'conversation content');
-
-  const conversationEl = childrenOf(host)[1];
-  assert.deepEqual(conversationEl.caseListOptions, {
-    listName: 'Cases-Complaints',
-  });
-});
-
-test('ConversationView: cora-conversation element caseListOptions defaults to {} when caseType is null', async () => {
-  const client = makeStubClient();
-  const host = ConversationView({
-    client: /** @type {any} */ (client),
-    saveQueue: null,
-    caseId: 'case-1',
-    caseType: null,
-    currentUser: null,
-  });
-  await waitForRender(host);
-
-  const conversationEl = childrenOf(host)[1];
-  assert.deepEqual(conversationEl.caseListOptions, {});
-});
-
-test('ConversationView: renders nothing when caseType is unknown', async () => {
-  const host = ConversationView({
-    client: /** @type {any} */ (makeStubClient()),
-    saveQueue: null,
-    caseId: 'case-1',
-    caseType: 'totally-unknown-case-type',
-    currentUser: null,
-  });
-  assert.deepEqual(
-    childrenOf(host),
-    [],
-    'should not render anything for an unknown case type'
+  const slice = createRouteSlice(
+    { id: 'case-1', caseType: 'example-review' },
+    /** @type {any} */ ({
+      chrome: {
+        currentUser: CURRENT_USER,
+        permissions: {},
+      },
+      currentUser: CURRENT_USER,
+      client: {},
+      saveQueue: {},
+    })
   );
+  const loaded = slice.reducer(slice.initialState, {
+    type: 'conversation/loaded',
+    caseRow: CASE_ROW,
+    access: 'read-only',
+    caseListOptions: { listName: 'Example Cases' },
+  });
+  const changed = slice.reducer(loaded, {
+    type: 'conversation/messages-changed',
+    messages: [{ author: 'A', timestamp: '2026-07-19', body: 'B' }],
+  });
+  assert.equal(changed.routes.conversation.caseRow?.conversation[0].body, 'B');
+  assert.equal(
+    slice.reducer(changed, { type: 'unrelated' }),
+    changed,
+    'unknown actions preserve state identity'
+  );
+});
+
+test('CASE-3 refresh fetches the routed case', async () => {
+  /** @type {any[]} */
+  const calls = [];
+  const row = await refreshConversation({
+    client: /** @type {any} */ ({
+      async getCase(/** @type {string} */ id, /** @type {any} */ options) {
+        calls.push([id, options]);
+        return CASE_ROW;
+      },
+    }),
+    caseId: 'case-1',
+    caseListOptions: { listName: 'Example Cases' },
+  });
+  assert.equal(row, CASE_ROW);
+  assert.deepEqual(calls, [['case-1', { listName: 'Example Cases' }]]);
 });

@@ -11,7 +11,6 @@ import {
 import { updateSummaryNotesAppeal } from './summary-notes-appeal-controller.js';
 import { updateAmendOutcome } from './amend-outcome-controller.js';
 import { updateAppealReview } from './appeal-review-controller.js';
-import { createConversationPanelBinding } from './conversation-controller.js';
 import {
   bindCompletion,
   completeCase,
@@ -42,7 +41,6 @@ export function createCaseReviewInterimAdapter({
   modelChanged,
 }) {
   const registry = createCaseReviewNodeRegistry();
-  const conversation = createConversationPanelBinding();
   let bound = false;
 
   /** @returns {CaseReviewShellContext} */
@@ -73,7 +71,6 @@ export function createCaseReviewInterimAdapter({
       bound = true;
       bindRemediationPanel(ctx);
       bindRemediationTracking(ctx);
-      conversation.bind(ctx);
       bindCompletion(ctx);
     }
     if (!viewModel.loaded.get() || !viewModel.caseRow) return;
@@ -82,14 +79,11 @@ export function createCaseReviewInterimAdapter({
     updateSummaryNotesAppeal(ctx);
     updateAmendOutcome(ctx);
     updateAppealReview(ctx);
-    conversation.update(ctx);
     updateCompletion(ctx);
   }
 
   return {
     update,
-    handleKeydown: (/** @type {KeyboardEvent} */ event) =>
-      conversation.handleKeydown(event),
     get panels() {
       const nodes = registry.ensure();
       return /** @type {Record<string, Node>} */ ({
@@ -101,14 +95,6 @@ export function createCaseReviewInterimAdapter({
         appealReview: nodes.appealReview,
         amendOutcome: nodes.amendOutcome,
       });
-    },
-    get conversation() {
-      return registry.ensure().conversation;
-    },
-    get conversationToggle() {
-      return viewModel.machine?.canToggleConversation
-        ? registry.ensure().conversationToggle
-        : null;
     },
     get completeButton() {
       return registry.ensure().completeButton;

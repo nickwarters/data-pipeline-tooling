@@ -2,10 +2,23 @@
 import './_register-example-review.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { installDom, waitForRender } from './_dom-stub.js';
+import { installDom, waitFor } from './_dom-stub.js';
 import { initRouter, routeRegistrationSpy } from './helpers/router.js';
 
 installDom();
+
+const permissions = {
+  isReviewer: true,
+  listAccessCaseTypes: [],
+  isAdviser: false,
+  ownedCaseTypes: [],
+  ownedJourneyCaseTypes: [],
+  isControls: false,
+  isReviewerManager: false,
+  isResponsiblePartyManager: false,
+  isMaintainer: false,
+  isVisitor: false,
+};
 
 /** @type {Record<string, Function[]>} */
 const windowListeners = {};
@@ -21,14 +34,21 @@ const { register } = await import('../src/routes/conversation.js');
 /** @param {{ caseRow?: any }} [opts] */
 function makeContext(opts = {}) {
   const caseRow = 'caseRow' in opts ? opts.caseRow : null;
+  const currentUser = { id: 'u1', displayName: 'User One' };
   return {
     client: /** @type {any} */ ({
       async getCase() {
         return caseRow;
       },
     }),
-    saveQueue: /** @type {any} */ ({}),
-    currentUser: /** @type {any} */ ({ id: 'u1' }),
+    saveQueue: /** @type {any} */ ({ loadCase() {} }),
+    currentUser: /** @type {any} */ (currentUser),
+    chrome: /** @type {any} */ ({
+      currentUser,
+      permissions,
+      nav: { currentHash: '#/' },
+      toasts: [],
+    }),
   };
 }
 
@@ -61,37 +81,50 @@ test('conversation route: unmount is a no-op (does not throw)', () => {
   );
 });
 
-test('conversation route: mount renders ConversationView output into the container', async () => {
+test('conversation route: mount renders the store-driven conversation page', async () => {
   const client = {
     async getCase(/** @type {string} */ id) {
-      return { id, title: 'Case Title', conversation: [] };
+      return {
+        id,
+        caseType: 'example-review',
+        title: 'Case Title',
+        status: 'In-progress',
+        assignedReviewer: 'u42',
+        responsibleParty: 'agent',
+        answers: {},
+        conversation: [],
+        notes: '',
+        completedAt: null,
+        etag: 'v1',
+      };
     },
   };
-  const saveQueue = {};
-  const currentUser = { id: 'u42' };
-
-  /** @type {any[]} */
-  const rendered = [];
-  const container = {
-    replaceChildren(/** @type {any[]} */ ...children) {
-      rendered.splice(0, rendered.length, ...children);
-    },
-  };
+  const currentUser = { id: 'u42', displayName: 'Reviewer' };
+  const container = document.createElement('div');
 
   const router = new Router();
   initRouter(router, /** @type {any} */ (container));
 
-  register(router, /** @type {any} */ ({ client, saveQueue, currentUser }));
+  register(
+    router,
+    /** @type {any} */ ({
+      ...makeContext(),
+      client,
+      currentUser,
+      chrome: {
+        currentUser,
+        permissions,
+        nav: { currentHash: '#/' },
+        toasts: [],
+      },
+    })
+  );
   await router.navigate('#/conversation/123');
+  await waitFor(() => container.textContent.includes('Case Title'));
 
-  assert.equal(rendered.length, 1, 'container should receive one host node');
-  const host = /** @type {any} */ (rendered[0]);
-  assert.equal(host._children.length, 2, 'header + cora-conversation rendered');
-  const conversationEl = host._children[1];
-  assert.equal(conversationEl.client, client);
-  assert.equal(conversationEl.saveQueue, saveQueue);
-  assert.equal(conversationEl.caseId, '123');
-  assert.equal(conversationEl.currentUser, currentUser);
+  assert.match(container.textContent, /Case Title/);
+  assert.match(container.textContent, /Conversation/);
+  assert.equal(container.querySelector('cora-conversation'), null);
 });
 
 test('conversation route: renders a cora-route-error panel when the page module fails to load', async () => {
@@ -127,17 +160,23 @@ test('conversation route: source-key route passes caseType through to the fetche
   const client = {
     async getCase(/** @type {string} */ id, /** @type {any} */ opts) {
       getCaseCalls.push([id, opts]);
-      return { id, title: 'Case Title', conversation: [] };
+      return {
+        id,
+        caseType: 'example-review',
+        title: 'Case Title',
+        status: 'In-progress',
+        assignedReviewer: 'u42',
+        responsibleParty: 'agent',
+        answers: {},
+        conversation: [],
+        notes: '',
+        completedAt: null,
+        etag: 'v1',
+      };
     },
   };
 
-  /** @type {any[]} */
-  const rendered = [];
-  const container = {
-    replaceChildren(/** @type {any[]} */ ...children) {
-      rendered.splice(0, rendered.length, ...children);
-    },
-  };
+  const container = document.createElement('div');
 
   const router = new Router();
   initRouter(router, /** @type {any} */ (container));
@@ -145,15 +184,14 @@ test('conversation route: source-key route passes caseType through to the fetche
   register(
     router,
     /** @type {any} */ ({
+      ...makeContext(),
       client,
-      saveQueue: {},
-      currentUser: { id: 'u42' },
     })
   );
   await router.navigate('#/conversation/example-review/123');
-  await waitForRender(rendered[0]);
+  await waitFor(() => container.textContent.includes('Case Title'));
 
   assert.equal(getCaseCalls.length, 1);
   assert.equal(getCaseCalls[0][0], '123');
-  assert.equal(rendered.length, 1);
+  assert.match(container.textContent, /Case Title/);
 });

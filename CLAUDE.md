@@ -148,8 +148,10 @@ src/
     cora-case-review/          # converted Section views + save effect + interim adapter + remaining per-tab controllers
       details-view.js          # config-driven, read-only Case Details pure view (mirrors current Section behaviour)
       case-actions.js          # Answer dispatch -> unchanged SaveQueue; save status dispatch bridge
-      interim-adapter.js       # mounts the remaining CASE-3…6 legacy Section components outside the morph boundary
+      interim-adapter.js       # mounts the remaining CASE-4…6 legacy Section components outside the morph boundary
       question-panel-view.js   # CASE-2 group-scoped Questions view with memoised cards
+      conversation-view.js     # CASE-3 pure conversation panel + unchanged JSON-blob PATCH effect
+      notes-view.js            # CASE-3 pure Notes and Case Justification view; SaveQueue remains the writer
       tab-controller.js
       node-registry.js
       completion-controller.js

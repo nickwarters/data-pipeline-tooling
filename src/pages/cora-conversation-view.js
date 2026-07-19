@@ -1,103 +1,46 @@
 // @ts-check
-import { signal } from '../lib/signal.js';
-import { reactive } from '../lib/view.js';
 import { h } from '../lib/html.js';
+import { CaseMachine } from '../lib/case-machine.js';
 import {
   UnknownCaseTypeError,
   loadCaseTypeConfig,
 } from '../../case-types/manifest.js';
-import '../components/sections/cora-conversation.js';
+import {
+  conversationView,
+  postConversationMessage,
+  refreshConversation,
+} from './cora-case-review/conversation-view.js';
 
-/** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
-/** @typedef {import('../sharepoint-client.js').CurrentUser} CurrentUser */
-/** @typedef {import('../services/save-queue.js').SaveQueue} SaveQueue */
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
+/** @typedef {import('../sharepoint-client.js').CaseListOptions} CaseListOptions */
 
 /**
- * Lightweight conversation-only view for the Responsible Party.
- * Shows only the Conversation thread — no Q&A, Notes, or Reviewer identity.
- *
- * @param {{
- * client: SharePointClient | null,
- * saveQueue: SaveQueue | null,
- * caseId: string,
- * caseType: string | null,
- * currentUser: CurrentUser | null,
- * }} props
- * @returns {HTMLElement}
+ * @typedef {Object} ConversationRouteState
+ * @property {CaseRow | null} caseRow
+ * @property {'edit'|'read-only'|'hidden'} access
+ * @property {CaseListOptions} caseListOptions
+ * @property {string | null} error
  */
-export function ConversationView({
-  client,
-  saveQueue,
-  caseId,
-  caseType,
-  currentUser,
-}) {
-  /** @type {import('../lib/signal.js').Signal<CaseRow | null>} */
-  const caseRow = signal(/** @type {CaseRow | null} */ (null));
-  /** @type {import('../lib/signal.js').Signal<import('../sharepoint-client.js').CaseListOptions>} */
-  const caseListOptions = signal(
-    /** @type {import('../sharepoint-client.js').CaseListOptions} */ ({})
-  );
-
-  async function fetchData() {
-    if (!client || !caseId) return;
-    /** @type {import('../sharepoint-client.js').CaseListOptions} */
-    let opts = {};
-    if (caseType) {
-      try {
-        const config = await loadCaseTypeConfig(caseType);
-        opts = config.listName ? { listName: config.listName } : {};
-      } catch (error) {
-        if (error instanceof UnknownCaseTypeError) return;
-        throw error;
-      }
-    }
-    caseListOptions.set(opts);
-    const row = await client.getCase(caseId, opts);
-    if (!row) return;
-    if (typeof saveQueue?.loadCase === 'function') {
-      saveQueue.loadCase(row, opts);
-    }
-    caseRow.set(row);
-  }
-
-  const host = reactive(() =>
-    renderConversationView({
-      client,
-      saveQueue,
-      caseId,
-      currentUser,
-      caseRow: caseRow.get(),
-      caseListOptions: caseListOptions.get(),
-    })
-  );
-  fetchData();
-  return host;
-}
 
 /**
- * @param {{
- * client: SharePointClient | null,
- * saveQueue: SaveQueue | null,
- * caseId: string,
- * currentUser: CurrentUser | null,
- * caseRow: CaseRow | null,
- * caseListOptions: import('../sharepoint-client.js').CaseListOptions,
- * }} args
- * @returns {Node[]}
+ * @typedef {Object} ConversationState
+ * @property {import('../core/chrome-state.js').ChromeState} chrome
+ * @property {{ conversation: ConversationRouteState }} routes
  */
-function renderConversationView({
-  client,
-  saveQueue,
-  caseId,
-  currentUser,
-  caseRow,
-  caseListOptions,
-}) {
-  if (!caseRow) return [];
 
-  return [
+/**
+ * @param {ConversationState} state
+ * @param {{dispatch: (action: any) => any}} tools
+ * @param {(body: string, state: ConversationState) => void|Promise<void>} send
+ */
+export function conversationPageView(state, tools, send) {
+  const route = state.routes.conversation;
+  if (route.error) return h('p', { role: 'alert' }, route.error);
+  if (!route.caseRow) return h('p', {}, 'Loading...');
+
+  return h(
+    'div',
+    { className: 'cora-conversation-view' },
     h(
       'header',
       { className: 'cora-conversation-view-header' },
@@ -106,21 +49,185 @@ function renderConversationView({
         {
           type: 'button',
           className: 'cora-back-btn',
-          onclick: () => {
+          onClick: () => {
             location.hash = '#/my-reviews';
           },
         },
         '← My Reviews'
       ),
-      h('h1', {}, caseRow.title || caseRow.id)
+      h('h1', {}, route.caseRow.title || route.caseRow.id)
     ),
-    h('cora-conversation', {
-      client,
-      saveQueue,
-      caseId,
+    conversationView({
+      messages: route.caseRow.conversation,
+      access: route.access,
+      heading: 'Conversation',
+      onSend: (body) => send(body, state),
+    })
+  );
+}
+
+/**
+ * @param {Record<string, string>} params
+ * @param {import('../setup/register-routes.js').AppContext} context
+ */
+export function createRouteSlice(params, context) {
+  const currentUser = context.chrome.currentUser ?? context.currentUser;
+
+  /** @param {string} body @param {ConversationState} state */
+  async function send(
+    /** @type {string} */ body,
+    /** @type {ConversationState} */ state,
+    /** @type {(action: any) => any} */ dispatch
+  ) {
+    const route = state.routes.conversation;
+    if (
+      route.access !== 'edit' ||
+      !route.caseRow ||
+      !currentUser ||
+      !context.saveQueue
+    ) {
+      return;
+    }
+    await postConversationMessage({
+      client: context.client,
+      saveQueue: context.saveQueue,
+      caseId: route.caseRow.id,
+      messages: route.caseRow.conversation,
       currentUser,
-      messages: caseRow.conversation,
-      caseListOptions,
+      caseListOptions: route.caseListOptions,
+      body,
+      onMessages: (messages) =>
+        dispatch({ type: 'conversation/messages-changed', messages }),
+    });
+  }
+
+  return {
+    initialState: /** @type {ConversationState} */ ({
+      chrome: context.chrome,
+      routes: {
+        conversation: {
+          caseRow: null,
+          access: 'read-only',
+          caseListOptions: {},
+          error: null,
+        },
+      },
     }),
-  ];
+    /** @param {ConversationState} state @param {any} action */
+    reducer(state, action) {
+      const route = state.routes.conversation;
+      if (action.type === 'conversation/loaded') {
+        return {
+          ...state,
+          routes: {
+            conversation: {
+              ...route,
+              caseRow: action.caseRow,
+              access: action.access,
+              caseListOptions: action.caseListOptions,
+            },
+          },
+        };
+      }
+      if (action.type === 'conversation/messages-changed' && route.caseRow) {
+        return {
+          ...state,
+          routes: {
+            conversation: {
+              ...route,
+              caseRow: { ...route.caseRow, conversation: action.messages },
+            },
+          },
+        };
+      }
+      if (action.type === 'conversation/load-failed') {
+        return {
+          ...state,
+          routes: {
+            conversation: { ...route, error: action.message },
+          },
+        };
+      }
+      return state;
+    },
+    /** @param {Element} container @param {ConversationState} state @param {any} tools */
+    render(container, state, tools) {
+      tools.morph(
+        container,
+        conversationPageView(state, tools, (body, currentState) =>
+          send(body, currentState, tools.dispatch)
+        )
+      );
+    },
+    start(/** @type {any} */ tools) {
+      let active = true;
+      /** @type {CaseListOptions} */
+      let caseListOptions = {};
+
+      async function load() {
+        try {
+          let config = null;
+          if (params.caseType) {
+            config = await loadCaseTypeConfig(params.caseType);
+            caseListOptions = config.listName
+              ? { listName: config.listName }
+              : {};
+          }
+          const caseRow = await context.client.getCase(
+            params.id,
+            caseListOptions
+          );
+          if (!caseRow || !active) return;
+          config ??= await loadCaseTypeConfig(caseRow.caseType);
+          const access = currentUser
+            ? new CaseMachine(
+                caseRow,
+                { id: currentUser.id },
+                context.chrome.permissions,
+                config
+              ).access.conversation
+            : 'read-only';
+          context.saveQueue?.loadCase(caseRow, caseListOptions);
+          tools.dispatch({
+            type: 'conversation/loaded',
+            caseRow,
+            access,
+            caseListOptions,
+          });
+        } catch (error) {
+          if (!active) return;
+          if (error instanceof UnknownCaseTypeError) {
+            tools.dispatch({
+              type: 'conversation/load-failed',
+              message: 'This Case Type is not supported.',
+            });
+            return;
+          }
+          throw error;
+        }
+      }
+
+      void load();
+      if (typeof document !== 'undefined') {
+        tools.listen(document, 'visibilitychange', () => {
+          if (document.hidden) return;
+          void refreshConversation({
+            client: context.client,
+            caseId: params.id,
+            caseListOptions,
+          }).then((caseRow) => {
+            if (active && caseRow) {
+              tools.dispatch({
+                type: 'conversation/messages-changed',
+                messages: caseRow.conversation,
+              });
+            }
+          });
+        });
+      }
+      return () => {
+        active = false;
+      };
+    },
+  };
 }
