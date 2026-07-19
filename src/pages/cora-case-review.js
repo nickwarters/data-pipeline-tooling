@@ -386,7 +386,6 @@ export function createRouteSlice(params, context) {
           'button',
           {
             key: `tab-${entry.id}`,
-            type: 'button',
             className: 'cora-tabs-tab',
             role: 'tab',
             id: `case-tab-${entry.id}`,
