@@ -1,5 +1,4 @@
 // @ts-check
-import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
 import { EmptyState } from '../../lib/empty-state.js';
 import { buildAmendmentFields } from '../../evaluators/amended-outcome.js';
@@ -286,49 +285,3 @@ export function resolveAppeal(
 
   props.render();
 }
-
-export class CORAAppealReview extends ShellElement {
-  constructor() {
-    super();
-    /** @type {CaseRow | null} */
-    this.caseRow = null;
-    /** @type {SaveQueue | null} */
-    this.saveQueue = null;
-    /** @type {string} */
-    this.caseId = '';
-    /** @type {'edit'|'read-only'|'hidden'} */
-    this.access = 'read-only';
-    /** @type {CurrentUser | null} */
-    this.currentUser = null;
-    /** @type {OutcomeOption[]} */
-    this.outcomeOptions = [];
-  }
-
-  render() {
-    return AppealReviewSection(this._buildProps());
-  }
-
-  /**
-   * ISO timestamp seam so tests can pin `at`.
-   * @returns {string}
-   */
-  now() {
-    return new Date().toISOString();
-  }
-
-  /** @returns {AppealReviewProps} */
-  _buildProps() {
-    return {
-      caseRow: this.caseRow,
-      saveQueue: this.saveQueue,
-      caseId: this.caseId,
-      access: this.access,
-      currentUser: this.currentUser,
-      outcomeOptions: this.outcomeOptions,
-      now: () => this.now(),
-      render: () => this._shellRenderNow?.(),
-    };
-  }
-}
-
-customElements.define('cora-appeal-review', CORAAppealReview);

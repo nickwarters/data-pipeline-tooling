@@ -112,9 +112,7 @@ src/
       cora-toast.js
     sections/                   # domain-feature units: take config, wire base components together
       cora-allocation.js
-      cora-amend-outcome.js
       cora-app-nav.js
-      cora-appeal.js
       cora-attribute-menu.js
       cora-capture-groups.js
       cora-case-details.js
@@ -128,7 +126,6 @@ src/
       cora-showwhen-group.js
       cora-wording-editor.js
     collections/                # page/tab-level assemblies mounted directly by pages
-      cora-appeal-review.js
       cora-case-tabs.js
       cora-compile-drawer.js
       cora-question-list.js
@@ -140,8 +137,8 @@ src/
     dev-morph-harness.js        # dev-only morph() demo (store-less scratch view, #404)
     dev-performance-harness.js  # dev-only CORE-5 500-question keystroke-latency gate (mock-only)
                                 #   see docs/palimpsest-performance-gate.md for the measured result
-    cora-case-review.js        # store slice + pure tab shell; unconverted Sections use the interim adapter
-    cora-case-review/          # converted Section views + save effect + interim adapter + remaining per-tab controllers
+    cora-case-review.js        # store slice + pure tab shell
+    cora-case-review/          # converted Section views + save effect + remaining legacy-shell controllers
       details-view.js          # config-driven, read-only Case Details pure view (mirrors current Section behaviour)
       case-actions.js          # Answer dispatch -> unchanged SaveQueue; save status dispatch bridge
       interim-adapter.js       # mounts the remaining CASE-4…6 legacy Section components outside the morph boundary
@@ -156,8 +153,9 @@ src/
       remediation-actions.js   # CASE-5 route action for configurable Remediation Detail edits
       remediation-view.js      # CASE-5 pure Issues and Remediation Actions view
       remediation-tracking-view.js # CASE-5 pure Remediation Tracking view
-      amend-outcome-controller.js
-      appeal-review-controller.js
+      appeal-view.js           # CASE-6 pure Appeal request view + unchanged SaveQueue effect
+      appeal-review-view.js    # CASE-6 pure Controls resolution view + linked amendment write
+      amend-outcome-view.js    # CASE-6 pure ADR-0026 Amend Outcome view
       controllers.js
       conversation-controller.js
       header-controller.js

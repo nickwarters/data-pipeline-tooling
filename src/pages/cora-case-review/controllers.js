@@ -20,7 +20,7 @@ export {
   collectUnansweredQuestions,
   updateQuestionPanel,
 } from './question-panel-controller.js';
-export { updateSummaryNotesAppeal } from './summary-notes-appeal-controller.js';
+export { updateNotes } from './summary-notes-appeal-controller.js';
 export {
   createConversationPanelBinding,
   updateConversationPanel,

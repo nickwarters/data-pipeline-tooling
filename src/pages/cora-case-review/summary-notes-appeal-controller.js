@@ -2,22 +2,14 @@
 import { resolveSectionHeadings } from '../../lib/section-labels.js';
 
 /**
- * Owns property assignment for the remaining Notes and Appeal tabs.
+ * Owns property assignment for the remaining legacy Notes tab.
  * @param {import('./types.js').CaseReviewShellContext} context
  */
-export function updateSummaryNotesAppeal(context) {
+export function updateNotes(context) {
   const { viewModel: vm, nodes } = context;
-  const { notes, appeal } = nodes;
-  const {
-    caseRow,
-    catalogue,
-    config,
-    answersSignal,
-    allAnswered,
-    currentUser,
-    access,
-  } = vm;
-  if (!notes || !appeal || !caseRow || !config || !currentUser) return;
+  const { notes } = nodes;
+  const { caseRow, config, access } = vm;
+  if (!notes || !caseRow || !config) return;
 
   // Prefer the view model's resolved headings; fall back to resolving from
   // the config so the controller stays usable with minimal contexts.
@@ -30,16 +22,5 @@ export function updateSummaryNotesAppeal(context) {
     access: context.displayMode(access.notes),
     heading: headings.notes,
     placeholders: config.placeholders ?? {},
-  });
-
-  Object.assign(appeal, {
-    caseRow,
-    saveQueue: vm.saveQueue,
-    caseId: caseRow.id,
-    access: context.displayMode(access.appealRequest),
-    currentUser,
-    catalogue,
-    answers: caseRow.answers,
-    heading: headings.appealRequest,
   });
 }

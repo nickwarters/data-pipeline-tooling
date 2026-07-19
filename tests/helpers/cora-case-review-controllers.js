@@ -31,12 +31,6 @@ const { bindCaseReviewTabs, buildCaseReviewTabs, updateCaseReviewTabs } =
   await import('../../src/pages/cora-case-review/tab-controller.js');
 const { bindQuestionPanel, collectUnansweredQuestions, updateQuestionPanel } =
   await import('../../src/pages/cora-case-review/question-panel-controller.js');
-const { updateSummaryNotesAppeal } =
-  await import('../../src/pages/cora-case-review/summary-notes-appeal-controller.js');
-const { updateAmendOutcome } =
-  await import('../../src/pages/cora-case-review/amend-outcome-controller.js');
-const { updateAppealReview } =
-  await import('../../src/pages/cora-case-review/appeal-review-controller.js');
 const { createConversationPanelBinding } =
   await import('../../src/pages/cora-case-review/conversation-controller.js');
 const {
@@ -799,22 +793,16 @@ export {
   documentListeners,
   hasRemediationActions,
   installDom,
-  makeAmendOutcomeContext,
-  makeAppealReviewContext,
   makeCompletionContext,
   makeConversationContext,
   makeHeaderContext,
   makeQuestionContext,
   makeRemediationContext,
-  makeSummaryNotesAppealContext,
   makeTabContext,
   makeTrackingContext,
-  updateAmendOutcome,
-  updateAppealReview,
   updateCaseReviewHeader,
   updateCaseReviewTabs,
   updateCompletion,
   updateQuestionPanel,
-  updateSummaryNotesAppeal,
   useElementClass,
 };

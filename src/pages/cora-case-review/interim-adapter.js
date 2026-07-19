@@ -1,8 +1,6 @@
 // @ts-check
 import { createCaseReviewNodeRegistry } from './node-registry.js';
-import { updateSummaryNotesAppeal } from './summary-notes-appeal-controller.js';
-import { updateAmendOutcome } from './amend-outcome-controller.js';
-import { updateAppealReview } from './appeal-review-controller.js';
+import { updateNotes } from './summary-notes-appeal-controller.js';
 
 /** @typedef {import('../../lib/case-review-view-model.js').CaseReviewViewModel} CaseReviewViewModel */
 /** @typedef {import('../../services/save-queue.js').SaveQueue} SaveQueue */
@@ -47,9 +45,7 @@ export function createCaseReviewInterimAdapter({
   function update() {
     const ctx = context();
     if (!viewModel.loaded.get() || !viewModel.caseRow) return;
-    updateSummaryNotesAppeal(ctx);
-    updateAmendOutcome(ctx);
-    updateAppealReview(ctx);
+    updateNotes(ctx);
   }
 
   return {

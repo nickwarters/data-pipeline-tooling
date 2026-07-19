@@ -136,7 +136,7 @@ test('CORACaseReview: notes panel receives notes and Case Justification from the
   assert.equal(notes.caseRow.caseJustification, 'why this case passes');
 });
 
-test('CORACaseReview: appeal panel is wired with the Case row, access, user and catalogue', async () => {
+test('CORACaseReview: assigned reviewer sees the Appeal history read-only', async () => {
   const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (makeClient());
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
@@ -144,26 +144,8 @@ test('CORACaseReview: appeal panel is wired with the Case row, access, user and 
   await el.connectedCallback();
 
   const appeal = panelOf(el, 'appealRequest');
-  assert.equal(appeal.caseId, 'c1', 'appeal panel knows the Case id');
-  assert.equal(
-    appeal.access,
-    'read-only',
-    'assigned reviewer sees the Appeal Section read-only'
-  );
-  assert.equal(
-    appeal.currentUser.id,
-    'u1',
-    'current user forwarded for the appellant'
-  );
-  assert.ok(
-    Array.isArray(appeal.catalogue),
-    'catalogue forwarded so disputed Answers can be cited'
-  );
-  assert.equal(
-    appeal.saveQueue,
-    el.saveQueue,
-    'writes go through the SaveQueue'
-  );
+  assert.equal(getByTag(appeal, 'h2').textContent, 'Appeal');
+  assert.equal(queryAllByTag(appeal, 'button').length, 0);
 });
 
 test('CORACaseReview: default selected tab is Details', async () => {

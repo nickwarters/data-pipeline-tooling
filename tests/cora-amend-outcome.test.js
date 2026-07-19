@@ -7,8 +7,43 @@ installDom();
 
 // DOM stubs must be in place before any src import.
 
-const { CORAAmendOutcome } =
-  await import('../src/components/sections/cora-amend-outcome.js');
+const { AmendOutcomeSection } =
+  await import('../src/pages/cora-case-review/amend-outcome-view.js');
+
+class CORAAmendOutcome extends HTMLElement {
+  constructor() {
+    super();
+    /** @type {any} */
+    this.caseRow = null;
+    /** @type {any} */
+    this.saveQueue = null;
+    this.caseId = '';
+    this.access = /** @type {'edit'|'read-only'|'hidden'} */ ('read-only');
+    /** @type {any} */
+    this.currentUser = null;
+    /** @type {any[]} */
+    this.outcomeOptions = [];
+  }
+
+  now() {
+    return new Date().toISOString();
+  }
+
+  connectedCallback() {
+    this.replaceChildren(
+      ...AmendOutcomeSection({
+        caseRow: this.caseRow,
+        saveQueue: /** @type {any} */ (this.saveQueue),
+        caseId: this.caseId,
+        access: this.access,
+        currentUser: this.currentUser,
+        outcomeOptions: this.outcomeOptions,
+        now: () => this.now(),
+        render: () => this.connectedCallback(),
+      })
+    );
+  }
+}
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 

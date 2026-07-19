@@ -7,8 +7,43 @@ installDom();
 
 // DOM stubs must be in place before any src import.
 
-const { CORAAppealReview, resolveAppeal } =
-  await import('../src/components/collections/cora-appeal-review.js');
+const { AppealReviewSection, resolveAppeal } =
+  await import('../src/pages/cora-case-review/appeal-review-view.js');
+
+class CORAAppealReview extends HTMLElement {
+  constructor() {
+    super();
+    /** @type {any} */
+    this.caseRow = null;
+    /** @type {any} */
+    this.saveQueue = null;
+    this.caseId = '';
+    this.access = /** @type {'edit'|'read-only'|'hidden'} */ ('read-only');
+    /** @type {any} */
+    this.currentUser = null;
+    /** @type {any[]} */
+    this.outcomeOptions = [];
+  }
+
+  now() {
+    return new Date().toISOString();
+  }
+
+  connectedCallback() {
+    this.replaceChildren(
+      ...AppealReviewSection({
+        caseRow: this.caseRow,
+        saveQueue: /** @type {any} */ (this.saveQueue),
+        caseId: this.caseId,
+        access: this.access,
+        currentUser: this.currentUser,
+        outcomeOptions: this.outcomeOptions,
+        now: () => this.now(),
+        render: () => this.connectedCallback(),
+      })
+    );
+  }
+}
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../src/sharepoint-client.js').Appeal} Appeal */

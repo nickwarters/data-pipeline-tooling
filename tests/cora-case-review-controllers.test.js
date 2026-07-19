@@ -4,5 +4,4 @@
 import './cora-case-review-controllers-shell.tests.js';
 import './cora-case-review-controllers-questions.tests.js';
 import './cora-case-review-controllers-conversation.tests.js';
-import './cora-case-review-controllers-outcomes.tests.js';
 import './cora-case-review-controllers-completion.tests.js';

@@ -1,5 +1,4 @@
 // @ts-check
-import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
 import { EmptyState } from '../../lib/empty-state.js';
 import { DEFAULT_SECTION_HEADINGS } from '../../lib/section-labels.js';
@@ -234,60 +233,3 @@ export function raiseAppeal(props, rationaleEl, checkboxes, errorEl) {
   props.saveQueue?.enqueue(props.caseId, 'appeals', next);
   props.render();
 }
-
-export class CORAAppeal extends ShellElement {
-  constructor() {
-    super();
-    /** @type {CaseRow | null} */
-    this.caseRow = null;
-    /** @type {SaveQueue | null} */
-    this.saveQueue = null;
-    /** @type {string} */
-    this.caseId = '';
-    /** @type {'edit'|'read-only'|'hidden'} */
-    this.access = 'read-only';
-    /** @type {CurrentUser | null} */
-    this.currentUser = null;
-    /**
-     * The Case Type's non-deprecated Question catalogue plus the current Answers,
-     * used to offer the disputed *failed* Answers as optional citations.
-     * @type {QuestionDefinition[]}
-     */
-    this.catalogue = [];
-    /** @type {Record<string, Answer>} */
-    this.answers = {};
-    /** @type {string} Section heading (overridable via `CaseTypeConfig.sectionLabels.appealRequest`). */
-    this.heading = DEFAULT_SECTION_HEADINGS.appealRequest;
-  }
-
-  render() {
-    return AppealSection(this._buildProps());
-  }
-
-  /**
-   * A locally-unique Appeal id. Overridable seam; the default is sufficient since
-   * Appeals are appended one at a time per Case.
-   * @returns {string}
-   */
-  newAppealId() {
-    return `appeal-${Date.now()}`;
-  }
-
-  /** @returns {AppealProps} */
-  _buildProps() {
-    return {
-      caseRow: this.caseRow,
-      saveQueue: this.saveQueue,
-      caseId: this.caseId,
-      access: this.access,
-      currentUser: this.currentUser,
-      catalogue: this.catalogue,
-      answers: this.answers,
-      newAppealId: () => this.newAppealId(),
-      render: () => this._shellRenderNow?.(),
-      heading: this.heading,
-    };
-  }
-}
-
-customElements.define('cora-appeal', CORAAppeal);

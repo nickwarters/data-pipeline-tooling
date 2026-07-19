@@ -8,6 +8,7 @@ import {
   getByRole,
   getByTag,
   queryAllByRole,
+  queryAllByTag,
 } from './helpers/semantic-dom.js';
 
 installDom();
@@ -232,6 +233,195 @@ test('CASE-1 state: tab selection is store-owned and rejects hidden Sections', (
     id: 'remediation',
   });
   assert.equal(unchanged, state, 'hidden Section cannot become active');
+});
+
+test('CASE-6 route: Appeal renders directly from store state without legacy controller wiring', () => {
+  const appealSnapshot = snapshot();
+  appealSnapshot.access = {
+    ...appealSnapshot.access,
+    appealRequest: 'edit',
+  };
+  let state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: appealSnapshot }
+  );
+  state = caseReviewReducer(state, {
+    type: 'case/tab-selected',
+    id: 'appealRequest',
+  });
+
+  const { container } = renderShippedState(state);
+  const panel = queryAllByRole(container, 'tabpanel').find(
+    (candidate) => candidate.getAttribute('id') === 'case-panel-appealRequest'
+  );
+  assert.ok(panel);
+  assert.equal(queryAllByTag(panel, 'cora-appeal').length, 1);
+  assert.equal(
+    getByRole(panel, 'button', { name: 'Raise Appeal' }).textContent,
+    'Raise Appeal'
+  );
+});
+
+test('CASE-6 route: raising an Appeal persists through the store-owned panel', () => {
+  const appealSnapshot = snapshot();
+  appealSnapshot.access = {
+    ...appealSnapshot.access,
+    appealRequest: 'edit',
+  };
+  let state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: appealSnapshot }
+  );
+  state = caseReviewReducer(state, {
+    type: 'case/tab-selected',
+    id: 'appealRequest',
+  });
+  /** @type {Array<{id: string, field: string, value: any}>} */
+  const writes = [];
+  const { container } = renderShippedState(state, {
+    saveQueue: {
+      enqueue(
+        /** @type {string} */ id,
+        /** @type {string} */ field,
+        /** @type {any} */ value
+      ) {
+        writes.push({ id, field, value });
+      },
+    },
+  });
+  const panel = queryAllByRole(container, 'tabpanel').find(
+    (candidate) => candidate.getAttribute('id') === 'case-panel-appealRequest'
+  );
+  assert.ok(panel);
+  getByRole(panel, 'textbox', { name: 'Appeal rationale' }).value =
+    'The result is wrong.';
+  fireEvent(getByRole(panel, 'button', { name: 'Raise Appeal' }), 'click');
+
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].field, 'appeals');
+  assert.equal(writes[0].value[0].state, 'raised');
+});
+
+test('CASE-6 route: Controls resolves an Appeal and amends an Outcome through state-derived edit access', () => {
+  const controlsSnapshot = snapshot();
+  controlsSnapshot.caseRow = {
+    ...controlsSnapshot.caseRow,
+    status: 'Completed',
+    outcomeAtCompletion: 'fail',
+    appeals: [
+      {
+        id: 'appeal-1',
+        appellant: 'u2',
+        at: '2026-07-19T10:00:00Z',
+        rationale: 'Wrong result.',
+        state: 'raised',
+      },
+    ],
+  };
+  controlsSnapshot.access = {
+    ...controlsSnapshot.access,
+    appealReview: 'edit',
+    amendOutcome: 'edit',
+  };
+  controlsSnapshot.config.outcomeOptions = [
+    { id: 'pass', wording: 'Pass', severity: 0 },
+    { id: 'fail', wording: 'Fail', severity: 100 },
+  ];
+  /** @type {Array<{id: string, fields: any}>} */
+  const fieldWrites = [];
+  const saveQueue = {
+    enqueue() {},
+    enqueueFields(/** @type {string} */ id, /** @type {any} */ fields) {
+      fieldWrites.push({ id, fields });
+    },
+  };
+
+  let reviewState = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: controlsSnapshot }
+  );
+  reviewState = caseReviewReducer(reviewState, {
+    type: 'case/tab-selected',
+    id: 'appealReview',
+  });
+  const review = renderShippedState(reviewState, { saveQueue });
+  const reviewPanel = queryAllByRole(review.container, 'tabpanel').find(
+    (candidate) => candidate.getAttribute('id') === 'case-panel-appealReview'
+  );
+  assert.ok(reviewPanel);
+  getByRole(reviewPanel, 'radio', { name: 'Agree' }).checked = true;
+  getByRole(reviewPanel, 'textbox', { name: 'Resolution rationale' }).value =
+    'Agreed.';
+  getByRole(reviewPanel, 'combobox', { name: 'Amended outcome' }).value =
+    'pass';
+  getByRole(reviewPanel, 'textbox', {
+    name: 'Amendment justification',
+  }).value = 'Corrected.';
+  fireEvent(
+    getByRole(reviewPanel, 'button', { name: 'Resolve Appeal' }),
+    'click'
+  );
+  assert.equal(fieldWrites[0].fields.amendedOutcome.fromAppealId, 'appeal-1');
+
+  controlsSnapshot.caseRow.appeals = [];
+  let amendState = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: controlsSnapshot }
+  );
+  amendState = caseReviewReducer(amendState, {
+    type: 'case/tab-selected',
+    id: 'amendOutcome',
+  });
+  const amend = renderShippedState(amendState, { saveQueue });
+  const amendPanel = queryAllByRole(amend.container, 'tabpanel').find(
+    (candidate) => candidate.getAttribute('id') === 'case-panel-amendOutcome'
+  );
+  assert.ok(amendPanel);
+  getByRole(amendPanel, 'combobox', { name: 'Amended outcome' }).value = 'fail';
+  getByRole(amendPanel, 'textbox', {
+    name: 'Amendment justification',
+  }).value = 'Reconsidered.';
+  fireEvent(
+    getByRole(amendPanel, 'button', { name: 'Amend Outcome' }),
+    'click'
+  );
+  assert.equal(fieldWrites[1].fields.amendedOutcome.outcome, 'fail');
+});
+
+test('CASE-6 route: appeal views keep empty Case Type configuration defaults', () => {
+  const minimal = snapshot();
+  minimal.caseRow = { ...minimal.caseRow, responsibleParty: '' };
+  delete minimal.config.detailFields;
+  delete minimal.config.captureGroups;
+  delete minimal.config.remediationFields;
+  delete minimal.config.placeholders;
+  delete minimal.config.outcomeOptions;
+  minimal.access = {
+    ...minimal.access,
+    appealRequest: 'hidden',
+    appealReview: 'read-only',
+    amendOutcome: 'read-only',
+  };
+  const state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: minimal }
+  );
+  const { container } = renderShippedState(state);
+
+  assert.equal(
+    queryAllByRole(container, 'tab').some(
+      (tab) => tab.textContent === 'Appeal'
+    ),
+    false
+  );
+  assert.equal(
+    getByRole(container, 'tab', { name: 'Appeal Review' }).hidden,
+    false
+  );
+  assert.equal(
+    getByRole(container, 'tab', { name: 'Amend Outcome' }).hidden,
+    false
+  );
 });
 
 test('CASE-1 state: model refreshes and Answer edits preserve valid selection and fall back when access changes', () => {

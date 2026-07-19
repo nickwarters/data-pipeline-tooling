@@ -1,5 +1,4 @@
 // @ts-check
-import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
 import { EmptyState } from '../../lib/empty-state.js';
 import {
@@ -213,53 +212,3 @@ export function amend(props, selectEl, justificationEl, errorEl) {
 function wordingFor(value, outcomeOptions) {
   return outcomeOptions.find((o) => o.id === value)?.wording ?? value;
 }
-
-export class CORAAmendOutcome extends ShellElement {
-  constructor() {
-    super();
-    /** @type {CaseRow | null} */
-    this.caseRow = null;
-    /** @type {SaveQueue | null} */
-    this.saveQueue = null;
-    /** @type {string} */
-    this.caseId = '';
-    /** @type {'edit'|'read-only'|'hidden'} */
-    this.access = 'read-only';
-    /** @type {CurrentUser | null} */
-    this.currentUser = null;
-    /**
-     * The Case Type's Outcome options, offered as the hand-set verdict
-     * choices. Empty when the Case Type declares none.
-     * @type {OutcomeOption[]}
-     */
-    this.outcomeOptions = [];
-  }
-
-  render() {
-    return AmendOutcomeSection(this._buildProps());
-  }
-
-  /**
-   * ISO timestamp seam so tests can pin `amendedAt`.
-   * @returns {string}
-   */
-  now() {
-    return new Date().toISOString();
-  }
-
-  /** @returns {AmendOutcomeProps} */
-  _buildProps() {
-    return {
-      caseRow: this.caseRow,
-      saveQueue: this.saveQueue,
-      caseId: this.caseId,
-      access: this.access,
-      currentUser: this.currentUser,
-      outcomeOptions: this.outcomeOptions,
-      now: () => this.now(),
-      render: () => this._shellRenderNow?.(),
-    };
-  }
-}
-
-customElements.define('cora-amend-outcome', CORAAmendOutcome);

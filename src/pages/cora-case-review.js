@@ -9,7 +9,6 @@ import {
   createCaseReviewSaveEffect,
   observeSaveStatus,
 } from './cora-case-review/case-actions.js';
-import { createCaseReviewInterimAdapter } from './cora-case-review/interim-adapter.js';
 import {
   createQuestionPanelView,
   questionGroupsOf,
@@ -21,6 +20,9 @@ import {
 } from './cora-case-review/conversation-view.js';
 import { notesView } from './cora-case-review/notes-view.js';
 import { summaryView } from './cora-case-review/summary-view.js';
+import { AppealSection } from './cora-case-review/appeal-view.js';
+import { AppealReviewSection } from './cora-case-review/appeal-review-view.js';
+import { AmendOutcomeSection } from './cora-case-review/amend-outcome-view.js';
 import { editRemediationDetail } from './cora-case-review/remediation-actions.js';
 import { RemediationSection } from './cora-case-review/remediation-view.js';
 import { RemediationTracking } from './cora-case-review/remediation-tracking-view.js';
@@ -41,18 +43,13 @@ import {
   bindCaseReviewTabs,
   updateCaseReviewTabs,
 } from './cora-case-review/tab-controller.js';
-import { updateSummaryNotesAppeal } from './cora-case-review/summary-notes-appeal-controller.js';
-import { updateAmendOutcome } from './cora-case-review/amend-outcome-controller.js';
-import { updateAppealReview } from './cora-case-review/appeal-review-controller.js';
+import { updateNotes } from './cora-case-review/summary-notes-appeal-controller.js';
 import { createConversationPanelBinding } from './cora-case-review/conversation-controller.js';
 
 import '../components/collections/cora-question-list.js';
 import '../components/base/cora-group-progress.js';
 import '../components/sections/cora-conversation.js';
 import '../components/sections/cora-notes.js';
-import '../components/sections/cora-appeal.js';
-import '../components/collections/cora-appeal-review.js';
-import '../components/sections/cora-amend-outcome.js';
 import '../components/base/cora-status-banner.js';
 import '../components/base/cora-tabs.js';
 
@@ -351,6 +348,18 @@ function saveStatusView(status) {
 }
 
 /**
+ * Preserve the existing scoped CSS selectors while the Case Review route owns
+ * rendering. These are inert light-DOM hosts, not registered custom elements.
+ * @param {string} tagName
+ * @param {Node[]} children
+ */
+function sectionStyleHost(tagName, children) {
+  const host = document.createElement(tagName);
+  host.replaceChildren(...children);
+  return host;
+}
+
+/**
  * CASE-1 route slice. The view model adapts existing loading/domain behaviour
  * into store snapshots; the interim adapter owns only the unconverted Section
  * components.
@@ -371,17 +380,6 @@ export function createRouteSlice(params, context) {
     currentUserId:
       context.chrome.currentUser?.id ?? context.currentUser?.id ?? '',
     capabilities: context.chrome.permissions ?? context.capabilities,
-  });
-  const adapter = createCaseReviewInterimAdapter({
-    viewModel,
-    client: context.client,
-    saveQueue: context.saveQueue,
-    modelChanged() {
-      dispatch({
-        type: 'case/model-changed',
-        snapshot: viewModel.toStoreSnapshot(),
-      });
-    },
   });
   const questionsView = createQuestionPanelView();
   const remediationCaptureEls = new Map();
@@ -489,7 +487,6 @@ export function createRouteSlice(params, context) {
     const caseRow = snapshot.caseRow;
     const config = snapshot.config;
 
-    adapter.update();
     tools.morph(parts.header, [
       h('h1', {}, snapshot.caseRow.title),
       h('p', {}, `Reviewer: ${snapshot.caseRow.assignedReviewer}`),
@@ -533,7 +530,6 @@ export function createRouteSlice(params, context) {
       })
     );
 
-    const legacyPanels = adapter.panels;
     for (const entry of tabEntries()) {
       const panel = parts.panels[entry.id];
       const visible = snapshot.access[entry.id] !== 'hidden';
@@ -699,10 +695,83 @@ export function createRouteSlice(params, context) {
         );
         continue;
       }
-      const node = legacyPanels[entry.id];
-      if (!node) continue;
-      if (visible && node.parentNode !== panel) panel.appendChild(node);
-      if (!visible && node.parentNode === panel) panel.removeChild(node);
+      if (entry.id === 'appealRequest') {
+        tools.morph(
+          panel,
+          visible
+            ? sectionStyleHost(
+                'cora-appeal',
+                AppealSection({
+                  caseRow: snapshot.caseRow,
+                  saveQueue: context.saveQueue,
+                  caseId: snapshot.caseRow.id,
+                  access: snapshot.access.appealRequest,
+                  currentUser: snapshot.currentUser,
+                  catalogue: snapshot.catalogue,
+                  answers: snapshot.answers,
+                  newAppealId: () => `appeal-${Date.now()}`,
+                  render: () =>
+                    tools.dispatch({
+                      type: 'case/model-changed',
+                      snapshot: viewModel.toStoreSnapshot(),
+                    }),
+                  heading: snapshot.sectionHeadings.appealRequest,
+                })
+              )
+            : null
+        );
+        continue;
+      }
+      if (entry.id === 'appealReview') {
+        tools.morph(
+          panel,
+          visible
+            ? sectionStyleHost(
+                'cora-appeal-review',
+                AppealReviewSection({
+                  caseRow: snapshot.caseRow,
+                  saveQueue: context.saveQueue,
+                  caseId: snapshot.caseRow.id,
+                  access: snapshot.access.appealReview,
+                  currentUser: snapshot.currentUser,
+                  outcomeOptions: snapshot.config.outcomeOptions ?? [],
+                  now: () => new Date().toISOString(),
+                  render: () =>
+                    tools.dispatch({
+                      type: 'case/model-changed',
+                      snapshot: viewModel.toStoreSnapshot(),
+                    }),
+                })
+              )
+            : null
+        );
+        continue;
+      }
+      if (entry.id === 'amendOutcome') {
+        tools.morph(
+          panel,
+          visible
+            ? sectionStyleHost(
+                'cora-amend-outcome',
+                AmendOutcomeSection({
+                  caseRow: snapshot.caseRow,
+                  saveQueue: context.saveQueue,
+                  caseId: snapshot.caseRow.id,
+                  access: snapshot.access.amendOutcome,
+                  currentUser: snapshot.currentUser,
+                  outcomeOptions: snapshot.config.outcomeOptions ?? [],
+                  now: () => new Date().toISOString(),
+                  render: () =>
+                    tools.dispatch({
+                      type: 'case/model-changed',
+                      snapshot: viewModel.toStoreSnapshot(),
+                    }),
+                })
+              )
+            : null
+        );
+        continue;
+      }
     }
 
     parts.conversation.hidden =
@@ -720,7 +789,7 @@ export function createRouteSlice(params, context) {
                 client: context.client,
                 saveQueue: context.saveQueue,
                 caseId: params.id,
-                messages: snapshot.caseRow?.conversation ?? [],
+                messages: snapshot.caseRow.conversation,
                 currentUser,
                 caseListOptions: snapshot.caseListOptions,
                 body,
@@ -1053,9 +1122,48 @@ export function CaseReviewPage({
           ),
       })
     );
-    updateSummaryNotesAppeal(context);
-    updateAmendOutcome(context);
-    updateAppealReview(context);
+    updateNotes(context);
+    replaceHostChildren(
+      /** @type {HTMLElement} */ (registry.appeal),
+      AppealSection({
+        caseRow,
+        saveQueue,
+        caseId,
+        access: access.appealRequest,
+        currentUser,
+        catalogue: vm.catalogue,
+        answers: vm.answersSignal.get(),
+        newAppealId: () => `appeal-${Date.now()}`,
+        render: () => vm.answersSignal.set({ ...vm.answersSignal.get() }),
+        heading: vm.sectionHeadings.appealRequest,
+      })
+    );
+    replaceHostChildren(
+      /** @type {HTMLElement} */ (registry.appealReview),
+      AppealReviewSection({
+        caseRow,
+        saveQueue,
+        caseId,
+        access: access.appealReview,
+        currentUser,
+        outcomeOptions: config.outcomeOptions ?? [],
+        now: () => new Date().toISOString(),
+        render: () => vm.answersSignal.set({ ...vm.answersSignal.get() }),
+      })
+    );
+    replaceHostChildren(
+      /** @type {HTMLElement} */ (registry.amendOutcome),
+      AmendOutcomeSection({
+        caseRow,
+        saveQueue,
+        caseId,
+        access: access.amendOutcome,
+        currentUser,
+        outcomeOptions: config.outcomeOptions ?? [],
+        now: () => new Date().toISOString(),
+        render: () => vm.answersSignal.set({ ...vm.answersSignal.get() }),
+      })
+    );
     conversationPanel.update(context);
     updateCaseReviewHeader(context);
     updateCompletion(context);
