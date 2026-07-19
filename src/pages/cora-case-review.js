@@ -1,5 +1,5 @@
 // @ts-check
-import { reactive, on } from '../lib/view.js';
+import { reactive, on, replaceHostChildren } from '../lib/view.js';
 import { h } from '../lib/html.js';
 import { CaseReviewViewModel } from '../lib/case-review-view-model.js';
 import { evaluate } from '../evaluators/applicability-evaluator.js';
@@ -21,6 +21,9 @@ import {
 } from './cora-case-review/conversation-view.js';
 import { notesView } from './cora-case-review/notes-view.js';
 import { summaryView } from './cora-case-review/summary-view.js';
+import { editRemediationDetail } from './cora-case-review/remediation-actions.js';
+import { RemediationSection } from './cora-case-review/remediation-view.js';
+import { RemediationTracking } from './cora-case-review/remediation-tracking-view.js';
 import {
   bindCompletion,
   completeCase,
@@ -38,14 +41,6 @@ import {
   bindCaseReviewTabs,
   updateCaseReviewTabs,
 } from './cora-case-review/tab-controller.js';
-import {
-  bindRemediationPanel,
-  updateRemediationPanel,
-} from './cora-case-review/remediation-controller.js';
-import {
-  bindRemediationTracking,
-  updateRemediationTracking,
-} from './cora-case-review/remediation-tracking-controller.js';
 import { updateSummaryNotesAppeal } from './cora-case-review/summary-notes-appeal-controller.js';
 import { updateAmendOutcome } from './cora-case-review/amend-outcome-controller.js';
 import { updateAppealReview } from './cora-case-review/appeal-review-controller.js';
@@ -53,8 +48,6 @@ import { createConversationPanelBinding } from './cora-case-review/conversation-
 
 import '../components/collections/cora-question-list.js';
 import '../components/base/cora-group-progress.js';
-import '../components/sections/cora-remediation-section.js';
-import '../components/sections/cora-remediation-tracking.js';
 import '../components/sections/cora-conversation.js';
 import '../components/sections/cora-notes.js';
 import '../components/sections/cora-appeal.js';
@@ -391,6 +384,9 @@ export function createRouteSlice(params, context) {
     },
   });
   const questionsView = createQuestionPanelView();
+  const remediationCaptureEls = new Map();
+  /** @type {ReturnType<typeof createCaseReviewSaveEffect> | null} */
+  let save = null;
   /** @type {null | {
    *   root: HTMLElement,
    *   status: HTMLElement,
@@ -600,6 +596,89 @@ export function createRouteSlice(params, context) {
         );
         continue;
       }
+      if (entry.id === 'issues') {
+        tools.morph(
+          panel,
+          visible
+            ? RemediationSection({
+                catalogue: snapshot.catalogue,
+                answers: snapshot.answers,
+                attributeFailures: snapshot.config.attributeFailures === true,
+                client: context.client,
+                responsibleParty: snapshot.caseRow.responsibleParty
+                  ? {
+                      loginName: snapshot.caseRow.responsibleParty,
+                      displayName: snapshot.caseRow.responsibleParty,
+                    }
+                  : null,
+                canAttribute: snapshot.machine?.canAttribute ?? false,
+                remediationFields: snapshot.config.remediationFields ?? [],
+                canCaptureDetails: snapshot.machine?.canCapture ?? false,
+                captureGroups: snapshot.config.captureGroups ?? [],
+                canCapture: snapshot.machine?.canCapture ?? false,
+                captureEls: remediationCaptureEls,
+                canSelectRemediation:
+                  snapshot.machine?.canSelectRemediation ?? false,
+                dispatchCapture: (questionId, fieldKey, value) =>
+                  viewModel.handleCapture(questionId, fieldKey, value),
+                dispatchDetail: (questionId, key, value) => {
+                  const answers = editRemediationDetail({
+                    answers: snapshot.answers,
+                    questionId,
+                    key,
+                    value,
+                    canEdit: snapshot.machine?.canCapture ?? false,
+                    fields: config.remediationFields ?? [],
+                  });
+                  if (answers === snapshot.answers) return;
+                  viewModel.answersSignal.set(answers);
+                  save?.answersEdited(answers);
+                },
+                dispatchAttribute: (questionId, attributedParty) =>
+                  viewModel.handleAttribute(questionId, attributedParty),
+                dispatchRemediationAction: (questionId, action, selected) =>
+                  viewModel.handleRemediationAction(
+                    questionId,
+                    action,
+                    selected
+                  ),
+                dispatchRemediationFreeForm: (questionId, value) =>
+                  viewModel.handleRemediationFreeForm(questionId, value),
+              })
+            : null
+        );
+        continue;
+      }
+      if (entry.id === 'remediation') {
+        tools.morph(
+          panel,
+          visible
+            ? RemediationTracking({
+                catalogue: snapshot.catalogue,
+                answers: snapshot.answers,
+                captureGroups: snapshot.config.captureGroups ?? [],
+                canResolve: snapshot.access.remediation === 'edit',
+                caseRow: snapshot.caseRow,
+                heading: snapshot.sectionHeadings.remediation,
+                dispatchStatus: (
+                  questionId,
+                  fieldKey,
+                  actionId,
+                  status,
+                  cancelReason
+                ) =>
+                  viewModel.handleActionStatus(
+                    questionId,
+                    fieldKey,
+                    actionId,
+                    status,
+                    cancelReason
+                  ),
+              })
+            : null
+        );
+        continue;
+      }
       if (entry.id === 'summary') {
         tools.morph(
           panel,
@@ -716,13 +795,14 @@ export function createRouteSlice(params, context) {
     },
     start(/** @type {any} */ tools) {
       dispatch = tools.dispatch;
-      const save = createCaseReviewSaveEffect({
+      const saveEffect = createCaseReviewSaveEffect({
         saveQueue: context.saveQueue,
         caseId: params.id,
         dispatch: tools.dispatch,
       });
+      save = saveEffect;
       viewModel.setAnswerChangeHandler((answers) =>
-        save.answersEdited(answers)
+        saveEffect.answersEdited(answers)
       );
       const disposeSaveStatus = observeSaveStatus(
         context.saveQueue,
@@ -762,7 +842,9 @@ export function createRouteSlice(params, context) {
       });
       return () => {
         questionsView.clear();
+        remediationCaptureEls.clear();
         viewModel.setAnswerChangeHandler(null);
+        save = null;
         disposeSaveStatus();
       };
     },
@@ -815,6 +897,7 @@ export function CaseReviewPage({
   });
   const nodeRegistry = createCaseReviewNodeRegistry();
   const conversationPanel = createConversationPanelBinding();
+  const remediationCaptureEls = new Map();
   let eventsBound = false;
 
   /**
@@ -882,8 +965,39 @@ export function CaseReviewPage({
       eventsBound = true;
       bindCaseReviewTabs(context);
       bindQuestionPanel(context);
-      bindRemediationPanel(context);
-      bindRemediationTracking(context);
+      registry.issues?.addEventListener('cora-capture', (event) => {
+        const detail = /** @type {any} */ (event).detail;
+        vm.handleCapture(detail.questionId, detail.fieldKey, detail.value);
+      });
+      registry.issues?.addEventListener('cora-attribute', (event) => {
+        const detail = /** @type {any} */ (event).detail;
+        vm.handleAttribute(detail.questionId, detail.attributedParty);
+      });
+      registry.issues?.addEventListener('cora-remediation-action', (event) => {
+        const detail = /** @type {any} */ (event).detail;
+        vm.handleRemediationAction(
+          detail.questionId,
+          detail.action,
+          detail.selected
+        );
+      });
+      registry.issues?.addEventListener(
+        'cora-remediation-freeform',
+        (event) => {
+          const detail = /** @type {any} */ (event).detail;
+          vm.handleRemediationFreeForm(detail.questionId, detail.value);
+        }
+      );
+      registry.remediation?.addEventListener('cora-action-status', (event) => {
+        const detail = /** @type {any} */ (event).detail;
+        vm.handleActionStatus(
+          detail.questionId,
+          detail.fieldKey,
+          detail.actionId,
+          detail.status,
+          detail.cancelReason
+        );
+      });
       conversationPanel.bind(context);
       bindCompletion(context);
     }
@@ -904,8 +1018,92 @@ export function CaseReviewPage({
       detailFields: config.detailFields ?? [],
     });
     updateQuestionPanel(context);
-    updateRemediationPanel(context);
-    updateRemediationTracking(context);
+    Object.assign(/** @type {HTMLElement} */ (registry.issues), {
+      client,
+      canAttribute: machine.canAttribute,
+      responsibleParty: caseRow.responsibleParty
+        ? {
+            loginName: caseRow.responsibleParty,
+            displayName: caseRow.responsibleParty,
+          }
+        : null,
+      captureGroups: config.captureGroups ?? [],
+      canCapture: machine.canCapture,
+      canSelectRemediation: machine.canSelectRemediation,
+      _update: [
+        vm.catalogue,
+        vm.answersSignal.get(),
+        config.attributeFailures === true,
+      ],
+    });
+    replaceHostChildren(
+      /** @type {HTMLElement} */ (registry.issues),
+      RemediationSection({
+        catalogue: vm.catalogue,
+        answers: vm.answersSignal.get(),
+        attributeFailures: config.attributeFailures === true,
+        client,
+        responsibleParty: caseRow.responsibleParty
+          ? {
+              loginName: caseRow.responsibleParty,
+              displayName: caseRow.responsibleParty,
+            }
+          : null,
+        canAttribute: machine.canAttribute,
+        remediationFields: config.remediationFields ?? [],
+        canCaptureDetails: machine.canCapture,
+        captureGroups: config.captureGroups ?? [],
+        canCapture: machine.canCapture,
+        captureEls: remediationCaptureEls,
+        canSelectRemediation: machine.canSelectRemediation,
+        dispatchCapture: (questionId, fieldKey, value) =>
+          vm.handleCapture(questionId, fieldKey, value),
+        dispatchDetail: (questionId, key, value) => {
+          const answers = editRemediationDetail({
+            answers: vm.answersSignal.get(),
+            questionId,
+            key,
+            value,
+            canEdit: machine.canCapture,
+            fields: config.remediationFields ?? [],
+          });
+          if (answers === vm.answersSignal.get()) return;
+          vm.answersSignal.set(answers);
+          saveQueue.enqueue(caseId, 'answers', answers);
+        },
+        dispatchAttribute: (questionId, attributedParty) =>
+          vm.handleAttribute(questionId, attributedParty),
+        dispatchRemediationAction: (questionId, action, selected) =>
+          vm.handleRemediationAction(questionId, action, selected),
+        dispatchRemediationFreeForm: (questionId, value) =>
+          vm.handleRemediationFreeForm(questionId, value),
+      })
+    );
+    replaceHostChildren(
+      /** @type {HTMLElement} */ (registry.remediation),
+      RemediationTracking({
+        catalogue: vm.catalogue,
+        answers: vm.answersSignal.get(),
+        captureGroups: config.captureGroups ?? [],
+        canResolve: access.remediation === 'edit',
+        caseRow,
+        heading: vm.sectionHeadings.remediation,
+        dispatchStatus: (
+          questionId,
+          fieldKey,
+          actionId,
+          status,
+          cancelReason
+        ) =>
+          vm.handleActionStatus(
+            questionId,
+            fieldKey,
+            actionId,
+            status,
+            cancelReason
+          ),
+      })
+    );
     updateSummaryNotesAppeal(context);
     updateAmendOutcome(context);
     updateAppealReview(context);

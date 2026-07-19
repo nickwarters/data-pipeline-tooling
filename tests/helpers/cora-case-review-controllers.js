@@ -31,8 +31,6 @@ const { bindCaseReviewTabs, buildCaseReviewTabs, updateCaseReviewTabs } =
   await import('../../src/pages/cora-case-review/tab-controller.js');
 const { bindQuestionPanel, collectUnansweredQuestions, updateQuestionPanel } =
   await import('../../src/pages/cora-case-review/question-panel-controller.js');
-const { bindRemediationPanel, updateRemediationPanel } =
-  await import('../../src/pages/cora-case-review/remediation-controller.js');
 const { updateSummaryNotesAppeal } =
   await import('../../src/pages/cora-case-review/summary-notes-appeal-controller.js');
 const { updateAmendOutcome } =
@@ -47,8 +45,6 @@ const {
   hasRemediationActions,
   updateCompletion,
 } = await import('../../src/pages/cora-case-review/completion-actions.js');
-const { bindRemediationTracking, updateRemediationTracking } =
-  await import('../../src/pages/cora-case-review/remediation-tracking-controller.js');
 
 /** @type {import('../../src/sharepoint-client.js').QuestionDefinition[]} */
 const QUESTIONS = [
@@ -795,8 +791,6 @@ export {
   bindCaseReviewTabs,
   bindCompletion,
   bindQuestionPanel,
-  bindRemediationPanel,
-  bindRemediationTracking,
   buildCaseReviewTabs,
   collectUnansweredQuestions,
   completeCase,
@@ -821,8 +815,6 @@ export {
   updateCaseReviewTabs,
   updateCompletion,
   updateQuestionPanel,
-  updateRemediationPanel,
-  updateRemediationTracking,
   updateSummaryNotesAppeal,
   useElementClass,
 };

@@ -20,10 +20,6 @@ export {
   collectUnansweredQuestions,
   updateQuestionPanel,
 } from './question-panel-controller.js';
-export {
-  bindRemediationPanel,
-  updateRemediationPanel,
-} from './remediation-controller.js';
 export { updateSummaryNotesAppeal } from './summary-notes-appeal-controller.js';
 export {
   createConversationPanelBinding,

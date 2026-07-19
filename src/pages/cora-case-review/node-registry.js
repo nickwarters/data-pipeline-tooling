@@ -56,6 +56,10 @@ export function createCaseReviewNodeRegistry() {
         node[entry.nodeKey] ??= h(entry.componentTag);
       }
       registry.questionsPanel ??= h('section');
+      registry.issues ??= h('section', { className: 'cora-issues-view' });
+      registry.remediation ??= h('section', {
+        className: 'cora-remediation-tracking-view',
+      });
       registry.questionList ??= h('cora-question-list');
       registry.progress ??= h('cora-group-progress');
       registry.banner ??= h('cora-status-banner');

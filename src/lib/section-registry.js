@@ -83,7 +83,7 @@ export const SECTION_REGISTRY = /** @type {const} */ ([
   },
   {
     id: 'issues',
-    componentTag: 'cora-remediation-section',
+    componentTag: null,
     nodeKey: 'issues',
     tab: true,
     tabOrder: 3,
@@ -103,7 +103,7 @@ export const SECTION_REGISTRY = /** @type {const} */ ([
   },
   {
     id: 'remediation',
-    componentTag: 'cora-remediation-tracking',
+    componentTag: null,
     nodeKey: 'remediation',
     tab: true,
     tabOrder: 4,

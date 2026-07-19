@@ -1,10 +1,10 @@
 // @ts-check
-import { ShellElement, replaceHostChildren } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
 import { EmptyState } from '../../lib/empty-state.js';
 import { DEFAULT_SECTION_HEADINGS } from '../../lib/section-labels.js';
 import { evaluate } from '../../evaluators/applicability-evaluator.js';
 import { isFailure } from '../../evaluators/failure-evaluator.js';
+import { isOverdue } from '../../evaluators/overdue-evaluator.js';
 import {
   actionFieldKeys,
   coerceRemediationActions,
@@ -28,6 +28,7 @@ import {
  * @property {Record<string, Answer>} answers
  * @property {CaptureGroup[]} captureGroups
  * @property {boolean} canResolve
+ * @property {import('../../sharepoint-client.js').CaseRow | null} [caseRow]
  * @property {(questionId: string, fieldKey: string, actionId: string, status: 'pending' | 'complete' | 'cancelled', cancelReason: string) => void} dispatchStatus
  * @property {string} [heading] Section heading; defaults to the standard copy so the component stays usable standalone.
  */
@@ -50,10 +51,32 @@ export function RemediationTracking(props) {
     props.heading ?? DEFAULT_SECTION_HEADINGS.remediation
   );
   const rows = collectRows(props);
+  const dueDate = props.caseRow?.remediationDueDate ?? null;
+  const overdue =
+    !!dueDate &&
+    isOverdue(
+      {
+        .../** @type {import('../../sharepoint-client.js').CaseRow} */ (
+          props.caseRow
+        ),
+        dueDate,
+      },
+      undefined
+    );
+  const sla = h(
+    'p',
+    { className: 'cora-remediation-due-date' },
+    `Remediation due: ${dueDate ?? '—'}`
+  );
+  const overdueBadge = overdue
+    ? h('p', { className: 'cora-badge cora-badge-overdue' }, 'Overdue')
+    : null;
 
   if (rows.length === 0) {
     return [
       heading,
+      sla,
+      ...(overdueBadge ? [overdueBadge] : []),
       EmptyState('No remediation actions sent.', {
         className: 'cora-remediation-tracking-empty',
       }),
@@ -62,7 +85,7 @@ export function RemediationTracking(props) {
 
   const list = h('ul', { class: 'cora-remediation-tracking-list' });
   for (const row of rows) list.appendChild(renderActionRow(props, row));
-  return [heading, list];
+  return [heading, sla, ...(overdueBadge ? [overdueBadge] : []), list];
 }
 
 /**
@@ -124,13 +147,13 @@ export function renderActionRow(props, row) {
       value: action.cancelReason ?? '',
       placeholder: 'Cancellation reason',
       hidden: action.status !== 'cancelled',
-      onchange: () =>
+      onchange: (/** @type {Event} */ event) =>
         props.dispatchStatus(
           question.id,
           fieldKey,
           action.id,
           'cancelled',
-          reasonInput.value
+          /** @type {HTMLInputElement} */ (event.target).value
         ),
     })
   );
@@ -141,17 +164,22 @@ export function renderActionRow(props, row) {
       {
         class: 'cora-tracking-status-select',
         value: action.status,
-        onchange: () => {
-          const status = /** @type {'pending'|'complete'|'cancelled'} */ (
-            select.value
+        onchange: (/** @type {Event} */ event) => {
+          const currentSelect = /** @type {HTMLSelectElement} */ (event.target);
+          const row = /** @type {HTMLElement} */ (currentSelect.parentNode);
+          const currentReasonInput = /** @type {HTMLInputElement} */ (
+            row.querySelector('.cora-tracking-cancel-input')
           );
-          reasonInput.hidden = status !== 'cancelled';
+          const status = /** @type {'pending'|'complete'|'cancelled'} */ (
+            currentSelect.value
+          );
+          currentReasonInput.hidden = status !== 'cancelled';
           props.dispatchStatus(
             question.id,
             fieldKey,
             action.id,
             status,
-            reasonInput.value
+            currentReasonInput.value
           );
         },
       },
@@ -165,63 +193,3 @@ export function renderActionRow(props, row) {
   li.appendChild(reasonInput);
   return li;
 }
-
-export class CORARemediationTracking extends ShellElement {
-  constructor() {
-    super();
-    /** @type {QuestionDefinition[]} */
-    this.catalogue = [];
-    /** @type {Record<string, Answer>} */
-    this.answers = {};
-    /** @type {CaptureGroup[]} */
-    this.captureGroups = [];
-    /** @type {boolean} Whether the viewer may resolve actions (Assigned Reviewer, Actions In Progress). */
-    this.canResolve = false;
-    /** @type {string} Section heading (overridable via `CaseTypeConfig.sectionLabels.remediation`). */
-    this.heading = DEFAULT_SECTION_HEADINGS.remediation;
-  }
-
-  /**
-   * @param {QuestionDefinition[]} catalogue
-   * @param {Record<string, Answer>} answers
-   */
-  update(catalogue, answers) {
-    this.catalogue = catalogue;
-    this.answers = answers;
-    this._render();
-  }
-
-  /**
-   * Survives (not routed through `this._shellRenderNow`): several tests call
-   * `update()` before `connectedCallback()`, so this must render unconditionally
-   * rather than being a no-op pre-connection like the base `update()`.
-   */
-  _render() {
-    replaceHostChildren(this, this.render());
-  }
-
-  render() {
-    return RemediationTracking(this._buildProps());
-  }
-
-  /** @returns {RemediationTrackingProps} */
-  _buildProps() {
-    return {
-      catalogue: this.catalogue,
-      answers: this.answers,
-      captureGroups: this.captureGroups,
-      canResolve: this.canResolve,
-      heading: this.heading,
-      dispatchStatus: (questionId, fieldKey, actionId, status, cancelReason) =>
-        this.emit('cora-action-status', {
-          questionId,
-          fieldKey,
-          actionId,
-          status,
-          cancelReason,
-        }),
-    };
-  }
-}
-
-customElements.define('cora-remediation-tracking', CORARemediationTracking);

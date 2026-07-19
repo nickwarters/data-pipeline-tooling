@@ -124,8 +124,6 @@ src/
       cora-owner-summary.js
       cora-question.js
       cora-question-card.js
-      cora-remediation-section.js
-      cora-remediation-tracking.js
       cora-showwhen-editor.js
       cora-showwhen-group.js
       cora-wording-editor.js
@@ -155,14 +153,15 @@ src/
       summary-view.js          # CASE-4 pure configured Summary view
       outcome-view.js          # CASE-4 configured Outcome view
       completion-actions.js    # CASE-4 CaseMachine-guarded completion actions
+      remediation-actions.js   # CASE-5 route action for configurable Remediation Detail edits
+      remediation-view.js      # CASE-5 pure Issues and Remediation Actions view
+      remediation-tracking-view.js # CASE-5 pure Remediation Tracking view
       amend-outcome-controller.js
       appeal-review-controller.js
       controllers.js
       conversation-controller.js
       header-controller.js
       question-panel-controller.js
-      remediation-controller.js
-      remediation-tracking-controller.js
       summary-notes-appeal-controller.js
       types.js
     cora-conversation-view.js

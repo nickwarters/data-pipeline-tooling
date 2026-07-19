@@ -5,8 +5,55 @@ import { installDom, findByClass, findAllByClass } from './_dom-stub.js';
 
 installDom();
 
-const { CORARemediationTracking } =
-  await import('../src/components/sections/cora-remediation-tracking.js');
+const { RemediationTracking } =
+  await import('../src/pages/cora-case-review/remediation-tracking-view.js');
+
+class CORARemediationTracking extends HTMLElement {
+  constructor() {
+    super();
+    /** @type {QuestionDefinition[]} */
+    this.catalogue = [];
+    /** @type {Record<string, Answer>} */
+    this.answers = {};
+    /** @type {any[]} */
+    this.captureGroups = [];
+    this.canResolve = false;
+    this.heading = 'Remediation';
+    /** @type {any} */
+    this.caseRow = null;
+  }
+
+  /** @param {QuestionDefinition[]} catalogue @param {Record<string, Answer>} answers */
+  update(catalogue, answers) {
+    this.catalogue = catalogue;
+    this.answers = answers;
+    this.replaceChildren(...this.render());
+  }
+
+  render() {
+    return RemediationTracking({
+      catalogue: this.catalogue,
+      answers: this.answers,
+      captureGroups: this.captureGroups,
+      canResolve: this.canResolve,
+      heading: this.heading,
+      caseRow: this.caseRow,
+      dispatchStatus: (questionId, fieldKey, actionId, status, cancelReason) =>
+        this.dispatchEvent(
+          new CustomEvent('cora-action-status', {
+            detail: {
+              questionId,
+              fieldKey,
+              actionId,
+              status,
+              cancelReason,
+            },
+            bubbles: true,
+          })
+        ),
+    });
+  }
+}
 
 /** @typedef {import('../src/sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../src/sharepoint-client.js').Answer} Answer */
@@ -127,7 +174,7 @@ test('CORARemediationTracking: editable select dispatches a resolution', () => {
 
   const select = findByClass(el, 'cora-tracking-status-select');
   select.value = 'complete';
-  select._fire('change');
+  select._fire('change', { target: select });
 
   assert.deepEqual(events, [
     {
@@ -162,11 +209,11 @@ test('CORARemediationTracking: cancelling reveals the reason input and dispatche
   assert.equal(reason.hidden, true, 'reason hidden until cancelled is chosen');
 
   select.value = 'cancelled';
-  select._fire('change');
+  select._fire('change', { target: select });
   assert.equal(reason.hidden, false, 'reason revealed once cancelled');
 
   reason.value = 'No longer needed';
-  reason._fire('change');
+  reason._fire('change', { target: reason });
 
   assert.deepEqual(events.at(-1), {
     questionId: 'q1',
@@ -219,4 +266,20 @@ test('CORARemediationTracking: default heading is Remediation when no override',
   el.captureGroups = [];
   el.update(CATALOGUE, {});
   assert.equal(/** @type {any} */ (el)._children[0].textContent, 'Remediation');
+});
+
+test('RemediationTracking: displays the stored SLA date and overdue evaluator result', () => {
+  const el = new CORARemediationTracking();
+  el.caseRow = {
+    status: 'Actions In Progress',
+    remediationDueDate: '2000-01-03',
+  };
+  el.update(CATALOGUE, {});
+
+  assert.match(allText(el), /Remediation due: 2000-01-03/);
+  assert.match(allText(el), /Overdue/);
+
+  el.caseRow = { status: 'Completed', remediationDueDate: '2000-01-03' };
+  el.update(CATALOGUE, {});
+  assert.doesNotMatch(allText(el), /Overdue/);
 });

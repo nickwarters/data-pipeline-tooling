@@ -40,8 +40,8 @@ test('CaseReviewNodeRegistry: creates and reuses the long-lived page nodes curre
   assert.equal(firstNodes.questionsPanel?.tagName, 'SECTION');
   assert.equal(firstNodes.questionList?.tagName, 'CORA-QUESTION-LIST');
   assert.equal(firstNodes.progress?.tagName, 'CORA-GROUP-PROGRESS');
-  assert.equal(firstNodes.issues?.tagName, 'CORA-REMEDIATION-SECTION');
-  assert.equal(firstNodes.remediation?.tagName, 'CORA-REMEDIATION-TRACKING');
+  assert.equal(firstNodes.issues?.tagName, 'SECTION');
+  assert.equal(firstNodes.remediation?.tagName, 'SECTION');
   assert.equal(firstNodes.summary?.tagName, 'CORA-SUMMARY');
   assert.equal(firstNodes.notes?.tagName, 'CORA-NOTES');
   assert.equal(firstNodes.appeal?.tagName, 'CORA-APPEAL');

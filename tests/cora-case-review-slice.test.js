@@ -20,6 +20,8 @@ const { createCaseReviewSaveEffect, observeSaveStatus } =
   await import('../src/pages/cora-case-review/case-actions.js');
 const { SaveQueue } = await import('../src/services/save-queue.js');
 const { morph } = await import('../src/core/morph.js');
+const { default: exampleReviewConfig } =
+  await import('./_example-review-case-type.js');
 
 /** @type {import('../src/core/chrome-state.js').ChromeState} */
 const chrome = {
@@ -506,6 +508,57 @@ test('CASE-4 view: Summary applies empty config defaults and incomplete snapshot
   assert.doesNotThrow(() => renderShippedState(incompleteState));
 });
 
+test('CASE-5 view: Issues renders failed Answers directly from route state', () => {
+  const answers = {
+    q1: {
+      value: 'No',
+      remediationActions: [{ id: 'q1-ra-0', text: 'Fix it' }],
+    },
+  };
+  const loadedSnapshot = {
+    ...snapshot(),
+    answers,
+    caseRow: { ...caseRow, answers },
+    catalogue: [
+      {
+        id: 'q1',
+        text: 'Question one',
+        responseType: 'yes-no-na',
+        failureValues: ['No'],
+        remediationActions: ['Fix it'],
+        deprecated: false,
+      },
+    ],
+    applicableQuestions: [
+      {
+        id: 'q1',
+        text: 'Question one',
+        responseType: 'yes-no-na',
+        failureValues: ['No'],
+        remediationActions: ['Fix it'],
+        deprecated: false,
+      },
+    ],
+    access: { ...snapshot().access, issues: 'read-only' },
+  };
+  let state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: loadedSnapshot }
+  );
+  state = caseReviewReducer(state, {
+    type: 'case/tab-selected',
+    id: 'issues',
+  });
+
+  const { container } = renderShippedState(state);
+  const panel = container.querySelector('#case-panel-issues');
+
+  assert.ok(panel);
+  assert.match(panel.textContent, /Question one/);
+  assert.match(panel.textContent, /Fix it/);
+  assert.equal(panel.querySelector('cora-remediation-section'), null);
+});
+
 test('CASE-4 action: completion flushes saves and persists only the CaseMachine transition', async () => {
   const transitionPatch = {
     status: 'Completed',
@@ -757,7 +810,17 @@ test('CASE-1 save effect: conflict status re-enters route state through dispatch
 });
 
 test('CASE-1 route: mock-mode store shell keeps interim Review working at the existing URL', async () => {
-  let storedRow = { ...caseRow, caseType: 'example-review' };
+  const qNeeds = exampleReviewConfig.questions.find(
+    (question) => question.id === 'q-needs'
+  );
+  assert.ok(qNeeds);
+  const originalFreeForm = qNeeds.allowFreeFormRemediation;
+  qNeeds.allowFreeFormRemediation = true;
+  let storedRow = {
+    ...caseRow,
+    caseType: 'example-review',
+    answers: { 'q-needs': { value: 'No' } },
+  };
   /** @type {any[]} */
   const patches = [];
   const client = {
@@ -841,10 +904,200 @@ test('CASE-1 route: mock-mode store shell keeps interim Review working at the ex
   await saveQueue.whenIdle();
   await flush();
 
-  assert.deepEqual(patches, [{ answers: { 'q-welcome': { value: 'Yes' } } }]);
+  assert.deepEqual(patches, [
+    {
+      answers: {
+        'q-needs': { value: 'No' },
+        'q-welcome': { value: 'Yes' },
+      },
+    },
+  ]);
   assert.equal(state.routes.caseReview.saveStatus, 'saved');
 
+  fireEvent(getByRole(container, 'tab', { name: 'Issues' }), 'click');
+  const issuesPanel = container.querySelector('#case-panel-issues');
+  const responsibleParty = issuesPanel?.querySelector(
+    '.cora-attribute-responsible'
+  );
+  assert.ok(responsibleParty, 'Responsible Party quick-pick is rendered');
+  fireEvent(responsibleParty, 'click');
+  await saveQueue.whenIdle();
+  await flush();
+
+  const capture = issuesPanel?.querySelector('cora-capture-groups');
+  assert.ok(capture, 'configured Issue Capture group is rendered');
+  fireEvent(capture, 'cora-capture', {
+    detail: { fieldKey: 'rootCause', value: 'Agent rushed' },
+  });
+  await saveQueue.whenIdle();
+  await flush();
+
+  const detail = /** @type {any} */ (
+    issuesPanel?.querySelector('.cora-remediation-detail-input')
+  );
+  assert.ok(detail, 'configured Remediation Detail is rendered');
+  detail.value = 'Rushed';
+  fireEvent(detail, 'change');
+  await saveQueue.whenIdle();
+  await flush();
+
+  const freeForm = /** @type {any} */ (
+    issuesPanel?.querySelector('.cora-remediation-freeform-input')
+  );
+  assert.ok(freeForm, 'free-form Remediation Action input is rendered');
+  freeForm.value = 'Coach the agent';
+  fireEvent(freeForm, 'change');
+  await saveQueue.whenIdle();
+  await flush();
+
+  const action = /** @type {any} */ (
+    issuesPanel?.querySelector('.cora-remediation-action-checkbox')
+  );
+  assert.ok(action, 'configured Remediation Action is rendered');
+  action.checked = true;
+  fireEvent(action, 'change');
+  await saveQueue.whenIdle();
+  await flush();
+
+  const savedAnswer = /** @type {any} */ (patches.at(-1)?.answers?.['q-needs']);
+  assert.ok(savedAnswer);
+  assert.deepEqual(savedAnswer.remediationActions, [
+    {
+      id: 'q-needs-ra-0',
+      text: 'Retrain agent on needs-identification protocol.',
+      completed: false,
+    },
+  ]);
+  assert.deepEqual(savedAnswer.remediationDetails, {
+    rootCause: 'Rushed',
+  });
+  assert.deepEqual(savedAnswer.capture, {
+    rootCause: 'Agent rushed',
+  });
+  assert.deepEqual(savedAnswer.attributedParty, {
+    loginName: 'u2',
+    displayName: 'u2',
+  });
+  assert.equal(savedAnswer.freeFormRemediation, 'Coach the agent');
+
   if (typeof dispose === 'function') dispose();
+  qNeeds.allowFreeFormRemediation = originalFreeForm;
   location.search = previousSearch;
   location.hash = previousHash;
+});
+
+test('CASE-5 route: remediation tracking resolves a sent action through the store seam', async () => {
+  const originalCaptureGroups = exampleReviewConfig.captureGroups;
+  exampleReviewConfig.captureGroups = [
+    ...(originalCaptureGroups ?? []),
+    {
+      key: 'actions',
+      label: 'Actions',
+      collapsed: false,
+      fields: [{ key: 'sentActions', label: 'Actions', type: 'actions' }],
+    },
+  ];
+  let storedRow = {
+    ...caseRow,
+    status: 'Actions In Progress',
+    caseType: 'example-review',
+    answers: {
+      'q-needs': {
+        value: 'No',
+        capture: {
+          sentActions: [
+            { id: 'sent-1', text: 'Coach the agent', status: 'pending' },
+          ],
+        },
+      },
+    },
+  };
+  /** @type {any[]} */
+  const patches = [];
+  const client = {
+    async getCase() {
+      return storedRow;
+    },
+    async getCurrentUser() {
+      return chrome.currentUser;
+    },
+    async getExportHash() {
+      return null;
+    },
+    async resolveUsers() {
+      return {};
+    },
+    async patchCase(/** @type {string} */ _id, /** @type {any} */ fields) {
+      patches.push(fields);
+      storedRow = { ...storedRow, ...fields, etag: 'e2' };
+      return { ok: true, status: 200, data: storedRow };
+    },
+  };
+  const saveQueue = new SaveQueue(/** @type {any} */ (client), {
+    debounceMs: 0,
+  });
+  const context = /** @type {any} */ ({
+    client,
+    saveQueue,
+    currentUser: chrome.currentUser,
+    capabilities: chrome.permissions,
+    chrome,
+  });
+  const previousSearch = location.search;
+  const previousHash = location.hash;
+  location.search = '?mock=1';
+  location.hash = '#/case/example-review/c1';
+  const slice = createRouteSlice(
+    { caseType: 'example-review', id: 'c1' },
+    context
+  );
+  let state = slice.initialState;
+  const container = document.createElement('main');
+  /** @type {any} */
+  let tools;
+  tools = {
+    morph,
+    dispatch(/** @type {any} */ action) {
+      state = slice.reducer(state, action);
+      slice.render(container, state, tools);
+    },
+    listen(
+      /** @type {EventTarget} */ target,
+      /** @type {string} */ type,
+      /** @type {EventListenerOrEventListenerObject} */ listener
+    ) {
+      target.addEventListener(type, listener);
+    },
+  };
+
+  let dispose;
+  try {
+    slice.render(container, state, tools);
+    dispose = slice.start?.(tools);
+    await waitFor(
+      () => state.routes.caseReview.snapshot?.loaded === true,
+      'store-driven remediation tracking load'
+    );
+
+    fireEvent(getByRole(container, 'tab', { name: 'Remediation' }), 'click');
+    const status = /** @type {any} */ (
+      container.querySelector('.cora-tracking-status-select')
+    );
+    assert.ok(status, 'sent action status control is rendered');
+    status.value = 'complete';
+    fireEvent(status, 'change');
+    await saveQueue.whenIdle();
+    await flush();
+
+    assert.equal(
+      patches.at(-1)?.answers?.['q-needs']?.capture?.sentActions?.[0]?.status,
+      'complete',
+      JSON.stringify(patches)
+    );
+  } finally {
+    if (typeof dispose === 'function') dispose();
+    exampleReviewConfig.captureGroups = originalCaptureGroups;
+    location.search = previousSearch;
+    location.hash = previousHash;
+  }
 });

@@ -1,12 +1,11 @@
 // @ts-check
-import { ShellElement, replaceHostChildren } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
 import { EmptyState } from '../../lib/empty-state.js';
 import { evaluate } from '../../evaluators/applicability-evaluator.js';
 import { isFailure } from '../../evaluators/failure-evaluator.js';
 import { buildCaptureControl } from '../../lib/capture-engine.js';
-import { AttributeMenu } from './cora-attribute-menu.js';
-import './cora-capture-groups.js';
+import { AttributeMenu } from '../../components/sections/cora-attribute-menu.js';
+import '../../components/sections/cora-capture-groups.js';
 
 import { normaliseConfiguredActions } from '../../evaluators/configured-outcome.js';
 
@@ -27,7 +26,7 @@ import { normaliseConfiguredActions } from '../../evaluators/configured-outcome.
  * @property {boolean} canCaptureDetails
  * @property {import('../../sharepoint-client.js').CaptureGroup[]} captureGroups
  * @property {boolean} canCapture
- * @property {Map<string, import('./cora-capture-groups.js').CORACaptureGroups>} captureEls
+ * @property {Map<string, import('../../components/sections/cora-capture-groups.js').CORACaptureGroups>} captureEls
  * @property {boolean} canSelectRemediation
  * @property {(questionId: string, fieldKey: string, value: string) => void} dispatchCapture
  * @property {(questionId: string, key: string, value: string) => void} dispatchDetail
@@ -372,22 +371,24 @@ export function renderRemediationCapture(props, li, q) {
  *
  * @param {RemediationSectionProps} props
  * @param {QuestionDefinition} q
- * @returns {import('./cora-capture-groups.js').CORACaptureGroups}
+ * @returns {import('../../components/sections/cora-capture-groups.js').CORACaptureGroups}
  */
 function syncCaptureElement(props, q) {
   let cg = props.captureEls.get(q.id);
   if (!cg) {
-    cg = /** @type {import('./cora-capture-groups.js').CORACaptureGroups} */ (
-      h('cora-capture-groups', {
-        'oncora-capture': (/** @type {any} */ ev) => {
-          /** @type {any} */ (ev).stopPropagation?.();
-          const { fieldKey, value } =
-            /** @type {CustomEvent<{ fieldKey: string, value: string }>} */ (ev)
-              .detail;
-          props.dispatchCapture(q.id, fieldKey, value);
-        },
-      })
-    );
+    cg =
+      /** @type {import('../../components/sections/cora-capture-groups.js').CORACaptureGroups} */ (
+        h('cora-capture-groups', {
+          'oncora-capture': (/** @type {any} */ ev) => {
+            /** @type {any} */ (ev).stopPropagation?.();
+            const { fieldKey, value } =
+              /** @type {CustomEvent<{ fieldKey: string, value: string }>} */ (
+                ev
+              ).detail;
+            props.dispatchCapture(q.id, fieldKey, value);
+          },
+        })
+      );
     props.captureEls.set(q.id, cg);
   }
   const capture = props.answers[q.id]?.capture ?? {};
@@ -397,294 +398,3 @@ function syncCaptureElement(props, q) {
   cg.update?.(props.captureGroups, capture, props.canCapture);
   return cg;
 }
-
-export class CORARemediationSection extends ShellElement {
-  constructor() {
-    super();
-    /** @type {QuestionDefinition[]} */
-    this.catalogue = [];
-    /** @type {Record<string, Answer>} */
-    this.answers = {};
-    /** @type {boolean} Whether this Case Type attributes failures to a person. */
-    this.attributeFailures = false;
-    /** @type {SharePointClient | null} Backs the embedded people picker. */
-    this.client = null;
-    /**
-     * The Case's Responsible Party, offered as a one-click quick-pick in each
-     * attribute menu. `null` when the Case has none. the architecture decision.
-     * @type {Party | null}
-     */
-    this.responsibleParty = null;
-    /**
-     * Whether the viewer may set/change/clear the Attributed Party: Assigned
-     * Reviewer only, on an In-progress Case (frozen at completion). UX-only per
-     * the architecture decision/0011; the server ACL is the real boundary.
-     * @type {boolean}
-     */
-    this.canAttribute = false;
-    /**
-     * The Case Type's configurable per-failure capture fields. One
-     * shared set applies to every failed Answer; empty when the Case Type
-     * declares none.
-     * @type {import('../../sharepoint-client.js').RemediationField[]}
-     */
-    this.remediationFields = [];
-    /**
-     * Whether the viewer may capture Remediation Details. Mirrors `canAttribute`:
-     * Assigned Reviewer only, on an In-progress Case (frozen at completion).
-     * @type {boolean}
-     */
-    this.canCaptureDetails = false;
-    /**
-     * The Case Type's unified **Issue Capture Group**s. Empty when the
-     * Case Type declares none. Both `captureGroups` and `remediationFields` may coexist.
-     * @type {import('../../sharepoint-client.js').CaptureGroup[]}
-     */
-    this.captureGroups = [];
-    /**
-     * Whether the viewer may capture Issue Capture values. Mirrors `canAttribute`:
-     * Assigned Reviewer only, on an In-progress Case (frozen at completion).
-     * @type {boolean}
-     */
-    this.canCapture = false;
-    /**
-     * Whether the viewer may select which Remediation Actions apply to a failed
-     * Answer and add a free-form action. Assigned Reviewer only, on
-     * a not-yet-reportable Case; read-only viewers see the selected subset.
-     * @type {boolean}
-     */
-    this.canSelectRemediation = false;
-    /**
-     * Per-failed-Answer `cora-capture-groups` instances, keyed by question id and
-     * reused across re-renders so each group's ephemeral collapse state survives
-     * an autosave-triggered re-render.
-     * @type {Map<string, import('./cora-capture-groups.js').CORACaptureGroups>}
-     */
-    this._captureEls = new Map();
-    /**
-     * The rendered `<li>` per failed question id, reused by the in-place patch
-     * (issue #308).
-     * @type {Map<string, HTMLElement>}
-     */
-    this._items = new Map();
-    /**
-     * The Answer reference each item was last rendered with; an unchanged
-     * reference means the item needs no patch (answers updates are immutable).
-     * @type {Map<string, Answer | undefined>}
-     */
-    this._renderedAnswers = new Map();
-    /**
-     * Structure signature of the last full render, `null` before the first.
-     * A matching signature on the next render means only Answer values can
-     * have changed, so items are patched in place instead of rebuilt.
-     * @type {string | null}
-     */
-    this._renderedStructure = null;
-  }
-
-  /**
-   * A stable string describing the list *structure*: the ordered failed
-   * question ids plus every prop that changes an item's internal shape. While
-   * two renders share a signature, a re-render can only mean changed Answer
-   * values, which the in-place patch handles without detaching the reused
-   * `cora-capture-groups` elements (issue #308).
-   *
-   * @param {RemediationSectionProps} props
-   * @param {QuestionDefinition[]} failed
-   * @returns {string}
-   */
-  _structureSignature(props, failed) {
-    return JSON.stringify([
-      failed.map((q) => q.id),
-      props.attributeFailures,
-      props.canAttribute,
-      props.canCaptureDetails,
-      props.canCapture,
-      props.canSelectRemediation,
-      (props.remediationFields ?? []).length,
-      (props.captureGroups ?? []).length,
-      props.responsibleParty?.loginName ?? null,
-    ]);
-  }
-
-  /**
-   * @param {QuestionDefinition[]} catalogue
-   * @param {Record<string, Answer>} answers
-   * @param {boolean} [attributeFailures]
-   */
-  update(catalogue, answers, attributeFailures = false) {
-    this.catalogue = catalogue;
-    this.answers = answers;
-    this.attributeFailures = attributeFailures;
-    this._render();
-  }
-
-  /**
-   * Survives (not routed through `this._shellRenderNow`): several tests call
-   * `update()` before `connectedCallback()`, so this must render unconditionally
-   * rather than being a no-op pre-connection like the base `update()`.
-   *
-   * While the structure signature is unchanged, changed items are patched in
-   * place — the reused `cora-capture-groups` elements are never detached, so
-   * the Reviewer's focus and the browser's scroll anchoring survive a
-   * capture-value autosave (issue #308). Any structural change (the failed set,
-   * or a shape-changing prop) falls back to the full rebuild.
-   */
-  _render() {
-    const props = this._buildProps();
-    const failed = failedQuestions(props);
-    if (
-      this._renderedStructure !== null &&
-      this._renderedStructure === this._structureSignature(props, failed)
-    ) {
-      this._patchItems(props, failed);
-      return;
-    }
-    replaceHostChildren(this, this.render());
-  }
-
-  render() {
-    const props = this._buildProps();
-    const failed = failedQuestions(props);
-    const nodes = RemediationSection(props);
-    this._indexItems(props, failed, nodes);
-    return nodes;
-  }
-
-  /**
-   * Records what a full render produced — the `<li>` per failed question, the
-   * Answer each was rendered with, and the structure signature — so the next
-   * `_render()` can patch in place.
-   *
-   * @param {RemediationSectionProps} props
-   * @param {QuestionDefinition[]} failed
-   * @param {Node[]} nodes
-   */
-  _indexItems(props, failed, nodes) {
-    this._items.clear();
-    this._renderedAnswers.clear();
-    const lis = nodes.flatMap((node) => [
-      .../** @type {HTMLElement} */ (node).querySelectorAll(
-        '.cora-remediation-item'
-      ),
-    ]);
-    failed.forEach((q, i) => {
-      this._items.set(q.id, /** @type {HTMLElement} */ (lis[i]));
-      this._renderedAnswers.set(q.id, props.answers[q.id]);
-    });
-    this._renderedStructure = this._structureSignature(props, failed);
-  }
-
-  /**
-   * In-place update path: refresh only the items whose Answer reference
-   * changed, leaving every other item's DOM untouched.
-   *
-   * @param {RemediationSectionProps} props
-   * @param {QuestionDefinition[]} failed
-   */
-  _patchItems(props, failed) {
-    for (const q of failed) {
-      const li = this._items.get(q.id);
-      if (!li || props.answers[q.id] === this._renderedAnswers.get(q.id)) {
-        continue;
-      }
-      updateRemediationItem(props, li, q);
-      this._renderedAnswers.set(q.id, props.answers[q.id]);
-    }
-  }
-
-  /**
-   * @param {QuestionDefinition} q
-   * @returns {HTMLElement}
-   */
-  _renderItem(q) {
-    return renderRemediationItem(this._buildProps(), q);
-  }
-
-  /**
-   * Renders the Attributed Party surface on a failed item. Read-only
-   * viewers see just the cached displayName. Editors get the inline
-   * `cora-attribute-menu`, always visible, offering the Responsible Party
-   * quick-pick and people search; its `cora-attribute-change` is re-dispatched
-   * here as a bubbling `cora-attribute` carrying the question id.
-   * Persistence is the page's responsibility so the answers signal stays the
-   * single source of truth.
-   *
-   * @param {HTMLElement} li
-   * @param {QuestionDefinition} q
-   */
-  _renderAttribution(li, q) {
-    renderRemediationAttribution(this._buildProps(), li, q);
-  }
-
-  /**
-   * Renders the configurable Remediation Details surface on a failed item
-   *. This slice is a minimal capture surface: editors get one control
-   * per declared field (text input or select); read-only viewers see only the
-   * fields that already carry a captured value. Persistence is the page's
-   * responsibility (it owns the answers signal), so each change is re-dispatched
-   * as a bubbling `cora-remediation-detail` carrying the question id, field key,
-   * and new value.
-   *
-   * @param {HTMLElement} li
-   * @param {QuestionDefinition} q
-   */
-  _renderDetails(li, q) {
-    renderRemediationDetails(this._buildProps(), li, q);
-  }
-
-  /**
-   * Renders the unified **Issue Capture Group**s for a failed item
-   * via the `cora-capture-groups` component. The instance is reused per question id
-   * so each group's ephemeral collapse state survives autosave re-renders. The
-   * component's bubbling `cora-capture` (field key + value) is caught here and
-   * re-dispatched as a `cora-capture` carrying the question id; persistence is the
-   * page's responsibility so the answers signal stays the single source of truth.
-   *
-   * @param {HTMLElement} li
-   * @param {QuestionDefinition} q
-   */
-  _renderCapture(li, q) {
-    renderRemediationCapture(this._buildProps(), li, q);
-  }
-
-  /**
-   * Builds the plain props object consumed by the exported pure render
-   * functions above. Not named `_props` — kept as an ordinary private
-   * helper reused by `render()` and the tested `_render*` methods.
-   *
-   * @returns {RemediationSectionProps}
-   */
-  _buildProps() {
-    return {
-      catalogue: this.catalogue,
-      answers: this.answers,
-      attributeFailures: this.attributeFailures,
-      client: this.client,
-      responsibleParty: this.responsibleParty,
-      canAttribute: this.canAttribute,
-      remediationFields: this.remediationFields,
-      canCaptureDetails: this.canCaptureDetails,
-      captureGroups: this.captureGroups,
-      canCapture: this.canCapture,
-      captureEls: this._captureEls,
-      canSelectRemediation: this.canSelectRemediation,
-      dispatchCapture: (questionId, fieldKey, value) =>
-        this.emit('cora-capture', { questionId, fieldKey, value }),
-      dispatchDetail: (questionId, key, value) =>
-        this.emit('cora-remediation-detail', { questionId, key, value }),
-      dispatchAttribute: (questionId, attributedParty) =>
-        this.emit('cora-attribute', { questionId, attributedParty }),
-      dispatchRemediationAction: (questionId, action, selected) =>
-        this.emit('cora-remediation-action', {
-          questionId,
-          action,
-          selected,
-        }),
-      dispatchRemediationFreeForm: (questionId, value) =>
-        this.emit('cora-remediation-freeform', { questionId, value }),
-    };
-  }
-}
-
-customElements.define('cora-remediation-section', CORARemediationSection);

@@ -1,13 +1,5 @@
 // @ts-check
 import { createCaseReviewNodeRegistry } from './node-registry.js';
-import {
-  bindRemediationPanel,
-  updateRemediationPanel,
-} from './remediation-controller.js';
-import {
-  bindRemediationTracking,
-  updateRemediationTracking,
-} from './remediation-tracking-controller.js';
 import { updateSummaryNotesAppeal } from './summary-notes-appeal-controller.js';
 import { updateAmendOutcome } from './amend-outcome-controller.js';
 import { updateAppealReview } from './appeal-review-controller.js';
@@ -36,7 +28,6 @@ export function createCaseReviewInterimAdapter({
   modelChanged,
 }) {
   const registry = createCaseReviewNodeRegistry();
-  let bound = false;
 
   /** @returns {CaseReviewShellContext} */
   function context() {
@@ -55,14 +46,7 @@ export function createCaseReviewInterimAdapter({
 
   function update() {
     const ctx = context();
-    if (!bound && viewModel.loaded.get() && viewModel.caseRow) {
-      bound = true;
-      bindRemediationPanel(ctx);
-      bindRemediationTracking(ctx);
-    }
     if (!viewModel.loaded.get() || !viewModel.caseRow) return;
-    updateRemediationPanel(ctx);
-    updateRemediationTracking(ctx);
     updateSummaryNotesAppeal(ctx);
     updateAmendOutcome(ctx);
     updateAppealReview(ctx);
@@ -73,8 +57,6 @@ export function createCaseReviewInterimAdapter({
     get panels() {
       const nodes = registry.ensure();
       return /** @type {Record<string, Node>} */ ({
-        issues: nodes.issues,
-        remediation: nodes.remediation,
         notes: nodes.notes,
         appealRequest: nodes.appeal,
         appealReview: nodes.appealReview,

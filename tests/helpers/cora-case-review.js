@@ -178,9 +178,8 @@ const panelOf = (/** @type {any} */ el, /** @type {string} */ id) =>
 const tabFor = (/** @type {any} */ el, /** @type {string} */ id) =>
   tabsOf(el).tabs.find((/** @type {any} */ t) => t.id === id);
 const questionSectionOf = (/** @type {any} */ el) => panelOf(el, 'questions');
-// The Issues capture tab keeps the `cora-remediation-section` node under the
-// `issues` panel key after the ADR-0024 split; `remediation` is the new tracking
-// tab (`cora-remediation-tracking`).
+// Issues and Remediation Tracking are plain view nodes under their ADR-0024
+// panel keys.
 const remediationOf = (/** @type {any} */ el) => panelOf(el, 'issues');
 const trackingOf = (/** @type {any} */ el) => panelOf(el, 'remediation');
 const summaryOf = (/** @type {any} */ el) => panelOf(el, 'summary');

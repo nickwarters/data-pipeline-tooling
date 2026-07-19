@@ -17,8 +17,10 @@ installDom();
 useElementClass(ConnectingStubEl, { registry: true });
 
 // ===== IMPORTS (after stubs) =====
-const { CORARemediationSection, updateRemediationItem } =
-  await import('../src/components/sections/cora-remediation-section.js');
+const { CORARemediationSection } =
+  await import('./helpers/cora-remediation-section.js');
+const { updateRemediationItem } =
+  await import('../src/pages/cora-case-review/remediation-view.js');
 
 /** @typedef {import('../src/sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 
