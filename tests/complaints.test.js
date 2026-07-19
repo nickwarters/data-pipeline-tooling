@@ -132,6 +132,26 @@ test('complaints: declares Case Details fields, each with a stable key and label
   }
 });
 
+test('complaints: page descriptors preserve its dashboard layout and add a config-only table column', () => {
+  assert.deepEqual(config.dashboardPanels, [
+    'kpis',
+    'actionCentre',
+    'ownerSummary',
+    'reviewerCases',
+    'allocation',
+    'responsibleParty',
+    'appeals',
+  ]);
+  assert.deepEqual(config.caseTableColumns, [
+    {
+      key: 'responsibleParty',
+      label: 'Responsible Party',
+      value: 'responsibleParty',
+      sortable: true,
+    },
+  ]);
+});
+
 // --- computeOutcome (response-driven: highest-scoring applicable outcome) ---
 
 test('complaints computeOutcome: empty answers → pass', () => {

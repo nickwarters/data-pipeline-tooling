@@ -245,7 +245,7 @@ test('reviewer worklist preserves the legacy columns, filters, and Open action',
   const actions = [];
   const view = dashboardView(/** @type {any} */ (state), {
     context: ctx,
-    dispatch: (action) => actions.push(action),
+    dispatch: (/** @type {any} */ action) => actions.push(action),
   });
 
   assert.match(view.textContent, /Beta case/);
@@ -292,6 +292,59 @@ test('dashboard pure view renders role-visible reviewer, owner, and allocation p
   assert.ok(/** @type {any} */ (view)._children);
   assert.ok(/** @type {any} */ (view)._children.length >= 1);
   assert.ok(/** @type {any} */ (view)._children[0]);
+});
+
+test('dashboard pure view renders only panels present in Case Type configuration', () => {
+  const ctx = context(
+    capabilities({ isReviewer: true, ownedCaseTypes: ['complaints'] })
+  );
+  ctx.client = null;
+  const slice = createRouteSlice({}, ctx);
+  const state = {
+    ...slice.initialState,
+    routes: {
+      dashboard: {
+        ...slice.initialState.routes.dashboard,
+        dashboardPanels: ['reviewerCases'],
+      },
+    },
+  };
+  const view = dashboardView(/** @type {any} */ (state), {
+    dispatch: () => {},
+    context: ctx,
+  });
+
+  assert.ok(view.querySelector('.cora-reviewer-cases'));
+  assert.equal(view.querySelector('cora-allocation'), null);
+  assert.equal(view.querySelector('cora-owner-summary'), null);
+});
+
+test('dashboard slice resolves Case Type panel presence through a store action', async () => {
+  const ctx = context(capabilities());
+  ctx.client = null;
+  /** @type {any[]} */
+  const actions = [];
+  /** @type {any[]} */
+  const sources = [];
+  const slice = createRouteSlice({}, ctx, {
+    loadDashboardPanels: async (caseSources) => {
+      sources.push(...caseSources);
+      return ['reviewerCases'];
+    },
+  });
+  slice.start({
+    context: ctx,
+    params: {},
+    dispatch: (/** @type {any} */ action) => actions.push(action),
+    listen: () => {},
+  });
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.deepEqual(sources, ctx.caseSources);
+  assert.deepEqual(actions, [
+    { type: 'dashboard-panels/loaded', panels: ['reviewerCases'] },
+  ]);
 });
 
 test('dashboard allocation wiring listens at the app boundary and reloads reviewer cases', async () => {

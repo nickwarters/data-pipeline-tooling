@@ -16,7 +16,7 @@ import {
 /**
  * @typedef {Object} TeamCasesRouteState
  * @property {CaseRow[] | null} cases
- * @property {CaseColumnDescriptor[]} dashboardColumns
+ * @property {CaseColumnDescriptor[]} caseTableColumns
  * @property {TableSort | null} sort
  */
 
@@ -25,26 +25,6 @@ import {
  * @property {import('../core/chrome-state.js').ChromeState} chrome
  * @property {{ teamCases: TeamCasesRouteState }} routes
  */
-
-/**
- * Convert the legacy Case Type extension shape at the boundary while GRID-1
- * adopts the descriptor schema. GRID-5 owns any later Case Type schema change.
- *
- * @param {import('../components/base/cora-data-table.js').ColumnDef<CaseRow>} column
- * @returns {CaseColumnDescriptor}
- */
-function adaptDashboardColumn(column) {
-  return {
-    key: column.key,
-    label: column.label,
-    value: column.getValue ?? (() => null),
-    sortable: column.sortable,
-    format: column.renderCell
-      ? (_value, row) => column.renderCell?.(row)
-      : undefined,
-    ariaLabel: column.ariaLabel,
-  };
-}
 
 /**
  * Resolve the extension columns for a table scoped to one Case Type. Mixed
@@ -61,7 +41,7 @@ export async function resolveDashboardColumns(
   if (!caseType) return [];
   try {
     const config = await load(caseType);
-    return (config.dashboardColumns ?? []).map(adaptDashboardColumn);
+    return config.caseTableColumns ?? [];
   } catch (error) {
     if (error instanceof UnknownCaseTypeError) return [];
     throw error;
@@ -73,10 +53,10 @@ export async function resolveDashboardColumns(
  * Value selection and presentation remain declarative; the Actions cell keeps
  * its navigation behaviour in code.
  *
- * @param {CaseColumnDescriptor[]} [dashboardColumns]
+ * @param {CaseColumnDescriptor[]} [caseTableColumns]
  * @returns {CaseColumnDescriptor[]}
  */
-export function teamCasesColumns(dashboardColumns = []) {
+export function teamCasesColumns(caseTableColumns = []) {
   return [
     {
       key: 'reference',
@@ -133,7 +113,7 @@ export function teamCasesColumns(dashboardColumns = []) {
           'Open'
         ),
     },
-    ...dashboardColumns,
+    ...caseTableColumns,
   ];
 }
 
@@ -155,7 +135,7 @@ export function teamCasesView(state, tools) {
     back,
     dataTableView({
       rows: route.cases,
-      columns: teamCasesColumns(route.dashboardColumns),
+      columns: teamCasesColumns(route.caseTableColumns),
       sort: route.sort,
       onSort: (key) => tools.dispatch({ type: 'table/sort-requested', key }),
       emptyMessage: 'No cases match the selected filters.',
@@ -192,7 +172,7 @@ export function createRouteSlice(
       routes: {
         teamCases: {
           cases: null,
-          dashboardColumns: [],
+          caseTableColumns: [],
           sort: null,
         },
       },
@@ -206,7 +186,7 @@ export function createRouteSlice(
             teamCases: {
               ...route,
               cases: action.cases,
-              dashboardColumns: action.dashboardColumns,
+              caseTableColumns: action.caseTableColumns,
             },
           },
         };
@@ -237,9 +217,9 @@ export function createRouteSlice(
       void Promise.all([
         fetchCases(client, parsed, currentUser.id, tools.context.caseSources),
         resolveColumns(parsed.caseType),
-      ]).then(([cases, dashboardColumns]) => {
+      ]).then(([cases, caseTableColumns]) => {
         if (active) {
-          tools.dispatch({ type: 'cases/loaded', cases, dashboardColumns });
+          tools.dispatch({ type: 'cases/loaded', cases, caseTableColumns });
         }
       });
 

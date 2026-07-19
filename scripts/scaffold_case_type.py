@@ -221,6 +221,25 @@ const config = {{
     {{ key: 'customerName', label: 'Customer name' }},
     {{ key: 'reviewDate', label: 'Review date' }},
   ],
+ // Page descriptors express Case Type variation only. Permission checks,
+ // navigation, formatting, and other branching behaviour stay in framework code.
+  dashboardPanels: [
+    'kpis',
+    'actionCentre',
+    'ownerSummary',
+    'reviewerCases',
+    'allocation',
+    'responsibleParty',
+    'appeals',
+  ],
+  caseTableColumns: [
+    {{
+      key: 'customerName',
+      label: 'Customer name',
+      value: 'details.customerName',
+      sortable: true,
+    }},
+  ],
   sections: {{
     details: {{ showInSummary: true }},
     questions: {{ showInSummary: true }},
@@ -356,6 +375,13 @@ test('{opts.slug}: declares Case Details fields with stable keys and labels', ()
   for (const field of config.detailFields ?? []) {{
     assert.ok(field.key.length > 0);
     assert.ok(field.label.length > 0);
+  }}
+}});
+
+test('{opts.slug}: declares data-only page descriptors', () => {{
+  assert.ok((config.dashboardPanels ?? []).length > 0);
+  for (const column of config.caseTableColumns ?? []) {{
+    assert.equal(typeof column.value, 'string');
   }}
 }});
 

@@ -63,7 +63,7 @@ test('team cases slice: fetches with parsed route params and dispatches loaded d
     markLoaded = resolve;
   });
   const cases = [row('c1')];
-  const dashboardColumns = [
+  const caseTableColumns = [
     { key: 'owner', label: 'Owner', value: 'responsibleParty' },
   ];
   const slice = createRouteSlice(
@@ -76,7 +76,7 @@ test('team cases slice: fetches with parsed route params and dispatches loaded d
         fetchCalls.push(args);
         return cases;
       },
-      resolveColumns: async () => dashboardColumns,
+      resolveColumns: async () => caseTableColumns,
     }
   );
 
@@ -98,7 +98,7 @@ test('team cases slice: fetches with parsed route params and dispatches loaded d
   assert.deepEqual(actions[0], {
     type: 'cases/loaded',
     cases,
-    dashboardColumns,
+    caseTableColumns,
   });
   dispose?.();
 });
@@ -108,7 +108,7 @@ test('team cases slice: reducer owns loaded rows and generic table sort state', 
   const loaded = slice.reducer(slice.initialState, {
     type: 'cases/loaded',
     cases: [row('c1')],
-    dashboardColumns: [],
+    caseTableColumns: [],
   });
   const sorted = slice.reducer(loaded, {
     type: 'table/sort-requested',
@@ -174,6 +174,50 @@ test('team cases columns: mixed and unknown Case Types have no extension columns
   );
 });
 
+test('team cases columns: a scoped Case Type contributes generic descriptors without an adapter', async () => {
+  const columns = [
+    {
+      key: 'responsibleParty',
+      label: 'Responsible Party',
+      value: 'responsibleParty',
+      sortable: true,
+    },
+  ];
+  assert.deepEqual(
+    await resolveDashboardColumns(
+      'complaints',
+      async () => /** @type {any} */ ({ caseTableColumns: columns })
+    ),
+    columns
+  );
+});
+
+test('team cases page: Complaints config alone adds the visible Responsible Party column', async () => {
+  const caseTableColumns = await resolveDashboardColumns('complaints');
+  const loaded = teamCasesView(
+    {
+      ...createRouteSlice({}, context()).initialState,
+      routes: {
+        teamCases: {
+          cases: [row('c1')],
+          caseTableColumns,
+          sort: null,
+        },
+      },
+    },
+    { dispatch: () => {} }
+  );
+
+  assert.ok(
+    [...loaded.querySelectorAll('th')].some(
+      (heading) => heading.textContent === 'Responsible Party'
+    )
+  );
+  assert.ok(
+    [...loaded.querySelectorAll('td')].some((cell) => cell.textContent === 'rp')
+  );
+});
+
 test('team cases columns: unexpected Case Type loading failures rethrow', async () => {
   const failure = new Error('config unavailable');
   await assert.rejects(
@@ -192,7 +236,7 @@ test('team cases view: keeps heading, back link, empty state, and row links', ()
       routes: {
         teamCases: {
           cases: [],
-          dashboardColumns: [],
+          caseTableColumns: [],
           sort: null,
         },
       },
@@ -211,7 +255,7 @@ test('team cases view: keeps heading, back link, empty state, and row links', ()
       routes: {
         teamCases: {
           cases: [row('c1')],
-          dashboardColumns: [],
+          caseTableColumns: [],
           sort: null,
         },
       },

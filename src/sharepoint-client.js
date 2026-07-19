@@ -360,19 +360,34 @@
  */
 
 /**
+ * A data-only column a Case Type contributes when a generic Case table is
+ * scoped to that one Case Type. `value` is a dot-separated `CaseRow` property
+ * path interpreted by `views/data-table.js`. Links, formatting, and any
+ * branching behaviour remain framework code.
+ *
+ * @typedef {{ key: string, label: string, value: string, sortable?: boolean }} CaseTableColumnDescriptor
+ */
+
+/**
+ * A generic dashboard panel that may contain or summarise Cases. Case Type
+ * config declares presence only; permission and state branching remain in the
+ * dashboard's panel descriptor code.
+ *
+ * @typedef {'kpis'|'actionCentre'|'ownerSummary'|'reviewerCases'|'allocation'|'responsibleParty'|'appeals'} DashboardPanelKey
+ */
+
+/**
  * Shape every Case Type module must satisfy.
  *
- * `dashboardColumns`, if present, are extra columns a Case Type contributes to
- * `cora-case-table` beyond the framework's `defaultCaseColumns` — data-plus-
- * render-function compatible with `ColumnDef` (see
- * `components/base/cora-data-table.js`), so a Case Type can add a column
- * without touching any framework file. **Mixed-Case-Type-table semantics**:
- * dashboard pages that list Cases across more than one Case Type at once
- * (e.g. the Team Cases report with no `caseType` filter) must NOT apply any
- * Case Type's `dashboardColumns` — a page only appends them once the table is
- * scoped to a single Case Type (e.g. Team Cases filtered by `caseType`).
- * Pages opt in explicitly via the existing `cora-case-table` `customColumns`
- * prop; `cora-case-table` itself has no Case-Type awareness.
+ * `caseTableColumns` contribute data-only columns when a generic Case table is
+ * scoped to one Case Type; mixed-Case-Type tables do not apply one Case Type's
+ * variation. `dashboardPanels` declares presence from the dashboard's fixed
+ * panel vocabulary, while permission branching remains code. `sections`
+ * remains the Section layout descriptor. See ADR-0035.
+ *
+ * `dashboardColumns` is the additive legacy component-era shape. It remains in
+ * the typedef for source compatibility; new and scaffolded Case Types use
+ * `caseTableColumns`.
  *
  * @typedef {{
  * questions: QuestionDefinition[],
@@ -394,7 +409,9 @@
  * remediationFields?: RemediationField[],
  * captureGroups?: CaptureGroup[],
  * detailFields?: CaseDetailField[],
- * dashboardColumns?: import('./components/base/cora-data-table.js').ColumnDef<CaseRow>[]
+ * dashboardColumns?: import('./components/base/cora-data-table.js').ColumnDef<CaseRow>[],
+ * caseTableColumns?: CaseTableColumnDescriptor[],
+ * dashboardPanels?: DashboardPanelKey[]
  * }} CaseTypeConfig
  */
 

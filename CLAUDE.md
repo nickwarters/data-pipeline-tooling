@@ -8,7 +8,7 @@ Before doing any non-trivial work in this repo, read:
 
 1. **[CONTEXT.md](./CONTEXT.md)** — domain language. Use these terms exactly when discussing or coding (`Case Type`, `Question Definition`, `Applicable Question`, `Answer`, `Remediation Action`, `Reviewer`, `Responsible Party`, `Case Type Owner`, `Conversation`, `Outcome`).
 2. **[docs/PLAN.md](./docs/PLAN.md)** — the slice-based execution roadmap. Slice 1 ("Example Case") is long done; the framework is deep into later slices. Current work is **Slice 11 — User groups & remediation workflow** (two-axis roles, case lifecycle, remediation loop, Amend Outcome, Appeals — see [`docs/user-groups-workflow-grilling-session-plan.md`](./docs/user-groups-workflow-grilling-session-plan.md)). Read the slice list to see what's shipped vs. sketched before assuming a feature doesn't exist yet.
-3. **[docs/adr/](./docs/adr/)** — 34 architecture decisions, numbered (`0001`–`0034`). Every non-trivial decision in the codebase traces back to one of these. Don't deviate from an ADR without surfacing the deviation explicitly.
+3. **[docs/adr/](./docs/adr/)** — 35 architecture decisions, numbered (`0001`–`0035`). Every non-trivial decision in the codebase traces back to one of these. Don't deviate from an ADR without surfacing the deviation explicitly.
 
 ## Project overview
 
@@ -37,6 +37,7 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
 - **No `innerHTML` for user data.** XSS prevention; also preserves input state.
 - **Custom elements use the `cora-` prefix** (also the CSS namespace).
 - **Question Definitions are never deleted** — use a `deprecated` flag (avoids dangling references from Case Type modules).
+- **Case Type descriptors express variation; branching behaviour stays in code** (ADR-0035). Descriptors may select stable keys, labels, property paths, ordering, membership, and simple flags. Permission/lifecycle decisions, navigation, conditional formatting, event handling, and effects belong in code.
 
 ## Gotchas
 
@@ -100,7 +101,7 @@ src/
 
   components/                   # reusable cora-* custom elements, layered by dependency
     base/                       # leaf primitives — compose no other component (cf. lib/signal.js)
-      cora-data-table.js           # legacy ColumnDef contract retained for dashboardColumns (GRID-5 owns migration)
+      cora-data-table.js           # legacy component-era table retained while unconverted consumers remain
       cora-options-editor.js
       cora-people-picker.js
       cora-question-labels.js
@@ -167,7 +168,7 @@ src/
       action-centre-view.js       # pure reason-descriptor view + bounded load actions (ADR-0030 flags unchanged)
       controls-view.js            # pure generic-table Appeals panel + paged load action
       kpi-view.js                 # pure renderer for kpi-strip-model output
-      panel-descriptors.js        # fixed role-to-panel visibility convention
+      panel-descriptors.js        # config-declared presence intersected with code-owned role visibility
     home.js                      # store-driven Home pure view (Palimpsest PILOT-2)
     cora-journey-cases.js         # store-driven Journey Cases slice + generic descriptors (GRID-2)
     reports-index.js             # store-driven pure view (Palimpsest PILOT-1)
@@ -175,7 +176,7 @@ src/
     responsible-party/
       view.js                     # pure outcome/remediation/unread views using generic tables
     cora-reviewer-team-report.js
-    cora-team-cases.js          # store-driven Team Cases slice + table descriptors (GRID-1)
+    cora-team-cases.js          # store-driven Team Cases + Case Type table descriptors (GRID-1/5)
     question-bank/              # question bank editor subsystem ("just another page", #382)
       cora-bank-dock.js
       cora-bank-editor.js       # page shell; owns the ONLY store imports + child wiring

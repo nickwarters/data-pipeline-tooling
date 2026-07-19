@@ -35,6 +35,25 @@ const config = {
     { key: 'customerName', label: 'Customer name' },
     { key: 'complaintDate', label: 'Complaint date' },
   ],
+  dashboardPanels: [
+    'kpis',
+    'actionCentre',
+    'ownerSummary',
+    'reviewerCases',
+    'allocation',
+    'responsibleParty',
+    'appeals',
+  ],
+  // Config-only GRID-5 demonstration: a single-Case-Type table gains this
+  // visible column without a page or renderer edit.
+  caseTableColumns: [
+    {
+      key: 'responsibleParty',
+      label: 'Responsible Party',
+      value: 'responsibleParty',
+      sortable: true,
+    },
+  ],
   // Per-Section config object. Mirrors the amended Section set: the
   // block Sections opt in/out of the Summary, and the appeal/amend Sections are
   // enabled so the Complaints appeal flow and Amend Outcome
