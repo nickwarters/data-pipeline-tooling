@@ -10,7 +10,6 @@ import {
 
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
-/** @typedef {import('../../sharepoint-client.js').OutcomeOption} OutcomeOption */
 
 /** @param {QuestionDefinition} question */
 export function questionGroupOf(question) {
@@ -38,7 +37,6 @@ export function createQuestionPanelView() {
    *   activeGroup: string,
    *   access: 'edit'|'read-only'|'hidden',
    *   heading: string,
-   *   outcomeOptions: OutcomeOption[],
    *   onAnswer: (questionId: string, value: string|string[]) => void,
    *   onGroupSelected: (group: string) => void,
    * }} props
@@ -95,17 +93,16 @@ export function createQuestionPanelView() {
         },
         ...visibleQuestions.map((question) => {
           const answer = props.answers[question.id];
-          return memo(
-            question.id,
-            [answer, true, question.labelIds, props.access],
-            () =>
-              questionCardView({
-                question,
-                answer,
-                access: props.access,
-                outcomeOptions: props.outcomeOptions,
-                onAnswer: props.onAnswer,
-              })
+          // Applicability is represented by presence in `visibleQuestions`;
+          // inapplicable and off-group cards are evicted above. Labels and
+          // Outcome options are not rendered by this answering-path card.
+          return memo(question.id, [answer, props.access], () =>
+            questionCardView({
+              question,
+              answer,
+              access: props.access,
+              onAnswer: props.onAnswer,
+            })
           );
         })
       )
@@ -126,7 +123,6 @@ export function createQuestionPanelView() {
  *   question: QuestionDefinition,
  *   answer: Answer|undefined,
  *   access: 'edit'|'read-only'|'hidden',
- *   outcomeOptions: OutcomeOption[],
  *   onAnswer: (questionId: string, value: string|string[]) => void,
  * }} props
  */

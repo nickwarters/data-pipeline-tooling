@@ -307,6 +307,7 @@ test('case page reducer keeps group, conversation, and field state behind loaded
 
   const grouped = {
     ...snapshot(),
+    machine: { canToggleConversation: true },
     applicableQuestions: [
       ...snapshot().applicableQuestions,
       {
@@ -382,6 +383,30 @@ test('case page reducer keeps group, conversation, and field state behind loaded
       type: 'case/conversation-toggled',
     }),
     hiddenConversation
+  );
+
+  const lifecycleBlockedConversation = /** @type {any} */ ({
+    ...state,
+    routes: {
+      caseReview: {
+        ...state.routes.caseReview,
+        snapshot: {
+          ...state.routes.caseReview.snapshot,
+          machine: { canToggleConversation: false },
+          access: {
+            ...state.routes.caseReview.snapshot?.access,
+            conversation: 'read-only',
+          },
+        },
+      },
+    },
+  });
+  assert.equal(
+    caseReviewReducer(lifecycleBlockedConversation, {
+      type: 'case/conversation-toggled',
+    }),
+    lifecycleBlockedConversation,
+    'a visible conversation remains closed when the lifecycle gate blocks toggling'
   );
 });
 

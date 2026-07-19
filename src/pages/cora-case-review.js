@@ -252,7 +252,12 @@ export function caseReviewReducer(state, action) {
     };
   }
   if (action.type === 'case/conversation-toggled') {
-    if (route.snapshot?.access.conversation === 'hidden') return state;
+    if (
+      route.snapshot?.access.conversation === 'hidden' ||
+      !route.snapshot?.machine?.canToggleConversation
+    ) {
+      return state;
+    }
     return {
       ...state,
       routes: {
@@ -560,7 +565,6 @@ export function createRouteSlice(params, context) {
                 activeGroup: route.activeQuestionGroup,
                 access: snapshot.access.questions,
                 heading: snapshot.sectionHeadings.questions,
-                outcomeOptions: snapshot.config.outcomeOptions ?? [],
                 onAnswer: (questionId, value) =>
                   viewModel.handleAnswer(questionId, value),
                 onGroupSelected: (group) =>

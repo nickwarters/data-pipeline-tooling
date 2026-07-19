@@ -33,7 +33,6 @@ function props(overrides = {}) {
     activeGroup: 'Identity',
     access: /** @type {const} */ ('edit'),
     heading: 'Questions',
-    outcomeOptions: [],
     onAnswer() {},
     onGroupSelected() {},
     ...overrides,
@@ -57,7 +56,7 @@ test('CASE-2 Questions view mounts only the active Question Group and reports pr
   assert.doesNotMatch(node.textContent, /Question q2/);
 });
 
-test('CASE-2 Questions view memoises unchanged cards by Answer, applicability, labels, and access', () => {
+test('CASE-2 Questions view memoises unchanged cards by rendered inputs', () => {
   const view = createQuestionPanelView();
   const answer = { value: 'Yes' };
   const first = view.render(props({ answers: { q1: answer } }));
