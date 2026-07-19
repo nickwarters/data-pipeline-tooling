@@ -1,4 +1,5 @@
 // @ts-check
+import { createStoreRoute } from '../core/store-route.js';
 
 /**
  * @param {import('../lib/router.js').Router} router
@@ -10,22 +11,19 @@ export function register(
   context,
   loadPage = () => import('../pages/cora-journey-cases.js')
 ) {
+  const storeRoute = createStoreRoute({ load: loadPage, context });
   router.register('#/journey-cases', {
-    async mount(container) {
+    mount(container, params) {
       // List-scope Journey Owner capability: only a user who
       // owns at least one Case Type as a Journey Owner may see this view.
       if (context.journeyCaseSources.length === 0) {
         location.hash = '#/';
         return;
       }
-      const { JourneyCasesPage } = await loadPage();
-      container.replaceChildren(
-        JourneyCasesPage({
-          client: context.client,
-          journeyCaseSources: context.journeyCaseSources,
-        })
-      );
+      return storeRoute.mount(container, params);
     },
-    unmount() {},
+    unmount() {
+      storeRoute.unmount();
+    },
   });
 }

@@ -1,130 +1,137 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { isolateBrowserGlobals } from './helpers/browser-globals.js';
 import { installDom } from './_dom-stub.js';
 import { initRouter, routeRegistrationSpy } from './helpers/router.js';
 
+isolateBrowserGlobals();
 installDom();
-
-/** @type {Record<string, Function[]>} */
-const windowListeners = {};
 /** @type {any} */ (globalThis).window = {
-  addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
-    (windowListeners[t] ??= []).push(h);
-  },
+  addEventListener() {},
+  removeEventListener() {},
 };
+/** @type {any} */ (globalThis).location = { hash: '' };
 
-const { Router } = await import('../src/lib/router.js');
-const { register } = await import('../src/routes/journey-cases.js');
-
-/** @param {any} node @param {string} tag @returns {any|null} */
-function findTag(node, tag) {
-  if (node.tagName === tag.toUpperCase()) return node;
-  for (const c of node._children ?? []) {
-    const f = findTag(c, tag);
-    if (f) return f;
-  }
-  return null;
-}
-
-/**
- * @param {string} slug
- * @param {string} [listName]
- * @returns {import('../src/setup/resolve-eligible-case-types.js').CaseSource}
- */
-const src = (slug, listName = `${slug}-list`) => ({
-  slug,
-  listName,
-  displayName: slug,
-});
+import { Router } from '../src/lib/router.js';
+import { register } from '../src/routes/journey-cases.js';
 
 /** @param {string[]} journeySlugs */
-const ctx = (journeySlugs) =>
-  /** @type {any} */ ({
-    client: {
-      id: 'mock',
-      async listCases() {
-        return [];
-      },
+function context(journeySlugs) {
+  return /** @type {any} */ ({
+    client: {},
+    chrome: {
+      toasts: [],
+      nav: { currentHash: '#/journey-cases' },
+      currentUser: { id: 'journey-owner-1', displayName: 'Journey Owner' },
+      permissions: {},
     },
-    journeyCaseSources: journeySlugs.map((s) => src(s)),
+    journeyCaseSources: journeySlugs.map((slug) => ({
+      slug,
+      listName: `${slug}-list`,
+      displayName: slug,
+    })),
   });
+}
 
-test('routes-journey-cases: registers #/journey-cases route', () => {
+test('journey cases route: registers the unchanged URL', () => {
   const registration = routeRegistrationSpy();
-  register(/** @type {any} */ (registration.router), ctx(['complaints']));
+  register(/** @type {any} */ (registration.router), context(['complaints']));
   assert.equal(registration.has('#/journey-cases'), true);
 });
 
-test('routes-journey-cases: mounts JourneyCasesPage output when owned types exist', async () => {
+test('journey cases route: mounts the store-driven slice', async () => {
   const router = new Router();
-  /** @type {any[]} */
-  let mounted = [];
-  const container = {
-    replaceChildren(/** @type {any} */ ...args) {
-      mounted = args;
-    },
-  };
-  initRouter(router, /** @type {any} */ (container));
-  register(router, ctx(['complaints', 'example-review']));
-  await router.navigate('#/journey-cases');
-
-  assert.equal(mounted.length, 1, 'should mount a single host element');
-  assert.ok(findTag(mounted[0], 'h1'), 'should render the page heading');
-});
-
-test('routes-journey-cases: non-Journey-Owner is redirected to #/ and no view mounts', () => {
-  /** @type {any} */ (globalThis).location = { hash: '#/journey-cases' };
-  const router = new Router();
-  /** @type {any[]} */
-  let mounted = [];
-  const container = {
-    replaceChildren(/** @type {any} */ ...args) {
-      mounted = args;
-    },
-  };
-  initRouter(router, /** @type {any} */ (container));
-  register(router, ctx([]));
-  router.navigate('#/journey-cases');
-
-  assert.equal(location.hash, '#/', 'should redirect to home');
-  assert.equal(mounted.length, 0, 'should not mount the view');
-  /** @type {any} */ (globalThis).location = { hash: '' };
-});
-
-test('routes-journey-cases: unmount is a no-op (does not throw)', () => {
-  const registration = routeRegistrationSpy();
-  register(/** @type {any} */ (registration.router), ctx(['complaints']));
-  assert.doesNotThrow(() =>
-    registration.handlerFor('#/journey-cases').unmount()
+  const container = document.createElement('main');
+  initRouter(router, container);
+  register(
+    router,
+    context(['complaints']),
+    /** @type {any} */ (
+      async () => ({
+        createRouteSlice: () => ({
+          initialState: {},
+          reducer: (/** @type {any} */ state) => state,
+          view: () => {
+            const heading = document.createElement('h1');
+            heading.textContent = 'Journey Cases';
+            return heading;
+          },
+        }),
+      })
+    )
   );
+
+  await router.navigate('#/journey-cases');
+  assert.equal(container.querySelector('h1')?.textContent, 'Journey Cases');
+  assert.equal(/** @type {any} */ (container)._children.length, 1);
 });
 
-test('routes-journey-cases: a rejecting page load renders a cora-route-error panel', async () => {
-  const originalConsoleError = console.error;
+test('journey cases route: redirects a non-Journey-Owner without loading the page', async () => {
+  let loaded = false;
+  const registration = routeRegistrationSpy();
+  register(
+    /** @type {any} */ (registration.router),
+    context([]),
+    /** @type {any} */ (
+      async () => {
+        loaded = true;
+        return {};
+      }
+    )
+  );
+
+  await registration
+    .handlerFor('#/journey-cases')
+    .mount(document.createElement('main'), {});
+  assert.equal(location.hash, '#/');
+  assert.equal(loaded, false);
+});
+
+test('journey cases route: load failure remains contained by the router', async () => {
+  const originalError = console.error;
   console.error = () => {};
   try {
     const router = new Router();
-    /** @type {any[]} */
-    let mounted = [];
-    const container = {
-      replaceChildren(/** @type {any} */ ...args) {
-        mounted = args;
-      },
-    };
-    initRouter(router, /** @type {any} */ (container));
-    register(router, ctx(['complaints']), () =>
+    const container = document.createElement('main');
+    initRouter(router, container);
+    register(router, context(['complaints']), () =>
       Promise.reject(new Error('boom'))
     );
-    await router.navigate('#/journey-cases');
 
-    assert.equal(mounted.length, 1, 'should mount the error panel');
+    await router.navigate('#/journey-cases');
+    assert.equal(container.childNodes.length, 1);
     assert.equal(
-      mounted[0].className,
-      'cora-route-error',
-      'should render the router error panel'
+      /** @type {HTMLElement} */ (container.childNodes[0]).className,
+      'cora-route-error'
     );
   } finally {
-    console.error = originalConsoleError;
+    console.error = originalError;
   }
+});
+
+test('journey cases route: unmount disposes the store-driven slice', async () => {
+  let disposed = false;
+  const registration = routeRegistrationSpy();
+  register(
+    /** @type {any} */ (registration.router),
+    context(['complaints']),
+    /** @type {any} */ (
+      async () => ({
+        createRouteSlice: () => ({
+          initialState: {},
+          reducer: (/** @type {any} */ state) => state,
+          view: () => document.createElement('section'),
+          start: () => () => {
+            disposed = true;
+          },
+        }),
+      })
+    )
+  );
+
+  const handler = registration.handlerFor('#/journey-cases');
+  await handler.mount(document.createElement('main'), {});
+  handler.unmount();
+  assert.equal(disposed, true);
 });

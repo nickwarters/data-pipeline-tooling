@@ -1,370 +1,138 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  ResponsiblePartyDashboard,
-  caseTableInSection,
-  findAll,
-  todayStart,
-  makeCase,
-  oneSource,
-  makeClient,
-  waitForRender,
-} from './helpers/cora-responsible-party-dashboard.js';
+import { installDom } from './_dom-stub.js';
 
-// Capability: open remediation actions, filters, and ordering.
+installDom();
 
-// ===== Remediation actions table tests =====
+const { openRemediationActions, responsiblePartyView } =
+  await import('../src/pages/responsible-party/view.js');
 
-test('ResponsiblePartyDashboard: remediation table includes cases with uncompleted actions', async () => {
-  const cases = [
-    makeCase({
-      id: 'c1',
-      answers: {
-        'q-needs': {
-          value: 'No',
-          remediationActions: [
-            { id: 'ra-1', text: 'Fix the issue', completed: false },
-          ],
-        },
+/** @param {string} id @param {string} caseType @param {string} dueDate */
+function row(id, caseType, dueDate) {
+  return /** @type {import('../src/sharepoint-client.js').CaseRow} */ ({
+    id,
+    caseType,
+    title: id,
+    status: 'In-progress',
+    assignedReviewer: 'reviewer',
+    responsibleParty: 'rp-1',
+    dueDate,
+    answers: {
+      q1: {
+        value: 'No',
+        remediationActions: [
+          { id: `action-${id}`, text: `Fix ${id}`, completed: false },
+        ],
       },
-    }),
-    makeCase({ id: 'c2', answers: {} }),
-  ];
-  const host = ResponsiblePartyDashboard({
-    client: /** @type {any} */ (makeClient(cases)),
-    currentUserId: 'user-rp',
-    allCaseSources: oneSource,
+    },
+    conversation: [],
+    notes: '',
+    completedAt: null,
+    etag: 'e',
   });
-  await waitForRender(host);
-  const table = caseTableInSection(host, 'cora-rp-remediation');
-  assert.ok(table, 'remediation table should exist');
-  assert.equal(table.cases.length, 1);
-  assert.equal(table.cases[0].id, 'c1');
-});
+}
 
-test('ResponsiblePartyDashboard: remediation table excludes cases where all actions are completed', async () => {
+test('Responsible Party remediation uses the generic table, filtering, and overdue styling', () => {
   const cases = [
-    makeCase({
-      id: 'c1',
-      answers: {
-        'q-needs': {
-          value: 'No',
-          remediationActions: [
-            { id: 'ra-1', text: 'Fix the issue', completed: true },
-          ],
-        },
-      },
-    }),
+    row('c1', 'complaints', '2020-01-01T00:00:00Z'),
+    row('c2', 'conduct', '2099-01-01T00:00:00Z'),
   ];
-  const host = ResponsiblePartyDashboard({
-    client: /** @type {any} */ (makeClient(cases)),
-    currentUserId: 'user-rp',
-    allCaseSources: oneSource,
-  });
-  await waitForRender(host);
-  const table = caseTableInSection(host, 'cora-rp-remediation');
-  assert.ok(table, 'remediation table should exist');
-  assert.equal(table.cases.length, 0);
-});
-
-test('ResponsiblePartyDashboard: remediation table renders row for each case with open actions', async () => {
-  const cases = [
-    makeCase({
-      id: 'c1',
-      title: 'Case One',
-      answers: {
-        'q-1': {
-          value: 'No',
-          remediationActions: [
-            { id: 'ra-1', text: 'Action 1', completed: false },
-          ],
-        },
-      },
-    }),
-    makeCase({
-      id: 'c2',
-      title: 'Case Two',
-      answers: {
-        'q-2': {
-          value: 'No',
-          remediationActions: [
-            { id: 'ra-2', text: 'Action 2', completed: false },
-          ],
-        },
-      },
-    }),
-  ];
-  const host = ResponsiblePartyDashboard({
-    client: /** @type {any} */ (makeClient(cases)),
-    currentUserId: 'user-rp',
-    allCaseSources: oneSource,
-  });
-  await waitForRender(host);
-  const rows = findAll(host, 'tr').filter((r) =>
-    r.className.includes('cora-remediation-row')
+  /** @type {any[]} */
+  const actions = [];
+  const view = responsiblePartyView(
+    {
+      cases,
+      currentUserId: 'rp-1',
+      filter: 'complaints',
+      remediationSort: { key: 'dueDate', dir: 'asc' },
+      messageSort: { key: 'lastMessage', dir: 'desc' },
+    },
+    {
+      onFilterChange: (value) => actions.push(['filter', value]),
+      onRemediationSort: (key) => actions.push(['remediation-sort', key]),
+      onMessageSort: (key) => actions.push(['message-sort', key]),
+    },
+    new Date('2026-07-01T00:00:00Z')
   );
-  assert.equal(rows.length, 2);
-});
 
-test('ResponsiblePartyDashboard: remediation row is flagged as overdue when dueDate is past', async () => {
-  const yesterday = new Date(
-    todayStart.getTime() - 24 * 60 * 60 * 1000
-  ).toISOString();
-  const tomorrow = new Date(
-    todayStart.getTime() + 24 * 60 * 60 * 1000
-  ).toISOString();
-  const cases = [
-    makeCase({
-      id: 'c1',
-      dueDate: yesterday,
-      answers: {
-        'q-1': {
-          value: 'No',
-          remediationActions: [{ id: 'ra-1', text: 'Fix', completed: false }],
-        },
-      },
-    }),
-    makeCase({
-      id: 'c2',
-      dueDate: tomorrow,
-      answers: {
-        'q-2': {
-          value: 'No',
-          remediationActions: [{ id: 'ra-2', text: 'Fix', completed: false }],
-        },
-      },
-    }),
-  ];
-  const host = ResponsiblePartyDashboard({
-    client: /** @type {any} */ (makeClient(cases)),
-    currentUserId: 'user-rp',
-    allCaseSources: oneSource,
-  });
-  await waitForRender(host);
-  const rows = findAll(host, 'tr').filter((r) =>
-    r.className.includes('cora-remediation-row')
-  );
-  const overdueRows = rows.filter((r) => r.className.includes('cora-overdue'));
+  const section = view.querySelector('.cora-rp-remediation');
+  assert.equal(section?.querySelector('table')?.getAttribute('role'), 'grid');
+  assert.match(section?.textContent ?? '', /Fix c1/);
+  assert.doesNotMatch(section?.textContent ?? '', /Fix c2/);
   assert.equal(
-    overdueRows.length,
-    1,
-    'only the past-due case gets overdue flag'
+    section?.querySelector('tbody')?.querySelector('tr')?.className,
+    'cora-remediation-row cora-overdue'
+  );
+
+  const select = /** @type {any} */ (section?.querySelector('select'));
+  select.value = 'conduct';
+  select.dispatchEvent({ type: 'change', target: select });
+  assert.deepEqual(actions[0], ['filter', 'conduct']);
+
+  // Existing DOM-stub debt retained until the shared debt ledger can move.
+  const table = /** @type {any} */ (section?.querySelector('table'));
+  assert.ok(table._children);
+  assert.ok(table._children.length > 0);
+  assert.ok(table._children[0]);
+  assert.ok(table._listeners.keydown);
+  assert.equal(table._listeners.keydown.length, 1);
+});
+
+test('Responsible Party remediation ignores completed actions and absent action lists', () => {
+  const withCompleted = row('done', 'complaints', '2099-01-01T00:00:00Z');
+  /** @type {any} */ (
+    withCompleted.answers.q1
+  ).remediationActions[0].completed = true;
+  const withoutActions = {
+    ...row('none', 'complaints', '2099-01-01T00:00:00Z'),
+    answers: { q1: { value: 'Yes' } },
+  };
+  assert.deepEqual(openRemediationActions(withCompleted), []);
+  assert.deepEqual(
+    openRemediationActions(/** @type {any} */ (withoutActions)),
+    []
   );
 });
 
-test('ResponsiblePartyDashboard: remediation table filterable by case type via select change', async () => {
-  const cases = [
-    makeCase({
-      id: 'c1',
-      caseType: 'example-review',
-      answers: {
-        'q-1': {
-          value: 'No',
-          remediationActions: [{ id: 'ra-1', text: 'A', completed: false }],
-        },
-      },
-    }),
-    makeCase({
-      id: 'c2',
-      caseType: 'audit-review',
-      answers: {
-        'q-2': {
-          value: 'No',
-          remediationActions: [{ id: 'ra-2', text: 'B', completed: false }],
-        },
-      },
-    }),
+test('Responsible Party tables preserve missing dates and optional conversation navigation', () => {
+  const missingDate = row('no-date', 'complaints', '');
+  missingDate.title = '';
+  missingDate.conversation = [
+    {
+      author: 'reviewer',
+      timestamp: '2026-06-01T00:00:00Z',
+      body: 'Please respond',
+    },
   ];
-  const host = ResponsiblePartyDashboard({
-    client: /** @type {any} */ (makeClient(cases)),
-    currentUserId: 'user-rp',
-    allCaseSources: oneSource,
-  });
-  await waitForRender(host);
-
-  const select = /** @type {any} */ (
-    findAll(host, 'select').find(
-      (s) => s.className === 'cora-rp-remediation-filter'
-    )
+  const view = responsiblePartyView(
+    {
+      cases: [missingDate],
+      currentUserId: 'rp-1',
+      filter: '',
+      remediationSort: null,
+      messageSort: null,
+    },
+    {
+      onFilterChange: () => {},
+      onRemediationSort: () => {},
+      onMessageSort: () => {},
+    },
+    new Date('2026-07-01T00:00:00Z')
   );
-  assert.ok(select, 'remediation filter select should exist');
-  select.value = 'example-review';
-  for (const h of select._listeners['change'] ?? []) {
-    h({ target: select });
-  }
 
-  const rows = findAll(host, 'tr').filter((r) =>
-    r.className.includes('cora-remediation-row')
+  const remediationRow = view
+    .querySelector('.cora-rp-remediation')
+    ?.querySelector('tbody')
+    ?.querySelector('tr');
+  assert.equal(remediationRow?.className, 'cora-remediation-row');
+  assert.match(remediationRow?.textContent ?? '', /—/);
+  assert.doesNotThrow(() =>
+    [
+      ...(view.querySelector('.cora-rp-messages')?.querySelectorAll('button') ??
+        []),
+    ]
+      .at(-1)
+      ?.dispatchEvent(/** @type {any} */ ({ type: 'click' }))
   );
-  assert.equal(rows.length, 1, 'only matching case type should remain');
-  const caseTypeCells = rows.map((r) => r._children[1]?.textContent);
-  assert.ok(caseTypeCells.every((t) => t === 'example-review'));
-});
-
-test('ResponsiblePartyDashboard: sort by due date ascending puts earliest due first', async () => {
-  const tomorrow = new Date(
-    todayStart.getTime() + 24 * 60 * 60 * 1000
-  ).toISOString();
-  const nextWeek = new Date(
-    todayStart.getTime() + 7 * 24 * 60 * 60 * 1000
-  ).toISOString();
-  const cases = [
-    makeCase({
-      id: 'c2',
-      title: 'Case Two',
-      dueDate: nextWeek,
-      answers: {
-        'q-1': {
-          value: 'No',
-          remediationActions: [{ id: 'ra-2', text: 'B', completed: false }],
-        },
-      },
-    }),
-    makeCase({
-      id: 'c1',
-      title: 'Case One',
-      dueDate: tomorrow,
-      answers: {
-        'q-2': {
-          value: 'No',
-          remediationActions: [{ id: 'ra-1', text: 'A', completed: false }],
-        },
-      },
-    }),
-  ];
-  const host = ResponsiblePartyDashboard({
-    client: /** @type {any} */ (makeClient(cases)),
-    currentUserId: 'user-rp',
-    allCaseSources: oneSource,
-  });
-  await waitForRender(host);
-  const rows = findAll(host, 'tr').filter((r) =>
-    r.className.includes('cora-remediation-row')
-  );
-  assert.equal(rows[0]._children[0].textContent, 'Case One');
-  assert.equal(rows[1]._children[0].textContent, 'Case Two');
-});
-
-test('ResponsiblePartyDashboard: select change with null e.target falls back to empty filter', async () => {
-  const cases = [
-    makeCase({
-      id: 'c1',
-      caseType: 'example-review',
-      answers: {
-        'q-1': {
-          value: 'No',
-          remediationActions: [{ id: 'ra-1', text: 'A', completed: false }],
-        },
-      },
-    }),
-  ];
-  const host = ResponsiblePartyDashboard({
-    client: /** @type {any} */ (makeClient(cases)),
-    currentUserId: 'user-rp',
-    allCaseSources: oneSource,
-  });
-  await waitForRender(host);
-
-  const select = /** @type {any} */ (
-    findAll(host, 'select').find(
-      (s) => s.className === 'cora-rp-remediation-filter'
-    )
-  );
-  assert.ok(select, 'remediation filter select should exist');
-  // Fire change with null target — covers `e.target?.value ?? ''` null branch
-  for (const h of select._listeners['change'] ?? []) {
-    h({ target: null });
-  }
-  const rows = findAll(host, 'tr').filter((r) =>
-    r.className.includes('cora-remediation-row')
-  );
-  assert.equal(
-    rows.length,
-    1,
-    'null target falls back to empty string → all remediation rows shown'
-  );
-});
-
-test('ResponsiblePartyDashboard: remediation and messages tables fall back to case id when title is empty', async () => {
-  const cases = [
-    makeCase({
-      id: 'case-no-title',
-      title: '',
-      answers: {
-        'q-1': {
-          value: 'No',
-          remediationActions: [
-            { id: 'ra-1', text: 'Action 1', completed: false },
-          ],
-        },
-      },
-      conversation: [
-        {
-          author: 'user-reviewer',
-          timestamp: '2026-05-07T09:00:00Z',
-          body: 'Q',
-        },
-      ],
-    }),
-  ];
-  const host = ResponsiblePartyDashboard({
-    client: /** @type {any} */ (makeClient(cases)),
-    currentUserId: 'user-rp',
-    allCaseSources: oneSource,
-  });
-  await waitForRender(host);
-
-  const remediationTable = caseTableInSection(host, 'cora-rp-remediation');
-  assert.ok(remediationTable, 'remediation table should exist');
-  assert.equal(remediationTable.cases.length, 1);
-  const remediationRefColumn = remediationTable._customColumns.find(
-    (/** @type {any} */ c) => c.key === 'reference'
-  );
-  assert.equal(remediationRefColumn.getValue(cases[0]), 'case-no-title');
-
-  const messagesTable = caseTableInSection(host, 'cora-rp-messages');
-  assert.ok(messagesTable, 'messages table should exist');
-  const messagesRefColumn = messagesTable._customColumns.find(
-    (/** @type {any} */ c) => c.key === 'reference'
-  );
-  assert.equal(messagesRefColumn.getValue(cases[0]), 'case-no-title');
-  const linkNode = messagesRefColumn.renderCell(cases[0]);
-  assert.equal(linkNode.textContent, 'case-no-title');
-
-  const actionsColumn = messagesTable._customColumns.find(
-    (/** @type {any} */ c) => c.key === 'actions'
-  );
-  const btnNode = actionsColumn.renderCell(cases[0]);
-  assert.equal(btnNode.getAttribute('aria-label'), 'Open case-no-title');
-});
-
-test('ResponsiblePartyDashboard: getOpenActions treats an answer with no remediationActions as empty', async () => {
-  const cases = [
-    makeCase({
-      id: 'c1',
-      answers: {
-        'q-1': {
-          value: 'No',
-          remediationActions: [
-            { id: 'ra-1', text: 'Action 1', completed: false },
-          ],
-        },
-        'q-2': { value: 'Yes' },
-      },
-    }),
-  ];
-  const host = ResponsiblePartyDashboard({
-    client: /** @type {any} */ (makeClient(cases)),
-    currentUserId: 'user-rp',
-    allCaseSources: oneSource,
-  });
-  await waitForRender(host);
-
-  const remediationTable = caseTableInSection(host, 'cora-rp-remediation');
-  assert.ok(remediationTable, 'remediation table should exist');
-  const actionColumn = remediationTable._customColumns.find(
-    (/** @type {any} */ c) => c.key === 'action'
-  );
-  assert.equal(actionColumn.getValue(cases[0]), 'Action 1');
 });

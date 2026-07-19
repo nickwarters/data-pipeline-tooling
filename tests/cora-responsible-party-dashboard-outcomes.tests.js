@@ -1,261 +1,101 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  ResponsiblePartyDashboard,
-  todayStart,
-  makeCase,
-  oneSource,
-  makeClient,
-  outcomeTotal,
-  outcomeCount,
-  outcomeMonthRow,
-  waitForRender,
-} from './helpers/cora-responsible-party-dashboard.js';
+import { deriveResponsibleParty } from '../src/pages/responsible-party/view.js';
+import { responsiblePartyView } from '../src/pages/responsible-party/view.js';
+import { installDom } from './_dom-stub.js';
 
-// Capability: twelve-month outcome summaries.
+installDom();
 
-test('ResponsiblePartyDashboard: outcome summary includes completed cases within last 12 months', async () => {
-  const recentMonth = new Date(todayStart);
-  recentMonth.setMonth(recentMonth.getMonth() - 2);
-  const cases = [
-    makeCase({
-      id: 'c1',
-      status: 'Completed',
-      completedAt: recentMonth.toISOString(),
-      outcome: 'Pass',
-    }),
-    makeCase({
-      id: 'c2',
-      status: 'Completed',
-      completedAt: recentMonth.toISOString(),
-      outcome: 'Fail',
-    }),
-  ];
-  const host = ResponsiblePartyDashboard({
-    client: /** @type {any} */ (makeClient(cases)),
-    currentUserId: 'user-rp',
-    allCaseSources: oneSource,
+/** @param {string} id @param {Partial<import('../src/sharepoint-client.js').CaseRow>} overrides */
+function row(id, overrides = {}) {
+  return /** @type {import('../src/sharepoint-client.js').CaseRow} */ ({
+    id,
+    caseType: 'complaints',
+    title: id,
+    status: 'In-progress',
+    assignedReviewer: 'reviewer',
+    responsibleParty: 'rp-1',
+    answers: {},
+    conversation: [],
+    notes: '',
+    completedAt: null,
+    etag: 'e',
+    ...overrides,
   });
-  await waitForRender(host);
-  assert.equal(outcomeTotal(host), 2);
-});
+}
 
-test('ResponsiblePartyDashboard: outcome summary excludes completed cases older than 12 months', async () => {
-  const old = new Date(todayStart);
-  old.setMonth(old.getMonth() - 13);
-  const recent = new Date(todayStart);
-  recent.setMonth(recent.getMonth() - 1);
-  const cases = [
-    makeCase({
-      id: 'c1',
-      status: 'Completed',
-      completedAt: old.toISOString(),
-      outcome: 'Pass',
-    }),
-    makeCase({
-      id: 'c2',
-      status: 'Completed',
-      completedAt: recent.toISOString(),
-      outcome: 'Pass',
-    }),
-  ];
-  const host = ResponsiblePartyDashboard({
-    client: /** @type {any} */ (makeClient(cases)),
-    currentUserId: 'user-rp',
-    allCaseSources: oneSource,
-  });
-  await waitForRender(host);
-  assert.equal(outcomeTotal(host), 1, 'only the recent case counts');
-});
-
-test('ResponsiblePartyDashboard: outcome summary excludes in-progress cases', async () => {
-  const cases = [
-    makeCase({ id: 'c1', status: 'In-progress', completedAt: null }),
-    makeCase({
-      id: 'c2',
-      status: 'Completed',
-      completedAt: todayStart.toISOString(),
-      outcome: 'Pass',
-    }),
-  ];
-  const host = ResponsiblePartyDashboard({
-    client: /** @type {any} */ (makeClient(cases)),
-    currentUserId: 'user-rp',
-    allCaseSources: oneSource,
-  });
-  await waitForRender(host);
-  assert.equal(outcomeTotal(host), 1);
-});
-
-test('ResponsiblePartyDashboard: outcome summary groups by outcome type', async () => {
-  const cases = [
-    makeCase({
-      id: 'c1',
-      status: 'Completed',
-      completedAt: todayStart.toISOString(),
-      outcome: 'Pass',
-    }),
-    makeCase({
-      id: 'c2',
-      status: 'Completed',
-      completedAt: todayStart.toISOString(),
-      outcome: 'Pass',
-    }),
-    makeCase({
-      id: 'c3',
-      status: 'Completed',
-      completedAt: todayStart.toISOString(),
-      outcome: 'Fail',
-    }),
-  ];
-  const host = ResponsiblePartyDashboard({
-    client: /** @type {any} */ (makeClient(cases)),
-    currentUserId: 'user-rp',
-    allCaseSources: oneSource,
-  });
-  await waitForRender(host);
-  assert.equal(outcomeCount(host, 'Pass'), 2);
-  assert.equal(outcomeCount(host, 'Fail'), 1);
-});
-
-test('ResponsiblePartyDashboard: two completed cases in same month+outcome increments count (covers ?? 0 and !monthMap[month] false branch)', async () => {
-  const recentMonth = new Date();
-  recentMonth.setDate(1);
-  const iso = recentMonth.toISOString().slice(0, 10);
-
-  const cases = [
-    makeCase({
-      id: 'c1',
-      status: /** @type {'Completed'} */ ('Completed'),
-      completedAt: `${iso}T10:00:00Z`,
-      outcome: 'Pass',
-    }),
-    makeCase({
-      id: 'c2',
-      status: /** @type {'Completed'} */ ('Completed'),
-      completedAt: `${iso}T11:00:00Z`,
-      outcome: 'Pass',
-    }),
-  ];
-  const host = ResponsiblePartyDashboard({
-    client: /** @type {any} */ (makeClient(cases)),
-    currentUserId: 'user-rp',
-    allCaseSources: oneSource,
-  });
-  await waitForRender(host);
-
-  assert.equal(outcomeTotal(host), 2);
-  assert.equal(
-    outcomeCount(host, 'Pass'),
-    2,
-    'two cases with same outcome increment count'
+test('Responsible Party derivation summarises only the last twelve months of completed outcomes', () => {
+  const result = deriveResponsibleParty(
+    [
+      row('recent-pass', {
+        status: 'Completed',
+        completedAt: '2026-06-01T00:00:00Z',
+        outcome: 'Pass',
+      }),
+      row('recent-fail', {
+        status: 'Completed',
+        completedAt: '2026-05-01T00:00:00Z',
+        outcome: 'Fail',
+      }),
+      row('recent-unknown', {
+        status: 'Completed',
+        completedAt: '2026-05-15T00:00:00Z',
+      }),
+      row('old', {
+        status: 'Completed',
+        completedAt: '2024-01-01T00:00:00Z',
+        outcome: 'Pass',
+      }),
+    ],
+    'rp-1',
+    new Date('2026-07-01T00:00:00Z')
   );
-  const month = iso.slice(0, 7);
-  const monthRow = outcomeMonthRow(host, month);
-  assert.equal(
-    monthRow?.['Pass'],
-    2,
-    'same outcome in same month accumulates count'
+
+  assert.equal(result.outcomeSummary.totalCompleted, 3);
+  assert.deepEqual(result.outcomeSummary.byOutcome, {
+    Pass: 1,
+    Fail: 1,
+    Unknown: 1,
+  });
+  assert.deepEqual(
+    result.outcomeSummary.byMonth.map((entry) => entry.month),
+    ['2026-05', '2026-06']
   );
 });
 
-test('ResponsiblePartyDashboard: case with null outcome uses "Unknown" label', async () => {
-  const recentMonth = new Date();
-  recentMonth.setDate(1);
-  const iso = recentMonth.toISOString().slice(0, 10);
-
-  const cases = [
-    makeCase({
-      id: 'c1',
-      status: /** @type {'Completed'} */ ('Completed'),
-      completedAt: `${iso}T10:00:00Z`,
-      outcome: /** @type {any} */ (null),
-    }),
-  ];
-  const host = ResponsiblePartyDashboard({
-    client: /** @type {any} */ (makeClient(cases)),
-    currentUserId: 'user-rp',
-    allCaseSources: oneSource,
+test('Responsible Party pure view renders outcome totals and the month matrix', () => {
+  const completed = row('recent-pass', {
+    status: 'Completed',
+    completedAt: '2026-06-01T00:00:00Z',
+    outcome: 'Pass',
   });
-  await waitForRender(host);
-
-  assert.equal(
-    outcomeCount(host, 'Unknown'),
-    1,
-    'null outcome falls back to "Unknown" label'
-  );
-});
-
-test('ResponsiblePartyDashboard: months are sorted chronologically and a month missing an outcome renders 0', async () => {
-  // Three distinct months, inserted out of chronological order (earliest,
-  // latest, middle) so Array.prototype.sort's comparator is exercised in
-  // both directions (a < b and a >= b) while sorting by month string.
-  const earliestMonth = new Date(todayStart);
-  earliestMonth.setMonth(earliestMonth.getMonth() - 3);
-  earliestMonth.setDate(1);
-  const latestMonth = new Date(todayStart);
-  latestMonth.setMonth(latestMonth.getMonth() - 1);
-  latestMonth.setDate(1);
-  const middleMonth = new Date(todayStart);
-  middleMonth.setMonth(middleMonth.getMonth() - 2);
-  middleMonth.setDate(1);
-
-  const cases = [
-    makeCase({
-      id: 'c1',
-      status: /** @type {'Completed'} */ ('Completed'),
-      completedAt: earliestMonth.toISOString(),
-      outcome: 'Pass',
-    }),
-    makeCase({
-      id: 'c2',
-      status: /** @type {'Completed'} */ ('Completed'),
-      completedAt: latestMonth.toISOString(),
-      outcome: 'Pass',
-    }),
-    makeCase({
-      id: 'c3',
-      status: /** @type {'Completed'} */ ('Completed'),
-      completedAt: latestMonth.toISOString(),
-      outcome: 'Fail',
-    }),
-    // Middle month is missing the "Fail" outcome, so its table cell must
-    // fall back to 0.
-    makeCase({
-      id: 'c4',
-      status: /** @type {'Completed'} */ ('Completed'),
-      completedAt: middleMonth.toISOString(),
-      outcome: 'Pass',
-    }),
-  ];
-  const host = ResponsiblePartyDashboard({
-    client: /** @type {any} */ (makeClient(cases)),
-    currentUserId: 'user-rp',
-    allCaseSources: oneSource,
+  const failed = row('recent-fail', {
+    status: 'Completed',
+    completedAt: '2026-05-01T00:00:00Z',
+    outcome: 'Fail',
   });
-  await waitForRender(host);
+  const view = responsiblePartyView(
+    {
+      cases: [completed, failed],
+      currentUserId: 'rp-1',
+      filter: '',
+      remediationSort: { key: 'dueDate', dir: 'asc' },
+      messageSort: { key: 'lastMessage', dir: 'desc' },
+    },
+    {
+      onFilterChange: () => {},
+      onRemediationSort: () => {},
+      onMessageSort: () => {},
+    },
+    new Date('2026-07-01T00:00:00Z')
+  );
 
-  const middleRow = outcomeMonthRow(
-    host,
-    middleMonth.toISOString().slice(0, 7)
+  assert.equal(view.querySelector('.cora-rp-outcome-total')?.textContent, '2');
+  assert.equal(view.querySelector('.cora-rp-outcome-pass')?.textContent, '1');
+  assert.equal(view.querySelector('.cora-rp-outcome-fail')?.textContent, '1');
+  assert.match(
+    view.querySelector('.cora-rp-outcome-table')?.textContent ?? '',
+    /2026-05012026-0610/
   );
-  assert.equal(
-    middleRow?.['Fail'],
-    0,
-    'month missing an outcome renders 0 for that column'
-  );
-
-  const latestRow = outcomeMonthRow(
-    host,
-    latestMonth.toISOString().slice(0, 7)
-  );
-  assert.equal(latestRow?.['Pass'], 1);
-  assert.equal(latestRow?.['Fail'], 1);
-
-  const earliestRow = outcomeMonthRow(
-    host,
-    earliestMonth.toISOString().slice(0, 7)
-  );
-  assert.equal(earliestRow?.['Pass'], 1);
 });

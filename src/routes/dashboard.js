@@ -1,4 +1,5 @@
 // @ts-check
+import { createStoreRoute } from '../core/store-route.js';
 
 /**
  * @param {import('../lib/router.js').Router} router
@@ -10,20 +11,13 @@ export function register(
   context,
   loadPage = () => import('../pages/cora-dashboard.js')
 ) {
+  const storeRoute = createStoreRoute({ load: loadPage, context });
   router.register('#/dashboard', {
-    async mount(container) {
-      const { DashboardPage } = await loadPage();
-      container.replaceChildren(
-        DashboardPage({
-          client: context.client,
-          currentUserId: context.currentUser.id,
-          capabilities: context.capabilities,
-          caseSources: context.caseSources,
-          allCaseSources: context.caseSources,
-          allocationSources: context.allocationSources,
-        })
-      );
+    mount(container, params) {
+      return storeRoute.mount(container, params);
     },
-    unmount() {},
+    unmount() {
+      storeRoute.unmount();
+    },
   });
 }

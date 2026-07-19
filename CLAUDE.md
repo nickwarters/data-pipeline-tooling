@@ -100,7 +100,7 @@ src/
 
   components/                   # reusable cora-* custom elements, layered by dependency
     base/                       # leaf primitives — compose no other component (cf. lib/signal.js)
-      cora-data-table.js
+      cora-data-table.js           # legacy ColumnDef contract retained for dashboardColumns (GRID-5 owns migration)
       cora-options-editor.js
       cora-people-picker.js
       cora-question-labels.js
@@ -119,7 +119,6 @@ src/
       cora-case-details.js
       cora-command-palette.js
       cora-conversation.js
-      cora-kpi-strip.js
       cora-notes.js
       cora-outcome.js
       cora-owner-summary.js
@@ -132,12 +131,9 @@ src/
       cora-summary.js
       cora-wording-editor.js
     collections/                # page/tab-level assemblies mounted directly by pages
-      cora-action-centre.js       # dashboard panel (moved from pages/, #384)
       cora-appeal-review.js
-      cora-case-table.js
       cora-case-tabs.js
       cora-compile-drawer.js
-      cora-controls-dashboard.js   # dashboard panel (moved from pages/, #384)
       cora-question-list.js
 
   config/
@@ -166,11 +162,18 @@ src/
       summary-notes-appeal-controller.js
       types.js
     cora-conversation-view.js
-    cora-dashboard.js
+    cora-dashboard.js             # store-driven dashboard slice + descriptor-selected panels (GRID-3/4)
+    dashboard/
+      action-centre-view.js       # pure reason-descriptor view + bounded load actions (ADR-0030 flags unchanged)
+      controls-view.js            # pure generic-table Appeals panel + paged load action
+      kpi-view.js                 # pure renderer for kpi-strip-model output
+      panel-descriptors.js        # fixed role-to-panel visibility convention
     home.js                      # store-driven Home pure view (Palimpsest PILOT-2)
-    cora-journey-cases.js
+    cora-journey-cases.js         # store-driven Journey Cases slice + generic descriptors (GRID-2)
     reports-index.js             # store-driven pure view (Palimpsest PILOT-1)
-    cora-responsible-party-dashboard.js
+    cora-responsible-party-dashboard.js # store-driven Responsible Party slice shared by dashboard and #/my-cases
+    responsible-party/
+      view.js                     # pure outcome/remediation/unread views using generic tables
     cora-reviewer-team-report.js
     cora-team-cases.js          # store-driven Team Cases slice + table descriptors (GRID-1)
     question-bank/              # question bank editor subsystem ("just another page", #382)

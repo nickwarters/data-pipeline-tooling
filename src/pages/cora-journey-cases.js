@@ -1,80 +1,115 @@
 // @ts-check
-import { signal } from '../lib/signal.js';
-import { reactive } from '../lib/view.js';
 import { h } from '../lib/html.js';
 import { caseRouteFor } from '../lib/case-route-links.js';
 import { fetchJourneyCases } from '../services/journey-cases-fetcher.js';
-import '../components/collections/cora-case-table.js';
+import { dataTableView, nextTableSort } from '../views/data-table.js';
 
-/** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 
-/** @typedef {import('../setup/resolve-eligible-case-types.js').CaseSource} CaseSource */
-
 /**
- * Journey Owner cross-case Summary view. Lists every Case of
- * the Journey Owner's Case Type(s) (`journeyCaseSources`), each row linking
- * into that Case's read-only Summary. The per-Case `summary` matrix cell grants
- * `journeyOwner: read-only`, so the links resolve without any per-Case ACL row.
- *
- * @param {{ client: SharePointClient|null, journeyCaseSources: CaseSource[] }} props
- * @returns {HTMLElement}
+ * @typedef {Object} JourneyCasesState
+ * @property {import('../core/chrome-state.js').ChromeState} chrome
+ * @property {{ journeyCases: { cases: CaseRow[] | null, sort: import('../views/data-table.js').TableSort | null } }} routes
  */
-export function JourneyCasesPage({ client, journeyCaseSources }) {
-  /** @type {import('../lib/signal.js').Signal<CaseRow[] | null>} */
-  const cases = signal(/** @type {CaseRow[] | null} */ (null));
 
-  async function fetchData() {
-    if (!client) return;
-    cases.set(await fetchJourneyCases(client, journeyCaseSources));
-  }
-
-  const host = reactive(() =>
-    renderJourneyCases({ client, cases: cases.get() })
-  );
-  fetchData();
-  return host;
+/** @returns {import('../views/data-table.js').ColumnDescriptor<CaseRow>[]} */
+export function journeyCasesColumns() {
+  return [
+    {
+      key: 'reference',
+      label: 'Reference',
+      value: (row) => row.title || row.id,
+      sortable: true,
+      href: caseRouteFor,
+    },
+    {
+      key: 'caseType',
+      label: 'Case Type',
+      value: 'caseType',
+      sortable: true,
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      value: 'status',
+      sortable: true,
+    },
+  ];
 }
 
 /**
- * @param {{ client: SharePointClient|null, cases: CaseRow[] | null }} props
- * @returns {Node[]}
+ * @param {JourneyCasesState} state
+ * @param {{ dispatch: (action: any) => any }} tools
  */
-function renderJourneyCases({ client, cases }) {
-  const h1 = h('h1', {}, 'Journey Cases');
+export function journeyCasesView(state, tools) {
+  const route = state.routes.journeyCases;
+  const heading = h('h1', {}, 'Journey Cases');
+  if (!route.cases) return h('div', {}, heading);
+  return h(
+    'div',
+    {},
+    heading,
+    dataTableView({
+      rows: route.cases,
+      columns: journeyCasesColumns(),
+      sort: route.sort,
+      onSort: (key) => tools.dispatch({ type: 'table/sort-requested', key }),
+      emptyMessage: 'No cases of your Case Type(s) yet.',
+      rowKey: (row) => `${row.caseType}:${row.id}`,
+      rowHref: caseRouteFor,
+    })
+  );
+}
 
-  if (!client || !cases) {
-    return [h1];
-  }
-
-  if (cases.length === 0) {
-    return [h1, h('p', {}, 'No cases of your Case Type(s) yet.')];
-  }
-
-  return [
-    h1,
-    h('cora-case-table', {
-      toolbar: 'hidden',
-      columns: [
-        {
-          key: 'reference',
-          label: 'Reference',
-          getValue: (/** @type {CaseRow} */ r) => r.title || r.id,
-          renderCell: (/** @type {CaseRow} */ r) =>
-            h('a', { href: caseRouteFor(r) }, r.title || r.id),
-        },
-        {
-          key: 'caseType',
-          label: 'Case Type',
-          getValue: (/** @type {CaseRow} */ r) => r.caseType,
-        },
-        {
-          key: 'status',
-          label: 'Status',
-          getValue: (/** @type {CaseRow} */ r) => r.status,
-        },
-      ],
-      cases,
-    }),
-  ];
+/**
+ * @param {Record<string, string>} _params
+ * @param {import('../setup/register-routes.js').AppContext} context
+ * @param {{ fetchCases?: typeof fetchJourneyCases }} [dependencies]
+ */
+export function createRouteSlice(
+  _params,
+  context,
+  { fetchCases = fetchJourneyCases } = {}
+) {
+  return {
+    initialState: {
+      chrome: context.chrome,
+      routes: { journeyCases: { cases: null, sort: null } },
+    },
+    reducer(/** @type {JourneyCasesState} */ state, /** @type {any} */ action) {
+      const route = state.routes.journeyCases;
+      if (action.type === 'cases/loaded') {
+        return {
+          ...state,
+          routes: { journeyCases: { ...route, cases: action.cases } },
+        };
+      }
+      if (action.type === 'table/sort-requested') {
+        return {
+          ...state,
+          routes: {
+            journeyCases: {
+              ...route,
+              sort: nextTableSort(route.sort, action.key),
+            },
+          },
+        };
+      }
+      return state;
+    },
+    view: journeyCasesView,
+    start(/** @type {any} */ tools) {
+      let active = true;
+      if (!tools.context.client) return () => {};
+      void fetchCases(
+        tools.context.client,
+        tools.context.journeyCaseSources
+      ).then((cases) => {
+        if (active) tools.dispatch({ type: 'cases/loaded', cases });
+      });
+      return () => {
+        active = false;
+      };
+    },
+  };
 }
