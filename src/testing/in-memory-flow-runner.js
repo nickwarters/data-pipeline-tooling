@@ -14,8 +14,10 @@ import {
   completeCase,
   completionPatch,
 } from '../pages/cora-case-review/completion-actions.js';
-import { raiseAppeal } from '../pages/cora-case-review/appeal-view.js';
-import { resolveAppeal } from '../pages/cora-case-review/appeal-review-view.js';
+import {
+  raiseAppeal,
+  resolveAppeal,
+} from '../pages/cora-case-review/appeal-actions.js';
 import { loadCaseTypeConfig } from '../../case-types/manifest.js';
 
 /**
@@ -280,25 +282,18 @@ export function createInMemoryFlowRunner(state, opts = {}) {
     if (vm.access.appealRequest !== 'edit') {
       throw new Error('Current actor cannot raise an Appeal.');
     }
-    raiseAppeal(
-      {
-        caseRow: vm.caseRow,
-        saveQueue,
-        caseId: vm.caseId,
-        access: vm.access.appealRequest,
-        currentUser: { id: action.actorId, displayName: action.actorId },
-        catalogue: vm.catalogue,
-        answers: vm.answersSignal.get(),
-        newAppealId: () => `flow-appeal-${Date.now()}`,
-        render() {},
-      },
-      { value: action.rationale },
-      (action.citedAnswerKeys ?? []).map((value) => ({
-        checked: true,
-        value,
-      })),
-      /** @type {any} */ ({ hidden: true })
-    );
+    if (!vm.caseRow)
+      throw new Error('Cannot raise before the Case has loaded.');
+    const result = raiseAppeal({
+      caseRow: vm.caseRow,
+      appellant: action.actorId,
+      rationale: action.rationale,
+      citedAnswerKeys: action.citedAnswerKeys ?? [],
+      id: `flow-appeal-${Date.now()}`,
+      at: new Date().toISOString(),
+    });
+    vm.caseRow = result.caseRow;
+    saveQueue.enqueue(vm.caseId, 'appeals', result.appeals);
     await flushCurrentCase();
   }
 
@@ -313,25 +308,25 @@ export function createInMemoryFlowRunner(state, opts = {}) {
         (candidate) => candidate.state !== 'resolved'
       )
     );
-    resolveAppeal(
-      {
-        caseRow: vm.caseRow,
-        saveQueue,
-        caseId: vm.caseId,
-        access: vm.access.appealReview,
-        currentUser: { id: action.actorId, displayName: action.actorId },
-        outcomeOptions: vm.config?.outcomeOptions ?? [],
-        now: () => new Date().toISOString(),
-        render() {},
-      },
-      appeal,
-      { checked: action.verdict === 'agreed' },
-      { checked: action.verdict === 'rejected' },
-      { value: action.rationale },
-      { value: action.outcome ?? '' },
-      { value: action.justification ?? '' },
-      /** @type {any} */ ({ hidden: true })
-    );
+    if (!vm.caseRow || !appeal) {
+      throw new Error('Cannot resolve without an open Appeal.');
+    }
+    const result = resolveAppeal({
+      caseRow: vm.caseRow,
+      appealId: appeal.id,
+      verdict: action.verdict,
+      rationale: action.rationale,
+      resolver: action.actorId,
+      at: new Date().toISOString(),
+      outcome: action.outcome,
+      justification: action.justification,
+    });
+    vm.caseRow = result.caseRow;
+    if (result.transactional) {
+      saveQueue.enqueueFields(vm.caseId, result.fields);
+    } else {
+      saveQueue.enqueue(vm.caseId, 'appeals', result.fields.appeals);
+    }
     await flushCurrentCase();
   }
 

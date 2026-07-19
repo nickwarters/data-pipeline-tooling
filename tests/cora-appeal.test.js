@@ -9,45 +9,8 @@ installDom();
 
 const { AppealSection } =
   await import('../src/pages/cora-case-review/appeal-view.js');
-
-class CORAAppeal extends HTMLElement {
-  constructor() {
-    super();
-    /** @type {any} */
-    this.caseRow = null;
-    /** @type {any} */
-    this.saveQueue = null;
-    this.caseId = '';
-    this.access = /** @type {'edit'|'read-only'|'hidden'} */ ('read-only');
-    /** @type {any} */
-    this.currentUser = null;
-    /** @type {any[]} */
-    this.catalogue = [];
-    this.answers = {};
-    this.heading = 'Appeal';
-  }
-
-  newAppealId() {
-    return `appeal-${Date.now()}`;
-  }
-
-  connectedCallback() {
-    this.replaceChildren(
-      ...AppealSection({
-        caseRow: this.caseRow,
-        saveQueue: /** @type {any} */ (this.saveQueue),
-        caseId: this.caseId,
-        access: this.access,
-        currentUser: this.currentUser,
-        catalogue: this.catalogue,
-        answers: this.answers,
-        newAppealId: () => this.newAppealId(),
-        render: () => this.connectedCallback(),
-        heading: this.heading,
-      })
-    );
-  }
-}
+const { raiseAppeal } =
+  await import('../src/pages/cora-case-review/appeal-actions.js');
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 
@@ -84,24 +47,55 @@ function makeQueue() {
   };
 }
 
-/** Build a `cora-appeal` wired for the edit (raise) flow. */
+/** Render the shipped view directly into a DOM query root. */
+function renderAppeal(overrides = {}, queue = makeQueue()) {
+  const props = {
+    caseRow: /** @type {CaseRow | null} */ (null),
+    access: /** @type {'edit'|'read-only'|'hidden'} */ ('read-only'),
+    currentUser: /** @type {any} */ (null),
+    catalogue: /** @type {any[]} */ ([]),
+    answers: /** @type {Record<string, any>} */ ({}),
+    heading: 'Appeal',
+    ...overrides,
+  };
+  const el = document.createElement('main');
+  const render = () => {
+    el.replaceChildren(
+      ...AppealSection({
+        ...props,
+        onRaise: ({ rationale, citedAnswerKeys }) => {
+          if (!props.caseRow) return;
+          const result = raiseAppeal({
+            caseRow: props.caseRow,
+            appellant: props.currentUser?.id ?? '',
+            rationale,
+            citedAnswerKeys,
+            id: 'appeal-new',
+            at: '2026-06-12T00:00:00Z',
+          });
+          props.caseRow = result.caseRow;
+          queue.enqueue('c1', 'appeals', result.appeals);
+          render();
+        },
+      })
+    );
+  };
+  render();
+  return { el, props, queue, render };
+}
+
 function makeEditable(caseOverrides = {}) {
-  const queue = makeQueue();
-  const el = new CORAAppeal();
-  el.caseRow = makeCase(caseOverrides);
-  el.saveQueue = /** @type {any} */ (queue);
-  el.caseId = 'c1';
-  el.access = 'edit';
-  el.currentUser = { id: 'u-rp', displayName: 'RP' };
-  el.connectedCallback();
-  return { el, queue };
+  return renderAppeal({
+    caseRow: makeCase(caseOverrides),
+    access: 'edit',
+    currentUser: { id: 'u-rp', displayName: 'RP' },
+  });
 }
 
 // --- Rendering ---
 
 test('CORAAppeal: renders an Appeal heading first', () => {
-  const el = new CORAAppeal();
-  el.connectedCallback();
+  const { el } = renderAppeal();
   assert.equal(/** @type {any} */ (el)._children[0].textContent, 'Appeal');
 });
 
@@ -116,10 +110,7 @@ test('CORAAppeal: edit access on a Completed Case shows the raise form', () => {
 });
 
 test('CORAAppeal: read-only access shows no form and a placeholder when there are no Appeals', () => {
-  const el = new CORAAppeal();
-  el.caseRow = makeCase();
-  el.access = 'read-only';
-  el.connectedCallback();
+  const { el } = renderAppeal({ caseRow: makeCase() });
   assert.equal(
     findByClass(el, 'cora-appeal-form'),
     null,
@@ -132,9 +123,7 @@ test('CORAAppeal: read-only access shows no form and a placeholder when there ar
 });
 
 test('CORAAppeal: with no caseRow there are no Appeals to list', () => {
-  const el = new CORAAppeal();
-  el.access = 'read-only';
-  el.connectedCallback();
+  const { el } = renderAppeal();
   assert.ok(findByClass(el, 'cora-empty cora-appeal-empty'));
 });
 
@@ -158,10 +147,10 @@ const FAIL_CATALOGUE = [
 ];
 
 test('CORAAppeal: the form offers a citation checkbox only for failed Answers', () => {
-  const { el } = makeEditable();
-  el.catalogue = /** @type {any} */ (FAIL_CATALOGUE);
-  el.answers = { 'q-greet': { value: 'No' }, 'q-close': { value: 'Yes' } };
-  el.connectedCallback();
+  const { el, props, render } = makeEditable();
+  props.catalogue = /** @type {any} */ (FAIL_CATALOGUE);
+  props.answers = { 'q-greet': { value: 'No' }, 'q-close': { value: 'Yes' } };
+  render();
   const boxes = findAllByClass(el, 'cora-appeal-cite');
   assert.equal(
     boxes.length,
@@ -171,10 +160,10 @@ test('CORAAppeal: the form offers a citation checkbox only for failed Answers', 
 });
 
 test('CORAAppeal: the citations list is introduced with a heading and guidance when there are failed Answers', () => {
-  const { el } = makeEditable();
-  el.catalogue = /** @type {any} */ (FAIL_CATALOGUE);
-  el.answers = { 'q-greet': { value: 'No' }, 'q-close': { value: 'No' } };
-  el.connectedCallback();
+  const { el, props, render } = makeEditable();
+  props.catalogue = /** @type {any} */ (FAIL_CATALOGUE);
+  props.answers = { 'q-greet': { value: 'No' }, 'q-close': { value: 'No' } };
+  render();
   const heading = findByClass(el, 'cora-appeal-cite-heading');
   const intro = findByClass(el, 'cora-appeal-cite-intro');
   assert.ok(heading, 'a citations heading is rendered');
@@ -183,10 +172,10 @@ test('CORAAppeal: the citations list is introduced with a heading and guidance w
 });
 
 test('CORAAppeal: the citations heading sits between the rationale and the citation checkboxes', () => {
-  const { el } = makeEditable();
-  el.catalogue = /** @type {any} */ (FAIL_CATALOGUE);
-  el.answers = { 'q-greet': { value: 'No' }, 'q-close': { value: 'No' } };
-  el.connectedCallback();
+  const { el, props, render } = makeEditable();
+  props.catalogue = /** @type {any} */ (FAIL_CATALOGUE);
+  props.answers = { 'q-greet': { value: 'No' }, 'q-close': { value: 'No' } };
+  render();
   const form = findByClass(el, 'cora-appeal-form');
   const classes = form._children.map((/** @type {any} */ c) => c.className);
   const rationaleIdx = classes.indexOf('cora-appeal-rationale');
@@ -203,10 +192,10 @@ test('CORAAppeal: the citations heading sits between the rationale and the citat
 });
 
 test('CORAAppeal: the citations heading and guidance are omitted when there are no failed Answers', () => {
-  const { el } = makeEditable();
-  el.catalogue = /** @type {any} */ (FAIL_CATALOGUE);
-  el.answers = { 'q-greet': { value: 'Yes' }, 'q-close': { value: 'Yes' } };
-  el.connectedCallback();
+  const { el, props, render } = makeEditable();
+  props.catalogue = /** @type {any} */ (FAIL_CATALOGUE);
+  props.answers = { 'q-greet': { value: 'Yes' }, 'q-close': { value: 'Yes' } };
+  render();
   assert.equal(findByClass(el, 'cora-appeal-cite-heading'), null);
   assert.equal(findByClass(el, 'cora-appeal-cite-intro'), null);
 });
@@ -278,10 +267,10 @@ test('CORAAppeal: a missing rationale value (null) is treated as empty', () => {
 });
 
 test('CORAAppeal: citing disputed failed Answers records their keys on the Appeal', () => {
-  const { el, queue } = makeEditable();
-  el.catalogue = /** @type {any} */ (FAIL_CATALOGUE);
-  el.answers = { 'q-greet': { value: 'No' }, 'q-close': { value: 'No' } };
-  el.connectedCallback();
+  const { el, props, queue, render } = makeEditable();
+  props.catalogue = /** @type {any} */ (FAIL_CATALOGUE);
+  props.answers = { 'q-greet': { value: 'No' }, 'q-close': { value: 'No' } };
+  render();
 
   findByClass(el, 'cora-appeal-rationale').value = 'both wrong';
   const boxes = findAllByClass(el, 'cora-appeal-cite').map(
@@ -299,7 +288,7 @@ test('CORAAppeal: citing disputed failed Answers records their keys on the Appea
 });
 
 test('CORAAppeal: a raised Appeal does not set Answer values (case-level only)', () => {
-  const { el, queue } = makeEditable({
+  const { el, props, queue } = makeEditable({
     answers: { 'q-greet': { value: 'No' } },
   });
   findByClass(el, 'cora-appeal-rationale').value = 'dispute';
@@ -310,7 +299,7 @@ test('CORAAppeal: a raised Appeal does not set Answer values (case-level only)',
     ['appeals']
   );
   assert.deepEqual(
-    el.caseRow?.answers,
+    props.caseRow?.answers,
     { 'q-greet': { value: 'No' } },
     'frozen Answers untouched'
   );
@@ -346,21 +335,20 @@ test('CORAAppeal: an existing open Appeal blocks the form even before raising', 
 });
 
 test('CORAAppeal: an Appeal item renders its state, rationale and cited Answers', () => {
-  const el = new CORAAppeal();
-  el.access = 'read-only';
-  el.caseRow = makeCase({
-    appeals: [
-      {
-        id: 'a1',
-        appellant: 'u-rp',
-        at: '2026-06-10T00:00:00Z',
-        rationale: 'wrong outcome',
-        citedAnswerKeys: ['q-greet'],
-        state: 'raised',
-      },
-    ],
+  const { el } = renderAppeal({
+    caseRow: makeCase({
+      appeals: [
+        {
+          id: 'a1',
+          appellant: 'u-rp',
+          at: '2026-06-10T00:00:00Z',
+          rationale: 'wrong outcome',
+          citedAnswerKeys: ['q-greet'],
+          state: 'raised',
+        },
+      ],
+    }),
   });
-  el.connectedCallback();
   const item = findByClass(el, 'cora-appeal-item');
   assert.ok(
     findByClass(item, 'cora-appeal-state').textContent.includes('raised')
@@ -375,26 +363,25 @@ test('CORAAppeal: an Appeal item renders its state, rationale and cited Answers'
 });
 
 test('CORAAppeal: a resolved Appeal item renders its verdict and resolver rationale', () => {
-  const el = new CORAAppeal();
-  el.access = 'read-only';
-  el.caseRow = makeCase({
-    appeals: [
-      {
-        id: 'a1',
-        appellant: 'u-rp',
-        at: '2026-06-10T00:00:00Z',
-        rationale: 'wrong',
-        state: 'resolved',
-        resolution: {
-          verdict: 'agreed',
-          rationale: 'Reviewer misread the transcript.',
-          resolver: 'u-qa',
-          at: '2026-06-11T00:00:00Z',
+  const { el } = renderAppeal({
+    caseRow: makeCase({
+      appeals: [
+        {
+          id: 'a1',
+          appellant: 'u-rp',
+          at: '2026-06-10T00:00:00Z',
+          rationale: 'wrong',
+          state: 'resolved',
+          resolution: {
+            verdict: 'agreed',
+            rationale: 'Reviewer misread the transcript.',
+            resolver: 'u-qa',
+            at: '2026-06-11T00:00:00Z',
+          },
         },
-      },
-    ],
+      ],
+    }),
   });
-  el.connectedCallback();
   const item = findByClass(el, 'cora-appeal-item');
   assert.ok(
     findByClass(item, 'cora-appeal-resolution').textContent.includes('agreed'),
@@ -409,63 +396,51 @@ test('CORAAppeal: a resolved Appeal item renders its verdict and resolver ration
 });
 
 test('CORAAppeal: an open Appeal item omits the resolution line', () => {
-  const el = new CORAAppeal();
-  el.access = 'read-only';
-  el.caseRow = makeCase({
-    appeals: [
-      {
-        id: 'a1',
-        appellant: 'u-rp',
-        at: '2026-06-10T00:00:00Z',
-        rationale: 'pending',
-        state: 'raised',
-      },
-    ],
+  const { el } = renderAppeal({
+    caseRow: makeCase({
+      appeals: [
+        {
+          id: 'a1',
+          appellant: 'u-rp',
+          at: '2026-06-10T00:00:00Z',
+          rationale: 'pending',
+          state: 'raised',
+        },
+      ],
+    }),
   });
-  el.connectedCallback();
   assert.equal(findByClass(el, 'cora-appeal-resolution'), null);
 });
 
 test('CORAAppeal: an Appeal item without citations omits the cited-Answers line', () => {
-  const el = new CORAAppeal();
-  el.access = 'read-only';
-  el.caseRow = makeCase({
-    appeals: [
-      {
-        id: 'a1',
-        appellant: 'u-rp',
-        at: '2026-06-10T00:00:00Z',
-        rationale: 'no citations',
-        state: 'raised',
-      },
-    ],
+  const { el } = renderAppeal({
+    caseRow: makeCase({
+      appeals: [
+        {
+          id: 'a1',
+          appellant: 'u-rp',
+          at: '2026-06-10T00:00:00Z',
+          rationale: 'no citations',
+          state: 'raised',
+        },
+      ],
+    }),
   });
-  el.connectedCallback();
   assert.equal(findByClass(el, 'cora-appeal-item-cited'), null);
 });
 
 test('CORAAppeal: raising without a saveQueue or caseRow does not throw', () => {
-  const el = new CORAAppeal();
-  el.access = 'edit';
-  el.caseRow = null;
-  el.saveQueue = null;
-  el.currentUser = null;
-  el.connectedCallback();
+  const { el } = renderAppeal({ access: 'edit' });
   const rationale = findByClass(el, 'cora-appeal-rationale');
   rationale.value = 'orphan appeal';
   assert.doesNotThrow(() => {
     findByClass(el, 'cora-appeal-submit')._listeners['click'][0]();
   });
 });
-test('CORAAppeal: newAppealId yields a non-empty string', () => {
-  assert.ok(new CORAAppeal().newAppealId().length > 0);
-});
 
 // --- Case Type sectionLabels heading override (MAINT-11) ---
 
 test('CORAAppeal: heading prop overrides the default Appeal heading', () => {
-  const el = new CORAAppeal();
-  el.heading = 'Challenge';
-  el.connectedCallback();
+  const { el } = renderAppeal({ heading: 'Challenge' });
   assert.equal(/** @type {any} */ (el)._children[0].textContent, 'Challenge');
 });

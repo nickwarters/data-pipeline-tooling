@@ -9,41 +9,8 @@ installDom();
 
 const { AmendOutcomeSection } =
   await import('../src/pages/cora-case-review/amend-outcome-view.js');
-
-class CORAAmendOutcome extends HTMLElement {
-  constructor() {
-    super();
-    /** @type {any} */
-    this.caseRow = null;
-    /** @type {any} */
-    this.saveQueue = null;
-    this.caseId = '';
-    this.access = /** @type {'edit'|'read-only'|'hidden'} */ ('read-only');
-    /** @type {any} */
-    this.currentUser = null;
-    /** @type {any[]} */
-    this.outcomeOptions = [];
-  }
-
-  now() {
-    return new Date().toISOString();
-  }
-
-  connectedCallback() {
-    this.replaceChildren(
-      ...AmendOutcomeSection({
-        caseRow: this.caseRow,
-        saveQueue: /** @type {any} */ (this.saveQueue),
-        caseId: this.caseId,
-        access: this.access,
-        currentUser: this.currentUser,
-        outcomeOptions: this.outcomeOptions,
-        now: () => this.now(),
-        render: () => this.connectedCallback(),
-      })
-    );
-  }
-}
+const { amendOutcome } =
+  await import('../src/pages/cora-case-review/appeal-actions.js');
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 
@@ -91,26 +58,53 @@ function allText(el) {
   return out;
 }
 
-/** Build a `cora-amend-outcome` wired for the Controls edit flow. */
+/** Render the shipped view directly into a DOM query root. */
+function renderAmendOutcome(overrides = {}, queue = makeQueue()) {
+  const props = {
+    caseRow: /** @type {CaseRow | null} */ (null),
+    access: /** @type {'edit'|'read-only'|'hidden'} */ ('read-only'),
+    currentUser: /** @type {any} */ (null),
+    outcomeOptions: /** @type {any[]} */ ([]),
+    ...overrides,
+  };
+  const el = document.createElement('main');
+  const render = () => {
+    el.replaceChildren(
+      ...AmendOutcomeSection({
+        ...props,
+        onAmend: ({ outcome, justification }) => {
+          if (!props.caseRow) return;
+          const result = amendOutcome({
+            caseRow: props.caseRow,
+            outcome,
+            justification,
+            amendedBy: props.currentUser?.id ?? '',
+            amendedAt: '2026-06-12T00:00:00Z',
+          });
+          props.caseRow = result.caseRow;
+          queue.enqueueFields('c1', result.fields);
+          render();
+        },
+      })
+    );
+  };
+  render();
+  return { el, props, queue, render };
+}
+
 function makeEditable(caseOverrides = {}) {
-  const queue = makeQueue();
-  const el = new CORAAmendOutcome();
-  el.caseRow = makeCase(caseOverrides);
-  el.saveQueue = /** @type {any} */ (queue);
-  el.caseId = 'c1';
-  el.access = 'edit';
-  el.currentUser = { id: 'controls-1', displayName: 'Controls' };
-  el.outcomeOptions = OUTCOME_OPTIONS;
-  el.now = () => '2026-06-12T00:00:00Z';
-  el.connectedCallback();
-  return { el, queue };
+  return renderAmendOutcome({
+    caseRow: makeCase(caseOverrides),
+    access: 'edit',
+    currentUser: { id: 'controls-1', displayName: 'Controls' },
+    outcomeOptions: OUTCOME_OPTIONS,
+  });
 }
 
 // --- Rendering ---
 
 test('CORAAmendOutcome: renders an Amend Outcome heading first', () => {
-  const el = new CORAAmendOutcome();
-  el.connectedCallback();
+  const { el } = renderAmendOutcome();
   assert.equal(
     /** @type {any} */ (el)._children[0].textContent,
     'Amend Outcome'
@@ -118,11 +112,10 @@ test('CORAAmendOutcome: renders an Amend Outcome heading first', () => {
 });
 
 test('CORAAmendOutcome: shows the Current Outcome (the frozen snapshot) with configured wording', () => {
-  const el = new CORAAmendOutcome();
-  el.caseRow = makeCase({ outcomeAtCompletion: 'fail' });
-  el.access = 'read-only';
-  el.outcomeOptions = OUTCOME_OPTIONS;
-  el.connectedCallback();
+  const { el } = renderAmendOutcome({
+    caseRow: makeCase({ outcomeAtCompletion: 'fail' }),
+    outcomeOptions: OUTCOME_OPTIONS,
+  });
   const current = findByClass(el, 'cora-amend-outcome-current');
   assert.ok(
     current.textContent.includes('Fail'),
@@ -131,31 +124,27 @@ test('CORAAmendOutcome: shows the Current Outcome (the frozen snapshot) with con
 });
 
 test('CORAAmendOutcome: Current Outcome falls back to an em dash before a snapshot exists', () => {
-  const el = new CORAAmendOutcome();
   const c = makeCase({ status: 'In-progress' });
   delete (/** @type {any} */ (c).outcomeAtCompletion);
-  el.caseRow = c;
-  el.access = 'read-only';
-  el.connectedCallback();
+  const { el } = renderAmendOutcome({ caseRow: c });
   assert.ok(
     findByClass(el, 'cora-amend-outcome-current').textContent.includes('—')
   );
 });
 
 test('CORAAmendOutcome: Current Outcome shows the amended value once amended', () => {
-  const el = new CORAAmendOutcome();
-  el.caseRow = makeCase({
-    outcomeAtCompletion: 'fail',
-    amendedOutcome: {
-      outcome: 'pass',
-      justification: 'ok',
-      amendedBy: 'controls-1',
-      amendedAt: '2026-06-12T00:00:00Z',
-    },
+  const { el } = renderAmendOutcome({
+    caseRow: makeCase({
+      outcomeAtCompletion: 'fail',
+      amendedOutcome: {
+        outcome: 'pass',
+        justification: 'ok',
+        amendedBy: 'controls-1',
+        amendedAt: '2026-06-12T00:00:00Z',
+      },
+    }),
+    outcomeOptions: OUTCOME_OPTIONS,
   });
-  el.access = 'read-only';
-  el.outcomeOptions = OUTCOME_OPTIONS;
-  el.connectedCallback();
   assert.ok(
     findByClass(el, 'cora-amend-outcome-current').textContent.includes('Pass'),
     'the amended Outcome is in force'
@@ -163,11 +152,9 @@ test('CORAAmendOutcome: Current Outcome shows the amended value once amended', (
 });
 
 test('CORAAmendOutcome: Current Outcome falls back to the raw value when no option wording matches', () => {
-  const el = new CORAAmendOutcome();
-  el.caseRow = makeCase({ outcomeAtCompletion: 'fail' });
-  el.access = 'read-only';
-  el.outcomeOptions = []; // no wording configured for this Case Type
-  el.connectedCallback();
+  const { el } = renderAmendOutcome({
+    caseRow: makeCase({ outcomeAtCompletion: 'fail' }),
+  });
   assert.ok(
     findByClass(el, 'cora-amend-outcome-current').textContent.includes('fail'),
     'renders the raw outcome value'
@@ -186,10 +173,7 @@ test('CORAAmendOutcome: edit access on a Completed Case shows the amend form', (
 });
 
 test('CORAAmendOutcome: read-only access shows a placeholder when nothing has been amended', () => {
-  const el = new CORAAmendOutcome();
-  el.caseRow = makeCase();
-  el.access = 'read-only';
-  el.connectedCallback();
+  const { el } = renderAmendOutcome({ caseRow: makeCase() });
   assert.equal(findByClass(el, 'cora-amend-outcome-form'), null, 'no form');
   assert.ok(
     findByClass(el, 'cora-empty cora-amend-outcome-empty'),
@@ -198,26 +182,22 @@ test('CORAAmendOutcome: read-only access shows a placeholder when nothing has be
 });
 
 test('CORAAmendOutcome: read-only access with no Case row shows the empty placeholder', () => {
-  const el = new CORAAmendOutcome();
-  el.caseRow = null;
-  el.access = 'read-only';
-  el.connectedCallback();
+  const { el } = renderAmendOutcome();
   assert.ok(findByClass(el, 'cora-empty cora-amend-outcome-empty'));
 });
 
 test('CORAAmendOutcome: read-only access renders the existing amendment record', () => {
-  const el = new CORAAmendOutcome();
-  el.caseRow = makeCase({
-    amendedOutcome: {
-      outcome: 'pass',
-      justification: 'Reviewer misread the transcript.',
-      amendedBy: 'controls-1',
-      amendedAt: '2026-06-12T00:00:00Z',
-    },
+  const { el } = renderAmendOutcome({
+    caseRow: makeCase({
+      amendedOutcome: {
+        outcome: 'pass',
+        justification: 'Reviewer misread the transcript.',
+        amendedBy: 'controls-1',
+        amendedAt: '2026-06-12T00:00:00Z',
+      },
+    }),
+    outcomeOptions: OUTCOME_OPTIONS,
   });
-  el.access = 'read-only';
-  el.outcomeOptions = OUTCOME_OPTIONS;
-  el.connectedCallback();
   const record = findByClass(el, 'cora-amend-outcome-record');
   assert.ok(record, 'record rendered');
   const text = allText(record);
@@ -252,16 +232,16 @@ test('CORAAmendOutcome: amending writes the record and re-stamps the effective c
 });
 
 test('CORAAmendOutcome: amending mutates the Case row locally so the view reflects it', () => {
-  const { el } = makeEditable();
+  const { el, props } = makeEditable();
   findByClass(el, 'cora-amend-outcome-select').value = 'refer';
   findByClass(el, 'cora-amend-outcome-justification').value = 'Borderline';
   findByClass(el, 'cora-amend-outcome-submit')._listeners['click'][0]();
 
-  assert.equal(el.caseRow?.amendedOutcome?.outcome, 'refer');
-  assert.equal(el.caseRow?.effectiveOutcome, 'refer');
-  assert.equal(el.caseRow?.outcomeOverridden, true);
+  assert.equal(props.caseRow?.amendedOutcome?.outcome, 'refer');
+  assert.equal(props.caseRow?.effectiveOutcome, 'refer');
+  assert.equal(props.caseRow?.outcomeOverridden, true);
   assert.equal(
-    el.caseRow?.outcomeAtCompletion,
+    props.caseRow?.outcomeAtCompletion,
     'fail',
     'the frozen snapshot is untouched'
   );
@@ -324,40 +304,14 @@ test('CORAAmendOutcome: the edit form pre-fills from an existing amendment (re-a
   );
 });
 
-test('CORAAmendOutcome: amending with no saveQueue or caseRow does not throw', () => {
-  const el = new CORAAmendOutcome();
-  el.access = 'edit';
-  el.caseRow = null;
-  el.saveQueue = null;
-  el.currentUser = null;
-  el.outcomeOptions = OUTCOME_OPTIONS;
-  el.connectedCallback();
+test('CORAAmendOutcome: amending with no Case row does not throw', () => {
+  const { el } = renderAmendOutcome({
+    access: 'edit',
+    outcomeOptions: OUTCOME_OPTIONS,
+  });
   findByClass(el, 'cora-amend-outcome-select').value = 'pass';
   findByClass(el, 'cora-amend-outcome-justification').value = 'orphan';
   assert.doesNotThrow(() => {
     findByClass(el, 'cora-amend-outcome-submit')._listeners['click'][0]();
   });
-});
-
-test('CORAAmendOutcome: amending with a Case row but no saveQueue still mutates the row without throwing', () => {
-  const el = new CORAAmendOutcome();
-  el.caseRow = makeCase();
-  el.saveQueue = null;
-  el.caseId = 'c1';
-  el.access = 'edit';
-  el.currentUser = { id: 'controls-1', displayName: 'Controls' };
-  el.outcomeOptions = OUTCOME_OPTIONS;
-  el.now = () => '2026-06-12T00:00:00Z';
-  el.connectedCallback();
-
-  findByClass(el, 'cora-amend-outcome-select').value = 'pass';
-  findByClass(el, 'cora-amend-outcome-justification').value = 'Corrected';
-  assert.doesNotThrow(() => {
-    findByClass(el, 'cora-amend-outcome-submit')._listeners['click'][0]();
-  });
-  assert.equal(el.caseRow?.amendedOutcome?.outcome, 'pass');
-});
-
-test('CORAAmendOutcome: now() yields a non-empty ISO-like string by default', () => {
-  assert.ok(new CORAAmendOutcome().now().length > 0);
 });

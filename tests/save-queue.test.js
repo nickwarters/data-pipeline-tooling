@@ -143,6 +143,40 @@ test('SaveQueue: status becomes saving immediately after enqueue', () => {
   assert.equal(q.status.get(), 'saving');
 });
 
+test('SaveQueue: subscribeStatus delivers current and future statuses until unsubscribed', async () => {
+  const timer = makeTimer();
+  const q = new SaveQueue(makeClient(), {
+    debounceMs: 0,
+    setTimer: timer.setTimer,
+    clearTimer: timer.clearTimer,
+  });
+  q.loadCase(BASE_ROW);
+  /** @type {Array<'saved'|'saving'|'reconnecting'|'conflict'>} */
+  const statuses = [];
+  const unsubscribe = q.subscribeStatus((status) => statuses.push(status));
+
+  assert.deepEqual(
+    statuses,
+    ['saved'],
+    'current status is delivered immediately'
+  );
+  q.enqueue('c1', 'notes', 'hello');
+  assert.deepEqual(statuses, ['saved', 'saving']);
+  timer.runAll();
+  await q.whenIdle();
+  assert.deepEqual(statuses, ['saved', 'saving', 'saved']);
+
+  unsubscribe();
+  q.enqueue('c1', 'notes', 'after unsubscribe');
+  assert.deepEqual(
+    statuses,
+    ['saved', 'saving', 'saved'],
+    'unsubscribe stops future delivery'
+  );
+  timer.runAll();
+  await q.whenIdle();
+});
+
 // --- debounce ---
 
 test('SaveQueue: rapid calls to same field result in exactly one PATCH', async () => {

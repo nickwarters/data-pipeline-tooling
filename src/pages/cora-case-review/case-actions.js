@@ -33,13 +33,6 @@ export function createCaseReviewSaveEffect({ saveQueue, caseId, dispatch }) {
  * @returns {() => void}
  */
 export function observeSaveStatus(saveQueue, dispatch) {
-  if (typeof saveQueue.subscribeStatus !== 'function') {
-    dispatch({
-      type: 'case/save-status-changed',
-      status: saveQueue.status.get(),
-    });
-    return () => {};
-  }
   return saveQueue.subscribeStatus((status) => {
     dispatch({
       type: 'case/save-status-changed',

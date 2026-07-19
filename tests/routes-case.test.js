@@ -51,6 +51,12 @@ function makeContext(calls = []) {
     client: makeClient(calls),
     saveQueue: {
       status: { get: () => 'saved' },
+      subscribeStatus(
+        /** @type {(status: 'saved'|'saving'|'reconnecting'|'conflict') => void} */ listener
+      ) {
+        listener('saved');
+        return () => {};
+      },
       loadCase() {},
       enqueue() {},
     },

@@ -1,14 +1,11 @@
 // @ts-check
 import { h } from '../../lib/html.js';
 import { EmptyState } from '../../lib/empty-state.js';
-import { buildAmendmentFields } from '../../evaluators/amended-outcome.js';
 
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../../sharepoint-client.js').Appeal} Appeal */
-/** @typedef {import('../../sharepoint-client.js').AmendedOutcome} AmendedOutcome */
 /** @typedef {import('../../sharepoint-client.js').OutcomeOption} OutcomeOption */
 /** @typedef {import('../../sharepoint-client.js').CurrentUser} CurrentUser */
-/** @typedef {import('../../services/save-queue.js').SaveQueue} SaveQueue */
 
 /**
  * The **Appeal Review** Section. Lets **Controls** resolve an open
@@ -18,19 +15,16 @@ import { buildAmendmentFields } from '../../evaluators/amended-outcome.js';
  * Completed Case with an open Appeal; `read-only` for other observers; otherwise
  * the Section is not rendered at all. At most one Appeal may be open at a time.
  *
- * Agreeing triggers a transactional write: the Appeal is resolved *and* an Amended
- * Outcome carrying `fromAppealId` is authored in the same
- * `SaveQueue.enqueueFields` call. Rejecting writes only the updated `appeals[]`.
+ * Agreeing emits one resolution intent so the route slice can persist the
+ * resolved Appeal and linked `fromAppealId` amendment transactionally. Rejecting
+ * emits the same intent without amendment fields. This view owns validation only.
  *
  * @typedef {object} AppealReviewProps
  * @property {CaseRow | null} caseRow
- * @property {SaveQueue | null} saveQueue
- * @property {string} caseId
  * @property {'edit'|'read-only'|'hidden'} access
  * @property {CurrentUser | null} currentUser
  * @property {OutcomeOption[]} outcomeOptions
- * @property {() => string} now
- * @property {() => void} render
+ * @property {(input: {appealId: string, verdict: 'agreed'|'rejected', rationale: string, outcome?: string, justification?: string}) => void} [onResolve]
  */
 
 /**
@@ -189,7 +183,7 @@ export function renderResolveForm(props, appeal) {
             /** @type {HTMLElement | null} */ (event?.target ?? null)?.closest(
               '.cora-appeal-review-form'
             );
-          resolveAppeal(
+          submitAppealResolution(
             props,
             appeal,
             /** @type {HTMLInputElement | null} */ (
@@ -230,7 +224,7 @@ export function renderResolveForm(props, appeal) {
  * @param {{ value?: string }} justificationEl
  * @param {HTMLElement} errorEl
  */
-export function resolveAppeal(
+export function submitAppealResolution(
   props,
   appeal,
   agreeRadio,
@@ -259,50 +253,15 @@ export function resolveAppeal(
     }
   }
 
-  /** @type {Appeal['resolution']} */
-  const resolution = {
+  props.onResolve?.({
+    appealId: appeal.id,
     verdict: /** @type {'agreed'|'rejected'} */ (verdict),
     rationale,
-    resolver: props.currentUser?.id ?? '',
-    at: props.now(),
-  };
-
-  const updatedAppeal = {
-    ...appeal,
-    state: /** @type {'resolved'} */ ('resolved'),
-    resolution,
-  };
-  const allAppeals = (props.caseRow?.appeals ?? []).map((a) =>
-    a.id === appeal.id ? updatedAppeal : a
-  );
-
-  if (props.caseRow) props.caseRow.appeals = allAppeals;
-
-  if (agreed) {
-    const outcome = (outcomeEl.value ?? '').trim();
-    const justification = (justificationEl.value ?? '').trim();
-    /** @type {AmendedOutcome} */
-    const amendment = {
-      outcome,
-      justification,
-      amendedBy: props.currentUser?.id ?? '',
-      amendedAt: props.now(),
-      fromAppealId: appeal.id,
-    };
-    if (props.caseRow) {
-      const fields = buildAmendmentFields(props.caseRow, amendment);
-      Object.assign(props.caseRow, fields);
-      props.caseRow.appeals = allAppeals;
-      props.saveQueue?.enqueueFields(props.caseId, {
-        appeals: allAppeals,
-        ...fields,
-      });
-    } else {
-      props.saveQueue?.enqueueFields(props.caseId, { appeals: allAppeals });
-    }
-  } else {
-    props.saveQueue?.enqueue(props.caseId, 'appeals', allAppeals);
-  }
-
-  props.render();
+    ...(agreed
+      ? {
+          outcome: (outcomeEl.value ?? '').trim(),
+          justification: (justificationEl.value ?? '').trim(),
+        }
+      : {}),
+  });
 }

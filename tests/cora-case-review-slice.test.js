@@ -23,6 +23,9 @@ const { SaveQueue } = await import('../src/services/save-queue.js');
 const { morph } = await import('../src/core/morph.js');
 const { default: exampleReviewConfig } =
   await import('./_example-review-case-type.js');
+const { default: complaintsConfig } =
+  await import('../case-types/complaints.js');
+const { evaluateAccess } = await import('../src/services/section-access.js');
 
 /** @type {import('../src/core/chrome-state.js').ChromeState} */
 const chrome = {
@@ -260,6 +263,69 @@ test('CASE-6 route: Appeal renders directly from store state without legacy cont
     getByRole(panel, 'button', { name: 'Raise Appeal' }).textContent,
     'Raise Appeal'
   );
+});
+
+test('CASE-6 route: configured Journey Owner and alternative Manager raisers reach the converted Appeal surface', () => {
+  const configurations = [
+    {
+      label: 'Complaints Journey Owner',
+      config: complaintsConfig,
+      roles:
+        /** @type {import('../src/services/section-access.js').Role[]} */ ([
+          'journeyOwner',
+        ]),
+    },
+    {
+      label: 'alternative Responsible Party Manager',
+      config: {
+        ...complaintsConfig,
+        appeal: {
+          raisedBy: /** @type {const} */ ('responsiblePartyManager'),
+          resolvedBy: /** @type {const} */ ('controls'),
+        },
+      },
+      roles:
+        /** @type {import('../src/services/section-access.js').Role[]} */ ([
+          'responsiblePartyManager',
+        ]),
+    },
+  ];
+
+  for (const { label, config, roles } of configurations) {
+    const appealSnapshot = snapshot();
+    appealSnapshot.caseRow = {
+      ...appealSnapshot.caseRow,
+      status: 'Completed',
+    };
+    appealSnapshot.access = {
+      ...appealSnapshot.access,
+      appealRequest: evaluateAccess(
+        'appealRequest',
+        roles,
+        appealSnapshot.caseRow,
+        config
+      ),
+    };
+    let state = caseReviewReducer(
+      createInitialCaseReviewState(chrome, 'popover'),
+      { type: 'case/load-finished', snapshot: appealSnapshot }
+    );
+    state = caseReviewReducer(state, {
+      type: 'case/tab-selected',
+      id: 'appealRequest',
+    });
+
+    const { container } = renderShippedState(state);
+    const panel = queryAllByRole(container, 'tabpanel').find(
+      (candidate) => candidate.getAttribute('id') === 'case-panel-appealRequest'
+    );
+    assert.ok(panel, label);
+    assert.equal(
+      getByRole(panel, 'button', { name: 'Raise Appeal' }).textContent,
+      'Raise Appeal',
+      label
+    );
+  }
 });
 
 test('CASE-6 route: raising an Appeal persists through the store-owned panel', () => {

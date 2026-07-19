@@ -22,6 +22,11 @@ import { summaryView } from './cora-case-review/summary-view.js';
 import { AppealSection } from './cora-case-review/appeal-view.js';
 import { AppealReviewSection } from './cora-case-review/appeal-review-view.js';
 import { AmendOutcomeSection } from './cora-case-review/amend-outcome-view.js';
+import {
+  amendOutcome,
+  raiseAppeal,
+  resolveAppeal,
+} from './cora-case-review/appeal-actions.js';
 import { editRemediationDetail } from './cora-case-review/remediation-actions.js';
 import { RemediationSection } from './cora-case-review/remediation-view.js';
 import { RemediationTracking } from './cora-case-review/remediation-tracking-view.js';
@@ -676,18 +681,30 @@ export function createRouteSlice(params, context) {
                 'cora-appeal',
                 AppealSection({
                   caseRow: snapshot.caseRow,
-                  saveQueue: context.saveQueue,
-                  caseId: snapshot.caseRow.id,
                   access: snapshot.access.appealRequest,
                   currentUser: snapshot.currentUser,
                   catalogue: snapshot.catalogue,
                   answers: snapshot.answers,
-                  newAppealId: () => `appeal-${Date.now()}`,
-                  render: () =>
+                  onRaise: ({ rationale, citedAnswerKeys }) => {
+                    const result = raiseAppeal({
+                      caseRow,
+                      appellant: snapshot.currentUser?.id ?? '',
+                      rationale,
+                      citedAnswerKeys,
+                      id: `appeal-${Date.now()}`,
+                      at: new Date().toISOString(),
+                    });
+                    viewModel.caseRow = result.caseRow;
+                    context.saveQueue.enqueue(
+                      caseRow.id,
+                      'appeals',
+                      result.appeals
+                    );
                     tools.dispatch({
                       type: 'case/model-changed',
-                      snapshot: viewModel.toStoreSnapshot(),
-                    }),
+                      snapshot: { ...snapshot, caseRow: result.caseRow },
+                    });
+                  },
                   heading: snapshot.sectionHeadings.appealRequest,
                 })
               )
@@ -703,17 +720,34 @@ export function createRouteSlice(params, context) {
                 'cora-appeal-review',
                 AppealReviewSection({
                   caseRow: snapshot.caseRow,
-                  saveQueue: context.saveQueue,
-                  caseId: snapshot.caseRow.id,
                   access: snapshot.access.appealReview,
                   currentUser: snapshot.currentUser,
                   outcomeOptions: snapshot.config.outcomeOptions ?? [],
-                  now: () => new Date().toISOString(),
-                  render: () =>
+                  onResolve: (resolution) => {
+                    const result = resolveAppeal({
+                      caseRow,
+                      resolver: snapshot.currentUser?.id ?? '',
+                      at: new Date().toISOString(),
+                      ...resolution,
+                    });
+                    viewModel.caseRow = result.caseRow;
+                    if (result.transactional) {
+                      context.saveQueue.enqueueFields(
+                        caseRow.id,
+                        result.fields
+                      );
+                    } else {
+                      context.saveQueue.enqueue(
+                        caseRow.id,
+                        'appeals',
+                        result.fields.appeals
+                      );
+                    }
                     tools.dispatch({
                       type: 'case/model-changed',
-                      snapshot: viewModel.toStoreSnapshot(),
-                    }),
+                      snapshot: { ...snapshot, caseRow: result.caseRow },
+                    });
+                  },
                 })
               )
             : null
@@ -728,17 +762,24 @@ export function createRouteSlice(params, context) {
                 'cora-amend-outcome',
                 AmendOutcomeSection({
                   caseRow: snapshot.caseRow,
-                  saveQueue: context.saveQueue,
-                  caseId: snapshot.caseRow.id,
                   access: snapshot.access.amendOutcome,
                   currentUser: snapshot.currentUser,
                   outcomeOptions: snapshot.config.outcomeOptions ?? [],
-                  now: () => new Date().toISOString(),
-                  render: () =>
+                  onAmend: ({ outcome, justification }) => {
+                    const result = amendOutcome({
+                      caseRow,
+                      outcome,
+                      justification,
+                      amendedBy: snapshot.currentUser?.id ?? '',
+                      amendedAt: new Date().toISOString(),
+                    });
+                    viewModel.caseRow = result.caseRow;
+                    context.saveQueue.enqueueFields(caseRow.id, result.fields);
                     tools.dispatch({
                       type: 'case/model-changed',
-                      snapshot: viewModel.toStoreSnapshot(),
-                    }),
+                      snapshot: { ...snapshot, caseRow: result.caseRow },
+                    });
+                  },
                 })
               )
             : null

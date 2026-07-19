@@ -10,14 +10,14 @@ import { buildCaptureControl } from '../../lib/capture-engine.js';
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../../sharepoint-client.js').CurrentUser} CurrentUser */
-/** @typedef {import('../../services/save-queue.js').SaveQueue} SaveQueue */
 
 /**
  * The Appeal Section. Lets the Responsible Party or their Manager
  * raise a case-level **Appeal** objecting to a Completed Case's Current Outcome
  * (CONTEXT.md). The Appeal is additive: it appends to the Case row's `appeals[]`
- * JSON blob via the SaveQueue and never touches the frozen
- * Answers — citing a disputed Answer aims the reviewer but sets no value.
+ * JSON blob through a route-owned action and never touches the frozen Answers —
+ * citing a disputed Answer aims the reviewer but sets no value. This view owns
+ * form validation only; the route slice owns immutable state and persistence.
  *
  * Access is resolved upstream (section-access, the architecture decision): `edit` only for the
  * appellant roles on a Completed Case, otherwise `read-only` (reviewers/owner/
@@ -32,14 +32,11 @@ import { buildCaptureControl } from '../../lib/capture-engine.js';
 /**
  * @typedef {object} AppealProps
  * @property {CaseRow | null} caseRow
- * @property {SaveQueue | null} saveQueue
- * @property {string} caseId
  * @property {'edit'|'read-only'|'hidden'} access
  * @property {CurrentUser | null} currentUser
  * @property {QuestionDefinition[]} catalogue
  * @property {Record<string, Answer>} answers
- * @property {() => string} newAppealId
- * @property {() => void} render
+ * @property {(input: {rationale: string, citedAnswerKeys: string[]}) => void} [onRaise]
  * @property {string} [heading] Section heading; defaults to the standard copy so the component stays usable standalone.
  */
 
@@ -208,7 +205,7 @@ export function renderAppealForm(props) {
             /** @type {HTMLElement | null} */ (event?.target ?? null)?.closest(
               '.cora-appeal-form'
             );
-          raiseAppeal(
+          submitAppeal(
             props,
             /** @type {HTMLTextAreaElement | null} */ (
               form?.querySelector('.cora-appeal-rationale')
@@ -235,7 +232,7 @@ export function renderAppealForm(props) {
  * @param {Array<{ checked?: boolean, value?: string }>} checkboxes
  * @param {HTMLElement} errorEl
  */
-export function raiseAppeal(props, rationaleEl, checkboxes, errorEl) {
+export function submitAppeal(props, rationaleEl, checkboxes, errorEl) {
   const rationale = (rationaleEl.value ?? '').trim();
   if (!rationale) {
     errorEl.hidden = false;
@@ -246,18 +243,5 @@ export function raiseAppeal(props, rationaleEl, checkboxes, errorEl) {
     .filter((b) => b.checked)
     .map((b) => /** @type {string} */ (b.value));
 
-  /** @type {Appeal} */
-  const appeal = {
-    id: props.newAppealId(),
-    appellant: props.currentUser?.id ?? '',
-    at: new Date().toISOString(),
-    rationale,
-    state: 'raised',
-  };
-  if (citedAnswerKeys.length) appeal.citedAnswerKeys = citedAnswerKeys;
-
-  const next = [...appealsFrom(props), appeal];
-  if (props.caseRow) props.caseRow.appeals = next;
-  props.saveQueue?.enqueue(props.caseId, 'appeals', next);
-  props.render();
+  props.onRaise?.({ rationale, citedAnswerKeys });
 }

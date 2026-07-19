@@ -7,43 +7,10 @@ installDom();
 
 // DOM stubs must be in place before any src import.
 
-const { AppealReviewSection, resolveAppeal } =
+const { AppealReviewSection } =
   await import('../src/pages/cora-case-review/appeal-review-view.js');
-
-class CORAAppealReview extends HTMLElement {
-  constructor() {
-    super();
-    /** @type {any} */
-    this.caseRow = null;
-    /** @type {any} */
-    this.saveQueue = null;
-    this.caseId = '';
-    this.access = /** @type {'edit'|'read-only'|'hidden'} */ ('read-only');
-    /** @type {any} */
-    this.currentUser = null;
-    /** @type {any[]} */
-    this.outcomeOptions = [];
-  }
-
-  now() {
-    return new Date().toISOString();
-  }
-
-  connectedCallback() {
-    this.replaceChildren(
-      ...AppealReviewSection({
-        caseRow: this.caseRow,
-        saveQueue: /** @type {any} */ (this.saveQueue),
-        caseId: this.caseId,
-        access: this.access,
-        currentUser: this.currentUser,
-        outcomeOptions: this.outcomeOptions,
-        now: () => this.now(),
-        render: () => this.connectedCallback(),
-      })
-    );
-  }
-}
+const { resolveAppeal } =
+  await import('../src/pages/cora-case-review/appeal-actions.js');
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../src/sharepoint-client.js').Appeal} Appeal */
@@ -113,24 +80,53 @@ function makeQueue() {
   };
 }
 
-/** Build a Controls-editable element with an open Appeal. */
+/** Render the shipped view directly into a DOM query root. */
+function renderAppealReview(overrides = {}, queue = makeQueue()) {
+  const props = {
+    caseRow: /** @type {CaseRow | null} */ (null),
+    access: /** @type {'edit'|'read-only'|'hidden'} */ ('read-only'),
+    currentUser: /** @type {any} */ (null),
+    outcomeOptions: /** @type {any[]} */ ([]),
+    ...overrides,
+  };
+  const el = document.createElement('main');
+  const render = () => {
+    el.replaceChildren(
+      ...AppealReviewSection({
+        ...props,
+        onResolve: (resolution) => {
+          if (!props.caseRow) return;
+          const result = resolveAppeal({
+            caseRow: props.caseRow,
+            resolver: props.currentUser?.id ?? '',
+            at: '2026-06-12T00:00:00Z',
+            ...resolution,
+          });
+          props.caseRow = result.caseRow;
+          if (result.transactional) {
+            queue.enqueueFields('c1', result.fields);
+          } else {
+            queue.enqueue('c1', 'appeals', result.fields.appeals);
+          }
+          render();
+        },
+      })
+    );
+  };
+  render();
+  return { el, props, queue, render };
+}
+
 function makeEditable(caseOverrides = {}) {
-  const queue = makeQueue();
-  const el = new CORAAppealReview();
-  el.caseRow = makeCase({
-    appeals: [openAppeal()],
-    ...caseOverrides,
+  return renderAppealReview({
+    caseRow: makeCase({ appeals: [openAppeal()], ...caseOverrides }),
+    access: 'edit',
+    currentUser: { id: 'u-controls', displayName: 'Controls' },
+    outcomeOptions: [
+      { id: 'pass', wording: 'Pass', severity: 0 },
+      { id: 'fail', wording: 'Fail', severity: 100 },
+    ],
   });
-  el.saveQueue = /** @type {any} */ (queue);
-  el.caseId = 'c1';
-  el.access = 'edit';
-  el.currentUser = { id: 'u-controls', displayName: 'Controls' };
-  el.outcomeOptions = [
-    { id: 'pass', wording: 'Pass', severity: 0 },
-    { id: 'fail', wording: 'Fail', severity: 100 },
-  ];
-  el.connectedCallback();
-  return { el, queue };
 }
 
 /** Submit the resolve form by clicking the submit button. */
@@ -141,8 +137,7 @@ function clickSubmit(/** @type {any} */ el) {
 // --- Rendering ---
 
 test('CORAAppealReview: renders an Appeal Review heading first', () => {
-  const el = new CORAAppealReview();
-  el.connectedCallback();
+  const { el } = renderAppealReview();
   assert.equal(
     /** @type {any} */ (el)._children[0].textContent,
     'Appeal Review'
@@ -176,10 +171,10 @@ test('CORAAppealReview: edit access with an open Appeal renders the resolve form
 });
 
 test('CORAAppealReview: edit access with no open Appeal shows no form', () => {
-  const el = new CORAAppealReview();
-  el.caseRow = makeCase({ appeals: [resolvedAppeal()] });
-  el.access = 'edit';
-  el.connectedCallback();
+  const { el } = renderAppealReview({
+    caseRow: makeCase({ appeals: [resolvedAppeal()] }),
+    access: 'edit',
+  });
   assert.equal(
     findByClass(el, 'cora-appeal-review-form'),
     null,
@@ -188,10 +183,9 @@ test('CORAAppealReview: edit access with no open Appeal shows no form', () => {
 });
 
 test('CORAAppealReview: read-only access shows no form', () => {
-  const el = new CORAAppealReview();
-  el.caseRow = makeCase({ appeals: [openAppeal()] });
-  el.access = 'read-only';
-  el.connectedCallback();
+  const { el } = renderAppealReview({
+    caseRow: makeCase({ appeals: [openAppeal()] }),
+  });
   assert.equal(
     findByClass(el, 'cora-appeal-review-form'),
     null,
@@ -200,24 +194,20 @@ test('CORAAppealReview: read-only access shows no form', () => {
 });
 
 test('CORAAppealReview: with no Appeals shows a placeholder', () => {
-  const el = new CORAAppealReview();
-  el.access = 'read-only';
-  el.connectedCallback();
+  const { el } = renderAppealReview();
   assert.ok(findByClass(el, 'cora-empty cora-appeal-review-empty'));
 });
 
 test('CORAAppealReview: caseRow without an appeals property is treated as having no Appeals', () => {
-  const el = new CORAAppealReview();
-  el.access = 'read-only';
-  // A caseRow that has no `appeals` field at all (sparse object).
-  el.caseRow = /** @type {any} */ ({
-    id: 'c1',
-    status: 'Completed',
-    assignedReviewer: 'u1',
-    responsibleParty: 'u-rp',
-    etag: 'e1',
+  const { el } = renderAppealReview({
+    caseRow: /** @type {any} */ ({
+      id: 'c1',
+      status: 'Completed',
+      assignedReviewer: 'u1',
+      responsibleParty: 'u-rp',
+      etag: 'e1',
+    }),
   });
-  el.connectedCallback();
   assert.ok(
     findByClass(el, 'cora-empty cora-appeal-review-empty'),
     'placeholder shown when appeals is missing'
@@ -225,20 +215,16 @@ test('CORAAppealReview: caseRow without an appeals property is treated as having
 });
 
 test('CORAAppealReview: with no caseRow shows an empty placeholder', () => {
-  const el = new CORAAppealReview();
-  el.caseRow = null;
-  el.access = 'edit';
-  el.connectedCallback();
+  const { el } = renderAppealReview({ access: 'edit' });
   assert.ok(findByClass(el, 'cora-empty cora-appeal-review-empty'));
 });
 
 // --- Appeal summary items ---
 
 test('CORAAppealReview: each Appeal renders a summary item with state and rationale', () => {
-  const el = new CORAAppealReview();
-  el.access = 'read-only';
-  el.caseRow = makeCase({ appeals: [openAppeal()] });
-  el.connectedCallback();
+  const { el } = renderAppealReview({
+    caseRow: makeCase({ appeals: [openAppeal()] }),
+  });
   const item = findByClass(el, 'cora-appeal-review-item');
   assert.ok(item, 'item rendered');
   assert.ok(
@@ -252,10 +238,9 @@ test('CORAAppealReview: each Appeal renders a summary item with state and ration
 });
 
 test('CORAAppealReview: a resolved Appeal item shows the resolution verdict and rationale', () => {
-  const el = new CORAAppealReview();
-  el.access = 'read-only';
-  el.caseRow = makeCase({ appeals: [resolvedAppeal()] });
-  el.connectedCallback();
+  const { el } = renderAppealReview({
+    caseRow: makeCase({ appeals: [resolvedAppeal()] }),
+  });
   const item = findByClass(el, 'cora-appeal-review-item');
   const res = findByClass(item, 'cora-appeal-review-resolution');
   assert.ok(res.textContent.includes('agreed'));
@@ -263,19 +248,17 @@ test('CORAAppealReview: a resolved Appeal item shows the resolution verdict and 
 });
 
 test('CORAAppealReview: an unresolved Appeal item omits the resolution line', () => {
-  const el = new CORAAppealReview();
-  el.access = 'read-only';
-  el.caseRow = makeCase({ appeals: [openAppeal()] });
-  el.connectedCallback();
+  const { el } = renderAppealReview({
+    caseRow: makeCase({ appeals: [openAppeal()] }),
+  });
   const item = findByClass(el, 'cora-appeal-review-item');
   assert.equal(findByClass(item, 'cora-appeal-review-resolution'), null);
 });
 
 test('CORAAppealReview: multiple Appeals each render their own summary item', () => {
-  const el = new CORAAppealReview();
-  el.access = 'read-only';
-  el.caseRow = makeCase({ appeals: [resolvedAppeal(), openAppeal()] });
-  el.connectedCallback();
+  const { el } = renderAppealReview({
+    caseRow: makeCase({ appeals: [resolvedAppeal(), openAppeal()] }),
+  });
   assert.equal(findAllByClass(el, 'cora-appeal-review-item').length, 2);
 });
 
@@ -348,12 +331,16 @@ test('CORAAppealReview: reject resolves the appeal with rejected verdict and sav
 });
 
 test('CORAAppealReview: reject does not create an Amended Outcome', () => {
-  const { el, queue } = makeEditable();
+  const { el, props } = makeEditable();
   findByClass(el, 'cora-appeal-review-verdict-rejected').checked = true;
   findByClass(el, 'cora-appeal-review-rationale-input').value =
     'No change needed.';
   clickSubmit(el);
-  assert.equal(el.caseRow?.amendedOutcome, undefined, 'no amendment authored');
+  assert.equal(
+    props.caseRow?.amendedOutcome,
+    undefined,
+    'no amendment authored'
+  );
 });
 
 test('CORAAppealReview: after rejecting, the form is replaced by the resolved item (re-render)', () => {
@@ -423,7 +410,7 @@ test('CORAAppealReview: agree links the Amended Outcome to the Appeal id via fro
 });
 
 test('CORAAppealReview: agree also updates caseRow.amendedOutcome in memory', () => {
-  const { el } = makeEditable();
+  const { el, props } = makeEditable();
   findByClass(el, 'cora-appeal-review-verdict-agreed').checked = true;
   findByClass(el, 'cora-appeal-review-rationale-input').value =
     'Wrong outcome.';
@@ -432,20 +419,20 @@ test('CORAAppealReview: agree also updates caseRow.amendedOutcome in memory', ()
     'Correction.';
   clickSubmit(el);
 
-  assert.equal(el.caseRow?.amendedOutcome?.outcome, 'pass');
-  assert.equal(el.caseRow?.amendedOutcome?.fromAppealId, 'ap1');
+  assert.equal(props.caseRow?.amendedOutcome?.outcome, 'pass');
+  assert.equal(props.caseRow?.amendedOutcome?.fromAppealId, 'ap1');
 });
 
 test('CORAAppealReview: agree stamps the effectiveOutcome and outcomeOverridden on caseRow', () => {
-  const { el } = makeEditable();
+  const { el, props } = makeEditable();
   findByClass(el, 'cora-appeal-review-verdict-agreed').checked = true;
   findByClass(el, 'cora-appeal-review-rationale-input').value = 'Wrong.';
   findByClass(el, 'cora-appeal-review-outcome-select').value = 'pass';
   findByClass(el, 'cora-appeal-review-amend-justification').value = 'Amended.';
   clickSubmit(el);
 
-  assert.equal(el.caseRow?.effectiveOutcome, 'pass');
-  assert.equal(el.caseRow?.outcomeOverridden, true);
+  assert.equal(props.caseRow?.effectiveOutcome, 'pass');
+  assert.equal(props.caseRow?.outcomeOverridden, true);
 });
 
 test('CORAAppealReview: after agreeing, the form is replaced by the resolved item (re-render)', () => {
@@ -481,34 +468,26 @@ test('CORAAppealReview: prior resolved Appeals are retained in the appeals array
 // --- Missing dependencies (null guards) ---
 
 test('CORAAppealReview: resolving without a saveQueue or caseRow does not throw', () => {
-  const el = new CORAAppealReview();
-  el.access = 'edit';
-  el.caseRow = makeCase({ appeals: [openAppeal()] });
-  el.saveQueue = null;
-  el.currentUser = null;
-  el.connectedCallback();
+  const { el } = renderAppealReview({
+    access: 'edit',
+    caseRow: makeCase({ appeals: [openAppeal()] }),
+  });
   findByClass(el, 'cora-appeal-review-verdict-rejected').checked = true;
   findByClass(el, 'cora-appeal-review-rationale-input').value = 'No change.';
   assert.doesNotThrow(() => clickSubmit(el));
 });
 
 test('CORAAppealReview: agreeing without caseRow does not throw', () => {
-  const el = new CORAAppealReview();
-  el.access = 'edit';
-  el.caseRow = makeCase({ appeals: [openAppeal()] });
-  el.saveQueue = null;
-  el.currentUser = null;
-  el.outcomeOptions = [{ id: 'pass', wording: 'Pass', severity: 0 }];
-  el.connectedCallback();
+  const { el } = renderAppealReview({
+    access: 'edit',
+    caseRow: makeCase({ appeals: [openAppeal()] }),
+    outcomeOptions: [{ id: 'pass', wording: 'Pass', severity: 0 }],
+  });
   findByClass(el, 'cora-appeal-review-verdict-agreed').checked = true;
   findByClass(el, 'cora-appeal-review-rationale-input').value = 'Wrong.';
   findByClass(el, 'cora-appeal-review-outcome-select').value = 'pass';
   findByClass(el, 'cora-appeal-review-amend-justification').value = 'Amended.';
   assert.doesNotThrow(() => clickSubmit(el));
-});
-
-test('CORAAppealReview: now() returns a non-empty ISO string', () => {
-  assert.ok(new CORAAppealReview().now().length > 0);
 });
 
 test('CORAAppealReview: a null rationale value is treated as empty (does not save)', () => {
@@ -554,36 +533,5 @@ test('CORAAppealReview: null justification value on agree treated as empty (vali
     queue.enqueuedFields.length,
     0,
     'null justification treated as empty → validation fails'
-  );
-});
-
-test('CORAAppealReview: agree with null caseRow enqueueFields only the appeals array (null guard branch)', () => {
-  const queue = makeQueue();
-  const appeal = openAppeal();
-  // Call resolveAppeal directly with a null caseRow to exercise the
-  // agreed-but-no-caseRow branch (lines 278-279).
-  resolveAppeal(
-    {
-      caseRow: null,
-      saveQueue: /** @type {any} */ (queue),
-      caseId: 'c1',
-      access: 'edit',
-      currentUser: { id: 'u-controls', displayName: 'Controls' },
-      outcomeOptions: [{ id: 'pass', wording: 'Pass', severity: 0 }],
-      now: () => '2026-07-01T00:00:00Z',
-      render: () => {},
-    },
-    appeal,
-    { checked: true }, // agreeRadio
-    { checked: false }, // rejectRadio
-    { value: 'Outcome was wrong.' },
-    { value: 'pass' },
-    { value: 'Reviewer error.' },
-    /** @type {any} */ ({ hidden: true })
-  );
-  assert.equal(queue.enqueuedFields.length, 1);
-  assert.ok(
-    Array.isArray(queue.enqueuedFields[0].fields.appeals),
-    'appeals written as array'
   );
 });

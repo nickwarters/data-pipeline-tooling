@@ -1,23 +1,19 @@
 // @ts-check
 import { h } from '../../lib/html.js';
 import { EmptyState } from '../../lib/empty-state.js';
-import {
-  currentOutcome,
-  buildAmendmentFields,
-} from '../../evaluators/amended-outcome.js';
+import { currentOutcome } from '../../evaluators/amended-outcome.js';
 
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../../sharepoint-client.js').AmendedOutcome} AmendedOutcome */
 /** @typedef {import('../../sharepoint-client.js').OutcomeOption} OutcomeOption */
 /** @typedef {import('../../sharepoint-client.js').CurrentUser} CurrentUser */
-/** @typedef {import('../../services/save-queue.js').SaveQueue} SaveQueue */
 
 /**
  * The **Amend Outcome** Section. Lets **Controls** author a case-level
  * **Amended Outcome** on a Completed Case: an explicit, hand-set verdict with a
  * mandatory justification. The write is additive — the frozen `outcomeAtCompletion`
- * is never touched — and is a single ETag-guarded PATCH (`SaveQueue.enqueueFields`,
- * the architecture decision) that carries the record *and* re-stamps the the architecture decision reporting columns
+ * is never touched. It emits one intent that the route slice persists as a
+ * single ETag-guarded PATCH carrying the record and re-stamping the reporting columns
  * (`effectiveOutcome` / `outcomeOverridden` / `effectiveHadRemediation`) together
  * so a partial write cannot desync them.
  *
@@ -29,13 +25,10 @@ import {
 /**
  * @typedef {object} AmendOutcomeProps
  * @property {CaseRow | null} caseRow
- * @property {SaveQueue | null} saveQueue
- * @property {string} caseId
  * @property {'edit'|'read-only'|'hidden'} access
  * @property {CurrentUser | null} currentUser
  * @property {OutcomeOption[]} outcomeOptions
- * @property {() => string} now
- * @property {() => void} render
+ * @property {(input: {outcome: string, justification: string}) => void} [onAmend]
  */
 
 /**
@@ -194,8 +187,8 @@ export function renderAmendForm(props) {
 }
 
 /**
- * Validate, build the transactional field set and enqueue the single ETag-guarded
- * write. Both an Outcome and a justification are required.
+ * Validate and emit a single amendment intent. Both an Outcome and a
+ * justification are required.
  * @param {AmendOutcomeProps} props
  * @param {{ value?: string }} selectEl
  * @param {{ value?: string }} justificationEl
@@ -209,20 +202,7 @@ export function amend(props, selectEl, justificationEl, errorEl) {
     return;
   }
 
-  /** @type {AmendedOutcome} */
-  const amendment = {
-    outcome,
-    justification,
-    amendedBy: props.currentUser?.id ?? '',
-    amendedAt: props.now(),
-  };
-
-  if (props.caseRow) {
-    const fields = buildAmendmentFields(props.caseRow, amendment);
-    Object.assign(props.caseRow, fields);
-    props.saveQueue?.enqueueFields(props.caseId, fields);
-  }
-  props.render();
+  props.onAmend?.({ outcome, justification });
 }
 
 /**

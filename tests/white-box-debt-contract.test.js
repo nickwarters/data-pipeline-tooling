@@ -23,7 +23,7 @@ const BASELINE = {
   'tests/accessibility.test.js': [14, 0, 0],
   'tests/app-chrome.test.js': [7, 0, 0],
   'tests/cora-allocation.test.js': [6, 1, 14],
-  'tests/cora-amend-outcome.test.js': [2, 8, 0],
+  'tests/cora-amend-outcome.test.js': [2, 7, 0],
   'tests/cora-app-nav.test.js': [1, 0, 0],
   'tests/cora-appeal-review.test.js': [1, 1, 0],
   'tests/cora-appeal.test.js': [4, 8, 0],

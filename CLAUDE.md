@@ -147,9 +147,10 @@ src/
       remediation-actions.js   # CASE-5 route action for configurable Remediation Detail edits
       remediation-view.js      # CASE-5 pure Issues and Remediation Actions view
       remediation-tracking-view.js # CASE-5 pure Remediation Tracking view
-      appeal-view.js           # CASE-6 pure Appeal request view + unchanged SaveQueue effect
-      appeal-review-view.js    # CASE-6 pure Controls resolution view + linked amendment write
-      amend-outcome-view.js    # CASE-6 pure ADR-0026 Amend Outcome view
+      appeal-actions.js        # CASE-6 immutable Appeal/resolution/amendment state transitions
+      appeal-view.js           # CASE-6 pure Appeal request form and history view
+      appeal-review-view.js    # CASE-6 pure Controls resolution form and history view
+      amend-outcome-view.js    # CASE-6 pure ADR-0026 Amend Outcome form and record view
     cora-conversation-view.js
     cora-dashboard.js             # store-driven dashboard slice + descriptor-selected panels (GRID-3/4)
     dashboard/
