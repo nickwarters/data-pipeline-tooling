@@ -243,113 +243,6 @@ function saveStatusView(status) {
 }
 
 /**
- * Store-driven Case Review shell. The tab structure and Details panel are pure;
- * unconverted Section nodes are supplied by the interim adapter.
- *
- * @param {CaseReviewState} state
- * @param {{
- *   dispatch: (action: any) => unknown,
- *   panels?: Record<string, Node>,
- *   conversation?: Node | null,
- *   conversationToggle?: Node | null,
- *   completeButton?: Node | null,
- * }} tools
- * @returns {HTMLElement}
- */
-export function caseReviewView(state, tools) {
-  const route = state.routes.caseReview;
-  const snapshot = route.snapshot;
-  if (!snapshot) {
-    return h('div', { className: 'cora-case-review' }, 'Loading...');
-  }
-  if (snapshot.error) {
-    return h('div', { className: 'cora-case-review' }, snapshot.error);
-  }
-  if (snapshot.accessDenied) {
-    return h(
-      'section',
-      { className: 'cora-case-review cora-access-denied' },
-      h('h2', {}, 'Access denied'),
-      h('p', {}, 'You do not have access to this case.')
-    );
-  }
-  if (!snapshot.loaded || !snapshot.caseRow || !snapshot.config) {
-    return h('div', { className: 'cora-case-review' }, 'Loading...');
-  }
-
-  const tabs = visibleCaseTabs(snapshot);
-  /** @type {Record<string, Node>} */
-  const panels = {
-    ...(tools.panels ?? {}),
-    details: caseDetailsView(
-      snapshot.caseRow,
-      snapshot.config.detailFields ?? []
-    ),
-  };
-
-  const tabButtons = tabs.map((entry) => {
-    const selected = route.activeTab === entry.id;
-    return h(
-      'button',
-      {
-        key: `tab-${entry.id}`,
-        className: 'cora-tabs-tab',
-        role: 'tab',
-        id: `case-tab-${entry.id}`,
-        'aria-controls': `case-panel-${entry.id}`,
-        'aria-selected': String(selected),
-        tabindex: selected ? '0' : '-1',
-        onClick: () =>
-          tools.dispatch({ type: 'case/tab-selected', id: entry.id }),
-        onKeyDown: (/** @type {KeyboardEvent} */ event) =>
-          selectAdjacentTab(event, tabs, route.activeTab, tools.dispatch),
-      },
-      snapshot.sectionLabels[entry.id]
-    );
-  });
-  const tabPanels = tabs.map((entry) => {
-    const panel = h(
-      'div',
-      {
-        key: `panel-${entry.id}`,
-        className: 'cora-tabs-panel',
-        role: 'tabpanel',
-        id: `case-panel-${entry.id}`,
-        'aria-labelledby': `case-tab-${entry.id}`,
-        tabindex: '0',
-        hidden: route.activeTab !== entry.id,
-      },
-      panels[entry.id] ?? null
-    );
-    return panel;
-  });
-
-  return h(
-    'div',
-    {
-      className: 'cora-case-review',
-      'data-conversation-mode': route.panelMode,
-    },
-    saveStatusView(route.saveStatus),
-    h(
-      'header',
-      {},
-      h('h1', {}, snapshot.caseRow.title),
-      h('p', {}, `Reviewer: ${snapshot.caseRow.assignedReviewer}`),
-      tools.conversationToggle ?? null
-    ),
-    h(
-      'div',
-      { className: 'cora-tabs' },
-      h('div', { role: 'tablist', className: 'cora-tabs-list' }, tabButtons),
-      tabPanels
-    ),
-    tools.conversation ?? null,
-    tools.completeButton ?? null
-  );
-}
-
-/**
  * CASE-1 route slice. The view model adapts existing loading/domain behaviour
  * into store snapshots; the interim adapter owns only the unconverted Section
  * components.
@@ -397,6 +290,14 @@ export function createRouteSlice(params, context) {
   function ensureShell(container, tools) {
     if (shell) return shell;
     const status = h('div', { className: 'cora-case-review__save-status' });
+    // Preserve the retired status-banner host placement until its styles move
+    // to the store shell's stylesheet in a dedicated styling change.
+    Object.assign(status.style, {
+      position: 'fixed',
+      bottom: 'var(--cora-space-4)',
+      right: 'var(--cora-space-4)',
+      zIndex: '110',
+    });
     const header = h('header');
     const tablist = h('div', {
       role: 'tablist',
@@ -485,6 +386,7 @@ export function createRouteSlice(params, context) {
           'button',
           {
             key: `tab-${entry.id}`,
+            type: 'button',
             className: 'cora-tabs-tab',
             role: 'tab',
             id: `case-tab-${entry.id}`,
@@ -586,7 +488,12 @@ export function createRouteSlice(params, context) {
 }
 
 /**
- * Case Review route shell. A plain function component: it owns the
+ * Legacy Case Review rollback/compatibility shell. The store route no longer
+ * mounts this function, but CASE-1 deliberately retains it while the remaining
+ * Sections migrate in CASE-2 through CASE-6. Do not extend this path; its tests
+ * pin rollback compatibility until the final Section migration removes it.
+ *
+ * A plain function component: it owns the
  * view-model, a registry of long-lived Section nodes, and the panel bindings,
  * and returns a reactive() host that re-composes `h()` nodes whenever the
  * view-model's signals change. Custom elements survive only as the leaf Section

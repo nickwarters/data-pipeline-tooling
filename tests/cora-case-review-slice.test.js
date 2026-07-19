@@ -12,12 +12,8 @@ import {
 
 installDom();
 
-const {
-  caseReviewReducer,
-  caseReviewView,
-  createRouteSlice,
-  createInitialCaseReviewState,
-} = await import('../src/pages/cora-case-review.js');
+const { caseReviewReducer, createRouteSlice, createInitialCaseReviewState } =
+  await import('../src/pages/cora-case-review.js');
 const { caseDetailsView } =
   await import('../src/pages/cora-case-review/details-view.js');
 const { createCaseReviewSaveEffect, observeSaveStatus } =
@@ -98,6 +94,47 @@ function snapshot() {
       amendOutcome: 'Amend Outcome',
     },
   });
+}
+
+/**
+ * Render through the same route-slice path production mounts. `start()` is
+ * intentionally not called: these view tests provide store state directly.
+ *
+ * @param {any} initialState
+ */
+function renderShippedState(initialState) {
+  const slice = createRouteSlice(
+    { caseType: 'example-review', id: 'c1' },
+    /** @type {any} */ ({
+      client: {},
+      saveQueue: {},
+      currentUser: chrome.currentUser,
+      capabilities: chrome.permissions,
+      chrome,
+    })
+  );
+  let state = initialState;
+  /** @type {any[]} */
+  const actions = [];
+  const container = document.createElement('main');
+  /** @type {any} */
+  let tools;
+  tools = {
+    morph,
+    dispatch(/** @type {any} */ action) {
+      actions.push(action);
+      state = slice.reducer(state, action);
+      slice.render(container, state, tools);
+    },
+  };
+  slice.render(container, state, tools);
+  return {
+    actions,
+    container,
+    get state() {
+      return state;
+    },
+  };
 }
 
 test('CASE-1 state: route state owns loading, save status, and selected tab under routes.caseReview', () => {
@@ -199,41 +236,38 @@ test('CASE-1 Details view mirrors today: config-driven values are read-only with
   assert.equal(view.getAttribute('data-access'), 'read-only');
 });
 
-test('CASE-1 view: pure tab shell renders only permitted tabs and dispatches selection', async () => {
-  /** @type {any[]} */
-  const actions = [];
+test('CASE-1 view: shipped tab shell renders only permitted tabs and dispatches selection', async () => {
   const state = caseReviewReducer(
     createInitialCaseReviewState(chrome, 'popover'),
     { type: 'case/load-finished', snapshot: snapshot() }
   );
-  const view = caseReviewView(state, {
-    dispatch: (action) => actions.push(action),
-    panels: {},
-  });
+  const view = renderShippedState(state);
 
-  assert.equal(queryAllByRole(view, 'tab').length, 7);
-  fireEvent(getByRole(view, 'tab', { name: 'Notes' }), 'click');
+  const tabs = queryAllByRole(view.container, 'tab');
+  assert.equal(tabs.length, 7);
+  assert.ok(tabs.every((tab) => tab.getAttribute('type') === 'button'));
+  fireEvent(getByRole(view.container, 'tab', { name: 'Notes' }), 'click');
   const keyEvent = fireEvent(
-    getByRole(view, 'tab', { name: 'Details' }),
+    getByRole(view.container, 'tab', { name: 'Notes' }),
     'keydown',
     {
       key: 'ArrowRight',
     }
   );
-  assert.deepEqual(actions, [
+  assert.deepEqual(view.actions, [
     { type: 'case/tab-selected', id: 'notes' },
-    { type: 'case/tab-selected', id: 'questions' },
+    { type: 'case/tab-selected', id: 'appealRequest' },
   ]);
   assert.equal(keyEvent.defaultPrevented, true);
   await flush();
   assert.equal(
     document.activeElement?.getAttribute('id'),
-    'case-tab-questions'
+    'case-tab-appealRequest'
   );
-  const visiblePanel = queryAllByRole(view, 'tabpanel').find(
+  const visiblePanel = queryAllByRole(view.container, 'tabpanel').find(
     (panel) => !panel.hidden
   );
-  assert.equal(visiblePanel?.getAttribute('id'), 'case-panel-details');
+  assert.equal(visiblePanel?.getAttribute('id'), 'case-panel-appealRequest');
 });
 
 test('CASE-1 view: conflict state is surfaced with the existing reload warning', () => {
@@ -245,20 +279,33 @@ test('CASE-1 view: conflict state is surfaced with the existing reload warning',
     type: 'case/save-status-changed',
     status: 'conflict',
   });
-  const view = caseReviewView(state, { dispatch() {}, panels: {} });
+  const view = renderShippedState(state).container;
   assert.match(getByRole(view, 'alert').textContent, /edited in another tab/);
   assert.equal(
     getByRole(view, 'button', { name: 'Reload' }).textContent,
     'Reload'
   );
+  const root = /** @type {HTMLElement} */ (view.childNodes[0]);
+  const status = /** @type {HTMLElement} */ (root.childNodes[0]);
+  assert.deepEqual(
+    {
+      position: status.style.position,
+      bottom: status.style.bottom,
+      right: status.style.right,
+      zIndex: status.style.zIndex,
+    },
+    {
+      position: 'fixed',
+      bottom: 'var(--cora-space-4)',
+      right: 'var(--cora-space-4)',
+      zIndex: '110',
+    }
+  );
 });
 
 test('CASE-1 view: loading, error, denied, saving, and reconnecting states are explicit', () => {
   const initial = createInitialCaseReviewState(chrome, 'popover');
-  assert.match(
-    caseReviewView(initial, { dispatch() {} }).textContent,
-    /Loading/
-  );
+  assert.match(renderShippedState(initial).container.textContent, /Loading/);
 
   const loaded = caseReviewReducer(initial, {
     type: 'case/load-finished',
@@ -269,7 +316,7 @@ test('CASE-1 view: loading, error, denied, saving, and reconnecting states are e
     snapshot: { ...snapshot(), error: 'Case not found.' },
   });
   assert.match(
-    caseReviewView(errorState, { dispatch() {} }).textContent,
+    renderShippedState(errorState).container.textContent,
     /Case not found/
   );
   const deniedState = caseReviewReducer(initial, {
@@ -277,7 +324,7 @@ test('CASE-1 view: loading, error, denied, saving, and reconnecting states are e
     snapshot: { ...snapshot(), accessDenied: true },
   });
   assert.match(
-    caseReviewView(deniedState, { dispatch() {} }).textContent,
+    renderShippedState(deniedState).container.textContent,
     /Access denied/
   );
 
@@ -290,7 +337,7 @@ test('CASE-1 view: loading, error, denied, saving, and reconnecting states are e
       status,
     });
     assert.equal(
-      getByRole(caseReviewView(statusState, { dispatch() {} }), 'status')
+      getByRole(renderShippedState(statusState).container, 'status')
         .textContent,
       label
     );

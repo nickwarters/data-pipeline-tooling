@@ -1,6 +1,6 @@
 // @ts-check
 import { h } from '../../lib/html.js';
-import { CASE_STATUS } from '../../lib/case-statuses.js';
+import { caseDetailFields } from '../../components/sections/cora-case-details.js';
 
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../../sharepoint-client.js').CaseDetailField} CaseDetailField */
@@ -15,28 +15,7 @@ import { CASE_STATUS } from '../../lib/case-statuses.js';
  * @returns {HTMLElement}
  */
 export function caseDetailsView(caseRow, detailFields = []) {
-  const fields = [
-    { key: 'title', label: 'Title', value: caseRow.title },
-    {
-      key: 'assignedReviewer',
-      label: 'Assigned Reviewer',
-      value: caseRow.assignedReviewer,
-    },
-    { key: 'status', label: 'Status', value: caseRow.status },
-    { key: 'dueDate', label: 'Due date', value: caseRow.dueDate },
-    { key: 'relatedDate', label: 'Related date', value: caseRow.relatedDate },
-    { key: 'created', label: 'Created', value: caseRow.created },
-    {
-      key: 'completedAt',
-      label: CASE_STATUS.COMPLETED,
-      value: caseRow.completedAt,
-    },
-    ...detailFields.map((field) => ({
-      key: field.key,
-      label: field.label,
-      value: caseRow.details?.[field.key],
-    })),
-  ];
+  const fields = caseDetailFields(caseRow, detailFields);
 
   return h(
     'section',
@@ -45,15 +24,15 @@ export function caseDetailsView(caseRow, detailFields = []) {
     h(
       'dl',
       { className: 'cora-case-details-list' },
-      ...fields.flatMap((field) => [
-        h('dt', { className: 'cora-case-details-label' }, field.label),
+      ...fields.flatMap(({ field, label, display }) => [
+        h('dt', { className: 'cora-case-details-label' }, label),
         h(
           'dd',
           {
             className: 'cora-case-details-value',
-            'data-field': field.key,
+            'data-field': field,
           },
-          field.value ? field.value : '—'
+          display
         ),
       ])
     )
