@@ -46,7 +46,7 @@ const {
   completeCase,
   hasRemediationActions,
   updateCompletion,
-} = await import('../../src/pages/cora-case-review/completion-controller.js');
+} = await import('../../src/pages/cora-case-review/completion-actions.js');
 const { bindRemediationTracking, updateRemediationTracking } =
   await import('../../src/pages/cora-case-review/remediation-tracking-controller.js');
 

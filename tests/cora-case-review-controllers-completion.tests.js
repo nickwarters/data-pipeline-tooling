@@ -10,6 +10,10 @@ import {
   makeCompletionContext,
   updateCompletion,
 } from './helpers/cora-case-review-controllers.js';
+import {
+  completionControl,
+  completionPatch,
+} from '../src/pages/cora-case-review/completion-actions.js';
 
 isolateBrowserGlobals();
 
@@ -68,7 +72,7 @@ test('bindCompletion: disables during submit, uses transition patch, and re-enab
   assert.equal(completeButton.disabled, false);
 });
 
-test('bindCompletion: falls back to default completion patch when no transition exists', () => {
+test('bindCompletion: does not submit when CaseMachine exposes no transition', () => {
   const { context, completeButton, completeCalls } = makeCompletionContext({
     transitionToCompleted: null,
   });
@@ -76,9 +80,7 @@ test('bindCompletion: falls back to default completion patch when no transition 
   bindCompletion(/** @type {any} */ (context));
   completeButton._listeners.click[0]({ target: completeButton });
 
-  assert.equal(completeCalls.length, 1);
-  assert.equal(completeCalls[0].patchFields.status, 'Completed');
-  assert.equal(typeof completeCalls[0].patchFields.completedAt, 'string');
+  assert.equal(completeCalls.length, 0);
 });
 
 test('hasRemediationActions: true iff an Answer carries ≥1 Remediation Action', () => {
@@ -140,7 +142,7 @@ test('bindCompletion: no-actions path uses transitionToCompleted', () => {
   assert.equal(completeCalls[0].patchFields, patchFromTransition);
 });
 
-test('bindCompletion: actions path falls back to default patch when the transition is absent', () => {
+test('bindCompletion: actions path does not submit when its transition is absent', () => {
   const { context, completeButton, completeCalls } = makeCompletionContext({
     answers: ACTIONS_ANSWERS,
     transitionToActionsInProgress: null,
@@ -149,9 +151,7 @@ test('bindCompletion: actions path falls back to default patch when the transiti
   bindCompletion(/** @type {any} */ (context));
   completeButton._listeners.click[0]({ target: completeButton });
 
-  assert.equal(completeCalls.length, 1);
-  assert.equal(completeCalls[0].patchFields.status, 'Completed');
-  assert.equal(typeof completeCalls[0].patchFields.completedAt, 'string');
+  assert.equal(completeCalls.length, 0);
 });
 
 test('updateCompletion: hidden until the Responsible Party is set at the bottom of Issues (ADR-0024)', () => {
@@ -259,4 +259,168 @@ test('completeCase: does not patch when required collaborators or flush success 
   });
 
   assert.equal(patchCount, 0);
+});
+
+test('completionControl: lifecycle capability, answer state, and Responsible Party all gate visibility', () => {
+  const caseRow = /** @type {any} */ ({ responsibleParty: 'owner' });
+  const base = {
+    machine: /** @type {any} */ ({
+      canComplete: true,
+      canCompleteRemediation: false,
+    }),
+    caseRow,
+    answers: {},
+    allAnswered: true,
+  };
+  assert.deepEqual(completionControl(base), {
+    visible: true,
+    label: 'Complete Case',
+  });
+  assert.equal(
+    completionControl({ ...base, allAnswered: false }).visible,
+    false
+  );
+  assert.equal(
+    completionControl({
+      ...base,
+      caseRow: /** @type {any} */ ({ responsibleParty: null }),
+    }).visible,
+    false
+  );
+  assert.equal(completionControl({ ...base, machine: null }).visible, false);
+  assert.deepEqual(
+    completionControl({
+      ...base,
+      allAnswered: false,
+      answers: ACTIONS_ANSWERS,
+      machine: /** @type {any} */ ({
+        canComplete: false,
+        canCompleteRemediation: true,
+      }),
+    }),
+    { visible: true, label: 'Complete Case' }
+  );
+});
+
+test('completionPatch: invalid state has no fallback lifecycle mutation', () => {
+  const transition = () => ({ status: 'Completed' });
+  const base = {
+    machine: /** @type {any} */ ({
+      canComplete: true,
+      canCompleteRemediation: false,
+      transitionToCompleted: transition,
+    }),
+    caseRow: /** @type {any} */ ({ responsibleParty: 'owner' }),
+    answers: {},
+    allAnswered: true,
+    computeOutcome: () => ({ outcome: 'pass' }),
+    exportHash: 'bank-hash',
+  };
+
+  assert.equal(completionPatch({ ...base, machine: null }), null);
+  assert.equal(completionPatch({ ...base, allAnswered: false }), null);
+  assert.equal(
+    completionPatch({
+      ...base,
+      caseRow: /** @type {any} */ ({ responsibleParty: null }),
+    }),
+    null
+  );
+  assert.equal(
+    completionPatch({
+      ...base,
+      machine: /** @type {any} */ ({
+        ...base.machine,
+        canComplete: false,
+      }),
+    }),
+    null
+  );
+  assert.equal(
+    completionPatch({
+      ...base,
+      machine: /** @type {any} */ ({
+        canComplete: true,
+        canCompleteRemediation: false,
+      }),
+    }),
+    null
+  );
+});
+
+test('completionPatch: passes the evaluator, answers, and bank hash to the CaseMachine transition', () => {
+  const answers = { q1: { value: 'Yes' } };
+  const computeOutcome = () => ({ outcome: 'pass' });
+  /** @type {any[]} */
+  const calls = [];
+  const machine = /** @type {any} */ ({
+    canComplete: true,
+    canCompleteRemediation: false,
+    transitionToCompleted(/** @type {any[]} */ ...args) {
+      calls.push({ self: this, args });
+      return { status: 'Completed', questionBankVersion: args[2] };
+    },
+  });
+
+  const patch = completionPatch({
+    machine,
+    caseRow: /** @type {any} */ ({ responsibleParty: 'owner' }),
+    answers,
+    allAnswered: true,
+    computeOutcome,
+    exportHash: 'bank-hash',
+  });
+
+  assert.deepEqual(patch, {
+    status: 'Completed',
+    questionBankVersion: 'bank-hash',
+  });
+  assert.equal(calls[0].self, machine);
+  assert.deepEqual(calls[0].args, [computeOutcome, answers, 'bank-hash']);
+});
+
+test('completionPatch: final close is impossible without the CaseMachine transition', () => {
+  const base = {
+    machine: /** @type {any} */ ({ canCompleteRemediation: true }),
+    caseRow: /** @type {any} */ ({ responsibleParty: 'owner' }),
+    answers: {},
+    allAnswered: false,
+    computeOutcome: () => ({ outcome: 'pass' }),
+    exportHash: null,
+  };
+  assert.equal(completionPatch(base), null);
+  assert.deepEqual(
+    completionPatch({
+      ...base,
+      machine: /** @type {any} */ ({
+        canCompleteRemediation: true,
+        transitionToFinalComplete: () => ({ status: 'Completed' }),
+      }),
+    }),
+    { status: 'Completed' }
+  );
+});
+
+test('completion compatibility adapters are inert without their required public state', () => {
+  const base = makeCompletionContext();
+  base.context.nodes.completeButton = /** @type {any} */ (null);
+  assert.doesNotThrow(() => bindCompletion(/** @type {any} */ (base.context)));
+  assert.doesNotThrow(() =>
+    updateCompletion(/** @type {any} */ (base.context))
+  );
+
+  const missingRow = makeCompletionContext();
+  missingRow.context.viewModel.caseRow = /** @type {any} */ (null);
+  assert.doesNotThrow(() =>
+    bindCompletion(/** @type {any} */ (missingRow.context))
+  );
+  assert.doesNotThrow(() =>
+    updateCompletion(/** @type {any} */ (missingRow.context))
+  );
+
+  const missingConfig = makeCompletionContext();
+  missingConfig.context.viewModel.config = /** @type {any} */ (null);
+  assert.doesNotThrow(() =>
+    bindCompletion(/** @type {any} */ (missingConfig.context))
+  );
 });

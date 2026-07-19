@@ -1,54 +1,12 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  installDom,
-  StubEl,
-  useElementClass,
-  findByClass,
-  findAllByClass,
-} from './_dom-stub.js';
+import { findAllByClass, findByClass, installDom } from './_dom-stub.js';
 
 installDom();
 
-// Records the most recent update() call so tests can observe what Summary
-// forwarded to the Outcome block.
-class RecordingEl extends StubEl {
-  constructor(tag = '') {
-    super(tag);
-    /** @type {any} */
-    this._updateArgs = null;
-  }
-  // Some `update()` callers (e.g. cora-outcome) now pass a single props
-  // object; others (still-unmigrated components like cora-capture-groups)
-  // still pass positional args. Record either shape faithfully: a lone
-  // object arg is stored as-is (so `.computeOutcome` etc. read naturally),
-  // multiple/positional args fall back to the old `.a1`/`.a2`/`.a3` shape.
-  update(/** @type {any[]} */ ...args) {
-    this._updateArgs =
-      args.length === 1 && args[0] !== null && typeof args[0] === 'object'
-        ? args[0]
-        : { a1: args[0], a2: args[1], a3: args[2] };
-  }
-}
-
-useElementClass(RecordingEl);
-
-// DOM stubs must be in place before any src import.
-
-/**
- * Flattens a subtree's text into one string for content assertions.
- * @param {any} el
- * @returns {string}
- */
-function allText(el) {
-  let out = el.textContent ? el.textContent + ' ' : '';
-  for (const c of el._children ?? []) out += allText(c);
-  return out;
-}
-
-const { CORASummary, Summary } =
-  await import('../src/components/sections/cora-summary.js');
+const { summaryView } =
+  await import('../src/pages/cora-case-review/summary-view.js');
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 
@@ -57,658 +15,327 @@ function makeCase(overrides = {}) {
   return {
     id: 'c1',
     caseType: 'example-review',
-    title: 'T',
+    title: 'Case one',
     status: 'In-progress',
-    assignedReviewer: 'u1',
-    responsibleParty: 'u2',
+    assignedReviewer: 'reviewer@example.com',
+    responsibleParty: 'owner@example.com',
     answers: {},
     conversation: [],
-    notes: '',
+    notes: 'Reviewer note',
     completedAt: null,
     etag: 'e1',
     ...overrides,
   };
 }
 
-/** @param {Record<string, import('../src/sharepoint-client.js').Answer>} answers */
-function makeComputeOutcome(answers) {
-  const hasNo = Object.values(answers).some((a) => a.value === 'No');
-  return { outcome: /** @type {'pass' | 'fail'} */ (hasNo ? 'fail' : 'pass') };
-}
-
-test('CORASummary: renders a Summary heading as its first child', () => {
-  const el = new CORASummary();
-  el.connectedCallback();
-  const heading = /** @type {any} */ (el)._children[0];
-  assert.equal(heading.textContent, 'Summary');
-});
-
-test('Summary: plain function renders heading and outcome block', () => {
-  const nodes = Summary({
-    computeOutcome: null,
-    answers: {},
-    allAnswered: false,
-    caseRow: null,
-    catalogue: [],
-    summarySections: [],
-    captureGroups: [],
-    detailFields: [],
-    outcomeOptions: [],
-  });
-
-  assert.equal(/** @type {any} */ (nodes[0]).textContent, 'Summary');
-  assert.equal(/** @type {any} */ (nodes[1])._updateArgs.allAnswered, false);
-});
-
-test('CORASummary: renders an Outcome block (cora-outcome) as the first content block', () => {
-  const el = new CORASummary();
-  el.connectedCallback();
-  const block = /** @type {any} */ (el)._children[1];
-  assert.ok(block, 'an outcome block is rendered inside Summary');
-});
-
-test('CORASummary: forwards live computeOutcome/answers/allAnswered to the Outcome block while In-progress', () => {
-  const el = new CORASummary();
-  el.caseRow = makeCase({ status: 'In-progress' });
-  el.connectedCallback();
-
-  const answers = { 'q-welcome': { value: 'No' } };
-  const compute = (/** @type {any} */ a) => makeComputeOutcome(a);
-  el.update({ computeOutcome: compute, answers, allAnswered: true });
-
-  const block = /** @type {any} */ (el)._children[1];
-  assert.equal(
-    block._updateArgs.computeOutcome,
-    compute,
-    'the live outcome function is passed through unchanged'
-  );
-  assert.equal(
-    block._updateArgs.answers,
-    answers,
-    'the current Answers are passed through'
-  );
-  assert.equal(
-    block._updateArgs.allAnswered,
-    true,
-    'allAnswered is passed through'
-  );
-});
-
-test('CORASummary: update() renders immediately even when the element was never connected', () => {
-  const el = new CORASummary();
-  el.caseRow = makeCase({ status: 'In-progress' });
-
-  const answers = { 'q-welcome': { value: 'Yes' } };
-  el.update({
-    computeOutcome: (/** @type {any} */ a) => makeComputeOutcome(a),
-    answers,
-    allAnswered: true,
-  });
-
-  const heading = /** @type {any} */ (el)._children[0];
-  assert.equal(heading.textContent, 'Summary');
-  const block = /** @type {any} */ (el)._children[1];
-  assert.equal(block._updateArgs.answers, answers);
-});
-
-test('CORASummary: reads the frozen outcomeAtCompletion snapshot once the Case is Completed', () => {
-  const el = new CORASummary();
-  el.caseRow = makeCase({ status: 'Completed', outcomeAtCompletion: 'fail' });
-  el.connectedCallback();
-
-  // Even with live Answers that would compute "pass", a Completed Case shows the
-  // frozen outcome (ADR-0012).
-  el.update({
-    computeOutcome: (/** @type {any} */ a) => makeComputeOutcome(a),
-    answers: {},
-    allAnswered: true,
-  });
-
-  const block = /** @type {any} */ (el)._children[1];
-  assert.equal(
-    block._updateArgs.allAnswered,
-    true,
-    'frozen outcome is treated as answered'
-  );
-  assert.equal(
-    block._updateArgs.computeOutcome().outcome,
-    'fail',
-    'the frozen outcome is rendered, not a recomputation'
-  );
-});
-
-test('CORASummary: the Outcome block shows the Current Outcome (amended) over the frozen snapshot (ADR-0026)', () => {
-  const el = new CORASummary();
-  el.caseRow = makeCase({
-    status: 'Completed',
-    outcomeAtCompletion: 'fail',
-    amendedOutcome: {
-      outcome: 'pass',
-      justification: 'Reviewer misread the call',
-      amendedBy: 'controls-1',
-      amendedAt: '2026-06-12T00:00:00Z',
-    },
-  });
-  el.connectedCallback();
-  el.update({
-    computeOutcome: (/** @type {any} */ a) => makeComputeOutcome(a),
-    answers: {},
-    allAnswered: true,
-  });
-
-  const block = /** @type {any} */ (el)._children[1];
-  assert.equal(
-    block._updateArgs.computeOutcome().outcome,
-    'pass',
-    'the amended Outcome is rendered, not the frozen snapshot'
-  );
-});
-
-test('CORASummary: reads the frozen snapshot from the reportable milestone (Actions In Progress), ADR-0023', () => {
-  const el = new CORASummary();
-  el.caseRow = makeCase({
-    status: 'Actions In Progress',
-    outcomeAtCompletion: 'fail',
-  });
-  el.connectedCallback();
-
-  // The snapshot is stamped at reportable, so an Actions-In-Progress Case shows
-  // the frozen outcome even though it is not yet Completed.
-  el.update({
-    computeOutcome: (/** @type {any} */ a) => makeComputeOutcome(a),
-    answers: {},
-    allAnswered: true,
-  });
-
-  const block = /** @type {any} */ (el)._children[1];
-  assert.equal(
-    block._updateArgs.allAnswered,
-    true,
-    'frozen outcome is treated as answered'
-  );
-  assert.equal(
-    block._updateArgs.computeOutcome().outcome,
-    'fail',
-    'the frozen outcome is rendered from the reportable snapshot'
-  );
-});
-
-test('CORASummary: falls back to live derivation when a Completed Case has no frozen snapshot', () => {
-  const el = new CORASummary();
-  el.caseRow = makeCase({ status: 'Completed' });
-  el.connectedCallback();
-
-  const answers = { 'q-welcome': { value: 'No' } };
-  const compute = (/** @type {any} */ a) => makeComputeOutcome(a);
-  el.update({ computeOutcome: compute, answers, allAnswered: true });
-
-  const block = /** @type {any} */ (el)._children[1];
-  assert.equal(
-    block._updateArgs.computeOutcome,
-    compute,
-    'live function used when there is no snapshot to read'
-  );
-});
-
-test('CORASummary: renders an indeterminate Outcome block before update() is called', () => {
-  const el = new CORASummary();
-  el.connectedCallback();
-  const block = /** @type {any} */ (el)._children[1];
-  assert.equal(
-    block._updateArgs.allAnswered,
-    false,
-    'allAnswered is false until update supplies state'
-  );
-  // The placeholder outcome function resolves to a pass outcome, but allAnswered
-  // is false so the Outcome block renders its indeterminate state regardless.
-  assert.equal(block._updateArgs.computeOutcome().outcome, 'pass');
-});
-
-test('CORASummary: renders a Key dates block (Created, Completed) from the Case row', () => {
-  const el = new CORASummary();
-  el.caseRow = makeCase({ created: '2026-04-01', completedAt: '2026-06-05' });
-  el.connectedCallback();
-  const block = findByClass(/** @type {any} */ (el), 'cora-summary-key-dates');
-  assert.ok(block, 'a key-dates block is rendered');
-  const text = allText(block);
-  assert.ok(text.includes('2026-04-01'), 'shows Created');
-  assert.ok(text.includes('2026-06-05'), 'shows Completed');
-});
-
-test('CORASummary: Key dates fall back to an em dash when timestamps are absent', () => {
-  const el = new CORASummary();
-  el.caseRow = makeCase({ completedAt: null });
-  el.connectedCallback();
-  const block = findByClass(/** @type {any} */ (el), 'cora-summary-key-dates');
-  assert.ok(allText(block).includes('—'));
-});
-
-test('CORASummary: omits the Key dates block when there is no Case row', () => {
-  const el = new CORASummary();
-  el.connectedCallback();
-  assert.equal(
-    findByClass(/** @type {any} */ (el), 'cora-summary-key-dates'),
-    null
-  );
-});
-
-test('CORASummary: renders a Case Details block only when details is in summarySections', () => {
-  const el = new CORASummary();
-  el.caseRow = makeCase({ title: 'Rollup case', assignedReviewer: 'jane' });
-  el.summarySections = ['details'];
-  el.connectedCallback();
-  const block = findByClass(/** @type {any} */ (el), 'cora-summary-details');
-  assert.ok(block, 'details block rendered when opted in');
-  const text = allText(block);
-  assert.ok(text.includes('Rollup case'), 'shows the case title');
-  assert.ok(text.includes('jane'), 'shows the assigned reviewer');
-});
-
-test('CORASummary: Case Details block includes the Case Type configured detail fields', () => {
-  const el = new CORASummary();
-  el.caseRow = makeCase({
-    title: 'Rollup case',
-    details: { customerName: 'Jordan Lee' },
-  });
-  el.summarySections = ['details'];
-  el.detailFields = [{ key: 'customerName', label: 'Customer name' }];
-  el.connectedCallback();
-  const block = findByClass(/** @type {any} */ (el), 'cora-summary-details');
-  const text = allText(block);
-  assert.ok(text.includes('Customer name'), 'shows the configured label');
-  assert.ok(text.includes('Jordan Lee'), 'shows the configured value');
-});
-
-test('CORASummary: omits the Case Details block when details is not in summarySections', () => {
-  const el = new CORASummary();
-  el.caseRow = makeCase();
-  el.summarySections = [];
-  el.connectedCallback();
-  assert.equal(
-    findByClass(/** @type {any} */ (el), 'cora-summary-details'),
-    null
-  );
-});
-
-const COUNT_CATALOGUE = [
-  {
-    id: 'q-open',
-    text: 'Greeted?',
-    questionGroup: 'Opening',
-    responseType: 'yes-no-na',
-    failureValues: ['No'],
-    deprecated: false,
-  },
-  {
-    id: 'q-needs',
-    text: 'Needs found?',
-    questionGroup: 'Discovery',
-    responseType: 'yes-no-na',
-    failureValues: ['No'],
-    remediationActions: ['Retrain.'],
-    deprecated: false,
-  },
-];
-
-test('CORASummary: renders a per-Question-Group pass/fail counts block when questions is opted in', () => {
-  const el = new CORASummary();
-  el.caseRow = makeCase();
-  el.catalogue = /** @type {any} */ (COUNT_CATALOGUE);
-  el.summarySections = ['questions'];
-  el.connectedCallback();
-  el.update({
-    computeOutcome: (/** @type {any} */ a) => makeComputeOutcome(a),
-    answers: { 'q-open': { value: 'No' }, 'q-needs': { value: 'Yes' } },
-    allAnswered: true,
-  });
-
-  const block = findByClass(/** @type {any} */ (el), 'cora-summary-counts');
-  assert.ok(block, 'counts block rendered');
-  const text = allText(block);
-  assert.ok(
-    /Opening/.test(text) && /Discovery/.test(text),
-    'both categories listed'
-  );
-  assert.ok(/1\s*fail|fail.*1/i.test(text), 'a failed count is shown');
-  assert.ok(/1\s*pass|pass.*1/i.test(text), 'a passed count is shown');
-});
-
-test('CORASummary: omits the counts block when questions is not opted in', () => {
-  const el = new CORASummary();
-  el.caseRow = makeCase();
-  el.catalogue = /** @type {any} */ (COUNT_CATALOGUE);
-  el.summarySections = [];
-  el.connectedCallback();
-  assert.equal(
-    findByClass(/** @type {any} */ (el), 'cora-summary-counts'),
-    null
-  );
-});
-
-test('CORASummary: renders a remediation block with the action count and each failed Answer + its actions', () => {
-  const el = new CORASummary();
-  el.caseRow = makeCase();
-  el.catalogue = /** @type {any} */ (COUNT_CATALOGUE);
-  el.summarySections = ['issues'];
-  el.connectedCallback();
-  el.update({
-    computeOutcome: (/** @type {any} */ a) => makeComputeOutcome(a),
-    answers: {
-      'q-open': { value: 'No' },
-      // q-needs fails and the Reviewer selected its 'Retrain.' action (issue #250);
-      // only selected actions surface in the Summary.
-      'q-needs': {
-        value: 'No',
-        remediationActions: [
-          { id: 'q-needs-ra-0', text: 'Retrain.', completed: false },
-        ],
-      },
-    },
-    allAnswered: true,
-  });
-
-  const block = findByClass(
-    /** @type {any} */ (el),
-    'cora-summary-remediation'
-  );
-  assert.ok(block, 'remediation block rendered');
-  const text = allText(block);
-  assert.ok(
-    /Remediation Actions?:?\s*1/i.test(text),
-    'shows the selected remediation action count (1)'
-  );
-  assert.ok(
-    text.includes('Greeted?') && text.includes('Needs found?'),
-    'lists both failed questions'
-  );
-  assert.ok(
-    text.includes('Retrain.'),
-    'lists the failed Answer’s selected action'
-  );
-});
-
-/** @type {any} */
-const SUMMARY_CAPTURE_GROUPS = [
-  {
-    key: 'cause',
-    label: 'Cause',
-    collapsed: false,
-    fields: [{ key: 'rootCause', label: 'Root cause', type: 'text' }],
-  },
-];
-
-test('CORASummary: renders read-only capture groups for a failed Answer that has captured values', () => {
-  const el = new CORASummary();
-  el.caseRow = makeCase();
-  el.catalogue = /** @type {any} */ (COUNT_CATALOGUE);
-  el.captureGroups = SUMMARY_CAPTURE_GROUPS;
-  el.summarySections = ['issues'];
-  el.connectedCallback();
-  el.update({
-    computeOutcome: (/** @type {any} */ a) => makeComputeOutcome(a),
-    answers: {
-      'q-open': { value: 'No', capture: { rootCause: 'Rushed' } },
-      'q-needs': { value: 'No' },
-    },
-    allAnswered: true,
-  });
-
-  const caps = findAllByClass(/** @type {any} */ (el), 'cora-summary-capture');
-  assert.equal(
-    caps.length,
-    1,
-    'only the failed Answer with captured values renders a capture block'
-  );
-  assert.equal(
-    caps[0]._updateArgs.a3,
-    false,
-    'capture is rendered read-only in the Summary'
-  );
-  assert.deepEqual(caps[0]._updateArgs.a2, { rootCause: 'Rushed' });
-  assert.equal(caps[0]._updateArgs.a1, SUMMARY_CAPTURE_GROUPS);
-});
-
-test('CORASummary: renders no capture block when the Case Type declares no captureGroups', () => {
-  const el = new CORASummary();
-  el.caseRow = makeCase();
-  el.catalogue = /** @type {any} */ (COUNT_CATALOGUE);
-  el.summarySections = ['issues'];
-  el.connectedCallback();
-  el.update({
-    computeOutcome: (/** @type {any} */ a) => makeComputeOutcome(a),
-    answers: { 'q-open': { value: 'No', capture: { rootCause: 'x' } } },
-    allAnswered: true,
-  });
-  assert.equal(
-    findAllByClass(/** @type {any} */ (el), 'cora-summary-capture').length,
-    0
-  );
-});
-
-test('CORASummary: a failed Answer without a Question Group renders just the question text', () => {
-  const el = new CORASummary();
-  el.caseRow = makeCase();
-  el.catalogue = /** @type {any} */ ([
+const CATALOGUE =
+  /** @type {import('../src/sharepoint-client.js').QuestionDefinition[]} */ ([
     {
-      id: 'q-bare',
-      text: 'No category?',
+      id: 'q-open',
+      text: 'Greeted?',
+      questionGroup: 'Opening',
       responseType: 'yes-no-na',
       failureValues: ['No'],
       deprecated: false,
     },
+    {
+      id: 'q-needs',
+      text: 'Needs found?',
+      questionGroup: 'Discovery',
+      responseType: 'yes-no-na',
+      failureValues: ['No'],
+      remediationActions: ['Retrain.'],
+      deprecated: false,
+    },
   ]);
-  el.summarySections = ['issues'];
-  el.connectedCallback();
-  el.update({
-    computeOutcome: (/** @type {any} */ a) => makeComputeOutcome(a),
-    answers: { 'q-bare': { value: 'No' } },
-    allAnswered: true,
-  });
 
-  const block = findByClass(
-    /** @type {any} */ (el),
-    'cora-summary-remediation'
-  );
-  assert.ok(allText(block).includes('No category?'));
-});
-
-test('CORASummary: remediation block reports no failures when there are none', () => {
-  const el = new CORASummary();
-  el.caseRow = makeCase();
-  el.catalogue = /** @type {any} */ (COUNT_CATALOGUE);
-  el.summarySections = ['issues'];
-  el.connectedCallback();
-  el.update({
-    computeOutcome: (/** @type {any} */ a) => makeComputeOutcome(a),
-    answers: { 'q-open': { value: 'Yes' }, 'q-needs': { value: 'Yes' } },
-    allAnswered: true,
-  });
-
-  const block = findByClass(
-    /** @type {any} */ (el),
-    'cora-summary-remediation'
-  );
-  assert.ok(block, 'remediation block still rendered when opted in');
-  assert.ok(
-    /no failures/i.test(allText(block)),
-    'states there are no failures'
-  );
-});
-
-test('CORASummary: omits the remediation block when remediation is not opted in', () => {
-  const el = new CORASummary();
-  el.caseRow = makeCase();
-  el.catalogue = /** @type {any} */ (COUNT_CATALOGUE);
-  el.summarySections = [];
-  el.connectedCallback();
-  assert.equal(
-    findByClass(/** @type {any} */ (el), 'cora-summary-remediation'),
-    null
-  );
-});
-
-/** @type {any} */
-const ACTIONS_GROUPS = [
-  {
-    key: 'g',
-    label: 'G',
-    fields: [{ key: 'acts', label: 'Actions', type: 'actions' }],
-  },
+const OPTIONS = [
+  { id: 'pass', wording: 'Pass', severity: 0 },
+  { id: 'fail', wording: 'Fail', severity: 100 },
 ];
 
-test('CORASummary: remediation tracking block shows the due date and each sent action status/reason (ADR-0024)', () => {
-  const el = new CORASummary();
-  el.caseRow = makeCase({ remediationDueDate: '2026-07-16' });
-  el.catalogue = /** @type {any} */ (COUNT_CATALOGUE);
-  el.captureGroups = ACTIONS_GROUPS;
-  el.summarySections = ['remediation'];
-  el.connectedCallback();
-  el.update({
-    computeOutcome: (/** @type {any} */ a) => makeComputeOutcome(a),
-    answers: {
-      'q-open': {
-        value: 'No',
-        capture: {
-          acts: [
-            { id: 'a1', text: 'Re-issue letter', status: 'complete' },
-            {
-              id: 'a2',
-              text: 'Refund fee',
-              status: 'cancelled',
-              cancelReason: 'Already refunded',
-            },
+/** @param {Partial<Parameters<typeof summaryView>[0]>} [overrides] */
+function render(overrides = {}) {
+  return summaryView({
+    computeOutcome: () => ({ outcome: 'pass' }),
+    answers: {},
+    allAnswered: true,
+    caseRow: makeCase(),
+    catalogue: CATALOGUE,
+    summarySections: [],
+    captureGroups: [],
+    detailFields: [],
+    outcomeOptions: OPTIONS,
+    ...overrides,
+  });
+}
+
+/** @param {Node[]} nodes */
+function rootOf(nodes) {
+  const root = document.createElement('div');
+  root.append(...nodes);
+  return root;
+}
+
+test('summaryView renders live outcome and key dates', () => {
+  const nodes = render({
+    computeOutcome: () => ({ outcome: 'fail' }),
+    caseRow: makeCase({ created: '2026-04-01', completedAt: null }),
+  });
+  const root = rootOf(nodes);
+
+  assert.equal(nodes[0].textContent, 'Summary');
+  assert.match(root.textContent, /Fail/);
+  assert.match(root.textContent, /Created2026-04-01/);
+  assert.match(root.textContent, /Completed—/);
+});
+
+test('summaryView uses frozen and amended outcomes after the reportable milestone', () => {
+  const frozen = rootOf(
+    render({
+      computeOutcome: () => ({ outcome: 'pass' }),
+      caseRow: makeCase({
+        status: 'Actions In Progress',
+        outcomeAtCompletion: 'fail',
+      }),
+    })
+  );
+  assert.match(frozen.textContent, /Fail/);
+
+  const amended = rootOf(
+    render({
+      caseRow: makeCase({
+        status: 'Completed',
+        outcomeAtCompletion: 'fail',
+        amendedOutcome: {
+          outcome: 'pass',
+          justification: 'Correction',
+          amendedBy: 'controls@example.com',
+          amendedAt: '2026-07-01T00:00:00Z',
+        },
+      }),
+    })
+  );
+  assert.match(amended.textContent, /Pass/);
+});
+
+test('summaryView falls back to live outcome when no snapshot exists', () => {
+  const root = rootOf(
+    render({
+      computeOutcome: () => ({ outcome: 'fail' }),
+      caseRow: makeCase({ status: 'Completed' }),
+    })
+  );
+  assert.match(root.textContent, /Fail/);
+});
+
+test('summaryView follows the configured showInSummary sections and headings', () => {
+  const root = rootOf(
+    render({
+      caseRow: makeCase({
+        title: 'Roll-up case',
+        details: { customerName: 'Jordan Lee' },
+      }),
+      detailFields: [{ key: 'customerName', label: 'Customer name' }],
+      summarySections: ['details', 'questions', 'notes'],
+      answers: {
+        'q-open': { value: 'No' },
+        'q-needs': { value: 'Yes' },
+      },
+      sectionHeadings: {
+        details: 'Details',
+        questions: 'Assessment',
+        issues: 'Findings',
+        remediation: 'Fix-up',
+        summary: 'Wrap-up',
+        notes: 'Case Notes',
+        appealRequest: 'Appeal',
+        appealReview: 'Appeal Review',
+        amendOutcome: 'Amend Outcome',
+        conversation: 'Conversation',
+      },
+    })
+  );
+
+  assert.match(root.textContent, /Wrap-up/);
+  assert.match(root.textContent, /Customer nameJordan Lee/);
+  assert.match(root.textContent, /Assessment/);
+  assert.match(root.textContent, /Opening: 0 pass, 1 fail/);
+  assert.match(root.textContent, /Case NotesReviewer note/);
+  assert.equal(findByClass(root, 'cora-summary-remediation'), null);
+});
+
+test('summaryView renders failures, selected remediation and read-only capture', () => {
+  const root = rootOf(
+    render({
+      summarySections: ['issues'],
+      captureGroups: [
+        {
+          key: 'cause',
+          label: 'Cause',
+          fields: [{ key: 'rootCause', label: 'Root cause', type: 'text' }],
+        },
+      ],
+      answers: {
+        'q-open': {
+          value: 'No',
+          capture: { rootCause: 'Rushed' },
+        },
+        'q-needs': {
+          value: 'No',
+          remediationActions: [
+            { id: 'ra-1', text: 'Retrain.', completed: false },
           ],
         },
       },
-    },
-    allAnswered: true,
+    })
+  );
+
+  assert.match(root.textContent, /Remediation Actions: 1/);
+  assert.match(root.textContent, /Opening: Greeted?/);
+  assert.match(root.textContent, /Answer: No/);
+  assert.match(root.textContent, /Retrain\./);
+  assert.equal(findAllByClass(root, 'cora-summary-capture').length, 1);
+});
+
+test('summaryView reports empty failures without adding capture UI', () => {
+  const root = rootOf(
+    render({
+      summarySections: ['issues'],
+      answers: { 'q-open': { value: 'Yes' } },
+    })
+  );
+  assert.match(root.textContent, /No failures\./);
+  assert.equal(findAllByClass(root, 'cora-summary-capture').length, 0);
+});
+
+test('summaryView renders an ungrouped failure without invented actions or capture', () => {
+  const root = rootOf(
+    render({
+      catalogue: /** @type {any} */ ([
+        {
+          id: 'q-bare',
+          text: 'Ungrouped question',
+          responseType: 'yes-no-na',
+          failureValues: ['No'],
+          deprecated: false,
+        },
+      ]),
+      summarySections: ['issues'],
+      captureGroups: [
+        {
+          key: 'cause',
+          label: 'Cause',
+          fields: [{ key: 'rootCause', label: 'Root cause', type: 'text' }],
+        },
+      ],
+      answers: { 'q-bare': { value: 'No', capture: {} } },
+    })
+  );
+  assert.match(root.textContent, /Ungrouped question/);
+  assert.doesNotMatch(root.textContent, /General: Ungrouped question/);
+  assert.equal(findAllByClass(root, 'cora-summary-capture').length, 0);
+});
+
+test('summaryView renders sent remediation status, cancellation reason, and due date', () => {
+  const root = rootOf(
+    render({
+      caseRow: makeCase({ remediationDueDate: '2026-07-16' }),
+      summarySections: ['remediation'],
+      captureGroups: [
+        {
+          key: 'actions',
+          label: 'Actions',
+          fields: [{ key: 'sent', label: 'Sent', type: 'actions' }],
+        },
+      ],
+      answers: {
+        'q-open': {
+          value: 'No',
+          capture: {
+            sent: [
+              { id: 'a1', text: 'Re-issue letter', status: 'complete' },
+              {
+                id: 'a2',
+                text: 'Refund fee',
+                status: 'cancelled',
+                cancelReason: 'Already refunded',
+              },
+            ],
+          },
+        },
+      },
+    })
+  );
+
+  assert.match(root.textContent, /Remediation due: 2026-07-16/);
+  assert.match(root.textContent, /Re-issue letter — complete/);
+  assert.match(root.textContent, /Refund fee — cancelled \(Already refunded\)/);
+});
+
+test('summaryView renders the empty remediation tracking state', () => {
+  const root = rootOf(
+    render({
+      summarySections: ['remediation'],
+      answers: { 'q-open': { value: 'No' } },
+    })
+  );
+  assert.match(root.textContent, /Remediation due: —/);
+  assert.match(root.textContent, /No remediation actions sent\./);
+});
+
+test('summaryView renders an ungrouped sent action and omits an empty cancellation reason', () => {
+  const root = rootOf(
+    render({
+      catalogue: /** @type {any} */ ([
+        {
+          id: 'q-bare',
+          text: 'Ungrouped tracking',
+          responseType: 'yes-no-na',
+          failureValues: ['No'],
+          deprecated: false,
+        },
+      ]),
+      summarySections: ['remediation'],
+      captureGroups: [
+        {
+          key: 'actions',
+          label: 'Actions',
+          fields: [{ key: 'sent', label: 'Sent', type: 'actions' }],
+        },
+      ],
+      answers: {
+        'q-bare': {
+          value: 'No',
+          capture: {
+            sent: [
+              {
+                id: 'a1',
+                text: 'Close loop',
+                status: 'cancelled',
+                cancelReason: '',
+              },
+            ],
+          },
+        },
+      },
+    })
+  );
+  assert.match(root.textContent, /Ungrouped tracking/);
+  assert.match(root.textContent, /Close loop — cancelled/);
+  assert.doesNotMatch(root.textContent, /cancelled \(/);
+});
+
+test('summaryView ignores sections without a summary block and works without a row', () => {
+  const withUnknownSection = render({
+    summarySections: /** @type {any} */ (['conversation']),
   });
+  assert.equal(withUnknownSection.length, 4);
 
-  const block = findByClass(
-    /** @type {any} */ (el),
-    'cora-summary-remediation-tracking'
-  );
-  assert.ok(block, 'remediation tracking block rendered');
-  const text = allText(block);
-  assert.ok(/Remediation due:\s*2026-07-16/.test(text), 'shows the due date');
-  assert.ok(text.includes('Re-issue letter') && text.includes('complete'));
-  assert.ok(
-    text.includes('Refund fee') &&
-      text.includes('cancelled') &&
-      text.includes('Already refunded'),
-    'shows a cancelled action with its reason'
-  );
-});
-
-test('CORASummary: remediation tracking block states none sent and an em-dash due date when there are no actions', () => {
-  const el = new CORASummary();
-  el.caseRow = makeCase();
-  el.catalogue = /** @type {any} */ (COUNT_CATALOGUE);
-  el.captureGroups = ACTIONS_GROUPS;
-  el.summarySections = ['remediation'];
-  el.connectedCallback();
-  el.update({
-    computeOutcome: (/** @type {any} */ a) => makeComputeOutcome(a),
-    answers: { 'q-open': { value: 'No' } },
-    allAnswered: true,
+  const withoutRow = render({
+    caseRow: null,
+    summarySections: /** @type {any} */ (['conversation']),
   });
-
-  const block = findByClass(
-    /** @type {any} */ (el),
-    'cora-summary-remediation-tracking'
-  );
-  assert.ok(block, 'tracking block rendered');
-  const text = allText(block);
-  assert.ok(/Remediation due:\s*—/.test(text), 'no due date shows an em-dash');
-  assert.ok(/no remediation actions sent/i.test(text));
-});
-
-test('CORASummary: renders a notes block with the Case notes only when notes is opted in', () => {
-  const el = new CORASummary();
-  el.caseRow = makeCase({ notes: 'Reviewer notes here.' });
-  el.summarySections = ['notes'];
-  el.connectedCallback();
-  const block = findByClass(/** @type {any} */ (el), 'cora-summary-notes');
-  assert.ok(block, 'notes block rendered when opted in');
-  assert.ok(allText(block).includes('Reviewer notes here.'));
-});
-
-test('CORASummary: a Section with no Summary block (e.g. conversation) contributes nothing', () => {
-  const el = new CORASummary();
-  el.caseRow = makeCase();
-  el.summarySections = /** @type {any} */ (['conversation']);
-  el.connectedCallback();
-  // Only heading, outcome, and key dates — no extra block for conversation.
-  assert.equal(/** @type {any} */ (el)._children.length, 3);
-});
-
-test('CORASummary: notes block is omitted by default (notes absent from summarySections)', () => {
-  const el = new CORASummary();
-  el.caseRow = makeCase({ notes: 'Reviewer notes here.' });
-  el.summarySections = ['details', 'questions', 'remediation'];
-  el.connectedCallback();
-  assert.equal(
-    findByClass(/** @type {any} */ (el), 'cora-summary-notes'),
-    null
-  );
-});
-
-// --- Case Type sectionLabels heading overrides (MAINT-11) ---
-
-test('CORASummary: sectionHeadings prop overrides the Summary h2 and block h3s', () => {
-  const el = new CORASummary();
-  el.caseRow = makeCase({ notes: 'note text' });
-  el.catalogue = [];
-  el.summarySections = /** @type {any} */ ([
-    'questions',
-    'issues',
-    'remediation',
-    'notes',
-  ]);
-  el.sectionHeadings = {
-    details: 'Details',
-    questions: 'Assessment',
-    issues: 'Findings',
-    remediation: 'Fix-up',
-    summary: 'Wrap-up',
-    notes: 'Case Notes',
-    appealRequest: 'Appeal',
-    appealReview: 'Appeal Review',
-    amendOutcome: 'Amend Outcome',
-    conversation: 'Conversation',
-  };
-  el.connectedCallback();
-
-  assert.equal(/** @type {any} */ (el)._children[0].textContent, 'Wrap-up');
-  const text = allText(el);
-  assert.match(text, /Assessment/);
-  assert.match(text, /Findings/);
-  assert.match(text, /Fix-up/);
-  assert.match(text, /Case Notes/);
-});
-
-test('Summary: default headings are unchanged when no sectionHeadings passed', () => {
-  const nodes = Summary({
-    computeOutcome: null,
-    answers: {},
-    allAnswered: false,
-    caseRow: makeCase({ notes: 'n' }),
-    catalogue: [],
-    summarySections: /** @type {any} */ ([
-      'questions',
-      'issues',
-      'remediation',
-      'notes',
-    ]),
-    captureGroups: [],
-    detailFields: [],
-    outcomeOptions: [],
-  });
-
-  assert.equal(/** @type {any} */ (nodes[0]).textContent, 'Summary');
-  const text = nodes.map((n) => allText(n)).join(' ');
-  assert.match(text, /Questions/);
-  assert.match(text, /Issues/);
-  assert.match(text, /Remediation/);
-  assert.match(text, /Notes/);
+  assert.equal(withoutRow.length, 3);
+  assert.equal(findByClass(rootOf(withoutRow), 'cora-summary-key-dates'), null);
 });

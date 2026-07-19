@@ -20,6 +20,14 @@ import {
   refreshConversation,
 } from './cora-case-review/conversation-view.js';
 import { notesView } from './cora-case-review/notes-view.js';
+import { summaryView } from './cora-case-review/summary-view.js';
+import {
+  bindCompletion,
+  completeCase,
+  completionControl,
+  completionPatch,
+  updateCompletion,
+} from './cora-case-review/completion-actions.js';
 import { updateCaseReviewHeader } from './cora-case-review/header-controller.js';
 import {
   bindQuestionPanel,
@@ -42,11 +50,6 @@ import { updateSummaryNotesAppeal } from './cora-case-review/summary-notes-appea
 import { updateAmendOutcome } from './cora-case-review/amend-outcome-controller.js';
 import { updateAppealReview } from './cora-case-review/appeal-review-controller.js';
 import { createConversationPanelBinding } from './cora-case-review/conversation-controller.js';
-import {
-  bindCompletion,
-  completeCase,
-  updateCompletion,
-} from './cora-case-review/completion-controller.js';
 
 import '../components/collections/cora-question-list.js';
 import '../components/base/cora-group-progress.js';
@@ -54,7 +57,6 @@ import '../components/sections/cora-remediation-section.js';
 import '../components/sections/cora-remediation-tracking.js';
 import '../components/sections/cora-conversation.js';
 import '../components/sections/cora-notes.js';
-import '../components/sections/cora-summary.js';
 import '../components/sections/cora-appeal.js';
 import '../components/collections/cora-appeal-review.js';
 import '../components/sections/cora-amend-outcome.js';
@@ -79,6 +81,9 @@ import '../components/base/cora-tabs.js';
  * @property {import('../sharepoint-client.js').QuestionDefinition[]} catalogue
  * @property {Record<string, import('../sharepoint-client.js').Answer>} answers
  * @property {import('../sharepoint-client.js').QuestionDefinition[]} applicableQuestions
+ * @property {boolean} allAnswered
+ * @property {import('../services/section-access.js').Section[]} summarySections
+ * @property {string | null} exportHash
  * @property {Record<import('../services/section-access.js').Section, import('../services/section-access.js').Mode>} access
  * @property {Required<import('../sharepoint-client.js').SectionLabels>} sectionLabels
  * @property {Required<import('../sharepoint-client.js').SectionLabels>} sectionHeadings
@@ -95,6 +100,7 @@ import '../components/base/cora-tabs.js';
  *   saveStatus: SaveStatus,
  *   activeQuestionGroup: string,
  *   conversationHidden: boolean,
+ *   completionPending: boolean,
  *   snapshot: CaseReviewSnapshot | null,
  * } }} routes
  */
@@ -114,6 +120,7 @@ export function createInitialCaseReviewState(chrome, panelMode) {
         saveStatus: 'saved',
         activeQuestionGroup: '',
         conversationHidden: true,
+        completionPending: false,
         snapshot: null,
       },
     },
@@ -283,6 +290,15 @@ export function caseReviewReducer(state, action) {
           ...route,
           snapshot: { ...route.snapshot, caseRow },
         },
+      },
+    };
+  }
+  if (action.type === 'case/completion-pending') {
+    if (action.pending === route.completionPending) return state;
+    return {
+      ...state,
+      routes: {
+        caseReview: { ...route, completionPending: action.pending },
       },
     };
   }
@@ -469,6 +485,8 @@ export function createRouteSlice(params, context) {
       return;
     }
     const currentUser = snapshot.currentUser;
+    const caseRow = snapshot.caseRow;
+    const config = snapshot.config;
 
     adapter.update();
     tools.morph(parts.header, [
@@ -578,6 +596,26 @@ export function createRouteSlice(params, context) {
         );
         continue;
       }
+      if (entry.id === 'summary') {
+        tools.morph(
+          panel,
+          visible
+            ? summaryView({
+                computeOutcome: snapshot.config.computeOutcome,
+                answers: snapshot.answers,
+                allAnswered: snapshot.allAnswered,
+                caseRow: snapshot.caseRow,
+                catalogue: snapshot.catalogue,
+                summarySections: snapshot.summarySections,
+                captureGroups: snapshot.config.captureGroups ?? [],
+                detailFields: snapshot.config.detailFields ?? [],
+                outcomeOptions: snapshot.config.outcomeOptions ?? [],
+                sectionHeadings: snapshot.sectionHeadings,
+              })
+            : null
+        );
+        continue;
+      }
       const node = legacyPanels[entry.id];
       if (!node) continue;
       if (visible && node.parentNode !== panel) panel.appendChild(node);
@@ -612,10 +650,54 @@ export function createRouteSlice(params, context) {
             },
           })
     );
-    const completeButton = adapter.completeButton;
-    if (completeButton && completeButton.parentNode !== parts.completion) {
-      parts.completion.appendChild(completeButton);
-    }
+    const completion = completionControl({
+      machine: snapshot.machine,
+      caseRow,
+      answers: snapshot.answers,
+      allAnswered: snapshot.allAnswered,
+    });
+    tools.morph(
+      parts.completion,
+      completion.visible
+        ? h(
+            'button',
+            {
+              className: 'cora-complete-btn',
+              disabled: route.completionPending,
+              onClick: async () => {
+                const patchFields = completionPatch({
+                  machine: snapshot.machine,
+                  caseRow,
+                  answers: snapshot.answers,
+                  allAnswered: snapshot.allAnswered,
+                  computeOutcome: config.computeOutcome,
+                  exportHash: snapshot.exportHash,
+                });
+                if (!patchFields) return;
+                tools.dispatch({
+                  type: 'case/completion-pending',
+                  pending: true,
+                });
+                try {
+                  await completeCase({
+                    caseId: caseRow.id,
+                    client: context.client,
+                    saveQueue: context.saveQueue,
+                    patchFields,
+                    caseListOptions: snapshot.caseListOptions,
+                  });
+                } finally {
+                  tools.dispatch({
+                    type: 'case/completion-pending',
+                    pending: false,
+                  });
+                }
+              },
+            },
+            completion.label
+          )
+        : null
+    );
   }
 
   return {
@@ -753,14 +835,15 @@ export function CaseReviewPage({
           : null,
       },
       displayMode,
-      completeCase: (cid, c, sq, patchFields) =>
-        completeCase({
+      completeCase: async (cid, c, sq, patchFields) => {
+        await completeCase({
           caseId: cid,
           client: c ?? client,
           saveQueue: sq ?? saveQueue,
           patchFields: patchFields ?? null,
-          opts: vm.caseListOptions,
-        }),
+          caseListOptions: vm.caseListOptions,
+        });
+      },
       toggleConversationPanel: () => vm.toggleConversationPanel(),
     };
   };

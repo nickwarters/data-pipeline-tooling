@@ -43,7 +43,7 @@ test('completeCase: navigates to the dashboard on a successful PATCH', async () 
     caseId: 'c1',
     client: /** @type {any} */ (client),
     saveQueue,
-    patchFields: null,
+    patchFields: { status: 'Completed' },
     opts: {},
   });
   assert.equal(/** @type {any} */ (globalThis).location.hash, '#/dashboard');
@@ -59,7 +59,7 @@ test('completeCase: does not navigate on failure', async () => {
     caseId: 'c1',
     client: /** @type {any} */ (client),
     saveQueue,
-    patchFields: null,
+    patchFields: { status: 'Completed' },
     opts: {},
   });
   assert.equal(/** @type {any} */ (globalThis).location.hash, 'keep-me');

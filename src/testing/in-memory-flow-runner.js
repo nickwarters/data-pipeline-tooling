@@ -1,5 +1,4 @@
 // @ts-check
-import { CASE_STATUS } from '../lib/case-statuses.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
@@ -13,8 +12,8 @@ import { resolveCapabilities } from '../services/permissions.js';
 import { SaveQueue } from '../services/save-queue.js';
 import {
   completeCase,
-  hasRemediationActions,
-} from '../pages/cora-case-review/completion-controller.js';
+  completionPatch,
+} from '../pages/cora-case-review/completion-actions.js';
 
 /**
  * @typedef {{
@@ -250,35 +249,21 @@ async function clickCompleteCase(vm) {
     throw new Error('Cannot complete before the Case page has loaded.');
   }
 
-  let patchFields;
-  if (
-    vm.machine.canCompleteRemediation &&
-    vm.machine.transitionToFinalComplete
-  ) {
-    patchFields = vm.machine.transitionToFinalComplete();
-  } else {
-    const transition = hasRemediationActions(vm)
-      ? vm.machine.transitionToActionsInProgress
-      : vm.machine.transitionToCompleted;
-    patchFields = transition
-      ? transition.call(
-          vm.machine,
-          vm.config.computeOutcome,
-          vm.answersSignal.get(),
-          vm.exportHash ?? null
-        )
-      : {
-          status: CASE_STATUS.COMPLETED,
-          completedAt: new Date().toISOString(),
-        };
-  }
+  const patchFields = completionPatch({
+    machine: vm.machine,
+    caseRow: vm.caseRow,
+    answers: vm.answersSignal.get(),
+    allAnswered: vm.allAnswered.get(),
+    computeOutcome: vm.config.computeOutcome,
+    exportHash: vm.exportHash,
+  });
 
   await completeCase({
     caseId: vm.caseRow.id,
     client: vm.client,
     saveQueue: vm.saveQueue,
     patchFields,
-    opts: vm.caseListOptions,
+    caseListOptions: vm.caseListOptions,
   });
 }
 

@@ -11,11 +11,6 @@ import {
 import { updateSummaryNotesAppeal } from './summary-notes-appeal-controller.js';
 import { updateAmendOutcome } from './amend-outcome-controller.js';
 import { updateAppealReview } from './appeal-review-controller.js';
-import {
-  bindCompletion,
-  completeCase,
-  updateCompletion,
-} from './completion-controller.js';
 
 /** @typedef {import('../../lib/case-review-view-model.js').CaseReviewViewModel} CaseReviewViewModel */
 /** @typedef {import('../../services/save-queue.js').SaveQueue} SaveQueue */
@@ -50,14 +45,7 @@ export function createCaseReviewInterimAdapter({
       viewModel,
       nodes: /** @type {any} */ (nodeFields),
       displayMode: (mode) => mode,
-      completeCase: (caseId, nextClient, nextQueue, patchFields) =>
-        completeCase({
-          caseId,
-          client: nextClient ?? client,
-          saveQueue: nextQueue ?? saveQueue,
-          patchFields: patchFields ?? null,
-          opts: viewModel.caseListOptions,
-        }),
+      completeCase: async () => {},
       toggleConversationPanel() {
         viewModel.toggleConversationPanel();
         modelChanged();
@@ -71,7 +59,6 @@ export function createCaseReviewInterimAdapter({
       bound = true;
       bindRemediationPanel(ctx);
       bindRemediationTracking(ctx);
-      bindCompletion(ctx);
     }
     if (!viewModel.loaded.get() || !viewModel.caseRow) return;
     updateRemediationPanel(ctx);
@@ -79,7 +66,6 @@ export function createCaseReviewInterimAdapter({
     updateSummaryNotesAppeal(ctx);
     updateAmendOutcome(ctx);
     updateAppealReview(ctx);
-    updateCompletion(ctx);
   }
 
   return {
@@ -89,15 +75,11 @@ export function createCaseReviewInterimAdapter({
       return /** @type {Record<string, Node>} */ ({
         issues: nodes.issues,
         remediation: nodes.remediation,
-        summary: nodes.summary,
         notes: nodes.notes,
         appealRequest: nodes.appeal,
         appealReview: nodes.appealReview,
         amendOutcome: nodes.amendOutcome,
       });
-    },
-    get completeButton() {
-      return registry.ensure().completeButton;
     },
   };
 }

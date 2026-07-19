@@ -1,5 +1,4 @@
 // @ts-check
-import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
 
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
@@ -48,44 +47,6 @@ export function Outcome({
 
   return [h('h2', {}, 'Outcome'), h('p', { className }, textContent)];
 }
-
-export class CORAOutcome extends ShellElement {
-  constructor() {
-    super();
-    /** @type {((answers: Record<string, Answer>) => OutcomeResult) | null} */
-    this.computeOutcome = null;
-    /** @type {Record<string, Answer>} */
-    this.answers = {};
-    /** @type {boolean} */
-    this.allAnswered = false;
-    /** @type {OutcomeOption[]} */
-    this.outcomeOptions = [];
-  }
-
-  render() {
-    return Outcome({
-      computeOutcome: this.computeOutcome,
-      answers: this.answers,
-      allAnswered: this.allAnswered,
-      outcomeOptions: this.outcomeOptions,
-    });
-  }
-
-  /**
-   * Replace one or more props and render immediately. Callers typically
-   * construct a fresh `cora-outcome` host and call this before it is ever
-   * attached to the DOM (see `cora-summary.js`'s Outcome block), so this
-   * falls back to `connectedCallback()` when the shell hasn't mounted yet.
-   * @param {Partial<OutcomeProps>} props
-   */
-  update(props) {
-    Object.assign(this, props);
-    if (this._shellRenderNow) this._shellRenderNow();
-    else this.connectedCallback();
-  }
-}
-
-customElements.define('cora-outcome', CORAOutcome);
 
 /** @param {string} value */
 function classSuffixFor(value) {

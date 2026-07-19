@@ -76,10 +76,21 @@ function snapshot() {
         { key: 'customerName', label: 'Customer name' },
         { key: 'accountNumber', label: 'Account number' },
       ],
+      captureGroups: [],
+      outcomeOptions: [
+        { id: 'pass', wording: 'Compliant', severity: 0 },
+        { id: 'fail', wording: 'Non-compliant', severity: 100 },
+      ],
+      computeOutcome: () => ({ outcome: 'pass' }),
     },
     catalogue,
     applicableQuestions: catalogue,
     answers: caseRow.answers,
+    allAnswered: false,
+    summarySections: ['details', 'questions', 'issues'],
+    machine: null,
+    exportHash: null,
+    caseListOptions: {},
     access: {
       details: 'read-only',
       questions: 'edit',
@@ -124,8 +135,9 @@ function snapshot() {
  * intentionally not called: these view tests provide store state directly.
  *
  * @param {any} initialState
+ * @param {Record<string, any>} [contextOverrides]
  */
-function renderShippedState(initialState) {
+function renderShippedState(initialState, contextOverrides = {}) {
   const slice = createRouteSlice(
     { caseType: 'example-review', id: 'c1' },
     /** @type {any} */ ({
@@ -134,6 +146,7 @@ function renderShippedState(initialState) {
       currentUser: chrome.currentUser,
       capabilities: chrome.permissions,
       chrome,
+      ...contextOverrides,
     })
   );
   let state = initialState;
@@ -167,6 +180,7 @@ test('CASE-1 state: route state owns loading, save status, and selected tab unde
     activeTab: '',
     activeQuestionGroup: '',
     conversationHidden: true,
+    completionPending: false,
     panelMode: 'popover',
     saveStatus: 'saved',
     snapshot: null,
@@ -184,6 +198,20 @@ test('CASE-1 state: route state owns loading, save status, and selected tab unde
     status: 'saving',
   });
   assert.equal(saving.routes.caseReview.saveStatus, 'saving');
+
+  const pending = caseReviewReducer(loaded, {
+    type: 'case/completion-pending',
+    pending: true,
+  });
+  assert.equal(pending.routes.caseReview.completionPending, true);
+  assert.equal(
+    caseReviewReducer(pending, {
+      type: 'case/completion-pending',
+      pending: true,
+    }),
+    pending,
+    'an unchanged completion state is referentially stable'
+  );
 });
 
 test('CASE-1 state: tab selection is store-owned and rejects hidden Sections', () => {
@@ -252,6 +280,111 @@ test('CASE-1 state: model refreshes and Answer edits preserve valid selection an
   assert.equal(caseReviewReducer(state, { type: 'unknown' }), state);
 });
 
+test('case page reducer keeps group, conversation, and field state behind loaded access', () => {
+  const initial = createInitialCaseReviewState(chrome, 'popover');
+  assert.equal(
+    caseReviewReducer(initial, {
+      type: 'case/question-group-selected',
+      group: 'General',
+    }),
+    initial
+  );
+  assert.equal(
+    caseReviewReducer(initial, {
+      type: 'case/conversation-changed',
+      messages: [],
+    }),
+    initial
+  );
+  assert.equal(
+    caseReviewReducer(initial, {
+      type: 'case/field-edited',
+      field: 'notes',
+      value: 'x',
+    }),
+    initial
+  );
+
+  const grouped = {
+    ...snapshot(),
+    applicableQuestions: [
+      ...snapshot().applicableQuestions,
+      {
+        id: 'q2',
+        text: 'Question two',
+        questionGroup: 'Follow-up',
+        responseType: 'yes-no-na',
+        deprecated: false,
+      },
+    ],
+  };
+  let state = caseReviewReducer(initial, {
+    type: 'case/load-finished',
+    snapshot: grouped,
+  });
+  assert.equal(state.routes.caseReview.activeQuestionGroup, 'General');
+  assert.equal(
+    caseReviewReducer(state, {
+      type: 'case/question-group-selected',
+      group: 'Missing',
+    }),
+    state
+  );
+  assert.equal(
+    caseReviewReducer(state, {
+      type: 'case/question-group-selected',
+      group: 'General',
+    }),
+    state
+  );
+  state = caseReviewReducer(state, {
+    type: 'case/question-group-selected',
+    group: 'Follow-up',
+  });
+  assert.equal(state.routes.caseReview.activeQuestionGroup, 'Follow-up');
+
+  state = caseReviewReducer(state, { type: 'case/conversation-toggled' });
+  assert.equal(state.routes.caseReview.conversationHidden, false);
+  state = caseReviewReducer(state, {
+    type: 'case/conversation-changed',
+    messages: [{ body: 'Updated message' }],
+  });
+  assert.deepEqual(state.routes.caseReview.snapshot?.caseRow?.conversation, [
+    { body: 'Updated message' },
+  ]);
+  state = caseReviewReducer(state, {
+    type: 'case/field-edited',
+    field: 'notes',
+    value: 'Updated note',
+  });
+  assert.equal(
+    state.routes.caseReview.snapshot?.caseRow?.notes,
+    'Updated note'
+  );
+
+  const hiddenConversation = /** @type {any} */ ({
+    ...state,
+    routes: {
+      caseReview: {
+        ...state.routes.caseReview,
+        snapshot: {
+          ...state.routes.caseReview.snapshot,
+          access: {
+            ...state.routes.caseReview.snapshot?.access,
+            conversation: 'hidden',
+          },
+        },
+      },
+    },
+  });
+  assert.equal(
+    caseReviewReducer(hiddenConversation, {
+      type: 'case/conversation-toggled',
+    }),
+    hiddenConversation
+  );
+});
+
 test('CASE-1 Details view mirrors today: config-driven values are read-only with empty fallback', () => {
   const view = caseDetailsView(caseRow, snapshot().config.detailFields);
   assert.equal(getByTag(view, 'h2').textContent, 'Case Details');
@@ -293,6 +426,167 @@ test('CASE-1 view: shipped tab shell renders only permitted tabs and dispatches 
     (panel) => !panel.hidden
   );
   assert.equal(visiblePanel?.getAttribute('id'), 'case-panel-appealRequest');
+});
+
+test('CASE-4 view: Summary is rendered from store state and configured sections', () => {
+  let state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: snapshot() }
+  );
+  state = caseReviewReducer(state, {
+    type: 'case/tab-selected',
+    id: 'summary',
+  });
+
+  const view = renderShippedState(state).container;
+  const panel = queryAllByRole(view, 'tabpanel').find(
+    (candidate) => candidate.getAttribute('id') === 'case-panel-summary'
+  );
+  assert.ok(panel);
+  assert.equal(panel.hidden, false);
+  assert.match(panel.textContent, /Summary/);
+  assert.match(panel.textContent, /Awaiting answers/);
+  assert.match(panel.textContent, /Case Details/);
+  assert.match(panel.textContent, /Questions/);
+  assert.match(panel.textContent, /Issues/);
+});
+
+test('CASE-4 view: Summary applies empty config defaults and incomplete snapshots stay inert', () => {
+  const baseSnapshot = snapshot();
+  const minimalSummarySnapshot = {
+    ...baseSnapshot,
+    config: {
+      computeOutcome: baseSnapshot.config.computeOutcome,
+    },
+  };
+  let state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: minimalSummarySnapshot }
+  );
+  state = caseReviewReducer(state, {
+    type: 'case/tab-selected',
+    id: 'summary',
+  });
+  const view = renderShippedState(state).container;
+  assert.match(view.textContent, /Awaiting answers/);
+
+  const incomplete = {
+    ...minimalSummarySnapshot,
+    currentUser: null,
+  };
+  const incompleteState = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: incomplete }
+  );
+  assert.doesNotThrow(() => renderShippedState(incompleteState));
+});
+
+test('CASE-4 action: completion flushes saves and persists only the CaseMachine transition', async () => {
+  const transitionPatch = {
+    status: 'Completed',
+    completedAt: '2026-07-19T12:00:00Z',
+    outcomeAtCompletion: 'pass',
+    questionBankVersion: 'bank-hash',
+  };
+  const machine = /** @type {any} */ ({
+    canComplete: true,
+    canCompleteRemediation: false,
+    transitionToCompleted: (
+      /** @type {Function} */ computeOutcome,
+      /** @type {Record<string, any>} */ answers,
+      /** @type {string} */ exportHash
+    ) => {
+      calls.push(['transition', computeOutcome(answers).outcome, exportHash]);
+      return transitionPatch;
+    },
+  });
+  const loadedSnapshot = {
+    ...snapshot(),
+    machine,
+    allAnswered: true,
+    exportHash: 'bank-hash',
+  };
+  const state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: loadedSnapshot }
+  );
+  /** @type {any[]} */
+  const calls = [];
+  const view = renderShippedState(state, {
+    saveQueue: {
+      async flushCase(/** @type {string} */ id) {
+        calls.push(['flush', id]);
+        return true;
+      },
+      getEtag: () => 'e1',
+    },
+    client: {
+      async patchCase(/** @type {any[]} */ ...args) {
+        calls.push(['patch', ...args]);
+        return { ok: true, status: 200 };
+      },
+    },
+  });
+
+  const button = getByRole(view.container, 'button', {
+    name: 'Complete Case',
+  });
+  fireEvent(button, 'click');
+  await flush();
+
+  assert.deepEqual(calls, [
+    ['transition', 'pass', 'bank-hash'],
+    ['flush', 'c1'],
+    ['patch', 'c1', transitionPatch, 'e1', {}],
+  ]);
+  assert.ok(
+    view.actions.some(
+      (action) => action.type === 'case/completion-pending' && action.pending
+    )
+  );
+  assert.equal(view.state.routes.caseReview.completionPending, false);
+  assert.equal(location.hash, '#/dashboard');
+});
+
+test('CASE-4 action: a missing CaseMachine transition cannot dispatch completion', async () => {
+  const loadedSnapshot = {
+    ...snapshot(),
+    machine: /** @type {any} */ ({
+      canComplete: true,
+      canCompleteRemediation: false,
+    }),
+    allAnswered: true,
+  };
+  const state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: loadedSnapshot }
+  );
+  let patches = 0;
+  const view = renderShippedState(state, {
+    saveQueue: {
+      async flushCase() {
+        return true;
+      },
+      getEtag: () => 'e1',
+    },
+    client: {
+      async patchCase() {
+        patches++;
+        return { ok: true, status: 200 };
+      },
+    },
+  });
+
+  fireEvent(
+    getByRole(view.container, 'button', { name: 'Complete Case' }),
+    'click'
+  );
+  await flush();
+  assert.equal(patches, 0);
+  assert.equal(
+    view.actions.some((action) => action.type === 'case/completion-pending'),
+    false
+  );
 });
 
 test('CASE-1 view: conflict state is surfaced with the existing reload warning', () => {

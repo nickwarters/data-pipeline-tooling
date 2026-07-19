@@ -121,7 +121,6 @@ src/
       cora-command-palette.js
       cora-conversation.js
       cora-notes.js
-      cora-outcome.js
       cora-owner-summary.js
       cora-question.js
       cora-question-card.js
@@ -129,7 +128,6 @@ src/
       cora-remediation-tracking.js
       cora-showwhen-editor.js
       cora-showwhen-group.js
-      cora-summary.js
       cora-wording-editor.js
     collections/                # page/tab-level assemblies mounted directly by pages
       cora-appeal-review.js
@@ -154,7 +152,9 @@ src/
       notes-view.js            # CASE-3 pure Notes and Case Justification view; SaveQueue remains the writer
       tab-controller.js
       node-registry.js
-      completion-controller.js
+      summary-view.js          # CASE-4 pure configured Summary view
+      outcome-view.js          # CASE-4 configured Outcome view
+      completion-actions.js    # CASE-4 CaseMachine-guarded completion actions
       amend-outcome-controller.js
       appeal-review-controller.js
       controllers.js

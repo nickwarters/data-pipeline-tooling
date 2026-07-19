@@ -1,13 +1,12 @@
 // @ts-check
-import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
-import './cora-outcome.js';
-import { caseDetailFields } from './cora-case-details.js';
+import { Outcome } from './outcome-view.js';
+import { caseDetailFields } from '../../components/sections/cora-case-details.js';
 import { buildSummaryModel } from '../../evaluators/summary-model.js';
 import { isReportable } from '../../lib/case-machine.js';
 import { currentOutcome } from '../../evaluators/amended-outcome.js';
 import { DEFAULT_SECTION_HEADINGS } from '../../lib/section-labels.js';
-import './cora-capture-groups.js';
+import '../../components/sections/cora-capture-groups.js';
 import { CASE_STATUS } from '../../lib/case-statuses.js';
 
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
@@ -34,12 +33,9 @@ import { CASE_STATUS } from '../../lib/case-statuses.js';
  * @param {SummaryProps} props
  * @returns {Node[]}
  */
-export function Summary(props) {
+export function summaryView(props) {
   const headings = props.sectionHeadings ?? DEFAULT_SECTION_HEADINGS;
   const heading = h('h2', {}, headings.summary);
-  const outcomeEl = /** @type {import('./cora-outcome.js').CORAOutcome} */ (
-    h('cora-outcome')
-  );
 
   // The Outcome snapshot is stamped at the reportable milestone, so
   // read the frozen value from reportable on — not only once Completed. Once
@@ -48,35 +44,22 @@ export function Summary(props) {
   const reportable = isReportable(props.caseRow?.status ?? '');
   const current =
     reportable && props.caseRow ? currentOutcome(props.caseRow) : undefined;
-  if (current) {
-    /** @type {OutcomeResult} */
-    const result = {
-      outcome: current,
-    };
-    outcomeEl.update({
-      computeOutcome: () => result,
-      answers: {},
-      allAnswered: true,
-      outcomeOptions: props.outcomeOptions,
-    });
-  } else if (props.computeOutcome) {
-    outcomeEl.update({
-      computeOutcome: props.computeOutcome,
-      answers: props.answers,
-      allAnswered: props.allAnswered,
-      outcomeOptions: props.outcomeOptions,
-    });
-  } else {
-    outcomeEl.update({
-      computeOutcome: () => /** @type {OutcomeResult} */ ({ outcome: 'pass' }),
-      answers: {},
-      allAnswered: false,
-      outcomeOptions: props.outcomeOptions,
-    });
-  }
+  const outcome = current
+    ? Outcome({
+        computeOutcome: () => ({ outcome: current }),
+        answers: {},
+        allAnswered: true,
+        outcomeOptions: props.outcomeOptions,
+      })
+    : Outcome({
+        computeOutcome: props.computeOutcome,
+        answers: props.answers,
+        allAnswered: props.allAnswered,
+        outcomeOptions: props.outcomeOptions,
+      });
 
   /** @type {Node[]} */
-  const children = [heading, outcomeEl];
+  const children = [heading, ...outcome];
 
   if (props.caseRow) {
     children.push(renderKeyDates(props.caseRow));
@@ -257,7 +240,7 @@ function renderCapture(props, questionId) {
   if (!capture || Object.keys(capture).length === 0) return null;
 
   const cg =
-    /** @type {import('./cora-capture-groups.js').CORACaptureGroups} */ (
+    /** @type {import('../../components/sections/cora-capture-groups.js').CORACaptureGroups} */ (
       h('cora-capture-groups', {
         class: 'cora-summary-capture',
       })
@@ -337,85 +320,3 @@ function renderFieldBlock(className, title, rows) {
  *
  * Summary is never editable — only `read-only` or `hidden` (see section-access).
  */
-export class CORASummary extends ShellElement {
-  constructor() {
-    super();
-    /** @type {((answers: Record<string, Answer>) => OutcomeResult) | null} */
-    this.computeOutcome = null;
-    /** @type {Record<string, Answer>} */
-    this.answers = {};
-    /** @type {boolean} */
-    this.allAnswered = false;
-    /** @type {CaseRow | null} */
-    this.caseRow = null;
-    /**
-     * The Case Type's non-deprecated Question catalogue, used to recompute the
-     * counts and failed-Answer blocks from the current Answers.
-     * @type {QuestionDefinition[]}
-     */
-    this.catalogue = [];
-    /**
-     * The Sections to render as Summary blocks, already filtered by membership,
-     * `showInSummary`, and the viewer's access. Rendered in the given
-     * order. The page resolves this; the component just renders it.
-     * @type {Section[]}
-     */
-    this.summarySections = [];
-    /**
-     * The Case Type's unified **Issue Capture Group**s, rendered
-     * read-only (expanded, populated-only) under each failed Answer. Empty when
-     * the Case Type declares none.
-     * @type {import('../../sharepoint-client.js').CaptureGroup[]}
-     */
-    this.captureGroups = [];
-    /**
-     * The Case Type's declared Case Details fields, appended to the
-     * Summary's Case Details block. Empty when the Case Type declares none.
-     * @type {import('../../sharepoint-client.js').CaseDetailField[]}
-     */
-    this.detailFields = [];
-    /**
-     * The Case Type's configured Outcome vocabulary, used to resolve
-     * the Outcome block's wording. Empty when the Case Type declares none, in
-     * which case the Outcome block shows a "not configured" state.
-     * @type {import('../../sharepoint-client.js').OutcomeOption[]}
-     */
-    this.outcomeOptions = [];
-    /**
-     * Resolved section headings (page-threaded from
-     * `CaseTypeConfig.sectionLabels`); defaults keep the component standalone.
-     * @type {Required<import('../../sharepoint-client.js').SectionLabels>}
-     */
-    this.sectionHeadings = DEFAULT_SECTION_HEADINGS;
-  }
-
-  render() {
-    return Summary({
-      computeOutcome: this.computeOutcome,
-      answers: this.answers,
-      allAnswered: this.allAnswered,
-      caseRow: this.caseRow,
-      catalogue: this.catalogue,
-      summarySections: this.summarySections,
-      captureGroups: this.captureGroups,
-      detailFields: this.detailFields,
-      outcomeOptions: this.outcomeOptions,
-      sectionHeadings: this.sectionHeadings,
-    });
-  }
-
-  /**
-   * Replace one or more props and render immediately. Falls back to
-   * `connectedCallback()` when the shell hasn't mounted yet (defensive —
-   * unlike `cora-outcome`, callers only ever `update()` an already-connected
-   * `cora-summary`, but this keeps the contract consistent).
-   * @param {{ computeOutcome: (answers: Record<string, Answer>) => OutcomeResult, answers: Record<string, Answer>, allAnswered: boolean }} props
-   */
-  update(props) {
-    Object.assign(this, props);
-    if (this._shellRenderNow) this._shellRenderNow();
-    else this.connectedCallback();
-  }
-}
-
-customElements.define('cora-summary', CORASummary);

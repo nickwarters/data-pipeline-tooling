@@ -96,57 +96,6 @@ test('CORACaseReview: there is no standalone Outcome tab', async () => {
   );
 });
 
-test('CORACaseReview: the Summary panel reads the frozen outcomeAtCompletion on a Completed Case', async () => {
-  const completedRow = {
-    ...BASE_ROW,
-    status: /** @type {'Completed'} */ ('Completed'),
-    outcomeAtCompletion: 'fail',
-    answers: {
-      'q-welcome': { value: 'Yes' },
-      'q-needs': { value: 'No' },
-      'q-channel': { value: 'Email' },
-      'q-products': { value: ['Billing'] },
-    },
-  };
-  const client = makeClient({ caseRow: completedRow });
-  const saveQueue = new SaveQueue(/** @type {any} */ (client));
-  saveQueue.loadCase(completedRow);
-
-  const el = new CaseReviewHarness();
-  el.client = /** @type {any} */ (client);
-  el.saveQueue = saveQueue;
-  el.caseId = 'c1';
-  el.currentUserId = 'u1';
-  await el.connectedCallback();
-
-  const summaryEl = summaryOf(el);
-  assert.equal(
-    summaryEl.caseRow,
-    completedRow,
-    'Summary receives the Case row so it can read the frozen snapshot'
-  );
-});
-
-test('CORACaseReview: Summary receives the catalogue and the resolved summarySections (Notes excluded by default)', async () => {
-  const el = new CaseReviewHarness();
-  el.client = /** @type {any} */ (makeClient());
-  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
-  el.caseId = 'c1';
-  el.currentUserId = 'u1'; // assigned reviewer → full access
-  await el.connectedCallback();
-
-  const summaryEl = summaryOf(el);
-  assert.ok(
-    Array.isArray(summaryEl.catalogue) && summaryEl.catalogue.length > 0,
-    'Summary receives the Question catalogue'
-  );
-  assert.deepEqual(
-    summaryEl.summarySections,
-    ['details', 'questions', 'issues'],
-    'Notes excluded by default; the Remediation tracking block is dropped while its Section is hidden (no sent actions)'
-  );
-});
-
 test('CORACaseReview: each tab panel carries the matching Section content node', async () => {
   const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (makeClient());

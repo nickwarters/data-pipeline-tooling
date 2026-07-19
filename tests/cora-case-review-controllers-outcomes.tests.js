@@ -11,32 +11,13 @@ import {
   updateSummaryNotesAppeal,
 } from './helpers/cora-case-review-controllers.js';
 
-// Capability: summary, notes, appeal, and amended-outcome routing.
+// Capability: remaining notes, appeal, and amended-outcome legacy routing.
 
-test('updateSummaryNotesAppeal: assigns Summary, Notes, and Appeal tab props', () => {
-  const {
-    context,
-    summary,
-    notes,
-    appeal,
-    saveQueue,
-    currentUser,
-    answers,
-    summarySections,
-    captureGroups,
-    computeOutcome,
-    caseRow,
-  } = makeSummaryNotesAppealContext();
+test('updateSummaryNotesAppeal: assigns Notes and Appeal tab props', () => {
+  const { context, notes, appeal, saveQueue, currentUser, answers, caseRow } =
+    makeSummaryNotesAppealContext();
 
   updateSummaryNotesAppeal(/** @type {any} */ (context));
-
-  assert.equal(/** @type {any} */ (summary).caseRow, caseRow);
-  assert.equal(/** @type {any} */ (summary).catalogue, QUESTIONS);
-  assert.equal(/** @type {any} */ (summary).summarySections, summarySections);
-  assert.equal(/** @type {any} */ (summary).captureGroups, captureGroups);
-  assert.deepEqual(summary._updateArgs, [
-    { computeOutcome, answers, allAnswered: true },
-  ]);
 
   // Notes renders from and writes edits back onto the Case row (issue #317).
   assert.equal(/** @type {any} */ (notes).caseRow, caseRow);
@@ -147,8 +128,8 @@ test('updateAppealReview: no-ops when the node or required view-model state is a
   );
 });
 
-test('updateSummaryNotesAppeal: threads resolved section headings to Summary, Notes, and Appeal', () => {
-  const { context, summary, notes, appeal } = makeSummaryNotesAppealContext();
+test('updateSummaryNotesAppeal: threads resolved section headings to Notes and Appeal', () => {
+  const { context, notes, appeal } = makeSummaryNotesAppealContext();
   /** @type {any} */ (context.viewModel).config.sectionLabels = {
     notes: 'Case Notes',
     appealRequest: 'Challenge',
@@ -159,10 +140,6 @@ test('updateSummaryNotesAppeal: threads resolved section headings to Summary, No
 
   assert.equal(/** @type {any} */ (notes).heading, 'Case Notes');
   assert.equal(/** @type {any} */ (appeal).heading, 'Challenge');
-  const headings = /** @type {any} */ (summary).sectionHeadings;
-  assert.equal(headings.notes, 'Case Notes');
-  assert.equal(headings.questions, 'Assessment');
-  assert.equal(headings.summary, 'Summary');
 });
 
 test('updateSummaryNotesAppeal: threads Case-Type-configured placeholders to Notes', () => {
@@ -187,14 +164,10 @@ test('updateSummaryNotesAppeal: defaults placeholders to an empty object when th
 });
 
 test('updateSummaryNotesAppeal: defaults the section headings when no sectionLabels declared', () => {
-  const { context, summary, notes, appeal } = makeSummaryNotesAppealContext();
+  const { context, notes, appeal } = makeSummaryNotesAppealContext();
 
   updateSummaryNotesAppeal(/** @type {any} */ (context));
 
   assert.equal(/** @type {any} */ (notes).heading, 'Notes');
   assert.equal(/** @type {any} */ (appeal).heading, 'Appeal');
-  assert.equal(
-    /** @type {any} */ (summary).sectionHeadings.questions,
-    'Questions'
-  );
 });

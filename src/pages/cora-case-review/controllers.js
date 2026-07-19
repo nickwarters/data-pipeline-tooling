@@ -30,8 +30,10 @@ export {
   updateConversationPanel,
 } from './conversation-controller.js';
 export {
-  CompletionController,
   bindCompletion,
   completeCase,
+  completionControl,
+  completionPatch,
+  hasRemediationActions,
   updateCompletion,
-} from './completion-controller.js';
+} from './completion-actions.js';

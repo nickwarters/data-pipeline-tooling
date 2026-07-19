@@ -63,7 +63,7 @@ const EMPTY_CASE_TYPE_CONFIG = {
 const { CaseReviewPage } = await import('../../src/pages/cora-case-review.js');
 const { SaveQueue } = await import('../../src/services/save-queue.js');
 const { completeCase } =
-  await import('../../src/pages/cora-case-review/completion-controller.js');
+  await import('../../src/pages/cora-case-review/completion-actions.js');
 
 /**
  * Thin test harness around the CaseReviewPage function component. The page is a
