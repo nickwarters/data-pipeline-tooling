@@ -931,6 +931,67 @@ test('CASE-1 view: loading, error, denied, saving, and reconnecting states are e
   }
 });
 
+test('CASE-7 route: Notes and Conversation write through store-owned callbacks', async () => {
+  const interactive = snapshot();
+  interactive.machine = { canToggleConversation: true };
+  let state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: interactive }
+  );
+  state = caseReviewReducer(state, { type: 'case/tab-selected', id: 'notes' });
+  state = caseReviewReducer(state, { type: 'case/conversation-toggled' });
+
+  /** @type {Array<{id: string, field: string, value: any}>} */
+  const queued = [];
+  /** @type {any[]} */
+  const patches = [];
+  const saveQueue = {
+    enqueue(
+      /** @type {string} */ id,
+      /** @type {string} */ field,
+      /** @type {any} */ value
+    ) {
+      queued.push({ id, field, value });
+    },
+    getEtag() {
+      return 'e1';
+    },
+    loadCase() {},
+  };
+  const client = {
+    async patchCase(
+      /** @type {string} */ id,
+      /** @type {any} */ fields,
+      /** @type {string} */ etag
+    ) {
+      patches.push({ id, fields, etag });
+      return { ok: true, status: 200, data: { ...caseRow, ...fields } };
+    },
+  };
+  const view = renderShippedState(state, { client, saveQueue });
+  const message = getByRole(view.container, 'textbox', {
+    name: 'Message to Responsible Party',
+  });
+  message.value = 'Please review this.';
+  fireEvent(
+    getByRole(view.container, 'button', { name: 'Send message' }),
+    'click'
+  );
+  await flush();
+  assert.equal(patches[0].fields.conversation[0].body, 'Please review this.');
+  assert.equal(
+    view.state.routes.caseReview.snapshot.caseRow.conversation[0].body,
+    'Please review this.'
+  );
+
+  const notes = getByRole(view.container, 'textbox', { name: 'Case notes' });
+  notes.value = 'Store-owned note';
+  fireEvent(notes, 'input');
+  assert.deepEqual(queued, [
+    { id: 'c1', field: 'notes', value: 'Store-owned note' },
+  ]);
+});
+
 test('CASE-1 save effect: rapid Answer dispatches coalesce through unchanged SaveQueue', async () => {
   /** @type {any[]} */
   const patches = [];
@@ -999,7 +1060,7 @@ test('CASE-1 save effect: conflict status re-enters route state through dispatch
   assert.deepEqual(statuses, ['saved', 'saving', 'conflict']);
 });
 
-test('CASE-1 route: mock-mode store shell keeps interim Review working at the existing URL', async () => {
+test('CASE-7 route: mock-mode store shell keeps Review working at the existing URL', async () => {
   const qNeeds = exampleReviewConfig.questions.find(
     (question) => question.id === 'q-needs'
   );

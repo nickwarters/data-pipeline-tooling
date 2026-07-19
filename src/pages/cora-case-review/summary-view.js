@@ -1,7 +1,7 @@
 // @ts-check
 import { h } from '../../lib/html.js';
 import { Outcome } from './outcome-view.js';
-import { caseDetailFields } from '../../components/sections/cora-case-details.js';
+import { caseDetailFields } from './details-view.js';
 import { buildSummaryModel } from '../../evaluators/summary-model.js';
 import { isReportable } from '../../lib/case-machine.js';
 import { currentOutcome } from '../../evaluators/amended-outcome.js';

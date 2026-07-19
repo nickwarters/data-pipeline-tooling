@@ -1,7 +1,6 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 
 import {
   SECTION_REGISTRY,
@@ -16,15 +15,7 @@ import {
   MATRIX,
 } from '../src/services/section-access.js';
 import { DEFAULT_SECTION_LABELS } from '../src/lib/section-labels.js';
-import { buildCaseReviewTabs } from '../src/pages/cora-case-review/tab-controller.js';
 import { CASE_TYPE_IMPORTERS } from '../case-types/manifest.js';
-
-const ROOT = new URL('../', import.meta.url);
-
-/** @param {string} path */
-function read(path) {
-  return readFileSync(new URL(path, ROOT), 'utf8');
-}
 
 // --- The registry itself ---
 
@@ -74,15 +65,8 @@ test('SUMMARY_SECTIONS is derived from the registry (summary blocks in order)', 
 
 // --- Tabs are derived, in the historical order ---
 
-test('buildCaseReviewTabs derives tab order and ids from the registry', () => {
-  /** @type {any} */
-  const context = {
-    viewModel: {
-      config: {},
-      access: Object.fromEntries(SECTIONS.map((s) => [s, 'read-only'])),
-    },
-  };
-  const tabs = buildCaseReviewTabs(context);
+test('tabEntries derives tab order and ids from the registry', () => {
+  const tabs = tabEntries();
   assert.deepEqual(
     tabs.map((t) => t.id),
     [
@@ -99,22 +83,6 @@ test('buildCaseReviewTabs derives tab order and ids from the registry', () => {
   );
   // Conversation is never a tab.
   assert.ok(!tabs.some((t) => /** @type {string} */ (t.id) === 'conversation'));
-});
-
-test('tab labels come from the resolved labels, hidden from the access map', () => {
-  /** @type {any} */
-  const context = {
-    viewModel: {
-      config: {},
-      access: { ...Object.fromEntries(SECTIONS.map((s) => [s, 'read-only'])) },
-    },
-  };
-  context.viewModel.access.notes = 'hidden';
-  const tabs = buildCaseReviewTabs(context);
-  const notes = tabs.find((t) => t.id === 'notes');
-  assert.equal(notes?.label, DEFAULT_SECTION_LABELS.notes);
-  assert.equal(notes?.hidden, true);
-  assert.equal(tabs.find((t) => t.id === 'details')?.hidden, false);
 });
 
 // --- Consistency contracts (ADR-0032 acceptance criteria) ---
@@ -141,38 +109,6 @@ test('registry ids ⊇ every `sections` key declared by every Case Type', async 
         `Case Type "${slug}" declares section "${key}" absent from the registry`
       );
     }
-  }
-});
-
-test('tab-controller.js lists no Section ids independently — it derives them', () => {
-  const src = read('src/pages/cora-case-review/tab-controller.js');
-  // None of the tab-only Section ids should appear as a string literal now that
-  // the tab list and panel map are derived from the registry.
-  for (const id of [
-    'appealRequest',
-    'appealReview',
-    'amendOutcome',
-    'issues',
-  ]) {
-    assert.doesNotMatch(
-      src,
-      new RegExp(`['"]${id}['"]`),
-      `tab-controller.js still hardcodes the "${id}" Section id`
-    );
-  }
-});
-
-test('the node registry materializes each registry componentTag under its nodeKey', () => {
-  const src = read('src/pages/cora-case-review/node-registry.js');
-  // The uniform Section panels are created by looping the registry; assert no
-  // Section is left independently hand-created with its own h('cora-...') call.
-  for (const entry of SECTION_REGISTRY) {
-    if (!entry.componentTag) continue;
-    assert.doesNotMatch(
-      src,
-      new RegExp(`h\\(['"]${entry.componentTag}['"]\\)`),
-      `node-registry.js still hand-creates ${entry.componentTag}; derive it from the registry`
-    );
   }
 });
 

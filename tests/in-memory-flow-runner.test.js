@@ -2,7 +2,10 @@
 import './_register-example-review.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { runFlowFixture } from '../src/testing/in-memory-flow-runner.js';
+import {
+  createInMemoryFlowRunner,
+  runFlowFixture,
+} from '../src/testing/in-memory-flow-runner.js';
 import exampleReviewConfig from './_example-review-case-type.js';
 
 /** @type {import('../src/sharepoint-client.js').CaseRow} */
@@ -19,6 +22,34 @@ const CASE_ROW = {
   completedAt: null,
   etag: 'etag-flow-1',
 };
+
+test('in-memory flow runner rejects actions that cannot run without a loaded Case', async () => {
+  const runner = createInMemoryFlowRunner(
+    {
+      personas: {
+        reviewer: {
+          userId: 'user-reviewer',
+          displayName: 'Reviewer',
+          groups: [],
+        },
+      },
+      lists: { 'Cases-ExampleReview': [CASE_ROW] },
+    },
+    { persona: 'missing-persona' }
+  );
+
+  assert.equal(runner.viewModel, null);
+  assert.ok(runner.snapshot().lists['Cases-ExampleReview']);
+  await runner.run([{ type: 'flush' }]);
+  await assert.rejects(
+    runner.run([{ type: 'answer', questionId: 'q-welcome', value: 'Yes' }]),
+    /before a loadCasePage action/
+  );
+  await assert.rejects(
+    runner.run([/** @type {any} */ ({ type: 'unsupported' })]),
+    /Unsupported flow action/
+  );
+});
 
 test('in-memory flow runner loads a case, answers questions, completes, and snapshots the new list state', async () => {
   const snapshot = await runFlowFixture({

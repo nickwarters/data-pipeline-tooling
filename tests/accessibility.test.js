@@ -31,9 +31,6 @@ const { CORAQuestion } =
   await import('../src/components/sections/cora-question.js');
 const { CORAQuestionList } =
   await import('../src/components/collections/cora-question-list.js');
-const { CORANotes } = await import('../src/components/sections/cora-notes.js');
-const { CORAConversation } =
-  await import('../src/components/sections/cora-conversation.js');
 const { CORAStatusBanner } =
   await import('../src/components/base/cora-status-banner.js');
 const { signal } = await import('../src/lib/signal.js');
@@ -412,56 +409,6 @@ test('CORAQuestionList: multi-choice question with no answer initialises current
     [],
     'multi-choice with no existing answer must initialise currentValue to []'
   );
-});
-
-// ---- cora-notes / cora-conversation labelling ----
-
-test('CORANotes: textarea has aria-label="Case notes"', () => {
-  const el = new CORANotes();
-  el.notes = '';
-  el.saveQueue = /** @type {any} */ ({ enqueue() {} });
-  el.caseId = 'case-1';
-  el.connectedCallback();
-
-  const textarea = /** @type {any} */ (el)._children.find(
-    (/** @type {any} */ c) => c.className === 'cora-notes-input'
-  );
-  assert.equal(textarea._attrs['aria-label'], 'Case notes');
-});
-
-test('CORANotes: Case Justification textarea has aria-label="Case Justification"', () => {
-  const el = new CORANotes();
-  el.notes = '';
-  el.caseJustification = '';
-  el.saveQueue = /** @type {any} */ ({ enqueue() {} });
-  el.caseId = 'case-1';
-  el.connectedCallback();
-
-  const textarea = /** @type {any} */ (el)._children.find(
-    (/** @type {any} */ c) => c.className === 'cora-case-justification-input'
-  );
-  assert.equal(textarea._attrs['aria-label'], 'Case Justification');
-});
-
-test('CORAConversation: compose textarea has aria-label="Message to Responsible Party"', () => {
-  const el = new CORAConversation();
-  el._messages = [];
-  el.connectedCallback();
-
-  // children: heading, empty/list, compose
-  const compose = /** @type {any} */ (el)._children[2];
-  const textarea = compose._children[0];
-  assert.equal(textarea._attrs['aria-label'], 'Message to Responsible Party');
-});
-
-test('CORAConversation: send button has aria-label even when textarea is empty', () => {
-  const el = new CORAConversation();
-  el._messages = [];
-  el.connectedCallback();
-
-  const compose = /** @type {any} */ (el)._children[2];
-  const btn = compose._children[1];
-  assert.equal(btn.textContent, 'Send');
 });
 
 // ---- status banner regression ----

@@ -115,10 +115,7 @@ src/
       cora-app-nav.js
       cora-attribute-menu.js
       cora-capture-groups.js
-      cora-case-details.js
       cora-command-palette.js
-      cora-conversation.js
-      cora-notes.js
       cora-owner-summary.js
       cora-question.js
       cora-question-card.js
@@ -138,15 +135,12 @@ src/
     dev-performance-harness.js  # dev-only CORE-5 500-question keystroke-latency gate (mock-only)
                                 #   see docs/palimpsest-performance-gate.md for the measured result
     cora-case-review.js        # store slice + pure tab shell
-    cora-case-review/          # converted Section views + save effect + remaining legacy-shell controllers
+    cora-case-review/          # store actions/effects and pure Section views
       details-view.js          # config-driven, read-only Case Details pure view (mirrors current Section behaviour)
       case-actions.js          # Answer dispatch -> unchanged SaveQueue; save status dispatch bridge
-      interim-adapter.js       # mounts the remaining CASE-4…6 legacy Section components outside the morph boundary
       question-panel-view.js   # CASE-2 group-scoped Questions view with memoised cards
       conversation-view.js     # CASE-3 pure conversation panel + unchanged JSON-blob PATCH effect
       notes-view.js            # CASE-3 pure Notes and Case Justification view; SaveQueue remains the writer
-      tab-controller.js
-      node-registry.js
       summary-view.js          # CASE-4 pure configured Summary view
       outcome-view.js          # CASE-4 configured Outcome view
       completion-actions.js    # CASE-4 CaseMachine-guarded completion actions
@@ -156,12 +150,6 @@ src/
       appeal-view.js           # CASE-6 pure Appeal request view + unchanged SaveQueue effect
       appeal-review-view.js    # CASE-6 pure Controls resolution view + linked amendment write
       amend-outcome-view.js    # CASE-6 pure ADR-0026 Amend Outcome view
-      controllers.js
-      conversation-controller.js
-      header-controller.js
-      question-panel-controller.js
-      summary-notes-appeal-controller.js
-      types.js
     cora-conversation-view.js
     cora-dashboard.js             # store-driven dashboard slice + descriptor-selected panels (GRID-3/4)
     dashboard/

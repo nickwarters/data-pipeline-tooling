@@ -22,7 +22,7 @@ const { register } = await import('../src/routes/case.js');
 /**
  * A client that records the id/opts each getCase is called with. Returning null
  * short-circuits the view-model load after the fetch, which is all these route
- * tests need: they verify the route plumbs its params into CaseReviewPage.
+ * tests need: they verify the route plumbs its params into the store module.
  * @param {Array<{ id: string, opts: any }>} calls
  */
 function makeClient(calls) {
@@ -102,7 +102,7 @@ test('case route: navigating away runs the case route unmount cleanly', async ()
   );
 });
 
-test('case route: mount composes CaseReviewPage and fetches the id from the route', async () => {
+test('case route: mount composes the store route and fetches the id from the route', async () => {
   /** @type {Array<{ id: string, opts: any }>} */
   const calls = [];
   const container = document.createElement('main');

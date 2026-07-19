@@ -1,5 +1,4 @@
 // @ts-check
-import { reactive, on, replaceHostChildren } from '../lib/view.js';
 import { h } from '../lib/html.js';
 import { CaseReviewViewModel } from '../lib/case-review-view-model.js';
 import { evaluate } from '../evaluators/applicability-evaluator.js';
@@ -27,37 +26,11 @@ import { editRemediationDetail } from './cora-case-review/remediation-actions.js
 import { RemediationSection } from './cora-case-review/remediation-view.js';
 import { RemediationTracking } from './cora-case-review/remediation-tracking-view.js';
 import {
-  bindCompletion,
   completeCase,
   completionControl,
   completionPatch,
-  updateCompletion,
 } from './cora-case-review/completion-actions.js';
-import { updateCaseReviewHeader } from './cora-case-review/header-controller.js';
-import {
-  bindQuestionPanel,
-  updateQuestionPanel,
-} from './cora-case-review/question-panel-controller.js';
-import { createCaseReviewNodeRegistry } from './cora-case-review/node-registry.js';
-import {
-  bindCaseReviewTabs,
-  updateCaseReviewTabs,
-} from './cora-case-review/tab-controller.js';
-import { updateNotes } from './cora-case-review/summary-notes-appeal-controller.js';
-import { createConversationPanelBinding } from './cora-case-review/conversation-controller.js';
 
-import '../components/collections/cora-question-list.js';
-import '../components/base/cora-group-progress.js';
-import '../components/sections/cora-conversation.js';
-import '../components/sections/cora-notes.js';
-import '../components/base/cora-status-banner.js';
-import '../components/base/cora-tabs.js';
-
-/** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
-/** @typedef {import('../services/save-queue.js').SaveQueue} SaveQueue */
-/** @typedef {import('../services/permissions.js').Capabilities} Capabilities */
-/** @typedef {import('../services/section-access.js').Mode} Mode */
-/** @typedef {import('./cora-case-review/types.js').CaseReviewShellContext} CaseReviewShellContext */
 /** @typedef {'saved'|'saving'|'reconnecting'|'conflict'} SaveStatus */
 
 /**
@@ -781,7 +754,7 @@ export function createRouteSlice(params, context) {
       snapshot.access.conversation === 'hidden'
         ? null
         : conversationView({
-            messages: snapshot.caseRow.conversation,
+            messages: caseRow.conversation,
             access: snapshot.access.conversation,
             heading: snapshot.sectionHeadings.conversation,
             onSend: async (body) => {
@@ -789,7 +762,7 @@ export function createRouteSlice(params, context) {
                 client: context.client,
                 saveQueue: context.saveQueue,
                 caseId: params.id,
-                messages: snapshot.caseRow.conversation,
+                messages: caseRow.conversation,
                 currentUser,
                 caseListOptions: snapshot.caseListOptions,
                 body,
@@ -918,279 +891,4 @@ export function createRouteSlice(params, context) {
       };
     },
   };
-}
-
-/**
- * Legacy Case Review rollback/compatibility shell. The store route no longer
- * mounts this function, but CASE-1 deliberately retains it while the remaining
- * Sections migrate in CASE-2 through CASE-6. Do not extend this path; its tests
- * pin rollback compatibility until the final Section migration removes it.
- *
- * A plain function component: it owns the
- * view-model, a registry of long-lived Section nodes, and the panel bindings,
- * and returns a reactive() host that re-composes `h()` nodes whenever the
- * view-model's signals change. Custom elements survive only as the leaf Section
- * components and as this route/browser-integration shell — there is no
- * class-backed page element and no per-render controller layer.
- *
- * @param {{
- * client: SharePointClient | null,
- * saveQueue: SaveQueue | null,
- * caseId: string,
- * caseType?: string | null,
- * currentUserId?: string,
- * capabilities?: Capabilities | null,
- * }} props
- * @returns {HTMLElement}
- */
-export function CaseReviewPage({
-  client,
-  saveQueue,
-  caseId,
-  caseType = null,
-  currentUserId = '',
-  capabilities = null,
-}) {
-  // Missing collaborators — there is no Case to load, so render nothing.
-  if (!client || !saveQueue || !caseId) {
-    return reactive(() => []);
-  }
-
-  const viewModel = new CaseReviewViewModel({
-    client,
-    saveQueue,
-    caseId,
-    currentUserId,
-    capabilities,
-    caseType,
-  });
-  const nodeRegistry = createCaseReviewNodeRegistry();
-  const conversationPanel = createConversationPanelBinding();
-  const remediationCaptureEls = new Map();
-  let eventsBound = false;
-
-  /**
-   * Build the shared controller context. `conversationToggle` is only exposed
-   * when the Case allows the conversation panel to be toggled; `completeCase`
-   * is wired to the shared services so components never reach back into the
-   * page.
-   *
-   * @param {CaseReviewViewModel} vm
-   * @param {(m: Mode) => Mode} displayMode
-   * @param {boolean} canToggleConversation
-   * @returns {CaseReviewShellContext}
-   */
-  const buildContext = (vm, displayMode, canToggleConversation) => {
-    const { ensure: _ensure, ...nodeFields } = nodeRegistry.ensure();
-    return {
-      viewModel: /** @type {any} */ (vm),
-      nodes: {
-        .../** @type {any} */ (nodeFields),
-        conversationToggle: canToggleConversation
-          ? nodeRegistry.conversationToggle
-          : null,
-      },
-      displayMode,
-      completeCase: async (cid, c, sq, patchFields) => {
-        await completeCase({
-          caseId: cid,
-          client: c ?? client,
-          saveQueue: sq ?? saveQueue,
-          patchFields: patchFields ?? null,
-          caseListOptions: vm.caseListOptions,
-        });
-      },
-      toggleConversationPanel: () => vm.toggleConversationPanel(),
-    };
-  };
-
-  const host = reactive(() => {
-    const vm = viewModel;
-    if (!vm.loaded.get()) {
-      if (vm.error.get()) return h('p', {}, vm.error.get());
-      return h('p', {}, 'Loading...');
-    }
-
-    if (vm.accessDenied.get()) {
-      return h(
-        'section',
-        { class: 'cora-access-denied' },
-        h('h2', {}, 'Access denied'),
-        h('p', {}, 'You do not have access to this case.')
-      );
-    }
-
-    const { caseRow, config, currentUser, access, machine } = vm;
-    if (!caseRow || !config || !machine || !currentUser) return;
-
-    /** @param {Mode} m */
-    const displayMode = (m) => m;
-    const canToggleConversation = machine.canToggleConversation;
-
-    const registry = nodeRegistry.ensure();
-    const context = buildContext(vm, displayMode, canToggleConversation);
-
-    if (!eventsBound) {
-      eventsBound = true;
-      bindCaseReviewTabs(context);
-      bindQuestionPanel(context);
-      conversationPanel.bind(context);
-      bindCompletion(context);
-    }
-
-    // Alt+C toggles the conversation panel. Registered through on() so its
-    // teardown rides this reactive view's lifecycle rather than a hand-rolled
-    // document add/removeEventListener pair.
-    if (canToggleConversation) {
-      on(document, 'keydown', (/** @type {any} */ event) =>
-        conversationPanel.handleKeydown(event)
-      );
-    }
-
-    updateCaseReviewTabs(context);
-    Object.assign(/** @type {HTMLElement} */ (registry.details), {
-      caseRow,
-      access: displayMode(access.details),
-      detailFields: config.detailFields ?? [],
-    });
-    updateQuestionPanel(context);
-    replaceHostChildren(
-      /** @type {HTMLElement} */ (registry.issues),
-      RemediationSection({
-        catalogue: vm.catalogue,
-        answers: vm.answersSignal.get(),
-        attributeFailures: config.attributeFailures === true,
-        client,
-        responsibleParty: caseRow.responsibleParty
-          ? {
-              loginName: caseRow.responsibleParty,
-              displayName: caseRow.responsibleParty,
-            }
-          : null,
-        canAttribute: machine.canAttribute,
-        remediationFields: config.remediationFields ?? [],
-        canCaptureDetails: machine.canCapture,
-        captureGroups: config.captureGroups ?? [],
-        canCapture: machine.canCapture,
-        captureEls: remediationCaptureEls,
-        canSelectRemediation: machine.canSelectRemediation,
-        dispatchCapture: (questionId, fieldKey, value) =>
-          vm.handleCapture(questionId, fieldKey, value),
-        dispatchDetail: (questionId, key, value) => {
-          const answers = editRemediationDetail({
-            answers: vm.answersSignal.get(),
-            questionId,
-            key,
-            value,
-            canEdit: machine.canCapture,
-            fields: config.remediationFields ?? [],
-          });
-          if (answers === vm.answersSignal.get()) return;
-          vm.answersSignal.set(answers);
-          saveQueue.enqueue(caseId, 'answers', answers);
-        },
-        dispatchAttribute: (questionId, attributedParty) =>
-          vm.handleAttribute(questionId, attributedParty),
-        dispatchRemediationAction: (questionId, action, selected) =>
-          vm.handleRemediationAction(questionId, action, selected),
-        dispatchRemediationFreeForm: (questionId, value) =>
-          vm.handleRemediationFreeForm(questionId, value),
-      })
-    );
-    replaceHostChildren(
-      /** @type {HTMLElement} */ (registry.remediation),
-      RemediationTracking({
-        catalogue: vm.catalogue,
-        answers: vm.answersSignal.get(),
-        captureGroups: config.captureGroups ?? [],
-        canResolve: access.remediation === 'edit',
-        caseRow,
-        heading: vm.sectionHeadings.remediation,
-        dispatchStatus: (
-          questionId,
-          fieldKey,
-          actionId,
-          status,
-          cancelReason
-        ) =>
-          vm.handleActionStatus(
-            questionId,
-            fieldKey,
-            actionId,
-            status,
-            cancelReason
-          ),
-      })
-    );
-    updateNotes(context);
-    replaceHostChildren(
-      /** @type {HTMLElement} */ (registry.appeal),
-      AppealSection({
-        caseRow,
-        saveQueue,
-        caseId,
-        access: access.appealRequest,
-        currentUser,
-        catalogue: vm.catalogue,
-        answers: vm.answersSignal.get(),
-        newAppealId: () => `appeal-${Date.now()}`,
-        render: () => vm.answersSignal.set({ ...vm.answersSignal.get() }),
-        heading: vm.sectionHeadings.appealRequest,
-      })
-    );
-    replaceHostChildren(
-      /** @type {HTMLElement} */ (registry.appealReview),
-      AppealReviewSection({
-        caseRow,
-        saveQueue,
-        caseId,
-        access: access.appealReview,
-        currentUser,
-        outcomeOptions: config.outcomeOptions ?? [],
-        now: () => new Date().toISOString(),
-        render: () => vm.answersSignal.set({ ...vm.answersSignal.get() }),
-      })
-    );
-    replaceHostChildren(
-      /** @type {HTMLElement} */ (registry.amendOutcome),
-      AmendOutcomeSection({
-        caseRow,
-        saveQueue,
-        caseId,
-        access: access.amendOutcome,
-        currentUser,
-        outcomeOptions: config.outcomeOptions ?? [],
-        now: () => new Date().toISOString(),
-        render: () => vm.answersSignal.set({ ...vm.answersSignal.get() }),
-      })
-    );
-    conversationPanel.update(context);
-    updateCaseReviewHeader(context);
-    updateCompletion(context);
-
-    return /** @type {Node[]} */ (
-      [
-        registry.banner,
-        registry.header,
-        registry.tabs,
-        registry.conversation,
-        registry.completeButton,
-      ].filter(Boolean)
-    );
-  });
-
-  // Conversation display mode (popover vs sidebar) is a route/browser-integration
-  // concern: it reads a URL param once and reflects it as a host attribute the
-  // CSS keys off. It stays on this shell rather than the conversation binding,
-  // which owns behaviour (toggle/keyboard), not the host element's presentation.
-  // The URL does not change during the view's life, so it is resolved once here.
-  host.className = 'cora-case-review';
-  const searchStr =
-    typeof location !== 'undefined' ? (location.search ?? '') : '';
-  const panelMode =
-    new URLSearchParams(searchStr).get('conversation') ?? 'popover';
-  host.setAttribute('data-conversation-mode', panelMode);
-
-  viewModel.load();
-  return host;
 }

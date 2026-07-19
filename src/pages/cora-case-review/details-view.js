@@ -1,9 +1,47 @@
 // @ts-check
 import { h } from '../../lib/html.js';
-import { caseDetailFields } from '../../components/sections/cora-case-details.js';
+import { CASE_STATUS } from '../../lib/case-statuses.js';
 
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../../sharepoint-client.js').CaseDetailField} CaseDetailField */
+
+/**
+ * The Case Details fields shown on the Case, in display order. Shared with the
+ * Summary view so both surfaces use the same configured fields and empty-value
+ * fallback.
+ *
+ * @param {CaseRow} caseRow
+ * @param {CaseDetailField[]} [detailFields]
+ * @returns {Array<{ field: string, label: string, value: string | null | undefined, display: string }>}
+ */
+export function caseDetailFields(caseRow, detailFields = []) {
+  const fields = [
+    { field: 'title', label: 'Title', value: caseRow.title },
+    {
+      field: 'assignedReviewer',
+      label: 'Assigned Reviewer',
+      value: caseRow.assignedReviewer,
+    },
+    { field: 'status', label: 'Status', value: caseRow.status },
+    { field: 'dueDate', label: 'Due date', value: caseRow.dueDate },
+    { field: 'relatedDate', label: 'Related date', value: caseRow.relatedDate },
+    { field: 'created', label: 'Created', value: caseRow.created },
+    {
+      field: 'completedAt',
+      label: CASE_STATUS.COMPLETED,
+      value: caseRow.completedAt,
+    },
+    ...detailFields.map((field) => ({
+      field: field.key,
+      label: field.label,
+      value: caseRow.details?.[field.key],
+    })),
+  ];
+  return fields.map((field) => ({
+    ...field,
+    display: field.value ? field.value : '—',
+  }));
+}
 
 /**
  * Store-driven Case Details view. It deliberately mirrors the existing

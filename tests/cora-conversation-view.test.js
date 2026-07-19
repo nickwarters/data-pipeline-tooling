@@ -117,6 +117,33 @@ test('CASE-3 posting preserves JSON-blob PATCH, ETag, list routing, and queue re
   ]);
 });
 
+test('CASE-7 posting leaves queue state untouched when the PATCH is rejected', async () => {
+  let loads = 0;
+  const result = await postConversationMessage({
+    client: /** @type {any} */ ({
+      async patchCase() {
+        return { ok: false, status: 412 };
+      },
+    }),
+    saveQueue: /** @type {any} */ ({
+      getEtag() {
+        return 'v1';
+      },
+      loadCase() {
+        loads += 1;
+      },
+    }),
+    caseId: 'case-1',
+    messages: [],
+    currentUser: CURRENT_USER,
+    caseListOptions: {},
+    body: 'Retry later',
+  });
+
+  assert.equal(result.result.status, 412);
+  assert.equal(loads, 0);
+});
+
 test('CASE-3 standalone page and reducer render store state without a custom element', () => {
   const state = {
     chrome: /** @type {any} */ ({}),
