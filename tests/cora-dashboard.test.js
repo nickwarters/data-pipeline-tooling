@@ -347,6 +347,40 @@ test('dashboard slice resolves Case Type panel presence through a store action',
   ]);
 });
 
+test('dashboard slice keeps legacy panels and reports a Case Type panel-load failure', async () => {
+  const ctx = context(capabilities());
+  ctx.client = null;
+  const failure = new Error('Case Type module unavailable');
+  /** @type {any[]} */
+  const actions = [];
+  /** @type {any[]} */
+  const errors = [];
+  const originalError = console.error;
+  console.error = (...args) => errors.push(args);
+  try {
+    const slice = createRouteSlice({}, ctx, {
+      loadDashboardPanels: async () => {
+        throw failure;
+      },
+    });
+    slice.start({
+      context: ctx,
+      params: {},
+      dispatch: (/** @type {any} */ action) => actions.push(action),
+      listen: () => {},
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    assert.deepEqual(actions, []);
+    assert.equal(errors.length, 1);
+    assert.match(errors[0][0], /Case Type dashboard panels failed to load/);
+    assert.equal(errors[0][1], failure);
+  } finally {
+    console.error = originalError;
+  }
+});
+
 test('dashboard allocation wiring listens at the app boundary and reloads reviewer cases', async () => {
   const ctx = context(capabilities({ isReviewer: true }));
   let loads = 0;

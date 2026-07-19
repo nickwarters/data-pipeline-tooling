@@ -221,8 +221,8 @@ const config = {{
     {{ key: 'customerName', label: 'Customer name' }},
     {{ key: 'reviewDate', label: 'Review date' }},
   ],
- // Page descriptors express Case Type variation only. Permission checks,
- // navigation, formatting, and other branching behaviour stay in framework code.
+  // Page descriptors express Case Type variation only. Permission checks,
+  // navigation, formatting, and other branching behaviour stay in framework code.
   dashboardPanels: [
     'kpis',
     'actionCentre',

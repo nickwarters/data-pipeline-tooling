@@ -371,7 +371,9 @@
 /**
  * A generic dashboard panel that may contain or summarise Cases. Case Type
  * config declares presence only; permission and state branching remain in the
- * dashboard's panel descriptor code.
+ * dashboard's panel descriptor code. This closed union mirrors the authoritative
+ * `dashboardPanels` list in `pages/dashboard/panel-descriptors.js`; update both
+ * together when adding a platform panel.
  *
  * @typedef {'kpis'|'actionCentre'|'ownerSummary'|'reviewerCases'|'allocation'|'responsibleParty'|'appeals'} DashboardPanelKey
  */

@@ -576,15 +576,22 @@ export function createRouteSlice(
       const currentUser = tools.context.chrome.currentUser;
       const capabilities = tools.context.chrome.permissions;
 
-      void loadDashboardPanels(tools.context.caseSources).then((panels) => {
-        const initialPanels = initialState.routes.dashboard.dashboardPanels;
-        const changed =
-          panels.length !== initialPanels.length ||
-          panels.some((panel, index) => panel !== initialPanels[index]);
-        if (active && changed) {
-          tools.dispatch({ type: 'dashboard-panels/loaded', panels });
-        }
-      });
+      void loadDashboardPanels(tools.context.caseSources)
+        .then((panels) => {
+          const initialPanels = initialState.routes.dashboard.dashboardPanels;
+          const changed =
+            panels.length !== initialPanels.length ||
+            panels.some((panel, index) => panel !== initialPanels[index]);
+          if (active && changed) {
+            tools.dispatch({ type: 'dashboard-panels/loaded', panels });
+          }
+        })
+        .catch((error) => {
+          console.error(
+            '[CORA] Case Type dashboard panels failed to load',
+            error
+          );
+        });
 
       const loadReviewerCases = async () => {
         if (!client || !capabilities.isReviewer) return;
