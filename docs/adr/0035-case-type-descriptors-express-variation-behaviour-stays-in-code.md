@@ -4,7 +4,7 @@ Date: 2026-07-19
 
 ## Status
 
-Proposed — requires human sign-off on GRID-5 issue #416.
+Accepted — human sign-off recorded on GRID-5 issue #416.
 
 ## Context
 
