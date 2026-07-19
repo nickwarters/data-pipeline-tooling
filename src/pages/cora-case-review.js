@@ -965,39 +965,6 @@ export function CaseReviewPage({
       eventsBound = true;
       bindCaseReviewTabs(context);
       bindQuestionPanel(context);
-      registry.issues?.addEventListener('cora-capture', (event) => {
-        const detail = /** @type {any} */ (event).detail;
-        vm.handleCapture(detail.questionId, detail.fieldKey, detail.value);
-      });
-      registry.issues?.addEventListener('cora-attribute', (event) => {
-        const detail = /** @type {any} */ (event).detail;
-        vm.handleAttribute(detail.questionId, detail.attributedParty);
-      });
-      registry.issues?.addEventListener('cora-remediation-action', (event) => {
-        const detail = /** @type {any} */ (event).detail;
-        vm.handleRemediationAction(
-          detail.questionId,
-          detail.action,
-          detail.selected
-        );
-      });
-      registry.issues?.addEventListener(
-        'cora-remediation-freeform',
-        (event) => {
-          const detail = /** @type {any} */ (event).detail;
-          vm.handleRemediationFreeForm(detail.questionId, detail.value);
-        }
-      );
-      registry.remediation?.addEventListener('cora-action-status', (event) => {
-        const detail = /** @type {any} */ (event).detail;
-        vm.handleActionStatus(
-          detail.questionId,
-          detail.fieldKey,
-          detail.actionId,
-          detail.status,
-          detail.cancelReason
-        );
-      });
       conversationPanel.bind(context);
       bindCompletion(context);
     }
@@ -1018,24 +985,6 @@ export function CaseReviewPage({
       detailFields: config.detailFields ?? [],
     });
     updateQuestionPanel(context);
-    Object.assign(/** @type {HTMLElement} */ (registry.issues), {
-      client,
-      canAttribute: machine.canAttribute,
-      responsibleParty: caseRow.responsibleParty
-        ? {
-            loginName: caseRow.responsibleParty,
-            displayName: caseRow.responsibleParty,
-          }
-        : null,
-      captureGroups: config.captureGroups ?? [],
-      canCapture: machine.canCapture,
-      canSelectRemediation: machine.canSelectRemediation,
-      _update: [
-        vm.catalogue,
-        vm.answersSignal.get(),
-        config.attributeFailures === true,
-      ],
-    });
     replaceHostChildren(
       /** @type {HTMLElement} */ (registry.issues),
       RemediationSection({

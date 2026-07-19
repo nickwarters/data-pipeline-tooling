@@ -204,6 +204,11 @@ test('a change to the failed set still rebuilds the list correctly', () => {
   const items = findAllByClass(el, 'cora-remediation-item');
   assert.equal(items.length, 2);
   assert.deepEqual(
+    items.map((item) => item.getAttribute('key')),
+    ['q-welcome', 'q-resolve'],
+    'failed items carry stable question identities for morphing'
+  );
+  assert.deepEqual(
     items.map(
       (item) => findByClass(item, 'cora-remediation-question').textContent
     ),

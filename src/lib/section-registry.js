@@ -30,9 +30,9 @@
  *   Case Type `sections` allow-list and the Summary block set.
  * @property {string | null} componentTag
  *   The custom-element tag rendered for this Section's panel, or `null` when the
- *   panel is a bespoke wrapper (only `questions`, whose panel is a plain
- *   `<section>` wrapping the question list + progress). Uniform panels are
- *   materialized from this tag by the node registry.
+ *   panel is a bespoke plain `<section>` wrapper (`questions`, `issues`, or
+ *   `remediation`). Uniform panels are materialized from this tag by the node
+ *   registry.
  * @property {string} nodeKey
  *   The key this Section's panel node is stored under in the Case Review node
  *   registry. Equals `id` except where history diverged: `questions` →

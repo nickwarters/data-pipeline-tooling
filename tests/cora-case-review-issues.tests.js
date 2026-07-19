@@ -34,21 +34,18 @@ test('CORACaseReview: Assigned Reviewer can set an Attributed Party, persisting 
   await el.connectedCallback();
 
   const remediation = remediationOf(el);
+  const picker = remediation.querySelector('cora-people-picker');
+  assert.ok(picker, 'Assigned Reviewer sees the attribution people picker');
   assert.equal(
-    remediation.canAttribute,
-    true,
-    'Assigned Reviewer on In-progress case may attribute'
-  );
-  assert.equal(
-    remediation.client,
+    picker.client,
     client,
-    'client is handed to the section for the picker'
+    'client is handed to the rendered picker'
   );
 
-  fireEvent(remediation, 'cora-attribute', {
+  fireEvent(picker, 'cora-person-selected', {
     detail: {
-      questionId: 'q-needs',
-      attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' },
+      loginName: 'jsmith',
+      displayName: 'Jane Smith',
     },
   });
 
@@ -78,10 +75,11 @@ test("CORACaseReview: forwards the Case's Responsible Party to the remediation s
   await el.connectedCallback();
 
   const remediation = remediationOf(el);
-  assert.deepEqual(
-    remediation.responsibleParty,
-    { loginName: 'rparty', displayName: 'rparty' },
-    'bare account doubles as the display name until the page-load resolver lands (#97)'
+  const quickPick = remediation.querySelector('.cora-attribute-responsible');
+  assert.equal(
+    quickPick?.textContent,
+    'Responsible Party — rparty',
+    'the bare account is rendered as the quick-pick display name until the page-load resolver lands (#97)'
   );
 });
 
@@ -112,9 +110,9 @@ test('CORACaseReview: clearing an Attributed Party strips it from the Answer and
   await el.connectedCallback();
 
   const remediation = remediationOf(el);
-  fireEvent(remediation, 'cora-attribute', {
-    detail: { questionId: 'q-needs', attributedParty: null },
-  });
+  const clear = remediation.querySelector('.cora-attribute-clear');
+  assert.ok(clear, 'clear-attribution control is rendered');
+  fireEvent(clear, 'click');
 
   assert.equal(enqueued.length, 1);
   assert.equal(
@@ -129,7 +127,7 @@ test('CORACaseReview: clearing an Attributed Party strips it from the Answer and
   );
 });
 
-test('CORACaseReview: cora-attribute is ignored when the referenced Answer is missing', async () => {
+test('CORACaseReview: does not render attribution controls when no Answer fails', async () => {
   const client = makeClient({
     caseRow: { ...BASE_ROW, assignedReviewer: 'u1' },
   });
@@ -148,17 +146,12 @@ test('CORACaseReview: cora-attribute is ignored when the referenced Answer is mi
   await el.connectedCallback();
 
   const remediation = remediationOf(el);
-  fireEvent(remediation, 'cora-attribute', {
-    detail: {
-      questionId: 'q-nonexistent',
-      attributedParty: { loginName: 'x', displayName: 'X' },
-    },
-  });
+  assert.equal(remediation.querySelector('.cora-attribute-menu'), null);
 
   assert.equal(
     enqueued.length,
     0,
-    'no persistence when there is no Answer to attribute'
+    'no persistence occurs when there is no failed Answer to attribute'
   );
 });
 
@@ -179,18 +172,17 @@ test('CORACaseReview: passes the Case Type captureGroups to the remediation sect
   await el.connectedCallback();
 
   const remediation = remediationOf(el);
-  assert.ok(
-    remediation.captureGroups.length > 0,
-    'captureGroups forwarded from config'
-  );
+  const capture = remediation.querySelector('cora-capture-groups');
+  assert.ok(capture, 'configured capture groups render in the Issues panel');
+  assert.ok(capture.groups.length > 0, 'configured groups reach the control');
   assert.equal(
-    remediation.canCapture,
+    capture.canCapture,
     true,
-    'Assigned Reviewer on In-progress case may capture'
+    'Assigned Reviewer receives an editable capture control'
   );
 });
 
-test('CORACaseReview: a cora-capture event records the value into Answer.capture and persists', async () => {
+test('CORACaseReview: editing the rendered capture control records the value and persists', async () => {
   const failRow = {
     ...BASE_ROW,
     assignedReviewer: 'u1',
@@ -212,9 +204,10 @@ test('CORACaseReview: a cora-capture event records the value into Answer.capture
   await el.connectedCallback();
 
   const remediation = remediationOf(el);
-  fireEvent(remediation, 'cora-capture', {
+  const capture = remediation.querySelector('cora-capture-groups');
+  assert.ok(capture, 'capture control is rendered');
+  fireEvent(capture, 'cora-capture', {
     detail: {
-      questionId: 'q-needs',
       fieldKey: 'rootCause',
       value: 'Agent rushed',
     },
@@ -227,7 +220,7 @@ test('CORACaseReview: a cora-capture event records the value into Answer.capture
   });
 });
 
-test('CORACaseReview: a cora-capture for an unknown field key is ignored', async () => {
+test('CORACaseReview: the rendered capture control ignores an unknown field key', async () => {
   const failRow = {
     ...BASE_ROW,
     assignedReviewer: 'u1',
@@ -249,11 +242,10 @@ test('CORACaseReview: a cora-capture for an unknown field key is ignored', async
   await el.connectedCallback();
 
   const remediation = remediationOf(el);
-  fireEvent(remediation, 'cora-capture', {
-    detail: { questionId: 'q-needs', fieldKey: 'ghost', value: 'x' },
-  });
-  fireEvent(remediation, 'cora-capture', {
-    detail: { questionId: 'q-missing', fieldKey: 'rootCause', value: 'x' },
+  const capture = remediation.querySelector('cora-capture-groups');
+  assert.ok(capture, 'capture control is rendered');
+  fireEvent(capture, 'cora-capture', {
+    detail: { fieldKey: 'ghost', value: 'x' },
   });
 
   assert.equal(
@@ -287,13 +279,11 @@ test('CORACaseReview: capture is frozen (ignored) on a Completed case', async ()
   await el.connectedCallback();
 
   const remediation = remediationOf(el);
-  assert.equal(
-    remediation.canCapture,
-    false,
-    'capture is frozen at completion'
-  );
-  fireEvent(remediation, 'cora-capture', {
-    detail: { questionId: 'q-needs', fieldKey: 'rootCause', value: 'x' },
+  const capture = remediation.querySelector('cora-capture-groups');
+  assert.ok(capture, 'read-only capture values remain rendered');
+  assert.equal(capture.canCapture, false, 'capture is frozen at completion');
+  fireEvent(capture, 'cora-capture', {
+    detail: { fieldKey: 'rootCause', value: 'x' },
   });
   assert.equal(enqueued.length, 0, 'no persistence when capture is frozen');
 });
@@ -334,17 +324,10 @@ test('CORACaseReview: non-assigned viewer cannot attribute (read-only)', async (
 
   const remediation = remediationOf(el);
   assert.equal(
-    remediation.canAttribute,
-    false,
-    'Responsible Party cannot attribute'
+    remediation.querySelector('.cora-attribute-menu'),
+    null,
+    'Responsible Party receives no attribution controls'
   );
-
-  fireEvent(remediation, 'cora-attribute', {
-    detail: {
-      questionId: 'q-needs',
-      attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' },
-    },
-  });
   assert.equal(
     enqueued.length,
     0,
@@ -388,7 +371,7 @@ test('CORACaseReview: resolves stored Attributed Party names to authoritative di
   );
   const remediation = remediationOf(el);
   assert.equal(
-    remediation._update[1]['q-needs'].attributedParty.displayName,
+    remediation.querySelector('.cora-attribute-current')?.textContent,
     'Jane Smith',
     'authoritative display name is rendered after resolution'
   );
@@ -460,7 +443,7 @@ test('CORACaseReview: keeps the cached Attributed Party name when resolution ret
 
   const remediation = remediationOf(el);
   assert.equal(
-    remediation._update[1]['q-needs'].attributedParty.displayName,
+    remediation.querySelector('.cora-attribute-current')?.textContent,
     'Cached Ghost',
     'cached display name is retained as the fallback'
   );

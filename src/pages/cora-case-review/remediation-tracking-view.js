@@ -38,8 +38,8 @@ import {
  * Action across the Case's failed Answers and lets the Assigned Reviewer resolve
  * each — `complete`, or `cancelled` with a required reason. Read-only viewers see
  * each action's status and (when cancelled) its reason. Persistence is the page's
- * responsibility: a status change is re-dispatched as a bubbling `cora-action-status`
- * so the answers signal stays the single source of truth.
+ * responsibility: a status change calls the `dispatchStatus` callback so the
+ * answers signal stays the single source of truth.
  *
  * @param {RemediationTrackingProps} props
  * @returns {Node[]}
@@ -120,7 +120,10 @@ export function collectRows(props) {
  */
 export function renderActionRow(props, row) {
   const { question, fieldKey, action } = row;
-  const li = h('li', { class: 'cora-remediation-tracking-item' });
+  const li = h('li', {
+    class: 'cora-remediation-tracking-item',
+    key: `${question.id}:${fieldKey}:${action.id}`,
+  });
   li.appendChild(h('p', { class: 'cora-tracking-question' }, question.text));
   li.appendChild(h('p', { class: 'cora-tracking-action' }, action.text));
 

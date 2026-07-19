@@ -462,7 +462,11 @@ test('CORACaseReview: forwards a null Responsible Party when the Case has none',
   await el.connectedCallback();
 
   const remediation = remediationOf(el);
-  assert.equal(remediation.responsibleParty, null);
+  assert.equal(
+    remediation.querySelector('.cora-attribute-responsible'),
+    null,
+    'no Responsible Party quick-pick is rendered for an empty account'
+  );
 });
 
 test('CORACaseReview: attribution is frozen (read-only) on a Completed case', async () => {
@@ -490,17 +494,10 @@ test('CORACaseReview: attribution is frozen (read-only) on a Completed case', as
 
   const remediation = remediationOf(el);
   assert.equal(
-    remediation.canAttribute,
-    false,
-    'Completed case freezes attribution'
+    remediation.querySelector('.cora-attribute-menu'),
+    null,
+    'Completed case renders no attribution controls'
   );
-
-  fireEvent(remediation, 'cora-attribute', {
-    detail: {
-      questionId: 'q-needs',
-      attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' },
-    },
-  });
   assert.equal(
     enqueued.length,
     0,

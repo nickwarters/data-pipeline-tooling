@@ -115,6 +115,19 @@ test('CORARemediationTracking: sent actions with no failure are not listed', () 
   assert.ok(findByClass(el, 'cora-empty cora-remediation-tracking-empty'));
 });
 
+test('CORARemediationTracking: malformed non-array action capture is ignored', () => {
+  const el = new CORARemediationTracking();
+  el.captureGroups = GROUPS;
+  el.update(CATALOGUE, {
+    q1: {
+      value: 'No',
+      capture: { acts: /** @type {any} */ ({ id: 'not-an-array' }) },
+    },
+  });
+
+  assert.ok(findByClass(el, 'cora-empty cora-remediation-tracking-empty'));
+});
+
 test('CORARemediationTracking: read-only lists each sent action with status and cancel reason', () => {
   const el = new CORARemediationTracking();
   el.captureGroups = GROUPS;
@@ -137,6 +150,11 @@ test('CORARemediationTracking: read-only lists each sent action with status and 
   });
   const items = findAllByClass(el, 'cora-remediation-tracking-item');
   assert.equal(items.length, 2);
+  assert.deepEqual(
+    items.map((item) => item.getAttribute('key')),
+    ['q1:acts:acts-0', 'q1:acts:a2'],
+    'tracking rows carry stable action identities for morphing'
+  );
   const text = allText(el);
   assert.ok(text.includes('legacy pending') && /Status: pending/.test(text));
   assert.ok(/Status: cancelled/.test(text) && /Reason: Dup/.test(text));
