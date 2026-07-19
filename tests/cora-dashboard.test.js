@@ -6,7 +6,7 @@ import { installDom } from './_dom-stub.js';
 installDom();
 /** @type {any} */ (globalThis).location = { hash: '' };
 
-const { createRouteSlice, dashboardView } =
+const { createRouteSlice, dashboardView, reviewerCaseColumns } =
   await import('../src/pages/cora-dashboard.js');
 
 function capabilities(overrides = {}) {
@@ -150,6 +150,128 @@ test('dashboard reducer owns KPI disclosure and table sort state', () => {
   });
 });
 
+test('reviewer worklist preserves the legacy columns, filters, and Open action', () => {
+  assert.deepEqual(
+    reviewerCaseColumns().map((column) => column.key),
+    [
+      'reference',
+      'caseType',
+      'relatedDate',
+      'dueDate',
+      'status',
+      'assigned',
+      'actions',
+    ]
+  );
+  const ctx = context(capabilities({ isReviewer: true }));
+  ctx.client = null;
+  const slice = createRouteSlice({}, ctx);
+  const cases = [
+    {
+      id: 'alpha',
+      title: 'Alpha case',
+      caseType: 'complaints',
+      status: 'In-progress',
+      relatedDate: '2026-01-01',
+      dueDate: '2026-01-10',
+      created: 'reviewer-a',
+      overdue: false,
+    },
+    {
+      id: 'beta',
+      title: 'Beta case',
+      caseType: 'conduct',
+      status: 'Completed',
+      relatedDate: '2026-02-01',
+      dueDate: '2026-02-10',
+      created: 'reviewer-b',
+      overdue: false,
+    },
+    {
+      id: 'fallback-reference',
+      title: '',
+      caseType: 'complaints',
+      status: 'In-progress',
+      relatedDate: '',
+      dueDate: '',
+      created: '',
+      overdue: false,
+    },
+  ];
+  const loaded = slice.reducer(slice.initialState, {
+    type: 'reviewer-cases/loaded',
+    cases,
+  });
+  const unfiltered = dashboardView(/** @type {any} */ (loaded), {
+    context: ctx,
+    dispatch: () => {},
+  });
+  assert.match(unfiltered.textContent, /Alpha case/);
+  assert.match(unfiltered.textContent, /Beta case/);
+  assert.match(unfiltered.textContent, /fallback-reference/);
+
+  const byCaseType = slice.reducer(loaded, {
+    type: 'reviewer-table/filter-text-changed',
+    value: 'complaints',
+  });
+  assert.match(
+    dashboardView(/** @type {any} */ (byCaseType), {
+      context: ctx,
+      dispatch: () => {},
+    }).textContent,
+    /Alpha case/
+  );
+  const byStatus = slice.reducer(loaded, {
+    type: 'reviewer-table/filter-text-changed',
+    value: 'completed',
+  });
+  assert.match(
+    dashboardView(/** @type {any} */ (byStatus), {
+      context: ctx,
+      dispatch: () => {},
+    }).textContent,
+    /Beta case/
+  );
+
+  let state = slice.reducer(loaded, {
+    type: 'reviewer-table/filter-text-changed',
+    value: 'beta',
+  });
+  state = slice.reducer(state, {
+    type: 'reviewer-table/status-filter-changed',
+    value: 'Completed',
+  });
+  /** @type {any[]} */
+  const actions = [];
+  const view = dashboardView(/** @type {any} */ (state), {
+    context: ctx,
+    dispatch: (action) => actions.push(action),
+  });
+
+  assert.match(view.textContent, /Beta case/);
+  assert.doesNotMatch(view.textContent, /Alpha case/);
+  assert.equal(view.querySelectorAll('th').length, 7);
+  const textFilter = /** @type {any} */ (
+    view.querySelector('[aria-label="Filter cases"]')
+  );
+  textFilter.value = 'conduct';
+  textFilter.dispatchEvent({ type: 'input', target: textFilter });
+  const statusFilter = /** @type {any} */ (
+    view.querySelector('[aria-label="Filter by status"]')
+  );
+  statusFilter.value = 'In-progress';
+  statusFilter.dispatchEvent({ type: 'change', target: statusFilter });
+  [...view.querySelectorAll('.cora-case-open-btn')]
+    .at(-1)
+    ?.dispatchEvent(/** @type {any} */ ({ type: 'click' }));
+
+  assert.deepEqual(actions, [
+    { type: 'reviewer-table/filter-text-changed', value: 'conduct' },
+    { type: 'reviewer-table/status-filter-changed', value: 'In-progress' },
+  ]);
+  assert.equal(location.hash, '#/case/conduct/beta');
+});
+
 test('dashboard pure view renders role-visible reviewer, owner, and allocation panels', () => {
   const ctx = context(
     capabilities({ isReviewer: true, ownedCaseTypes: ['complaints'] })
@@ -240,11 +362,20 @@ test('dashboard reducer composes Controls, Action Centre, and Responsible Party 
     type: 'action-centre/scope-changed',
     value: false,
   });
+  assert.deepEqual(state.routes.dashboard.actionCentre.counts, {});
   state = slice.reducer(state, {
     type: 'action-centre/counts-loaded',
     counts: { overdue: 2 },
     peeks: { overdue: null },
     headline: 2,
+  });
+  const scopedWithStaleCounts = slice.reducer(state, {
+    type: 'action-centre/scope-changed',
+    value: true,
+  });
+  const scopedView = dashboardView(scopedWithStaleCounts, {
+    context: ctx,
+    dispatch: () => {},
   });
   state = slice.reducer(state, {
     type: 'action-centre/group-toggled',
@@ -302,6 +433,15 @@ test('dashboard reducer composes Controls, Action Centre, and Responsible Party 
     2
   );
   assert.equal(state.routes.dashboard.actionCentre.counts.overdue, 2);
+  assert.equal(
+    scopedWithStaleCounts.routes.dashboard.actionCentre.counts.overdue,
+    2
+  );
+  assert.equal(scopedWithStaleCounts.routes.dashboard.actionCentre.headline, 2);
+  assert.doesNotMatch(
+    scopedView.querySelector('.cora-action-centre')?.textContent ?? '',
+    /Nothing needs your action right now/
+  );
   assert.equal(state.routes.dashboard.responsibleParty.filter, 'complaints');
   assert.equal(
     state.routes.dashboard.responsibleParty.remediationSort?.dir,

@@ -39,6 +39,8 @@ import {
  * @property {Set<string>} openKpiLanes
  * @property {Set<string>} expandedKpiTiles
  * @property {TableSort | null} reviewerSort
+ * @property {string} reviewerFilterText
+ * @property {string} reviewerStatusFilter
  * @property {TableSort | null} appealSort
  * @property {ReturnType<typeof initialActionCentreState>} actionCentre
  * @property {ReturnType<typeof initialResponsiblePartyState>} responsibleParty
@@ -61,16 +63,121 @@ export function reviewerCaseColumns() {
       href: caseRouteFor,
     },
     { key: 'caseType', label: 'Case Type', value: 'caseType', sortable: true },
-    { key: 'status', label: 'Status', value: 'status', sortable: true },
+    {
+      key: 'relatedDate',
+      label: 'Related Date',
+      value: (row) => /** @type {any} */ (row).relatedDate || '',
+      sortable: true,
+    },
     {
       key: 'dueDate',
       label: 'Due Date',
       value: (row) => row.dueDate || '',
       sortable: true,
-      format: (value) =>
-        value ? new Date(String(value)).toLocaleDateString() : '—',
+    },
+    { key: 'status', label: 'Status', value: 'status', sortable: true },
+    {
+      key: 'assigned',
+      label: 'Assigned',
+      value: (row) => row.created || '',
+      sortable: true,
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
+      value: (row) => row.title || row.id,
+      format: (value, row) =>
+        h(
+          'button',
+          {
+            type: 'button',
+            className: 'cora-case-open-btn',
+            'aria-label': `Open ${value}`,
+            onclick: () => {
+              location.hash = caseRouteFor(row);
+            },
+          },
+          'Open'
+        ),
     },
   ];
+}
+
+/** @param {DashboardRouteState} route @param {(action: any) => any} dispatch */
+export function reviewerCasesView(route, dispatch) {
+  const text = route.reviewerFilterText.toLowerCase();
+  const rows = route.reviewerCases.filter((row) => {
+    if (
+      route.reviewerStatusFilter &&
+      row.status !== route.reviewerStatusFilter
+    ) {
+      return false;
+    }
+    if (!text) return true;
+    return (
+      (row.title || row.id).toLowerCase().includes(text) ||
+      row.caseType.toLowerCase().includes(text) ||
+      row.status.toLowerCase().includes(text)
+    );
+  });
+  return h(
+    'section',
+    { className: 'cora-reviewer-cases' },
+    h('h1', {}, 'Outstanding Cases'),
+    h(
+      'div',
+      { className: 'cora-case-table-toolbar' },
+      h('input', {
+        className: 'cora-case-table-filter',
+        type: 'text',
+        value: route.reviewerFilterText,
+        placeholder: 'Filter cases…',
+        'aria-label': 'Filter cases',
+        oninput: (/** @type {any} */ event) =>
+          dispatch({
+            type: 'reviewer-table/filter-text-changed',
+            value: event.target?.value ?? '',
+          }),
+      }),
+      h(
+        'select',
+        {
+          className: 'cora-case-table-status-filter',
+          value: route.reviewerStatusFilter,
+          'aria-label': 'Filter by status',
+          onchange: (/** @type {any} */ event) =>
+            dispatch({
+              type: 'reviewer-table/status-filter-changed',
+              value: event.target?.value ?? '',
+            }),
+        },
+        h('option', { value: '' }, 'All statuses'),
+        h('option', { value: CASE_STATUS.IN_PROGRESS }, 'In Progress'),
+        h('option', { value: CASE_STATUS.COMPLETED }, CASE_STATUS.COMPLETED)
+      )
+    ),
+    dataTableView({
+      rows,
+      columns: reviewerCaseColumns(),
+      sort: route.reviewerSort,
+      onSort: (key) => dispatch({ type: 'reviewer-table/sort-requested', key }),
+      emptyMessage: 'No outstanding cases.',
+      rowKey: (row) => `${row.caseType}:${row.id}`,
+      rowHref: caseRouteFor,
+      rowClass: (row) =>
+        row.overdue ? 'cora-case-row cora-case-row--overdue' : 'cora-case-row',
+    })
+  );
+}
+
+/** @param {ReturnType<typeof initialActionCentreState>} state @param {boolean} value */
+export function actionCentreScopeState(state, value) {
+  return {
+    ...state,
+    needsActionNow: value,
+    reasons: visibleReasons(state.allReasons, value),
+    pages: {},
+  };
 }
 
 /**
@@ -121,26 +228,7 @@ export function dashboardView(state, tools) {
         ownedCaseTypes: capabilities.ownedCaseTypes,
         allCaseSources: tools.context.caseSources,
       }),
-    reviewerCases: () =>
-      h(
-        'section',
-        { className: 'cora-reviewer-cases' },
-        h('h1', {}, 'Outstanding Cases'),
-        dataTableView({
-          rows: route.reviewerCases,
-          columns: reviewerCaseColumns(),
-          sort: route.reviewerSort,
-          onSort: (key) =>
-            tools.dispatch({ type: 'reviewer-table/sort-requested', key }),
-          emptyMessage: 'No outstanding cases.',
-          rowKey: (row) => `${row.caseType}:${row.id}`,
-          rowHref: caseRouteFor,
-          rowClass: (row) =>
-            row.overdue
-              ? 'cora-case-row cora-case-row--overdue'
-              : 'cora-case-row',
-        })
-      ),
+    reviewerCases: () => reviewerCasesView(route, tools.dispatch),
     allocation: () =>
       h('cora-allocation', {
         client: tools.context.client,
@@ -197,6 +285,8 @@ export function createRouteSlice(
         openKpiLanes: new Set(),
         expandedKpiTiles: new Set(),
         reviewerSort: null,
+        reviewerFilterText: '',
+        reviewerStatusFilter: '',
         appealSort: { key: 'raised', dir: 'asc' },
         actionCentre: initialActionCentreState(context.chrome.permissions),
         responsibleParty: initialResponsiblePartyState(
@@ -254,12 +344,7 @@ export function createRouteSlice(
     /** @param {ReturnType<typeof initialActionCentreState>} actionState @param {boolean} value */
     toggleNeedsAction(actionState, value) {
       if (!effectTools || actionState.needsActionNow === value) return;
-      const next = {
-        ...actionState,
-        needsActionNow: value,
-        reasons: visibleReasons(actionState.allReasons, value),
-        pages: {},
-      };
+      const next = actionCentreScopeState(actionState, value);
       effectTools.dispatch({ type: 'action-centre/scope-changed', value });
       void refreshActionCounts(next);
       for (const reason of next.reasons) {
@@ -354,6 +439,22 @@ export function createRouteSlice(
           },
         };
       }
+      if (action.type === 'reviewer-table/filter-text-changed') {
+        return {
+          ...state,
+          routes: {
+            dashboard: { ...route, reviewerFilterText: action.value },
+          },
+        };
+      }
+      if (action.type === 'reviewer-table/status-filter-changed') {
+        return {
+          ...state,
+          routes: {
+            dashboard: { ...route, reviewerStatusFilter: action.value },
+          },
+        };
+      }
       if (action.type === 'appeals-table/sort-requested') {
         return {
           ...state,
@@ -371,18 +472,10 @@ export function createRouteSlice(
           routes: {
             dashboard: {
               ...route,
-              actionCentre: {
-                ...route.actionCentre,
-                needsActionNow: action.value,
-                reasons: visibleReasons(
-                  route.actionCentre.allReasons,
-                  action.value
-                ),
-                counts: {},
-                peeks: {},
-                headline: 0,
-                pages: {},
-              },
+              actionCentre: actionCentreScopeState(
+                route.actionCentre,
+                action.value
+              ),
             },
           },
         };
