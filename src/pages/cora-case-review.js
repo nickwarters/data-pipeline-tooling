@@ -2,6 +2,7 @@
 import { reactive, on } from '../lib/view.js';
 import { h } from '../lib/html.js';
 import { CaseReviewViewModel } from '../lib/case-review-view-model.js';
+import { evaluate } from '../evaluators/applicability-evaluator.js';
 import { tabEntries } from '../lib/section-registry.js';
 import { caseDetailsView } from './cora-case-review/details-view.js';
 import {
@@ -9,6 +10,10 @@ import {
   observeSaveStatus,
 } from './cora-case-review/case-actions.js';
 import { createCaseReviewInterimAdapter } from './cora-case-review/interim-adapter.js';
+import {
+  createQuestionPanelView,
+  questionGroupsOf,
+} from './cora-case-review/question-panel-view.js';
 import { updateCaseReviewHeader } from './cora-case-review/header-controller.js';
 import {
   bindQuestionPanel,
@@ -65,9 +70,12 @@ import '../components/base/cora-tabs.js';
  * @property {import('../sharepoint-client.js').CaseRow | null} caseRow
  * @property {import('../sharepoint-client.js').CurrentUser | null} currentUser
  * @property {import('../sharepoint-client.js').CaseTypeConfig | null} config
+ * @property {import('../sharepoint-client.js').QuestionDefinition[]} catalogue
  * @property {Record<string, import('../sharepoint-client.js').Answer>} answers
+ * @property {import('../sharepoint-client.js').QuestionDefinition[]} applicableQuestions
  * @property {Record<import('../services/section-access.js').Section, import('../services/section-access.js').Mode>} access
  * @property {Required<import('../sharepoint-client.js').SectionLabels>} sectionLabels
+ * @property {Required<import('../sharepoint-client.js').SectionLabels>} sectionHeadings
  */
 
 /**
@@ -77,6 +85,7 @@ import '../components/base/cora-tabs.js';
  *   activeTab: string,
  *   panelMode: string,
  *   saveStatus: SaveStatus,
+ *   activeQuestionGroup: string,
  *   snapshot: CaseReviewSnapshot | null,
  * } }} routes
  */
@@ -94,6 +103,7 @@ export function createInitialCaseReviewState(chrome, panelMode) {
         activeTab: '',
         panelMode,
         saveStatus: 'saved',
+        activeQuestionGroup: '',
         snapshot: null,
       },
     },
@@ -146,6 +156,7 @@ export function caseReviewReducer(state, action) {
   const route = state.routes.caseReview;
   if (action.type === 'case/load-finished') {
     const tabs = visibleCaseTabs(action.snapshot);
+    const groups = questionGroupsOf(action.snapshot.applicableQuestions ?? []);
     return {
       ...state,
       routes: {
@@ -153,6 +164,7 @@ export function caseReviewReducer(state, action) {
           ...route,
           snapshot: action.snapshot,
           activeTab: tabs[0]?.id ?? '',
+          activeQuestionGroup: groups[0] ?? '',
         },
       },
     };
@@ -170,16 +182,30 @@ export function caseReviewReducer(state, action) {
     };
   }
   if (action.type === 'case/answers-edited' && route.snapshot) {
+    const applicableIds = evaluate(route.snapshot.catalogue, action.answers);
+    const applicableQuestions = route.snapshot.catalogue.filter((question) =>
+      applicableIds.has(question.id)
+    );
+    const groups = questionGroupsOf(applicableQuestions);
     const snapshot = {
       ...route.snapshot,
       answers: action.answers,
+      applicableQuestions,
       caseRow: route.snapshot.caseRow
         ? { ...route.snapshot.caseRow, answers: action.answers }
         : null,
     };
     return {
       ...state,
-      routes: { caseReview: { ...route, snapshot } },
+      routes: {
+        caseReview: {
+          ...route,
+          snapshot,
+          activeQuestionGroup: groups.includes(route.activeQuestionGroup)
+            ? route.activeQuestionGroup
+            : (groups[0] ?? ''),
+        },
+      },
     };
   }
   if (action.type === 'case/tab-selected') {
@@ -190,6 +216,21 @@ export function caseReviewReducer(state, action) {
     return {
       ...state,
       routes: { caseReview: { ...route, activeTab: action.id } },
+    };
+  }
+  if (action.type === 'case/question-group-selected') {
+    const groups = questionGroupsOf(route.snapshot?.applicableQuestions ?? []);
+    if (
+      !groups.includes(action.group) ||
+      action.group === route.activeQuestionGroup
+    ) {
+      return state;
+    }
+    return {
+      ...state,
+      routes: {
+        caseReview: { ...route, activeQuestionGroup: action.group },
+      },
     };
   }
   if (action.type === 'case/save-status-changed') {
@@ -275,6 +316,7 @@ export function createRouteSlice(params, context) {
       });
     },
   });
+  const questionsView = createQuestionPanelView();
   /** @type {null | {
    *   root: HTMLElement,
    *   status: HTMLElement,
@@ -419,6 +461,30 @@ export function createRouteSlice(params, context) {
         );
         continue;
       }
+      if (entry.id === 'questions') {
+        tools.morph(
+          panel,
+          visible
+            ? questionsView.render({
+                catalogue: snapshot.catalogue,
+                questions: snapshot.applicableQuestions,
+                answers: snapshot.answers,
+                activeGroup: route.activeQuestionGroup,
+                access: snapshot.access.questions,
+                heading: snapshot.sectionHeadings.questions,
+                outcomeOptions: snapshot.config.outcomeOptions ?? [],
+                onAnswer: (questionId, value) =>
+                  viewModel.handleAnswer(questionId, value),
+                onGroupSelected: (group) =>
+                  tools.dispatch({
+                    type: 'case/question-group-selected',
+                    group,
+                  }),
+              })
+            : null
+        );
+        continue;
+      }
       const node = legacyPanels[entry.id];
       if (!node) continue;
       if (visible && node.parentNode !== panel) panel.appendChild(node);
@@ -479,6 +545,7 @@ export function createRouteSlice(params, context) {
         });
       });
       return () => {
+        questionsView.clear();
         viewModel.setAnswerChangeHandler(null);
         disposeSaveStatus();
       };

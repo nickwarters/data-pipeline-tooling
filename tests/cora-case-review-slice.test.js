@@ -57,6 +57,14 @@ const caseRow = {
 };
 
 function snapshot() {
+  const catalogue = [
+    {
+      id: 'q1',
+      text: 'Question one',
+      responseType: 'yes-no-na',
+      deprecated: false,
+    },
+  ];
   return /** @type {any} */ ({
     loaded: true,
     error: null,
@@ -69,6 +77,9 @@ function snapshot() {
         { key: 'accountNumber', label: 'Account number' },
       ],
     },
+    catalogue,
+    applicableQuestions: catalogue,
+    answers: caseRow.answers,
     access: {
       details: 'read-only',
       questions: 'edit',
@@ -84,6 +95,18 @@ function snapshot() {
     sectionLabels: {
       details: 'Details',
       questions: 'Review',
+      issues: 'Issues',
+      remediation: 'Remediation',
+      summary: 'Summary',
+      notes: 'Notes',
+      conversation: 'Conversation',
+      appealRequest: 'Appeal',
+      appealReview: 'Appeal Review',
+      amendOutcome: 'Amend Outcome',
+    },
+    sectionHeadings: {
+      details: 'Case Details',
+      questions: 'Questions',
       issues: 'Issues',
       remediation: 'Remediation',
       summary: 'Summary',
@@ -142,6 +165,7 @@ test('CASE-1 state: route state owns loading, save status, and selected tab unde
   assert.equal(initial.chrome, chrome);
   assert.deepEqual(initial.routes.caseReview, {
     activeTab: '',
+    activeQuestionGroup: '',
     panelMode: 'popover',
     saveStatus: 'saved',
     snapshot: null,
@@ -488,10 +512,12 @@ test('CASE-1 route: mock-mode store shell keeps interim Review working at the ex
   const reviewPanel = queryAllByRole(container, 'tabpanel').find(
     (panel) => panel.getAttribute('id') === 'case-panel-questions'
   );
-  assert.ok(reviewPanel, 'interim Review panel remains mounted');
-  fireEvent(getByTag(reviewPanel, 'section'), 'cora-answer', {
-    detail: { questionId: 'q-welcome', value: 'Yes' },
-  });
+  assert.ok(reviewPanel, 'store-driven Review panel remains mounted');
+  const yes = reviewPanel.querySelector(
+    '[data-focus-key="answer:q-welcome:0"]'
+  );
+  assert.ok(yes);
+  fireEvent(yes, 'change');
   await saveQueue.whenIdle();
   await flush();
 

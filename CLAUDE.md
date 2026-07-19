@@ -144,11 +144,12 @@ src/
     dev-morph-harness.js        # dev-only morph() demo (store-less scratch view, #404)
     dev-performance-harness.js  # dev-only CORE-5 500-question keystroke-latency gate (mock-only)
                                 #   see docs/palimpsest-performance-gate.md for the measured result
-    cora-case-review.js        # CASE-1 store slice + pure tab shell; unconverted Sections use the interim adapter
-    cora-case-review/          # converted Details view + save effect + interim adapter + remaining per-tab controllers
+    cora-case-review.js        # store slice + pure tab shell; unconverted Sections use the interim adapter
+    cora-case-review/          # converted Section views + save effect + interim adapter + remaining per-tab controllers
       details-view.js          # config-driven, read-only Case Details pure view (mirrors current Section behaviour)
       case-actions.js          # Answer dispatch -> unchanged SaveQueue; save status dispatch bridge
-      interim-adapter.js       # mounts CASE-2…6 legacy Section components outside the morph boundary
+      interim-adapter.js       # mounts the remaining CASE-3…6 legacy Section components outside the morph boundary
+      question-panel-view.js   # CASE-2 group-scoped Questions view with memoised cards
       tab-controller.js
       node-registry.js
       completion-controller.js

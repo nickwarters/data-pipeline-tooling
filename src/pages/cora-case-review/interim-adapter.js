@@ -1,10 +1,6 @@
 // @ts-check
 import { createCaseReviewNodeRegistry } from './node-registry.js';
 import {
-  bindQuestionPanel,
-  updateQuestionPanel,
-} from './question-panel-controller.js';
-import {
   bindRemediationPanel,
   updateRemediationPanel,
 } from './remediation-controller.js';
@@ -75,14 +71,12 @@ export function createCaseReviewInterimAdapter({
     const ctx = context();
     if (!bound && viewModel.loaded.get() && viewModel.caseRow) {
       bound = true;
-      bindQuestionPanel(ctx);
       bindRemediationPanel(ctx);
       bindRemediationTracking(ctx);
       conversation.bind(ctx);
       bindCompletion(ctx);
     }
     if (!viewModel.loaded.get() || !viewModel.caseRow) return;
-    updateQuestionPanel(ctx);
     updateRemediationPanel(ctx);
     updateRemediationTracking(ctx);
     updateSummaryNotesAppeal(ctx);
@@ -99,7 +93,6 @@ export function createCaseReviewInterimAdapter({
     get panels() {
       const nodes = registry.ensure();
       return /** @type {Record<string, Node>} */ ({
-        questions: nodes.questionsPanel,
         issues: nodes.issues,
         remediation: nodes.remediation,
         summary: nodes.summary,
