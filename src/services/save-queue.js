@@ -5,7 +5,7 @@
 /** @typedef {import('../sharepoint-client.js').PatchResult} PatchResult */
 /** @typedef {import('../sharepoint-client.js').CaseListOptions} CaseListOptions */
 
-import { signal } from '../lib/signal.js';
+import { effect, signal } from '../lib/signal.js';
 
 /** @typedef {'saved' | 'saving' | 'reconnecting' | 'conflict'} SaveStatus */
 
@@ -62,6 +62,18 @@ export class SaveQueue {
   /** @returns {{ get: () => SaveStatus }} */
   get status() {
     return this._statusSignal;
+  }
+
+  /**
+   * Observe status transitions without exposing the queue's reactive
+   * implementation to consumers. The listener is called immediately with the
+   * current status and again after each transition.
+   *
+   * @param {(status: SaveStatus) => void} listener
+   * @returns {() => void}
+   */
+  subscribeStatus(listener) {
+    return effect(() => listener(this._statusSignal.get()));
   }
 
   /**

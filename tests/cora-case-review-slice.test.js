@@ -302,6 +302,44 @@ test('CASE-6 route: raising an Appeal persists through the store-owned panel', (
   assert.equal(writes[0].value[0].state, 'raised');
 });
 
+test('CASE-6 route: Appeal action remains live after switching from another tab', () => {
+  const appealSnapshot = snapshot();
+  appealSnapshot.caseRow = { ...appealSnapshot.caseRow, appeals: [] };
+  appealSnapshot.access = {
+    ...appealSnapshot.access,
+    appealRequest: 'edit',
+  };
+  const state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: appealSnapshot }
+  );
+  /** @type {Array<{id: string, field: string, value: any}>} */
+  const writes = [];
+  const route = renderShippedState(state, {
+    saveQueue: {
+      enqueue(
+        /** @type {string} */ id,
+        /** @type {string} */ field,
+        /** @type {any} */ value
+      ) {
+        writes.push({ id, field, value });
+      },
+    },
+  });
+
+  fireEvent(getByRole(route.container, 'tab', { name: 'Appeal' }), 'click');
+  const panel = queryAllByRole(route.container, 'tabpanel').find(
+    (candidate) => candidate.getAttribute('id') === 'case-panel-appealRequest'
+  );
+  assert.ok(panel);
+  getByRole(panel, 'textbox', { name: 'Appeal rationale' }).value =
+    'The result is wrong.';
+  const raise = getByRole(panel, 'button', { name: 'Raise Appeal' });
+  fireEvent(raise, 'click');
+
+  assert.equal(writes.length, 1);
+});
+
 test('CASE-6 route: Controls resolves an Appeal and amends an Outcome through state-derived edit access', () => {
   const controlsSnapshot = snapshot();
   controlsSnapshot.caseRow = {
@@ -386,6 +424,105 @@ test('CASE-6 route: Controls resolves an Appeal and amends an Outcome through st
     'click'
   );
   assert.equal(fieldWrites[1].fields.amendedOutcome.outcome, 'fail');
+});
+
+test('CASE-6 route: Appeal Review action remains live after switching from another tab', () => {
+  const controlsSnapshot = snapshot();
+  controlsSnapshot.caseRow = {
+    ...controlsSnapshot.caseRow,
+    status: 'Completed',
+    outcomeAtCompletion: 'fail',
+    appeals: [
+      {
+        id: 'appeal-1',
+        appellant: 'u2',
+        at: '2026-07-19T10:00:00Z',
+        rationale: 'Wrong result.',
+        state: 'raised',
+      },
+    ],
+  };
+  controlsSnapshot.access = {
+    ...controlsSnapshot.access,
+    appealReview: 'edit',
+    amendOutcome: 'edit',
+  };
+  /** @type {Array<{id: string, fields: any}>} */
+  const writes = [];
+  const state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: controlsSnapshot }
+  );
+  const route = renderShippedState(state, {
+    saveQueue: {
+      enqueue() {},
+      enqueueFields(/** @type {string} */ id, /** @type {any} */ fields) {
+        writes.push({ id, fields });
+      },
+    },
+  });
+
+  fireEvent(
+    getByRole(route.container, 'tab', { name: 'Appeal Review' }),
+    'click'
+  );
+  const panel = queryAllByRole(route.container, 'tabpanel').find(
+    (candidate) => candidate.getAttribute('id') === 'case-panel-appealReview'
+  );
+  assert.ok(panel);
+  getByRole(panel, 'radio', { name: 'Agree' }).checked = true;
+  getByRole(panel, 'textbox', { name: 'Resolution rationale' }).value =
+    'Agreed.';
+  getByRole(panel, 'combobox', { name: 'Amended outcome' }).value = 'pass';
+  getByRole(panel, 'textbox', { name: 'Amendment justification' }).value =
+    'Corrected.';
+  fireEvent(getByRole(panel, 'button', { name: 'Resolve Appeal' }), 'click');
+
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].fields.amendedOutcome.fromAppealId, 'appeal-1');
+});
+
+test('CASE-6 route: Amend Outcome action remains live after switching from another tab', () => {
+  const controlsSnapshot = snapshot();
+  controlsSnapshot.caseRow = {
+    ...controlsSnapshot.caseRow,
+    status: 'Completed',
+    outcomeAtCompletion: 'fail',
+  };
+  controlsSnapshot.access = {
+    ...controlsSnapshot.access,
+    amendOutcome: 'edit',
+  };
+  /** @type {Array<{id: string, fields: any}>} */
+  const writes = [];
+  const state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: controlsSnapshot }
+  );
+  const route = renderShippedState(state, {
+    saveQueue: {
+      enqueue() {},
+      enqueueFields(/** @type {string} */ id, /** @type {any} */ fields) {
+        writes.push({ id, fields });
+      },
+    },
+  });
+
+  fireEvent(
+    getByRole(route.container, 'tab', { name: 'Amend Outcome' }),
+    'click'
+  );
+  const panel = queryAllByRole(route.container, 'tabpanel').find(
+    (candidate) => candidate.getAttribute('id') === 'case-panel-amendOutcome'
+  );
+  assert.ok(panel);
+  getByRole(panel, 'combobox', { name: 'Amended outcome' }).value = 'pass';
+  getByRole(panel, 'textbox', { name: 'Amendment justification' }).value =
+    'Corrected.';
+  fireEvent(getByRole(panel, 'button', { name: 'Amend Outcome' }), 'click');
+
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].fields.amendedOutcome.outcome, 'pass');
 });
 
 test('CASE-6 route: appeal views keep empty Case Type configuration defaults', () => {

@@ -150,7 +150,12 @@ export function renderAppealForm(props) {
   )) {
     const box = /** @type {HTMLInputElement} */ (
       /** @type {unknown} */ (
-        h('input', { type: 'checkbox', value: q.id, checked: false })
+        h('input', {
+          type: 'checkbox',
+          value: q.id,
+          checked: false,
+          className: 'cora-appeal-cite-input',
+        })
       )
     );
     checkboxes.push(box);
@@ -194,7 +199,30 @@ export function renderAppealForm(props) {
       'button',
       {
         className: 'cora-appeal-submit',
-        onClick: () => raiseAppeal(props, rationale, checkboxes, error),
+        onClick: (/** @type {Event | undefined} */ event) => {
+          const button = /** @type {HTMLElement | null} */ (
+            event?.currentTarget ?? null
+          );
+          const form =
+            button?.closest('.cora-appeal-form') ??
+            /** @type {HTMLElement | null} */ (event?.target ?? null)?.closest(
+              '.cora-appeal-form'
+            );
+          raiseAppeal(
+            props,
+            /** @type {HTMLTextAreaElement | null} */ (
+              form?.querySelector('.cora-appeal-rationale')
+            ) ?? rationale,
+            form
+              ? /** @type {HTMLInputElement[]} */ (
+                  Array.from(form.querySelectorAll('.cora-appeal-cite-input'))
+                )
+              : checkboxes,
+            /** @type {HTMLElement | null} */ (
+              form?.querySelector('.cora-appeal-error')
+            ) ?? error
+          );
+        },
       },
       'Raise Appeal'
     )

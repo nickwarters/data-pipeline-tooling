@@ -1,5 +1,4 @@
 // @ts-check
-import { effect } from '../../lib/signal.js';
 
 /** @typedef {import('../../services/save-queue.js').SaveQueue} SaveQueue */
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
@@ -26,18 +25,25 @@ export function createCaseReviewSaveEffect({ saveQueue, caseId, dispatch }) {
 }
 
 /**
- * Bridge the unchanged SaveQueue status signal into route-owned state. This is
- * an edge effect; views consume only the dispatched status value.
+ * Bridge SaveQueue status transitions into route-owned state. Views consume
+ * only the dispatched status value and do not depend on the queue internals.
  *
  * @param {SaveQueue} saveQueue
  * @param {(action: {type: 'case/save-status-changed', status: SaveStatus}) => unknown} dispatch
  * @returns {() => void}
  */
 export function observeSaveStatus(saveQueue, dispatch) {
-  return effect(() => {
+  if (typeof saveQueue.subscribeStatus !== 'function') {
     dispatch({
       type: 'case/save-status-changed',
       status: saveQueue.status.get(),
+    });
+    return () => {};
+  }
+  return saveQueue.subscribeStatus((status) => {
+    dispatch({
+      type: 'case/save-status-changed',
+      status,
     });
   });
 }

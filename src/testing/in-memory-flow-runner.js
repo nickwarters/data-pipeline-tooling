@@ -14,6 +14,9 @@ import {
   completeCase,
   completionPatch,
 } from '../pages/cora-case-review/completion-actions.js';
+import { raiseAppeal } from '../pages/cora-case-review/appeal-view.js';
+import { resolveAppeal } from '../pages/cora-case-review/appeal-review-view.js';
+import { loadCaseTypeConfig } from '../../case-types/manifest.js';
 
 /**
  * @typedef {{
@@ -31,6 +34,11 @@ import {
  * caseType?: string,
  * currentUserId?: string,
  * capabilities?: Capabilities | null
+ * } | {
+ * type: 'allocateCase',
+ * caseId: string,
+ * caseType: string,
+ * reviewerId: string
  * } | {
  * type: 'answer',
  * questionId: string,
@@ -58,6 +66,18 @@ import {
  * cancelReason?: string
  * } | {
  * type: 'clickCompleteCase'
+ * } | {
+ * type: 'raiseAppeal',
+ * actorId: string,
+ * rationale: string,
+ * citedAnswerKeys?: string[]
+ * } | {
+ * type: 'resolveAppeal',
+ * actorId: string,
+ * verdict: 'agreed' | 'rejected',
+ * rationale: string,
+ * outcome?: string,
+ * justification?: string
  * } | {
  * type: 'flush'
  * }} FlowAction
@@ -148,6 +168,9 @@ export function createInMemoryFlowRunner(state, opts = {}) {
   /** @param {FlowAction} action */
   async function runAction(action) {
     switch (action.type) {
+      case 'allocateCase':
+        await allocateCase(action);
+        return;
       case 'loadCasePage':
         viewModel = await loadCasePage(action);
         return;
@@ -191,6 +214,12 @@ export function createInMemoryFlowRunner(state, opts = {}) {
       case 'clickCompleteCase':
         await clickCompleteCase(requirePage(action));
         return;
+      case 'raiseAppeal':
+        await raiseCurrentAppeal(action);
+        return;
+      case 'resolveAppeal':
+        await resolveCurrentAppeal(action);
+        return;
       case 'flush':
         await flushCurrentCase();
         return;
@@ -198,6 +227,24 @@ export function createInMemoryFlowRunner(state, opts = {}) {
         throw new Error(
           `Unsupported flow action: ${/** @type {any} */ (action).type}`
         );
+    }
+  }
+
+  /** @param {Extract<FlowAction, { type: 'allocateCase' }>} action */
+  async function allocateCase(action) {
+    const config = await loadCaseTypeConfig(action.caseType);
+    const opts = config.listName ? { listName: config.listName } : {};
+    const row = await client.getCase(action.caseId, opts);
+    if (!row)
+      throw new Error(`Cannot allocate missing Case "${action.caseId}".`);
+    const result = await client.patchCase(
+      action.caseId,
+      { assignedReviewer: action.reviewerId },
+      row.etag,
+      opts
+    );
+    if (!result.ok) {
+      throw new Error(`Case allocation failed with status ${result.status}.`);
     }
   }
 
@@ -225,6 +272,67 @@ export function createInMemoryFlowRunner(state, opts = {}) {
 
   async function flushCurrentCase() {
     if (viewModel) await saveQueue.flushCase(viewModel.caseId);
+  }
+
+  /** @param {Extract<FlowAction, { type: 'raiseAppeal' }>} action */
+  async function raiseCurrentAppeal(action) {
+    const vm = requirePage(action);
+    if (vm.access.appealRequest !== 'edit') {
+      throw new Error('Current actor cannot raise an Appeal.');
+    }
+    raiseAppeal(
+      {
+        caseRow: vm.caseRow,
+        saveQueue,
+        caseId: vm.caseId,
+        access: vm.access.appealRequest,
+        currentUser: { id: action.actorId, displayName: action.actorId },
+        catalogue: vm.catalogue,
+        answers: vm.answersSignal.get(),
+        newAppealId: () => `flow-appeal-${Date.now()}`,
+        render() {},
+      },
+      { value: action.rationale },
+      (action.citedAnswerKeys ?? []).map((value) => ({
+        checked: true,
+        value,
+      })),
+      /** @type {any} */ ({ hidden: true })
+    );
+    await flushCurrentCase();
+  }
+
+  /** @param {Extract<FlowAction, { type: 'resolveAppeal' }>} action */
+  async function resolveCurrentAppeal(action) {
+    const vm = requirePage(action);
+    if (vm.access.appealReview !== 'edit') {
+      throw new Error('Current actor cannot resolve an Appeal.');
+    }
+    const appeal = /** @type {import('../sharepoint-client.js').Appeal} */ (
+      (vm.caseRow?.appeals ?? []).find(
+        (candidate) => candidate.state !== 'resolved'
+      )
+    );
+    resolveAppeal(
+      {
+        caseRow: vm.caseRow,
+        saveQueue,
+        caseId: vm.caseId,
+        access: vm.access.appealReview,
+        currentUser: { id: action.actorId, displayName: action.actorId },
+        outcomeOptions: vm.config?.outcomeOptions ?? [],
+        now: () => new Date().toISOString(),
+        render() {},
+      },
+      appeal,
+      { checked: action.verdict === 'agreed' },
+      { checked: action.verdict === 'rejected' },
+      { value: action.rationale },
+      { value: action.outcome ?? '' },
+      { value: action.justification ?? '' },
+      /** @type {any} */ ({ hidden: true })
+    );
+    await flushCurrentCase();
   }
 
   /**

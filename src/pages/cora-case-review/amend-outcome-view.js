@@ -165,7 +165,28 @@ export function renderAmendForm(props) {
       'button',
       {
         className: 'cora-amend-outcome-submit',
-        onClick: () => amend(props, select, justification, error),
+        onClick: (/** @type {Event | undefined} */ event) => {
+          const button = /** @type {HTMLElement | null} */ (
+            event?.currentTarget ?? null
+          );
+          const form =
+            button?.closest('.cora-amend-outcome-form') ??
+            /** @type {HTMLElement | null} */ (event?.target ?? null)?.closest(
+              '.cora-amend-outcome-form'
+            );
+          amend(
+            props,
+            /** @type {HTMLSelectElement | null} */ (
+              form?.querySelector('.cora-amend-outcome-select')
+            ) ?? select,
+            /** @type {HTMLTextAreaElement | null} */ (
+              form?.querySelector('.cora-amend-outcome-justification')
+            ) ?? justification,
+            /** @type {HTMLElement | null} */ (
+              form?.querySelector('.cora-amend-outcome-error')
+            ) ?? error
+          );
+        },
       },
       'Amend Outcome'
     )

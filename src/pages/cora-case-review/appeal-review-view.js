@@ -180,17 +180,38 @@ export function renderResolveForm(props, appeal) {
       'button',
       {
         className: 'cora-appeal-review-submit',
-        onClick: () =>
+        onClick: (/** @type {Event | undefined} */ event) => {
+          const button = /** @type {HTMLElement | null} */ (
+            event?.currentTarget ?? null
+          );
+          const form =
+            button?.closest('.cora-appeal-review-form') ??
+            /** @type {HTMLElement | null} */ (event?.target ?? null)?.closest(
+              '.cora-appeal-review-form'
+            );
           resolveAppeal(
             props,
             appeal,
-            agreeRadio,
-            rejectRadio,
-            rationale,
-            outcomeSelect,
-            amendJustification,
-            error
-          ),
+            /** @type {HTMLInputElement | null} */ (
+              form?.querySelector('.cora-appeal-review-verdict-agreed')
+            ) ?? agreeRadio,
+            /** @type {HTMLInputElement | null} */ (
+              form?.querySelector('.cora-appeal-review-verdict-rejected')
+            ) ?? rejectRadio,
+            /** @type {HTMLTextAreaElement | null} */ (
+              form?.querySelector('.cora-appeal-review-rationale-input')
+            ) ?? rationale,
+            /** @type {HTMLSelectElement | null} */ (
+              form?.querySelector('.cora-appeal-review-outcome-select')
+            ) ?? outcomeSelect,
+            /** @type {HTMLTextAreaElement | null} */ (
+              form?.querySelector('.cora-appeal-review-amend-justification')
+            ) ?? amendJustification,
+            /** @type {HTMLElement | null} */ (
+              form?.querySelector('.cora-appeal-review-error')
+            ) ?? error
+          );
+        },
       },
       'Resolve Appeal'
     )

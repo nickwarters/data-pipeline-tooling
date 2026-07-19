@@ -17,7 +17,7 @@ test('CASE-7 case review tree contains only store actions and pure views', () =>
     const source = readFileSync(new URL(file, directory), 'utf8');
     assert.doesNotMatch(
       source,
-      /\b(?:ShellElement|defineView|reactive)\b|\bsignal\s*\(/
+      /\b(?:ShellElement|defineView|reactive)\b|\bsignal\s*\(|from ['\"][^'\"]*signal\.js['\"]/
     );
   }
 });
