@@ -9,6 +9,7 @@ import {
   hashStr,
   compileExport,
   buildPublishArtifacts,
+  publishBankEffect,
 } from '../src/pages/question-bank/question-bank-compile.js';
 
 /** Tiny helper to build a bank with one question. */
@@ -733,4 +734,24 @@ test('buildPublishArtifacts: versioned JSON still carries all other envelope fie
 test('buildPublishArtifacts: envelope without labels produces identical versioned and current JSON', () => {
   const r = buildPublishArtifacts(pubEnvelope, null);
   assert.equal(r.versionedJson, r.currentJson);
+});
+
+test('publishBankEffect writes byte-identical artifacts from the existing compiler path', async () => {
+  /** @type {any[]} */
+  const writes = [];
+  const artifacts = await publishBankEffect(
+    /** @type {any} */ (exportBank),
+    null,
+    async (payload) => {
+      writes.push(payload);
+    }
+  );
+  const envelope = JSON.parse(artifacts.currentJson);
+  const rebuilt = buildPublishArtifacts(envelope, null);
+
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0], artifacts);
+  assert.equal(artifacts.currentJson, rebuilt.currentJson);
+  assert.equal(artifacts.versionedJson, rebuilt.versionedJson);
+  assert.deepEqual(artifacts.manifest, rebuilt.manifest);
 });

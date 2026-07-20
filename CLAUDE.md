@@ -124,7 +124,6 @@ src/
       cora-wording-editor.js
     collections/                # page/tab-level assemblies mounted directly by pages
       cora-case-tabs.js
-      cora-compile-drawer.js
       cora-question-list.js
 
   config/
@@ -174,11 +173,12 @@ src/
       cora-bank-rail.js
       cora-outcome-options-editor.js
       cora-question-bank-editor.css
+      compile-drawer.js         # pure compile/simulation/publish drawer view (BANK-3)
       cora-remediation-actions-editor.js # edits a Question Definition's Remediation Actions (moved from components/sections, #381)
       question-bank-compile.js
       question-bank-source.js
       question-bank-store.js    # temporary BANK-1 adapter for old card editors; removed by BANK-2
-      simulate-panel.js         # impact-simulation panel fed to cora-compile-drawer via props
+      simulate-panel.js         # pure golden-tested impact-simulation view
 
   views/                        # generic store-driven pure renderers
     data-table.js               # descriptor-driven table view (value, sort, format, links)

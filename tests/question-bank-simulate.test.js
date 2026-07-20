@@ -152,6 +152,60 @@ test('simulate: identical banks report no impact', () => {
   });
 });
 
+test('simulate: fixture result remains byte-for-byte golden', () => {
+  const base = baselineBank();
+  const draft = draftFrom(base, (bank) => {
+    bank.questions[0].optionOutcomes = { Yes: 'fail' };
+  });
+  const result = simulateBankImpact(base, draft, [
+    sampleCase({ 'q-a': { value: 'Yes' } }, 'case-1', 'Case 1'),
+  ]);
+
+  assert.equal(
+    JSON.stringify(result),
+    JSON.stringify({
+      diff: {
+        added: [],
+        removed: [],
+        changed: [
+          {
+            id: 'q-a',
+            fields: ['optionOutcomes', 'failureValues'],
+          },
+        ],
+        outcomeConfigChanged: false,
+      },
+      cases: [
+        {
+          caseId: 'case-1',
+          title: 'Case 1',
+          applicabilityGained: [],
+          applicabilityLost: [],
+          newlyRequired: [],
+          issuesAdded: [{ id: 'q-a', causedBy: ['q-a'] }],
+          issuesRemoved: [],
+          outcome: {
+            before: 'pass',
+            after: 'fail',
+            changed: true,
+            causedBy: ['q-a'],
+          },
+          changed: true,
+        },
+      ],
+      totals: {
+        casesChanged: 1,
+        applicabilityGained: 0,
+        applicabilityLost: 0,
+        newlyRequired: 0,
+        issuesAdded: 1,
+        issuesRemoved: 0,
+        outcomesChanged: 1,
+      },
+    })
+  );
+});
+
 test('simulate: added question reports gained applicability + newly required Answer, caused by itself', () => {
   const base = baselineBank();
   const draft = draftFrom(base, (b) => {

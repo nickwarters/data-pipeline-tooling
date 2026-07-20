@@ -111,7 +111,7 @@ test('reset: H2 headings keep the CORA surface colour over SharePoint theme styl
 test('Question Bank: field selects use the theme surface rather than a native white fill', () => {
   const body = ruleBody(
     questionBankStyles,
-    '}\ncora-bank-editor .field-select {'
+    '}\n.cora-bank-editor .field-select {'
   );
   assert.match(body, /background-color:\s*var\(--cora-color-surface\)/);
 });
@@ -119,7 +119,7 @@ test('Question Bank: field selects use the theme surface rather than a native wh
 test('Question Bank: the Category field input uses the theme surface rather than a native white fill', () => {
   const body = ruleBody(
     questionBankStyles,
-    '}\ncora-bank-editor .field-input {'
+    '}\n.cora-bank-editor .field-input {'
   );
   assert.match(body, /background-color:\s*var\(--cora-color-surface\)/);
 });
@@ -127,7 +127,7 @@ test('Question Bank: the Category field input uses the theme surface rather than
 test('Question Bank: per-option outcome selects use the theme surface and text colour rather than native white chrome', () => {
   const body = ruleBody(
     questionBankStyles,
-    '}\ncora-bank-editor .opt-outcome-select {'
+    '}\n.cora-bank-editor .opt-outcome-select {'
   );
   assert.match(body, /background-color:\s*var\(--cora-color-surface\)/);
   assert.match(body, /color:\s*var\(--cora-color-on-surface\)/);

@@ -1,7 +1,7 @@
 /*
  * Question Bank Editor — route #/question-bank.
  *
- * All selectors are scoped under `cora-bank-editor` so they cannot bleed
+ * All selectors are scoped under `.cora-bank-editor` so they cannot bleed
  * into the rest of the app. The editor uses the same design tokens as
  * the rest of the platform (see cora-design-tokens.css) — Barlow Condensed
  * for display, Barlow for body, JetBrains Mono for code/eyebrows, and
@@ -9,19 +9,19 @@
  *
  * Class names are stable; this file is structured around the DOM that
  * cora-bank-editor.js, cora-bank-rail.js, cora-bank-list.js, cora-question-card.js,
- * cora-bank-dock.js, cora-compile-drawer.js and cora-toast.js render.
+ * cora-bank-dock.js, compile-drawer.js and cora-toast.js render.
  */
 
 /* Neutralise the [data-cora-root] base button rule so this file's bespoke
    button styles (icon-btn, mini-btn, pill-btn, dock-btn, drawer-close,
    add-card, op-toggle, tag-add) are not overridden by the framework's
    filled red default. The .cora-btn helpers are unaffected. */
-cora-bank-editor button {
+.cora-bank-editor button {
   all: revert;
 }
 
 /* ── Root ─────────────────────────────────────────────────────────────── */
-cora-bank-editor {
+.cora-bank-editor {
   display: block;
   background: var(--cora-color-bg);
   color: var(--cora-color-on-surface);
@@ -30,25 +30,25 @@ cora-bank-editor {
   position: relative;
 }
 
-cora-bank-editor *,
-cora-bank-editor *::before,
-cora-bank-editor *::after {
+.cora-bank-editor *,
+.cora-bank-editor *::before,
+.cora-bank-editor *::after {
   box-sizing: border-box;
 }
 
-cora-bank-editor cora-case-tabs,
-cora-bank-editor cora-bank-rail,
-cora-bank-editor cora-bank-list,
-cora-bank-editor cora-question-card,
-cora-bank-editor cora-wording-editor,
-cora-bank-editor cora-options-editor,
-cora-bank-editor cora-showwhen-editor,
-cora-bank-editor cora-showwhen-group,
-cora-bank-editor cora-showwhen-leaf,
-cora-bank-editor cora-remediation-actions-editor,
-cora-bank-editor cora-bank-dock,
-cora-bank-editor cora-compile-drawer,
-cora-bank-editor cora-toast {
+.cora-bank-editor cora-case-tabs,
+.cora-bank-editor cora-bank-rail,
+.cora-bank-editor cora-bank-list,
+.cora-bank-editor cora-question-card,
+.cora-bank-editor cora-wording-editor,
+.cora-bank-editor cora-options-editor,
+.cora-bank-editor cora-showwhen-editor,
+.cora-bank-editor cora-showwhen-group,
+.cora-bank-editor cora-showwhen-leaf,
+.cora-bank-editor cora-remediation-actions-editor,
+.cora-bank-editor cora-bank-dock,
+.cora-bank-editor cora-compile-drawer,
+.cora-bank-editor cora-toast {
   display: block;
 }
 
@@ -56,14 +56,14 @@ cora-bank-editor cora-toast {
    grid column — it is always the off-canvas `☰ Filters` pop-over (see below).
    `minmax(0, 1fr)` lets the editor column shrink so its own overflow-x scroll
    containers (e.g. .code-block) work instead of overflowing the page. */
-cora-bank-editor .bank-main {
+.cora-bank-editor .bank-main {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   min-height: calc(100vh - 220px);
 }
 
 /* ── Masthead ─────────────────────────────────────────────────────────── */
-cora-bank-editor .masthead {
+.cora-bank-editor .masthead {
   background: var(--cora-color-surface);
   border-bottom: 1px solid var(--cora-color-border);
   padding: var(--cora-space-6) var(--cora-space-7) var(--cora-space-5);
@@ -73,7 +73,7 @@ cora-bank-editor .masthead {
   gap: var(--cora-space-5);
 }
 
-cora-bank-editor .eyebrow {
+.cora-bank-editor .eyebrow {
   font-family: var(--cora-font-mono);
   font-size: var(--cora-font-size-2xs);
   letter-spacing: var(--cora-tracking-widest);
@@ -81,7 +81,7 @@ cora-bank-editor .eyebrow {
   color: var(--cora-color-text-muted);
   margin-bottom: var(--cora-space-2);
 }
-cora-bank-editor .eyebrow .dot {
+.cora-bank-editor .eyebrow .dot {
   display: inline-block;
   width: 5px;
   height: 5px;
@@ -91,7 +91,7 @@ cora-bank-editor .eyebrow .dot {
   vertical-align: middle;
 }
 
-cora-bank-editor h1 {
+.cora-bank-editor h1 {
   font-family: var(--cora-font-display);
   font-weight: var(--cora-font-weight-black);
   font-size: var(--cora-font-size-3xl);
@@ -100,12 +100,12 @@ cora-bank-editor h1 {
   color: var(--cora-color-on-surface);
   margin: 0;
 }
-cora-bank-editor h1 em {
+.cora-bank-editor h1 em {
   font-style: normal;
   color: var(--cora-color-accent);
 }
 
-cora-bank-editor .masthead-meta {
+.cora-bank-editor .masthead-meta {
   text-align: right;
   font-family: var(--cora-font-mono);
   font-size: var(--cora-font-size-xs);
@@ -114,13 +114,13 @@ cora-bank-editor .masthead-meta {
   border-left: 1px solid var(--cora-color-border);
   padding-left: var(--cora-space-4);
 }
-cora-bank-editor .masthead-meta strong {
+.cora-bank-editor .masthead-meta strong {
   color: var(--cora-color-on-surface);
   font-weight: var(--cora-font-weight-semibold);
 }
 
 /* ── Case-type tab bar ────────────────────────────────────────────────── */
-cora-bank-editor .case-bar {
+.cora-bank-editor .case-bar {
   padding: var(--cora-space-3) var(--cora-space-7);
   background: var(--cora-color-surface);
   border-bottom: 1px solid var(--cora-color-border);
@@ -129,18 +129,18 @@ cora-bank-editor .case-bar {
   gap: var(--cora-space-5);
   flex-wrap: wrap;
 }
-cora-bank-editor .case-bar-label {
+.cora-bank-editor .case-bar-label {
   font-family: var(--cora-font-mono);
   font-size: var(--cora-font-size-xs);
   letter-spacing: var(--cora-tracking-wider);
   text-transform: uppercase;
   color: var(--cora-color-text-muted);
 }
-cora-bank-editor .case-tabs {
+.cora-bank-editor .case-tabs {
   display: flex;
   gap: var(--cora-space-1);
 }
-cora-bank-editor .case-tab {
+.cora-bank-editor .case-tab {
   background: transparent;
   border: 1px solid transparent;
   padding: var(--cora-space-2) var(--cora-space-3);
@@ -158,27 +158,27 @@ cora-bank-editor .case-tab {
   align-items: center;
   gap: var(--cora-space-2);
 }
-cora-bank-editor .case-tab:hover {
+.cora-bank-editor .case-tab:hover {
   color: var(--cora-color-on-surface);
   background: var(--cora-color-surface-2);
 }
-cora-bank-editor .case-tab.active {
+.cora-bank-editor .case-tab.active {
   color: var(--cora-color-accent);
   border-color: var(--cora-color-accent);
   background: var(--cora-color-accent-muted);
 }
-cora-bank-editor .tab-count {
+.cora-bank-editor .tab-count {
   font-family: var(--cora-font-mono);
   font-size: var(--cora-font-size-2xs);
   color: var(--cora-color-text-muted);
   padding-left: var(--cora-space-2);
   border-left: 1px solid var(--cora-color-border);
 }
-cora-bank-editor .case-tab.active .tab-count {
+.cora-bank-editor .case-tab.active .tab-count {
   color: var(--cora-color-accent);
   border-left-color: currentColor;
 }
-cora-bank-editor .case-bar-right {
+.cora-bank-editor .case-bar-right {
   margin-left: auto;
   display: flex;
   gap: var(--cora-space-2);
@@ -186,7 +186,7 @@ cora-bank-editor .case-bar-right {
 }
 
 /* ── Pill buttons (used in case-bar and drawer footer) ────────────────── */
-cora-bank-editor .pill-btn {
+.cora-bank-editor .pill-btn {
   background: var(--cora-color-surface);
   border: 1px solid var(--cora-color-border-strong);
   padding: var(--cora-space-2) var(--cora-space-3);
@@ -203,19 +203,19 @@ cora-bank-editor .pill-btn {
     background var(--cora-duration-fast) var(--cora-easing-standard),
     border-color var(--cora-duration-fast) var(--cora-easing-standard);
 }
-cora-bank-editor .pill-btn:hover {
+.cora-bank-editor .pill-btn:hover {
   background: var(--cora-color-surface-2);
 }
-cora-bank-editor .pill-btn.primary {
+.cora-bank-editor .pill-btn.primary {
   background: var(--cora-color-accent);
   border-color: var(--cora-color-accent);
   color: var(--cora-color-text-on-accent);
 }
-cora-bank-editor .pill-btn.primary:hover {
+.cora-bank-editor .pill-btn.primary:hover {
   background: var(--cora-color-accent-hover);
   border-color: var(--cora-color-accent-hover);
 }
-cora-bank-editor .pill-btn .key {
+.cora-bank-editor .pill-btn .key {
   font-family: var(--cora-font-mono);
   font-size: var(--cora-font-size-2xs);
   opacity: 0.75;
@@ -228,7 +228,7 @@ cora-bank-editor .pill-btn .key {
 /* The rail slides in from the left as an off-canvas pop-over at every width,
    surfaced by the `☰ Filters` toggle. This keeps the editor full-width and
    avoids the intermediate widths where a static rail squeezed the cards. */
-cora-bank-editor aside.rail {
+.cora-bank-editor aside.rail {
   border-right: 1px solid var(--cora-color-border);
   padding: var(--cora-space-5) var(--cora-space-4);
   background: var(--cora-color-surface);
@@ -247,14 +247,14 @@ cora-bank-editor aside.rail {
     transform var(--cora-duration-base) var(--cora-easing-standard),
     visibility var(--cora-duration-base) var(--cora-easing-standard);
 }
-cora-bank-editor aside.rail.open {
+.cora-bank-editor aside.rail.open {
   transform: translateX(0);
   visibility: visible;
 }
-cora-bank-editor .rail-section {
+.cora-bank-editor .rail-section {
   margin-bottom: var(--cora-space-5);
 }
-cora-bank-editor .rail-section h3 {
+.cora-bank-editor .rail-section h3 {
   font-family: var(--cora-font-mono);
   font-size: var(--cora-font-size-2xs);
   letter-spacing: var(--cora-tracking-wider);
@@ -265,7 +265,7 @@ cora-bank-editor .rail-section h3 {
   border-bottom: 1px solid var(--cora-color-border);
   font-weight: var(--cora-font-weight-semibold);
 }
-cora-bank-editor .filter-chip {
+.cora-bank-editor .filter-chip {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -277,34 +277,34 @@ cora-bank-editor .filter-chip {
   color: var(--cora-color-on-surface);
   transition: background var(--cora-duration-fast) var(--cora-easing-standard);
 }
-cora-bank-editor .filter-chip:hover {
+.cora-bank-editor .filter-chip:hover {
   background: var(--cora-color-surface-2);
 }
-cora-bank-editor .filter-chip.active {
+.cora-bank-editor .filter-chip.active {
   background: var(--cora-color-accent-muted);
   color: var(--cora-color-accent);
   font-weight: var(--cora-font-weight-semibold);
 }
-cora-bank-editor .filter-chip .chip-count {
+.cora-bank-editor .filter-chip .chip-count {
   font-family: var(--cora-font-mono);
   font-size: var(--cora-font-size-xs);
   color: var(--cora-color-text-muted);
 }
-cora-bank-editor .chip-meta {
+.cora-bank-editor .chip-meta {
   display: inline-flex;
   align-items: center;
   gap: var(--cora-space-1);
 }
-cora-bank-editor .chip-move {
+.cora-bank-editor .chip-move {
   width: 24px;
   height: 24px;
   font-size: var(--cora-font-size-sm);
 }
-cora-bank-editor .filter-chip.active .chip-count {
+.cora-bank-editor .filter-chip.active .chip-count {
   color: var(--cora-color-accent);
 }
 
-cora-bank-editor .toggle-row {
+.cora-bank-editor .toggle-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -312,7 +312,7 @@ cora-bank-editor .toggle-row {
   font-size: var(--cora-font-size-sm);
   color: var(--cora-color-on-surface);
 }
-cora-bank-editor .toggle {
+.cora-bank-editor .toggle {
   --w: 32px;
   --h: 18px;
   width: var(--w);
@@ -327,7 +327,7 @@ cora-bank-editor .toggle {
     background var(--cora-duration-base) var(--cora-easing-standard),
     border-color var(--cora-duration-base) var(--cora-easing-standard);
 }
-cora-bank-editor .toggle::after {
+.cora-bank-editor .toggle::after {
   content: '';
   position: absolute;
   top: 1px;
@@ -339,15 +339,15 @@ cora-bank-editor .toggle::after {
   box-shadow: var(--cora-shadow-sm);
   transition: transform var(--cora-duration-base) var(--cora-easing-standard);
 }
-cora-bank-editor .toggle.on {
+.cora-bank-editor .toggle.on {
   background: var(--cora-color-accent);
   border-color: var(--cora-color-accent);
 }
-cora-bank-editor .toggle.on::after {
+.cora-bank-editor .toggle.on::after {
   transform: translateX(14px);
 }
 
-cora-bank-editor .rail-stat {
+.cora-bank-editor .rail-stat {
   font-family: var(--cora-font-display);
   font-weight: var(--cora-font-weight-black);
   font-size: var(--cora-font-size-2xl);
@@ -355,7 +355,7 @@ cora-bank-editor .rail-stat {
   letter-spacing: var(--cora-tracking-tight);
   color: var(--cora-color-on-surface);
 }
-cora-bank-editor .rail-stat-label {
+.cora-bank-editor .rail-stat-label {
   font-family: var(--cora-font-mono);
   font-size: var(--cora-font-size-2xs);
   letter-spacing: var(--cora-tracking-wider);
@@ -364,33 +364,33 @@ cora-bank-editor .rail-stat-label {
   margin-top: 2px;
 }
 
-cora-bank-editor .rail-legend {
+.cora-bank-editor .rail-legend {
   font-family: var(--cora-font-mono);
   font-size: var(--cora-font-size-xs);
   line-height: var(--cora-line-height-loose);
   color: var(--cora-color-text-muted);
 }
-cora-bank-editor .rail-legend .swatch {
+.cora-bank-editor .rail-legend .swatch {
   display: inline-block;
   width: 3px;
   height: 11px;
   vertical-align: middle;
   margin-right: var(--cora-space-2);
 }
-cora-bank-editor .rail-legend .swatch.active {
+.cora-bank-editor .rail-legend .swatch.active {
   background: var(--cora-color-accent);
 }
-cora-bank-editor .rail-legend .swatch.deprecated {
+.cora-bank-editor .rail-legend .swatch.deprecated {
   background: var(--cora-color-text-subtle);
 }
-cora-bank-editor .rail-legend .swatch.conditional {
+.cora-bank-editor .rail-legend .swatch.conditional {
   background: var(--cora-color-warning);
 }
 
 /* ── Rail pop-over trigger + backdrop ─────────────────────────────────── */
 /* The `☰ Filters` toggle sits above the editor at every width and opens the
    off-canvas rail; the backdrop dims the page while the rail is open. */
-cora-bank-editor .rail-toggle {
+.cora-bank-editor .rail-toggle {
   display: inline-flex;
   align-items: center;
   gap: var(--cora-space-2);
@@ -408,13 +408,13 @@ cora-bank-editor .rail-toggle {
     background var(--cora-duration-fast) var(--cora-easing-standard),
     border-color var(--cora-duration-fast) var(--cora-easing-standard);
 }
-cora-bank-editor .rail-toggle:hover {
+.cora-bank-editor .rail-toggle:hover {
   background: var(--cora-color-surface-2);
   border-color: var(--cora-color-accent);
   color: var(--cora-color-accent);
 }
 
-cora-bank-editor .rail-backdrop {
+.cora-bank-editor .rail-backdrop {
   display: block;
   position: fixed;
   inset: 0;
@@ -424,20 +424,20 @@ cora-bank-editor .rail-backdrop {
   pointer-events: none;
   transition: opacity var(--cora-duration-base) var(--cora-easing-standard);
 }
-cora-bank-editor .rail-backdrop.open {
+.cora-bank-editor .rail-backdrop.open {
   opacity: 1;
   pointer-events: auto;
 }
 
 /* ── Editor pane ──────────────────────────────────────────────────────── */
-cora-bank-editor .editor {
+.cora-bank-editor .editor {
   padding: var(--cora-space-6) var(--cora-space-7)
     calc(var(--cora-space-12) + var(--cora-space-5));
   max-width: var(--cora-content-max-width);
   width: 100%;
 }
 
-cora-bank-editor .editor-head {
+.cora-bank-editor .editor-head {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
@@ -445,7 +445,7 @@ cora-bank-editor .editor-head {
   padding-bottom: var(--cora-space-3);
   border-bottom: 1px solid var(--cora-color-border);
 }
-cora-bank-editor .editor-head h2 {
+.cora-bank-editor .editor-head h2 {
   font-family: var(--cora-font-display);
   font-weight: var(--cora-font-weight-bold);
   font-size: var(--cora-font-size-xl);
@@ -453,7 +453,7 @@ cora-bank-editor .editor-head h2 {
   margin: 0;
   color: var(--cora-color-on-surface);
 }
-cora-bank-editor .editor-head h2 .meta {
+.cora-bank-editor .editor-head h2 .meta {
   font-family: var(--cora-font-mono);
   font-size: var(--cora-font-size-xs);
   font-weight: var(--cora-font-weight-regular);
@@ -464,7 +464,7 @@ cora-bank-editor .editor-head h2 .meta {
   vertical-align: middle;
 }
 
-cora-bank-editor .dirty-indicator {
+.cora-bank-editor .dirty-indicator {
   font-family: var(--cora-font-mono);
   font-size: var(--cora-font-size-xs);
   letter-spacing: var(--cora-tracking-wider);
@@ -474,16 +474,16 @@ cora-bank-editor .dirty-indicator {
   align-items: center;
   gap: var(--cora-space-2);
 }
-cora-bank-editor .dirty-dot {
+.cora-bank-editor .dirty-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: var(--cora-color-success);
 }
-cora-bank-editor .dirty-indicator.is-dirty {
+.cora-bank-editor .dirty-indicator.is-dirty {
   color: var(--cora-color-warning);
 }
-cora-bank-editor .dirty-indicator.is-dirty .dirty-dot {
+.cora-bank-editor .dirty-indicator.is-dirty .dirty-dot {
   background: var(--cora-color-warning);
   animation: cora-bank-pulse 1.8s infinite;
 }
@@ -494,21 +494,21 @@ cora-bank-editor .dirty-indicator.is-dirty .dirty-dot {
 }
 
 /* ── Outcome options ─────────────────────────────────────────────────── */
-cora-bank-editor .outcome-options {
+.cora-bank-editor .outcome-options {
   margin-bottom: var(--cora-space-4);
   padding: var(--cora-space-3);
   border: 1px solid var(--cora-color-border);
   border-radius: var(--cora-radius-md);
   background: var(--cora-color-surface);
 }
-cora-bank-editor .outcome-options-head {
+.cora-bank-editor .outcome-options-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--cora-space-3);
   margin-bottom: var(--cora-space-2);
 }
-cora-bank-editor .outcome-options h3 {
+.cora-bank-editor .outcome-options h3 {
   margin: 0;
   font-family: var(--cora-font-mono);
   font-size: var(--cora-font-size-2xs);
@@ -516,15 +516,15 @@ cora-bank-editor .outcome-options h3 {
   text-transform: uppercase;
   color: var(--cora-color-text-muted);
 }
-cora-bank-editor .default-outcome-row {
+.cora-bank-editor .default-outcome-row {
   margin-bottom: var(--cora-space-3);
   max-width: 24rem;
 }
-cora-bank-editor .outcome-option-list {
+.cora-bank-editor .outcome-option-list {
   display: grid;
   gap: var(--cora-space-2);
 }
-cora-bank-editor .outcome-option-row {
+.cora-bank-editor .outcome-option-row {
   display: grid;
   grid-template-columns:
     minmax(8rem, 1fr) minmax(12rem, 2fr) minmax(5rem, 0.6fr)
@@ -532,15 +532,15 @@ cora-bank-editor .outcome-option-row {
   gap: var(--cora-space-2);
   align-items: end;
 }
-cora-bank-editor .outcome-option-field {
+.cora-bank-editor .outcome-option-field {
   display: grid;
   gap: 3px;
   font-family: var(--cora-font-body);
   font-size: var(--cora-font-size-xs);
   color: var(--cora-color-text-muted);
 }
-cora-bank-editor .outcome-option-field input,
-cora-bank-editor .outcome-option-field select {
+.cora-bank-editor .outcome-option-field input,
+.cora-bank-editor .outcome-option-field select {
   min-width: 0;
   border: 1px solid var(--cora-color-border);
   border-radius: var(--cora-radius-sm);
@@ -550,14 +550,14 @@ cora-bank-editor .outcome-option-field select {
   font-family: var(--cora-font-body);
   font-size: var(--cora-font-size-sm);
 }
-cora-bank-editor .outcome-empty {
+.cora-bank-editor .outcome-empty {
   font-family: var(--cora-font-mono);
   font-size: var(--cora-font-size-xs);
   color: var(--cora-color-text-muted);
 }
 
 /* ── Question card ────────────────────────────────────────────────────── */
-cora-bank-editor cora-question-card.card {
+.cora-bank-editor cora-question-card.card {
   display: block;
   background: var(--cora-color-surface);
   border: 1px solid var(--cora-color-border);
@@ -570,16 +570,16 @@ cora-bank-editor cora-question-card.card {
     border-color var(--cora-duration-fast) var(--cora-easing-standard),
     box-shadow var(--cora-duration-fast) var(--cora-easing-standard);
 }
-cora-bank-editor cora-question-card.card:hover {
+.cora-bank-editor cora-question-card.card:hover {
   border-color: var(--cora-color-border-strong);
   box-shadow: var(--cora-shadow-md);
 }
-cora-bank-editor cora-question-card.card.deprecated {
+.cora-bank-editor cora-question-card.card.deprecated {
   opacity: 0.6;
   background: var(--cora-color-surface-2);
 }
 
-cora-bank-editor .card-stripe {
+.cora-bank-editor .card-stripe {
   position: absolute;
   left: -1px;
   top: var(--cora-space-3);
@@ -588,18 +588,18 @@ cora-bank-editor .card-stripe {
   background: var(--cora-color-accent);
   border-radius: var(--cora-radius-sm);
 }
-cora-bank-editor cora-question-card.card.deprecated .card-stripe {
+.cora-bank-editor cora-question-card.card.deprecated .card-stripe {
   background: var(--cora-color-text-subtle);
 }
 
-cora-bank-editor .card-head {
+.cora-bank-editor .card-head {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: var(--cora-space-5);
   margin-bottom: var(--cora-space-3);
 }
-cora-bank-editor .card-num {
+.cora-bank-editor .card-num {
   font-family: var(--cora-font-mono);
   font-size: var(--cora-font-size-xs);
   letter-spacing: var(--cora-tracking-wide);
@@ -607,10 +607,10 @@ cora-bank-editor .card-num {
   padding-top: var(--cora-space-1);
   min-width: 110px;
 }
-cora-bank-editor .card-num-label {
+.cora-bank-editor .card-num-label {
   margin-bottom: var(--cora-space-1);
 }
-cora-bank-editor .card-num .id-input {
+.cora-bank-editor .card-num .id-input {
   background: transparent;
   border: none;
   font-family: var(--cora-font-mono);
@@ -620,13 +620,13 @@ cora-bank-editor .card-num .id-input {
   border-bottom: 1px dashed transparent;
   padding: 2px 0;
 }
-cora-bank-editor .card-num .id-input:focus {
+.cora-bank-editor .card-num .id-input:focus {
   outline: none;
   border-bottom-color: var(--cora-color-border-strong);
   color: var(--cora-color-on-surface);
 }
 
-cora-bank-editor .card-body {
+.cora-bank-editor .card-body {
   flex: 1;
   /* Allow the body to shrink below its content's intrinsic width so the
      action buttons stay inside the card instead of overflowing its right
@@ -635,7 +635,7 @@ cora-bank-editor .card-body {
 }
 
 /* ── Wording editor ───────────────────────────────────────────────────── */
-cora-bank-editor .wording {
+.cora-bank-editor .wording {
   position: relative;
   padding: var(--cora-space-3) var(--cora-space-4);
   margin-bottom: var(--cora-space-1);
@@ -646,12 +646,12 @@ cora-bank-editor .wording {
     border-color var(--cora-duration-fast) var(--cora-easing-standard),
     box-shadow var(--cora-duration-fast) var(--cora-easing-standard);
 }
-cora-bank-editor .wording:hover,
-cora-bank-editor .wording.focused {
+.cora-bank-editor .wording:hover,
+.cora-bank-editor .wording.focused {
   border-color: var(--cora-color-accent);
   box-shadow: var(--cora-focus-ring);
 }
-cora-bank-editor .wording::before {
+.cora-bank-editor .wording::before {
   content: 'Question wording';
   position: absolute;
   top: -8px;
@@ -664,7 +664,7 @@ cora-bank-editor .wording::before {
   text-transform: uppercase;
   color: var(--cora-color-text-muted);
 }
-cora-bank-editor .wording .edit-mark {
+.cora-bank-editor .wording .edit-mark {
   position: absolute;
   top: -8px;
   right: var(--cora-space-3);
@@ -679,12 +679,12 @@ cora-bank-editor .wording .edit-mark {
   align-items: center;
   gap: var(--cora-space-1);
 }
-cora-bank-editor .wording .edit-mark::before {
+.cora-bank-editor .wording .edit-mark::before {
   content: '✎';
   font-size: var(--cora-font-size-sm);
 }
 
-cora-bank-editor .q-text {
+.cora-bank-editor .q-text {
   font-family: var(--cora-font-body);
   font-weight: var(--cora-font-weight-medium);
   font-size: var(--cora-font-size-md);
@@ -697,14 +697,14 @@ cora-bank-editor .q-text {
   padding: 2px 0;
   caret-color: var(--cora-color-accent);
 }
-cora-bank-editor .q-text:focus {
+.cora-bank-editor .q-text:focus {
   outline: none;
 }
-cora-bank-editor .q-text.deprecated-text {
+.cora-bank-editor .q-text.deprecated-text {
   text-decoration: line-through;
   text-decoration-color: var(--cora-color-text-subtle);
 }
-cora-bank-editor .wording-foot {
+.cora-bank-editor .wording-foot {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -717,15 +717,15 @@ cora-bank-editor .wording-foot {
   text-transform: uppercase;
   color: var(--cora-color-text-muted);
 }
-cora-bank-editor .wording-foot .changed {
+.cora-bank-editor .wording-foot .changed {
   color: var(--cora-color-warning);
 }
-cora-bank-editor .wording-foot .charcount.warn {
+.cora-bank-editor .wording-foot .charcount.warn {
   color: var(--cora-color-danger);
 }
 
 /* ── Card actions (icon buttons) ──────────────────────────────────────── */
-cora-bank-editor .card-actions {
+.cora-bank-editor .card-actions {
   display: flex;
   gap: var(--cora-space-1);
   align-items: flex-start;
@@ -733,7 +733,7 @@ cora-bank-editor .card-actions {
      card-body absorbs the width pressure (see its min-width: 0). */
   flex-shrink: 0;
 }
-cora-bank-editor .icon-btn {
+.cora-bank-editor .icon-btn {
   background: transparent;
   border: 1px solid transparent;
   width: 30px;
@@ -748,39 +748,39 @@ cora-bank-editor .icon-btn {
   font-size: var(--cora-font-size-base);
   transition: all var(--cora-duration-fast) var(--cora-easing-standard);
 }
-cora-bank-editor .icon-btn:hover {
+.cora-bank-editor .icon-btn:hover {
   color: var(--cora-color-on-surface);
   background: var(--cora-color-surface-2);
   border-color: var(--cora-color-border);
 }
-cora-bank-editor .icon-btn:disabled {
+.cora-bank-editor .icon-btn:disabled {
   cursor: not-allowed;
   opacity: 0.35;
 }
-cora-bank-editor .icon-btn:disabled:hover {
+.cora-bank-editor .icon-btn:disabled:hover {
   color: var(--cora-color-text-muted);
   background: transparent;
   border-color: transparent;
 }
-cora-bank-editor .icon-btn.danger:hover {
+.cora-bank-editor .icon-btn.danger:hover {
   color: var(--cora-color-danger);
   border-color: var(--cora-color-danger);
   background: var(--cora-color-danger-bg);
 }
 
 /* ── Field grid (category / response-type / failure criteria) ─────────── */
-cora-bank-editor .field-grid {
+.cora-bank-editor .field-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: var(--cora-space-3) var(--cora-space-5);
   margin-top: var(--cora-space-4);
 }
-cora-bank-editor .field {
+.cora-bank-editor .field {
   display: flex;
   flex-direction: column;
   gap: var(--cora-space-1);
 }
-cora-bank-editor .field label {
+.cora-bank-editor .field label {
   font-family: var(--cora-font-mono);
   font-size: var(--cora-font-size-2xs);
   letter-spacing: var(--cora-tracking-wider);
@@ -788,8 +788,8 @@ cora-bank-editor .field label {
   color: var(--cora-color-text-muted);
   font-weight: var(--cora-font-weight-semibold);
 }
-cora-bank-editor .field-input,
-cora-bank-editor .field-select {
+.cora-bank-editor .field-input,
+.cora-bank-editor .field-select {
   border: none;
   border-bottom: 1px solid var(--cora-color-border-strong);
   padding: var(--cora-space-1) 0;
@@ -798,17 +798,17 @@ cora-bank-editor .field-select {
   color: var(--cora-color-on-surface);
   width: 100%;
 }
-cora-bank-editor .field-input:focus,
-cora-bank-editor .field-select:focus {
+.cora-bank-editor .field-input:focus,
+.cora-bank-editor .field-select:focus {
   outline: none;
   border-bottom-color: var(--cora-color-accent);
 }
-cora-bank-editor .field-input {
+.cora-bank-editor .field-input {
   /* A transparent native input can retain SharePoint's white control fill in
      dark mode. Give it the same tokenised surface as .field-select below. */
   background-color: var(--cora-color-surface);
 }
-cora-bank-editor .field-select {
+.cora-bank-editor .field-select {
   /* A transparent native select can retain SharePoint's white control fill in
      dark mode. Give the select an explicit tokenised surface instead. */
   background-color: var(--cora-color-surface);
@@ -821,7 +821,7 @@ cora-bank-editor .field-select {
 }
 
 /* ── Options editor (tag list for multi-choice) ───────────────────────── */
-cora-bank-editor .options-label {
+.cora-bank-editor .options-label {
   font-family: var(--cora-font-mono);
   font-size: var(--cora-font-size-2xs);
   letter-spacing: var(--cora-tracking-wider);
@@ -831,13 +831,13 @@ cora-bank-editor .options-label {
   display: block;
   margin-bottom: var(--cora-space-2);
 }
-cora-bank-editor .tag-row {
+.cora-bank-editor .tag-row {
   display: flex;
   flex-wrap: wrap;
   gap: var(--cora-space-1);
   margin-top: var(--cora-space-1);
 }
-cora-bank-editor .tag {
+.cora-bank-editor .tag {
   display: inline-flex;
   align-items: center;
   gap: var(--cora-space-1);
@@ -848,15 +848,15 @@ cora-bank-editor .tag {
   font-size: var(--cora-font-size-sm);
   color: var(--cora-color-on-surface);
 }
-cora-bank-editor .tag .tag-x {
+.cora-bank-editor .tag .tag-x {
   cursor: pointer;
   color: var(--cora-color-text-muted);
   font-family: var(--cora-font-mono);
 }
-cora-bank-editor .tag .tag-x:hover {
+.cora-bank-editor .tag .tag-x:hover {
   color: var(--cora-color-danger);
 }
-cora-bank-editor .tag-add {
+.cora-bank-editor .tag-add {
   background: transparent;
   border: 1px dashed var(--cora-color-border-strong);
   padding: var(--cora-space-1) var(--cora-space-3);
@@ -866,25 +866,25 @@ cora-bank-editor .tag-add {
   border-radius: var(--cora-radius-md);
   cursor: pointer;
 }
-cora-bank-editor .tag-add:hover {
+.cora-bank-editor .tag-add:hover {
   border-color: var(--cora-color-accent);
   color: var(--cora-color-accent);
   border-style: solid;
 }
 
 /* ── Per-option Outcome mapping (response drives the outcome) ──────────── */
-cora-bank-editor .opt-list {
+.cora-bank-editor .opt-list {
   display: flex;
   flex-direction: column;
   gap: var(--cora-space-1);
   margin-top: var(--cora-space-1);
 }
-cora-bank-editor .opt-row {
+.cora-bank-editor .opt-row {
   display: flex;
   align-items: flex-start;
   gap: var(--cora-space-2);
 }
-cora-bank-editor .opt-label {
+.cora-bank-editor .opt-label {
   flex: 1 1 auto;
   background: var(--cora-color-surface-2);
   border: 1px solid var(--cora-color-border);
@@ -895,7 +895,7 @@ cora-bank-editor .opt-label {
   line-height: 1.4;
   overflow-wrap: anywhere;
 }
-cora-bank-editor .opt-outcome-select {
+.cora-bank-editor .opt-outcome-select {
   flex: 0 0 auto;
   min-width: 9rem;
   border: none;
@@ -914,44 +914,44 @@ cora-bank-editor .opt-outcome-select {
   background-position: right 4px center;
   padding-right: var(--cora-space-5);
 }
-cora-bank-editor .opt-outcome-select:disabled {
+.cora-bank-editor .opt-outcome-select:disabled {
   opacity: 0.7;
   cursor: default;
 }
-cora-bank-editor .opt-row .tag-x {
+.cora-bank-editor .opt-row .tag-x {
   cursor: pointer;
   color: var(--cora-color-text-muted);
   font-family: var(--cora-font-mono);
 }
-cora-bank-editor .opt-row .tag-x:hover {
+.cora-bank-editor .opt-row .tag-x:hover {
   color: var(--cora-color-danger);
 }
 
 /* ── Labels block (reporting tags) ────────────────────────────────────── */
-cora-bank-editor .labels-block {
+.cora-bank-editor .labels-block {
   margin-top: var(--cora-space-4);
 }
-cora-bank-editor .labels-help {
+.cora-bank-editor .labels-help {
   font-size: var(--cora-font-size-2xs);
   color: var(--cora-color-text-muted);
   margin: 2px 0 var(--cora-space-2);
 }
-cora-bank-editor .label-row,
-cora-bank-editor .label-add-row {
+.cora-bank-editor .label-row,
+.cora-bank-editor .label-add-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--cora-space-2);
 }
-cora-bank-editor .label-add-row {
+.cora-bank-editor .label-add-row {
   margin-top: var(--cora-space-2);
 }
-cora-bank-editor .label-empty {
+.cora-bank-editor .label-empty {
   font-size: var(--cora-font-size-sm);
   color: var(--cora-color-text-muted);
   font-style: italic;
 }
-cora-bank-editor .label-pill {
+.cora-bank-editor .label-pill {
   display: inline-flex;
   align-items: center;
   gap: var(--cora-space-1);
@@ -963,11 +963,11 @@ cora-bank-editor .label-pill {
   background: color-mix(in srgb, var(--pill) 16%, transparent);
   border: 1px solid color-mix(in srgb, var(--pill) 45%, transparent);
 }
-cora-bank-editor .label-pill-name {
+.cora-bank-editor .label-pill-name {
   line-height: 1;
 }
 /* A native colour input squeezed into a swatch that reads as the pill dot. */
-cora-bank-editor .label-pill-color {
+.cora-bank-editor .label-pill-color {
   appearance: none;
   -webkit-appearance: none;
   width: 14px;
@@ -978,23 +978,23 @@ cora-bank-editor .label-pill-color {
   background: transparent;
   cursor: pointer;
 }
-cora-bank-editor .label-pill-color::-webkit-color-swatch-wrapper {
+.cora-bank-editor .label-pill-color::-webkit-color-swatch-wrapper {
   padding: 0;
 }
-cora-bank-editor .label-pill-color::-webkit-color-swatch {
+.cora-bank-editor .label-pill-color::-webkit-color-swatch {
   border: 1px solid color-mix(in srgb, var(--pill) 60%, transparent);
   border-radius: 50%;
 }
-cora-bank-editor .label-pill-x {
+.cora-bank-editor .label-pill-x {
   cursor: pointer;
   color: var(--cora-color-text-muted);
   font-family: var(--cora-font-mono);
   line-height: 1;
 }
-cora-bank-editor .label-pill-x:hover {
+.cora-bank-editor .label-pill-x:hover {
   color: var(--cora-color-danger);
 }
-cora-bank-editor .label-add-chip {
+.cora-bank-editor .label-add-chip {
   display: inline-flex;
   align-items: center;
   gap: var(--cora-space-1);
@@ -1007,23 +1007,23 @@ cora-bank-editor .label-add-chip {
   color: var(--cora-color-text-muted);
   cursor: pointer;
 }
-cora-bank-editor .label-add-chip:hover {
+.cora-bank-editor .label-add-chip:hover {
   border-style: solid;
   border-color: var(--pill);
   color: var(--cora-color-on-surface);
 }
-cora-bank-editor .label-swatch-dot {
+.cora-bank-editor .label-swatch-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: var(--pill);
 }
-cora-bank-editor .label-new {
+.cora-bank-editor .label-new {
   display: inline-flex;
   align-items: center;
   gap: var(--cora-space-1);
 }
-cora-bank-editor .label-new-name {
+.cora-bank-editor .label-new-name {
   background: transparent;
   border: 1px solid var(--cora-color-border);
   border-radius: var(--cora-radius-md);
@@ -1032,7 +1032,7 @@ cora-bank-editor .label-new-name {
   color: var(--cora-color-on-surface);
   width: 9rem;
 }
-cora-bank-editor .label-new-color {
+.cora-bank-editor .label-new-color {
   width: 24px;
   height: 24px;
   padding: 0;
@@ -1041,7 +1041,7 @@ cora-bank-editor .label-new-color {
   background: transparent;
   cursor: pointer;
 }
-cora-bank-editor .label-new-add {
+.cora-bank-editor .label-new-add {
   background: transparent;
   border: 1px dashed var(--cora-color-border-strong);
   padding: var(--cora-space-1) var(--cora-space-3);
@@ -1051,21 +1051,21 @@ cora-bank-editor .label-new-add {
   border-radius: var(--cora-radius-md);
   cursor: pointer;
 }
-cora-bank-editor .label-new-add:hover {
+.cora-bank-editor .label-new-add:hover {
   border-color: var(--cora-color-accent);
   color: var(--cora-color-accent);
   border-style: solid;
 }
 
 /* ── showWhen block ───────────────────────────────────────────────────── */
-cora-bank-editor .showwhen-block {
+.cora-bank-editor .showwhen-block {
   margin-top: var(--cora-space-4);
   padding: var(--cora-space-3) var(--cora-space-4);
   background: var(--cora-color-warning-bg);
   border-left: 3px solid var(--cora-color-warning);
   border-radius: 0 var(--cora-radius-md) var(--cora-radius-md) 0;
 }
-cora-bank-editor .showwhen-header {
+.cora-bank-editor .showwhen-header {
   display: flex;
   align-items: center;
   font-family: var(--cora-font-mono);
@@ -1076,12 +1076,12 @@ cora-bank-editor .showwhen-header {
   font-weight: var(--cora-font-weight-semibold);
   margin-bottom: var(--cora-space-2);
 }
-cora-bank-editor .showwhen-desc {
+.cora-bank-editor .showwhen-desc {
   color: var(--cora-color-text-muted);
   font-weight: var(--cora-font-weight-regular);
   margin-left: auto;
 }
-cora-bank-editor .showwhen-mode {
+.cora-bank-editor .showwhen-mode {
   appearance: none;
   cursor: pointer;
   font-family: var(--cora-font-mono);
@@ -1099,18 +1099,18 @@ cora-bank-editor .showwhen-mode {
   background-repeat: no-repeat;
   background-position: right 6px center;
 }
-cora-bank-editor .showwhen-mode:focus {
+.cora-bank-editor .showwhen-mode:focus {
   outline: none;
   border-color: var(--cora-color-accent);
 }
-cora-bank-editor .showwhen-empty {
+.cora-bank-editor .showwhen-empty {
   font-family: var(--cora-font-mono);
   font-size: var(--cora-font-size-xs);
   color: var(--cora-color-text-muted);
   padding: var(--cora-space-1) 0;
 }
 
-cora-bank-editor cora-showwhen-group.group {
+.cora-bank-editor cora-showwhen-group.group {
   position: relative;
   display: block;
   margin: var(--cora-space-1) 0;
@@ -1119,23 +1119,23 @@ cora-bank-editor cora-showwhen-group.group {
   background: var(--cora-color-surface);
   border: 1px solid var(--cora-color-border);
 }
-cora-bank-editor cora-showwhen-group.group.op-and {
+.cora-bank-editor cora-showwhen-group.group.op-and {
   border-left: 3px solid var(--cora-color-warning);
 }
-cora-bank-editor cora-showwhen-group.group.op-or {
+.cora-bank-editor cora-showwhen-group.group.op-or {
   border-left: 3px dashed var(--cora-color-info);
 }
-cora-bank-editor cora-showwhen-group cora-showwhen-group.group {
+.cora-bank-editor cora-showwhen-group cora-showwhen-group.group {
   margin-left: var(--cora-space-3);
 }
 
-cora-bank-editor .group-head {
+.cora-bank-editor .group-head {
   display: flex;
   align-items: center;
   gap: var(--cora-space-2);
   margin-bottom: var(--cora-space-2);
 }
-cora-bank-editor .op-toggle {
+.cora-bank-editor .op-toggle {
   cursor: pointer;
   user-select: none;
   font-family: var(--cora-font-mono);
@@ -1153,22 +1153,22 @@ cora-bank-editor .op-toggle {
   align-items: center;
   gap: var(--cora-space-2);
 }
-cora-bank-editor .op-toggle.op-and {
+.cora-bank-editor .op-toggle.op-and {
   color: var(--cora-color-warning);
 }
-cora-bank-editor .op-toggle.op-or {
+.cora-bank-editor .op-toggle.op-or {
   color: var(--cora-color-info);
 }
-cora-bank-editor .op-toggle:hover {
+.cora-bank-editor .op-toggle:hover {
   background: var(--cora-color-on-surface);
   color: var(--cora-color-surface);
   border-color: var(--cora-color-on-surface);
 }
-cora-bank-editor .op-toggle .arrow {
+.cora-bank-editor .op-toggle .arrow {
   font-size: var(--cora-font-size-xs);
   opacity: 0.6;
 }
-cora-bank-editor .op-toggle .qual {
+.cora-bank-editor .op-toggle .qual {
   font-family: var(--cora-font-body);
   font-size: var(--cora-font-size-xs);
   letter-spacing: var(--cora-tracking-base);
@@ -1177,17 +1177,17 @@ cora-bank-editor .op-toggle .qual {
   color: var(--cora-color-text-muted);
   margin-left: var(--cora-space-1);
 }
-cora-bank-editor .op-toggle:hover .qual {
+.cora-bank-editor .op-toggle:hover .qual {
   color: var(--cora-color-surface-2);
 }
 
-cora-bank-editor .group-actions {
+.cora-bank-editor .group-actions {
   margin-left: auto;
   display: flex;
   gap: var(--cora-space-1);
   align-items: center;
 }
-cora-bank-editor .mini-btn {
+.cora-bank-editor .mini-btn {
   background: transparent;
   border: 1px solid var(--cora-color-border);
   color: var(--cora-color-text-muted);
@@ -1197,20 +1197,20 @@ cora-bank-editor .mini-btn {
   cursor: pointer;
   border-radius: var(--cora-radius-sm);
 }
-cora-bank-editor .mini-btn:hover {
+.cora-bank-editor .mini-btn:hover {
   color: var(--cora-color-on-surface);
   border-color: var(--cora-color-border-strong);
 }
-cora-bank-editor .mini-btn.danger:hover {
+.cora-bank-editor .mini-btn.danger:hover {
   color: var(--cora-color-danger);
   border-color: var(--cora-color-danger);
 }
 
-cora-bank-editor .group-children {
+.cora-bank-editor .group-children {
   padding-left: 0;
 }
 
-cora-bank-editor .leaf {
+.cora-bank-editor .leaf {
   display: flex;
   align-items: center;
   gap: var(--cora-space-2);
@@ -1222,8 +1222,8 @@ cora-bank-editor .leaf {
   border: 1px solid var(--cora-color-border);
   border-radius: var(--cora-radius-sm);
 }
-cora-bank-editor .leaf select,
-cora-bank-editor .leaf input {
+.cora-bank-editor .leaf select,
+.cora-bank-editor .leaf input {
   background: transparent;
   border: none;
   border-bottom: 1px dashed var(--cora-color-border);
@@ -1232,31 +1232,31 @@ cora-bank-editor .leaf input {
   font-size: var(--cora-font-size-sm);
   color: var(--cora-color-on-surface);
 }
-cora-bank-editor .leaf select:focus,
-cora-bank-editor .leaf input:focus {
+.cora-bank-editor .leaf select:focus,
+.cora-bank-editor .leaf input:focus {
   outline: none;
   border-bottom-color: var(--cora-color-accent);
 }
-cora-bank-editor .leaf .leaf-op {
+.cora-bank-editor .leaf .leaf-op {
   color: var(--cora-color-warning);
   font-weight: var(--cora-font-weight-bold);
   padding: 0 2px;
 }
-cora-bank-editor .leaf .leaf-x {
+.cora-bank-editor .leaf .leaf-x {
   margin-left: auto;
   cursor: pointer;
   color: var(--cora-color-text-muted);
   font-family: var(--cora-font-mono);
 }
-cora-bank-editor .leaf .leaf-x:hover {
+.cora-bank-editor .leaf .leaf-x:hover {
   color: var(--cora-color-danger);
 }
-cora-bank-editor .leaf-answered-hint {
+.cora-bank-editor .leaf-answered-hint {
   color: var(--cora-color-text-muted);
   font-size: var(--cora-font-size-xs);
 }
 
-cora-bank-editor
+.cora-bank-editor
   cora-showwhen-group.op-or
   > .group-children
   > cora-showwhen-leaf
@@ -1265,7 +1265,7 @@ cora-bank-editor
   color: var(--cora-color-info);
 }
 
-cora-bank-editor .conjunction {
+.cora-bank-editor .conjunction {
   display: flex;
   align-items: center;
   gap: var(--cora-space-2);
@@ -1276,7 +1276,7 @@ cora-bank-editor .conjunction {
   text-transform: uppercase;
   color: var(--cora-color-text-muted);
 }
-cora-bank-editor .conjunction .glyph {
+.cora-bank-editor .conjunction .glyph {
   padding: 1px var(--cora-space-2);
   border: 1px solid var(--cora-color-border);
   border-radius: var(--cora-radius-pill);
@@ -1284,10 +1284,10 @@ cora-bank-editor .conjunction .glyph {
 }
 
 /* ── Remediation editor ───────────────────────────────────────────────── */
-cora-bank-editor .rem-block {
+.cora-bank-editor .rem-block {
   margin-top: var(--cora-space-4);
 }
-cora-bank-editor .rem-block h4 {
+.cora-bank-editor .rem-block h4 {
   font-family: var(--cora-font-mono);
   font-size: var(--cora-font-size-2xs);
   letter-spacing: var(--cora-tracking-wider);
@@ -1296,11 +1296,11 @@ cora-bank-editor .rem-block h4 {
   font-weight: var(--cora-font-weight-semibold);
   margin: 0 0 var(--cora-space-2);
 }
-cora-bank-editor .rem-count {
+.cora-bank-editor .rem-count {
   color: var(--cora-color-text-muted);
   margin-left: var(--cora-space-1);
 }
-cora-bank-editor .rem-free-row {
+.cora-bank-editor .rem-free-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1310,26 +1310,26 @@ cora-bank-editor .rem-free-row {
   border-left: 3px solid var(--cora-color-success);
   border-radius: 0 var(--cora-radius-md) var(--cora-radius-md) 0;
 }
-cora-bank-editor .rem-free-title {
+.cora-bank-editor .rem-free-title {
   font-family: var(--cora-font-body);
   font-size: var(--cora-font-size-sm);
   color: var(--cora-color-on-surface);
   font-weight: var(--cora-font-weight-semibold);
 }
-cora-bank-editor .rem-free-help {
+.cora-bank-editor .rem-free-help {
   font-family: var(--cora-font-mono);
   font-size: var(--cora-font-size-xs);
   color: var(--cora-color-text-muted);
   margin-top: 2px;
 }
-cora-bank-editor .rem-free-preview {
+.cora-bank-editor .rem-free-preview {
   margin: var(--cora-space-1) 0 var(--cora-space-3);
   padding: var(--cora-space-2) var(--cora-space-3);
   border: 1px dashed var(--cora-color-success);
   border-radius: var(--cora-radius-md);
   background: var(--cora-color-surface);
 }
-cora-bank-editor .rem-free-preview-eyebrow {
+.cora-bank-editor .rem-free-preview-eyebrow {
   font-family: var(--cora-font-mono);
   font-size: var(--cora-font-size-2xs);
   letter-spacing: var(--cora-tracking-wider);
@@ -1338,13 +1338,13 @@ cora-bank-editor .rem-free-preview-eyebrow {
   font-weight: var(--cora-font-weight-semibold);
   margin-bottom: var(--cora-space-1);
 }
-cora-bank-editor .rem-free-preview-body {
+.cora-bank-editor .rem-free-preview-body {
   font-family: var(--cora-font-body);
   font-size: var(--cora-font-size-sm);
   color: var(--cora-color-text-muted);
   font-style: italic;
 }
-cora-bank-editor .rem-item {
+.cora-bank-editor .rem-item {
   display: grid;
   grid-template-columns: minmax(12rem, 1fr) minmax(12rem, 0.8fr) auto;
   align-items: center;
@@ -1352,13 +1352,13 @@ cora-bank-editor .rem-item {
   padding: var(--cora-space-2) 0;
   border-bottom: 1px dotted var(--cora-color-border);
 }
-cora-bank-editor .rem-item:last-child {
+.cora-bank-editor .rem-item:last-child {
   border-bottom: none;
 }
-cora-bank-editor .rem-item::before {
+.cora-bank-editor .rem-item::before {
   content: none;
 }
-cora-bank-editor .rem-item input {
+.cora-bank-editor .rem-item input {
   min-width: 0;
   background: transparent;
   border: none;
@@ -1366,10 +1366,10 @@ cora-bank-editor .rem-item input {
   color: var(--cora-color-on-surface);
   font-family: var(--cora-font-body);
 }
-cora-bank-editor .rem-item input:focus {
+.cora-bank-editor .rem-item input:focus {
   outline: none;
 }
-cora-bank-editor .rem-item .x {
+.cora-bank-editor .rem-item .x {
   cursor: pointer;
   color: var(--cora-color-text-muted);
   font-family: var(--cora-font-mono);
@@ -1377,19 +1377,19 @@ cora-bank-editor .rem-item .x {
   border: 0;
   background: transparent;
 }
-cora-bank-editor .rem-item .x:hover {
+.cora-bank-editor .rem-item .x:hover {
   color: var(--cora-color-danger);
 }
-cora-bank-editor .rem-empty {
+.cora-bank-editor .rem-empty {
   font-family: var(--cora-font-mono);
   font-size: var(--cora-font-size-xs);
   color: var(--cora-color-text-muted);
   padding: var(--cora-space-1) 0;
 }
-cora-bank-editor .rem-add {
+.cora-bank-editor .rem-add {
   margin-top: var(--cora-space-2);
 }
-cora-bank-editor .rem-outcome-block {
+.cora-bank-editor .rem-outcome-block {
   display: grid;
   grid-template-columns: minmax(12rem, 1fr) minmax(14rem, 1fr);
   align-items: center;
@@ -1400,13 +1400,13 @@ cora-bank-editor .rem-outcome-block {
   border-radius: var(--cora-radius-md);
   background: var(--cora-color-surface);
 }
-cora-bank-editor .rem-outcome-block h5 {
+.cora-bank-editor .rem-outcome-block h5 {
   margin: 0;
   font-size: var(--cora-font-size-xs);
   color: var(--cora-color-text-muted);
   font-weight: var(--cora-font-weight-semibold);
 }
-cora-bank-editor .rem-outcome-select {
+.cora-bank-editor .rem-outcome-select {
   width: 100%;
   min-width: 0;
   border: 1px solid var(--cora-color-border);
@@ -1419,7 +1419,7 @@ cora-bank-editor .rem-outcome-select {
 }
 
 /* ── Add-card (dashed "Draft a new question" CTA) ─────────────────────── */
-cora-bank-editor .add-card {
+.cora-bank-editor .add-card {
   border: 1.5px dashed var(--cora-color-border-strong);
   padding: var(--cora-space-5);
   text-align: center;
@@ -1438,12 +1438,12 @@ cora-bank-editor .add-card {
     color var(--cora-duration-fast) var(--cora-easing-standard),
     background var(--cora-duration-fast) var(--cora-easing-standard);
 }
-cora-bank-editor .add-card:hover {
+.cora-bank-editor .add-card:hover {
   border-color: var(--cora-color-accent);
   color: var(--cora-color-accent);
   background: var(--cora-color-accent-muted);
 }
-cora-bank-editor .add-card .plus {
+.cora-bank-editor .add-card .plus {
   display: inline-block;
   font-family: var(--cora-font-display);
   font-size: var(--cora-font-size-lg);
@@ -1453,7 +1453,7 @@ cora-bank-editor .add-card .plus {
 }
 
 /* ── Dock (sticky footer summary) ─────────────────────────────────────── */
-cora-bank-editor .dock {
+.cora-bank-editor .dock {
   position: fixed;
   bottom: 0;
   left: 0;
@@ -1468,36 +1468,36 @@ cora-bank-editor .dock {
   box-shadow: var(--cora-shadow-md);
   z-index: 50;
 }
-cora-bank-editor .dock-status {
+.cora-bank-editor .dock-status {
   display: flex;
   align-items: center;
   gap: var(--cora-space-3);
   font-family: var(--cora-font-mono);
   font-size: var(--cora-font-size-sm);
 }
-cora-bank-editor .dock-stat {
+.cora-bank-editor .dock-stat {
   padding: 0 var(--cora-space-3);
   border-right: 1px solid var(--cora-color-border);
 }
-cora-bank-editor .dock-stat:last-child {
+.cora-bank-editor .dock-stat:last-child {
   border-right: none;
 }
-cora-bank-editor .dock-stat strong {
+.cora-bank-editor .dock-stat strong {
   color: var(--cora-color-on-surface);
   font-weight: var(--cora-font-weight-semibold);
 }
-cora-bank-editor .dock-stat .label {
+.cora-bank-editor .dock-stat .label {
   color: var(--cora-color-text-muted);
   margin-right: var(--cora-space-1);
   letter-spacing: var(--cora-tracking-wider);
   text-transform: uppercase;
   font-size: var(--cora-font-size-2xs);
 }
-cora-bank-editor .dock-actions {
+.cora-bank-editor .dock-actions {
   display: flex;
   gap: var(--cora-space-2);
 }
-cora-bank-editor .dock-btn {
+.cora-bank-editor .dock-btn {
   background: var(--cora-color-surface);
   border: 1px solid var(--cora-color-border-strong);
   color: var(--cora-color-on-surface);
@@ -1514,21 +1514,21 @@ cora-bank-editor .dock-btn {
     background var(--cora-duration-fast) var(--cora-easing-standard),
     border-color var(--cora-duration-fast) var(--cora-easing-standard);
 }
-cora-bank-editor .dock-btn:hover {
+.cora-bank-editor .dock-btn:hover {
   background: var(--cora-color-surface-2);
 }
-cora-bank-editor .dock-btn.primary {
+.cora-bank-editor .dock-btn.primary {
   background: var(--cora-color-accent);
   border-color: var(--cora-color-accent);
   color: var(--cora-color-text-on-accent);
 }
-cora-bank-editor .dock-btn.primary:hover {
+.cora-bank-editor .dock-btn.primary:hover {
   background: var(--cora-color-accent-hover);
   border-color: var(--cora-color-accent-hover);
 }
 
 /* ── Drawer (compile preview) ─────────────────────────────────────────── */
-cora-bank-editor .drawer-backdrop {
+.cora-bank-editor .drawer-backdrop {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.5);
@@ -1537,12 +1537,12 @@ cora-bank-editor .drawer-backdrop {
   pointer-events: none;
   transition: opacity var(--cora-duration-base) var(--cora-easing-standard);
 }
-cora-bank-editor .drawer-backdrop.open {
+.cora-bank-editor .drawer-backdrop.open {
   opacity: 1;
   pointer-events: auto;
 }
 
-cora-bank-editor .drawer {
+.cora-bank-editor .drawer {
   position: fixed;
   top: 0;
   right: 0;
@@ -1557,18 +1557,18 @@ cora-bank-editor .drawer {
   flex-direction: column;
   box-shadow: var(--cora-shadow-lg);
 }
-cora-bank-editor .drawer.open {
+.cora-bank-editor .drawer.open {
   transform: translateX(0);
 }
 
-cora-bank-editor .drawer-head {
+.cora-bank-editor .drawer-head {
   padding: var(--cora-space-5) var(--cora-space-6) var(--cora-space-4);
   border-bottom: 1px solid var(--cora-color-border);
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
 }
-cora-bank-editor .drawer-head h3 {
+.cora-bank-editor .drawer-head h3 {
   font-family: var(--cora-font-display);
   font-weight: var(--cora-font-weight-bold);
   font-size: var(--cora-font-size-xl);
@@ -1577,17 +1577,17 @@ cora-bank-editor .drawer-head h3 {
   margin: 0;
   color: var(--cora-color-on-surface);
 }
-cora-bank-editor .drawer-head h3 em {
+.cora-bank-editor .drawer-head h3 em {
   font-style: normal;
   color: var(--cora-color-accent);
 }
-cora-bank-editor .drawer-head p {
+.cora-bank-editor .drawer-head p {
   font-size: var(--cora-font-size-sm);
   color: var(--cora-color-text-muted);
   margin: var(--cora-space-1) 0 0;
   max-width: 380px;
 }
-cora-bank-editor .drawer-close {
+.cora-bank-editor .drawer-close {
   background: transparent;
   border: 1px solid var(--cora-color-border);
   width: 32px;
@@ -1598,36 +1598,36 @@ cora-bank-editor .drawer-close {
   color: var(--cora-color-text-muted);
   border-radius: var(--cora-radius-md);
 }
-cora-bank-editor .drawer-close:hover {
+.cora-bank-editor .drawer-close:hover {
   color: var(--cora-color-danger);
   border-color: var(--cora-color-danger);
 }
 
-cora-bank-editor .drawer-body {
+.cora-bank-editor .drawer-body {
   flex: 1;
   overflow-y: auto;
   padding: var(--cora-space-4) var(--cora-space-6);
 }
-cora-bank-editor .diff-summary {
+.cora-bank-editor .diff-summary {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: var(--cora-space-3);
   margin-bottom: var(--cora-space-4);
 }
-cora-bank-editor .diff-card {
+.cora-bank-editor .diff-card {
   background: var(--cora-color-surface);
   border: 1px solid var(--cora-color-border);
   padding: var(--cora-space-3) var(--cora-space-4);
   border-radius: var(--cora-radius-md);
 }
-cora-bank-editor .diff-card .n {
+.cora-bank-editor .diff-card .n {
   font-family: var(--cora-font-display);
   font-weight: var(--cora-font-weight-black);
   font-size: var(--cora-font-size-2xl);
   line-height: var(--cora-line-height-tight);
   letter-spacing: var(--cora-tracking-tight);
 }
-cora-bank-editor .diff-card .l {
+.cora-bank-editor .diff-card .l {
   font-family: var(--cora-font-mono);
   font-size: var(--cora-font-size-2xs);
   letter-spacing: var(--cora-tracking-wider);
@@ -1635,24 +1635,24 @@ cora-bank-editor .diff-card .l {
   color: var(--cora-color-text-muted);
   margin-top: var(--cora-space-1);
 }
-cora-bank-editor .diff-card.added .n {
+.cora-bank-editor .diff-card.added .n {
   color: var(--cora-color-success);
 }
-cora-bank-editor .diff-card.changed .n {
+.cora-bank-editor .diff-card.changed .n {
   color: var(--cora-color-warning);
 }
-cora-bank-editor .diff-card.removed .n {
+.cora-bank-editor .diff-card.removed .n {
   color: var(--cora-color-danger);
 }
 
-cora-bank-editor .sim-panel {
+.cora-bank-editor .sim-panel {
   background: var(--cora-color-surface);
   border: 1px solid var(--cora-color-border);
   border-radius: var(--cora-radius-md);
   padding: var(--cora-space-3) var(--cora-space-4);
   margin-bottom: var(--cora-space-4);
 }
-cora-bank-editor .sim-panel h4 {
+.cora-bank-editor .sim-panel h4 {
   font-family: var(--cora-font-mono);
   font-size: var(--cora-font-size-2xs);
   letter-spacing: var(--cora-tracking-wider);
@@ -1660,34 +1660,34 @@ cora-bank-editor .sim-panel h4 {
   color: var(--cora-color-text-muted);
   margin: 0 0 var(--cora-space-2);
 }
-cora-bank-editor .sim-summary {
+.cora-bank-editor .sim-summary {
   font-size: var(--cora-font-size-sm);
   margin: 0 0 var(--cora-space-2);
 }
-cora-bank-editor .sim-empty {
+.cora-bank-editor .sim-empty {
   font-size: var(--cora-font-size-sm);
   color: var(--cora-color-text-muted);
   margin: 0;
 }
-cora-bank-editor .sim-cases {
+.cora-bank-editor .sim-cases {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
   gap: var(--cora-space-2);
 }
-cora-bank-editor .sim-case {
+.cora-bank-editor .sim-case {
   border-top: 1px solid var(--cora-color-border);
   padding-top: var(--cora-space-2);
   font-size: var(--cora-font-size-sm);
 }
-cora-bank-editor .sim-case ul {
+.cora-bank-editor .sim-case ul {
   margin: var(--cora-space-1) 0 0;
   padding-left: var(--cora-space-5);
   color: var(--cora-color-text-muted);
 }
 
-cora-bank-editor .code-block {
+.cora-bank-editor .code-block {
   background: #0e0e0f;
   color: #eaeaec;
   padding: var(--cora-space-4) var(--cora-space-5);
@@ -1699,27 +1699,27 @@ cora-bank-editor .code-block {
   overflow-x: auto;
   max-height: 50vh;
 }
-cora-bank-editor .code-block .k {
+.cora-bank-editor .code-block .k {
   color: #ff9f43;
 }
-cora-bank-editor .code-block .s {
+.cora-bank-editor .code-block .s {
   color: #b5e48c;
 }
-cora-bank-editor .code-block .b {
+.cora-bank-editor .code-block .b {
   color: #ff8a80;
 }
-cora-bank-editor .code-block .p {
+.cora-bank-editor .code-block .p {
   color: #9fb8d0;
 }
-cora-bank-editor .code-block .c {
+.cora-bank-editor .code-block .c {
   color: #6a6f7f;
   font-style: italic;
 }
-cora-bank-editor .code-inline {
+.cora-bank-editor .code-inline {
   font-family: var(--cora-font-mono);
 }
 
-cora-bank-editor .drawer-foot {
+.cora-bank-editor .drawer-foot {
   padding: var(--cora-space-3) var(--cora-space-6);
   border-top: 1px solid var(--cora-color-border);
   display: flex;
@@ -1728,19 +1728,19 @@ cora-bank-editor .drawer-foot {
   gap: var(--cora-space-3);
   background: var(--cora-color-surface-2);
 }
-cora-bank-editor .drawer-foot small {
+.cora-bank-editor .drawer-foot small {
   font-family: var(--cora-font-mono);
   font-size: var(--cora-font-size-xs);
   color: var(--cora-color-text-muted);
   letter-spacing: var(--cora-tracking-wide);
 }
-cora-bank-editor .drawer-foot-actions {
+.cora-bank-editor .drawer-foot-actions {
   display: flex;
   gap: var(--cora-space-2);
 }
 
 /* ── Toast ────────────────────────────────────────────────────────────── */
-cora-bank-editor .toast {
+.cora-bank-editor .toast {
   position: fixed;
   bottom: 90px;
   left: 50%;
@@ -1762,11 +1762,11 @@ cora-bank-editor .toast {
   align-items: center;
   gap: var(--cora-space-2);
 }
-cora-bank-editor .toast.show {
+.cora-bank-editor .toast.show {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
-cora-bank-editor .toast .dot {
+.cora-bank-editor .toast .dot {
   width: 6px;
   height: 6px;
   background: var(--cora-color-success);
@@ -1774,12 +1774,12 @@ cora-bank-editor .toast .dot {
 }
 
 /* ── Empty state ──────────────────────────────────────────────────────── */
-cora-bank-editor .empty {
+.cora-bank-editor .empty {
   text-align: center;
   padding: var(--cora-space-10) var(--cora-space-4);
   color: var(--cora-color-text-muted);
 }
-cora-bank-editor .empty h3 {
+.cora-bank-editor .empty h3 {
   font-family: var(--cora-font-display);
   font-weight: var(--cora-font-weight-bold);
   font-size: var(--cora-font-size-lg);
@@ -1788,8 +1788,8 @@ cora-bank-editor .empty h3 {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  cora-bank-editor aside.rail,
-  cora-bank-editor .rail-backdrop {
+  .cora-bank-editor aside.rail,
+  .cora-bank-editor .rail-backdrop {
     transition: none;
   }
 }

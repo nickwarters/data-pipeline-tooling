@@ -11,36 +11,39 @@ import {
 } from './helpers/semantic-dom.js';
 installDom();
 
-const { CORACompileDrawer } =
-  await import('../src/components/collections/cora-compile-drawer.js');
-const { signal } = await import('../src/lib/signal.js');
+const { CompileDrawer } =
+  await import('../src/pages/question-bank/compile-drawer.js');
 const { compileBank, highlight } =
   await import('../src/pages/question-bank/question-bank-compile.js');
 
 /**
- * Mount a CORACompileDrawer with props + spies (no store).
+ * Render the pure compile drawer with props + spies (no store).
  * @param {{ open?: boolean, bank?: any, diff?: any, highlight?: any, hashCode?: any, simulatePanel?: any }} [over]
  */
 function mount(over = {}) {
-  const e = /** @type {any} */ (new CORACompileDrawer());
-  e.open = signal(over.open ?? false);
-  e.bank = signal(over.bank ?? freshExampleReviewBank());
-  e.diff = signal(over.diff ?? { added: 0, changed: 0, deprecated: 0 });
-  e.compile = compileBank;
-  e.highlight = 'highlight' in over ? over.highlight : highlight;
-  e.hashCode = 'hashCode' in over ? over.hashCode : async () => 'deadbeef';
-  e.simulatePanel = over.simulatePanel ?? null;
   const calls = { closed: 0, copied: 0, submitted: 0 };
-  e.onClose = () => {
-    calls.closed += 1;
-  };
-  e.onCopied = () => {
-    calls.copied += 1;
-  };
-  e.onSubmit = () => {
-    calls.submitted += 1;
-  };
-  e.connectedCallback();
+  const e = /** @type {any} */ (document.createElement('div'));
+  e.replaceChildren(
+    ...CompileDrawer({
+      open: over.open ?? false,
+      bank: over.bank ?? freshExampleReviewBank(),
+      diff: over.diff ?? { added: 0, changed: 0, deprecated: 0 },
+      compile: compileBank,
+      highlight: 'highlight' in over ? over.highlight : highlight,
+      hashCode: 'hashCode' in over ? over.hashCode : async () => 'deadbeef',
+      simulatePanel: over.simulatePanel ?? null,
+      onClose: () => {
+        calls.closed += 1;
+      },
+      onCopied: () => {
+        calls.copied += 1;
+      },
+      onSubmit: () => {
+        calls.submitted += 1;
+      },
+    })
+  );
+  e.disconnectedCallback = () => {};
   return { e, calls };
 }
 
@@ -59,11 +62,13 @@ test('CORACompileDrawer: open signal adds .open to backdrop and drawer', () => {
   e.disconnectedCallback();
 });
 
-test('CORACompileDrawer: re-renders when the open signal flips', () => {
-  const { e } = mount({ open: false });
-  e.open.set(true);
-  assert.ok(e.querySelector('.drawer-backdrop').className.includes('open'));
-  e.disconnectedCallback();
+test('CompileDrawer: open state is supplied by the route render', () => {
+  const closed = mount({ open: false }).e;
+  const open = mount({ open: true }).e;
+  assert.ok(
+    !closed.querySelector('.drawer-backdrop').className.includes('open')
+  );
+  assert.ok(open.querySelector('.drawer-backdrop').className.includes('open'));
 });
 
 test('CORACompileDrawer: backdrop click and × button call onClose', () => {

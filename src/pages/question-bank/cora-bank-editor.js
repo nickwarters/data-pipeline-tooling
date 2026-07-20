@@ -25,6 +25,7 @@ import { BankDock } from './cora-bank-dock.js';
 import { compileBank, hashStr, highlight } from './question-bank-compile.js';
 import { simulatorEnabled } from './question-bank-flags.js';
 import { SimulatePanel } from './simulate-panel.js';
+import { CompileDrawer } from './compile-drawer.js';
 import { moveCategory, moveGroup } from '../../lib/question-order.js';
 
 // BANK-1 keeps the question-card internals behind the temporary adapter.
@@ -38,7 +39,6 @@ import '../../components/sections/cora-showwhen-editor.js';
 import '../../components/sections/cora-showwhen-group.js';
 import '../../components/base/cora-showwhen-leaf.js';
 import './cora-remediation-actions-editor.js';
-import '../../components/collections/cora-compile-drawer.js';
 import '../../components/base/cora-toast.js';
 
 /** @typedef {import('./bank-slice.js').QuestionBankRouteState} QuestionBankRouteState */
@@ -88,9 +88,9 @@ function caseTabsPropsFor(route, dispatch) {
  */
 function compileDrawerPropsFor(route, dispatch) {
   return {
-    open: drawerSignal,
-    bank: currentBankSignal,
-    diff: { get: () => diffCounts(route) },
+    open: route.drawerOpen,
+    bank: currentBank(route),
+    diff: diffCounts(route),
     compile: compileBank,
     highlight,
     hashCode: hashStr,
@@ -114,7 +114,7 @@ function compileDrawerPropsFor(route, dispatch) {
 /**
  * @param {QuestionBankState} state
  * @param {{ dispatch: (action: any) => any, memo?: (key: PropertyKey, deps: readonly unknown[], render: () => HTMLElement) => HTMLElement }} tools
- * @returns {Node[]}
+ * @returns {HTMLElement}
  */
 export function bankEditorView(state, tools) {
   const route = selectQuestionBankState(state);
@@ -124,7 +124,9 @@ export function bankEditorView(state, tools) {
     /** @type {(banks: QuestionBankRouteState['cases']) => void} */ mutator
   ) => tools.dispatch({ type: 'bank/legacy-committed', mutator });
 
-  return [
+  return h(
+    'div',
+    { className: 'cora-bank-editor' },
     h(
       'header',
       { className: 'masthead' },
@@ -206,9 +208,9 @@ export function bankEditorView(state, tools) {
       diffCounts: diffCounts(route),
       openDrawer: () => tools.dispatch({ type: 'drawer/changed', open: true }),
     }),
-    h('cora-compile-drawer', compileDrawerPropsFor(route, tools.dispatch)),
-    h('cora-toast', { message: { get: () => route.toastMsg } }),
-  ];
+    ...CompileDrawer(compileDrawerPropsFor(route, tools.dispatch)),
+    h('cora-toast', { message: { get: () => route.toastMsg } })
+  );
 }
 
 /**

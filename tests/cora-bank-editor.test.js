@@ -8,7 +8,7 @@ await import('../src/pages/question-bank/cora-bank-editor.js');
 
 const G = /** @type {any} */ (globalThis);
 
-test('cora-bank-editor: all 16 custom elements register', () => {
+test('cora-bank-editor: remaining integration elements register; compile drawer is a pure view', () => {
   const names = [
     'cora-bank-editor',
     'cora-case-tabs',
@@ -24,7 +24,6 @@ test('cora-bank-editor: all 16 custom elements register', () => {
     'cora-showwhen-leaf',
     'cora-remediation-actions-editor',
     'cora-bank-dock',
-    'cora-compile-drawer',
     'cora-toast',
   ];
   for (const n of names) {
@@ -45,7 +44,11 @@ test('cora-bank-editor: mounts shell and registers keydown handler', () => {
   };
   /** @type {any} */ (G.document).removeEventListener = () => {};
   inst.connectedCallback();
-  assert.ok(inst._children.length >= 4); // masthead + tabs + main + dock + drawer + toast
+  assert.equal(inst._children.length, 1);
+  assert.equal(
+    inst.querySelector('.cora-bank-editor')?.className,
+    'cora-bank-editor'
+  );
   assert.equal(keydownHandlers.length, 1);
 
   // Simulate ⌘↵ — should open the drawer signal
@@ -217,8 +220,8 @@ test('bank editor: compileDrawerProps wires compile + store; simulate panel gate
     await import('../src/pages/question-bank/question-bank-compile.js');
   _resetStore();
   const props = /** @type {any} */ (compileDrawerProps());
-  assert.equal(props.open, drawerOpen);
-  assert.equal(props.bank, currentBank);
+  assert.equal(props.open, drawerOpen.get());
+  assert.equal(props.bank, currentBank.get());
   assert.equal(props.compile, compileBank);
 
   // Flag off → no simulate panel.
