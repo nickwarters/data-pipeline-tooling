@@ -61,6 +61,19 @@ export function BankList(props) {
       ]
     )
   );
+  // Neighbouring cards depend on catalogue topology for within-group move
+  // controls and showWhen target options. Keep that dependency coarse but
+  // stable so ordinary wording edits still invalidate only their own card.
+  const questionTopology = bank.questions
+    .map((/** @type {any} */ question) =>
+      [
+        question.id,
+        question.category,
+        question.questionGroup,
+        question.deprecated,
+      ].join('\u0000')
+    )
+    .join('\u0001');
   const cards = visible.map((/** @type {any} */ question) => {
     const baselineQuestion = baselineById.get(question.id);
     const conditional =
@@ -90,6 +103,7 @@ export function BankList(props) {
             baselineQuestion,
             filters.questionGroup,
             conditional,
+            questionTopology,
           ],
           render
         )

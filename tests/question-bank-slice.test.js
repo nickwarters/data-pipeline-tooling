@@ -149,6 +149,73 @@ test('editing one of 500 questions preserves untouched card identities within th
   }
 });
 
+test('editing a Question ID refreshes condition targets in memoised neighbouring cards', () => {
+  const questions = [
+    {
+      id: 'source-question',
+      text: 'Source',
+      responseType: 'yes-no-na',
+      deprecated: false,
+    },
+    {
+      id: 'conditional-question',
+      text: 'Conditional',
+      responseType: 'yes-no-na',
+      deprecated: false,
+      showWhen: { 'source-question': { equals: 'Yes' } },
+    },
+  ];
+  const state = /** @type {any} */ ({
+    ...createRouteSlice({}, context()).initialState.routes.questionBank,
+    cases: {
+      synthetic: { slug: 'synthetic', label: 'Synthetic', questions },
+    },
+    baseline: {
+      synthetic: {
+        slug: 'synthetic',
+        label: 'Synthetic',
+        questions: structuredClone(questions),
+      },
+    },
+    activeSlug: 'synthetic',
+  });
+  const memo = createMemo();
+  const props = {
+    bank: state.cases.synthetic,
+    baselineQuestions: state.baseline.synthetic.questions,
+    filters: {
+      category: null,
+      questionGroup: null,
+      showDeprecated: true,
+      conditionalOnly: false,
+    },
+    dirty: false,
+    dispatch() {},
+    addQuestion() {},
+    memo,
+  };
+  BankList(props);
+
+  const edited = questionBankReducer(state, {
+    type: 'question/field-changed',
+    questionId: 'source-question',
+    field: 'id',
+    value: 'renamed-source',
+  });
+  const rerendered = BankList({
+    ...props,
+    bank: edited.cases.synthetic,
+  });
+  const conditionTarget = /** @type {HTMLSelectElement} */ (
+    rerendered.querySelector('[aria-label="Condition question"]')
+  );
+
+  assert.equal(
+    /** @type {HTMLOptionElement} */ (conditionTarget.childNodes[0]).value,
+    'renamed-source'
+  );
+});
+
 test('bank selectors report added, changed, and deprecated Question Definitions', () => {
   const route = selectQuestionBankState(
     createRouteSlice({}, context()).initialState

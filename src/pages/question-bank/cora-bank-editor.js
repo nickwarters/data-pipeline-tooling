@@ -42,16 +42,17 @@ function toast(dispatch, message) {
 /**
  * @param {QuestionBankRouteState} route
  * @param {(action: any) => any} dispatch
+ * @param {boolean} dirty
  */
-function caseTabsPropsFor(route, dispatch) {
+function caseTabsPropsFor(route, dispatch, dirty) {
   return {
     types: route.cases,
     active: route.activeSlug,
-    dirty: isDirty(route),
+    dirty,
     onSelect: (/** @type {string} */ slug) =>
       dispatch({ type: 'bank/selected', slug }),
     onRevert: () => {
-      if (!isDirty(route)) return toast(dispatch, 'Nothing to revert');
+      if (!dirty) return toast(dispatch, 'Nothing to revert');
       const ok = /** @type {any} */ (globalThis).confirm?.(
         'Discard all uncommitted edits and return to the last synced state?'
       );
@@ -67,12 +68,13 @@ function caseTabsPropsFor(route, dispatch) {
  * @param {QuestionBankRouteState} route
  * @param {(action: any) => any} dispatch
  * @param {() => void} publish
+ * @param {{ added: number, changed: number, deprecated: number }} diff
  */
-function compileDrawerPropsFor(route, dispatch, publish) {
+function compileDrawerPropsFor(route, dispatch, publish, diff) {
   return {
     open: route.drawerOpen,
     bank: currentBank(route),
-    diff: diffCounts(route),
+    diff,
     compile: compileBank,
     highlight,
     hashCode: hashStr,
@@ -98,6 +100,8 @@ function compileDrawerPropsFor(route, dispatch, publish) {
 export function bankEditorView(state, tools) {
   const route = selectQuestionBankState(state);
   const bank = currentBank(route);
+  const dirty = isDirty(route);
+  const diff = diffCounts(route);
 
   return h(
     'div',
@@ -127,7 +131,7 @@ export function bankEditorView(state, tools) {
         h('strong', {}, 'questions.v3')
       )
     ),
-    CaseTabs(caseTabsPropsFor(route, tools.dispatch)),
+    CaseTabs(caseTabsPropsFor(route, tools.dispatch, dirty)),
     h(
       'main',
       { className: 'bank-main' },
@@ -155,7 +159,7 @@ export function bankEditorView(state, tools) {
         bank,
         baselineQuestions: baselineBank(route)?.questions ?? [],
         filters: route.filters,
-        dirty: isDirty(route),
+        dirty,
         conditionalQuestionIds: route.conditionalQuestionIds,
         dispatch: tools.dispatch,
         memo: tools.memo,
@@ -164,14 +168,15 @@ export function bankEditorView(state, tools) {
     ),
     BankDock({
       bank,
-      diffCounts: diffCounts(route),
+      diffCounts: diff,
       openDrawer: () => tools.dispatch({ type: 'drawer/changed', open: true }),
     }),
     ...CompileDrawer(
       compileDrawerPropsFor(
         route,
         tools.dispatch,
-        tools.publish ?? (() => tools.dispatch({ type: 'publish/requested' }))
+        tools.publish ?? (() => tools.dispatch({ type: 'publish/requested' })),
+        diff
       )
     ),
     h(
@@ -202,6 +207,9 @@ export function createRouteSlice(_params, context) {
           // The browser workbench prepares exact artifacts; opening the PR is
           // deliberately a human-controlled handoff when no writer is injected.
         });
+      // The supported offline cycle leaves the writer undefined and merges this
+      // candidate entry into the existing append-only manifest before deployment.
+      // Any future runtime writer must source that existing manifest here first.
       const artifacts = await publishBankEffect(
         currentBank(latestRoute),
         null,
