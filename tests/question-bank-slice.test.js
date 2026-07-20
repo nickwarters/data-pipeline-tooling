@@ -78,7 +78,7 @@ test('question bank slice deprecates and restores definitions without deleting t
   );
 });
 
-test('editing one of 500 questions preserves untouched card identities within the 5 ms gate', () => {
+test('editing one of 500 questions preserves untouched card identities within the 5 ms gate', (t) => {
   const questions = Array.from({ length: 500 }, (_, index) => ({
     id: `q-${index}`,
     text: `Question ${index}`,
@@ -144,6 +144,7 @@ test('editing one of 500 questions preserves untouched card identities within th
   const coverageInstrumented =
     process.env.npm_lifecycle_event === 'test:coverage';
   if (!coverageInstrumented) {
+    t.diagnostic(`500-question real-edit p95: ${p95.toFixed(2)} ms`);
     assert.ok(p95 <= 5, `single-edit p95 took ${p95.toFixed(2)} ms`);
   }
 });
@@ -172,7 +173,7 @@ test('bank selectors report added, changed, and deprecated Question Definitions'
   });
 });
 
-test('bank route reducer owns filters, samples, toast, revert, and submit state', () => {
+test('bank route reducer owns filters, samples, toast, revert, and publish state', () => {
   const slice = createRouteSlice({}, context());
   let state = slice.initialState;
   for (const action of [
@@ -182,7 +183,9 @@ test('bank route reducer owns filters, samples, toast, revert, and submit state'
     { type: 'toast/changed', message: 'Saved' },
     { type: 'bank/reverted' },
     { type: 'drawer/changed', open: true },
-    { type: 'bank/submitted' },
+    { type: 'publish/requested' },
+    { type: 'publish/succeeded', artifacts: { currentJson: '{}' } },
+    { type: 'publish/failed', message: 'write failed' },
   ]) {
     state = slice.reducer(state, action);
   }
@@ -190,9 +193,11 @@ test('bank route reducer owns filters, samples, toast, revert, and submit state'
   assert.equal(route.filters.category, 'Opening');
   assert.equal(route.railOpen, true);
   assert.deepEqual(route.sampleCases.example, [{ id: '1' }]);
-  assert.equal(route.toastMsg, 'Saved');
+  assert.equal(route.toastMsg, 'Publish failed');
   assert.equal(route.drawerOpen, false);
   assert.deepEqual(route.baseline, route.cases);
+  assert.equal(route.publishStatus, 'failed');
+  assert.equal(route.publishError, 'write failed');
   assert.equal(slice.reducer(state, { type: 'unknown' }), state);
 });
 
@@ -238,7 +243,7 @@ test('bank editor pure view wires tabs, drawer, simulation, and toast actions', 
   }
   const types = actions.map((action) => action.type);
   assert.ok(types.includes('bank/reverted'));
-  assert.ok(types.includes('bank/submitted'));
+  assert.ok(types.includes('publish/requested'));
   assert.ok(types.includes('drawer/changed'));
   assert.ok(types.includes('toast/changed'));
 });
@@ -293,6 +298,120 @@ test('bank route start owns keyboard, sample-load, and unmount effects', async (
   assert.ok(actions.some((action) => action.type === 'rail/changed'));
 });
 
+test('Send for Review runs the publish effect and stores its exact artifacts', async () => {
+  /** @type {any[]} */
+  const writes = [];
+  /** @type {(value?: unknown) => void} */
+  let wrote = () => {};
+  const written = new Promise((resolve) => {
+    wrote = resolve;
+  });
+  const slice = createRouteSlice(
+    {},
+    /** @type {any} */ ({
+      ...context(),
+      writeQuestionBankArtifacts: async (/** @type {any} */ artifacts) => {
+        writes.push(artifacts);
+        wrote();
+      },
+    })
+  );
+  let state = slice.reducer(slice.initialState, {
+    type: 'drawer/changed',
+    open: true,
+  });
+  const tools = /** @type {any} */ ({
+    dispatch(/** @type {any} */ action) {
+      state = slice.reducer(state, action);
+    },
+    listen() {},
+  });
+  const view = slice.view(state, tools);
+  const dispose = slice.start(tools);
+  fireEvent(getByRole(view, 'button', { name: 'Send for Review' }), 'click');
+  await written;
+  await flush();
+  dispose();
+
+  assert.equal(writes.length, 1);
+  const route = selectQuestionBankState(state);
+  assert.equal(route.publishStatus, 'succeeded');
+  assert.equal(route.publishArtifacts, writes[0]);
+  assert.equal(route.drawerOpen, false);
+  assert.deepEqual(route.baseline, route.cases);
+});
+
+test('publish effect reports writer failures and ignores work after unmount', async () => {
+  for (const reason of [new Error('write failed'), 'string failure']) {
+    let attempted = /** @type {(value?: unknown) => void} */ (() => {});
+    const attempt = new Promise((resolve) => {
+      attempted = resolve;
+    });
+    const slice = createRouteSlice(
+      {},
+      /** @type {any} */ ({
+        ...context(),
+        writeQuestionBankArtifacts: async () => {
+          attempted();
+          throw reason;
+        },
+      })
+    );
+    let state = slice.reducer(slice.initialState, {
+      type: 'drawer/changed',
+      open: true,
+    });
+    const tools = /** @type {any} */ ({
+      dispatch(/** @type {any} */ action) {
+        state = slice.reducer(state, action);
+      },
+      listen() {},
+    });
+    const view = slice.view(state, tools);
+    const dispose = slice.start(tools);
+    fireEvent(getByRole(view, 'button', { name: 'Send for Review' }), 'click');
+    await attempt;
+    await flush();
+    assert.equal(selectQuestionBankState(state).publishStatus, 'failed');
+    dispose();
+  }
+
+  let release = /** @type {(value?: unknown) => void} */ (() => {});
+  const pending = new Promise((resolve) => {
+    release = resolve;
+  });
+  const slice = createRouteSlice(
+    {},
+    /** @type {any} */ ({
+      ...context(),
+      writeQuestionBankArtifacts: async () => pending,
+    })
+  );
+  let state = slice.reducer(slice.initialState, {
+    type: 'drawer/changed',
+    open: true,
+  });
+  const tools = /** @type {any} */ ({
+    dispatch(/** @type {any} */ action) {
+      state = slice.reducer(state, action);
+    },
+    listen() {},
+  });
+  const view = slice.view(state, tools);
+  fireEvent(getByRole(view, 'button', { name: 'Send for Review' }), 'click');
+  assert.equal(selectQuestionBankState(state).publishStatus, 'idle');
+  const dispose = slice.start(tools);
+  const activeView = slice.view(state, tools);
+  fireEvent(
+    getByRole(activeView, 'button', { name: 'Send for Review' }),
+    'click'
+  );
+  dispose();
+  release();
+  await flush();
+  assert.equal(selectQuestionBankState(state).publishStatus, 'publishing');
+});
+
 test('bank editor and route effects preserve rejected and disabled branches', async () => {
   const slice = createRouteSlice({}, context());
   /** @type {any[]} */
@@ -341,4 +460,20 @@ test('bank editor and route effects preserve rejected and disabled branches', as
     /** @type {any} */ (globalThis).location.search = search;
   }
   assert.ok(actions.some((action) => action.type === 'drawer/changed'));
+
+  /** @type {any} */ (globalThis).location.search = '?simulate=1';
+  const invalidSamples = createRouteSlice(
+    {},
+    /** @type {any} */ ({
+      ...context(),
+      loadQuestionBankSamples: async () => null,
+    })
+  );
+  const dispose = invalidSamples.start({
+    dispatch() {},
+    listen() {},
+  });
+  await flush();
+  dispose();
+  /** @type {any} */ (globalThis).location.search = search;
 });

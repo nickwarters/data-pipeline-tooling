@@ -24,6 +24,7 @@ import { register as registerDevPerformance } from '../routes/dev-performance.js
  * @property {Element} appEl
  * @property {() => Promise<unknown>} [loadQuestionBankEditor]
  * @property {() => Promise<unknown>} [loadQuestionBankSamples]
+ * @property {(artifacts: ReturnType<import('../pages/question-bank/question-bank-compile.js').buildPublishArtifacts>) => Promise<void>} [writeQuestionBankArtifacts]
  */
 
 /**

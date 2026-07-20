@@ -78,3 +78,27 @@ test('SimulatePanel: reports Outcome changes with attribution', () => {
   const text = allText(panel);
   assert.ok(text.includes('Outcome: fail → pass (caused by q-welcome)'));
 });
+
+test('SimulatePanel: renders null Outcomes and configuration-only attribution', () => {
+  const configured = freshExampleReviewBank();
+  const unconfigured = freshExampleReviewBank();
+  unconfigured.outcomeOptions = [];
+  delete unconfigured.defaultOutcomeId;
+  const samples = [
+    {
+      id: 'case-1',
+      title: 'First Case',
+      answers: { 'q-welcome': { value: 'No' } },
+    },
+  ];
+  assert.ok(
+    allText(SimulatePanel(configured, unconfigured, samples)).includes(
+      'Outcome: fail → —'
+    )
+  );
+  assert.ok(
+    allText(SimulatePanel(unconfigured, configured, samples)).includes(
+      'Outcome: — → fail'
+    )
+  );
+});

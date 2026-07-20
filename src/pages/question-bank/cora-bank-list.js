@@ -50,10 +50,19 @@ export function BankList(props) {
       props.dispatch({ type: 'outcome/removed', outcomeId: option.id }),
   });
 
+  const baselineById = new Map(
+    props.baselineQuestions.map((question) => [question.id, question])
+  );
+  const questionIndexById = new Map(
+    bank.questions.map(
+      (/** @type {any} */ question, /** @type {number} */ index) => [
+        question.id,
+        index,
+      ]
+    )
+  );
   const cards = visible.map((/** @type {any} */ question) => {
-    const baselineQuestion = props.baselineQuestions.find(
-      (candidate) => candidate.id === question.id
-    );
+    const baselineQuestion = baselineById.get(question.id);
     const conditional =
       Boolean(question.showWhen) ||
       Boolean(props.conditionalQuestionIds?.includes(question.id));
@@ -61,7 +70,9 @@ export function BankList(props) {
       /** @type {HTMLElement} */ (
         QuestionCard({
           question,
-          questionIndex: bank.questions.indexOf(question),
+          questionIndex: /** @type {number} */ (
+            questionIndexById.get(question.id)
+          ),
           bank,
           baselineQuestions: props.baselineQuestions,
           groupFilterActive: Boolean(filters.questionGroup),

@@ -739,19 +739,30 @@ test('buildPublishArtifacts: envelope without labels produces identical versione
 test('publishBankEffect writes byte-identical artifacts from the existing compiler path', async () => {
   /** @type {any[]} */
   const writes = [];
-  const artifacts = await publishBankEffect(
-    /** @type {any} */ (exportBank),
-    null,
-    async (payload) => {
-      writes.push(payload);
+  const expectedEnvelope = await compileExport(/** @type {any} */ (exportBank));
+  const expected = buildPublishArtifacts(expectedEnvelope, null);
+  const RealDate = Date;
+  /** @type {any} */ (globalThis).Date = class extends RealDate {
+    constructor() {
+      super(expectedEnvelope.generatedAt);
     }
-  );
-  const envelope = JSON.parse(artifacts.currentJson);
-  const rebuilt = buildPublishArtifacts(envelope, null);
+  };
+  let artifacts;
+  try {
+    artifacts = await publishBankEffect(
+      /** @type {any} */ (exportBank),
+      null,
+      async (payload) => {
+        writes.push(payload);
+      }
+    );
+  } finally {
+    /** @type {any} */ (globalThis).Date = RealDate;
+  }
 
   assert.equal(writes.length, 1);
   assert.equal(writes[0], artifacts);
-  assert.equal(artifacts.currentJson, rebuilt.currentJson);
-  assert.equal(artifacts.versionedJson, rebuilt.versionedJson);
-  assert.deepEqual(artifacts.manifest, rebuilt.manifest);
+  assert.equal(artifacts.currentJson, expected.currentJson);
+  assert.equal(artifacts.versionedJson, expected.versionedJson);
+  assert.deepEqual(artifacts.manifest, expected.manifest);
 });

@@ -55,6 +55,39 @@ test('CORACompileDrawer: renders backdrop + drawer (closed by default)', () => {
   e.disconnectedCallback();
 });
 
+test('CompileDrawer: closed state does not compile, hash, highlight, or simulate', () => {
+  const calls = { compile: 0, hash: 0, highlight: 0, simulate: 0 };
+  const root = document.createElement('div');
+  root.replaceChildren(
+    ...CompileDrawer({
+      open: false,
+      bank: freshExampleReviewBank(),
+      diff: { added: 0, changed: 0, deprecated: 0 },
+      compile: () => {
+        calls.compile += 1;
+        return '{}';
+      },
+      hashCode: async () => {
+        calls.hash += 1;
+        return 'hash';
+      },
+      highlight: (code) => {
+        calls.highlight += 1;
+        return code;
+      },
+      simulatePanel: () => {
+        calls.simulate += 1;
+        return document.createElement('div');
+      },
+      onClose() {},
+      onCopied() {},
+      onSubmit() {},
+    })
+  );
+  assert.deepEqual(calls, { compile: 0, hash: 0, highlight: 0, simulate: 0 });
+  assert.equal(root.childElementCount, 2);
+});
+
 test('CORACompileDrawer: open signal adds .open to backdrop and drawer', () => {
   const { e } = mount({ open: true });
   assert.ok(e.querySelector('.drawer-backdrop').className.includes('open'));

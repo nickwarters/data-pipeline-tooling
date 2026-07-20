@@ -933,6 +933,12 @@ test('bank reducer covers defensive and clearing branches for plain actions', ()
   apply({
     type: 'question/field-changed',
     questionId: 'q-1',
+    field: 'text',
+    value: null,
+  });
+  apply({
+    type: 'question/field-changed',
+    questionId: 'q-1',
     field: 'category',
     value: 'Changed',
   });
@@ -1047,6 +1053,24 @@ test('bank reducer covers defensive and clearing branches for plain actions', ()
     questionId: 'q-2',
     index: 0,
     option: 'Missing',
+  });
+  apply({
+    type: 'question/option-removed',
+    questionId: 'q-1',
+    index: 0,
+    option: 'Yes',
+  });
+  apply({
+    type: 'question/option-outcome-changed',
+    questionId: 'q-2',
+    option: 'Yes',
+    outcomeId: 'pass',
+  });
+  apply({
+    type: 'question/option-outcome-changed',
+    questionId: 'q-2',
+    option: 'Yes',
+    outcomeId: '',
   });
   apply({
     type: 'question/label-assigned',

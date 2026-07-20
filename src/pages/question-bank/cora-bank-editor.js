@@ -11,7 +11,12 @@ import {
 import { BankRail } from './cora-bank-rail.js';
 import { BankList } from './cora-bank-list.js';
 import { BankDock } from './cora-bank-dock.js';
-import { compileBank, hashStr, highlight } from './question-bank-compile.js';
+import {
+  compileBank,
+  hashStr,
+  highlight,
+  publishBankEffect,
+} from './question-bank-compile.js';
 import { simulatorEnabled } from './question-bank-flags.js';
 import { SimulatePanel } from './simulate-panel.js';
 import { CompileDrawer } from './compile-drawer.js';
@@ -61,8 +66,9 @@ function caseTabsPropsFor(route, dispatch) {
 /**
  * @param {QuestionBankRouteState} route
  * @param {(action: any) => any} dispatch
+ * @param {() => void} publish
  */
-function compileDrawerPropsFor(route, dispatch) {
+function compileDrawerPropsFor(route, dispatch, publish) {
   return {
     open: route.drawerOpen,
     bank: currentBank(route),
@@ -80,16 +86,13 @@ function compileDrawerPropsFor(route, dispatch) {
         : null,
     onClose: () => dispatch({ type: 'drawer/changed', open: false }),
     onCopied: () => toast(dispatch, 'Bank JSON copied to clipboard'),
-    onSubmit: () => {
-      dispatch({ type: 'bank/submitted' });
-      toast(dispatch, 'Submitted for review');
-    },
+    onSubmit: publish,
   };
 }
 
 /**
  * @param {QuestionBankState} state
- * @param {{ dispatch: (action: any) => any, memo?: (key: PropertyKey, deps: readonly unknown[], render: () => HTMLElement) => HTMLElement }} tools
+ * @param {{ dispatch: (action: any) => any, memo?: (key: PropertyKey, deps: readonly unknown[], render: () => HTMLElement) => HTMLElement, publish?: () => void }} tools
  * @returns {HTMLElement}
  */
 export function bankEditorView(state, tools) {
@@ -164,7 +167,13 @@ export function bankEditorView(state, tools) {
       diffCounts: diffCounts(route),
       openDrawer: () => tools.dispatch({ type: 'drawer/changed', open: true }),
     }),
-    ...CompileDrawer(compileDrawerPropsFor(route, tools.dispatch)),
+    ...CompileDrawer(
+      compileDrawerPropsFor(
+        route,
+        tools.dispatch,
+        tools.publish ?? (() => tools.dispatch({ type: 'publish/requested' }))
+      )
+    ),
     h(
       'div',
       { className: 'toast' + (route.toastMsg ? ' show' : '') },
@@ -179,6 +188,36 @@ export function bankEditorView(state, tools) {
  * @param {import('../../setup/register-routes.js').AppContext} context
  */
 export function createRouteSlice(_params, context) {
+  let latestRoute = initialQuestionBankState();
+  /** @type {any|null} */
+  let effectTools = null;
+  let active = false;
+  const publish = async () => {
+    if (!effectTools || !active) return;
+    effectTools.dispatch({ type: 'publish/requested' });
+    try {
+      const write =
+        context.writeQuestionBankArtifacts ??
+        (async () => {
+          // The browser workbench prepares exact artifacts; opening the PR is
+          // deliberately a human-controlled handoff when no writer is injected.
+        });
+      const artifacts = await publishBankEffect(
+        currentBank(latestRoute),
+        null,
+        write
+      );
+      if (active)
+        effectTools.dispatch({ type: 'publish/succeeded', artifacts });
+    } catch (error) {
+      if (active) {
+        effectTools.dispatch({
+          type: 'publish/failed',
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  };
   return {
     initialState: {
       chrome: context.chrome,
@@ -190,8 +229,13 @@ export function createRouteSlice(_params, context) {
       if (next === current) return state;
       return { ...state, routes: { questionBank: next } };
     },
-    view: bankEditorView,
+    view(/** @type {QuestionBankState} */ state, /** @type {any} */ tools) {
+      latestRoute = selectQuestionBankState(state);
+      return bankEditorView(state, { ...tools, publish });
+    },
     start(/** @type {any} */ tools) {
+      active = true;
+      effectTools = tools;
       context.appEl.classList.add('cora-fullbleed');
       const key = (/** @type {any} */ event) => {
         if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
@@ -218,7 +262,11 @@ export function createRouteSlice(_params, context) {
           }
         });
       }
-      return () => context.appEl.classList.remove('cora-fullbleed');
+      return () => {
+        active = false;
+        effectTools = null;
+        context.appEl.classList.remove('cora-fullbleed');
+      };
     },
   };
 }

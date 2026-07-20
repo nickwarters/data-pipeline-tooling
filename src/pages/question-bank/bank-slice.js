@@ -29,6 +29,9 @@ const defaultSlug = Object.keys(initialBanks)[0];
  * @property {string} toastMsg
  * @property {Record<string, import('./question-bank-simulate.js').SampleCase[]>} sampleCases
  * @property {string[]} conditionalQuestionIds
+ * @property {'idle'|'publishing'|'succeeded'|'failed'} publishStatus
+ * @property {ReturnType<import('./question-bank-compile.js').buildPublishArtifacts>|null} publishArtifacts
+ * @property {string} publishError
  */
 
 /** @returns {QuestionBankRouteState} */
@@ -48,6 +51,9 @@ export function initialQuestionBankState() {
     toastMsg: '',
     sampleCases: {},
     conditionalQuestionIds: [],
+    publishStatus: 'idle',
+    publishArtifacts: null,
+    publishError: '',
   };
 }
 
@@ -484,11 +490,26 @@ export function questionBankReducer(state, action) {
   if (action.type === 'bank/reverted') {
     return { ...state, cases: structuredClone(state.baseline) };
   }
-  if (action.type === 'bank/submitted') {
+  if (action.type === 'publish/requested') {
+    return { ...state, publishStatus: 'publishing', publishError: '' };
+  }
+  if (action.type === 'publish/succeeded') {
     return {
       ...state,
       baseline: structuredClone(state.cases),
       drawerOpen: false,
+      publishStatus: 'succeeded',
+      publishArtifacts: action.artifacts,
+      publishError: '',
+      toastMsg: 'Submitted for review',
+    };
+  }
+  if (action.type === 'publish/failed') {
+    return {
+      ...state,
+      publishStatus: 'failed',
+      publishError: action.message,
+      toastMsg: 'Publish failed',
     };
   }
   return state;

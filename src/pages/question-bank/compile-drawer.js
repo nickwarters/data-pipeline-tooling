@@ -22,6 +22,12 @@ import { h, unsafeHTML } from '../../lib/html.js';
  * @returns {HTMLElement[]}
  */
 export function CompileDrawer(props) {
+  if (!props.open) {
+    return [
+      h('div', { class: 'drawer-backdrop', onclick: props.onClose }),
+      h('aside', { class: 'drawer' }),
+    ];
+  }
   const code = props.compile(props.bank);
   const hashMeta = h('small', {}, 'hash: …');
   const hashed = props.hashCode
@@ -41,12 +47,12 @@ export function CompileDrawer(props) {
 
   return [
     h('div', {
-      class: 'drawer-backdrop' + (props.open ? ' open' : ''),
+      class: 'drawer-backdrop open',
       onclick: props.onClose,
     }),
     h(
       'aside',
-      { class: 'drawer' + (props.open ? ' open' : '') },
+      { class: 'drawer open' },
       h(
         'div',
         { class: 'drawer-head' },
