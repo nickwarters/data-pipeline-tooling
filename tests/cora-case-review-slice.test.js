@@ -516,6 +516,30 @@ test('CASE-1 state: tab selection is store-owned and rejects hidden Sections', (
   assert.equal(unchanged, state, 'hidden Section cannot become active');
 });
 
+test('CASE-1 route: the conversation host is a direct child the scoped popover CSS can target', () => {
+  const state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: snapshot() }
+  );
+  const { container } = renderShippedState(state);
+  const root = container.querySelector('.cora-case-review');
+  assert.ok(root, 'the case-review root is rendered');
+  assert.equal(root.getAttribute('data-conversation-mode'), 'popover');
+  // The popover/sidebar CSS selects
+  // `.cora-case-review[data-conversation-mode='…'] > .cora-case-review__conversation`.
+  // The conversation host must therefore carry that class and be a *direct*
+  // child of the root, else it renders inline instead of as a floating panel.
+  const conversation = container.querySelector(
+    '.cora-case-review__conversation'
+  );
+  assert.ok(conversation, 'conversation host carries the scoped class');
+  assert.equal(
+    conversation.parentNode,
+    root,
+    'conversation host is a direct child of the root'
+  );
+});
+
 test('CASE-6 route: Appeal renders directly from store state without legacy controller wiring', () => {
   const appealSnapshot = snapshot();
   appealSnapshot.access = {

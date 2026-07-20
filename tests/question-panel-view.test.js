@@ -56,6 +56,23 @@ test('CASE-2 Questions view mounts only the active Question Group and reports pr
   assert.doesNotMatch(node.textContent, /Question q2/);
 });
 
+test('CASE-2 Questions view marks only the active Question Group tab with aria-current', () => {
+  const node = createQuestionPanelView().render(
+    props({ activeGroup: 'Conduct' })
+  );
+  const tabs = Array.from(node.querySelectorAll('.cora-question-group-tab'));
+  assert.equal(tabs.length, 2);
+  const current = tabs.filter(
+    (tab) => tab.getAttribute('aria-current') === 'true'
+  );
+  assert.equal(current.length, 1, 'exactly one tab is aria-current');
+  assert.match(current[0].textContent, /Conduct/);
+  // The inactive tab carries no aria-current marker (the styling hook that
+  // distinguishes the active tab from the rest).
+  const inactive = tabs.find((tab) => tab !== current[0]);
+  assert.equal(inactive?.getAttribute('aria-current'), null);
+});
+
 test('CASE-2 Questions view memoises unchanged cards by rendered inputs', () => {
   const view = createQuestionPanelView();
   const answer = { value: 'Yes' };
