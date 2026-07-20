@@ -179,6 +179,70 @@ function renderShippedState(initialState, contextOverrides = {}) {
   };
 }
 
+/**
+ * Mount the shipped Issues panel with one attributable failed Answer while the
+ * Case load remains pending, so attribution-search behavior is exercised only
+ * through the route's public render/start seams.
+ * @param {(query: string) => Promise<any[]>} searchPeople
+ */
+function renderAttributionSearchRoute(searchPeople) {
+  const failedSnapshot = snapshot();
+  failedSnapshot.catalogue[0].failureValues = ['No'];
+  failedSnapshot.answers = { q1: { value: 'No' } };
+  failedSnapshot.caseRow = {
+    ...failedSnapshot.caseRow,
+    answers: failedSnapshot.answers,
+  };
+  failedSnapshot.config.attributeFailures = true;
+  failedSnapshot.machine = {
+    canAttribute: true,
+    canCapture: false,
+    canSelectRemediation: false,
+    canToggleConversation: false,
+  };
+  let state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: failedSnapshot }
+  );
+  state = caseReviewReducer(state, {
+    type: 'case/tab-selected',
+    id: 'issues',
+  });
+  const never = new Promise(() => {});
+  const client = /** @type {any} */ ({
+    getCase: () => never,
+    getCurrentUser: async () => chrome.currentUser,
+    getExportHash: async () => null,
+    resolveUsers: async () => ({}),
+    searchPeople,
+  });
+  const saveQueue = new SaveQueue(client, { debounceMs: 0 });
+  const slice = createRouteSlice(
+    { caseType: 'example-review', id: 'c1' },
+    /** @type {any} */ ({ client, saveQueue, chrome })
+  );
+  const container = document.createElement('main');
+  /** @type {any} */
+  let tools;
+  tools = {
+    morph,
+    dispatch(/** @type {any} */ action) {
+      state = slice.reducer(state, action);
+      slice.render(container, state, tools);
+    },
+    listen() {},
+  };
+  slice.render(container, state, tools);
+  const dispose = slice.start(tools);
+  return {
+    container,
+    dispose,
+    get state() {
+      return state;
+    },
+  };
+}
+
 test('CASE-1 state: route state owns loading, save status, and selected tab under routes.caseReview', () => {
   const initial = createInitialCaseReviewState(chrome, 'popover');
   assert.equal(initial.chrome, chrome);
@@ -187,6 +251,8 @@ test('CASE-1 state: route state owns loading, save status, and selected tab unde
     activeQuestionGroup: '',
     conversationHidden: true,
     completionPending: false,
+    captureCollapsed: {},
+    attributionSearch: {},
     panelMode: 'popover',
     saveStatus: 'saved',
     snapshot: null,
@@ -218,6 +284,218 @@ test('CASE-1 state: route state owns loading, save status, and selected tab unde
     pending,
     'an unchanged completion state is referentially stable'
   );
+});
+
+test('CASE-5 state: attribution search query and results stay independent per failed Question', () => {
+  let state = createInitialCaseReviewState(chrome, 'popover');
+  state = caseReviewReducer(state, {
+    type: 'case/attribution-search-input',
+    questionId: 'q1',
+    query: 'Jane',
+  });
+  state = caseReviewReducer(state, {
+    type: 'case/attribution-search-input',
+    questionId: 'q2',
+    query: 'Alex',
+  });
+  state = caseReviewReducer(state, {
+    type: 'case/attribution-search-results',
+    questionId: 'q1',
+    query: 'Jane',
+    people: [{ loginName: 'jsmith', displayName: 'Jane Smith' }],
+  });
+
+  assert.deepEqual(state.routes.caseReview.attributionSearch, {
+    q1: {
+      query: 'Jane',
+      people: [{ loginName: 'jsmith', displayName: 'Jane Smith' }],
+    },
+    q2: { query: 'Alex', people: [] },
+  });
+  assert.equal(
+    caseReviewReducer(state, {
+      type: 'case/attribution-search-results',
+      questionId: 'missing',
+      query: 'Nobody',
+      people: [],
+    }),
+    state
+  );
+  const cleared = caseReviewReducer(state, {
+    type: 'case/attribution-search-cleared',
+    questionId: 'q1',
+  });
+  assert.deepEqual(cleared.routes.caseReview.attributionSearch, {
+    q2: { query: 'Alex', people: [] },
+  });
+  assert.equal(
+    caseReviewReducer(state, {
+      type: 'case/attribution-search-results',
+      questionId: 'q2',
+      query: 'Stale',
+      people: [],
+    }),
+    state
+  );
+  assert.equal(
+    caseReviewReducer(state, {
+      type: 'case/attribution-search-cleared',
+      questionId: 'missing',
+    }),
+    state
+  );
+});
+
+test('CASE-5 route: attribution search is debounced and renders route-owned results', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  /** @type {string[]} */
+  const searches = [];
+  const route = renderAttributionSearchRoute(async (query) => {
+    searches.push(query);
+    return [{ loginName: 'jsmith', displayName: 'Jane Smith' }];
+  });
+  const input = getByRole(route.container, 'combobox', {
+    name: 'Search people',
+  });
+  input.value = 'Ja';
+  fireEvent(input, 'input');
+  const updatedInput = getByRole(route.container, 'combobox', {
+    name: 'Search people',
+  });
+  updatedInput.value = 'Jane';
+  fireEvent(updatedInput, 'input');
+
+  assert.equal(
+    route.state.routes.caseReview.attributionSearch.q1.query,
+    'Jane'
+  );
+  t.mock.timers.tick(199);
+  assert.deepEqual(searches, []);
+  t.mock.timers.tick(1);
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.deepEqual(searches, ['Jane']);
+  assert.equal(
+    getByRole(route.container, 'option', { name: /Jane Smith/ }).textContent,
+    'Jane Smith — jsmith'
+  );
+  const clearedInput = getByRole(route.container, 'combobox', {
+    name: 'Search people',
+  });
+  clearedInput.value = '   ';
+  fireEvent(clearedInput, 'input');
+  t.mock.timers.tick(200);
+  assert.deepEqual(searches, ['Jane']);
+  route.dispose();
+});
+
+test('CASE-5 route: a stale attribution result cannot replace the latest query', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  /** @type {Record<string, (people: any[]) => void>} */
+  const resolveSearch = {};
+  const route = renderAttributionSearchRoute(
+    (query) =>
+      new Promise((resolve) => {
+        resolveSearch[query] = resolve;
+      })
+  );
+  let input = getByRole(route.container, 'combobox', {
+    name: 'Search people',
+  });
+  input.value = 'Jane';
+  fireEvent(input, 'input');
+  t.mock.timers.tick(200);
+
+  input = getByRole(route.container, 'combobox', { name: 'Search people' });
+  input.value = 'Janet';
+  fireEvent(input, 'input');
+  t.mock.timers.tick(200);
+  resolveSearch.Janet([{ loginName: 'jdoe', displayName: 'Janet Doe' }]);
+  await Promise.resolve();
+  await Promise.resolve();
+  resolveSearch.Jane([{ loginName: 'jsmith', displayName: 'Jane Smith' }]);
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.equal(
+    route.state.routes.caseReview.attributionSearch.q1.query,
+    'Janet'
+  );
+  assert.equal(
+    getByRole(route.container, 'option', { name: /Janet Doe/ }).textContent,
+    'Janet Doe — jdoe'
+  );
+  assert.equal(route.container.textContent.includes('Jane Smith'), false);
+  route.dispose();
+});
+
+test('CASE-5 route: disposal clears attribution debounce and suppresses an in-flight result', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  /** @type {string[]} */
+  const searches = [];
+  const waiting = renderAttributionSearchRoute(async (query) => {
+    searches.push(query);
+    return [];
+  });
+  let input = getByRole(waiting.container, 'combobox', {
+    name: 'Search people',
+  });
+  input.value = 'Never sent';
+  fireEvent(input, 'input');
+  waiting.dispose();
+  t.mock.timers.tick(200);
+  assert.deepEqual(searches, []);
+
+  /** @type {(people: any[]) => void} */
+  let resolveSearch = () => {};
+  const inFlight = renderAttributionSearchRoute(
+    () =>
+      new Promise((resolve) => {
+        resolveSearch = resolve;
+      })
+  );
+  input = getByRole(inFlight.container, 'combobox', {
+    name: 'Search people',
+  });
+  input.value = 'Late';
+  fireEvent(input, 'input');
+  t.mock.timers.tick(200);
+  inFlight.dispose();
+  resolveSearch([{ loginName: 'late', displayName: 'Late Result' }]);
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.deepEqual(
+    inFlight.state.routes.caseReview.attributionSearch.q1.people,
+    []
+  );
+});
+
+test('CASE-5 route: selecting the Responsible Party cancels that Question search', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  /** @type {string[]} */
+  const searches = [];
+  const route = renderAttributionSearchRoute(async (query) => {
+    searches.push(query);
+    return [];
+  });
+  const input = getByRole(route.container, 'combobox', {
+    name: 'Search people',
+  });
+  input.value = 'Pending';
+  fireEvent(input, 'input');
+  fireEvent(
+    getByRole(route.container, 'button', {
+      name: 'Responsible Party — u2',
+    }),
+    'click'
+  );
+  t.mock.timers.tick(200);
+
+  assert.deepEqual(searches, []);
+  assert.equal(route.state.routes.caseReview.attributionSearch.q1, undefined);
+  route.dispose();
 });
 
 test('CASE-1 state: tab selection is store-owned and rejects hidden Sections', () => {
@@ -1374,15 +1652,27 @@ test('CASE-7 route: mock-mode store shell keeps Review working at the existing U
     '.cora-attribute-responsible'
   );
   assert.ok(responsibleParty, 'Responsible Party quick-pick is rendered');
+  tools.dispatch({
+    type: 'case/attribution-search-input',
+    questionId: 'q-needs',
+    query: 'stale picker text',
+  });
+  assert.equal(
+    state.routes.caseReview.attributionSearch['q-needs'].query,
+    'stale picker text'
+  );
   fireEvent(responsibleParty, 'click');
   await saveQueue.whenIdle();
   await flush();
+  assert.equal(state.routes.caseReview.attributionSearch['q-needs'], undefined);
 
-  const capture = issuesPanel?.querySelector('cora-capture-groups');
-  assert.ok(capture, 'configured Issue Capture group is rendered');
-  fireEvent(capture, 'cora-capture', {
-    detail: { fieldKey: 'rootCause', value: 'Agent rushed' },
-  });
+  assert.equal(issuesPanel?.querySelector('cora-capture-groups'), null);
+  const capture = /** @type {any} */ (
+    issuesPanel?.querySelector('.cora-capture-input')
+  );
+  assert.ok(capture, 'configured Issue Capture field is rendered directly');
+  capture.value = 'Agent rushed';
+  fireEvent(capture, 'change');
   await saveQueue.whenIdle();
   await flush();
 

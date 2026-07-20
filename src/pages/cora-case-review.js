@@ -69,6 +69,8 @@ import {
  *   activeQuestionGroup: string,
  *   conversationHidden: boolean,
  *   completionPending: boolean,
+ *   captureCollapsed: Record<string, Set<string>>,
+ *   attributionSearch: Record<string, { query: string, people: import('../sharepoint-client.js').PersonResult[] }>,
  *   snapshot: CaseReviewSnapshot | null,
  * } }} routes
  */
@@ -89,6 +91,8 @@ export function createInitialCaseReviewState(chrome, panelMode) {
         activeQuestionGroup: '',
         conversationHidden: true,
         completionPending: false,
+        captureCollapsed: {},
+        attributionSearch: {},
         snapshot: null,
       },
     },
@@ -216,6 +220,68 @@ export function caseReviewReducer(state, action) {
       ...state,
       routes: {
         caseReview: { ...route, activeQuestionGroup: action.group },
+      },
+    };
+  }
+  if (action.type === 'case/capture-group-toggled') {
+    const current = route.captureCollapsed[action.questionId] ?? new Set();
+    const collapsed = new Set(current);
+    if (action.collapsed) collapsed.add(action.groupKey);
+    else collapsed.delete(action.groupKey);
+    return {
+      ...state,
+      routes: {
+        caseReview: {
+          ...route,
+          captureCollapsed: {
+            ...route.captureCollapsed,
+            [action.questionId]: collapsed,
+          },
+        },
+      },
+    };
+  }
+  if (action.type === 'case/attribution-search-input') {
+    return {
+      ...state,
+      routes: {
+        caseReview: {
+          ...route,
+          attributionSearch: {
+            ...route.attributionSearch,
+            [action.questionId]: { query: action.query, people: [] },
+          },
+        },
+      },
+    };
+  }
+  if (action.type === 'case/attribution-search-results') {
+    const current = route.attributionSearch[action.questionId];
+    if (!current || current.query !== action.query) return state;
+    return {
+      ...state,
+      routes: {
+        caseReview: {
+          ...route,
+          attributionSearch: {
+            ...route.attributionSearch,
+            [action.questionId]: {
+              query: action.query,
+              people: action.people,
+            },
+          },
+        },
+      },
+    };
+  }
+  if (action.type === 'case/attribution-search-cleared') {
+    if (!(action.questionId in route.attributionSearch)) return state;
+    const attributionSearch = { ...route.attributionSearch };
+    delete attributionSearch[action.questionId];
+    return {
+      ...state,
+      routes: {
+        caseReview: { ...route, attributionSearch },
       },
     };
   }
@@ -350,6 +416,11 @@ export function createRouteSlice(params, context) {
   const panelMode =
     new URLSearchParams(search).get('conversation') ?? 'popover';
   let dispatch = (/** @type {any} */ _action) => {};
+  let active = false;
+  /** @type {Map<string, ReturnType<typeof setTimeout>>} */
+  const attributionTimers = new Map();
+  /** @type {Map<string, string>} */
+  const pendingAttributionQueries = new Map();
   const viewModel = new CaseReviewViewModel({
     client: context.client,
     saveQueue: context.saveQueue,
@@ -360,7 +431,6 @@ export function createRouteSlice(params, context) {
     capabilities: context.chrome.permissions ?? context.capabilities,
   });
   const questionsView = createQuestionPanelView();
-  const remediationCaptureEls = new Map();
   /** @type {ReturnType<typeof createCaseReviewSaveEffect> | null} */
   let save = null;
   /** @type {null | {
@@ -373,6 +443,48 @@ export function createRouteSlice(params, context) {
    *   completion: HTMLElement,
    * }} */
   let shell = null;
+
+  /** @param {string} questionId */
+  function clearAttributionSearch(questionId) {
+    const timer = attributionTimers.get(questionId);
+    if (timer !== undefined) clearTimeout(timer);
+    attributionTimers.delete(questionId);
+    pendingAttributionQueries.delete(questionId);
+    dispatch({ type: 'case/attribution-search-cleared', questionId });
+  }
+
+  /** @param {string} questionId @param {string} query */
+  function requestAttributionSearch(questionId, query) {
+    dispatch({ type: 'case/attribution-search-input', questionId, query });
+    const timer = attributionTimers.get(questionId);
+    if (timer !== undefined) clearTimeout(timer);
+    attributionTimers.delete(questionId);
+    pendingAttributionQueries.set(questionId, query);
+    const trimmed = query.trim();
+    if (!trimmed || !context.client) return;
+    attributionTimers.set(
+      questionId,
+      setTimeout(() => {
+        attributionTimers.delete(questionId);
+        void context.client.searchPeople(trimmed).then((people) => {
+          if (active && pendingAttributionQueries.get(questionId) === query) {
+            dispatch({
+              type: 'case/attribution-search-results',
+              questionId,
+              query,
+              people,
+            });
+          }
+        });
+      }, 200)
+    );
+  }
+
+  /** @param {string} questionId @param {{ loginName: string, displayName: string } | null} party */
+  function selectAttribution(questionId, party) {
+    viewModel.handleAttribute(questionId, party);
+    clearAttributionSearch(questionId);
+  }
 
   /** @param {Element} container @param {any} tools */
   function ensureShell(container, tools) {
@@ -578,7 +690,6 @@ export function createRouteSlice(params, context) {
                 catalogue: snapshot.catalogue,
                 answers: snapshot.answers,
                 attributeFailures: snapshot.config.attributeFailures === true,
-                client: context.client,
                 responsibleParty: snapshot.caseRow.responsibleParty
                   ? {
                       loginName: snapshot.caseRow.responsibleParty,
@@ -590,11 +701,19 @@ export function createRouteSlice(params, context) {
                 canCaptureDetails: snapshot.machine?.canCapture ?? false,
                 captureGroups: snapshot.config.captureGroups ?? [],
                 canCapture: snapshot.machine?.canCapture ?? false,
-                captureEls: remediationCaptureEls,
+                captureCollapsed: route.captureCollapsed,
+                attributionSearch: route.attributionSearch,
                 canSelectRemediation:
                   snapshot.machine?.canSelectRemediation ?? false,
                 dispatchCapture: (questionId, fieldKey, value) =>
                   viewModel.handleCapture(questionId, fieldKey, value),
+                dispatchCaptureToggle: (questionId, groupKey, collapsed) =>
+                  tools.dispatch({
+                    type: 'case/capture-group-toggled',
+                    questionId,
+                    groupKey,
+                    collapsed,
+                  }),
                 dispatchDetail: (questionId, key, value) => {
                   const answers = editRemediationDetail({
                     answers: snapshot.answers,
@@ -608,8 +727,8 @@ export function createRouteSlice(params, context) {
                   viewModel.answersSignal.set(answers);
                   save?.answersEdited(answers);
                 },
-                dispatchAttribute: (questionId, attributedParty) =>
-                  viewModel.handleAttribute(questionId, attributedParty),
+                dispatchAttribute: selectAttribution,
+                dispatchAttributeSearch: requestAttributionSearch,
                 dispatchRemediationAction: (questionId, action, selected) =>
                   viewModel.handleRemediationAction(
                     questionId,
@@ -878,6 +997,7 @@ export function createRouteSlice(params, context) {
     },
     start(/** @type {any} */ tools) {
       dispatch = tools.dispatch;
+      active = true;
       const saveEffect = createCaseReviewSaveEffect({
         saveQueue: context.saveQueue,
         caseId: params.id,
@@ -924,8 +1044,11 @@ export function createRouteSlice(params, context) {
         });
       });
       return () => {
+        active = false;
+        for (const timer of attributionTimers.values()) clearTimeout(timer);
+        attributionTimers.clear();
+        pendingAttributionQueries.clear();
         questionsView.clear();
-        remediationCaptureEls.clear();
         viewModel.setAnswerChangeHandler(null);
         save = null;
         disposeSaveStatus();

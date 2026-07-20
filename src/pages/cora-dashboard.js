@@ -1,8 +1,14 @@
 // @ts-check
 import { h } from '../lib/html.js';
 import { caseRouteFor } from '../lib/case-route-links.js';
-import '../components/sections/cora-allocation.js';
-import '../components/sections/cora-owner-summary.js';
+import {
+  Allocation,
+  getUnassignedCases,
+} from '../components/sections/cora-allocation.js';
+import {
+  loadOwnerSummaries,
+  OwnerSummary,
+} from '../components/sections/cora-owner-summary.js';
 import {
   initialResponsiblePartyState,
   reduceResponsibleParty,
@@ -46,6 +52,8 @@ import {
  * @property {string} reviewerFilterText
  * @property {string} reviewerStatusFilter
  * @property {TableSort | null} appealSort
+ * @property {boolean} allocationEmpty
+ * @property {import('../components/sections/cora-owner-summary.js').OwnerSummary[]} ownerSummaries
  * @property {import('../sharepoint-client.js').DashboardPanelKey[]} dashboardPanels
  * @property {ReturnType<typeof initialActionCentreState>} actionCentre
  * @property {ReturnType<typeof initialResponsiblePartyState>} responsibleParty
@@ -195,6 +203,7 @@ export function actionCentreScopeState(state, value) {
  *     toggleGroup: (state: ReturnType<typeof initialActionCentreState>, reason: import('../services/action-centre-model.js').Reason) => void,
  *     showMore: (state: ReturnType<typeof initialActionCentreState>, reason: import('../services/action-centre-model.js').Reason) => void,
  *   },
+ *   dashboardActions?: { requestNextCase: () => void },
  * }} tools
  */
 export function dashboardView(state, tools) {
@@ -227,18 +236,12 @@ export function dashboardView(state, tools) {
           location.hash = caseRouteFor(row);
         },
       }),
-    ownerSummary: () =>
-      h('cora-owner-summary', {
-        client: tools.context.client,
-        ownedCaseTypes: capabilities.ownedCaseTypes,
-        allCaseSources: tools.context.caseSources,
-      }),
+    ownerSummary: () => OwnerSummary({ summaries: route.ownerSummaries }),
     reviewerCases: () => reviewerCasesView(route, tools.dispatch),
     allocation: () =>
-      h('cora-allocation', {
-        client: tools.context.client,
-        currentUserId: state.chrome.currentUser.id,
-        allocationSources: tools.context.allocationSources,
+      Allocation({
+        isEmpty: route.allocationEmpty,
+        onRequestNextCase: () => tools.dashboardActions?.requestNextCase?.(),
       }),
     responsibleParty: () =>
       responsiblePartyPanelView(route.responsibleParty, tools, {
@@ -267,6 +270,8 @@ export function dashboardView(state, tools) {
  *   loadActionCounts?: typeof loadActionCentreCounts,
  *   loadActionPage?: typeof loadActionCentrePage,
  *   loadDashboardPanels?: typeof resolveDashboardPanels,
+ *   loadOwnerSummary?: typeof loadOwnerSummaries,
+ *   loadAllocationCandidates?: typeof getUnassignedCases,
  * }} [dependencies]
  */
 export function createRouteSlice(
@@ -279,6 +284,8 @@ export function createRouteSlice(
     loadActionCounts = loadActionCentreCounts,
     loadActionPage = loadActionCentrePage,
     loadDashboardPanels = resolveDashboardPanels,
+    loadOwnerSummary = loadOwnerSummaries,
+    loadAllocationCandidates = getUnassignedCases,
   } = {}
 ) {
   /** @type {DashboardState} */
@@ -295,6 +302,8 @@ export function createRouteSlice(
         reviewerFilterText: '',
         reviewerStatusFilter: '',
         appealSort: { key: 'raised', dir: 'asc' },
+        allocationEmpty: false,
+        ownerSummaries: [],
         dashboardPanels: dashboardPanels.map((descriptor) => descriptor.key),
         actionCentre: initialActionCentreState(context.chrome.permissions),
         responsibleParty: initialResponsiblePartyState(
@@ -307,6 +316,26 @@ export function createRouteSlice(
   /** @type {any} */
   let effectTools = null;
   let effectsActive = false;
+
+  async function refreshReviewerCases() {
+    const client = effectTools?.context.client;
+    const capabilities = effectTools?.context.chrome.permissions;
+    if (!client || !capabilities?.isReviewer) return;
+    const rows = await listAcrossSources(
+      client,
+      effectTools.context.caseSources,
+      {
+        status: CASE_STATUS.IN_PROGRESS,
+        assignedReviewer: effectTools.context.chrome.currentUser.id,
+      }
+    );
+    if (effectsActive) {
+      effectTools.dispatch({
+        type: 'reviewer-cases/loaded',
+        cases: rows.map((row) => ({ ...row, overdue: isOverdue(row) })),
+      });
+    }
+  }
 
   /** @param {ReturnType<typeof initialActionCentreState>} actionState */
   async function refreshActionCounts(actionState) {
@@ -378,6 +407,42 @@ export function createRouteSlice(
     },
   };
 
+  const dashboardActions = {
+    async requestNextCase() {
+      const tools = effectTools;
+      const client = tools?.context.client;
+      if (!client) return;
+      const candidates = await loadAllocationCandidates({
+        client,
+        allocationSources: tools.context.allocationSources,
+      });
+      for (const candidate of candidates) {
+        const result = await client.patchCase(
+          candidate.id,
+          { assignedReviewer: tools.context.chrome.currentUser.id },
+          candidate.etag,
+          candidate._listOptions
+        );
+        if (result.ok) {
+          if (effectsActive) {
+            effectTools.dispatch({
+              type: 'allocation/availability-changed',
+              isEmpty: false,
+            });
+          }
+          await refreshReviewerCases();
+          return;
+        }
+      }
+      if (effectsActive) {
+        effectTools.dispatch({
+          type: 'allocation/availability-changed',
+          isEmpty: true,
+        });
+      }
+    },
+  };
+
   return {
     initialState,
     reducer(/** @type {DashboardState} */ state, /** @type {any} */ action) {
@@ -399,6 +464,22 @@ export function createRouteSlice(
           ...state,
           routes: {
             dashboard: { ...route, dashboardPanels: action.panels },
+          },
+        };
+      }
+      if (action.type === 'owner-summaries/loaded') {
+        return {
+          ...state,
+          routes: {
+            dashboard: { ...route, ownerSummaries: action.summaries },
+          },
+        };
+      }
+      if (action.type === 'allocation/availability-changed') {
+        return {
+          ...state,
+          routes: {
+            dashboard: { ...route, allocationEmpty: action.isEmpty },
           },
         };
       }
@@ -567,7 +648,11 @@ export function createRouteSlice(
       return state;
     },
     view: (/** @type {DashboardState} */ state, /** @type {any} */ tools) =>
-      dashboardView(state, { ...tools, actionCentreActions }),
+      dashboardView(state, {
+        ...tools,
+        actionCentreActions,
+        dashboardActions,
+      }),
     start(/** @type {any} */ tools) {
       let active = true;
       effectTools = tools;
@@ -593,25 +678,18 @@ export function createRouteSlice(
           );
         });
 
-      const loadReviewerCases = async () => {
-        if (!client || !capabilities.isReviewer) return;
-        const rows = await listAcrossSources(
-          client,
-          tools.context.caseSources,
-          {
-            status: CASE_STATUS.IN_PROGRESS,
-            assignedReviewer: currentUser.id,
-          }
-        );
-        if (active) {
-          tools.dispatch({
-            type: 'reviewer-cases/loaded',
-            cases: rows.map((row) => ({ ...row, overdue: isOverdue(row) })),
+      if (client) {
+        if (capabilities.ownedCaseTypes.length > 0) {
+          void loadOwnerSummary({
+            client,
+            ownedCaseTypes: capabilities.ownedCaseTypes,
+            allCaseSources: tools.context.caseSources,
+          }).then((summaries) => {
+            if (active) {
+              tools.dispatch({ type: 'owner-summaries/loaded', summaries });
+            }
           });
         }
-      };
-
-      if (client) {
         void loadKpis({
           client,
           currentUserId: currentUser.id,
@@ -626,7 +704,7 @@ export function createRouteSlice(
             if (active) tools.dispatch({ type: 'appeals/loaded', cases });
           });
         }
-        void loadReviewerCases();
+        void refreshReviewerCases();
         if (capabilities.isAdviser) {
           void listAcrossSources(client, tools.context.caseSources, {
             responsibleParty: currentUser.id,
@@ -653,11 +731,6 @@ export function createRouteSlice(
         }
       }
 
-      if (capabilities.isReviewer && tools.context.appEl) {
-        tools.listen(tools.context.appEl, 'cora-allocated', () => {
-          void loadReviewerCases();
-        });
-      }
       return () => {
         active = false;
         effectsActive = false;

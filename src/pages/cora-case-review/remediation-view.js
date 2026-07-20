@@ -5,13 +5,12 @@ import { evaluate } from '../../evaluators/applicability-evaluator.js';
 import { isFailure } from '../../evaluators/failure-evaluator.js';
 import { buildCaptureControl } from '../../lib/capture-engine.js';
 import { AttributeMenu } from '../../components/sections/cora-attribute-menu.js';
-import '../../components/sections/cora-capture-groups.js';
+import { CaptureGroups } from '../../components/sections/cora-capture-groups.js';
 
 import { normaliseConfiguredActions } from '../../evaluators/configured-outcome.js';
 
 /** @typedef {import('../../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
-/** @typedef {import('../../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {{ loginName: string, displayName: string }} Party */
 
 /**
@@ -19,26 +18,26 @@ import { normaliseConfiguredActions } from '../../evaluators/configured-outcome.
  * @property {QuestionDefinition[]} catalogue
  * @property {Record<string, Answer>} answers
  * @property {boolean} attributeFailures
- * @property {SharePointClient | null} client
  * @property {Party | null} responsibleParty
  * @property {boolean} canAttribute
  * @property {import('../../sharepoint-client.js').RemediationField[]} remediationFields
  * @property {boolean} canCaptureDetails
  * @property {import('../../sharepoint-client.js').CaptureGroup[]} captureGroups
  * @property {boolean} canCapture
- * @property {Map<string, import('../../components/sections/cora-capture-groups.js').CORACaptureGroups>} captureEls
+ * @property {Record<string, Set<string>>} captureCollapsed
+ * @property {Record<string, { query: string, people: import('../../sharepoint-client.js').PersonResult[] }>} attributionSearch
  * @property {boolean} canSelectRemediation
  * @property {(questionId: string, fieldKey: string, value: string) => void} dispatchCapture
+ * @property {(questionId: string, groupKey: string, collapsed: boolean) => void} dispatchCaptureToggle
  * @property {(questionId: string, key: string, value: string) => void} dispatchDetail
  * @property {(questionId: string, attributedParty: Party | null) => void} dispatchAttribute
+ * @property {(questionId: string, query: string) => void} dispatchAttributeSearch
  * @property {(questionId: string, action: { id: string, text: string }, selected: boolean) => void} dispatchRemediationAction
  * @property {(questionId: string, value: string) => void} dispatchRemediationFreeForm
  */
 
 /**
  * The Applicable Questions whose Answers currently fail, in catalogue order.
- * This ordered id set is what decides between a full list rebuild and an
- * in-place item patch (issue #308).
  *
  * @param {RemediationSectionProps} props
  * @returns {QuestionDefinition[]}
@@ -93,11 +92,8 @@ export function renderRemediationItem(props, q) {
 
 /**
  * Builds a failed item's content around its capture slot: `before` is
- * everything rendered above the `cora-capture-groups` element (question,
- * answer, attribution, details), `after` everything below (Remediation
- * Actions). Split out so {@link updateRemediationItem} can refresh both sides
- * in place without ever detaching the reused capture element between them
- * (issue #308).
+ * everything rendered above the capture fields (question, answer,
+ * attribution, details), `after` everything below (Remediation Actions).
  *
  * @param {RemediationSectionProps} props
  * @param {QuestionDefinition} q
@@ -127,31 +123,6 @@ function buildItemContent(props, q) {
   renderRemediationActions(props, after, q);
 
   return { before: [...before.childNodes], after: [...after.childNodes] };
-}
-
-/**
- * Refreshes an already-rendered failed item in place. The reused
- * `cora-capture-groups` element stays attached to its `<li>` throughout — its
- * own `update()` syncs new values into the live controls — while the plain
- * content on either side is rebuilt. Keeping the capture subtree connected is
- * what preserves the Reviewer's focus and the browser's scroll anchoring
- * across an autosave re-render (issue #308).
- *
- * @param {RemediationSectionProps} props
- * @param {HTMLElement} li
- * @param {QuestionDefinition} q
- */
-export function updateRemediationItem(props, li, q) {
-  const cg = props.captureGroups?.length ? syncCaptureElement(props, q) : null;
-  const { before, after } = buildItemContent(props, q);
-
-  const anchor = cg && cg.parentNode === li ? cg : null;
-  for (const child of [...li.childNodes]) {
-    if (child !== anchor) li.removeChild(child);
-  }
-  for (const node of before) li.insertBefore(node, anchor);
-  if (cg && !anchor) li.appendChild(cg);
-  for (const node of after) li.appendChild(node);
 }
 
 /**
@@ -302,12 +273,15 @@ export function renderRemediationAttribution(props, li, q) {
   }
 
   const menu = AttributeMenu({
-    client: props.client,
     responsibleParty: props.responsibleParty,
     attributedParty: attributedParty ?? null,
-    onChange: (/** @type {Party | null} */ party) => {
+    query: props.attributionSearch[q.id]?.query ?? '',
+    people: props.attributionSearch[q.id]?.people ?? [],
+    onInput: (query) => props.dispatchAttributeSearch(q.id, query),
+    onSelect: (/** @type {Party} */ party) => {
       props.dispatchAttribute(q.id, party);
     },
+    onClear: () => props.dispatchAttribute(q.id, null),
   });
   li.appendChild(/** @type {any} */ (menu));
 }
@@ -360,41 +334,21 @@ export function renderRemediationDetails(props, li, q) {
  * @param {QuestionDefinition} q
  */
 export function renderRemediationCapture(props, li, q) {
-  li.appendChild(/** @type {any} */ (syncCaptureElement(props, q)));
-}
-
-/**
- * Gets (or lazily creates) the question's reused `cora-capture-groups`
- * instance and pushes the current capture state into it. Separated from
- * {@link renderRemediationCapture} so the in-place patch can refresh the
- * element without re-appending it (issue #308).
- *
- * @param {RemediationSectionProps} props
- * @param {QuestionDefinition} q
- * @returns {import('../../components/sections/cora-capture-groups.js').CORACaptureGroups}
- */
-function syncCaptureElement(props, q) {
-  let cg = props.captureEls.get(q.id);
-  if (!cg) {
-    cg =
-      /** @type {import('../../components/sections/cora-capture-groups.js').CORACaptureGroups} */ (
-        h('cora-capture-groups', {
-          'oncora-capture': (/** @type {any} */ ev) => {
-            /** @type {any} */ (ev).stopPropagation?.();
-            const { fieldKey, value } =
-              /** @type {CustomEvent<{ fieldKey: string, value: string }>} */ (
-                ev
-              ).detail;
-            props.dispatchCapture(q.id, fieldKey, value);
-          },
-        })
-      );
-    props.captureEls.set(q.id, cg);
-  }
   const capture = props.answers[q.id]?.capture ?? {};
-  cg.groups = props.captureGroups;
-  cg.capture = capture;
-  cg.canCapture = props.canCapture;
-  cg.update?.(props.captureGroups, capture, props.canCapture);
-  return cg;
+  const collapsed = new Map(
+    [...(props.captureCollapsed[q.id] ?? new Set())].map((key) => [key, true])
+  );
+  li.append(
+    ...CaptureGroups({
+      groups: props.captureGroups,
+      capture,
+      canCapture: props.canCapture,
+      namePrefix: `${q.id}-`,
+      collapsed,
+      onToggle: (groupKey, next) =>
+        props.dispatchCaptureToggle(q.id, groupKey, next),
+      onCapture: (fieldKey, value) =>
+        props.dispatchCapture(q.id, fieldKey, value),
+    })
+  );
 }

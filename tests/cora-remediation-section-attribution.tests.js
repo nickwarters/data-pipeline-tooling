@@ -86,11 +86,6 @@ test('CORARemediationSection: no Attributed Party surface when failure has none,
 
 test('CORARemediationSection: read-only viewer (canAttribute off) shows display name, no attribute menu', () => {
   const el = new CORARemediationSection();
-  el.client = /** @type {any} */ ({
-    async searchPeople() {
-      return [];
-    },
-  });
   el.canAttribute = false;
   el.update(
     FAIL_CAT,
@@ -114,14 +109,8 @@ test('CORARemediationSection: read-only viewer (canAttribute off) shows display 
   );
 });
 
-test('CORARemediationSection: editable failure renders an attribute menu wired with client and responsibleParty', () => {
-  const client = /** @type {any} */ ({
-    async searchPeople() {
-      return [];
-    },
-  });
+test('CORARemediationSection: editable failure renders a controlled attribute menu with responsibleParty', () => {
   const el = new CORARemediationSection();
-  el.client = client;
   el.responsibleParty = { loginName: 'rparty', displayName: 'rparty' };
   el.canAttribute = true;
   el.update(FAIL_CAT, { q1: { value: 'No' } }, true);
@@ -132,9 +121,11 @@ test('CORARemediationSection: editable failure renders an attribute menu wired w
     findByClass(el, 'cora-attribute-title'),
     'attribute menu rendered inline for an editable failure'
   );
-  const picker = findByTag(el, 'cora-people-picker');
-  assert.ok(picker, 'menu embeds a people picker');
-  assert.equal(picker.client, client, 'menu forwards the SharePointClient');
+  assert.equal(findByTag(el, 'cora-people-picker'), null);
+  assert.ok(
+    el.querySelector('[role="combobox"]'),
+    'menu renders the picker directly'
+  );
   assert.equal(
     findByClass(el, 'cora-attribute-current'),
     null,
@@ -149,11 +140,6 @@ test('CORARemediationSection: editable failure renders an attribute menu wired w
 
 test('CORARemediationSection: editable failure with an attribution passes the party to the menu', () => {
   const el = new CORARemediationSection();
-  el.client = /** @type {any} */ ({
-    async searchPeople() {
-      return [];
-    },
-  });
   el.canAttribute = true;
   el.update(
     FAIL_CAT,
@@ -173,11 +159,6 @@ test('CORARemediationSection: editable failure with an attribution passes the pa
 
 test('CORARemediationSection: editable surface is suppressed when attributeFailures is off', () => {
   const el = new CORARemediationSection();
-  el.client = /** @type {any} */ ({
-    async searchPeople() {
-      return [];
-    },
-  });
   el.canAttribute = true;
   el.update(FAIL_CAT, { q1: { value: 'No' } }, false);
 
@@ -188,14 +169,10 @@ test('CORARemediationSection: editable surface is suppressed when attributeFailu
   );
 });
 
-test('CORARemediationSection: the menu onChange re-dispatches as bubbling cora-attribute with the question id', () => {
+test('CORARemediationSection: the menu quick-pick re-dispatches as bubbling cora-attribute with the question id', () => {
   const el = new CORARemediationSection();
-  el.client = /** @type {any} */ ({
-    async searchPeople() {
-      return [];
-    },
-  });
   el.canAttribute = true;
+  el.responsibleParty = { loginName: 'jsmith', displayName: 'Jane Smith' };
   el.update(FAIL_CAT, { q1: { value: 'No' } }, true);
 
   /** @type {any[]} */
@@ -204,10 +181,7 @@ test('CORARemediationSection: the menu onChange re-dispatches as bubbling cora-a
     events.push(e)
   );
 
-  // Picking someone in the embedded people picker invokes the menu's onChange.
-  findByTag(el, 'cora-people-picker')._fire('cora-person-selected', {
-    detail: { loginName: 'jsmith', displayName: 'Jane Smith' },
-  });
+  findByClass(el, 'cora-attribute-responsible')._fire('click');
 
   assert.equal(events.length, 1);
   assert.equal(events[0].bubbles, true);
@@ -217,13 +191,8 @@ test('CORARemediationSection: the menu onChange re-dispatches as bubbling cora-a
   });
 });
 
-test('CORARemediationSection: a null cora-attribute-change re-dispatches cora-attribute clearing the party', () => {
+test('CORARemediationSection: clear re-dispatches cora-attribute with a null party', () => {
   const el = new CORARemediationSection();
-  el.client = /** @type {any} */ ({
-    async searchPeople() {
-      return [];
-    },
-  });
   el.canAttribute = true;
   el.update(
     FAIL_CAT,
@@ -242,7 +211,7 @@ test('CORARemediationSection: a null cora-attribute-change re-dispatches cora-at
     events.push(e)
   );
 
-  // Clearing the attribution invokes the menu's onChange with a null party.
+  // Clearing the attribution invokes the menu's controlled clear callback.
   findByClass(el, 'cora-attribute-clear')._fire('click');
 
   assert.equal(events.length, 1);

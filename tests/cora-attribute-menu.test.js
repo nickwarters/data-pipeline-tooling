@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom, findByClass } from './_dom-stub.js';
+import { fireEvent } from './helpers/semantic-dom.js';
 
 installDom();
 
@@ -32,7 +33,8 @@ function mount(props = {}) {
   /** @type {any[]} */
   const changes = [];
   const host = AttributeMenu({
-    onChange: (party) => changes.push(party),
+    onSelect: (party) => changes.push(party),
+    onClear: () => changes.push(null),
     ...props,
   });
   return { host: /** @type {any} */ (host), changes };
@@ -58,19 +60,11 @@ test('AttributeMenu: renders the inline "Attribute failure to" title', () => {
   assert.equal(title.textContent, 'Attribute failure to');
 });
 
-test('AttributeMenu: unset shows the picker inline, no chip or clear', () => {
-  const { host } = mount({
-    client: /** @type {any} */ ({
-      async searchPeople() {
-        return [];
-      },
-    }),
-  });
+test('AttributeMenu: unset renders the PeoplePicker combobox directly, no chip or clear', () => {
+  const { host } = mount();
 
-  assert.ok(
-    findByTag(host, 'cora-people-picker'),
-    'people picker shown inline'
-  );
+  assert.equal(findByTag(host, 'cora-people-picker'), null);
+  assert.ok(host.querySelector('[role="combobox"]'), 'combobox shown inline');
   assert.equal(
     findByClass(host, 'cora-attribute-current'),
     null,
@@ -97,7 +91,7 @@ test('AttributeMenu: omits the Responsible Party quick-pick when none is set', (
   assert.equal(findByClass(host, 'cora-attribute-responsible'), null);
 });
 
-test('AttributeMenu: choosing the Responsible Party calls onChange', () => {
+test('AttributeMenu: choosing the Responsible Party calls onSelect', () => {
   const { host, changes } = mount({ responsibleParty: RESPONSIBLE });
 
   findByClass(host, 'cora-attribute-responsible')._fire('click');
@@ -106,34 +100,37 @@ test('AttributeMenu: choosing the Responsible Party calls onChange', () => {
   assert.deepEqual(changes[0], RESPONSIBLE);
 });
 
-test('AttributeMenu: embeds a people picker wired to the client', () => {
-  const client = /** @type {any} */ ({
-    async searchPeople() {
-      return [];
-    },
-  });
-  const { host } = mount({ client });
+test('AttributeMenu: renders the pure picker input and results list', () => {
+  const { host } = mount();
 
-  const picker = findByTag(host, 'cora-people-picker');
-  assert.ok(picker, 'people picker rendered');
-  assert.equal(picker.client, client, 'picker receives the client');
+  assert.ok(host.querySelector('[role="combobox"]'));
+  assert.ok(host.querySelector('[role="listbox"]'));
 });
 
-test('AttributeMenu: selecting someone via search calls onChange with that person', () => {
-  const { host, changes } = mount({
-    client: /** @type {any} */ ({
-      async searchPeople() {
-        return [];
-      },
-    }),
+test('AttributeMenu: renders supplied results and reports controlled input and selection', () => {
+  /** @type {string[]} */
+  const inputs = [];
+  /** @type {any[]} */
+  const selections = [];
+  const { host } = mount({
+    query: 'Jane',
+    people: [PERSON],
+    onInput: (/** @type {string} */ value) => inputs.push(value),
+    onSelect: (/** @type {any} */ person) => selections.push(person),
   });
 
-  findByTag(host, 'cora-people-picker')._fire('cora-person-selected', {
-    detail: PERSON,
-  });
+  const input = host.querySelector('[role="combobox"]');
+  assert.equal(input.value, 'Jane');
+  assert.equal(
+    host.querySelector('[role="option"]')?.textContent,
+    'Jane Smith — jsmith'
+  );
+  input.value = 'Janet';
+  fireEvent(input, 'input');
+  fireEvent(host.querySelector('[role="option"]'), 'click');
 
-  assert.equal(changes.length, 1);
-  assert.deepEqual(changes[0], PERSON);
+  assert.deepEqual(inputs, ['Janet']);
+  assert.deepEqual(selections, [PERSON]);
 });
 
 test('AttributeMenu: when set, shows the attributed person and a clear button, no picker', () => {
@@ -158,7 +155,7 @@ test('AttributeMenu: when set, shows the attributed person and a clear button, n
   );
 });
 
-test('AttributeMenu: clicking clear calls onChange with a null party', () => {
+test('AttributeMenu: clicking clear calls onClear', () => {
   const { host, changes } = mount({ attributedParty: PERSON });
 
   findByClass(host, 'cora-attribute-clear')._fire('click');

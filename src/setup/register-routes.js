@@ -4,7 +4,6 @@ import { register as registerDashboard } from '../routes/dashboard.js';
 import { register as registerConversation } from '../routes/conversation.js';
 import { register as registerQuestionBank } from '../routes/question-bank.js';
 import { register as registerCase } from '../routes/case.js';
-import { register as registerReports } from '../routes/reports.js';
 import { register as registerTeamCases } from '../routes/team-cases.js';
 import { register as registerMyCases } from '../routes/my-cases.js';
 import { register as registerJourneyCases } from '../routes/journey-cases.js';
@@ -57,7 +56,6 @@ export function registerRoutes(router, context) {
   safeRegister('conversation', registerConversation, router, context);
   safeRegister('question-bank', registerQuestionBank, router, context);
   safeRegister('case', registerCase, router, context);
-  safeRegister('reports', registerReports, router, context);
   safeRegister('team-cases', registerTeamCases, router, context);
   safeRegister('my-cases', registerMyCases, router, context);
   safeRegister('journey-cases', registerJourneyCases, router, context);

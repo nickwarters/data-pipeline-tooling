@@ -9,13 +9,11 @@ installDom();
 
 // ===== IMPORTS (after stubs) =====
 const {
-  failedQuestions,
   RemediationSection,
   renderRemediationAttribution,
   renderRemediationCapture,
   renderRemediationDetails,
   renderRemediationItem,
-  updateRemediationItem,
 } = await import('../../src/pages/cora-case-review/remediation-view.js');
 /** @typedef {Parameters<typeof RemediationSection>[0]} RemediationSectionProps */
 
@@ -32,8 +30,6 @@ export class CORARemediationSection extends HTMLElement {
     /** @type {Record<string, Answer>} */
     this.answers = {};
     this.attributeFailures = false;
-    /** @type {any} */
-    this.client = null;
     /** @type {{loginName: string, displayName: string} | null} */
     this.responsibleParty = null;
     this.canAttribute = false;
@@ -44,13 +40,6 @@ export class CORARemediationSection extends HTMLElement {
     this.captureGroups = [];
     this.canCapture = false;
     this.canSelectRemediation = false;
-    /** @type {Map<string, any>} */
-    this._captureEls = new Map();
-    /** @type {Map<string, HTMLElement>} */
-    this._items = new Map();
-    /** @type {Map<string, Answer | undefined>} */
-    this._renderedAnswers = new Map();
-    this._renderedStructure = null;
   }
 
   connectedCallback() {
@@ -65,60 +54,12 @@ export class CORARemediationSection extends HTMLElement {
     this._render();
   }
 
-  /** @param {RemediationSectionProps} props @param {QuestionDefinition[]} failed */
-  _structureSignature(props, failed) {
-    return JSON.stringify([
-      failed.map((question) => question.id),
-      props.attributeFailures,
-      props.canAttribute,
-      props.canCaptureDetails,
-      props.canCapture,
-      props.canSelectRemediation,
-      props.remediationFields.length,
-      props.captureGroups.length,
-      props.responsibleParty?.loginName ?? null,
-    ]);
-  }
-
   _render() {
-    const props = this._buildProps();
-    const failed = failedQuestions(props);
-    if (
-      this._renderedStructure !== null &&
-      this._renderedStructure === this._structureSignature(props, failed)
-    ) {
-      for (const question of failed) {
-        const li = this._items.get(question.id);
-        if (
-          li &&
-          props.answers[question.id] !== this._renderedAnswers.get(question.id)
-        ) {
-          updateRemediationItem(props, li, question);
-          this._renderedAnswers.set(question.id, props.answers[question.id]);
-        }
-      }
-      return;
-    }
     this.replaceChildren(...this.render());
   }
 
   render() {
-    const props = this._buildProps();
-    const failed = failedQuestions(props);
-    const nodes = RemediationSection(props);
-    this._items.clear();
-    this._renderedAnswers.clear();
-    const items = nodes.flatMap((node) => [
-      .../** @type {HTMLElement} */ (node).querySelectorAll(
-        '.cora-remediation-item'
-      ),
-    ]);
-    failed.forEach((question, index) => {
-      this._items.set(question.id, /** @type {HTMLElement} */ (items[index]));
-      this._renderedAnswers.set(question.id, props.answers[question.id]);
-    });
-    this._renderedStructure = this._structureSignature(props, failed);
-    return nodes;
+    return RemediationSection(this._buildProps());
   }
 
   /** @param {QuestionDefinition} question */
@@ -152,21 +93,23 @@ export class CORARemediationSection extends HTMLElement {
       catalogue: this.catalogue,
       answers: this.answers,
       attributeFailures: this.attributeFailures,
-      client: this.client,
       responsibleParty: this.responsibleParty,
       canAttribute: this.canAttribute,
       remediationFields: this.remediationFields,
       canCaptureDetails: this.canCaptureDetails,
       captureGroups: this.captureGroups,
       canCapture: this.canCapture,
-      captureEls: this._captureEls,
+      captureCollapsed: {},
+      attributionSearch: {},
       canSelectRemediation: this.canSelectRemediation,
       dispatchCapture: (questionId, fieldKey, value) =>
         this._emit('cora-capture', { questionId, fieldKey, value }),
+      dispatchCaptureToggle() {},
       dispatchDetail: (questionId, key, value) =>
         this._emit('cora-remediation-detail', { questionId, key, value }),
       dispatchAttribute: (questionId, attributedParty) =>
         this._emit('cora-attribute', { questionId, attributedParty }),
+      dispatchAttributeSearch() {},
       dispatchRemediationAction: (questionId, action, selected) =>
         this._emit('cora-remediation-action', {
           questionId,

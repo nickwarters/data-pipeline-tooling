@@ -99,24 +99,24 @@ src/
   actions/                      # effects: async work reached only via dispatch (CORE-3 / Project Palimpsest)
     case-actions.js             # persistence effect example: SharePointClient + SaveQueue re-entering via dispatch
 
-  components/                   # reusable cora-* custom elements, layered by dependency
+  components/                   # reusable views and remaining cora-* custom elements, layered by dependency
     base/                       # leaf primitives — compose no other component (cf. lib/signal.js)
-      cora-data-table.js           # legacy component-era table retained while unconverted consumers remain
-      cora-people-picker.js
-      cora-group-progress.js      # per-Question-Group progress strip (was cora-section-progress, #390)
+      cora-data-table.js           # pure legacy table renderer retained for direct consumers
+      cora-people-picker.js        # pure People Picker renderer and search helpers
+      cora-group-progress.js      # pure per-Question-Group progress strip
       cora-status-banner.js
       cora-tabs.js
       cora-toast.js
     sections/                   # domain-feature units: take config, wire base components together
-      cora-allocation.js
+      cora-allocation.js          # pure allocation view and candidate loader
       cora-app-nav.js
       cora-attribute-menu.js
-      cora-capture-groups.js
+      cora-capture-groups.js      # pure Issue Capture Group renderer
       cora-command-palette.js
-      cora-owner-summary.js
-      cora-question.js
+      cora-owner-summary.js       # pure ownership-summary view and loader
+      cora-question.js            # pure Question renderer
     collections/                # page/tab-level assemblies mounted directly by pages
-      cora-case-tabs.js
+      cora-case-tabs.js           # pure Question Bank Case Type tab bar
 
   config/
     working-days.js
@@ -151,11 +151,9 @@ src/
       panel-descriptors.js        # config-declared presence intersected with code-owned role visibility
     home.js                      # store-driven Home pure view (Palimpsest PILOT-2)
     cora-journey-cases.js         # store-driven Journey Cases slice + generic descriptors (GRID-2)
-    reports-index.js             # store-driven pure view (Palimpsest PILOT-1)
     cora-responsible-party-dashboard.js # store-driven Responsible Party slice shared by dashboard and #/my-cases
     responsible-party/
       view.js                     # pure outcome/remediation/unread views using generic tables
-    cora-reviewer-team-report.js
     cora-team-cases.js          # store-driven Team Cases + Case Type table descriptors (GRID-1/5)
     question-bank/              # question bank editor subsystem ("just another page", #382)
       bank-slice.js             # route-local bank editor state, derived selectors, and actions (BANK-1)
@@ -190,7 +188,6 @@ src/
     journey-cases.js
     my-cases.js
     question-bank.js
-    reports.js
     root.js
     team-cases.js
 
@@ -204,7 +201,6 @@ src/
     journey-cases-fetcher.js
     mock-sharepoint-client.js
     permissions.js
-    reviewer-team-fetcher.js
     save-queue.js
     section-access.js
     team-cases-fetcher.js
@@ -220,7 +216,6 @@ src/
     overdue-evaluator.js
     remediation-actions.js
     remediation-details.js
-    reviewer-team-aggregator.js
     question-group-progress.js   # per-Question-Group answered/total (was section-progress.js, #390)
     summary-model.js
     time-windows.js

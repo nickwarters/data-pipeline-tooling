@@ -1,40 +1,41 @@
 // @ts-check
 import { h } from '../../lib/html.js';
-import '../base/cora-people-picker.js';
+import { PeoplePicker } from '../base/cora-people-picker.js';
 
-/** @typedef {import('../../sharepoint-client.js').SharePointClient} SharePointClient */
+/** @typedef {import('../../sharepoint-client.js').PersonResult} PersonResult */
 /** @typedef {{ loginName: string, displayName: string }} Party */
 
 /**
  * Inline attribution control. Rendered directly under a failed
  * Answer's remediation, it is always visible — no button to disclose it, no
  * floating popover. Unset, it offers a one-click quick-pick of the Case's
- * Responsible Party (the common case) alongside the `cora-people-picker` for
+ * Responsible Party (the common case) alongside `PeoplePicker` for
  * everyone else. Once set, it collapses to the attributed person's name plus a
  * clear button; clearing re-reveals the pickers so the reviewer can re-attribute.
  *
- * Owns no state of its own: choosing a person or clearing invokes `onChange`
- * with the new party (or `null`). The caller (cora-remediation-section) persists
- * the change and re-renders this control, so the answers signal stays the single
- * source of truth.
+ * Owns no state of its own: the Case Review route supplies query/results and
+ * handles input, selection, and clearing before re-rendering this control.
  *
  * @param {{
- * client?: SharePointClient | null,
  * attributedParty?: Party | null,
  * responsibleParty?: Party | null,
- * onChange?: (party: Party | null) => void,
+ * query?: string,
+ * people?: PersonResult[],
+ * onInput?: (value: string) => void,
+ * onSelect?: (party: Party) => void,
+ * onClear?: () => void,
  * }} props
  * @returns {HTMLElement}
  */
 export function AttributeMenu({
-  client = null,
   attributedParty = null,
   responsibleParty = null,
-  onChange,
+  query = '',
+  people = [],
+  onInput = () => {},
+  onSelect = () => {},
+  onClear = () => {},
 }) {
-  /** @param {Party | null} party */
-  const select = (party) => onChange?.(party);
-
   /** @type {Node[]} */
   const children = [
     h('p', { className: 'cora-attribute-title' }, 'Attribute failure to'),
@@ -56,7 +57,7 @@ export function AttributeMenu({
             className: 'cora-attribute-clear',
             type: 'button',
             'aria-label': 'Clear attribution',
-            onClick: () => select(null),
+            onClick: onClear,
           },
           '✕'
         )
@@ -71,27 +72,22 @@ export function AttributeMenu({
           {
             className: 'cora-attribute-responsible',
             type: 'button',
-            onClick: () => select(rp),
+            onClick: () => onSelect(rp),
           },
           `Responsible Party — ${rp.displayName}`
         )
       );
     }
 
-    const picker = h('cora-people-picker');
-    const p = /** @type {any} */ (picker);
-    p.client = client;
-    p.addEventListener(
-      'cora-person-selected',
-      (/** @type {CustomEvent<Party>} */ ev) => {
-        const detail = /** @type {CustomEvent<Party>} */ (ev).detail;
-        select({
-          loginName: detail.loginName,
-          displayName: detail.displayName,
-        });
-      }
-    );
-    children.push(picker);
+    const picker = PeoplePicker({
+      placeholder: 'Search people…',
+      people,
+      query,
+      inputValue: query,
+      onInput,
+      onSelect,
+    });
+    children.push(...picker);
   }
 
   return h('div', { className: 'cora-attribute-menu' }, ...children);

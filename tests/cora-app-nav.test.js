@@ -37,7 +37,7 @@ test('cora-app-nav: reviewer sees dashboard link', () => {
   const el = new CORAAppNav();
   el.capabilities = {
     isReviewer: true,
-    ownedCaseTypes: [],
+    ownedCaseTypes: ['example-review'],
     isAdviser: false,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
@@ -76,7 +76,7 @@ test('cora-app-nav: reviewer does not see reports link', () => {
   );
 });
 
-test('cora-app-nav: reviewer manager sees dashboard and reports links', () => {
+test('cora-app-nav: reviewer manager sees dashboard without a retired reports link', () => {
   const el = new CORAAppNav();
   el.capabilities = {
     isReviewer: false,
@@ -95,10 +95,7 @@ test('cora-app-nav: reviewer manager sees dashboard and reports links', () => {
     findNavItem(el, '#/dashboard'),
     'reviewer manager should see dashboard link'
   );
-  assert.ok(
-    findNavItem(el, '#/reports'),
-    'reviewer manager should see reports link'
-  );
+  assert.equal(findNavItem(el, '#/reports'), null);
 });
 
 test('cora-app-nav: reviewer manager does not see question bank link', () => {
@@ -123,7 +120,7 @@ test('cora-app-nav: reviewer manager does not see question bank link', () => {
   );
 });
 
-test('cora-app-nav: case type owner sees dashboard, reports, and question bank links', () => {
+test('cora-app-nav: case type owner sees dashboard and question bank without a retired reports link', () => {
   const el = new CORAAppNav();
   el.capabilities = {
     isReviewer: false,
@@ -142,10 +139,7 @@ test('cora-app-nav: case type owner sees dashboard, reports, and question bank l
     findNavItem(el, '#/dashboard'),
     'case type owner should see dashboard link'
   );
-  assert.ok(
-    findNavItem(el, '#/reports'),
-    'case type owner should see reports link'
-  );
+  assert.equal(findNavItem(el, '#/reports'), null);
   assert.ok(
     findNavItem(el, '#/question-bank'),
     'case type owner should see question bank link'
@@ -220,7 +214,7 @@ test('cora-app-nav: active item matches current hash exactly', () => {
   const el = new CORAAppNav();
   el.capabilities = {
     isReviewer: false,
-    ownedCaseTypes: [],
+    ownedCaseTypes: ['example-review'],
     isAdviser: false,
     isReviewerManager: true,
     isResponsiblePartyManager: false,
@@ -238,23 +232,23 @@ test('cora-app-nav: active item matches current hash exactly', () => {
     'page',
     'dashboard link should be active'
   );
-  const reports = findNavItem(el, '#/reports');
-  assert.ok(reports, 'reports link should exist');
+  const questionBank = findNavItem(el, '#/question-bank');
+  assert.ok(questionBank, 'question bank link should exist');
   assert.equal(
-    reports.getAttribute('aria-current'),
+    questionBank.getAttribute('aria-current'),
     '',
-    'reports link should not be active'
+    'question bank link should not be active'
   );
 });
 
 test('cora-app-nav: active item matches sub-route prefix', () => {
   /** @type {any} */ (globalThis).location = {
-    hash: '#/reports/reviewer-team',
+    hash: '#/question-bank/editor',
   };
   const el = new CORAAppNav();
   el.capabilities = {
     isReviewer: false,
-    ownedCaseTypes: [],
+    ownedCaseTypes: ['example-review'],
     isAdviser: false,
     isReviewerManager: true,
     isResponsiblePartyManager: false,
@@ -265,12 +259,12 @@ test('cora-app-nav: active item matches sub-route prefix', () => {
     isVisitor: false,
   };
   el.connectedCallback();
-  const reports = findNavItem(el, '#/reports');
-  assert.ok(reports, 'reports link should exist');
+  const questionBank = findNavItem(el, '#/question-bank');
+  assert.ok(questionBank, 'question bank link should exist');
   assert.equal(
-    reports.getAttribute('aria-current'),
+    questionBank.getAttribute('aria-current'),
     'page',
-    'reports link should be active on sub-route'
+    'question bank link should be active on sub-route'
   );
   const dash = findNavItem(el, '#/dashboard');
   assert.equal(

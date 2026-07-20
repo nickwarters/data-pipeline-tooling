@@ -1,6 +1,5 @@
 // @ts-check
 import { h } from '../../lib/html.js';
-import { ShellElement, replaceHostChildren } from '../../lib/view.js';
 
 /** @typedef {import('../../evaluators/question-group-progress.js').QuestionGroupProgress} QuestionGroupProgress */
 /** @typedef {import('../../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
@@ -54,53 +53,3 @@ export function GroupProgress({ groups, onGroupJump, onJumpUnanswered }) {
 
   return [...rows, jumpBtn];
 }
-
-export class CORAGroupProgress extends ShellElement {
-  constructor() {
-    super();
-    /** @type {QuestionGroupProgress[]} */
-    this._groups = [];
-    /** @type {QuestionDefinition[]} */
-    this._unansweredQuestions = [];
-  }
-
-  /**
-   * @param {QuestionGroupProgress[]} groups
-   * @param {QuestionDefinition[]} unansweredQuestions - applicable questions without an answer, in order
-   */
-  update(groups, unansweredQuestions) {
-    this._groups = groups;
-    this._unansweredQuestions = unansweredQuestions;
-    this._render();
-  }
-
-  // Survivor: update() is a bespoke positional override called directly by
-  // callers/tests before connectedCallback() (when _shellRenderNow is still
-  // null), so it can't route through the base's _shellRenderNow re-render
-  // entry point — it needs a render path that works pre-connect.
-  _render() {
-    replaceHostChildren(this, this.render());
-  }
-
-  render() {
-    return GroupProgress({
-      groups: this._groups,
-      unansweredQuestions: this._unansweredQuestions,
-      onGroupJump: (group) => {
-        this.dispatchEvent(
-          new CustomEvent('cora-group-jump', {
-            detail: { group },
-            bubbles: true,
-          })
-        );
-      },
-      onJumpUnanswered: () => {
-        this.dispatchEvent(
-          new CustomEvent('cora-jump-unanswered', { bubbles: true })
-        );
-      },
-    });
-  }
-}
-
-customElements.define('cora-group-progress', CORAGroupProgress);

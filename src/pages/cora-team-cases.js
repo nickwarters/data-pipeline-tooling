@@ -125,14 +125,12 @@ export function teamCasesColumns(caseTableColumns = []) {
 export function teamCasesView(state, tools) {
   const route = state.routes.teamCases;
   const heading = h('h1', {}, 'Team Cases');
-  const back = h('a', { href: '#/reports' }, '← Back to Reports');
-  if (!route.cases) return h('div', {}, heading, back);
+  if (!route.cases) return h('div', {}, heading);
 
   return h(
     'div',
     {},
     heading,
-    back,
     dataTableView({
       rows: route.cases,
       columns: teamCasesColumns(route.caseTableColumns),

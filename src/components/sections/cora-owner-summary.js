@@ -1,5 +1,4 @@
 // @ts-check
-import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
 import { CASE_STATUS } from '../../lib/case-statuses.js';
 
@@ -157,40 +156,3 @@ export function OwnerSummary({ summaries }) {
 
   return [h2, ...cards];
 }
-
-export class CORAOwnerSummary extends ShellElement {
-  constructor() {
-    super();
-    /** @type {SharePointClient | null} */
-    this.client = null;
-    /** @type {string[]} */
-    this.ownedCaseTypes = [];
-    /** @type {import('../../setup/resolve-eligible-case-types.js').CaseSource[]} */
-    this.allCaseSources = [];
-    /** @type {OwnerSummary[]} */
-    this._summaries = [];
-  }
-
-  async connectedCallback() {
-    super.connectedCallback();
-    if (!this.client || !this.ownedCaseTypes.length) return;
-    await this._refresh();
-  }
-
-  async _refresh() {
-    this._summaries = await loadOwnerSummaries({
-      client: /** @type {SharePointClient} */ (this.client),
-      ownedCaseTypes: this.ownedCaseTypes,
-      allCaseSources: this.allCaseSources,
-    });
-
-    this._shellRenderNow?.();
-  }
-
-  render() {
-    if (!this.client || !this.ownedCaseTypes.length) return undefined;
-    return OwnerSummary({ summaries: this._summaries });
-  }
-}
-
-customElements.define('cora-owner-summary', CORAOwnerSummary);

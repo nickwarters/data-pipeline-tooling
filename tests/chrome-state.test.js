@@ -26,10 +26,10 @@ test('createChromeState: captures the current route for nav state', () => {
   const chrome = createChromeState({
     currentUser: { id: 'u1', displayName: 'A User' },
     permissions: /** @type {any} */ ({}),
-    currentHash: '#/reports',
+    currentHash: '#/question-bank',
   });
 
-  assert.equal(chrome.nav.currentHash, '#/reports');
+  assert.equal(chrome.nav.currentHash, '#/question-bank');
 });
 
 test('bindChromeNavigation: keeps nav state current and removes its listener', () => {
@@ -44,14 +44,14 @@ test('bindChromeNavigation: keeps nav state current and removes its listener', (
     readHash: () => currentHash,
   });
 
-  currentHash = '#/reports';
+  currentHash = '#/question-bank';
   target.dispatchEvent(new Event('hashchange'));
-  assert.equal(chrome.nav.currentHash, '#/reports');
+  assert.equal(chrome.nav.currentHash, '#/question-bank');
 
   dispose();
   currentHash = '#/dashboard';
   target.dispatchEvent(new Event('hashchange'));
-  assert.equal(chrome.nav.currentHash, '#/reports');
+  assert.equal(chrome.nav.currentHash, '#/question-bank');
 });
 
 test('bindChromeNavigation: default browser binding normalises an empty hash', () => {
@@ -63,7 +63,7 @@ test('bindChromeNavigation: default browser binding normalises an empty hash', (
   const chrome = createChromeState({
     currentUser: { id: 'u1', displayName: 'A User' },
     permissions: /** @type {any} */ ({}),
-    currentHash: '#/reports',
+    currentHash: '#/question-bank',
   });
 
   try {

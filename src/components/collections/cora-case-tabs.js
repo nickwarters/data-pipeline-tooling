@@ -1,5 +1,4 @@
 // @ts-check
-import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
 
 /**
@@ -68,41 +67,3 @@ export function CaseTabs({
     )
   );
 }
-
-/**
- * Case Type tab bar shell. State arrives as **signals** passed as properties
- * (`cases`, `active`, `dirty`) — the render effect subscribes to whatever it
- * is given, so fine-grained reactivity is unchanged — and interactions flow
- * up through the `onSelect` / `onRevert` / `onCompile` callbacks supplied by
- * the mounting page. No store dependency.
- */
-export class CORACaseTabs extends ShellElement {
-  constructor() {
-    super();
-    /** @type {{ get(): Record<string, any> } | null} */
-    this.cases = null;
-    /** @type {{ get(): string } | null} */
-    this.active = null;
-    /** @type {{ get(): boolean } | null} */
-    this.dirty = null;
-    /** @type {(slug: string) => void} */
-    this.onSelect = () => {};
-    /** @type {() => void} */
-    this.onRevert = () => {};
-    /** @type {() => void} */
-    this.onCompile = () => {};
-  }
-
-  render() {
-    return CaseTabs({
-      types: this.cases?.get() ?? {},
-      active: this.active?.get() ?? '',
-      dirty: this.dirty?.get() ?? false,
-      onSelect: this.onSelect,
-      onRevert: this.onRevert,
-      onCompile: this.onCompile,
-    });
-  }
-}
-
-customElements.define('cora-case-tabs', CORACaseTabs);

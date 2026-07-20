@@ -74,8 +74,6 @@ test('home view: each role keeps its existing destination and order', () => {
 
   assert.deepEqual(headings(view), [
     'Reviewer',
-    'Reviewer Manager',
-    'Responsible Party Manager',
     'Responsible Party',
     'Case Type Owner',
     'Journey Owner',
@@ -84,8 +82,6 @@ test('home view: each role keeps its existing destination and order', () => {
   ]);
   assert.deepEqual(links(view), [
     '#/dashboard',
-    '#/reports/reviewer-team',
-    '#/reports/responsible-party-team',
     '#/my-cases',
     '#/question-bank',
     '#/journey-cases',

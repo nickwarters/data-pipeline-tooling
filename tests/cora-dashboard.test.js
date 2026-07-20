@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
+import { fireEvent, getByRole } from './helpers/semantic-dom.js';
 
 installDom();
 /** @type {any} */ (globalThis).location = { hash: '' };
@@ -71,11 +72,15 @@ test('dashboard slice: effects load reviewer rows, KPI lanes, and Controls appea
   const loaded = new Promise((resolve) => {
     markLoaded = resolve;
   });
-  const slice = createRouteSlice({}, ctx, {
-    listAcrossSources: async () => /** @type {any} */ (reviewer),
-    loadAppeals: async () => /** @type {any} */ (appeals),
-    loadKpis: async () => /** @type {any} */ (lanes),
-  });
+  const slice = createRouteSlice(
+    {},
+    ctx,
+    /** @type {any} */ ({
+      listAcrossSources: async () => /** @type {any} */ (reviewer),
+      loadAppeals: async () => /** @type {any} */ (appeals),
+      loadKpis: async () => /** @type {any} */ (lanes),
+    })
+  );
   slice.start({
     context: ctx,
     params: {},
@@ -284,14 +289,404 @@ test('dashboard pure view renders role-visible reviewer, owner, and allocation p
   });
 
   assert.equal(view.querySelector('h1')?.textContent, 'Outstanding Cases');
-  assert.ok(view.querySelector('cora-allocation'));
-  assert.ok(view.querySelector('cora-owner-summary'));
+  assert.equal(
+    view.querySelector('.cora-allocation-btn')?.textContent,
+    'Request next Case'
+  );
+  assert.equal(
+    view.querySelector('.cora-owner-summary-heading')?.textContent,
+    'Case Type Ownership Summary'
+  );
+  assert.equal(view.querySelector('cora-allocation'), null);
+  assert.equal(view.querySelector('cora-owner-summary'), null);
   assert.match(view.textContent, /No outstanding cases/);
+  view
+    .querySelector('.cora-allocation-btn')
+    ?.dispatchEvent(/** @type {any} */ ({ type: 'click' }));
 
   // Existing DOM-stub debt retained until the shared debt ledger can move.
   assert.ok(/** @type {any} */ (view)._children);
   assert.ok(/** @type {any} */ (view)._children.length >= 1);
   assert.ok(/** @type {any} */ (view)._children[0]);
+});
+
+test('dashboard owner summary loads through the route slice and renders from state', async () => {
+  const ctx = context(capabilities({ ownedCaseTypes: ['complaints'] }));
+  /** @type {any[]} */
+  const actions = [];
+  const slice = createRouteSlice(
+    {},
+    ctx,
+    /** @type {any} */ ({
+      loadKpis: async () => [],
+      loadOwnerSummary: async () => [
+        {
+          caseType: 'complaints',
+          outstanding: 2,
+          assigned: 3,
+          overdue: 1,
+          completedToday: 4,
+          completedLast7Days: 9,
+        },
+      ],
+    })
+  );
+  slice.start({
+    context: ctx,
+    params: {},
+    dispatch: (/** @type {any} */ action) => actions.push(action),
+    listen: () => {},
+  });
+  await Promise.resolve();
+  await Promise.resolve();
+
+  const loadedAction = actions.find(
+    (action) => action.type === 'owner-summaries/loaded'
+  );
+  assert.ok(loadedAction);
+  const loaded = slice.reducer(slice.initialState, loadedAction);
+  const view = dashboardView(/** @type {any} */ (loaded), {
+    context: ctx,
+    dispatch: () => {},
+  });
+  assert.match(view.textContent, /complaints/);
+  assert.match(view.textContent, /Completed \(last 7 days\)9/);
+});
+
+test('dashboard owner summary suppresses a late result after route disposal', async () => {
+  const ctx = context(capabilities({ ownedCaseTypes: ['complaints'] }));
+  /** @type {(value: any[]) => void} */
+  let resolveSummaries = () => {};
+  const summaries = new Promise((resolve) => {
+    resolveSummaries = resolve;
+  });
+  /** @type {any[]} */
+  const actions = [];
+  let initialPanels =
+    /** @type {import('../src/sharepoint-client.js').DashboardPanelKey[]} */ ([]);
+  const slice = createRouteSlice(
+    {},
+    ctx,
+    /** @type {any} */ ({
+      loadKpis: async () => [],
+      loadOwnerSummary: async () => summaries,
+      loadDashboardPanels: async () => initialPanels,
+    })
+  );
+  initialPanels = [...slice.initialState.routes.dashboard.dashboardPanels];
+  const dispose = slice.start({
+    context: ctx,
+    params: {},
+    dispatch: (/** @type {any} */ action) => actions.push(action),
+    listen: () => {},
+  });
+  dispose();
+  resolveSummaries([{ caseType: 'late' }]);
+  await summaries;
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.equal(
+    actions.some((action) => action.type === 'owner-summaries/loaded'),
+    false
+  );
+});
+
+test('dashboard allocation claims a candidate and refreshes reviewer rows through route actions', async () => {
+  const ctx = context(capabilities({ isReviewer: true }));
+  /** @type {any[]} */
+  const patches = [];
+  ctx.client = /** @type {any} */ ({
+    async patchCase(/** @type {any[]} */ ...args) {
+      patches.push(args);
+      return { ok: true };
+    },
+  });
+  /** @type {any[]} */
+  const actions = [];
+  const slice = createRouteSlice(
+    {},
+    ctx,
+    /** @type {any} */ ({
+      loadKpis: async () => [],
+      listAcrossSources: async () => [{ id: 'refreshed', dueDate: '' }],
+      loadAllocationCandidates: async () => [
+        {
+          id: 'oldest',
+          etag: '"4"',
+          _listOptions: { listName: 'Cases-Complaints' },
+        },
+      ],
+    })
+  );
+  const tools = /** @type {any} */ ({
+    context: ctx,
+    params: {},
+    dispatch: (/** @type {any} */ action) => actions.push(action),
+    listen: () => {},
+  });
+  slice.start(tools);
+  const view = slice.view(slice.initialState, tools);
+  view
+    .querySelector('.cora-allocation-btn')
+    ?.dispatchEvent(/** @type {any} */ ({ type: 'click' }));
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.deepEqual(patches, [
+    [
+      'oldest',
+      { assignedReviewer: 'u1' },
+      '"4"',
+      { listName: 'Cases-Complaints' },
+    ],
+  ]);
+  assert.ok(
+    actions.some(
+      (action) =>
+        action.type === 'reviewer-cases/loaded' &&
+        action.cases[0].id === 'refreshed'
+    )
+  );
+});
+
+test('dashboard allocation retries a stale candidate before claiming the next Case', async () => {
+  const ctx = context(capabilities({ isReviewer: true }));
+  /** @type {string[]} */
+  const patches = [];
+  ctx.client = /** @type {any} */ ({
+    async patchCase(/** @type {string} */ id) {
+      patches.push(id);
+      return { ok: id === 'available' };
+    },
+  });
+  /** @type {any[]} */
+  const actions = [];
+  const slice = createRouteSlice(
+    {},
+    ctx,
+    /** @type {any} */ ({
+      loadKpis: async () => [],
+      listAcrossSources: async () => [],
+      loadAllocationCandidates: async () => [
+        {
+          id: 'stale',
+          etag: '"1"',
+          _listOptions: { listName: 'Cases-Complaints' },
+        },
+        {
+          id: 'available',
+          etag: '"2"',
+          _listOptions: { listName: 'Cases-Complaints' },
+        },
+      ],
+    })
+  );
+  const tools = /** @type {any} */ ({
+    context: ctx,
+    params: {},
+    dispatch: (/** @type {any} */ action) => actions.push(action),
+    listen: () => {},
+  });
+  slice.start(tools);
+  fireEvent(
+    getByRole(slice.view(slice.initialState, tools), 'button', {
+      name: 'Request next Case',
+    }),
+    'click'
+  );
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.deepEqual(patches, ['stale', 'available']);
+  assert.equal(
+    actions.some(
+      (action) =>
+        action.type === 'allocation/availability-changed' && action.isEmpty
+    ),
+    false
+  );
+});
+
+test('dashboard allocation exhausts stale candidates and renders the resulting empty state', async () => {
+  const ctx = context(capabilities({ isReviewer: true }));
+  ctx.client = /** @type {any} */ ({
+    async patchCase() {
+      return { ok: false };
+    },
+  });
+  /** @type {any[]} */
+  const actions = [];
+  const slice = createRouteSlice(
+    {},
+    ctx,
+    /** @type {any} */ ({
+      loadKpis: async () => [],
+      listAcrossSources: async () => [],
+      loadAllocationCandidates: async () => [
+        {
+          id: 'stale',
+          etag: '"1"',
+          _listOptions: { listName: 'Cases-Complaints' },
+        },
+      ],
+    })
+  );
+  const tools = /** @type {any} */ ({
+    context: ctx,
+    params: {},
+    dispatch: (/** @type {any} */ action) => actions.push(action),
+    listen: () => {},
+  });
+  slice.start(tools);
+  slice
+    .view(slice.initialState, tools)
+    .querySelector('.cora-allocation-btn')
+    ?.dispatchEvent(/** @type {any} */ ({ type: 'click' }));
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+
+  const exhausted = actions.find(
+    (action) => action.type === 'allocation/availability-changed'
+  );
+  assert.deepEqual(exhausted, {
+    type: 'allocation/availability-changed',
+    isEmpty: true,
+  });
+  const state = slice.reducer(slice.initialState, exhausted);
+  assert.match(slice.view(state, tools).textContent, /No Cases available/);
+});
+
+test('dashboard allocation action is inert before start and after route disposal', async () => {
+  const ctx = context(capabilities({ isReviewer: true }));
+  /** @type {(value: any[]) => void} */
+  let resolveCandidates = () => {};
+  const candidates = new Promise((resolve) => {
+    resolveCandidates = resolve;
+  });
+  let patches = 0;
+  ctx.client = /** @type {any} */ ({
+    async patchCase() {
+      patches += 1;
+      return { ok: true };
+    },
+  });
+  /** @type {any[]} */
+  const actions = [];
+  const slice = createRouteSlice(
+    {},
+    ctx,
+    /** @type {any} */ ({
+      loadKpis: async () => [],
+      listAcrossSources: async () => [],
+      loadAllocationCandidates: async () => candidates,
+    })
+  );
+  const tools = /** @type {any} */ ({
+    context: ctx,
+    params: {},
+    dispatch: (/** @type {any} */ action) => actions.push(action),
+    listen: () => {},
+  });
+
+  slice
+    .view(slice.initialState, tools)
+    .querySelector('.cora-allocation-btn')
+    ?.dispatchEvent(/** @type {any} */ ({ type: 'click' }));
+  const dispose = slice.start(tools);
+  slice
+    .view(slice.initialState, tools)
+    .querySelector('.cora-allocation-btn')
+    ?.dispatchEvent(/** @type {any} */ ({ type: 'click' }));
+  dispose();
+  resolveCandidates([
+    {
+      id: 'late',
+      etag: '"1"',
+      _listOptions: { listName: 'Cases-Complaints' },
+    },
+  ]);
+  await candidates;
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.equal(patches, 1);
+  assert.equal(
+    actions.some((action) => action.type === 'allocation/availability-changed'),
+    false
+  );
+});
+
+test('dashboard allocation does not publish exhausted state after route disposal', async () => {
+  const ctx = context(capabilities({ isReviewer: true }));
+  /** @type {(value: any[]) => void} */
+  let resolveCandidates = () => {};
+  const candidates = new Promise((resolve) => {
+    resolveCandidates = resolve;
+  });
+  ctx.client = /** @type {any} */ ({
+    async patchCase() {
+      return { ok: false };
+    },
+  });
+  /** @type {any[]} */
+  const actions = [];
+  const slice = createRouteSlice(
+    {},
+    ctx,
+    /** @type {any} */ ({
+      loadKpis: async () => [],
+      listAcrossSources: async () => [],
+      loadAllocationCandidates: async () => candidates,
+    })
+  );
+  const tools = /** @type {any} */ ({
+    context: ctx,
+    params: {},
+    dispatch: (/** @type {any} */ action) => actions.push(action),
+    listen: () => {},
+  });
+  const dispose = slice.start(tools);
+  slice
+    .view(slice.initialState, tools)
+    .querySelector('.cora-allocation-btn')
+    ?.dispatchEvent(/** @type {any} */ ({ type: 'click' }));
+  dispose();
+  resolveCandidates([
+    {
+      id: 'late-stale',
+      etag: '"1"',
+      _listOptions: { listName: 'Cases-Complaints' },
+    },
+  ]);
+  await candidates;
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.equal(
+    actions.some((action) => action.type === 'allocation/availability-changed'),
+    false
+  );
+});
+
+test('dashboard reducer stores resolved panel and owner-summary state', () => {
+  const slice = createRouteSlice({}, context(capabilities()));
+  const withPanels = slice.reducer(slice.initialState, {
+    type: 'dashboard-panels/loaded',
+    panels: ['allocation'],
+  });
+  const withSummaries = slice.reducer(withPanels, {
+    type: 'owner-summaries/loaded',
+    summaries: [{ caseType: 'complaints' }],
+  });
+
+  assert.deepEqual(withPanels.routes.dashboard.dashboardPanels, ['allocation']);
+  assert.deepEqual(withSummaries.routes.dashboard.ownerSummaries, [
+    { caseType: 'complaints' },
+  ]);
 });
 
 test('dashboard pure view renders only panels present in Case Type configuration', () => {
@@ -347,6 +742,29 @@ test('dashboard slice resolves Case Type panel presence through a store action',
   ]);
 });
 
+test('dashboard slice does not dispatch when Case Type panels match initial route state', async () => {
+  const ctx = context(capabilities());
+  ctx.client = null;
+  /** @type {any[]} */
+  const actions = [];
+  let initialPanels =
+    /** @type {import('../src/sharepoint-client.js').DashboardPanelKey[]} */ ([]);
+  const slice = createRouteSlice({}, ctx, {
+    loadDashboardPanels: async () => initialPanels,
+  });
+  initialPanels = [...slice.initialState.routes.dashboard.dashboardPanels];
+  slice.start({
+    context: ctx,
+    params: {},
+    dispatch: (/** @type {any} */ action) => actions.push(action),
+    listen: () => {},
+  });
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.deepEqual(actions, []);
+});
+
 test('dashboard slice keeps legacy panels and reports a Case Type panel-load failure', async () => {
   const ctx = context(capabilities());
   ctx.client = null;
@@ -379,47 +797,6 @@ test('dashboard slice keeps legacy panels and reports a Case Type panel-load fai
   } finally {
     console.error = originalError;
   }
-});
-
-test('dashboard allocation wiring listens at the app boundary and reloads reviewer cases', async () => {
-  const ctx = context(capabilities({ isReviewer: true }));
-  let loads = 0;
-  /** @type {() => void} */
-  let markReloaded = () => {};
-  /** @type {Promise<void>} */
-  const reloaded = new Promise((resolve) => {
-    markReloaded = resolve;
-  });
-  const slice = createRouteSlice({}, ctx, {
-    listAcrossSources: async () => {
-      loads += 1;
-      if (loads === 3) markReloaded();
-      return [];
-    },
-    loadKpis: async () => [],
-  });
-  const dispose = slice.start({
-    context: ctx,
-    params: {},
-    dispatch: () => {},
-    listen: (
-      /** @type {any} */ target,
-      /** @type {string} */ type,
-      /** @type {any} */ listener
-    ) => target.addEventListener(type, listener),
-  });
-  await Promise.resolve();
-
-  const app = /** @type {any} */ (ctx.appEl);
-  assert.ok(app._listeners['cora-allocated']);
-  assert.equal(app._listeners['cora-allocated'].length, 1);
-  app._fire('cora-allocated', {});
-  app._fire('cora-allocated', {});
-  assert.ok(app._listeners['cora-allocated']);
-  assert.equal(app._listeners['cora-allocated'].length, 1);
-  await reloaded;
-  assert.equal(loads, 3);
-  dispose?.();
 });
 
 test('dashboard reducer composes Controls, Action Centre, and Responsible Party transitions', () => {
@@ -661,8 +1038,10 @@ test('dashboard pure view composes every real panel for a multi-role user', () =
   assert.ok(view.querySelector('.cora-reviewer-cases'));
   assert.ok(view.querySelector('.cora-rp-remediation'));
   assert.ok(view.querySelector('.cora-controls-appeals'));
-  assert.ok(view.querySelector('cora-owner-summary'));
-  assert.ok(view.querySelector('cora-allocation'));
+  assert.ok(view.querySelector('.cora-owner-summary-heading'));
+  assert.ok(view.querySelector('.cora-allocation-btn'));
+  assert.equal(view.querySelector('cora-owner-summary'), null);
+  assert.equal(view.querySelector('cora-allocation'), null);
 
   [...view.querySelectorAll('button')].forEach((button) =>
     button.dispatchEvent(/** @type {any} */ ({ type: 'click' }))
@@ -711,6 +1090,7 @@ test('dashboard Action Centre controller reloads scope, groups, and pages throug
     listAcrossSources: async () => [],
     loadAppeals: async () => [],
     loadKpis: async () => [],
+    loadOwnerSummary: async () => [],
     loadActionCounts: async ({ reasons }) => {
       countLoads += 1;
       return {

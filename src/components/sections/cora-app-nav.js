@@ -67,9 +67,6 @@ export function AppNav({ capabilities, hash }) {
   if (hasAnyRole) {
     itemsEl.appendChild(AppNavItem('Dashboard', '#/dashboard', navItems));
   }
-  if (isReviewerManager || isOwner) {
-    itemsEl.appendChild(AppNavItem('Reports', '#/reports', navItems));
-  }
   if (isOwner) {
     itemsEl.appendChild(
       AppNavItem('Question Bank', '#/question-bank', navItems)

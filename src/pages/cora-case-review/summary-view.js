@@ -6,7 +6,7 @@ import { buildSummaryModel } from '../../evaluators/summary-model.js';
 import { isReportable } from '../../lib/case-machine.js';
 import { currentOutcome } from '../../evaluators/amended-outcome.js';
 import { DEFAULT_SECTION_HEADINGS } from '../../lib/section-labels.js';
-import '../../components/sections/cora-capture-groups.js';
+import { CaptureGroups } from '../../components/sections/cora-capture-groups.js';
 import { CASE_STATUS } from '../../lib/case-statuses.js';
 
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
@@ -239,17 +239,19 @@ function renderCapture(props, questionId) {
   const capture = props.answers[questionId]?.capture;
   if (!capture || Object.keys(capture).length === 0) return null;
 
-  const cg =
-    /** @type {import('../../components/sections/cora-capture-groups.js').CORACaptureGroups} */ (
-      h('cora-capture-groups', {
-        class: 'cora-summary-capture',
-      })
-    );
-  cg.groups = props.captureGroups;
-  cg.capture = capture;
-  cg.canCapture = false;
-  cg.update(props.captureGroups, capture, false);
-  return cg;
+  return h(
+    'div',
+    { class: 'cora-summary-capture' },
+    ...CaptureGroups({
+      groups: props.captureGroups,
+      capture,
+      canCapture: false,
+      namePrefix: `summary-${questionId}-`,
+      collapsed: new Map(),
+      onToggle() {},
+      onCapture() {},
+    })
+  );
 }
 
 /**

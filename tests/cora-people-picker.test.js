@@ -2,226 +2,107 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
+import {
+  fireEvent,
+  getByRole,
+  queryAllByRole,
+} from './helpers/semantic-dom.js';
 
 installDom();
 
-// ===== IMPORTS (after stubs) =====
-const { CORAPeoplePicker } =
+const { PeoplePicker, peoplePickerOptions, searchPeople } =
   await import('../src/components/base/cora-people-picker.js');
 
-/**
- * Build a fake client whose searchPeople resolves to `results` and records queries.
- * @param {Array<{loginName: string, displayName: string, email?: string}>} results
- */
-function makeClient(results) {
+const PERSON = { loginName: 'jsmith', displayName: 'Jane Smith' };
+
+test('PeoplePicker renders an accessible input and hidden empty result list', () => {
   /** @type {string[]} */
-  const queries = [];
-  return {
-    queries,
-    /** @param {string} q */
-    async searchPeople(q) {
-      queries.push(q);
-      return results;
+  const inputs = [];
+  const nodes = PeoplePicker({
+    placeholder: 'Find a colleague',
+    people: [],
+    query: '',
+    inputValue: 'Jan',
+    onInput: (value) => inputs.push(value),
+    onSelect() {},
+  });
+  const host = document.createElement('div');
+  host.append(...nodes);
+  const input = /** @type {any} */ (getByRole(host, 'combobox'));
+  assert.equal(input.placeholder, 'Find a colleague');
+  assert.equal(input.value, 'Jan');
+  input.value = 'Jane';
+  fireEvent(input, 'input');
+  fireEvent(input, 'input', { target: {} });
+  assert.deepEqual(inputs, ['Jane', '']);
+  assert.equal(getByRole(host, 'listbox').hidden, true);
+});
+
+test('PeoplePicker renders one selectable option per search result', () => {
+  /** @type {any[]} */
+  const selected = [];
+  const host = document.createElement('div');
+  host.append(
+    ...PeoplePicker({
+      placeholder: '',
+      people: [PERSON],
+      query: 'Jane',
+      inputValue: 'Jane',
+      onInput() {},
+      onSelect: (person) => selected.push(person),
+    })
+  );
+  const [option] = queryAllByRole(host, 'option');
+  assert.equal(option.textContent, 'Jane Smith — jsmith');
+  fireEvent(option, 'click');
+  assert.deepEqual(selected, [PERSON]);
+  assert.equal(getByRole(host, 'listbox').hidden, false);
+});
+
+test('peoplePickerOptions offers a raw-account fallback only for a non-empty query', () => {
+  assert.equal(peoplePickerOptions([], '', () => {}).length, 0);
+  const [fallback] = peoplePickerOptions([], 'someone', () => {});
+  assert.equal(fallback.textContent, 'Use “someone” as account');
+});
+
+test('searchPeople trims and forwards a query before rendering results', async () => {
+  /** @type {any[]} */
+  const calls = [];
+  await searchPeople(
+    {
+      client: /** @type {any} */ ({
+        async searchPeople(/** @type {string} */ query) {
+          calls.push(query);
+          return [PERSON];
+        },
+      }),
+      renderResults: (
+        /** @type {any[]} */ people,
+        /** @type {string} */ query
+      ) => calls.push([people, query]),
     },
-  };
-}
-
-function mount(/** @type {any} */ client = null) {
-  const el = new CORAPeoplePicker();
-  if (client) el.client = /** @type {any} */ (client);
-  el.connectedCallback();
-  return el;
-}
-
-const input = (/** @type {any} */ el) => el._children[0];
-const results = (/** @type {any} */ el) => el._children[1];
-
-test('CORAPeoplePicker: renders a search input with the cora- namespaced class and default placeholder', () => {
-  const el = mount();
-  assert.equal(input(el).className, 'cora-people-picker-input');
-  assert.equal(input(el).placeholder, 'Search people…');
+    ' Jane '
+  );
+  assert.deepEqual(calls, ['Jane', [[PERSON], 'Jane']]);
 });
 
-test('CORAPeoplePicker: results list starts hidden and empty', () => {
-  const el = mount();
-  assert.equal(results(el).className, 'cora-people-picker-results');
-  assert.equal(results(el).hidden, true);
-  assert.equal(results(el)._children.length, 0);
-});
-
-test('CORAPeoplePicker: search renders one option per person with "Display — account" label', async () => {
-  const client = makeClient([
-    { loginName: 'jsmith', displayName: 'John Smith' },
-    { loginName: 'asmith', displayName: 'Anna Smith' },
-  ]);
-  const el = mount(client);
-  await el._search('smith');
-
-  assert.equal(client.queries[0], 'smith');
-  assert.equal(results(el).hidden, false);
-  const opts = results(el)._children;
-  assert.equal(opts.length, 2);
-  assert.equal(opts[0].textContent, 'John Smith — jsmith');
-  assert.equal(opts[0].className, 'cora-people-picker-option');
-});
-
-test('CORAPeoplePicker: clicking an option emits cora-person-selected with the bare account and clears the field', async () => {
-  const client = makeClient([
-    { loginName: 'jsmith', displayName: 'John Smith' },
-  ]);
-  const el = mount(client);
+test('searchPeople clears results without querying for blank input or a missing client', async () => {
   /** @type {any[]} */
-  const events = [];
-  el.addEventListener('cora-person-selected', (e) => events.push(e));
-  await el._search('john');
-
-  results(el)._children[0]._fire('click');
-
-  assert.equal(events.length, 1);
-  assert.deepEqual(events[0].detail, {
-    loginName: 'jsmith',
-    displayName: 'John Smith',
-  });
-  assert.equal(events[0].bubbles, true);
-  assert.equal(input(el).value, '');
-  assert.equal(results(el).hidden, true);
-  assert.equal(results(el)._children.length, 0);
-});
-
-test('CORAPeoplePicker: free-text fallback offers the typed text as a raw account when search finds nothing', async () => {
-  const client = makeClient([]);
-  const el = mount(client);
-  /** @type {any[]} */
-  const events = [];
-  el.addEventListener('cora-person-selected', (e) => events.push(e));
-  await el._search('contractor1');
-
-  const opts = results(el)._children;
-  assert.equal(results(el).hidden, false);
-  assert.equal(opts.length, 1);
-  assert.equal(opts[0].textContent, 'Use “contractor1” as account');
-
-  opts[0]._fire('click');
-  assert.deepEqual(events[0].detail, {
-    loginName: 'contractor1',
-    displayName: 'contractor1',
-  });
-});
-
-test('CORAPeoplePicker: a blank query clears the list without querying the client', async () => {
-  const client = makeClient([
-    { loginName: 'jsmith', displayName: 'John Smith' },
-  ]);
-  const el = mount(client);
-  await el._search('   ');
-
-  assert.equal(client.queries.length, 0);
-  assert.equal(results(el).hidden, true);
-  assert.equal(results(el)._children.length, 0);
-});
-
-test('CORAPeoplePicker: with no client a non-empty query renders no options', async () => {
-  const el = mount();
-  await el._search('smith');
-  assert.equal(results(el).hidden, true);
-  assert.equal(results(el)._children.length, 0);
-});
-
-test('CORAPeoplePicker: typing debounces and routes the query through client.searchPeople', async (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
-  const client = makeClient([
-    { loginName: 'jsmith', displayName: 'John Smith' },
-  ]);
-  const el = mount(client);
-  el.debounceMs = 0;
-
-  input(el)._fire('input', { target: { value: 'jo' } });
-  t.mock.timers.tick(0);
-  await el._searchPromise;
-
-  assert.deepEqual(client.queries, ['jo']);
-  assert.equal(results(el)._children[0].textContent, 'John Smith — jsmith');
-});
-
-test('CORAPeoplePicker: typing resets the debounce timer so only the latest query fires', async (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
-  const client = makeClient([]);
-  const el = mount(client);
-  el.debounceMs = 5;
-
-  input(el)._fire('input', { target: { value: 'jo' } });
-  input(el)._fire('input', { target: { value: 'john' } });
-  t.mock.timers.tick(5);
-  await el._searchPromise;
-
-  assert.deepEqual(client.queries, ['john']);
-});
-
-test('CORAPeoplePicker: input with a null target value is treated as empty string', async (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
-  const client = makeClient([]);
-  const el = mount(client);
-  el.debounceMs = 0;
-
-  input(el)._fire('input', { target: { value: null } });
-  t.mock.timers.tick(0);
-  await el._searchPromise;
-
-  assert.equal(
-    client.queries.length,
-    0,
-    'empty query short-circuits before the client call'
+  const rendered = [];
+  const renderResults = (
+    /** @type {any[]} */ people,
+    /** @type {string} */ query
+  ) => rendered.push([people, query]);
+  await searchPeople(
+    {
+      client: /** @type {any} */ ({ searchPeople: assert.fail }),
+      renderResults,
+    },
+    '   '
   );
-});
-
-test('CORAPeoplePicker: results arriving preserve the focused input node (no focus loss while typing)', async () => {
-  const client = makeClient([
-    { loginName: 'jsmith', displayName: 'John Smith' },
+  await searchPeople({ client: null, renderResults }, 'Jane');
+  assert.deepEqual(rendered, [
+    [[], ''],
+    [[], ''],
   ]);
-  const el = mount(client);
-  const before = input(el);
-  before.focus();
-  assert.equal(before._focused, true);
-
-  // A background search resolving must not rebuild the input the user is typing
-  // into — only the results list changes.
-  await el._search('smith');
-
-  assert.equal(
-    input(el),
-    before,
-    'input node is preserved across a results update'
-  );
-  assert.equal(
-    input(el)._focused,
-    true,
-    'focus is retained when results arrive'
-  );
-  assert.equal(results(el)._children.length, 1, 'results still update');
-});
-
-test('CORAPeoplePicker: honours a custom placeholder', () => {
-  const el = new CORAPeoplePicker();
-  el.placeholder = 'Attribute to…';
-  el.connectedCallback();
-  assert.equal(input(el).placeholder, 'Attribute to…');
-});
-
-test('CORAPeoplePicker: disconnectedCallback clears the pending debounce timer', (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
-  const client = makeClient([
-    { loginName: 'jsmith', displayName: 'John Smith' },
-  ]);
-  const el = mount(client);
-  el.debounceMs = 5;
-
-  input(el)._fire('input', { target: { value: 'jo' } });
-  el.disconnectedCallback();
-  t.mock.timers.tick(5);
-
-  assert.equal(
-    client.queries.length,
-    0,
-    'cancelled timer never reaches the client'
-  );
 });

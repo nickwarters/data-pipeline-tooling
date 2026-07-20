@@ -228,7 +228,7 @@ test('team cases columns: unexpected Case Type loading failures rethrow', async 
   );
 });
 
-test('team cases view: keeps heading, back link, empty state, and row links', () => {
+test('team cases view: keeps heading, empty state, and row links without retired report navigation', () => {
   const slice = createRouteSlice({}, context());
   const empty = teamCasesView(
     {
@@ -244,7 +244,7 @@ test('team cases view: keeps heading, back link, empty state, and row links', ()
     { dispatch: () => {} }
   );
   assert.equal(empty.querySelector('h1')?.textContent, 'Team Cases');
-  assert.equal(empty.querySelector('a')?.getAttribute('href'), '#/reports');
+  assert.equal(empty.querySelector('a'), null);
   assert.match(empty.textContent, /No cases match the selected filters/);
 
   /** @type {any[]} */
@@ -299,4 +299,22 @@ test('team cases slice: cleanup suppresses a late fetch result', async () => {
   await Promise.resolve();
   await Promise.resolve();
   assert.deepEqual(actions, []);
+});
+
+test('team cases slice: does not load without both a client and current user', () => {
+  const fetchCases = () => {
+    assert.fail('must not fetch without a complete route context');
+  };
+  for (const missing of ['client', 'currentUser']) {
+    const ctx = context();
+    if (missing === 'client') ctx.client = null;
+    else ctx.chrome.currentUser = null;
+    const slice = createRouteSlice({}, ctx, { fetchCases });
+    const dispose = slice.start({
+      dispatch: assert.fail,
+      params: {},
+      context: ctx,
+    });
+    dispose();
+  }
 });

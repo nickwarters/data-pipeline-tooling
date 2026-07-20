@@ -195,7 +195,9 @@ test('summaryView renders failures, selected remediation and read-only capture',
   assert.match(root.textContent, /Opening: Greeted?/);
   assert.match(root.textContent, /Answer: No/);
   assert.match(root.textContent, /Retrain\./);
+  assert.match(root.textContent, /Root cause: Rushed/);
   assert.equal(findAllByClass(root, 'cora-summary-capture').length, 1);
+  assert.equal(root.querySelector('cora-capture-groups'), null);
 });
 
 test('summaryView reports empty failures without adding capture UI', () => {

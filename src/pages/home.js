@@ -23,17 +23,6 @@ export function homeView(state) {
   if (capabilities.isReviewer) {
     sections.push(roleSection('Reviewer', '#/dashboard'));
   }
-  if (capabilities.isReviewerManager) {
-    sections.push(roleSection('Reviewer Manager', '#/reports/reviewer-team'));
-  }
-  if (capabilities.isResponsiblePartyManager) {
-    sections.push(
-      roleSection(
-        'Responsible Party Manager',
-        '#/reports/responsible-party-team'
-      )
-    );
-  }
   if (capabilities.isAdviser) {
     sections.push(roleSection('Responsible Party', '#/my-cases'));
   }

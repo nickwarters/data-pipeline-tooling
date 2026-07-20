@@ -1,5 +1,4 @@
 // @ts-check
-import { ShellElement, replaceHostChildren } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
 import { EmptyState } from '../../lib/empty-state.js';
 import { CASE_STATUS } from '../../lib/case-statuses.js';
@@ -98,82 +97,3 @@ export async function getUnassignedCases({
 
   return orderCandidatesByAge(candidates, random);
 }
-
-export class CORAAllocation extends ShellElement {
-  constructor() {
-    super();
-    /** @type {SharePointClient | null} */
-    this.client = null;
-    /** @type {string} */
-    this.currentUserId = '';
-    /** @type {AllocationSource[]} */
-    this.allocationSources = [];
-    /** @type {boolean} */
-    this.isEmpty = false;
-    /** @type {() => number} */
-    this.random = Math.random;
-  }
-
-  connectedCallback() {
-    super.connectedCallback();
-  }
-
-  disconnectedCallback() {
-    super.disconnectedCallback();
-  }
-
-  // Kept: tests call _renderEmpty()/_requestNextCase() before connect, where
-  // the base render entry (_shellRenderNow) is a no-op.
-  _render() {
-    replaceHostChildren(this, this.render());
-  }
-
-  render() {
-    return Allocation({
-      isEmpty: this.isEmpty,
-      onRequestNextCase: () => this._requestNextCase(),
-    });
-  }
-
-  /** @returns {Promise<void>} */
-  async _requestNextCase() {
-    if (!this.client) return;
-    const candidates = await this._getUnassignedCases();
-    for (const c of candidates) {
-      const result = await this.client.patchCase(
-        c.id,
-        { assignedReviewer: this.currentUserId },
-        c.etag,
-        c._listOptions
-      );
-      if (result.ok) {
-        this.dispatchEvent(
-          new CustomEvent('cora-allocated', {
-            detail: { caseId: c.id },
-            bubbles: true,
-          })
-        );
-        return;
-      }
-      // 412 — another reviewer won the race; try the next candidate, which
-      // may live on a different list.
-    }
-    this._renderEmpty();
-  }
-
-  /** @returns {Promise<AllocationCandidate[]>} */
-  async _getUnassignedCases() {
-    return getUnassignedCases({
-      client: this.client,
-      allocationSources: this.allocationSources,
-      random: this.random,
-    });
-  }
-
-  _renderEmpty() {
-    this.isEmpty = true;
-    this._render();
-  }
-}
-
-customElements.define('cora-allocation', CORAAllocation);

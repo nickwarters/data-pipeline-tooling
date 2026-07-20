@@ -5,7 +5,7 @@ import { installDom } from './_dom-stub.js';
 
 installDom();
 
-const { CORAQuestion } =
+const { Question } =
   await import('../src/components/sections/cora-question.js');
 const { CORAStatusBanner } =
   await import('../src/components/base/cora-status-banner.js');
@@ -15,14 +15,17 @@ const { signal } = await import('../src/lib/signal.js');
 
 /** @param {QuestionDefinition} question @param {any} value */
 function mountQuestion(question, value) {
-  const element = new CORAQuestion();
-  element.question = question;
-  element.currentValue = value;
-  element.connectedCallback();
-  return /** @type {any} */ (element)._children[0];
+  return /** @type {HTMLElement} */ (
+    Question({
+      question,
+      currentValue: value,
+      access: 'edit',
+      onAnswer() {},
+    })[0]
+  );
 }
 
-test('CORAQuestion: yes-no-na renders an accessible required radiogroup', () => {
+test('Question: yes-no-na renders an accessible required radiogroup', () => {
   const fieldset = mountQuestion(
     /** @type {QuestionDefinition} */ ({
       id: 'q1',
@@ -32,11 +35,11 @@ test('CORAQuestion: yes-no-na renders an accessible required radiogroup', () => 
     }),
     ''
   );
-  assert.equal(fieldset._attrs.role, 'radiogroup');
-  assert.equal(fieldset._attrs['aria-required'], 'true');
+  assert.equal(fieldset.getAttribute('role'), 'radiogroup');
+  assert.equal(fieldset.getAttribute('aria-required'), 'true');
 });
 
-test('CORAQuestion: single-choice uses radiogroup and multi-choice uses group', () => {
+test('Question: single-choice uses radiogroup and multi-choice uses group', () => {
   const base = {
     id: 'q-choice',
     text: 'Choice?',
@@ -50,7 +53,7 @@ test('CORAQuestion: single-choice uses radiogroup and multi-choice uses group', 
         responseType: 'single-choice',
       }),
       ''
-    )._attrs.role,
+    ).getAttribute('role'),
     'radiogroup'
   );
   assert.equal(
@@ -60,12 +63,12 @@ test('CORAQuestion: single-choice uses radiogroup and multi-choice uses group', 
         responseType: 'multi-choice',
       }),
       []
-    )._attrs.role,
+    ).getAttribute('role'),
     'group'
   );
 });
 
-test('CORAQuestion: fieldset and answer inputs have stable focus keys', () => {
+test('Question: fieldset and answer inputs have stable focus keys', () => {
   const fieldset = mountQuestion(
     /** @type {QuestionDefinition} */ ({
       id: 'q-chan',
@@ -77,13 +80,11 @@ test('CORAQuestion: fieldset and answer inputs have stable focus keys', () => {
     ''
   );
   assert.equal(fieldset.id, 'cora-q-q-chan');
-  assert.equal(
-    fieldset._children[1]._children[0]._attrs['data-focus-key'],
-    'answer:q-chan:0'
-  );
-  assert.equal(
-    fieldset._children[2]._children[0]._attrs['data-focus-key'],
-    'answer:q-chan:1'
+  assert.deepEqual(
+    [...fieldset.querySelectorAll('input')].map((input) =>
+      input.getAttribute('data-focus-key')
+    ),
+    ['answer:q-chan:0', 'answer:q-chan:1', 'answer:q-chan:2']
   );
 });
 
