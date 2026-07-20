@@ -1,13 +1,11 @@
 // @ts-check
 // CaseReviewViewModel is the Case Review page's state model: it loads the Case,
 // catalogue, roles and access, exposes them as signals/computeds, and holds the
-// answer-mutation handlers that persist through the SaveQueue. The page
-// (CaseReviewPage) is a plain function component that reads these signals inside
-// reactive(); the view-model owns state, not rendering, so it is the single
-// state layer reactive() reads — not a controller framework wrapped around it.
+// answer-mutation handlers that persist through the SaveQueue. Signals remain
+// an internal state-notification detail; the store-driven page reads snapshots
+// and renders through keyed morphing.
 
 import { signal, computed } from './signal.js';
-import { withPreservedScroll } from './preserve-scroll.js';
 import { evaluate } from '../evaluators/applicability-evaluator.js';
 import {
   materializeRemediationActions,
@@ -430,27 +428,6 @@ export class CaseReviewViewModel {
   }
 
   /**
-   * Runs `mutate` (a synchronous signal update that triggers a re-render) while
-   * holding the scroll position steady across the resulting DOM churn.
-   *
-   * Since issue #308 the Issues list patches changed items in place, so capture
-   * value changes no longer need this. It remains for the remediation-action
-   * and free-form handlers: those controls live in the plain item content the
-   * patch rebuilds, so the control the Reviewer just used is still replaced,
-   * which can break the browser's scroll anchoring. Snapshotting and restoring
-   * the scroll around the synchronous re-render keeps the page where it was.
-   *
-   * Delegates to the shared `withPreservedScroll` helper (`./preserve-scroll.js`)
-   * so the same protection is available outside the view model (e.g. the
-   * capture-group collapse toggle).
-   *
-   * @param {() => void} mutate
-   */
-  _withPreservedScroll(mutate) {
-    withPreservedScroll(mutate);
-  }
-
-  /**
    * @param {string} questionId
    * @param {{ loginName: string, displayName: string } | null} attributedParty
    */
@@ -506,7 +483,7 @@ export class CaseReviewViewModel {
       nextAnswer = rest;
     }
     const newAnswers = { ...current, [questionId]: nextAnswer };
-    this._withPreservedScroll(() => this.answersSignal.set(newAnswers));
+    this.answersSignal.set(newAnswers);
     this._persistAnswers(newAnswers);
   }
 
@@ -532,7 +509,7 @@ export class CaseReviewViewModel {
       nextAnswer = rest;
     }
     const newAnswers = { ...current, [questionId]: nextAnswer };
-    this._withPreservedScroll(() => this.answersSignal.set(newAnswers));
+    this.answersSignal.set(newAnswers);
     this._persistAnswers(newAnswers);
   }
 

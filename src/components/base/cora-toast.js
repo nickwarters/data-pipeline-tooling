@@ -1,26 +1,15 @@
 // @ts-check
-import { defineView } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
-import { toastMsg } from '../../lib/toast.js';
 
 /**
- * Transient status toast. Reads the shared `toastMsg` signal, so it re-renders
- * whenever a `showToast()` call updates the message.
- *
+ * @param {{message: string}} state
  * @returns {HTMLElement}
  */
-export function Toast() {
-  const msg = toastMsg.get();
+export function Toast({ message }) {
   return h(
     'div',
-    { className: 'toast' + (msg ? ' show' : '') },
+    { className: 'toast' + (message ? ' show' : '') },
     h('span', { className: 'dot' }),
-    h('span', {}, msg || '')
+    h('span', {}, message)
   );
 }
-
-export const CORAToast = defineView('cora-toast', {
-  render() {
-    return Toast();
-  },
-});

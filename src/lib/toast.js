@@ -1,31 +1,41 @@
 // @ts-check
-/**
- * Transient status-toast primitive.
- *
- * A single shared `toastMsg` signal plus `showToast()` to set it and auto-clear
- * after a short delay. This is framework-level UI plumbing with no knowledge of
- * any subsystem, so it lives in `lib/` — the base `<cora-toast>` reads it, and
- * the question-bank store re-exports it for its own callers (`showToast` on
- * save, etc.).
- */
 
-import { signal } from './signal.js';
+/** @typedef {{ message: string }} ToastState */
 
-export const toastMsg = signal('');
+/** @param {ToastState} [initialState] */
+export function createToastStore(initialState = { message: '' }) {
+  let state = initialState;
+  /** @type {Set<(state: ToastState) => void>} */
+  const listeners = new Set();
+  return {
+    getState: () => state,
+    /** @param {{type: 'toast/show', message: string} | {type: 'toast/clear', message?: string}} action */
+    dispatch(action) {
+      if (action.type === 'toast/show') state = { message: action.message };
+      if (
+        action.type === 'toast/clear' &&
+        (action.message === undefined || state.message === action.message)
+      ) {
+        state = { message: '' };
+      }
+      for (const listener of listeners) listener(state);
+      return state;
+    },
+    /** @param {(state: ToastState) => void} listener */
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+  };
+}
 
-/**
- * Show `msg` in the toast, then clear it after 1800ms — unless another
- * `showToast()` replaced it in the meantime. No-ops gracefully in environments
- * without `setTimeout` (e.g. some test harnesses).
- *
- * @param {string} msg
- */
-export function showToast(msg) {
-  toastMsg.set(msg);
+export const toastStore = createToastStore();
+
+/** @param {string} message */
+export function showToast(message) {
+  toastStore.dispatch({ type: 'toast/show', message });
   const timer = /** @type {any} */ (globalThis).setTimeout;
   if (typeof timer === 'function') {
-    timer(() => {
-      if (toastMsg.get() === msg) toastMsg.set('');
-    }, 1800);
+    timer(() => toastStore.dispatch({ type: 'toast/clear', message }), 1800);
   }
 }

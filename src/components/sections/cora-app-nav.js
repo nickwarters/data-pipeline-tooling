@@ -1,5 +1,4 @@
 // @ts-check
-import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
 
 /** @typedef {import('../../services/permissions.js').Capabilities} Capabilities */
@@ -77,65 +76,3 @@ export function AppNav({ capabilities, hash }) {
   updateActiveNavItems(navItems, hash);
   return { node, navItems };
 }
-
-export class CORAAppNav extends ShellElement {
-  constructor() {
-    super();
-    /** @type {Capabilities} */
-    this.capabilities = {
-      isReviewer: false,
-      listAccessCaseTypes: [],
-      isAdviser: false,
-      ownedCaseTypes: [],
-      ownedJourneyCaseTypes: [],
-      isControls: false,
-      isReviewerManager: false,
-      isResponsiblePartyManager: false,
-      isMaintainer: false,
-      isVisitor: false,
-    };
-    /** @type {Array<{el: any, href: string}>} */
-    this._navItems = [];
-    this._onHashChange = () => this._updateActive();
-  }
-
-  connectedCallback() {
-    super.connectedCallback();
-    if (typeof window !== 'undefined' && window.addEventListener) {
-      window.addEventListener('hashchange', this._onHashChange);
-    }
-  }
-
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    if (typeof window !== 'undefined' && window.removeEventListener) {
-      window.removeEventListener('hashchange', this._onHashChange);
-    }
-  }
-
-  render() {
-    const hash = typeof location !== 'undefined' ? location.hash || '#/' : '#/';
-    const { node, navItems } = AppNav({
-      capabilities: this.capabilities,
-      hash,
-    });
-    this._navItems = navItems;
-    return node;
-  }
-
-  /**
-   * @param {string} label
-   * @param {string} href
-   * @returns {any}
-   */
-  _makeItem(label, href) {
-    return AppNavItem(label, href, this._navItems);
-  }
-
-  _updateActive() {
-    const hash = typeof location !== 'undefined' ? location.hash || '#/' : '#/';
-    updateActiveNavItems(this._navItems, hash);
-  }
-}
-
-customElements.define('cora-app-nav', CORAAppNav);

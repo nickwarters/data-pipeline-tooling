@@ -1,80 +1,81 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-
-const {
-  register,
-  deregister,
-  actions,
-  openPalette,
-  closePalette,
-  isOpen,
+import {
+  createCommandPaletteState,
+  createCommandPaletteStore,
   filterActions,
-} = await import('../src/services/command-palette-store.js');
+} from '../src/services/command-palette-store.js';
 
-/** @returns {import('../src/services/command-palette-store.js').PaletteAction} */
-function makeAction(id = 'a', overrides = {}) {
+/** @param {string} id @param {Record<string, any>} [overrides] */
+function action(id, overrides = {}) {
   return {
     id,
     label: `Action ${id}`,
     keywords: [],
-    handler: () => {},
+    handler() {},
     ...overrides,
   };
 }
 
-// Reset between tests by deregistering known ids — avoids module re-import cost.
-
-test('register: adds action to actions signal', () => {
-  register(makeAction('r1'));
-  assert.ok(actions.get().some((a) => a.id === 'r1'));
-  deregister('r1');
+test('command palette store: register adds and duplicate ids replace actions', () => {
+  const store = createCommandPaletteStore();
+  store.dispatch({ type: 'palette/register', action: action('open') });
+  store.dispatch({
+    type: 'palette/register',
+    action: action('open', { label: 'Open Case' }),
+  });
+  assert.deepEqual(
+    store.getState().actions.map((item) => item.label),
+    ['Open Case']
+  );
 });
 
-test('deregister: removes action by id', () => {
-  register(makeAction('r2'));
-  deregister('r2');
-  assert.ok(!actions.get().some((a) => a.id === 'r2'));
+test('command palette store: deregister removes only the named action', () => {
+  const store = createCommandPaletteStore();
+  for (const id of ['a', 'b']) {
+    store.dispatch({ type: 'palette/register', action: action(id) });
+  }
+  store.dispatch({ type: 'palette/deregister', id: 'a' });
+  assert.deepEqual(
+    store.getState().actions.map((item) => item.id),
+    ['b']
+  );
 });
 
-test('register: duplicate id replaces existing entry', () => {
-  register(makeAction('r3', { label: 'First' }));
-  register(makeAction('r3', { label: 'Second' }));
-  const matches = actions.get().filter((a) => a.id === 'r3');
-  assert.equal(matches.length, 1);
-  assert.equal(matches[0].label, 'Second');
-  deregister('r3');
+test('command palette store: close resets transient interaction state', () => {
+  const store = createCommandPaletteStore({
+    ...createCommandPaletteState(),
+    isOpen: true,
+    query: 'case',
+    selectedIndex: 2,
+  });
+  store.dispatch({ type: 'palette/close' });
+  assert.deepEqual(store.getState(), createCommandPaletteState());
 });
 
-test('filterActions: empty query returns all actions', () => {
-  const all = [makeAction('x'), makeAction('y')];
-  assert.deepEqual(filterActions('', all), all);
+test('command palette store: dispatch synchronously notifies subscribers', () => {
+  const store = createCommandPaletteStore();
+  /** @type {boolean[]} */
+  const seen = [];
+  const unsubscribe = store.subscribe((state) => seen.push(state.isOpen));
+  store.dispatch({ type: 'palette/open' });
+  unsubscribe();
+  store.dispatch({ type: 'palette/close' });
+  assert.deepEqual(seen, [true]);
 });
 
-test('filterActions: matches label as case-insensitive substring', () => {
-  const all = [
-    makeAction('x', { label: 'Go to Case' }),
-    makeAction('y', { label: 'Dashboard' }),
+test('filterActions matches labels and keywords case-insensitively', () => {
+  const actions = [
+    action('case', { label: 'Go to Case' }),
+    action('allocate', { keywords: ['Assign'] }),
   ];
-  const result = filterActions('case', all);
-  assert.equal(result.length, 1);
-  assert.equal(result[0].id, 'x');
-});
-
-test('filterActions: matches keyword entries case-insensitively', () => {
-  const all = [
-    makeAction('x', { label: 'Allocate', keywords: ['next', 'assign'] }),
-    makeAction('y', { label: 'Open', keywords: ['navigate'] }),
-  ];
-  assert.equal(filterActions('NEXT', all).length, 1);
-  assert.equal(filterActions('NEXT', all)[0].id, 'x');
-});
-
-test('openPalette: sets isOpen to true; closePalette: sets it to false', () => {
-  closePalette();
-  assert.equal(isOpen.get(), false);
-  openPalette();
-  assert.equal(isOpen.get(), true);
-  closePalette();
-  assert.equal(isOpen.get(), false);
+  assert.deepEqual(
+    filterActions('CASE', actions).map((item) => item.id),
+    ['case']
+  );
+  assert.deepEqual(
+    filterActions('assign', actions).map((item) => item.id),
+    ['allocate']
+  );
 });

@@ -4,7 +4,7 @@
 // matrix, and the lifecycle transition PATCH fields. It holds
 // no DOM and no signals — the function-component page (CaseReviewPage) reads it
 // through the view-model, so it is plain domain state, not a UI orchestration
-// layer around reactive().
+// layer around view rendering.
 
 import {
   evaluateAccess,

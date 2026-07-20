@@ -17,8 +17,9 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
 ## Architecture in one screen
 
 - **SPA shell, hash routing, page independence**. One `.aspx` host page, one Content Editor, one `app.js`. Every route lazy-loads its page inside its own `mount()` via dynamic `import()` (`src/routes/*.js`) — the boot graph does not statically depend on any page. If a page module fails to load (broken, missing), the router (`lib/router.js`) catches it inside an async `navigate()`, logs it, and renders a plain-DOM `cora-route-error` panel into the route container; the nav lives outside that container and stays usable, so one broken page cannot break another or the boot. A navigation sequence token discards a stale mount that resolves after the user has already navigated on. Registration is likewise isolated: `setup/register-routes.js` wraps each route's registration in `safeRegister`, so a route module that throws at registration costs only its own route. **Removal recipe — deleting a page is:** delete the page file (`src/pages/<page>.js`) + its route file (`src/routes/<route>.js`) + its `safeRegister(...)` line in `setup/register-routes.js` + its nav link. Nothing else breaks. `tests/component-layering-contract.test.js` enforces the layering: no static page import outside `src/pages/`, dynamic page `import()` only in `src/routes/*`, and route modules imported only by `setup/register-routes.js`.
-- **Web Components in light DOM + home-grown signal primitive**. Custom elements (`<cora-*>`) are the unit of UI; `signal()`/`computed()`/`effect()` (~50 LOC) drive fine-grained reactivity. Light DOM (not Shadow DOM) for form ergonomics; `cora-` CSS prefix for SharePoint isolation. Components register themselves via a top-level `customElements.define(...)` call as a module side effect — there is no central registry module. A component only becomes available once something side-effect-imports it (typically the page/section that mounts it). `tests/framework-contract.test.js` asserts a global registry (`registerComponents`/`register-components`) never comes back — don't reintroduce one. For the anatomy of a single component (pure view function → `defineView`/`ShellElement` shell, registration, lifecycle, events, and a new-component checklist) see [`docs/component-anatomy-explainer.html`](./docs/component-anatomy-explainer.html).
-- **ADR-0034 strangler migration in progress (Project Palimpsest, #402).** Routes are converting one at a time from the signal/`ShellElement` component model above to a single-store + pure-view + `morph()` architecture, entered through the router seam via `createStoreRoute()` (`core/store-route.js`). Old-style and new-style routes coexist behind that seam by design — do not "correct" a new store-driven page back to signals/`ShellElement`. New pages follow the slice module pattern in [`docs/guide/store-actions-and-effects.md`](./docs/guide/store-actions-and-effects.md).
+- **Store-driven pure views in light DOM.** Application UI is authored as pure `state → h()` view functions, store reducers, and dispatched actions; `morph()` updates the live light DOM in place. The `cora-` CSS prefix remains the SharePoint-isolation boundary. `tests/framework-contract.test.js` prevents class components, legacy view APIs, app-layer signal imports, view-to-client imports, and a global component registry from returning.
+- **ADR-0034 is implemented (Project Palimpsest, #402).** Routes use the single-store + pure-view + `morph()` architecture through `createStoreRoute()` (`core/store-route.js`). `lib/signal.js` remains only as internal state/service notification plumbing for `SaveQueue` and `CaseReviewViewModel`; application surfaces never import it. New slices follow [`docs/guide/store-actions-and-effects.md`](./docs/guide/store-actions-and-effects.md).
+- [`docs/component-anatomy-explainer.html`](./docs/component-anatomy-explainer.html) is retained as migration provenance for the superseded component shell, not as current authoring guidance.
 - **New feature code follows the Palimpsest playbook.** From PILOT-2 onward, use [`docs/palimpsest-playbook.md`](./docs/palimpsest-playbook.md) for the state shape, action naming, test pattern, and conversion PR checklist; do not add new feature code in the old component-owned-state style.
 - **Case Type config as JS modules; Question Bank content as SharePoint-hosted text artifacts.** One module per Case Type under `case-types/{slug}.js`, lazy-loaded via `case-types/manifest.js`. Question Bank content (Question Definitions, labels, and Outcome vocabulary) lives in `case-types/banks/{slug}.txt`, stored in the SharePoint Style Library and loaded through `case-types/load-bank.js` as part of the Case Type config. There is no shared Question Definitions list and no planned runtime join to one. `HttpSharePointClient`/`MockSharePointClient` expose `getExportHash`/`getVersionedExport` for ADR-0021's immutable, point-in-time exports on reportable Cases.
 - **JSDoc + `tsc --checkJs` for types**. No `.ts` files; the deployed JS is the source JS. CI runs `tsc --noEmit --checkJs --allowJs`.
@@ -78,14 +79,13 @@ src/
     case-machine.js
     case-review-view-model.js
     case-route-links.js
-    html.js                     # h() / reactive() / defineView() plain-function view primitives
+    html.js                     # h() plain-function view primitive
     question-order.js           # generic question/category ordering helpers (was question-bank/)
     route-error-panel.js        # shared route-failure panel, used by router.js and core/store-route.js (#437)
     router.js                   # hash-based SPA router
     showwhen-tree.js            # generic showWhen tree parse/serialise/mutate (was question-bank/)
-    signal.js                   # home-grown signal/computed/effect (~50 LOC)
-    toast.js                    # transient toast primitive (toastMsg signal + showToast)
-    view.js
+    signal.js                   # internal state/service notification primitive
+    toast.js                    # transient toast store + showToast action
 
   core/                         # store-driven view runtime (ADR-0034 / Project Palimpsest)
                                 #   see docs/guide/store-actions-and-effects.md for the contract
@@ -99,8 +99,8 @@ src/
   actions/                      # effects: async work reached only via dispatch (CORE-3 / Project Palimpsest)
     case-actions.js             # persistence effect example: SharePointClient + SaveQueue re-entering via dispatch
 
-  components/                   # reusable views and remaining cora-* custom elements, layered by dependency
-    base/                       # leaf primitives — compose no other component (cf. lib/signal.js)
+  components/                   # reusable pure views, layered by dependency
+    base/                       # leaf primitives — compose no other view
       cora-data-table.js           # pure legacy table renderer retained for direct consumers
       cora-people-picker.js        # pure People Picker renderer and search helpers
       cora-group-progress.js      # pure per-Question-Group progress strip
@@ -250,5 +250,5 @@ dev/
   fixtures/                     # mock data used by MockSharePointClient (?mock=1)
 
 tests/                          # node:test unit tests — flat, one file per subject by filename
-                                # (e.g. cora-toast.test.js imports components/base/cora-toast.js)
+                                # (e.g. cora-toast.test.js imports the pure Toast view)
 ```

@@ -11,38 +11,146 @@ function read(path) {
   return readFileSync(new URL(path, ROOT), 'utf8');
 }
 
-/** @param {string} markdown */
-function jsCodeBlocks(markdown) {
-  return [...markdown.matchAll(/```js\n([\s\S]*?)```/g)].map(
-    (match) => match[1]
-  );
+/**
+ * Report app-layer class components from an injectable source set. Keeping the
+ * source set injectable proves the contract catches representative legacy code
+ * instead of merely agreeing with today's tree.
+ *
+ * @param {Array<{path: string, source: string}>} files
+ * @returns {string[]}
+ */
+export function classComponentViolations(files) {
+  return files
+    .filter(({ path }) =>
+      /^(?:src\/(?:actions|components|pages|routes|setup|views)\/)/.test(path)
+    )
+    .filter(({ source }) =>
+      /\bclass\s+\w+\s+extends\s+(?:HTMLElement|\w*(?:Element|Component))\b/.test(
+        source
+      )
+    )
+    .map(({ path }) => path);
 }
 
-test('framework contract: component authoring is function-first', () => {
-  const doc = read('docs/guide/component-authoring.md');
+/** @param {Array<{path: string, source: string}>} files @returns {string[]} */
+export function legacyFrameworkViolations(files) {
+  return files
+    .filter(({ source }) =>
+      /\b(?:ShellElement|defineView)\b|\breactive\s*\(/.test(source)
+    )
+    .map(({ path }) => path);
+}
 
-  assert.match(doc, /Write new UI as plain functions/);
-  assert.match(doc, /Do not add lifecycle-backed base classes/);
+/** @param {Array<{path: string, source: string}>} files @returns {string[]} */
+export function appSignalImportViolations(files) {
+  return files
+    .filter(({ path }) =>
+      /^(?:src\/(?:actions|components|pages|routes|setup|views)\/)/.test(path)
+    )
+    .filter(({ source }) => /\bfrom\s+['"][^'"]*\/signal\.js['"]/.test(source))
+    .map(({ path }) => path);
+}
 
-  for (const block of jsCodeBlocks(doc)) {
-    assert.doesNotMatch(block, /extends\s+[A-Z]\w+/);
-    assert.doesNotMatch(block, /connectedCallback\s*\(/);
-    assert.doesNotMatch(block, /disconnectedCallback\s*\(/);
-  }
+/** @param {Array<{path: string, source: string}>} files @returns {string[]} */
+export function viewClientImportViolations(files) {
+  return files
+    .filter(({ path }) =>
+      /(?:^src\/(?:components|pages|views)\/|(?:^|\/)[^/]*-view\.js$)/.test(
+        path
+      )
+    )
+    .filter(({ source }) =>
+      /\bfrom\s+['"][^'"]*(?:sharepoint-client|save-queue)\.js['"]/.test(source)
+    )
+    .map(({ path }) => path);
+}
+
+/** @returns {Array<{path: string, source: string}>} */
+function sourceFiles() {
+  const paths = readdirSync(new URL('src/', ROOT), { recursive: true })
+    .map(String)
+    .filter((path) => path.endsWith('.js'));
+  return paths.map((path) => ({
+    path: `src/${path}`,
+    source: read(`src/${path}`),
+  }));
+}
+
+test('framework contract: representative class components are rejected', () => {
+  assert.deepEqual(
+    classComponentViolations([
+      {
+        path: 'src/components/legacy-widget.js',
+        source: 'export class LegacyWidget extends HTMLElement {}',
+      },
+    ]),
+    ['src/components/legacy-widget.js']
+  );
 });
 
-test('framework contract: testing guide does not teach lifecycle-first examples', () => {
-  const doc = read('docs/guide/testing.md');
+test('framework contract: application UI has no class components', () => {
+  assert.deepEqual(classComponentViolations(sourceFiles()), []);
+});
 
-  assert.match(doc, /Function Component Tests/);
-  assert.match(doc, /Legacy Shell Tests/);
-  assert.doesNotMatch(doc, /TODO\(simplify-ui\)/);
+test('framework contract: representative legacy framework APIs are rejected', () => {
+  assert.deepEqual(
+    legacyFrameworkViolations([
+      {
+        path: 'src/components/legacy-one.js',
+        source: "import { ShellElement } from '../lib/view.js';",
+      },
+      {
+        path: 'src/components/legacy-two.js',
+        source: "export const Legacy = defineView('cora-legacy', {});",
+      },
+      {
+        path: 'src/components/legacy-three.js',
+        source: 'export const Legacy = reactive(() => view());',
+      },
+    ]),
+    [
+      'src/components/legacy-one.js',
+      'src/components/legacy-two.js',
+      'src/components/legacy-three.js',
+    ]
+  );
+});
 
-  for (const block of jsCodeBlocks(doc)) {
-    assert.doesNotMatch(block, /new\s+CR[A-Z]/);
-    assert.doesNotMatch(block, /connectedCallback\s*\(/);
-    assert.doesNotMatch(block, /disconnectedCallback\s*\(/);
-  }
+test('framework contract: legacy view APIs cannot return to source', () => {
+  assert.deepEqual(legacyFrameworkViolations(sourceFiles()), []);
+});
+
+test('framework contract: representative app-layer signal imports are rejected', () => {
+  assert.deepEqual(
+    appSignalImportViolations([
+      {
+        path: 'src/pages/legacy-page.js',
+        source: "import { signal } from '../lib/signal.js';",
+      },
+    ]),
+    ['src/pages/legacy-page.js']
+  );
+});
+
+test('framework contract: application surfaces do not import signals', () => {
+  assert.deepEqual(appSignalImportViolations(sourceFiles()), []);
+});
+
+test('framework contract: representative view-to-client imports are rejected', () => {
+  assert.deepEqual(
+    viewClientImportViolations([
+      {
+        path: 'src/pages/orders-view.js',
+        source:
+          "import { HttpSharePointClient } from '../services/http-sharepoint-client.js';",
+      },
+    ]),
+    ['src/pages/orders-view.js']
+  );
+});
+
+test('framework contract: views never import clients', () => {
+  assert.deepEqual(viewClientImportViolations(sourceFiles()), []);
 });
 
 test('framework contract: global component registry stays deleted', () => {

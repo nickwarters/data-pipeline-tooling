@@ -7,9 +7,8 @@ installDom();
 
 const { Question } =
   await import('../src/components/sections/cora-question.js');
-const { CORAStatusBanner } =
+const { StatusBanner } =
   await import('../src/components/base/cora-status-banner.js');
-const { signal } = await import('../src/lib/signal.js');
 
 /** @typedef {import('../src/sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 
@@ -88,13 +87,8 @@ test('Question: fieldset and answer inputs have stable focus keys', () => {
   );
 });
 
-test('CORAStatusBanner: saving banner announces polite status', () => {
-  const element = new CORAStatusBanner();
-  element.saveQueue = /** @type {any} */ ({
-    status: signal(/** @type {'saving'} */ ('saving')),
-  });
-  element.connectedCallback();
-  const node = /** @type {any} */ (element)._children[0];
+test('StatusBanner: saving banner announces polite status', () => {
+  const node = /** @type {any} */ (StatusBanner({ status: 'saving' }));
   assert.equal(node._attrs.role, 'status');
   assert.equal(node._attrs['aria-live'], 'polite');
 });

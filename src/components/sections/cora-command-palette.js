@@ -1,77 +1,22 @@
 // @ts-check
-import { signal } from '../../lib/signal.js';
-import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
-import {
-  isOpen,
-  query,
-  filteredActions,
-  openPalette,
-  closePalette,
-} from '../../services/command-palette-store.js';
+import { morph } from '../../core/morph.js';
+import { filterActions } from '../../services/command-palette-store.js';
+
+/** @typedef {import('../../services/command-palette-store.js').PaletteAction} PaletteAction */
+/** @typedef {import('../../services/command-palette-store.js').CommandPaletteState} CommandPaletteState */
 
 /**
- * @typedef {import('../../services/command-palette-store.js').PaletteAction} PaletteAction
- */
-
-/**
- * @typedef {object} CommandPaletteState
- * @property {import('../../lib/signal.js').Signal<number>} selIdx
- * @property {import('../../lib/signal.js').Signal<'idle'|'awaiting-input'|'awaiting-option'>} mode
- * @property {import('../../lib/signal.js').Signal<PaletteAction|null>} pendingAction
- * @property {import('../../lib/signal.js').Signal<number>} optionIdx
- * @property {(action: PaletteAction) => void} activateAction
- * @property {() => void} reset
- */
-
-/**
- * @returns {CommandPaletteState}
- */
-export function createCommandPaletteState() {
-  const state = {
-    selIdx: signal(-1),
-    mode: signal(
-      /** @type {'idle'|'awaiting-input'|'awaiting-option'} */ ('idle')
-    ),
-    pendingAction: signal(/** @type {PaletteAction|null} */ (null)),
-    optionIdx: signal(-1),
-    activateAction: (/** @type {PaletteAction} */ action) => {
-      if (action.kind === 'input') {
-        state.pendingAction.set(action);
-        state.mode.set('awaiting-input');
-        return;
-      }
-      if (action.kind === 'options') {
-        state.pendingAction.set(action);
-        state.optionIdx.set(-1);
-        state.mode.set('awaiting-option');
-        return;
-      }
-      action.handler();
-      state.reset();
-    },
-    reset: () => {
-      state.selIdx.set(-1);
-      state.pendingAction.set(null);
-      state.mode.set('idle');
-      state.optionIdx.set(-1);
-      query.set('');
-      closePalette();
-    },
-  };
-  return state;
-}
-
-/**
- * @param {{ addEventListener(type: string, listener: (ev: any) => void): void, removeEventListener(type: string, listener: (ev: any) => void): void }} target
+ * @param {{ addEventListener(type: string, listener: (event: any) => void): void, removeEventListener(type: string, listener: (event: any) => void): void }} target
+ * @param {() => void} open
  * @returns {() => void}
  */
-export function bindCommandPaletteShortcut(target) {
-  /** @param {any} ev */
-  const onKeydown = (ev) => {
-    if (ev.key === 'k' && (ev.ctrlKey || ev.metaKey)) {
-      ev.preventDefault?.();
-      openPalette();
+export function bindCommandPaletteShortcut(target, open) {
+  /** @param {any} event */
+  const onKeydown = (event) => {
+    if (event.key === 'k' && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault?.();
+      open();
     }
   };
   target.addEventListener('keydown', onKeydown);
@@ -79,172 +24,159 @@ export function bindCommandPaletteShortcut(target) {
 }
 
 /**
+ * Pure command-palette view: state in, action dispatches back.
  * @param {CommandPaletteState} state
- * @returns {Node[] | Node}
+ * @param {(action: {type: string, [key: string]: any}) => void} dispatch
+ * @returns {HTMLElement | HTMLElement[]}
  */
-export function CommandPalette(state) {
-  if (!isOpen.get()) {
-    return [];
-  }
+export function CommandPalette(state, dispatch) {
+  if (!state.isOpen) return [];
+  const filtered = filterActions(state.query, state.actions);
 
-  const filtered = filteredActions.get();
-  const selIdx = state.selIdx.get();
-  const mode = state.mode.get();
-  const pending = state.pendingAction.get();
-  const optIdx = state.optionIdx.get();
+  /** @param {PaletteAction} action */
+  const activate = (action) => {
+    if (action.kind === 'input') {
+      dispatch({ type: 'palette/await-input', action });
+    } else if (action.kind === 'options') {
+      dispatch({ type: 'palette/await-option', action });
+    } else {
+      action.handler();
+      dispatch({ type: 'palette/close' });
+    }
+  };
 
-  // Closures read live signal values so they work correctly even when called
-  // on a stale (detached) element reference.
-  /** @param {any} ev */
-  const onInputKeydown = (ev) => {
-    const curMode = state.mode.get();
-    const curSelIdx = state.selIdx.get();
-    const curFiltered = filteredActions.get();
-    const curPending = state.pendingAction.get();
-    const curOptIdx = state.optionIdx.get();
-
-    if (ev.key === 'Escape') {
-      ev.preventDefault?.();
-      state.reset();
+  /** @param {any} event */
+  const onKeydown = (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault?.();
+      dispatch({ type: 'palette/close' });
       return;
     }
-
-    if (curMode === 'awaiting-option') {
-      const opts = curPending?.options ?? [];
-      if (ev.key === 'ArrowDown') {
-        ev.preventDefault?.();
-        state.optionIdx.set(Math.min(curOptIdx + 1, opts.length - 1));
-      } else if (ev.key === 'ArrowUp') {
-        ev.preventDefault?.();
-        state.optionIdx.set(Math.max(curOptIdx - 1, 0));
-      } else if (ev.key === 'Enter') {
-        ev.preventDefault?.();
-        const opt = opts[curOptIdx];
-        if (!opt) return;
-        curPending?.handler(opt.value);
-        state.reset();
+    if (state.mode === 'awaiting-option') {
+      const options = state.pendingAction?.options ?? [];
+      if (event.key === 'ArrowDown') {
+        event.preventDefault?.();
+        dispatch({
+          type: 'palette/select-option',
+          index: Math.min(state.optionIndex + 1, options.length - 1),
+        });
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault?.();
+        dispatch({
+          type: 'palette/select-option',
+          index: Math.max(state.optionIndex - 1, 0),
+        });
+      } else if (event.key === 'Enter') {
+        event.preventDefault?.();
+        const option = options[state.optionIndex];
+        if (option && state.pendingAction) {
+          state.pendingAction.handler(option.value);
+          dispatch({ type: 'palette/close' });
+        }
       }
       return;
     }
-
-    if (ev.key === 'ArrowDown') {
-      ev.preventDefault?.();
-      state.selIdx.set(Math.min(curSelIdx + 1, curFiltered.length - 1));
-      return;
-    }
-    if (ev.key === 'ArrowUp') {
-      ev.preventDefault?.();
-      state.selIdx.set(Math.max(curSelIdx - 1, 0));
-      return;
-    }
-    if (ev.key === 'Enter') {
-      ev.preventDefault?.();
-      const action = curFiltered[curSelIdx];
-      if (!action) return;
-      state.activateAction(action);
+    if (event.key === 'ArrowDown') {
+      event.preventDefault?.();
+      dispatch({
+        type: 'palette/select',
+        index: Math.min(state.selectedIndex + 1, filtered.length - 1),
+      });
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault?.();
+      dispatch({
+        type: 'palette/select',
+        index: Math.max(state.selectedIndex - 1, 0),
+      });
+    } else if (event.key === 'Enter') {
+      event.preventDefault?.();
+      const action = filtered[state.selectedIndex];
+      if (action) activate(action);
     }
   };
 
-  /** @param {any} ev */
-  const onInputChange = (ev) => {
-    query.set(ev.target.value);
-    state.selIdx.set(-1);
-  };
-
-  const inputEl = h('input', {
+  const input = h('input', {
     className: 'palette-input',
     type: 'text',
     placeholder: 'Type a command…',
-    onkeydown: onInputKeydown,
-    oninput: onInputChange,
+    value: state.query,
+    onkeydown: onKeydown,
+    oninput: (/** @type {any} */ event) =>
+      dispatch({ type: 'palette/query', query: event.target.value }),
   });
 
-  const listItems =
-    mode === 'awaiting-option' && pending?.options
-      ? pending.options.map((opt, i) =>
+  const items =
+    state.mode === 'awaiting-option' && state.pendingAction?.options
+      ? state.pendingAction.options.map((option, index) =>
           h(
             'div',
             {
-              className: 'palette-option' + (i === optIdx ? ' selected' : ''),
+              className:
+                'palette-option' +
+                (index === state.optionIndex ? ' selected' : ''),
             },
-            opt.label
+            option.label
           )
         )
-      : filtered.map((action, i) =>
+      : filtered.map((action, index) =>
           h(
             'div',
-            { className: 'palette-item' + (i === selIdx ? ' selected' : '') },
+            {
+              className:
+                'palette-item' +
+                (index === state.selectedIndex ? ' selected' : ''),
+            },
             action.label
           )
         );
 
-  /** @type {any[]} */
-  const extras = [];
-  if (mode === 'awaiting-input' && pending) {
-    const placeholder = pending.input?.placeholder ?? '';
-    /** @param {any} ev */
-    const onArgKeydown = (ev) => {
-      const curPending = state.pendingAction.get();
-      if (ev.key === 'Enter') {
-        ev.preventDefault?.();
-        if (!curPending) return;
-        curPending.handler(ev.target.value);
-        state.reset();
-      } else if (ev.key === 'Escape') {
-        ev.preventDefault?.();
-        state.reset();
-      }
-    };
-    extras.push(
+  const extra = [];
+  if (state.mode === 'awaiting-input' && state.pendingAction) {
+    const pending = state.pendingAction;
+    extra.push(
       h('input', {
         className: 'palette-arg-input',
         type: 'text',
-        placeholder,
-        onkeydown: onArgKeydown,
+        placeholder: pending.input?.placeholder ?? '',
+        onkeydown: (/** @type {any} */ event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault?.();
+            pending.handler(event.target.value);
+            dispatch({ type: 'palette/close' });
+          } else if (event.key === 'Escape') {
+            event.preventDefault?.();
+            dispatch({ type: 'palette/close' });
+          }
+        },
       })
     );
   }
 
-  return h(
-    'div',
-    { className: 'palette-overlay' },
-    inputEl,
-    ...listItems,
-    ...extras
+  return h('div', { className: 'palette-overlay' }, input, ...items, ...extra);
+}
+
+/**
+ * Mount the pure view against a store and return lifecycle cleanup.
+ * @param {Element} container
+ * @param {{
+ *   store: { getState(): CommandPaletteState, dispatch(action: any): any, subscribe(listener: (state: CommandPaletteState) => void): () => void },
+ *   target?: any,
+ * }} options
+ * @returns {() => void}
+ */
+export function mountCommandPalette(container, { store, target = document }) {
+  const render = (/** @type {CommandPaletteState} */ state) =>
+    morph(
+      container,
+      CommandPalette(state, (action) => store.dispatch(action))
+    );
+  const unsubscribe = store.subscribe(render);
+  const unbindShortcut = bindCommandPaletteShortcut(target, () =>
+    store.dispatch({ type: 'palette/open' })
   );
+  render(store.getState());
+  return () => {
+    unbindShortcut();
+    unsubscribe();
+  };
 }
-
-export class CORACommandPalette extends ShellElement {
-  constructor() {
-    super();
-    this._state = createCommandPaletteState();
-    /** @type {(() => void) | null} */
-    this._unbindShortcut = null;
-  }
-
-  connectedCallback() {
-    super.connectedCallback();
-    this._unbindShortcut = bindCommandPaletteShortcut(document);
-  }
-
-  disconnectedCallback() {
-    this._unbindShortcut?.();
-    this._unbindShortcut = null;
-    super.disconnectedCallback();
-  }
-
-  render() {
-    return CommandPalette(this._state);
-  }
-
-  /** @param {PaletteAction} action */
-  _activateAction(action) {
-    this._state.activateAction(action);
-  }
-
-  _reset() {
-    this._state.reset();
-  }
-}
-
-customElements.define('cora-command-palette', CORACommandPalette);

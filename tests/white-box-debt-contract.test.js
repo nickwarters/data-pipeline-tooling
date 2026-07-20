@@ -20,14 +20,10 @@ const ROUTER_INTERNAL_PATTERN = /\._(?:routes|container)\b/g;
  */
 // Tuple order: child structure, listener registry, underscore-prefixed call.
 const BASELINE = {
-  'tests/accessibility.test.js': [1, 0, 0],
-  'tests/app-chrome.test.js': [7, 0, 0],
   'tests/cora-amend-outcome.test.js': [2, 7, 0],
-  'tests/cora-app-nav.test.js': [1, 0, 0],
   'tests/cora-appeal-review.test.js': [1, 1, 0],
   'tests/cora-appeal.test.js': [4, 8, 0],
   'tests/cora-attribute-menu.test.js': [1, 0, 2],
-  'tests/cora-command-palette.test.js': [5, 2, 0],
   'tests/cora-dashboard.test.js': [3, 0, 0],
   'tests/cora-journey-cases.test.js': [2, 0, 0],
   'tests/dashboard-action-centre-view.test.js': [3, 0, 15],
@@ -41,9 +37,6 @@ const BASELINE = {
   'tests/cora-responsible-party-dashboard-conversation.tests.js': [0, 4, 0],
   'tests/cora-responsible-party-dashboard-loading.tests.js': [3, 0, 0],
   'tests/cora-responsible-party-dashboard-remediation.tests.js': [3, 2, 0],
-  'tests/cora-status-banner.test.js': [12, 1, 0],
-  'tests/cora-tabs.test.js': [4, 0, 11],
-  'tests/cora-toast.test.js': [4, 0, 0],
   'tests/html.test.js': [1, 2, 0],
   'tests/http-sharepoint-client-protocol.test.js': [0, 0, 2],
   'tests/router.test.js': [3, 0, 0],
@@ -52,7 +45,6 @@ const BASELINE = {
   'tests/routes-my-cases.test.js': [1, 0, 0],
   'tests/simulate-panel.test.js': [1, 0, 0],
   'tests/uat-banner.test.js': [2, 0, 0],
-  'tests/view.test.js': [19, 0, 0],
 };
 
 const ROUTER_INTERNAL_BASELINE = {};

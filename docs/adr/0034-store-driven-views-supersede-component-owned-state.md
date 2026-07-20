@@ -6,6 +6,14 @@ Date: 2026-07-18
 
 Accepted
 
+Implemented through SUNSET-1 on 2026-07-20. The legacy view shell and scroll-
+snapshot helper are deleted, and contract tests now prevent class components,
+legacy view APIs, app-layer signal imports, and view-to-client imports from
+returning. `lib/signal.js` is retained only as an internal notification
+primitive for `SaveQueue` and `CaseReviewViewModel`; application surfaces
+(`actions`, `components`, `pages`, `routes`, `setup`, and `views`) cannot import
+it.
+
 Supersedes ADR-0003 (Web Components with signals). Deliberately preserves
 ADR-0002 (SPA shell + hash routing, route-level page independence and lazy
 `import()`) and ADR-0009 (mock-first dev loop) unchanged, and keeps every Hard
@@ -201,9 +209,10 @@ a Windows confirmation run.
 ## Consequences
 
 - **One mental model** for the app layer: state in, DOM out, actions back.
-  `ShellElement`, `defineView`, focus/scroll-restore machinery, the case-review
-  controllers/node-registry, and app-layer signals are all slated for deletion
-  in SUNSET.
+  The legacy component shell, its focus/scroll-restore machinery, the case-
+  review controllers/node-registry, and app-layer signals were removed by
+  SUNSET-1. The retained signal primitive is internal state/service plumbing,
+  not an app-layer authoring API.
 - **Materially less code.** Target ~13–15,000 source lines (from ~22,000), with
   the test estate shrinking proportionally.
 - **Evaluators, services, Case Type config, the Question Bank, and the

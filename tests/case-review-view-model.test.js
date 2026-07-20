@@ -3,7 +3,7 @@ import './_register-example-review.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CaseReviewViewModel } from '../src/lib/case-review-view-model.js';
-import { signal, effect } from '../src/lib/signal.js';
+import { signal } from '../src/lib/signal.js';
 import { CASE_TYPE_IMPORTERS } from '../case-types/manifest.js';
 import { isolateBrowserGlobals } from './helpers/browser-globals.js';
 
@@ -31,133 +31,6 @@ function makeVM(enqueue) {
   vm.answersSignal = signal(/** @type {any} */ ({ q1: { value: 'No' } }));
   return vm;
 }
-
-test('handleCapture does not snapshot/restore scroll — the Issues in-place sync owns preservation (issue #308)', () => {
-  // Since #308 the remediation section patches items in place instead of
-  // rebuilding the list, so a capture value change never detaches the control
-  // the Reviewer is editing and the #307 scroll workaround is gone from this
-  // path. If handleCapture regressed to wrapping the signal set in
-  // withPreservedScroll, this simulated jump would be "restored" to 500.
-  let scrollY = 500;
-  /** @type {any} */ (globalThis).window = {
-    scrollX: 0,
-    get scrollY() {
-      return scrollY;
-    },
-    scrollTo(/** @type {number} */ _x, /** @type {number} */ y) {
-      scrollY = y;
-    },
-  };
-  try {
-    /** @type {any[]} */
-    const calls = [];
-    const vm = makeVM((...a) => calls.push(a));
-
-    let first = true;
-    effect(() => {
-      vm.answersSignal.get();
-      if (!first) scrollY = 0;
-      first = false;
-    });
-
-    vm.handleCapture('q1', 'rootCause', 'Agent rushed');
-
-    assert.equal(scrollY, 0, 'no scroll snapshot/restore around the set');
-    assert.equal(calls.length, 1, 'still enqueues the save');
-    assert.deepEqual(calls[0][2].q1.capture, { rootCause: 'Agent rushed' });
-  } finally {
-    delete (/** @type {any} */ (globalThis).window);
-  }
-});
-
-test('handleRemediationAction restores window scroll after the re-render shifts it', () => {
-  // The action checkboxes live in the plain item content the in-place patch
-  // rebuilds, so this path keeps the scroll-preservation wrapper.
-  let scrollY = 500;
-  /** @type {any} */ (globalThis).window = {
-    scrollX: 0,
-    get scrollY() {
-      return scrollY;
-    },
-    scrollTo(/** @type {number} */ _x, /** @type {number} */ y) {
-      scrollY = y;
-    },
-  };
-  try {
-    /** @type {any[]} */
-    const calls = [];
-    const vm = makeSelectionVM((...a) => calls.push(a));
-
-    // Simulate the Issues re-render: any answers change "jumps" the scroll, as a
-    // real DOM teardown above the viewport would.
-    let first = true;
-    effect(() => {
-      vm.answersSignal.get();
-      if (!first) scrollY = 0;
-      first = false;
-    });
-
-    vm.handleRemediationAction('q1', { id: 'ra-0', text: 'Retrain' }, true);
-
-    assert.equal(scrollY, 500, 'scroll position restored after the jump');
-    assert.equal(calls.length, 1, 'still enqueues the save');
-  } finally {
-    delete (/** @type {any} */ (globalThis).window);
-  }
-});
-
-test('handleRemediationFreeForm restores the app scroll container, not the (unscrolled) window', () => {
-  // In the real app the root #app[data-cora-root] is position:fixed with its own
-  // overflow-y:auto, so the window never scrolls — window.scrollTo is a no-op and
-  // the Issues re-render throws the Reviewer around. The scroll must be preserved
-  // on the app container instead.
-  let containerTop = 500;
-  const container = {
-    getAttribute: () => '',
-    get scrollTop() {
-      return containerTop;
-    },
-    set scrollTop(v) {
-      containerTop = v;
-    },
-    scrollLeft: 0,
-  };
-  let windowScrollY = 0;
-  /** @type {any} */ (globalThis).window = {
-    scrollX: 0,
-    get scrollY() {
-      return windowScrollY;
-    },
-    scrollTo(/** @type {number} */ _x, /** @type {number} */ y) {
-      windowScrollY = y;
-    },
-  };
-  /** @type {any} */ (globalThis).document = {
-    querySelector: (/** @type {string} */ sel) =>
-      sel === '#app[data-cora-root]' ? container : null,
-  };
-  try {
-    const vm = makeSelectionVM(() => {});
-    // The re-render churns the container scroll (as a real DOM teardown does).
-    let first = true;
-    effect(() => {
-      vm.answersSignal.get();
-      if (!first) containerTop = 0;
-      first = false;
-    });
-
-    vm.handleRemediationFreeForm('q1', 'Escalate to legal');
-
-    assert.equal(
-      containerTop,
-      500,
-      'app container scroll restored after the jump'
-    );
-  } finally {
-    delete (/** @type {any} */ (globalThis).window);
-    delete (/** @type {any} */ (globalThis).document);
-  }
-});
 
 test('handleCapture works (no throw) when window is absent', () => {
   assert.equal(typeof globalThis.window, 'undefined');

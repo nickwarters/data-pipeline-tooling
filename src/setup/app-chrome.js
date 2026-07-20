@@ -13,8 +13,10 @@
  * @param {import('../services/permissions.js').Capabilities} capabilities
  * @param {{
  *   loadNav?: () => Promise<typeof import('../components/sections/cora-app-nav.js')>,
- *   loadPalette?: () => Promise<typeof import('../components/sections/cora-command-palette.js')>,
+ *   loadPalette?: () => Promise<any>,
  *   body?: Element,
+ *   navigationTarget?: any,
+ *   readHash?: () => string,
  * }} [options]
  * @returns {Promise<boolean>} false when nav failed to load (fatal message already rendered)
  */
@@ -23,13 +25,21 @@ export async function mountAppChrome(
   capabilities,
   {
     loadNav = () => import('../components/sections/cora-app-nav.js'),
-    loadPalette = () =>
-      import('../components/sections/cora-command-palette.js'),
+    loadPalette = async () => {
+      const [view, state] = await Promise.all([
+        import('../components/sections/cora-command-palette.js'),
+        import('../services/command-palette-store.js'),
+      ]);
+      return { ...view, commandPaletteStore: state.commandPaletteStore };
+    },
     body = document.body,
+    navigationTarget = window,
+    readHash = () => location.hash || '#/',
   } = {}
 ) {
+  let navModule;
   try {
-    await loadNav();
+    navModule = await loadNav();
   } catch (err) {
     console.error('[CORA] app nav failed to load', err);
     const panel = document.createElement('div');
@@ -40,17 +50,27 @@ export async function mountAppChrome(
     return false;
   }
 
-  const nav =
-    /** @type {import('../components/sections/cora-app-nav.js').CORAAppNav} */ (
-      document.createElement('cora-app-nav')
-    );
-  nav.capabilities = capabilities;
+  const { node: nav, navItems } = navModule.AppNav({
+    capabilities,
+    hash: readHash(),
+  });
   appEl.appendChild(nav);
+  navigationTarget.addEventListener('hashchange', () =>
+    navModule.updateActiveNavItems(navItems, readHash())
+  );
 
+  /** @type {Element | null} */
+  let paletteRoot = null;
   try {
-    await loadPalette();
-    body.appendChild(document.createElement('cora-command-palette'));
+    const paletteModule = await loadPalette();
+    paletteRoot = document.createElement('div');
+    paletteRoot.className = 'cora-command-palette';
+    body.appendChild(paletteRoot);
+    paletteModule.mountCommandPalette(paletteRoot, {
+      store: paletteModule.commandPaletteStore,
+    });
   } catch (err) {
+    if (paletteRoot?.parentNode === body) body.removeChild(paletteRoot);
     console.error('[CORA] command palette failed to load', err);
   }
 

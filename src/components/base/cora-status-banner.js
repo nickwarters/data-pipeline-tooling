@@ -1,8 +1,6 @@
 // @ts-check
 import { h } from '../../lib/html.js';
-import { defineView } from '../../lib/view.js';
 
-/** @typedef {import('../../services/save-queue.js').SaveQueue} SaveQueue */
 /** @typedef {import('../../services/save-queue.js').SaveStatus} SaveStatus */
 
 /**
@@ -12,13 +10,10 @@ import { defineView } from '../../lib/view.js';
  * reconnecting -> gentle "Reconnecting…" indicator (auto-clears on saved)
  * conflict -> persistent assertive banner with a Reload button
  *
- * @param {{ saveQueue: SaveQueue | null }} props
+ * @param {{ status: SaveStatus }} props
  * @returns {HTMLElement | HTMLElement[]}
  */
-export function StatusBanner({ saveQueue }) {
-  if (!saveQueue) return [];
-  const status = saveQueue.status.get();
-
+export function StatusBanner({ status }) {
   if (status === 'saved') {
     return [];
   }
@@ -70,20 +65,3 @@ function renderConflict() {
     ]
   );
 }
-
-export const CORAStatusBanner = defineView('cora-status-banner', {
-  props: /** @type {{ saveQueue: SaveQueue | null }} */ ({
-    saveQueue: null,
-  }),
-  render({ props }) {
-    return StatusBanner({ saveQueue: props.saveQueue });
-  },
-  afterMount({ host }) {
-    Object.assign(host.style, {
-      position: 'fixed',
-      bottom: 'var(--cora-space-4)',
-      right: 'var(--cora-space-4)',
-      zIndex: '110',
-    });
-  },
-});
