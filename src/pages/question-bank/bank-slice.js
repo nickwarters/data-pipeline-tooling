@@ -86,6 +86,15 @@ export function diffCounts(state) {
  * @returns {QuestionBankRouteState}
  */
 export function questionBankReducer(state, action) {
+  if (action.type === 'question/deprecation-toggled') {
+    const cases = structuredClone(state.cases);
+    const question = cases[state.activeSlug].questions.find(
+      (candidate) => candidate.id === action.questionId
+    );
+    if (!question) return state;
+    question.deprecated = !question.deprecated;
+    return { ...state, cases };
+  }
   if (action.type === 'bank/selected') {
     return {
       ...state,

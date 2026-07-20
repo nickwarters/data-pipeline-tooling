@@ -11,7 +11,7 @@ import {
 } from './question-bank-store.js';
 
 /**
- * @param {{ bank: any, baselineQuestions: any[], filters: any, dirty: boolean, onCommit: (fn: () => void) => void, addQuestion: () => void }} props
+ * @param {{ bank: any, baselineQuestions: any[], filters: any, dirty: boolean, onCommit: (fn: () => void) => void, addQuestion: () => void, memo?: (key: PropertyKey, deps: readonly unknown[], render: () => HTMLElement) => HTMLElement }} props
  * @returns {HTMLElement}
  */
 export function BankList(props) {
@@ -63,15 +63,28 @@ export function BankList(props) {
     );
   } else {
     visible.forEach((/** @type {any} */ q) => {
-      const card = /** @type {any} */ (
-        document.createElement('cora-question-card')
+      const baselineQuestion = props.baselineQuestions.find(
+        (candidate) => candidate.id === q.id
       );
-      card.question = q;
-      card.bank = bank;
-      card.baselineQuestions = props.baselineQuestions;
-      card.questionIndex = bank.questions.indexOf(q);
-      card.groupFilterActive = Boolean(f.questionGroup);
-      card.onCommit = props.onCommit;
+      const renderCard = () => {
+        const card = /** @type {any} */ (
+          document.createElement('cora-question-card')
+        );
+        card.question = q;
+        card.bank = bank;
+        card.baselineQuestions = props.baselineQuestions;
+        card.questionIndex = bank.questions.indexOf(q);
+        card.groupFilterActive = Boolean(f.questionGroup);
+        card.onCommit = props.onCommit;
+        return card;
+      };
+      const card = props.memo
+        ? props.memo(
+            q.id,
+            [q, bank.outcomeOptions, baselineQuestion, f.questionGroup],
+            renderCard
+          )
+        : renderCard();
       listRoot.appendChild(card);
     });
   }

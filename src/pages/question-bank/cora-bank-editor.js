@@ -113,7 +113,7 @@ function compileDrawerPropsFor(route, dispatch) {
 
 /**
  * @param {QuestionBankState} state
- * @param {{ dispatch: (action: any) => any }} tools
+ * @param {{ dispatch: (action: any) => any, memo?: (key: PropertyKey, deps: readonly unknown[], render: () => HTMLElement) => HTMLElement }} tools
  * @returns {Node[]}
  */
 export function bankEditorView(state, tools) {
@@ -184,6 +184,7 @@ export function bankEditorView(state, tools) {
         filters: route.filters,
         dirty: isDirty(route),
         onCommit,
+        memo: tools.memo,
         addQuestion: () => {
           onCommit((banks) => {
             const active = banks[route.activeSlug];

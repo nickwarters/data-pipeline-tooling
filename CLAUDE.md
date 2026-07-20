@@ -170,7 +170,7 @@ src/
       bank-slice.js             # route-local bank editor state, derived selectors, and actions (BANK-1)
       cora-bank-dock.js
       cora-bank-editor.js       # store-driven route slice + pure editor shell
-      cora-bank-list.js
+      cora-bank-list.js         # memoises Question Definition cards for 500-question banks (BANK-2)
       cora-bank-rail.js
       cora-outcome-options-editor.js
       cora-question-bank-editor.css
