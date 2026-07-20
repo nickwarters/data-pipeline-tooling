@@ -1,14 +1,5 @@
 // @ts-check
-import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
-import {
-  activeSlug,
-  commit,
-  currentBank,
-  filters,
-  railOpen,
-  setFilters,
-} from './question-bank-store.js';
 import {
   canMoveCategory,
   canMoveGroup,
@@ -16,8 +7,6 @@ import {
   categoryOrder,
   groupKey,
   groupOrder,
-  moveCategory,
-  moveGroup,
 } from '../../lib/question-order.js';
 
 /**
@@ -276,33 +265,3 @@ export function BankRail(props) {
 
   return [aside, toggle, backdrop];
 }
-
-export class CORABankRail extends ShellElement {
-  render() {
-    return BankRail({
-      bank: currentBank.get(),
-      filters: filters.get(),
-      railOpen: railOpen.get(),
-      setFilters,
-      moveCategory: (name, direction) =>
-        commit((types) =>
-          moveCategory(types[activeSlug.get()].questions, name, direction)
-        ),
-      moveGroup: (category, name, direction) =>
-        commit((types) =>
-          moveGroup(
-            types[activeSlug.get()].questions,
-            category,
-            name,
-            direction
-          )
-        ),
-      onToggleRail: () => railOpen.set(!railOpen.get()),
-      onCloseRail: () => {
-        if (railOpen.get()) railOpen.set(false);
-      },
-    });
-  }
-}
-
-customElements.define('cora-bank-rail', CORABankRail);

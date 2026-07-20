@@ -4,8 +4,6 @@ import assert from 'node:assert/strict';
 
 const { loadSampleCases, SAMPLE_CASE_LIMIT } =
   await import('../src/pages/question-bank/question-bank-samples.js');
-const { sampleCases, _resetStore } =
-  await import('../src/pages/question-bank/question-bank-store.js');
 
 /** @param {string} id @param {Record<string, any>} [answers] */
 function row(id, answers) {
@@ -18,7 +16,6 @@ function source(slug, listName) {
 }
 
 test('loadSampleCases: samples each requested source through listCases, carrying its listName', async () => {
-  _resetStore();
   /** @type {Array<{ filter: any, opts: any }>} */
   const calls = [];
   const client = /** @type {any} */ ({
@@ -27,7 +24,7 @@ test('loadSampleCases: samples each requested source through listCases, carrying
       return [row(`${filter.caseType}-1`, { 'q-a': { value: 'Yes' } })];
     },
   });
-  await loadSampleCases(client, [
+  const sampleCases = await loadSampleCases(client, [
     source('example-review', 'Cases-ExampleReview'),
     source('complaints', 'Cases-Complaints'),
   ]);
@@ -39,31 +36,29 @@ test('loadSampleCases: samples each requested source through listCases, carrying
     calls.map((c) => c.opts.listName),
     ['Cases-ExampleReview', 'Cases-Complaints']
   );
-  assert.deepEqual(sampleCases.get()['example-review'], [
+  assert.deepEqual(sampleCases['example-review'], [
     {
       id: 'example-review-1',
       title: 'Title example-review-1',
       answers: { 'q-a': { value: 'Yes' } },
     },
   ]);
-  assert.equal(sampleCases.get()['complaints'].length, 1);
+  assert.equal(sampleCases['complaints'].length, 1);
 });
 
 test('loadSampleCases: defaults answers to an empty record', async () => {
-  _resetStore();
   const client = /** @type {any} */ ({
     async listCases() {
       return [row('case-1')];
     },
   });
-  await loadSampleCases(client, [
+  const sampleCases = await loadSampleCases(client, [
     source('example-review', 'Cases-ExampleReview'),
   ]);
-  assert.deepEqual(sampleCases.get()['example-review'][0].answers, {});
+  assert.deepEqual(sampleCases['example-review'][0].answers, {});
 });
 
 test('loadSampleCases: caps the sample at SAMPLE_CASE_LIMIT', async () => {
-  _resetStore();
   const rows = Array.from({ length: SAMPLE_CASE_LIMIT + 5 }, (_, i) =>
     row(`case-${i}`, {})
   );
@@ -72,30 +67,28 @@ test('loadSampleCases: caps the sample at SAMPLE_CASE_LIMIT', async () => {
       return rows;
     },
   });
-  await loadSampleCases(client, [
+  const sampleCases = await loadSampleCases(client, [
     source('example-review', 'Cases-ExampleReview'),
   ]);
-  assert.equal(sampleCases.get()['example-review'].length, SAMPLE_CASE_LIMIT);
+  assert.equal(sampleCases['example-review'].length, SAMPLE_CASE_LIMIT);
 });
 
 test('loadSampleCases: a failing list leaves that slug with no samples', async () => {
-  _resetStore();
   const client = /** @type {any} */ ({
     async listCases(/** @type {any} */ filter) {
       if (filter.caseType === 'complaints') throw new Error('403');
       return [row('case-1', {})];
     },
   });
-  await loadSampleCases(client, [
+  const sampleCases = await loadSampleCases(client, [
     source('example-review', 'Cases-ExampleReview'),
     source('complaints', 'Cases-Complaints'),
   ]);
-  assert.equal(sampleCases.get()['example-review'].length, 1);
-  assert.deepEqual(sampleCases.get()['complaints'], []);
+  assert.equal(sampleCases['example-review'].length, 1);
+  assert.deepEqual(sampleCases['complaints'], []);
 });
 
 test('loadSampleCases: defaults to no sources (and samples nothing) when none are passed', async () => {
-  _resetStore();
   /** @type {string[]} */
   const asked = [];
   const client = /** @type {any} */ ({
@@ -109,7 +102,6 @@ test('loadSampleCases: defaults to no sources (and samples nothing) when none ar
 });
 
 test('loadSampleCases: multiple sources fan out independently, each keyed by its own slug', async () => {
-  _resetStore();
   /** @type {Record<string, string>} */
   const listNameBySlug = {};
   const client = /** @type {any} */ ({
@@ -118,7 +110,7 @@ test('loadSampleCases: multiple sources fan out independently, each keyed by its
       return [row(`${filter.caseType}-1`, {})];
     },
   });
-  await loadSampleCases(client, [
+  const sampleCases = await loadSampleCases(client, [
     source('example-review', 'Cases-ExampleReview'),
     source('stress-review', 'Cases-StressReview'),
     source('complaints', 'Cases-Complaints'),
@@ -128,7 +120,7 @@ test('loadSampleCases: multiple sources fan out independently, each keyed by its
     'stress-review': 'Cases-StressReview',
     complaints: 'Cases-Complaints',
   });
-  assert.equal(sampleCases.get()['example-review'].length, 1);
-  assert.equal(sampleCases.get()['stress-review'].length, 1);
-  assert.equal(sampleCases.get()['complaints'].length, 1);
+  assert.equal(sampleCases['example-review'].length, 1);
+  assert.equal(sampleCases['stress-review'].length, 1);
+  assert.equal(sampleCases['complaints'].length, 1);
 });

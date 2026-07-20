@@ -1,16 +1,5 @@
 // @ts-check
-import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
-import {
-  bindQuestionBankStore,
-  cases,
-  activeSlug,
-  isDirty as dirtySignal,
-  currentBank as currentBankSignal,
-  drawerOpen as drawerSignal,
-  railOpen as railSignal,
-  showToast as showLegacyToast,
-} from './question-bank-store.js';
 import {
   baselineBank,
   currentBank,
@@ -26,20 +15,7 @@ import { compileBank, hashStr, highlight } from './question-bank-compile.js';
 import { simulatorEnabled } from './question-bank-flags.js';
 import { SimulatePanel } from './simulate-panel.js';
 import { CompileDrawer } from './compile-drawer.js';
-import { moveCategory, moveGroup } from '../../lib/question-order.js';
-
-// BANK-1 keeps the question-card internals behind the temporary adapter.
-import '../../components/collections/cora-case-tabs.js';
-import './cora-outcome-options-editor.js';
-import '../../components/sections/cora-question-card.js';
-import '../../components/base/cora-question-labels.js';
-import '../../components/sections/cora-wording-editor.js';
-import '../../components/base/cora-options-editor.js';
-import '../../components/sections/cora-showwhen-editor.js';
-import '../../components/sections/cora-showwhen-group.js';
-import '../../components/base/cora-showwhen-leaf.js';
-import './cora-remediation-actions-editor.js';
-import '../../components/base/cora-toast.js';
+import { CaseTabs } from '../../components/collections/cora-case-tabs.js';
 
 /** @typedef {import('./bank-slice.js').QuestionBankRouteState} QuestionBankRouteState */
 /** @typedef {{ chrome: import('../../core/chrome-state.js').ChromeState, routes: { questionBank: QuestionBankRouteState } }} QuestionBankState */
@@ -64,9 +40,9 @@ function toast(dispatch, message) {
  */
 function caseTabsPropsFor(route, dispatch) {
   return {
-    cases,
-    active: activeSlug,
-    dirty: dirtySignal,
+    types: route.cases,
+    active: route.activeSlug,
+    dirty: isDirty(route),
     onSelect: (/** @type {string} */ slug) =>
       dispatch({ type: 'bank/selected', slug }),
     onRevert: () => {
@@ -118,11 +94,7 @@ function compileDrawerPropsFor(route, dispatch) {
  */
 export function bankEditorView(state, tools) {
   const route = selectQuestionBankState(state);
-  bindQuestionBankStore(() => route, tools.dispatch);
   const bank = currentBank(route);
-  const onCommit = (
-    /** @type {(banks: QuestionBankRouteState['cases']) => void} */ mutator
-  ) => tools.dispatch({ type: 'bank/legacy-committed', mutator });
 
   return h(
     'div',
@@ -152,7 +124,7 @@ export function bankEditorView(state, tools) {
         h('strong', {}, 'questions.v3')
       )
     ),
-    h('cora-case-tabs', caseTabsPropsFor(route, tools.dispatch)),
+    CaseTabs(caseTabsPropsFor(route, tools.dispatch)),
     h(
       'main',
       { className: 'bank-main' },
@@ -163,18 +135,14 @@ export function bankEditorView(state, tools) {
         setFilters: (patch) =>
           tools.dispatch({ type: 'filters/changed', patch }),
         moveCategory: (name, direction) =>
-          onCommit((banks) =>
-            moveCategory(banks[route.activeSlug].questions, name, direction)
-          ),
+          tools.dispatch({ type: 'category/moved', category: name, direction }),
         moveGroup: (category, name, direction) =>
-          onCommit((banks) =>
-            moveGroup(
-              banks[route.activeSlug].questions,
-              category,
-              name,
-              direction
-            )
-          ),
+          tools.dispatch({
+            type: 'group/moved',
+            category,
+            group: name,
+            direction,
+          }),
         onToggleRail: () =>
           tools.dispatch({ type: 'rail/changed', open: !route.railOpen }),
         onCloseRail: () =>
@@ -185,22 +153,10 @@ export function bankEditorView(state, tools) {
         baselineQuestions: baselineBank(route)?.questions ?? [],
         filters: route.filters,
         dirty: isDirty(route),
-        onCommit,
+        conditionalQuestionIds: route.conditionalQuestionIds,
+        dispatch: tools.dispatch,
         memo: tools.memo,
-        addQuestion: () => {
-          onCommit((banks) => {
-            const active = banks[route.activeSlug];
-            active.questions.push(
-              /** @type {any} */ ({
-                id: `q-new-${active.questions.length + 1}`,
-                text: 'New question — click to edit',
-                questionGroup: 'Uncategorised',
-                responseType: 'yes-no-na',
-                deprecated: false,
-              })
-            );
-          });
-        },
+        addQuestion: () => tools.dispatch({ type: 'question/added' }),
       })
     ),
     BankDock({
@@ -209,7 +165,12 @@ export function bankEditorView(state, tools) {
       openDrawer: () => tools.dispatch({ type: 'drawer/changed', open: true }),
     }),
     ...CompileDrawer(compileDrawerPropsFor(route, tools.dispatch)),
-    h('cora-toast', { message: { get: () => route.toastMsg } })
+    h(
+      'div',
+      { className: 'toast' + (route.toastMsg ? ' show' : '') },
+      h('span', { className: 'dot' }),
+      h('span', {}, route.toastMsg)
+    )
   );
 }
 
@@ -250,117 +211,14 @@ export function createRouteSlice(_params, context) {
             import('./question-bank-samples.js').then((module) =>
               module.loadSampleCases(context.client, context.caseSources)
             ));
-        void loadSamples();
+        void loadSamples().then((loaded) => {
+          if (!loaded || typeof loaded !== 'object') return;
+          for (const [slug, cases] of Object.entries(loaded)) {
+            tools.dispatch({ type: 'samples/loaded', slug, cases });
+          }
+        });
       }
       return () => context.appEl.classList.remove('cora-fullbleed');
     },
   };
 }
-
-// Legacy exports remain only until BANK-2 finishes porting the editor tests.
-/** @param {string} slug */
-export function selectBank(slug) {
-  activeSlug.set(slug);
-}
-export function revertBank() {
-  const state = /** @type {any} */ ({
-    cases: cases.get(),
-    baseline: awaitBaseline().get(),
-  });
-  if (!dirtySignal.get()) return showLegacyToast('Nothing to revert');
-  if (
-    !(
-      /** @type {any} */ (globalThis).confirm?.(
-        'Discard all uncommitted edits and return to the last synced state?'
-      )
-    )
-  )
-    return;
-  cases.set(structuredClone(state.baseline));
-  showLegacyToast('Reverted to baseline');
-}
-function awaitBaseline() {
-  return /** @type {any} */ (legacyBaseline);
-}
-import { baseline as legacyBaseline } from './question-bank-store.js';
-export function submitBankForReview() {
-  legacyBaseline.set(structuredClone(cases.get()));
-  drawerSignal.set(false);
-  showLegacyToast('Submitted for review');
-}
-export function caseTabsProps() {
-  return {
-    cases,
-    active: activeSlug,
-    dirty: dirtySignal,
-    onSelect: selectBank,
-    onRevert: revertBank,
-    onCompile: () => drawerSignal.set(true),
-  };
-}
-export function compileDrawerProps() {
-  const route = /** @type {QuestionBankRouteState} */ ({
-    cases: cases.get(),
-    baseline: legacyBaseline.get(),
-    activeSlug: activeSlug.get(),
-    filters: /** @type {any} */ ({}),
-    drawerOpen: drawerSignal.get(),
-    railOpen: false,
-    toastMsg: '',
-    sampleCases: {},
-  });
-  return compileDrawerPropsFor(route, (action) => {
-    if (action.type === 'drawer/changed') drawerSignal.set(action.open);
-    if (action.type === 'bank/submitted') submitBankForReview();
-    if (action.type === 'toast/changed' && action.message)
-      showLegacyToast(action.message);
-  });
-}
-/** @param {{ addEventListener: Function, removeEventListener: Function }} target */
-export function bindBankEditorKeys(target) {
-  const key = (/** @type {any} */ event) => {
-    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-      event.preventDefault?.();
-      drawerSignal.set(true);
-    }
-    if (event.key === 'Escape') {
-      drawerSignal.set(false);
-      railSignal.set(false);
-    }
-  };
-  target.addEventListener('keydown', key);
-  return () => target.removeEventListener('keydown', key);
-}
-export class CORABankEditor extends ShellElement {
-  constructor() {
-    super();
-    /** @type {null | (() => void)} */
-    this._key = null;
-  }
-  connectedCallback() {
-    super.connectedCallback();
-    this._key = bindBankEditorKeys(document);
-  }
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    this._key?.();
-    this._key = null;
-  }
-  render() {
-    return bankEditorView(
-      {
-        chrome: /** @type {any} */ ({}),
-        routes: {
-          questionBank: {
-            ...initialQuestionBankState(),
-            cases: cases.get(),
-            baseline: legacyBaseline.get(),
-            activeSlug: activeSlug.get(),
-          },
-        },
-      },
-      { dispatch: () => {} }
-    );
-  }
-}
-customElements.define('cora-bank-editor', CORABankEditor);

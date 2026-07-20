@@ -1,7 +1,5 @@
 // @ts-check
-import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
-import { currentBank, diffCounts, drawerOpen } from './question-bank-store.js';
 
 /**
  * @param {{ bank: any, diffCounts: { added: number, changed: number, deprecated: number }, openDrawer: () => void }} props
@@ -47,18 +45,6 @@ export function BankDock(props) {
     )
   );
 }
-
-export class CORABankDock extends ShellElement {
-  render() {
-    return BankDock({
-      bank: currentBank.get(),
-      diffCounts: diffCounts.get(),
-      openDrawer: () => drawerOpen.set(true),
-    });
-  }
-}
-
-customElements.define('cora-bank-dock', CORABankDock);
 
 /**
  * @param {string} label

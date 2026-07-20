@@ -20,7 +20,7 @@ const ROUTER_INTERNAL_PATTERN = /\._(?:routes|container)\b/g;
  */
 // Tuple order: child structure, listener registry, underscore-prefixed call.
 const BASELINE = {
-  'tests/accessibility.test.js': [14, 0, 0],
+  'tests/accessibility.test.js': [6, 0, 0],
   'tests/app-chrome.test.js': [7, 0, 0],
   'tests/cora-allocation.test.js': [6, 1, 14],
   'tests/cora-amend-outcome.test.js': [2, 7, 0],
@@ -28,8 +28,6 @@ const BASELINE = {
   'tests/cora-appeal-review.test.js': [1, 1, 0],
   'tests/cora-appeal.test.js': [4, 8, 0],
   'tests/cora-attribute-menu.test.js': [1, 0, 3],
-  'tests/cora-bank-dock.test.js': [19, 2, 0],
-  'tests/cora-bank-editor.test.js': [1, 0, 0],
   'tests/cora-capture-groups.test.js': [1, 0, 14],
   'tests/cora-case-tabs.test.js': [18, 3, 0],
   'tests/cora-command-palette.test.js': [5, 2, 0],

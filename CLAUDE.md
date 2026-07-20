@@ -102,11 +102,8 @@ src/
   components/                   # reusable cora-* custom elements, layered by dependency
     base/                       # leaf primitives — compose no other component (cf. lib/signal.js)
       cora-data-table.js           # legacy component-era table retained while unconverted consumers remain
-      cora-options-editor.js
       cora-people-picker.js
-      cora-question-labels.js
       cora-group-progress.js      # per-Question-Group progress strip (was cora-section-progress, #390)
-      cora-showwhen-leaf.js
       cora-status-banner.js
       cora-tabs.js
       cora-toast.js
@@ -118,13 +115,8 @@ src/
       cora-command-palette.js
       cora-owner-summary.js
       cora-question.js
-      cora-question-card.js
-      cora-showwhen-editor.js
-      cora-showwhen-group.js
-      cora-wording-editor.js
     collections/                # page/tab-level assemblies mounted directly by pages
       cora-case-tabs.js
-      cora-question-list.js
 
   config/
     working-days.js
@@ -175,9 +167,15 @@ src/
       cora-question-bank-editor.css
       compile-drawer.js         # pure compile/simulation/publish drawer view (BANK-3)
       cora-remediation-actions-editor.js # edits a Question Definition's Remediation Actions (moved from components/sections, #381)
+      options-editor.js          # pure Question Definition response-option editor (BANK-2)
+      question-card.js           # pure memoised Question Definition editing card (BANK-2)
+      question-labels.js         # pure reporting-label editor (BANK-2)
+      showwhen-editor.js         # pure showWhen editor shell (BANK-2)
+      showwhen-group.js          # pure recursive showWhen group view (BANK-2)
+      showwhen-leaf.js           # pure showWhen condition view (BANK-2)
+      wording-editor.js          # pure Question Definition wording editor (BANK-2)
       question-bank-compile.js
       question-bank-source.js
-      question-bank-store.js    # temporary BANK-1 adapter for old card editors; removed by BANK-2
       simulate-panel.js         # pure golden-tested impact-simulation view
 
   views/                        # generic store-driven pure renderers

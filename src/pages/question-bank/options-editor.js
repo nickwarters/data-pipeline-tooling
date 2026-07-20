@@ -1,6 +1,5 @@
 // @ts-check
 import { h } from '../../lib/html.js';
-import { ShellElement } from '../../lib/view.js';
 import { outcomeResponseOptions } from '../../evaluators/configured-outcome.js';
 import { YES_NO } from '../../lib/response-options.js';
 
@@ -150,70 +149,3 @@ export function OptionsEditor({
     )
   );
 }
-
-export class CORAOptionsEditor extends ShellElement {
-  constructor() {
-    super();
-    /** @type {any} */
-    this.question = null;
-    /**
-     * The Case Type's configured Outcomes, passed down by the mounting site.
-     * @type {import('../../sharepoint-client.js').OutcomeOption[]}
-     */
-    this.outcomeOptions = [];
-    /**
-     * Mutation sink. Defaults to "just apply the mutation" so the component
-     * works standalone; the bank editor injects the store's `commit()`.
-     * @type {(fn: () => void) => void}
-     */
-    this.onCommit = (fn) => fn();
-  }
-
-  render() {
-    const commit = this.onCommit;
-    return OptionsEditor({
-      question: this.question,
-      outcomeOptions: this.outcomeOptions ?? [],
-      onRemoveOption: (index, option) => {
-        commit(() => {
-          this.question.options.splice(index, 1);
-          if (this.question.optionOutcomes) {
-            delete this.question.optionOutcomes[option];
-            if (!Object.keys(this.question.optionOutcomes).length)
-              delete this.question.optionOutcomes;
-          }
-        });
-      },
-      onAddOption: () => {
-        const value = /** @type {any} */ (globalThis).prompt?.(
-          `New option label (max ${MAX_OPTION_LENGTH} characters):`
-        );
-        if (!value) return;
-        const trimmed = value.trim();
-        if (!trimmed) return;
-        if (trimmed.length > MAX_OPTION_LENGTH) {
-          /** @type {any} */ (globalThis).alert?.(
-            `Option label is too long: it must be ${MAX_OPTION_LENGTH} characters or fewer.`
-          );
-          return;
-        }
-        commit(() => {
-          (this.question.options ||= []).push(trimmed);
-        });
-      },
-      onSetOptionOutcome: (option, outcomeId) => {
-        commit(() => {
-          if (outcomeId) {
-            (this.question.optionOutcomes ||= {})[option] = outcomeId;
-          } else if (this.question.optionOutcomes) {
-            delete this.question.optionOutcomes[option];
-            if (!Object.keys(this.question.optionOutcomes).length)
-              delete this.question.optionOutcomes;
-          }
-        });
-      },
-    });
-  }
-}
-
-customElements.define('cora-options-editor', CORAOptionsEditor);

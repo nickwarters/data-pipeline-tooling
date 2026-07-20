@@ -13,11 +13,8 @@
  *     those concerns from the question-bank subsystem any more.
  *
  *  2. No component imports from the question-bank subsystem at all. The last
- *     ten couplings (editor primitives reading the bank-editor *store
- *     singleton*) were inverted in issue #382: state flows down as properties
- *     (signals allowed as property values) and mutations flow up through
- *     `onCommit` callbacks, with the bank editor page owning the only store
- *     imports.
+ *     former couplings have now moved into the store-driven bank page as pure
+ *     views. Shared components do not know about bank state or actions.
  */
 
 import { readdirSync, readFileSync } from 'node:fs';
@@ -85,15 +82,13 @@ test('layering: cora-toast (a base primitive) does not import from question-bank
 });
 
 test('layering: no component imports from the question-bank subsystem', () => {
-  // The last ten couplings (editor primitives reading the bank-editor store
-  // singleton) were inverted in issue #382: state flows down as properties
-  // (signals allowed as property values) and mutations flow up through
-  // `onCommit` callbacks; the bank editor page owns the only store imports.
+  // Question Bank editor views live under the page and dispatch plain actions;
+  // shared components remain independent of that route.
   const offenders = componentFiles.filter(importsQuestionBank);
   assert.deepEqual(
     offenders,
     [],
-    'components must receive question-bank state via props and report mutations via onCommit — see issue #382 and docs/question-bank-store-inversion-explainer.html'
+    'shared components must not depend on the Question Bank page'
   );
 });
 

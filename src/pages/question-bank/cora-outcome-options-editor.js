@@ -1,7 +1,5 @@
 // @ts-check
-import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
-import { activeSlug, commit, currentBank } from './question-bank-store.js';
 
 /**
  * @param {{ bank: import('./question-bank-source.js').QuestionBank, addOutcome: () => void, setDefaultOutcome: (id: string) => void, renameOutcome: (option: import('../../sharepoint-client.js').OutcomeOption, id: string) => void, setWording: (option: import('../../sharepoint-client.js').OutcomeOption, wording: string) => void, setSeverity: (option: import('../../sharepoint-client.js').OutcomeOption, severity: string) => void, removeOutcome: (option: import('../../sharepoint-client.js').OutcomeOption, index: number) => void }} props
@@ -92,121 +90,6 @@ export function OutcomeOptionsEditor(props) {
   );
 }
 
-export class CORAOutcomeOptionsEditor extends ShellElement {
-  render() {
-    const bank = currentBank.get();
-    return OutcomeOptionsEditor({
-      bank,
-      addOutcome: () =>
-        commit((types) => {
-          const b = types[activeSlug.get()];
-          b.outcomeOptions ??= [];
-          b.outcomeOptions.push(this._newOutcomeOption(b));
-        }),
-      setDefaultOutcome: (id) =>
-        commit((types) => {
-          const b = types[activeSlug.get()];
-          if (id) b.defaultOutcomeId = id;
-          else delete b.defaultOutcomeId;
-        }),
-      renameOutcome: (option, id) =>
-        commit(() => {
-          const previousId = option.id;
-          const nextId = id.trim() || previousId;
-          option.id = nextId;
-          if (nextId !== previousId) {
-            this._renameOutcomeReferences(bank, previousId, nextId);
-          }
-        }),
-      setWording: (option, wording) =>
-        commit(() => {
-          option.wording = wording;
-        }),
-      setSeverity: (option, severity) =>
-        commit(() => {
-          // Severity is required (it is the outcome sort key), so a blank/invalid
-          // entry coerces to 0 rather than clearing the field.
-          const parsed = Number(severity);
-          option.severity = Number.isFinite(parsed) ? parsed : 0;
-        }),
-      removeOutcome: (option, index) =>
-        commit((types) => {
-          const b = types[activeSlug.get()];
-          this._clearOutcomeReferences(b, option.id);
-          b.outcomeOptions?.splice(index, 1);
-        }),
-    });
-  }
-
-  /**
-   * @param {import('./question-bank-source.js').QuestionBank} bank
-   * @returns {import('../../sharepoint-client.js').OutcomeOption}
-   */
-  _newOutcomeOption(bank) {
-    const existing = new Set((bank.outcomeOptions ?? []).map((o) => o.id));
-    let index = (bank.outcomeOptions ?? []).length + 1;
-    let id = `outcome-${index}`;
-    while (existing.has(id)) {
-      index += 1;
-      id = `outcome-${index}`;
-    }
-    return {
-      id,
-      wording: 'New outcome',
-      severity: 100,
-    };
-  }
-
-  /**
-   * @param {import('./question-bank-source.js').QuestionBank} bank
-   * @param {string} previousId
-   * @param {string} nextId
-   */
-  _renameOutcomeReferences(bank, previousId, nextId) {
-    for (const question of bank.questions) {
-      const map = question.optionOutcomes;
-      if (!map) continue;
-      for (const key of Object.keys(map)) {
-        if (map[key] === previousId) map[key] = nextId;
-      }
-    }
-    if (bank.defaultOutcomeId === previousId) bank.defaultOutcomeId = nextId;
-  }
-
-  /**
-   * @param {import('./question-bank-source.js').QuestionBank} bank
-   * @param {string} outcomeId
-   */
-  _clearOutcomeReferences(bank, outcomeId) {
-    for (const question of bank.questions) {
-      const map = question.optionOutcomes;
-      if (!map) continue;
-      for (const key of Object.keys(map)) {
-        if (map[key] === outcomeId) delete map[key];
-      }
-      if (!Object.keys(map).length) delete question.optionOutcomes;
-    }
-    if (bank.defaultOutcomeId === outcomeId) delete bank.defaultOutcomeId;
-  }
-
-  /**
-   * @param {string} label
-   * @param {HTMLElement} control
-   */
-  _field(label, control) {
-    return outcomeField(label, control);
-  }
-
-  /**
-   * @param {string} value
-   * @param {import('../../sharepoint-client.js').OutcomeOption[]} outcomeOptions
-   * @param {(id: string) => void} onChange
-   */
-  _outcomeSelect(value, outcomeOptions, onChange) {
-    return outcomeOptionsSelect(value, outcomeOptions, onChange);
-  }
-}
-
 /**
  * @param {string} label
  * @param {HTMLElement} control
@@ -243,5 +126,3 @@ export function outcomeOptionsSelect(value, outcomeOptions, onChange) {
     )
   );
 }
-
-customElements.define('cora-outcome-options-editor', CORAOutcomeOptionsEditor);

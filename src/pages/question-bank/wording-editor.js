@@ -1,5 +1,4 @@
 // @ts-check
-import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
 
 /**
@@ -84,37 +83,3 @@ function wordingStatus(question, baselineQuestion) {
   }
   return h('span', {}, '○ Unchanged');
 }
-
-export class CORAWordingEditor extends ShellElement {
-  constructor() {
-    super();
-    /** @type {any} */
-    this.question = null;
-    /**
-     * The question's counterpart in the last-synced baseline bank (or
-     * undefined for a new draft), passed down by the mounting site.
-     * @type {any}
-     */
-    this.baselineQuestion = undefined;
-    /**
-     * Mutation sink. Defaults to "just apply the mutation" so the component
-     * works standalone; the bank editor injects the store's `commit()`.
-     * @type {(fn: () => void) => void}
-     */
-    this.onCommit = (fn) => fn();
-  }
-
-  render() {
-    return WordingEditor({
-      question: this.question,
-      baselineQuestion: this.baselineQuestion,
-      onTextInput: (value) => {
-        this.onCommit(() => {
-          this.question.text = value;
-        });
-      },
-    });
-  }
-}
-
-customElements.define('cora-wording-editor', CORAWordingEditor);
