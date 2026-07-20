@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import config from '../case-types/complaints.js';
 import { detectCycles } from '../src/evaluators/applicability-evaluator.js';
 import { deriveFailureValues } from '../src/evaluators/failure-evaluator.js';
+import { validateCaptureGroups } from '../src/evaluators/issue-capture.js';
 import { cases } from '../dev/fixtures/cases.js';
 
 /** @typedef {import('../src/sharepoint-client.js').Answer} Answer */
@@ -71,6 +72,47 @@ test('complaints: at least one question maps a failing response and has remediat
 
 test('complaints: no cycles in showWhen graph', () => {
   assert.strictEqual(detectCycles(config.questions), false);
+});
+
+// --- Issue Capture Groups ---
+
+test('complaints: declares Issue Capture Groups with unique field keys', () => {
+  const groups = config.captureGroups ?? [];
+  assert.ok(groups.length >= 1, 'expected at least one capture group');
+  const keys = groups.flatMap((g) => g.fields.map((f) => f.key));
+  assert.ok(keys.length >= 1, 'expected at least one capture field');
+  assert.equal(
+    new Set(keys).size,
+    keys.length,
+    'capture field keys must be unique across groups'
+  );
+  // Passes the same validation gate the view model applies at load time.
+  assert.doesNotThrow(() => validateCaptureGroups(groups));
+});
+
+test('complaints: every capture field is a supported type with options for choices', () => {
+  const allowed = new Set([
+    'text',
+    'textarea',
+    'select',
+    'radio',
+    'person',
+    'actions',
+  ]);
+  for (const group of config.captureGroups ?? []) {
+    for (const field of group.fields) {
+      assert.ok(
+        allowed.has(field.type),
+        `${field.key} has unsupported type ${field.type}`
+      );
+      if (field.type === 'select' || field.type === 'radio') {
+        assert.ok(
+          Array.isArray(field.options) && field.options.length > 0,
+          `${field.key} (${field.type}) should carry a non-empty options[]`
+        );
+      }
+    }
+  }
 });
 
 test('complaints: attributes failures to a person', () => {

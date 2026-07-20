@@ -83,6 +83,61 @@ const config = {
   defaultOutcomeId: bank.defaultOutcomeId ?? '',
   questions: bank.questions,
 
+  // Issue Capture Groups — the typed fields a Reviewer captures against a
+  // *failed* Answer on the Issues tab. Presentation-only groupings (see the
+  // CaptureGroup typedef in sharepoint-client.js); field keys are unique across
+  // all groups. `Customer impact` defaults collapsed to exercise the toggle.
+  captureGroups: [
+    {
+      key: 'root-cause',
+      label: 'Root cause & attribution',
+      fields: [
+        {
+          key: 'rootCauseSummary',
+          label: 'Root cause summary',
+          type: 'textarea',
+          placeholder: 'Describe what went wrong and why.',
+        },
+        {
+          key: 'failureCategory',
+          label: 'Failure category',
+          type: 'select',
+          options: ['Process', 'System', 'Human error', 'Third party'],
+        },
+        {
+          key: 'attributedTo',
+          label: 'Attributed to',
+          type: 'person',
+        },
+      ],
+    },
+    {
+      key: 'customer-impact',
+      label: 'Customer impact',
+      collapsed: true,
+      fields: [
+        {
+          key: 'harmLevel',
+          label: 'Level of harm',
+          type: 'radio',
+          options: ['None', 'Minor', 'Material', 'Severe'],
+        },
+        {
+          key: 'redressRequired',
+          label: 'Redress required?',
+          type: 'radio',
+          options: ['Yes', 'No'],
+        },
+        {
+          key: 'impactNotes',
+          label: 'Impact notes',
+          type: 'text',
+          placeholder: 'Optional additional detail.',
+        },
+      ],
+    },
+  ],
+
   /** @param {Record<string, Answer>} answers */
   computeOutcome(answers) {
     return computeConfiguredOutcome(
