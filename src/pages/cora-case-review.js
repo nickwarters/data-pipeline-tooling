@@ -8,10 +8,7 @@ import {
   createCaseReviewSaveEffect,
   observeSaveStatus,
 } from './cora-case-review/case-actions.js';
-import {
-  createQuestionPanelView,
-  questionGroupsOf,
-} from './cora-case-review/question-panel-view.js';
+import { createQuestionPanelView } from './cora-case-review/question-panel-view.js';
 import {
   conversationView,
   postConversationMessage,
@@ -66,7 +63,6 @@ import {
  *   activeTab: string,
  *   panelMode: string,
  *   saveStatus: SaveStatus,
- *   activeQuestionGroup: string,
  *   conversationHidden: boolean,
  *   completionPending: boolean,
  *   captureCollapsed: Record<string, Set<string>>,
@@ -88,7 +84,6 @@ export function createInitialCaseReviewState(chrome, panelMode) {
         activeTab: '',
         panelMode,
         saveStatus: 'saved',
-        activeQuestionGroup: '',
         conversationHidden: true,
         completionPending: false,
         captureCollapsed: {},
@@ -145,7 +140,6 @@ export function caseReviewReducer(state, action) {
   const route = state.routes.caseReview;
   if (action.type === 'case/load-finished') {
     const tabs = visibleCaseTabs(action.snapshot);
-    const groups = questionGroupsOf(action.snapshot.applicableQuestions ?? []);
     return {
       ...state,
       routes: {
@@ -153,7 +147,6 @@ export function caseReviewReducer(state, action) {
           ...route,
           snapshot: action.snapshot,
           activeTab: tabs[0]?.id ?? '',
-          activeQuestionGroup: groups[0] ?? '',
           conversationHidden: action.snapshot.conversationHidden ?? true,
         },
       },
@@ -176,7 +169,6 @@ export function caseReviewReducer(state, action) {
     const applicableQuestions = route.snapshot.catalogue.filter((question) =>
       applicableIds.has(question.id)
     );
-    const groups = questionGroupsOf(applicableQuestions);
     const snapshot = {
       ...route.snapshot,
       answers: action.answers,
@@ -187,15 +179,7 @@ export function caseReviewReducer(state, action) {
     };
     return {
       ...state,
-      routes: {
-        caseReview: {
-          ...route,
-          snapshot,
-          activeQuestionGroup: groups.includes(route.activeQuestionGroup)
-            ? route.activeQuestionGroup
-            : (groups[0] ?? ''),
-        },
-      },
+      routes: { caseReview: { ...route, snapshot } },
     };
   }
   if (action.type === 'case/tab-selected') {
@@ -206,21 +190,6 @@ export function caseReviewReducer(state, action) {
     return {
       ...state,
       routes: { caseReview: { ...route, activeTab: action.id } },
-    };
-  }
-  if (action.type === 'case/question-group-selected') {
-    const groups = questionGroupsOf(route.snapshot?.applicableQuestions ?? []);
-    if (
-      !groups.includes(action.group) ||
-      action.group === route.activeQuestionGroup
-    ) {
-      return state;
-    }
-    return {
-      ...state,
-      routes: {
-        caseReview: { ...route, activeQuestionGroup: action.group },
-      },
     };
   }
   if (action.type === 'case/capture-group-toggled') {
@@ -644,16 +613,10 @@ export function createRouteSlice(params, context) {
                 catalogue: snapshot.catalogue,
                 questions: snapshot.applicableQuestions,
                 answers: snapshot.answers,
-                activeGroup: route.activeQuestionGroup,
                 access: snapshot.access.questions,
                 heading: snapshot.sectionHeadings.questions,
                 onAnswer: (questionId, value) =>
                   viewModel.handleAnswer(questionId, value),
-                onGroupSelected: (group) =>
-                  tools.dispatch({
-                    type: 'case/question-group-selected',
-                    group,
-                  }),
               })
             : null
         );

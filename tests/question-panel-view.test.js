@@ -30,16 +30,14 @@ function props(overrides = {}) {
     catalogue,
     questions: catalogue,
     answers: {},
-    activeGroup: 'Identity',
     access: /** @type {const} */ ('edit'),
     heading: 'Questions',
     onAnswer() {},
-    onGroupSelected() {},
     ...overrides,
   };
 }
 
-test('CASE-2 Questions view mounts only the active Question Group and reports progress', () => {
+test('CASE-2 Questions view mounts every applicable Question Group in one grouped list', () => {
   const view = createQuestionPanelView();
   const node = view.render(
     props({ answers: { q1: { value: 'Yes' }, q2: { value: 'No' } } })
@@ -49,28 +47,107 @@ test('CASE-2 Questions view mounts only the active Question Group and reports pr
     'Identity',
     'Conduct',
   ]);
-  assert.equal(findAllByClass(node, 'cora-question-card').length, 1);
-  assert.match(node.textContent, /Identity 1\/1/);
-  assert.match(node.textContent, /Conduct 1\/1/);
+  // Both groups' cards render together — this is a scrolling list, not tabs.
+  assert.equal(findAllByClass(node, 'cora-question-card').length, 2);
   assert.match(node.textContent, /Question q1/);
-  assert.doesNotMatch(node.textContent, /Question q2/);
+  assert.match(node.textContent, /Question q2/);
+  // Each Question Group gets a heading acting as a scroll anchor.
+  const groupHeadings = Array.from(
+    node.querySelectorAll('.cora-question-group-heading')
+  );
+  assert.equal(groupHeadings.length, 2);
+  assert.deepEqual(
+    groupHeadings.map((el) => el.getAttribute('data-qgroup')),
+    ['Identity', 'Conduct']
+  );
 });
 
-test('CASE-2 Questions view marks only the active Question Group tab with aria-current', () => {
+test('CASE-2 Questions view renders a Question Group progress side panel that tracks answered/total', () => {
+  const view = createQuestionPanelView();
+  const node = view.render(props({ answers: { q1: { value: 'Yes' } } }));
+
+  const panel = node.querySelector('.cora-group-progress');
+  assert.ok(panel, 'the sticky progress side panel is present');
+  const rows = node.querySelectorAll('.cora-group-progress-row');
+  assert.equal(rows.length, 2);
+  // Identity answered (1/1) is marked complete; Conduct (0/1) is not.
+  assert.match(rows[0].textContent, /Identity/);
+  assert.match(rows[0].textContent, /1\/1/);
+  assert.ok(rows[0].className.includes('complete'));
+  assert.match(rows[1].textContent, /Conduct/);
+  assert.match(rows[1].textContent, /0\/1/);
+  assert.ok(!rows[1].className.includes('complete'));
+
+  // The panel updates as the review progresses.
+  const advanced = view.render(
+    props({ answers: { q1: { value: 'Yes' }, q2: { value: 'No' } } })
+  );
+  const advancedRows = advanced.querySelectorAll('.cora-group-progress-row');
+  assert.match(advancedRows[1].textContent, /1\/1/);
+  assert.ok(advancedRows[1].className.includes('complete'));
+});
+
+test('CASE-2 progress side panel jumps to a group and to the next unanswered question', () => {
+  const view = createQuestionPanelView();
+  const node = view.render(props({ answers: { q1: { value: 'Yes' } } }));
+
+  // Clicking a group row scrolls its anchor into view; clicking "Jump to next
+  // unanswered" scrolls the first unanswered card into view.
+  const conductAnchor = /** @type {any} */ (
+    Array.from(node.querySelectorAll('.cora-question-group-heading')).find(
+      (el) => el.getAttribute('data-qgroup') === 'Conduct'
+    )
+  );
+  const conductCard = /** @type {any} */ (
+    node.querySelectorAll('.cora-question-card')[1]
+  );
+  let anchorScrolled = false;
+  let cardScrolled = false;
+  conductAnchor.scrollIntoView = () => {
+    anchorScrolled = true;
+  };
+  conductCard.scrollIntoView = () => {
+    cardScrolled = true;
+  };
+
+  fireEvent(node.querySelectorAll('.cora-group-progress-row')[1], 'click');
+  assert.equal(anchorScrolled, true, 'group row jumps to the group anchor');
+
+  fireEvent(node.querySelector('.cora-jump-unanswered-btn'), 'click');
+  assert.equal(
+    cardScrolled,
+    true,
+    'jump-unanswered scrolls the first unanswered card'
+  );
+});
+
+test('CASE-2 jump-to-next-unanswered is inert when every question is answered', () => {
+  const view = createQuestionPanelView();
+  const node = view.render(
+    props({ answers: { q1: { value: 'Yes' }, q2: { value: 'No' } } })
+  );
+  // No unanswered card exists; the handler must no-op without throwing.
+  assert.doesNotThrow(() =>
+    fireEvent(node.querySelector('.cora-jump-unanswered-btn'), 'click')
+  );
+});
+
+test('CASE-2 Questions view renders category headings above their Question Groups when declared', () => {
+  const catalogue = [
+    { ...question('q1', 'Identity'), category: 'Onboarding' },
+    { ...question('q2', 'Conduct'), category: 'Onboarding' },
+    { ...question('q3', 'Closure'), category: 'Exit' },
+  ];
   const node = createQuestionPanelView().render(
-    props({ activeGroup: 'Conduct' })
+    props({ catalogue, questions: catalogue })
   );
-  const tabs = Array.from(node.querySelectorAll('.cora-question-group-tab'));
-  assert.equal(tabs.length, 2);
-  const current = tabs.filter(
-    (tab) => tab.getAttribute('aria-current') === 'true'
+  const categories = Array.from(
+    node.querySelectorAll('.cora-question-category-heading')
   );
-  assert.equal(current.length, 1, 'exactly one tab is aria-current');
-  assert.match(current[0].textContent, /Conduct/);
-  // The inactive tab carries no aria-current marker (the styling hook that
-  // distinguishes the active tab from the rest).
-  const inactive = tabs.find((tab) => tab !== current[0]);
-  assert.equal(inactive?.getAttribute('aria-current'), null);
+  assert.deepEqual(
+    categories.map((el) => el.textContent),
+    ['Onboarding', 'Exit']
+  );
 });
 
 test('CASE-2 Questions view memoises unchanged cards by rendered inputs', () => {
@@ -82,12 +159,23 @@ test('CASE-2 Questions view memoises unchanged cards by rendered inputs', () => 
   const secondCard = findAllByClass(second, 'cora-question-card')[0];
 
   assert.equal(secondCard, firstCard);
-  assert.equal(view.cacheSize, 1);
+  assert.equal(view.cacheSize, 2);
 
   const changed = view.render(props({ answers: { q1: { value: 'No' } } }));
   assert.notEqual(findAllByClass(changed, 'cora-question-card')[0], firstCard);
   view.clear();
   assert.equal(view.cacheSize, 0);
+});
+
+test('CASE-2 Questions view evicts cached cards for questions that become inapplicable', () => {
+  const view = createQuestionPanelView();
+  const catalogue = [question('q1', 'Identity'), question('q2', 'Conduct')];
+  view.render(props({ catalogue, questions: catalogue }));
+  assert.equal(view.cacheSize, 2);
+
+  // q2 no longer applicable → its card is dropped from the memo cache.
+  view.render(props({ catalogue, questions: [catalogue[0]] }));
+  assert.equal(view.cacheSize, 1);
 });
 
 test('CASE-2 answer re-renders preserve the focused native control without snapshots', () => {
@@ -105,41 +193,6 @@ test('CASE-2 answer re-renders preserve the focused native control without snaps
     input
   );
   assert.equal(document.activeElement, input);
-});
-
-test('CASE-2 Questions view switches groups, evicts unmounted cards, and falls back from a stale group', () => {
-  /** @type {string[]} */
-  const selected = [];
-  const view = createQuestionPanelView();
-  const first = view.render(
-    props({
-      activeGroup: 'Missing',
-      onGroupSelected: (/** @type {string} */ group) => selected.push(group),
-    })
-  );
-  assert.equal(
-    first
-      .querySelector('.cora-question-group-panel')
-      ?.getAttribute('data-question-group'),
-    'Identity'
-  );
-  fireEvent(first.querySelectorAll('button')[1], 'click');
-  assert.deepEqual(selected, ['Conduct']);
-
-  const second = view.render(props({ activeGroup: 'Conduct' }));
-  assert.match(second.textContent, /Question q2/);
-  assert.doesNotMatch(second.textContent, /Question q1/);
-  assert.equal(view.cacheSize, 1, 'the inactive group card was evicted');
-
-  const empty = view.render(
-    props({ catalogue: [], questions: [], activeGroup: '' })
-  );
-  assert.equal(findAllByClass(empty, 'cora-question-card').length, 0);
-
-  const pendingCatalogue = view.render(
-    props({ catalogue: [], questions: [question('q-new', 'New')] })
-  );
-  assert.match(pendingCatalogue.textContent, /New 0\/0/);
 });
 
 test('CASE-2 question cards dispatch single and exclusive multi-choice Answers', () => {
@@ -258,11 +311,7 @@ test('CASE-2 real Questions view keeps the 500-question steady-state median with
     )
   );
   const view = createQuestionPanelView();
-  const base = props({
-    catalogue,
-    questions: catalogue,
-    activeGroup: 'Group 01',
-  });
+  const base = props({ catalogue, questions: catalogue });
   view.render(base);
 
   const samples = [];
@@ -279,6 +328,6 @@ test('CASE-2 real Questions view keeps the 500-question steady-state median with
 
   assert.ok(
     median <= 5,
-    `500-question group-scoped steady-state median was ${median.toFixed(3)} ms`
+    `500-question grouped steady-state median was ${median.toFixed(3)} ms`
   );
 });

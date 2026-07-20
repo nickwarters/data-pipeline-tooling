@@ -248,7 +248,6 @@ test('CASE-1 state: route state owns loading, save status, and selected tab unde
   assert.equal(initial.chrome, chrome);
   assert.deepEqual(initial.routes.caseReview, {
     activeTab: '',
-    activeQuestionGroup: '',
     conversationHidden: true,
     completionPending: false,
     captureCollapsed: {},
@@ -977,15 +976,8 @@ test('CASE-1 state: model refreshes and Answer edits preserve valid selection an
   assert.equal(caseReviewReducer(state, { type: 'unknown' }), state);
 });
 
-test('case page reducer keeps group, conversation, and field state behind loaded access', () => {
+test('case page reducer keeps conversation and field state behind loaded access', () => {
   const initial = createInitialCaseReviewState(chrome, 'popover');
-  assert.equal(
-    caseReviewReducer(initial, {
-      type: 'case/question-group-selected',
-      group: 'General',
-    }),
-    initial
-  );
   assert.equal(
     caseReviewReducer(initial, {
       type: 'case/conversation-changed',
@@ -1020,26 +1012,6 @@ test('case page reducer keeps group, conversation, and field state behind loaded
     type: 'case/load-finished',
     snapshot: grouped,
   });
-  assert.equal(state.routes.caseReview.activeQuestionGroup, 'General');
-  assert.equal(
-    caseReviewReducer(state, {
-      type: 'case/question-group-selected',
-      group: 'Missing',
-    }),
-    state
-  );
-  assert.equal(
-    caseReviewReducer(state, {
-      type: 'case/question-group-selected',
-      group: 'General',
-    }),
-    state
-  );
-  state = caseReviewReducer(state, {
-    type: 'case/question-group-selected',
-    group: 'Follow-up',
-  });
-  assert.equal(state.routes.caseReview.activeQuestionGroup, 'Follow-up');
 
   state = caseReviewReducer(state, { type: 'case/conversation-toggled' });
   assert.equal(state.routes.caseReview.conversationHidden, false);

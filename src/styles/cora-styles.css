@@ -1079,62 +1079,6 @@ cora-status-banner {
   color: var(--cora-color-text-muted, inherit);
 }
 
-/* Question Group tabs (store-driven Questions panel): the Reviewer switches
-   between Question Groups, each labelled with its answered/total progress. The
-   active tab is marked with `aria-current='true'`. Scoped under
-   [data-cora-root] so these win over the global `[data-cora-root] button` reset
-   (0,1,1), which would otherwise paint every tab as a solid accent pill. Mirrors
-   the cora-tabs primitive. */
-.cora-question-groups {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--cora-space-1);
-  border-bottom: 1px solid var(--cora-color-border);
-  margin-bottom: var(--cora-space-4);
-}
-
-[data-cora-root] .cora-question-group-tab {
-  appearance: none;
-  border: none;
-  background: transparent;
-  margin: 0 0 -1px;
-  padding: var(--cora-space-2) var(--cora-space-4);
-  font-family: var(--cora-font-display);
-  font-size: var(--cora-font-size-sm);
-  font-weight: var(--cora-font-weight-semibold);
-  letter-spacing: var(--cora-tracking-wide);
-  color: var(--cora-color-text-muted);
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
-  transition:
-    color var(--cora-duration-fast) var(--cora-easing-standard),
-    border-color var(--cora-duration-fast) var(--cora-easing-standard);
-}
-
-[data-cora-root] .cora-question-group-tab:hover {
-  color: var(--cora-color-on-surface);
-  background: transparent;
-  border-color: transparent;
-}
-
-[data-cora-root] .cora-question-group-tab[aria-current='true'] {
-  color: var(--cora-color-accent);
-  border-bottom-color: var(--cora-color-accent);
-}
-
-[data-cora-root] .cora-question-group-tab:focus-visible {
-  outline: var(--cora-focus-outline);
-  outline-offset: calc(-1 * var(--cora-focus-offset));
-  border-radius: var(--cora-radius-sm);
-  box-shadow: none;
-}
-
-/* The active group's question cards sit below the tab strip. */
-.cora-question-group-panel {
-  padding-top: var(--cora-space-2);
-}
-
 /* Bulk-verdict control on groups configured with allowBulkOutcome (#390). */
 .cora-group-verdict-label {
   display: inline-flex;
@@ -2232,7 +2176,7 @@ cora-status-banner {
 
 /* ── Section progress sidebar ────────────────────────────────────────────── */
 
-[data-cora-root] section:has(cora-group-progress) {
+[data-cora-root] section:has(.cora-group-progress) {
   display: grid;
   grid-template-columns: 1fr 14rem;
   grid-template-rows: auto 1fr;
@@ -2240,11 +2184,12 @@ cora-status-banner {
   align-items: start;
 }
 
-[data-cora-root] section:has(cora-group-progress) > h2 {
+[data-cora-root] section:has(.cora-group-progress) > h2 {
   grid-column: 1 / -1;
 }
 
-[data-cora-root] cora-group-progress {
+[data-cora-root] .cora-group-progress {
+  display: block;
   position: sticky;
   top: var(--cora-space-5);
   background: var(--cora-color-surface);
@@ -2286,10 +2231,17 @@ cora-status-banner {
   color: var(--cora-color-success);
 }
 
-.cora-jump-unanswered-btn {
+/* Scoped under [data-cora-root] to beat the global button reset (0,1,1), whose
+   `white-space: nowrap` + `inline-flex` would clip this full-width label. */
+[data-cora-root] .cora-jump-unanswered-btn {
+  box-sizing: border-box;
+  display: block;
   width: 100%;
   margin-top: var(--cora-space-3);
+  padding: var(--cora-space-2);
   font-size: var(--cora-font-size-xs);
+  text-align: center;
+  white-space: normal;
 }
 
 /* ── KPI tiles ───────────────────────────────────────────────────────────── */

@@ -2,6 +2,7 @@
 import { computeQuestionGroupProgress } from '../../evaluators/question-group-progress.js';
 import { isFailure } from '../../evaluators/failure-evaluator.js';
 import { createMemo } from '../../core/memo.js';
+import { GroupProgress } from '../../components/base/cora-group-progress.js';
 import { h } from '../../lib/html.js';
 import {
   NA_VALUE,
@@ -21,10 +22,19 @@ export function questionGroupsOf(questions) {
   return [...new Set(questions.map(questionGroupOf))];
 }
 
+/** @param {Answer|undefined} answer */
+function isAnswered(answer) {
+  const value = answer?.value;
+  return Array.isArray(value) ? value.length > 0 : !!value;
+}
+
 /**
- * The CASE-2 Questions view owns its memo cache. Only the active Question Group
- * is composed, and each card is cached on the inputs that can change its
- * rendered subtree. `clear()` is called by the route's unmount hook.
+ * The CASE-2 Questions view owns its memo cache. Every applicable Question Group
+ * is composed into one scrolling list (grouped by category/Question Group), and
+ * a sticky **Question Group progress** side panel tracks answered/total per
+ * group as the review is completed — clicking a group jumps to it. Each card is
+ * cached on the inputs that can change its rendered subtree. `clear()` is called
+ * by the route's unmount hook.
  */
 export function createQuestionPanelView() {
   const memo = createMemo();
@@ -34,76 +44,90 @@ export function createQuestionPanelView() {
    *   catalogue: QuestionDefinition[],
    *   questions: QuestionDefinition[],
    *   answers: Record<string, Answer>,
-   *   activeGroup: string,
    *   access: 'edit'|'read-only'|'hidden',
    *   heading: string,
    *   onAnswer: (questionId: string, value: string|string[]) => void,
-   *   onGroupSelected: (group: string) => void,
    * }} props
    */
   function render(props) {
-    const groups = questionGroupsOf(props.questions);
-    const activeGroup = groups.includes(props.activeGroup)
-      ? props.activeGroup
-      : (groups[0] ?? '');
-    const visibleQuestions = props.questions.filter(
-      (question) => questionGroupOf(question) === activeGroup
-    );
-    const visibleIds = new Set(visibleQuestions.map((question) => question.id));
+    const { catalogue, questions, answers, access, heading, onAnswer } = props;
 
-    for (const question of props.catalogue) {
-      if (!visibleIds.has(question.id)) memo.delete(question.id);
+    const applicableIds = new Set(questions.map((question) => question.id));
+    for (const question of catalogue) {
+      if (!applicableIds.has(question.id)) memo.delete(question.id);
     }
 
-    const progress = computeQuestionGroupProgress(
-      props.catalogue,
-      props.answers
+    const progress = computeQuestionGroupProgress(catalogue, answers);
+    const unansweredQuestions = questions.filter(
+      (question) => !isAnswered(answers[question.id])
     );
+
+    // Compose the grouped question list. Category headings (top level, only when
+    // any question declares one) nest Question Group headings; each group
+    // heading is a scroll anchor the progress side panel jumps to. Cards are
+    // memoised on [answer, access] so an unchanged catalogue reuses nodes.
+    const hasCategories = questions.some((question) => question.category);
+    /** @type {Map<string, HTMLElement>} */
+    const groupAnchors = new Map();
+    /** @type {HTMLElement | null} */
+    let firstUnanswered = null;
+    /** @type {Node[]} */
+    const listChildren = [];
+    /** @type {string | null} */
+    let prevCategory = null;
+    /** @type {string | null} */
+    let prevGroup = null;
+
+    for (const question of questions) {
+      const category = question.category || 'General';
+      const group = questionGroupOf(question);
+
+      if (hasCategories && category !== prevCategory) {
+        listChildren.push(
+          h('h3', { className: 'cora-question-category-heading' }, category)
+        );
+        prevGroup = null;
+      }
+      if (group !== prevGroup || category !== prevCategory) {
+        const anchor = h(
+          'div',
+          { className: 'cora-question-group-heading', 'data-qgroup': group },
+          h('h4', {}, group)
+        );
+        groupAnchors.set(group, anchor);
+        listChildren.push(anchor);
+      }
+      prevCategory = category;
+      prevGroup = group;
+
+      const answer = answers[question.id];
+      const card = memo(question.id, [answer, access], () =>
+        questionCardView({ question, answer, access, onAnswer })
+      );
+      if (!firstUnanswered && !isAnswered(answer)) firstUnanswered = card;
+      listChildren.push(card);
+    }
 
     return h(
       'section',
       { className: 'cora-question-panel' },
-      h('h2', {}, props.heading),
+      h('h2', {}, heading),
+      h('div', { className: 'cora-question-list' }, ...listChildren),
       h(
-        'div',
-        {
-          className: 'cora-question-groups',
-          'aria-label': 'Question Groups',
-        },
-        ...groups.map((group) => {
-          const selected = group === activeGroup;
-          const groupProgress = progress.find((entry) => entry.group === group);
-          return h(
-            'button',
-            {
-              key: `question-group-${group}`,
-              className: 'cora-question-group-tab',
-              'aria-current': selected ? 'true' : null,
-              onClick: () => props.onGroupSelected(group),
-            },
-            `${group} ${groupProgress?.answered ?? 0}/${groupProgress?.total ?? 0}`
-          );
-        })
-      ),
-      h(
-        'div',
-        {
-          className: 'cora-question-group-panel',
-          'data-question-group': activeGroup,
-        },
-        ...visibleQuestions.map((question) => {
-          const answer = props.answers[question.id];
-          // Applicability is represented by presence in `visibleQuestions`;
-          // inapplicable and off-group cards are evicted above. Labels and
-          // Outcome options are not rendered by this answering-path card.
-          return memo(question.id, [answer, props.access], () =>
-            questionCardView({
-              question,
-              answer,
-              access: props.access,
-              onAnswer: props.onAnswer,
-            })
-          );
+        'aside',
+        { className: 'cora-group-progress', 'aria-label': 'Question Groups' },
+        ...GroupProgress({
+          groups: progress,
+          unansweredQuestions,
+          onGroupJump: (group) =>
+            groupAnchors
+              .get(group)
+              ?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+          onJumpUnanswered: () =>
+            firstUnanswered?.scrollIntoView({
+              behavior: 'smooth',
+              block: 'start',
+            }),
         })
       )
     );
@@ -182,7 +206,13 @@ export function questionCardView({ question, answer, access, onAnswer }) {
 
   return h(
     'article',
-    { key: question.id, className: 'cora-question-card' },
+    {
+      key: question.id,
+      className: 'cora-question-card',
+      // The progress side panel's "Jump to next unanswered" scrolls to the
+      // first card carrying this marker.
+      'data-unanswered': isAnswered(answer) ? null : 'true',
+    },
     h(
       'fieldset',
       {
