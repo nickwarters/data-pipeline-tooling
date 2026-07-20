@@ -167,8 +167,9 @@ src/
     cora-reviewer-team-report.js
     cora-team-cases.js          # store-driven Team Cases + Case Type table descriptors (GRID-1/5)
     question-bank/              # question bank editor subsystem ("just another page", #382)
+      bank-slice.js             # route-local bank editor state, derived selectors, and actions (BANK-1)
       cora-bank-dock.js
-      cora-bank-editor.js       # page shell; owns the ONLY store imports + child wiring
+      cora-bank-editor.js       # store-driven route slice + pure editor shell
       cora-bank-list.js
       cora-bank-rail.js
       cora-outcome-options-editor.js
@@ -176,7 +177,7 @@ src/
       cora-remediation-actions-editor.js # edits a Question Definition's Remediation Actions (moved from components/sections, #381)
       question-bank-compile.js
       question-bank-source.js
-      question-bank-store.js    # bank-editor state singleton (re-exports lib/toast.js)
+      question-bank-store.js    # temporary BANK-1 adapter for old card editors; removed by BANK-2
       simulate-panel.js         # impact-simulation panel fed to cora-compile-drawer via props
 
   views/                        # generic store-driven pure renderers

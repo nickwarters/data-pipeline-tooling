@@ -1,190 +1,183 @@
 // @ts-check
 /**
- * Reactive state store for the Question Bank curator workbench.
+ * Temporary BANK-1 adapter for the old question-card editors.
  *
- * The store is a module-level singleton (mirrors the shape the page had as
- * an inline script). Components import the signals they care about and the
- * `commit()` / `setFilters()` / `showToast()` helpers for mutations.
- *
- * commit() preserves focus across re-renders. Coarse-grained reactivity tears
- * down + rebuilds DOM on every signal change, which would steal focus from
- * an actively-typed input. The fix: any input that wants focus survival sets
- * `data-focus-key="<stable>"`, and commit() captures+restores both focus and
- * selection around the mutation.
+ * Production state is owned by the question-bank route slice. This module only
+ * projects that state through the signal-shaped interface the BANK-2 editors
+ * still consume; it is removed with those mutation sinks in BANK-2.
  */
+import { signal } from '../../lib/signal.js';
+import { toastMsg as legacyToastMsg } from '../../lib/toast.js';
+import {
+  baselineBank as selectBaselineBank,
+  currentBank as selectCurrentBank,
+  diffCounts as selectDiffCounts,
+  initialQuestionBankState,
+  isDirty as selectIsDirty,
+  questionBankReducer,
+} from './bank-slice.js';
 
-import { signal, computed } from '../../lib/signal.js';
-import { toastMsg, showToast } from '../../lib/toast.js';
-import { questionBanks } from './question-bank-source.js';
+/** @typedef {import('./bank-slice.js').QuestionBankRouteState} QuestionBankRouteState */
 
-// The transient toast primitive now lives in lib/toast.js (a framework concern,
-// not bank-editor state). Re-exported here so existing store callers are
-// unaffected.
-export { toastMsg, showToast };
+let fallbackState = initialQuestionBankState();
+/** @type {null | (() => QuestionBankRouteState)} */
+let readBoundState = null;
+/** @type {null | ((action: any) => any)} */
+let dispatchBoundAction = null;
+const revision = signal(0);
 
-/** @typedef {import('./question-bank-source.js').QuestionBank} QuestionBank */
-/** @typedef {import('./question-bank-source.js').DraftQuestion} DraftQuestion */
+function read() {
+  revision.get();
+  return readBoundState?.() ?? fallbackState;
+}
+
+/** @param {any} action */
+function dispatch(action) {
+  if (dispatchBoundAction) dispatchBoundAction(action);
+  else fallbackState = questionBankReducer(fallbackState, action);
+  revision.set(revision.get() + 1);
+}
 
 /**
- * @typedef {{ category: string|null, questionGroup: string|null, showDeprecated: boolean, conditionalOnly: boolean }} Filters
+ * Bind the legacy editors to the currently rendered route-local store.
+ * @param {() => QuestionBankRouteState} getState
+ * @param {(action: any) => any} routeDispatch
+ * @returns {() => void}
  */
-
-const initial = /** @type {Record<string, QuestionBank>} */ (
-  structuredClone(questionBanks)
-);
-
-// The bank the curator lands on by default. Derived from the loaded banks (the
-// first manifest slug) rather than hardcoded, so retiring a Case Type never
-// leaves the store pointing at a slug that no longer exists.
-const defaultSlug = Object.keys(initial)[0];
-
-export const cases = signal(
-  /** @type {Record<string, QuestionBank>} */ (structuredClone(initial))
-);
-export const baseline = signal(
-  /** @type {Record<string, QuestionBank>} */ (structuredClone(initial))
-);
-export const activeSlug = signal(/** @type {string} */ (defaultSlug));
-export const filters = signal(
-  /** @type {Filters} */ ({
-    category: null,
-    questionGroup: null,
-    showDeprecated: true,
-    conditionalOnly: false,
-  })
-);
-export const drawerOpen = signal(false);
-/**
- * Whether the left rail is surfaced as a pop-over. Only has a visual effect
- * on narrow viewports (half-screen split view); on wide viewports the rail is
- * a static grid column and this flag is inert. See cora-bank-rail.js.
- */
-export const railOpen = signal(false);
-/**
- * Sample Cases for the impact simulator, keyed by bank slug. Populated by the
- * question-bank route from `SharePointClient.listCases` (read-only); empty
- * until loaded, in which case the drawer shows its empty state.
- *
- * @type {import('../../lib/signal.js').Signal<Record<string, import('./question-bank-simulate.js').SampleCase[]>>}
- */
-export const sampleCases = signal({});
-
-// ── Derived ────────────────────────────────────────────────────────────────
-
-export const currentBank = computed(() => cases.get()[activeSlug.get()]);
-export const baselineBank = computed(() => baseline.get()[activeSlug.get()]);
-export const isDirty = computed(
-  () => JSON.stringify(cases.get()) !== JSON.stringify(baseline.get())
-);
-export const diffCounts = computed(() => {
-  let added = 0,
-    changed = 0,
-    dep = 0;
-  const types = cases.get(),
-    base = baseline.get();
-  for (const slug in types) {
-    /** @type {Record<string, DraftQuestion>} */
-    const baseIdx = Object.fromEntries(
-      (base[slug]?.questions ?? []).map((q) => [q.id, q])
-    );
-    for (const q of types[slug].questions) {
-      const b = baseIdx[q.id];
-      if (!b) {
-        added++;
-        continue;
-      }
-      if (!b.deprecated && q.deprecated) dep++;
-      else if (JSON.stringify(b) !== JSON.stringify(q)) changed++;
+export function bindQuestionBankStore(getState, routeDispatch) {
+  readBoundState = getState;
+  dispatchBoundAction = routeDispatch;
+  return () => {
+    if (readBoundState === getState) {
+      readBoundState = null;
+      dispatchBoundAction = null;
     }
-  }
-  return { added, changed, deprecated: dep };
-});
+  };
+}
 
-// ── Mutations ──────────────────────────────────────────────────────────────
+/** @template T @param {(state: QuestionBankRouteState) => T} get @param {(value: T) => void} [set] */
+function facade(get, set) {
+  return {
+    get: () => get(read()),
+    set(/** @type {T} */ value) {
+      if (!set) throw new TypeError('Computed bank state is read-only');
+      set(value);
+    },
+  };
+}
 
-/**
- * Mutate `cases` in place then re-emit so subscribed effects fire.
- * Preserves focus/selection across the resulting DOM rebuild for inputs that
- * carry a stable `data-focus-key` attribute.
- *
- * @param {(types: Record<string, QuestionBank>) => void} mutator
- */
+export const cases = facade(
+  (state) => state.cases,
+  (value) =>
+    dispatch({
+      type: 'state/replaced',
+      state: { ...read(), cases: value },
+    })
+);
+export const baseline = facade(
+  (state) => state.baseline,
+  (value) =>
+    dispatch({
+      type: 'state/replaced',
+      state: { ...read(), baseline: value },
+    })
+);
+export const activeSlug = facade(
+  (state) => state.activeSlug,
+  (slug) => dispatch({ type: 'bank/selected', slug })
+);
+export const filters = facade(
+  (state) => state.filters,
+  (value) =>
+    dispatch({
+      type: 'state/replaced',
+      state: { ...read(), filters: value },
+    })
+);
+export const drawerOpen = facade(
+  (state) => state.drawerOpen,
+  (open) => dispatch({ type: 'drawer/changed', open })
+);
+export const railOpen = facade(
+  (state) => state.railOpen,
+  (open) => dispatch({ type: 'rail/changed', open })
+);
+export const sampleCases = facade(
+  (state) => state.sampleCases,
+  (value) =>
+    dispatch({
+      type: 'state/replaced',
+      state: { ...read(), sampleCases: value },
+    })
+);
+export const currentBank = facade(selectCurrentBank);
+export const baselineBank = facade(selectBaselineBank);
+export const isDirty = facade(selectIsDirty);
+export const diffCounts = facade(selectDiffCounts);
+export const toastMsg = facade(
+  (state) => state.toastMsg,
+  (message) => dispatch({ type: 'toast/changed', message })
+);
+
+/** @param {(types: QuestionBankRouteState['cases']) => void} mutator */
 export function commit(mutator) {
-  // This is a non-reactive mutation-broadcast path (not a reactive() render), so
-  // it keeps its own focus-key snapshot/restore rather than the shared
-  // captureFocus()/restoreFocus() helpers: those gate on the active element
-  // being inside a specific root and always re-focus, whereas here we skip
-  // re-focusing when the same element is still active to avoid disturbing an
-  // untouched input during coarse-grained rebuilds.
   const doc = /** @type {any} */ (globalThis).document;
   const active = doc?.activeElement;
   const focusKey = active?.getAttribute?.('data-focus-key') ?? null;
-  const sel =
+  const selection =
     focusKey && active && 'selectionStart' in active
       ? [active.selectionStart, active.selectionEnd]
       : null;
-
-  const v = cases.get();
-  mutator(v);
-  cases.set(v);
-
-  if (focusKey && doc) {
-    const found = doc.querySelector(
-      `[data-focus-key="${cssEscape(focusKey)}"]`
+  dispatch({ type: 'bank/legacy-committed', mutator });
+  if (!focusKey || !doc) return;
+  const escaped =
+    /** @type {any} */ (globalThis).CSS?.escape?.(focusKey) ??
+    focusKey.replace(
+      /[^a-zA-Z0-9_-]/g,
+      (/** @type {string} */ char) => `\\${char}`
     );
-    if (found && found !== doc.activeElement) {
-      found.focus?.();
-      if (sel && typeof found.setSelectionRange === 'function') {
-        try {
-          found.setSelectionRange(sel[0], sel[1]);
-        } catch {
-          /* not applicable */
-        }
+  const found = doc.querySelector(`[data-focus-key="${escaped}"]`);
+  if (found && found !== doc.activeElement) {
+    found.focus?.();
+    if (selection && typeof found.setSelectionRange === 'function') {
+      try {
+        found.setSelectionRange(selection[0], selection[1]);
+      } catch {
+        // Selection is not supported by every focusable control.
       }
     }
   }
 }
 
-/**
- * @param {string} slug
- * @param {import('./question-bank-simulate.js').SampleCase[]} list
- */
-export function setSampleCases(slug, list) {
-  sampleCases.set({ ...sampleCases.get(), [slug]: list });
-}
-
-/** @param {Partial<Filters>} patch */
+/** @param {Partial<QuestionBankRouteState['filters']>} patch */
 export function setFilters(patch) {
-  filters.set({ ...filters.get(), ...patch });
+  dispatch({ type: 'filters/changed', patch });
 }
 
-/**
- * CSS.escape isn't available in every test environment; fall back to a
- * conservative escape that quotes anything outside ASCII alphanumerics, dash,
- * and underscore.
- *
- * @param {string} s
- * @returns {string}
- */
-function cssEscape(s) {
-  const native = /** @type {any} */ (globalThis).CSS;
-  if (native && typeof native.escape === 'function') return native.escape(s);
-  return s.replace(/[^a-zA-Z0-9_-]/g, (c) => `\\${c}`);
+/** @param {string} slug @param {import('./question-bank-simulate.js').SampleCase[]} list */
+export function setSampleCases(slug, list) {
+  dispatch({ type: 'samples/loaded', slug, cases: list });
 }
 
-/** Test-only: restore signals to their initial state. */
+/** @param {string} message */
+export function showToast(message) {
+  dispatch({ type: 'toast/changed', message });
+  legacyToastMsg.set(message);
+  const later = /** @type {any} */ (globalThis).setTimeout;
+  if (typeof later === 'function') {
+    later(() => {
+      if (toastMsg.get() === message)
+        dispatch({ type: 'toast/changed', message: '' });
+      if (legacyToastMsg.get() === message) legacyToastMsg.set('');
+    }, 2400);
+  }
+}
+
+/** Test-only compatibility until BANK-2 ports the remaining editor tests. */
 export function _resetStore() {
-  cases.set(structuredClone(initial));
-  baseline.set(structuredClone(initial));
-  activeSlug.set(defaultSlug);
-  filters.set({
-    category: null,
-    questionGroup: null,
-    showDeprecated: true,
-    conditionalOnly: false,
-  });
-  drawerOpen.set(false);
-  railOpen.set(false);
-  toastMsg.set('');
-  sampleCases.set({});
+  fallbackState = initialQuestionBankState();
+  readBoundState = null;
+  dispatchBoundAction = null;
+  legacyToastMsg.set('');
+  revision.set(revision.get() + 1);
 }

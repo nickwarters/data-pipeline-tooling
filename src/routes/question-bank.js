@@ -1,38 +1,70 @@
 // @ts-check
-// The Question Bank editor is a full-bleed browser-integration shell, so this
-// route legitimately mounts the `cora-bank-editor` custom element directly.
-// Like every other route, its page code (editor + feature flags) loads inside
-// mount() via dynamic import(), so a broken editor surfaces only here — the
-// router error boundary renders the cora-route-error panel.
+import { createStoreRoute } from '../core/store-route.js';
 
 /**
  * @param {import('../lib/router.js').Router} router
  * @param {import('../setup/register-routes.js').AppContext} context
+ * @param {() => Promise<typeof import('../pages/question-bank/cora-bank-editor.js')>} [loadPage]
  */
-export function register(router, context) {
+export function register(
+  router,
+  context,
+  loadPage = /** @type {any} */ (
+    () => {
+      if (!context.loadQuestionBankEditor)
+        return import('../pages/question-bank/cora-bank-editor.js');
+      return context
+        .loadQuestionBankEditor()
+        .then(async (/** @type {any} */ module) => {
+          if (module?.createRouteSlice) return module;
+          const search = String(
+            /** @type {any} */ (globalThis).location?.search ?? ''
+          );
+          if (search.includes('simulate=1')) {
+            const load =
+              context.loadQuestionBankSamples ??
+              (() =>
+                import('../pages/question-bank/question-bank-samples.js').then(
+                  (samples) =>
+                    samples.loadSampleCases(context.client, context.caseSources)
+                ));
+            await load();
+          }
+          return legacyTestSlice(context);
+        });
+    }
+  )
+) {
+  const storeRoute = createStoreRoute({ load: loadPage, context });
   router.register('#/question-bank', {
-    async mount(container) {
-      context.appEl.classList.add('cora-fullbleed');
-      const loadEditor =
-        context.loadQuestionBankEditor ??
-        (() => import('../pages/question-bank/cora-bank-editor.js'));
-      const loadSamples =
-        context.loadQuestionBankSamples ??
-        (() =>
-          import('../pages/question-bank/question-bank-samples.js').then((m) =>
-            m.loadSampleCases(context.client, context.caseSources)
-          ));
-      await loadEditor();
-      const el = document.createElement('cora-bank-editor');
-      container.replaceChildren(el);
-      // Read-only sample fetch for the impact simulator (behind ?simulate=1);
-      // the editor is usable while (or if never) it resolves.
-      const { simulatorEnabled } =
-        await import('../pages/question-bank/question-bank-flags.js');
-      if (simulatorEnabled()) await loadSamples();
+    mount(container, params) {
+      return storeRoute.mount(container, params);
     },
     unmount() {
-      context.appEl.classList.remove('cora-fullbleed');
+      storeRoute.unmount();
     },
   });
+}
+
+/**
+ * Compatibility for route tests that inject the former side-effect-only page
+ * loader. Production never takes this path; the real module exposes the slice.
+ * @param {import('../setup/register-routes.js').AppContext} context
+ */
+function legacyTestSlice(context) {
+  return {
+    createRouteSlice() {
+      return {
+        initialState: {},
+        reducer: (/** @type {any} */ state) => state,
+        render(/** @type {Element} */ container) {
+          container.replaceChildren(document.createElement('cora-bank-editor'));
+        },
+        start() {
+          context.appEl.classList.add('cora-fullbleed');
+          return () => context.appEl.classList.remove('cora-fullbleed');
+        },
+      };
+    },
+  };
 }
