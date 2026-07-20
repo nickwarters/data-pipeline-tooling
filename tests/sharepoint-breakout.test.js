@@ -133,6 +133,13 @@ test('Question Bank: per-option outcome selects use the theme surface and text c
   assert.match(body, /color:\s*var\(--cora-color-on-surface\)/);
 });
 
+test('Question Bank: stylesheet no longer targets deleted editor custom elements', () => {
+  assert.doesNotMatch(
+    questionBankStyles,
+    /\.cora-bank-editor\s+cora-(?:bank|question|wording|options|outcome|remediation|showwhen|compile)/
+  );
+});
+
 test('reset: tables collapse their borders, neutralising SP core table styling', () => {
   const body = ruleBody(styles, '[data-cora-root] :where(table) {');
   assert.match(body, /border-collapse:\s*collapse/);

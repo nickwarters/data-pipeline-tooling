@@ -36,22 +36,6 @@
   box-sizing: border-box;
 }
 
-.cora-bank-editor cora-case-tabs,
-.cora-bank-editor cora-bank-rail,
-.cora-bank-editor cora-bank-list,
-.cora-bank-editor cora-question-card,
-.cora-bank-editor cora-wording-editor,
-.cora-bank-editor cora-options-editor,
-.cora-bank-editor cora-showwhen-editor,
-.cora-bank-editor cora-showwhen-group,
-.cora-bank-editor cora-showwhen-leaf,
-.cora-bank-editor cora-remediation-actions-editor,
-.cora-bank-editor cora-bank-dock,
-.cora-bank-editor cora-compile-drawer,
-.cora-bank-editor cora-toast {
-  display: block;
-}
-
 /* Single editor column at every width. The filter rail is never a static
    grid column — it is always the off-canvas `☰ Filters` pop-over (see below).
    `minmax(0, 1fr)` lets the editor column shrink so its own overflow-x scroll
@@ -557,7 +541,7 @@
 }
 
 /* ── Question card ────────────────────────────────────────────────────── */
-.cora-bank-editor cora-question-card.card {
+.cora-bank-editor .card {
   display: block;
   background: var(--cora-color-surface);
   border: 1px solid var(--cora-color-border);
@@ -570,11 +554,11 @@
     border-color var(--cora-duration-fast) var(--cora-easing-standard),
     box-shadow var(--cora-duration-fast) var(--cora-easing-standard);
 }
-.cora-bank-editor cora-question-card.card:hover {
+.cora-bank-editor .card:hover {
   border-color: var(--cora-color-border-strong);
   box-shadow: var(--cora-shadow-md);
 }
-.cora-bank-editor cora-question-card.card.deprecated {
+.cora-bank-editor .card.deprecated {
   opacity: 0.6;
   background: var(--cora-color-surface-2);
 }
@@ -588,7 +572,7 @@
   background: var(--cora-color-accent);
   border-radius: var(--cora-radius-sm);
 }
-.cora-bank-editor cora-question-card.card.deprecated .card-stripe {
+.cora-bank-editor .card.deprecated .card-stripe {
   background: var(--cora-color-text-subtle);
 }
 
@@ -1110,7 +1094,7 @@
   padding: var(--cora-space-1) 0;
 }
 
-.cora-bank-editor cora-showwhen-group.group {
+.cora-bank-editor .group {
   position: relative;
   display: block;
   margin: var(--cora-space-1) 0;
@@ -1119,13 +1103,13 @@
   background: var(--cora-color-surface);
   border: 1px solid var(--cora-color-border);
 }
-.cora-bank-editor cora-showwhen-group.group.op-and {
+.cora-bank-editor .group.op-and {
   border-left: 3px solid var(--cora-color-warning);
 }
-.cora-bank-editor cora-showwhen-group.group.op-or {
+.cora-bank-editor .group.op-or {
   border-left: 3px dashed var(--cora-color-info);
 }
-.cora-bank-editor cora-showwhen-group cora-showwhen-group.group {
+.cora-bank-editor .group .group {
   margin-left: var(--cora-space-3);
 }
 
@@ -1256,12 +1240,7 @@
   font-size: var(--cora-font-size-xs);
 }
 
-.cora-bank-editor
-  cora-showwhen-group.op-or
-  > .group-children
-  > cora-showwhen-leaf
-  > .leaf
-  .leaf-op {
+.cora-bank-editor .group.op-or > .group-children > .leaf .leaf-op {
   color: var(--cora-color-info);
 }
 
