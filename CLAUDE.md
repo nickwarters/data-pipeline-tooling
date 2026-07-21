@@ -166,7 +166,7 @@ src/
       action-centre-view.js       # pure reason-descriptor view + bounded load actions (ADR-0030 flags unchanged)
       controls-view.js            # pure generic-table Appeals panel + paged load action
       kpi-view.js                 # pure renderer for kpi-strip-model output
-      panel-descriptors.js        # config-declared presence intersected with code-owned role visibility
+      panel-descriptors.js        # code-owned panel registry and role visibility
     home.js                      # store-driven Home route slice and pure view
     cora-journey-cases.js         # store-driven Journey Cases slice + generic descriptors (GRID-2)
     cora-responsible-party-dashboard.js # store-driven Responsible Party slice shared by dashboard and #/my-cases
