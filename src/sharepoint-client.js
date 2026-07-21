@@ -369,23 +369,13 @@
  */
 
 /**
- * A generic dashboard panel that may contain or summarise Cases. Case Type
- * config declares presence only; permission and state branching remain in the
- * dashboard's panel descriptor code. This closed union mirrors the authoritative
- * `dashboardPanels` list in `pages/dashboard/panel-descriptors.js`; update both
- * together when adding a platform panel.
- *
- * @typedef {'kpis'|'actionCentre'|'ownerSummary'|'reviewerCases'|'allocation'|'responsibleParty'|'appeals'} DashboardPanelKey
- */
-
-/**
  * Shape every Case Type module must satisfy.
  *
  * `caseTableColumns` contribute data-only columns when a generic Case table is
  * scoped to one Case Type; mixed-Case-Type tables do not apply one Case Type's
- * variation. `dashboardPanels` declares presence from the dashboard's fixed
- * panel vocabulary, while permission branching remains code. `sections`
- * remains the Section layout descriptor. See ADR-0035.
+ * variation. `sections` remains the Section layout descriptor. Dashboard
+ * composition is owned by dashboard code and is not Case Type configuration.
+ * See ADR-0035 and ADR-0036.
  *
  * `dashboardColumns` is the additive legacy component-era shape. It remains in
  * the typedef for source compatibility; new and scaffolded Case Types use
@@ -412,8 +402,7 @@
  * captureGroups?: CaptureGroup[],
  * detailFields?: CaseDetailField[],
  * dashboardColumns?: import('./components/base/cora-data-table.js').ColumnDef<CaseRow>[],
- * caseTableColumns?: CaseTableColumnDescriptor[],
- * dashboardPanels?: DashboardPanelKey[]
+ * caseTableColumns?: CaseTableColumnDescriptor[]
  * }} CaseTypeConfig
  */
 

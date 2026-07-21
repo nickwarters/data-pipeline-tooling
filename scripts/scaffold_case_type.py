@@ -221,17 +221,8 @@ const config = {{
     {{ key: 'customerName', label: 'Customer name' }},
     {{ key: 'reviewDate', label: 'Review date' }},
   ],
-  // Page descriptors express Case Type variation only. Permission checks,
+  // Case table descriptors express Case Type variation only. Permission checks,
   // navigation, formatting, and other branching behaviour stay in framework code.
-  dashboardPanels: [
-    'kpis',
-    'actionCentre',
-    'ownerSummary',
-    'reviewerCases',
-    'allocation',
-    'responsibleParty',
-    'appeals',
-  ],
   caseTableColumns: [
     {{
       key: 'customerName',
@@ -378,8 +369,7 @@ test('{opts.slug}: declares Case Details fields with stable keys and labels', ()
   }}
 }});
 
-test('{opts.slug}: declares data-only page descriptors', () => {{
-  assert.ok((config.dashboardPanels ?? []).length > 0);
+test('{opts.slug}: declares data-only Case Type descriptors', () => {{
   for (const column of config.caseTableColumns ?? []) {{
     assert.equal(typeof column.value, 'string');
   }}

@@ -66,6 +66,8 @@ test('dashboard slice: effects load reviewer rows, KPI lanes, and Controls appea
   ];
   /** @type {any[]} */
   const actions = [];
+  /** @type {any[]} */
+  const reviewerSources = [];
   /** @type {() => void} */
   let markLoaded = () => {};
   /** @type {Promise<void>} */
@@ -76,7 +78,13 @@ test('dashboard slice: effects load reviewer rows, KPI lanes, and Controls appea
     {},
     ctx,
     /** @type {any} */ ({
-      listAcrossSources: async () => /** @type {any} */ (reviewer),
+      listAcrossSources: async (
+        /** @type {any} */ _client,
+        /** @type {any[]} */ caseSources
+      ) => {
+        reviewerSources.push(...caseSources);
+        return /** @type {any} */ (reviewer);
+      },
       loadAppeals: async () => /** @type {any} */ (appeals),
       loadKpis: async () => /** @type {any} */ (lanes),
     })
@@ -106,6 +114,7 @@ test('dashboard slice: effects load reviewer rows, KPI lanes, and Controls appea
       .overdue,
     true
   );
+  assert.deepEqual(reviewerSources, ctx.caseSources);
 });
 
 test('dashboard reducer owns KPI disclosure and table sort state', () => {
@@ -362,18 +371,14 @@ test('dashboard owner summary suppresses a late result after route disposal', as
   });
   /** @type {any[]} */
   const actions = [];
-  let initialPanels =
-    /** @type {import('../src/sharepoint-client.js').DashboardPanelKey[]} */ ([]);
   const slice = createRouteSlice(
     {},
     ctx,
     /** @type {any} */ ({
       loadKpis: async () => [],
       loadOwnerSummary: async () => summaries,
-      loadDashboardPanels: async () => initialPanels,
     })
   );
-  initialPanels = [...slice.initialState.routes.dashboard.dashboardPanels];
   const dispose = slice.start({
     context: ctx,
     params: {},
@@ -672,131 +677,16 @@ test('dashboard allocation does not publish exhausted state after route disposal
   );
 });
 
-test('dashboard reducer stores resolved panel and owner-summary state', () => {
+test('dashboard reducer stores owner-summary state', () => {
   const slice = createRouteSlice({}, context(capabilities()));
-  const withPanels = slice.reducer(slice.initialState, {
-    type: 'dashboard-panels/loaded',
-    panels: ['allocation'],
-  });
-  const withSummaries = slice.reducer(withPanels, {
+  const withSummaries = slice.reducer(slice.initialState, {
     type: 'owner-summaries/loaded',
     summaries: [{ caseType: 'complaints' }],
   });
 
-  assert.deepEqual(withPanels.routes.dashboard.dashboardPanels, ['allocation']);
   assert.deepEqual(withSummaries.routes.dashboard.ownerSummaries, [
     { caseType: 'complaints' },
   ]);
-});
-
-test('dashboard pure view renders only panels present in Case Type configuration', () => {
-  const ctx = context(
-    capabilities({ isReviewer: true, ownedCaseTypes: ['complaints'] })
-  );
-  ctx.client = null;
-  const slice = createRouteSlice({}, ctx);
-  const state = {
-    ...slice.initialState,
-    routes: {
-      dashboard: {
-        ...slice.initialState.routes.dashboard,
-        dashboardPanels: ['reviewerCases'],
-      },
-    },
-  };
-  const view = dashboardView(/** @type {any} */ (state), {
-    dispatch: () => {},
-    context: ctx,
-  });
-
-  assert.ok(view.querySelector('.cora-reviewer-cases'));
-  assert.equal(view.querySelector('cora-allocation'), null);
-  assert.equal(view.querySelector('cora-owner-summary'), null);
-});
-
-test('dashboard slice resolves Case Type panel presence through a store action', async () => {
-  const ctx = context(capabilities());
-  ctx.client = null;
-  /** @type {any[]} */
-  const actions = [];
-  /** @type {any[]} */
-  const sources = [];
-  const slice = createRouteSlice({}, ctx, {
-    loadDashboardPanels: async (caseSources) => {
-      sources.push(...caseSources);
-      return ['reviewerCases'];
-    },
-  });
-  slice.start({
-    context: ctx,
-    params: {},
-    dispatch: (/** @type {any} */ action) => actions.push(action),
-    listen: () => {},
-  });
-  await Promise.resolve();
-  await Promise.resolve();
-
-  assert.deepEqual(sources, ctx.caseSources);
-  assert.deepEqual(actions, [
-    { type: 'dashboard-panels/loaded', panels: ['reviewerCases'] },
-  ]);
-});
-
-test('dashboard slice does not dispatch when Case Type panels match initial route state', async () => {
-  const ctx = context(capabilities());
-  ctx.client = null;
-  /** @type {any[]} */
-  const actions = [];
-  let initialPanels =
-    /** @type {import('../src/sharepoint-client.js').DashboardPanelKey[]} */ ([]);
-  const slice = createRouteSlice({}, ctx, {
-    loadDashboardPanels: async () => initialPanels,
-  });
-  initialPanels = [...slice.initialState.routes.dashboard.dashboardPanels];
-  slice.start({
-    context: ctx,
-    params: {},
-    dispatch: (/** @type {any} */ action) => actions.push(action),
-    listen: () => {},
-  });
-  await Promise.resolve();
-  await Promise.resolve();
-
-  assert.deepEqual(actions, []);
-});
-
-test('dashboard slice keeps legacy panels and reports a Case Type panel-load failure', async () => {
-  const ctx = context(capabilities());
-  ctx.client = null;
-  const failure = new Error('Case Type module unavailable');
-  /** @type {any[]} */
-  const actions = [];
-  /** @type {any[]} */
-  const errors = [];
-  const originalError = console.error;
-  console.error = (...args) => errors.push(args);
-  try {
-    const slice = createRouteSlice({}, ctx, {
-      loadDashboardPanels: async () => {
-        throw failure;
-      },
-    });
-    slice.start({
-      context: ctx,
-      params: {},
-      dispatch: (/** @type {any} */ action) => actions.push(action),
-      listen: () => {},
-    });
-    await Promise.resolve();
-    await Promise.resolve();
-
-    assert.deepEqual(actions, []);
-    assert.equal(errors.length, 1);
-    assert.match(errors[0][0], /Case Type dashboard panels failed to load/);
-    assert.equal(errors[0][1], failure);
-  } finally {
-    console.error = originalError;
-  }
 });
 
 test('dashboard reducer composes Controls, Action Centre, and Responsible Party transitions', () => {

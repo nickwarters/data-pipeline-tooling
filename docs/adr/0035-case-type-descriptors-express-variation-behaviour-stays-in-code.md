@@ -6,6 +6,11 @@ Date: 2026-07-19
 
 Accepted — human sign-off recorded on GRID-5 issue #416.
 
+> **Partially superseded by [ADR-0036](./0036-dashboard-composition-is-dashboard-owned.md).**
+> Dashboard composition is dashboard-owned; `CaseTypeConfig.dashboardPanels`
+> was removed. The data-only descriptor rule remains in force for genuine Case
+> Type variation such as `caseTableColumns` and `sections`.
+
 ## Context
 
 Project Palimpsest's GRID slices replaced bespoke read surfaces with two small

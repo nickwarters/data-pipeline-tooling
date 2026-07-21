@@ -174,16 +174,8 @@ test('complaints: declares Case Details fields, each with a stable key and label
   }
 });
 
-test('complaints: page descriptors preserve its dashboard layout and add a config-only table column', () => {
-  assert.deepEqual(config.dashboardPanels, [
-    'kpis',
-    'actionCentre',
-    'ownerSummary',
-    'reviewerCases',
-    'allocation',
-    'responsibleParty',
-    'appeals',
-  ]);
+test('complaints: Case Type descriptors exclude dashboard composition and add a config-only table column', () => {
+  assert.equal('dashboardPanels' in config, false);
   assert.deepEqual(config.caseTableColumns, [
     {
       key: 'responsibleParty',

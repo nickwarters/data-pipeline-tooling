@@ -15,7 +15,7 @@ Use these sources instead:
 - [CONTEXT.md](../CONTEXT.md) owns domain language.
 - GitHub issues and milestones own remaining delivery work and sequencing.
 
-The permanent application model is captured by ADR-0034 and ADR-0035: route
-state feeds pure `h()` views, events dispatch actions, effects cross external
-boundaries, and data-only Case Type descriptors express variation while
-branching behaviour remains in code.
+The permanent application model is captured by ADR-0034, ADR-0035, and ADR-0036:
+route state feeds pure `h()` views, events dispatch actions, effects cross
+external boundaries, data-only Case Type descriptors express genuine Case Type
+variation, and dashboard composition remains dashboard-owned.

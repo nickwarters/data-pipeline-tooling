@@ -56,7 +56,7 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
 - **No `innerHTML` for user data.** XSS prevention; also preserves input state.
 - **Custom elements use the `cora-` prefix** (also the CSS namespace).
 - **Question Definitions are never deleted** — use a `deprecated` flag (avoids dangling references from Case Type modules).
-- **Case Type descriptors express variation; branching behaviour stays in code** (ADR-0035). Descriptors may select stable keys, labels, property paths, ordering, membership, and simple flags. Permission/lifecycle decisions, navigation, conditional formatting, event handling, and effects belong in code.
+- **Case Type descriptors express genuine Case Type variation; branching behaviour stays in code** (ADR-0035). Descriptors may select stable keys, labels, property paths, ordering, membership, and simple flags. Permission/lifecycle decisions, navigation, conditional formatting, event handling, and effects belong in code. Dashboard composition is dashboard-owned and must not be declared by Case Type configuration (ADR-0036); the dashboard consumes resolved `caseSources` only for Case data access.
 
 ## Gotchas
 

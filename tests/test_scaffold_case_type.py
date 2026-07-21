@@ -80,7 +80,7 @@ class ScaffoldCaseTypeTest(unittest.TestCase):
         self.assertIn("TODO(case-type): Replace starter questions", module_source)
         self.assertIn("TODO(case-type): Confirm the SLA hours", module_source)
         self.assertNotIn("listName:", module_source)
-        self.assertIn("dashboardPanels: [", module_source)
+        self.assertNotIn("dashboardPanels", module_source)
         self.assertIn("caseTableColumns: [", module_source)
         self.assertIn("value: 'details.customerName'", module_source)
 

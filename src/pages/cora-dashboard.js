@@ -26,11 +26,7 @@ import { loadKpiModel } from '../evaluators/kpi-strip-model.js';
 import { CASE_STATUS } from '../lib/case-statuses.js';
 import { listCasesAcrossSources } from '../services/across-sources.js';
 import { dataTableView, nextTableSort } from '../views/data-table.js';
-import {
-  dashboardPanels,
-  resolveDashboardPanels,
-  visibleDashboardPanels,
-} from './dashboard/panel-descriptors.js';
+import { visibleDashboardPanels } from './dashboard/panel-descriptors.js';
 import { kpiStripView } from './dashboard/kpi-view.js';
 import {
   controlsAppealsView,
@@ -54,7 +50,6 @@ import {
  * @property {TableSort | null} appealSort
  * @property {boolean} allocationEmpty
  * @property {import('../components/sections/cora-owner-summary.js').OwnerSummary[]} ownerSummaries
- * @property {import('../sharepoint-client.js').DashboardPanelKey[]} dashboardPanels
  * @property {ReturnType<typeof initialActionCentreState>} actionCentre
  * @property {ReturnType<typeof initialResponsiblePartyState>} responsibleParty
  */
@@ -209,7 +204,7 @@ export function actionCentreScopeState(state, value) {
 export function dashboardView(state, tools) {
   const route = state.routes.dashboard;
   const capabilities = state.chrome.permissions;
-  const panels = visibleDashboardPanels(capabilities, route.dashboardPanels);
+  const panels = visibleDashboardPanels(capabilities);
   const panelViews = {
     kpis: () =>
       kpiStripView({
@@ -269,7 +264,6 @@ export function dashboardView(state, tools) {
  *   listAcrossSources?: typeof listCasesAcrossSources,
  *   loadActionCounts?: typeof loadActionCentreCounts,
  *   loadActionPage?: typeof loadActionCentrePage,
- *   loadDashboardPanels?: typeof resolveDashboardPanels,
  *   loadOwnerSummary?: typeof loadOwnerSummaries,
  *   loadAllocationCandidates?: typeof getUnassignedCases,
  * }} [dependencies]
@@ -283,7 +277,6 @@ export function createRouteSlice(
     listAcrossSources = listCasesAcrossSources,
     loadActionCounts = loadActionCentreCounts,
     loadActionPage = loadActionCentrePage,
-    loadDashboardPanels = resolveDashboardPanels,
     loadOwnerSummary = loadOwnerSummaries,
     loadAllocationCandidates = getUnassignedCases,
   } = {}
@@ -304,7 +297,6 @@ export function createRouteSlice(
         appealSort: { key: 'raised', dir: 'asc' },
         allocationEmpty: false,
         ownerSummaries: [],
-        dashboardPanels: dashboardPanels.map((descriptor) => descriptor.key),
         actionCentre: initialActionCentreState(context.chrome.permissions),
         responsibleParty: initialResponsiblePartyState(
           context.chrome.currentUser.id
@@ -457,14 +449,6 @@ export function createRouteSlice(
         return {
           ...state,
           routes: { dashboard: { ...route, appealCases: action.cases } },
-        };
-      }
-      if (action.type === 'dashboard-panels/loaded') {
-        return {
-          ...state,
-          routes: {
-            dashboard: { ...route, dashboardPanels: action.panels },
-          },
         };
       }
       if (action.type === 'owner-summaries/loaded') {
@@ -660,23 +644,6 @@ export function createRouteSlice(
       const client = tools.context.client;
       const currentUser = tools.context.chrome.currentUser;
       const capabilities = tools.context.chrome.permissions;
-
-      void loadDashboardPanels(tools.context.caseSources)
-        .then((panels) => {
-          const initialPanels = initialState.routes.dashboard.dashboardPanels;
-          const changed =
-            panels.length !== initialPanels.length ||
-            panels.some((panel, index) => panel !== initialPanels[index]);
-          if (active && changed) {
-            tools.dispatch({ type: 'dashboard-panels/loaded', panels });
-          }
-        })
-        .catch((error) => {
-          console.error(
-            '[CORA] Case Type dashboard panels failed to load',
-            error
-          );
-        });
 
       if (client) {
         if (capabilities.ownedCaseTypes.length > 0) {

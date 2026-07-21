@@ -1,6 +1,5 @@
 // @ts-check
 import { reasonsForCapabilities } from '../../services/action-centre-model.js';
-import { loadCaseTypeConfig } from '../../../case-types/manifest.js';
 
 /**
  * The dashboard has a fixed, intentionally small panel vocabulary. Role
@@ -27,48 +26,9 @@ export const dashboardPanels = [
   { key: 'appeals', visible: (c) => c.isControls },
 ];
 
-/**
- * Resolve the canonical union of panels declared by the Case Types available
- * in this dashboard. A Case Type without the additive field retains the legacy
- * all-panels behaviour.
- *
- * @param {Array<{ slug: string }>} caseSources
- * @param {(slug: string) => Promise<import('../../sharepoint-client.js').CaseTypeConfig>} [load]
- * @returns {Promise<import('../../sharepoint-client.js').DashboardPanelKey[]>}
- */
-export async function resolveDashboardPanels(
-  caseSources,
-  load = loadCaseTypeConfig
-) {
-  const configs = await Promise.all(
-    caseSources.map((source) => load(source.slug))
-  );
-  const legacyAllPanels = configs.some(
-    (config) => config.dashboardPanels === undefined
-  );
-  const present = new Set(
-    legacyAllPanels
-      ? dashboardPanels.map((descriptor) => descriptor.key)
-      : configs.flatMap((config) => config.dashboardPanels ?? [])
-  );
+/** @param {import('../../services/permissions.js').Capabilities} capabilities */
+export function visibleDashboardPanels(capabilities) {
   return dashboardPanels
-    .map((descriptor) => descriptor.key)
-    .filter((key) => present.has(key));
-}
-
-/**
- * @param {import('../../services/permissions.js').Capabilities} capabilities
- * @param {import('../../sharepoint-client.js').DashboardPanelKey[]} [presentPanels]
- */
-export function visibleDashboardPanels(
-  capabilities,
-  presentPanels = dashboardPanels.map((descriptor) => descriptor.key)
-) {
-  return dashboardPanels
-    .filter(
-      (descriptor) =>
-        presentPanels.includes(descriptor.key) &&
-        descriptor.visible(capabilities)
-    )
+    .filter((descriptor) => descriptor.visible(capabilities))
     .map((descriptor) => descriptor.key);
 }
