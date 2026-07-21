@@ -7,8 +7,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Before doing any non-trivial work in this repo, read:
 
 1. **[CONTEXT.md](./CONTEXT.md)** — domain language. Use these terms exactly when discussing or coding (`Case Type`, `Question Definition`, `Applicable Question`, `Answer`, `Remediation Action`, `Reviewer`, `Responsible Party`, `Case Type Owner`, `Conversation`, `Outcome`).
-2. **[docs/PLAN.md](./docs/PLAN.md)** — the slice-based execution roadmap. Slice 1 ("Example Case") is long done; the framework is deep into later slices. Current work is **Slice 11 — User groups & remediation workflow** (two-axis roles, case lifecycle, remediation loop, Amend Outcome, Appeals — see [`docs/user-groups-workflow-grilling-session-plan.md`](./docs/user-groups-workflow-grilling-session-plan.md)). Read the slice list to see what's shipped vs. sketched before assuming a feature doesn't exist yet.
-3. **[docs/adr/](./docs/adr/)** — 35 architecture decisions, numbered (`0001`–`0035`). Every non-trivial decision in the codebase traces back to one of these. Don't deviate from an ADR without surfacing the deviation explicitly.
+2. **[docs/guide/add-a-page.md](./docs/guide/add-a-page.md)** — the one-page
+   authoring path: state → `h()`, actions, effects, lazy route, and tests.
+3. **[docs/adr/](./docs/adr/)** — 35 architecture decisions, numbered
+   (`0001`–`0035`). Read the status before relying on an older decision, and do
+   not deviate from an accepted ADR without surfacing the deviation explicitly.
 
 ## Project overview
 
@@ -17,15 +20,29 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
 ## Architecture in one screen
 
 - **SPA shell, hash routing, page independence**. One `.aspx` host page, one Content Editor, one `app.js`. Every route lazy-loads its page inside its own `mount()` via dynamic `import()` (`src/routes/*.js`) — the boot graph does not statically depend on any page. If a page module fails to load (broken, missing), the router (`lib/router.js`) catches it inside an async `navigate()`, logs it, and renders a plain-DOM `cora-route-error` panel into the route container; the nav lives outside that container and stays usable, so one broken page cannot break another or the boot. A navigation sequence token discards a stale mount that resolves after the user has already navigated on. Registration is likewise isolated: `setup/register-routes.js` wraps each route's registration in `safeRegister`, so a route module that throws at registration costs only its own route. **Removal recipe — deleting a page is:** delete the page file (`src/pages/<page>.js`) + its route file (`src/routes/<route>.js`) + its `safeRegister(...)` line in `setup/register-routes.js` + its nav link. Nothing else breaks. `tests/component-layering-contract.test.js` enforces the layering: no static page import outside `src/pages/`, dynamic page `import()` only in `src/routes/*`, and route modules imported only by `setup/register-routes.js`.
-- **Store-driven pure views in light DOM.** Application UI is authored as pure `state → h()` view functions, store reducers, and dispatched actions; `morph()` updates the live light DOM in place. The `cora-` CSS prefix remains the SharePoint-isolation boundary. `tests/framework-contract.test.js` prevents class components, legacy view APIs, app-layer signal imports, view-to-client imports, and a global component registry from returning.
-- **ADR-0034 is implemented (Project Palimpsest, #402).** Routes use the single-store + pure-view + `morph()` architecture through `createStoreRoute()` (`core/store-route.js`). `lib/signal.js` remains only as internal state/service notification plumbing for `SaveQueue` and `CaseReviewViewModel`; application surfaces never import it. New slices follow [`docs/guide/store-actions-and-effects.md`](./docs/guide/store-actions-and-effects.md).
-- [`docs/component-anatomy-explainer.html`](./docs/component-anatomy-explainer.html) is retained as migration provenance for the superseded component shell, not as current authoring guidance.
-- **New feature code follows the Palimpsest playbook.** From PILOT-2 onward, use [`docs/palimpsest-playbook.md`](./docs/palimpsest-playbook.md) for the state shape, action naming, test pattern, and conversion PR checklist; do not add new feature code in the old component-owned-state style.
+- **Store-driven pure views in light DOM.** Each application route owns state
+  shaped as `{ chrome, routes }`. Pages export `createRouteSlice()` with initial
+  state, a reducer, and a pure `state → h()` view. Event callbacks dispatch
+  `domain/event` actions; async work and persistence live in effects. The
+  `createStoreRoute()` adapter creates the store and memo cache, renders through
+  keyed `morph()`, contains route failures, and cleans up on navigation.
+- **One authoring model.** Views are synchronous and side-effect free. They do
+  not import clients or persistence services, and application pages do not use
+  the internal notification primitive retained by `SaveQueue` and
+  `CaseReviewViewModel`. Start with
+  [`docs/guide/add-a-page.md`](./docs/guide/add-a-page.md); use
+  [`docs/guide/store-actions-and-effects.md`](./docs/guide/store-actions-and-effects.md)
+  and [`docs/guide/router.md`](./docs/guide/router.md) as reference.
+- **Light DOM and CSS isolation.** `h()` creates safe DOM nodes, keyed `morph()`
+  preserves focus/caret/scroll across renders, and the `cora-` CSS prefix remains
+  the SharePoint-isolation boundary. See the current
+  [state/action/render explainer](./docs/component-anatomy-explainer.html).
 - **Case Type config as JS modules; Question Bank content as SharePoint-hosted text artifacts.** One module per Case Type under `case-types/{slug}.js`, lazy-loaded via `case-types/manifest.js`. Question Bank content (Question Definitions, labels, and Outcome vocabulary) lives in `case-types/banks/{slug}.txt`, stored in the SharePoint Style Library and loaded through `case-types/load-bank.js` as part of the Case Type config. There is no shared Question Definitions list and no planned runtime join to one. `HttpSharePointClient`/`MockSharePointClient` expose `getExportHash`/`getVersionedExport` for ADR-0021's immutable, point-in-time exports on reportable Cases.
 - **JSDoc + `tsc --checkJs` for types**. No `.ts` files; the deployed JS is the source JS. CI runs `tsc --noEmit --checkJs --allowJs`.
 - **Per-Case-Type `showWhen` graph + `outcome` function**. Applicability is data (declarative `showWhen`); outcome is code (exported function). Same module, one place to look.
 - **Case storage: everything on the Case row**. `Answers` and `Conversation` as JSON blobs on a per-Case-Type SharePoint list row. Notes as plain text. Field-level PATCH only.
-- **Auto-save: 1500ms debounce + ETag concurrency**. Single `SaveQueue` primitive; components never call `fetch` directly.
+- **Auto-save: 1500ms debounce + ETag concurrency**. A single `SaveQueue`
+  primitive owns writes; views never call `fetch` directly.
 - **Mock-first dev loop**. All REST goes through a `SharePointClient` interface. `?mock=1` URL param swaps in `MockSharePointClient` from `dev/fixtures/`. `node --test` for unit tests.
 - **Auth: browser NTLM/Kerberos; security via SharePoint list permissions**. Client-side group checks are UX-only; the real boundary is SharePoint's list ACLs.
 - **Two live environments: prod and UAT (ADR-0033)**. Same source tree, deployed twice: prod at `Style Library/CODE/CORA` + `SitePages/app.aspx` + unprefixed lists; UAT at `CODE/CORA-UAT` + `SitePages/uat.app.aspx` + `uat_`-prefixed lists (`deploy_to_sharepoint.py --env uat`). The deployed host page declares its environment via the `{{CORA_ENV}}` token → `window.CORA_ENV`; `src/config/environment.js` is the only place that resolves it, and `HttpSharePointClient` applies the list prefix centrally. Never branch on the environment name elsewhere.
@@ -34,7 +51,8 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
 
 - **No third-party runtime dependencies, ever.** Dev/CI tools (tsc, prettier, node test runner) are fine.
 - **No build step at runtime.** Source JS is deployed JS.
-- **Components never call `fetch()` directly** — always through the `SharePointClient` interface. This is what makes mock-first dev work.
+- **Views never call `fetch()` directly** — effects use the `SharePointClient`
+  interface. This is what makes the mock-first development loop work.
 - **No `innerHTML` for user data.** XSS prevention; also preserves input state.
 - **Custom elements use the `cora-` prefix** (also the CSS namespace).
 - **Question Definitions are never deleted** — use a `deprecated` flag (avoids dangling references from Case Type modules).
@@ -87,7 +105,7 @@ src/
     signal.js                   # internal state/service notification primitive
     toast.js                    # transient toast store + showToast action
 
-  core/                         # store-driven view runtime (ADR-0034 / Project Palimpsest)
+  core/                         # store-driven view runtime (ADR-0034)
                                 #   see docs/guide/store-actions-and-effects.md for the contract
     chrome-state.js             # shared toasts/nav/current-user/permissions store slice
     morph.js                    # keyed DOM-morphing reconciler: patches live DOM to an h() tree
@@ -96,12 +114,12 @@ src/
     memo.js                     # per-view memo cache, keyed by position, cleared on unmount — CORE-4 (#406)
     store-route.js               # adapts a store-driven route module to the Router handler shape — CORE-6 (#407)
 
-  actions/                      # effects: async work reached only via dispatch (CORE-3 / Project Palimpsest)
+  actions/                      # effects: async work reached only via dispatch
     case-actions.js             # persistence effect example: SharePointClient + SaveQueue re-entering via dispatch
 
   components/                   # reusable pure views, layered by dependency
     base/                       # leaf primitives — compose no other view
-      cora-data-table.js           # pure legacy table renderer retained for direct consumers
+      cora-data-table.js           # pure table renderer retained for direct consumers
       cora-people-picker.js        # pure People Picker renderer and search helpers
       cora-group-progress.js      # pure per-Question-Group progress strip
       cora-status-banner.js
@@ -121,7 +139,7 @@ src/
   config/
     working-days.js
 
-  pages/                        # top-level view components, mostly one per route
+  pages/                        # route slices, top-level views, and focused page actions
     dev-morph-harness.js        # dev-only morph() demo (store-less scratch view, #404)
     dev-performance-harness.js  # dev-only CORE-5 500-question keystroke-latency gate (mock-only)
                                 #   see docs/palimpsest-performance-gate.md for the measured result
@@ -149,7 +167,7 @@ src/
       controls-view.js            # pure generic-table Appeals panel + paged load action
       kpi-view.js                 # pure renderer for kpi-strip-model output
       panel-descriptors.js        # config-declared presence intersected with code-owned role visibility
-    home.js                      # store-driven Home pure view (Palimpsest PILOT-2)
+    home.js                      # store-driven Home route slice and pure view
     cora-journey-cases.js         # store-driven Journey Cases slice + generic descriptors (GRID-2)
     cora-responsible-party-dashboard.js # store-driven Responsible Party slice shared by dashboard and #/my-cases
     responsible-party/
@@ -158,7 +176,7 @@ src/
     question-bank/              # question bank editor subsystem ("just another page", #382)
       bank-slice.js             # route-local bank editor state, derived selectors, and actions (BANK-1)
       cora-bank-dock.js
-      cora-bank-editor.js       # store-driven route slice + pure editor shell
+      cora-bank-editor.js       # store-driven route slice + pure editor view
       cora-bank-list.js         # memoises Question Definition cards for 500-question banks (BANK-2)
       cora-bank-rail.js
       cora-outcome-options-editor.js
@@ -224,8 +242,6 @@ src/
     app-chrome.js                 # guarded nav + command-palette mount (fatal nav / skipped palette)
     register-routes.js
     resolve-eligible-case-types.js
-                                 # NOTE: no register-components.js — components register via
-                                 # top-level customElements.define() side effects (see Hard rules)
 
   styles/
     cora-design-tokens.css

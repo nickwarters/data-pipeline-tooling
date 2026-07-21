@@ -4,7 +4,10 @@ Date: 2026-06-04
 
 ## Status
 
-Accepted
+Accepted in part. The bare account-name identity and User Profile resolution
+decisions remain current. [ADR-0020](./0020-unified-issue-capture-engine.md)
+supersedes the dedicated `attributedParty` field with a typed person field in
+`Answer.capture`.
 
 ## Context
 

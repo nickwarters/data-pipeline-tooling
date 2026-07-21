@@ -14,10 +14,17 @@ primitive for `SaveQueue` and `CaseReviewViewModel`; application surfaces
 (`actions`, `components`, `pages`, `routes`, `setup`, and `views`) cannot import
 it.
 
-Supersedes ADR-0003 (Web Components with signals). Deliberately preserves
-ADR-0002 (SPA shell + hash routing, route-level page independence and lazy
-`import()`) and ADR-0009 (mock-first dev loop) unchanged, and keeps every Hard
-rule in [CLAUDE.md](../../CLAUDE.md) intact.
+Supersedes [ADR-0003](./0003-web-components-with-signals.md). Deliberately
+preserves [ADR-0002](./0002-spa-shell-with-hash-routing.md) (SPA shell + hash
+routing, route-level page independence and lazy `import()`) and
+[ADR-0009](./0009-mock-first-dev-loop.md) (mock-first dev loop) unchanged. It
+changes the rendering mechanism, not the accepted information architecture in
+[ADR-0014](./0014-tabbed-case-review-layout.md),
+[ADR-0016](./0016-summary-section-replaces-outcome-tab.md), or
+[ADR-0024](./0024-remediation-tracking-tab.md), the `cora-` isolation decision
+in [ADR-0029](./0029-cora-branding-and-cr-prefix-rename.md), or the code-owned
+Section vocabulary in [ADR-0032](./0032-data-driven-section-registry.md). Every
+hard rule in [CLAUDE.md](../../CLAUDE.md) remains intact.
 
 This is the foundation ADR for **Project Palimpsest** (parent epic #402,
 sub-issue CORE-1 #403). It must be signed off before CORE-2 (`morph()`

@@ -1,5 +1,13 @@
 # Summary Section replaces the Outcome tab
 
+## Status
+
+Accepted. The Summary/Outcome information architecture remains current; its
+view implementation follows
+[ADR-0034](./0034-store-driven-views-supersede-component-owned-state.md), and
+Section variation follows
+[ADR-0035](./0035-case-type-descriptors-express-variation-behaviour-stays-in-code.md).
+
 The case-review tab row is **Case Details · Review · Issues · Summary · Remediation · Notes · Amend Outcome**. "Review" is the UI label for Questions. "Issues" captures failed-Answer detail. "Remediation" tracks sent actions. The standalone **Outcome** tab is removed; the verdict is one block inside the read-only **Summary** Section.
 
 ## What Summary is

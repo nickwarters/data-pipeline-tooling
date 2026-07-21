@@ -4,7 +4,11 @@ Date: 2026-06-05
 
 ## Status
 
-Accepted
+Accepted as amended by
+[ADR-0021](./0021-versioned-question-bank-snapshots-for-completed-cases.md). The
+function-free reporting contract remains current; the editable source is now
+the per-Case-Type bank text artifact, and reportable Cases resolve immutable
+`{slug}.{hash}.json` exports.
 
 ## Context
 

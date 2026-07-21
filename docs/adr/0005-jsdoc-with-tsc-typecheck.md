@@ -1,5 +1,9 @@
 # JSDoc + `tsc --checkJs` for type safety
 
+## Status
+
+Accepted. Still current.
+
 All framework code uses **JSDoc type annotations** with `// @ts-check` at the top of every file. CI runs `tsc --noEmit --checkJs --allowJs` against the source tree. No `.ts` files, no transpilation — the deployed JS is the source JS, preserving the no-build-toolchain rule.
 
 Shared types live in `/types/*.d.ts` (declaration-only files are valid in a JSDoc-typed JS project) and are referenced from JSDoc via `@typedef` `import`s. This gives us type-safe boundaries for: Case Type configs, Question Definitions, Answers, the signal primitive, and the SharePoint REST client surface.

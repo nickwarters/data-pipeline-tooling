@@ -1,94 +1,96 @@
 # SaveQueue
 
+`SaveQueue` owns debounced Case writes, ETag concurrency, retry backoff, and save
+status. Views never use it directly. A route effect or focused action module
+enqueues persistence and dispatches observable results back into page state.
+
 ## Quick reference
 
 ```js
-// Receive saveQueue as a property; never construct one inside a component.
-this.saveQueue.enqueue(caseId, 'answers', updatedAnswers); // debounced PATCH
-this.saveQueue.enqueue(caseId, 'notes', newNotes);
+// At the effect boundary, after loading a Case:
+saveQueue.loadCase(row, { listName });
 
-// Show save status in the UI:
-this.subscribe(this.saveQueue.status, (s) => {
-  // s is 'saved' | 'saving' | 'reconnecting' | 'conflict'
-  statusEl.textContent = s;
-});
+// Debounced field-level writes:
+saveQueue.enqueue(caseId, 'answers', updatedAnswers);
+saveQueue.enqueue(caseId, 'notes', newNotes);
 
-// Seed the ETag after loading a case row:
-this.saveQueue.loadCase(row);
+// Bridge queue status into route state:
+const unsubscribe = saveQueue.subscribeStatus((status) =>
+  dispatch({ type: 'case/save-status-changed', status })
+);
+
+// Return unsubscribe from start(...) or its focused binding helper.
+return unsubscribe;
 ```
 
-**Rule: components never call `fetch()` directly. All persistence goes through `SaveQueue.enqueue`.**
+All persistence goes through `SaveQueue` and `SharePointClient`; no view calls
+`fetch()` or mutates the queue.
 
----
+## Why it exists
 
-## Why SaveQueue exists
+Page code should not duplicate transport rules. Centralising them means the
+same behaviour is used with `HttpSharePointClient` in SharePoint and
+`MockSharePointClient` under `?mock=1` and in tests.
 
-Components don't know about ETags, concurrency conflicts, retry backoff, or debouncing. Those concerns belong in one place so they can be tested and reasoned about independently. `SaveQueue` is that place.
+### Debounce
 
-This design also makes mock-first development work: in test and `?mock=1` mode, the same `SaveQueue` is wired to `MockSharePointClient`, which never makes a real HTTP request. Components don't need to know or care which client is behind the queue.
-
----
-
-## How it works
-
-### Debounce (1500 ms)
-
-`enqueue(caseId, fieldName, value)` sets a 1500 ms timer. If the same field is enqueued again before the timer fires, the timer resets. Only the last value is sent. This prevents a flood of PATCH requests while a Reviewer is typing.
+`enqueue(caseId, fieldName, value)` starts a 1500 ms timer. Enqueuing the same
+field again resets that timer, so only the last value is sent while a Reviewer
+is typing.
 
 ### ETag concurrency
 
-Every PATCH is sent with an `If-Match` header containing the current ETag. If the server returns `412 Precondition Failed`, `SaveQueue` fetches the latest row and checks whether the remote answers have changed since the last save. If the remote answers match the baseline (i.e., a concurrent writer only changed a different field), `SaveQueue` refreshes the ETag and retries automatically. If answers differ, it sets status to `'conflict'` and stops — the component (or a `<cora-status-banner>`) must prompt the Reviewer to reload.
+Every PATCH uses the current ETag. After a `412 Precondition Failed`, the queue
+fetches the latest row. If the server changed only another field, it refreshes
+the ETag and retries. If Answers changed remotely, it moves to `conflict` and
+does not overwrite them.
 
 ### Retry backoff
 
-Non-412 errors (network timeouts, throttling) trigger exponential backoff using the schedule `[1s, 2s, 4s, 8s, 16s, 30s]`. Status is set to `'reconnecting'` during retries.
+Network and throttling failures retry with `[1s, 2s, 4s, 8s, 16s, 30s]` delays.
+The queue reports `reconnecting` during retries.
 
-### Status signal
+### Status bridge
 
-`saveQueue.status` is a read-only signal. Subscribe to it in `<cora-status-banner>` or any component that needs to display save state.
+`subscribeStatus(listener)` immediately reports the current status and then
+each transition: `saved`, `saving`, `reconnecting`, or `conflict`. Bind it in a
+route effect and dispatch the value into page state. The view renders that
+state like any other value.
 
----
+## Loading and list context
 
-## Using `loadCase`
-
-Call `saveQueue.loadCase(row)` whenever you fetch or re-fetch a case row. This updates the internal ETag and baseline answers so that subsequent PATCHs use the correct precondition.
+Call `loadCase(row, { listName })` after every successful fetch or re-fetch.
+This seeds the ETag, baseline Answers, and the per-Case-Type list context used by
+later writes.
 
 ```js
-const row = await context.client.getCase(id);
-if (row) {
-  context.saveQueue.loadCase(row);
-  answersSignal.set(row.answers ?? {});
+const options = { listName };
+const row = await client.getCase(caseId, options);
+if (!row) throw new Error(`Case ${caseId} was not found`);
+
+saveQueue.loadCase(row, options);
+dispatch({ type: 'case/loaded', case: row });
+```
+
+Use `whenIdle()` when an effect or flow must observe completion without forcing
+the debounce early. Use `flushCase(caseId)` only at a deliberate transition
+that must persist pending writes before continuing.
+
+## Adding a saveable field
+
+`enqueue` accepts any Case field name. No queue change is normally required.
+Update the client mapper for the corresponding SharePoint column, then prove the
+round trip and concurrency behaviour at the public client/queue seam.
+
+## Focused action example
+
+```js
+export function changeNotes({ dispatch, saveQueue, caseId, notes }) {
+  dispatch({ type: 'case/notes-changed', notes });
+  saveQueue.enqueue(caseId, 'notes', notes);
 }
 ```
 
----
-
-## Adding a new saveable field
-
-No changes to `SaveQueue` are needed. `enqueue` accepts any `fieldName` string and passes it as the key in the PATCH body. On the `HttpSharePointClient` side, make sure `itemFromRow` in `http-sharepoint-client.js` maps the new field to the correct SharePoint column name.
-
----
-
-## Worked example: a component that saves notes
-
-```js
-// @ts-check
-import { h } from '../lib/html.js';
-
-/** @typedef {import('../services/save-queue.js').SaveQueue} SaveQueue */
-
-/**
- * @param {{ notes: string, saveQueue: SaveQueue | null, caseId: string }} props
- */
-export function Notes({ notes, saveQueue, caseId }) {
-  return h('textarea', {
-    value: notes,
-    oninput: (ev) => {
-      const value = /** @type {HTMLTextAreaElement} */ (ev.target).value ?? '';
-      saveQueue?.enqueue(caseId, 'notes', value);
-    },
-  });
-}
-```
-
-The component never calls `fetch()`. It never knows the ETag. It never retries. That's all `SaveQueue`'s responsibility.
+The view dispatches `case/notes-changed`. The page action updates state and
+enqueues the write. `SaveQueue` owns the debounce, ETag, retry, and conflict
+rules.

@@ -1,5 +1,10 @@
 # Mock-first dev loop, `node --test` for unit tests
 
+## Status
+
+Accepted. Reaffirmed unchanged by
+[ADR-0034](./0034-store-driven-views-supersede-component-owned-state.md).
+
 All SharePoint REST access is funneled through a single `SharePointClient` interface (a JSDoc typedef). Two implementations:
 
 - **`HttpSharePointClient`** — real REST, used in production.

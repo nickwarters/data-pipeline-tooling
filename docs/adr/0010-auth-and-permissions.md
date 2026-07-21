@@ -1,5 +1,10 @@
 # Authentication and permissions
 
+## Status
+
+Accepted. Still current; [ADR-0022](./0022-two-axis-role-model.md) extends the
+capability model without changing SharePoint ACLs as the security boundary.
+
 The framework assumes **standard SharePoint SE browser authentication** — NTLM/Kerberos handled transparently by the browser, requests sent with `credentials: 'include'`. No custom login flow, no token management. SharePoint's `X-RequestDigest` is fetched lazily from `_api/contextinfo` on first write and refreshed on 403.
 
 ### Security boundary

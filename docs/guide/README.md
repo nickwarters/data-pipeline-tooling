@@ -1,23 +1,26 @@
-# Maintainer Developer Guide
+# Maintainer developer guide
 
-Reference for building new function components and wiring them into Case Review.
+Start with the one-page authoring path, then open the reference for the boundary
+you are changing.
 
 ## Topics
 
-| Guide                                                       | What it covers                                                          |
-| ----------------------------------------------------------- | ----------------------------------------------------------------------- |
-| [Component authoring](component-authoring.md)               | Plain function components, `h()`, `reactive()`, and legacy shell limits |
-| [Signals](signals.md)                                       | `signal()`, `computed()`, `effect()` primitives with worked examples    |
-| [Sharing signals](sharing-signals.md)                       | Passing signals across components; concrete multi-component example     |
-| [Router integration](router.md)                             | Registering a route that composes page functions or explicit shells     |
-| [SaveQueue](save-queue.md)                                  | Why components never call `fetch()` directly; how to enqueue a save     |
-| [SharePointClient](sharepoint-client.md)                    | Interface contract, adding a new method, mock substitution (`?mock=1`)  |
-| [Case Type onboarding (code)](case-type-onboarding-code.md) | Manual walkthrough: nothing → running dev harness with a new Case Type  |
-| [Provisioning runbook](provisioning-runbook.md)             | SharePoint columns, per-Case-Type groups, and the holiday-list burden   |
-| [Testing](testing.md)                                       | `node --test`, DOM stubs, what constitutes a good test                  |
+| Guide                                                       | What it covers                                                         |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------- |
+| [Add a store-driven page](add-a-page.md)                    | One-page path: state → `h()`, actions, effects, lazy route, tests      |
+| [Store, actions, and effects](store-actions-and-effects.md) | Permanent contracts and ownership boundaries                           |
+| [Router integration](router.md)                             | Route independence, lazy loading, registration, and cleanup            |
+| [SaveQueue](save-queue.md)                                  | Debounced, ETag-guarded persistence                                    |
+| [SharePointClient](sharepoint-client.md)                    | Interface contract, new methods, and mock substitution (`?mock=1`)     |
+| [Case Type onboarding (code)](case-type-onboarding-code.md) | Manual path from nothing to a running mock Case Type                   |
+| [Provisioning runbook](provisioning-runbook.md)             | SharePoint columns, per-Case-Type groups, and holiday-list maintenance |
+| [Testing](testing.md)                                       | Public seams, semantic DOM tests, and repository gates                 |
+| [In-memory flow runner](in-memory-flow-runner.md)           | Browser-free end-to-end domain and persistence journeys                |
 
 ## Prerequisites
 
-- Read [CONTEXT.md](../../CONTEXT.md) for domain language (`Case`, `Case Type`, `Question Definition`, `Answer`, `Outcome`, …).
-- Read [docs/PLAN.md](../PLAN.md) to understand the current execution roadmap.
-- Skim [docs/adr/](../adr/) — every non-trivial architectural decision is documented there. Don't deviate from an ADR without surfacing the deviation.
+- Read [CONTEXT.md](../../CONTEXT.md) for domain language (`Case`, `Case Type`,
+  `Question Definition`, `Answer`, `Outcome`, …).
+- Read [CLAUDE.md](../../CLAUDE.md) for the shipped architecture and hard rules.
+- Check [docs/adr/](../adr/) for the current decision governing the seam. Do not
+  deviate from an accepted ADR without surfacing the deviation.

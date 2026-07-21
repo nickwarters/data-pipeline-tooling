@@ -1,5 +1,11 @@
 # Case Type configuration as JS modules (not JSON)
 
+## Status
+
+Accepted. Still current; [ADR-0035](./0035-case-type-descriptors-express-variation-behaviour-stays-in-code.md)
+clarifies that data-only descriptors express variation while branching
+behaviour remains in JavaScript.
+
 Each **Case Type** is a JS module under `/Style Library/case-review/case-types/{slug}.js`, exporting a `default` POJO that conforms to a `CaseTypeConfig` JSDoc typedef. Loaded lazily via dynamic `import()` when a Case of that type is opened.
 
 Chosen over JSON files because JS modules: (a) carry **JSDoc types** for IDE intellisense and CI type-checking, (b) can `import` shared helpers and constants (e.g., common field validators), (c) let the **outcome algorithm be an exported function** rather than something encoded in a data DSL, (d) cache identically to JSON in the browser. No build step is added — modern browsers load ES modules natively, consistent with the architecture decision.

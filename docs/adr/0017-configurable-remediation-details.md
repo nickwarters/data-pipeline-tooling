@@ -1,5 +1,11 @@
 # Configurable per-failure Remediation Details
 
+## Status
+
+Superseded by [ADR-0020](./0020-unified-issue-capture-engine.md). The historical
+completion-gate and master-detail rationale carries forward there; the flat
+storage and declaration shape does not.
+
 > The flat `remediationFields` / `remediationDetails:
 Record<string,string>` model is replaced by the unified **Issue Capture** engine
 > (grouped, typed `Issue Capture Field`s incl. first-class `person`/`actions`, intra-group

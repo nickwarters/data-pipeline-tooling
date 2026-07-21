@@ -6,6 +6,12 @@ Date: 2026-07-11
 
 Accepted
 
+The code-owned Section vocabulary remains current. Views consume it through the
+store-driven model in
+[ADR-0034](./0034-store-driven-views-supersede-component-owned-state.md), while
+[ADR-0035](./0035-case-type-descriptors-express-variation-behaviour-stays-in-code.md)
+clarifies the boundary between Section descriptor data and branching behaviour.
+
 Evolves ADR-0011 (section-level RBAC) and ADR-0014 (tabbed Case Review layout).
 
 ## Context

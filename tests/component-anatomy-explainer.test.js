@@ -40,52 +40,63 @@ test('anatomy explainer: exists and is a self-contained HTML document', () => {
   assert.doesNotMatch(html, /https?:\/\//);
 });
 
-test('anatomy explainer: teaches both blessed shell wrappers', () => {
+test('anatomy explainer: teaches the state, view, action, reducer loop', () => {
   const html = read(DOC);
-  assert.match(html, /defineView/);
-  assert.match(html, /ShellElement/);
-  // Function-first core: pure h() functions that the shells delegate to.
-  assert.match(html, /\bh\(/);
+  assert.match(html, /State in/);
+  assert.match(html, /DOM out/);
+  assert.match(html, /Actions back/);
+  assert.match(html, /greetingView/);
+  assert.match(html, /greetingReducer/);
+  assert.match(html, /greeting\/name-changed/);
 });
 
-test('anatomy explainer: documents registration rules and the dev warning', () => {
+test('anatomy explainer: documents the store-driven route boundary', () => {
   const html = read(DOC);
-  assert.match(html, /customElements\.define/);
-  assert.match(html, /side-effect import/i);
-  // The MAINT-05 dev warning from src/lib/html.js.
-  assert.match(html, /is not defined/);
+  const samples = codeSamples(html).join('\n');
+  assert.match(html, /createRouteSlice/);
+  assert.match(html, /createStoreRoute/);
+  assert.match(samples, /import\('\.\.\/pages\/greeting\.js'\)/);
+  assert.match(html, /route-local object/i);
 });
 
-test('anatomy explainer: documents lifecycle freebies and the advanced escape hatch', () => {
+test('anatomy explainer: assigns lifecycle and effects to the route edge', () => {
   const html = read(DOC);
-  assert.match(html, /connectedCallback/);
-  assert.match(html, /captureFocus/);
-  assert.match(html, /restoreFocus/);
-  // Points at the confirmed structural-signature example.
-  assert.match(html, /cora-capture-groups/);
+  assert.match(html, /route\s+adapter owns lifecycle/i);
+  assert.match(html, /listen\(\)/);
+  assert.match(html, /start\(tools\)/);
+  assert.match(html, /SharePointClient/);
+  assert.match(html, /SaveQueue/);
 });
 
-test('anatomy explainer: documents event conventions', () => {
+test('anatomy explainer: documents view and dispatch boundaries', () => {
   const html = read(DOC);
-  assert.match(html, /emit\(/);
-  assert.match(html, /bubbles:\s*true/);
+  assert.match(html, /Views are synchronous/);
+  assert.match(html, /dispatch actions/i);
+  assert.match(html, /domain\/event/);
   assert.match(html, /cora-/);
 });
 
-test('anatomy explainer: documents the new-component checklist', () => {
+test('anatomy explainer: documents the route checklist', () => {
   const html = read(DOC);
-  assert.match(html, /base/);
-  assert.match(html, /sections/);
-  assert.match(html, /collections/);
+  assert.match(html, /Page import is lazy/);
+  assert.match(html, /State is under/);
+  assert.match(html, /View is pure and synchronous/);
+  assert.match(html, /I\/O lives in an effect/);
 });
 
 test('anatomy explainer: worked examples honour the hard rules', () => {
   const samples = codeSamples(read(DOC));
   assert.ok(samples.length >= 2, 'expected at least two worked code samples');
   const allCode = samples.join('\n');
-  // No innerHTML for user data; components never call fetch() directly.
+  // No innerHTML for user data; views never call fetch() directly.
   assert.doesNotMatch(allCode, /\.innerHTML\s*=/);
   assert.doesNotMatch(allCode, /\bfetch\(/);
+});
+
+test('anatomy explainer: does not revive deleted authoring concepts', () => {
+  const html = read(DOC);
+  assert.doesNotMatch(html, /ShellElement|defineView|connectedCallback/);
+  assert.doesNotMatch(html, /app-layer signals?/i);
 });
 
 test('anatomy explainer: CLAUDE.md links to it', () => {

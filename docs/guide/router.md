@@ -1,117 +1,119 @@
-# Router Integration
+# Router integration
 
-A route is a plain `register(router, context)` function that composes **function
-components** — plain functions returning `h()` nodes — and mounts them with
-`container.replaceChildren(…)`. Routes do not create a custom element per screen;
-custom elements are reserved for route/browser-integration shells.
+A route exports `register(router, context)`, lazy-loads one page module, and
+hands that loader to `createStoreRoute()`. This keeps page code out of the boot
+graph and gives every page the same store, render, error, and cleanup contract.
 
 ## Quick reference
 
 ```js
 // src/routes/my-page.js
-import { MyPage } from '../pages/my-page.js';
+import { createStoreRoute } from '../core/store-route.js';
 
 export function register(router, context) {
-  router.register('#/my-page/:id', {
-    //:id → dynamic segment
-    mount(container, { id }) {
-      // called when hash matches
-      container.replaceChildren(MyPage({ client: context.client, caseId: id }));
-    },
-    unmount() {}, // called before the next route mounts
-  });
+  router.register(
+    '#/my-page/:id',
+    createStoreRoute({ load: () => import('../pages/my-page.js'), context })
+  );
 }
 ```
 
-Then add one line to `src/setup/register-routes.js`:
+Then register the route in `src/setup/register-routes.js`:
 
 ```js
 import { register as registerMyPage } from '../routes/my-page.js';
-// …
-registerMyPage(router, context);
-```
 
----
+safeRegister('my-page', registerMyPage, router, context);
+```
 
 ## How the router works
 
-The `Router` class (`src/lib/router.js`) is a plain hash router. It listens for `hashchange` events on `window` and matches `location.hash` against registered patterns. When a match is found it calls `unmount()` on the previous route and `mount(container, params)` on the new one.
+`Router` in `src/lib/router.js` listens for `hashchange`, matches the hash
+against registered patterns, unmounts the current handler, and mounts the next
+one. A segment beginning with `:` becomes a string in the `params` object.
 
-Pattern segments starting with `:` become string keys in the `params` object:
+| Pattern         | Hash           | `params`       |
+| --------------- | -------------- | -------------- |
+| `#/dashboard`   | `#/dashboard`  | `{}`           |
+| `#/my-page/:id` | `#/my-page/42` | `{ id: '42' }` |
 
-| Pattern       | Hash          | `params`       |
-| ------------- | ------------- | -------------- |
-| `#/dashboard` | `#/dashboard` | `{}`           |
-| `#/case/:id`  | `#/case/42`   | `{ id: '42' }` |
+Every page import stays inside its route's `load` callback. The router contains
+load failures inside the route container, and a navigation sequence prevents a
+slow prior import from mounting after the user has moved elsewhere.
 
-The router is created once in `app.js` and passed (via `AppContext`) to every route registration function.
+`safeRegister(...)` independently contains registration failures. A broken
+route therefore cannot prevent sibling routes or persistent navigation from
+working.
 
----
+## Adding a route
 
-## Adding a new route — step by step
+1. Add `src/pages/my-page.js` with `createRouteSlice(params, context)`. Follow
+   [Add a store-driven page](add-a-page.md).
+2. Add `src/routes/my-page.js` using the quick-reference pattern above.
+3. Import and register the route through `safeRegister(...)` in
+   `src/setup/register-routes.js`.
+4. Add a navigation link only if the page belongs in persistent navigation.
+5. Test the page's public view/reducer behaviour, route registration, parameter
+   forwarding, and lazy-load failure boundary. See [Testing](testing.md).
 
-1. **Create the route file** `src/routes/my-page.js` with an exported `register` function (see Quick reference above).
+Removing a page is the reverse: remove its page file, route file,
+`safeRegister(...)` call, and navigation link.
 
-2. **Create the page function** under `src/pages/` if the route needs a dedicated view (see [Component authoring](component-authoring.md)).
+## Mount and unmount ownership
 
-3. **Import what the route uses** — import the page function directly. Import a custom-element shell module only for a genuine route/browser-integration boundary, never as the default way to mount a screen.
+`createStoreRoute()`:
 
-4. **Register the route** — import and call your `register` function in `src/setup/register-routes.js`.
+- calls the page's `createRouteSlice(params, context)`;
+- creates the route-local store and memo cache;
+- renders a `view(state, tools)` through `morph()`, or calls the slice's custom
+  `render(...)` only where a bounded render surface requires it;
+- supplies `dispatch`, `memo`, `params`, `context`, and `listen` tools;
+- contains render failures after mount inside the route;
+- removes listeners registered with `listen(...)` on navigation;
+- calls the cleanup returned by `start(...)`, disposes the store, and clears
+  the memo cache.
 
-5. **Write tests** — test the route's `mount` function directly (see [Testing](testing.md)).
-
----
-
-## `mount` and `unmount` lifecycle
-
-`mount(container, params)` is called every time the user navigates to your route. Build the component tree and call `container.replaceChildren(…)` to render it. This replaces whatever was there before — you don't need to clean up the previous route's DOM yourself.
-
-`unmount()` is called just before the next route mounts. You rarely need to do
-anything here. Use `unmount` only for teardown that cannot be owned by
-`reactive()` lifecycle helpers or removed with `replaceChildren()`.
-
----
+Views do not own lifecycle work. Register external listeners through
+`listen(target, type, listener)` inside the slice's `start(tools)` effect, and
+return a cleanup function for any other edge resource.
 
 ## AppContext
 
-Every route handler receives the same `AppContext` object:
+The current `AppContext` contract is defined in
+`src/setup/register-routes.js`. Its important boundaries are:
 
 ```js
 /**
- * @typedef {Object} AppContext
  * @property {import('../sharepoint-client.js').SharePointClient} client
  * @property {import('../services/save-queue.js').SaveQueue} saveQueue
- * @property {import('../sharepoint-client.js').CurrentUser} currentUser
- * @property {import('../services/permissions.js').Capabilities} capabilities
+ * @property {import('../core/chrome-state.js').ChromeState} chrome
+ * @property {import('../setup/resolve-eligible-case-types.js').CaseSource[]} caseSources
  * @property {Element} appEl
  */
 ```
 
-Pass the relevant slices down to components as properties. Don't pass the entire context object to a component — it creates an implicit dependency on everything.
+Use context to construct initial route state and edge effects. Views read
+application values from state, not directly from the context object. Already
+resolved Case sources come from context; pages must not re-run eligibility
+rules.
 
----
+## Worked example
 
-## Worked example: `#/my-cases` route
+The `#/my-cases` route is intentionally thin:
 
 ```js
-// src/routes/my-cases.js
-// @ts-check
+import { createStoreRoute } from '../core/store-route.js';
 
-/**
- * @param {import('../lib/router.js').Router} router
- * @param {import('../setup/register-routes.js').AppContext} context
- */
 export function register(router, context) {
-  router.register('#/my-cases', {
-    mount(container) {
-      container.replaceChildren(
-        MyCasesPage({
-          client: context.client,
-          currentUserId: context.currentUser.id,
-        })
-      );
-    },
-    unmount() {},
-  });
+  router.register(
+    '#/my-cases',
+    createStoreRoute({
+      load: () => import('../pages/cora-responsible-party-dashboard.js'),
+      context,
+    })
+  );
 }
 ```
+
+All page-specific state, reduction, view composition, and effects remain in the
+page module or focused action modules.

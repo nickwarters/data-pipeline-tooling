@@ -1,5 +1,11 @@
 # Auto-save semantics and concurrency
 
+## Status
+
+Accepted. Still current; [ADR-0034](./0034-store-driven-views-supersede-component-owned-state.md)
+moves orchestration into effects without changing `SaveQueue`, debounce, retry,
+or ETag semantics.
+
 The framework auto-saves Case mutations through a single `SaveQueue` primitive — every Web Component that mutates Case data goes through it; nothing calls REST directly.
 
 ### Save trigger

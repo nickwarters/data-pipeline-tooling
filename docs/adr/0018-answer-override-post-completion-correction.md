@@ -4,13 +4,11 @@ Date: 2026-06-11
 
 ## Status
 
-Answer Override, the QA Check, and the QA
-Reviewer role are retired. Post-completion corrections are now a **case-level
-Amended Outcome** authored by **Controls** (a hand-set verdict + justification + audit),
-not a per-Answer re-derivation. `overrides[]`, the override editor, `qa-*` Case Types, and
-the `override` access Mode are removed. This record is kept for history; the reasoning below
-explains _why_ per-Answer override was originally chosen and why that constraint was
-relaxed once QA was shelved.
+Superseded by
+[ADR-0026](./0026-amend-outcome-case-level-and-qa-retirement.md). Answer
+Override, the QA Check, and the QA Reviewer role are retired. Post-completion
+corrections are now a **case-level Amended Outcome** authored by **Controls**,
+not a per-Answer re-derivation. This record is kept for history.
 
 > [the architecture decision]: ./0026-amend-outcome-case-level-and-qa-retirement.md
 

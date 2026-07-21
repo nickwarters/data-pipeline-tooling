@@ -1,7 +1,7 @@
 # Store, actions, and effects
 
-During the route-by-route migration, each converted route owns one store and
-one app-state object. Every object follows the same shape: route state under
+Every application route owns one store and one app-state object. State follows
+the same shape: route state under
 `routes`, plus the shared `chrome` state created once at boot by
 `createChromeState()` for toasts, navigation, and the current user's identity
 and permissions:
@@ -22,15 +22,11 @@ Do not duplicate chrome values inside route slices. Pass already-resolved Case
 sources through `AppContext` and store them under the owning route only when
 that route consumes them; a page must not rerun Case Type eligibility rules.
 
-`chrome` is a boot-owned shared reference during the strangler phase. Route
+`chrome` is a boot-owned shared reference. Route
 reducers do not replace or mutate it; named helpers in `core/chrome-state.js`
 perform shared writes, and an affected route effect dispatches after the write
-when its view needs to render the change. Direct `AppContext.currentUser` and
-`AppContext.capabilities` access remains only as a bridge for legacy routes.
-
-The command palette deliberately remains in `services/command-palette-store.js`
-until that chrome surface is converted. Do not add an unused `palette` field to
-`ChromeState` in the meantime.
+when its view needs to render the change. Application pages do not read parallel
+copies from `AppContext.currentUser` or `AppContext.capabilities`.
 
 Actions use `domain/event` names such as `query/changed` or `case/saved`.
 `dispatch(action)` runs the reducer synchronously. Rendering happens in a

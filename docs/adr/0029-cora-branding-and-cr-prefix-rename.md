@@ -4,6 +4,9 @@
 
 Accepted
 
+The `cora-` naming and CSS-isolation boundary remain current under
+[ADR-0034](./0034-store-driven-views-supersede-component-owned-state.md).
+
 ## Context
 
 The platform is now named **CORA**. Since the architecture decision, every custom element tag,

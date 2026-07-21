@@ -1,5 +1,12 @@
 # Tabbed case review layout
 
+## Status
+
+Accepted as amended by ADR-0016, ADR-0024, ADR-0026, and ADR-0027. The tabbed
+Section layout remains current; its state and rendering mechanism is now the
+store-driven model in
+[ADR-0034](./0034-store-driven-views-supersede-component-owned-state.md).
+
 > The **Remediation** tab is now a
 > distinct _tracking_ Section (per-action complete/cancelled), split from **Issues**
 > capture; **Amend Outcome** is a case-level Controls surface;

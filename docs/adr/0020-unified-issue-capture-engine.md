@@ -1,5 +1,11 @@
 # Unified Issue Capture engine (grouped, typed, conditional)
 
+## Status
+
+Accepted. Supersedes [ADR-0017](./0017-configurable-remediation-details.md) and
+the capture-specific parts of ADR-0013; lifecycle and identity-resolution rules
+that it explicitly carries forward remain current.
+
 A **Case Type** declares everything captured against a _failed_ **Answer** (an **Issue**) as one model: an ordered list of **Issue Capture Group**s, each holding ordered, typed **Issue Capture Field**s. This replaces the three previously separate concerns on a failed Answer — **Attributed Party**, **Remediation Actions**, and flat Remediation Details — with a single engine. The driver is **consolidation**: Case Type Owners workshopped a shared structure to stop Case Types diverging, and channelled all per-Case-Type variation into this one well-defined slot.
 
 ## Why one engine, not three special cases

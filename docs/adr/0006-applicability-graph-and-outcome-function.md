@@ -1,5 +1,9 @@
 # Applicability as data, outcome as code
 
+## Status
+
+Accepted. Still current.
+
 Within each **Case Type** module, **question applicability** is expressed as a declarative `showWhen` graph (data), while the **outcome computation** is an exported JS function (code). Both live in the same module so a Case Type's behaviour is understood from one file.
 
 `showWhen` belongs to the per-Case-Type Question Bank artifact because applicability is part of that Case Type's catalogue. A stable Question Definition ID may be reused, but each bank owns its complete definition and applicability wiring; there is no runtime join to a shared Question Definitions list. The schema starts minimal — `{questionId: {in: [...] | equals:... | answered: true}}` plus `$and` / `$or` — and grows by extension only when a real case demands it. Resist evolving it into a Turing-complete DSL.

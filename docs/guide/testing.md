@@ -1,12 +1,8 @@
 # Testing
 
-Tests should exercise the public seams we want to keep: plain function
-components, `h()` output, signal-driven `reactive()` updates, pure functions,
-and thin route shells.
-
-Lifecycle-heavy tests are legacy coverage. Add new
-`connectedCallback()`/`disconnectedCallback()` tests only when you are explicitly
-testing a browser/custom-element boundary.
+Tests exercise the public seams we want to keep: pure views and reducers,
+semantic `h()` output and events, dispatched actions, edge effects, route
+registration, and externally visible persistence or protocol contracts.
 
 ## Quick Reference
 
@@ -132,9 +128,11 @@ The router-internal baseline is now zero and must remain zero. Use
 `initRouter()` and `routeRegistrationSpy()` from `tests/helpers/router.js` for
 real-navigation and registration-only tests respectively.
 
-## Function Component Tests
+## Pure view and reducer tests
 
-Prefer importing a plain function and asserting the DOM nodes it returns.
+Render the exported view from state, interact through semantic DOM helpers, and
+assert the action it dispatches. Pass that action through the reducer to prove
+the next visible state without coupling the test to store internals.
 
 ```js
 import { test } from 'node:test';
@@ -144,77 +142,42 @@ import { installDom } from './_dom-stub.js';
 
 installDom();
 
-function Greeting({ name }) {
-  return h('p', {}, `Hello, ${name}`);
-}
-
-test('Greeting: renders the supplied name', () => {
-  const node = Greeting({ name: 'Alex' });
-  assert.equal(node.tagName, 'P');
-  assert.equal(node.textContent, 'Hello, Alex');
-});
-```
-
-## Reactive Tests
-
-Use `reactive()` when the component reads signals while rendering.
-
-```js
-import { test } from 'node:test';
-import assert from 'node:assert/strict';
-import { h } from '../src/lib/html.js';
-import { signal } from '../src/lib/signal.js';
-import { reactive } from '../src/lib/view.js';
-import { fireEvent, getByRole } from './helpers/semantic-dom.js';
-
-function Counter() {
-  const count = signal(0);
-  return reactive(() =>
-    h(
-      'button',
-      { type: 'button', onclick: () => count.set(count.get() + 1) },
-      count.get()
-    )
+function greetingView(state, { dispatch }) {
+  return h(
+    'button',
+    { onclick: () => dispatch({ type: 'greeting/cleared' }) },
+    `Hello, ${state.name}`
   );
 }
 
-test('Counter: updates when clicked', () => {
-  const host = Counter();
-  const button = getByRole(host, 'button');
-
-  assert.equal(button.textContent, '0');
-  fireEvent(button, 'click');
-  assert.equal(getByRole(host, 'button').textContent, '1');
+test('greeting: renders state and dispatches the clear action', () => {
+  const actions = [];
+  const node = greetingView(
+    { name: 'Alex' },
+    { dispatch: (action) => actions.push(action) }
+  );
+  assert.equal(node.textContent, 'Hello, Alex');
+  node.click();
+  assert.deepEqual(actions, [{ type: 'greeting/cleared' }]);
 });
 ```
 
 ## Route Tests
 
-Route handlers are plain functions. Test them by registering the route, calling
-`mount`, and asserting what the route places in the container.
+Use `routeRegistrationSpy()` for registration-only coverage or a real Router
+for navigation. Page behaviour belongs in page tests; route tests own the URL,
+parameters, context plumbing, lazy loader, and failure boundary.
 
 ```js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Router } from '../src/lib/router.js';
 import { register } from '../src/routes/root.js';
+import { routeRegistrationSpy } from './helpers/router.js';
 
-test('root route: renders home sections', () => {
-  const router = new Router();
-  const rendered = [];
-  const appEl = {
-    replaceChildren(...children) {
-      rendered.splice(0, rendered.length, ...children);
-    },
-  };
-
-  register(router, {
-    appEl,
-    capabilities: { isVisitor: true, ownedCaseTypes: [] },
-  });
-  router.navigate('#/');
-
-  assert.equal(rendered.length, 1);
+test('root route: registers the home hash', () => {
+  const { router, has } = routeRegistrationSpy();
+  register(router, { chrome: {} });
+  assert.equal(has('#/'), true);
 });
 ```
 
@@ -226,9 +189,8 @@ fixed delay or by guessing how many microtasks an implementation needs.
 - DOM tests should use `waitFor(() => observableCondition)` from
   `tests/_dom-stub.js`; the predicate should name the rendered state or external
   call the test asserts, rather than a private task queue.
-- Use `waitForRender(host)` only when one reactive render is itself the
-  completion boundary. Multi-stage work should wait for its final observable
-  state with `waitFor()`.
+- For a coalesced store render, use `waitFor()` with the visible DOM state or
+  dispatched external result that represents completion.
 - `SaveQueue.whenIdle()` observes the real debounce/retry chain without forcing
   an early flush. Inject `setTimer`, `clearTimer`, or `sleep` when a test needs
   to control a debounce or retry boundary precisely.
@@ -236,24 +198,11 @@ fixed delay or by guessing how many microtasks an implementation needs.
   `reconnecting`, then release the operation and await its completion signal.
 - Keep a real-timer assertion only for the timer adapter itself.
 
-## Legacy Shell Tests
-
-When a test must cover a custom-element shell, keep it narrow:
-
-- Stub `HTMLElement`, `document`, and `customElements` before importing the
-  shell module.
-- Prefer asserting the shell forwards props/events correctly.
-- Do not test private lifecycle bookkeeping.
-- Do not navigate `_children` by numeric position or call `_listeners` directly
-  when a role, accessible name, stable field key, or public event expresses the
-  behaviour.
-- Do not use shell tests as the default pattern for new feature UI.
-
 ## Red-Green-Refactor
 
-Every behavior change should start with a failing test at the smallest useful
-public seam. For most new UI, that seam is a plain function component or a pure
-action/binding function, not a class instance.
+Every behavior change starts with a failing test at the smallest useful public
+seam. For new UI, that seam is normally an exported view/reducer pair or a
+focused action/effect function.
 
 1. **Red** — write a failing test for the behaviour you are about to add.
 2. **Green** — write the minimum production code to make it pass.
@@ -267,11 +216,10 @@ stub may use private arrays internally to emulate the DOM; tests using that stub
 should interact with its public DOM methods and semantic helpers.
 
 `installDom()` also isolates browser-global state per test. It captures the
-file-level DOM after component imports and restores global replacements,
-`location`, and document listeners after every test. Custom-element definitions
-remain append-only, matching the browser and allowing lazy module imports to be
-cached safely. This means a test may customise the shared stub without making
-later tests depend on its cleanup or execution order.
+file-level DOM after module imports and restores global replacements,
+`location`, and document listeners after every test. This means a test may
+customise the shared stub without making later tests depend on its cleanup or
+execution order.
 
 Suites that need hand-built browser stubs instead of `installDom()` must call
 `isolateBrowserGlobals()` from `tests/helpers/browser-globals.js` during

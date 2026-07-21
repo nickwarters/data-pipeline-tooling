@@ -1,5 +1,11 @@
 # Case storage shape: everything on the Case row
 
+## Status
+
+Accepted as amended by [ADR-0023](./0023-case-lifecycle-and-reportable-milestone.md)
+and [ADR-0026](./0026-amend-outcome-case-level-and-qa-retirement.md). The
+single-row storage and field-level PATCH decisions remain current.
+
 A **Case** is one row in a per-Case-Type SharePoint list (`Cases-{CaseTypeSlug}`). The row carries:
 
 - **Typed columns** for case-detail fields (vary per Case Type)

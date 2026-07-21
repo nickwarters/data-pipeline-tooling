@@ -6,6 +6,10 @@ Date: 2026-07-01
 
 Accepted
 
+The Section and lifecycle decision remains current. Rendering and event
+handling follow
+[ADR-0034](./0034-store-driven-views-supersede-component-owned-state.md).
+
 ## Context
 
 The standalone **Remediation** tab has been parked since the Jun 2026 restructure (#144,

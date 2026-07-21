@@ -13,8 +13,9 @@ generic descriptor conventions:
 
 - GRID-1/2 introduced generic Case tables driven by column descriptors.
 - GRID-3 introduced dashboard panels selected from a fixed panel vocabulary.
-- ADR-0032 already lets a Case Type vary its enabled Sections and their
-  presentation flags through the `sections` map.
+- [ADR-0032](./0032-data-driven-section-registry.md) already lets a Case Type
+  vary its enabled Sections and their presentation flags through the
+  `sections` map.
 
 The remaining Case Type seam still used the legacy component-era
 `dashboardColumns` shape, and dashboard panel presence lived wholly in page
@@ -52,10 +53,11 @@ The rule applies to future descriptors too:
   navigation, event handling, formatting that depends on runtime state,
   persistence, network calls, and other effects.
 
-ADR-0004 remains unchanged: a Case Type is still a JavaScript module because
-real Case Type behaviour such as `computeOutcome` belongs in an explicit
-function. This decision constrains descriptor fields; it does not pretend all
-Case Type configuration must be JSON.
+[ADR-0004](./0004-case-type-config-as-js-modules.md) remains unchanged: a Case
+Type is still a JavaScript module because real Case Type behaviour such as
+`computeOutcome` belongs in an explicit function. This decision constrains
+descriptor fields; it does not pretend all Case Type configuration must be
+JSON.
 
 The additive legacy `dashboardColumns` typedef remains temporarily for source
 compatibility, but new and scaffolded Case Types use `caseTableColumns`. It is

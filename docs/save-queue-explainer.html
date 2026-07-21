@@ -1211,10 +1211,11 @@
         </div>
         <div class="concept-card c-status">
           <span class="concept-icon">◎</span>
-          <div class="concept-name">Status Signal</div>
+          <div class="concept-name">Internal status notification</div>
           <p class="concept-desc">
-            A <code>signal()</code> inside SaveQueue drives the save indicator.
-            Four states: <em>saved</em> → <em>saving</em> →
+            SaveQueue keeps its notification mechanism private; route effects
+            observe status through <code>subscribeStatus()</code> and dispatch
+            it into page state. Four states: <em>saved</em> → <em>saving</em> →
             <em>reconnecting</em> on network error, or <em>conflict</em> when
             another reviewer's Answer changes can't be safely merged.
           </p>
@@ -1874,7 +1875,7 @@
           happy: [
             {
               title: '① enqueue() — timer started, status: saving',
-              desc: 'The component calls enqueue("Answers", v). No existing timer for this field, so state.pending["Answers"] is set with a new 1500ms timer. statusSignal becomes "saving". Nothing has been sent to the server.',
+              desc: 'The page action calls enqueue("Answers", v). No existing timer for this field, so state.pending["Answers"] is set with a new 1500ms timer. Internal status becomes "saving". Nothing has been sent to the server.',
               hl: [0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11],
               msgs: [
                 ar('right', 0, 'to-queue', 'enqueue("Answers", v1)'),
@@ -2201,7 +2202,7 @@
             },
             {
               title: '⑤ Conflict banner — user must decide',
-              desc: 'An effect watching the status signal surfaces a non-disruptive banner: "Case was edited elsewhere — reload to see the latest." The user\'s pending text stays in the textarea but is not saved. They can compare and decide.',
+              desc: 'The route effect receives the subscribed status and dispatches it into page state, surfacing a non-disruptive banner: "Case was edited elsewhere — reload to see the latest." The user\'s pending text stays in the textarea but is not saved. They can compare and decide.',
               hl: [44, 45],
               msgs: [],
               state: {
