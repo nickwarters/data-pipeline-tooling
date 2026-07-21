@@ -142,8 +142,13 @@ function snapshot() {
  *
  * @param {any} initialState
  * @param {Record<string, any>} [contextOverrides]
+ * @param {(container: any) => void} [seedContainer]
  */
-function renderShippedState(initialState, contextOverrides = {}) {
+function renderShippedState(
+  initialState,
+  contextOverrides = {},
+  seedContainer = undefined
+) {
   const slice = createRouteSlice(
     { caseType: 'example-review', id: 'c1' },
     /** @type {any} */ ({
@@ -159,6 +164,7 @@ function renderShippedState(initialState, contextOverrides = {}) {
   /** @type {any[]} */
   const actions = [];
   const container = document.createElement('main');
+  seedContainer?.(container);
   /** @type {any} */
   let tools;
   tools = {
@@ -173,6 +179,9 @@ function renderShippedState(initialState, contextOverrides = {}) {
   return {
     actions,
     container,
+    dispatch(/** @type {any} */ action) {
+      tools.dispatch(action);
+    },
     get state() {
       return state;
     },
@@ -536,6 +545,50 @@ test('CASE-1 route: the conversation host is a direct child the scoped popover C
     conversation.parentNode,
     root,
     'conversation host is a direct child of the root'
+  );
+});
+
+test('CASE-1 route: mounting over a previous route’s leftover DOM keeps the conversation host live', () => {
+  const toggleSnapshot = snapshot();
+  toggleSnapshot.machine = {
+    ...toggleSnapshot.machine,
+    canToggleConversation: true,
+  };
+  const state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: toggleSnapshot }
+  );
+  // The router does not clear the container between routes; the incoming
+  // route's first render replaces whatever the previous page left behind.
+  // Seed a tree morph() would happily patch in place (a div of divs, the
+  // same shape as the case shell) so node reuse is exercised.
+  const rendered = renderShippedState(state, {}, (container) => {
+    const leftover = document.createElement('div');
+    for (let i = 0; i < 5; i += 1) {
+      leftover.appendChild(document.createElement('div'));
+    }
+    container.appendChild(leftover);
+  });
+  const { container } = rendered;
+  const conversation = /** @type {any} */ (
+    container.querySelector('.cora-case-review__conversation')
+  );
+  assert.ok(conversation, 'conversation host is rendered into the container');
+  assert.equal(
+    conversation.hidden,
+    true,
+    'the in-document conversation host starts hidden'
+  );
+
+  rendered.dispatch({ type: 'case/conversation-toggled' });
+  assert.equal(
+    conversation.hidden,
+    false,
+    'toggling reveals the same in-document conversation host'
+  );
+  assert.ok(
+    conversation.querySelector('.cora-conversation-panel'),
+    'the in-document conversation host receives the panel content'
   );
 });
 

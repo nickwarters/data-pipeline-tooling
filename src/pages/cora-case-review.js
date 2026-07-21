@@ -502,7 +502,11 @@ export function createRouteSlice(params, context) {
       conversation,
       completion
     );
-    tools.morph(container, root);
+    // The router leaves the previous route's DOM in the container; morphing
+    // over it would patch those foreign nodes in place and leave this shell's
+    // cached part references detached. A fresh mount replaces the content
+    // outright so every later per-part morph targets in-document nodes.
+    container.replaceChildren(root);
     shell = { root, status, header, tablist, panels, conversation, completion };
     return shell;
   }
