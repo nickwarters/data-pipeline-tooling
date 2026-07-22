@@ -140,9 +140,6 @@ src/
     working-days.js
 
   pages/                        # route slices, top-level views, and focused page actions
-    dev-morph-harness.js        # dev-only morph() demo (store-less scratch view, #404)
-    dev-performance-harness.js  # dev-only CORE-5 500-question keystroke-latency gate (mock-only)
-                                #   see docs/palimpsest-performance-gate.md for the measured result
     cora-case-review.js        # store slice + pure tab shell
     cora-case-review/          # store actions/effects and pure Section views
       details-view.js          # config-driven, read-only Case Details pure view (mirrors current Section behaviour)
@@ -201,8 +198,6 @@ src/
     case.js
     conversation.js
     dashboard.js
-    dev-morph.js                # dev-only #/dev/morph, self-gated on ?mock=1 (#404)
-    dev-performance.js          # dev-only #/dev/performance, self-gated on ?mock=1 (CORE-5, #408)
     journey-cases.js
     my-cases.js
     question-bank.js

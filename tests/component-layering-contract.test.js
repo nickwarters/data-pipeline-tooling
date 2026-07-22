@@ -141,8 +141,6 @@ test('layering: new-style store route modules expose slices without importing th
   // This explicit set is the strangler ledger: add each page when its route is
   // converted, and remove the test only when every route is store-driven.
   const STORE_ROUTE_MODULES = [
-    'src/pages/dev-morph-harness.js',
-    'src/pages/dev-performance-harness.js',
     'src/pages/home.js',
     'src/pages/cora-case-review.js',
     'src/pages/cora-team-cases.js',

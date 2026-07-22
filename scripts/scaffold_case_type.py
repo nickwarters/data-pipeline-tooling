@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import re
 import sys
 from dataclasses import dataclass
@@ -21,12 +20,7 @@ class ScaffoldOptions:
     display_name: str
 
 
-@dataclass(frozen=True)
-class PerformanceBankOptions:
-    root: Path
-
-
-def parse_args(argv: list[str]) -> ScaffoldOptions | PerformanceBankOptions:
+def parse_args(argv: list[str]) -> ScaffoldOptions:
     parser = argparse.ArgumentParser(
         description="Scaffold a new Case Type module, wiring, fixtures, tests, and ADR."
     )
@@ -45,22 +39,12 @@ def parse_args(argv: list[str]) -> ScaffoldOptions | PerformanceBankOptions:
         dest="display_name",
         help='Human-readable display name, e.g. "Widget Review".',
     )
-    parser.add_argument(
-        "--performance-bank",
-        action="store_true",
-        help="Generate the permanent synthetic 500-question performance bank.",
-    )
     args = parser.parse_args(argv)
 
-    if args.performance_bank:
-        if args.slug or args.display_name:
-            parser.error("--performance-bank cannot be combined with --slug or --display")
-        return PerformanceBankOptions(root=args.root.resolve())
-
     if not args.slug:
-        parser.error("--slug is required unless --performance-bank is used")
+        parser.error("--slug is required")
     if not args.display_name:
-        parser.error("--display is required unless --performance-bank is used")
+        parser.error("--display is required")
     if not re.fullmatch(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*", args.slug):
         parser.error(
             f'Invalid --slug "{args.slug}". Use kebab-case starting with a lowercase letter.'
@@ -73,93 +57,6 @@ def parse_args(argv: list[str]) -> ScaffoldOptions | PerformanceBankOptions:
         slug=args.slug,
         display_name=args.display_name,
     )
-
-
-def performance_bank() -> dict[str, object]:
-    """Build the deterministic bank used by the Palimpsest performance gate."""
-    question_count = 500
-    group_size = 25
-    fan_out_count = 125
-    gate_id = "q-perf-fan-out-gate"
-    text_answer_id = "q-perf-steady-state-text"
-    questions: list[dict[str, object]] = []
-
-    for index in range(question_count):
-        number = index + 1
-        group_number = index // group_size + 1
-        question_id = f"q-perf-{number:03d}"
-        question: dict[str, object] = {
-            "id": question_id,
-            "text": f"Synthetic review check {number:03d}",
-            "category": f"Review area {(group_number - 1) // 4 + 1}",
-            "questionGroup": f"Question Group {group_number:02d}",
-            "responseType": "yes-no-na",
-            "deprecated": False,
-        }
-
-        if index == 0:
-            question.update(
-                {
-                    "id": gate_id,
-                    "text": "Enable the worst-case downstream review checks?",
-                }
-            )
-        elif index == 1:
-            question.update(
-                {
-                    "id": text_answer_id,
-                    "text": "Record the steady-state performance Answer",
-                    "responseType": "text",
-                }
-            )
-        elif index % 5 == 0:
-            question.update(
-                {
-                    "responseType": "single-choice",
-                    "options": ["Clear", "Needs review", "Not observed"],
-                }
-            )
-
-        if index >= question_count - fan_out_count:
-            question["showWhen"] = {gate_id: {"equals": "Yes"}}
-
-        questions.append(question)
-
-    return {
-        "slug": "performance-500",
-        "label": "Palimpsest 500-question performance bank",
-        "questions": questions,
-        "labels": [],
-        "outcomeOptions": [],
-        "performanceProfile": {
-            "questionCount": question_count,
-            "questionGroupCount": question_count // group_size,
-            "questionsPerGroup": group_size,
-            "textAnswerQuestionId": text_answer_id,
-            "fanOutGateQuestionId": gate_id,
-            "fanOutQuestionCount": fan_out_count,
-        },
-    }
-
-
-def generate_performance_bank(opts: PerformanceBankOptions) -> Path:
-    output = opts.root / "case-types" / "banks" / "performance-500.txt"
-    output.parent.mkdir(parents=True, exist_ok=True)
-    serialized = json.dumps(performance_bank(), indent=2)
-    serialized = serialized.replace(
-        '      "options": [\n'
-        '        "Clear",\n'
-        '        "Needs review",\n'
-        '        "Not observed"\n'
-        "      ]",
-        '      "options": ["Clear", "Needs review", "Not observed"]',
-    )
-    output.write_text(
-        serialized + "\n",
-        encoding="utf-8",
-    )
-    print(f"Generated 500-question performance bank at {output.relative_to(opts.root)}")
-    return output
 
 
 def escape_regexp(source: str) -> str:
@@ -613,10 +510,7 @@ def scaffold(opts: ScaffoldOptions) -> None:
 def main(argv: list[str]) -> int:
     try:
         options = parse_args(argv)
-        if isinstance(options, PerformanceBankOptions):
-            generate_performance_bank(options)
-        else:
-            scaffold(options)
+        scaffold(options)
     except Exception as error:
         print(error, file=sys.stderr)
         return 1

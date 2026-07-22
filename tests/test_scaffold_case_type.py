@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import shutil
 import subprocess
 import tempfile
@@ -131,41 +130,6 @@ class ScaffoldCaseTypeTest(unittest.TestCase):
             )
 
         self.assertIn("already exists", context.exception.stderr)
-
-    def test_generates_the_reusable_500_question_performance_bank(self) -> None:
-        root = self.make_fixture_root()
-
-        result = self.run_scaffold(root, "--performance-bank")
-
-        self.assertIn("Generated 500-question performance bank", result.stdout)
-        bank_path = root / "case-types" / "banks" / "performance-500.txt"
-        self.assertTrue(bank_path.is_file())
-        bank = json.loads(bank_path.read_text(encoding="utf-8"))
-
-        self.assertEqual(bank["slug"], "performance-500")
-        self.assertEqual(len(bank["questions"]), 500)
-
-        groups: dict[str, list[dict[str, object]]] = {}
-        for question in bank["questions"]:
-            groups.setdefault(question["questionGroup"], []).append(question)
-        self.assertEqual(len(groups), 20)
-        self.assertTrue(all(20 <= len(group) <= 40 for group in groups.values()))
-
-        text_questions = [
-            question
-            for question in bank["questions"]
-            if question["responseType"] == "text"
-        ]
-        self.assertEqual(len(text_questions), 1)
-
-        gate_id = bank["performanceProfile"]["fanOutGateQuestionId"]
-        fan_out = [
-            question
-            for question in bank["questions"]
-            if question.get("showWhen") == {gate_id: {"equals": "Yes"}}
-        ]
-        self.assertEqual(len(fan_out), 125)
-
 
 if __name__ == "__main__":
     unittest.main()

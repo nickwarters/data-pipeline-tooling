@@ -108,33 +108,3 @@ test('registerRoutes: registers the complete public route contract', () => {
     '#/journey-cases',
   ]);
 });
-
-test('registerRoutes: adds the store-driven dev harness through the same registration seam in the mock loop', () => {
-  const originalLocation = /** @type {any} */ (globalThis).location;
-  try {
-    /** @type {any} */ (globalThis).location = {
-      hash: '',
-      search: '?mock=1',
-    };
-    assert.deepEqual(registeredPatterns(), [
-      '#/',
-      '#/dashboard',
-      '#/conversation/:caseType/:id',
-      '#/conversation/:id',
-      '#/question-bank',
-      '#/case/:caseType/:id',
-      '#/case/:id',
-      '#/team-cases',
-      '#/my-cases',
-      '#/journey-cases',
-      '#/dev/morph',
-      '#/dev/performance',
-    ]);
-  } finally {
-    if (originalLocation === undefined) {
-      delete (/** @type {any} */ (globalThis).location);
-    } else {
-      /** @type {any} */ (globalThis).location = originalLocation;
-    }
-  }
-});

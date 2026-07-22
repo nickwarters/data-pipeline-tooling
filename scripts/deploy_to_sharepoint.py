@@ -62,13 +62,6 @@ DEFAULT_INCLUDE_SUFFIXES = (".js", ".css", ".html", ".aspx")
 BANKS_DIR = "case-types/banks"
 BANK_ARTIFACT_SUFFIX = ".txt"
 
-# Dev-only synthetic Question Bank fixtures that must never ship to prod/UAT:
-# they exist purely to feed the mock-only performance harness
-# (`src/pages/dev-performance-harness.js`, reachable only behind ?mock=1) and
-# have no production consumer. Named explicitly rather than by a "performance-*"
-# glob so a genuine future bank can't accidentally collide with the convention.
-DEV_ONLY_BANK_FILENAMES = frozenset({"performance-500.txt"})
-
 # Suffixes whose content is templated at deploy time (see HOST_BASE_TOKEN).
 TEMPLATED_SUFFIXES = (".html", ".aspx")
 
@@ -245,7 +238,6 @@ def collect_local_files(
     Question Bank artifacts (``case-types/banks/*.txt``) are collected as a
     scoped special case (see :data:`BANKS_DIR`), not via ``include_suffixes`` —
     a ``.txt`` file anywhere else under an include root is still excluded.
-    Dev-only synthetic banks (:data:`DEV_ONLY_BANK_FILENAMES`) never ship.
     """
     suffixes = tuple(include_suffixes)
     files: dict[str, LocalFile] = {}
@@ -260,7 +252,6 @@ def collect_local_files(
             is_bank_artifact = (
                 path.suffix == BANK_ARTIFACT_SUFFIX
                 and rel.parent == PurePosixPath(BANKS_DIR)
-                and path.name not in DEV_ONLY_BANK_FILENAMES
             )
             if not is_bank_artifact and path.suffix not in suffixes:
                 continue

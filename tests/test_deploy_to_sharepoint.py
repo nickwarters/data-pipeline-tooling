@@ -75,8 +75,7 @@ class RenderTemplatedFilesTest(unittest.TestCase):
 
 
 class CollectLocalFilesBankArtifactTest(unittest.TestCase):
-    """Question Bank .txt artifacts (#435): scoped to case-types/banks/, and
-    dev-only synthetic banks excluded."""
+    """Question Bank .txt artifacts (#435) are scoped to case-types/banks/."""
 
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
@@ -93,13 +92,6 @@ class CollectLocalFilesBankArtifactTest(unittest.TestCase):
         self._write("case-types/manifest.js", "export default {};")
         files = collect_local_files(self.root)
         self.assertIn("case-types/banks/complaints.txt", files)
-
-    def test_dev_only_performance_bank_is_excluded(self) -> None:
-        self._write("case-types/banks/complaints.txt", '{"ok": true}')
-        self._write("case-types/banks/performance-500.txt", '{"huge": true}')
-        files = collect_local_files(self.root)
-        self.assertIn("case-types/banks/complaints.txt", files)
-        self.assertNotIn("case-types/banks/performance-500.txt", files)
 
     def test_txt_outside_banks_dir_is_still_excluded(self) -> None:
         self._write("src/notes.txt", "stray tool artefact")
