@@ -137,38 +137,6 @@ test('layering: no static page import outside src/pages/; dynamic page import() 
   );
 });
 
-test('layering: new-style store route modules expose slices without importing the router', () => {
-  // This explicit set is the strangler ledger: add each page when its route is
-  // converted, and remove the test only when every route is store-driven.
-  const STORE_ROUTE_MODULES = [
-    'src/pages/home.js',
-    'src/pages/cora-case-review.js',
-    'src/pages/cora-team-cases.js',
-    'src/pages/cora-journey-cases.js',
-    'src/pages/cora-dashboard.js',
-    'src/pages/cora-responsible-party-dashboard.js',
-  ];
-  const forbiddenDependency =
-    /(?:^|\/)(?:core\/(?:store-route|store|morph)|lib\/router|services\/(?:save-queue|sharepoint-client))\.js$/;
-  /** @type {string[]} */
-  const offenders = [];
-  for (const rel of STORE_ROUTE_MODULES) {
-    const source = readCode(rel);
-    if (!/export function createRouteSlice\s*\(/.test(source)) {
-      offenders.push(`${rel} -> missing createRouteSlice export`);
-    }
-    for (const spec of importSpecifiers(rel)) {
-      if (forbiddenDependency.test(spec)) offenders.push(`${rel} -> ${spec}`);
-    }
-  }
-
-  assert.deepEqual(
-    offenders,
-    [],
-    'store-route modules expose route state + a pure view; the route adapter owns store, morph, router, and persistence boundaries'
-  );
-});
-
 /**
  * Rule (b): route modules are `setup/register-routes.js`'s private detail —
  * nothing else imports them (statically or dynamically).

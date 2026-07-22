@@ -58,7 +58,9 @@ DEFAULT_INCLUDE_SUFFIXES = (".js", ".css", ".html", ".aspx")
 # fetches `./banks/{slug}.txt` relative to its deployed module URL at runtime, so
 # these files must ship too. Unlike DEFAULT_INCLUDE_SUFFIXES this is scoped to
 # BANKS_DIR only — a stray .txt tool artefact elsewhere under an include root
-# (e.g. src/notes.txt) must still be excluded (#435).
+# (e.g. src/notes.txt) must still be excluded (#435). Every .txt file placed in
+# BANKS_DIR is deployable runtime content; synthetic fixtures belong under tests/
+# so they cannot accidentally ship to prod or UAT.
 BANKS_DIR = "case-types/banks"
 BANK_ARTIFACT_SUFFIX = ".txt"
 
@@ -237,7 +239,9 @@ def collect_local_files(
 
     Question Bank artifacts (``case-types/banks/*.txt``) are collected as a
     scoped special case (see :data:`BANKS_DIR`), not via ``include_suffixes`` —
-    a ``.txt`` file anywhere else under an include root is still excluded.
+    a ``.txt`` file anywhere else under an include root is still excluded. Every
+    artifact in ``BANKS_DIR`` is treated as deployable runtime content; test and
+    benchmark fixtures must live outside the runtime include roots.
     """
     suffixes = tuple(include_suffixes)
     files: dict[str, LocalFile] = {}

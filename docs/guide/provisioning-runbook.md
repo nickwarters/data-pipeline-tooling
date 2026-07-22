@@ -82,6 +82,10 @@ allowlist, since `.txt` elsewhere in the tree is still excluded), and
 `case-types/load-bank.js` loads it as part of the config. Keep the `.txt`
 extension: SharePoint SE can block or mis-serve `.json` files.
 
+Everything under `case-types/banks/` is production-deployable runtime content.
+Keep synthetic benchmark banks under `tests/fixtures/` (or another directory
+outside the deploy roots) so they cannot ship to production or UAT.
+
 The Question Bank editor compiles the same artifact. Publish immutable versioned
 exports as described by ADR-0021 so reportable Cases can resolve their
 as-reviewed question catalogue.
