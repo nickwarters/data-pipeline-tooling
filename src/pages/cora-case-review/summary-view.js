@@ -44,7 +44,7 @@ export function summaryView(props) {
   const reportable = isReportable(props.caseRow?.status ?? '');
   const current =
     reportable && props.caseRow ? currentOutcome(props.caseRow) : undefined;
-  const outcome = current
+  const outcomeNodes = current
     ? Outcome({
         computeOutcome: () => ({ outcome: current }),
         answers: {},
@@ -57,9 +57,11 @@ export function summaryView(props) {
         allAnswered: props.allAnswered,
         outcomeOptions: props.outcomeOptions,
       });
+  const outcome = document.createElement('cora-outcome');
+  outcome.replaceChildren(...outcomeNodes);
 
   /** @type {Node[]} */
-  const children = [heading, ...outcome];
+  const children = [heading, outcome];
 
   if (props.caseRow) {
     children.push(renderKeyDates(props.caseRow));

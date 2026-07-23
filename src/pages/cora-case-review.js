@@ -749,18 +749,21 @@ export function createRouteSlice(params, context) {
         tools.morph(
           panel,
           visible
-            ? summaryView({
-                computeOutcome: snapshot.config.computeOutcome,
-                answers: snapshot.answers,
-                allAnswered: snapshot.allAnswered,
-                caseRow: snapshot.caseRow,
-                catalogue: snapshot.catalogue,
-                summarySections: snapshot.summarySections,
-                captureGroups: snapshot.config.captureGroups ?? [],
-                detailFields: snapshot.config.detailFields ?? [],
-                outcomeOptions: snapshot.config.outcomeOptions ?? [],
-                sectionHeadings: snapshot.sectionHeadings,
-              })
+            ? sectionStyleHost(
+                'cora-summary',
+                summaryView({
+                  computeOutcome: snapshot.config.computeOutcome,
+                  answers: snapshot.answers,
+                  allAnswered: snapshot.allAnswered,
+                  caseRow: snapshot.caseRow,
+                  catalogue: snapshot.catalogue,
+                  summarySections: snapshot.summarySections,
+                  captureGroups: snapshot.config.captureGroups ?? [],
+                  detailFields: snapshot.config.detailFields ?? [],
+                  outcomeOptions: snapshot.config.outcomeOptions ?? [],
+                  sectionHeadings: snapshot.sectionHeadings,
+                })
+              )
             : null
         );
         continue;

@@ -1212,6 +1212,17 @@ test('CASE-4 view: Summary is rendered from store state and configured sections'
   assert.match(panel.textContent, /Case Details/);
   assert.match(panel.textContent, /Questions/);
   assert.match(panel.textContent, /Issues/);
+  const summaryHosts = queryAllByTag(panel, 'cora-summary');
+  assert.equal(
+    summaryHosts.length,
+    1,
+    'the Summary keeps the light-DOM host targeted by its shipped CSS'
+  );
+  assert.equal(
+    queryAllByTag(summaryHosts[0], 'cora-outcome').length,
+    1,
+    'the Outcome keeps the nested host targeted by its Summary card CSS'
+  );
 });
 
 test('CASE-4 view: Summary shows the live Outcome after every Outcome question is answered', () => {

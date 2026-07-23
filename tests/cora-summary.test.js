@@ -332,12 +332,12 @@ test('summaryView ignores sections without a summary block and works without a r
   const withUnknownSection = render({
     summarySections: /** @type {any} */ (['conversation']),
   });
-  assert.equal(withUnknownSection.length, 4);
+  assert.equal(withUnknownSection.length, 3);
 
   const withoutRow = render({
     caseRow: null,
     summarySections: /** @type {any} */ (['conversation']),
   });
-  assert.equal(withoutRow.length, 3);
+  assert.equal(withoutRow.length, 2);
   assert.equal(findByClass(rootOf(withoutRow), 'cora-summary-key-dates'), null);
 });
