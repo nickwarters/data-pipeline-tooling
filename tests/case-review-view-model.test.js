@@ -32,6 +32,28 @@ function makeVM(enqueue) {
   return vm;
 }
 
+test('allAnswered treats an empty multi-choice Answer as unanswered on load', () => {
+  const vm = new CaseReviewViewModel({
+    client: /** @type {any} */ ({}),
+    saveQueue: /** @type {any} */ ({ enqueue() {} }),
+    caseId: 'c1',
+    currentUserId: 'u1',
+    capabilities: null,
+  });
+  vm.catalogue = [
+    {
+      id: 'q1',
+      text: 'Select every applicable issue',
+      responseType: 'multi-choice',
+      options: ['Issue A'],
+      deprecated: false,
+    },
+  ];
+  vm.answersSignal.set({ q1: { value: [] } });
+
+  assert.equal(vm.allAnswered.get(), false);
+});
+
 test('handleCapture works (no throw) when window is absent', () => {
   assert.equal(typeof globalThis.window, 'undefined');
   /** @type {any[]} */

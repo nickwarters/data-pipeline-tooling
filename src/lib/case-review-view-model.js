@@ -6,7 +6,10 @@
 // and renders through keyed morphing.
 
 import { signal, computed } from './signal.js';
-import { evaluate } from '../evaluators/applicability-evaluator.js';
+import {
+  allApplicableAnswered,
+  evaluate,
+} from '../evaluators/applicability-evaluator.js';
 import {
   materializeRemediationActions,
   withDerivedFailureValues,
@@ -131,12 +134,9 @@ export class CaseReviewViewModel {
       return this.catalogue.filter((q) => ids.has(q.id));
     });
 
-    this.allAnswered = computed(() => {
-      const answers = this.answersSignal.get();
-      return this.applicableQuestions
-        .get()
-        .every((q) => !!answers[q.id]?.value);
-    });
+    this.allAnswered = computed(() =>
+      allApplicableAnswered(this.catalogue, this.answersSignal.get())
+    );
 
     /** @type {string | null} */
     this.exportHash = null;
