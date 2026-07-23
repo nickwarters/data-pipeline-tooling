@@ -5,8 +5,8 @@ import { installDom } from './_dom-stub.js';
 
 installDom();
 
-const { Question } =
-  await import('../src/components/sections/cora-question.js');
+const { questionCardView } =
+  await import('../src/pages/cora-case-review/question-panel-view.js');
 const { StatusBanner } =
   await import('../src/components/base/cora-status-banner.js');
 
@@ -15,12 +15,12 @@ const { StatusBanner } =
 /** @param {QuestionDefinition} question @param {any} value */
 function mountQuestion(question, value) {
   return /** @type {HTMLElement} */ (
-    Question({
+    questionCardView({
       question,
-      currentValue: value,
+      answer: { value },
       access: 'edit',
       onAnswer() {},
-    })[0]
+    }).querySelector('fieldset')
   );
 }
 

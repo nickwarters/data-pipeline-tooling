@@ -132,7 +132,6 @@ src/
       cora-capture-groups.js      # pure Issue Capture Group renderer
       cora-command-palette.js
       cora-owner-summary.js       # pure ownership-summary view and loader
-      cora-question.js            # pure Question renderer
     collections/                # page/tab-level assemblies mounted directly by pages
       cora-case-tabs.js           # pure Question Bank Case Type tab bar
 
