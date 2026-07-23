@@ -42,7 +42,7 @@ test('HttpSharePointClient: maps roadmap rows and prefixes the Roadmap list in U
               Title: 'Delivery',
               Description: 'A roadmap item',
               Theme: 'Core',
-              Labels: { results: ['2027', 'P1'] },
+              Labels: '2027\nP1',
               Status: 'Upcoming',
             },
           ],
@@ -57,4 +57,30 @@ test('HttpSharePointClient: maps roadmap rows and prefixes the Roadmap list in U
   assert.match(calls[0], /getbytitle\('uat_Roadmap'\)/);
   assert.match(calls[0], /[?&]\$select=/);
   assert.deepEqual(rows, [{ ...item, id: '7' }]);
+});
+
+test('HttpSharePointClient: warns when a SharePoint roadmap status is unsupported', async () => {
+  const originalWarn = console.warn;
+  /** @type {string[]} */
+  const warnings = [];
+  console.warn = (message) => warnings.push(String(message));
+  try {
+    const client = new HttpSharePointClient({
+      fetchImpl: async () =>
+        new Response(
+          JSON.stringify({
+            value: [{ Id: 8, Title: 'Blocked', Status: 'Blocked' }],
+          }),
+          { status: 200 }
+        ),
+    });
+
+    await client.listRoadmapItems();
+
+    assert.deepEqual(warnings, [
+      'Roadmap item "8" has unsupported status "BLOCKED" and was not displayed.',
+    ]);
+  } finally {
+    console.warn = originalWarn;
+  }
 });

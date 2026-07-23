@@ -65,8 +65,8 @@ export function AppNav({ capabilities, hash }) {
 
   if (hasAnyRole) {
     itemsEl.appendChild(AppNavItem('Dashboard', '#/dashboard', navItems));
+    itemsEl.appendChild(AppNavItem('Roadmap', '#/roadmap', navItems));
   }
-  itemsEl.appendChild(AppNavItem('Roadmap', '#/roadmap', navItems));
   if (isOwner) {
     itemsEl.appendChild(
       AppNavItem('Question Bank', '#/question-bank', navItems)

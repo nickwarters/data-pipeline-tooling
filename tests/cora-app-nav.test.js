@@ -59,13 +59,12 @@ test('AppNav: Case Type Owner sees Question Bank; other roles do not', () => {
   assert.equal(findLink(reviewer, '#/question-bank'), null);
 });
 
-test('AppNav: Roadmap is visible even when the user has no case-work role', () => {
+test('AppNav: Visitor sees no navigation links beyond the CORA brand', () => {
   const { node, navItems } = AppNav({
     capabilities: /** @type {any} */ (capabilities()),
     hash: '#/',
   });
-  assert.equal(navItems.length, 1);
-  assert.ok(findLink(node, '#/roadmap'));
+  assert.equal(navItems.length, 0);
   assert.ok(findLink(node, '#/dashboard'), 'brand remains a home link');
 });
 

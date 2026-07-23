@@ -30,6 +30,7 @@ const ACCEPT_JSON = 'application/json;odata=nometadata';
 const CONTENT_TYPE_JSON = 'application/json;odata=nometadata;charset=utf-8';
 const DEFAULT_THROTTLE_MS = 1000;
 const ROADMAP_LIST_NAME = 'Roadmap';
+const ROADMAP_STATUSES = new Set(['LIVE', 'IN PROGRESS', 'UPCOMING']);
 
 export class HttpSharePointClient {
   /** @param {HttpSharePointClientOptions} [opts] */
@@ -741,18 +742,18 @@ function rowFromItem(item, etag) {
  */
 function roadmapItemFromItem(item) {
   const rawLabels = item?.Labels;
-  const labels = Array.isArray(rawLabels)
-    ? rawLabels
-    : Array.isArray(
-          /** @type {{ results?: unknown[] } | null | undefined} */ (rawLabels)
-            ?.results
-        )
-      ? /** @type {{ results: unknown[] }} */ (rawLabels).results
-      : typeof rawLabels === 'string'
-        ? rawLabels.split(/[\n;,]/)
-        : [];
+  const labels = typeof rawLabels === 'string' ? rawLabels.split(/\r?\n/) : [];
+  const id = String(item?.Id ?? '');
+  const status = String(item?.Status ?? '')
+    .trim()
+    .toUpperCase();
+  if (!ROADMAP_STATUSES.has(status)) {
+    console.warn(
+      `Roadmap item "${id}" has unsupported status "${status}" and was not displayed.`
+    );
+  }
   return {
-    id: String(item?.Id ?? ''),
+    id,
     title: String(item?.Title ?? ''),
     description: String(item?.Description ?? ''),
     theme: String(item?.Theme ?? ''),
@@ -761,9 +762,7 @@ function roadmapItemFromItem(item) {
       .map((label) => label.trim())
       .filter(Boolean),
     status: /** @type {import('../sharepoint-client.js').RoadmapStatus} */ (
-      String(item?.Status ?? '')
-        .trim()
-        .toUpperCase()
+      status
     ),
   };
 }

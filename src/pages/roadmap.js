@@ -1,6 +1,5 @@
 // @ts-check
 import { h } from '../lib/html.js';
-import { createRouteErrorPanel } from '../lib/route-error-panel.js';
 
 /** @typedef {import('../sharepoint-client.js').RoadmapItem} RoadmapItem */
 /** @typedef {import('../sharepoint-client.js').RoadmapStatus} RoadmapStatus */
@@ -94,9 +93,13 @@ export function roadmapReducer(state, action) {
  */
 function roadmapCardView(item, expanded, dispatch) {
   const isLong = item.description.length > ROADMAP_DESCRIPTION_LIMIT;
+  const clippedDescription = item.description
+    .slice(0, ROADMAP_DESCRIPTION_LIMIT)
+    .trimEnd()
+    .replace(/\s+\S*$/, '');
   const description =
     isLong && !expanded
-      ? `${item.description.slice(0, ROADMAP_DESCRIPTION_LIMIT).trimEnd()}…`
+      ? `${clippedDescription || item.description.slice(0, ROADMAP_DESCRIPTION_LIMIT)}…`
       : item.description;
   const descriptionId = `cora-roadmap-description-${item.id}`;
 
@@ -151,7 +154,7 @@ function roadmapCardView(item, expanded, dispatch) {
  */
 export function roadmapView(state, { dispatch }) {
   const route = state.routes.roadmap;
-  if (route.error) return createRouteErrorPanel();
+  if (route.error) return h('p', { role: 'alert' }, route.error);
 
   const items = route.items ?? [];
   const columns = bucketRoadmapItems(items);

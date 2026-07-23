@@ -111,6 +111,9 @@ function makeClient({ patchResponses = [], getCaseRow } = {}) {
     async getCurrentUser() {
       return { id: 'user-test', displayName: 'Test User' };
     },
+    async listRoadmapItems() {
+      return [];
+    },
     async searchPeople() {
       return [];
     },

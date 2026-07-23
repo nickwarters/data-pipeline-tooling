@@ -1,5 +1,5 @@
 // @ts-check
-/** @typedef {Pick<import('../sharepoint-client.js').SharePointClient, 'getCase' | 'patchCase'>} SaveClient */
+/** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../sharepoint-client.js').PatchResult} PatchResult */
@@ -21,7 +21,7 @@ import { effect, signal } from '../lib/signal.js';
 
 export class SaveQueue {
   /**
-   * @param {SaveClient} client
+   * @param {SharePointClient} client
    * @param {{
    * debounceMs?: number,
    * backoffSchedule?: number[],

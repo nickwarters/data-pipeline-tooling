@@ -88,6 +88,8 @@ prefix centrally (ADR-0033).
 
 Grant read access to the same users who can open CORA. Items are maintained
 directly in SharePoint; this application slice does not create or edit them.
+Cards are displayed in SharePoint creation order (`Id` ascending); this slice
+does not provide manual ordering.
 
 ## 3. Question Bank artifacts
 

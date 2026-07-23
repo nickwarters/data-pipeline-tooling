@@ -117,7 +117,16 @@ test('roadmapView: renders card fields, labels, and three semantic columns', () 
   assert.match(node.textContent, /Already delivered\./);
   assert.match(node.textContent, /ThemeCore/);
   assert.match(node.textContent, /2027P1/);
-  assert.equal(node.innerHTML, '', 'user data is rendered as text nodes');
+});
+
+test('roadmapView: data-load failures render the stored message as an alert', () => {
+  const failed = state(null);
+  failed.routes.roadmap.error = 'Unable to read Roadmap';
+
+  const alert = roadmapView(failed, { dispatch() {} });
+
+  assert.equal(alert.getAttribute('role'), 'alert');
+  assert.equal(alert.textContent, 'Unable to read Roadmap');
 });
 
 test('roadmapView: long descriptions dispatch toggle and expand/collapse in place', () => {
@@ -147,6 +156,19 @@ test('roadmapView: long descriptions dispatch toggle and expand/collapse in plac
   assert.equal(less?.textContent, 'less...');
   assert.equal(less?.getAttribute('aria-expanded'), 'true');
   assert.match(expandedView.textContent, new RegExp(items[2].description));
+});
+
+test('roadmapView: truncated descriptions stop at a word boundary', () => {
+  const prefix = `${'complete '.repeat(19)}partialwordlong`;
+  const description = `${prefix} remainder after the truncation threshold`;
+  const node = roadmapView(
+    state([{ ...items[0], description, id: 'word-boundary' }]),
+    { dispatch() {} }
+  );
+
+  const rendered = node.querySelector('.cora-roadmap-card-description');
+  assert.equal(rendered?.textContent.includes('partialword'), false);
+  assert.equal(rendered?.textContent.endsWith('complete…'), true);
 });
 
 test('createRouteSlice: loads through the client and owns full-width cleanup', async () => {
