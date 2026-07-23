@@ -3,11 +3,8 @@ import { computeQuestionGroupProgress } from '../../evaluators/question-group-pr
 import { isFailure } from '../../evaluators/failure-evaluator.js';
 import { createMemo } from '../../core/memo.js';
 import { GroupProgress } from '../../components/base/cora-group-progress.js';
+import { Question } from '../../components/sections/cora-question.js';
 import { h } from '../../lib/html.js';
-import {
-  NA_VALUE,
-  reviewerResponseOptions,
-} from '../../lib/response-options.js';
 
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
@@ -151,47 +148,13 @@ export function createQuestionPanelView() {
  * }} props
  */
 export function questionCardView({ question, answer, access, onAnswer }) {
-  const options = reviewerResponseOptions(question);
-  const isMulti = question.responseType === 'multi-choice';
-  const value = answer?.value ?? (isMulti ? [] : '');
-  const selected = new Set(Array.isArray(value) ? value : []);
-  const controls = options.map((option, index) =>
-    h(
-      'label',
-      { className: 'cora-question-option' },
-      h('input', {
-        type: isMulti ? 'checkbox' : 'radio',
-        name: `cora-q-${question.id}`,
-        value: option,
-        'data-focus-key': `answer:${question.id}:${index}`,
-        checked: isMulti ? selected.has(option) : value === option,
-        disabled: access !== 'edit',
-        onChange: (/** @type {any} */ event) => {
-          if (access !== 'edit') return;
-          if (!isMulti) {
-            onAnswer(question.id, option);
-            return;
-          }
-          const next = new Set(selected);
-          if (event.target.checked) next.add(option);
-          else next.delete(option);
-          if (event.target.checked) {
-            if (option === NA_VALUE) {
-              next.clear();
-              next.add(NA_VALUE);
-            } else {
-              next.delete(NA_VALUE);
-            }
-          }
-          onAnswer(
-            question.id,
-            options.filter((candidate) => next.has(candidate))
-          );
-        },
-      }),
-      h('span', {}, ` ${option}`)
-    )
-  );
+  const questionNodes = Question({
+    question,
+    currentValue:
+      answer?.value ?? (question.responseType === 'multi-choice' ? [] : ''),
+    access,
+    onAnswer: ({ questionId, value }) => onAnswer(questionId, value),
+  });
 
   const remediation = isFailure(question, answer)
     ? [
@@ -213,16 +176,7 @@ export function questionCardView({ question, answer, access, onAnswer }) {
       // first card carrying this marker.
       'data-unanswered': isAnswered(answer) ? null : 'true',
     },
-    h(
-      'fieldset',
-      {
-        id: `cora-q-${question.id}`,
-        role: isMulti ? 'group' : 'radiogroup',
-        'aria-required': 'true',
-      },
-      h('legend', {}, question.text),
-      ...controls
-    ),
+    ...questionNodes,
     remediation.length
       ? h(
           'div',

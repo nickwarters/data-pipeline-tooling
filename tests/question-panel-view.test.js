@@ -150,6 +150,35 @@ test('CASE-2 Questions view renders category headings above their Question Group
   );
 });
 
+test('CASE-2 Questions view stacks only sentence-length single-choice options', () => {
+  const longChoice = {
+    ...question('long-choice', 'Identity'),
+    responseType: /** @type {const} */ ('single-choice'),
+    options: [
+      'Short',
+      'This option is deliberately longer than forty characters for layout',
+    ],
+  };
+  const node = createQuestionPanelView().render(
+    props({ catalogue: [longChoice], questions: [longChoice] })
+  );
+
+  assert.equal(
+    node.querySelector('fieldset')?.className,
+    'cora-question cora-question-options-long'
+  );
+
+  const shortChoice = {
+    ...longChoice,
+    id: 'short-choice',
+    options: ['A', 'B'],
+  };
+  const shortNode = createQuestionPanelView().render(
+    props({ catalogue: [shortChoice], questions: [shortChoice] })
+  );
+  assert.equal(shortNode.querySelector('fieldset')?.className, 'cora-question');
+});
+
 test('CASE-2 Questions view memoises unchanged cards by rendered inputs', () => {
   const view = createQuestionPanelView();
   const answer = { value: 'Yes' };
