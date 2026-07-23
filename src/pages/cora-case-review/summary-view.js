@@ -57,6 +57,8 @@ export function summaryView(props) {
         allAnswered: props.allAnswered,
         outcomeOptions: props.outcomeOptions,
       });
+  // Keep this inert host here for the `cora-summary > cora-outcome` CSS contract;
+  // using h() for an intentionally unregistered cora-* tag would warn in development.
   const outcome = document.createElement('cora-outcome');
   outcome.replaceChildren(...outcomeNodes);
 
