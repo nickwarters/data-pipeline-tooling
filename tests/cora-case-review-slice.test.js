@@ -1214,6 +1214,60 @@ test('CASE-4 view: Summary is rendered from store state and configured sections'
   assert.match(panel.textContent, /Issues/);
 });
 
+test('CASE-4 view: Summary shows the live Outcome after every Outcome question is answered', () => {
+  const outcomeSnapshot = snapshot();
+  outcomeSnapshot.catalogue = [
+    {
+      id: 'q1',
+      text: 'First outcome',
+      responseType: 'outcome',
+      options: ['Compliant', 'Non-compliant'],
+      optionOutcomes: { Compliant: 'pass', 'Non-compliant': 'fail' },
+      deprecated: false,
+    },
+    {
+      id: 'q2',
+      text: 'Second outcome',
+      responseType: 'outcome',
+      options: ['Compliant', 'Non-compliant'],
+      optionOutcomes: { Compliant: 'pass', 'Non-compliant': 'fail' },
+      deprecated: false,
+    },
+  ];
+  outcomeSnapshot.applicableQuestions = outcomeSnapshot.catalogue;
+  outcomeSnapshot.config.computeOutcome = (
+    /** @type {Record<string, import('../src/sharepoint-client.js').Answer>} */ answers
+  ) => ({
+    outcome: Object.values(answers).some(
+      (answer) => answer.value === 'Non-compliant'
+    )
+      ? 'fail'
+      : 'pass',
+  });
+
+  let state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: outcomeSnapshot }
+  );
+  state = caseReviewReducer(state, {
+    type: 'case/answers-edited',
+    answers: {
+      q1: { value: 'Compliant' },
+      q2: { value: 'Non-compliant' },
+    },
+  });
+  state = caseReviewReducer(state, {
+    type: 'case/tab-selected',
+    id: 'summary',
+  });
+
+  const view = renderShippedState(state).container;
+  const panel = view.querySelector('#case-panel-summary');
+  assert.equal(state.routes.caseReview.snapshot?.allAnswered, true);
+  assert.match(panel?.textContent ?? '', /Non-compliant/);
+  assert.doesNotMatch(panel?.textContent ?? '', /Awaiting answers/);
+});
+
 test('CASE-4 view: Summary applies empty config defaults and incomplete snapshots stay inert', () => {
   const baseSnapshot = snapshot();
   const minimalSummarySnapshot = {

@@ -1,7 +1,10 @@
 // @ts-check
 import { h } from '../lib/html.js';
 import { CaseReviewViewModel } from '../lib/case-review-view-model.js';
-import { evaluate } from '../evaluators/applicability-evaluator.js';
+import {
+  allApplicableAnswered,
+  evaluate,
+} from '../evaluators/applicability-evaluator.js';
 import { tabEntries } from '../lib/section-registry.js';
 import { caseDetailsView } from './cora-case-review/details-view.js';
 import {
@@ -173,6 +176,10 @@ export function caseReviewReducer(state, action) {
       ...route.snapshot,
       answers: action.answers,
       applicableQuestions,
+      allAnswered: allApplicableAnswered(
+        route.snapshot.catalogue,
+        action.answers
+      ),
       caseRow: route.snapshot.caseRow
         ? { ...route.snapshot.caseRow, answers: action.answers }
         : null,
