@@ -7,6 +7,7 @@ import { register as registerCase } from '../routes/case.js';
 import { register as registerTeamCases } from '../routes/team-cases.js';
 import { register as registerMyCases } from '../routes/my-cases.js';
 import { register as registerJourneyCases } from '../routes/journey-cases.js';
+import { register as registerRoadmap } from '../routes/roadmap.js';
 
 /**
  * @typedef {Object} AppContext
@@ -57,4 +58,5 @@ export function registerRoutes(router, context) {
   safeRegister('team-cases', registerTeamCases, router, context);
   safeRegister('my-cases', registerMyCases, router, context);
   safeRegister('journey-cases', registerJourneyCases, router, context);
+  safeRegister('roadmap', registerRoadmap, router, context);
 }

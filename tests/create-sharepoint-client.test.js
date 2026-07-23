@@ -20,6 +20,7 @@ test('createSharePointClient: returns an object satisfying SharePointClient when
   assert.equal(typeof client.getCase, 'function');
   assert.equal(typeof client.listCases, 'function');
   assert.equal(typeof client.patchCase, 'function');
+  assert.equal(typeof client.listRoadmapItems, 'function');
 });
 
 test('createSharePointClient: returns a MockSharePointClient when mock=1', async () => {
@@ -170,5 +171,15 @@ test('createSharePointClient: mock client searchPeople is backed by the people f
     results.every(
       (r) => typeof r.loginName === 'string' && r.loginName.length > 0
     )
+  );
+});
+
+test('createSharePointClient: mock client serves roadmap fixtures', async () => {
+  const client = await createSharePointClient(new URLSearchParams('mock=1'));
+  const rows = await client.listRoadmapItems();
+  assert.ok(rows.length >= 3);
+  assert.deepEqual(
+    new Set(rows.map((row) => row.status)),
+    new Set(['LIVE', 'IN PROGRESS', 'UPCOMING'])
   );
 });

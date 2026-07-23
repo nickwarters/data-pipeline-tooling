@@ -6,6 +6,7 @@ import { CASE_STATUS } from '../lib/case-statuses.js';
 /** @typedef {import('../sharepoint-client.js').CaseListOptions} CaseListOptions */
 /** @typedef {import('../sharepoint-client.js').PatchResult} PatchResult */
 /** @typedef {import('../sharepoint-client.js').PersonResult} PersonResult */
+/** @typedef {import('../sharepoint-client.js').RoadmapItem} RoadmapItem */
 
 /** @typedef {import('../sharepoint-client.js').VersionedExport} VersionedExport */
 
@@ -17,7 +18,8 @@ export class MockSharePointClient {
    * people?: PersonResult[],
    * exportHashes?: Record<string, string>,
    * versionedExports?: Record<string, VersionedExport>,
-   * lists?: Record<string, CaseRow[]>
+   * lists?: Record<string, CaseRow[]>,
+   * roadmapItems?: RoadmapItem[]
    * }} opts
    */
   constructor({
@@ -27,12 +29,17 @@ export class MockSharePointClient {
     exportHashes = /** @type {Record<string, string>} */ ({}),
     versionedExports = /** @type {Record<string, VersionedExport>} */ ({}),
     lists = /** @type {Record<string, CaseRow[]>} */ ({}),
+    roadmapItems = [],
   }) {
     this._personas = personas;
     this._persona = persona;
     this._people = people.slice();
     this._exportHashes = exportHashes;
     this._versionedExports = versionedExports;
+    this._roadmapItems = roadmapItems.map((item) => ({
+      ...item,
+      labels: item.labels.slice(),
+    }));
     // Every Case lives in a named per-Case-Type list store — there is no
     // default store. Deep-clone so fixture arrays are not mutated across tests.
     this._lists = Object.fromEntries(
@@ -239,6 +246,14 @@ export class MockSharePointClient {
    */
   async countCases(filter, opts = {}) {
     return this._caseStore(opts).filter(this._predicate(filter)).length;
+  }
+
+  /** @returns {Promise<RoadmapItem[]>} */
+  async listRoadmapItems() {
+    return this._roadmapItems.map((item) => ({
+      ...item,
+      labels: item.labels.slice(),
+    }));
   }
 
   /** @returns {Promise<string[]>} */

@@ -59,12 +59,13 @@ test('AppNav: Case Type Owner sees Question Bank; other roles do not', () => {
   assert.equal(findLink(reviewer, '#/question-bank'), null);
 });
 
-test('AppNav: Visitor sees no navigation links beyond the CORA brand', () => {
+test('AppNav: Roadmap is visible even when the user has no case-work role', () => {
   const { node, navItems } = AppNav({
     capabilities: /** @type {any} */ (capabilities()),
     hash: '#/',
   });
-  assert.equal(navItems.length, 0);
+  assert.equal(navItems.length, 1);
+  assert.ok(findLink(node, '#/roadmap'));
   assert.ok(findLink(node, '#/dashboard'), 'brand remains a home link');
 });
 
@@ -79,10 +80,19 @@ test('updateActiveNavItems: exact and sub-route hashes mark only the active item
   const bank = navItems.find((item) => item.href === '#/question-bank')?.el;
   assert.ok(dashboard);
   assert.ok(bank);
+  const roadmap = navItems.find((item) => item.href === '#/roadmap')?.el;
+  assert.ok(roadmap);
   assert.equal(dashboard.getAttribute('aria-current'), 'page');
   assert.equal(bank.getAttribute('aria-current'), '');
+  assert.equal(roadmap.getAttribute('aria-current'), '');
 
   updateActiveNavItems(navItems, '#/question-bank/editor');
   assert.equal(dashboard.getAttribute('aria-current'), '');
   assert.equal(bank.getAttribute('aria-current'), 'page');
+  assert.equal(roadmap.getAttribute('aria-current'), '');
+
+  updateActiveNavItems(navItems, '#/roadmap');
+  assert.equal(dashboard.getAttribute('aria-current'), '');
+  assert.equal(bank.getAttribute('aria-current'), '');
+  assert.equal(roadmap.getAttribute('aria-current'), 'page');
 });

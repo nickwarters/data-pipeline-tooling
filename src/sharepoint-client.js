@@ -295,6 +295,21 @@
  * }} VersionedExport
  */
 
+/** @typedef {'LIVE' | 'IN PROGRESS' | 'UPCOMING'} RoadmapStatus */
+
+/**
+ * A read-only row from the shared Roadmap list.
+ *
+ * @typedef {{
+ * id: string,
+ * title: string,
+ * description: string,
+ * theme: string,
+ * labels: string[],
+ * status: RoadmapStatus
+ * }} RoadmapItem
+ */
+
 /**
  * Every REST consumer codes against this interface. Both MockSharePointClient
  * and HttpSharePointClient satisfy it identically.
@@ -306,6 +321,7 @@
  * countCases: (filter: ListCasesFilter, opts?: CaseListOptions) => Promise<number>,
  * getCurrentUserGroups: () => Promise<string[]>,
  * getCurrentUser: () => Promise<CurrentUser>,
+ * listRoadmapItems: () => Promise<RoadmapItem[]>,
  * searchPeople: (query: string) => Promise<PersonResult[]>,
  * resolveUsers: (accountNames: string[]) => Promise<Record<string, string | null>>,
  * getExportHash: (slug: string) => Promise<string | null>,

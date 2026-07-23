@@ -72,7 +72,24 @@ read-only persona.
 
 ---
 
-## 2. Question Bank artifacts
+## 2. Roadmap list
+
+Provision one site-wide `Roadmap` list for the read-only Roadmap page. UAT
+requires a matching `uat_Roadmap` list; application code applies the environment
+prefix centrally (ADR-0033).
+
+| Internal name | SharePoint type            | Notes                                                     |
+| ------------- | -------------------------- | --------------------------------------------------------- |
+| `Title`       | Single line of text        | Card title.                                               |
+| `Description` | Multiple lines, plain text | Card description. Rich text is not rendered by the app.   |
+| `Theme`       | Single line of text        | Short grouping phrase, usually a couple of words.         |
+| `Labels`      | Multiple lines, plain text | Free-form values, one per line, such as `Q12027` or `P1`. |
+| `Status`      | Choice                     | Exactly `LIVE`, `IN PROGRESS`, or `UPCOMING`.             |
+
+Grant read access to the same users who can open CORA. Items are maintained
+directly in SharePoint; this application slice does not create or edit them.
+
+## 3. Question Bank artifacts
 
 Do **not** provision a `QuestionDefinitions` list. Each Case Type owns a
 `case-types/banks/{slug}.txt` file containing JSON text. `deploy_to_sharepoint.py`
@@ -92,7 +109,7 @@ as-reviewed question catalogue.
 
 ---
 
-## 3. Groups per Case Type
+## 4. Groups per Case Type
 
 SharePoint groups fall on two orthogonal axes. For a Case Type whose
 display name is `X` (e.g. `Example Review`, **not** the slug), provision:
@@ -122,7 +139,7 @@ retired QA Reviewer). See the architecture decision for the full capability matr
 
 ---
 
-## 4. Recurring maintenance — the working-day holiday list
+## 5. Recurring maintenance — the working-day holiday list
 
 The remediation SLA is **10 working days** after Send Actions, which
 excludes weekends **and** public holidays. The holiday source is an **in-code

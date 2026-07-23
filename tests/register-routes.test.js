@@ -106,5 +106,6 @@ test('registerRoutes: registers the complete public route contract', () => {
     '#/team-cases',
     '#/my-cases',
     '#/journey-cases',
+    '#/roadmap',
   ]);
 });

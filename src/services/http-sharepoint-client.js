@@ -10,6 +10,7 @@ import { CASE_STATUS } from '../lib/case-statuses.js';
 /** @typedef {import('../sharepoint-client.js').CurrentUser} CurrentUser */
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../sharepoint-client.js').Message} Message */
+/** @typedef {import('../sharepoint-client.js').RoadmapItem} RoadmapItem */
 
 /**
  * @typedef {(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>} FetchImpl
@@ -28,6 +29,7 @@ import { CASE_STATUS } from '../lib/case-statuses.js';
 const ACCEPT_JSON = 'application/json;odata=nometadata';
 const CONTENT_TYPE_JSON = 'application/json;odata=nometadata;charset=utf-8';
 const DEFAULT_THROTTLE_MS = 1000;
+const ROADMAP_LIST_NAME = 'Roadmap';
 
 export class HttpSharePointClient {
   /** @param {HttpSharePointClientOptions} [opts] */
@@ -166,6 +168,24 @@ export class HttpSharePointClient {
     const body = await this._read(url);
     const n = Number(body);
     return Number.isFinite(n) ? n : 0;
+  }
+
+  /**
+   * Read the shared Roadmap list. `_listItemsUrl` applies ADR-0033's
+   * environment prefix, so UAT reads `uat_Roadmap` without branching here.
+   *
+   * @returns {Promise<RoadmapItem[]>}
+   */
+  async listRoadmapItems() {
+    const url =
+      this._listItemsUrl(ROADMAP_LIST_NAME) +
+      '?$select=Id,Title,Description,Theme,Labels,Status&$orderby=Id';
+    const items = await this._getAllPages(url);
+    return items.map((item) =>
+      roadmapItemFromItem(
+        /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (item))
+      )
+    );
   }
 
   /** @returns {Promise<string[]>} */
@@ -712,6 +732,39 @@ function rowFromItem(item, etag) {
     reopened: item?.Reopened != null ? Boolean(item.Reopened) : undefined,
     reopenedAt: typeof item?.ReopenedAt === 'string' ? item.ReopenedAt : null,
     etag,
+  };
+}
+
+/**
+ * @param {Record<string, unknown>} item
+ * @returns {RoadmapItem}
+ */
+function roadmapItemFromItem(item) {
+  const rawLabels = item?.Labels;
+  const labels = Array.isArray(rawLabels)
+    ? rawLabels
+    : Array.isArray(
+          /** @type {{ results?: unknown[] } | null | undefined} */ (rawLabels)
+            ?.results
+        )
+      ? /** @type {{ results: unknown[] }} */ (rawLabels).results
+      : typeof rawLabels === 'string'
+        ? rawLabels.split(/[\n;,]/)
+        : [];
+  return {
+    id: String(item?.Id ?? ''),
+    title: String(item?.Title ?? ''),
+    description: String(item?.Description ?? ''),
+    theme: String(item?.Theme ?? ''),
+    labels: labels
+      .map(String)
+      .map((label) => label.trim())
+      .filter(Boolean),
+    status: /** @type {import('../sharepoint-client.js').RoadmapStatus} */ (
+      String(item?.Status ?? '')
+        .trim()
+        .toUpperCase()
+    ),
   };
 }
 
