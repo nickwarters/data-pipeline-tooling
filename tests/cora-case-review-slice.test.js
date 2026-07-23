@@ -57,6 +57,8 @@ const caseRow = {
   answers: {},
   conversation: [],
   notes: '',
+  onHold: false,
+  placedOnHoldAt: null,
   completedAt: null,
   etag: 'e1',
   details: { customerName: 'Ada Lovelace', accountNumber: '' },
@@ -291,6 +293,36 @@ test('CASE-1 state: route state owns loading, save status, and selected tab unde
     }),
     pending,
     'an unchanged completion state is referentially stable'
+  );
+});
+
+test('On hold reducer: updates both hold fields in the loaded Case snapshot', () => {
+  const loaded = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: snapshot() }
+  );
+  const placedOnHoldAt = '2026-07-23T09:30:00.000Z';
+
+  const held = caseReviewReducer(loaded, {
+    type: 'case/on-hold-changed',
+    onHold: true,
+    placedOnHoldAt,
+  });
+  assert.equal(held.routes.caseReview.snapshot?.caseRow?.onHold, true);
+  assert.equal(
+    held.routes.caseReview.snapshot?.caseRow?.placedOnHoldAt,
+    placedOnHoldAt
+  );
+
+  const resumed = caseReviewReducer(held, {
+    type: 'case/on-hold-changed',
+    onHold: false,
+    placedOnHoldAt: null,
+  });
+  assert.equal(resumed.routes.caseReview.snapshot?.caseRow?.onHold, false);
+  assert.equal(
+    resumed.routes.caseReview.snapshot?.caseRow?.placedOnHoldAt,
+    null
   );
 });
 
@@ -1191,6 +1223,52 @@ test('CASE-1 view: shipped tab shell renders only permitted tabs and dispatches 
   assert.equal(visiblePanel?.getAttribute('id'), 'case-panel-appealRequest');
 });
 
+test('On hold view: Reviewer sees the current hold state and non-Reviewers do not', () => {
+  const reviewerState = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: snapshot() }
+  );
+  const reviewerView = renderShippedState(reviewerState);
+  const toggle = getByRole(reviewerView.container, 'button', {
+    name: 'On hold',
+  });
+
+  assert.equal(toggle.getAttribute('aria-pressed'), 'false');
+  fireEvent(toggle, 'click');
+  assert.deepEqual(reviewerView.actions.at(-1), {
+    type: 'case/on-hold-toggle-requested',
+    onHold: true,
+  });
+
+  const held = caseReviewReducer(reviewerState, {
+    type: 'case/on-hold-changed',
+    onHold: true,
+    placedOnHoldAt: '2026-07-23T09:30:00.000Z',
+  });
+  assert.equal(
+    getByRole(renderShippedState(held).container, 'button', {
+      name: 'On hold',
+    }).getAttribute('aria-pressed'),
+    'true'
+  );
+
+  const nonReviewerChrome = {
+    ...chrome,
+    permissions: { ...chrome.permissions, isReviewer: false },
+  };
+  const nonReviewerState = caseReviewReducer(
+    createInitialCaseReviewState(nonReviewerChrome, 'popover'),
+    { type: 'case/load-finished', snapshot: snapshot() }
+  );
+  assert.equal(
+    queryAllByRole(
+      renderShippedState(nonReviewerState).container,
+      'button'
+    ).some((button) => button.textContent === 'On hold'),
+    false
+  );
+});
+
 test('CASE-4 view: Summary is rendered from store state and configured sections', () => {
   let state = caseReviewReducer(
     createInitialCaseReviewState(chrome, 'popover'),
@@ -1640,6 +1718,59 @@ test('CASE-1 save effect: rapid Answer dispatches coalesce through unchanged Sav
   );
 });
 
+test('On hold effect: queues the paired fields as one PATCH and clears the timestamp on release', async () => {
+  /** @type {any[]} */
+  const patches = [];
+  const client = {
+    async patchCase(/** @type {string} */ _id, /** @type {any} */ fields) {
+      patches.push(fields);
+      return {
+        ok: true,
+        status: 200,
+        data: { ...caseRow, ...fields, etag: `e${patches.length + 1}` },
+      };
+    },
+    async getCase() {
+      return caseRow;
+    },
+  };
+  const queue = new SaveQueue(/** @type {any} */ (client), { debounceMs: 0 });
+  queue.loadCase(/** @type {any} */ (caseRow));
+  /** @type {any[]} */
+  const dispatched = [];
+  const save = createCaseReviewSaveEffect({
+    saveQueue: queue,
+    caseId: 'c1',
+    dispatch: (action) => dispatched.push(action),
+    now: () => new Date('2026-07-23T09:30:00.000Z'),
+  });
+
+  save.onHoldChanged(true);
+  await queue.whenIdle();
+  save.onHoldChanged(false);
+  await queue.whenIdle();
+
+  assert.deepEqual(patches, [
+    {
+      onHold: true,
+      placedOnHoldAt: '2026-07-23T09:30:00.000Z',
+    },
+    { onHold: false, placedOnHoldAt: null },
+  ]);
+  assert.deepEqual(dispatched, [
+    {
+      type: 'case/on-hold-changed',
+      onHold: true,
+      placedOnHoldAt: '2026-07-23T09:30:00.000Z',
+    },
+    {
+      type: 'case/on-hold-changed',
+      onHold: false,
+      placedOnHoldAt: null,
+    },
+  ]);
+});
+
 test('CASE-1 save effect: conflict status re-enters route state through dispatch', async () => {
   const queue = new SaveQueue(
     /** @type {any} */ ({
@@ -1853,6 +1984,29 @@ test('CASE-7 route: mock-mode store shell keeps Review working at the existing U
     displayName: 'u2',
   });
   assert.equal(savedAnswer.freeFormRemediation, 'Coach the agent');
+
+  const onHold = getByRole(container, 'button', { name: 'On hold' });
+  assert.equal(onHold.getAttribute('aria-pressed'), 'false');
+  fireEvent(onHold, 'click');
+  await saveQueue.whenIdle();
+  await flush();
+  const holdPatch = /** @type {any} */ (patches.at(-1));
+  assert.equal(holdPatch?.onHold, true);
+  assert.equal(typeof holdPatch?.placedOnHoldAt, 'string');
+  assert.equal(
+    getByRole(container, 'button', { name: 'On hold' }).getAttribute(
+      'aria-pressed'
+    ),
+    'true'
+  );
+
+  fireEvent(getByRole(container, 'button', { name: 'On hold' }), 'click');
+  await saveQueue.whenIdle();
+  await flush();
+  assert.deepEqual(patches.at(-1), {
+    onHold: false,
+    placedOnHoldAt: null,
+  });
 
   if (typeof dispose === 'function') dispose();
   qNeeds.allowFreeFormRemediation = originalFreeForm;

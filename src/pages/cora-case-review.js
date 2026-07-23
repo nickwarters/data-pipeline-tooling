@@ -307,6 +307,22 @@ export function caseReviewReducer(state, action) {
       },
     };
   }
+  if (action.type === 'case/on-hold-changed' && route.snapshot?.caseRow) {
+    const caseRow = {
+      ...route.snapshot.caseRow,
+      onHold: action.onHold,
+      placedOnHoldAt: action.placedOnHoldAt,
+    };
+    return {
+      ...state,
+      routes: {
+        caseReview: {
+          ...route,
+          snapshot: { ...route.snapshot, caseRow },
+        },
+      },
+    };
+  }
   if (action.type === 'case/completion-pending') {
     if (action.pending === route.completionPending) return state;
     return {
@@ -413,6 +429,7 @@ export function createRouteSlice(params, context) {
    *   status: HTMLElement,
    *   header: HTMLElement,
    *   tablist: HTMLElement,
+   *   holdControl: HTMLElement,
    *   panels: Record<string, HTMLElement>,
    *   conversation: HTMLElement,
    *   completion: HTMLElement,
@@ -478,6 +495,9 @@ export function createRouteSlice(params, context) {
       role: 'tablist',
       className: 'cora-tabs-list',
     });
+    const holdControl = h('div', {
+      className: 'cora-case-review__hold-control',
+    });
     /** @type {Record<string, HTMLElement>} */
     const panels = {};
     for (const entry of tabEntries()) {
@@ -504,7 +524,17 @@ export function createRouteSlice(params, context) {
       },
       status,
       header,
-      h('div', { className: 'cora-tabs' }, tablist, ...Object.values(panels)),
+      h(
+        'div',
+        { className: 'cora-tabs' },
+        h(
+          'div',
+          { className: 'cora-case-review__tab-strip' },
+          tablist,
+          holdControl
+        ),
+        ...Object.values(panels)
+      ),
       conversation,
       completion
     );
@@ -513,7 +543,16 @@ export function createRouteSlice(params, context) {
     // cached part references detached. A fresh mount replaces the content
     // outright so every later per-part morph targets in-document nodes.
     container.replaceChildren(root);
-    shell = { root, status, header, tablist, panels, conversation, completion };
+    shell = {
+      root,
+      status,
+      header,
+      tablist,
+      holdControl,
+      panels,
+      conversation,
+      completion,
+    };
     return shell;
   }
 
@@ -575,6 +614,29 @@ export function createRouteSlice(params, context) {
     ]);
 
     const tabs = visibleCaseTabs(snapshot);
+    tools.morph(
+      parts.holdControl,
+      state.chrome.permissions.isReviewer
+        ? h(
+            'button',
+            {
+              type: 'button',
+              className: 'cora-case-review__hold-toggle',
+              'aria-label': 'On hold',
+              'aria-pressed': String(caseRow.onHold === true),
+              onClick: () => {
+                const onHold = caseRow.onHold !== true;
+                tools.dispatch({
+                  type: 'case/on-hold-toggle-requested',
+                  onHold,
+                });
+                save?.onHoldChanged(onHold);
+              },
+            },
+            'On hold'
+          )
+        : null
+    );
     tools.morph(
       parts.tablist,
       tabs.map((entry) => {

@@ -232,6 +232,8 @@ test('HttpSharePointClient: getCase hydrates the full CaseRow contract', async (
             Appeals: JSON.stringify(appeals),
             DueDate: '2026-06-10T10:00:00.000Z',
             RelatedDate: '2026-06-04T10:00:00.000Z',
+            OnHold: true,
+            PlacedOnHoldAt: '2026-06-05T10:00:00.000Z',
             Created: '2026-06-01T09:00:00.000Z',
           }),
           { status: 200, headers: { ETag: '"v7"' } }
@@ -266,6 +268,8 @@ test('HttpSharePointClient: getCase hydrates the full CaseRow contract', async (
   assert.deepEqual(row?.appeals, appeals);
   assert.equal(row?.dueDate, '2026-06-10T10:00:00.000Z');
   assert.equal(row?.relatedDate, '2026-06-04T10:00:00.000Z');
+  assert.equal(row?.onHold, true);
+  assert.equal(row?.placedOnHoldAt, '2026-06-05T10:00:00.000Z');
   assert.equal(row?.created, '2026-06-01T09:00:00.000Z');
   assert.equal(row?.overdue, false);
 });

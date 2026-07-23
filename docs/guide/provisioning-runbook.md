@@ -65,6 +65,8 @@ read-only persona.
 | `Appeals`                 | Multiple lines of text (plain) | JSON array of Appeals.                                                                                                                                                                                    |
 | `DueDate`                 | Date and Time                  | Review due date (drives `Overdue`).                                                                                                                                                                       |
 | `RelatedDate`             | Date and Time                  | Case-relevant date (e.g. interaction date).                                                                                                                                                               |
+| `OnHold`                  | Yes/No                         | Reviewer-controlled hold state.                                                                                                                                                                           |
+| `PlacedOnHoldAt`          | Date and Time                  | Timestamp set when `OnHold` is applied; cleared when the Case leaves hold.                                                                                                                                |
 
 `Created` is the SharePoint system column. **Removed:** the `Overrides` /
 `overrides[]` blob — do not provision it; corrected reporting now flows from

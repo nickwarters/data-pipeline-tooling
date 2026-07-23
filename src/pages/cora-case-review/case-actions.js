@@ -11,15 +11,34 @@
  * @param {{
  *   saveQueue: SaveQueue,
  *   caseId: string,
- *   dispatch: (action: {type: 'case/answers-edited', answers: Record<string, Answer>}) => unknown,
+ *   dispatch: (action:
+ *     | {type: 'case/answers-edited', answers: Record<string, Answer>}
+ *     | {type: 'case/on-hold-changed', onHold: boolean, placedOnHoldAt: string | null}
+ *   ) => unknown,
+ *   now?: () => Date,
  * }} input
  */
-export function createCaseReviewSaveEffect({ saveQueue, caseId, dispatch }) {
+export function createCaseReviewSaveEffect({
+  saveQueue,
+  caseId,
+  dispatch,
+  now = () => new Date(),
+}) {
   return {
     /** @param {Record<string, Answer>} answers */
     answersEdited(answers) {
       dispatch({ type: 'case/answers-edited', answers });
       saveQueue.enqueue(caseId, 'answers', answers);
+    },
+    /** @param {boolean} onHold */
+    onHoldChanged(onHold) {
+      const placedOnHoldAt = onHold ? now().toISOString() : null;
+      dispatch({
+        type: 'case/on-hold-changed',
+        onHold,
+        placedOnHoldAt,
+      });
+      saveQueue.enqueueFields(caseId, { onHold, placedOnHoldAt });
     },
   };
 }

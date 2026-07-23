@@ -726,6 +726,9 @@ function rowFromItem(item, etag) {
       typeof item?.AwaitingSince === 'string' ? item.AwaitingSince : null,
     reviewRequired:
       item?.ReviewRequired != null ? Boolean(item.ReviewRequired) : undefined,
+    onHold: item?.OnHold != null ? Boolean(item.OnHold) : undefined,
+    placedOnHoldAt:
+      typeof item?.PlacedOnHoldAt === 'string' ? item.PlacedOnHoldAt : null,
     hasOpenAppeal:
       item?.HasOpenAppeal != null ? Boolean(item.HasOpenAppeal) : undefined,
     appealRaisedAt:
@@ -820,6 +823,9 @@ function itemFromRow(fields) {
     out.AwaitingSince = fields.awaitingSince;
   if (fields.reviewRequired !== undefined)
     out.ReviewRequired = fields.reviewRequired;
+  if (fields.onHold !== undefined) out.OnHold = fields.onHold;
+  if (fields.placedOnHoldAt !== undefined)
+    out.PlacedOnHoldAt = fields.placedOnHoldAt;
   if (fields.hasOpenAppeal !== undefined)
     out.HasOpenAppeal = fields.hasOpenAppeal;
   if (fields.appealRaisedAt !== undefined)

@@ -60,6 +60,8 @@ export const cases = [
       complaintDate: '2026-06-18',
     },
     notes: '',
+    onHold: true,
+    placedOnHoldAt: _yesterday.toISOString(),
     completedAt: null,
     dueDate: _nextWeek.toISOString(),
     created: '2026-06-18T08:00:00Z',

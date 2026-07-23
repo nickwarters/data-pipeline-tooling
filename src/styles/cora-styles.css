@@ -2578,8 +2578,48 @@ cora-tabs {
 
 .cora-tabs-list {
   display: flex;
+  flex: 1;
   gap: var(--cora-space-1);
   border-bottom: 1px solid var(--cora-color-border);
+}
+
+.cora-case-review__tab-strip {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--cora-color-border);
+}
+
+.cora-case-review__tab-strip .cora-tabs-list {
+  border-bottom: 0;
+}
+
+.cora-case-review__hold-control {
+  display: flex;
+  align-items: center;
+  padding-left: var(--cora-space-3);
+}
+
+[data-cora-root] .cora-case-review__hold-toggle {
+  appearance: none;
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-sm);
+  background: transparent;
+  color: var(--cora-color-text-muted);
+  padding: var(--cora-space-1) var(--cora-space-3);
+  font: inherit;
+  font-weight: var(--cora-font-weight-semibold);
+  cursor: pointer;
+}
+
+[data-cora-root] .cora-case-review__hold-toggle[aria-pressed='true'] {
+  border-color: var(--cora-color-warning);
+  background: var(--cora-color-warning-bg);
+  color: var(--cora-color-on-surface);
+}
+
+[data-cora-root] .cora-case-review__hold-toggle:focus-visible {
+  outline: var(--cora-focus-outline);
+  outline-offset: var(--cora-focus-offset);
 }
 
 /* Scoped under [data-cora-root] so these win over the global `[data-cora-root]

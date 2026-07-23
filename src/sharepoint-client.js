@@ -155,6 +155,8 @@
  * awaitingResponsibleParty?: boolean,
  * awaitingSince?: string | null,
  * reviewRequired?: boolean,
+ * onHold?: boolean,
+ * placedOnHoldAt?: string | null,
  * hasOpenAppeal?: boolean,
  * appealRaisedAt?: string | null,
  * reopened?: boolean,

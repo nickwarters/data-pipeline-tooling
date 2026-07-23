@@ -286,6 +286,12 @@ test('complaints fixtures: an outstanding and a completed Complaints Case exist'
   );
 });
 
+test('complaints fixtures: include an On hold Case for the mock Case Review toggle', () => {
+  const onHold = cases.find((candidate) => candidate.onHold === true);
+  assert.ok(onHold);
+  assert.equal(typeof onHold.placedOnHoldAt, 'string');
+});
+
 test('complaints fixtures: the Completed Case reference answers compute to its frozen outcomeAtCompletion', () => {
   const completed = cases.find(
     (c) => c.caseType === 'complaints' && c.status === 'Completed'

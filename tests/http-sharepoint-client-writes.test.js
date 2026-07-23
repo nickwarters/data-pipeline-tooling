@@ -174,6 +174,8 @@ test('HttpSharePointClient: patchCase writes mutable CaseRow fields to SharePoin
       appeals: [appeal],
       dueDate: '2026-06-10T10:00:00.000Z',
       relatedDate: null,
+      onHold: true,
+      placedOnHoldAt: '2026-07-23T09:30:00.000Z',
       assignedReviewerManager: null,
       responsiblePartyManager: 'rp-manager',
     },
@@ -205,6 +207,8 @@ test('HttpSharePointClient: patchCase writes mutable CaseRow fields to SharePoin
     Appeals: JSON.stringify([appeal]),
     DueDate: '2026-06-10T10:00:00.000Z',
     RelatedDate: null,
+    OnHold: true,
+    PlacedOnHoldAt: '2026-07-23T09:30:00.000Z',
     AssignedReviewerManager: null,
     ResponsiblePartyManager: 'rp-manager',
   });

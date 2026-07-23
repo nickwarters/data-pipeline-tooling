@@ -87,6 +87,24 @@ test('MockSharePointClient: patchCase merges only the specified fields', async (
   assert.equal(result.data?.assignedReviewer, 'user-1');
 });
 
+test('MockSharePointClient: On hold fields round-trip together under mock mode', async () => {
+  const client = makeClient();
+  const result = await client.patchCase(
+    'case-1',
+    {
+      onHold: true,
+      placedOnHoldAt: '2026-07-23T09:30:00.000Z',
+    },
+    'etag-1',
+    { listName: LIST }
+  );
+
+  assert.equal(result.ok, true);
+  const reread = await client.getCase('case-1', { listName: LIST });
+  assert.equal(reread?.onHold, true);
+  assert.equal(reread?.placedOnHoldAt, '2026-07-23T09:30:00.000Z');
+});
+
 test('MockSharePointClient: patchCase ETag changes after each write', async () => {
   const client = makeClient();
   const r1 = await client.patchCase('case-1', { notes: 'first' }, 'etag-1', {
