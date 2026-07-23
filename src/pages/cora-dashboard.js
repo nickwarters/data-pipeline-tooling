@@ -3,7 +3,7 @@ import { h } from '../lib/html.js';
 import { caseRouteFor } from '../lib/case-route-links.js';
 import {
   Allocation,
-  getUnassignedCases,
+  getAllocationAvailability,
 } from '../components/sections/cora-allocation.js';
 import {
   loadOwnerSummaries,
@@ -49,6 +49,7 @@ import {
  * @property {string} reviewerStatusFilter
  * @property {TableSort | null} appealSort
  * @property {boolean} allocationEmpty
+ * @property {boolean} allocationAtCapacity
  * @property {import('../components/sections/cora-owner-summary.js').OwnerSummary[]} ownerSummaries
  * @property {ReturnType<typeof initialActionCentreState>} actionCentre
  * @property {ReturnType<typeof initialResponsiblePartyState>} responsibleParty
@@ -236,6 +237,7 @@ export function dashboardView(state, tools) {
     allocation: () =>
       Allocation({
         isEmpty: route.allocationEmpty,
+        isAtCapacity: route.allocationAtCapacity,
         onRequestNextCase: () => tools.dashboardActions?.requestNextCase?.(),
       }),
     responsibleParty: () =>
@@ -265,7 +267,7 @@ export function dashboardView(state, tools) {
  *   loadActionCounts?: typeof loadActionCentreCounts,
  *   loadActionPage?: typeof loadActionCentrePage,
  *   loadOwnerSummary?: typeof loadOwnerSummaries,
- *   loadAllocationCandidates?: typeof getUnassignedCases,
+ *   loadAllocationAvailability?: typeof getAllocationAvailability,
  * }} [dependencies]
  */
 export function createRouteSlice(
@@ -278,7 +280,7 @@ export function createRouteSlice(
     loadActionCounts = loadActionCentreCounts,
     loadActionPage = loadActionCentrePage,
     loadOwnerSummary = loadOwnerSummaries,
-    loadAllocationCandidates = getUnassignedCases,
+    loadAllocationAvailability = getAllocationAvailability,
   } = {}
 ) {
   /** @type {DashboardState} */
@@ -296,6 +298,7 @@ export function createRouteSlice(
         reviewerStatusFilter: '',
         appealSort: { key: 'raised', dir: 'asc' },
         allocationEmpty: false,
+        allocationAtCapacity: false,
         ownerSummaries: [],
         actionCentre: initialActionCentreState(context.chrome.permissions),
         responsibleParty: initialResponsiblePartyState(
@@ -308,6 +311,7 @@ export function createRouteSlice(
   /** @type {any} */
   let effectTools = null;
   let effectsActive = false;
+  let allocationRequestActive = false;
 
   async function refreshReviewerCases() {
     const client = effectTools?.context.client;
@@ -403,34 +407,52 @@ export function createRouteSlice(
     async requestNextCase() {
       const tools = effectTools;
       const client = tools?.context.client;
-      if (!client) return;
-      const candidates = await loadAllocationCandidates({
-        client,
-        allocationSources: tools.context.allocationSources,
-      });
-      for (const candidate of candidates) {
-        const result = await client.patchCase(
-          candidate.id,
-          { assignedReviewer: tools.context.chrome.currentUser.id },
-          candidate.etag,
-          candidate._listOptions
-        );
-        if (result.ok) {
+      if (!client || allocationRequestActive) return;
+      allocationRequestActive = true;
+      try {
+        const availability = await loadAllocationAvailability({
+          client,
+          allocationSources: tools.context.allocationSources,
+          currentUserId: tools.context.chrome.currentUser.id,
+        });
+        if (availability.isAtCapacity) {
           if (effectsActive) {
             effectTools.dispatch({
               type: 'allocation/availability-changed',
               isEmpty: false,
+              isAtCapacity: true,
             });
           }
-          await refreshReviewerCases();
           return;
         }
-      }
-      if (effectsActive) {
-        effectTools.dispatch({
-          type: 'allocation/availability-changed',
-          isEmpty: true,
-        });
+        for (const candidate of availability.candidates) {
+          const result = await client.patchCase(
+            candidate.id,
+            { assignedReviewer: tools.context.chrome.currentUser.id },
+            candidate.etag,
+            candidate._listOptions
+          );
+          if (result.ok) {
+            if (effectsActive) {
+              effectTools.dispatch({
+                type: 'allocation/availability-changed',
+                isEmpty: false,
+                isAtCapacity: false,
+              });
+            }
+            await refreshReviewerCases();
+            return;
+          }
+        }
+        if (effectsActive) {
+          effectTools.dispatch({
+            type: 'allocation/availability-changed',
+            isEmpty: true,
+            isAtCapacity: false,
+          });
+        }
+      } finally {
+        allocationRequestActive = false;
       }
     },
   };
@@ -463,7 +485,11 @@ export function createRouteSlice(
         return {
           ...state,
           routes: {
-            dashboard: { ...route, allocationEmpty: action.isEmpty },
+            dashboard: {
+              ...route,
+              allocationEmpty: action.isEmpty,
+              allocationAtCapacity: action.isAtCapacity,
+            },
           },
         };
       }

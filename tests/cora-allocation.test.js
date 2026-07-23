@@ -6,8 +6,12 @@ import { fireEvent } from './helpers/semantic-dom.js';
 
 installDom();
 
-const { Allocation, getUnassignedCases, orderCandidatesByAge } =
-  await import('../src/components/sections/cora-allocation.js');
+const {
+  Allocation,
+  getAllocationAvailability,
+  getUnassignedCases,
+  orderCandidatesByAge,
+} = await import('../src/components/sections/cora-allocation.js');
 
 test('Allocation renders the request action and reports clicks', () => {
   let clicks = 0;
@@ -23,9 +27,23 @@ test('Allocation renders the request action and reports clicks', () => {
 });
 
 test('Allocation renders the empty state after the route exhausts candidates', () => {
-  const view = Allocation({ isEmpty: true, onRequestNextCase() {} });
+  const view = Allocation({
+    isEmpty: true,
+    isAtCapacity: false,
+    onRequestNextCase() {},
+  });
   assert.equal(view.className, 'cora-empty cora-allocation-empty');
   assert.equal(view.textContent, 'No Cases available');
+});
+
+test('Allocation distinguishes a capacity limit from an empty candidate pool', () => {
+  const view = Allocation({
+    isEmpty: false,
+    isAtCapacity: true,
+    onRequestNextCase() {},
+  });
+  assert.equal(view.className, 'cora-empty cora-allocation-empty');
+  assert.equal(view.textContent, 'Maximum active Cases reached');
 });
 
 test('orderCandidatesByAge sorts oldest first and uses one stable tie-break draw per candidate', () => {
@@ -118,4 +136,107 @@ test('getUnassignedCases returns no candidates without a client', async () => {
     await getUnassignedCases({ client: null, allocationSources: [] }),
     []
   );
+});
+
+test('getAllocationAvailability skips at-limit sources and counts only non-held In-progress Cases', async () => {
+  /** @type {any[]} */
+  const counts = [];
+  /** @type {any[]} */
+  const reads = [];
+  const availability = await getAllocationAvailability({
+    client: /** @type {any} */ ({
+      async countCases(/** @type {any} */ filter, /** @type {any} */ options) {
+        counts.push([filter, options]);
+        return options.listName === 'Cases-A' ? 3 : 2;
+      },
+      async listCases(/** @type {any} */ filter, /** @type {any} */ options) {
+        reads.push([filter, options]);
+        return [
+          {
+            id: 'available-b',
+            created: '2026-01-01',
+            assignedReviewer: '',
+            etag: '"1"',
+          },
+        ];
+      },
+    }),
+    allocationSources: [
+      { slug: 'a', listName: 'Cases-A', maxInProgressCases: 3 },
+      { slug: 'b', listName: 'Cases-B', maxInProgressCases: 3 },
+    ],
+    currentUserId: 'reviewer-1',
+    random: () => 0,
+  });
+
+  assert.deepEqual(counts, [
+    [
+      {
+        status: 'In-progress',
+        assignedReviewer: 'reviewer-1',
+        onHold: false,
+      },
+      { listName: 'Cases-A' },
+    ],
+    [
+      {
+        status: 'In-progress',
+        assignedReviewer: 'reviewer-1',
+        onHold: false,
+      },
+      { listName: 'Cases-B' },
+    ],
+  ]);
+  assert.deepEqual(reads, [
+    [{ status: 'In-progress', caseType: 'b' }, { listName: 'Cases-B' }],
+  ]);
+  assert.deepEqual(
+    availability.candidates.map((candidate) => candidate.id),
+    ['available-b']
+  );
+  assert.equal(availability.isAtCapacity, false);
+});
+
+test('getAllocationAvailability reports capacity when every limited source is at or over its limit', async () => {
+  let reads = 0;
+  const availability = await getAllocationAvailability({
+    client: /** @type {any} */ ({
+      async countCases() {
+        return 4;
+      },
+      async listCases() {
+        reads += 1;
+        return [];
+      },
+    }),
+    allocationSources: [
+      { slug: 'a', listName: 'Cases-A', maxInProgressCases: 3 },
+      { slug: 'b', listName: 'Cases-B', maxInProgressCases: 2 },
+    ],
+    currentUserId: 'reviewer-1',
+  });
+
+  assert.deepEqual(availability.candidates, []);
+  assert.equal(availability.isAtCapacity, true);
+  assert.equal(reads, 0);
+});
+
+test('getAllocationAvailability leaves unconfigured sources unlimited', async () => {
+  let counts = 0;
+  const availability = await getAllocationAvailability({
+    client: /** @type {any} */ ({
+      async countCases() {
+        counts += 1;
+        return 99;
+      },
+      async listCases() {
+        return [];
+      },
+    }),
+    allocationSources: [{ slug: 'a', listName: 'Cases-A' }],
+    currentUserId: 'reviewer-1',
+  });
+
+  assert.equal(counts, 0);
+  assert.equal(availability.isAtCapacity, false);
 });

@@ -45,6 +45,51 @@ test('resolveCaseSourcesFromCaseTypes: grants via the list-access group derived 
   ]);
 });
 
+test('resolveCaseSourcesFromCaseTypes: carries the optional allocation limit from Case Type config', () => {
+  const sources = resolveCaseSourcesFromCaseTypes(
+    ['Reviewers - Complaints'],
+    [
+      {
+        slug: 'complaints',
+        listName: 'Cases-Complaints',
+        config: minimalConfig({
+          displayName: 'Complaints',
+          maxInProgressCases: 3,
+        }),
+      },
+    ]
+  );
+
+  assert.deepEqual(sources, [
+    {
+      slug: 'complaints',
+      listName: 'Cases-Complaints',
+      displayName: 'Complaints',
+      maxInProgressCases: 3,
+    },
+  ]);
+});
+
+test('resolveCaseSourcesFromCaseTypes: rejects a non-positive allocation limit', () => {
+  assert.throws(
+    () =>
+      resolveCaseSourcesFromCaseTypes(
+        ['Reviewers - Complaints'],
+        [
+          {
+            slug: 'complaints',
+            listName: 'Cases-Complaints',
+            config: minimalConfig({
+              displayName: 'Complaints',
+              maxInProgressCases: 0,
+            }),
+          },
+        ]
+      ),
+    /maxInProgressCases must be a positive integer/
+  );
+});
+
 test('resolveCaseSourcesFromCaseTypes: a Case Type Owner gets only their Case Type source', () => {
   const sources = resolveCaseSourcesFromCaseTypes(
     ['CaseTypeOwner - Complaints'],
@@ -323,6 +368,7 @@ test('resolveCaseSources: a Reviewers - Complaints user is granted the complaint
       slug: 'complaints',
       listName: 'Cases-Complaints',
       displayName: 'Complaints',
+      maxInProgressCases: 3,
     },
   ]);
 });

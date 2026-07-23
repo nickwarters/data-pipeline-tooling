@@ -524,6 +524,33 @@ test('HttpSharePointClient: countCases maps the reason flags to indexed boolean 
   assert.ok(url.includes('Reopened eq 1'));
 });
 
+test('HttpSharePointClient: countCases maps non-held capacity to the indexed OnHold column', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () => new Response('2', { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  await client.countCases(
+    {
+      status: 'In-progress',
+      assignedReviewer: 'reviewer-1',
+      onHold: false,
+    },
+    { listName: 'Cases-Complaints' }
+  );
+
+  const url = decodeURIComponent(calls[0].url);
+  assert.ok(url.includes("Status eq 'In-progress'"));
+  assert.ok(url.includes("AssignedReviewerId eq 'reviewer-1'"));
+  assert.ok(url.includes('OnHold eq 0'));
+});
+
 test('HttpSharePointClient: countCases with anyOf builds an OR of parenthesised sub-filters', async () => {
   const { fetch, calls } = makeFetch([
     {

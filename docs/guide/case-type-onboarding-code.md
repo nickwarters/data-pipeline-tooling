@@ -203,6 +203,7 @@ const config = {
   listName: 'Cases-WidgetReview',
   eligibleGroups: ['Reviewers - Widget Review'],
   slaHours: 72,
+  maxInProgressCases: 3,
   attributeFailures: true,
   detailFields: [
     { key: 'orderRef', label: 'Order reference' },
@@ -261,6 +262,10 @@ What each field does, and how to choose its value:
   blanket group (e.g. plain `Reviewers`) would open the type to every
   reviewer — usually not what you want.
 - **`slaHours`** — drives the working-day due-date and the overdue evaluator.
+- **`maxInProgressCases`** — optional positive-integer soft limit for allocation.
+  Before claiming a Case, the framework counts this Reviewer's `In-progress`
+  Cases whose `OnHold` value is No. Omit the field to leave allocation
+  unlimited for this Case Type.
 - **`attributeFailures`** — when true, a failed Answer asks the Reviewer to
   attribute the failure to a person (feeds Responsible-Party reporting).
 - **`detailFields`** — the read-only Case Details panel, `{ key, label }`

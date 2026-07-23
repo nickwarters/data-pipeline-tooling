@@ -27,6 +27,7 @@ const config = {
   listName: 'Cases-Complaints',
   eligibleGroups: ['Reviewers - Complaints'],
   slaHours: 72,
+  maxInProgressCases: 3,
   attributeFailures: true,
   // Case Type-specific Case Details fields. Values live in the
   // CaseRow.details JSON blob keyed by `key`.

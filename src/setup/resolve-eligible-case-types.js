@@ -19,7 +19,7 @@ import { caseTypeGroupNames, permissions } from '../services/permissions.js';
  * Case Type's human name, carried so per-source consumers (dashboards,
  * fetchers) need not re-resolve it.
  *
- * @typedef {{ slug: string, listName: string, displayName: string }} CaseSource
+ * @typedef {{ slug: string, listName: string, displayName: string, maxInProgressCases?: number }} CaseSource
  */
 
 /**
@@ -27,18 +27,31 @@ import { caseTypeGroupNames, permissions } from '../services/permissions.js';
  * so the later write lands on the same list the row was read from. Structurally
  * a `CaseSource` without the display name.
  *
- * @typedef {{ slug: string, listName: string }} AllocationSource
+ * @typedef {{ slug: string, listName: string, maxInProgressCases?: number }} AllocationSource
  */
 
 /**
  * Project a resolved Case Type down to the public `CaseSource` shape, coercing
  * an absent display name to an empty string in exactly one place.
  *
- * @param {{ slug: string, listName: string, displayName?: string }} source
+ * @param {{ slug: string, listName: string, displayName?: string, maxInProgressCases?: number }} source
  * @returns {CaseSource}
  */
-function toCaseSource({ slug, listName, displayName }) {
-  return { slug, listName, displayName: displayName ?? '' };
+function toCaseSource({ slug, listName, displayName, maxInProgressCases }) {
+  if (
+    maxInProgressCases !== undefined &&
+    (!Number.isInteger(maxInProgressCases) || maxInProgressCases <= 0)
+  ) {
+    throw new TypeError(
+      `Case Type "${slug}" maxInProgressCases must be a positive integer.`
+    );
+  }
+  return {
+    slug,
+    listName,
+    displayName: displayName ?? '',
+    ...(maxInProgressCases === undefined ? {} : { maxInProgressCases }),
+  };
 }
 
 /**
@@ -112,7 +125,12 @@ export function resolveCaseSourcesFromCaseTypes(userGroups, caseTypes) {
       });
 
   return eligible.map(({ slug, listName, config }) =>
-    toCaseSource({ slug, listName, displayName: config.displayName })
+    toCaseSource({
+      slug,
+      listName,
+      displayName: config.displayName,
+      maxInProgressCases: config.maxInProgressCases,
+    })
   );
 }
 

@@ -43,7 +43,13 @@ function context(permissions) {
         displayName: 'Complaints',
       },
     ],
-    allocationSources: [{ slug: 'complaints', listName: 'Cases-Complaints' }],
+    allocationSources: [
+      {
+        slug: 'complaints',
+        listName: 'Cases-Complaints',
+        maxInProgressCases: 3,
+      },
+    ],
     appEl: document.createElement('main'),
   });
 }
@@ -415,13 +421,16 @@ test('dashboard allocation claims a candidate and refreshes reviewer rows throug
     /** @type {any} */ ({
       loadKpis: async () => [],
       listAcrossSources: async () => [{ id: 'refreshed', dueDate: '' }],
-      loadAllocationCandidates: async () => [
-        {
-          id: 'oldest',
-          etag: '"4"',
-          _listOptions: { listName: 'Cases-Complaints' },
-        },
-      ],
+      loadAllocationAvailability: async () => ({
+        candidates: [
+          {
+            id: 'oldest',
+            etag: '"4"',
+            _listOptions: { listName: 'Cases-Complaints' },
+          },
+        ],
+        isAtCapacity: false,
+      }),
     })
   );
   const tools = /** @type {any} */ ({
@@ -474,18 +483,21 @@ test('dashboard allocation retries a stale candidate before claiming the next Ca
     /** @type {any} */ ({
       loadKpis: async () => [],
       listAcrossSources: async () => [],
-      loadAllocationCandidates: async () => [
-        {
-          id: 'stale',
-          etag: '"1"',
-          _listOptions: { listName: 'Cases-Complaints' },
-        },
-        {
-          id: 'available',
-          etag: '"2"',
-          _listOptions: { listName: 'Cases-Complaints' },
-        },
-      ],
+      loadAllocationAvailability: async () => ({
+        candidates: [
+          {
+            id: 'stale',
+            etag: '"1"',
+            _listOptions: { listName: 'Cases-Complaints' },
+          },
+          {
+            id: 'available',
+            etag: '"2"',
+            _listOptions: { listName: 'Cases-Complaints' },
+          },
+        ],
+        isAtCapacity: false,
+      }),
     })
   );
   const tools = /** @type {any} */ ({
@@ -530,13 +542,16 @@ test('dashboard allocation exhausts stale candidates and renders the resulting e
     /** @type {any} */ ({
       loadKpis: async () => [],
       listAcrossSources: async () => [],
-      loadAllocationCandidates: async () => [
-        {
-          id: 'stale',
-          etag: '"1"',
-          _listOptions: { listName: 'Cases-Complaints' },
-        },
-      ],
+      loadAllocationAvailability: async () => ({
+        candidates: [
+          {
+            id: 'stale',
+            etag: '"1"',
+            _listOptions: { listName: 'Cases-Complaints' },
+          },
+        ],
+        isAtCapacity: false,
+      }),
     })
   );
   const tools = /** @type {any} */ ({
@@ -560,6 +575,7 @@ test('dashboard allocation exhausts stale candidates and renders the resulting e
   assert.deepEqual(exhausted, {
     type: 'allocation/availability-changed',
     isEmpty: true,
+    isAtCapacity: false,
   });
   const state = slice.reducer(slice.initialState, exhausted);
   assert.match(slice.view(state, tools).textContent, /No Cases available/);
@@ -567,10 +583,10 @@ test('dashboard allocation exhausts stale candidates and renders the resulting e
 
 test('dashboard allocation action is inert before start and after route disposal', async () => {
   const ctx = context(capabilities({ isReviewer: true }));
-  /** @type {(value: any[]) => void} */
-  let resolveCandidates = () => {};
-  const candidates = new Promise((resolve) => {
-    resolveCandidates = resolve;
+  /** @type {(value: any) => void} */
+  let resolveAvailability = () => {};
+  const availability = new Promise((resolve) => {
+    resolveAvailability = resolve;
   });
   let patches = 0;
   ctx.client = /** @type {any} */ ({
@@ -587,7 +603,7 @@ test('dashboard allocation action is inert before start and after route disposal
     /** @type {any} */ ({
       loadKpis: async () => [],
       listAcrossSources: async () => [],
-      loadAllocationCandidates: async () => candidates,
+      loadAllocationAvailability: async () => availability,
     })
   );
   const tools = /** @type {any} */ ({
@@ -607,14 +623,17 @@ test('dashboard allocation action is inert before start and after route disposal
     .querySelector('.cora-allocation-btn')
     ?.dispatchEvent(/** @type {any} */ ({ type: 'click' }));
   dispose();
-  resolveCandidates([
-    {
-      id: 'late',
-      etag: '"1"',
-      _listOptions: { listName: 'Cases-Complaints' },
-    },
-  ]);
-  await candidates;
+  resolveAvailability({
+    candidates: [
+      {
+        id: 'late',
+        etag: '"1"',
+        _listOptions: { listName: 'Cases-Complaints' },
+      },
+    ],
+    isAtCapacity: false,
+  });
+  await availability;
   await Promise.resolve();
   await Promise.resolve();
 
@@ -627,10 +646,10 @@ test('dashboard allocation action is inert before start and after route disposal
 
 test('dashboard allocation does not publish exhausted state after route disposal', async () => {
   const ctx = context(capabilities({ isReviewer: true }));
-  /** @type {(value: any[]) => void} */
-  let resolveCandidates = () => {};
-  const candidates = new Promise((resolve) => {
-    resolveCandidates = resolve;
+  /** @type {(value: any) => void} */
+  let resolveAvailability = () => {};
+  const availability = new Promise((resolve) => {
+    resolveAvailability = resolve;
   });
   ctx.client = /** @type {any} */ ({
     async patchCase() {
@@ -645,7 +664,7 @@ test('dashboard allocation does not publish exhausted state after route disposal
     /** @type {any} */ ({
       loadKpis: async () => [],
       listAcrossSources: async () => [],
-      loadAllocationCandidates: async () => candidates,
+      loadAllocationAvailability: async () => availability,
     })
   );
   const tools = /** @type {any} */ ({
@@ -660,14 +679,17 @@ test('dashboard allocation does not publish exhausted state after route disposal
     .querySelector('.cora-allocation-btn')
     ?.dispatchEvent(/** @type {any} */ ({ type: 'click' }));
   dispose();
-  resolveCandidates([
-    {
-      id: 'late-stale',
-      etag: '"1"',
-      _listOptions: { listName: 'Cases-Complaints' },
-    },
-  ]);
-  await candidates;
+  resolveAvailability({
+    candidates: [
+      {
+        id: 'late-stale',
+        etag: '"1"',
+        _listOptions: { listName: 'Cases-Complaints' },
+      },
+    ],
+    isAtCapacity: false,
+  });
+  await availability;
   await Promise.resolve();
   await Promise.resolve();
 
@@ -675,6 +697,151 @@ test('dashboard allocation does not publish exhausted state after route disposal
     actions.some((action) => action.type === 'allocation/availability-changed'),
     false
   );
+});
+
+test('dashboard allocation blocks at capacity and re-checks after a successful claim', async () => {
+  const ctx = context(capabilities({ isReviewer: true }));
+  let patches = 0;
+  ctx.client = /** @type {any} */ ({
+    async patchCase() {
+      patches += 1;
+      return { ok: true };
+    },
+  });
+  let checks = 0;
+  /** @type {any[]} */
+  const actions = [];
+  /** @type {() => void} */
+  let markFirstClaimComplete = () => {};
+  const firstClaimComplete = new Promise((resolve) => {
+    markFirstClaimComplete = resolve;
+  });
+  /** @type {() => void} */
+  let markCapacityPublished = () => {};
+  const capacityPublished = new Promise((resolve) => {
+    markCapacityPublished = resolve;
+  });
+  const slice = createRouteSlice(
+    {},
+    ctx,
+    /** @type {any} */ ({
+      loadKpis: async () => [],
+      listAcrossSources: async () => [],
+      async loadAllocationAvailability() {
+        checks += 1;
+        return checks === 1
+          ? {
+              candidates: [
+                {
+                  id: 'third',
+                  etag: '"1"',
+                  _listOptions: { listName: 'Cases-Complaints' },
+                },
+              ],
+              isAtCapacity: false,
+            }
+          : { candidates: [], isAtCapacity: true };
+      },
+    })
+  );
+  const tools = /** @type {any} */ ({
+    context: ctx,
+    params: {},
+    dispatch: (/** @type {any} */ action) => {
+      actions.push(action);
+      if (action.type === 'reviewer-cases/loaded' && patches === 1) {
+        markFirstClaimComplete();
+      }
+      if (
+        action.type === 'allocation/availability-changed' &&
+        action.isAtCapacity === true
+      ) {
+        markCapacityPublished();
+      }
+    },
+    listen: () => {},
+  });
+  slice.start(tools);
+
+  const request = () =>
+    fireEvent(
+      getByRole(slice.view(slice.initialState, tools), 'button', {
+        name: 'Request next Case',
+      }),
+      'click'
+    );
+  request();
+  await firstClaimComplete;
+  await Promise.resolve();
+  request();
+  await capacityPublished;
+
+  assert.equal(checks, 2);
+  assert.equal(patches, 1);
+  const capacity = actions.find(
+    (action) =>
+      action.type === 'allocation/availability-changed' &&
+      action.isAtCapacity === true
+  );
+  assert.deepEqual(capacity, {
+    type: 'allocation/availability-changed',
+    isEmpty: false,
+    isAtCapacity: true,
+  });
+  const state = slice.reducer(slice.initialState, capacity);
+  assert.match(
+    slice.view(state, tools).textContent,
+    /Maximum active Cases reached/
+  );
+});
+
+test('dashboard allocation coalesces concurrent requests into one capacity check', async () => {
+  const ctx = context(capabilities({ isReviewer: true }));
+  /** @type {(value: any) => void} */
+  let resolveAvailability = () => {};
+  const availability = new Promise((resolve) => {
+    resolveAvailability = resolve;
+  });
+  let checks = 0;
+  /** @type {() => void} */
+  let markPublished = () => {};
+  const published = new Promise((resolve) => {
+    markPublished = resolve;
+  });
+  const slice = createRouteSlice(
+    {},
+    ctx,
+    /** @type {any} */ ({
+      loadKpis: async () => [],
+      listAcrossSources: async () => [],
+      async loadAllocationAvailability() {
+        checks += 1;
+        return availability;
+      },
+    })
+  );
+  const tools = /** @type {any} */ ({
+    context: ctx,
+    params: {},
+    dispatch(/** @type {any} */ action) {
+      if (action.type === 'allocation/availability-changed') markPublished();
+    },
+    listen: () => {},
+  });
+  slice.start(tools);
+  const request = () =>
+    fireEvent(
+      getByRole(slice.view(slice.initialState, tools), 'button', {
+        name: 'Request next Case',
+      }),
+      'click'
+    );
+
+  request();
+  request();
+  assert.equal(checks, 1);
+  resolveAvailability({ candidates: [], isAtCapacity: false });
+  await published;
 });
 
 test('dashboard reducer stores owner-summary state', () => {

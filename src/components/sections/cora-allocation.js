@@ -18,10 +18,15 @@ import { listCasesPerSource } from '../../services/across-sources.js';
  */
 
 /**
- * @param {{ isEmpty: boolean, onRequestNextCase: () => void }} props
+ * @param {{ isEmpty: boolean, isAtCapacity?: boolean, onRequestNextCase: () => void }} props
  * @returns {HTMLElement}
  */
-export function Allocation({ isEmpty, onRequestNextCase }) {
+export function Allocation({ isEmpty, isAtCapacity, onRequestNextCase }) {
+  if (isAtCapacity) {
+    return EmptyState('Maximum active Cases reached', {
+      className: 'cora-allocation-empty',
+    });
+  }
   if (isEmpty) {
     return EmptyState('No Cases available', {
       className: 'cora-allocation-empty',
@@ -96,4 +101,60 @@ export async function getUnassignedCases({
   );
 
   return orderCandidatesByAge(candidates, random);
+}
+
+/**
+ * Re-checks the current Reviewer's active workload per limited Case Type before
+ * loading allocation candidates. Held Cases do not consume capacity. A source
+ * without `maxInProgressCases` remains unlimited and needs no count query.
+ *
+ * @param {{
+ * client: SharePointClient | null,
+ * allocationSources: AllocationSource[],
+ * currentUserId: string,
+ * random?: () => number
+ * }} props
+ * @returns {Promise<{ candidates: AllocationCandidate[], isAtCapacity: boolean }>}
+ */
+export async function getAllocationAvailability({
+  client,
+  allocationSources,
+  currentUserId,
+  random,
+}) {
+  if (!client) return { candidates: [], isAtCapacity: false };
+
+  const capacity = await Promise.all(
+    allocationSources.map(async (source) => {
+      if (source.maxInProgressCases === undefined) {
+        return { source, isAtCapacity: false };
+      }
+      const activeCases = await client.countCases(
+        {
+          status: CASE_STATUS.IN_PROGRESS,
+          assignedReviewer: currentUserId,
+          onHold: false,
+        },
+        { listName: source.listName }
+      );
+      return {
+        source,
+        isAtCapacity: activeCases >= source.maxInProgressCases,
+      };
+    })
+  );
+  const availableSources = capacity
+    .filter(({ isAtCapacity }) => !isAtCapacity)
+    .map(({ source }) => source);
+  const isAtCapacity =
+    allocationSources.length > 0 && availableSources.length === 0;
+
+  return {
+    candidates: await getUnassignedCases({
+      client,
+      allocationSources: availableSources,
+      random,
+    }),
+    isAtCapacity,
+  };
 }

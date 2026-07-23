@@ -49,10 +49,13 @@ async function boot() {
     userGroups,
     capabilities.ownedJourneyCaseTypes
   );
-  const allocationSources = caseSources.map(({ slug, listName }) => ({
-    slug,
-    listName,
-  }));
+  const allocationSources = caseSources.map(
+    ({ slug, listName, maxInProgressCases }) => ({
+      slug,
+      listName,
+      ...(maxInProgressCases === undefined ? {} : { maxInProgressCases }),
+    })
+  );
 
   const appEl = /** @type {Element} */ (document.getElementById('app'));
   appEl.setAttribute('data-cora-root', '');

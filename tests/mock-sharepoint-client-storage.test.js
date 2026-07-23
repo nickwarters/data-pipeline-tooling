@@ -105,6 +105,28 @@ test('MockSharePointClient: On hold fields round-trip together under mock mode',
   assert.equal(reread?.placedOnHoldAt, '2026-07-23T09:30:00.000Z');
 });
 
+test('MockSharePointClient: non-held filters treat absent and false On hold values as active', async () => {
+  const client = new MockSharePointClient({
+    lists: {
+      [LIST]: [
+        { ...CASES[0], id: 'absent', onHold: undefined },
+        { ...CASES[0], id: 'active', onHold: false },
+        { ...CASES[0], id: 'held', onHold: true },
+      ],
+    },
+    personas: PERSONAS,
+  });
+
+  const rows = await client.listCases(
+    { status: 'In-progress', assignedReviewer: 'user-1', onHold: false },
+    { listName: LIST }
+  );
+  assert.deepEqual(
+    rows.map((row) => row.id),
+    ['absent', 'active']
+  );
+});
+
 test('MockSharePointClient: patchCase ETag changes after each write', async () => {
   const client = makeClient();
   const r1 = await client.patchCase('case-1', { notes: 'first' }, 'etag-1', {

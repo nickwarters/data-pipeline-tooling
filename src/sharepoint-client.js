@@ -254,7 +254,7 @@
  * last 7 days" on the busy Case Type) — is summed from sub-threshold per-day
  * `$count` slices rather than one large fetch.
  *
- * @typedef {{ status?: string, assignedReviewer?: string, caseType?: string, responsibleParty?: string, overdue?: boolean, awaitingResponsibleParty?: boolean, reviewRequired?: boolean, hasOpenAppeal?: boolean, reopened?: boolean, assignedReviewerManager?: string, effectiveOutcome?: string, outcomeOverridden?: boolean, completedAfter?: string, completedBefore?: string, anyOf?: ListCasesFilter[] }} ListCasesFilter
+ * @typedef {{ status?: string, assignedReviewer?: string, caseType?: string, responsibleParty?: string, overdue?: boolean, awaitingResponsibleParty?: boolean, reviewRequired?: boolean, onHold?: boolean, hasOpenAppeal?: boolean, reopened?: boolean, assignedReviewerManager?: string, effectiveOutcome?: string, outcomeOverridden?: boolean, completedAfter?: string, completedBefore?: string, anyOf?: ListCasesFilter[] }} ListCasesFilter
  * @typedef {{ listName?: string, top?: number, skip?: number, orderBy?: string, orderDir?: 'asc' | 'desc' }} CaseListOptions
  */
 
@@ -414,6 +414,7 @@
  * questionGroups?: Record<string, QuestionGroupConfig>,
  * appeal?: AppealConfig,
  * slaHours?: number,
+ * maxInProgressCases?: number,
  * attributeFailures?: boolean,
  * remediationFields?: RemediationField[],
  * captureGroups?: CaptureGroup[],

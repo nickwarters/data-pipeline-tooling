@@ -292,6 +292,10 @@ test('complaints fixtures: include an On hold Case for the mock Case Review togg
   assert.equal(typeof onHold.placedOnHoldAt, 'string');
 });
 
+test('complaints config: limits each Reviewer to three active Cases', () => {
+  assert.equal(config.maxInProgressCases, 3);
+});
+
 test('complaints fixtures: the Completed Case reference answers compute to its frozen outcomeAtCompletion', () => {
   const completed = cases.find(
     (c) => c.caseType === 'complaints' && c.status === 'Completed'
