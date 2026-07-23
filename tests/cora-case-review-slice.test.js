@@ -1223,7 +1223,7 @@ test('CASE-1 view: shipped tab shell renders only permitted tabs and dispatches 
   assert.equal(visiblePanel?.getAttribute('id'), 'case-panel-appealRequest');
 });
 
-test('On hold view: Reviewer sees the current hold state and non-Reviewers do not', () => {
+test('On hold view: only Reviewers with an In-progress Case see the current hold state', () => {
   const reviewerState = caseReviewReducer(
     createInitialCaseReviewState(chrome, 'popover'),
     { type: 'case/load-finished', snapshot: snapshot() }
@@ -1234,11 +1234,7 @@ test('On hold view: Reviewer sees the current hold state and non-Reviewers do no
   });
 
   assert.equal(toggle.getAttribute('aria-pressed'), 'false');
-  fireEvent(toggle, 'click');
-  assert.deepEqual(reviewerView.actions.at(-1), {
-    type: 'case/on-hold-toggle-requested',
-    onHold: true,
-  });
+  assert.equal(toggle.getAttribute('aria-label'), null);
 
   const held = caseReviewReducer(reviewerState, {
     type: 'case/on-hold-changed',
@@ -1267,6 +1263,27 @@ test('On hold view: Reviewer sees the current hold state and non-Reviewers do no
     ).some((button) => button.textContent === 'On hold'),
     false
   );
+
+  for (const status of ['Actions In Progress', 'Completed']) {
+    const reportableState = caseReviewReducer(
+      createInitialCaseReviewState(chrome, 'popover'),
+      {
+        type: 'case/load-finished',
+        snapshot: {
+          ...snapshot(),
+          caseRow: { ...caseRow, status },
+        },
+      }
+    );
+    assert.equal(
+      queryAllByRole(
+        renderShippedState(reportableState).container,
+        'button'
+      ).some((button) => button.textContent === 'On hold'),
+      false,
+      `${status} Cases must not expose the On hold control`
+    );
+  }
 });
 
 test('CASE-4 view: Summary is rendered from store state and configured sections', () => {
@@ -2007,6 +2024,24 @@ test('CASE-7 route: mock-mode store shell keeps Review working at the existing U
     onHold: false,
     placedOnHoldAt: null,
   });
+
+  const patchCountBeforeRapidToggle = patches.length;
+  const rapidToggle = getByRole(container, 'button', { name: 'On hold' });
+  fireEvent(rapidToggle, 'click');
+  fireEvent(rapidToggle, 'click');
+  await saveQueue.whenIdle();
+  await flush();
+  assert.equal(patches.length, patchCountBeforeRapidToggle + 1);
+  assert.deepEqual(patches.at(-1), {
+    onHold: false,
+    placedOnHoldAt: null,
+  });
+  assert.equal(
+    getByRole(container, 'button', { name: 'On hold' }).getAttribute(
+      'aria-pressed'
+    ),
+    'false'
+  );
 
   if (typeof dispose === 'function') dispose();
   qNeeds.allowFreeFormRemediation = originalFreeForm;

@@ -1,6 +1,7 @@
 // @ts-check
 import { h } from '../lib/html.js';
 import { CaseReviewViewModel } from '../lib/case-review-view-model.js';
+import { CASE_STATUS } from '../lib/case-statuses.js';
 import {
   allApplicableAnswered,
   evaluate,
@@ -424,6 +425,7 @@ export function createRouteSlice(params, context) {
   const questionsView = createQuestionPanelView();
   /** @type {ReturnType<typeof createCaseReviewSaveEffect> | null} */
   let save = null;
+  let requestedOnHold = false;
   /** @type {null | {
    *   root: HTMLElement,
    *   status: HTMLElement,
@@ -614,23 +616,20 @@ export function createRouteSlice(params, context) {
     ]);
 
     const tabs = visibleCaseTabs(snapshot);
+    requestedOnHold = caseRow.onHold === true;
     tools.morph(
       parts.holdControl,
-      state.chrome.permissions.isReviewer
+      state.chrome.permissions.isReviewer &&
+        caseRow.status === CASE_STATUS.IN_PROGRESS
         ? h(
             'button',
             {
               type: 'button',
               className: 'cora-case-review__hold-toggle',
-              'aria-label': 'On hold',
               'aria-pressed': String(caseRow.onHold === true),
               onClick: () => {
-                const onHold = caseRow.onHold !== true;
-                tools.dispatch({
-                  type: 'case/on-hold-toggle-requested',
-                  onHold,
-                });
-                save?.onHoldChanged(onHold);
+                requestedOnHold = !requestedOnHold;
+                save?.onHoldChanged(requestedOnHold);
               },
             },
             'On hold'
