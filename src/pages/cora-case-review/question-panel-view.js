@@ -12,6 +12,12 @@ import {
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 
+/**
+ * Option text longer than this many characters triggers the stacked-card
+ * layout (`cora-question-options-long`) instead of the default inline
+ * pill layout, so sentence-length single-choice options (e.g. `outcome`
+ * wordings) remain readable.
+ */
 const LONG_OPTION_THRESHOLD = 40;
 
 /** @param {QuestionDefinition} question */

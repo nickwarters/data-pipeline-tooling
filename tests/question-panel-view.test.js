@@ -170,12 +170,12 @@ test('CASE-2 Questions view stacks only sentence-length single-choice and Outcom
     );
   }
 
-  const longChoice = {
+  const baseChoice = {
     ...question('short-choice', 'Identity'),
     responseType: /** @type {const} */ ('single-choice'),
   };
   const shortChoice = {
-    ...longChoice,
+    ...baseChoice,
     options: ['A', 'B'],
   };
   const shortNode = createQuestionPanelView().render(
