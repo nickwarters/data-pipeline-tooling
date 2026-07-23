@@ -294,6 +294,22 @@ test('CASE-1 state: route state owns loading, save status, and selected tab unde
   );
 });
 
+test('CASE-1 state: expanding a capture group preserves an override of a collapsed case-type default', () => {
+  const initial = createInitialCaseReviewState(chrome, 'popover');
+
+  const expanded = caseReviewReducer(initial, {
+    type: 'case/capture-group-toggled',
+    questionId: 'q-needs',
+    groupKey: 'customer-impact',
+    collapsed: false,
+  });
+
+  assert.deepEqual(
+    expanded.routes.caseReview.captureCollapsed['q-needs'],
+    new Map([['customer-impact', false]])
+  );
+});
+
 test('CASE-5 state: attribution search query and results stay independent per failed Question', () => {
   let state = createInitialCaseReviewState(chrome, 'popover');
   state = caseReviewReducer(state, {

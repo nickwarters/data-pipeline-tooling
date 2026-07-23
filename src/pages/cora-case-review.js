@@ -65,7 +65,7 @@ import {
  *   saveStatus: SaveStatus,
  *   conversationHidden: boolean,
  *   completionPending: boolean,
- *   captureCollapsed: Record<string, Set<string>>,
+ *   captureCollapsed: Record<string, Map<string, boolean>>,
  *   attributionSearch: Record<string, { query: string, people: import('../sharepoint-client.js').PersonResult[] }>,
  *   snapshot: CaseReviewSnapshot | null,
  * } }} routes
@@ -193,10 +193,9 @@ export function caseReviewReducer(state, action) {
     };
   }
   if (action.type === 'case/capture-group-toggled') {
-    const current = route.captureCollapsed[action.questionId] ?? new Set();
-    const collapsed = new Set(current);
-    if (action.collapsed) collapsed.add(action.groupKey);
-    else collapsed.delete(action.groupKey);
+    const current = route.captureCollapsed[action.questionId] ?? new Map();
+    const collapsed = new Map(current);
+    collapsed.set(action.groupKey, action.collapsed);
     return {
       ...state,
       routes: {

@@ -24,7 +24,7 @@ import { normaliseConfiguredActions } from '../../evaluators/configured-outcome.
  * @property {boolean} canCaptureDetails
  * @property {import('../../sharepoint-client.js').CaptureGroup[]} captureGroups
  * @property {boolean} canCapture
- * @property {Record<string, Set<string>>} captureCollapsed
+ * @property {Record<string, Map<string, boolean>>} captureCollapsed
  * @property {Record<string, { query: string, people: import('../../sharepoint-client.js').PersonResult[] }>} attributionSearch
  * @property {boolean} canSelectRemediation
  * @property {(questionId: string, fieldKey: string, value: string) => void} dispatchCapture
@@ -335,9 +335,7 @@ export function renderRemediationDetails(props, li, q) {
  */
 export function renderRemediationCapture(props, li, q) {
   const capture = props.answers[q.id]?.capture ?? {};
-  const collapsed = new Map(
-    [...(props.captureCollapsed[q.id] ?? new Set())].map((key) => [key, true])
-  );
+  const collapsed = props.captureCollapsed[q.id] ?? new Map();
   li.append(
     ...CaptureGroups({
       groups: props.captureGroups,
