@@ -616,6 +616,8 @@ export function createRouteSlice(params, context) {
     ]);
 
     const tabs = visibleCaseTabs(snapshot);
+    // Store renders are microtask-coalesced, so rapid clicks can outpace the
+    // rendered snapshot; re-sync this latch on every render.
     requestedOnHold = caseRow.onHold === true;
     tools.morph(
       parts.holdControl,

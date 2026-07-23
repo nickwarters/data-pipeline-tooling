@@ -105,7 +105,7 @@ indexed predicate.
 | `ReopenedAt`                              | Date and Time                                                |         | Clock paired with `Reopened`; app-written.                                    |
 | `ReviewRequired`                          | Yes/No                                                       |  **✓**  | Action Centre reason flag; app-written.                                       |
 | `OnHold`                                  | Yes/No                                                       |         | Reviewer-controlled hold state for an `In-progress` Case; app-written.        |
-| `PlacedOnHoldAt`                          | Date and Time                                                |         | Set when the Case enters hold; cleared when it leaves hold.                   |
+| `PlacedOnHoldAt`                          | Date and Time                                                |         | Cleared automatically when leaving `In-progress`.                             |
 | `Outcome`                                 | Single line of text                                          |         | Live working Outcome.                                                         |
 | `OutcomeAtCompletion`                     | Single line of text                                          |         | Frozen Outcome snapshot taken at reportable; app-written.                     |
 | `HadRemediation`                          | Yes/No                                                       |         | Frozen at reportable; app-written.                                            |

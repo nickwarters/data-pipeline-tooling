@@ -71,14 +71,17 @@ export function completionPatch(input) {
   const transition = hasRemediationActions(input.answers)
     ? machine.transitionToActionsInProgress
     : machine.transitionToCompleted;
-  return (
+  const transitionFields =
     transition?.call(
       machine,
       input.computeOutcome,
       input.answers,
       input.exportHash
-    ) ?? null
-  );
+    ) ?? null;
+  if (!transitionFields) return null;
+  return input.caseRow.onHold === true
+    ? { ...transitionFields, onHold: false, placedOnHoldAt: null }
+    : transitionFields;
 }
 
 /**

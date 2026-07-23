@@ -75,6 +75,49 @@ test('completionPatch freezes outcome and ADR-0019 effective columns in the life
   assert.equal(patch?.effectiveHadRemediation, true);
   assert.equal(patch?.outcomeOverridden, false);
   assert.equal(patch?.questionBankVersion, 'sha256:v1');
+  assert.equal('onHold' in (patch ?? {}), false);
+  assert.equal('placedOnHoldAt' in (patch ?? {}), false);
+});
+
+test('completionPatch atomically clears hold fields when either transition leaves In-progress', () => {
+  const heldCase = {
+    ...CASE_ROW,
+    onHold: true,
+    placedOnHoldAt: '2026-07-23T09:30:00.000Z',
+  };
+  const base = {
+    machine: machine(),
+    caseRow: heldCase,
+    allAnswered: true,
+    computeOutcome: () => ({ outcome: 'pass' }),
+    exportHash: null,
+  };
+
+  const sendActions = completionPatch({
+    ...base,
+    answers: {
+      q1: {
+        value: 'No',
+        remediationActions: [{ id: 'a1', text: 'Fix', completed: false }],
+      },
+    },
+  });
+  assert.equal(sendActions?.status, 'Actions In Progress');
+  assert.equal(sendActions?.onHold, false);
+  assert.equal(sendActions?.placedOnHoldAt, null);
+
+  const complete = completionPatch({ ...base, answers: {} });
+  assert.equal(complete?.status, 'Completed');
+  assert.equal(complete?.onHold, false);
+  assert.equal(complete?.placedOnHoldAt, null);
+
+  const unheldComplete = completionPatch({
+    ...base,
+    caseRow: CASE_ROW,
+    answers: {},
+  });
+  assert.equal('onHold' in (unheldComplete ?? {}), false);
+  assert.equal('placedOnHoldAt' in (unheldComplete ?? {}), false);
 });
 
 test('completionPatch rejects incomplete or unauthorised completion and uses final-close transition when ready', () => {
