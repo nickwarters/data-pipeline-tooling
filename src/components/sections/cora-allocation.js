@@ -146,15 +146,18 @@ export async function getAllocationAvailability({
   const availableSources = capacity
     .filter(({ isAtCapacity }) => !isAtCapacity)
     .map(({ source }) => source);
-  const isAtCapacity =
-    allocationSources.length > 0 && availableSources.length === 0;
+  const anySourceAtCapacity = capacity.some(({ isAtCapacity }) => isAtCapacity);
+  if (availableSources.length === 0) {
+    return { candidates: [], isAtCapacity: anySourceAtCapacity };
+  }
+  const candidates = await getUnassignedCases({
+    client,
+    allocationSources: availableSources,
+    random,
+  });
 
   return {
-    candidates: await getUnassignedCases({
-      client,
-      allocationSources: availableSources,
-      random,
-    }),
-    isAtCapacity,
+    candidates,
+    isAtCapacity: candidates.length === 0 && anySourceAtCapacity,
   };
 }

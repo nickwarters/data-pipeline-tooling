@@ -313,6 +313,19 @@ export function createRouteSlice(
   let effectsActive = false;
   let allocationRequestActive = false;
 
+  /**
+   * @param {{ candidates: unknown[], isAtCapacity: boolean }} availability
+   */
+  function publishAllocationAvailability(availability) {
+    if (!effectsActive) return;
+    effectTools.dispatch({
+      type: 'allocation/availability-changed',
+      isEmpty:
+        !availability.isAtCapacity && availability.candidates.length === 0,
+      isAtCapacity: availability.isAtCapacity,
+    });
+  }
+
   async function refreshReviewerCases() {
     const client = effectTools?.context.client;
     const capabilities = effectTools?.context.chrome.permissions;
@@ -416,13 +429,7 @@ export function createRouteSlice(
           currentUserId: tools.context.chrome.currentUser.id,
         });
         if (availability.isAtCapacity) {
-          if (effectsActive) {
-            effectTools.dispatch({
-              type: 'allocation/availability-changed',
-              isEmpty: false,
-              isAtCapacity: true,
-            });
-          }
+          publishAllocationAvailability(availability);
           return;
         }
         for (const candidate of availability.candidates) {
@@ -433,24 +440,23 @@ export function createRouteSlice(
             candidate._listOptions
           );
           if (result.ok) {
-            if (effectsActive) {
-              effectTools.dispatch({
-                type: 'allocation/availability-changed',
-                isEmpty: false,
-                isAtCapacity: false,
-              });
-            }
-            await refreshReviewerCases();
+            if (!effectsActive) return;
+            const [nextAvailability] = await Promise.all([
+              loadAllocationAvailability({
+                client,
+                allocationSources: tools.context.allocationSources,
+                currentUserId: tools.context.chrome.currentUser.id,
+              }),
+              refreshReviewerCases(),
+            ]);
+            publishAllocationAvailability(nextAvailability);
             return;
           }
         }
-        if (effectsActive) {
-          effectTools.dispatch({
-            type: 'allocation/availability-changed',
-            isEmpty: true,
-            isAtCapacity: false,
-          });
-        }
+        publishAllocationAvailability({
+          candidates: [],
+          isAtCapacity: false,
+        });
       } finally {
         allocationRequestActive = false;
       }

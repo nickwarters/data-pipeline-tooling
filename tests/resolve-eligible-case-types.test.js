@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  allocationSourcesFromCaseSources,
   resolveCaseSourcesFromCaseTypes,
   resolveCaseSources,
   resolveAppCaseSources,
@@ -70,23 +71,38 @@ test('resolveCaseSourcesFromCaseTypes: carries the optional allocation limit fro
   ]);
 });
 
-test('resolveCaseSourcesFromCaseTypes: rejects a non-positive allocation limit', () => {
-  assert.throws(
-    () =>
-      resolveCaseSourcesFromCaseTypes(
-        ['Reviewers - Complaints'],
-        [
-          {
-            slug: 'complaints',
-            listName: 'Cases-Complaints',
-            config: minimalConfig({
-              displayName: 'Complaints',
-              maxInProgressCases: 0,
-            }),
-          },
-        ]
-      ),
-    /maxInProgressCases must be a positive integer/
+test('allocationSourcesFromCaseSources: isolates an invalid limit to that Case Type', () => {
+  /** @type {Error[]} */
+  const errors = [];
+  const caseSources = resolveCaseSourcesFromCaseTypes(
+    ['Reviewer-Managers'],
+    [
+      {
+        slug: 'complaints',
+        listName: 'Cases-Complaints',
+        config: minimalConfig({
+          displayName: 'Complaints',
+          maxInProgressCases: 0,
+        }),
+      },
+      {
+        slug: 'example-review',
+        listName: 'Cases-ExampleReview',
+        config: minimalConfig({ displayName: 'Example Review' }),
+      },
+    ]
+  );
+
+  assert.deepEqual(
+    allocationSourcesFromCaseSources(caseSources, (error) =>
+      errors.push(error)
+    ),
+    [{ slug: 'example-review', listName: 'Cases-ExampleReview' }]
+  );
+  assert.equal(caseSources.length, 2, 'other app surfaces keep both sources');
+  assert.match(
+    errors[0]?.message ?? '',
+    /Case Type "complaints" maxInProgressCases must be a positive integer/
   );
 });
 

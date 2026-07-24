@@ -39,7 +39,7 @@ async function boot() {
   });
   bindChromeNavigation(chrome);
 
-  const { resolveAppCaseSources } =
+  const { allocationSourcesFromCaseSources, resolveAppCaseSources } =
     await import('./setup/resolve-eligible-case-types.js');
   // Every route receives only sources the current user's roles may span.
   // Type-scoped owners get their own types; broad roles (Controls,
@@ -49,13 +49,7 @@ async function boot() {
     userGroups,
     capabilities.ownedJourneyCaseTypes
   );
-  const allocationSources = caseSources.map(
-    ({ slug, listName, maxInProgressCases }) => ({
-      slug,
-      listName,
-      ...(maxInProgressCases === undefined ? {} : { maxInProgressCases }),
-    })
-  );
+  const allocationSources = allocationSourcesFromCaseSources(caseSources);
 
   const appEl = /** @type {Element} */ (document.getElementById('app'));
   appEl.setAttribute('data-cora-root', '');

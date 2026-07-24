@@ -38,20 +38,48 @@ import { caseTypeGroupNames, permissions } from '../services/permissions.js';
  * @returns {CaseSource}
  */
 function toCaseSource({ slug, listName, displayName, maxInProgressCases }) {
-  if (
-    maxInProgressCases !== undefined &&
-    (!Number.isInteger(maxInProgressCases) || maxInProgressCases <= 0)
-  ) {
-    throw new TypeError(
-      `Case Type "${slug}" maxInProgressCases must be a positive integer.`
-    );
-  }
   return {
     slug,
     listName,
     displayName: displayName ?? '',
     ...(maxInProgressCases === undefined ? {} : { maxInProgressCases }),
   };
+}
+
+/**
+ * Projects app-wide Case sources down to allocation sources. A malformed limit
+ * disables allocation only for that Case Type: the source remains available to
+ * the rest of the app and the other Case Types continue to allocate.
+ *
+ * @param {CaseSource[]} caseSources
+ * @param {(error: TypeError) => void} [reportInvalid]
+ * @returns {AllocationSource[]}
+ */
+export function allocationSourcesFromCaseSources(
+  caseSources,
+  reportInvalid = (error) =>
+    console.error('[RALPH] Allocation source disabled:', error)
+) {
+  return caseSources.flatMap(({ slug, listName, maxInProgressCases }) => {
+    if (
+      maxInProgressCases !== undefined &&
+      (!Number.isInteger(maxInProgressCases) || maxInProgressCases <= 0)
+    ) {
+      reportInvalid(
+        new TypeError(
+          `Case Type "${slug}" maxInProgressCases must be a positive integer.`
+        )
+      );
+      return [];
+    }
+    return [
+      {
+        slug,
+        listName,
+        ...(maxInProgressCases === undefined ? {} : { maxInProgressCases }),
+      },
+    ];
+  });
 }
 
 /**

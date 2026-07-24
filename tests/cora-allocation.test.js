@@ -221,6 +221,27 @@ test('getAllocationAvailability reports capacity when every limited source is at
   assert.equal(reads, 0);
 });
 
+test('getAllocationAvailability reports capacity when capped sources are mixed with empty sources', async () => {
+  const availability = await getAllocationAvailability({
+    client: /** @type {any} */ ({
+      async countCases(/** @type {any} */ _filter, /** @type {any} */ options) {
+        return options.listName === 'Cases-A' ? 3 : 0;
+      },
+      async listCases() {
+        return [];
+      },
+    }),
+    allocationSources: [
+      { slug: 'a', listName: 'Cases-A', maxInProgressCases: 3 },
+      { slug: 'b', listName: 'Cases-B', maxInProgressCases: 3 },
+    ],
+    currentUserId: 'reviewer-1',
+  });
+
+  assert.deepEqual(availability.candidates, []);
+  assert.equal(availability.isAtCapacity, true);
+});
+
 test('getAllocationAvailability leaves unconfigured sources unlimited', async () => {
   let counts = 0;
   const availability = await getAllocationAvailability({

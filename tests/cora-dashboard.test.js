@@ -699,7 +699,7 @@ test('dashboard allocation does not publish exhausted state after route disposal
   );
 });
 
-test('dashboard allocation blocks at capacity and re-checks after a successful claim', async () => {
+test('dashboard allocation immediately publishes capacity after the claim that reaches the limit', async () => {
   const ctx = context(capabilities({ isReviewer: true }));
   let patches = 0;
   ctx.client = /** @type {any} */ ({
@@ -765,17 +765,13 @@ test('dashboard allocation blocks at capacity and re-checks after a successful c
   });
   slice.start(tools);
 
-  const request = () =>
-    fireEvent(
-      getByRole(slice.view(slice.initialState, tools), 'button', {
-        name: 'Request next Case',
-      }),
-      'click'
-    );
-  request();
+  fireEvent(
+    getByRole(slice.view(slice.initialState, tools), 'button', {
+      name: 'Request next Case',
+    }),
+    'click'
+  );
   await firstClaimComplete;
-  await Promise.resolve();
-  request();
   await capacityPublished;
 
   assert.equal(checks, 2);
