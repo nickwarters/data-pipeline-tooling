@@ -6,12 +6,15 @@
 //
 // These assertions run against the example-review test fixture, which carries
 // the full lifecycle set (including Actions In Progress) and the legacy-shaped
-// capture data. example-review was retired from the mock client in issue #383;
-// the mock-served complaints fixtures no longer cover Actions In Progress.
+// capture data. example-review was retired from the mock client in issue #383,
+// so the mock-served complaints fixtures are guarded separately below: issue
+// #495 adds the demoable "remediation sent to the adviser" Case.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { exampleReviewCases as cases } from './_example-review-cases.js';
+import { cases as mockCases } from '../dev/fixtures/cases.js';
+import { personas } from '../dev/fixtures/personas.js';
 import { coerceRemediationActions } from '../src/evaluators/remediation-actions.js';
 
 test('fixtures exercise all three lifecycle statuses (ADR-0023)', () => {
@@ -61,4 +64,60 @@ test('Answers-blob Remediation Actions coerce from the new object shape and a le
   }
   // The legacy bare string became a pending action with a synthesised id.
   assert.ok(actions.some((a) => a.status === 'pending'));
+});
+
+// --- mock-served complaints fixtures (issue #495) -------------------------
+// The ?mock=1 demo set must carry a Case whose Remediation Actions have been
+// sent to the adviser and are still outstanding, so the handoff is demoable
+// from both sides (?asUser=reviewer and ?asUser=responsible-party).
+
+/** @returns {import('../src/sharepoint-client.js').CaseRow} */
+function sentToAdviserCase() {
+  const row = mockCases.find(
+    (c) =>
+      c.caseType === 'complaints' &&
+      c.status === 'Actions In Progress' &&
+      Object.values(c.answers).some(
+        (answer) => (answer.remediationActions?.length ?? 0) > 0
+      )
+  );
+  assert.ok(
+    row,
+    'a mock complaints Case has Remediation Actions sent and in progress'
+  );
+  return row;
+}
+
+test('a mock complaints Case has remediation sent and still in progress (#495)', () => {
+  const row = sentToAdviserCase();
+  // Stamped by CaseMachine.transitionToActionsInProgress at Send Actions: the
+  // reportable milestone freezes the Outcome but does not close the Case.
+  assert.equal(typeof row.reportableAt, 'string');
+  assert.equal(typeof row.remediationDueDate, 'string');
+  assert.equal(row.completedAt, null);
+  assert.equal(typeof row.outcomeAtCompletion, 'string');
+  assert.equal(row.hadRemediation, true);
+  assert.equal(row.effectiveHadRemediation, true);
+  assert.equal(row.effectiveOutcome, row.outcomeAtCompletion);
+  assert.equal(row.outcomeOverridden, false);
+
+  // Still outstanding: at least one sent action is not yet completed.
+  const open = Object.values(row.answers).flatMap((answer) =>
+    (answer.remediationActions ?? []).filter((action) => !action.completed)
+  );
+  assert.ok(open.length > 0, 'at least one sent action is still outstanding');
+});
+
+test('the sent-to-adviser Case is addressed to a Responsible Party persona (#495)', () => {
+  const row = sentToAdviserCase();
+  const personaIds = new Set(Object.values(personas).map((p) => p.userId));
+  assert.ok(
+    row.responsibleParty && personaIds.has(row.responsibleParty),
+    'the Responsible Party is a switchable ?asUser= persona'
+  );
+  // The adviser's unread-messages panel needs a message they did not write.
+  assert.ok(
+    row.conversation.some((message) => message.author !== row.responsibleParty),
+    'the Conversation carries a message from someone other than the adviser'
+  );
 });
