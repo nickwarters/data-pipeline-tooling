@@ -403,6 +403,11 @@
  * the typedef for source compatibility; new and scaffolded Case Types use
  * `caseTableColumns`.
  *
+ * `generalQuestions` declares the **General Questions** rendered beneath the
+ * Question Groups on the Review tab. They reuse the `CaptureField` vocabulary
+ * but are never outcome-driving: their answers are namespaced in the Answers
+ * blob and no evaluator reads them.
+ *
  * @typedef {{
  * questions: QuestionDefinition[],
  * computeOutcome: (answers: Record<string, Answer>) => OutcomeResult,
@@ -423,6 +428,7 @@
  * attributeFailures?: boolean,
  * remediationFields?: RemediationField[],
  * captureGroups?: CaptureGroup[],
+ * generalQuestions?: CaptureField[],
  * detailFields?: CaseDetailField[],
  * dashboardColumns?: import('./components/base/cora-data-table.js').ColumnDef<CaseRow>[],
  * caseTableColumns?: CaseTableColumnDescriptor[]

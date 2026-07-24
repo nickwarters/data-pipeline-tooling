@@ -130,6 +130,25 @@ const config = {
     },
   ],
 
+  // General Questions — arbitrary fields a Reviewer answers below the Question
+  // Groups on the Review tab. They use the Issue Capture Group field types but
+  // are never outcome-driving: nothing here reaches computeOutcome,
+  // applicability, failure evaluation or Question Group progress.
+  generalQuestions: [
+    {
+      key: 'reviewChannel',
+      label: 'How was this complaint reviewed?',
+      type: 'select',
+      options: ['Case file only', 'Call recording', 'Both'],
+    },
+    {
+      key: 'reviewerObservations',
+      label: 'Observations for the Case Type Owner',
+      type: 'textarea',
+      placeholder: 'Optional — anything worth feeding back on the journey.',
+    },
+  ],
+
   /** @param {Record<string, Answer>} answers */
   computeOutcome(answers) {
     return computeConfiguredOutcome(

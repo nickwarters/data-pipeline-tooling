@@ -165,6 +165,19 @@ const config = {
   ],
   questions: bank.questions,
 
+  // General Questions — non-outcome-driving fields rendered below the Question
+  // Groups on the Review tab. Answers are namespaced (`general:<key>`) in the
+  // same Answers blob and reach no evaluator.
+  generalQuestions: [
+    {
+      key: 'reviewChannel',
+      label: 'How was this reviewed?',
+      type: 'select',
+      options: ['Case file only', 'Call recording'],
+    },
+    { key: 'observations', label: 'Observations', type: 'textarea' },
+  ],
+
   /** @param {Record<string, Answer>} answers */
   computeOutcome(answers) {
     return computeConfiguredOutcome(

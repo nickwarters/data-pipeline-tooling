@@ -13,6 +13,7 @@ import {
   observeSaveStatus,
 } from './cora-case-review/case-actions.js';
 import { createQuestionPanelView } from './cora-case-review/question-panel-view.js';
+import { GeneralQuestions } from './cora-case-review/general-questions-view.js';
 import {
   conversationView,
   postConversationMessage,
@@ -682,15 +683,27 @@ export function createRouteSlice(params, context) {
         tools.morph(
           panel,
           visible
-            ? questionsView.render({
-                catalogue: snapshot.catalogue,
-                questions: snapshot.applicableQuestions,
-                answers: snapshot.answers,
-                access: snapshot.access.questions,
-                heading: snapshot.sectionHeadings.questions,
-                onAnswer: (questionId, value) =>
-                  viewModel.handleAnswer(questionId, value),
-              })
+            ? [
+                questionsView.render({
+                  catalogue: snapshot.catalogue,
+                  questions: snapshot.applicableQuestions,
+                  answers: snapshot.answers,
+                  access: snapshot.access.questions,
+                  heading: snapshot.sectionHeadings.questions,
+                  onAnswer: (questionId, value) =>
+                    viewModel.handleAnswer(questionId, value),
+                }),
+                // General Questions sit below the last Question Group. They
+                // travel the same Answer path (namespaced keys, one SaveQueue
+                // write) but drive no Outcome — see general-questions-view.js.
+                ...GeneralQuestions({
+                  fields: snapshot.config.generalQuestions ?? [],
+                  answers: snapshot.answers,
+                  access: snapshot.access.questions,
+                  onAnswer: (answerKey, value) =>
+                    viewModel.handleAnswer(answerKey, value),
+                }),
+              ]
             : null
         );
         continue;

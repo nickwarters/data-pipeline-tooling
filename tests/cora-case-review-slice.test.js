@@ -1923,6 +1923,39 @@ test('CASE-7 route: mock-mode store shell keeps Review working at the existing U
     },
   ]);
   assert.equal(state.routes.caseReview.saveStatus, 'saved');
+  const allAnsweredBeforeGeneralQuestion =
+    state.routes.caseReview.snapshot?.allAnswered;
+
+  // A General Question travels the same Answer path: one namespaced key added
+  // to the Answers blob, written by the same SaveQueue, leaving the Question
+  // Definition answers and the computed Outcome untouched.
+  const outcomeOf = () => {
+    const snapshot = state.routes.caseReview.snapshot;
+    assert.ok(snapshot?.config, 'loaded snapshot carries its Case Type config');
+    return snapshot.config.computeOutcome(snapshot.answers);
+  };
+  const outcomeBefore = outcomeOf();
+  const channel = reviewPanel.querySelector(
+    '[data-focus-key="general-question:reviewChannel"]'
+  );
+  assert.ok(channel, 'General Questions render on the Review tab');
+  channel.value = 'Call recording';
+  fireEvent(channel, 'change');
+  await saveQueue.whenIdle();
+  await flush();
+
+  assert.deepEqual(patches[1], {
+    answers: {
+      'q-needs': { value: 'No' },
+      'q-welcome': { value: 'Yes' },
+      'general:reviewChannel': { value: 'Call recording' },
+    },
+  });
+  assert.deepEqual(outcomeOf(), outcomeBefore);
+  assert.equal(
+    state.routes.caseReview.snapshot?.allAnswered,
+    allAnsweredBeforeGeneralQuestion
+  );
 
   fireEvent(getByRole(container, 'tab', { name: 'Issues' }), 'click');
   const issuesPanel = container.querySelector('#case-panel-issues');

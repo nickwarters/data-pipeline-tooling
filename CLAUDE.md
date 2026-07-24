@@ -144,6 +144,7 @@ src/
       details-view.js          # config-driven, read-only Case Details pure view (mirrors current Section behaviour)
       case-actions.js          # Answer dispatch -> unchanged SaveQueue; save status dispatch bridge
       question-panel-view.js   # CASE-2 group-scoped Questions view with memoised cards
+      general-questions-view.js # pure, non-outcome-driving General Questions section (#472)
       conversation-view.js     # CASE-3 pure conversation panel + unchanged JSON-blob PATCH effect
       notes-view.js            # CASE-3 pure Notes and Case Justification view; SaveQueue remains the writer
       summary-view.js          # CASE-4 pure configured Summary view

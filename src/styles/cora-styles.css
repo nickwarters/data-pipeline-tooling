@@ -1540,6 +1540,36 @@ cora-status-banner {
   padding-bottom: var(--cora-space-3);
 }
 
+/* General Questions: a Case Type's non-outcome-driving fields, separated from
+   the Applicable Questions above them by a rule. The Questions panel is a
+   `1fr 14rem` grid with a sticky progress rail; these render outside it, so
+   reserve the rail's width to keep both columns of content left-aligned. */
+[data-cora-root] .cora-general-questions-rule {
+  margin: var(--cora-space-5) calc(14rem + var(--cora-space-5)) 0 0;
+  border: 0;
+  border-top: 1px solid var(--cora-color-border);
+}
+
+[data-cora-root] .cora-general-questions {
+  display: grid;
+  gap: var(--cora-space-3);
+  margin-right: calc(14rem + var(--cora-space-5));
+  padding-top: var(--cora-space-4);
+}
+
+[data-cora-root] .cora-general-questions-heading {
+  margin: 0;
+  font-size: var(--cora-font-size-lg, 1.125rem);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Each question is a label hugging its shared capture control. */
+[data-cora-root] .cora-general-question {
+  display: grid;
+  gap: var(--cora-space-1);
+}
+
 /* Read-only capture rendering (Summary): heading + static label:value lines. */
 [data-cora-root] .cora-capture-group-heading {
   margin: 0;

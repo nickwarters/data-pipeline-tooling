@@ -97,6 +97,10 @@ _Avoid_: Section (reserved for the role-gated tab areas), Category (now the leve
 The top, presentation-only grouping level on a **Question Definition** (`category`, #390). Displayed to **Reviewers** under whatever name the **Case Type** gives it (e.g. "COGG Section") as a heading above its nested **Question Groups**. Never touches applicability or the **Outcome**. Optional.
 _Avoid_: COGG Section (a per-Case-Type display label, not a code/domain term), Section
 
+**General Question**:
+A **Case Type**-configured field a **Reviewer** answers on the Review tab beneath every **Applicable Question**, behind a rule and its own section title (`generalQuestions` in the Case Type module, using the **Issue Capture Field** type vocabulary). Deliberately _not_ outcome-driving: General Questions carry no `showWhen` and no failure criteria, and their answers — namespaced `general:<key>` in the Case's **Answer** blob — reach no evaluator, so applicability, **Question Group** progress, completion gating and the **Outcome** are all unaffected. Never a **Question Definition**: General Questions do not live in the **Question Bank** and are not editable in the bank editor.
+_Avoid_: General Question Group (collides with the `General` fallback **Question Group**), Free-text question, Metadata question
+
 **Group Verdict**:
 The bulk-marking control on a **Question Group** a **Case Type** has opted in via `questionGroups: { <group>: { allowBulkOutcome: true } }`. One selection — a configured **Outcome** wording or N/A — writes that value to every applicable, non-deprecated `outcome`-type **Question Definition** in the group, through the normal **Answer** path. A write shortcut, not a lock: no group-level state is stored on the Case, and each Answer stays individually editable afterwards.
 _Avoid_: Bulk outcome (the verdict can also be N/A), Group answer
