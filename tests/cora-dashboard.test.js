@@ -713,13 +713,15 @@ test('dashboard allocation blocks at capacity and re-checks after a successful c
   const actions = [];
   /** @type {() => void} */
   let markFirstClaimComplete = () => {};
+  /** @type {Promise<void>} */
   const firstClaimComplete = new Promise((resolve) => {
-    markFirstClaimComplete = resolve;
+    markFirstClaimComplete = () => resolve();
   });
   /** @type {() => void} */
   let markCapacityPublished = () => {};
+  /** @type {Promise<void>} */
   const capacityPublished = new Promise((resolve) => {
-    markCapacityPublished = resolve;
+    markCapacityPublished = () => resolve();
   });
   const slice = createRouteSlice(
     {},
@@ -805,8 +807,9 @@ test('dashboard allocation coalesces concurrent requests into one capacity check
   let checks = 0;
   /** @type {() => void} */
   let markPublished = () => {};
+  /** @type {Promise<void>} */
   const published = new Promise((resolve) => {
-    markPublished = resolve;
+    markPublished = () => resolve();
   });
   const slice = createRouteSlice(
     {},

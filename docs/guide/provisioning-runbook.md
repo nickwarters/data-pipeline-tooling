@@ -72,6 +72,12 @@ read-only persona.
 `overrides[]` blob — do not provision it; corrected reporting now flows from
 `AmendedOutcome` into the `Effective*` columns.
 
+Before enabling a Case Type's `maxInProgressCases` limit on an existing list,
+backfill every unset `OnHold` value to **No**. SharePoint's allocation filter is
+`OnHold eq 0`; legacy null values do not match it and would otherwise be omitted
+from the Reviewer's active-Case count. Ensure `OnHold` is indexed before enabling
+the limit.
+
 ---
 
 ## 2. Roadmap list

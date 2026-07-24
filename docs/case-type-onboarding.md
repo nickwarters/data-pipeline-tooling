@@ -56,6 +56,9 @@ edit does, and a full dev-harness verification tour — see
       in the schema. This is the irreversible step above — do it before ingesting
       any Cases.
 - [ ] Confirm the index count is ≤ 20.
+- [ ] Before enabling `maxInProgressCases` on a list that already contains
+      Cases, backfill every unset `OnHold` value to **No**. The allocation count
+      filters on `OnHold = No`, so legacy null values would otherwise be omitted.
 - [ ] Set the Case Type module's `listName` to the new list once list-backed
       reads are wired in (until then the scaffold runs mock-only via `?mock=1`,
       the architecture decision).
@@ -143,12 +146,12 @@ list is past the threshold.
 
 ## Indexed columns
 
-The 11 columns to index on the empty `Cases-{slug}` list — the
+The 12 columns to index on the empty `Cases-{slug}` list — the
 lifecycle/date columns and the the architecture decision reason flags that live reads lead with:
 
 `Status`, `DueDate`, `CompletedAt`, `AssignedReviewer`, `ResponsibleParty`,
 `AssignedReviewerManager`, `ResponsiblePartyManager`, `HasOpenAppeal`,
-`AwaitingResponsibleParty`, `Reopened`, `ReviewRequired`.
+`AwaitingResponsibleParty`, `Reopened`, `ReviewRequired`, `OnHold`.
 
-11 of a maximum 20 indexes per list. Add any promoted detail column (above) to
+12 of a maximum 20 indexes per list. Add any promoted detail column (above) to
 this set only if a live query will lead with it, and keep the total ≤ 20.
