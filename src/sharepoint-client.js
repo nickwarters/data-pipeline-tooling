@@ -254,6 +254,11 @@
  * last 7 days" on the busy Case Type) — is summed from sub-threshold per-day
  * `$count` slices rather than one large fetch.
  *
+ * `orderBy` names a **`CaseRow` key**, never a SharePoint internal column name:
+ * both clients speak the row vocabulary, and `HttpSharePointClient` maps the key
+ * to its internal column before emitting `$orderby`. Only a key that client maps
+ * is sortable — an unmapped one throws there rather than reaching SharePoint.
+ *
  * @typedef {{ status?: string, assignedReviewer?: string, caseType?: string, responsibleParty?: string, overdue?: boolean, awaitingResponsibleParty?: boolean, reviewRequired?: boolean, onHold?: boolean, hasOpenAppeal?: boolean, reopened?: boolean, assignedReviewerManager?: string, effectiveOutcome?: string, outcomeOverridden?: boolean, completedAfter?: string, completedBefore?: string, anyOf?: ListCasesFilter[] }} ListCasesFilter
  * @typedef {{ listName?: string, top?: number, skip?: number, orderBy?: string, orderDir?: 'asc' | 'desc' }} CaseListOptions
  */

@@ -32,6 +32,33 @@ const DEFAULT_THROTTLE_MS = 1000;
 const ROADMAP_LIST_NAME = 'Roadmap';
 const ROADMAP_STATUSES = new Set(['LIVE', 'IN PROGRESS', 'UPCOMING']);
 
+/**
+ * `CaseListOptions.orderBy` is a `CaseRow` key — the vocabulary every caller and
+ * `MockSharePointClient` already speak. OData `$orderby`, by contrast, takes the
+ * SharePoint **internal column name**, which is PascalCase and case-sensitive
+ * (see the column schema in `docs/case-type-onboarding.md`). Sorting is the one
+ * place a raw key would otherwise reach the wire untranslated, so the sortable
+ * keys are mapped here, alongside `buildFilterExpr`/`itemFromRow` doing the same
+ * for filters and writes.
+ *
+ * @type {Record<string, string>}
+ */
+const ORDER_BY_COLUMNS = {
+  id: 'Id',
+  title: 'Title',
+  status: 'Status',
+  created: 'Created',
+  dueDate: 'DueDate',
+  relatedDate: 'RelatedDate',
+  completedAt: 'CompletedAt',
+  reportableAt: 'ReportableAt',
+  remediationDueDate: 'RemediationDueDate',
+  awaitingSince: 'AwaitingSince',
+  appealRaisedAt: 'AppealRaisedAt',
+  reopenedAt: 'ReopenedAt',
+  placedOnHoldAt: 'PlacedOnHoldAt',
+};
+
 export class HttpSharePointClient {
   /** @param {HttpSharePointClientOptions} [opts] */
   constructor(opts = {}) {
@@ -130,8 +157,9 @@ export class HttpSharePointClient {
     const expr = buildFilterExpr(filter);
     if (expr) query.push(`$filter=${encodeURIComponent(expr)}`);
     if (opts.orderBy) {
+      const column = orderByColumn(opts.orderBy);
       const dir = opts.orderDir === 'desc' ? ' desc' : '';
-      query.push(`$orderby=${encodeURIComponent(opts.orderBy + dir)}`);
+      query.push(`$orderby=${encodeURIComponent(column + dir)}`);
     }
     if (opts.top !== undefined) query.push(`$top=${opts.top}`);
     if (opts.skip !== undefined) query.push(`$skip=${opts.skip}`);
@@ -533,6 +561,25 @@ function parseRetryAfter(ra) {
 /** @param {string} s */
 function escapeOData(s) {
   return String(s).replace(/'/g, "''");
+}
+
+/**
+ * Resolve a `CaseRow` sort key to its SharePoint internal column name. An
+ * unmapped key fails loudly here rather than travelling to SharePoint as an
+ * invalid `$orderby` and coming back as an opaque 400.
+ *
+ * @param {string} key
+ * @returns {string}
+ */
+function orderByColumn(key) {
+  const column = ORDER_BY_COLUMNS[key];
+  if (!column) {
+    throw new Error(
+      `HttpSharePointClient: orderBy "${key}" has no SharePoint column — ` +
+        `sortable keys are ${Object.keys(ORDER_BY_COLUMNS).join(', ')}.`
+    );
+  }
+  return column;
 }
 
 /**

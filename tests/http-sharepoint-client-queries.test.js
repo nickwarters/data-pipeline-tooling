@@ -615,7 +615,7 @@ test('HttpSharePointClient: listCases with top/skip pages a single window withou
   const url = decodeURIComponent(calls[0].url);
   assert.ok(url.includes('$top=4'));
   assert.ok(url.includes('$skip=8'));
-  assert.ok(url.includes('$orderby=awaitingSince'));
+  assert.ok(url.includes('$orderby=AwaitingSince'));
 });
 
 test('HttpSharePointClient: a paged read parses the legacy verbose { d: { results } } shape', async () => {
@@ -685,7 +685,77 @@ test('HttpSharePointClient: listCases orderBy desc appends the desc direction', 
   );
 
   const url = decodeURIComponent(calls[0].url);
-  assert.ok(url.includes('$orderby=dueDate desc'));
+  assert.ok(url.includes('$orderby=DueDate desc'));
+});
+
+test('HttpSharePointClient: listCases maps every CaseRow sort key to its internal column name', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(JSON.stringify({ value: [] }), { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  /** @type {[string, string][]} */
+  const pairs = [
+    ['appealRaisedAt', 'AppealRaisedAt'],
+    ['awaitingSince', 'AwaitingSince'],
+    ['reopenedAt', 'ReopenedAt'],
+    ['placedOnHoldAt', 'PlacedOnHoldAt'],
+    ['dueDate', 'DueDate'],
+    ['created', 'Created'],
+    ['completedAt', 'CompletedAt'],
+    ['reportableAt', 'ReportableAt'],
+    ['remediationDueDate', 'RemediationDueDate'],
+    ['relatedDate', 'RelatedDate'],
+    ['title', 'Title'],
+    ['status', 'Status'],
+    ['id', 'Id'],
+  ];
+
+  for (const [key] of pairs) {
+    await client.listCases(
+      {},
+      { listName: 'Cases-ExampleReview', top: 1, orderBy: key }
+    );
+  }
+
+  const urls = calls.map((c) => decodeURIComponent(c.url));
+  pairs.forEach(([, column], i) => {
+    assert.ok(
+      urls[i].includes(`$orderby=${column}`),
+      `expected $orderby=${column} for ${pairs[i][0]}, got ${urls[i]}`
+    );
+  });
+});
+
+test('HttpSharePointClient: listCases rejects an orderBy key with no internal column', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(JSON.stringify({ value: [] }), { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  await assert.rejects(
+    () =>
+      client.listCases(
+        {},
+        { listName: 'Cases-ExampleReview', orderBy: 'notAColumn' }
+      ),
+    /notAColumn/
+  );
+  assert.equal(calls.length, 0, 'no request is sent with an invalid $orderby');
 });
 
 test('HttpSharePointClient: listCases maps the reason columns from SP into the CaseRow', async () => {
