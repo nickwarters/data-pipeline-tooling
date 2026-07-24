@@ -218,13 +218,21 @@ function makeSpBackend(seed) {
       }
     }
 
-    const countMatch = url.match(/\/items\/\$count(\?.*)?$/);
-    if (countMatch) {
-      const filterExpr = decodeFilterExpr(url);
-      const n = [...store.values()].filter((row) =>
-        matchesFilterExpr(filterExpr, toSpItem(row))
-      ).length;
-      return new Response(JSON.stringify(n), { status: 200 });
+    // SharePoint Subscription Edition's OData v3 service has **no** `$count`
+    // segment: `…/items/$count` comes back as "Cannot find a resource for the
+    // request $count" (issue #486). The fake reproduces that by not routing it,
+    // so a client that reaches for `$count` fails here rather than in prod.
+    if (/\/items\/\$count(\?.*)?$/.test(url)) {
+      return new Response(
+        JSON.stringify({
+          'odata.error': {
+            message: {
+              value: 'Cannot find a resource for the request $count.',
+            },
+          },
+        }),
+        { status: 404 }
+      );
     }
 
     if (url.includes('/items') && method === 'GET') {

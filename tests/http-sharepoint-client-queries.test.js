@@ -6,6 +6,20 @@ import { WEB_URL, makeFetch } from './helpers/http-sharepoint-client.js';
 
 // Capability: list queries, filters, paging, and counts.
 
+/**
+ * A `countCases` response page: the `$select=Id` projection SharePoint returns,
+ * optionally carrying an `odata.nextLink` to a further page.
+ *
+ * @param {number} n
+ * @param {string} [nextLink]
+ */
+function idPage(n, nextLink) {
+  /** @type {Record<string, unknown>} */
+  const body = { value: Array.from({ length: n }, (_, i) => ({ Id: i + 1 })) };
+  if (nextLink) body['odata.nextLink'] = nextLink;
+  return new Response(JSON.stringify(body), { status: 200 });
+}
+
 test('HttpSharePointClient: listCases follows odata.nextLink across pages and concatenates results', async () => {
   const page2Url = `${WEB_URL}/_api/web/lists/getbytitle('Cases-ExampleReview')/items?$skiptoken=PAGE2`;
   const { fetch, calls } = makeFetch([
@@ -396,11 +410,11 @@ test('HttpSharePointClient: listCases with a CompletedAt window leads with the i
   );
 });
 
-test('HttpSharePointClient: countCases sums a bounded CompletedAt day-slice via $count', async () => {
+test('HttpSharePointClient: countCases sums a bounded CompletedAt day-slice', async () => {
   const { fetch, calls } = makeFetch([
     {
       when: (c) => c.method === 'GET',
-      respond: () => new Response('42', { status: 200 }),
+      respond: () => idPage(42),
     },
   ]);
   const client = new HttpSharePointClient({
@@ -420,7 +434,11 @@ test('HttpSharePointClient: countCases sums a bounded CompletedAt day-slice via 
 
   assert.equal(n, 42);
   const url = decodeURIComponent(calls[0].url);
-  assert.ok(url.includes('/items/$count'), 'a windowed count uses $count');
+  assert.ok(
+    !url.includes('$count'),
+    'SharePoint SE has no $count segment (issue #486)'
+  );
+  assert.ok(url.includes('$select=Id'), 'a count reads the Id column only');
   assert.ok(url.includes("CompletedAt ge '2026-07-02T00:00:00.000Z'"));
   assert.ok(url.includes("CompletedAt lt '2026-07-03T00:00:00.000Z'"));
 });
@@ -449,11 +467,11 @@ test('HttpSharePointClient: listCases without a CompletedAt window omits the Com
 
 // --- Action Centre: countCases, paging, reason flags (issue #287) ---
 
-test('HttpSharePointClient: countCases hits the $count endpoint and returns a bare integer', async () => {
+test('HttpSharePointClient: countCases counts an Id-only read, never the unroutable $count segment', async () => {
   const { fetch, calls } = makeFetch([
     {
       when: (c) => c.method === 'GET',
-      respond: () => new Response('23', { status: 200 }),
+      respond: () => idPage(23),
     },
   ]);
   const client = new HttpSharePointClient({
@@ -468,20 +486,47 @@ test('HttpSharePointClient: countCases hits the $count endpoint and returns a ba
 
   assert.equal(n, 23);
   const url = decodeURIComponent(calls[0].url);
-  assert.ok(url.includes('/items/$count'), 'should use the $count endpoint');
-  assert.ok(url.includes("Status eq 'In-progress'"), 'should carry the filter');
-  assert.equal(
-    calls.filter((c) => c.url.includes('$skip')).length,
-    0,
-    'a count never pages'
+  assert.ok(
+    !url.includes('$count'),
+    'SharePoint SE answers /items/$count with "Cannot find a resource" (#486)'
   );
+  assert.ok(url.includes('$select=Id'), 'only the Id column crosses the wire');
+  assert.ok(url.includes('$top=5000'), 'pages at the List View Threshold');
+  assert.ok(url.includes("Status eq 'In-progress'"), 'should carry the filter');
+  assert.equal(calls.length, 1, 'one page, one request');
 });
 
-test('HttpSharePointClient: countCases with no filter omits $filter and defaults non-numeric bodies to 0', async () => {
+test('HttpSharePointClient: countCases follows odata.nextLink and sums every page', async () => {
+  const page2 = `${WEB_URL}/_api/web/lists/getbytitle('Cases-ExampleReview')/items?$skiptoken=PAGE2`;
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.method === 'GET' && c.url.includes('$skiptoken=PAGE2'),
+      respond: () => idPage(7),
+    },
+    {
+      when: (c) => c.method === 'GET',
+      respond: () => idPage(5000, page2),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const n = await client.countCases(
+    { reopened: true },
+    { listName: 'Cases-ExampleReview' }
+  );
+
+  assert.equal(n, 5007, 'a matched set past the page size counts every page');
+  assert.equal(calls.length, 2);
+});
+
+test('HttpSharePointClient: countCases with no filter omits $filter and counts an empty page as 0', async () => {
   const { fetch, calls } = makeFetch([
     {
       when: (c) => c.method === 'GET',
-      respond: () => new Response(JSON.stringify(null), { status: 200 }),
+      respond: () => idPage(0),
     },
   ]);
   const client = new HttpSharePointClient({
@@ -492,14 +537,13 @@ test('HttpSharePointClient: countCases with no filter omits $filter and defaults
   const n = await client.countCases({}, { listName: 'Cases-ExampleReview' });
   assert.equal(n, 0);
   assert.ok(!calls[0].url.includes('$filter'), 'no filter in the URL');
-  assert.ok(calls[0].url.endsWith('/items/$count'));
 });
 
 test('HttpSharePointClient: countCases maps the reason flags to indexed boolean columns', async () => {
   const { fetch, calls } = makeFetch([
     {
       when: (c) => c.method === 'GET',
-      respond: () => new Response('4', { status: 200 }),
+      respond: () => idPage(4),
     },
   ]);
   const client = new HttpSharePointClient({
@@ -528,7 +572,7 @@ test('HttpSharePointClient: countCases maps non-held capacity to the indexed OnH
   const { fetch, calls } = makeFetch([
     {
       when: (c) => c.method === 'GET',
-      respond: () => new Response('2', { status: 200 }),
+      respond: () => idPage(2),
     },
   ]);
   const client = new HttpSharePointClient({
@@ -555,7 +599,7 @@ test('HttpSharePointClient: countCases with anyOf builds an OR of parenthesised 
   const { fetch, calls } = makeFetch([
     {
       when: (c) => c.method === 'GET',
-      respond: () => new Response('7', { status: 200 }),
+      respond: () => idPage(7),
     },
   ]);
   const client = new HttpSharePointClient({
@@ -847,12 +891,12 @@ test('HttpSharePointClient: countCases throws when called without a listName', a
 // --- pre-existing branch-coverage gaps (unrelated to the strictness flip,
 // closed here because this file is in scope for the migration ticket) -----
 
-test('HttpSharePointClient: countCases defaults to 0 for a non-numeric (NaN) count body', async () => {
+test('HttpSharePointClient: countCases defaults to 0 for an unrecognised page shape', async () => {
   const { fetch } = makeFetch([
     {
       when: (c) => c.method === 'GET',
       respond: () =>
-        new Response(JSON.stringify({ not: 'a number' }), { status: 200 }),
+        new Response(JSON.stringify({ not: 'a page' }), { status: 200 }),
     },
   ]);
   const client = new HttpSharePointClient({
@@ -864,11 +908,15 @@ test('HttpSharePointClient: countCases defaults to 0 for a non-numeric (NaN) cou
   assert.equal(n, 0);
 });
 
-test('HttpSharePointClient: countCases returns n for a well-formed numeric count body', async () => {
+test('HttpSharePointClient: countCases counts the legacy d.results page shape', async () => {
   const { fetch } = makeFetch([
     {
       when: (c) => c.method === 'GET',
-      respond: () => new Response('42', { status: 200 }),
+      respond: () =>
+        new Response(
+          JSON.stringify({ d: { results: [{ Id: 1 }, { Id: 2 }] } }),
+          { status: 200 }
+        ),
     },
   ]);
   const client = new HttpSharePointClient({
@@ -877,7 +925,7 @@ test('HttpSharePointClient: countCases returns n for a well-formed numeric count
   });
 
   const n = await client.countCases({}, { listName: 'Cases-ExampleReview' });
-  assert.equal(n, 42);
+  assert.equal(n, 2);
 });
 
 test('HttpSharePointClient: _getAllPages falls back to [] for an unrecognised page shape', async () => {
@@ -902,7 +950,7 @@ test('HttpSharePointClient: countCases with every reason flag false renders ever
   const { fetch, calls } = makeFetch([
     {
       when: (c) => c.method === 'GET',
-      respond: () => new Response('0', { status: 200 }),
+      respond: () => idPage(0),
     },
   ]);
   const client = new HttpSharePointClient({

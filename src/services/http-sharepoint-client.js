@@ -32,6 +32,11 @@ const DEFAULT_THROTTLE_MS = 1000;
 const ROADMAP_LIST_NAME = 'Roadmap';
 const ROADMAP_STATUSES = new Set(['LIVE', 'IN PROGRESS', 'UPCOMING']);
 
+// Page size for `countCases`' Id-only read. 5,000 is SharePoint's List View
+// Threshold and the largest page it will serve; anything beyond it comes back
+// through `odata.nextLink`.
+const COUNT_PAGE_SIZE = 5000;
+
 /**
  * `CaseListOptions.orderBy` is a `CaseRow` key — the vocabulary every caller and
  * `MockSharePointClient` already speak. OData `$orderby`, by contrast, takes the
@@ -181,9 +186,20 @@ export class HttpSharePointClient {
   }
 
   /**
-   * Count-only query: the OData `$count` companion to `listCases`.
-   * The endpoint returns a bare integer, so a group-header or KPI count never
-   * pulls a single Case row across the wire.
+   * Count-only query: the counting companion to `listCases`.
+   *
+   * SharePoint Subscription Edition's REST service is OData **v3** and has no
+   * `$count` segment — `…/items/$count` answers "Cannot find a resource for the
+   * request $count" (issue #486). The supported way to count a *filtered* set is
+   * to read the matching rows and count them, so this reads `$select=Id` only:
+   * the same indexed `$filter` as before, one 4-byte column per row, and no
+   * Answers/Conversation/Details blob crosses the wire.
+   *
+   * The read pages at the List View Threshold and follows `odata.nextLink`, so
+   * the cost scales with the size of the *matched* set, not the list. Every
+   * caller counts an ADR-0031-bounded slice (an Action Centre reason group, a
+   * completed day-window, one Reviewer's in-progress Cases) for exactly that
+   * reason — an unbounded count over a large list would walk every page.
    *
    * @param {ListCasesFilter} filter
    * @param {CaseListOptions} [opts]
@@ -192,11 +208,12 @@ export class HttpSharePointClient {
   async countCases(filter, opts = {}) {
     const listName = this._requireListName(opts);
     const expr = buildFilterExpr(filter);
-    let url = this._listItemsUrl(listName) + '/$count';
-    if (expr) url += `?$filter=${encodeURIComponent(expr)}`;
-    const body = await this._read(url);
-    const n = Number(body);
-    return Number.isFinite(n) ? n : 0;
+    const query = [`$select=Id`, `$top=${COUNT_PAGE_SIZE}`];
+    if (expr) query.unshift(`$filter=${encodeURIComponent(expr)}`);
+    const items = await this._getAllPages(
+      `${this._listItemsUrl(listName)}?${query.join('&')}`
+    );
+    return items.length;
   }
 
   /**

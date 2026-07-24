@@ -238,7 +238,7 @@
 
 /**
  * A server-side Case query. Every scalar field is an ANDed
- * equality on an **indexed** Case column so a filtered `$count`/`$top` stays
+ * equality on an **indexed** Case column so a filtered count/`$top` stays
  * cheap past the 5000-item threshold (ties to the architecture decision: reason-defining data is
  * hoisted onto queryable columns, never mined from the `Answers`/`appeals`
  * blobs). `awaitingResponsibleParty`, `hasOpenAppeal` and `reopened` are the
@@ -252,7 +252,7 @@
  * windowed completion metric leads with the selective date column and — for a
  * window that could itself exceed the List View Threshold (e.g. "completed in the
  * last 7 days" on the busy Case Type) — is summed from sub-threshold per-day
- * `$count` slices rather than one large fetch.
+ * `countCases` slices rather than one large fetch.
  *
  * `orderBy` names a **`CaseRow` key**, never a SharePoint internal column name:
  * both clients speak the row vocabulary, and `HttpSharePointClient` maps the key
