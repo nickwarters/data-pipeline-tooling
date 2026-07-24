@@ -348,7 +348,7 @@ names derive from it via `caseTypeGroupNames()`:
 | `JourneyOwner - Widget Review`  | Journey Owner capability (journey cases page, raises appeals) |
 
 Groups sit on two orthogonal axes: **functional capability** (what you can do
-anywhere — `Controls`, `Reviewer-Managers`, `Advisers`,
+anywhere — `Controls`, `Reviewer Managers`, `Advisers`,
 `ResponsibleParty-Managers`, `CR-Maintainers`) and **per-Case-Type list
 access** (which type's Cases you can open — the three derived groups). Two
 rules worth internalising:

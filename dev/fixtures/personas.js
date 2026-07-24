@@ -49,7 +49,7 @@ export const personas = {
   'reviewer-manager': {
     userId: 'user-rm',
     displayName: 'Morgan Manager',
-    groups: ['Reviewer-Managers'],
+    groups: ['Reviewer Managers'],
   },
   controls: {
     userId: 'user-controls',

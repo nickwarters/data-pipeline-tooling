@@ -75,7 +75,7 @@ test('allocationSourcesFromCaseSources: isolates an invalid limit to that Case T
   /** @type {Error[]} */
   const errors = [];
   const caseSources = resolveCaseSourcesFromCaseTypes(
-    ['Reviewer-Managers'],
+    ['Reviewer Managers'],
     [
       {
         slug: 'complaints',
@@ -254,7 +254,7 @@ test('resolveCaseSourcesFromCaseTypes: a Case Type with no displayName is not gr
   assert.deepEqual(sources, []);
 });
 
-test('resolveCaseSourcesFromCaseTypes: Reviewer-Managers get every source (with empty displayName when a config declares none)', () => {
+test('resolveCaseSourcesFromCaseTypes: Reviewer Managers get every source (with empty displayName when a config declares none)', () => {
   const caseTypes = [
     {
       slug: 'complaints',
@@ -270,7 +270,7 @@ test('resolveCaseSourcesFromCaseTypes: Reviewer-Managers get every source (with 
   ];
 
   const sources = resolveCaseSourcesFromCaseTypes(
-    ['Reviewer-Managers'],
+    ['Reviewer Managers'],
     caseTypes
   );
 
@@ -389,8 +389,8 @@ test('resolveCaseSources: a Reviewers - Complaints user is granted the complaint
   ]);
 });
 
-test('resolveCaseSources: Reviewer-Managers are granted every manifest Case Type as a source', async () => {
-  const sources = await resolveCaseSources(['Reviewer-Managers']);
+test('resolveCaseSources: Reviewer Managers are granted every manifest Case Type as a source', async () => {
+  const sources = await resolveCaseSources(['Reviewer Managers']);
   assert.deepEqual(
     sources.map((s) => s.slug).sort(),
     Object.keys(CASE_TYPE_IMPORTERS).sort()
@@ -423,7 +423,7 @@ test('resolveCaseSourcesFromCaseTypes: broad roles come from the permissions con
 });
 
 test('resolveCaseSources: complaints carries its explicit Case list', async () => {
-  const sources = await resolveCaseSources(['Reviewer-Managers']);
+  const sources = await resolveCaseSources(['Reviewer Managers']);
   const complaints = sources.find((s) => s.slug === 'complaints');
   assert.equal(complaints?.listName, 'Cases-Complaints');
 });

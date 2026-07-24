@@ -60,7 +60,7 @@ export const permissions = {
   reviewer: 'Reviewers',
   adviser: 'Advisers',
   controls: 'Controls',
-  reviewerManager: 'Reviewer-Managers',
+  reviewerManager: 'Reviewer Managers',
   // TBC: placeholder SharePoint group names — confirm with the platform owner.
   responsiblePartyManager: 'ResponsibleParty-Managers',
   maintainer: 'CR-Maintainers',

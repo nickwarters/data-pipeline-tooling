@@ -29,15 +29,15 @@ function jsFilesUnder(dir) {
   return out;
 }
 
-test('eligibility: Reviewer-Managers resolve every manifest slug to a source with an explicit listName', async () => {
-  const sources = await resolveCaseSources(['Reviewer-Managers']);
+test('eligibility: Reviewer Managers resolve every manifest slug to a source with an explicit listName', async () => {
+  const sources = await resolveCaseSources(['Reviewer Managers']);
   const bySlug = new Map(sources.map((s) => [s.slug, s]));
 
   for (const slug of Object.keys(CASE_TYPE_IMPORTERS)) {
     const source = bySlug.get(slug);
     assert.ok(
       source,
-      `resolveCaseSources(['Reviewer-Managers']) did not resolve manifest ` +
+      `resolveCaseSources(['Reviewer Managers']) did not resolve manifest ` +
         `slug "${slug}". Every Case Type must be group-derivable — a manager ` +
         `holds every source.`
     );

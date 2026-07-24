@@ -12,7 +12,7 @@ const sampleConfig = {
   reviewer: 'Reviewers',
   adviser: 'Advisers',
   controls: 'Controls',
-  reviewerManager: 'Reviewer-Managers',
+  reviewerManager: 'Reviewer Managers',
   responsiblePartyManager: 'ResponsibleParty-Managers',
   maintainer: 'CR-Maintainers',
   caseTypes: [
@@ -122,8 +122,8 @@ test('resolveCapabilities: admin (Reviewers + owner) → reviewer + owned types'
   assert.deepEqual(caps.ownedCaseTypes, ['example-review']);
 });
 
-test('resolveCapabilities: Reviewer-Managers group → isReviewerManager=true', () => {
-  const caps = resolveCapabilities(['Reviewer-Managers'], sampleConfig);
+test('resolveCapabilities: Reviewer Managers group → isReviewerManager=true', () => {
+  const caps = resolveCapabilities(['Reviewer Managers'], sampleConfig);
   assert.equal(caps.isReviewerManager, true);
   assert.equal(caps.isReviewer, false);
   assert.equal(caps.isVisitor, false);
@@ -175,7 +175,7 @@ test('permissions: exported config exposes the functional group names and Case T
   assert.equal(permissions.reviewer, 'Reviewers');
   assert.equal(permissions.adviser, 'Advisers');
   assert.equal(permissions.controls, 'Controls');
-  assert.equal(permissions.reviewerManager, 'Reviewer-Managers');
+  assert.equal(permissions.reviewerManager, 'Reviewer Managers');
   assert.equal(
     permissions.responsiblePartyManager,
     'ResponsibleParty-Managers'

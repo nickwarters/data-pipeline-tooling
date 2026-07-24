@@ -45,7 +45,7 @@ The two sides mirror each other: **Reviewing** = `Reviewers` (base) → `CaseTyp
 | `Reviewers - <type>`     | Access to that Case Type's Cases SharePoint list for reviewing.                                                        |
 | `CaseTypeOwner - <type>` | Access to that Case Type's list for Question Bank ownership and reporting.                                             |
 | `JourneyOwner - <type>`  | Access to that Case Type's list for journey oversight and Appeals.                                                     |
-| Broad functional roles   | Controls, Reviewer-Managers, Advisers and ResponsibleParty-Managers span all Case Type lists, with assignment filters. |
+| Broad functional roles   | Controls, Reviewer Managers, Advisers and ResponsibleParty-Managers span all Case Type lists, with assignment filters. |
 
 These grants describe the frontend's source selection; SharePoint list ACLs remain
 the real security boundary.
@@ -141,7 +141,7 @@ A user may fetch Case list **X** when they hold one of X's type-scoped roles:
 ```
 
 `config.eligibleGroups` and `config.reviewerGroup` remain supported aliases for
-a type's access groups. Controls, Reviewer-Managers, Advisers,
+a type's access groups. Controls, Reviewer Managers, Advisers,
 ResponsibleParty-Managers and Maintainers span **every** source. Maintainers
 need this access to preview sample Cases while editing every Question Bank. Adviser and
 ResponsibleParty-Manager reads remain query-filtered by the Case row's

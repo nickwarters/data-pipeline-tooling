@@ -116,7 +116,7 @@ async function loadCaseTypeSources(slugs, importers) {
  * - `CaseTypeOwner - <config.displayName>`
  * - `JourneyOwner - <config.displayName>`
  *
- * Controls, Reviewer-Managers, Advisers, ResponsibleParty-Managers and
+ * Controls, Reviewer Managers, Advisers, ResponsibleParty-Managers and
  * Maintainers span
  * every source. Adviser and manager consumers must still apply their
  * assignment filter to each per-list query. Configured `eligibleGroups` and
