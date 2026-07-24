@@ -9,6 +9,16 @@
  */
 export const people = [
   {
+    loginName: 'user-reviewer',
+    displayName: 'Alex Reviewer',
+    email: 'alex.reviewer@contoso.com',
+  },
+  {
+    loginName: 'user-reviewer-2',
+    displayName: 'Zara Reviewer',
+    email: 'zara.reviewer@contoso.com',
+  },
+  {
     loginName: 'areviewer',
     displayName: 'Alex Reviewer',
     email: 'alex.reviewer@contoso.com',

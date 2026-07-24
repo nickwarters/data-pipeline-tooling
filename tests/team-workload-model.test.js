@@ -73,6 +73,7 @@ test('buildTeamWorkload: counts outstanding allocated cases per reviewer and Cas
 
   assert.deepEqual(model, [
     {
+      reviewerId: 'reviewer-a',
       reviewer: 'reviewer-a',
       countsByCaseType: { complaints: 1, conduct: 1 },
       totalOutstanding: 2,
@@ -81,6 +82,7 @@ test('buildTeamWorkload: counts outstanding allocated cases per reviewer and Cas
       isTotal: false,
     },
     {
+      reviewerId: 'reviewer-b',
       reviewer: 'reviewer-b',
       countsByCaseType: { complaints: 0, conduct: 1 },
       totalOutstanding: 1,
@@ -89,6 +91,7 @@ test('buildTeamWorkload: counts outstanding allocated cases per reviewer and Cas
       isTotal: false,
     },
     {
+      reviewerId: null,
       reviewer: 'Total',
       countsByCaseType: { complaints: 1, conduct: 2 },
       totalOutstanding: 3,
@@ -130,6 +133,7 @@ test('buildTeamWorkload: an empty live position still returns the all-staff tota
     buildTeamWorkload([], sources, new Date('2026-07-24T00:00:00.000Z')),
     [
       {
+        reviewerId: null,
         reviewer: 'Total',
         countsByCaseType: { complaints: 0, conduct: 0 },
         totalOutstanding: 0,

@@ -13,6 +13,7 @@ const OUTSTANDING_STATUSES = new Set([
 
 /**
  * @typedef {Object} WorkloadRow
+ * @property {string | null} reviewerId
  * @property {string} reviewer
  * @property {Record<string, number>} countsByCaseType
  * @property {number} totalOutstanding
@@ -72,6 +73,7 @@ export function buildTeamWorkload(cases, sources, now) {
     let row = byReviewer.get(item.assignedReviewer);
     if (!row) {
       row = {
+        reviewerId: item.assignedReviewer,
         reviewer: item.assignedReviewer,
         countsByCaseType: emptyCaseTypeCounts(sources),
         totalOutstanding: 0,
@@ -101,6 +103,7 @@ export function buildTeamWorkload(cases, sources, now) {
   );
   /** @type {WorkloadRow} */
   const total = {
+    reviewerId: null,
     reviewer: 'Total',
     countsByCaseType: emptyCaseTypeCounts(sources),
     totalOutstanding: 0,
@@ -124,4 +127,23 @@ export function buildTeamWorkload(cases, sources, now) {
   }
 
   return [...staffRows, total];
+}
+
+/**
+ * Apply directory display names without losing the account id used as the
+ * stable row identity. Missing names deliberately fall back to the account.
+ *
+ * @param {WorkloadRow[]} rows
+ * @param {Record<string, string | null>} displayNames
+ * @returns {WorkloadRow[]}
+ */
+export function withReviewerDisplayNames(rows, displayNames) {
+  return rows.map((row) =>
+    row.reviewerId === null
+      ? row
+      : {
+          ...row,
+          reviewer: displayNames[row.reviewerId] || row.reviewerId,
+        }
+  );
 }

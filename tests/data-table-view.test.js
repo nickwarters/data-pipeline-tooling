@@ -170,22 +170,57 @@ test('data table view: arrow keys move focus between grid cells', () => {
   assert.equal(document.activeElement, firstRowCells[0]);
 });
 
-test('data table view: null values stay last when sorting descending', () => {
-  const view = dataTableView({
-    rows: [...rows, { id: '3', person: { name: 'Null' }, score: null }],
-    columns,
-    sort: { key: 'score', dir: 'desc' },
-    onSort: () => {},
-    emptyMessage: 'No people.',
-    rowKey: (row) => row.id,
-  });
+test('data table view: null values stay last in both sort directions', () => {
+  const nullableRows = [
+    ...rows,
+    { id: '3', person: { name: 'Null' }, score: null },
+  ];
 
-  assert.deepEqual(
-    [...(view.querySelector('tbody')?.querySelectorAll('tr') ?? [])].map(
-      (row) => row.getAttribute('key')
-    ),
-    ['1', '2', '3']
-  );
+  for (const [dir, expected] of [
+    ['asc', ['2', '1', '3']],
+    ['desc', ['1', '2', '3']],
+  ]) {
+    const view = dataTableView({
+      rows: nullableRows,
+      columns,
+      sort: /** @type {any} */ ({ key: 'score', dir }),
+      onSort: () => {},
+      emptyMessage: 'No people.',
+      rowKey: (row) => row.id,
+    });
+
+    assert.deepEqual(
+      [...(view.querySelector('tbody')?.querySelectorAll('tr') ?? [])].map(
+        (row) => row.getAttribute('key')
+      ),
+      expected
+    );
+  }
+});
+
+test('data table view: footer rows remain outside the sortable body', () => {
+  for (const dir of /** @type {const} */ (['asc', 'desc'])) {
+    const view = dataTableView({
+      rows,
+      footerRows: [{ id: 'total', person: { name: 'Total' }, score: 19 }],
+      columns,
+      sort: { key: 'score', dir },
+      onSort: () => {},
+      emptyMessage: 'No people.',
+      rowKey: (row) => row.id,
+    });
+
+    assert.deepEqual(
+      [...(view.querySelector('tbody')?.querySelectorAll('tr') ?? [])].map(
+        (row) => row.getAttribute('key')
+      ),
+      dir === 'asc' ? ['2', '1'] : ['1', '2']
+    );
+    assert.equal(
+      view.querySelector('tfoot')?.querySelector('tr')?.textContent,
+      'Total19 points'
+    );
+  }
 });
 
 test('data table view: nextTableSort starts ascending and toggles direction', () => {

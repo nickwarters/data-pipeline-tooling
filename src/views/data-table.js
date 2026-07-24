@@ -27,6 +27,7 @@ import { h } from '../lib/html.js';
  * @template Row
  * @typedef {Object} DataTableViewProps
  * @property {Row[]} rows
+ * @property {Row[]} [footerRows] Rows rendered after, and excluded from, the sortable body.
  * @property {ColumnDescriptor<Row>[]} columns
  * @property {TableSort | null} sort
  * @property {(key: string) => void} onSort
@@ -127,6 +128,7 @@ function moveGridFocus(table, event) {
  */
 export function dataTableView({
   rows,
+  footerRows = [],
   columns,
   sort,
   onSort,
@@ -135,7 +137,8 @@ export function dataTableView({
   rowHref,
   rowClass = () => '',
 }) {
-  if (rows.length === 0) return h('p', {}, emptyMessage);
+  if (rows.length === 0 && footerRows.length === 0)
+    return h('p', {}, emptyMessage);
 
   const sortColumn = sort
     ? columns.find((column) => column.key === sort.key && column.sortable)
@@ -147,6 +150,54 @@ export function dataTableView({
         return compareValues(aValue, bValue, sort?.dir ?? 'asc');
       })
     : rows;
+
+  /**
+   * @param {Row} row
+   * @param {boolean} focusable
+   * @returns {HTMLElement}
+   */
+  function renderRow(row, focusable) {
+    const className = rowClass(row);
+    /** @type {Record<string, any>} */
+    const rowProps = { key: rowKey(row) };
+    if (focusable) rowProps.tabindex = '0';
+    if (className) rowProps.className = className;
+    if (focusable && rowHref) {
+      rowProps.onkeydown = (/** @type {KeyboardEvent} */ event) => {
+        if (event.key === 'Enter') location.hash = rowHref(row);
+      };
+    }
+    return h(
+      'tr',
+      rowProps,
+      ...columns.map((column) => {
+        const value = columnValue(row, column);
+        const formatted = column.format
+          ? column.format(value, row)
+          : value == null || value === ''
+            ? '—'
+            : String(value);
+        const content = column.href
+          ? h(
+              'a',
+              {
+                href: column.href(row),
+                'aria-label':
+                  typeof column.ariaLabel === 'function'
+                    ? column.ariaLabel(row)
+                    : column.ariaLabel,
+              },
+              formatted
+            )
+          : formatted;
+        return h(
+          'td',
+          focusable ? { key: column.key, tabindex: '-1' } : { key: column.key },
+          content
+        );
+      })
+    );
+  }
 
   /** @type {HTMLElement} */
   let table;
@@ -194,44 +245,11 @@ export function dataTableView({
     h(
       'tbody',
       { className: 'cora-data-table-body' },
-      ...visibleRows.map((row) => {
-        const className = rowClass(row);
-        /** @type {Record<string, any>} */
-        const rowProps = { key: rowKey(row), tabindex: '0' };
-        if (className) rowProps.className = className;
-        if (rowHref) {
-          rowProps.onkeydown = (/** @type {KeyboardEvent} */ event) => {
-            if (event.key === 'Enter') location.hash = rowHref(row);
-          };
-        }
-        return h(
-          'tr',
-          rowProps,
-          ...columns.map((column) => {
-            const value = columnValue(row, column);
-            const formatted = column.format
-              ? column.format(value, row)
-              : value == null || value === ''
-                ? '—'
-                : String(value);
-            const content = column.href
-              ? h(
-                  'a',
-                  {
-                    href: column.href(row),
-                    'aria-label':
-                      typeof column.ariaLabel === 'function'
-                        ? column.ariaLabel(row)
-                        : column.ariaLabel,
-                  },
-                  formatted
-                )
-              : formatted;
-            return h('td', { key: column.key, tabindex: '-1' }, content);
-          })
-        );
-      })
-    )
+      ...visibleRows.map((row) => renderRow(row, true))
+    ),
+    footerRows.length > 0
+      ? h('tfoot', {}, ...footerRows.map((row) => renderRow(row, false)))
+      : null
   );
   return table;
 }

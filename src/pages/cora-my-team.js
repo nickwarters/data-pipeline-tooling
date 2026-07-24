@@ -1,5 +1,8 @@
 // @ts-check
-import { buildTeamWorkload } from '../evaluators/team-workload-model.js';
+import {
+  buildTeamWorkload,
+  withReviewerDisplayNames,
+} from '../evaluators/team-workload-model.js';
 import { h } from '../lib/html.js';
 import { fetchTeamWorkloadCases } from '../services/team-cases-fetcher.js';
 import { dataTableView, nextTableSort } from '../views/data-table.js';
@@ -20,13 +23,12 @@ import { dataTableView, nextTableSort } from '../views/data-table.js';
 /**
  * @typedef {Object} MyTeamState
  * @property {import('../core/chrome-state.js').ChromeState} chrome
- * @property {CaseSource[]} myTeamCaseSources
  * @property {{ myTeam: MyTeamRouteState }} routes
  */
 
 /**
  * @typedef {
- *   | { type: 'workload/load-started' }
+ *   | { type: 'workload/refresh-requested' }
  *   | { type: 'workload/loaded', rows: WorkloadRow[] }
  *   | { type: 'workload/load-failed', message: string }
  *   | { type: 'table/sort-requested', key: string }
@@ -75,11 +77,20 @@ export function myTeamColumns(sources) {
 
 /**
  * @param {MyTeamState} state
- * @param {{ dispatch: (action: MyTeamAction) => void, onRefresh: () => void }} tools
+ * @param {{
+ *   dispatch: (action: MyTeamAction) => void,
+ *   caseSources: CaseSource[],
+ *   runRefreshEffect?: () => void,
+ * }} tools
  * @returns {HTMLElement}
  */
-export function myTeamView(state, { dispatch, onRefresh }) {
+export function myTeamView(
+  state,
+  { dispatch, caseSources, runRefreshEffect = () => {} }
+) {
   const route = state.routes.myTeam;
+  const staffRows = route.rows?.filter((row) => !row.isTotal) ?? [];
+  const totalRows = route.rows?.filter((row) => row.isTotal) ?? [];
   return h(
     'main',
     { class: 'cora-my-team', 'aria-busy': String(route.loading) },
@@ -101,7 +112,10 @@ export function myTeamView(state, { dispatch, onRefresh }) {
         {
           type: 'button',
           disabled: route.loading,
-          onclick: onRefresh,
+          onclick: () => {
+            dispatch({ type: 'workload/refresh-requested' });
+            runRefreshEffect();
+          },
         },
         route.loading ? 'Refreshing…' : 'Refresh'
       )
@@ -121,12 +135,16 @@ export function myTeamView(state, { dispatch, onRefresh }) {
           'div',
           { class: 'cora-my-team-table' },
           dataTableView({
-            rows: route.rows,
-            columns: myTeamColumns(state.myTeamCaseSources),
+            rows: staffRows,
+            footerRows: totalRows,
+            columns: myTeamColumns(caseSources),
             sort: route.sort,
             onSort: (key) => dispatch({ type: 'table/sort-requested', key }),
             emptyMessage: 'No allocated outstanding Cases.',
-            rowKey: (row) => (row.isTotal ? 'total' : row.reviewer),
+            rowKey: (row) =>
+              row.reviewerId === null
+                ? 'workload-total'
+                : `reviewer:${row.reviewerId}`,
             rowClass: (row) =>
               row.isTotal ? 'cora-workload-row cora-workload-row--total' : '',
           })
@@ -150,13 +168,57 @@ export function createRouteSlice(
 ) {
   let active = false;
   let loadSequence = 0;
-  /** @type {() => void} */
-  let refresh = () => {};
+  /** @type {null | { dispatch: (action: MyTeamAction) => void, context: import('../setup/register-routes.js').AppContext }} */
+  let effectTools = null;
+
+  function runRefreshEffect() {
+    const tools = effectTools;
+    if (!active || !tools) return;
+    const sequence = ++loadSequence;
+    void fetchCases(
+      tools.context.client,
+      tools.context.chrome.currentUser.id,
+      tools.context.caseSources
+    ).then(
+      async (cases) => {
+        if (!active || sequence !== loadSequence) return;
+        const rows = buildTeamWorkload(cases, tools.context.caseSources, now());
+        const reviewerIds = rows.flatMap((row) =>
+          row.reviewerId === null ? [] : [row.reviewerId]
+        );
+        /** @type {Record<string, string | null>} */
+        let displayNames = {};
+        try {
+          if (typeof tools.context.client.resolveUsers === 'function') {
+            displayNames = await tools.context.client.resolveUsers(reviewerIds);
+          }
+        } catch {
+          // Workload data remains useful when directory enrichment is unavailable.
+        }
+        if (active && sequence === loadSequence) {
+          tools.dispatch({
+            type: 'workload/loaded',
+            rows: withReviewerDisplayNames(rows, displayNames),
+          });
+        }
+      },
+      (error) => {
+        if (active && sequence === loadSequence) {
+          tools.dispatch({
+            type: 'workload/load-failed',
+            message:
+              error instanceof Error
+                ? error.message
+                : 'Unable to load current workload.',
+          });
+        }
+      }
+    );
+  }
 
   /** @type {MyTeamState} */
   const initialState = {
     chrome: context.chrome,
-    myTeamCaseSources: context.caseSources,
     routes: {
       myTeam: {
         rows: null,
@@ -176,7 +238,7 @@ export function createRouteSlice(
      */
     reducer(state, action) {
       const route = state.routes.myTeam;
-      if (action.type === 'workload/load-started') {
+      if (action.type === 'workload/refresh-requested') {
         return {
           ...state,
           routes: {
@@ -224,54 +286,25 @@ export function createRouteSlice(
     },
     view(
       /** @type {MyTeamState} */ state,
-      /** @type {{ dispatch: (action: MyTeamAction) => void }} */ tools
+      /** @type {{ dispatch: (action: MyTeamAction) => void, context: import('../setup/register-routes.js').AppContext }} */ tools
     ) {
       return myTeamView(state, {
         dispatch: tools.dispatch,
-        onRefresh: refresh,
+        caseSources: tools.context.caseSources,
+        runRefreshEffect,
       });
     },
     start(
       /** @type {{ dispatch: (action: MyTeamAction) => void, context: import('../setup/register-routes.js').AppContext }} */ tools
     ) {
       active = true;
-      refresh = () => {
-        const sequence = ++loadSequence;
-        tools.dispatch({ type: 'workload/load-started' });
-        void fetchCases(
-          tools.context.client,
-          tools.context.chrome.currentUser.id,
-          tools.context.caseSources
-        ).then(
-          (cases) => {
-            if (active && sequence === loadSequence) {
-              tools.dispatch({
-                type: 'workload/loaded',
-                rows: buildTeamWorkload(
-                  cases,
-                  tools.context.caseSources,
-                  now()
-                ),
-              });
-            }
-          },
-          (error) => {
-            if (active && sequence === loadSequence) {
-              tools.dispatch({
-                type: 'workload/load-failed',
-                message:
-                  error instanceof Error
-                    ? error.message
-                    : 'Unable to load current workload.',
-              });
-            }
-          }
-        );
-      };
-      refresh();
+      effectTools = tools;
+      tools.dispatch({ type: 'workload/refresh-requested' });
+      runRefreshEffect();
 
       return () => {
         active = false;
+        effectTools = null;
         loadSequence += 1;
       };
     },

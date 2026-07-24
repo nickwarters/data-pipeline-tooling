@@ -22,9 +22,10 @@ const sources = [
   },
 ];
 
-function context() {
+/** @param {any} [client] */
+function context(client = {}) {
   return /** @type {any} */ ({
-    client: {},
+    client,
     chrome: {
       toasts: [],
       nav: { currentHash: '#/my-team' },
@@ -55,7 +56,7 @@ test('my team view: renders loading, errors, the workload table, and roster limi
     fetchCases: async () => [],
     now: () => new Date('2026-07-24T00:00:00.000Z'),
   });
-  const tools = { dispatch() {}, onRefresh() {} };
+  const tools = { dispatch() {}, caseSources: sources };
 
   const loading = myTeamView(slice.initialState, tools);
   assert.equal(loading.getAttribute('aria-busy'), 'true');
@@ -74,6 +75,7 @@ test('my team view: renders loading, errors, the workload table, and roster limi
     type: 'workload/loaded',
     rows: [
       {
+        reviewerId: 'reviewer-a',
         reviewer: 'reviewer-a',
         countsByCaseType: { complaints: 2, conduct: 1 },
         totalOutstanding: 3,
@@ -82,6 +84,7 @@ test('my team view: renders loading, errors, the workload table, and roster limi
         isTotal: false,
       },
       {
+        reviewerId: null,
         reviewer: 'Total',
         countsByCaseType: { complaints: 2, conduct: 1 },
         totalOutstanding: 3,
@@ -98,7 +101,8 @@ test('my team view: renders loading, errors, the workload table, and roster limi
     view.textContent,
     /only staff with allocated outstanding Cases/i
   );
-  assert.equal(view.querySelector('tbody')?.querySelectorAll('tr').length, 2);
+  assert.equal(view.querySelector('tbody')?.querySelectorAll('tr').length, 1);
+  assert.equal(view.querySelector('tfoot')?.querySelectorAll('tr').length, 1);
 });
 
 test('my team slice: loads fresh data, refreshes manually, sorts, and ignores stale completion', async () => {
@@ -126,7 +130,7 @@ test('my team slice: loads fresh data, refreshes manually, sorts, and ignores st
     context: context(),
   });
 
-  assert.deepEqual(actions[0], { type: 'workload/load-started' });
+  assert.deepEqual(actions[0], { type: 'workload/refresh-requested' });
   pending[0].release();
   await pending[0].promise;
   assert.equal(actions[1].type, 'workload/loaded');
@@ -134,10 +138,15 @@ test('my team slice: loads fresh data, refreshes manually, sorts, and ignores st
   const loadedState = slice.reducer(slice.initialState, actions[1]);
   const rendered = slice.view?.(
     loadedState,
-    /** @type {any} */ ({ dispatch() {} })
+    /** @type {any} */ ({
+      dispatch(/** @type {any} */ action) {
+        actions.push(action);
+      },
+      context: context(),
+    })
   );
   fireEvent(getByRole(rendered, 'button', { name: 'Refresh' }), 'click');
-  assert.deepEqual(actions[2], { type: 'workload/load-started' });
+  assert.deepEqual(actions[2], { type: 'workload/refresh-requested' });
 
   const sorted = slice.reducer(slice.initialState, {
     type: 'table/sort-requested',
@@ -153,4 +162,118 @@ test('my team slice: loads fresh data, refreshes manually, sorts, and ignores st
   pending[1].release();
   await pending[1].promise;
   assert.equal(actions.length, 3);
+});
+
+test('my team view: keeps Total last under every sortable column and direction', () => {
+  const slice = createRouteSlice({}, context(), {
+    fetchCases: async () => [],
+  });
+  const loaded = slice.reducer(slice.initialState, {
+    type: 'workload/loaded',
+    rows: [
+      {
+        reviewerId: 'reviewer-z',
+        reviewer: 'Zara Reviewer',
+        countsByCaseType: { complaints: 1, conduct: 0 },
+        totalOutstanding: 1,
+        onHold: 0,
+        longestHoldDays: null,
+        isTotal: false,
+      },
+      {
+        reviewerId: 'reviewer-a',
+        reviewer: 'Alex Reviewer',
+        countsByCaseType: { complaints: 0, conduct: 2 },
+        totalOutstanding: 2,
+        onHold: 1,
+        longestHoldDays: 4,
+        isTotal: false,
+      },
+      {
+        reviewerId: null,
+        reviewer: 'Total',
+        countsByCaseType: { complaints: 1, conduct: 2 },
+        totalOutstanding: 3,
+        onHold: 1,
+        longestHoldDays: 4,
+        isTotal: true,
+      },
+    ],
+  });
+
+  for (const column of myTeamColumns(sources)) {
+    for (const dir of /** @type {const} */ (['asc', 'desc'])) {
+      const sorted = {
+        ...loaded,
+        routes: {
+          myTeam: {
+            ...loaded.routes.myTeam,
+            sort: { key: column.key, dir },
+          },
+        },
+      };
+      const view = myTeamView(sorted, {
+        dispatch() {},
+        caseSources: sources,
+      });
+      assert.equal(
+        view.querySelector('tfoot')?.querySelector('tr')?.textContent,
+        'Total12314'
+      );
+      assert.equal(
+        view.querySelector('tbody')?.querySelectorAll('tr').length,
+        2
+      );
+    }
+  }
+});
+
+test('my team slice: resolves reviewer display names and falls back to account ids', async () => {
+  /** @type {any[]} */
+  const actions = [];
+  const client = {
+    async resolveUsers(/** @type {string[]} */ accounts) {
+      assert.deepEqual(accounts, ['reviewer-a', 'reviewer-b']);
+      return { 'reviewer-a': 'Alex Reviewer', 'reviewer-b': null };
+    },
+  };
+  const slice = createRouteSlice({}, context(), {
+    fetchCases: async () => [
+      /** @type {any} */ ({
+        id: 'a',
+        caseType: 'complaints',
+        status: 'In-progress',
+        assignedReviewer: 'reviewer-a',
+      }),
+      /** @type {any} */ ({
+        id: 'b',
+        caseType: 'conduct',
+        status: 'Actions In Progress',
+        assignedReviewer: 'reviewer-b',
+      }),
+    ],
+  });
+
+  slice.start?.({
+    dispatch(/** @type {any} */ action) {
+      actions.push(action);
+    },
+    context: context(client),
+  });
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.deepEqual(
+    /** @type {any} */ (actions.at(-1)).rows.map((/** @type {any} */ row) => [
+      row.reviewerId,
+      row.reviewer,
+    ]),
+    [
+      ['reviewer-a', 'Alex Reviewer'],
+      ['reviewer-b', 'reviewer-b'],
+      [null, 'Total'],
+    ]
+  );
+  assert.equal(Object.hasOwn(slice.initialState, 'myTeamCaseSources'), false);
 });
