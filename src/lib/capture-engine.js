@@ -84,3 +84,29 @@ export function buildCaptureControl(
     onchange: onChangeHandler,
   });
 }
+
+/**
+ * Tags a control built above with a stable `data-focus-key` so focus and caret
+ * survive an autosave-driven re-render, and sets its disabled state.
+ *
+ * Which field types produce a wrapper around several inputs is knowledge that
+ * belongs to the builder, so it lives here rather than in each consumer: add a
+ * multi-input type to `buildCaptureControl` and every caller stays correct.
+ * A `radio` group's inputs each take `<key>:<value>`.
+ *
+ * @param {HTMLElement} control
+ * @param {CaptureField | RemediationField} fieldConfig
+ * @param {string} key
+ * @param {boolean} [disabled]
+ */
+export function applyCaptureFocusKey(control, fieldConfig, key, disabled) {
+  if (fieldConfig.type === 'radio') {
+    for (const input of control.querySelectorAll('input')) {
+      input.setAttribute('data-focus-key', `${key}:${input.value}`);
+      if (disabled !== undefined) input.disabled = disabled;
+    }
+    return;
+  }
+  control.setAttribute('data-focus-key', key);
+  if (disabled !== undefined) /** @type {any} */ (control).disabled = disabled;
+}

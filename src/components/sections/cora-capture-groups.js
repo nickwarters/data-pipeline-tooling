@@ -1,6 +1,9 @@
 // @ts-check
 import { h } from '../../lib/html.js';
-import { buildCaptureControl } from '../../lib/capture-engine.js';
+import {
+  buildCaptureControl,
+  applyCaptureFocusKey,
+} from '../../lib/capture-engine.js';
 
 /** @typedef {import('../../sharepoint-client.js').CaptureGroup} CaptureGroup */
 /** @typedef {import('../../sharepoint-client.js').CaptureField} CaptureField */
@@ -169,22 +172,16 @@ function focusKeyFor(namePrefix, fieldKey) {
 }
 
 /**
- * Tags the field's focusable control(s) with a stable `data-focus-key`. It does
- * lets the store renderer restore focus after a structural re-render.
+ * Tags the field's focusable control(s) with a stable `data-focus-key`, which
+ * lets the store renderer restore focus after a structural re-render. The
+ * engine that built the control knows how to tag it.
  *
  * @param {HTMLElement} control
  * @param {CaptureField} field
  * @param {string} namePrefix
  */
 function applyFocusKey(control, field, namePrefix) {
-  const key = focusKeyFor(namePrefix, field.key);
-  if (field.type === 'radio') {
-    for (const input of control.querySelectorAll('input')) {
-      input.setAttribute('data-focus-key', `${key}:${input.value}`);
-    }
-  } else {
-    control.setAttribute('data-focus-key', key);
-  }
+  applyCaptureFocusKey(control, field, focusKeyFor(namePrefix, field.key));
 }
 
 /**

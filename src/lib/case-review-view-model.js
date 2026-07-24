@@ -20,6 +20,10 @@ import {
   findCaptureField,
 } from '../evaluators/issue-capture.js';
 import {
+  validateGeneralQuestions,
+  validateAnswerKeyNamespace,
+} from '../evaluators/general-questions.js';
+import {
   coerceRemediationActions,
   setActionStatus,
 } from '../evaluators/remediation-actions.js';
@@ -272,6 +276,7 @@ export class CaseReviewViewModel {
     this.exportHash = exportHash;
 
     validateCaptureGroups(config.captureGroups);
+    validateGeneralQuestions(config.generalQuestions);
 
     if (versionHash && versionedExport) {
       // Reportable Case with a published snapshot — freeze the catalogue as-reviewed.
@@ -323,6 +328,10 @@ export class CaseReviewViewModel {
         ? (versionedExport.defaultOutcomeId ?? config.defaultOutcomeId)
         : config.defaultOutcomeId) ?? ''
     );
+
+    // The `general:` answer-key namespace only isolates General Questions from
+    // the catalogue while no Question Definition id can be mistaken for one.
+    validateAnswerKeyNamespace(this.catalogue);
 
     this.catalogueById = new Map(this.catalogue.map((q) => [q.id, q]));
 

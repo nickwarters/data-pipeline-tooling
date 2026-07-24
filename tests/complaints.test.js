@@ -5,6 +5,10 @@ import config from '../case-types/complaints.js';
 import { detectCycles } from '../src/evaluators/applicability-evaluator.js';
 import { deriveFailureValues } from '../src/evaluators/failure-evaluator.js';
 import { validateCaptureGroups } from '../src/evaluators/issue-capture.js';
+import {
+  validateGeneralQuestions,
+  validateAnswerKeyNamespace,
+} from '../src/evaluators/general-questions.js';
 import { cases } from '../dev/fixtures/cases.js';
 
 /** @typedef {import('../src/sharepoint-client.js').Answer} Answer */
@@ -88,6 +92,15 @@ test('complaints: declares Issue Capture Groups with unique field keys', () => {
   );
   // Passes the same validation gate the view model applies at load time.
   assert.doesNotThrow(() => validateCaptureGroups(groups));
+});
+
+test('complaints: General Questions and Question Definition ids pass the load-time gates', () => {
+  assert.ok(
+    (config.generalQuestions ?? []).length >= 1,
+    'expected the live Case Type to declare a General Question'
+  );
+  assert.doesNotThrow(() => validateGeneralQuestions(config.generalQuestions));
+  assert.doesNotThrow(() => validateAnswerKeyNamespace(config.questions));
 });
 
 test('complaints: every capture field is a supported type with options for choices', () => {

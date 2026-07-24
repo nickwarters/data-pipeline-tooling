@@ -230,6 +230,7 @@ src/
     remediation-actions.js
     remediation-details.js
     question-group-progress.js   # per-Question-Group answered/total (was section-progress.js, #390)
+    general-questions.js         # General Question answer-key namespace + load-time config gates (#472)
     summary-model.js
     time-windows.js
 

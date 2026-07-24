@@ -236,6 +236,12 @@
   --cora-space-10: 4rem; /* 64px */
   --cora-space-12: 6rem; /* 96px */
 
+  /* ═══ LAYOUT ═══════════════════════════════════════════════════════════ */
+  /* Width of the sticky Question Group progress rail. Content rendered
+     outside that grid (General Questions) reserves the same width to stay
+     left-aligned with it, so the two must move together. */
+  --cora-progress-rail-width: 14rem;
+
   /* ═══ BORDER RADIUS ════════════════════════════════════════════════════ */
   --cora-radius-none: 0;
   --cora-radius-sm: 2px;

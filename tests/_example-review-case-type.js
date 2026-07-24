@@ -165,9 +165,9 @@ const config = {
   ],
   questions: bank.questions,
 
-  // General Questions — non-outcome-driving fields rendered below the Question
-  // Groups on the Review tab. Answers are namespaced (`general:<key>`) in the
-  // same Answers blob and reach no evaluator.
+  // General Questions — non-outcome-driving fields rendered above or below the Question
+  // Groups on the Review tab (`generalQuestionsPlacement`). Answers are
+  // namespaced (`general:<key>`) in the same Answers blob and reach no evaluator.
   generalQuestions: [
     {
       key: 'reviewChannel',

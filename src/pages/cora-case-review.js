@@ -13,7 +13,7 @@ import {
   observeSaveStatus,
 } from './cora-case-review/case-actions.js';
 import { createQuestionPanelView } from './cora-case-review/question-panel-view.js';
-import { GeneralQuestions } from './cora-case-review/general-questions-view.js';
+import { withGeneralQuestions } from './cora-case-review/general-questions-view.js';
 import {
   conversationView,
   postConversationMessage,
@@ -397,6 +397,38 @@ function sectionStyleHost(tagName, children) {
 }
 
 /**
+ * The Review tab's contents: the Applicable Questions, with the Case Type's
+ * General Questions before or after them. General Questions travel the same
+ * Answer path (namespaced keys, one SaveQueue write) but drive no Outcome —
+ * see general-questions-view.js.
+ *
+ * @param {CaseReviewSnapshot} snapshot
+ * @param {ReturnType<typeof createQuestionPanelView>} questionsView
+ * @param {CaseReviewViewModel} viewModel
+ * @returns {Node[]}
+ */
+function questionsPanel(snapshot, questionsView, viewModel) {
+  return withGeneralQuestions(
+    questionsView.render({
+      catalogue: snapshot.catalogue,
+      questions: snapshot.applicableQuestions,
+      answers: snapshot.answers,
+      access: snapshot.access.questions,
+      heading: snapshot.sectionHeadings.questions,
+      onAnswer: (questionId, value) =>
+        viewModel.handleAnswer(questionId, value),
+    }),
+    {
+      fields: snapshot.config?.generalQuestions ?? [],
+      answers: snapshot.answers,
+      access: snapshot.access.questions,
+      placement: snapshot.config?.generalQuestionsPlacement ?? 'after',
+      onAnswer: (answerKey, value) => viewModel.handleAnswer(answerKey, value),
+    }
+  );
+}
+
+/**
  * CASE-1 route slice. The view model adapts existing loading/domain behaviour
  * into store snapshots; the interim adapter owns only the unconverted Section
  * components.
@@ -682,29 +714,7 @@ export function createRouteSlice(params, context) {
       if (entry.id === 'questions') {
         tools.morph(
           panel,
-          visible
-            ? [
-                questionsView.render({
-                  catalogue: snapshot.catalogue,
-                  questions: snapshot.applicableQuestions,
-                  answers: snapshot.answers,
-                  access: snapshot.access.questions,
-                  heading: snapshot.sectionHeadings.questions,
-                  onAnswer: (questionId, value) =>
-                    viewModel.handleAnswer(questionId, value),
-                }),
-                // General Questions sit below the last Question Group. They
-                // travel the same Answer path (namespaced keys, one SaveQueue
-                // write) but drive no Outcome — see general-questions-view.js.
-                ...GeneralQuestions({
-                  fields: snapshot.config.generalQuestions ?? [],
-                  answers: snapshot.answers,
-                  access: snapshot.access.questions,
-                  onAnswer: (answerKey, value) =>
-                    viewModel.handleAnswer(answerKey, value),
-                }),
-              ]
-            : null
+          visible ? questionsPanel(snapshot, questionsView, viewModel) : null
         );
         continue;
       }

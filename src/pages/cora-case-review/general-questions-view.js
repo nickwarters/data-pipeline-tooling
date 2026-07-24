@@ -1,8 +1,12 @@
 // @ts-check
 import { h } from '../../lib/html.js';
-import { buildCaptureControl } from '../../lib/capture-engine.js';
+import {
+  buildCaptureControl,
+  applyCaptureFocusKey,
+} from '../../lib/capture-engine.js';
+import { generalAnswerKey } from '../../evaluators/general-questions.js';
 
-/** @typedef {import('../../sharepoint-client.js').CaptureField} CaptureField */
+/** @typedef {import('../../sharepoint-client.js').GeneralQuestionField} GeneralQuestionField */
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
 
 /**
@@ -11,22 +15,6 @@ import { buildCaptureControl } from '../../lib/capture-engine.js';
  * the section is called.
  */
 export const GENERAL_QUESTIONS_TITLE = 'General Questions';
-
-/**
- * The namespace every General Question answer key carries inside the Case's
- * `Answers` blob. A Question Definition id is a bank identifier and never
- * contains `:`, so a namespaced key cannot collide with one — which is what
- * keeps the two kinds of answer able to share one blob.
- */
-export const GENERAL_ANSWER_PREFIX = 'general:';
-
-/**
- * @param {string} fieldKey
- * @returns {string}
- */
-export function generalAnswerKey(fieldKey) {
-  return `${GENERAL_ANSWER_PREFIX}${fieldKey}`;
-}
 
 /**
  * The current value of a General Question, '' when unanswered.
@@ -42,8 +30,10 @@ function currentValue(answers, fieldKey) {
 
 /**
  * Renders a Case Type's **General Questions**: arbitrary configured fields a
- * Reviewer answers alongside the Applicable Questions, shown beneath the last
- * Question Group behind a separator.
+ * Reviewer answers alongside the Applicable Questions, shown above the first or
+ * beneath the last Question Group, behind a separator. The caller places the
+ * returned nodes; `placement` only decides which side of them the separator
+ * falls on.
  *
  * General Questions are deliberately *not* outcome-driving. They carry no
  * `showWhen`, no failure mapping and no Remediation Actions, and their answers
@@ -56,34 +46,57 @@ function currentValue(answers, fieldKey) {
  * learn. Returns `[]` when the Case Type declares none.
  *
  * @param {{
- *   fields: CaptureField[],
+ *   fields: GeneralQuestionField[],
  *   answers: Record<string, Answer>,
  *   access: 'edit'|'read-only'|'hidden',
+ *   placement?: 'before'|'after',
  *   onAnswer: (answerKey: string, value: string) => void,
  * }} props
  * @returns {HTMLElement[]}
  */
-export function GeneralQuestions({ fields, answers, access, onAnswer }) {
+export function GeneralQuestions({
+  fields,
+  answers,
+  access,
+  placement = 'after',
+  onAnswer,
+}) {
   if (!fields.length || access === 'hidden') return [];
   const canEdit = access === 'edit';
 
-  return [
-    h('hr', { className: 'cora-general-questions-rule' }),
+  const rule = h('hr', { className: 'cora-general-questions-rule' });
+  const section = h(
+    'section',
+    { className: 'cora-general-questions' },
     h(
-      'section',
-      { className: 'cora-general-questions' },
-      h(
-        'h3',
-        { className: 'cora-general-questions-heading' },
-        GENERAL_QUESTIONS_TITLE
-      ),
-      ...fields.map((field) => questionField(field, answers, canEdit, onAnswer))
+      'h3',
+      { className: 'cora-general-questions-heading' },
+      GENERAL_QUESTIONS_TITLE
     ),
-  ];
+    ...fields.map((field) => questionField(field, answers, canEdit, onAnswer))
+  );
+  // The separator always sits between the two sets of questions.
+  return placement === 'before' ? [section, rule] : [rule, section];
 }
 
 /**
- * @param {CaptureField} field
+ * The Review tab's questions in configured order: the Applicable Questions with
+ * the Case Type's General Questions placed before or after them. One place
+ * decides the order, so the separator and the section can never disagree.
+ *
+ * @param {Node} applicableQuestions
+ * @param {Parameters<typeof GeneralQuestions>[0]} props
+ * @returns {Node[]}
+ */
+export function withGeneralQuestions(applicableQuestions, props) {
+  const general = GeneralQuestions(props);
+  return props.placement === 'before'
+    ? [...general, applicableQuestions]
+    : [applicableQuestions, ...general];
+}
+
+/**
+ * @param {GeneralQuestionField} field
  * @param {Record<string, Answer>} answers
  * @param {boolean} canEdit
  * @param {(answerKey: string, value: string) => void} onAnswer
@@ -103,7 +116,14 @@ function questionField(field, answers, canEdit, onAnswer) {
     'cora-capture-input',
     'general-'
   );
-  applyAccess(control, field, canEdit);
+  // A stable focus key per control, so the Reviewer's caret survives an
+  // autosave-driven re-render; disabled outside `edit` access.
+  applyCaptureFocusKey(
+    control,
+    field,
+    `general-question:${field.key}`,
+    !canEdit
+  );
 
   return h(
     'div',
@@ -111,27 +131,4 @@ function questionField(field, answers, canEdit, onAnswer) {
     h('label', { className: 'cora-capture-label' }, field.label),
     control
   );
-}
-
-/**
- * Tags the field's focusable control(s) with a stable `data-focus-key` so the
- * Reviewer's focus and caret survive an autosave-driven re-render, and disables
- * them outside `edit` access. A `radio` field is a wrapper around several
- * inputs, so both are applied per input.
- *
- * @param {HTMLElement} control
- * @param {CaptureField} field
- * @param {boolean} canEdit
- */
-function applyAccess(control, field, canEdit) {
-  const key = `general-question:${field.key}`;
-  if (field.type === 'radio') {
-    for (const input of control.querySelectorAll('input')) {
-      input.setAttribute('data-focus-key', `${key}:${input.value}`);
-      input.disabled = !canEdit;
-    }
-    return;
-  }
-  control.setAttribute('data-focus-key', key);
-  /** @type {any} */ (control).disabled = !canEdit;
 }

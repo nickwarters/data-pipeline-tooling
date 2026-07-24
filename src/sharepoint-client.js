@@ -64,6 +64,16 @@
  */
 
 /**
+ * One **General Question** declared by a Case Type: a `CaptureField` restricted
+ * to the types the General Questions section actually renders. `person` and
+ * `actions` are deliberately excluded — `buildCaptureControl` falls through to
+ * a plain text box for them, and an Owner should be told at load time
+ * (`validateGeneralQuestions`) rather than shipping a degraded field.
+ *
+ * @typedef {{ key: string, label: string, type: 'text' | 'textarea' | 'select' | 'radio', options?: string[], placeholder?: string }} GeneralQuestionField
+ */
+
+/**
  * @typedef {{ author: string, timestamp: string, body: string }} Message
  */
 
@@ -403,10 +413,11 @@
  * the typedef for source compatibility; new and scaffolded Case Types use
  * `caseTableColumns`.
  *
- * `generalQuestions` declares the **General Questions** rendered beneath the
- * Question Groups on the Review tab. They reuse the `CaptureField` vocabulary
- * but are never outcome-driving: their answers are namespaced in the Answers
- * blob and no evaluator reads them.
+ * `generalQuestions` declares the **General Questions** rendered above or beneath the
+ * Question Groups on the Review tab — `generalQuestionsPlacement` selects which
+ * ('after' when absent). They reuse the `CaptureField` vocabulary but are never
+ * outcome-driving: their answers are namespaced in the Answers blob and no
+ * evaluator reads them.
  *
  * @typedef {{
  * questions: QuestionDefinition[],
@@ -428,7 +439,8 @@
  * attributeFailures?: boolean,
  * remediationFields?: RemediationField[],
  * captureGroups?: CaptureGroup[],
- * generalQuestions?: CaptureField[],
+ * generalQuestions?: GeneralQuestionField[],
+ * generalQuestionsPlacement?: 'before' | 'after',
  * detailFields?: CaseDetailField[],
  * dashboardColumns?: import('./components/base/cora-data-table.js').ColumnDef<CaseRow>[],
  * caseTableColumns?: CaseTableColumnDescriptor[]

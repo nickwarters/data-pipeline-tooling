@@ -6,8 +6,10 @@ import { fireEvent } from './helpers/semantic-dom.js';
 
 installDom();
 
-const { GeneralQuestions, generalAnswerKey, GENERAL_ANSWER_PREFIX } =
+const { GeneralQuestions, withGeneralQuestions } =
   await import('../src/pages/cora-case-review/general-questions-view.js');
+const { generalAnswerKey } =
+  await import('../src/evaluators/general-questions.js');
 const { computeQuestionGroupProgress } =
   await import('../src/evaluators/question-group-progress.js');
 const { evaluate, allApplicableAnswered } =
@@ -16,10 +18,10 @@ const { isFailure } = await import('../src/evaluators/failure-evaluator.js');
 const { computeConfiguredOutcome } =
   await import('../src/evaluators/configured-outcome.js');
 
-/** @typedef {import('../src/sharepoint-client.js').CaptureField} CaptureField */
+/** @typedef {import('../src/sharepoint-client.js').GeneralQuestionField} GeneralQuestionField */
 /** @typedef {import('../src/sharepoint-client.js').Answer} Answer */
 
-/** @type {CaptureField[]} */
+/** @type {GeneralQuestionField[]} */
 const FIELDS = [
   { key: 'reviewerNotes', label: 'Reviewer notes', type: 'textarea' },
   {
@@ -166,9 +168,29 @@ test('a read-only Reviewer sees the answers but cannot edit them', () => {
   assert.deepEqual(seen, []);
 });
 
-test('a General Question key cannot collide with a Question Definition id', () => {
-  assert.equal(GENERAL_ANSWER_PREFIX, 'general:');
-  assert.equal(generalAnswerKey('reviewerNotes'), 'general:reviewerNotes');
+test('placement decides which side of the section the separator falls on', () => {
+  const after = GeneralQuestions({
+    fields: FIELDS,
+    answers: {},
+    access: 'edit',
+    onAnswer() {},
+  });
+  const before = GeneralQuestions({
+    fields: FIELDS,
+    answers: {},
+    access: 'edit',
+    placement: 'before',
+    onAnswer() {},
+  });
+
+  assert.deepEqual(
+    after.map((node) => node.tagName),
+    ['HR', 'SECTION']
+  );
+  assert.deepEqual(
+    before.map((node) => node.tagName),
+    ['SECTION', 'HR']
+  );
 });
 
 // --- General Questions are not outcome-driving -----------------------------
@@ -213,6 +235,37 @@ const OUTCOME_OPTIONS = [
   { id: 'pass', wording: 'Pass', severity: 0 },
   { id: 'fail', wording: 'Fail', severity: 100 },
 ];
+
+test('a Case Type places its General Questions before or after the Question Groups', () => {
+  const applicable = document.createElement('section');
+  applicable.className = 'applicable';
+  const props = {
+    fields: FIELDS,
+    answers: {},
+    access: /** @type {const} */ ('edit'),
+    onAnswer() {},
+  };
+
+  assert.deepEqual(
+    withGeneralQuestions(applicable, props).map(
+      (/** @type {any} */ node) => node.className
+    ),
+    ['applicable', 'cora-general-questions-rule', 'cora-general-questions']
+  );
+  assert.deepEqual(
+    withGeneralQuestions(applicable, {
+      ...props,
+      placement: 'before',
+    }).map((/** @type {any} */ node) => node.className),
+    ['cora-general-questions', 'cora-general-questions-rule', 'applicable']
+  );
+  assert.deepEqual(
+    withGeneralQuestions(applicable, { ...props, fields: [] }).map(
+      (/** @type {any} */ node) => node.className
+    ),
+    ['applicable']
+  );
+});
 
 test('General Question answers do not change applicability or completion', () => {
   assert.deepEqual(
