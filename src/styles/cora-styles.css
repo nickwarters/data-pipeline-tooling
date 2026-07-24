@@ -528,6 +528,48 @@ cora-status-banner {
   outline-offset: -2px;
 }
 
+/* ── My Team workload ──────────────────────────────────────────────────── */
+
+[data-cora-root] .cora-my-team-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--cora-space-4);
+  padding-bottom: var(--cora-space-4);
+  border-bottom: 1px solid var(--cora-color-border);
+}
+
+[data-cora-root] .cora-my-team-header h1 {
+  margin-bottom: var(--cora-space-1);
+}
+
+[data-cora-root] .cora-my-team-header p,
+[data-cora-root] .cora-my-team-roster-note {
+  color: var(--cora-color-text-muted);
+}
+
+[data-cora-root] .cora-my-team-header button {
+  flex: 0 0 auto;
+}
+
+[data-cora-root] .cora-my-team-roster-note {
+  max-width: 48rem;
+  padding-left: var(--cora-space-3);
+  border-left: 3px solid var(--cora-color-border-strong);
+  font-size: var(--cora-font-size-sm);
+}
+
+[data-cora-root] .cora-my-team-table {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+[data-cora-root] .cora-data-table .cora-workload-row--total td {
+  background: var(--cora-color-surface-2);
+  border-top: 2px solid var(--cora-color-border-strong);
+  font-weight: var(--cora-font-weight-bold);
+}
+
 [data-cora-root] .cora-overdue td {
   background: var(--cora-color-danger-bg);
 }

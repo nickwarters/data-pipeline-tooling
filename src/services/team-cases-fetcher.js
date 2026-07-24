@@ -28,3 +28,20 @@ export function fetchTeamCases(client, params, managerId, sources) {
     assignedReviewerManager: managerId,
   }));
 }
+
+/**
+ * Read the live manager workload across the same manager-scoped, per-source
+ * fan-out as Team Cases, without borrowing that page's URL filter contract.
+ * Outstanding and hold rules stay in the pure workload evaluator.
+ *
+ * @param {SharePointClient} client
+ * @param {string} managerId
+ * @param {CaseSource[]} sources
+ * @returns {Promise<CaseRow[]>}
+ */
+export function fetchTeamWorkloadCases(client, managerId, sources) {
+  return listCasesAcrossSources(client, sources, (source) => ({
+    caseType: source.slug,
+    assignedReviewerManager: managerId,
+  }));
+}

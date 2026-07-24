@@ -72,6 +72,9 @@ export function AppNav({ capabilities, hash }) {
       AppNavItem('Question Bank', '#/question-bank', navItems)
     );
   }
+  if (isReviewerManager) {
+    itemsEl.appendChild(AppNavItem('My Team', '#/my-team', navItems));
+  }
 
   const node = h('div', { class: 'cora-app-nav-bar' }, brand, itemsEl);
   updateActiveNavItems(navItems, hash);

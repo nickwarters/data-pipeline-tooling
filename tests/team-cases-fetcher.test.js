@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-const { fetchTeamCases } =
+const { fetchTeamCases, fetchTeamWorkloadCases } =
   await import('../src/services/team-cases-fetcher.js');
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
@@ -152,4 +152,43 @@ test('fetchTeamCases: caseType matching no source yields no calls and empty resu
   );
   assert.deepEqual(result, []);
   assert.equal(client.calls.length, 0);
+});
+
+test('fetchTeamWorkloadCases: reuses manager-scoped fan-out without Team Cases params', async () => {
+  const client = makeClient({
+    complaints: [row('c1', 'complaints')],
+    conduct: [row('c2', 'conduct')],
+  });
+  const result = await fetchTeamWorkloadCases(
+    /** @type {any} */ (client),
+    'manager-1',
+    [src('complaints'), src('conduct')]
+  );
+
+  assert.deepEqual(
+    client.calls.map(({ filter, opts }) => ({
+      filter,
+      listName: opts?.listName,
+    })),
+    [
+      {
+        filter: {
+          caseType: 'complaints',
+          assignedReviewerManager: 'manager-1',
+        },
+        listName: 'complaints-list',
+      },
+      {
+        filter: {
+          caseType: 'conduct',
+          assignedReviewerManager: 'manager-1',
+        },
+        listName: 'conduct-list',
+      },
+    ]
+  );
+  assert.deepEqual(
+    result.map((item) => item.id),
+    ['c1', 'c2']
+  );
 });

@@ -40,6 +40,43 @@ export const cases = [
   // --- complaints fixture cases (Complaints journey; appeals raised by the
   // Journey Owner, resolved by Controls — ADR-0027) ---
   {
+    // My Team live-workload fixture: a held Case allocated to Morgan Manager's
+    // first staff member.
+    id: 'complaints-team-1',
+    caseType: 'complaints',
+    title: 'Complaint team workload #1',
+    status: 'In-progress',
+    assignedReviewer: 'user-reviewer',
+    assignedReviewerManager: 'user-rm',
+    responsibleParty: 'user-agent-a',
+    answers: {},
+    conversation: [],
+    notes: '',
+    onHold: true,
+    placedOnHoldAt: _threeDaysAgo.toISOString(),
+    completedAt: null,
+    created: _fiveDaysAgo.toISOString(),
+    etag: 'etag-cm-team1-v1',
+  },
+  {
+    // A second staff member and lifecycle status exercise the multi-reviewer
+    // totals shown by ?mock=1&asUser=reviewer-manager.
+    id: 'complaints-team-2',
+    caseType: 'complaints',
+    title: 'Complaint team workload #2',
+    status: 'Actions In Progress',
+    assignedReviewer: 'user-reviewer-2',
+    assignedReviewerManager: 'user-rm',
+    responsibleParty: 'user-agent-b',
+    answers: {},
+    conversation: [],
+    notes: '',
+    onHold: false,
+    completedAt: null,
+    created: _threeDaysAgo.toISOString(),
+    etag: 'etag-cm-team2-v1',
+  },
+  {
     // Outstanding: In-progress, assigned to the reviewer so it surfaces on the
     // reviewer dashboard's "Outstanding Cases". Partially answered (root-cause is
     // applicable via showWhen but unanswered), so it is not yet completable.

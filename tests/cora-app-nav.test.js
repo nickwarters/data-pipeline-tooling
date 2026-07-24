@@ -59,6 +59,33 @@ test('AppNav: Case Type Owner sees Question Bank; other roles do not', () => {
   assert.equal(findLink(reviewer, '#/question-bank'), null);
 });
 
+test('AppNav: only Reviewer Managers see My Team', () => {
+  const manager = AppNav({
+    capabilities: /** @type {any} */ (
+      capabilities({ isReviewerManager: true })
+    ),
+    hash: '#/my-team',
+  }).node;
+  assert.ok(findLink(manager, '#/my-team'));
+  assert.equal(
+    findLink(manager, '#/my-team')?.getAttribute('aria-current'),
+    'page'
+  );
+
+  for (const role of [
+    { isReviewer: true },
+    { isAdviser: true },
+    { ownedCaseTypes: ['complaints'] },
+    {},
+  ]) {
+    const node = AppNav({
+      capabilities: /** @type {any} */ (capabilities(role)),
+      hash: '#/',
+    }).node;
+    assert.equal(findLink(node, '#/my-team'), null);
+  }
+});
+
 test('AppNav: Visitor sees no navigation links beyond the CORA brand', () => {
   const { node, navItems } = AppNav({
     capabilities: /** @type {any} */ (capabilities()),
