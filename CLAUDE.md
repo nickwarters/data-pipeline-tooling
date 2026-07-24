@@ -249,6 +249,7 @@ src/
 case-types/                     # one module per Case Type, lazy-loaded via manifest.js
   manifest.js                   # CASE_TYPE_IMPORTERS / QUESTION_BANK_IMPORTERS registries
   load-bank.js                  # loads a bank .txt artifact as parsed JSON (see Gotchas)
+  general-questions.js          # shared General Question catalogue + resolveGeneralQuestions (#489)
   complaints.js                 # the only live Case Type (#383)
   banks/                        # Question Bank content, JSON text stored as .txt (see Gotchas)
     complaints.txt

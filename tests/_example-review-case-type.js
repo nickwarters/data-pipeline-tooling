@@ -11,6 +11,7 @@
 
 import { computeConfiguredOutcome } from '../src/evaluators/configured-outcome.js';
 import { loadBank } from '../case-types/load-bank.js';
+import { resolveGeneralQuestions } from '../case-types/general-questions.js';
 
 const bank = await loadBank(
   new URL('./_example-review-bank.txt', import.meta.url)
@@ -168,15 +169,12 @@ const config = {
   // General Questions — non-outcome-driving fields rendered above or below the Question
   // Groups on the Review tab (`generalQuestionsPlacement`). Answers are
   // namespaced (`general:<key>`) in the same Answers blob and reach no evaluator.
-  generalQuestions: [
-    {
-      key: 'reviewChannel',
-      label: 'How was this reviewed?',
-      type: 'select',
-      options: ['Case file only', 'Call recording'],
-    },
+  // A shared question is included by key so its answer key stays stable across
+  // Case Types; a Case Type-specific one is written out inline beside it.
+  generalQuestions: resolveGeneralQuestions([
+    'reviewChannel',
     { key: 'observations', label: 'Observations', type: 'textarea' },
-  ],
+  ]),
 
   /** @param {Record<string, Answer>} answers */
   computeOutcome(answers) {

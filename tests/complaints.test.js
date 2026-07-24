@@ -9,6 +9,7 @@ import {
   validateGeneralQuestions,
   validateAnswerKeyNamespace,
 } from '../src/evaluators/general-questions.js';
+import { resolveGeneralQuestions } from '../case-types/general-questions.js';
 import { cases } from '../dev/fixtures/cases.js';
 
 /** @typedef {import('../src/sharepoint-client.js').Answer} Answer */
@@ -101,6 +102,15 @@ test('complaints: General Questions and Question Definition ids pass the load-ti
   );
   assert.doesNotThrow(() => validateGeneralQuestions(config.generalQuestions));
   assert.doesNotThrow(() => validateAnswerKeyNamespace(config.questions));
+});
+
+test('complaints: its General Questions are shared ones, resolved to the catalogue definitions', () => {
+  // Included by key rather than restated, so the answer keys — and so any
+  // cross-Case-Type reporting on them — stay stable as Case Types are added.
+  assert.deepEqual(
+    config.generalQuestions,
+    resolveGeneralQuestions(['reviewChannel', 'reviewerObservations'])
+  );
 });
 
 test('complaints: every capture field is a supported type with options for choices', () => {

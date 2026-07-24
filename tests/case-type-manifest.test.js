@@ -7,6 +7,11 @@ import {
   loadCaseTypeConfig,
 } from '../case-types/manifest.js';
 import { CaseReviewViewModel } from '../src/lib/case-review-view-model.js';
+import { validateCaptureGroups } from '../src/evaluators/issue-capture.js';
+import {
+  validateGeneralQuestions,
+  validateAnswerKeyNamespace,
+} from '../src/evaluators/general-questions.js';
 
 test('case type manifest: known Case Type slugs resolve to their static import functions', async () => {
   const knownSlugs = ['complaints'];
@@ -16,6 +21,33 @@ test('case type manifest: known Case Type slugs resolve to their static import f
     assert.equal(typeof CASE_TYPE_IMPORTERS[slug], 'function');
     const config = await loadCaseTypeConfig(slug);
     assert.ok(Array.isArray(config.questions), `${slug} has questions`);
+  }
+});
+
+test('case type manifest: every registered Case Type module evaluates and passes the load-time gates', async () => {
+  // Boot loads *every* registered Case Type (resolve-eligible-case-types.js
+  // Promise.all's the whole manifest before eligibility is applied), so a module
+  // that throws at evaluation — an unknown shared General Question key, a
+  // malformed capture group, a reserved answer-key namespace — costs the whole
+  // app its boot, not just its own Case Type. This sweep keeps that failure in
+  // CI, and stays true for Case Types added after this test was written.
+  const slugs = Object.keys(CASE_TYPE_IMPORTERS);
+  assert.ok(slugs.length > 0, 'expected at least one registered Case Type');
+
+  for (const slug of slugs) {
+    const config = await loadCaseTypeConfig(slug);
+    assert.doesNotThrow(
+      () => validateGeneralQuestions(config.generalQuestions),
+      `${slug} General Questions`
+    );
+    assert.doesNotThrow(
+      () => validateCaptureGroups(config.captureGroups ?? []),
+      `${slug} Issue Capture Groups`
+    );
+    assert.doesNotThrow(
+      () => validateAnswerKeyNamespace(config.questions),
+      `${slug} Question Definition ids`
+    );
   }
 });
 

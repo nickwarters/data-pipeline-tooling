@@ -417,7 +417,10 @@
  * Question Groups on the Review tab — `generalQuestionsPlacement` selects which
  * ('after' when absent). They reuse the `CaptureField` vocabulary but are never
  * outcome-driving: their answers are namespaced in the Answers blob and no
- * evaluator reads them.
+ * evaluator reads them. A Case Type builds the list with
+ * `resolveGeneralQuestions()` (`case-types/general-questions.js`): shared
+ * questions are included by key so their answer keys stay stable across Case
+ * Types, and Case Type-specific ones are declared inline beside them.
  *
  * @typedef {{
  * questions: QuestionDefinition[],
