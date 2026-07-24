@@ -2197,3 +2197,31 @@ test('CASE-5 route: remediation tracking resolves a sent action through the stor
     location.hash = previousHash;
   }
 });
+
+test('CASE-4 view: the Summary rolls up the Reviewer’s General Question answers', () => {
+  const generalSnapshot = snapshot();
+  generalSnapshot.config.generalQuestions = [
+    { key: 'reviewChannel', label: 'How was this reviewed?', type: 'select' },
+    { key: 'observations', label: 'Observations', type: 'textarea' },
+  ];
+  generalSnapshot.answers = {
+    ...generalSnapshot.answers,
+    'general:observations': { value: 'Nothing systemic here' },
+  };
+
+  let state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: generalSnapshot }
+  );
+  state = caseReviewReducer(state, {
+    type: 'case/tab-selected',
+    id: 'summary',
+  });
+
+  const panel = renderShippedState(state).container.querySelector(
+    '#case-panel-summary'
+  );
+  assert.match(panel?.textContent ?? '', /ObservationsNothing systemic here/);
+  // Unanswered ones stay out rather than showing an empty row.
+  assert.doesNotMatch(panel?.textContent ?? '', /How was this reviewed\?/);
+});

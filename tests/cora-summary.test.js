@@ -341,3 +341,151 @@ test('summaryView ignores sections without a summary block and works without a r
   assert.equal(withoutRow.length, 2);
   assert.equal(findByClass(rootOf(withoutRow), 'cora-summary-key-dates'), null);
 });
+
+// --- General Questions on the Summary (#490) -------------------------------
+// A read-only roll-up of what the Reviewer wrote in the Review tab's General
+// Questions. Display only: nothing here reaches summary-model, computeOutcome
+// or completion gating — the assertions below pin that.
+
+/** @type {import('../src/sharepoint-client.js').GeneralQuestionField[]} */
+const GENERAL_QUESTIONS = [
+  {
+    key: 'reviewChannel',
+    label: 'How was this reviewed?',
+    type: 'select',
+    options: ['Case file only', 'Call recording'],
+  },
+  { key: 'observations', label: 'Observations', type: 'textarea' },
+];
+
+test('summaryView rolls up answered General Questions, in configured order', () => {
+  const root = rootOf(
+    render({
+      generalQuestions: GENERAL_QUESTIONS,
+      answers: {
+        'general:observations': { value: 'Handled well' },
+        'general:reviewChannel': { value: 'Call recording' },
+      },
+    })
+  );
+
+  const block = findByClass(root, 'cora-summary-general-questions');
+  assert.ok(block, 'the Summary carries a General Questions block');
+  assert.match(block.textContent, /General Questions/);
+  assert.equal(
+    block.textContent,
+    'General QuestionsHow was this reviewed?Call recordingObservationsHandled well'
+  );
+  // Read-only, like every other Summary block.
+  assert.equal(block.querySelectorAll('input').length, 0);
+  assert.equal(block.querySelectorAll('select').length, 0);
+  assert.equal(block.querySelectorAll('textarea').length, 0);
+});
+
+test('summaryView omits unanswered General Questions, and the block when none is answered', () => {
+  const partial = rootOf(
+    render({
+      generalQuestions: GENERAL_QUESTIONS,
+      answers: { 'general:observations': { value: 'Handled well' } },
+    })
+  );
+  assert.equal(
+    findByClass(partial, 'cora-summary-general-questions').textContent,
+    'General QuestionsObservationsHandled well'
+  );
+
+  const none = rootOf(render({ generalQuestions: GENERAL_QUESTIONS }));
+  assert.equal(findByClass(none, 'cora-summary-general-questions'), null);
+
+  const blank = rootOf(
+    render({
+      generalQuestions: GENERAL_QUESTIONS,
+      answers: { 'general:observations': { value: '' } },
+    })
+  );
+  assert.equal(findByClass(blank, 'cora-summary-general-questions'), null);
+});
+
+test('an answer whose General Question the Case Type no longer declares is not rolled up', () => {
+  // The roll-up is catalogue-driven: it walks the *configured* fields, so an
+  // orphaned `general:` answer (its field removed from the Case Type after the
+  // Reviewer answered) stays in the blob but shows nowhere. Documented in
+  // CONTEXT.md so "where did my answer go?" is a one-line answer, not archaeology.
+  const root = rootOf(
+    render({
+      generalQuestions: GENERAL_QUESTIONS,
+      answers: {
+        'general:observations': { value: 'Handled well' },
+        'general:retiredQuestion': { value: 'Answered before it was removed' },
+      },
+    })
+  );
+  const block = findByClass(root, 'cora-summary-general-questions');
+  assert.equal(block.textContent, 'General QuestionsObservationsHandled well');
+});
+
+test('a Case Type declaring no General Questions gets no Summary block', () => {
+  assert.equal(
+    findByClass(rootOf(render({})), 'cora-summary-general-questions'),
+    null
+  );
+});
+
+test('the Summary block follows the Case Type placement, like the Review tab', () => {
+  /** @param {'before'|'after'} [placement] */
+  const classNames = (placement) =>
+    render({
+      generalQuestions: GENERAL_QUESTIONS,
+      generalQuestionsPlacement: placement,
+      summarySections: ['notes'],
+      answers: { 'general:observations': { value: 'Handled well' } },
+    })
+      .slice(2) // past the Summary heading and the Outcome host
+      .map((/** @type {any} */ node) => node.className);
+
+  assert.deepEqual(classNames('before'), [
+    'cora-summary-key-dates',
+    'cora-summary-general-questions',
+    'cora-summary-notes',
+  ]);
+  assert.deepEqual(classNames('after'), [
+    'cora-summary-key-dates',
+    'cora-summary-notes',
+    'cora-summary-general-questions',
+  ]);
+  // Absent placement matches the Review tab's default.
+  assert.deepEqual(classNames(), classNames('after'));
+});
+
+test('a General Question answer does not reach the Summary counts or the Outcome', () => {
+  /** @param {Record<string, any>} answers */
+  const summaryOf = (answers) =>
+    rootOf(
+      render({
+        generalQuestions: GENERAL_QUESTIONS,
+        summarySections: ['questions', 'issues'],
+        answers,
+        computeOutcome: (
+          /** @type {Record<string, any>} */ candidateAnswers
+        ) => ({
+          outcome: Object.values(candidateAnswers).some(
+            (answer) => answer.value === 'No'
+          )
+            ? 'fail'
+            : 'pass',
+        }),
+      })
+    );
+
+  const base = { 'q-open': { value: 'Yes' } };
+  const withGeneral = { ...base, 'general:observations': { value: 'No' } };
+  assert.equal(
+    findByClass(summaryOf(withGeneral), 'cora-summary-counts').textContent,
+    findByClass(summaryOf(base), 'cora-summary-counts').textContent
+  );
+  assert.equal(
+    findAllByClass(summaryOf(withGeneral), 'cora-summary-remediation')[0]
+      .textContent,
+    findAllByClass(summaryOf(base), 'cora-summary-remediation')[0].textContent
+  );
+});

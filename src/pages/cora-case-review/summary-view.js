@@ -8,6 +8,8 @@ import { currentOutcome } from '../../evaluators/amended-outcome.js';
 import { DEFAULT_SECTION_HEADINGS } from '../../lib/section-labels.js';
 import { CaptureGroups } from '../../components/sections/cora-capture-groups.js';
 import { CASE_STATUS } from '../../lib/case-statuses.js';
+import { generalAnswerKey } from '../../evaluators/general-questions.js';
+import { GENERAL_QUESTIONS_TITLE } from './general-questions-view.js';
 
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../../sharepoint-client.js').OutcomeResult} OutcomeResult */
@@ -27,6 +29,8 @@ import { CASE_STATUS } from '../../lib/case-statuses.js';
  * @property {import('../../sharepoint-client.js').CaseDetailField[]} detailFields
  * @property {import('../../sharepoint-client.js').OutcomeOption[]} outcomeOptions
  * @property {Required<import('../../sharepoint-client.js').SectionLabels>} [sectionHeadings] Resolved section headings; defaults to the standard copy so the component stays usable standalone.
+ * @property {import('../../sharepoint-client.js').GeneralQuestionField[]} [generalQuestions] The Case Type's General Questions, rolled up read-only. Display only — they reach no evaluator here either.
+ * @property {'before'|'after'} [generalQuestionsPlacement] Which side of the configured Summary blocks the roll-up sits on; matches the Review tab's placement ('after' when absent).
  */
 
 /**
@@ -67,10 +71,17 @@ export function summaryView(props) {
 
   if (props.caseRow) {
     children.push(renderKeyDates(props.caseRow));
+    const general = renderGeneralQuestions(props);
+    // `generalQuestionsPlacement` is also interpreted by the Review tab
+    // (cora-case-review.js, where absent likewise means 'after') — keep the two
+    // in step, or hoist a shared resolver if a third consumer appears.
+    const before = props.generalQuestionsPlacement === 'before';
+    if (general && before) children.push(general);
     for (const section of props.summarySections) {
       const block = renderSectionBlock(props, section, props.caseRow);
       if (block) children.push(block);
     }
+    if (general && !before) children.push(general);
   }
 
   return children;
@@ -276,6 +287,46 @@ function renderCounts(props) {
       )
     )
   );
+}
+
+/**
+ * The **General Questions** roll-up: what the Reviewer wrote on the Review tab,
+ * read-only, for the Case Type Owner who only reads the Summary. Unanswered
+ * fields are left out (as the read-only Issue Capture view does), so the block
+ * disappears entirely when the Reviewer answered none.
+ *
+ * Reads `general:<key>` straight from the Answers blob rather than through
+ * `buildSummaryModel`: General Questions stay outside the model, the Outcome and
+ * completion gating, and this is a display block, not a change to either.
+ *
+ * @param {SummaryProps} props
+ * @returns {HTMLElement | null}
+ */
+function renderGeneralQuestions(props) {
+  const rows = (props.generalQuestions ?? [])
+    .map((field) => ({
+      label: field.label,
+      display: answerText(props.answers[generalAnswerKey(field.key)]),
+    }))
+    .filter((row) => row.display !== '');
+  if (rows.length === 0) return null;
+
+  return renderFieldBlock(
+    'cora-summary-general-questions',
+    GENERAL_QUESTIONS_TITLE,
+    rows
+  );
+}
+
+/**
+ * A General Question answer as display text, '' when unanswered.
+ * @param {Answer | undefined} answer
+ * @returns {string}
+ */
+function answerText(answer) {
+  const value = answer?.value;
+  if (Array.isArray(value)) return value.join(', ');
+  return typeof value === 'string' ? value : '';
 }
 
 /**

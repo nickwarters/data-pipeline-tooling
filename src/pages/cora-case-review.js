@@ -422,6 +422,9 @@ function questionsPanel(snapshot, questionsView, viewModel) {
       fields: snapshot.config?.generalQuestions ?? [],
       answers: snapshot.answers,
       access: snapshot.access.questions,
+      // `generalQuestionsPlacement` is also interpreted by the Summary roll-up
+      // (cora-case-review/summary-view.js) — keep the two in step, or hoist a
+      // shared resolver if a third consumer appears.
       placement: snapshot.config?.generalQuestionsPlacement ?? 'after',
       onAnswer: (answerKey, value) => viewModel.handleAnswer(answerKey, value),
     }
@@ -848,6 +851,9 @@ export function createRouteSlice(params, context) {
                   detailFields: snapshot.config.detailFields ?? [],
                   outcomeOptions: snapshot.config.outcomeOptions ?? [],
                   sectionHeadings: snapshot.sectionHeadings,
+                  generalQuestions: snapshot.config.generalQuestions ?? [],
+                  generalQuestionsPlacement:
+                    snapshot.config.generalQuestionsPlacement,
                 })
               )
             : null
