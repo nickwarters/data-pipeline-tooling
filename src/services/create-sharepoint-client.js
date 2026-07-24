@@ -56,9 +56,31 @@ export async function createSharePointClient(
 
   const { HttpSharePointClient } = await import('./http-sharepoint-client.js');
   return new HttpSharePointClient({
+    webUrl: resolveHostWebUrl(),
     listPrefix: env.listPrefix,
     exportBasePath: env.exportBasePath,
   });
+}
+
+/**
+ * The web the host page belongs to, from SharePoint's `_spPageContextInfo`.
+ * Without this, every `/_api/...` path resolves root-relative against the web
+ * application root — on a site-path deployment (`/sites/cora`) that is a web
+ * the user has no access to, so boot dies in an NTLM 401 credential-prompt
+ * loop (#464). Server-relative is preferred over absolute so Alternate Access
+ * Mapping / proxy hosts never disagree with the page's own origin. Empty when
+ * there is no SharePoint page context (dev loop), preserving root-relative
+ * behaviour there.
+ *
+ * @param {unknown} [ctx] defaults to the host page's `_spPageContextInfo`.
+ * @returns {string}
+ */
+export function resolveHostWebUrl(
+  ctx = /** @type {Record<string, unknown>} */ (globalThis)._spPageContextInfo
+) {
+  const info = /** @type {Record<string, unknown> | undefined} */ (ctx);
+  const url = info?.webServerRelativeUrl ?? info?.webAbsoluteUrl ?? '';
+  return typeof url === 'string' ? url : '';
 }
 
 /**

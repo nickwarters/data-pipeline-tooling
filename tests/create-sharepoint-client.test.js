@@ -158,6 +158,62 @@ test('createSharePointClient: environment does not affect the mock client (#366)
   assert.ok(client instanceof MockSharePointClient);
 });
 
+test('createSharePointClient: HTTP client scopes API calls to the host web via _spPageContextInfo (#464)', async () => {
+  // On a site-path deployment (e.g. /sites/cora) a root-relative
+  // `/_api/web/currentUser` hits the web application root, where the user has
+  // no access — an NTLM 401 credential-prompt loop at boot. The client must
+  // take its webUrl from the SharePoint host page context.
+  const g = /** @type {Record<string, unknown>} */ (globalThis);
+  g._spPageContextInfo = { webServerRelativeUrl: '/sites/cora' };
+  try {
+    const client = /** @type {any} */ (
+      await createSharePointClient(new URLSearchParams(''))
+    );
+    assert.equal(client._webUrl, '/sites/cora');
+  } finally {
+    delete g._spPageContextInfo;
+  }
+});
+
+test('createSharePointClient: falls back to webAbsoluteUrl when webServerRelativeUrl is absent (#464)', async () => {
+  const g = /** @type {Record<string, unknown>} */ (globalThis);
+  g._spPageContextInfo = {
+    webAbsoluteUrl: 'https://sp.example.com/sites/cora',
+  };
+  try {
+    const client = /** @type {any} */ (
+      await createSharePointClient(new URLSearchParams(''))
+    );
+    assert.equal(client._webUrl, 'https://sp.example.com/sites/cora');
+  } finally {
+    delete g._spPageContextInfo;
+  }
+});
+
+test('createSharePointClient: webUrl is empty when no SharePoint page context exists (#464)', async () => {
+  // Dev loop / non-SharePoint host: root-relative URLs are the best available
+  // guess and preserve the pre-fix behaviour.
+  const client = /** @type {any} */ (
+    await createSharePointClient(new URLSearchParams(''))
+  );
+  assert.equal(client._webUrl, '');
+});
+
+test('createSharePointClient: a root-web page context yields an empty webUrl, not a bare slash (#464)', async () => {
+  // _spPageContextInfo.webServerRelativeUrl is '/' at a root site; the client
+  // constructor strips trailing slashes so URLs never double up.
+  const g = /** @type {Record<string, unknown>} */ (globalThis);
+  g._spPageContextInfo = { webServerRelativeUrl: '/' };
+  try {
+    const client = /** @type {any} */ (
+      await createSharePointClient(new URLSearchParams(''))
+    );
+    assert.equal(client._webUrl, '');
+  } finally {
+    delete g._spPageContextInfo;
+  }
+});
+
 test('createSharePointClient: mock client searchPeople is backed by the people fixture', async () => {
   const { people } = await import('../dev/fixtures/people.js');
   const client = await createSharePointClient(new URLSearchParams('mock=1'));
