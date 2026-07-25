@@ -121,3 +121,17 @@ test('the sent-to-adviser Case is addressed to a Responsible Party persona (#495
     'the Conversation carries a message from someone other than the adviser'
   );
 });
+
+test('the sent-to-adviser Case names a Responsible Party Manager persona (#499)', () => {
+  // Both Remediation audiences must be switchable in mock mode. The Manager's
+  // role is resolved from the Case row field, not group membership, so the
+  // fixture has to name them for the responsible-party rendering — and the
+  // Conversation it points at — to be demoable.
+  const row = sentToAdviserCase();
+  const personaIds = new Set(Object.values(personas).map((p) => p.userId));
+  assert.ok(
+    row.responsiblePartyManager && personaIds.has(row.responsiblePartyManager),
+    'the Responsible Party Manager is a switchable ?asUser= persona'
+  );
+  assert.notEqual(row.responsiblePartyManager, row.responsibleParty);
+});

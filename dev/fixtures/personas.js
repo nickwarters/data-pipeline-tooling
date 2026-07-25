@@ -4,7 +4,8 @@
  * Activate via the ?asUser= URL param, e.g. ?asUser=reviewer (default).
  * Available keys: reviewer, owner, journey-owner-complaints,
  * case-type-owner-complaints, admin,
- * responsible-party, reviewer-manager, controls (a standalone Controls user,
+ * responsible-party, responsible-party-manager, reviewer-manager,
+ * controls (a standalone Controls user,
  * ADR-0022), action-centre (multi-role Reviewer+Controls+Owner, for seeing
  * every Action Centre reason group at once — issue #287), visitor (no groups —
  * exercises the Visitor explainer-only branch).
@@ -50,6 +51,14 @@ export const personas = {
     userId: 'user-rm',
     displayName: 'Morgan Manager',
     groups: ['Reviewer Managers'],
+  },
+  // The line manager of `responsible-party`, named on complaints-case-5. The
+  // Section role is resolved from that Case row field rather than the group, so
+  // this persona only holds it on Cases that name them (#499).
+  'responsible-party-manager': {
+    userId: 'user-rp-manager',
+    displayName: 'Priya RP Manager',
+    groups: ['ResponsibleParty-Managers'],
   },
   controls: {
     userId: 'user-controls',

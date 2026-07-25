@@ -270,6 +270,9 @@ export const cases = [
     status: 'Actions In Progress',
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-rp',
+    // Their line manager, so the Remediation tab's responsible-party rendering
+    // and the Conversation it points at are demoable from both sides (#499).
+    responsiblePartyManager: 'user-rp-manager',
     answers: {
       'q-cm-ack': {
         value: 'No',
