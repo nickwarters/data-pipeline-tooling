@@ -71,11 +71,11 @@ export function RemediationTracking(props) {
     isOverdue({ ...caseRow, dueDate }, undefined);
   const sla = h(
     'p',
-    { class: 'cora-remediation-due-date' },
+    { className: 'cora-remediation-due-date' },
     `Remediation due: ${dueDate ?? '—'}`
   );
   const overdueBadge = overdue
-    ? h('p', { class: 'cora-badge cora-badge-overdue' }, 'Overdue')
+    ? h('p', { className: 'cora-badge cora-badge-overdue' }, 'Overdue')
     : null;
 
   /** @type {Node[]} */
@@ -90,7 +90,7 @@ export function RemediationTracking(props) {
     ];
   }
 
-  const list = h('ul', { class: 'cora-remediation-tracking-list' });
+  const list = h('ul', { className: 'cora-remediation-tracking-list' });
   for (const row of rows) list.appendChild(renderQuestionRow(props, row));
 
   /** @type {Node[]} */
@@ -104,7 +104,7 @@ export function RemediationTracking(props) {
     tail.push(
       h(
         'p',
-        { class: 'cora-remediation-gate' },
+        { className: 'cora-remediation-gate' },
         'Record an outcome for every remediation above — with the details or justification required — before this Case can be completed.'
       )
     );
@@ -123,24 +123,28 @@ export function RemediationTracking(props) {
  */
 function renderQuestionRow(props, row) {
   const li = h('li', {
-    class: 'cora-remediation-tracking-item',
+    className: 'cora-remediation-tracking-item',
     key: row.question.id,
   });
   li.appendChild(
-    h('p', { class: 'cora-tracking-question' }, row.question.text)
+    h('p', { className: 'cora-tracking-question' }, row.question.text)
   );
 
   if (row.actions.length > 0) {
-    const actions = h('ul', { class: 'cora-tracking-actions' });
+    const actions = h('ul', { className: 'cora-tracking-actions' });
     for (const action of row.actions) {
       actions.appendChild(
-        h('li', { class: 'cora-tracking-action', key: action.id }, action.text)
+        h(
+          'li',
+          { className: 'cora-tracking-action', key: action.id },
+          action.text
+        )
       );
     }
     li.appendChild(actions);
   }
   if (row.freeForm) {
-    li.appendChild(h('p', { class: 'cora-tracking-action' }, row.freeForm));
+    li.appendChild(h('p', { className: 'cora-tracking-action' }, row.freeForm));
   }
 
   // The responsible-party audience never sees the Reviewer's fields — neither
@@ -155,7 +159,7 @@ function renderQuestionRow(props, row) {
       li.appendChild(
         h(
           'p',
-          { class: 'cora-tracking-details' },
+          { className: 'cora-tracking-details' },
           `${REMEDIATION_DETAIL_LABELS[row.status]}: ${row.details}`
         )
       );
@@ -177,7 +181,7 @@ function renderQuestionRow(props, row) {
 function renderStatusLine(row) {
   return h(
     'p',
-    { class: 'cora-tracking-status' },
+    { className: 'cora-tracking-status' },
     row.status
       ? `Status: ${REMEDIATION_STATUS_LABELS[row.status]}`
       : 'Status: Awaiting the Reviewer'
@@ -204,7 +208,7 @@ function renderStatusControls(props, row) {
 
   const details = /** @type {HTMLTextAreaElement} */ (
     h('textarea', {
-      class: 'cora-tracking-details-input',
+      className: 'cora-tracking-details-input',
       value: row.details,
       hidden: !needsDetails,
       'aria-label': `${detailsLabel} for "${row.question.text}"`,
@@ -222,7 +226,7 @@ function renderStatusControls(props, row) {
     h(
       'select',
       {
-        class: 'cora-tracking-status-select',
+        className: 'cora-tracking-status-select',
         value: row.status ?? '',
         'aria-label': `Remediation outcome for "${row.question.text}"`,
         onchange: (/** @type {Event} */ event) =>
@@ -243,7 +247,7 @@ function renderStatusControls(props, row) {
 
   const wrapper = h(
     'div',
-    { class: 'cora-tracking-controls' },
+    { className: 'cora-tracking-controls' },
     select,
     details
   );
@@ -251,7 +255,7 @@ function renderStatusControls(props, row) {
     wrapper.appendChild(
       h(
         'p',
-        { class: 'cora-tracking-details-required' },
+        { className: 'cora-tracking-details-required' },
         `${detailsLabel} is required.`
       )
     );
@@ -269,7 +273,9 @@ function renderStatusControls(props, row) {
  * @returns {HTMLElement}
  */
 function conversationPrompt(props) {
-  const section = h('div', { class: 'cora-remediation-conversation-prompt' });
+  const section = h('div', {
+    className: 'cora-remediation-conversation-prompt',
+  });
   section.appendChild(
     h(
       'p',
@@ -283,14 +289,14 @@ function conversationPrompt(props) {
           'button',
           {
             type: 'button',
-            class: 'cora-btn cora-remediation-conversation-btn',
-            onClick: () => props.dispatchOpenConversation?.(),
+            className: 'cora-btn cora-remediation-conversation-btn',
+            onclick: () => props.dispatchOpenConversation?.(),
           },
           'Open conversation'
         )
       : h(
           'p',
-          { class: 'cora-remediation-conversation-unavailable' },
+          { className: 'cora-remediation-conversation-unavailable' },
           'The Conversation is not open to you on this Case; speak to the Responsible Party or the Reviewer directly.'
         )
   );

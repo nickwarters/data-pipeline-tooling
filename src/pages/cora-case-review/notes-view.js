@@ -60,7 +60,7 @@ function notesField(props) {
       'aria-label': props.label,
       readOnly,
       readonly: readOnly ? 'readonly' : undefined,
-      onInput: (/** @type {any} */ event) => {
+      oninput: (/** @type {any} */ event) => {
         if (readOnly) return;
         props.onFieldInput(props.field, event.target.value ?? '');
       },

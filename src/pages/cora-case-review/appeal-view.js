@@ -196,7 +196,7 @@ export function renderAppealForm(props) {
       'button',
       {
         className: 'cora-appeal-submit',
-        onClick: (/** @type {Event | undefined} */ event) => {
+        onclick: (/** @type {Event | undefined} */ event) => {
           const button = /** @type {HTMLElement | null} */ (
             event?.currentTarget ?? null
           );

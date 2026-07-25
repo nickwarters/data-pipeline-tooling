@@ -158,7 +158,7 @@ export function renderAmendForm(props) {
       'button',
       {
         className: 'cora-amend-outcome-submit',
-        onClick: (/** @type {Event | undefined} */ event) => {
+        onclick: (/** @type {Event | undefined} */ event) => {
           const button = /** @type {HTMLElement | null} */ (
             event?.currentTarget ?? null
           );

@@ -179,7 +179,7 @@ export function questionCardView({ question, answer, access, onAnswer }) {
         'data-focus-key': `answer:${question.id}:${index}`,
         checked: isMulti ? selected.has(option) : value === option,
         disabled: access !== 'edit',
-        onChange: (/** @type {any} */ event) => {
+        onchange: (/** @type {any} */ event) => {
           if (access !== 'edit') return;
           if (!isMulti) {
             onAnswer(question.id, option);

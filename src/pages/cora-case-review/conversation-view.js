@@ -61,7 +61,7 @@ function conversationCompose(onSend) {
       {
         className: 'cora-conversation-send',
         'aria-label': 'Send message',
-        onClick: async () => {
+        onclick: async () => {
           const body = (textarea.value ?? '').trim();
           if (!body) return;
           textarea.value = '';

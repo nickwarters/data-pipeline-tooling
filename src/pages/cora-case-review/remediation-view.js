@@ -65,7 +65,7 @@ export function RemediationSection(props) {
     return [heading, empty];
   }
 
-  const list = h('ul', { class: 'cora-remediation-list' });
+  const list = h('ul', { className: 'cora-remediation-list' });
   for (const q of failed) {
     list.appendChild(renderRemediationItem(props, q));
   }
@@ -78,7 +78,7 @@ export function RemediationSection(props) {
  * @returns {HTMLElement}
  */
 export function renderRemediationItem(props, q) {
-  const li = h('li', { class: 'cora-remediation-item', key: q.id });
+  const li = h('li', { className: 'cora-remediation-item', key: q.id });
   const { before, after } = buildItemContent(props, q);
 
   for (const node of before) li.appendChild(node);
@@ -103,14 +103,16 @@ function buildItemContent(props, q) {
   const before = h('div', {});
   if (q.questionGroup) {
     before.appendChild(
-      h('p', { class: 'cora-remediation-group' }, q.questionGroup)
+      h('p', { className: 'cora-remediation-group' }, q.questionGroup)
     );
   }
-  before.appendChild(h('p', { class: 'cora-remediation-question' }, q.text));
+  before.appendChild(
+    h('p', { className: 'cora-remediation-question' }, q.text)
+  );
 
   const v = props.answers[q.id]?.value;
   const ansText = `Answer: ${Array.isArray(v) ? v.join(', ') : (v ?? '')}`;
-  before.appendChild(h('p', { class: 'cora-remediation-answer' }, ansText));
+  before.appendChild(h('p', { className: 'cora-remediation-answer' }, ansText));
 
   if (props.attributeFailures) {
     renderRemediationAttribution(props, before, q);
@@ -157,11 +159,11 @@ export function renderRemediationActions(props, li, q) {
     li.appendChild(
       h(
         'p',
-        { class: 'cora-remediation-actions-heading' },
+        { className: 'cora-remediation-actions-heading' },
         'Remediation Actions'
       )
     );
-    const actions = h('ul', { class: 'cora-remediation-actions' });
+    const actions = h('ul', { className: 'cora-remediation-actions' });
     for (const action of visible) {
       actions.appendChild(
         editable
@@ -171,7 +173,7 @@ export function renderRemediationActions(props, li, q) {
               action,
               selectedIds.has(action.id)
             )
-          : h('li', { class: 'cora-remediation-action' }, action.text)
+          : h('li', { className: 'cora-remediation-action' }, action.text)
       );
     }
     li.appendChild(actions);
@@ -192,13 +194,13 @@ export function renderRemediationActions(props, li, q) {
 function renderRemediationActionCheckbox(props, q, action, checked) {
   return h(
     'li',
-    { class: 'cora-remediation-action' },
+    { className: 'cora-remediation-action' },
     h(
       'label',
       {},
       h('input', {
         type: 'checkbox',
-        class: 'cora-remediation-action-checkbox',
+        className: 'cora-remediation-action-checkbox',
         checked,
         onchange: (/** @type {any} */ event) => {
           props.dispatchRemediationAction(
@@ -223,7 +225,7 @@ function renderRemediationFreeForm(props, li, q, value) {
   if (!props.canSelectRemediation) {
     if (value) {
       li.appendChild(
-        h('p', { class: 'cora-remediation-freeform-value' }, value)
+        h('p', { className: 'cora-remediation-freeform-value' }, value)
       );
     }
     return;
@@ -232,15 +234,15 @@ function renderRemediationFreeForm(props, li, q, value) {
   li.appendChild(
     h(
       'div',
-      { class: 'cora-remediation-freeform' },
+      { className: 'cora-remediation-freeform' },
       h(
         'label',
-        { class: 'cora-remediation-freeform-label' },
+        { className: 'cora-remediation-freeform-label' },
         'Free-form action'
       ),
       h('input', {
         type: 'text',
-        class: 'cora-remediation-freeform-input',
+        className: 'cora-remediation-freeform-input',
         value,
         placeholder: 'Describe a remediation in your own words…',
         onchange: (/** @type {any} */ event) => {
@@ -264,7 +266,7 @@ export function renderRemediationAttribution(props, li, q) {
       li.appendChild(
         h(
           'p',
-          { class: 'cora-remediation-attributed-party' },
+          { className: 'cora-remediation-attributed-party' },
           `Attributed to: ${attributedParty.displayName}`
         )
       );
@@ -301,7 +303,7 @@ export function renderRemediationDetails(props, li, q) {
       li.appendChild(
         h(
           'p',
-          { class: 'cora-remediation-detail-value' },
+          { className: 'cora-remediation-detail-value' },
           `${field.label}: ${captured}`
         )
       );
@@ -319,8 +321,8 @@ export function renderRemediationDetails(props, li, q) {
 
     const wrap = h(
       'div',
-      { class: 'cora-remediation-detail-field' },
-      h('label', { class: 'cora-remediation-detail-label' }, field.label),
+      { className: 'cora-remediation-detail-field' },
+      h('label', { className: 'cora-remediation-detail-label' }, field.label),
       control
     );
 

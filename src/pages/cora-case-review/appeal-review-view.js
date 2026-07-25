@@ -174,7 +174,7 @@ export function renderResolveForm(props, appeal) {
       'button',
       {
         className: 'cora-appeal-review-submit',
-        onClick: (/** @type {Event | undefined} */ event) => {
+        onclick: (/** @type {Event | undefined} */ event) => {
           const button = /** @type {HTMLElement | null} */ (
             event?.currentTarget ?? null
           );

@@ -126,7 +126,7 @@ function renderSectionBlock(props, section, caseRow) {
   if (section === 'notes') {
     return h(
       'section',
-      { class: 'cora-summary-notes' },
+      { className: 'cora-summary-notes' },
       h('h3', {}, headingsOf(props).notes),
       h('p', {}, caseRow.notes)
     );
@@ -149,7 +149,7 @@ function renderIssues(props) {
 
   return h(
     'section',
-    { class: 'cora-summary-remediation' },
+    { className: 'cora-summary-remediation' },
     h('h3', {}, headingsOf(props).issues),
     h('p', {}, `Remediation Actions: ${remediationActionCount}`),
     failures.length === 0
@@ -176,7 +176,7 @@ function renderRemediationTracking(props) {
 
   return h(
     'section',
-    { class: 'cora-summary-remediation-tracking' },
+    { className: 'cora-summary-remediation-tracking' },
     h('h3', {}, headingsOf(props).remediation),
     h('p', {}, `Remediation due: ${dueDate ? dueDate : '—'}`),
     withActions.length === 0
@@ -256,7 +256,7 @@ function renderCapture(props, questionId) {
 
   return h(
     'div',
-    { class: 'cora-summary-capture' },
+    { className: 'cora-summary-capture' },
     ...CaptureGroups({
       groups: props.captureGroups,
       capture,
@@ -277,7 +277,7 @@ function renderCounts(props) {
   const { groupCounts } = buildSummaryModel(props.catalogue, props.answers);
   return h(
     'section',
-    { class: 'cora-summary-counts' },
+    { className: 'cora-summary-counts' },
     h('h3', {}, headingsOf(props).questions),
     h(
       'ul',
@@ -354,7 +354,7 @@ function renderKeyDates(caseRow) {
 function renderFieldBlock(className, title, rows) {
   return h(
     'section',
-    { class: className },
+    { className },
     h('h3', {}, title),
     h(
       'dl',
