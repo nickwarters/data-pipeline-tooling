@@ -17,6 +17,14 @@ const ROOT = new URL('../', import.meta.url);
  * Scoped to `src/` and `case-types/`: those are the deployed source. Fixtures
  * and scripts are listed in the block as directories, not file by file.
  *
+ * Known limit, accepted deliberately: matching on basename means a name that is
+ * not unique in the tree is satisfied by a single mention. Today that applies to
+ * `case-actions.js`, `general-questions.js`, `remediation-actions.js` and
+ * `roadmap.js`, each of which exists at two paths. A second file taking one of
+ * those names would pass unnoticed. Matching full paths instead would force the
+ * block to spell out its own indentation, which is the kind of brittleness that
+ * gets a guard deleted rather than maintained.
+ *
  * @param {string} directory
  * @returns {string[]}
  */
@@ -34,7 +42,10 @@ function productionFiles(directory) {
 
 test('CLAUDE.md layout mentions every production module', () => {
   const md = readFileSync(new URL('CLAUDE.md', ROOT), 'utf8');
-  const layout = md.split('## Directory layout')[1] ?? '';
+  // Bounded at the next `##` heading rather than running to end of file, so a
+  // section added after the layout cannot satisfy the check with prose that
+  // happens to name a module.
+  const layout = (md.split('\n## Directory layout')[1] ?? '').split('\n## ')[0];
   assert.notEqual(layout, '', 'CLAUDE.md has no "## Directory layout" section');
 
   const missing = [

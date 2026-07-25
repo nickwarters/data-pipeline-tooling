@@ -14,6 +14,20 @@ clarifies the boundary between Section descriptor data and branching behaviour.
 
 Evolves ADR-0011 (section-level RBAC) and ADR-0014 (tabbed Case Review layout).
 
+> **Update (#505):** the `componentTag` and `nodeKey` fields described below
+> have been removed from `SECTION_REGISTRY`. Both existed to drive the node
+> factory in `pages/cora-case-review/node-registry.js`, which ADR-0034 deleted
+> along with `tab-controller.js`; the fields outlived their only consumer and
+> were read by nothing. The decision this ADR records — one registry owning
+> Section existence and order — is unchanged, and `sectionIds()`,
+> `tabEntries()`, `summaryBlockIds()` and `sectionById()` still derive
+> `SECTIONS`, `SUMMARY_SECTIONS` and the tab strip. What changed is that a
+> Section's panel is no longer materialised from a tag name: `cora-case-review.js`
+> places each panel by `id` in a per-Section branch, because each takes a
+> different slice of state and a different set of dispatchers. Read the
+> registry-shape literal in **Decision** and the `nodeKey` rationale in
+> **Considered alternatives** as history.
+
 ## Context
 
 The Case Review page is organised into **Sections** (Details, Review, Issues,
