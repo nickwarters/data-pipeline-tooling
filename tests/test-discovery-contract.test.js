@@ -12,6 +12,10 @@ const TESTS_DIRECTORY = new URL('./', import.meta.url);
  * only if something imports it, so deleting the importer silently drops the
  * tests instead of failing. Everything else under `tests/` is support code and
  * carries the `_` prefix or lives in `tests/helpers/`.
+ *
+ * @param {URL} [directory]
+ * @param {string} [prefix]
+ * @returns {string[]}
  */
 function strayTestFiles(directory = TESTS_DIRECTORY, prefix = 'tests') {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {

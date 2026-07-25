@@ -4,19 +4,26 @@
  * source of truth for which Sections exist and how they are ordered (ADR-0032).
  *
  * Before this module, Section *existence* was restated in three hand-maintained
- * lists with no runtime check they agreed: `SECTIONS` in
- * `services/section-access.js`, `buildCaseReviewTabs` in
- * `pages/cora-case-review/tab-controller.js`, and the node factory in
- * `pages/cora-case-review/node-registry.js`. This registry describes each
- * built-in Section once; those structures are now *derived* from it (see the
- * `sectionIds` / `tabEntries` / `summaryBlockIds` helpers below), and a
- * contract test asserts nothing re-lists Section ids independently.
+ * lists with no runtime check they agreed. This registry describes each built-in
+ * Section once, and its two live consumers derive their structures from it:
  *
- * Scope (per ADR-0032): the registry owns Section *existence*, tab *order*,
- * *labels* (the `componentTag`/node wiring) and the Summary-block default. It
- * deliberately does **not** own the role→mode access policy — the `MATRIX` in
- * `services/section-access.js` stays where it is; the registry only supplies the
- * key set that MATRIX is asserted to match.
+ * - `services/section-access.js` re-exports `sectionIds()` as `SECTIONS` and
+ *   `summaryBlockIds()` as `SUMMARY_SECTIONS`, and reads
+ *   `showInSummaryDefault` via `sectionById()`.
+ * - `pages/cora-case-review.js` calls `tabEntries()` to build the tab strip and
+ *   its panel elements, and to iterate the Sections on render.
+ *
+ * A contract test asserts nothing re-lists Section ids independently.
+ *
+ * The registry supplies which Sections exist and in what order; it does not say
+ * how a Section's panel is rendered. That is a per-Section `if (entry.id === …)`
+ * branch in `pages/cora-case-review.js`, because each panel takes a different
+ * slice of state and a different set of dispatchers.
+ *
+ * Scope (per ADR-0032): the registry owns Section *existence*, tab *order* and
+ * the Summary-block default. It deliberately does **not** own the role→mode
+ * access policy — the `MATRIX` in `services/section-access.js` stays where it
+ * is; the registry only supplies the key set that MATRIX is asserted to match.
  *
  * @typedef {import('../services/section-access.js').Section} Section
  */
@@ -28,15 +35,6 @@
  * @property {Section} id
  *   The Section id — the key used across the access matrix, the tab list, the
  *   Case Type `sections` allow-list and the Summary block set.
- * @property {string | null} componentTag
- *   The custom-element tag rendered for this Section's panel, or `null` when the
- *   panel is a bespoke plain `<section>` wrapper (`questions`, `issues`, or
- *   `remediation`). Uniform panels are materialized from this tag by the node
- *   registry.
- * @property {string} nodeKey
- *   The key this Section's panel node is stored under in the Case Review node
- *   registry. Equals `id` except where history diverged: `questions` →
- *   `questionsPanel`, `appealRequest` → `appeal`.
  * @property {boolean} tab
  *   Whether the Section appears as a tab on the Case Review page. All Sections
  *   are tabs except `conversation`, which is a floating overlay.
@@ -63,8 +61,6 @@
 export const SECTION_REGISTRY = /** @type {const} */ ([
   {
     id: 'details',
-    componentTag: 'cora-case-details',
-    nodeKey: 'details',
     tab: true,
     tabOrder: 1,
     summaryBlock: true,
@@ -73,8 +69,6 @@ export const SECTION_REGISTRY = /** @type {const} */ ([
   },
   {
     id: 'questions',
-    componentTag: null,
-    nodeKey: 'questionsPanel',
     tab: true,
     tabOrder: 2,
     summaryBlock: true,
@@ -83,8 +77,6 @@ export const SECTION_REGISTRY = /** @type {const} */ ([
   },
   {
     id: 'issues',
-    componentTag: null,
-    nodeKey: 'issues',
     tab: true,
     tabOrder: 3,
     summaryBlock: true,
@@ -93,8 +85,6 @@ export const SECTION_REGISTRY = /** @type {const} */ ([
   },
   {
     id: 'summary',
-    componentTag: 'cora-summary',
-    nodeKey: 'summary',
     tab: true,
     tabOrder: 5,
     summaryBlock: false,
@@ -103,8 +93,6 @@ export const SECTION_REGISTRY = /** @type {const} */ ([
   },
   {
     id: 'remediation',
-    componentTag: null,
-    nodeKey: 'remediation',
     tab: true,
     tabOrder: 4,
     summaryBlock: true,
@@ -113,8 +101,6 @@ export const SECTION_REGISTRY = /** @type {const} */ ([
   },
   {
     id: 'notes',
-    componentTag: 'cora-notes',
-    nodeKey: 'notes',
     tab: true,
     tabOrder: 6,
     summaryBlock: true,
@@ -123,8 +109,6 @@ export const SECTION_REGISTRY = /** @type {const} */ ([
   },
   {
     id: 'conversation',
-    componentTag: 'cora-conversation',
-    nodeKey: 'conversation',
     tab: false,
     tabOrder: 0,
     summaryBlock: false,
@@ -133,8 +117,6 @@ export const SECTION_REGISTRY = /** @type {const} */ ([
   },
   {
     id: 'appealRequest',
-    componentTag: 'cora-appeal',
-    nodeKey: 'appeal',
     tab: true,
     tabOrder: 7,
     summaryBlock: false,
@@ -143,8 +125,6 @@ export const SECTION_REGISTRY = /** @type {const} */ ([
   },
   {
     id: 'appealReview',
-    componentTag: 'cora-appeal-review',
-    nodeKey: 'appealReview',
     tab: true,
     tabOrder: 8,
     summaryBlock: false,
@@ -153,8 +133,6 @@ export const SECTION_REGISTRY = /** @type {const} */ ([
   },
   {
     id: 'amendOutcome',
-    componentTag: 'cora-amend-outcome',
-    nodeKey: 'amendOutcome',
     tab: true,
     tabOrder: 9,
     summaryBlock: false,
@@ -175,8 +153,7 @@ export function sectionIds(registry = SECTION_REGISTRY) {
 }
 
 /**
- * The tab Sections in left-to-right order. Each entry keeps the id plus the
- * wiring (`componentTag`, `nodeKey`) the page needs to place its panel; the
+ * The tab Sections in left-to-right order. Callers place each panel by `id`; the
  * label is resolved separately (per Case Type) by `resolveSectionLabels`.
  *
  * @param {readonly SectionDefinition[]} [registry]

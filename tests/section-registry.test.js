@@ -37,10 +37,6 @@ test('SECTION_REGISTRY declares the ten built-in Sections in canonical order', (
 test('every registry entry has the wiring the derivations need', () => {
   for (const entry of SECTION_REGISTRY) {
     assert.equal(typeof entry.id, 'string');
-    assert.equal(typeof entry.nodeKey, 'string');
-    assert.ok(
-      entry.componentTag === null || typeof entry.componentTag === 'string'
-    );
     assert.equal(typeof entry.tab, 'boolean');
     assert.equal(typeof entry.summaryBlock, 'boolean');
     assert.equal(typeof entry.showInSummaryDefault, 'boolean');
@@ -120,8 +116,6 @@ test('adding a Section to a fixture registry flows into every derived structure'
     ...SECTION_REGISTRY,
     {
       id: 'riskAssessment',
-      componentTag: 'cora-risk-assessment',
-      nodeKey: 'riskAssessment',
       tab: true,
       tabOrder: 10,
       summaryBlock: true,
