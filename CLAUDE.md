@@ -97,10 +97,15 @@ src/
     case-machine.js
     case-review-view-model.js
     case-route-links.js
+    case-statuses.js            # CASE_STATUS: the persisted Case lifecycle values — do not change them
+    empty-state.js              # shared muted "nothing here yet" placeholder element
     html.js                     # h() plain-function view primitive
     question-order.js           # generic question/category ordering helpers (was question-bank/)
+    response-options.js         # single source of truth for response options + the NA_VALUE literal (#391)
     route-error-panel.js        # shared route-failure panel, used by router.js and core/store-route.js (#437)
     router.js                   # hash-based SPA router
+    section-labels.js           # DEFAULT_SECTION_LABELS + per-Case-Type sectionLabels overrides
+    section-registry.js         # ADR-0032 single source of truth for which Sections exist and their order
     showwhen-tree.js            # generic showWhen tree parse/serialise/mutate (was question-bank/)
     signal.js                   # internal state/service notification primitive
     toast.js                    # transient toast store + showToast action
@@ -135,6 +140,7 @@ src/
       cora-case-tabs.js           # pure Question Bank Case Type tab bar
 
   config/
+    environment.js              # ADR-0033: the only resolver of window.CORA_ENV (prod vs uat)
     working-days.js
 
   pages/                        # route slices, top-level views, and focused page actions
@@ -165,6 +171,8 @@ src/
       panel-descriptors.js        # code-owned panel registry and role visibility
     home.js                      # store-driven Home route slice and pure view
     cora-journey-cases.js         # store-driven Journey Cases slice + generic descriptors (GRID-2)
+    cora-my-team.js               # store-driven Team Workload slice + pure per-Reviewer workload view
+    roadmap.js                    # store-driven Roadmap slice and pure view
     cora-responsible-party-dashboard.js # store-driven Responsible Party slice shared by dashboard and #/my-cases
     responsible-party/
       view.js                     # pure outcome/remediation/unread views using generic tables
@@ -187,6 +195,9 @@ src/
       showwhen-leaf.js           # pure showWhen condition view (BANK-2)
       wording-editor.js          # pure Question Definition wording editor (BANK-2)
       question-bank-compile.js
+      question-bank-flags.js     # ?simulate=1 style URL-param flags for the workbench
+      question-bank-samples.js   # loads a capped sample of historical Cases for the simulator
+      question-bank-simulate.js  # pure impact simulator: replays sample Answers against a draft bank (#202)
       question-bank-source.js
       simulate-panel.js         # pure golden-tested impact-simulation view
 
@@ -199,12 +210,15 @@ src/
     dashboard.js
     journey-cases.js
     my-cases.js
+    my-team.js
     question-bank.js
+    roadmap.js
     root.js
     team-cases.js
 
   services/                     # non-UI modules: data, state, auth
     account-name.js
+    across-sources.js             # multi-list fan-out: one scoped request per Case source, merged (ADR-0022)
     action-centre-flags.js
     action-centre-model.js
     command-palette-store.js
@@ -233,12 +247,14 @@ src/
     question-group-progress.js   # per-Question-Group answered/total (was section-progress.js, #390)
     general-questions.js         # General Question answer-key namespace + load-time config gates (#472)
     summary-model.js
+    team-workload-model.js       # per-Reviewer workload rows for the My Team page
     time-windows.js
 
   setup/                        # app startup helpers
     app-chrome.js                 # guarded nav + command-palette mount (fatal nav / skipped palette)
     register-routes.js
     resolve-eligible-case-types.js
+    uat-banner.js                 # ADR-0033 UAT-only environment badge; renders nothing on prod
 
   styles/
     cora-design-tokens.css
@@ -258,10 +274,19 @@ case-types/                     # one module per Case Type, lazy-loaded via mani
 scripts/
   scaffold_case_type.py         # scaffolds a new Case Type module + bank artifact (ADR-0028)
   deploy_to_sharepoint.py
+  deploy_to_sharepoint.md       # deploy runbook: prod and uat targets (ADR-0033)
   run_in_memory_flow.js
+  uat_acl_smoke.js              # UAT list-ACL smoke check (npm run test:security:uat)
+  uat-acl-smoke.example.json    # sample config for the ACL smoke check
 
-dev/
+dev/                            # local dev loop; not deployed
+  index.html                    # dev host page for the mock-first loop (?mock=1)
+  styleguide.html               # rendered component/style reference
   fixtures/                     # mock data used by MockSharePointClient (?mock=1)
+    cases.js
+    people.js                   # directory people backing searchPeople
+    personas.js                 # ?asUser= personas (default: reviewer)
+    roadmap.js
 
 tests/                          # node:test unit tests — flat, one file per subject by filename
                                 # (e.g. cora-toast.test.js imports the pure Toast view)

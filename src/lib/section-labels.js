@@ -8,10 +8,11 @@
 /** @typedef {import('../sharepoint-client.js').SectionLabels} SectionLabels */
 
 /**
- * The current hardcoded Case Review tab labels / section headings, keyed by
- * Section id. Every literal here previously lived inline in
- * `buildCaseReviewTabs` (tab-controller.js) and in the components that render
- * each Section's heading.
+ * The default Case Review tab labels / section headings, keyed by Section id.
+ * `resolveSectionLabels` merges a Case Type's `sectionLabels` over these, and
+ * `cora-case-review.js` renders the result on the tab strip. The headings are
+ * read directly by the Section views that display one (`summary-view.js`,
+ * `remediation-tracking-view.js`, `appeal-view.js`).
  *
  * @type {Required<SectionLabels>}
  */
