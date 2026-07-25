@@ -80,6 +80,22 @@ export function setProps(el, props) {
 }
 
 /**
+ * Prop-naming contract (#509):
+ *
+ *   onclick / oninput / onchange / onkeydown …  → DOM events (addEventListener)
+ *   onCommit / onAnswer / onSort …              → component callback properties
+ *   className (never `class`)                   → the class attribute
+ *
+ * The casing is the signal. A camelCase `on[A-Z]` key that matches a property
+ * the element declares is assigned as a property and NEVER becomes a listener —
+ * so `onClick` on a cora-* host that declares `onClick` silently attaches
+ * nothing. Use lowercase for anything the browser dispatches, and reserve
+ * camelCase for the props-down/callbacks-up component API (issue #382).
+ *
+ * `tests/prop-naming-contract.test.js` enforces both halves.
+ */
+
+/**
  * Apply one authored prop to an element, mapping it to the right DOM channel
  * (event listener, callback property, className, value/other property, or a
  * plain attribute). This is the single source of truth for that mapping: `h()`

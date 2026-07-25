@@ -33,6 +33,11 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
   [`docs/guide/add-a-page.md`](./docs/guide/add-a-page.md); use
   [`docs/guide/store-actions-and-effects.md`](./docs/guide/store-actions-and-effects.md)
   and [`docs/guide/router.md`](./docs/guide/router.md) as reference.
+  **Prop naming is a contract, not a style:** DOM events are lowercase
+  (`onclick`, `oninput`, `onchange`, `onkeydown`) and the class prop is
+  `className`; camelCase `on[A-Z]` is reserved for component callback props
+  (`onAnswer`, `onSort`, `onCommit`), which `h()` assigns as properties and
+  never as listeners. Enforced by `tests/prop-naming-contract.test.js` (#509).
 - **Light DOM and CSS isolation.** `h()` creates safe DOM nodes, keyed `morph()`
   preserves focus/caret/scroll across renders, and the `cora-` CSS prefix remains
   the SharePoint-isolation boundary. See the current
