@@ -57,7 +57,7 @@ export function AttributeMenu({
             className: 'cora-attribute-clear',
             type: 'button',
             'aria-label': 'Clear attribution',
-            onClick: onClear,
+            onclick: onClear,
           },
           '✕'
         )
@@ -72,7 +72,7 @@ export function AttributeMenu({
           {
             className: 'cora-attribute-responsible',
             type: 'button',
-            onClick: () => onSelect(rp),
+            onclick: () => onSelect(rp),
           },
           `Responsible Party — ${rp.displayName}`
         )

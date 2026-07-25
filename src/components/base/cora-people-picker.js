@@ -51,7 +51,7 @@ export function PeoplePicker(props) {
   const items = peoplePickerOptions(props.people, props.query, props.onSelect);
 
   const inputEl = h('input', {
-    class: 'cora-people-picker-input',
+    className: 'cora-people-picker-input',
     type: 'text',
     role: 'combobox',
     'aria-label': 'Search people',
@@ -65,7 +65,7 @@ export function PeoplePicker(props) {
   const resultsEl = h(
     'ul',
     {
-      class: 'cora-people-picker-results',
+      className: 'cora-people-picker-results',
       role: 'listbox',
       hidden: items.length === 0,
     },
@@ -85,7 +85,7 @@ export function peoplePickerOption(person, label, onSelect) {
   return h(
     'li',
     {
-      class: 'cora-people-picker-option',
+      className: 'cora-people-picker-option',
       role: 'option',
       onclick: () => onSelect(person),
     },

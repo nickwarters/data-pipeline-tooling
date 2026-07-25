@@ -109,7 +109,7 @@ export async function loadOwnerSummaries({
 export function OwnerSummary({ summaries }) {
   const h2 = h(
     'h2',
-    { class: 'cora-owner-summary-heading' },
+    { className: 'cora-owner-summary-heading' },
     'Case Type Ownership Summary'
   );
 
@@ -141,14 +141,14 @@ export function OwnerSummary({ summaries }) {
 
     return h(
       'div',
-      { class: 'cora-owner-card' },
-      h('h3', { class: 'cora-owner-card-title' }, s.caseType),
+      { className: 'cora-owner-card' },
+      h('h3', { className: 'cora-owner-card-title' }, s.caseType),
       h(
         'dl',
-        { class: 'cora-owner-stats' },
+        { className: 'cora-owner-stats' },
         ...stats.flatMap(({ label, value, className }) => [
           h('dt', {}, label),
-          h('dd', { class: className }, String(value)),
+          h('dd', { className }, String(value)),
         ])
       )
     );

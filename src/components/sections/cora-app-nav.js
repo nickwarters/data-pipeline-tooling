@@ -16,7 +16,7 @@ import { h } from '../../lib/html.js';
 export function AppNavItem(label, href, navItems) {
   const a = h(
     'a',
-    { href, class: 'cora-app-nav-item', role: 'listitem' },
+    { href, className: 'cora-app-nav-item', role: 'listitem' },
     label
   );
   navItems.push({ el: a, href });
@@ -49,14 +49,14 @@ export function AppNav({ capabilities, hash }) {
     'a',
     {
       href: '#/dashboard',
-      class: 'cora-app-nav-brand',
+      className: 'cora-app-nav-brand',
       'aria-label': 'CORA — home',
     },
-    h('span', { class: 'cora-app-nav-mark', 'aria-hidden': 'true' }, 'C'),
-    h('span', { class: 'cora-app-nav-name' }, 'CORA')
+    h('span', { className: 'cora-app-nav-mark', 'aria-hidden': 'true' }, 'C'),
+    h('span', { className: 'cora-app-nav-name' }, 'CORA')
   );
 
-  const itemsEl = h('div', { class: 'cora-app-nav-items', role: 'list' });
+  const itemsEl = h('div', { className: 'cora-app-nav-items', role: 'list' });
 
   const { isReviewer, ownedCaseTypes, isAdviser, isReviewerManager } =
     capabilities;
@@ -76,7 +76,7 @@ export function AppNav({ capabilities, hash }) {
     itemsEl.appendChild(AppNavItem('My Team', '#/my-team', navItems));
   }
 
-  const node = h('div', { class: 'cora-app-nav-bar' }, brand, itemsEl);
+  const node = h('div', { className: 'cora-app-nav-bar' }, brand, itemsEl);
   updateActiveNavItems(navItems, hash);
   return { node, navItems };
 }

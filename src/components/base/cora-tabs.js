@@ -79,7 +79,7 @@ export function Tabs({
 
   const tablist = h(
     'div',
-    { role: 'tablist', class: 'cora-tabs-list' },
+    { role: 'tablist', className: 'cora-tabs-list' },
     ...visible.map((tab) => {
       const isSelected = tab.id === activeId;
       const tabId = `${uid}-tab-${tab.id}`;
@@ -88,7 +88,7 @@ export function Tabs({
       const btn = h(
         'button',
         {
-          class: 'cora-tabs-tab',
+          className: 'cora-tabs-tab',
           type: 'button',
           role: 'tab',
           id: tabId,
@@ -102,7 +102,7 @@ export function Tabs({
       );
 
       const panel = h('div', {
-        class: 'cora-tabs-panel',
+        className: 'cora-tabs-panel',
         role: 'tabpanel',
         id: panelId,
         'aria-labelledby': tabId,

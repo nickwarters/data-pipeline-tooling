@@ -36,7 +36,7 @@ export function Allocation({ isEmpty, isAtCapacity, onRequestNextCase }) {
     'button',
     {
       className: 'cora-allocation-btn',
-      onClick: onRequestNextCase,
+      onclick: onRequestNextCase,
     },
     'Request next Case'
   );

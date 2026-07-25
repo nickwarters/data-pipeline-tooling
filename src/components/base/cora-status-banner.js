@@ -58,7 +58,7 @@ function renderConflict() {
         'button',
         {
           className: 'cora-banner-reload',
-          onClick: () => location.reload(),
+          onclick: () => location.reload(),
         },
         'Reload'
       ),
