@@ -233,6 +233,28 @@ test('materializeRemediationActions: strips remediationActions when answer becom
   assert.equal('remediationActions' in out, false);
 });
 
+test('materializeRemediationActions: retains remediationStatus on a still-failing answer (#499)', () => {
+  const out = materializeRemediationActions(Q_FAIL_NO, {
+    value: 'No',
+    remediationActions: [
+      { id: 'q-needs-ra-0', text: 'Retrain agent.', completed: false },
+    ],
+    remediationStatus: { status: 'complete' },
+  });
+  assert.deepEqual(out.remediationStatus, { status: 'complete' });
+});
+
+test('materializeRemediationActions: strips remediationStatus when answer becomes passing (#499)', () => {
+  // The resolution shares the failure lifecycle with the remediation it resolves.
+  // Left behind, a re-failed Answer would render pre-resolved and the completion
+  // gate would count it as done.
+  const out = materializeRemediationActions(Q_FAIL_NO, {
+    value: 'Yes',
+    remediationStatus: { status: 'partial', details: 'Two of three done' },
+  });
+  assert.equal('remediationStatus' in out, false);
+});
+
 test('materializeRemediationActions: retains freeFormRemediation on a still-failing answer (issue #250)', () => {
   const out = materializeRemediationActions(Q_FAIL_NO, {
     value: 'No',

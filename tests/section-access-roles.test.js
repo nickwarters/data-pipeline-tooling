@@ -134,19 +134,42 @@ test('resolveRoles: assigned reviewer who is also Controls gets both roles', () 
 });
 
 // --- Reviewer Manager (#499) ---
+// Scoped to the Case, exactly like the Responsible Party Manager: the role comes
+// from the `assignedReviewerManager` row field, not from the platform-wide
+// `Reviewer Managers` group. A manager reads the Cases of the Reviewers they
+// manage, not every Case of every Case Type.
 
-test('resolveRoles: reviewer manager (from the standalone Reviewer Managers group)', () => {
+test('resolveRoles: the Reviewer Manager named on the Case row holds the role', () => {
   const roles = resolveRoles(
-    makeCase(),
+    makeCase({ assignedReviewerManager: 'user-rm' }),
     'user-rm',
     caps({ isReviewerManager: true })
   );
   assert.deepEqual(roles, ['reviewerManager']);
 });
 
-test('resolveRoles: a reviewer manager who is also the assigned reviewer holds both roles', () => {
+test('resolveRoles: a Reviewer Manager not named on the Case row holds no role', () => {
+  const roles = resolveRoles(
+    makeCase({ assignedReviewerManager: 'another-manager' }),
+    'user-rm',
+    caps({ isReviewerManager: true })
+  );
+  assert.deepEqual(roles, ['none']);
+});
+
+test('resolveRoles: group membership alone does not grant the role', () => {
+  // A Case with no manager denormalised onto it grants nobody the role.
   const roles = resolveRoles(
     makeCase(),
+    'user-rm',
+    caps({ isReviewerManager: true })
+  );
+  assert.deepEqual(roles, ['none']);
+});
+
+test('resolveRoles: a reviewer manager who is also the assigned reviewer holds both roles', () => {
+  const roles = resolveRoles(
+    makeCase({ assignedReviewerManager: 'user-reviewer' }),
     'user-reviewer',
     caps({ isReviewer: true, isReviewerManager: true })
   );

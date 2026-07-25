@@ -11,6 +11,9 @@ import {
   evaluateAccess,
   SECTIONS,
 } from './helpers/section-access.js';
+import { MATRIX } from '../src/services/section-access.js';
+
+/** @typedef {import('../src/services/section-access.js').Role} Role */
 
 // Capability: status transitions and most-permissive role composition.
 
@@ -452,6 +455,36 @@ test('remediationAudience: reviewer-side wins when a viewer holds both', () => {
     remediationAudience(['journeyOwner', 'assignedReviewer']),
     'reviewer'
   );
+});
+
+test('remediationAudience: every Role in the matrix is classified deliberately', () => {
+  // `remediationAudience` is a second classification of the Role union living
+  // outside MATRIX, and its fall-through is `responsibleParty` — so a Role added
+  // later would silently pick a rendering nobody chose. That is the same class of
+  // bug this feature exists to fix, so the Roles are enumerated here against the
+  // matrix rather than by hand: adding one fails this test until it is listed.
+  /** @type {Record<Role, 'reviewer' | 'responsibleParty'>} */
+  const expected = {
+    assignedReviewer: 'reviewer',
+    otherReviewer: 'reviewer',
+    reviewerManager: 'reviewer',
+    caseTypeOwner: 'reviewer',
+    controls: 'reviewer',
+    responsibleParty: 'responsibleParty',
+    responsiblePartyManager: 'responsibleParty',
+    journeyOwner: 'responsibleParty',
+    none: 'responsibleParty',
+  };
+
+  const roles = /** @type {Role[]} */ (Object.keys(MATRIX.remediation));
+  assert.deepEqual(
+    roles.slice().sort(),
+    Object.keys(expected).sort(),
+    'every Role with a Remediation cell is classified, and no more'
+  );
+  for (const role of roles) {
+    assert.equal(remediationAudience([role]), expected[role], role);
+  }
 });
 
 // --- Conversation: the Responsible Party Manager participates (#499) ---

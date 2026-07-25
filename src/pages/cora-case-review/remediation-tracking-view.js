@@ -60,25 +60,22 @@ export function RemediationTracking(props) {
     props.heading ?? DEFAULT_SECTION_HEADINGS.remediation
   );
   const rows = remediationRows(props.catalogue, props.answers);
-  const dueDate = props.caseRow?.remediationDueDate ?? null;
+  // `isOverdue` reads a Case with an explicit `dueDate`; the remediation SLA is
+  // the one being tracked here, so it is substituted in. Narrowing the Case row
+  // into a local first keeps the guard and the value visibly the same thing.
+  const caseRow = props.caseRow ?? null;
+  const dueDate = caseRow?.remediationDueDate ?? null;
   const overdue =
-    !!dueDate &&
-    isOverdue(
-      {
-        .../** @type {import('../../sharepoint-client.js').CaseRow} */ (
-          props.caseRow
-        ),
-        dueDate,
-      },
-      undefined
-    );
+    caseRow !== null &&
+    dueDate !== null &&
+    isOverdue({ ...caseRow, dueDate }, undefined);
   const sla = h(
     'p',
-    { className: 'cora-remediation-due-date' },
+    { class: 'cora-remediation-due-date' },
     `Remediation due: ${dueDate ?? '—'}`
   );
   const overdueBadge = overdue
-    ? h('p', { className: 'cora-badge cora-badge-overdue' }, 'Overdue')
+    ? h('p', { class: 'cora-badge cora-badge-overdue' }, 'Overdue')
     : null;
 
   /** @type {Node[]} */

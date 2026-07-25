@@ -1464,7 +1464,7 @@ test('CASE-4 action: completion flushes saves and persists only the CaseMachine 
   };
   const machine = /** @type {any} */ ({
     canComplete: true,
-    canCompleteRemediation: false,
+    mayResolveRemediation: false,
     transitionToCompleted: (
       /** @type {Function} */ computeOutcome,
       /** @type {Record<string, any>} */ answers,
@@ -1527,7 +1527,7 @@ test('CASE-4 action: a missing CaseMachine transition cannot dispatch completion
     ...snapshot(),
     machine: /** @type {any} */ ({
       canComplete: true,
-      canCompleteRemediation: false,
+      mayResolveRemediation: false,
     }),
     allAnswered: true,
   };
@@ -1560,6 +1560,50 @@ test('CASE-4 action: a missing CaseMachine transition cannot dispatch completion
   assert.equal(
     view.actions.some((action) => action.type === 'case/completion-pending'),
     false
+  );
+});
+
+test('CASE-4 view: the completion button is disabled with its reason while remediation is unresolved (#499)', () => {
+  const catalogue = [
+    {
+      id: 'q1',
+      text: 'Question one',
+      responseType: 'yes-no-na',
+      failureValues: ['No'],
+      deprecated: false,
+    },
+  ];
+  const answers = {
+    q1: {
+      value: 'No',
+      remediationActions: [{ id: 'a1', text: 'Call back', completed: false }],
+    },
+  };
+  const loadedSnapshot = {
+    ...snapshot(),
+    catalogue,
+    applicableQuestions: catalogue,
+    answers,
+    machine: /** @type {any} */ ({
+      canComplete: false,
+      mayResolveRemediation: true,
+    }),
+    allAnswered: true,
+  };
+  const state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: loadedSnapshot }
+  );
+  const view = renderShippedState(state);
+
+  const button = /** @type {HTMLButtonElement} */ (
+    getByRole(view.container, 'button', { name: 'Complete Case' })
+  );
+  assert.equal(button.disabled, true);
+  // The reason travels with the button, so the gate is legible from any tab.
+  assert.match(
+    view.container.textContent ?? '',
+    /before this Case can be completed/
   );
 });
 

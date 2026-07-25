@@ -1014,42 +1014,53 @@ export function createRouteSlice(params, context) {
       parts.completion,
       completion.visible
         ? h(
-            'button',
-            {
-              className: 'cora-complete-btn',
-              disabled: route.completionPending,
-              onClick: async () => {
-                const patchFields = completionPatch({
-                  machine: snapshot.machine,
-                  caseRow,
-                  catalogue: snapshot.catalogue,
-                  answers: snapshot.answers,
-                  allAnswered: snapshot.allAnswered,
-                  computeOutcome: config.computeOutcome,
-                  exportHash: snapshot.exportHash,
-                });
-                if (!patchFields) return;
-                tools.dispatch({
-                  type: 'case/completion-pending',
-                  pending: true,
-                });
-                try {
-                  await completeCase({
-                    caseId: caseRow.id,
-                    client: context.client,
-                    saveQueue: context.saveQueue,
-                    patchFields,
-                    caseListOptions: snapshot.caseListOptions,
+            'div',
+            { class: 'cora-completion' },
+            h(
+              'button',
+              {
+                className: 'cora-complete-btn',
+                disabled: route.completionPending || completion.disabled,
+                title: completion.reason ?? '',
+                onClick: async () => {
+                  const patchFields = completionPatch({
+                    machine: snapshot.machine,
+                    caseRow,
+                    catalogue: snapshot.catalogue,
+                    answers: snapshot.answers,
+                    allAnswered: snapshot.allAnswered,
+                    computeOutcome: config.computeOutcome,
+                    exportHash: snapshot.exportHash,
                   });
-                } finally {
+                  if (!patchFields) return;
                   tools.dispatch({
                     type: 'case/completion-pending',
-                    pending: false,
+                    pending: true,
                   });
-                }
+                  try {
+                    await completeCase({
+                      caseId: caseRow.id,
+                      client: context.client,
+                      saveQueue: context.saveQueue,
+                      patchFields,
+                      caseListOptions: snapshot.caseListOptions,
+                    });
+                  } finally {
+                    tools.dispatch({
+                      type: 'case/completion-pending',
+                      pending: false,
+                    });
+                  }
+                },
               },
-            },
-            completion.label
+              completion.label
+            ),
+            // The gate's reason travels with the button rather than living only
+            // on the Remediation tab, so it is legible from wherever the Reviewer
+            // is standing (#499).
+            ...(completion.reason
+              ? [h('p', { class: 'cora-completion-reason' }, completion.reason)]
+              : [])
           )
         : null
     );

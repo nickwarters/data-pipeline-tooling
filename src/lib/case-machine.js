@@ -93,9 +93,11 @@ export class CaseMachine {
   }
 
   /**
-   * The *permission* half of the final-complete gate: once actions have been
-   * **sent**, only the Assigned Reviewer — the one role that can `edit` the
-   * Remediation tab — closes an `Actions In Progress` Case to `Completed`.
+   * The *permission* half of the final-complete gate, and **only** that half —
+   * hence the name: this getter says the viewer *may resolve* remediation, not
+   * that the Case is ready to close. Once actions have been **sent**, only the
+   * Assigned Reviewer — the one role that can `edit` the Remediation tab — closes
+   * an `Actions In Progress` Case to `Completed`.
    *
    * The *content* half (every Question's remediation resolved, with its required
    * details / justification) lives in `completionControl` / `completionPatch`,
@@ -103,7 +105,7 @@ export class CaseMachine {
    * this machine holds — the Reviewer must be able to resolve the last row and
    * see the button enable without a reload (#499).
    */
-  get canCompleteRemediation() {
+  get mayResolveRemediation() {
     return (
       this.access.remediation === 'edit' &&
       this.caseRow.assignedReviewer === this.currentUser.id &&

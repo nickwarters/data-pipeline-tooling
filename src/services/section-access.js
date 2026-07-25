@@ -12,7 +12,7 @@
 /** @typedef {import('../sharepoint-client.js').CaseTypeConfig} CaseTypeConfig */
 /** @typedef {import('./permissions.js').Capabilities} Capabilities */
 
-import { hasRemediation } from '../evaluators/remediation-status.js';
+import { hasRemediation } from '../evaluators/answer-remediation.js';
 import { CASE_STATUS } from '../lib/case-statuses.js';
 import {
   sectionIds,
@@ -401,11 +401,14 @@ export function resolveRoles(caseRow, userId, capabilities) {
   } else if (capabilities.isReviewer) {
     roles.push('otherReviewer');
   }
-  // A Reviewer Manager oversees the reviewing function rather than any one Case,
-  // so the role is held from group membership alone and composes with whatever
-  // else the viewer is on this Case (#499). Across the matrix it observes
-  // exactly what a non-assigned Reviewer observes.
-  if (capabilities.isReviewerManager) {
+  // "Reviewer X is managed by Reviewer Manager Y" is denormalised onto the Case
+  // row as `assignedReviewerManager` (CONTEXT.md), so the role is resolved from
+  // that field rather than from the platform-wide `Reviewer Managers` group —
+  // mirroring the Responsible Party Manager below. A manager therefore reads the
+  // Cases of the Reviewers they manage, not every Case of every Case Type
+  // (#499). It composes with whatever else the viewer is on this Case, and
+  // across the matrix observes exactly what a non-assigned Reviewer observes.
+  if (caseRow.assignedReviewerManager === userId) {
     roles.push('reviewerManager');
   }
   if (caseRow.responsibleParty === userId) {

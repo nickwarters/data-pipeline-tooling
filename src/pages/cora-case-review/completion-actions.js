@@ -34,15 +34,26 @@ export function hasRemediationActions(input) {
  */
 export function readyToClose(input) {
   return (
-    input.machine?.canCompleteRemediation === true &&
+    input.machine?.mayResolveRemediation === true &&
     remediationComplete(input.catalogue ?? [], input.answers)
   );
 }
+
+/** The gate's wording, shown wherever the completion control appears (#499). */
+export const REMEDIATION_GATE_REASON =
+  'Record an outcome for every remediation on the Remediation tab — with the details or justification required — before this Case can be completed.';
 
 /**
  * Derive the one completion control from store state. The same CaseMachine
  * capability that permits the transition also controls whether the UI can
  * offer it.
+ *
+ * While remediation is outstanding the Assigned Reviewer sees the button
+ * **disabled with its reason** rather than not at all: hiding it left the gate
+ * legible only to a Reviewer who happened to open the Remediation tab, and from
+ * every other tab the feature simply looked absent (#499). A viewer without the
+ * permission half still sees nothing — the disabled button is the Reviewer's
+ * gate, not a notice board.
  *
  * @param {{
  *   machine: import('../../lib/case-machine.js').CaseMachine | null,
@@ -51,6 +62,7 @@ export function readyToClose(input) {
  *   answers: Record<string, Answer>,
  *   allAnswered: boolean,
  * }} input
+ * @returns {{ visible: boolean, disabled: boolean, label: string, reason: string | null }}
  */
 export function completionControl(input) {
   const readyToSend =
@@ -58,12 +70,20 @@ export function completionControl(input) {
     input.machine?.canComplete === true &&
     !!input.caseRow.responsibleParty;
   const canClose = readyToClose(input);
+  // Permission to close without the content half: the actions have been sent and
+  // this viewer resolves them, but at least one row is still outstanding.
+  const gated = input.machine?.mayResolveRemediation === true && !canClose;
   return {
-    visible: readyToSend || canClose,
+    visible: readyToSend || canClose || gated,
+    disabled: gated,
+    // Once the actions are sent there is nothing left to send, so the label is
+    // the close either way; before that, selected actions make it the send.
     label:
-      !canClose && hasRemediationActions(input.answers)
+      input.machine?.mayResolveRemediation !== true &&
+      hasRemediationActions(input.answers)
         ? 'Send Actions'
         : 'Complete Case',
+    reason: gated ? REMEDIATION_GATE_REASON : null,
   };
 }
 
@@ -86,7 +106,7 @@ export function completionControl(input) {
 export function completionPatch(input) {
   const machine = input.machine;
   if (!machine) return null;
-  if (machine.canCompleteRemediation) {
+  if (machine.mayResolveRemediation) {
     return readyToClose(input)
       ? (machine.transitionToFinalComplete?.() ?? null)
       : null;

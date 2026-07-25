@@ -88,7 +88,7 @@ export function countConfiguredFailures(questions, answers) {
  * selected choices, so a still-failing Answer keeps only the actions the
  * reviewer has selected onto the Answer. When the Answer is no
  * longer a failure, any stale `remediationActions`, `freeFormRemediation`,
- * `attributedParty`, `remediationDetails`, and `capture` are
+ * `remediationStatus`, `attributedParty`, `remediationDetails`, and `capture` are
  * stripped, so passing answers never carry leftover failure metadata. The
  * `attributedParty`, `remediationDetails`, and `capture` are kept on a
  * still-failing Answer even when the question defines no remediationActions.
@@ -126,6 +126,14 @@ export function materializeRemediationActions(question, answer) {
   // lifecycle: it only survives while the Answer is a failure.
   if (!failing && result.freeFormRemediation !== undefined) {
     const { freeFormRemediation: _dropFree, ...rest } = result;
+    result = rest;
+  }
+
+  // The Remediation tab's resolution (#499) shares the lifecycle of the
+  // remediation it resolves: left behind, a re-failed Answer would render
+  // pre-resolved and the completion gate would count it as done.
+  if (!failing && result.remediationStatus) {
+    const { remediationStatus: _dropStatus, ...rest } = result;
     result = rest;
   }
 

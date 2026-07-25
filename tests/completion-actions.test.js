@@ -140,7 +140,7 @@ test('completionPatch rejects incomplete or unauthorised completion and uses fin
     completionPatch({
       ...base,
       machine: /** @type {any} */ ({
-        canCompleteRemediation: true,
+        mayResolveRemediation: true,
         transitionToFinalComplete: () => ({ status: 'Completed' }),
       }),
     }),
@@ -277,7 +277,7 @@ const UNRESOLVED = {
 /** @param {boolean} permitted */
 function closingMachine(permitted) {
   return /** @type {any} */ ({
-    canCompleteRemediation: permitted,
+    mayResolveRemediation: permitted,
     canComplete: false,
     transitionToFinalComplete: () => ({ status: 'Completed' }),
   });
@@ -331,7 +331,10 @@ test('readyToClose: false without the CaseMachine permission, however resolved',
   );
 });
 
-test('completionControl: hides the Complete Case button while remediation is unresolved', () => {
+test('completionControl: shows Complete Case disabled, with the reason, while remediation is unresolved', () => {
+  // Hiding it made the gate invisible everywhere except the Remediation tab, so
+  // from the Summary the feature simply looked absent. Disabled-with-a-reason
+  // says what has to happen instead.
   const control = completionControl({
     machine: closingMachine(true),
     caseRow: CASE_ROW,
@@ -339,7 +342,10 @@ test('completionControl: hides the Complete Case button while remediation is unr
     answers: UNRESOLVED,
     allAnswered: true,
   });
-  assert.equal(control.visible, false);
+  assert.equal(control.visible, true);
+  assert.equal(control.disabled, true);
+  assert.equal(control.label, 'Complete Case');
+  assert.match(String(control.reason), /remediation/i);
 
   const ready = completionControl({
     machine: closingMachine(true),
@@ -351,7 +357,38 @@ test('completionControl: hides the Complete Case button while remediation is unr
     allAnswered: true,
   });
   assert.equal(ready.visible, true);
+  assert.equal(ready.disabled, false);
+  assert.equal(ready.reason, null);
   assert.equal(ready.label, 'Complete Case');
+});
+
+test('completionControl: a viewer who cannot resolve remediation sees no button at all', () => {
+  // The disabled button is the Assigned Reviewer's gate, not a notice board: a
+  // viewer without the permission half still sees nothing.
+  const control = completionControl({
+    machine: closingMachine(false),
+    caseRow: CASE_ROW,
+    catalogue: CATALOGUE,
+    answers: UNRESOLVED,
+    allAnswered: true,
+  });
+  assert.equal(control.visible, false);
+});
+
+test('completionControl: the pre-send path still reads Send Actions and is enabled', () => {
+  const control = completionControl({
+    machine: /** @type {any} */ ({
+      mayResolveRemediation: false,
+      canComplete: true,
+    }),
+    caseRow: CASE_ROW,
+    catalogue: CATALOGUE,
+    answers: UNRESOLVED,
+    allAnswered: true,
+  });
+  assert.equal(control.visible, true);
+  assert.equal(control.disabled, false);
+  assert.equal(control.label, 'Send Actions');
 });
 
 test('completionPatch: refuses the final close while a remediation row is unresolved', () => {

@@ -22,6 +22,7 @@
 
 import { evaluate } from './applicability-evaluator.js';
 import { isFailure } from './failure-evaluator.js';
+import { answerRemediation, hasRemediation } from './answer-remediation.js';
 
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
@@ -64,37 +65,11 @@ export const REMEDIATION_DETAIL_LABELS = {
  * @property {string} details The details / justification recorded with a non-`complete` status.
  */
 
-/**
- * The remediation attached to one Answer, or `null` when it carries none.
- * Whitespace-only free-form text does not count as remediation.
- *
- * @param {Answer | undefined} answer
- * @returns {{ actions: Array<{ id: string, text: string }>, freeForm: string } | null}
- */
-export function answerRemediation(answer) {
-  const actions = (answer?.remediationActions ?? []).map((action) => ({
-    id: action.id,
-    text: action.text,
-  }));
-  const freeForm = (answer?.freeFormRemediation ?? '').trim();
-  if (actions.length === 0 && freeForm === '') return null;
-  return { actions, freeForm };
-}
-
-/**
- * Whether *any* Answer on the Case carries remediation. This is the visibility
- * gate for the Remediation Section: with nothing to track there is no tab.
- * Deliberately catalogue-free so `services/section-access.js` can call it with
- * the Case row alone.
- *
- * @param {Record<string, Answer>} answers
- * @returns {boolean}
- */
-export function hasRemediation(answers) {
-  return Object.values(answers ?? {}).some(
-    (answer) => answerRemediation(answer) !== null
-  );
-}
+// `answerRemediation` / `hasRemediation` need neither the applicability graph nor
+// the failure rules, so they live in a leaf module that `section-access.js` can
+// import without dragging the evaluators onto the dashboard boot path. They are
+// re-exported here so this module stays the seam callers name.
+export { answerRemediation, hasRemediation };
 
 /**
  * Normalise a stored `remediationStatus`, tolerating absent or unrecognised
@@ -113,15 +88,40 @@ function readStatus(answer) {
 }
 
 /**
+ * The last result, keyed by the identity of the inputs that produced it. Both
+ * the tab and the completion gate ask for the rows on every render — and the
+ * details textarea re-renders on every keystroke — so without this the
+ * applicability graph is walked twice per character typed.
+ *
+ * Keying on identity is safe **because Answers are replaced, never mutated in
+ * place**: every writer (`handleRemediationStatus` and its siblings, the reducer)
+ * builds a fresh map. Code that edits an Answers map in place would read a stale
+ * row set. One entry, so navigating to another Case simply replaces it.
+ *
+ * @type {{ catalogue: QuestionDefinition[], answers: Record<string, Answer>, rows: RemediationRow[] } | null}
+ */
+let rowsCache = null;
+
+/**
  * The Remediation tab's rows: every *applicable*, *failed* Question that
  * carries remediation, in catalogue order. Failed Questions without remediation
  * are excluded — attaching actions is optional.
+ *
+ * Repeated calls with the same catalogue and Answers *references* return the same
+ * array, so callers may treat the result as stable within a render.
  *
  * @param {QuestionDefinition[]} catalogue
  * @param {Record<string, Answer>} answers
  * @returns {RemediationRow[]}
  */
 export function remediationRows(catalogue, answers) {
+  if (
+    rowsCache &&
+    rowsCache.catalogue === catalogue &&
+    rowsCache.answers === answers
+  ) {
+    return rowsCache.rows;
+  }
   const applicable = evaluate(catalogue, answers ?? {});
   /** @type {RemediationRow[]} */
   const rows = [];
@@ -133,6 +133,7 @@ export function remediationRows(catalogue, answers) {
     if (!remediation) continue;
     rows.push({ question, ...remediation, ...readStatus(answer) });
   }
+  rowsCache = { catalogue, answers, rows };
   return rows;
 }
 
@@ -144,6 +145,10 @@ export function remediationRows(catalogue, answers) {
  * box can be filled in either order. An empty status clears the field; an
  * unrecognised one is ignored.
  *
+ * Returns the *same* Answer when nothing changes — clearing a row that was never
+ * resolved, or an unrecognised status — so the caller's identity check can skip
+ * the write rather than PATCHing the Answers blob for a no-op.
+ *
  * @param {Answer} answer
  * @param {RemediationStatusValue | ''} status
  * @param {string} [details]
@@ -151,6 +156,7 @@ export function remediationRows(catalogue, answers) {
  */
 export function setRemediationStatus(answer, status, details = '') {
   if (status === '') {
+    if (!answer.remediationStatus) return answer;
     const { remediationStatus: _drop, ...rest } = answer;
     return rest;
   }

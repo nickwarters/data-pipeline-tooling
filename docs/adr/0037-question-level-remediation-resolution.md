@@ -76,7 +76,7 @@ auto-save.
 An `Actions In Progress` Case closes to `Completed` only when **every** row is
 resolved. The gate splits in two:
 
-- **Permission** — `CaseMachine.canCompleteRemediation`: the Assigned Reviewer,
+- **Permission** — `CaseMachine.mayResolveRemediation`: the Assigned Reviewer,
   `edit` on the Section, status `Actions In Progress`.
 - **Content** — `readyToClose` in `completion-actions.js`, computed from the
   store's **live** catalogue and Answers.
@@ -85,6 +85,23 @@ CaseMachine holds a load-time snapshot of the Case, so leaving the content half
 there (as ADR-0024 did) meant resolving the last row could not enable the button
 without a reload. Vacuously true when the Case carries no remediation, so the
 no-actions path is unaffected.
+
+The getter is named `mayResolveRemediation`, not `canComplete…`, precisely
+because it is only the permission half; both call sites re-wrap it in
+`readyToClose`, and a name that sounded like the whole gate is the mistake this
+ADR exists to correct.
+
+While the content half is unmet the Assigned Reviewer sees the completion button
+**disabled, with its reason underneath** rather than absent. Hiding it left the
+gate legible only on the Remediation tab; from anywhere else the Case simply
+looked uncloseable for no stated reason. A viewer without the permission half
+still sees no button — the disabled control is the Reviewer's gate, not a notice
+board.
+
+The resolution shares the failure lifecycle of the remediation it resolves:
+`materializeRemediationActions` strips `remediationStatus` when an Answer stops
+failing, alongside `remediationActions` and `freeFormRemediation`. Left behind, a
+re-failed Answer would render pre-resolved and the gate would count it as done.
 
 ### Two audiences, one breakdown
 
@@ -115,12 +132,30 @@ they cannot open would make the prompt a dead end. The Journey Owner keeps
 Reviewer-side wins when a viewer holds roles on both sides, mirroring the
 most-permissive rule in `evaluateAccess`.
 
-### `reviewerManager` becomes a Section-access Role
+### `reviewerManager` becomes a Section-access Role, scoped to the Case
 
 `capabilities.isReviewerManager` already existed (the `Reviewer Managers` group)
-but had no cell in the access matrix. It is added as a Role resolved from group
-membership alone, composing with whatever else the viewer is on the Case, and
-mirrors `otherReviewer` across every Section.
+but had no cell in the access matrix. It is added as a Role — read-only wherever
+a non-assigned Reviewer is read-only, including the Remediation breakdown — and
+composes with whatever else the viewer is on the Case.
+
+It is resolved **from the Case row**, `assignedReviewerManager === userId`,
+exactly as `responsiblePartyManager` is, and _not_ from the platform-wide
+`Reviewer Managers` group. That field already exists on every Case row and
+already drives the `#/reports/reviewer-team` report, so scoping costs nothing and
+keeps the Role in line with every other non-assigned role in `resolveRoles`:
+each is scoped by something Case-specific. Resolving it from the group would have
+made a Reviewer Manager a platform-wide reader of every Case of every Case Type —
+a second unscoped Role beside `controls`, which ADR-0022 decided deliberately and
+in its own right. Nothing here justified that, and it would have handed tabs to
+users whose SharePoint list ACLs may not permit the underlying read (a 403 on
+fetch is a worse failure than the access-denied panel they got before).
+
+A consequence worth stating: **Reviewer Manager and Responsible Party Manager now
+compose safely.** CONTEXT.md records a Maintainer convention that a user is one or
+the other, never both; with both Roles resolved from Case row fields and
+`remediationAudience` resolving reviewer-side-wins, no code depends on that
+convention any more.
 
 ## Considered options
 
@@ -147,7 +182,8 @@ mirrors `otherReviewer` across every Section.
 
 - The Remediation tab renders on real Cases for the first time.
 - The completion gate is live: a Case with unresolved remediation cannot close,
-  and the button appears the moment the last row is resolved.
+  the reason is stated on the button itself, and it enables the moment the last
+  row is resolved.
 - The people doing the work can see what is outstanding.
 
 **Negative**
@@ -155,8 +191,18 @@ mirrors `otherReviewer` across every Section.
 - The per-action `status` / `cancelReason` machinery from ADR-0024
   (`evaluators/remediation-actions.js`) is no longer read by the Remediation tab
   or the access matrix. It remains in use by `summary-model.js` and its Summary
-  block, which still reports capture-field actions; that block's blind spot is
-  unchanged by this ADR and is left for separate work.
+  block, which still reports capture-field actions — a store no Case Type
+  populates, which is the same blind spot that made the Remediation tab
+  invisible. The concrete symptom is a Reviewer seeing a full breakdown on
+  **Remediation** and an empty remediation block on **Summary**. Out of scope
+  here; tracked as the remaining half of
+  [#497](https://github.com/nickwarters/case-review-frontend-framework/issues/497),
+  which this ADR closes only the tracking side of.
+- `remediationRows` caches its last result against the _identity_ of the
+  catalogue and Answers it was given, because both the tab and the completion
+  gate ask for it on every render. That is safe only while Answers maps are
+  replaced rather than mutated in place — which is how every writer in the app
+  behaves, but it is now load-bearing.
 - Adding a Role widens the access matrix by a column: every Section now declares
   a `reviewerManager` cell.
 - The Conversation gains a third participant. Threads on Cases with a

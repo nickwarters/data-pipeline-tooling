@@ -135,3 +135,17 @@ test('the sent-to-adviser Case names a Responsible Party Manager persona (#499)'
   );
   assert.notEqual(row.responsiblePartyManager, row.responsibleParty);
 });
+
+test('the sent-to-adviser Case names a Reviewer Manager persona (#499)', () => {
+  // The reviewer-side Remediation rendering is held by the Assigned Reviewer's
+  // manager too, and that role is now resolved from the `assignedReviewerManager`
+  // row field rather than group membership — so the fixture has to name them for
+  // the read-only reviewer rendering to be demoable.
+  const row = sentToAdviserCase();
+  const personaIds = new Set(Object.values(personas).map((p) => p.userId));
+  assert.ok(
+    row.assignedReviewerManager && personaIds.has(row.assignedReviewerManager),
+    'the Reviewer Manager is a switchable ?asUser= persona'
+  );
+  assert.notEqual(row.assignedReviewerManager, row.assignedReviewer);
+});

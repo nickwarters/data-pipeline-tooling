@@ -221,6 +221,7 @@ src/
 
   evaluators/                   # pure logic: applicability, failure, and outcome
     amended-outcome.js
+    answer-remediation.js        # leaf: what remediation an Answer carries — no applicability/failure deps (#499)
     applicability-evaluator.js
     configured-outcome.js
     failure-evaluator.js

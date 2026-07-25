@@ -137,17 +137,17 @@ test('CaseMachine permits the final close only for the Assigned Reviewer of an A
 
   assert.equal(
     machineFor('Actions In Progress', ACTIONS_CONFIG, { answers })
-      .canCompleteRemediation,
+      .mayResolveRemediation,
     true
   );
   assert.equal(
     machineFor('In-progress', ACTIONS_CONFIG, { answers })
-      .canCompleteRemediation,
+      .mayResolveRemediation,
     false,
     'nothing to close before the actions are sent'
   );
   assert.equal(
-    machineFor('Completed', ACTIONS_CONFIG, { answers }).canCompleteRemediation,
+    machineFor('Completed', ACTIONS_CONFIG, { answers }).mayResolveRemediation,
     false,
     'and nothing to close once the Case is closed'
   );
@@ -155,7 +155,7 @@ test('CaseMachine permits the final close only for the Assigned Reviewer of an A
     machineFor('Actions In Progress', ACTIONS_CONFIG, {
       answers,
       assignedReviewer: 'other',
-    }).canCompleteRemediation,
+    }).mayResolveRemediation,
     false
   );
 });

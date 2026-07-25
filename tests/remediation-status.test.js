@@ -200,6 +200,38 @@ test('setRemediationStatus: an empty status clears the field entirely', () => {
   assert.equal('remediationStatus' in next, false);
 });
 
+test('remediationRows: an unchanged catalogue and Answers reuse the last result', () => {
+  // The rows are derived through a full applicability pass, and both the view and
+  // the completion gate ask for them on every render — which, while the Reviewer
+  // types a justification, is every keystroke. Same inputs, same array.
+  const answers = failedWithActions();
+  const first = remediationRows(CATALOGUE, answers);
+  assert.equal(remediationRows(CATALOGUE, answers), first);
+
+  const edited = {
+    ...answers,
+    q1: { ...answers.q1, remediationStatus: { status: 'complete' } },
+  };
+  const second = remediationRows(CATALOGUE, /** @type {any} */ (edited));
+  assert.notEqual(second, first);
+  assert.equal(second[0].status, 'complete');
+
+  // A different catalogue against the same Answers is not the cached result.
+  assert.notEqual(
+    remediationRows([CATALOGUE[0]], /** @type {any} */ (edited)),
+    second
+  );
+});
+
+test('setRemediationStatus: clearing an already-unresolved row is a no-op', () => {
+  // The caller short-circuits on identity to skip the write. Returning a fresh
+  // object for a field that was never there would PATCH the Answers blob — and
+  // bump the ETag — for nothing.
+  /** @type {Answer} */
+  const answer = { value: 'No' };
+  assert.equal(setRemediationStatus(answer, '', ''), answer);
+});
+
 test('setRemediationStatus: an unrecognised status is rejected, leaving the Answer untouched', () => {
   /** @type {Answer} */
   const answer = { value: 'No', remediationStatus: { status: 'complete' } };
@@ -228,18 +260,22 @@ test('isRemediationResolved: complete always; partial/cancelled only with text',
 });
 
 test('remediationComplete: every remediation row must be resolved', () => {
+  // Answers are replaced, never mutated in place — that is how the store writes
+  // them, and what lets `remediationRows` key its cache on identity.
   const answers = failedWithActions();
   assert.equal(remediationComplete(CATALOGUE, answers), false);
 
-  answers.q1 = setRemediationStatus(answers.q1, 'partial', '');
+  const started = { q1: setRemediationStatus(answers.q1, 'partial', '') };
   assert.equal(
-    remediationComplete(CATALOGUE, answers),
+    remediationComplete(CATALOGUE, started),
     false,
     'partial without details is not resolved'
   );
 
-  answers.q1 = setRemediationStatus(answers.q1, 'partial', 'Half done');
-  assert.equal(remediationComplete(CATALOGUE, answers), true);
+  const finished = {
+    q1: setRemediationStatus(answers.q1, 'partial', 'Half done'),
+  };
+  assert.equal(remediationComplete(CATALOGUE, finished), true);
 });
 
 test('remediationComplete: vacuously true when the Case carries no remediation', () => {

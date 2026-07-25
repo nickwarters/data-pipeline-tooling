@@ -269,6 +269,10 @@ export const cases = [
     title: 'Complaint #5',
     status: 'Actions In Progress',
     assignedReviewer: 'user-reviewer',
+    // The Reviewer's line manager. Both manager roles are resolved from the Case
+    // row rather than group membership, so naming them here is what makes the
+    // Remediation tab's two renderings demoable from every angle (#499).
+    assignedReviewerManager: 'user-rm',
     responsibleParty: 'user-rp',
     // Their line manager, so the Remediation tab's responsible-party rendering
     // and the Conversation it points at are demoable from both sides (#499).
@@ -286,8 +290,8 @@ export const cases = [
         ],
         // Resolved on the Remediation tab (#499). The redress Question below is
         // deliberately left unresolved, so the demo Case shows one row of each
-        // and the Reviewer's "Complete Case" button stays hidden until they
-        // record the second.
+        // and the Reviewer's "Complete Case" button stays disabled — with the
+        // reason under it — until they record the second.
         remediationStatus: { status: 'complete' },
         capture: {
           rootCauseSummary:

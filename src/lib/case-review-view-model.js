@@ -23,7 +23,10 @@ import {
   validateGeneralQuestions,
   validateAnswerKeyNamespace,
 } from '../evaluators/general-questions.js';
-import { setRemediationStatus } from '../evaluators/remediation-status.js';
+import {
+  answerRemediation,
+  setRemediationStatus,
+} from '../evaluators/remediation-status.js';
 import {
   showInSummary,
   SECTIONS,
@@ -539,6 +542,9 @@ export class CaseReviewViewModel {
     const current = this.answersSignal.get();
     const existing = current[questionId];
     if (!existing) return;
+    // Only a Question carrying remediation is a row on the tab, so only one can
+    // be resolved: this keeps the write path in step with what the view derives.
+    if (answerRemediation(existing) === null) return;
     const next = setRemediationStatus(existing, status, details);
     if (next === existing) return;
     const newAnswers = { ...current, [questionId]: next };

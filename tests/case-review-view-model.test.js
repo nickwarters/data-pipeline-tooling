@@ -298,6 +298,26 @@ test('handleRemediationStatus: no-op for a missing Answer or an unrecognised sta
   assert.equal(calls.length, 0);
 });
 
+test('handleRemediationStatus: no-op for an Answer carrying no remediation', () => {
+  // The write path agrees with the row set the tab derives: only a Question with
+  // remediation attached is rendered, so only one can be resolved.
+  /** @type {any[]} */
+  const calls = [];
+  const vm = makeTrackingVM((...a) => calls.push(a));
+  vm.answersSignal = signal(/** @type {any} */ ({ q1: { value: 'No' } }));
+  vm.handleRemediationStatus('q1', 'complete');
+  assert.equal(calls.length, 0);
+  assert.equal('remediationStatus' in vm.answersSignal.get().q1, false);
+});
+
+test('handleRemediationStatus: clearing an unresolved row does not queue a write', () => {
+  /** @type {any[]} */
+  const calls = [];
+  const vm = makeTrackingVM((...a) => calls.push(a));
+  vm.handleRemediationStatus('q1', '');
+  assert.equal(calls.length, 0);
+});
+
 // --- exportHash loading (ADR-0021 Step 3) ---
 
 test('CaseReviewViewModel.load() calls getExportHash with the case type slug and stores it as exportHash', async () => {

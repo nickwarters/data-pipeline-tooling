@@ -2248,6 +2248,21 @@ cora-status-banner {
   border-color: #00512f;
 }
 
+/* Gated rather than absent: the Reviewer sees the button they cannot press yet,
+   with the reason beneath it (#499). */
+.cora-complete-btn:disabled,
+.cora-complete-btn:disabled:hover {
+  background: var(--cora-color-border-strong);
+  border-color: var(--cora-color-border-strong);
+  cursor: not-allowed;
+}
+
+.cora-completion-reason {
+  margin: var(--cora-space-2) 0 0;
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-danger);
+}
+
 /* ── Section progress sidebar ────────────────────────────────────────────── */
 
 [data-cora-root] section:has(.cora-group-progress) {
@@ -2849,13 +2864,9 @@ cora-tabs {
 
 .cora-tracking-details-required,
 .cora-remediation-gate {
-  margin: 0;
+  margin: var(--cora-space-3) 0 0;
   font-size: var(--cora-font-size-sm);
   color: var(--cora-color-danger);
-}
-
-.cora-remediation-gate {
-  margin-top: var(--cora-space-3);
 }
 
 .cora-remediation-conversation-prompt {
