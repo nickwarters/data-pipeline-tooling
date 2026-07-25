@@ -29,14 +29,14 @@ const BASELINE = {
   'tests/dashboard-action-centre-view.test.js': [3, 0, 15],
   'tests/dashboard-controls-view.test.js': [2, 4, 0],
   'tests/dashboard-kpi-view.test.js': [3, 0, 6],
-  'tests/cora-remediation-section-actions.tests.js': [2, 0, 4],
-  'tests/cora-remediation-section-attribution.tests.js': [0, 0, 2],
-  'tests/cora-remediation-section-details.tests.js': [0, 0, 1],
-  'tests/cora-remediation-section-rendering.tests.js': [1, 0, 1],
+  'tests/cora-remediation-section-actions.test.js': [2, 0, 4],
+  'tests/cora-remediation-section-attribution.test.js': [0, 0, 2],
+  'tests/cora-remediation-section-details.test.js': [0, 0, 1],
+  'tests/cora-remediation-section-rendering.test.js': [1, 0, 1],
   'tests/cora-remediation-tracking.test.js': [3, 0, 0],
-  'tests/cora-responsible-party-dashboard-conversation.tests.js': [0, 4, 0],
-  'tests/cora-responsible-party-dashboard-loading.tests.js': [3, 0, 0],
-  'tests/cora-responsible-party-dashboard-remediation.tests.js': [3, 2, 0],
+  'tests/cora-responsible-party-dashboard-conversation.test.js': [0, 4, 0],
+  'tests/cora-responsible-party-dashboard-loading.test.js': [3, 0, 0],
+  'tests/cora-responsible-party-dashboard-remediation.test.js': [3, 2, 0],
   'tests/html.test.js': [1, 2, 0],
   'tests/http-sharepoint-client-protocol.test.js': [0, 0, 2],
   'tests/router.test.js': [3, 0, 0],
@@ -60,10 +60,7 @@ function findTestFiles(directory, prefix = 'tests') {
     if (entry.isDirectory()) {
       return findTestFiles(new URL(`${entry.name}/`, directory), path);
     }
-    return entry.isFile() &&
-      (entry.name.endsWith('.test.js') || entry.name.endsWith('.tests.js'))
-      ? [path]
-      : [];
+    return entry.isFile() && entry.name.endsWith('.test.js') ? [path] : [];
   });
 }
 
