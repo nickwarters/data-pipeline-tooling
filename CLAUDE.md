@@ -119,7 +119,6 @@ src/
 
   components/                   # reusable pure views, layered by dependency
     base/                       # leaf primitives — compose no other view
-      cora-data-table.js           # pure table renderer retained for direct consumers
       cora-people-picker.js        # pure People Picker renderer and search helpers
       cora-group-progress.js      # pure per-Question-Group progress strip
       cora-status-banner.js
