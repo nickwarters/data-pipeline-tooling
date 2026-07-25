@@ -5,12 +5,8 @@ import { remediationComplete } from '../../evaluators/remediation-status.js';
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 
-/** @param {Record<string, Answer> | {answersSignal?: {get?: () => Record<string, Answer>}}} input */
-export function hasRemediationActions(input) {
-  const source = /** @type {any} */ (input);
-  const answers = /** @type {Record<string, Answer>} */ (
-    source.answersSignal?.get?.() ?? input
-  );
+/** @param {Record<string, Answer>} answers */
+export function hasRemediationActions(answers) {
   return Object.values(answers).some(
     (answer) => (answer.remediationActions?.length ?? 0) > 0
   );
