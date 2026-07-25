@@ -235,25 +235,3 @@ export function h(tag, props = {}, ...children) {
 
   return el;
 }
-
-/**
- * Fragment primitive for returning multiple elements
- * @param {Record<string, any>} _props
- * @param {...VNode} children
- * @returns {DocumentFragment}
- */
-export function Fragment(_props, ...children) {
-  const frag = document.createDocumentFragment();
-  const append = (/** @type {any} */ child) => {
-    if (child == null || child === false) return;
-    if (Array.isArray(child)) {
-      for (const c of child) append(c);
-    } else if (child && typeof child === 'object' && 'appendChild' in child) {
-      frag.appendChild(/** @type {Node} */ (child));
-    } else {
-      frag.appendChild(document.createTextNode(String(child)));
-    }
-  };
-  append(children);
-  return frag;
-}
