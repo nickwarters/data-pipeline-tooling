@@ -5,7 +5,9 @@ Date: 2026-07-25
 ## Status
 
 Accepted — amends [ADR-0024](./0024-remediation-tracking-tab.md)
-(per-action completion, Responsible Party `hidden`). The two-Section split,
+(per-action completion, Responsible Party `hidden`) and
+[ADR-0011](./0011-section-level-role-based-access.md) (the Role set and the
+Conversation's participants). The two-Section split,
 the single case-level `remediationDueDate` and the reportable-freeze lifecycle
 that ADR-0024 established are unchanged.
 
@@ -101,6 +103,15 @@ discussing remediation and reporting it done (ADR-0024 D10 is preserved in
 substance: they still never edit the record). What changes is that they can now
 _read_ what is outstanding instead of inferring it from the thread.
 
+Because that call to action must lead somewhere, the **Responsible Party
+Manager** becomes a Conversation participant: `edit`, subject to the same Case
+Type `allowMessagesWhen` status gate as the Assigned Reviewer and the
+Responsible Party. ADR-0011 excluded them on the grounds that the thread is
+between the Reviewer and the Case's Responsible Party; in practice the Manager
+is the one who chases outstanding remediation, and sending them to a Section
+they cannot open would make the prompt a dead end. The Journey Owner keeps
+`read-only` — they observe the thread, they do not work the remediation.
+
 Reviewer-side wins when a viewer holds roles on both sides, mirroring the
 most-permissive rule in `evaluateAccess`.
 
@@ -148,7 +159,7 @@ mirrors `otherReviewer` across every Section.
   unchanged by this ADR and is left for separate work.
 - Adding a Role widens the access matrix by a column: every Section now declares
   a `reviewerManager` cell.
-- A Responsible Party Manager sees the Remediation breakdown but has
-  `conversation: hidden` (ADR-0011 — they are not a Conversation participant), so
-  the call to action degrades to guidance text for them. Whether to widen
-  Conversation access to the Manager is a separate domain decision.
+- The Conversation gains a third participant. Threads on Cases with a
+  Responsible Party Manager may now carry messages from someone ADR-0011's
+  participant list did not anticipate; nothing reads that list programmatically,
+  but reporting or export work that assumes a two-party thread should not.

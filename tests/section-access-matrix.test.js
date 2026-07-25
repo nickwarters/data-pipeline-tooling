@@ -105,7 +105,7 @@ test('matrix — In-progress Case (no actions, default appeal config → respons
         assignedReviewer: 'edit',
         otherReviewer: 'read-only',
         responsibleParty: 'edit',
-        responsiblePartyManager: 'hidden',
+        responsiblePartyManager: 'edit',
         caseTypeOwner: 'read-only',
         journeyOwner: 'read-only',
         controls: 'read-only',

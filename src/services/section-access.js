@@ -140,6 +140,20 @@ export function remediationAudience(roles) {
 }
 
 /**
+ * The Conversation cell shared by every participant in the thread: they post
+ * unless the Case Type's `allowMessagesWhen` gate excludes the current status,
+ * in which case the thread is still readable.
+ *
+ * @param {CaseRow} c
+ * @param {CaseTypeConfig} config
+ * @returns {Mode}
+ */
+const postsWhenAllowed = (c, config) => {
+  const allowed = config.sections?.conversation?.allowMessagesWhen;
+  return allowed && !allowed.includes(c.status) ? 'read-only' : 'edit';
+};
+
+/**
  * The Sections that can contribute a block to the read-only Summary Section
  *, in render order. Conversation (a floating overlay, never a tab)
  * and Summary itself never appear as Summary blocks. Derived from the Section
@@ -287,25 +301,19 @@ export const MATRIX = {
     controls: 'hidden',
     none: 'hidden',
   },
-  // The Conversation is the thread between the Assigned Reviewer and the Case's
-  // Responsible Party (Adviser); both post subject to the Case Type's
-  // `allowMessagesWhen` status gate. A Responsible Party Manager is not a
-  // participant, so they cannot see it. Other reviewers, the Case Type Owner, the
-  // Journey Owner and Controls observe it read-only.
+  // The Conversation is the thread between the Assigned Reviewer and the
+  // Responsible Party side — the Adviser and their Manager — each posting subject
+  // to the Case Type's `allowMessagesWhen` status gate. The Manager was
+  // originally excluded (ADR-0011), but the Remediation tab now routes the whole
+  // responsible-party audience here to discuss remediation and report it done
+  // (#499), so the Manager participates too. Other reviewers, the Case Type
+  // Owner, the Journey Owner and Controls observe it read-only.
   conversation: {
-    assignedReviewer: (c, config) => {
-      const allowed = config.sections?.conversation?.allowMessagesWhen;
-      if (allowed && !allowed.includes(c.status)) return 'read-only';
-      return 'edit';
-    },
+    assignedReviewer: postsWhenAllowed,
     otherReviewer: 'read-only',
     reviewerManager: 'read-only',
-    responsibleParty: (c, config) => {
-      const allowed = config.sections?.conversation?.allowMessagesWhen;
-      if (allowed && !allowed.includes(c.status)) return 'read-only';
-      return 'edit';
-    },
-    responsiblePartyManager: 'hidden',
+    responsibleParty: postsWhenAllowed,
+    responsiblePartyManager: postsWhenAllowed,
     caseTypeOwner: 'read-only',
     journeyOwner: 'read-only',
     controls: 'read-only',

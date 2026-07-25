@@ -453,3 +453,40 @@ test('remediationAudience: reviewer-side wins when a viewer holds both', () => {
     'reviewer'
   );
 });
+
+// --- Conversation: the Responsible Party Manager participates (#499) ---
+
+test('conversation: the Responsible Party Manager posts, like the Responsible Party', () => {
+  const cfg = makeConfig();
+  for (const status of ['In-progress', 'Actions In Progress', 'Completed']) {
+    assert.equal(
+      evaluateAccess(
+        'conversation',
+        ['responsiblePartyManager'],
+        makeCase({ status }),
+        cfg
+      ),
+      'edit',
+      status
+    );
+  }
+});
+
+test('conversation: the Manager reaching the Remediation tab has a Conversation to open', () => {
+  // The responsible-party rendering points at the Conversation, so the roles it
+  // covers must be able to see one (#499).
+  const cfg = makeConfig();
+  const c = makeCaseWithRemediation({ status: 'Actions In Progress' });
+  for (const role of /** @type {const} */ ([
+    'responsibleParty',
+    'responsiblePartyManager',
+    'journeyOwner',
+  ])) {
+    assert.equal(evaluateAccess('remediation', [role], c, cfg), 'read-only');
+    assert.notEqual(
+      evaluateAccess('conversation', [role], c, cfg),
+      'hidden',
+      role
+    );
+  }
+});

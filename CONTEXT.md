@@ -194,8 +194,9 @@ from the **Reviewer**. One per **Case**. Distinct from an **Attributed Party** (
 per-failure, not per-Case). The **Assigned Reviewer** _sets_ the Responsible Party in-app,
 at the bottom of the **Issues** Section, before **Send Actions**; it cannot be changed
 after send. Once actions are sent the Responsible Party gains `read-only`
-**Summary** and `edit` **Conversation** access (the only two Sections they see), and does
-the remediation work off-system, communicating via the Conversation.
+**Summary**, `read-only` **Remediation** and `edit` **Conversation** access (the only
+three Sections they see), and does the remediation work off-system, communicating via
+the Conversation.
 _Avoid_: Subject, owner (ambiguous), reviewee
 
 **Adviser**:
@@ -231,7 +232,7 @@ A SharePoint user in the Reviewer Managers **SharePoint Group** who manages a te
 _Avoid_: Team Lead, Reviewer Supervisor
 
 **Responsible Party Manager**:
-A SharePoint user in the Responsible Party Managers **SharePoint Group** who manages a team of **Responsible Parties** (e.g. the line manager of a group of call-centre agents being assessed). Sees the `#/reports/responsible-party-team` report — a 12-calendar-month view of their team's assessed Cases, broken down by pass / fail / had-remediation, totalled and per-Responsible-Party. The relationship "Responsible Party X is managed by Responsible Party Manager Y" is denormalised onto every **Case** row as `responsiblePartyManager` (a user field). Mutually exclusive with **Reviewer Manager**.
+A SharePoint user in the Responsible Party Managers **SharePoint Group** who manages a team of **Responsible Parties** (e.g. the line manager of a group of call-centre agents being assessed). Sees the `#/reports/responsible-party-team` report — a 12-calendar-month view of their team's assessed Cases, broken down by pass / fail / had-remediation, totalled and per-Responsible-Party. The relationship "Responsible Party X is managed by Responsible Party Manager Y" is denormalised onto every **Case** row as `responsiblePartyManager` (a user field). Mutually exclusive with **Reviewer Manager**. On a Case they read the **Remediation** Section's breakdown (without the Reviewer's fields) and, like the **Responsible Party** they manage, post in the **Conversation** — their interface for chasing remediation with the **Reviewer**.
 _Avoid_: Line Manager (overloaded), RP Manager (jargon abbreviation)
 
 **Case Type Owner**:
@@ -279,7 +280,7 @@ _Avoid_: Dispute, Complaint, Grievance, Challenge
 ### Communication
 
 **Conversation**:
-The thread between **Reviewer** and **Responsible Party** for one **Case**. Stored as a JSON array of **Messages** in a single plain-text field on the Case row.
+The thread between the **Reviewer** and the responsible-party side of one **Case** — the **Responsible Party** and their **Manager**, both of whom post. Stored as a JSON array of **Messages** in a single plain-text field on the Case row.
 
 **Message**:
 One entry in a **Conversation** — author, timestamp, body.

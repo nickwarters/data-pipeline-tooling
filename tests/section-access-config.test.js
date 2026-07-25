@@ -86,6 +86,7 @@ test('evaluateAccess: conversation allowMessagesWhen restricts to read-only for 
   for (const role of /** @type {const} */ ([
     'assignedReviewer',
     'responsibleParty',
+    'responsiblePartyManager',
   ])) {
     assert.equal(
       evaluateAccess('conversation', [role], cInProgress, cfg),
@@ -114,6 +115,10 @@ test('evaluateAccess: conversation without allowMessagesWhen defaults to edit', 
   );
   assert.equal(
     evaluateAccess('conversation', ['responsibleParty'], c, cfg),
+    'edit'
+  );
+  assert.equal(
+    evaluateAccess('conversation', ['responsiblePartyManager'], c, cfg),
     'edit'
   );
 });
