@@ -15,5 +15,5 @@ import { h } from './html.js';
  * @returns {HTMLElement}
  */
 export function EmptyState(message, { className = '', tag = 'p' } = {}) {
-  return h(tag, { class: `cora-empty ${className}`.trim() }, message);
+  return h(tag, { className: `cora-empty ${className}`.trim() }, message);
 }
