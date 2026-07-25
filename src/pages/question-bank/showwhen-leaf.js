@@ -19,12 +19,12 @@ export function ShowwhenLeaf(props) {
     });
   return h(
     'div',
-    { class: 'leaf' },
+    { className: 'leaf' },
     h(
       'select',
       {
         'aria-label': 'Condition question',
-        onChange: (/** @type {any} */ event) =>
+        onchange: (/** @type {any} */ event) =>
           change({ qId: event.target.value }),
       },
       ...others.map((candidate) =>
@@ -38,9 +38,9 @@ export function ShowwhenLeaf(props) {
     h(
       'select',
       {
-        class: 'leaf-op',
+        className: 'leaf-op',
         'aria-label': 'Condition operator',
-        onChange: (/** @type {any} */ event) =>
+        onchange: (/** @type {any} */ event) =>
           change({ op: event.target.value }),
       },
       ...[
@@ -59,16 +59,20 @@ export function ShowwhenLeaf(props) {
           value: Array.isArray(leaf.value)
             ? leaf.value.join(', ')
             : (leaf.value ?? ''),
-          onChange: (/** @type {any} */ event) =>
+          onchange: (/** @type {any} */ event) =>
             change({ value: event.target.value }),
         })
-      : h('span', { class: 'leaf-answered-hint' }, '— any non-empty answer'),
+      : h(
+          'span',
+          { className: 'leaf-answered-hint' },
+          '— any non-empty answer'
+        ),
     h(
       'button',
       {
-        class: 'leaf-x',
+        className: 'leaf-x',
         'aria-label': 'Remove condition',
-        onClick: () =>
+        onclick: () =>
           dispatch({
             type: 'question/showwhen-node-removed',
             questionId: question.id,

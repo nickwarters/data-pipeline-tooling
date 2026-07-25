@@ -110,7 +110,7 @@ export function OptionsEditor({
 
   const rows = options.map((option, index) => {
     const children = [
-      h('span', { class: 'opt-label' }, option),
+      h('span', { className: 'opt-label' }, option),
       optionOutcomeSelect(
         mapping[option] ?? '',
         outcomeOptions,
@@ -122,29 +122,29 @@ export function OptionsEditor({
       children.push(
         h(
           'span',
-          { class: 'tag-x', onclick: () => onRemoveOption(index, option) },
+          { className: 'tag-x', onclick: () => onRemoveOption(index, option) },
           '×'
         )
       );
     }
-    return h('div', { class: 'opt-row' }, ...children);
+    return h('div', { className: 'opt-row' }, ...children);
   });
 
   const list = [...rows];
   if (editable) {
     list.push(
-      h('button', { class: 'tag-add', onclick: onAddOption }, '+ option')
+      h('button', { className: 'tag-add', onclick: onAddOption }, '+ option')
     );
   }
 
   return h(
     'div',
     { style: 'margin-top:14px;' },
-    h('label', { class: 'options-label' }, 'Options'),
-    h('div', { class: 'opt-list' }, ...list),
+    h('label', { className: 'options-label' }, 'Options'),
+    h('div', { className: 'opt-list' }, ...list),
     h(
       'p',
-      { class: 'opt-na-note' },
+      { className: 'opt-na-note' },
       'N/A is always offered to the Reviewer and never maps to an Outcome.'
     )
   );

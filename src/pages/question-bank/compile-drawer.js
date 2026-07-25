@@ -24,8 +24,8 @@ import { h, unsafeHTML } from '../../lib/html.js';
 export function CompileDrawer(props) {
   if (!props.open) {
     return [
-      h('div', { class: 'drawer-backdrop', onclick: props.onClose }),
-      h('aside', { class: 'drawer' }),
+      h('div', { className: 'drawer-backdrop', onclick: props.onClose }),
+      h('aside', { className: 'drawer' }),
     ];
   }
   const code = props.compile(props.bank);
@@ -42,20 +42,20 @@ export function CompileDrawer(props) {
     });
 
   const codeBlock = props.highlight
-    ? h('div', { class: 'code-block' }, unsafeHTML(props.highlight(code)))
-    : h('div', { class: 'code-block' }, code);
+    ? h('div', { className: 'code-block' }, unsafeHTML(props.highlight(code)))
+    : h('div', { className: 'code-block' }, code);
 
   return [
     h('div', {
-      class: 'drawer-backdrop open',
+      className: 'drawer-backdrop open',
       onclick: props.onClose,
     }),
     h(
       'aside',
-      { class: 'drawer open' },
+      { className: 'drawer open' },
       h(
         'div',
-        { class: 'drawer-head' },
+        { className: 'drawer-head' },
         h(
           'div',
           {},
@@ -72,14 +72,14 @@ export function CompileDrawer(props) {
             '.'
           )
         ),
-        h('button', { class: 'drawer-close', onclick: props.onClose }, '×')
+        h('button', { className: 'drawer-close', onclick: props.onClose }, '×')
       ),
       h(
         'div',
-        { class: 'drawer-body' },
+        { className: 'drawer-body' },
         h(
           'div',
-          { class: 'diff-summary' },
+          { className: 'diff-summary' },
           diffCard('diff-card added', String(props.diff.added), 'Added'),
           diffCard('diff-card changed', String(props.diff.changed), 'Changed'),
           diffCard(
@@ -93,15 +93,15 @@ export function CompileDrawer(props) {
       ),
       h(
         'div',
-        { class: 'drawer-foot' },
+        { className: 'drawer-foot' },
         hashMeta,
         h(
           'div',
-          { class: 'drawer-foot-actions' },
+          { className: 'drawer-foot-actions' },
           h(
             'button',
             {
-              class: 'pill-btn',
+              className: 'pill-btn',
               onclick: async () => {
                 const clipboard = /** @type {any} */ (globalThis).navigator
                   ?.clipboard;
@@ -113,7 +113,7 @@ export function CompileDrawer(props) {
           ),
           h(
             'button',
-            { class: 'pill-btn primary', onclick: props.onSubmit },
+            { className: 'pill-btn primary', onclick: props.onSubmit },
             'Send for Review'
           )
         )
@@ -126,7 +126,7 @@ export function CompileDrawer(props) {
 function diffCard(className, count, label) {
   return h(
     'div',
-    { class: className },
+    { className: className },
     h('div', { className: 'n' }, count),
     h('div', { className: 'l' }, label)
   );

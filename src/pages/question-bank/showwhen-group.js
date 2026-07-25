@@ -19,8 +19,8 @@ export function ShowwhenGroup(props) {
         children.push(
           h(
             'div',
-            { class: 'conjunction' },
-            h('span', { class: 'glyph' }, group.op === 'and' ? 'AND' : 'OR')
+            { className: 'conjunction' },
+            h('span', { className: 'glyph' }, group.op === 'and' ? 'AND' : 'OR')
           )
         );
       }
@@ -49,27 +49,31 @@ export function ShowwhenGroup(props) {
 
   return h(
     'div',
-    { class: `group op-${group.op}` },
+    { className: `group op-${group.op}` },
     h(
       'div',
-      { class: 'group-head' },
+      { className: 'group-head' },
       h(
         'button',
         {
-          class: `op-toggle op-${group.op}`,
+          className: `op-toggle op-${group.op}`,
           title: 'Click to switch between AND / OR',
-          onClick: () =>
+          onclick: () =>
             dispatch({
               type: 'question/showwhen-group-toggled',
               questionId: question.id,
               path,
             }),
         },
-        h('span', { class: 'label' }, group.op === 'and' ? 'ALL OF' : 'ANY OF'),
-        h('span', { class: 'arrow' }, '⇅'),
         h(
           'span',
-          { class: 'qual' },
+          { className: 'label' },
+          group.op === 'and' ? 'ALL OF' : 'ANY OF'
+        ),
+        h('span', { className: 'arrow' }, '⇅'),
+        h(
+          'span',
+          { className: 'qual' },
           group.op === 'and'
             ? '(every condition must hold)'
             : '(at least one must hold)'
@@ -77,12 +81,12 @@ export function ShowwhenGroup(props) {
       ),
       h(
         'div',
-        { class: 'group-actions' },
+        { className: 'group-actions' },
         h(
           'button',
           {
-            class: 'mini-btn',
-            onClick: () => {
+            className: 'mini-btn',
+            onclick: () => {
               const target = others[0]?.id;
               if (!target) {
                 /** @type {any} */ (globalThis).alert?.(
@@ -103,8 +107,8 @@ export function ShowwhenGroup(props) {
         h(
           'button',
           {
-            class: 'mini-btn',
-            onClick: () =>
+            className: 'mini-btn',
+            onclick: () =>
               dispatch({
                 type: 'question/showwhen-group-added',
                 questionId: question.id,
@@ -117,9 +121,9 @@ export function ShowwhenGroup(props) {
           ? h(
               'button',
               {
-                class: 'mini-btn danger',
+                className: 'mini-btn danger',
                 title: 'Remove this group',
-                onClick: () =>
+                onclick: () =>
                   dispatch({
                     type: 'question/showwhen-node-removed',
                     questionId: question.id,
@@ -131,6 +135,6 @@ export function ShowwhenGroup(props) {
           : null
       )
     ),
-    h('div', { class: 'group-children' }, ...children)
+    h('div', { className: 'group-children' }, ...children)
   );
 }

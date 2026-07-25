@@ -37,10 +37,10 @@ export function QuestionCard(props) {
     'article',
     {
       key: question.id,
-      class: 'card' + (question.deprecated ? ' deprecated' : ''),
+      className: 'card' + (question.deprecated ? ' deprecated' : ''),
     },
     h('div', {
-      class: 'card-stripe',
+      className: 'card-stripe',
       'data-testid': 'conditional-indicator',
       'aria-hidden': 'true',
       style:
@@ -50,26 +50,26 @@ export function QuestionCard(props) {
     }),
     h(
       'div',
-      { class: 'card-head' },
+      { className: 'card-head' },
       h(
         'div',
-        { class: 'card-num' },
+        { className: 'card-num' },
         h(
           'div',
-          { class: 'card-num-label' },
+          { className: 'card-num-label' },
           `№ ${String(props.questionIndex + 1).padStart(2, '0')}`
         ),
         h('input', {
-          class: 'id-input',
+          className: 'id-input',
           'aria-label': 'Question ID',
           value: question.id,
-          onChange: (/** @type {any} */ event) =>
+          onchange: (/** @type {any} */ event) =>
             field('id', event.target.value),
         })
       ),
       h(
         'div',
-        { class: 'card-body' },
+        { className: 'card-body' },
         /** @type {HTMLElement} */ (
           WordingEditor({
             question,
@@ -79,7 +79,7 @@ export function QuestionCard(props) {
         ),
         h(
           'div',
-          { class: 'field-grid' },
+          { className: 'field-grid' },
           questionCardField(
             'Category',
             questionCardText(question.category ?? '', (value) =>
@@ -146,18 +146,18 @@ export function QuestionCard(props) {
       ),
       h(
         'div',
-        { class: 'card-actions' },
+        { className: 'card-actions' },
         moveButton('up', -1, directionAllowed(-1), question, props),
         moveButton('down', 1, directionAllowed(1), question, props),
         h(
           'button',
           {
-            class: 'icon-btn',
+            className: 'icon-btn',
             title: question.deprecated ? 'Restore' : 'Mark deprecated',
             'aria-label': question.deprecated
               ? 'Restore question'
               : 'Mark deprecated',
-            onClick: () =>
+            onclick: () =>
               props.dispatch({
                 type: 'question/deprecation-toggled',
                 questionId: question.id,
@@ -168,10 +168,10 @@ export function QuestionCard(props) {
         h(
           'button',
           {
-            class: 'icon-btn',
+            className: 'icon-btn',
             title: 'Duplicate',
             'aria-label': 'Duplicate question',
-            onClick: () =>
+            onclick: () =>
               props.dispatch({
                 type: 'question/duplicated',
                 questionId: question.id,
@@ -189,11 +189,11 @@ function moveButton(directionName, direction, enabled, question, props) {
   return h(
     'button',
     {
-      class: 'icon-btn',
+      className: 'icon-btn',
       title: `Move question ${directionName}`,
       'aria-label': `Move question ${directionName}`,
       disabled: !enabled,
-      onClick: () =>
+      onclick: () =>
         props.dispatch({
           type: 'question/moved',
           questionId: question.id,
@@ -225,15 +225,15 @@ function addOption(questionId, dispatch) {
 export function questionCardField(label, control) {
   if (!control.getAttribute?.('aria-label'))
     control.setAttribute?.('aria-label', label);
-  return h('div', { class: 'field' }, h('label', {}, label), control);
+  return h('div', { className: 'field' }, h('label', {}, label), control);
 }
 
 /** @param {string} value @param {(value: string) => void} onChange */
 export function questionCardText(value, onChange) {
   return h('input', {
-    class: 'field-input',
+    className: 'field-input',
     value,
-    onChange: (/** @type {any} */ event) => onChange(event.target.value),
+    onchange: (/** @type {any} */ event) => onChange(event.target.value),
   });
 }
 
@@ -242,8 +242,8 @@ export function questionCardSelect(options, value, onChange) {
   return h(
     'select',
     {
-      class: 'field-select',
-      onChange: (/** @type {any} */ event) => onChange(event.target.value),
+      className: 'field-select',
+      onchange: (/** @type {any} */ event) => onChange(event.target.value),
     },
     ...options.map((option) =>
       h('option', { value: option, selected: option === value }, option)

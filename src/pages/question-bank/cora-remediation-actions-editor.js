@@ -30,36 +30,40 @@ export function RemediationActionsEditor({ question, dispatch }) {
   const freeForm = Boolean(question.allowFreeFormRemediation);
   const wrap = h(
     'div',
-    { class: 'rem-block' },
+    { className: 'rem-block' },
     h(
       'h4',
       {},
       'Remediation Actions ',
       h(
         'span',
-        { class: 'rem-count' },
+        { className: 'rem-count' },
         `(${actions.length}${freeForm ? ' + free-form' : ''})`
       )
     ),
     h(
       'div',
-      { class: 'rem-free-row' },
+      { className: 'rem-free-row' },
       h(
         'div',
         {},
-        h('div', { class: 'rem-free-title' }, 'Allow free-form remediation'),
         h(
           'div',
-          { class: 'rem-free-help' },
+          { className: 'rem-free-title' },
+          'Allow free-form remediation'
+        ),
+        h(
+          'div',
+          { className: 'rem-free-help' },
           'Reviewers can write their own remediation alongside any canned actions.'
         )
       ),
       h('button', {
-        class: 'toggle' + (freeForm ? ' on' : ''),
+        className: 'toggle' + (freeForm ? ' on' : ''),
         role: 'switch',
         'aria-checked': String(freeForm),
         'aria-label': 'Allow free-form remediation',
-        onClick: () =>
+        onclick: () =>
           dispatch({
             type: 'question/free-form-remediation-toggled',
             questionId: question.id,
@@ -72,11 +76,15 @@ export function RemediationActionsEditor({ question, dispatch }) {
     wrap.appendChild(
       h(
         'div',
-        { class: 'rem-free-preview' },
-        h('div', { class: 'rem-free-preview-eyebrow' }, 'Reviewer will see'),
+        { className: 'rem-free-preview' },
         h(
           'div',
-          { class: 'rem-free-preview-body' },
+          { className: 'rem-free-preview-eyebrow' },
+          'Reviewer will see'
+        ),
+        h(
+          'div',
+          { className: 'rem-free-preview-body' },
           '"Describe a remediation in your own words…"'
         )
       )
@@ -87,11 +95,11 @@ export function RemediationActionsEditor({ question, dispatch }) {
     wrap.appendChild(
       h(
         'div',
-        { class: 'rem-item' },
+        { className: 'rem-item' },
         h('input', {
           value: action.text,
           'aria-label': `Remediation action ${index + 1}`,
-          onChange: (/** @type {any} */ event) =>
+          onchange: (/** @type {any} */ event) =>
             dispatch({
               type: 'question/remediation-action-changed',
               questionId: question.id,
@@ -102,9 +110,9 @@ export function RemediationActionsEditor({ question, dispatch }) {
         h(
           'button',
           {
-            class: 'x',
+            className: 'x',
             'aria-label': `Remove remediation action ${index + 1}`,
-            onClick: () =>
+            onclick: () =>
               dispatch({
                 type: 'question/remediation-action-removed',
                 questionId: question.id,
@@ -129,8 +137,8 @@ export function RemediationActionsEditor({ question, dispatch }) {
     h(
       'button',
       {
-        class: 'tag-add rem-add',
-        onClick: () =>
+        className: 'tag-add rem-add',
+        onclick: () =>
           dispatch({
             type: 'question/remediation-action-added',
             questionId: question.id,

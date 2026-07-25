@@ -15,12 +15,12 @@ import { h } from '../../lib/html.js';
 export function WordingEditor({ question, baselineQuestion, onTextInput }) {
   if (!question) return undefined;
 
-  const wrap = h('div', { class: 'wording' });
-  wrap.appendChild(h('span', { class: 'edit-mark' }, 'click to edit'));
+  const wrap = h('div', { className: 'wording' });
+  wrap.appendChild(h('span', { className: 'edit-mark' }, 'click to edit'));
 
   const textarea = /** @type {any} */ (
     h('textarea', {
-      class: 'q-text' + (question.deprecated ? ' deprecated-text' : ''),
+      className: 'q-text' + (question.deprecated ? ' deprecated-text' : ''),
       rows: '1',
       'aria-label': 'Question wording',
       spellcheck: 'true',
@@ -53,11 +53,11 @@ export function WordingEditor({ question, baselineQuestion, onTextInput }) {
   const length = question.text.length;
   const charCount = h(
     'span',
-    { class: 'charcount' + (length > 180 ? ' warn' : '') },
+    { className: 'charcount' + (length > 180 ? ' warn' : '') },
     `${length} chars`
   );
 
-  wrap.appendChild(h('div', { class: 'wording-foot' }, status, charCount));
+  wrap.appendChild(h('div', { className: 'wording-foot' }, status, charCount));
   return wrap;
 }
 

@@ -39,16 +39,16 @@ export function QuestionLabels({ question: q, bank, dispatch }) {
   );
   return h(
     'div',
-    { class: 'labels-block' },
-    h('label', { class: 'options-label' }, 'Labels'),
+    { className: 'labels-block' },
+    h('label', { className: 'options-label' }, 'Labels'),
     h(
       'div',
-      { class: 'labels-help' },
+      { className: 'labels-help' },
       'Reporting tags — shown here only; they never appear on a Case.'
     ),
     h(
       'div',
-      { class: 'label-row' },
+      { className: 'label-row' },
       ...pills,
       pills.length === 0
         ? EmptyState('No labels assigned', {
@@ -59,21 +59,21 @@ export function QuestionLabels({ question: q, bank, dispatch }) {
     ),
     h(
       'div',
-      { class: 'label-add-row' },
+      { className: 'label-add-row' },
       ...unassigned.map((/** @type {any} */ label) =>
         h(
           'button',
           {
-            class: 'label-add-chip',
+            className: 'label-add-chip',
             style: `--pill: ${label.color};`,
-            onClick: () =>
+            onclick: () =>
               dispatch({
                 type: 'question/label-assigned',
                 questionId: q.id,
                 labelId: label.id,
               }),
           },
-          h('span', { class: 'label-swatch-dot' }),
+          h('span', { className: 'label-swatch-dot' }),
           h('span', {}, label.name)
         )
       ),
@@ -86,26 +86,26 @@ export function QuestionLabels({ question: q, bank, dispatch }) {
 function labelPill(questionId, label, dispatch) {
   return h(
     'span',
-    { class: 'label-pill', style: `--pill: ${label.color};` },
+    { className: 'label-pill', style: `--pill: ${label.color};` },
     h('input', {
       type: 'color',
-      class: 'label-pill-color',
+      className: 'label-pill-color',
       value: label.color,
       title: 'Edit colour',
-      onChange: (/** @type {any} */ event) =>
+      onchange: (/** @type {any} */ event) =>
         dispatch({
           type: 'label/colour-changed',
           labelId: label.id,
           colour: event.target.value,
         }),
     }),
-    h('span', { class: 'label-pill-name' }, label.name),
+    h('span', { className: 'label-pill-name' }, label.name),
     h(
       'button',
       {
-        class: 'label-pill-x',
+        className: 'label-pill-x',
         title: 'Remove label',
-        onClick: () =>
+        onclick: () =>
           dispatch({
             type: 'question/label-unassigned',
             questionId,
@@ -120,26 +120,26 @@ function labelPill(questionId, label, dispatch) {
 /** @param {string} questionId @param {any} bank @param {(action: any) => void} dispatch */
 function createLabelControl(questionId, bank, dispatch) {
   const name = /** @type {any} */ (
-    h('input', { class: 'label-new-name', placeholder: 'New label…' })
+    h('input', { className: 'label-new-name', placeholder: 'New label…' })
   );
   const color = /** @type {any} */ (
     h('input', {
       type: 'color',
-      class: 'label-new-color',
+      className: 'label-new-color',
       value: DEFAULT_LABEL_COLOR,
       title: 'Pick colour',
     })
   );
   return h(
     'span',
-    { class: 'label-new' },
+    { className: 'label-new' },
     name,
     color,
     h(
       'button',
       {
-        class: 'label-new-add',
-        onClick: () => {
+        className: 'label-new-add',
+        onclick: () => {
           const text = String(name.value).trim();
           if (!text) return;
           dispatch({

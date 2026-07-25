@@ -24,17 +24,17 @@ export function ShowwhenEditor(props) {
     : '';
   const header = h(
     'div',
-    { class: 'showwhen-header' },
+    { className: 'showwhen-header' },
     h('span', {}, '◆ Show when'),
-    props.conditional ? h('span', { class: 'showwhen-desc' }, desc) : null,
+    props.conditional ? h('span', { className: 'showwhen-desc' }, desc) : null,
     h(
       'select',
       {
-        class: 'showwhen-mode',
+        className: 'showwhen-mode',
         value: props.conditional ? 'conditional' : 'always',
         'aria-label': 'Show when',
         'data-focus-key': `showwhen-mode-${question.id}`,
-        onChange: (/** @type {any} */ event) =>
+        onchange: (/** @type {any} */ event) =>
           props.dispatch({
             type: 'question/showwhen-mode-changed',
             questionId: question.id,
@@ -47,11 +47,11 @@ export function ShowwhenEditor(props) {
     )
   );
   if (!props.conditional) {
-    return h('div', { class: 'showwhen-block' }, header);
+    return h('div', { className: 'showwhen-block' }, header);
   }
   return h(
     'div',
-    { class: 'showwhen-block' },
+    { className: 'showwhen-block' },
     header,
     tree.children.length === 0
       ? EmptyState('// always shown — add a condition to gate this question', {

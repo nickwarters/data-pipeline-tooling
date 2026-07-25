@@ -27,7 +27,7 @@ function moveButtons(label, canUp, canDown, onMove) {
         title: `Move ${label} up`,
         'aria-label': `Move ${label} up`,
         disabled: !canUp,
-        onClick: (/** @type {Event} */ e) => {
+        onclick: (/** @type {Event} */ e) => {
           e.stopPropagation?.();
           onMove(-1);
         },
@@ -41,7 +41,7 @@ function moveButtons(label, canUp, canDown, onMove) {
         title: `Move ${label} down`,
         'aria-label': `Move ${label} down`,
         disabled: !canDown,
-        onClick: (/** @type {Event} */ e) => {
+        onclick: (/** @type {Event} */ e) => {
           e.stopPropagation?.();
           onMove(1);
         },
@@ -89,7 +89,7 @@ export function BankRail(props) {
         className:
           'filter-chip' +
           (f.category === null && f.questionGroup === null ? ' active' : ''),
-        onClick: () => select(null, null),
+        onclick: () => select(null, null),
       },
       h('span', {}, 'All'),
       h('span', { className: 'chip-count' }, String(questions.length))
@@ -112,7 +112,7 @@ export function BankRail(props) {
               (f.category === catName && f.questionGroup === null
                 ? ' active'
                 : ''),
-            onClick: () => select(catName, null),
+            onclick: () => select(catName, null),
           },
           h('span', {}, catName),
           h(
@@ -147,7 +147,7 @@ export function BankRail(props) {
               (!hasCategories || f.category === catName)
                 ? ' active'
                 : ''),
-            onClick: () => select(hasCategories ? catName : null, groupName),
+            onclick: () => select(hasCategories ? catName : null, groupName),
           },
           h('span', {}, groupName),
           h(
@@ -169,11 +169,11 @@ export function BankRail(props) {
 
   const tDep = h('div', {
     className: 'toggle' + (f.showDeprecated ? ' on' : ''),
-    onClick: () => props.setFilters({ showDeprecated: !f.showDeprecated }),
+    onclick: () => props.setFilters({ showDeprecated: !f.showDeprecated }),
   });
   const tCond = h('div', {
     className: 'toggle' + (f.conditionalOnly ? ' on' : ''),
-    onClick: () => props.setFilters({ conditionalOnly: !f.conditionalOnly }),
+    onclick: () => props.setFilters({ conditionalOnly: !f.conditionalOnly }),
   });
 
   const aside = h(
@@ -252,7 +252,7 @@ export function BankRail(props) {
       'data-focus-key': 'bank-rail-toggle',
       'aria-expanded': props.railOpen ? 'true' : 'false',
       'aria-controls': 'bank-rail-panel',
-      onClick: props.onToggleRail,
+      onclick: props.onToggleRail,
     },
     props.railOpen ? '✕ Filters' : '☰ Filters'
   );
@@ -260,7 +260,7 @@ export function BankRail(props) {
   const backdrop = h('div', {
     className: 'rail-backdrop' + (props.railOpen ? ' open' : ''),
     'aria-hidden': 'true',
-    onClick: props.onCloseRail,
+    onclick: props.onCloseRail,
   });
 
   return [aside, toggle, backdrop];

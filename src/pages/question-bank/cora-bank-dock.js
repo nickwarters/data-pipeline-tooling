@@ -31,14 +31,14 @@ export function BankDock(props) {
       { className: 'dock-actions' },
       h(
         'button',
-        { className: 'dock-btn', onClick: props.openDrawer },
+        { className: 'dock-btn', onclick: props.openDrawer },
         'Preview Config'
       ),
       h(
         'button',
         {
           className: 'dock-btn primary',
-          onClick: props.openDrawer,
+          onclick: props.openDrawer,
         },
         'Submit for Review →'
       )

@@ -112,24 +112,24 @@ export function BankList(props) {
 
   return h(
     'section',
-    { class: 'editor' },
+    { className: 'editor' },
     h(
       'div',
-      { class: 'editor-head' },
+      { className: 'editor-head' },
       h(
         'h2',
         {},
         h('span', {}, bank.label),
         h(
           'span',
-          { class: 'meta' },
+          { className: 'meta' },
           `${bank.questions.length} questions · slug: ${bank.slug}`
         )
       ),
       h(
         'div',
-        { class: 'dirty-indicator' + (dirty ? ' is-dirty' : '') },
-        h('span', { class: 'dirty-dot' }),
+        { className: 'dirty-indicator' + (dirty ? ' is-dirty' : '') },
+        h('span', { className: 'dirty-dot' }),
         h('span', {}, dirty ? 'Unsynced edits' : 'Clean · synced')
       )
     ),
@@ -142,7 +142,7 @@ export function BankList(props) {
         : [
             h(
               'div',
-              { class: 'empty' },
+              { className: 'empty' },
               h('h3', {}, 'No questions match your filters.'),
               h('p', {}, 'Clear filters or add a new question below.')
             ),
@@ -150,8 +150,8 @@ export function BankList(props) {
     ),
     h(
       'button',
-      { class: 'add-card', onClick: props.addQuestion },
-      h('span', { class: 'plus' }, '+'),
+      { className: 'add-card', onclick: props.addQuestion },
+      h('span', { className: 'plus' }, '+'),
       ' Draft a new question'
     )
   );

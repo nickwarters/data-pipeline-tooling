@@ -24,7 +24,7 @@ export function SimulatePanel(publishedBank, draftBank, samples) {
   if (!samples.length) {
     return h(
       'section',
-      { class: 'sim-panel' },
+      { className: 'sim-panel' },
       head,
       EmptyState(
         'No sample Cases loaded yet — impact simulation unavailable.',
@@ -39,7 +39,7 @@ export function SimulatePanel(publishedBank, draftBank, samples) {
   const t = result.totals;
   const summary = h(
     'p',
-    { class: 'sim-summary' },
+    { className: 'sim-summary' },
     `${t.casesChanged} of ${samples.length} sample Cases affected · ` +
       `${t.newlyRequired} newly required Answers · ` +
       `${t.issuesAdded} Issues added · ${t.issuesRemoved} Issues removed · ` +
@@ -51,7 +51,7 @@ export function SimulatePanel(publishedBank, draftBank, samples) {
     .map((c) =>
       h(
         'li',
-        { class: 'sim-case' },
+        { className: 'sim-case' },
         h('strong', {}, c.title),
         h('ul', {}, ...caseImpactLines(c).map((line) => h('li', {}, line)))
       )
@@ -59,11 +59,11 @@ export function SimulatePanel(publishedBank, draftBank, samples) {
 
   return h(
     'section',
-    { class: 'sim-panel' },
+    { className: 'sim-panel' },
     head,
     summary,
     rows.length
-      ? h('ul', { class: 'sim-cases' }, ...rows)
+      ? h('ul', { className: 'sim-cases' }, ...rows)
       : EmptyState('No sample Case is affected.', { className: 'sim-empty' })
   );
 }
