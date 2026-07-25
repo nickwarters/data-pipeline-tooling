@@ -85,13 +85,17 @@ test('permissions.caseTypes: names every manifest slug so its display name and d
   assert.deepEqual(
     permissionSlugs,
     Object.keys(CASE_TYPE_IMPORTERS).sort(),
-    'permissions.caseTypes (src/services/permissions.js) must list exactly the ' +
-      'manifest slugs, so per-Case-Type group names and display names resolve ' +
-      'for every Case Type.'
+    'permissions.caseTypes is derived from CASE_TYPES (case-types/manifest.js), ' +
+      'so it must cover exactly the manifest slugs — per-Case-Type group names ' +
+      'and display names resolve for every Case Type.'
   );
 });
 
 test('permissions.caseTypes: each displayName matches the Case Type config displayName', async () => {
+  // The one remaining duplicate of a display name is the config's own
+  // `displayName` (#508 hoisted the permissions copy into the manifest). This is
+  // the assertion that registry and config still agree — a mismatch would
+  // silently derive the wrong SharePoint group names.
   for (const { slug, displayName } of permissions.caseTypes) {
     const { default: config } = await CASE_TYPE_IMPORTERS[slug]();
     assert.equal(

@@ -108,6 +108,9 @@ import {{ computeConfiguredOutcome }} from '../src/evaluators/configured-outcome
  * @type {{CaseTypeConfig}}
  */
 const config = {{
+ // Must match the `displayName` on this slug's CASE_TYPES entry in
+ // case-types/manifest.js — the three SharePoint group names derive from it.
+  displayName: '{opts.display_name}',
   eligibleGroups: ['Reviewers'],
  // TODO(case-type): Confirm the SLA hours before production use.
   slaHours: 72,
@@ -375,18 +378,21 @@ Accepted
 
 ## Context
 
-Provisioning a new Case Type crosses the Case Type module, manifest, permissions,
-mock personas, mock Cases, and tests. Hand-editing that spread is easy to do
+Provisioning a new Case Type crosses the Case Type module, manifest, mock
+personas, mock Cases, and tests. Hand-editing that spread is easy to do
 inconsistently, especially before the SharePoint list and group provisioning has
 caught up with the application configuration.
 
 ## Decision
 
 Case Type provisioning starts with `python3 scripts/scaffold_case_type.py --slug <slug> --display "<Display Name>"`.
-The scaffold creates a plain-data Case Type module for `{opts.display_name}`, registers it in the
-manifest, appends the single permissions entry from which the per-Case-Type group
-names derive, adds mock personas, adds one outstanding and one Completed mock
-Case, and creates a focused test file for the generated contract.
+The scaffold creates a plain-data Case Type module for `{opts.display_name}` and
+registers it with a single entry in `CASE_TYPES` (`case-types/manifest.js`) — the
+one registry, carrying the display name from which the three per-Case-Type
+SharePoint group names derive. `permissions.caseTypes` is derived from it, so no
+permissions edit is needed (issue #508). The scaffold also adds mock personas,
+one outstanding and one Completed mock Case, and a focused test file for the
+generated contract.
 
 The generated Case Type deliberately has no `listName` so its sample Cases are
 openable in the mock store via `?mock=1` until list-backed Case Types are wired
@@ -426,40 +432,26 @@ def scaffold(opts: ScaffoldOptions) -> None:
     test_path.write_text(case_type_test(opts), encoding="utf-8")
     adr_path.write_text(adr(opts), encoding="utf-8")
 
+    # One registry entry. `CASE_TYPES` in case-types/manifest.js carries the
+    # slug, the display name the three SharePoint group names derive from, and
+    # the lazy importer. `CASE_TYPE_IMPORTERS`, `QUESTION_BANK_IMPORTERS` and
+    # `permissions.caseTypes` are all derived from it (issue #508), so there is
+    # nothing to add in src/services/permissions.js. No `bank` thunk is emitted:
+    # the scaffold writes no Question Bank artifact, and `bank` is optional.
     manifest_path = opts.root / "case-types" / "manifest.js"
     manifest = manifest_path.read_text(encoding="utf-8")
-    if not re.search(rf"['\"]{escape_regexp(opts.slug)}['\"]\s*:", manifest):
+    if not re.search(rf"slug:\s*['\"]{escape_regexp(opts.slug)}['\"]", manifest):
         manifest = insert_after_match(
             manifest,
-            r"export const CASE_TYPE_IMPORTERS = \{\n",
-            f"  '{opts.slug}': () => import('./{opts.slug}.js'),\n",
+            r"export const CASE_TYPES = \[\n",
+            f"  {{\n"
+            f"    slug: '{opts.slug}',\n"
+            f"    displayName: '{opts.display_name}',\n"
+            f"    importer: () => import('./{opts.slug}.js'),\n"
+            f"  }},\n",
             manifest_path,
         )
         manifest_path.write_text(manifest, encoding="utf-8")
-
-    permissions_path = opts.root / "src" / "services" / "permissions.js"
-    permissions = permissions_path.read_text(encoding="utf-8")
-    if f"slug: '{opts.slug}'" not in permissions:
-        array_anchor = "  caseTypes: ["
-        array_start = permissions.find(array_anchor)
-        if array_start == -1:
-            raise RuntimeError(
-                f"Could not find insertion anchor in {permissions_path}: {array_anchor}"
-            )
-        entries_start = array_start + len(array_anchor)
-        entries_end = permissions.find("],", entries_start)
-        if entries_end == -1:
-            raise RuntimeError(
-                f"Could not find caseTypes array end in {permissions_path}"
-            )
-        existing_entries = permissions[entries_start:entries_end].strip()
-        entry = f"{{ slug: '{opts.slug}', displayName: '{opts.display_name}' }}"
-        entries = f"{existing_entries},\n    {entry}" if existing_entries else entry
-        permissions = (
-            f"{permissions[:entries_start]}\n    {entries},\n  "
-            f"{permissions[entries_end:]}"
-        )
-        permissions_path.write_text(permissions, encoding="utf-8")
 
     personas_path = opts.root / "dev" / "fixtures" / "personas.js"
     personas = personas_path.read_text(encoding="utf-8")

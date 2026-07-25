@@ -6,6 +6,7 @@ import {
   caseTypeGroupNames,
   permissions,
 } from '../src/services/permissions.js';
+import { CASE_TYPES } from '../case-types/manifest.js';
 
 /** @type {import('../src/services/permissions.js').PermissionsConfig} */
 const sampleConfig = {
@@ -187,4 +188,28 @@ test('permissions: exported config exposes the functional group names and Case T
       (t) => t.slug === 'complaints' && t.displayName === 'Complaints'
     )
   );
+});
+
+test('permissions.caseTypes: derived from the CASE_TYPES manifest registry, not hand-listed (#508)', () => {
+  assert.deepEqual(
+    permissions.caseTypes,
+    CASE_TYPES.map(({ slug, displayName }) => ({ slug, displayName })),
+    'permissions.caseTypes must project the one Case Type registry, in order'
+  );
+
+  // Deriving must not have cost the boot path its laziness: no Case Type module
+  // is evaluated by importing permissions.js.
+  for (const entry of CASE_TYPES) {
+    assert.equal(typeof entry.importer, 'function');
+  }
+});
+
+test('permissions.caseTypes: group names still derive from the registry display names', () => {
+  const complaints = permissions.caseTypes.find((t) => t.slug === 'complaints');
+  assert.ok(complaints);
+  assert.deepEqual(caseTypeGroupNames(complaints.displayName), {
+    listAccess: 'Reviewers - Complaints',
+    caseTypeOwner: 'CaseTypeOwner - Complaints',
+    journeyOwner: 'JourneyOwner - Complaints',
+  });
 });

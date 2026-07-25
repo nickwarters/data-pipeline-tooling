@@ -11,18 +11,59 @@ import {
 } from '../src/evaluators/configured-outcome.js';
 
 /**
- * @type {Record<string, CaseTypeImporter>}
+ * One Case Type's static identity plus the thunks that reach its lazily loaded
+ * artifacts. `slug` and `displayName` are the only parts readable without
+ * evaluating a Case Type module, which is what lets the boot-critical,
+ * synchronous permissions config derive its per-Case-Type group names from this
+ * one registry (#508) while keeping ADR-0004's lazy loading intact.
+ *
+ * `bank` is optional: a Case Type may be registered before its Question Bank
+ * artifact exists (the scaffold path), in which case it simply does not appear
+ * in the bank editor.
+ *
+ * @typedef {{
+ * slug: string,
+ * displayName: string,
+ * importer: CaseTypeImporter,
+ * bank?: QuestionBankImporter
+ * }} CaseTypeEntry
  */
-export const CASE_TYPE_IMPORTERS = {
-  complaints: () => import('./complaints.js'),
-};
 
 /**
+ * THE Case Type registry. Adding a Case Type is one entry here, plus its config
+ * module under `case-types/` and (optionally) its bank artifact under
+ * `case-types/banks/`. `displayName` is load-bearing: it composes the three
+ * provisioned SharePoint group names — see `caseTypeGroupNames()` in
+ * `src/services/permissions.js`.
+ *
+ * @type {readonly CaseTypeEntry[]}
+ */
+export const CASE_TYPES = [
+  {
+    slug: 'complaints',
+    displayName: 'Complaints',
+    importer: () => import('./complaints.js'),
+    bank: () => loadQuestionBank('./banks/complaints.txt'),
+  },
+];
+
+/**
+ * Derived from `CASE_TYPES` — the shape existing consumers already depend on.
+ * @type {Record<string, CaseTypeImporter>}
+ */
+export const CASE_TYPE_IMPORTERS = Object.fromEntries(
+  CASE_TYPES.map((caseType) => [caseType.slug, caseType.importer])
+);
+
+/**
+ * Derived from `CASE_TYPES` — only the Case Types that declare a bank artifact.
  * @type {Record<string, QuestionBankImporter>}
  */
-export const QUESTION_BANK_IMPORTERS = {
-  complaints: () => loadQuestionBank('./banks/complaints.txt'),
-};
+export const QUESTION_BANK_IMPORTERS = Object.fromEntries(
+  CASE_TYPES.flatMap((caseType) =>
+    caseType.bank ? [[caseType.slug, caseType.bank]] : []
+  )
+);
 
 /**
  * @param {string} path

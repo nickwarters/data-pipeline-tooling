@@ -3,7 +3,8 @@
  * Maps SharePoint group names onto framework capabilities. Groups
  * fall on two orthogonal axes: functional capability (what you can do, anywhere)
  * and per-Case-Type list access (which Case's list you can open). Edit this file
- * to add new Case Types or change the group → capability mapping.
+ * to change the group → capability mapping; add new Case Types in
+ * `case-types/manifest.js`, from which `permissions.caseTypes` is derived.
  *
  * @typedef {{ slug: string, displayName: string }} CaseTypeGroupSource
  *
@@ -17,6 +18,8 @@
  * caseTypes: CaseTypeGroupSource[]
  * }} PermissionsConfig
  */
+
+import { CASE_TYPES } from '../../case-types/manifest.js';
 
 /**
  * Resolved capabilities for the current user, derived from group membership
@@ -66,10 +69,12 @@ export const permissions = {
   maintainer: 'CR-Maintainers',
   // Per-Case-Type group names derive from `displayName`: each entry
   // yields `Reviewers - X`, `CaseTypeOwner - X`, and `JourneyOwner - X`.
-  // Every slug in case-types/manifest.js is listed here so its display name
-  // and derived group names resolve consistently (each `displayName` matches
-  // the corresponding Case Type config's `displayName`).
-  caseTypes: [{ slug: 'complaints', displayName: 'Complaints' }],
+  // Projected from THE Case Type registry (case-types/manifest.js) so adding a
+  // Case Type is one registry edit (#508). That registry holds importer
+  // *thunks* only, so reading it here stays synchronous and evaluates no Case
+  // Type module — capability resolution remains boot-critical and lazy
+  // (ADR-0004).
+  caseTypes: CASE_TYPES.map(({ slug, displayName }) => ({ slug, displayName })),
 };
 
 /**

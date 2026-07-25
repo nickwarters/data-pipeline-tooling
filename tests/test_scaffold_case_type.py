@@ -80,21 +80,28 @@ class ScaffoldCaseTypeTest(unittest.TestCase):
         self.assertIn("TODO(case-type): Confirm the SLA hours", module_source)
         self.assertNotIn("listName:", module_source)
         self.assertNotIn("dashboardPanels", module_source)
+        # The config's displayName must agree with the registry entry (#508).
+        self.assertIn("displayName: 'Widget Review',", module_source)
         self.assertIn("caseTableColumns: [", module_source)
         self.assertIn("value: 'details.customerName'", module_source)
 
-        manifest = (root / "case-types" / "manifest.js").read_text(encoding="utf-8")
-        self.assertIn(
-            "'widget-review': () => import('./widget-review.js')",
-            manifest,
-        )
+        # One registry edit (#508): the CASE_TYPES entry carries the slug, the
+        # display name the SharePoint group names derive from, and the lazy
+        # importer. permissions.caseTypes is derived from it.
+        manifest_path = root / "case-types" / "manifest.js"
+        manifest = manifest_path.read_text(encoding="utf-8")
+        self.assert_js_parses(manifest_path)
+        self.assertIn("slug: 'widget-review',", manifest)
+        self.assertIn("displayName: 'Widget Review',", manifest)
+        self.assertIn("importer: () => import('./widget-review.js'),", manifest)
+        # The scaffold writes no Question Bank artifact, so it declares no bank
+        # thunk — `bank` is optional on a CASE_TYPES entry.
+        self.assertNotIn("banks/widget-review.txt", manifest)
 
-        permissions = (root / "src/services/permissions.js").read_text(
-            encoding="utf-8"
-        )
-        self.assertIn(
-            "{ slug: 'widget-review', displayName: 'Widget Review' }",
-            permissions,
+        self.assertEqual(
+            (root / "src/services/permissions.js").read_text(encoding="utf-8"),
+            (REPO_ROOT / "src/services/permissions.js").read_text(encoding="utf-8"),
+            "permissions.caseTypes derives from CASE_TYPES; the scaffold must not edit permissions.js",
         )
 
         personas = (root / "dev/fixtures/personas.js").read_text(encoding="utf-8")

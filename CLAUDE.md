@@ -286,7 +286,9 @@ src/
     in-memory-flow-runner.js
 
 case-types/                     # one module per Case Type, lazy-loaded via manifest.js
-  manifest.js                   # CASE_TYPE_IMPORTERS / QUESTION_BANK_IMPORTERS registries
+  manifest.js                   # CASE_TYPES: THE Case Type registry (slug + displayName +
+                                #   lazy importer/bank thunks); CASE_TYPE_IMPORTERS,
+                                #   QUESTION_BANK_IMPORTERS and permissions.caseTypes derive from it
   load-bank.js                  # loads a bank .txt artifact as parsed JSON (see Gotchas)
   general-questions.js          # shared General Question catalogue + resolveGeneralQuestions (#489)
   complaints.js                 # the only live Case Type (#383)

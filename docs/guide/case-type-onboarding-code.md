@@ -42,8 +42,7 @@ job:
 | ---------------------- | ------------------------------------ | ------------------------------------------------------------------------------- |
 | Question Bank artifact | `case-types/banks/widget-review.txt` | The reviewable content: Question Definitions, Outcome vocabulary, Labels        |
 | Case Type module       | `case-types/widget-review.js`        | The operational config: list, groups, sections, SLA, appeal routing, outcome fn |
-| Manifest registration  | `case-types/manifest.js`             | Makes the slug loadable (lazy `import()`) and the bank visible to the editor    |
-| Permissions entry      | `src/services/permissions.js`        | Derives the three per-Case-Type group names from one display name               |
+| Registry entry         | `case-types/manifest.js`             | THE one registration: slug, display name, lazy `import()`, bank thunk           |
 | Dev personas           | `dev/fixtures/personas.js`           | Mock users holding the new groups, selectable via `?asUser=`                    |
 | Example Cases          | `dev/fixtures/cases.js`              | Mock Case rows served by `MockSharePointClient` under `?mock=1`                 |
 | Tests                  | `tests/widget-review.test.js`        | Contract tests for the catalogue, outcome function, and fixtures                |
@@ -298,20 +297,30 @@ is scoped to this single type.
 
 ## Step 3 — Register the slug in the manifest
 
-Edit [case-types/manifest.js](../../case-types/manifest.js) and add one line
-to each registry:
+Edit [case-types/manifest.js](../../case-types/manifest.js) and add **one entry**
+to `CASE_TYPES` — the single Case Type registry (issue #508):
 
 ```js
-export const CASE_TYPE_IMPORTERS = {
-  complaints: () => import('./complaints.js'),
-  'widget-review': () => import('./widget-review.js'),
-};
-
-export const QUESTION_BANK_IMPORTERS = {
-  complaints: () => loadQuestionBank('./banks/complaints.txt'),
-  'widget-review': () => loadQuestionBank('./banks/widget-review.txt'),
-};
+export const CASE_TYPES = [
+  {
+    slug: 'complaints',
+    displayName: 'Complaints',
+    importer: () => import('./complaints.js'),
+    bank: () => loadQuestionBank('./banks/complaints.txt'),
+  },
+  {
+    slug: 'widget-review',
+    displayName: 'Widget Review',
+    importer: () => import('./widget-review.js'),
+    bank: () => loadQuestionBank('./banks/widget-review.txt'),
+  },
+];
 ```
+
+`CASE_TYPE_IMPORTERS`, `QUESTION_BANK_IMPORTERS`, and `permissions.caseTypes`
+are all **derived** from this table, so there is nothing else to register.
+`bank` is optional: omit it and the type simply does not appear in the Question
+Bank editor until its artifact exists.
 
 This is the entire integration surface with the rest of the app:
 
@@ -326,20 +335,18 @@ This is the entire integration surface with the rest of the app:
   `QUESTION_BANK_IMPORTERS`, so your bank appears in the editor with no
   further wiring.
 
-## Step 4 — User groups: add the permissions entry
+## Step 4 — User groups: derived from the registry entry
 
-Edit [src/services/permissions.js](../../src/services/permissions.js) and add
-your type to `permissions.caseTypes`:
+**No edit needed here.** `permissions.caseTypes` in
+[src/services/permissions.js](../../src/services/permissions.js) projects
+`CASE_TYPES`, so the entry you added in Step 3 already carries the display name:
 
 ```js
-caseTypes: [
-  { slug: 'complaints', displayName: 'Complaints' },
-  { slug: 'widget-review', displayName: 'Widget Review' },
-],
+caseTypes: CASE_TYPES.map(({ slug, displayName }) => ({ slug, displayName })),
 ```
 
-The `displayName` must match the module's `displayName` exactly — the group
-names derive from it via `caseTypeGroupNames()`:
+The registry's `displayName` must match the module's `displayName` exactly — the
+group names derive from it via `caseTypeGroupNames()`:
 
 | Derived group                   | Grants                                                        |
 | ------------------------------- | ------------------------------------------------------------- |

@@ -1,8 +1,11 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
+  CASE_TYPES,
   CASE_TYPE_IMPORTERS,
+  QUESTION_BANK_IMPORTERS,
   UnknownCaseTypeError,
   loadCaseTypeConfig,
 } from '../case-types/manifest.js';
@@ -22,6 +25,76 @@ test('case type manifest: known Case Type slugs resolve to their static import f
     const config = await loadCaseTypeConfig(slug);
     assert.ok(Array.isArray(config.questions), `${slug} has questions`);
   }
+});
+
+test('case type manifest: CASE_TYPES is the single registry every derived map comes from (#508)', () => {
+  assert.ok(Array.isArray(CASE_TYPES) && CASE_TYPES.length > 0);
+
+  for (const entry of CASE_TYPES) {
+    assert.equal(typeof entry.slug, 'string');
+    assert.ok(entry.slug.length > 0, 'each entry declares a slug');
+    assert.equal(typeof entry.displayName, 'string');
+    assert.ok(
+      entry.displayName.length > 0,
+      `${entry.slug} declares a display name`
+    );
+    assert.equal(
+      CASE_TYPE_IMPORTERS[entry.slug],
+      entry.importer,
+      `CASE_TYPE_IMPORTERS["${entry.slug}"] must be the registry entry's importer`
+    );
+    if (entry.bank) {
+      assert.equal(
+        QUESTION_BANK_IMPORTERS[entry.slug],
+        entry.bank,
+        `QUESTION_BANK_IMPORTERS["${entry.slug}"] must be the registry entry's bank importer`
+      );
+    }
+  }
+
+  assert.deepEqual(
+    Object.keys(CASE_TYPE_IMPORTERS).sort(),
+    CASE_TYPES.map((entry) => entry.slug).sort()
+  );
+  assert.deepEqual(
+    Object.keys(QUESTION_BANK_IMPORTERS).sort(),
+    CASE_TYPES.filter((entry) => entry.bank)
+      .map((entry) => entry.slug)
+      .sort()
+  );
+});
+
+test('case type manifest: importing the manifest evaluates no Case Type module (importers stay thunks)', () => {
+  // ADR-0004's lazy-load property, and the constraint that lets the
+  // boot-critical, synchronous permissions config read display names from this
+  // registry without eagerly loading a single Case Type config (#508, #493).
+  for (const entry of CASE_TYPES) {
+    assert.equal(
+      typeof entry.importer,
+      'function',
+      `${entry.slug}'s importer must be an un-invoked thunk, not an awaited module`
+    );
+    assert.ok(
+      !(entry.importer instanceof Promise),
+      `${entry.slug}'s importer must not be a Promise`
+    );
+    if (entry.bank) assert.equal(typeof entry.bank, 'function');
+  }
+
+  // The thunks are the only path to a Case Type module: no static import of a
+  // config or bank artifact may appear in the manifest source.
+  const source = readFileSync(
+    new URL('../case-types/manifest.js', import.meta.url),
+    'utf8'
+  );
+  const staticSpecifiers = [
+    ...source.matchAll(/(?:^|\n)import\s[\s\S]*?from\s+['"]([^'"]+)['"]/g),
+  ].map(([, specifier]) => specifier);
+  assert.deepEqual(
+    staticSpecifiers.sort(),
+    ['../src/evaluators/configured-outcome.js', './load-bank.js'],
+    'the manifest may statically import only its loader and the outcome validator — every Case Type module is reached through a thunk'
+  );
 });
 
 test('case type manifest: every registered Case Type module evaluates and passes the load-time gates', async () => {
