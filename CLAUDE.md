@@ -173,6 +173,7 @@ src/
   pages/                        # route slices, top-level views, and focused page actions
     cora-case-review.js        # store slice + pure tab shell
     cora-case-review/          # store actions/effects and pure Section views
+      answer-actions.js        # the pure Answer mutations; the store is the single owner (#510)
       details-view.js          # config-driven, read-only Case Details pure view (mirrors current Section behaviour)
       case-actions.js          # Answer dispatch -> unchanged SaveQueue; save status dispatch bridge
       question-panel-view.js   # CASE-2 group-scoped Questions view with memoised cards
