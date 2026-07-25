@@ -156,7 +156,6 @@ export class CaseReviewViewModel {
     /** @type {import('../services/section-access.js').Section[]} */
     this.summarySections = [];
 
-    this.activeTab = signal('');
     this.conversationHidden = signal(true);
   }
 
@@ -365,25 +364,9 @@ export class CaseReviewViewModel {
       (s) => this.access[s] !== 'hidden' && showInSummary(s, config)
     );
 
-    const tabs = [
-      { id: 'details', hidden: this.access.details === 'hidden' },
-      { id: 'questions', hidden: this.access.questions === 'hidden' },
-      { id: 'issues', hidden: this.access.issues === 'hidden' },
-      { id: 'remediation', hidden: this.access.remediation === 'hidden' },
-      { id: 'summary', hidden: this.access.summary === 'hidden' },
-      { id: 'notes', hidden: this.access.notes === 'hidden' },
-      { id: 'appealRequest', hidden: this.access.appealRequest === 'hidden' },
-    ];
-    const firstVisible = tabs.find((t) => !t.hidden);
-    if (firstVisible) this.activeTab.set(firstVisible.id);
-
     this.loaded.set(true);
 
     await this._resolveAttributedParties();
-  }
-
-  toggleConversationPanel() {
-    this.conversationHidden.set(!this.conversationHidden.get());
   }
 
   /**
