@@ -1,6 +1,9 @@
 // @ts-check
 
+import { remediationComplete } from '../../evaluators/remediation-status.js';
+
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
+/** @typedef {import('../../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 
 /** @param {Record<string, Answer> | {answersSignal?: {get?: () => Record<string, Answer>}}} input */
 export function hasRemediationActions(input) {
@@ -14,6 +17,29 @@ export function hasRemediationActions(input) {
 }
 
 /**
+ * The final-complete gate on the actions path: the Assigned Reviewer may close
+ * an `Actions In Progress` Case only when every Question carrying remediation
+ * has been resolved on the Remediation tab — `complete`, or `partial`/`cancelled`
+ * with the details / justification each requires (#499). The permission half
+ * comes from CaseMachine; the content half is computed here, from the store's
+ * live catalogue and Answers, so resolving the last row enables the button
+ * immediately.
+ *
+ * @param {{
+ *   machine: import('../../lib/case-machine.js').CaseMachine | null,
+ *   catalogue: QuestionDefinition[],
+ *   answers: Record<string, Answer>,
+ * }} input
+ * @returns {boolean}
+ */
+export function readyToClose(input) {
+  return (
+    input.machine?.canCompleteRemediation === true &&
+    remediationComplete(input.catalogue ?? [], input.answers)
+  );
+}
+
+/**
  * Derive the one completion control from store state. The same CaseMachine
  * capability that permits the transition also controls whether the UI can
  * offer it.
@@ -21,6 +47,7 @@ export function hasRemediationActions(input) {
  * @param {{
  *   machine: import('../../lib/case-machine.js').CaseMachine | null,
  *   caseRow: import('../../sharepoint-client.js').CaseRow,
+ *   catalogue: QuestionDefinition[],
  *   answers: Record<string, Answer>,
  *   allAnswered: boolean,
  * }} input
@@ -30,11 +57,11 @@ export function completionControl(input) {
     input.allAnswered &&
     input.machine?.canComplete === true &&
     !!input.caseRow.responsibleParty;
-  const readyToClose = input.machine?.canCompleteRemediation === true;
+  const canClose = readyToClose(input);
   return {
-    visible: readyToSend || readyToClose,
+    visible: readyToSend || canClose,
     label:
-      !readyToClose && hasRemediationActions(input.answers)
+      !canClose && hasRemediationActions(input.answers)
         ? 'Send Actions'
         : 'Complete Case',
   };
@@ -48,6 +75,7 @@ export function completionControl(input) {
  * @param {{
  *   machine: import('../../lib/case-machine.js').CaseMachine | null,
  *   caseRow: import('../../sharepoint-client.js').CaseRow,
+ *   catalogue: QuestionDefinition[],
  *   answers: Record<string, Answer>,
  *   allAnswered: boolean,
  *   computeOutcome: (answers: Record<string, Answer>) => import('../../sharepoint-client.js').OutcomeResult,
@@ -59,7 +87,9 @@ export function completionPatch(input) {
   const machine = input.machine;
   if (!machine) return null;
   if (machine.canCompleteRemediation) {
-    return machine.transitionToFinalComplete?.() ?? null;
+    return readyToClose(input)
+      ? (machine.transitionToFinalComplete?.() ?? null)
+      : null;
   }
   if (
     !input.allAnswered ||

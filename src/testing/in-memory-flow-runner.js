@@ -58,12 +58,10 @@ import { loadCaseTypeConfig } from '../../case-types/manifest.js';
  * questionId: string,
  * value: string
  * } | {
- * type: 'setActionStatus',
+ * type: 'setRemediationStatus',
  * questionId: string,
- * fieldKey: string,
- * actionId: string,
- * status: 'pending' | 'complete' | 'cancelled',
- * cancelReason?: string
+ * status: 'complete' | 'partial' | 'cancelled' | '',
+ * details?: string
  * } | {
  * type: 'clickCompleteCase'
  * } | {
@@ -200,13 +198,11 @@ export function createInMemoryFlowRunner(state, opts = {}) {
         );
         await flushCurrentCase();
         return;
-      case 'setActionStatus':
-        requirePage(action).handleActionStatus(
+      case 'setRemediationStatus':
+        requirePage(action).handleRemediationStatus(
           action.questionId,
-          action.fieldKey,
-          action.actionId,
           action.status,
-          action.cancelReason
+          action.details
         );
         await flushCurrentCase();
         return;
@@ -352,6 +348,7 @@ async function clickCompleteCase(vm) {
   const patchFields = completionPatch({
     machine: vm.machine,
     caseRow: vm.caseRow,
+    catalogue: vm.catalogue,
     answers: vm.answersSignal.get(),
     allAnswered: vm.allAnswered.get(),
     computeOutcome: vm.config.computeOutcome,

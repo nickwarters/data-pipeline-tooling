@@ -210,18 +210,13 @@ test('handleRemediationFreeForm: ignored when the Answer does not exist', () => 
   assert.equal(calls.length, 0);
 });
 
-// --- handleActionStatus: Remediation tracking (ADR-0024) ---
+// --- handleRemediationStatus: question-level Remediation resolution (#499) ---
 
 /**
  * @param {(...args: any[]) => void} enqueue
  * @param {string} [access]
- * @param {any} [acts]
  */
-function makeTrackingVM(
-  enqueue,
-  access = 'edit',
-  acts = [{ id: 'a1', text: 'Do it', status: 'pending' }]
-) {
+function makeTrackingVM(enqueue, access = 'edit') {
   const vm = new CaseReviewViewModel({
     client: /** @type {any} */ ({}),
     saveQueue: /** @type {any} */ ({ enqueue }),
@@ -231,73 +226,75 @@ function makeTrackingVM(
   });
   vm.access = /** @type {any} */ ({ remediation: access });
   vm.answersSignal = signal(
-    /** @type {any} */ ({ q1: { value: 'No', capture: { acts } } })
+    /** @type {any} */ ({
+      q1: {
+        value: 'No',
+        remediationActions: [{ id: 'a1', text: 'Do it', completed: false }],
+      },
+    })
   );
   return vm;
 }
 
-test('handleActionStatus: resolves an action to complete and persists', () => {
+test('handleRemediationStatus: records a complete resolution and persists', () => {
   /** @type {any[]} */
   const calls = [];
   const vm = makeTrackingVM((...a) => calls.push(a));
-  vm.handleActionStatus('q1', 'acts', 'a1', 'complete');
+  vm.handleRemediationStatus('q1', 'complete');
   assert.equal(calls.length, 1);
-  assert.deepEqual(vm.answersSignal.get().q1.capture?.acts, [
-    { id: 'a1', text: 'Do it', status: 'complete' },
-  ]);
+  assert.deepEqual(vm.answersSignal.get().q1.remediationStatus, {
+    status: 'complete',
+  });
 });
 
-test('handleActionStatus: cancelling with a reason persists the reason', () => {
+test('handleRemediationStatus: keeps the details a partial or cancelled resolution carries', () => {
   /** @type {any[]} */
   const calls = [];
   const vm = makeTrackingVM((...a) => calls.push(a));
-  vm.handleActionStatus('q1', 'acts', 'a1', 'cancelled', 'no longer needed');
-  assert.deepEqual(vm.answersSignal.get().q1.capture?.acts, [
-    {
-      id: 'a1',
-      text: 'Do it',
-      status: 'cancelled',
-      cancelReason: 'no longer needed',
-    },
-  ]);
+  vm.handleRemediationStatus('q1', 'cancelled', 'Customer declined');
+  assert.deepEqual(vm.answersSignal.get().q1.remediationStatus, {
+    status: 'cancelled',
+    details: 'Customer declined',
+  });
 });
 
-test('handleActionStatus: cancelling without a reason is dropped (hard validation)', () => {
+test('handleRemediationStatus: stores an as-yet-empty justification rather than dropping the write', () => {
+  // The Reviewer picks the status first and types afterwards; the completion
+  // gate — not this write — is what refuses an unresolved row.
   /** @type {any[]} */
   const calls = [];
   const vm = makeTrackingVM((...a) => calls.push(a));
-  vm.handleActionStatus('q1', 'acts', 'a1', 'cancelled');
-  assert.equal(calls.length, 0, 'invalid resolution is not persisted');
-  assert.deepEqual(vm.answersSignal.get().q1.capture?.acts, [
-    { id: 'a1', text: 'Do it', status: 'pending' },
-  ]);
+  vm.handleRemediationStatus('q1', 'cancelled');
+  assert.equal(calls.length, 1);
+  assert.deepEqual(vm.answersSignal.get().q1.remediationStatus, {
+    status: 'cancelled',
+    details: '',
+  });
 });
 
-test('handleActionStatus: coerces legacy string actions to objects on write', () => {
+test('handleRemediationStatus: an empty status clears the resolution', () => {
   /** @type {any[]} */
   const calls = [];
-  const vm = makeTrackingVM((...a) => calls.push(a), 'edit', ['legacy']);
-  vm.handleActionStatus('q1', 'acts', 'acts-0', 'complete');
-  assert.deepEqual(vm.answersSignal.get().q1.capture?.acts, [
-    { id: 'acts-0', text: 'legacy', status: 'complete' },
-  ]);
+  const vm = makeTrackingVM((...a) => calls.push(a));
+  vm.handleRemediationStatus('q1', 'complete');
+  vm.handleRemediationStatus('q1', '');
+  assert.equal('remediationStatus' in vm.answersSignal.get().q1, false);
 });
 
-test('handleActionStatus: no-op when the viewer cannot resolve (read-only)', () => {
+test('handleRemediationStatus: no-op when the viewer cannot resolve (read-only)', () => {
   /** @type {any[]} */
   const calls = [];
   const vm = makeTrackingVM((...a) => calls.push(a), 'read-only');
-  vm.handleActionStatus('q1', 'acts', 'a1', 'complete');
+  vm.handleRemediationStatus('q1', 'complete');
   assert.equal(calls.length, 0);
 });
 
-test('handleActionStatus: no-op for a missing answer, non-array field, or unknown action id', () => {
+test('handleRemediationStatus: no-op for a missing Answer or an unrecognised status', () => {
   /** @type {any[]} */
   const calls = [];
   const vm = makeTrackingVM((...a) => calls.push(a));
-  vm.handleActionStatus('missing', 'acts', 'a1', 'complete');
-  vm.handleActionStatus('q1', 'notAnArray', 'a1', 'complete');
-  vm.handleActionStatus('q1', 'acts', 'nope', 'complete');
+  vm.handleRemediationStatus('missing', 'complete');
+  vm.handleRemediationStatus('q1', /** @type {any} */ ('done-ish'));
   assert.equal(calls.length, 0);
 });
 

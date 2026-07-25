@@ -2082,17 +2082,7 @@ test('CASE-7 route: mock-mode store shell keeps Review working at the existing U
   location.hash = previousHash;
 });
 
-test('CASE-5 route: remediation tracking resolves a sent action through the store seam', async () => {
-  const originalCaptureGroups = exampleReviewConfig.captureGroups;
-  exampleReviewConfig.captureGroups = [
-    ...(originalCaptureGroups ?? []),
-    {
-      key: 'actions',
-      label: 'Actions',
-      collapsed: false,
-      fields: [{ key: 'sentActions', label: 'Actions', type: 'actions' }],
-    },
-  ];
+test('CASE-5 route: the Remediation tab resolves a Question through the store seam', async () => {
   let storedRow = {
     ...caseRow,
     status: 'Actions In Progress',
@@ -2100,11 +2090,9 @@ test('CASE-5 route: remediation tracking resolves a sent action through the stor
     answers: {
       'q-needs': {
         value: 'No',
-        capture: {
-          sentActions: [
-            { id: 'sent-1', text: 'Coach the agent', status: 'pending' },
-          ],
-        },
+        remediationActions: [
+          { id: 'sent-1', text: 'Coach the agent', completed: false },
+        ],
       },
     },
   };
@@ -2179,20 +2167,19 @@ test('CASE-5 route: remediation tracking resolves a sent action through the stor
     const status = /** @type {any} */ (
       container.querySelector('.cora-tracking-status-select')
     );
-    assert.ok(status, 'sent action status control is rendered');
+    assert.ok(status, 'the resolution control is rendered');
     status.value = 'complete';
     fireEvent(status, 'change');
     await saveQueue.whenIdle();
     await flush();
 
-    assert.equal(
-      patches.at(-1)?.answers?.['q-needs']?.capture?.sentActions?.[0]?.status,
-      'complete',
+    assert.deepEqual(
+      patches.at(-1)?.answers?.['q-needs']?.remediationStatus,
+      { status: 'complete' },
       JSON.stringify(patches)
     );
   } finally {
     if (typeof dispose === 'function') dispose();
-    exampleReviewConfig.captureGroups = originalCaptureGroups;
     location.search = previousSearch;
     location.hash = previousHash;
   }

@@ -29,7 +29,19 @@
  */
 
 /**
- * @typedef {{ value: string | string[], justification?: string, remediationActions?: Array<{id: string, text: string, completed: boolean}>, freeFormRemediation?: string, attributedParty?: { loginName: string, displayName: string }, remediationDetails?: Record<string, string>, capture?: Record<string, string | { loginName: string, displayName: string } | Array<string | RemediationAction>> }} Answer
+ * The **question-level Remediation resolution** (#499): how the whole of one
+ * Answer's remediation ended up, recorded by the Assigned Reviewer on the
+ * Remediation tab once the actions have been sent. `details` carries the free
+ * text a non-`complete` resolution requires — *details* for `partial`, a
+ * *justification* for `cancelled` — and is absent on `complete`. See
+ * `evaluators/remediation-status.js`, its single reader/writer.
+ *
+ * @typedef {'complete' | 'partial' | 'cancelled'} RemediationStatusValue
+ * @typedef {{ status: RemediationStatusValue, details?: string }} RemediationStatus
+ */
+
+/**
+ * @typedef {{ value: string | string[], justification?: string, remediationActions?: Array<{id: string, text: string, completed: boolean}>, freeFormRemediation?: string, remediationStatus?: RemediationStatus, attributedParty?: { loginName: string, displayName: string }, remediationDetails?: Record<string, string>, capture?: Record<string, string | { loginName: string, displayName: string } | Array<string | RemediationAction>> }} Answer
  */
 
 /**

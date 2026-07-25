@@ -33,7 +33,7 @@ const BASELINE = {
   'tests/cora-remediation-section-attribution.tests.js': [0, 0, 2],
   'tests/cora-remediation-section-details.tests.js': [0, 0, 1],
   'tests/cora-remediation-section-rendering.tests.js': [1, 0, 1],
-  'tests/cora-remediation-tracking.test.js': [3, 0, 3],
+  'tests/cora-remediation-tracking.test.js': [3, 0, 0],
   'tests/cora-responsible-party-dashboard-conversation.tests.js': [0, 4, 0],
   'tests/cora-responsible-party-dashboard-loading.tests.js': [3, 0, 0],
   'tests/cora-responsible-party-dashboard-remediation.tests.js': [3, 2, 0],

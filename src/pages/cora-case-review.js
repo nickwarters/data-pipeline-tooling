@@ -32,6 +32,7 @@ import {
 import { editRemediationDetail } from './cora-case-review/remediation-actions.js';
 import { RemediationSection } from './cora-case-review/remediation-view.js';
 import { RemediationTracking } from './cora-case-review/remediation-tracking-view.js';
+import { remediationAudience } from '../services/section-access.js';
 import {
   completeCase,
   completionControl,
@@ -811,24 +812,23 @@ export function createRouteSlice(params, context) {
             ? RemediationTracking({
                 catalogue: snapshot.catalogue,
                 answers: snapshot.answers,
-                captureGroups: snapshot.config.captureGroups ?? [],
+                audience: remediationAudience(snapshot.machine?.roles ?? []),
                 canResolve: snapshot.access.remediation === 'edit',
+                conversationAvailable:
+                  snapshot.access.conversation !== 'hidden',
                 caseRow: snapshot.caseRow,
                 heading: snapshot.sectionHeadings.remediation,
-                dispatchStatus: (
-                  questionId,
-                  fieldKey,
-                  actionId,
-                  status,
-                  cancelReason
-                ) =>
-                  viewModel.handleActionStatus(
+                dispatchStatus: (questionId, status, details) =>
+                  viewModel.handleRemediationStatus(
                     questionId,
-                    fieldKey,
-                    actionId,
                     status,
-                    cancelReason
+                    details
                   ),
+                dispatchOpenConversation: () => {
+                  if (route.conversationHidden) {
+                    tools.dispatch({ type: 'case/conversation-toggled' });
+                  }
+                },
               })
             : null
         );
@@ -1006,6 +1006,7 @@ export function createRouteSlice(params, context) {
     const completion = completionControl({
       machine: snapshot.machine,
       caseRow,
+      catalogue: snapshot.catalogue,
       answers: snapshot.answers,
       allAnswered: snapshot.allAnswered,
     });
@@ -1021,6 +1022,7 @@ export function createRouteSlice(params, context) {
                 const patchFields = completionPatch({
                   machine: snapshot.machine,
                   caseRow,
+                  catalogue: snapshot.catalogue,
                   answers: snapshot.answers,
                   allAnswered: snapshot.allAnswered,
                   computeOutcome: config.computeOutcome,

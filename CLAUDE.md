@@ -9,8 +9,8 @@ Before doing any non-trivial work in this repo, read:
 1. **[CONTEXT.md](./CONTEXT.md)** — domain language. Use these terms exactly when discussing or coding (`Case Type`, `Question Definition`, `Applicable Question`, `Answer`, `Remediation Action`, `Reviewer`, `Responsible Party`, `Case Type Owner`, `Conversation`, `Outcome`).
 2. **[docs/guide/add-a-page.md](./docs/guide/add-a-page.md)** — the one-page
    authoring path: state → `h()`, actions, effects, lazy route, and tests.
-3. **[docs/adr/](./docs/adr/)** — 35 architecture decisions, numbered
-   (`0001`–`0035`). Read the status before relying on an older decision, and do
+3. **[docs/adr/](./docs/adr/)** — 37 architecture decisions, numbered
+   (`0001`–`0037`). Read the status before relying on an older decision, and do
    not deviate from an accepted ADR without surfacing the deviation explicitly.
 
 ## Project overview
@@ -152,7 +152,7 @@ src/
       completion-actions.js    # CASE-4 CaseMachine-guarded completion actions
       remediation-actions.js   # CASE-5 route action for configurable Remediation Detail edits
       remediation-view.js      # CASE-5 pure Issues and Remediation Actions view
-      remediation-tracking-view.js # CASE-5 pure Remediation Tracking view
+      remediation-tracking-view.js # pure question-level Remediation tab, reviewer + responsible-party renderings (#499)
       appeal-actions.js        # CASE-6 immutable Appeal/resolution/amendment state transitions
       appeal-view.js           # CASE-6 pure Appeal request form and history view
       appeal-review-view.js    # CASE-6 pure Controls resolution form and history view
@@ -229,6 +229,7 @@ src/
     overdue-evaluator.js
     remediation-actions.js
     remediation-details.js
+    remediation-status.js         # question-level Remediation Resolution + completion gate (#499)
     question-group-progress.js   # per-Question-Group answered/total (was section-progress.js, #390)
     general-questions.js         # General Question answer-key namespace + load-time config gates (#472)
     summary-model.js

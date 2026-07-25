@@ -132,3 +132,23 @@ test('resolveRoles: assigned reviewer who is also Controls gets both roles', () 
   );
   assert.deepEqual(roles.sort(), ['assignedReviewer', 'controls']);
 });
+
+// --- Reviewer Manager (#499) ---
+
+test('resolveRoles: reviewer manager (from the standalone Reviewer Managers group)', () => {
+  const roles = resolveRoles(
+    makeCase(),
+    'user-rm',
+    caps({ isReviewerManager: true })
+  );
+  assert.deepEqual(roles, ['reviewerManager']);
+});
+
+test('resolveRoles: a reviewer manager who is also the assigned reviewer holds both roles', () => {
+  const roles = resolveRoles(
+    makeCase(),
+    'user-reviewer',
+    caps({ isReviewer: true, isReviewerManager: true })
+  );
+  assert.deepEqual(roles.sort(), ['assignedReviewer', 'reviewerManager']);
+});

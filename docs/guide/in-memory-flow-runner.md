@@ -93,7 +93,8 @@ If `personas` is omitted, the runner provides a minimal `reviewer` persona with
   `CaseReviewViewModel.handleRemediationAction`.
 - `freeFormRemediation`: calls
   `CaseReviewViewModel.handleRemediationFreeForm`.
-- `setActionStatus`: calls `CaseReviewViewModel.handleActionStatus`.
+- `setRemediationStatus`: calls `CaseReviewViewModel.handleRemediationStatus` —
+  the question-level Remediation resolution (#499).
 - `clickCompleteCase`: runs the same completion transition used by the page's
   bottom button.
 - `flush`: explicitly drains pending saves for the currently loaded case.

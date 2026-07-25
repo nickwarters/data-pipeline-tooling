@@ -5,7 +5,9 @@ import { isolateBrowserGlobals } from './helpers/browser-globals.js';
 import { CaseMachine } from '../src/lib/case-machine.js';
 import {
   completeCase,
+  completionControl,
   completionPatch,
+  readyToClose,
 } from '../src/pages/cora-case-review/completion-actions.js';
 
 isolateBrowserGlobals();
@@ -62,6 +64,7 @@ test('completionPatch freezes outcome and ADR-0019 effective columns in the life
   const patch = completionPatch({
     machine: machine(),
     caseRow: CASE_ROW,
+    catalogue: [],
     answers,
     allAnswered: true,
     computeOutcome: () => ({ outcome: 'fail' }),
@@ -88,6 +91,7 @@ test('completionPatch atomically clears hold fields when either transition leave
   const base = {
     machine: machine(),
     caseRow: heldCase,
+    catalogue: [],
     allAnswered: true,
     computeOutcome: () => ({ outcome: 'pass' }),
     exportHash: null,
@@ -124,6 +128,7 @@ test('completionPatch rejects incomplete or unauthorised completion and uses fin
   const base = {
     machine: machine(),
     caseRow: CASE_ROW,
+    catalogue: [],
     answers: {},
     allAnswered: false,
     computeOutcome: () => ({ outcome: 'pass' }),
@@ -245,5 +250,121 @@ test('completeCase returns false when dependencies or patch fields are absent', 
       patchFields: null,
     }),
     false
+  );
+});
+
+// --- The question-level Remediation gate (#499) ---
+
+/** @type {import('../src/sharepoint-client.js').QuestionDefinition[]} */
+const CATALOGUE = [
+  {
+    id: 'q1',
+    text: 'Greeted?',
+    responseType: 'yes-no-na',
+    failureValues: ['No'],
+    deprecated: false,
+  },
+];
+
+/** @type {Record<string, import('../src/sharepoint-client.js').Answer>} */
+const UNRESOLVED = {
+  q1: {
+    value: 'No',
+    remediationActions: [{ id: 'a1', text: 'Call back', completed: false }],
+  },
+};
+
+/** @param {boolean} permitted */
+function closingMachine(permitted) {
+  return /** @type {any} */ ({
+    canCompleteRemediation: permitted,
+    canComplete: false,
+    transitionToFinalComplete: () => ({ status: 'Completed' }),
+  });
+}
+
+test('readyToClose: the Reviewer may close only once every remediation row is resolved', () => {
+  assert.equal(
+    readyToClose({
+      machine: closingMachine(true),
+      catalogue: CATALOGUE,
+      answers: UNRESOLVED,
+    }),
+    false
+  );
+
+  assert.equal(
+    readyToClose({
+      machine: closingMachine(true),
+      catalogue: CATALOGUE,
+      answers: {
+        q1: { ...UNRESOLVED.q1, remediationStatus: { status: 'complete' } },
+      },
+    }),
+    true
+  );
+});
+
+test('readyToClose: a partial resolution still needs its details', () => {
+  const withStatus = (/** @type {any} */ remediationStatus) => ({
+    machine: closingMachine(true),
+    catalogue: CATALOGUE,
+    answers: { q1: { ...UNRESOLVED.q1, remediationStatus } },
+  });
+  assert.equal(readyToClose(withStatus({ status: 'partial' })), false);
+  assert.equal(
+    readyToClose(withStatus({ status: 'partial', details: 'Half done' })),
+    true
+  );
+});
+
+test('readyToClose: false without the CaseMachine permission, however resolved', () => {
+  assert.equal(
+    readyToClose({
+      machine: closingMachine(false),
+      catalogue: CATALOGUE,
+      answers: {
+        q1: { ...UNRESOLVED.q1, remediationStatus: { status: 'complete' } },
+      },
+    }),
+    false
+  );
+});
+
+test('completionControl: hides the Complete Case button while remediation is unresolved', () => {
+  const control = completionControl({
+    machine: closingMachine(true),
+    caseRow: CASE_ROW,
+    catalogue: CATALOGUE,
+    answers: UNRESOLVED,
+    allAnswered: true,
+  });
+  assert.equal(control.visible, false);
+
+  const ready = completionControl({
+    machine: closingMachine(true),
+    caseRow: CASE_ROW,
+    catalogue: CATALOGUE,
+    answers: {
+      q1: { ...UNRESOLVED.q1, remediationStatus: { status: 'complete' } },
+    },
+    allAnswered: true,
+  });
+  assert.equal(ready.visible, true);
+  assert.equal(ready.label, 'Complete Case');
+});
+
+test('completionPatch: refuses the final close while a remediation row is unresolved', () => {
+  assert.equal(
+    completionPatch({
+      machine: closingMachine(true),
+      caseRow: CASE_ROW,
+      catalogue: CATALOGUE,
+      answers: UNRESOLVED,
+      allAnswered: true,
+      computeOutcome: () => ({ outcome: 'pass' }),
+      exportHash: null,
+    }),
+    null
   );
 });

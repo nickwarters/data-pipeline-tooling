@@ -23,10 +23,7 @@ import {
   validateGeneralQuestions,
   validateAnswerKeyNamespace,
 } from '../evaluators/general-questions.js';
-import {
-  coerceRemediationActions,
-  setActionStatus,
-} from '../evaluators/remediation-actions.js';
+import { setRemediationStatus } from '../evaluators/remediation-status.js';
 import {
   showInSummary,
   SECTIONS,
@@ -523,52 +520,28 @@ export class CaseReviewViewModel {
   }
 
   /**
-   * Resolve a single sent Remediation Action on the Remediation tracking tab
-   *. Writes the new `status`/`cancelReason` back into the failed
-   * Answer's `actions`-typed capture field, coercing any legacy string entries to
-   * object records in the same pass. A cancelled action needs a reason; an invalid
-   * change (cancelled without one) is dropped rather than persisted, leaving the
-   * reviewer to supply the reason.
+   * Record how one Question's remediation was resolved, from the Remediation
+   * tab (#499): `complete`, or `partial` / `cancelled` with the details or
+   * justification that resolution requires. Only the Assigned Reviewer (the one
+   * viewer with `edit` on the Section) can write it; an unknown Question, or one
+   * carrying no remediation, is ignored.
+   *
+   * Incomplete text is stored rather than rejected — the Reviewer picks the
+   * status first and types afterwards — and the *completion gate*
+   * (`readyToClose`) is what refuses to close a Case whose rows are unresolved.
    *
    * @param {string} questionId
-   * @param {string} fieldKey
-   * @param {string} actionId
-   * @param {'pending' | 'complete' | 'cancelled'} status
-   * @param {string} [cancelReason]
+   * @param {import('../sharepoint-client.js').RemediationStatusValue | ''} status
+   * @param {string} [details]
    */
-  handleActionStatus(
-    questionId,
-    fieldKey,
-    actionId,
-    status,
-    cancelReason = ''
-  ) {
+  handleRemediationStatus(questionId, status, details = '') {
     if (this.access.remediation !== 'edit') return;
     const current = this.answersSignal.get();
     const existing = current[questionId];
-    const raw = existing?.capture?.[fieldKey];
-    if (!Array.isArray(raw)) return;
-
-    let changed = false;
-    /** @type {import('../sharepoint-client.js').RemediationAction[]} */
-    let next;
-    try {
-      next = coerceRemediationActions(raw, fieldKey).map((action) => {
-        if (action.id !== actionId) return action;
-        changed = true;
-        return setActionStatus(action, status, cancelReason);
-      });
-    } catch {
-      // Cancelled without a reason — a hard validation. Skip the write.
-      return;
-    }
-    if (!changed) return;
-
-    const newAnswer = {
-      ...existing,
-      capture: { ...existing.capture, [fieldKey]: next },
-    };
-    const newAnswers = { ...current, [questionId]: newAnswer };
+    if (!existing) return;
+    const next = setRemediationStatus(existing, status, details);
+    if (next === existing) return;
+    const newAnswers = { ...current, [questionId]: next };
     this.answersSignal.set(newAnswers);
     this._persistAnswers(newAnswers);
   }

@@ -2771,3 +2771,106 @@ cora-tabs {
   border-radius: 0 0 var(--cora-radius-sm, 4px) var(--cora-radius-sm, 4px);
   pointer-events: none;
 }
+
+/* ── Remediation tab — question-level tracking (#499) ────────────────────
+   One card per Question carrying remediation. The reviewing side gets the
+   resolution controls; the Responsible Party side gets the same breakdown and
+   a call to action pointing at the Conversation. */
+
+.cora-remediation-tracking-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: var(--cora-space-3);
+}
+
+.cora-remediation-tracking-item {
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  box-shadow: var(--cora-shadow-sm);
+  padding: var(--cora-space-3) var(--cora-space-4);
+}
+
+.cora-tracking-question {
+  font-weight: var(--cora-font-weight-medium);
+  margin: 0 0 var(--cora-space-2);
+}
+
+.cora-tracking-actions {
+  margin: 0 0 var(--cora-space-2);
+  padding-left: var(--cora-space-4);
+}
+
+.cora-tracking-action {
+  color: var(--cora-color-text-muted);
+}
+
+.cora-tracking-status,
+.cora-tracking-details {
+  margin: 0;
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+}
+
+.cora-tracking-controls {
+  display: grid;
+  gap: var(--cora-space-2);
+  margin-top: var(--cora-space-2);
+}
+
+[data-cora-root] .cora-tracking-status-select,
+[data-cora-root] .cora-tracking-details-input {
+  font: inherit;
+  width: 100%;
+  padding: var(--cora-space-2) var(--cora-space-3);
+  color: inherit;
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  transition: border-color var(--cora-duration-fast) var(--cora-easing-standard);
+}
+
+[data-cora-root] .cora-tracking-status-select {
+  cursor: pointer;
+}
+
+[data-cora-root] textarea.cora-tracking-details-input {
+  min-height: 4rem;
+  resize: vertical;
+}
+
+[data-cora-root] .cora-tracking-status-select:focus,
+[data-cora-root] .cora-tracking-details-input:focus {
+  outline: none;
+  border-color: var(--cora-color-accent);
+}
+
+.cora-tracking-details-required,
+.cora-remediation-gate {
+  margin: 0;
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-danger);
+}
+
+.cora-remediation-gate {
+  margin-top: var(--cora-space-3);
+}
+
+.cora-remediation-conversation-prompt {
+  margin-top: var(--cora-space-3);
+  padding: var(--cora-space-3) var(--cora-space-4);
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  display: grid;
+  gap: var(--cora-space-2);
+  justify-items: start;
+}
+
+.cora-remediation-conversation-unavailable {
+  margin: 0;
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+}

@@ -66,8 +66,10 @@ changes the Section set is: `details` · `questions` · `issues` · `summary` ·
 Remediation · Notes · Amend Outcome**, where "Review" is a UI label for the `questions`
 Section. Two Sections that used to be one: **Issues** _captures_ failed-Answer
 detail + **Remediation Actions** (Reviewer-edit until **Reportable**); the standalone
-**Remediation** Section _tracks_ each sent action to `complete`/`cancelled` (resolves
-#144). **Amend Outcome** is the **Controls** surface for a case-level **Amended Outcome**
+**Remediation** Section _tracks_ each failed Answer's remediation to a **Remediation
+Resolution** (resolves #144), and shows the same breakdown — without the Reviewer's
+fields, and with a pointer to the **Conversation** — to the **Responsible Party**, their
+**Manager** and the **Journey Owner**. **Amend Outcome** is the **Controls** surface for a case-level **Amended Outcome**
 — it is _not_ the retired **Answer Override**. **Appeal Request**
 and **Appeal Review** are the two ends of the **Appeal** flow. Access modes are
 `edit` / `read-only` / `hidden` only — the `override` mode is removed. **Conversation** is a
@@ -122,15 +124,30 @@ _Avoid_: Justification (bare — ambiguous with Answer Justification)
 
 **Remediation Action**:
 A corrective action attached to a _failed_ **Answer**. A failed Answer can have many
-Remediation Actions. Actions are _captured_ on the **Issues** Section through an **Issue
-Capture Field** of type `actions` inside a **Issue Capture Group**, and _tracked_ to
-resolution on the separate **Remediation** Section. An action is a stateful
-record `{ id, text, status: 'pending' | 'complete' | 'cancelled', cancelReason? }` — no
-longer a bare string; `cancelReason` is required when `cancelled`. On **Send Actions** all
-of a Case's actions acquire the case-level **Remediation Due Date**; the **Reviewer** (not
-the **Responsible Party**) marks each `complete`/`cancelled` on the Remediation Section
-during `Actions In Progress`.
+Remediation Actions. Actions are _captured_ on the **Issues** Section — the **Reviewer**
+ticks the ones the **Question Definition** configures (`answer.remediationActions`) and may
+add free-form text (`answer.freeFormRemediation`) — and the resulting remediation is
+_tracked_ to resolution on the separate **Remediation** Section, **per Question rather
+than per action** (see **Remediation Resolution**). On **Send Actions** all of a Case's
+actions acquire the case-level **Remediation Due Date**. A Case Type may also declare an
+`actions`-typed **Issue Capture Field**, whose stateful
+`{ id, text, status, cancelReason? }` records still feed the **Summary**'s remediation
+block; no live Case Type does, and the Remediation Section does not read them.
 _Avoid_: Remediation (ambiguous — refers to a Section, not the item)
+
+**Remediation Resolution**:
+How the **Reviewer** records that a _failed_ **Answer**'s remediation ended up, on the
+**Remediation** Section once the actions have been sent: **`complete`**, **`partial`**
+(partially complete) or **`cancelled`**. Recorded **per Question**, not per **Remediation
+Action** — one row per applicable, failed Question that carries remediation; failed
+Questions with no remediation attached never appear, because attaching actions is
+optional. `partial` requires _details_ and `cancelled` requires a _justification_ (both
+stored in the same `details` field); `complete` carries neither. Stored on the Answer as
+`remediationStatus: { status, details? }`. A row is **resolved** only once it has a status
+_and_ any text that status requires, and the Case cannot reach **Completed** while any row
+is unresolved. Only the **Assigned Reviewer** writes it; everyone who can see the Section
+reads the same breakdown.
+_Avoid_: Action status (that is the separate `actions`-capture-field record), Sign-off
 
 **Remediation Due Date**:
 A single **case-level** SLA date on the Case row (`remediationDueDate`), = **Reportable**
@@ -210,7 +227,7 @@ The single SharePoint user identified as responsible for one specific _failed_ *
 _Avoid_: Responsible Party (case-level, a different concept), Owner, Culprit, Blame, Assignee
 
 **Reviewer Manager**:
-A SharePoint user in the Reviewer Managers **SharePoint Group** who manages a team of **Reviewers**. Sees the `#/reports/reviewer-team` report — their team's completed-Case volumes (7- and 30-day) and current assigned-Case queue health (outstanding, overdue), totalled and broken down by **Case Type**. The relationship "Reviewer X is managed by Reviewer Manager Y" is denormalised onto every **Case** row as `assignedReviewerManager` (a user field) so reports can be queried via a single server-side `$filter` per **Case Type** list. A user is either a Reviewer Manager _or_ a **Responsible Party Manager**, never both — enforced by Maintainer convention, not code.
+A SharePoint user in the Reviewer Managers **SharePoint Group** who manages a team of **Reviewers**. Sees the `#/reports/reviewer-team` report — their team's completed-Case volumes (7- and 30-day) and current assigned-Case queue health (outstanding, overdue), totalled and broken down by **Case Type**. The relationship "Reviewer X is managed by Reviewer Manager Y" is denormalised onto every **Case** row as `assignedReviewerManager` (a user field) so reports can be queried via a single server-side `$filter` per **Case Type** list. A user is either a Reviewer Manager _or_ a **Responsible Party Manager**, never both — enforced by Maintainer convention, not code. On a Case they hold a **Section** access role of their own (`reviewerManager`), resolved from group membership alone and observing read-only whatever a non-assigned **Reviewer** observes — including the **Remediation** Section's reviewer-side breakdown.
 _Avoid_: Team Lead, Reviewer Supervisor
 
 **Responsible Party Manager**:

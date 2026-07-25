@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 
 import {
   evaluateAccess,
+  remediationAudience,
   resolveRoles,
   showInSummary,
   SECTIONS,
@@ -47,35 +48,18 @@ export function makeConfig(overrides = {}) {
 }
 
 /**
- * A config declaring one `actions`-typed Issue Capture Field, so the Remediation
- * *tracking* Section (ADR-0024) can become visible.
- * @returns {CaseTypeConfig}
- */
-export function makeActionsConfig(overrides = {}) {
-  return makeConfig({
-    captureGroups: [
-      {
-        key: 'g',
-        label: 'G',
-        fields: [{ key: 'acts', label: 'Actions', type: 'actions' }],
-      },
-    ],
-    ...overrides,
-  });
-}
-
-/**
- * A Case carrying one sent Remediation Action, so `hasSentActions` is true and the
- * Remediation tracking Section is not hidden.
+ * A Case whose failed Answer carries a Reviewer-selected Remediation Action —
+ * the store the Issues tab actually writes (`answer.remediationActions`), and so
+ * the one the Remediation Section's visibility gate reads (#499).
  * @param {Partial<CaseRow>} [overrides]
  * @returns {CaseRow}
  */
-export function makeCaseWithActions(overrides = {}) {
+export function makeCaseWithRemediation(overrides = {}) {
   return makeCase({
     answers: {
       q1: {
         value: 'No',
-        capture: { acts: [{ id: 'a', text: 'do', status: 'pending' }] },
+        remediationActions: [{ id: 'a', text: 'Call back', completed: false }],
       },
     },
     ...overrides,
@@ -141,6 +125,7 @@ export function assertGrid(grid, caseRow, config) {
 
 export {
   evaluateAccess,
+  remediationAudience,
   resolveRoles,
   showInSummary,
   SECTIONS,

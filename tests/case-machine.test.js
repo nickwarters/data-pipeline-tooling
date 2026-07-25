@@ -124,40 +124,36 @@ test('CaseMachine attribution freezes at reportable while remediation selection 
   assert.equal(machineFor('Completed').canSelectRemediation, false);
 });
 
-test('CaseMachine final completion is gated by remediation tracking (ADR-0024)', () => {
+test('CaseMachine permits the final close only for the Assigned Reviewer of an Actions In Progress Case (#499)', () => {
+  // The *content* half of the gate — every Question's remediation resolved —
+  // lives in completionControl/completionPatch, which see the live Answers.
   /** @type {Record<string, import('../src/sharepoint-client.js').Answer>} */
-  const resolved = {
+  const answers = {
     'q-a': {
       value: 'No',
-      capture: { acts: [{ id: 'a', text: 'x', status: 'complete' }] },
-    },
-  };
-  /** @type {Record<string, import('../src/sharepoint-client.js').Answer>} */
-  const pending = {
-    'q-a': {
-      value: 'No',
-      capture: { acts: [{ id: 'a', text: 'x', status: 'pending' }] },
+      remediationActions: [{ id: 'a1', text: 'Call back', completed: false }],
     },
   };
 
   assert.equal(
-    machineFor('Actions In Progress', ACTIONS_CONFIG, { answers: resolved })
+    machineFor('Actions In Progress', ACTIONS_CONFIG, { answers })
       .canCompleteRemediation,
     true
   );
   assert.equal(
-    machineFor('Actions In Progress', ACTIONS_CONFIG, { answers: pending })
+    machineFor('In-progress', ACTIONS_CONFIG, { answers })
       .canCompleteRemediation,
-    false
+    false,
+    'nothing to close before the actions are sent'
   );
   assert.equal(
-    machineFor('In-progress', ACTIONS_CONFIG, { answers: resolved })
-      .canCompleteRemediation,
-    false
+    machineFor('Completed', ACTIONS_CONFIG, { answers }).canCompleteRemediation,
+    false,
+    'and nothing to close once the Case is closed'
   );
   assert.equal(
     machineFor('Actions In Progress', ACTIONS_CONFIG, {
-      answers: resolved,
+      answers,
       assignedReviewer: 'other',
     }).canCompleteRemediation,
     false

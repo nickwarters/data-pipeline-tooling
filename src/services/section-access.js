@@ -4,7 +4,7 @@
  * SharePoint list ACLs remain the real boundary. See the architecture decision for design.
  *
  * @typedef {'details'|'questions'|'issues'|'summary'|'remediation'|'notes'|'conversation'|'appealRequest'|'appealReview'|'amendOutcome'} Section
- * @typedef {'assignedReviewer'|'otherReviewer'|'responsibleParty'|'responsiblePartyManager'|'caseTypeOwner'|'journeyOwner'|'controls'|'none'} Role
+ * @typedef {'assignedReviewer'|'otherReviewer'|'reviewerManager'|'responsibleParty'|'responsiblePartyManager'|'caseTypeOwner'|'journeyOwner'|'controls'|'none'} Role
  * @typedef {'edit'|'read-only'|'hidden'} Mode
  */
 
@@ -12,7 +12,7 @@
 /** @typedef {import('../sharepoint-client.js').CaseTypeConfig} CaseTypeConfig */
 /** @typedef {import('./permissions.js').Capabilities} Capabilities */
 
-import { allSentActions } from '../evaluators/remediation-actions.js';
+import { hasRemediation } from '../evaluators/remediation-status.js';
 import { CASE_STATUS } from '../lib/case-statuses.js';
 import {
   sectionIds,
@@ -78,16 +78,65 @@ function hasOpenAppeal(caseRow) {
 }
 
 /**
- * Whether the Case carries ≥1 **sent** Remediation Action across its Answers
- *. The Remediation *tracking* Section is meaningful only once actions
- * have been sent, so it is hidden entirely when the Case has none.
+ * Whether the Case has remediation to track: ≥1 Answer carrying a
+ * Reviewer-selected Remediation Action or free-form remediation text, **and** the
+ * Case past the reportable milestone (i.e. the actions have been *sent*).
+ *
+ * Both halves matter. While the Case is `In-progress` the Reviewer is still
+ * choosing actions on the Issues tab, so there is nothing to track yet; and
+ * remediation is optional, so a reportable Case may carry none at all.
+ *
+ * Note the store: the Reviewer's selections live on `answer.remediationActions`
+ * / `answer.freeFormRemediation` (what the Issues tab writes), **not** in an
+ * `actions`-typed Issue Capture Field. Gating on the latter is what kept this
+ * Section hidden on every real Case (#499).
  *
  * @param {CaseRow} caseRow
- * @param {CaseTypeConfig} config
  * @returns {boolean}
  */
-function hasSentActions(caseRow, config) {
-  return allSentActions(caseRow.answers, config.captureGroups).length > 0;
+function hasTrackableRemediation(caseRow) {
+  return isReportable(caseRow.status) && hasRemediation(caseRow.answers);
+}
+
+/**
+ * The Remediation cell shared by every role that only *observes* the tracking
+ * breakdown — which is everyone except the Assigned Reviewer, who resolves it.
+ *
+ * @param {CaseRow} c
+ * @returns {Mode}
+ */
+const observesRemediation = (c) =>
+  hasTrackableRemediation(c) ? 'read-only' : 'hidden';
+
+/**
+ * Which of the Remediation Section's two renderings a viewer gets (#499).
+ *
+ * - `reviewer` — the Assigned Reviewer, other Reviewers, a Reviewer Manager, the
+ *   Case Type Owner and Controls: the breakdown plus (when the mode is `edit`)
+ *   the per-Question resolution controls.
+ * - `responsibleParty` — the Responsible Party doing the work, their Manager and
+ *   the Journey Owner: the same breakdown without the Reviewer's fields, plus a
+ *   pointer to the Conversation, which is their interface for discussing the
+ *   remediation and reporting it done.
+ *
+ * Reviewer-side wins for a viewer holding roles on both sides, mirroring the
+ * most-permissive rule in `evaluateAccess`.
+ *
+ * @param {Role[]} roles
+ * @returns {'reviewer' | 'responsibleParty'}
+ */
+export function remediationAudience(roles) {
+  /** @type {Role[]} */
+  const reviewerSide = [
+    'assignedReviewer',
+    'otherReviewer',
+    'reviewerManager',
+    'caseTypeOwner',
+    'controls',
+  ];
+  return roles.some((role) => reviewerSide.includes(role))
+    ? 'reviewer'
+    : 'responsibleParty';
 }
 
 /**
@@ -135,6 +184,7 @@ export const MATRIX = {
   details: {
     assignedReviewer: 'read-only',
     otherReviewer: 'read-only',
+    reviewerManager: 'read-only',
     responsibleParty: 'hidden',
     responsiblePartyManager: 'hidden',
     caseTypeOwner: 'read-only',
@@ -150,6 +200,7 @@ export const MATRIX = {
   questions: {
     assignedReviewer: (c) => (isReportable(c.status) ? 'read-only' : 'edit'),
     otherReviewer: 'read-only',
+    reviewerManager: 'read-only',
     responsibleParty: 'hidden',
     responsiblePartyManager: 'hidden',
     caseTypeOwner: 'read-only',
@@ -165,6 +216,7 @@ export const MATRIX = {
   issues: {
     assignedReviewer: (c) => (isReportable(c.status) ? 'read-only' : 'edit'),
     otherReviewer: 'read-only',
+    reviewerManager: 'read-only',
     responsibleParty: 'hidden',
     responsiblePartyManager: 'hidden',
     caseTypeOwner: 'read-only',
@@ -183,6 +235,7 @@ export const MATRIX = {
   summary: {
     assignedReviewer: 'read-only',
     otherReviewer: 'read-only',
+    reviewerManager: 'read-only',
     responsibleParty: (c) => (isReportable(c.status) ? 'read-only' : 'hidden'),
     responsiblePartyManager: (c) =>
       c.status === CASE_STATUS.COMPLETED ? 'read-only' : 'hidden',
@@ -199,22 +252,23 @@ export const MATRIX = {
   // reviewers, the Case Type Owner, the Journey Owner and Controls observe it
   // read-only.
   remediation: {
-    assignedReviewer: (c, config) => {
-      if (!hasSentActions(c, config)) return 'hidden';
+    assignedReviewer: (c) => {
+      if (!hasTrackableRemediation(c)) return 'hidden';
       return c.status === CASE_STATUS.ACTIONS_IN_PROGRESS
         ? 'edit'
         : 'read-only';
     },
-    otherReviewer: (c, config) =>
-      hasSentActions(c, config) ? 'read-only' : 'hidden',
-    responsibleParty: 'hidden',
-    responsiblePartyManager: 'hidden',
-    caseTypeOwner: (c, config) =>
-      hasSentActions(c, config) ? 'read-only' : 'hidden',
-    journeyOwner: (c, config) =>
-      hasSentActions(c, config) ? 'read-only' : 'hidden',
-    controls: (c, config) =>
-      hasSentActions(c, config) ? 'read-only' : 'hidden',
+    otherReviewer: observesRemediation,
+    reviewerManager: observesRemediation,
+    // The party who actually does the remediation work — and the two roles who
+    // chase it — read the same breakdown, minus the Reviewer's resolution
+    // controls. The view routes them to the Conversation instead
+    // (`remediationAudience`, #499).
+    responsibleParty: observesRemediation,
+    responsiblePartyManager: observesRemediation,
+    caseTypeOwner: observesRemediation,
+    journeyOwner: observesRemediation,
+    controls: observesRemediation,
     none: 'hidden',
   },
   // Notes — reviewer working notes. The Assigned Reviewer edits them until the
@@ -225,6 +279,7 @@ export const MATRIX = {
     assignedReviewer: (c) =>
       c.status === CASE_STATUS.COMPLETED ? 'read-only' : 'edit',
     otherReviewer: 'read-only',
+    reviewerManager: 'read-only',
     responsibleParty: 'hidden',
     responsiblePartyManager: 'hidden',
     caseTypeOwner: 'read-only',
@@ -244,6 +299,7 @@ export const MATRIX = {
       return 'edit';
     },
     otherReviewer: 'read-only',
+    reviewerManager: 'read-only',
     responsibleParty: (c, config) => {
       const allowed = config.sections?.conversation?.allowMessagesWhen;
       if (allowed && !allowed.includes(c.status)) return 'read-only';
@@ -264,6 +320,7 @@ export const MATRIX = {
   appealRequest: {
     assignedReviewer: 'read-only',
     otherReviewer: 'hidden',
+    reviewerManager: 'hidden',
     responsibleParty: 'hidden',
     responsiblePartyManager: (c, config) =>
       appealRaiser(config) === 'responsiblePartyManager' &&
@@ -287,6 +344,7 @@ export const MATRIX = {
   appealReview: {
     assignedReviewer: 'read-only',
     otherReviewer: 'hidden',
+    reviewerManager: 'hidden',
     responsibleParty: 'hidden',
     responsiblePartyManager: 'read-only',
     caseTypeOwner: 'read-only',
@@ -304,6 +362,7 @@ export const MATRIX = {
   amendOutcome: {
     assignedReviewer: 'hidden',
     otherReviewer: 'hidden',
+    reviewerManager: 'hidden',
     responsibleParty: 'hidden',
     responsiblePartyManager: 'hidden',
     caseTypeOwner: 'hidden',
@@ -333,6 +392,13 @@ export function resolveRoles(caseRow, userId, capabilities) {
     roles.push('assignedReviewer');
   } else if (capabilities.isReviewer) {
     roles.push('otherReviewer');
+  }
+  // A Reviewer Manager oversees the reviewing function rather than any one Case,
+  // so the role is held from group membership alone and composes with whatever
+  // else the viewer is on this Case (#499). Across the matrix it observes
+  // exactly what a non-assigned Reviewer observes.
+  if (capabilities.isReviewerManager) {
+    roles.push('reviewerManager');
   }
   if (caseRow.responsibleParty === userId) {
     roles.push('responsibleParty');

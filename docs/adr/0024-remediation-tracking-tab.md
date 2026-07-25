@@ -4,10 +4,17 @@ Date: 2026-07-01
 
 ## Status
 
-Accepted
+Accepted, partly amended by
+[ADR-0037](./0037-question-level-remediation-resolution.md).
 
-The Section and lifecycle decision remains current. Rendering and event
-handling follow
+The two-Section split (Issues = capture, Remediation = tracking), the single
+case-level `remediationDueDate` and the reportable-freeze lifecycle remain
+current. ADR-0037 replaces the _unit_ of tracking (per Question, not per
+Remediation Action), its vocabulary (`complete` / `partial` / `cancelled` with
+required details or justification), the store it reads
+(`answer.remediationStatus` beside `answer.remediationActions`, not the
+`actions`-typed capture field), and the Responsible Party's `hidden` cell.
+Rendering and event handling follow
 [ADR-0034](./0034-store-driven-views-supersede-component-owned-state.md).
 
 ## Context

@@ -18,8 +18,6 @@ import {
 // reportable predicate alongside CaseMachine without a circular import.
 export { isReportable } from '../services/section-access.js';
 
-import { remediationTrackingComplete } from '../evaluators/remediation-actions.js';
-
 import { addWorkingDays } from './add-working-days.js';
 import {
   ENGLAND_WALES_HOLIDAYS,
@@ -95,22 +93,21 @@ export class CaseMachine {
   }
 
   /**
-   * The final-complete gate: once actions have been **sent**, an
-   * `Actions In Progress` Case may close to `Completed` only when the Remediation
-   * tracking tab is complete — every sent action `complete` or `cancelled` (with a
-   * reason). The Assigned Reviewer drives it. Inert on the no-actions path
-   * (`remediationTrackingComplete` is vacuously true), where completion happened
-   * outright at the reportable milestone instead.
+   * The *permission* half of the final-complete gate: once actions have been
+   * **sent**, only the Assigned Reviewer — the one role that can `edit` the
+   * Remediation tab — closes an `Actions In Progress` Case to `Completed`.
+   *
+   * The *content* half (every Question's remediation resolved, with its required
+   * details / justification) lives in `completionControl` / `completionPatch`,
+   * which read the store's **live** Answers rather than the load-time snapshot
+   * this machine holds — the Reviewer must be able to resolve the last row and
+   * see the button enable without a reload (#499).
    */
   get canCompleteRemediation() {
     return (
       this.access.remediation === 'edit' &&
       this.caseRow.assignedReviewer === this.currentUser.id &&
-      this.caseRow.status === CASE_STATUS.ACTIONS_IN_PROGRESS &&
-      remediationTrackingComplete(
-        this.caseRow.answers,
-        this.config.captureGroups
-      )
+      this.caseRow.status === CASE_STATUS.ACTIONS_IN_PROGRESS
     );
   }
 

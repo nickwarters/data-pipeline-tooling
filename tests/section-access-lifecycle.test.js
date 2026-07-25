@@ -4,8 +4,8 @@ import assert from 'node:assert/strict';
 import {
   makeCase,
   makeConfig,
-  makeActionsConfig,
-  makeCaseWithActions,
+  makeCaseWithRemediation,
+  remediationAudience,
   openAppeal,
   resolvedAppeal,
   evaluateAccess,
@@ -195,11 +195,12 @@ test('notes: reviewer edits until Completed, then read-only', () => {
 // --- Remediation tracking visibility (ADR-0024) ---
 
 test('remediation: hidden for every viewer until actions are sent', () => {
-  const cfg = makeActionsConfig();
+  const cfg = makeConfig();
   const c = makeCase();
   for (const role of /** @type {const} */ ([
     'assignedReviewer',
     'otherReviewer',
+    'reviewerManager',
     'responsibleParty',
     'responsiblePartyManager',
     'caseTypeOwner',
@@ -211,45 +212,6 @@ test('remediation: hidden for every viewer until actions are sent', () => {
       evaluateAccess('remediation', [role], c, cfg),
       'hidden',
       `remediation hidden for ${role} with no sent actions`
-    );
-  }
-});
-
-test('remediation: reviewer edits while Actions In Progress, read-only once Completed', () => {
-  const cfg = makeActionsConfig();
-  assert.equal(
-    evaluateAccess(
-      'remediation',
-      ['assignedReviewer'],
-      makeCaseWithActions({ status: 'Actions In Progress' }),
-      cfg
-    ),
-    'edit'
-  );
-  assert.equal(
-    evaluateAccess(
-      'remediation',
-      ['assignedReviewer'],
-      makeCaseWithActions({ status: 'Completed' }),
-      cfg
-    ),
-    'read-only'
-  );
-});
-
-test('remediation: observers see read-only once actions are sent', () => {
-  const cfg = makeActionsConfig();
-  const c = makeCaseWithActions({ status: 'Actions In Progress' });
-  for (const role of /** @type {const} */ ([
-    'otherReviewer',
-    'caseTypeOwner',
-    'journeyOwner',
-    'controls',
-  ])) {
-    assert.equal(
-      evaluateAccess('remediation', [role], c, cfg),
-      'read-only',
-      role
     );
   }
 });
@@ -324,5 +286,170 @@ test('most-permissive: Controls user who is also the Assigned Reviewer still edi
   assert.equal(
     evaluateAccess('questions', ['controls', 'otherReviewer'], c, cfg),
     'read-only'
+  );
+});
+
+// --- Remediation: question-level rows and the two audiences (#499) ---
+
+test('remediation: hidden while In-progress even though the Reviewer has attached actions', () => {
+  const cfg = makeConfig();
+  const c = makeCaseWithRemediation({ status: 'In-progress' });
+  for (const role of /** @type {const} */ ([
+    'assignedReviewer',
+    'reviewerManager',
+    'responsibleParty',
+    'responsiblePartyManager',
+    'journeyOwner',
+    'controls',
+  ])) {
+    assert.equal(evaluateAccess('remediation', [role], c, cfg), 'hidden', role);
+  }
+});
+
+test('remediation: visible from question-level remediation, with no actions-typed capture field declared', () => {
+  // The store is `answer.remediationActions` (what the Issues tab writes), not
+  // an `actions`-typed Issue Capture Field — no Case Type declares one (#499).
+  const cfg = makeConfig();
+  assert.equal(cfg.captureGroups, undefined);
+  assert.equal(
+    evaluateAccess(
+      'remediation',
+      ['assignedReviewer'],
+      makeCaseWithRemediation({ status: 'Actions In Progress' }),
+      cfg
+    ),
+    'edit'
+  );
+});
+
+test('remediation: free-form remediation alone makes the Section visible', () => {
+  const cfg = makeConfig();
+  const c = makeCase({
+    status: 'Actions In Progress',
+    answers: { q1: { value: 'No', freeFormRemediation: 'Write to customer' } },
+  });
+  assert.equal(
+    evaluateAccess('remediation', ['assignedReviewer'], c, cfg),
+    'edit'
+  );
+});
+
+test('remediation: a failed Answer with no remediation keeps the Section hidden', () => {
+  const cfg = makeConfig();
+  const c = makeCase({
+    status: 'Actions In Progress',
+    answers: { q1: { value: 'No' } },
+  });
+  assert.equal(
+    evaluateAccess('remediation', ['assignedReviewer'], c, cfg),
+    'hidden'
+  );
+});
+
+test('remediation: the reviewer-side audience observes read-only; only the Assigned Reviewer edits', () => {
+  const cfg = makeConfig();
+  const c = makeCaseWithRemediation({ status: 'Actions In Progress' });
+  assert.equal(
+    evaluateAccess('remediation', ['assignedReviewer'], c, cfg),
+    'edit'
+  );
+  for (const role of /** @type {const} */ ([
+    'otherReviewer',
+    'reviewerManager',
+    'caseTypeOwner',
+    'controls',
+  ])) {
+    assert.equal(
+      evaluateAccess('remediation', [role], c, cfg),
+      'read-only',
+      role
+    );
+  }
+});
+
+test('remediation: the responsible-party-side audience reads it once the Case is reportable', () => {
+  const cfg = makeConfig();
+  for (const role of /** @type {const} */ ([
+    'responsibleParty',
+    'responsiblePartyManager',
+    'journeyOwner',
+  ])) {
+    assert.equal(
+      evaluateAccess(
+        'remediation',
+        [role],
+        makeCaseWithRemediation({ status: 'Actions In Progress' }),
+        cfg
+      ),
+      'read-only',
+      `${role} while Actions In Progress`
+    );
+    assert.equal(
+      evaluateAccess(
+        'remediation',
+        [role],
+        makeCaseWithRemediation({ status: 'Completed' }),
+        cfg
+      ),
+      'read-only',
+      `${role} once Completed`
+    );
+  }
+});
+
+test('remediation: the Assigned Reviewer freezes to read-only once Completed', () => {
+  const cfg = makeConfig();
+  assert.equal(
+    evaluateAccess(
+      'remediation',
+      ['assignedReviewer'],
+      makeCaseWithRemediation({ status: 'Completed' }),
+      cfg
+    ),
+    'read-only'
+  );
+});
+
+test('remediation: never visible to the none role', () => {
+  assert.equal(
+    evaluateAccess(
+      'remediation',
+      ['none'],
+      makeCaseWithRemediation({ status: 'Actions In Progress' }),
+      makeConfig()
+    ),
+    'hidden'
+  );
+});
+
+// --- remediationAudience (#499) ---
+
+test('remediationAudience: reviewer-side roles get the status controls', () => {
+  for (const role of /** @type {const} */ ([
+    'assignedReviewer',
+    'otherReviewer',
+    'reviewerManager',
+    'caseTypeOwner',
+    'controls',
+  ])) {
+    assert.equal(remediationAudience([role]), 'reviewer', role);
+  }
+});
+
+test('remediationAudience: the party doing the work is pointed at the Conversation', () => {
+  for (const role of /** @type {const} */ ([
+    'responsibleParty',
+    'responsiblePartyManager',
+    'journeyOwner',
+    'none',
+  ])) {
+    assert.equal(remediationAudience([role]), 'responsibleParty', role);
+  }
+});
+
+test('remediationAudience: reviewer-side wins when a viewer holds both', () => {
+  assert.equal(
+    remediationAudience(['journeyOwner', 'assignedReviewer']),
+    'reviewer'
   );
 });

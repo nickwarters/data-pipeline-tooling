@@ -281,6 +281,11 @@ export const cases = [
             completed: true,
           },
         ],
+        // Resolved on the Remediation tab (#499). The redress Question below is
+        // deliberately left unresolved, so the demo Case shows one row of each
+        // and the Reviewer's "Complete Case" button stays hidden until they
+        // record the second.
+        remediationStatus: { status: 'complete' },
         capture: {
           rootCauseSummary:
             'The complaint sat unallocated in the shared inbox over a bank holiday weekend.',

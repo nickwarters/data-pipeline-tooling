@@ -4,8 +4,7 @@ import assert from 'node:assert/strict';
 import {
   makeCase,
   makeConfig,
-  makeActionsConfig,
-  makeCaseWithActions,
+  makeCaseWithRemediation,
   openAppeal,
   evaluateAccess,
   showInSummary,
@@ -18,8 +17,8 @@ import {
 // --- none role ---
 
 test('none role → hidden everywhere', () => {
-  const cfg = makeActionsConfig();
-  const c = makeCaseWithActions({
+  const cfg = makeConfig();
+  const c = makeCaseWithRemediation({
     status: 'Completed',
     appeals: [openAppeal()],
   });

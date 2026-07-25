@@ -199,10 +199,8 @@ test('in-memory flow runner completes the remediation loop through Send Actions 
             caseType: 'example-review',
           },
           {
-            type: 'setActionStatus',
+            type: 'setRemediationStatus',
             questionId: 'q-needs',
-            fieldKey: 'sentActions',
-            actionId: 'sent-1',
             status: 'complete',
           },
           {
@@ -312,10 +310,8 @@ test('in-memory flow runner completes allocate, review, remediate, appeal, and a
             caseType: 'example-review',
           },
           {
-            type: 'setActionStatus',
+            type: 'setRemediationStatus',
             questionId: 'q-needs',
-            fieldKey: 'sentActions',
-            actionId: 'sent-1',
             status: 'complete',
           },
           {

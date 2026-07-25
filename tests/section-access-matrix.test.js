@@ -4,8 +4,7 @@ import assert from 'node:assert/strict';
 import {
   makeCase,
   makeConfig,
-  makeActionsConfig,
-  makeCaseWithActions,
+  makeCaseWithRemediation,
   openAppeal,
   assertGrid,
   SECTIONS,
@@ -149,8 +148,8 @@ test('matrix — In-progress Case (no actions, default appeal config → respons
 });
 
 test('matrix — Actions In Progress Case with sent actions (reportable freeze)', () => {
-  const cfg = makeActionsConfig();
-  const c = makeCaseWithActions({ status: 'Actions In Progress' });
+  const cfg = makeConfig();
+  const c = makeCaseWithRemediation({ status: 'Actions In Progress' });
   assertGrid(
     {
       // Reviewer-edit Sections have frozen to read-only at the reportable milestone.
@@ -170,12 +169,15 @@ test('matrix — Actions In Progress Case with sent actions (reportable freeze)'
         responsibleParty: 'read-only',
         responsiblePartyManager: 'hidden',
       },
-      // Remediation tracking is now visible: reviewer edits, everyone else observes.
+      // Remediation tracking is now visible: the Assigned Reviewer resolves it,
+      // everyone else — including the Responsible Party side, who get the
+      // Conversation call-to-action instead of the fields (#499) — observes.
       remediation: {
         assignedReviewer: 'edit',
         otherReviewer: 'read-only',
-        responsibleParty: 'hidden',
-        responsiblePartyManager: 'hidden',
+        reviewerManager: 'read-only',
+        responsibleParty: 'read-only',
+        responsiblePartyManager: 'read-only',
         caseTypeOwner: 'read-only',
         journeyOwner: 'read-only',
         controls: 'read-only',

@@ -2,44 +2,53 @@
 import { h } from '../../lib/html.js';
 import { EmptyState } from '../../lib/empty-state.js';
 import { DEFAULT_SECTION_HEADINGS } from '../../lib/section-labels.js';
-import { evaluate } from '../../evaluators/applicability-evaluator.js';
-import { isFailure } from '../../evaluators/failure-evaluator.js';
 import { isOverdue } from '../../evaluators/overdue-evaluator.js';
 import {
-  actionFieldKeys,
-  coerceRemediationActions,
-} from '../../evaluators/remediation-actions.js';
+  REMEDIATION_STATUSES,
+  REMEDIATION_STATUS_LABELS,
+  REMEDIATION_DETAIL_LABELS,
+  isRemediationResolved,
+  remediationRows,
+} from '../../evaluators/remediation-status.js';
 
 /** @typedef {import('../../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
-/** @typedef {import('../../sharepoint-client.js').CaptureGroup} CaptureGroup */
-/** @typedef {import('../../sharepoint-client.js').RemediationAction} RemediationAction */
-
-/**
- * @typedef {object} TrackingRow
- * @property {QuestionDefinition} question
- * @property {string} fieldKey
- * @property {RemediationAction} action
- */
+/** @typedef {import('../../sharepoint-client.js').RemediationStatusValue} RemediationStatusValue */
+/** @typedef {import('../../evaluators/remediation-status.js').RemediationRow} RemediationRow */
 
 /**
  * @typedef {object} RemediationTrackingProps
  * @property {QuestionDefinition[]} catalogue
  * @property {Record<string, Answer>} answers
- * @property {CaptureGroup[]} captureGroups
- * @property {boolean} canResolve
+ * @property {'reviewer' | 'responsibleParty'} audience Which rendering the viewer gets — see `remediationAudience`.
+ * @property {boolean} canResolve Whether this viewer records resolutions (the Assigned Reviewer, in `edit` mode).
  * @property {import('../../sharepoint-client.js').CaseRow | null} [caseRow]
- * @property {(questionId: string, fieldKey: string, actionId: string, status: 'pending' | 'complete' | 'cancelled', cancelReason: string) => void} dispatchStatus
+ * @property {(questionId: string, status: RemediationStatusValue | '', details: string) => void} [dispatchStatus]
+ * @property {() => void} [dispatchOpenConversation] Opens the Conversation overlay for the responsible-party audience.
+ * @property {boolean} [conversationAvailable] Whether this viewer can see the Conversation at all.
  * @property {string} [heading] Section heading; defaults to the standard copy so the component stays usable standalone.
  */
 
 /**
- * The **Remediation tracking** tab: lists every *sent* Remediation
- * Action across the Case's failed Answers and lets the Assigned Reviewer resolve
- * each — `complete`, or `cancelled` with a required reason. Read-only viewers see
- * each action's status and (when cancelled) its reason. Persistence is the page's
- * responsibility: a status change calls the `dispatchStatus` callback so the
- * answers signal stays the single source of truth.
+ * The **Remediation** tab: what still has to be put right on this Case — one row
+ * per *Question* that carries remediation — and how each was resolved (#499).
+ * Questions that failed without any remediation attached do not appear:
+ * attaching Remediation Actions is optional.
+ *
+ * Two renderings of the same breakdown, chosen by `audience`:
+ *
+ * - `reviewer` — the reviewing side (Assigned Reviewer, other Reviewers, a
+ *   Reviewer Manager, the Case Type Owner, Controls). The **Assigned Reviewer**
+ *   additionally resolves each row to `complete` / `partial` / `cancelled`,
+ *   supplying the details or justification the latter two require. Until every
+ *   row is resolved the Case cannot be closed, so the panel says so.
+ * - `responsibleParty` — the Responsible Party doing the work, their Manager and
+ *   the Journey Owner. The same breakdown with none of the Reviewer's fields:
+ *   the **Conversation** is their interface, so the panel points them at it to
+ *   discuss the remediation with the Reviewer and to report it done.
+ *
+ * Pure: resolutions go to `dispatchStatus`, which the page turns into an Answer
+ * write on the normal auto-save path.
  *
  * @param {RemediationTrackingProps} props
  * @returns {Node[]}
@@ -50,7 +59,7 @@ export function RemediationTracking(props) {
     {},
     props.heading ?? DEFAULT_SECTION_HEADINGS.remediation
   );
-  const rows = collectRows(props);
+  const rows = remediationRows(props.catalogue, props.answers);
   const dueDate = props.caseRow?.remediationDueDate ?? null;
   const overdue =
     !!dueDate &&
@@ -72,11 +81,12 @@ export function RemediationTracking(props) {
     ? h('p', { className: 'cora-badge cora-badge-overdue' }, 'Overdue')
     : null;
 
+  /** @type {Node[]} */
+  const head = [heading, sla, ...(overdueBadge ? [overdueBadge] : [])];
+
   if (rows.length === 0) {
     return [
-      heading,
-      sla,
-      ...(overdueBadge ? [overdueBadge] : []),
+      ...head,
       EmptyState('No remediation actions sent.', {
         className: 'cora-remediation-tracking-empty',
       }),
@@ -84,79 +94,129 @@ export function RemediationTracking(props) {
   }
 
   const list = h('ul', { class: 'cora-remediation-tracking-list' });
-  for (const row of rows) list.appendChild(renderActionRow(props, row));
-  return [heading, sla, ...(overdueBadge ? [overdueBadge] : []), list];
-}
+  for (const row of rows) list.appendChild(renderQuestionRow(props, row));
 
-/**
- * @param {RemediationTrackingProps} props
- * @returns {TrackingRow[]}
- */
-export function collectRows(props) {
-  const keys = actionFieldKeys(props.captureGroups);
-  if (keys.length === 0) return [];
-  const applicable = evaluate(props.catalogue, props.answers);
-  /** @type {TrackingRow[]} */
-  const rows = [];
-  for (const question of props.catalogue) {
-    if (!applicable.has(question.id)) continue;
-    const answer = props.answers[question.id];
-    if (!isFailure(question, answer)) continue;
-    for (const fieldKey of keys) {
-      const raw = answer?.capture?.[fieldKey];
-      if (!Array.isArray(raw)) continue;
-      for (const action of coerceRemediationActions(raw, fieldKey)) {
-        rows.push({ question, fieldKey, action });
-      }
-    }
+  /** @type {Node[]} */
+  const tail = [];
+  if (props.audience === 'responsibleParty') {
+    tail.push(conversationPrompt(props));
+  } else if (
+    props.canResolve &&
+    rows.some((row) => !isRemediationResolved(row))
+  ) {
+    tail.push(
+      h(
+        'p',
+        { class: 'cora-remediation-gate' },
+        'Record an outcome for every remediation above — with the details or justification required — before this Case can be completed.'
+      )
+    );
   }
-  return rows;
+
+  return [...head, list, ...tail];
 }
 
 /**
+ * One Question's row: the Question, the remediation attached to it, and either
+ * the resolution controls or a read-only resolution line.
+ *
  * @param {RemediationTrackingProps} props
- * @param {TrackingRow} row
+ * @param {RemediationRow} row
  * @returns {HTMLElement}
  */
-export function renderActionRow(props, row) {
-  const { question, fieldKey, action } = row;
+function renderQuestionRow(props, row) {
   const li = h('li', {
     class: 'cora-remediation-tracking-item',
-    key: `${question.id}:${fieldKey}:${action.id}`,
+    key: row.question.id,
   });
-  li.appendChild(h('p', { class: 'cora-tracking-question' }, question.text));
-  li.appendChild(h('p', { class: 'cora-tracking-action' }, action.text));
+  li.appendChild(
+    h('p', { class: 'cora-tracking-question' }, row.question.text)
+  );
 
+  if (row.actions.length > 0) {
+    const actions = h('ul', { class: 'cora-tracking-actions' });
+    for (const action of row.actions) {
+      actions.appendChild(
+        h('li', { class: 'cora-tracking-action', key: action.id }, action.text)
+      );
+    }
+    li.appendChild(actions);
+  }
+  if (row.freeForm) {
+    li.appendChild(h('p', { class: 'cora-tracking-action' }, row.freeForm));
+  }
+
+  // The responsible-party audience never sees the Reviewer's fields — neither
+  // the controls nor the details/justification text behind them.
+  if (props.audience === 'responsibleParty') {
+    li.appendChild(renderStatusLine(row));
+    return li;
+  }
   if (!props.canResolve) {
-    li.appendChild(
-      h('p', { class: 'cora-tracking-status' }, `Status: ${action.status}`)
-    );
-    if (action.status === 'cancelled' && action.cancelReason) {
+    li.appendChild(renderStatusLine(row));
+    if (row.status && row.status !== 'complete' && row.details) {
       li.appendChild(
         h(
           'p',
-          { class: 'cora-tracking-cancel-reason' },
-          `Reason: ${action.cancelReason}`
+          { class: 'cora-tracking-details' },
+          `${REMEDIATION_DETAIL_LABELS[row.status]}: ${row.details}`
         )
       );
     }
     return li;
   }
 
-  const reasonInput = /** @type {HTMLInputElement} */ (
-    h('input', {
-      class: 'cora-tracking-cancel-input',
-      type: 'text',
-      value: action.cancelReason ?? '',
-      placeholder: 'Cancellation reason',
-      hidden: action.status !== 'cancelled',
-      onchange: (/** @type {Event} */ event) =>
-        props.dispatchStatus(
-          question.id,
-          fieldKey,
-          action.id,
-          'cancelled',
-          /** @type {HTMLInputElement} */ (event.target).value
+  li.appendChild(renderStatusControls(props, row));
+  return li;
+}
+
+/**
+ * The read-only resolution line. An unresolved row reads as awaiting the
+ * Reviewer rather than exposing a raw status value.
+ *
+ * @param {RemediationRow} row
+ * @returns {HTMLElement}
+ */
+function renderStatusLine(row) {
+  return h(
+    'p',
+    { class: 'cora-tracking-status' },
+    row.status
+      ? `Status: ${REMEDIATION_STATUS_LABELS[row.status]}`
+      : 'Status: Awaiting the Reviewer'
+  );
+}
+
+/**
+ * The Assigned Reviewer's controls: the resolution select plus, for the two
+ * resolutions that require it, the details / justification box. The box is
+ * always rendered (hidden when not needed) so `morph()` keeps the same node —
+ * and with it focus and caret — while the Reviewer types.
+ *
+ * @param {RemediationTrackingProps} props
+ * @param {RemediationRow} row
+ * @returns {HTMLElement}
+ */
+function renderStatusControls(props, row) {
+  const dispatch = props.dispatchStatus ?? (() => {});
+  const needsDetails =
+    row.status === 'partial' || row.status === 'cancelled' ? row.status : null;
+  const detailsLabel = needsDetails
+    ? REMEDIATION_DETAIL_LABELS[needsDetails]
+    : 'Details';
+
+  const details = /** @type {HTMLTextAreaElement} */ (
+    h('textarea', {
+      class: 'cora-tracking-details-input',
+      value: row.details,
+      hidden: !needsDetails,
+      'aria-label': `${detailsLabel} for "${row.question.text}"`,
+      placeholder: needsDetails ? `${detailsLabel} (required)` : '',
+      oninput: (/** @type {Event} */ event) =>
+        dispatch(
+          row.question.id,
+          /** @type {RemediationStatusValue | ''} */ (row.status ?? ''),
+          /** @type {HTMLTextAreaElement} */ (event.target).value
         ),
     })
   );
@@ -166,33 +226,76 @@ export function renderActionRow(props, row) {
       'select',
       {
         class: 'cora-tracking-status-select',
-        value: action.status,
-        onchange: (/** @type {Event} */ event) => {
-          const currentSelect = /** @type {HTMLSelectElement} */ (event.target);
-          const row = /** @type {HTMLElement} */ (currentSelect.parentNode);
-          const currentReasonInput = /** @type {HTMLInputElement} */ (
-            row.querySelector('.cora-tracking-cancel-input')
-          );
-          const status = /** @type {'pending'|'complete'|'cancelled'} */ (
-            currentSelect.value
-          );
-          currentReasonInput.hidden = status !== 'cancelled';
-          props.dispatchStatus(
-            question.id,
-            fieldKey,
-            action.id,
-            status,
-            currentReasonInput.value
-          );
-        },
+        value: row.status ?? '',
+        'aria-label': `Remediation outcome for "${row.question.text}"`,
+        onchange: (/** @type {Event} */ event) =>
+          dispatch(
+            row.question.id,
+            /** @type {RemediationStatusValue | ''} */ (
+              /** @type {HTMLSelectElement} */ (event.target).value
+            ),
+            row.details
+          ),
       },
-      h('option', { value: 'pending' }, 'Pending'),
-      h('option', { value: 'complete' }, 'Complete'),
-      h('option', { value: 'cancelled' }, 'Cancelled')
+      h('option', { value: '' }, 'Not yet resolved'),
+      ...REMEDIATION_STATUSES.map((status) =>
+        h('option', { value: status }, REMEDIATION_STATUS_LABELS[status])
+      )
     )
   );
 
-  li.appendChild(select);
-  li.appendChild(reasonInput);
-  return li;
+  const wrapper = h(
+    'div',
+    { class: 'cora-tracking-controls' },
+    select,
+    details
+  );
+  if (needsDetails && !isRemediationResolved(row)) {
+    wrapper.appendChild(
+      h(
+        'p',
+        { class: 'cora-tracking-details-required' },
+        `${detailsLabel} is required.`
+      )
+    );
+  }
+  return wrapper;
+}
+
+/**
+ * The responsible-party audience's call to action. The Conversation is already
+ * their interface for talking to the Reviewer, so the panel routes them there
+ * rather than growing a second messaging surface. A viewer who cannot see the
+ * Conversation at all gets the equivalent guidance in words.
+ *
+ * @param {RemediationTrackingProps} props
+ * @returns {HTMLElement}
+ */
+function conversationPrompt(props) {
+  const section = h('div', { class: 'cora-remediation-conversation-prompt' });
+  section.appendChild(
+    h(
+      'p',
+      {},
+      'Discuss this remediation with the Reviewer — and tell them once it is complete — in the Conversation.'
+    )
+  );
+  section.appendChild(
+    props.conversationAvailable
+      ? h(
+          'button',
+          {
+            type: 'button',
+            class: 'cora-btn cora-remediation-conversation-btn',
+            onClick: () => props.dispatchOpenConversation?.(),
+          },
+          'Open conversation'
+        )
+      : h(
+          'p',
+          { class: 'cora-remediation-conversation-unavailable' },
+          'The Conversation is not open to you on this Case; speak to the Responsible Party or the Reviewer directly.'
+        )
+  );
+  return section;
 }
