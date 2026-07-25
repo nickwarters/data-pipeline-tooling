@@ -125,6 +125,35 @@ test('RemediationTracking: one row per Question carrying remediation, listing it
   assert.doesNotMatch(text, /Explained the outcome\?/);
 });
 
+test('RemediationTracking: free-form remediation alone is a row, to both audiences', () => {
+  // Remediation Actions are optional *within* a remediated Answer too: the
+  // Reviewer may have typed free-form text and selected no actions at all.
+  /** @type {Record<string, Answer>} */
+  const answers = {
+    q1: { value: 'No', freeFormRemediation: 'Write to the customer' },
+  };
+
+  for (const audience of /** @type {const} */ ([
+    'reviewer',
+    'responsibleParty',
+  ])) {
+    const el = new CORARemediationTracking();
+    el.audience = audience;
+    el.canResolve = audience === 'reviewer';
+    el.update(CATALOGUE, answers);
+
+    assert.equal(
+      findAllByClass(el, 'cora-remediation-tracking-item').length,
+      1,
+      audience
+    );
+    assert.match(allText(el), /Write to the customer/, audience);
+    // No actions list is rendered when there are none to list.
+    assert.equal(findAllByClass(el, 'cora-tracking-actions').length, 0);
+    assert.equal(findAllByClass(el, 'cora-tracking-action').length, 1);
+  }
+});
+
 test('RemediationTracking: a passed Question with remediation attached is not a row', () => {
   const el = new CORARemediationTracking();
   el.update(CATALOGUE, {
