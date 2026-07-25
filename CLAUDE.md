@@ -84,6 +84,28 @@ prefer public behaviour over child positions, private listener registries, or
 private methods; do not add white-box assertions solely to cover a syntactic
 line.
 
+## Git: linear history
+
+**Keep branch history linear. Rebase onto `main`; do not merge `main` into a
+branch.** When a branch falls behind, `git fetch origin && git rebase
+origin/main`, then `git push --force-with-lease`. A merge commit on a feature
+branch is a defect to fix, not a state to preserve.
+
+Two conflicts recur when rebasing, both of which look textual and are not:
+
+- **`tests/white-box-debt-contract.test.js`'s `BASELINE`.** The tuples are a
+  debt ledger, and `main` lowers them as tests are migrated. Taking your
+  branch's side wholesale silently resurrects a count `main` paid down. Resolve
+  per key: keep your branch's structural edits, keep `main`'s lowered values.
+- **`CLAUDE.md`'s ADR count and Directory layout block.** Both move on almost
+  every branch. Take the higher ADR count and the union of the layout entries —
+  `tests/claude-md-layout-contract.test.js` will catch a dropped module, but
+  only for `src/` and `case-types/`.
+
+When a rebase reproduces a resolution you already worked out on a merge, tag the
+merge commit first and `git diff --quiet <tag> HEAD` afterwards: the trees should
+be identical, which is the cheapest proof the rebase did not lose anything.
+
 ## Directory layout
 
 ```
