@@ -93,10 +93,10 @@ export function myTeamView(
   const totalRows = route.rows?.filter((row) => row.isTotal) ?? [];
   return h(
     'main',
-    { class: 'cora-my-team', 'aria-busy': String(route.loading) },
+    { className: 'cora-my-team', 'aria-busy': String(route.loading) },
     h(
       'header',
-      { class: 'cora-my-team-header' },
+      { className: 'cora-my-team-header' },
       h(
         'div',
         {},
@@ -123,7 +123,7 @@ export function myTeamView(
     h('h2', {}, 'Current Workload'),
     h(
       'p',
-      { class: 'cora-my-team-roster-note' },
+      { className: 'cora-my-team-roster-note' },
       'This v1 view shows only staff with allocated outstanding Cases because no separate staff roster is available.'
     ),
     route.error ? h('p', { role: 'alert' }, route.error) : null,
@@ -133,7 +133,7 @@ export function myTeamView(
     route.rows !== null
       ? h(
           'div',
-          { class: 'cora-my-team-table' },
+          { className: 'cora-my-team-table' },
           dataTableView({
             rows: staffRows,
             footerRows: totalRows,

@@ -49,7 +49,7 @@ export function conversationPageView(state, tools, send) {
         {
           type: 'button',
           className: 'cora-back-btn',
-          onClick: () => {
+          onclick: () => {
             location.hash = '#/my-reviews';
           },
         },

@@ -368,7 +368,7 @@ function saveStatusView(status) {
         'button',
         {
           className: 'cora-banner-reload',
-          onClick: () => location.reload(),
+          onclick: () => location.reload(),
         },
         'Reload'
       )
@@ -644,7 +644,7 @@ export function createRouteSlice(params, context) {
               className: 'cora-conversation-toggle-btn',
               'aria-expanded': String(!route.conversationHidden),
               'aria-label': 'Toggle conversation panel (⌥C / Alt+C)',
-              onClick: () =>
+              onclick: () =>
                 tools.dispatch({ type: 'case/conversation-toggled' }),
             },
             snapshot.sectionHeadings.conversation
@@ -666,7 +666,7 @@ export function createRouteSlice(params, context) {
               type: 'button',
               className: 'cora-case-review__hold-toggle',
               'aria-pressed': String(caseRow.onHold === true),
-              onClick: () => {
+              onclick: () => {
                 requestedOnHold = !requestedOnHold;
                 save?.onHoldChanged(requestedOnHold);
               },
@@ -689,9 +689,9 @@ export function createRouteSlice(params, context) {
             'aria-controls': `case-panel-${entry.id}`,
             'aria-selected': String(selected),
             tabindex: selected ? '0' : '-1',
-            onClick: () =>
+            onclick: () =>
               tools.dispatch({ type: 'case/tab-selected', id: entry.id }),
-            onKeyDown: (/** @type {KeyboardEvent} */ event) =>
+            onkeydown: (/** @type {KeyboardEvent} */ event) =>
               selectAdjacentTab(event, tabs, route.activeTab, tools.dispatch),
           },
           snapshot.sectionLabels[entry.id]
@@ -1015,14 +1015,14 @@ export function createRouteSlice(params, context) {
       completion.visible
         ? h(
             'div',
-            { class: 'cora-completion' },
+            { className: 'cora-completion' },
             h(
               'button',
               {
                 className: 'cora-complete-btn',
                 disabled: route.completionPending || completion.disabled,
                 title: completion.reason ?? '',
-                onClick: async () => {
+                onclick: async () => {
                   const patchFields = completionPatch({
                     machine: snapshot.machine,
                     caseRow,
@@ -1059,7 +1059,13 @@ export function createRouteSlice(params, context) {
             // on the Remediation tab, so it is legible from wherever the Reviewer
             // is standing (#499).
             ...(completion.reason
-              ? [h('p', { class: 'cora-completion-reason' }, completion.reason)]
+              ? [
+                  h(
+                    'p',
+                    { className: 'cora-completion-reason' },
+                    completion.reason
+                  ),
+                ]
               : [])
           )
         : null
