@@ -22,8 +22,8 @@ test('CASE-5 action: Remediation Detail edits preserve Answers and reuse evaluat
   });
 
   assert.notEqual(edited, answers);
-  assert.deepEqual(edited.q1.remediationDetails, { severity: 'High' });
-  assert.equal(edited.q2, answers.q2);
+  assert.deepEqual(edited?.q1.remediationDetails, { severity: 'High' });
+  assert.equal(edited?.q2, answers.q2);
 
   assert.equal(
     editRemediationDetail({
@@ -34,7 +34,38 @@ test('CASE-5 action: Remediation Detail edits preserve Answers and reuse evaluat
       canEdit: false,
       fields: [{ key: 'rootCause', label: 'Root cause', type: 'text' }],
     }),
-    answers,
+    null,
     'read-only viewers cannot create an auto-save action'
+  );
+});
+
+test('CASE-5 action: an unknown Question or unconfigured field writes nothing', () => {
+  const answers = { q1: { value: 'No' } };
+  const fields =
+    /** @type {import('../src/sharepoint-client.js').RemediationField[]} */ ([
+      { key: 'rootCause', label: 'Root cause', type: 'text' },
+    ]);
+
+  assert.equal(
+    editRemediationDetail({
+      answers,
+      questionId: 'missing',
+      key: 'rootCause',
+      value: 'x',
+      canEdit: true,
+      fields,
+    }),
+    null
+  );
+  assert.equal(
+    editRemediationDetail({
+      answers,
+      questionId: 'q1',
+      key: 'unconfigured',
+      value: 'x',
+      canEdit: true,
+      fields,
+    }),
+    null
   );
 });

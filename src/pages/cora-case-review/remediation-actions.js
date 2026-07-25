@@ -9,6 +9,9 @@ import { captureRemediationDetail } from '../../evaluators/remediation-details.j
  * retaining detail fields; the caller sends the returned Answers through the
  * Case Review auto-save effect.
  *
+ * Shares the Answer-action contract (#510): `null` means "write nothing" — the
+ * viewer cannot edit, or there is no such Answer or configured field.
+ *
  * @param {{
  *   answers: Record<string, Answer>,
  *   questionId: string,
@@ -17,7 +20,7 @@ import { captureRemediationDetail } from '../../evaluators/remediation-details.j
  *   canEdit: boolean,
  *   fields: import('../../sharepoint-client.js').RemediationField[],
  * }} input
- * @returns {Record<string, Answer>}
+ * @returns {Record<string, Answer> | null}
  */
 export function editRemediationDetail({
   answers,
@@ -27,10 +30,10 @@ export function editRemediationDetail({
   canEdit,
   fields,
 }) {
-  if (!canEdit) return answers;
+  if (!canEdit) return null;
   const answer = answers[questionId];
   const field = fields.find((candidate) => candidate.key === key);
-  if (!answer || !field) return answers;
+  if (!answer || !field) return null;
   return {
     ...answers,
     [questionId]: captureRemediationDetail(answer, field, value),

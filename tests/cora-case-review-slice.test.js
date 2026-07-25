@@ -2229,6 +2229,100 @@ test('CASE-5 route: the Remediation tab resolves a Question through the store se
   }
 });
 
+test('CASE-7 route: a read-only Reviewer on a reportable Case writes no Answer (#510)', async () => {
+  // The single Answer writer is only as safe as the guards it is handed. A
+  // Completed Case is read-only for its Reviewer, so the Review tab still
+  // renders its controls — disabled — and firing one must reach neither the
+  // store nor the SaveQueue.
+  const storedRow = {
+    ...caseRow,
+    status: 'Completed',
+    completedAt: '2026-01-01T00:00:00Z',
+    caseType: 'example-review',
+    answers: { 'q-needs': { value: 'No' } },
+  };
+  /** @type {any[]} */
+  const patches = [];
+  const client = {
+    async getCase() {
+      return storedRow;
+    },
+    async getCurrentUser() {
+      return chrome.currentUser;
+    },
+    async getExportHash() {
+      return null;
+    },
+    async getVersionedExport() {
+      return null;
+    },
+    async resolveUsers() {
+      return {};
+    },
+    async patchCase(/** @type {string} */ _id, /** @type {any} */ fields) {
+      patches.push(fields);
+      return { ok: true, status: 200, data: storedRow };
+    },
+  };
+  const saveQueue = new SaveQueue(/** @type {any} */ (client), {
+    debounceMs: 0,
+  });
+  const slice = createRouteSlice(
+    { caseType: 'example-review', id: 'c1' },
+    /** @type {any} */ ({
+      client,
+      saveQueue,
+      currentUser: chrome.currentUser,
+      capabilities: chrome.permissions,
+      chrome,
+    })
+  );
+  let state = slice.initialState;
+  const container = document.createElement('main');
+  /** @type {any} */
+  let tools;
+  tools = {
+    morph,
+    dispatch(/** @type {any} */ action) {
+      state = slice.reducer(state, action);
+      slice.render(container, state, tools);
+    },
+    listen() {},
+  };
+
+  let dispose;
+  try {
+    slice.render(container, state, tools);
+    dispose = slice.start?.(tools);
+    await waitFor(
+      () => state.routes.caseReview.snapshot?.loaded === true,
+      'store-driven read-only Case Review load'
+    );
+
+    const snapshot = state.routes.caseReview.snapshot;
+    assert.equal(snapshot?.access.questions, 'read-only');
+    assert.equal(snapshot?.machine?.canCapture, false);
+    assert.equal(snapshot?.machine?.canSelectRemediation, false);
+
+    const option = /** @type {any} */ (
+      container.querySelector('[data-focus-key="answer:q-welcome:0"]')
+    );
+    assert.ok(option, 'the Review tab still renders its (disabled) controls');
+    fireEvent(option, 'change');
+    await saveQueue.whenIdle();
+    await flush();
+
+    assert.deepEqual(patches, [], 'no Answer reaches the SaveQueue');
+    assert.deepEqual(
+      state.routes.caseReview.snapshot?.answers,
+      storedRow.answers,
+      'and none reaches the store'
+    );
+  } finally {
+    if (typeof dispose === 'function') dispose();
+  }
+});
+
 test('CASE-4 view: the Summary rolls up the Reviewer’s General Question answers', () => {
   const generalSnapshot = snapshot();
   generalSnapshot.config.generalQuestions = [

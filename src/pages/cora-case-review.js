@@ -30,6 +30,14 @@ import {
   resolveAppeal,
 } from './cora-case-review/appeal-actions.js';
 import { editRemediationDetail } from './cora-case-review/remediation-actions.js';
+import {
+  answerEdited,
+  failureAttributed,
+  issueCaptured,
+  remediationActionToggled,
+  remediationFreeFormEdited,
+  remediationResolved,
+} from './cora-case-review/answer-actions.js';
 import { RemediationSection } from './cora-case-review/remediation-view.js';
 import { RemediationTracking } from './cora-case-review/remediation-tracking-view.js';
 import { remediationAudience } from '../services/section-access.js';
@@ -405,10 +413,10 @@ function sectionStyleHost(tagName, children) {
  *
  * @param {CaseReviewSnapshot} snapshot
  * @param {ReturnType<typeof createQuestionPanelView>} questionsView
- * @param {CaseReviewViewModel} viewModel
+ * @param {(questionId: string, value: string | string[]) => void} onAnswer
  * @returns {Node[]}
  */
-function questionsPanel(snapshot, questionsView, viewModel) {
+function questionsPanel(snapshot, questionsView, onAnswer) {
   return withGeneralQuestions(
     questionsView.render({
       catalogue: snapshot.catalogue,
@@ -416,8 +424,7 @@ function questionsPanel(snapshot, questionsView, viewModel) {
       answers: snapshot.answers,
       access: snapshot.access.questions,
       heading: snapshot.sectionHeadings.questions,
-      onAnswer: (questionId, value) =>
-        viewModel.handleAnswer(questionId, value),
+      onAnswer,
     }),
     {
       fields: snapshot.config?.generalQuestions ?? [],
@@ -427,7 +434,7 @@ function questionsPanel(snapshot, questionsView, viewModel) {
       // (cora-case-review/summary-view.js) — keep the two in step, or hoist a
       // shared resolver if a third consumer appears.
       placement: snapshot.config?.generalQuestionsPlacement ?? 'after',
-      onAnswer: (answerKey, value) => viewModel.handleAnswer(answerKey, value),
+      onAnswer,
     }
   );
 }
@@ -511,10 +518,17 @@ export function createRouteSlice(params, context) {
     );
   }
 
-  /** @param {string} questionId @param {{ loginName: string, displayName: string } | null} party */
-  function selectAttribution(questionId, party) {
-    viewModel.handleAttribute(questionId, party);
-    clearAttributionSearch(questionId);
+  /**
+   * The page's only Answer writer. Every mutation is a pure action returning
+   * either the next Answers or `null` for "write nothing"; from here on there
+   * is one store update and one SaveQueue enqueue, so the two cannot diverge
+   * (#510).
+   *
+   * @param {Record<string, import('../sharepoint-client.js').Answer> | null} next
+   */
+  function editAnswers(next) {
+    if (next === null) return;
+    save?.answersEdited(next);
   }
 
   /** @param {Element} container @param {any} tools */
@@ -634,6 +648,31 @@ export function createRouteSlice(params, context) {
     const caseRow = snapshot.caseRow;
     const config = snapshot.config;
 
+    /** @param {string} questionId @param {string | string[]} value */
+    const onAnswer = (questionId, value) =>
+      editAnswers(
+        answerEdited({
+          answers: snapshot.answers,
+          catalogue: snapshot.catalogue,
+          questionId,
+          value,
+          canEdit: snapshot.access.questions === 'edit',
+        })
+      );
+
+    /** @param {string} questionId @param {{ loginName: string, displayName: string } | null} party */
+    const selectAttribution = (questionId, party) => {
+      editAnswers(
+        failureAttributed({
+          answers: snapshot.answers,
+          questionId,
+          attributedParty: party,
+          canAttribute: snapshot.machine?.canAttribute ?? false,
+        })
+      );
+      clearAttributionSearch(questionId);
+    };
+
     tools.morph(parts.header, [
       h('h1', {}, snapshot.caseRow.title),
       h('p', {}, `Reviewer: ${snapshot.caseRow.assignedReviewer}`),
@@ -718,7 +757,7 @@ export function createRouteSlice(params, context) {
       if (entry.id === 'questions') {
         tools.morph(
           panel,
-          visible ? questionsPanel(snapshot, questionsView, viewModel) : null
+          visible ? questionsPanel(snapshot, questionsView, onAnswer) : null
         );
         continue;
       }
@@ -769,7 +808,16 @@ export function createRouteSlice(params, context) {
                 canSelectRemediation:
                   snapshot.machine?.canSelectRemediation ?? false,
                 dispatchCapture: (questionId, fieldKey, value) =>
-                  viewModel.handleCapture(questionId, fieldKey, value),
+                  editAnswers(
+                    issueCaptured({
+                      answers: snapshot.answers,
+                      captureGroups: config.captureGroups ?? [],
+                      questionId,
+                      fieldKey,
+                      value,
+                      canCapture: snapshot.machine?.canCapture ?? false,
+                    })
+                  ),
                 dispatchCaptureToggle: (questionId, groupKey, collapsed) =>
                   tools.dispatch({
                     type: 'case/capture-group-toggled',
@@ -777,29 +825,40 @@ export function createRouteSlice(params, context) {
                     groupKey,
                     collapsed,
                   }),
-                dispatchDetail: (questionId, key, value) => {
-                  const answers = editRemediationDetail({
-                    answers: snapshot.answers,
-                    questionId,
-                    key,
-                    value,
-                    canEdit: snapshot.machine?.canCapture ?? false,
-                    fields: config.remediationFields ?? [],
-                  });
-                  if (answers === snapshot.answers) return;
-                  viewModel.answersSignal.set(answers);
-                  save?.answersEdited(answers);
-                },
+                dispatchDetail: (questionId, key, value) =>
+                  editAnswers(
+                    editRemediationDetail({
+                      answers: snapshot.answers,
+                      questionId,
+                      key,
+                      value,
+                      canEdit: snapshot.machine?.canCapture ?? false,
+                      fields: config.remediationFields ?? [],
+                    })
+                  ),
                 dispatchAttribute: selectAttribution,
                 dispatchAttributeSearch: requestAttributionSearch,
                 dispatchRemediationAction: (questionId, action, selected) =>
-                  viewModel.handleRemediationAction(
-                    questionId,
-                    action,
-                    selected
+                  editAnswers(
+                    remediationActionToggled({
+                      answers: snapshot.answers,
+                      questionId,
+                      action,
+                      selected,
+                      canSelectRemediation:
+                        snapshot.machine?.canSelectRemediation ?? false,
+                    })
                   ),
                 dispatchRemediationFreeForm: (questionId, value) =>
-                  viewModel.handleRemediationFreeForm(questionId, value),
+                  editAnswers(
+                    remediationFreeFormEdited({
+                      answers: snapshot.answers,
+                      questionId,
+                      value,
+                      canSelectRemediation:
+                        snapshot.machine?.canSelectRemediation ?? false,
+                    })
+                  ),
               })
             : null
         );
@@ -819,10 +878,14 @@ export function createRouteSlice(params, context) {
                 caseRow: snapshot.caseRow,
                 heading: snapshot.sectionHeadings.remediation,
                 dispatchStatus: (questionId, status, details) =>
-                  viewModel.handleRemediationStatus(
-                    questionId,
-                    status,
-                    details
+                  editAnswers(
+                    remediationResolved({
+                      answers: snapshot.answers,
+                      questionId,
+                      status,
+                      details,
+                      canResolve: snapshot.access.remediation === 'edit',
+                    })
                   ),
                 dispatchOpenConversation: () => {
                   if (route.conversationHidden) {
@@ -1085,15 +1148,11 @@ export function createRouteSlice(params, context) {
     start(/** @type {any} */ tools) {
       dispatch = tools.dispatch;
       active = true;
-      const saveEffect = createCaseReviewSaveEffect({
+      save = createCaseReviewSaveEffect({
         saveQueue: context.saveQueue,
         caseId: params.id,
         dispatch: tools.dispatch,
       });
-      save = saveEffect;
-      viewModel.setAnswerChangeHandler((answers) =>
-        saveEffect.answersEdited(answers)
-      );
       const disposeSaveStatus = observeSaveStatus(
         context.saveQueue,
         tools.dispatch
@@ -1136,7 +1195,6 @@ export function createRouteSlice(params, context) {
         attributionTimers.clear();
         pendingAttributionQueries.clear();
         questionsView.clear();
-        viewModel.setAnswerChangeHandler(null);
         save = null;
         disposeSaveStatus();
       };

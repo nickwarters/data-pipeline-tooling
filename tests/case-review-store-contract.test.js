@@ -17,7 +17,28 @@ test('CASE-7 case review tree contains only store actions and pure views', () =>
     const source = readFileSync(new URL(file, directory), 'utf8');
     assert.doesNotMatch(
       source,
-      /\b(?:ShellElement|defineView|reactive)\b|\bsignal\s*\(|from ['\"][^'\"]*signal\.js['\"]/
+      /\b(?:ShellElement|defineView|reactive)\b|\bsignal\s*\(|from ['"][^'"]*signal\.js['"]/
     );
   }
+});
+
+test('the Case Review page has exactly one Answer owner (#510)', () => {
+  const page = readFileSync(
+    new URL('../src/pages/cora-case-review.js', import.meta.url),
+    'utf8'
+  );
+
+  // Answers live in the store. A view callback that reached past it into the
+  // loader would create the second owner this page was refactored to remove.
+  assert.doesNotMatch(page, /answersSignal/);
+  assert.doesNotMatch(page, /viewModel\.handle/);
+
+  // And exactly one writer: `editAnswers` is the only caller of the Answer
+  // save effect, which is in turn the only place Answers are dispatched and
+  // enqueued.
+  assert.equal(
+    (page.match(/answersEdited\(/g) ?? []).length,
+    1,
+    'only editAnswers may call the Answer save effect'
+  );
 });
