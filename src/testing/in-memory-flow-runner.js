@@ -17,6 +17,14 @@ import {
   raiseAppeal,
   resolveAppeal,
 } from '../pages/cora-case-review/appeal-actions.js';
+import {
+  answerEdited,
+  issueCaptured,
+  remediationActionToggled,
+  remediationFreeFormEdited,
+  remediationResolved,
+} from '../pages/cora-case-review/answer-actions.js';
+import { allApplicableAnswered } from '../evaluators/applicability-evaluator.js';
 import { loadCaseTypeConfig } from '../../case-types/manifest.js';
 
 /**
@@ -94,6 +102,7 @@ import { loadCaseTypeConfig } from '../../case-types/manifest.js';
  * client: MockSharePointClient,
  * saveQueue: SaveQueue,
  * viewModel: CaseReviewViewModel | null,
+ * answers: Record<string, import('../sharepoint-client.js').Answer>,
  * snapshot: () => { lists: Record<string, CaseRow[]> },
  * run: (actions: FlowAction[]) => Promise<{ lists: Record<string, CaseRow[]> }>
  * }} InMemoryFlowRunner
@@ -144,6 +153,20 @@ export function createInMemoryFlowRunner(state, opts = {}) {
   const saveQueue = new SaveQueue(client, { debounceMs: 0 });
   /** @type {CaseReviewViewModel | null} */
   let viewModel = null;
+  /**
+   * The runner stands in for the store: it is the single Answer owner, exactly
+   * as the route is in the browser (#510). The loader hands its Answers over
+   * once, and every later edit goes through one writer.
+   * @type {Record<string, import('../sharepoint-client.js').Answer>}
+   */
+  let answers = {};
+
+  /** @param {Record<string, import('../sharepoint-client.js').Answer> | null} next */
+  function editAnswers(next) {
+    if (next === null || !viewModel) return;
+    answers = next;
+    saveQueue.enqueue(viewModel.caseId, 'answers', answers);
+  }
 
   /** @type {InMemoryFlowRunner} */
   const runner = {
@@ -151,6 +174,9 @@ export function createInMemoryFlowRunner(state, opts = {}) {
     saveQueue,
     get viewModel() {
       return viewModel;
+    },
+    get answers() {
+      return answers;
     },
     snapshot() {
       return client.snapshot();
@@ -170,44 +196,80 @@ export function createInMemoryFlowRunner(state, opts = {}) {
         return;
       case 'loadCasePage':
         viewModel = await loadCasePage(action);
+        answers = viewModel.answers;
         return;
-      case 'answer':
-        requirePage(action).handleAnswer(action.questionId, action.value);
-        await flushCurrentCase();
-        return;
-      case 'captureIssue':
-        requirePage(action).handleCapture(
-          action.questionId,
-          action.fieldKey,
-          action.value
+      case 'answer': {
+        const vm = requirePage(action);
+        editAnswers(
+          answerEdited({
+            answers,
+            catalogue: vm.catalogue,
+            questionId: action.questionId,
+            value: action.value,
+            canEdit: vm.access.questions === 'edit',
+          })
         );
         await flushCurrentCase();
         return;
-      case 'selectRemediationAction':
-        requirePage(action).handleRemediationAction(
-          action.questionId,
-          action.action,
-          action.selected ?? true
+      }
+      case 'captureIssue': {
+        const vm = requirePage(action);
+        editAnswers(
+          issueCaptured({
+            answers,
+            captureGroups: vm.config?.captureGroups ?? [],
+            questionId: action.questionId,
+            fieldKey: action.fieldKey,
+            value: action.value,
+            canCapture: vm.machine?.canCapture ?? false,
+          })
         );
         await flushCurrentCase();
         return;
-      case 'freeFormRemediation':
-        requirePage(action).handleRemediationFreeForm(
-          action.questionId,
-          action.value
+      }
+      case 'selectRemediationAction': {
+        const vm = requirePage(action);
+        editAnswers(
+          remediationActionToggled({
+            answers,
+            questionId: action.questionId,
+            action: action.action,
+            selected: action.selected ?? true,
+            canSelectRemediation: vm.machine?.canSelectRemediation ?? false,
+          })
         );
         await flushCurrentCase();
         return;
-      case 'setRemediationStatus':
-        requirePage(action).handleRemediationStatus(
-          action.questionId,
-          action.status,
-          action.details
+      }
+      case 'freeFormRemediation': {
+        const vm = requirePage(action);
+        editAnswers(
+          remediationFreeFormEdited({
+            answers,
+            questionId: action.questionId,
+            value: action.value,
+            canSelectRemediation: vm.machine?.canSelectRemediation ?? false,
+          })
         );
         await flushCurrentCase();
         return;
+      }
+      case 'setRemediationStatus': {
+        const vm = requirePage(action);
+        editAnswers(
+          remediationResolved({
+            answers,
+            questionId: action.questionId,
+            status: action.status,
+            details: action.details,
+            canResolve: vm.access.remediation === 'edit',
+          })
+        );
+        await flushCurrentCase();
+        return;
+      }
       case 'clickCompleteCase':
-        await clickCompleteCase(requirePage(action));
+        await clickCompleteCase(requirePage(action), answers);
         return;
       case 'raiseAppeal':
         await raiseCurrentAppeal(action);
@@ -339,8 +401,11 @@ export function createInMemoryFlowRunner(state, opts = {}) {
   return runner;
 }
 
-/** @param {CaseReviewViewModel} vm */
-async function clickCompleteCase(vm) {
+/**
+ * @param {CaseReviewViewModel} vm
+ * @param {Record<string, import('../sharepoint-client.js').Answer>} answers
+ */
+async function clickCompleteCase(vm, answers) {
   if (!vm.caseRow || !vm.config || !vm.machine) {
     throw new Error('Cannot complete before the Case page has loaded.');
   }
@@ -349,8 +414,8 @@ async function clickCompleteCase(vm) {
     machine: vm.machine,
     caseRow: vm.caseRow,
     catalogue: vm.catalogue,
-    answers: vm.answersSignal.get(),
-    allAnswered: vm.allAnswered.get(),
+    answers,
+    allAnswered: allApplicableAnswered(vm.catalogue, answers),
     computeOutcome: vm.config.computeOutcome,
     exportHash: vm.exportHash,
   });

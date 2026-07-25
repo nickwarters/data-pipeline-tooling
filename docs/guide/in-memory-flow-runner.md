@@ -2,8 +2,9 @@
 
 The in-memory flow runner is a browser-free workflow harness for pipeline and
 sync tests. It reads SharePoint-like list state from a JSON fixture, loads a Case
-Review page through `CaseReviewViewModel`, executes domain-level page actions,
-flushes the normal `SaveQueue`, and writes the resulting list state back out.
+Review page through `CaseReviewViewModel`, executes domain-level page actions
+through the page's own Answer actions, flushes the normal `SaveQueue`, and
+writes the resulting list state back out.
 
 This is not a replacement for browser tests. It does not validate layout,
 keyboard behavior, focus, CSS, or DOM event wiring. It is intended to prove that
@@ -87,14 +88,18 @@ If `personas` is omitted, the runner provides a minimal `reviewer` persona with
 
 - `loadCasePage`: loads the Case Review page model for `caseId`; pass
   `caseType` when the route should carry source/list context.
-- `answer`: calls `CaseReviewViewModel.handleAnswer`.
-- `captureIssue`: calls `CaseReviewViewModel.handleCapture`.
-- `selectRemediationAction`: calls
-  `CaseReviewViewModel.handleRemediationAction`.
-- `freeFormRemediation`: calls
-  `CaseReviewViewModel.handleRemediationFreeForm`.
-- `setRemediationStatus`: calls `CaseReviewViewModel.handleRemediationStatus` —
-  the question-level Remediation resolution (#499).
+  The Answer actions below apply the page's pure Answer actions
+  (`src/pages/cora-case-review/answer-actions.js`) against the runner's own
+  Answers and enqueue the result, exactly as the route does against the store —
+  guards included, so a Reviewer who could not make the edit in the browser
+  cannot make it here either (#510).
+
+- `answer`: `answerEdited`.
+- `captureIssue`: `issueCaptured`.
+- `selectRemediationAction`: `remediationActionToggled`.
+- `freeFormRemediation`: `remediationFreeFormEdited`.
+- `setRemediationStatus`: `remediationResolved` — the question-level
+  Remediation resolution (#499).
 - `clickCompleteCase`: runs the same completion transition used by the page's
   bottom button.
 - `flush`: explicitly drains pending saves for the currently loaded case.

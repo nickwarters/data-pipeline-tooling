@@ -228,6 +228,24 @@ test('in-memory flow runner completes the remediation loop through Send Actions 
       row.completedAt,
       'the second lifecycle transition closes the Case'
     );
+    // The persisted Answer shape is the contract (ADR-0007 / ADR-0013): moving
+    // the write path to the store must be invisible to a stored Case (#510).
+    assert.deepEqual(row.answers['q-needs'], {
+      value: 'No',
+      capture: {
+        sentActions: [{ id: 'sent-1', text: 'Coach agent', status: 'pending' }],
+        rootCause: 'Reviewer missed the evidence.',
+      },
+      freeFormRemediation: 'Coach the reviewer.',
+      remediationActions: [
+        {
+          id: 'q-needs-ra-0',
+          text: 'Retrain agent on needs-identification protocol.',
+          completed: false,
+        },
+      ],
+      remediationStatus: { status: 'complete' },
+    });
   } finally {
     exampleReviewConfig.captureGroups = originalCaptureGroups;
   }

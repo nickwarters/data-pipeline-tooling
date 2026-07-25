@@ -1,32 +1,21 @@
 // @ts-check
-// CaseReviewViewModel is the Case Review page's state model: it loads the Case,
-// catalogue, roles and access, exposes them as signals/computeds, and holds the
-// answer-mutation handlers that persist through the SaveQueue. Signals remain
-// an internal state-notification detail; the store-driven page reads snapshots
-// and renders through keyed morphing.
+// CaseReviewViewModel loads the Case Review page: the Case row, the (possibly
+// as-reviewed) catalogue, the Case Type config, roles and access. It hands the
+// result over once, as a plain snapshot, and owns no Answer mutation — the
+// store is the single Answer owner and the route's answer-actions are the only
+// writers (#510). Signals remain an internal loading-state detail.
 
-import { signal, computed } from './signal.js';
+import { signal } from './signal.js';
 import {
   allApplicableAnswered,
   evaluate,
 } from '../evaluators/applicability-evaluator.js';
-import {
-  materializeRemediationActions,
-  withDerivedFailureValues,
-} from '../evaluators/failure-evaluator.js';
-import {
-  captureValue,
-  validateCaptureGroups,
-  findCaptureField,
-} from '../evaluators/issue-capture.js';
+import { withDerivedFailureValues } from '../evaluators/failure-evaluator.js';
+import { validateCaptureGroups } from '../evaluators/issue-capture.js';
 import {
   validateGeneralQuestions,
   validateAnswerKeyNamespace,
 } from '../evaluators/general-questions.js';
-import {
-  answerRemediation,
-  setRemediationStatus,
-} from '../evaluators/remediation-status.js';
 import {
   showInSummary,
   SECTIONS,
@@ -78,7 +67,6 @@ function caseTypeLoadErrorMessage(error, caseType, isRouteCaseType) {
  * @property {string} currentUserId
  * @property {Capabilities | null} capabilities
  * @property {string | null} [caseType]
- * @property {((answers: Record<string, Answer>) => void) | null} [onAnswersChanged]
  */
 
 export class CaseReviewViewModel {
@@ -90,7 +78,6 @@ export class CaseReviewViewModel {
     currentUserId,
     capabilities,
     caseType = null,
-    onAnswersChanged = null,
   }) {
     this.client = client;
     this.saveQueue = saveQueue;
@@ -98,7 +85,6 @@ export class CaseReviewViewModel {
     this.currentUserId = currentUserId;
     this.capabilities = capabilities;
     this.caseType = caseType;
-    this._onAnswersChanged = onAnswersChanged;
     /** @type {CaseListOptions} */
     this.caseListOptions = {};
 
@@ -128,19 +114,12 @@ export class CaseReviewViewModel {
     this.sectionHeadings = resolveSectionHeadings(null);
     /** @type {QuestionDefinition[]} */
     this.catalogue = [];
-    /** @type {Map<string, QuestionDefinition>} */
-    this.catalogueById = new Map();
-
-    this.answersSignal = signal(/** @type {Record<string, Answer>} */ ({}));
-
-    this.applicableQuestions = computed(() => {
-      const ids = evaluate(this.catalogue, this.answersSignal.get());
-      return this.catalogue.filter((q) => ids.has(q.id));
-    });
-
-    this.allAnswered = computed(() =>
-      allApplicableAnswered(this.catalogue, this.answersSignal.get())
-    );
+    /**
+     * The loaded Answers, handed to the store in `toStoreSnapshot()`. The
+     * loader stops touching them at that point: the store is the owner.
+     * @type {Record<string, Answer>}
+     */
+    this.answers = {};
 
     /** @type {string | null} */
     this.exportHash = null;
@@ -160,20 +139,13 @@ export class CaseReviewViewModel {
   }
 
   /**
-   * Install or replace the store-driven Answer effect bridge. Legacy callers
-   * leave this unset and retain the existing direct SaveQueue behaviour.
-   *
-   * @param {((answers: Record<string, Answer>) => void) | null} handler
-   */
-  setAnswerChangeHandler(handler) {
-    this._onAnswersChanged = handler;
-  }
-
-  /**
-   * Plain snapshot consumed by the CASE-1 route store. The view model remains
-   * the loading/domain adapter while the store becomes the UI state owner.
+   * Plain snapshot consumed by the CASE-1 route store — the loader's single
+   * handover to the state owner. `applicableQuestions` and `allAnswered` are
+   * derived here and re-derived by the reducer on every Answer edit; #467
+   * replaces both with a selector.
    */
   toStoreSnapshot() {
+    const applicableIds = evaluate(this.catalogue, this.answers);
     return {
       loaded: this.loaded.get(),
       error: this.error.get(),
@@ -182,9 +154,11 @@ export class CaseReviewViewModel {
       currentUser: this.currentUser,
       config: this.config,
       catalogue: this.catalogue,
-      answers: this.answersSignal.get(),
-      applicableQuestions: this.applicableQuestions.get(),
-      allAnswered: this.allAnswered.get(),
+      answers: this.answers,
+      applicableQuestions: this.catalogue.filter((q) =>
+        applicableIds.has(q.id)
+      ),
+      allAnswered: allApplicableAnswered(this.catalogue, this.answers),
       machine: this.machine,
       access: this.access,
       roles: this.roles,
@@ -196,15 +170,6 @@ export class CaseReviewViewModel {
       caseListOptions: this.caseListOptions,
       conversationHidden: this.conversationHidden.get(),
     };
-  }
-
-  /** @param {Record<string, Answer>} answers */
-  _persistAnswers(answers) {
-    if (this._onAnswersChanged) {
-      this._onAnswersChanged(answers);
-      return;
-    }
-    this.saveQueue.enqueue(this.caseId, 'answers', answers);
   }
 
   async load() {
@@ -332,9 +297,7 @@ export class CaseReviewViewModel {
     // the catalogue while no Question Definition id can be mistaken for one.
     validateAnswerKeyNamespace(this.catalogue);
 
-    this.catalogueById = new Map(this.catalogue.map((q) => [q.id, q]));
-
-    this.answersSignal.set({ ...caseRow.answers });
+    this.answers = { ...caseRow.answers };
 
     const actualUserId = this.currentUserId || currentUser.id;
     const caps = this.capabilities || {
@@ -370,175 +333,15 @@ export class CaseReviewViewModel {
   }
 
   /**
-   * @param {string} questionId
-   * @param {string | string[]} value
+   * Refresh stale Attributed Party display names from the directory, as the
+   * last step of the load and before the loader hands its Answers to the
+   * store. Not persisted: a display-name refresh is presentation, not a
+   * Reviewer edit.
    */
-  handleAnswer(questionId, value) {
-    if (this.access.questions !== 'edit') return;
-    const q = this.catalogueById.get(questionId);
-    const baseAnswer = { ...this.answersSignal.get()[questionId], value };
-    const nextAnswer = q
-      ? materializeRemediationActions(q, baseAnswer)
-      : baseAnswer;
-    const draft = { ...this.answersSignal.get(), [questionId]: nextAnswer };
-
-    const stillApplicable = evaluate(this.catalogue, draft);
-    const newAnswers = /** @type {Record<string, Answer>} */ ({});
-    for (const [id, answer] of Object.entries(draft)) {
-      if (!this.catalogueById.has(id) || stillApplicable.has(id)) {
-        newAnswers[id] = answer;
-      }
-    }
-
-    this.answersSignal.set(newAnswers);
-    this._persistAnswers(newAnswers);
-  }
-
-  /**
-   * @param {string} questionId
-   * @param {string} fieldKey
-   * @param {string} value
-   */
-  handleCapture(questionId, fieldKey, value) {
-    if (!this.machine?.canCapture) return;
-    const current = this.answersSignal.get();
-    const existing = current[questionId];
-    if (!existing) return;
-    const captureGroups = this.config?.captureGroups || [];
-    const field = findCaptureField(captureGroups, fieldKey);
-    if (!field) return;
-    const newAnswers = {
-      ...current,
-      [questionId]: captureValue(existing, field, value),
-    };
-    // No scroll workaround here (unlike the remediation-action handlers below):
-    // the Issues list patches changed items in place on a capture change, so the
-    // control being edited is never detached and focus/scroll survive natively
-    // (issue #308).
-    this.answersSignal.set(newAnswers);
-    this._persistAnswers(newAnswers);
-  }
-
-  /**
-   * @param {string} questionId
-   * @param {{ loginName: string, displayName: string } | null} attributedParty
-   */
-  handleAttribute(questionId, attributedParty) {
-    if (!this.machine?.canAttribute) return;
-    const current = this.answersSignal.get();
-    const existing = current[questionId];
-    if (!existing) return;
-    let nextAnswer;
-    if (attributedParty) {
-      nextAnswer = { ...existing, attributedParty };
-    } else {
-      const { attributedParty: _drop, ...rest } = existing;
-      nextAnswer = rest;
-    }
-    const newAnswers = { ...current, [questionId]: nextAnswer };
-    this.answersSignal.set(newAnswers);
-    this._persistAnswers(newAnswers);
-  }
-
-  /**
-   * Tick/untick a configured Remediation Action on a failed Answer.
-   * Selection is stored as the reviewer-chosen subset on
-   * `answer.remediationActions`; only these feed the per-action outcome scoring
-   * in `computeConfiguredOutcome`. Gated on `canSelectRemediation` (Assigned
-   * Reviewer, not-yet-reportable). Persists via the autosave SaveQueue.
-   *
-   * @param {string} questionId
-   * @param {{ id: string, text: string }} action
-   * @param {boolean} selected
-   */
-  handleRemediationAction(questionId, action, selected) {
-    if (!this.machine?.canSelectRemediation) return;
-    const current = this.answersSignal.get();
-    const existing = current[questionId];
-    if (!existing) return;
-
-    const list = existing.remediationActions ?? [];
-    let next;
-    if (selected) {
-      if (list.some((a) => a.id === action.id)) return;
-      next = [...list, { id: action.id, text: action.text, completed: false }];
-    } else {
-      if (!list.some((a) => a.id === action.id)) return;
-      next = list.filter((a) => a.id !== action.id);
-    }
-
-    let nextAnswer;
-    if (next.length) {
-      nextAnswer = { ...existing, remediationActions: next };
-    } else {
-      const { remediationActions: _drop, ...rest } = existing;
-      nextAnswer = rest;
-    }
-    const newAnswers = { ...current, [questionId]: nextAnswer };
-    this.answersSignal.set(newAnswers);
-    this._persistAnswers(newAnswers);
-  }
-
-  /**
-   * Capture a reviewer's free-form Remediation text on a failed Answer (issue
-   * #250), stored as `answer.freeFormRemediation`. An empty value clears the
-   * field. Shares the `canSelectRemediation` gate and the autosave lifecycle.
-   *
-   * @param {string} questionId
-   * @param {string} value
-   */
-  handleRemediationFreeForm(questionId, value) {
-    if (!this.machine?.canSelectRemediation) return;
-    const current = this.answersSignal.get();
-    const existing = current[questionId];
-    if (!existing) return;
-
-    let nextAnswer;
-    if (value) {
-      nextAnswer = { ...existing, freeFormRemediation: value };
-    } else {
-      const { freeFormRemediation: _drop, ...rest } = existing;
-      nextAnswer = rest;
-    }
-    const newAnswers = { ...current, [questionId]: nextAnswer };
-    this.answersSignal.set(newAnswers);
-    this._persistAnswers(newAnswers);
-  }
-
-  /**
-   * Record how one Question's remediation was resolved, from the Remediation
-   * tab (#499): `complete`, or `partial` / `cancelled` with the details or
-   * justification that resolution requires. Only the Assigned Reviewer (the one
-   * viewer with `edit` on the Section) can write it; an unknown Question, or one
-   * carrying no remediation, is ignored.
-   *
-   * Incomplete text is stored rather than rejected — the Reviewer picks the
-   * status first and types afterwards — and the *completion gate*
-   * (`readyToClose`) is what refuses to close a Case whose rows are unresolved.
-   *
-   * @param {string} questionId
-   * @param {import('../sharepoint-client.js').RemediationStatusValue | ''} status
-   * @param {string} [details]
-   */
-  handleRemediationStatus(questionId, status, details = '') {
-    if (this.access.remediation !== 'edit') return;
-    const current = this.answersSignal.get();
-    const existing = current[questionId];
-    if (!existing) return;
-    // Only a Question carrying remediation is a row on the tab, so only one can
-    // be resolved: this keeps the write path in step with what the view derives.
-    if (answerRemediation(existing) === null) return;
-    const next = setRemediationStatus(existing, status, details);
-    if (next === existing) return;
-    const newAnswers = { ...current, [questionId]: next };
-    this.answersSignal.set(newAnswers);
-    this._persistAnswers(newAnswers);
-  }
-
   async _resolveAttributedParties() {
     /** @type {string[]} */
     const accounts = [];
-    for (const answer of Object.values(this.answersSignal.get())) {
+    for (const answer of Object.values(this.answers)) {
       const login = answer.attributedParty?.loginName;
       if (login && !accounts.includes(login)) accounts.push(login);
     }
@@ -548,7 +351,7 @@ export class CaseReviewViewModel {
     let changed = false;
     /** @type {Record<string, Answer>} */
     const next = {};
-    for (const [id, answer] of Object.entries(this.answersSignal.get())) {
+    for (const [id, answer] of Object.entries(this.answers)) {
       const party = answer.attributedParty;
       const name = party ? resolved[party.loginName] : null;
       if (party && name && name !== party.displayName) {
@@ -561,6 +364,6 @@ export class CaseReviewViewModel {
         next[id] = answer;
       }
     }
-    if (changed) this.answersSignal.set(next);
+    if (changed) this.answers = next;
   }
 }

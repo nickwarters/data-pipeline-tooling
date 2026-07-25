@@ -3,36 +3,12 @@ import './_register-example-review.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CaseReviewViewModel } from '../src/lib/case-review-view-model.js';
-import { signal } from '../src/lib/signal.js';
 import { CASE_TYPE_IMPORTERS } from '../case-types/manifest.js';
 import { isolateBrowserGlobals } from './helpers/browser-globals.js';
 
 isolateBrowserGlobals();
 
-/**
- * Builds a view model wired just enough to exercise handleCapture: an editable
- * machine, a one-field capture group, and a stubbed save queue.
- * @param {(...args: any[]) => void} enqueue
- */
-function makeVM(enqueue) {
-  const vm = new CaseReviewViewModel({
-    client: /** @type {any} */ ({}),
-    saveQueue: /** @type {any} */ ({ enqueue }),
-    caseId: 'c1',
-    currentUserId: 'u1',
-    capabilities: null,
-  });
-  vm.machine = /** @type {any} */ ({ canCapture: true });
-  vm.config = /** @type {any} */ ({
-    captureGroups: [
-      { key: 'cause', fields: [{ key: 'rootCause', type: 'text' }] },
-    ],
-  });
-  vm.answersSignal = signal(/** @type {any} */ ({ q1: { value: 'No' } }));
-  return vm;
-}
-
-test('allAnswered treats an empty multi-choice Answer as unanswered on load', () => {
+test('toStoreSnapshot: an empty multi-choice Answer is unanswered on load', () => {
   const vm = new CaseReviewViewModel({
     client: /** @type {any} */ ({}),
     saveQueue: /** @type {any} */ ({ enqueue() {} }),
@@ -49,273 +25,65 @@ test('allAnswered treats an empty multi-choice Answer as unanswered on load', ()
       deprecated: false,
     },
   ];
-  vm.answersSignal.set({ q1: { value: [] } });
+  vm.answers = { q1: { value: [] } };
 
-  assert.equal(vm.allAnswered.get(), false);
+  assert.equal(vm.toStoreSnapshot().allAnswered, false);
 });
 
-test('handleCapture works (no throw) when window is absent', () => {
-  assert.equal(typeof globalThis.window, 'undefined');
-  /** @type {any[]} */
-  const calls = [];
-  const vm = makeVM((...a) => calls.push(a));
-  vm.handleCapture('q1', 'rootCause', 'x');
-  assert.equal(calls.length, 1);
-  assert.deepEqual(calls[0][2].q1.capture, { rootCause: 'x' });
-});
-
-// --- handleRemediationAction / handleRemediationFreeForm (issue #250) ---
-
-/**
- * @param {(...args: any[]) => void} enqueue
- * @param {any} [answer]
- * @param {boolean} [canSelectRemediation]
- */
-function makeSelectionVM(
-  enqueue,
-  answer = { value: 'No' },
-  canSelectRemediation = true
-) {
+test('toStoreSnapshot: the loader hands over Answers and the derived applicable set', () => {
   const vm = new CaseReviewViewModel({
     client: /** @type {any} */ ({}),
-    saveQueue: /** @type {any} */ ({ enqueue }),
+    saveQueue: /** @type {any} */ ({ enqueue() {} }),
     caseId: 'c1',
     currentUserId: 'u1',
     capabilities: null,
   });
-  vm.machine = /** @type {any} */ ({ canSelectRemediation });
-  vm.answersSignal = signal(/** @type {any} */ ({ q1: answer }));
-  return vm;
-}
+  vm.catalogue = [
+    { id: 'q1', text: 'One', responseType: 'yes-no-na', deprecated: false },
+    {
+      id: 'q2',
+      text: 'Only when q1 is No',
+      responseType: 'yes-no-na',
+      showWhen: { q1: { equals: 'No' } },
+      deprecated: false,
+    },
+  ];
+  vm.answers = { q1: { value: 'Yes' } };
 
-test('handleRemediationAction: ticking an action writes its id onto answer.remediationActions', () => {
-  /** @type {any[]} */
-  const calls = [];
-  const vm = makeSelectionVM((...a) => calls.push(a));
-  vm.handleRemediationAction('q1', { id: 'ra-0', text: 'Retrain' }, true);
-
-  assert.deepEqual(vm.answersSignal.get().q1.remediationActions, [
-    { id: 'ra-0', text: 'Retrain', completed: false },
-  ]);
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0][1], 'answers');
-});
-
-test('handleRemediationAction: unticking removes the action, dropping the key when empty', () => {
-  /** @type {any[]} */
-  const calls = [];
-  const vm = makeSelectionVM((...a) => calls.push(a), {
-    value: 'No',
-    remediationActions: [{ id: 'ra-0', text: 'Retrain', completed: false }],
-  });
-  vm.handleRemediationAction('q1', { id: 'ra-0', text: 'Retrain' }, false);
-
-  assert.equal(
-    'remediationActions' in vm.answersSignal.get().q1,
-    false,
-    'the empty selection key is removed, not left as []'
-  );
-  assert.equal(calls.length, 1);
-});
-
-test('handleRemediationAction: ticking preserves other selected actions', () => {
-  const vm = makeSelectionVM(() => {}, {
-    value: 'No',
-    remediationActions: [{ id: 'ra-0', text: 'Retrain', completed: false }],
-  });
-  vm.handleRemediationAction('q1', { id: 'ra-1', text: 'Update script' }, true);
-
-  assert.deepEqual(vm.answersSignal.get().q1.remediationActions, [
-    { id: 'ra-0', text: 'Retrain', completed: false },
-    { id: 'ra-1', text: 'Update script', completed: false },
-  ]);
-});
-
-test('handleRemediationAction: re-ticking an already-selected action is a no-op', () => {
-  /** @type {any[]} */
-  const calls = [];
-  const vm = makeSelectionVM((...a) => calls.push(a), {
-    value: 'No',
-    remediationActions: [{ id: 'ra-0', text: 'Retrain', completed: false }],
-  });
-  vm.handleRemediationAction('q1', { id: 'ra-0', text: 'Retrain' }, true);
-  assert.equal(calls.length, 0, 'no redundant save');
-});
-
-test('handleRemediationAction: unticking an unselected action is a no-op', () => {
-  /** @type {any[]} */
-  const calls = [];
-  const vm = makeSelectionVM((...a) => calls.push(a));
-  vm.handleRemediationAction('q1', { id: 'ra-0', text: 'Retrain' }, false);
-  assert.equal(calls.length, 0);
-});
-
-test('handleRemediationAction: ignored when canSelectRemediation is false', () => {
-  /** @type {any[]} */
-  const calls = [];
-  const vm = makeSelectionVM((...a) => calls.push(a), { value: 'No' }, false);
-  vm.handleRemediationAction('q1', { id: 'ra-0', text: 'Retrain' }, true);
-  assert.equal(calls.length, 0);
-});
-
-test('handleRemediationAction: ignored when the Answer does not exist', () => {
-  /** @type {any[]} */
-  const calls = [];
-  const vm = makeSelectionVM((...a) => calls.push(a));
-  vm.handleRemediationAction('missing', { id: 'ra-0', text: 'Retrain' }, true);
-  assert.equal(calls.length, 0);
-});
-
-test('handleRemediationFreeForm: stores the value on the Answer', () => {
-  /** @type {any[]} */
-  const calls = [];
-  const vm = makeSelectionVM((...a) => calls.push(a));
-  vm.handleRemediationFreeForm('q1', 'Escalate to legal');
-
-  assert.equal(
-    vm.answersSignal.get().q1.freeFormRemediation,
-    'Escalate to legal'
-  );
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0][1], 'answers');
-});
-
-test('handleRemediationFreeForm: an empty value clears the field', () => {
-  const vm = makeSelectionVM(() => {}, {
-    value: 'No',
-    freeFormRemediation: 'Old text',
-  });
-  vm.handleRemediationFreeForm('q1', '');
-
-  assert.equal(
-    'freeFormRemediation' in vm.answersSignal.get().q1,
-    false,
-    'clearing removes the key'
+  const snapshot = vm.toStoreSnapshot();
+  assert.equal(snapshot.answers, vm.answers);
+  assert.deepEqual(
+    snapshot.applicableQuestions.map((q) => q.id),
+    ['q1']
   );
 });
 
-test('handleRemediationFreeForm: ignored when canSelectRemediation is false', () => {
-  /** @type {any[]} */
-  const calls = [];
-  const vm = makeSelectionVM((...a) => calls.push(a), { value: 'No' }, false);
-  vm.handleRemediationFreeForm('q1', 'x');
-  assert.equal(calls.length, 0);
-});
-
-test('handleRemediationFreeForm: ignored when the Answer does not exist', () => {
-  /** @type {any[]} */
-  const calls = [];
-  const vm = makeSelectionVM((...a) => calls.push(a));
-  vm.handleRemediationFreeForm('missing', 'x');
-  assert.equal(calls.length, 0);
-});
-
-// --- handleRemediationStatus: question-level Remediation resolution (#499) ---
-
-/**
- * @param {(...args: any[]) => void} enqueue
- * @param {string} [access]
- */
-function makeTrackingVM(enqueue, access = 'edit') {
+test('CaseReviewViewModel exposes no Answer mutation surface (#510)', () => {
+  // The store is the single Answer owner: the loader loads, and the route's
+  // answer-actions are the only writers.
   const vm = new CaseReviewViewModel({
     client: /** @type {any} */ ({}),
-    saveQueue: /** @type {any} */ ({ enqueue }),
+    saveQueue: /** @type {any} */ ({ enqueue() {} }),
     caseId: 'c1',
     currentUserId: 'u1',
     capabilities: null,
   });
-  vm.access = /** @type {any} */ ({ remediation: access });
-  vm.answersSignal = signal(
-    /** @type {any} */ ({
-      q1: {
-        value: 'No',
-        remediationActions: [{ id: 'a1', text: 'Do it', completed: false }],
-      },
-    })
-  );
-  return vm;
-}
-
-test('handleRemediationStatus: records a complete resolution and persists', () => {
-  /** @type {any[]} */
-  const calls = [];
-  const vm = makeTrackingVM((...a) => calls.push(a));
-  vm.handleRemediationStatus('q1', 'complete');
-  assert.equal(calls.length, 1);
-  assert.deepEqual(vm.answersSignal.get().q1.remediationStatus, {
-    status: 'complete',
-  });
-});
-
-test('handleRemediationStatus: keeps the details a partial or cancelled resolution carries', () => {
-  /** @type {any[]} */
-  const calls = [];
-  const vm = makeTrackingVM((...a) => calls.push(a));
-  vm.handleRemediationStatus('q1', 'cancelled', 'Customer declined');
-  assert.deepEqual(vm.answersSignal.get().q1.remediationStatus, {
-    status: 'cancelled',
-    details: 'Customer declined',
-  });
-});
-
-test('handleRemediationStatus: stores an as-yet-empty justification rather than dropping the write', () => {
-  // The Reviewer picks the status first and types afterwards; the completion
-  // gate — not this write — is what refuses an unresolved row.
-  /** @type {any[]} */
-  const calls = [];
-  const vm = makeTrackingVM((...a) => calls.push(a));
-  vm.handleRemediationStatus('q1', 'cancelled');
-  assert.equal(calls.length, 1);
-  assert.deepEqual(vm.answersSignal.get().q1.remediationStatus, {
-    status: 'cancelled',
-    details: '',
-  });
-});
-
-test('handleRemediationStatus: an empty status clears the resolution', () => {
-  /** @type {any[]} */
-  const calls = [];
-  const vm = makeTrackingVM((...a) => calls.push(a));
-  vm.handleRemediationStatus('q1', 'complete');
-  vm.handleRemediationStatus('q1', '');
-  assert.equal('remediationStatus' in vm.answersSignal.get().q1, false);
-});
-
-test('handleRemediationStatus: no-op when the viewer cannot resolve (read-only)', () => {
-  /** @type {any[]} */
-  const calls = [];
-  const vm = makeTrackingVM((...a) => calls.push(a), 'read-only');
-  vm.handleRemediationStatus('q1', 'complete');
-  assert.equal(calls.length, 0);
-});
-
-test('handleRemediationStatus: no-op for a missing Answer or an unrecognised status', () => {
-  /** @type {any[]} */
-  const calls = [];
-  const vm = makeTrackingVM((...a) => calls.push(a));
-  vm.handleRemediationStatus('missing', 'complete');
-  vm.handleRemediationStatus('q1', /** @type {any} */ ('done-ish'));
-  assert.equal(calls.length, 0);
-});
-
-test('handleRemediationStatus: no-op for an Answer carrying no remediation', () => {
-  // The write path agrees with the row set the tab derives: only a Question with
-  // remediation attached is rendered, so only one can be resolved.
-  /** @type {any[]} */
-  const calls = [];
-  const vm = makeTrackingVM((...a) => calls.push(a));
-  vm.answersSignal = signal(/** @type {any} */ ({ q1: { value: 'No' } }));
-  vm.handleRemediationStatus('q1', 'complete');
-  assert.equal(calls.length, 0);
-  assert.equal('remediationStatus' in vm.answersSignal.get().q1, false);
-});
-
-test('handleRemediationStatus: clearing an unresolved row does not queue a write', () => {
-  /** @type {any[]} */
-  const calls = [];
-  const vm = makeTrackingVM((...a) => calls.push(a));
-  vm.handleRemediationStatus('q1', '');
-  assert.equal(calls.length, 0);
+  for (const name of [
+    'handleAnswer',
+    'handleCapture',
+    'handleAttribute',
+    'handleRemediationAction',
+    'handleRemediationFreeForm',
+    'handleRemediationStatus',
+    'setAnswerChangeHandler',
+  ]) {
+    assert.equal(
+      typeof (/** @type {any} */ (vm)[name]),
+      'undefined',
+      `${name} must not exist on the loader`
+    );
+  }
+  assert.equal('answersSignal' in vm, false);
 });
 
 // --- exportHash loading (ADR-0021 Step 3) ---
