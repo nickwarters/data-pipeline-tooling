@@ -155,3 +155,33 @@ test('sectionById resolves entries and returns undefined for unknown ids', () =>
   assert.equal(sectionById('details')?.showInSummaryDefault, true);
   assert.equal(sectionById('nope'), undefined);
 });
+
+test('every registry entry declares exactly the SectionDefinition fields', () => {
+  // `SECTION_REGISTRY` deliberately carries no `@type` annotation — that would
+  // widen the literal `id`s away and `Section` could not be projected from
+  // them. The helpers' defaulted `registry` parameter still catches a missing
+  // or wrongly-typed field, but *excess* properties slip past `tsc` entirely:
+  // adding `typo: true` to an entry type-checks clean. This closes that gap at
+  // the seam the house style prefers, rather than contorting the types.
+  const fields = [
+    'id',
+    'tab',
+    'tabOrder',
+    'summaryBlock',
+    'summaryOrder',
+    'showInSummaryDefault',
+  ];
+  for (const entry of SECTION_REGISTRY) {
+    assert.deepEqual(
+      Object.keys(entry).sort(),
+      [...fields].sort(),
+      `Section "${entry.id}" does not declare exactly the SectionDefinition fields`
+    );
+    assert.equal(typeof entry.id, 'string');
+    assert.equal(typeof entry.tab, 'boolean');
+    assert.equal(typeof entry.tabOrder, 'number');
+    assert.equal(typeof entry.summaryBlock, 'boolean');
+    assert.equal(typeof entry.summaryOrder, 'number');
+    assert.equal(typeof entry.showInSummaryDefault, 'boolean');
+  }
+});

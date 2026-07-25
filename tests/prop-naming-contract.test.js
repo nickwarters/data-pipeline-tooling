@@ -12,13 +12,21 @@
  *
  * So the casing carries meaning, and these tests keep it honest:
  *
- *  1. Anything the browser dispatches is written lowercase (`onclick`,
- *     `oninput`, `onchange`, `onkeydown`, …) so it always reaches
+ *  1. Anything handed to `h()` as an element prop is written lowercase
+ *     (`onclick`, `oninput`, `onpointerdown`, …) so it always reaches
  *     `addEventListener`.
  *  2. camelCase `on[A-Z]` is reserved for component callback properties
- *     (`onAnswer`, `onSort`, `onCommit`, …).
+ *     (`onAnswer`, `onSort`, `onCommit`, …), which are read off a plain prop
+ *     object by a view function and never reach `applyProp`.
  *  3. The class prop is written `className`, not `class` — both work, so the
  *     point is one spelling, not two.
+ *
+ * The rule is enforced **structurally, not against a list of event names**: an
+ * `on…` prop key is judged by the call it sits in, so a handler for an event
+ * nobody has written yet (`onpointerdown`, `onpaste`, `onscroll`) is covered
+ * the day it is written. An earlier draft of this file matched eight
+ * hard-coded event names, which let `onMouseEnter:` inside an `h()` call pass
+ * clean — precisely the footgun #509 exists to close.
  */
 
 import { readdirSync, readFileSync } from 'node:fs';
@@ -27,42 +35,6 @@ import assert from 'node:assert/strict';
 
 const ROOT = new URL('../', import.meta.url);
 const SCAN_ROOTS = ['src/', 'case-types/'];
-
-/** DOM events written as `on<Event>` props anywhere in the codebase. */
-const DOM_EVENTS = [
-  'click',
-  'input',
-  'change',
-  'keydown',
-  'keyup',
-  'submit',
-  'focus',
-  'blur',
-];
-
-/**
- * The two component callback props that happen to be *named* after a DOM event.
- * Neither is ever handed to `h()` as an element prop — both are keys in a prop
- * object passed to a plain view function, which reads them as
- * `props.onInput` / `props.onSubmit` — so `applyProp` never sees them and the
- * lowercase rule does not apply. They are listed here explicitly rather than
- * pattern-matched, because a textual scan cannot tell a component prop bag from
- * an element prop bag, and an unbounded exemption would give the rule away.
- *
- * (`Tabs`'s `onKeydown` prop in `src/components/base/cora-tabs.js` is a third
- * of the same kind; it currently appears only in JSDoc, which the scan strips.)
- *
- * Renaming these to something that cannot be mistaken for a DOM event —
- * `onQueryInput`, `onPublish` — would remove the need for the list, but that
- * changes a component's public API and is out of scope for #509.
- * @type {ReadonlySet<string>}
- */
-const COMPONENT_CALLBACKS_NAMED_AFTER_DOM_EVENTS = new Set([
-  // -> AttributeMenu({ onInput })     src/components/sections/cora-attribute-menu.js
-  'src/pages/cora-case-review/remediation-view.js → onInput:',
-  // -> CompileDrawer({ onSubmit })    src/pages/question-bank/compile-drawer.js
-  'src/pages/question-bank/cora-bank-editor.js → onSubmit:',
-]);
 
 /** @param {URL} dir @returns {string[]} repo-relative paths of every .js file */
 function jsFilesUnder(dir) {
@@ -78,60 +50,212 @@ function jsFilesUnder(dir) {
 }
 
 /**
- * Source with whole-line comments removed, so the contract comment in
- * `html.js` and prose that mentions `class:` or `onClick:` do not trip the
- * scan. Only real code remains.
- * @param {string} rel @returns {string[]} code lines, 1-indexed positions kept
+ * Blank out comments, strings, template literals and regex literals, keeping
+ * every character position (and therefore every line number) intact. Brackets
+ * inside prose or string data would otherwise derail the bracket walk below,
+ * and the `html.js` contract comment names both spellings on purpose.
+ *
+ * @param {string} source
+ * @returns {string} same length as `source`, code structure only
  */
-function codeLines(rel) {
-  return readFileSync(new URL(rel, ROOT), 'utf8')
-    .split('\n')
-    .map((line) => (/^\s*(\*|\/\/|\/\*)/.test(line) ? '' : line));
+function maskNonCode(source) {
+  const out = source.split('');
+  const blank = (/** @type {number} */ from, /** @type {number} */ to) => {
+    for (let i = from; i < to && i < out.length; i++)
+      if (out[i] !== '\n') out[i] = ' ';
+  };
+  // A `/` starts a regex (not a division) when the last meaningful character
+  // opens an expression position. Good enough for this codebase, and the
+  // balance assertion below catches it if it ever is not.
+  const REGEX_PRECEDERS = '(,=:[!&|?{};+-*%<>~^';
+  let i = 0;
+  let lastCode = '';
+  while (i < source.length) {
+    const c = source[i];
+    const next = source[i + 1];
+    if (c === '/' && next === '/') {
+      const end = source.indexOf('\n', i);
+      blank(i, end === -1 ? source.length : end);
+      i = end === -1 ? source.length : end;
+    } else if (c === '/' && next === '*') {
+      const end = source.indexOf('*/', i + 2);
+      blank(i, end === -1 ? source.length : end + 2);
+      i = end === -1 ? source.length : end + 2;
+    } else if (c === "'" || c === '"') {
+      let j = i + 1;
+      while (j < source.length && source[j] !== c)
+        j += source[j] === '\\' ? 2 : 1;
+      blank(i, j + 1);
+      i = j + 1;
+      lastCode = 'x';
+    } else if (c === '`') {
+      // Blank the whole template, expressions included: `${…}` braces vanish
+      // wholesale, so bracket balance is preserved either way.
+      let j = i + 1;
+      let depth = 0;
+      while (j < source.length) {
+        if (source[j] === '\\') j += 2;
+        else if (source[j] === '`' && depth === 0) break;
+        else {
+          if (source[j] === '{' && source[j - 1] === '$') depth++;
+          else if (source[j] === '}' && depth > 0) depth--;
+          j++;
+        }
+      }
+      blank(i, j + 1);
+      i = j + 1;
+      lastCode = 'x';
+    } else if (c === '/' && REGEX_PRECEDERS.includes(lastCode)) {
+      let j = i + 1;
+      let inClass = false;
+      while (j < source.length) {
+        if (source[j] === '\\') j += 2;
+        else if (source[j] === '[') ((inClass = true), j++);
+        else if (source[j] === ']') ((inClass = false), j++);
+        else if (source[j] === '/' && !inClass) break;
+        else if (source[j] === '\n') break;
+        else j++;
+      }
+      blank(i, j + 1);
+      i = j + 1;
+      lastCode = 'x';
+    } else {
+      if (!/\s/.test(c)) lastCode = c;
+      i++;
+    }
+  }
+  return out.join('');
+}
+
+/**
+ * Index of the nearest bracket that is still open at `from`, walking backwards.
+ * @param {string} masked @param {number} from @returns {number} index, or -1
+ */
+function enclosingOpener(masked, from) {
+  let depth = 0;
+  for (let i = from - 1; i >= 0; i--) {
+    const c = masked[i];
+    if (c === '}' || c === ')' || c === ']') depth++;
+    else if (c === '{' || c === '(' || c === '[') {
+      if (depth === 0) return i;
+      depth--;
+    }
+  }
+  return -1;
+}
+
+/**
+ * The function an object literal is being passed to, or null when the literal
+ * is not a call argument. `h('button', { onclick })` → `'h'`.
+ *
+ * @param {string} masked @param {number} braceIndex @returns {string | null}
+ */
+function calleeOfObjectLiteral(masked, braceIndex) {
+  const parenIndex = enclosingOpener(masked, braceIndex);
+  if (parenIndex === -1 || masked[parenIndex] !== '(') return null;
+  return (
+    masked.slice(0, parenIndex).match(/([A-Za-z_$][\w$]*)\s*$/)?.[1] ?? null
+  );
+}
+
+/**
+ * Every `on…:` prop key in a source file, tagged with whether it is being
+ * handed straight to `h()` (an element prop, so `applyProp` sees it) or to a
+ * view function (a component callback, which `applyProp` never sees).
+ *
+ * @param {string} rel @param {string} source
+ * @returns {{ where: string, name: string, inH: boolean }[]}
+ */
+export function propKeys(rel, source) {
+  const masked = maskNonCode(source);
+  /** @type {{ where: string, name: string, inH: boolean }[]} */
+  const found = [];
+  for (const match of masked.matchAll(/\bon([A-Za-z]\w*)\s*:/g)) {
+    const at = match.index ?? 0;
+    const braceIndex = enclosingOpener(masked, at);
+    const inObject = braceIndex !== -1 && masked[braceIndex] === '{';
+    found.push({
+      where: `${rel}:${masked.slice(0, at).split('\n').length}`,
+      name: match[1],
+      inH: inObject && calleeOfObjectLiteral(masked, braceIndex) === 'h',
+    });
+  }
+  return found;
 }
 
 const productionFiles = SCAN_ROOTS.flatMap((dir) =>
   jsFilesUnder(new URL(dir, ROOT))
 );
 
+/** @type {{ rel: string, source: string, masked: string }[]} */
+const sources = productionFiles.map((rel) => {
+  const source = readFileSync(new URL(rel, ROOT), 'utf8');
+  return { rel, source, masked: maskNonCode(source) };
+});
+
+const allPropKeys = sources.flatMap(({ rel, source }) => propKeys(rel, source));
+
 test('production files are in scope for the prop-naming scan', () => {
   assert.ok(
     productionFiles.length > 50,
     `expected the scan to cover the whole of ${SCAN_ROOTS.join(' and ')}`
   );
+  // A masker that silently ate the source would make every rule below vacuous.
+  assert.ok(
+    allPropKeys.filter((prop) => prop.inH).length > 50,
+    'expected to find element props inside h() calls — the scan is not working'
+  );
 });
 
-test('DOM event props are written lowercase', () => {
+test('the code masker keeps bracket structure intact', () => {
   /** @type {string[]} */
-  const offenders = [];
-  // Any `onSomething:` prop key. Anything whose event name is a DOM event but
-  // is not spelled all-lowercase (`onClick`, `onKeydown`, `onKEYUP`) is
-  // ambiguous at the applyProp branch and therefore an offender.
-  const propKey = /\bon([A-Za-z]+)\s*:/g;
-  for (const rel of productionFiles) {
-    codeLines(rel).forEach((line, index) => {
-      for (const [, name] of line.matchAll(propKey)) {
-        if (!DOM_EVENTS.includes(name.toLowerCase())) continue;
-        if (name === name.toLowerCase()) continue;
-        if (
-          COMPONENT_CALLBACKS_NAMED_AFTER_DOM_EVENTS.has(`${rel} → on${name}:`)
-        )
-          continue;
-        offenders.push(`${rel}:${index + 1} → on${name}:`);
-      }
-    });
+  const unbalanced = [];
+  for (const { rel, masked } of sources) {
+    let depth = 0;
+    for (const c of masked) {
+      if ('({['.includes(c)) depth++;
+      else if (')}]'.includes(c)) depth--;
+      if (depth < 0) break;
+    }
+    if (depth !== 0) unbalanced.push(`${rel} (depth ${depth})`);
   }
+  assert.deepEqual(
+    unbalanced,
+    [],
+    'brackets do not balance after masking, so the enclosing-call walk below cannot be trusted'
+  );
+});
+
+test('element event props handed to h() are lowercase', () => {
+  const offenders = allPropKeys
+    .filter((prop) => prop.inH && prop.name !== prop.name.toLowerCase())
+    .map((prop) => `${prop.where} → on${prop.name}:`);
   assert.deepEqual(
     offenders,
     [],
-    'DOM event props must be lowercase (onclick, oninput, onchange, onkeydown, …) so they reach addEventListener; camelCase on[A-Z] is reserved for component callback properties'
+    'an `on[A-Z]` key passed to h() is assigned as a property when the element declares it, and then no listener is ever attached — write DOM events lowercase (onclick, oninput, onpointerdown, …)'
+  );
+});
+
+test('camelCase on[A-Z] props are component callbacks, never element props', () => {
+  // The mirror of the rule above, stated from the other side: this is what
+  // makes the casing a *signal*. Every camelCase handler must be a key in a
+  // prop bag read by a view function, never something applyProp will see.
+  const offenders = allPropKeys
+    .filter((prop) => /^[A-Z]/.test(prop.name) && prop.inH)
+    .map((prop) => `${prop.where} → on${prop.name}:`);
+  assert.deepEqual(
+    offenders,
+    [],
+    'camelCase on[A-Z] is reserved for the props-down/callbacks-up component API (#382)'
   );
 });
 
 test('the class prop is written className', () => {
   /** @type {string[]} */
   const offenders = [];
-  for (const rel of productionFiles) {
-    codeLines(rel).forEach((line, index) => {
+  for (const { rel, masked } of sources) {
+    masked.split('\n').forEach((line, index) => {
       if (/(^|[^.\w])class\s*:/.test(line))
         offenders.push(`${rel}:${index + 1}`);
     });
@@ -140,5 +264,27 @@ test('the class prop is written className', () => {
     offenders,
     [],
     'use className: in h() props — `class:` works but two spellings for one prop is the thing this contract removes'
+  );
+});
+
+test('the scan flags a camelCase handler for any event, not a fixed list', () => {
+  // The regression that motivated the structural rewrite: the previous version
+  // of this contract matched eight hard-coded event names, so these passed.
+  const source = `
+    import { h } from '../lib/html.js';
+    export const Panel = (props) =>
+      h('div', { className: 'p', onMouseEnter: () => {}, onPaste: () => {} },
+        AttributeMenu({ onInput: props.onQuery, onSubmit: props.onGo }));
+  `;
+  const found = propKeys('synthetic.js', source);
+  assert.deepEqual(
+    found.filter((prop) => prop.inH).map((prop) => `on${prop.name}`),
+    ['onMouseEnter', 'onPaste'],
+    'element props inside h() must be detected whatever the event is named'
+  );
+  assert.deepEqual(
+    found.filter((prop) => !prop.inH).map((prop) => `on${prop.name}`),
+    ['onInput', 'onSubmit'],
+    'component callbacks named after DOM events are exempt by structure, not by an allowlist'
   );
 });
