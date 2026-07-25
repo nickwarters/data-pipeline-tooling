@@ -442,7 +442,7 @@
  * listName?: string,
  * reviewerGroup?: string,
  * displayName?: string,
- * sections?: Partial<Record<'details'|'questions'|'issues'|'summary'|'remediation'|'notes'|'conversation'|'appealRequest'|'appealReview'|'amendOutcome', SectionConfig>>,
+ * sections?: Partial<Record<import('./lib/section-registry.js').Section, SectionConfig>>,
  * questionGroups?: Record<string, QuestionGroupConfig>,
  * appeal?: AppealConfig,
  * slaHours?: number,

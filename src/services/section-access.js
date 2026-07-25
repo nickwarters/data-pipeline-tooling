@@ -3,7 +3,10 @@
  * Section-level role-based access on the case page. UX-only per the architecture decision;
  * SharePoint list ACLs remain the real boundary. See the architecture decision for design.
  *
- * @typedef {'details'|'questions'|'issues'|'summary'|'remediation'|'notes'|'conversation'|'appealRequest'|'appealReview'|'amendOutcome'} Section
+ * The Section id union is projected from `SECTION_REGISTRY` (ADR-0032) rather
+ * than restated here; `MATRIX` below is contract-tested to have exactly its keys.
+ *
+ * @typedef {import('../lib/section-registry.js').Section} Section
  * @typedef {'assignedReviewer'|'otherReviewer'|'reviewerManager'|'responsibleParty'|'responsiblePartyManager'|'caseTypeOwner'|'journeyOwner'|'controls'|'none'} Role
  * @typedef {'edit'|'read-only'|'hidden'} Mode
  */

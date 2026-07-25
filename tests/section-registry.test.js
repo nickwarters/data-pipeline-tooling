@@ -1,6 +1,7 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import {
   SECTION_REGISTRY,
@@ -130,6 +131,23 @@ test('adding a Section to a fixture registry flows into every derived structure'
   assert.equal(sectionIds(withRisk).at(-1), 'riskAssessment');
   assert.equal(tabEntries(withRisk).at(-1)?.id, 'riskAssessment');
   assert.equal(summaryBlockIds(withRisk).at(-1), 'riskAssessment');
+});
+
+test('the Section id union is stated in exactly one place', () => {
+  // ADR-0032: the registry is the single source of truth for which Sections
+  // exist. The `Section` *type* is projected from it, so no other module may
+  // spell the id list out as a hand-written union — a typo in a restated union
+  // is self-consistent, so `tsc --checkJs` cannot catch it.
+  for (const path of [
+    'src/services/section-access.js',
+    'src/sharepoint-client.js',
+  ]) {
+    const source = readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
+    assert.ok(
+      !/'appealRequest'\s*\|/.test(source),
+      `${path} restates the Section id union; import it from src/lib/section-registry.js instead`
+    );
+  }
 });
 
 test('sectionById resolves entries and returns undefined for unknown ids', () => {

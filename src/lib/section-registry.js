@@ -24,8 +24,23 @@
  * the Summary-block default. It deliberately does **not** own the role→mode
  * access policy — the `MATRIX` in `services/section-access.js` stays where it
  * is; the registry only supplies the key set that MATRIX is asserted to match.
+ */
+
+/**
+ * The Section id union, projected from `SECTION_REGISTRY` itself rather than
+ * restated by hand. An entry below is the only place a Section *id* is written:
+ * this type, the `MATRIX` key set, the Case Type `sections` allow-list, the tab
+ * list and the Summary block set all derive from it.
  *
- * @typedef {import('../services/section-access.js').Section} Section
+ * `section-access.js` and `sharepoint-client.js` import this type; they used to
+ * spell the union out, which `tsc` could not police because a typo in a
+ * restated *type* is self-consistent. `tests/section-registry.test.js` locks it.
+ *
+ * Adding a Section is now: an entry here, plus its `MATRIX` access row (policy,
+ * not existence — deliberately hand-written) and its `DEFAULT_SECTION_LABELS`
+ * label. `tsc` demands both; before this projection it demanded neither.
+ *
+ * @typedef {(typeof SECTION_REGISTRY)[number]['id']} Section
  */
 
 /**
@@ -56,7 +71,12 @@
  * the Summary block set omits Summary itself, Conversation and the appeal /
  * amend Sections).
  *
- * @type {readonly SectionDefinition[]}
+ * Deliberately carries no `@type {readonly SectionDefinition[]}` annotation: the
+ * literal `id` strings have to survive inference for `Section` above to be
+ * projected from them, and a widening annotation would erase them (annotating
+ * it is also circular, since `SectionDefinition.id` is itself a `Section`).
+ * Entry *shape* is still checked — every helper below defaults its `registry`
+ * parameter to this array, so a malformed entry fails at the default.
  */
 export const SECTION_REGISTRY = /** @type {const} */ ([
   {
