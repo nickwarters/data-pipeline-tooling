@@ -293,8 +293,8 @@ Optional fields to know about (all in the `CaseTypeConfig` typedef):
 `{ questions: 'Assessment' }`); `questionGroups` opts a named group into the
 bulk-verdict control (`{ Build: { allowBulkOutcome: true } }`);
 `remediationFields` and `captureGroups` extend per-failure capture;
-`dashboardColumns` contributes extra `cora-case-table` columns when a table is
-scoped to this single type.
+`caseTableColumns` contributes extra data-only columns when a generic Case table
+is scoped to this single type.
 
 ## Step 3 — Register the slug in the manifest
 

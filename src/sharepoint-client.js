@@ -421,10 +421,6 @@
  * composition is owned by dashboard code and is not Case Type configuration.
  * See ADR-0035 and ADR-0036.
  *
- * `dashboardColumns` is the additive legacy component-era shape. It remains in
- * the typedef for source compatibility; new and scaffolded Case Types use
- * `caseTableColumns`.
- *
  * `generalQuestions` declares the **General Questions** rendered above or beneath the
  * Question Groups on the Review tab — `generalQuestionsPlacement` selects which
  * ('after' when absent). They reuse the `CaptureField` vocabulary but are never
@@ -457,7 +453,6 @@
  * generalQuestions?: GeneralQuestionField[],
  * generalQuestionsPlacement?: 'before' | 'after',
  * detailFields?: CaseDetailField[],
- * dashboardColumns?: import('./components/base/cora-data-table.js').ColumnDef<CaseRow>[],
  * caseTableColumns?: CaseTableColumnDescriptor[]
  * }} CaseTypeConfig
  */

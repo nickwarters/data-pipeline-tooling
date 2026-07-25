@@ -68,6 +68,11 @@ The additive legacy `dashboardColumns` typedef remains temporarily for source
 compatibility, but new and scaffolded Case Types use `caseTableColumns`. It is
 not the extension seam for Palimpsest generic tables.
 
+> **Update (#505):** the temporary period is over. `dashboardColumns` was
+> removed from the `CaseTypeConfig` typedef along with the
+> `components/base/cora-data-table.js` module its type referred to; no Case Type
+> ever read it. `caseTableColumns` is the only Case Type table descriptor.
+
 ## Demonstration
 
 Complaints declares the complete current `dashboardPanels` set and retains its
