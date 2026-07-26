@@ -27,9 +27,12 @@
  * inside a selector list. It must not fire on `.cora-foo` class selectors, on
  * `[data-cora-root]` or any other attribute selector mentioning `cora-`, or on
  * `--cora-*` custom properties — all three are the normal, correct spelling and
- * appear hundreds of times. The synthetic fixture at the bottom pins all of
- * those cases, including the real pre-fix rules this contract was written
- * against.
+ * appear hundreds of times. Narrow is not the same as shallow, though: a type
+ * selector reaches the same elements from inside a functional pseudo-class
+ * (`:is()`, `:where()`, `:not()`, `:has()`) and from inside a nested rule, so
+ * the detector looks in both. The synthetic fixture at the bottom pins every
+ * one of those cases, including the real pre-fix rules this contract was
+ * written against.
  */
 
 import { readdirSync, readFileSync } from 'node:fs';
@@ -89,43 +92,47 @@ export function coraElementConstructions(rel, source) {
 /**
  * Every element-type `cora-*` selector in a stylesheet.
  *
- * Works on selector lists only — the text preceding a `{` — so declaration
- * values (`var(--cora-space-2)`) are never examined. Within a selector list,
- * attribute selectors are blanked first (`[data-cora-root]`), then a `cora-`
- * identifier counts as a type selector only when the character before it is not
- * one that would make it part of another token: `.` (class), `#` (id), `:`
- * (pseudo), `-` (custom property / longer identifier), or a word character.
+ * Works on selector lists only — the run of text that ends at a `{`, starting
+ * after the previous `{`, `}` or `;` — so declaration values
+ * (`var(--cora-space-2)`) are never examined. Because the run is cut at every
+ * `;` at *any* depth, a nested rule's prelude (`.wrap { color: red; & cora-x
+ * { … } }`) is read as the selector list it is, and a nested at-rule prelude is
+ * excluded by the same `^\s*@` test as a top-level one. That is what lets the
+ * ratchet outlive the "no CSS nesting in this repo" assumption — Edge Chromium,
+ * the ADR-0001 baseline, supports nesting today.
+ *
+ * Within a selector list, quoted strings and attribute selectors are blanked
+ * first (`[data-cora-root]`, `[href^='#/cora-thing']`); *parenthesised*
+ * arguments are deliberately **not** blanked, because a functional pseudo-class
+ * is exactly where a type selector hides — `:is(cora-app-nav)`,
+ * `:where(cora-toast)`, `:not(cora-tabs)` and `:has(cora-toast)` all match
+ * elements and all silently drop their declarations. A `cora-` identifier then
+ * counts as a type selector only when the character before it is not one that
+ * would make it part of another token: `.` (class), `#` (id), `:` (pseudo), `-`
+ * (custom property / longer identifier), or a word character.
  *
  * @param {string} rel @param {string} css
  * @returns {string[]} `path:line → selector` for each offending selector list
  */
 export function elementTypeCoraSelectors(rel, css) {
-  const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, (m) =>
-    m.replace(/[^\n]/g, ' ')
+  const scannable = blankStrings(
+    css.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
   );
   /** @type {string[]} */
   const found = [];
-  let depth = 0;
   let start = 0;
-  for (let i = 0; i < withoutComments.length; i++) {
-    const c = withoutComments[i];
+  for (let i = 0; i < scannable.length; i++) {
+    const c = scannable[i];
     if (c === '{') {
-      const prelude = withoutComments.slice(start, i);
+      const prelude = scannable.slice(start, i);
       // Only rule preludes are selector lists; `@media (...)`, `@supports`,
-      // `@font-face` and friends are not, and neither is anything nested inside
-      // a declaration block.
-      if (depth === 0 || isNestedRuleContext(withoutComments, start)) {
-        if (!/^\s*@/.test(prelude) && hasTypeCoraSelector(prelude)) {
-          const line = withoutComments.slice(0, start).split('\n').length;
-          found.push(`${rel}:${line} → ${prelude.trim().replace(/\s+/g, ' ')}`);
-        }
+      // `@font-face` and friends are not, at any depth.
+      if (!/^\s*@/.test(prelude) && hasTypeCoraSelector(prelude)) {
+        const line = scannable.slice(0, start).split('\n').length;
+        found.push(`${rel}:${line} → ${prelude.trim().replace(/\s+/g, ' ')}`);
       }
-      depth++;
       start = i + 1;
-    } else if (c === '}') {
-      depth--;
-      start = i + 1;
-    } else if (c === ';' && depth === 0) {
+    } else if (c === '}' || c === ';') {
       start = i + 1;
     }
   }
@@ -133,31 +140,21 @@ export function elementTypeCoraSelectors(rel, css) {
 }
 
 /**
- * A rule nested one level inside an at-rule block (`@media { .x { … } }`) is
- * still a selector list. A block nested inside an ordinary rule is not — CSS
- * nesting is not used in this repo, so anything at depth ≥ 1 that is not inside
- * an at-rule is treated as declarations and skipped.
- * @param {string} css @param {number} start index the prelude begins at
- * @returns {boolean}
+ * Quoted string contents replaced by spaces, so a brace inside a declaration
+ * value (`content: '{'`) cannot be mistaken for the start of a block. Length
+ * and newlines are preserved so reported line numbers stay true.
+ * @param {string} css @returns {string}
  */
-function isNestedRuleContext(css, start) {
-  const before = css.slice(0, start);
-  const openAtRule = before.lastIndexOf('@');
-  if (openAtRule === -1) return false;
-  // Inside the most recent at-rule block only if it has not been closed yet.
-  let depth = 0;
-  for (const c of before.slice(openAtRule)) {
-    if (c === '{') depth++;
-    else if (c === '}') depth--;
-  }
-  return depth === 1;
+function blankStrings(css) {
+  return css.replace(
+    /'[^'\n]*'|"[^"\n]*"/g,
+    (m) => m[0] + m.slice(1, -1).replace(/[^\n]/g, ' ') + m[0]
+  );
 }
 
 /** @param {string} selectorList @returns {boolean} */
 function hasTypeCoraSelector(selectorList) {
-  const blanked = selectorList
-    .replace(/\[[^\]]*\]/g, ' ')
-    .replace(/\((?:[^()]|\([^()]*\))*\)/g, ' ');
+  const blanked = selectorList.replace(/\[[^\]]*\]/g, ' ');
   return /(^|[^\w.#:-])cora-/.test(blanked);
 }
 
@@ -218,6 +215,17 @@ test('the CSS detector flags element-type selectors and only those', () => {
     @media (min-width: 40rem) { .cora-kpi-strip { display: grid; } }
     @media print { cora-toast { display: none; } }
     @supports (scrollbar-gutter: stable) { .cora-a { scrollbar-gutter: stable; } }
+    :is(cora-app-nav) { display: block; }
+    :where(cora-toast) { display: none; }
+    .cora-x:not(cora-tabs) { color: red; }
+    .cora-x:has(cora-toast) { color: red; }
+    [data-cora-root] :is(cora-app-nav, .cora-app-nav-bar) { position: sticky; }
+    :is(.cora-a, .cora-b):not(.cora-c) { color: red; }
+    li:nth-child(2n + 1) .cora-d { color: red; }
+    .cora-list li:nth-child(2n + 1 of .cora-e) { color: red; }
+    .cora-wrap { color: red; & cora-toast { display: none; } }
+    .cora-wrap { & .cora-inner { color: red; } }
+    .cora-quote::after { content: '{'; }
   `;
   assert.deepEqual(
     elementTypeCoraSelectors('fixture.css', fixture).map((f) =>
@@ -228,8 +236,14 @@ test('the CSS detector flags element-type selectors and only those', () => {
       'cora-people-picker',
       'cora-tabs',
       'cora-toast',
+      ':is(cora-app-nav)',
+      ':where(cora-toast)',
+      '.cora-x:not(cora-tabs)',
+      '.cora-x:has(cora-toast)',
+      '[data-cora-root] :is(cora-app-nav, .cora-app-nav-bar)',
+      '& cora-toast',
     ],
-    'the detector must fire on a bare cora-* in type position — including inside an at-rule block — and on nothing else'
+    'the detector must fire on a bare cora-* in type position — inside an at-rule block, inside a functional pseudo-class, and inside a nested rule — and on nothing else'
   );
 });
 
