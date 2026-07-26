@@ -10,7 +10,7 @@ import { h } from '../../lib/html.js';
  * @property {PersonResult[]} people
  * @property {string} query
  * @property {string} inputValue
- * @property {(value: string) => void} onInput
+ * @property {(value: string) => void} onQueryInput
  * @property {(person: { loginName: string, displayName: string }) => void} onSelect
  */
 
@@ -58,7 +58,7 @@ export function PeoplePicker(props) {
     placeholder: props.placeholder,
     value: props.inputValue,
     oninput: (/** @type {any} */ ev) => {
-      props.onInput(ev.target?.value ?? '');
+      props.onQueryInput(ev.target?.value ?? '');
     },
   });
 

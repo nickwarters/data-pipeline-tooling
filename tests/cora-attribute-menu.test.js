@@ -115,7 +115,7 @@ test('AttributeMenu: renders supplied results and reports controlled input and s
   const { host } = mount({
     query: 'Jane',
     people: [PERSON],
-    onInput: (/** @type {string} */ value) => inputs.push(value),
+    onQueryInput: (/** @type {string} */ value) => inputs.push(value),
     onSelect: (/** @type {any} */ person) => selections.push(person),
   });
 

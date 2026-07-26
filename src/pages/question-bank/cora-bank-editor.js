@@ -89,7 +89,7 @@ function compileDrawerPropsFor(route, dispatch, publish, diff) {
         : null,
     onClose: () => dispatch({ type: 'drawer/changed', open: false }),
     onCopied: () => toast(dispatch, 'Bank JSON copied to clipboard'),
-    onSubmit: publish,
+    onPublish: publish,
   };
 }
 

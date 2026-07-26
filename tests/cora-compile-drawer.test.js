@@ -21,7 +21,7 @@ const { compileBank, highlight } =
  * @param {{ open?: boolean, bank?: any, diff?: any, highlight?: any, hashCode?: any, simulatePanel?: any }} [over]
  */
 function mount(over = {}) {
-  const calls = { closed: 0, copied: 0, submitted: 0 };
+  const calls = { closed: 0, copied: 0, published: 0 };
   const e = /** @type {any} */ (document.createElement('div'));
   e.replaceChildren(
     ...CompileDrawer({
@@ -38,8 +38,8 @@ function mount(over = {}) {
       onCopied: () => {
         calls.copied += 1;
       },
-      onSubmit: () => {
-        calls.submitted += 1;
+      onPublish: () => {
+        calls.published += 1;
       },
     })
   );
@@ -81,7 +81,7 @@ test('CompileDrawer: closed state does not compile, hash, highlight, or simulate
       },
       onClose() {},
       onCopied() {},
-      onSubmit() {},
+      onPublish() {},
     })
   );
   assert.deepEqual(calls, { compile: 0, hash: 0, highlight: 0, simulate: 0 });
@@ -136,10 +136,10 @@ test('CORACompileDrawer: Copy writes code to clipboard + reports onCopied', asyn
   e.disconnectedCallback();
 });
 
-test('CORACompileDrawer: Send for Review calls onSubmit', () => {
+test('CORACompileDrawer: Send for Review calls onPublish', () => {
   const { e, calls } = mount({ open: true });
   fireEvent(getByRole(e, 'button', { name: 'Send for Review' }), 'click');
-  assert.equal(calls.submitted, 1);
+  assert.equal(calls.published, 1);
   e.disconnectedCallback();
 });
 

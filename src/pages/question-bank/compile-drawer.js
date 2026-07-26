@@ -12,7 +12,7 @@ import { h, unsafeHTML } from '../../lib/html.js';
  * @property {((bank: any) => Node | null) | null} simulatePanel
  * @property {() => void} onClose
  * @property {() => void} onCopied
- * @property {() => void} onSubmit
+ * @property {() => void} onPublish
  */
 
 /**
@@ -113,7 +113,7 @@ export function CompileDrawer(props) {
           ),
           h(
             'button',
-            { className: 'pill-btn primary', onclick: props.onSubmit },
+            { className: 'pill-btn primary', onclick: props.onPublish },
             'Send for Review'
           )
         )

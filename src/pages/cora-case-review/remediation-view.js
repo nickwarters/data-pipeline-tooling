@@ -279,7 +279,7 @@ export function renderRemediationAttribution(props, li, q) {
     attributedParty: attributedParty ?? null,
     query: props.attributionSearch[q.id]?.query ?? '',
     people: props.attributionSearch[q.id]?.people ?? [],
-    onInput: (query) => props.dispatchAttributeSearch(q.id, query),
+    onQueryInput: (query) => props.dispatchAttributeSearch(q.id, query),
     onSelect: (/** @type {Party} */ party) => {
       props.dispatchAttribute(q.id, party);
     },

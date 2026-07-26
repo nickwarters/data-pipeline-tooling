@@ -21,7 +21,7 @@ import { PeoplePicker } from '../base/cora-people-picker.js';
  * responsibleParty?: Party | null,
  * query?: string,
  * people?: PersonResult[],
- * onInput?: (value: string) => void,
+ * onQueryInput?: (value: string) => void,
  * onSelect?: (party: Party) => void,
  * onClear?: () => void,
  * }} props
@@ -32,7 +32,7 @@ export function AttributeMenu({
   responsibleParty = null,
   query = '',
   people = [],
-  onInput = () => {},
+  onQueryInput = () => {},
   onSelect = () => {},
   onClear = () => {},
 }) {
@@ -84,7 +84,7 @@ export function AttributeMenu({
       people,
       query,
       inputValue: query,
-      onInput,
+      onQueryInput,
       onSelect,
     });
     children.push(...picker);

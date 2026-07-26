@@ -23,7 +23,7 @@ test('PeoplePicker renders an accessible input and hidden empty result list', ()
     people: [],
     query: '',
     inputValue: 'Jan',
-    onInput: (value) => inputs.push(value),
+    onQueryInput: (value) => inputs.push(value),
     onSelect() {},
   });
   const host = document.createElement('div');
@@ -48,7 +48,7 @@ test('PeoplePicker renders one selectable option per search result', () => {
       people: [PERSON],
       query: 'Jane',
       inputValue: 'Jane',
-      onInput() {},
+      onQueryInput() {},
       onSelect: (person) => selected.push(person),
     })
   );
