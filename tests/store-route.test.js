@@ -70,6 +70,53 @@ test('store route: navigation removes real listeners and disposes store renders 
   assert.equal(renders, 3, 'disposed store schedules no later renders');
 });
 
+test('store route: the mount lifetime is exposed so a late promise dispatches nothing', async () => {
+  const container = document.createElement('div');
+  let release = /** @type {(value: any) => void} */ (() => {});
+  const loading = new Promise((resolve) => {
+    release = resolve;
+  });
+  let tools = /** @type {any} */ (null);
+  let reduced = 0;
+  const handler = createStoreRoute({
+    load: async () => ({
+      createRouteSlice: () => ({
+        initialState: { loaded: false },
+        reducer: (/** @type {any} */ state) => {
+          reduced += 1;
+          return { ...state, loaded: true };
+        },
+        view: () => document.createElement('p'),
+        start: (/** @type {any} */ startTools) => {
+          tools = startTools;
+          void loading.then(() => {
+            if (startTools.isActive())
+              startTools.dispatch({ type: 'items/loaded' });
+          });
+        },
+      }),
+    }),
+    context: /** @type {any} */ ({}),
+  });
+
+  await handler.mount(container, {});
+  assert.equal(tools.isActive(), true, 'the slice is active while mounted');
+  assert.equal(tools.signal.aborted, false);
+
+  handler.unmount();
+  assert.equal(tools.isActive(), false, 'isActive() flips false on unmount');
+  assert.equal(tools.signal.aborted, true, 'the signal aborts on unmount');
+
+  release(undefined);
+  await loading;
+  await Promise.resolve();
+  assert.equal(
+    reduced,
+    0,
+    'a promise resolving after unmount dispatches nothing'
+  );
+});
+
 test('store route: a slice renderer can morph only the containers selected by state', async () => {
   const container = document.createElement('div');
   /** @type {string[][]} */

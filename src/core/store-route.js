@@ -15,7 +15,7 @@ import { createRouteErrorPanel } from '../lib/route-error-panel.js';
  *     reducer: (state: any, action: any) => any,
  *     view?: (state: any, tools: { dispatch: (action: any) => any, memo: any, params: Record<string, string>, context: Context }) => any,
  *     render?: (container: Element, state: any, tools: { dispatch: (action: any) => any, memo: any, morph: typeof morph, params: Record<string, string>, context: Context }) => void,
- *     start?: (tools: { dispatch: (action: any) => any, memo: any, params: Record<string, string>, context: Context, listen: (target: EventTarget, type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions) => void }) => void | (() => void),
+ *     start?: (tools: { dispatch: (action: any) => any, memo: any, params: Record<string, string>, context: Context, isActive: () => boolean, signal: AbortSignal, listen: (target: EventTarget, type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions) => void }) => void | (() => void),
  *   } }>,
  *   context: Context,
  * }} options
@@ -49,12 +49,20 @@ export function createStoreRoute({ load, context }) {
       // coalescing) with no other try/catch on the path, so this render
       // callback must contain failures itself (#437).
       let mounted = false;
+      // The mount lifetime, owned here and exposed to the slice. A route effect
+      // guards a late `.then()` with isActive() instead of hand-rolling its own
+      // latch; the signal is the same lifetime in AbortSignal form (#517).
+      const controller = new AbortController();
       const tools = {
         dispatch: (/** @type {any} */ action) => store.dispatch(action),
         memo,
         morph,
         params,
         context,
+        /** True until this slice is unmounted. */
+        isActive: () => !controller.signal.aborted,
+        /** Aborted when this slice unmounts. */
+        signal: controller.signal,
         listen(
           /** @type {EventTarget} */ target,
           /** @type {string} */ type,
@@ -99,6 +107,7 @@ export function createStoreRoute({ load, context }) {
           removeListener();
         }
         if (typeof disposeListeners === 'function') disposeListeners();
+        controller.abort();
         store.dispose();
         memo.clear();
       };

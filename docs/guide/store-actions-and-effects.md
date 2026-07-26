@@ -59,3 +59,23 @@ Use the adapter's `listen(target, type, listener)` tool inside the route effect
 for external listeners. The adapter removes every registered listener before
 disposing the route effect, store, and memo cache on navigation. Do not call
 `addEventListener()` directly in a view.
+
+## The mount lifetime
+
+The adapter owns the mount lifetime and exposes it on `tools`. `isActive()`
+returns `true` until the slice is unmounted; `signal` is the same lifetime as an
+`AbortSignal`, aborted at the same moment. Guard any dispatch that resumes after
+an `await` or a `.then()`:
+
+```js
+start(tools) {
+  void fetchCases(tools.context.client).then((cases) => {
+    if (tools.isActive()) tools.dispatch({ type: 'cases/loaded', cases });
+  });
+}
+```
+
+Do not hand-roll a `let active = true` latch and a teardown that flips it; that
+is the same lifetime reimplemented, and forgetting it dispatches into a disposed
+store. `signal` is not yet threaded into `SharePointClient` calls — the client
+interface takes no `AbortSignal`.

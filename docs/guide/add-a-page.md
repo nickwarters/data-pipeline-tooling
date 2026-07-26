@@ -107,13 +107,18 @@ action module from it. Effects may use the client and may await. Their only way
 back into page state is `dispatch(...)`.
 
 ```js
-start({ dispatch, listen }) {
-  void loadGreeting(context.client).then((name) =>
-    dispatch({ type: 'greeting/name-changed', name })
-  );
+start({ dispatch, listen, isActive }) {
+  void loadGreeting(context.client).then((name) => {
+    if (isActive()) dispatch({ type: 'greeting/name-changed', name });
+  });
   listen(window, 'online', () => dispatch({ type: 'network/online' }));
 }
 ```
+
+Guard every dispatch that follows an `await` or a `.then()` with `isActive()` —
+the user may have navigated away, and the store is disposed. Do not hand-roll a
+`let active = true` latch; the adapter owns the mount lifetime and also exposes
+it as `tools.signal`, an `AbortSignal` aborted on unmount.
 
 Use `listen(target, type, listener)` for external listeners; the route adapter
 removes them on navigation. Return a cleanup function from `start` for any
