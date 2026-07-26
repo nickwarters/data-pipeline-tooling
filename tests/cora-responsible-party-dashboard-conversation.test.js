@@ -80,6 +80,19 @@ test('Responsible Party unread messages render through descriptors and invoke co
     '#/case/complaints/unread'
   );
   assert.match(section?.textContent ?? '', /—/);
+  assert.deepEqual(
+    [...section.querySelectorAll('th')].map((/** @type {any} */ th) => [
+      th.textContent,
+      th.className,
+      th.getAttribute('aria-sort'),
+    ]),
+    [
+      ['Reference', 'cora-col-reference', 'none'],
+      ['Case Type', 'cora-col-caseType', 'none'],
+      ['Last message', 'cora-col-lastMessage', 'descending'],
+      ['Actions', 'cora-col-actions', 'none'],
+    ]
+  );
   const open = /** @type {any} */ (
     [...section.querySelectorAll('button')].at(-1)
   );

@@ -2,6 +2,7 @@
 import { h } from '../../lib/html.js';
 import { caseRouteFor } from '../../lib/case-route-links.js';
 import { navigateTo } from '../../lib/navigate.js';
+import { caseActionsColumn } from '../../views/case-columns.js';
 import { dataTableView } from '../../views/data-table.js';
 
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
@@ -82,22 +83,7 @@ export function appealColumns() {
       label: 'Appellant rationale',
       value: (row) => openAppealOf(row)?.rationale ?? '',
     },
-    {
-      key: 'actions',
-      label: 'Actions',
-      value: (row) => row.title || row.id,
-      format: (value, row) =>
-        h(
-          'button',
-          {
-            type: 'button',
-            className: 'cora-case-open-btn',
-            'aria-label': `Open ${value}`,
-            onclick: () => navigateTo(caseRouteFor(row)),
-          },
-          'Open'
-        ),
-    },
+    caseActionsColumn((row) => navigateTo(caseRouteFor(row))),
   ];
 }
 

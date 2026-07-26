@@ -2,6 +2,7 @@
 import { h } from '../../lib/html.js';
 import { caseRouteFor } from '../../lib/case-route-links.js';
 import { CASE_STATUS } from '../../lib/case-statuses.js';
+import { caseActionsColumn } from '../../views/case-columns.js';
 import { dataTableView } from '../../views/data-table.js';
 
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
@@ -174,22 +175,7 @@ function messageColumns(
       format: (value) =>
         value ? new Date(String(value)).toLocaleString() : '—',
     },
-    {
-      key: 'actions',
-      label: 'Actions',
-      value: (row) => row.title || row.id,
-      format: (value, row) =>
-        h(
-          'button',
-          {
-            type: 'button',
-            className: 'cora-case-open-btn',
-            'aria-label': `Open ${value}`,
-            onclick: () => onOpenConversation?.(row),
-          },
-          'Open'
-        ),
-    },
+    caseActionsColumn((row) => onOpenConversation?.(row)),
   ];
 }
 

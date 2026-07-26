@@ -101,6 +101,23 @@ test('Controls appeal descriptors render through the generic table and keep navi
     ]
   );
 
+  assert.deepEqual(
+    [...view.querySelectorAll('th')].map((th) => [
+      th.textContent,
+      th.className,
+      th.getAttribute('aria-sort'),
+    ]),
+    [
+      ['Reference', 'cora-col-reference', 'none'],
+      ['Case Type', 'cora-col-caseType', 'none'],
+      ['Responsible Party', 'cora-col-responsibleParty', 'none'],
+      ['Appellant', 'cora-col-appellant', 'none'],
+      ['Raised', 'cora-col-raised', 'ascending'],
+      ['Appellant rationale', 'cora-col-rationale', 'none'],
+      ['Actions', 'cora-col-actions', 'none'],
+    ]
+  );
+
   [...view.querySelectorAll('th')]
     .find((header) => header.querySelector('button'))
     ?.querySelector('button')
@@ -142,25 +159,16 @@ test('Controls appeal descriptors degrade gracefully for resolved and incomplete
   assert.deepEqual(await fetchOpenAppeals(/** @type {any} */ ({}), []), []);
 
   const columns = appealColumns();
-  const reference = columns.find((column) => column.key === 'reference');
-  const appellant = columns.find((column) => column.key === 'appellant');
+  /** @param {string} key */
+  const valueOf = (key) => {
+    const column = columns.find((candidate) => candidate.key === key);
+    assert.ok(column, `no ${key} column`);
+    return /** @type {(row: any) => unknown} */ (column.value)(resolved);
+  };
   const raised = columns.find((column) => column.key === 'raised');
-  const rationale = columns.find((column) => column.key === 'rationale');
-  assert.equal(
-    /** @type {(row: any) => unknown} */ (reference?.value)(resolved),
-    'resolved'
-  );
-  assert.equal(
-    /** @type {(row: any) => unknown} */ (appellant?.value)(resolved),
-    ''
-  );
-  assert.equal(
-    /** @type {(row: any) => unknown} */ (raised?.value)(resolved),
-    null
-  );
+  assert.equal(valueOf('reference'), 'resolved');
+  assert.equal(valueOf('appellant'), '');
+  assert.equal(valueOf('raised'), null);
   assert.equal(raised?.format?.(null, /** @type {any} */ (resolved)), '—');
-  assert.equal(
-    /** @type {(row: any) => unknown} */ (rationale?.value)(resolved),
-    ''
-  );
+  assert.equal(valueOf('rationale'), '');
 });

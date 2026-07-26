@@ -113,6 +113,30 @@ test('journey cases descriptors and pure view preserve links, empty state, and s
     'c9'
   );
   assert.equal(columns[0].href?.(fallback), '#/case/complaints/c9');
+  const sorted = journeyCasesView(
+    {
+      ...createRouteSlice({}, context()).initialState,
+      routes: {
+        journeyCases: {
+          cases: [row('c9', 'complaints')],
+          sort: { key: 'status', dir: 'desc' },
+        },
+      },
+    },
+    { dispatch: () => {} }
+  );
+  assert.deepEqual(
+    [...sorted.querySelectorAll('th')].map((th) => [
+      th.textContent,
+      th.className,
+      th.getAttribute('aria-sort'),
+    ]),
+    [
+      ['Reference', 'cora-col-reference', 'none'],
+      ['Case Type', 'cora-col-caseType', 'none'],
+      ['Status', 'cora-col-status', 'descending'],
+    ]
+  );
 
   const slice = createRouteSlice({}, context());
   const loading = journeyCasesView(slice.initialState, { dispatch: () => {} });

@@ -4,6 +4,11 @@ import { patchRoute } from '../core/route-state.js';
 import { caseRouteFor } from '../lib/case-route-links.js';
 import { fetchJourneyCases } from '../services/journey-cases-fetcher.js';
 import {
+  caseReferenceColumn,
+  caseStatusColumn,
+  caseTypeColumn,
+} from '../views/case-columns.js';
+import {
   dataTableView,
   reduceTableSort,
   sortRequested,
@@ -20,29 +25,14 @@ const TABLE = 'journey';
  * @property {{ journeyCases: { cases: CaseRow[] | null, sort: import('../views/data-table.js').TableSort | null } }} routes
  */
 
-/** @returns {import('../views/data-table.js').ColumnDescriptor<CaseRow>[]} */
+/**
+ * Journey Cases is the standard Case table's three-column subset: same
+ * Reference link, same Case Type and Status selection.
+ *
+ * @returns {import('../views/data-table.js').ColumnDescriptor<CaseRow>[]}
+ */
 export function journeyCasesColumns() {
-  return [
-    {
-      key: 'reference',
-      label: 'Reference',
-      value: (row) => row.title || row.id,
-      sortable: true,
-      href: caseRouteFor,
-    },
-    {
-      key: 'caseType',
-      label: 'Case Type',
-      value: 'caseType',
-      sortable: true,
-    },
-    {
-      key: 'status',
-      label: 'Status',
-      value: 'status',
-      sortable: true,
-    },
-  ];
+  return [caseReferenceColumn(), caseTypeColumn(), caseStatusColumn()];
 }
 
 /**
