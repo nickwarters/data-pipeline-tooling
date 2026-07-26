@@ -192,13 +192,13 @@ const bank = await loadBank('./banks/widget-review.txt');
 
 /**
  * The **Widget Review** Case Type. Its per-Case-Type groups derive from the
- * `Widget Review` display name: `Reviewers - Widget Review`,
- * `CaseTypeOwner - Widget Review`, `JourneyOwner - Widget Review`.
+ * `Widget Review` display name — which lives on the registry entry (Step 3),
+ * not here: `Reviewers - Widget Review`, `CaseTypeOwner - Widget Review`,
+ * `JourneyOwner - Widget Review`.
  *
  * @type {CaseTypeConfig}
  */
 const config = {
-  displayName: 'Widget Review',
   listName: 'Cases-WidgetReview',
   eligibleGroups: ['Reviewers - Widget Review'],
   slaHours: 72,
@@ -243,10 +243,11 @@ export default config;
 
 What each field does, and how to choose its value:
 
-- **`displayName`** — the human name. It is load-bearing: the three
-  per-Case-Type group names are _derived_ from it (Step 4), and dashboards and
-  fetchers display it. Keep it identical to the permissions entry you add in
-  Step 4.
+- **No `displayName` here.** The human name is load-bearing — the three
+  per-Case-Type group names derive from it, and dashboards and fetchers display
+  it — so it is stated **once**, on the registry entry in Step 3 (#527). A
+  config module that restated it would let the capability side and the
+  Case-source eligibility side derive different group names.
 - **`listName`** — the SharePoint list this type's Cases live in
   (`Cases-{PascalSlug}` by convention). Every Case Type declares one; there is
   no default list. Under `?mock=1` the fixture Cases are partitioned into a
@@ -301,7 +302,8 @@ Edit [case-types/manifest.js](../../case-types/manifest.js) and add **one entry*
 to `CASE_TYPES` — the single Case Type registry (issue #508):
 
 ```js
-export const CASE_TYPES = [
+// case-types/manifest.js — `CASE_TYPES` is exported from this array.
+const registry = [
   {
     slug: 'complaints',
     displayName: 'Complaints',
@@ -319,6 +321,9 @@ export const CASE_TYPES = [
 
 `CASE_TYPE_IMPORTERS`, `QUESTION_BANK_IMPORTERS`, and `permissions.caseTypes`
 are all **derived** from this table, so there is nothing else to register.
+`displayName` is stated here and **only** here (#527): both the capability side
+(`permissions.caseTypes`) and the Case-source eligibility side
+(`resolveCaseSources`, via `displayNameFor`) read this one copy.
 `bank` is optional: omit it and the type simply does not appear in the Question
 Bank editor until its artifact exists.
 
@@ -345,8 +350,8 @@ This is the entire integration surface with the rest of the app:
 caseTypes: CASE_TYPES.map(({ slug, displayName }) => ({ slug, displayName })),
 ```
 
-The registry's `displayName` must match the module's `displayName` exactly — the
-group names derive from it via `caseTypeGroupNames()`:
+The registry entry's `displayName` is the only copy, and the group names derive
+from it via `caseTypeGroupNames()`:
 
 | Derived group                   | Grants                                                        |
 | ------------------------------- | ------------------------------------------------------------- |
@@ -621,8 +626,8 @@ npm run test:coverage  # 95% global floor over src/ and case-types/
 
 The suite is also your safety net for the earlier steps:
 [tests/case-type-eligibility-consistency.test.js](../../tests/case-type-eligibility-consistency.test.js)
-fails if a manifest slug is missing from `permissions.caseTypes` (Step 4), if
-the two `displayName`s disagree (Steps 2/4), or if the module declares no
+fails if a manifest slug is missing from `permissions.caseTypes` (Step 4), if a
+config module restates `displayName` (Step 2), or if the module declares no
 `listName` (Step 2) — so a forgotten wiring step surfaces as a named test
 failure, not as a silently empty dashboard.
 
@@ -669,9 +674,9 @@ When the tour passes, the code-side onboarding is done.
   despite the `.txt` extension; a trailing comma is the usual culprit. Check
   the browser console for the `load-bank` fetch.
 - **Dashboard empty for your reviewer persona** — the persona's group must be
-  exactly `Reviewers - <displayName>` with the display name from _both_
-  `permissions.caseTypes` and the module (they must match each other too).
-  Remember bare `Reviewers` grants nothing per-type.
+  exactly `Reviewers - <displayName>` with the display name from the registry
+  entry (Step 3) — the single copy. Remember bare `Reviewers` grants nothing
+  per-type.
 - **Allocation says "No Cases available"** — no fixture Case for your slug is
   simultaneously `In-progress` **and** `assignedReviewer: ''`.
 - **A fixture Case won't open / behaves oddly** — its `answers` reference ids

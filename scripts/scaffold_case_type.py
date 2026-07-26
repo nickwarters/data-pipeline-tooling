@@ -108,9 +108,9 @@ import {{ computeConfiguredOutcome }} from '../src/evaluators/configured-outcome
  * @type {{CaseTypeConfig}}
  */
 const config = {{
-  // Must match the `displayName` on this slug's CASE_TYPES entry in
-  // case-types/manifest.js — the three SharePoint group names derive from it.
-  displayName: '{opts.display_name}',
+  // The display name lives ONLY on this slug's CASE_TYPES entry in
+  // case-types/manifest.js (#527) — the three SharePoint group names derive
+  // from that one copy.
   eligibleGroups: ['Reviewers'],
   // TODO(case-type): Confirm the SLA hours before production use.
   slaHours: 72,
@@ -434,9 +434,9 @@ def scaffold(opts: ScaffoldOptions) -> None:
     test_path.write_text(case_type_test(opts), encoding="utf-8")
     adr_path.write_text(adr(opts), encoding="utf-8")
 
-    # One registry entry. `CASE_TYPES` in case-types/manifest.js carries the
-    # slug, the display name the three SharePoint group names derive from, and
-    # the lazy importer. `CASE_TYPE_IMPORTERS`, `QUESTION_BANK_IMPORTERS` and
+    # One registry entry, into the array `CASE_TYPES` is exported from. It
+    # carries the slug, the ONE copy of the display name the three SharePoint
+    # group names derive from (#527), and the lazy importer. `CASE_TYPE_IMPORTERS`, `QUESTION_BANK_IMPORTERS` and
     # `permissions.caseTypes` are all derived from it (issue #508), so there is
     # nothing to add in src/services/permissions.js. No `bank` thunk is emitted:
     # the scaffold writes no Question Bank artifact, and `bank` is optional.
@@ -445,7 +445,7 @@ def scaffold(opts: ScaffoldOptions) -> None:
     if not re.search(rf"slug:\s*['\"]{escape_regexp(opts.slug)}['\"]", manifest):
         manifest = insert_after_match(
             manifest,
-            r"export const CASE_TYPES = \[\n",
+            r"const registry = \[\n",
             f"  {{\n"
             f"    slug: '{opts.slug}',\n"
             f"    displayName: '{opts.display_name}',\n"
