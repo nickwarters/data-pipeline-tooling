@@ -27,7 +27,7 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
   `createStoreRoute()` adapter creates the store and memo cache, renders through
   keyed `morph()`, contains route failures, and cleans up on navigation. It also
   owns the mount lifetime: guard any post-`await` dispatch with `tools.isActive()`
-  (or use `tools.signal`) — never hand-roll a `let active = true` latch (#517).
+  — never hand-roll a `let active = true` latch (#517).
 - **Case Review Sections are data plus a panel renderer.** `lib/section-registry.js`
   (ADR-0032) says which Sections exist and in what order; `pages/cora-case-review/section-panels.js`
   says how each one's panel is filled, keyed by Section id — the render loop in

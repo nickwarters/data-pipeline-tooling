@@ -28,6 +28,12 @@ export function navigateTo(hash) {
  * browser treats as a different document, which full-reloads the `.aspx` host
  * page — the one thing a single-host-page SPA must never do by accident.
  *
+ * Called from a route guard, that throw propagates out through `mount` into the
+ * router's catch, so it surfaces as the `cora-route-error` panel rather than a
+ * console error. Acceptable — it is a programming error, and the nav stays
+ * usable — but worth knowing before writing a guard that *computes* its
+ * destination rather than passing a literal.
+ *
  * @param {string} hash - a full route hash; must begin with '#', e.g. '#/'
  * @returns {void}
  */

@@ -117,8 +117,7 @@ start({ dispatch, listen, isActive }) {
 
 Guard every dispatch that follows an `await` or a `.then()` with `isActive()` —
 the user may have navigated away, and the store is disposed. Do not hand-roll a
-`let active = true` latch; the adapter owns the mount lifetime and also exposes
-it as `tools.signal`, an `AbortSignal` aborted on unmount.
+`let active = true` latch; the adapter owns the mount lifetime.
 
 Use `listen(target, type, listener)` for external listeners; the route adapter
 removes them on navigation. Return a cleanup function from `start` for any

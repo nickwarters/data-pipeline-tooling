@@ -41,6 +41,11 @@ function probeImport(modulePath) {
 for (const modulePath of [
   'src/pages/question-bank/question-bank-source.js',
   'src/pages/question-bank/bank-slice.js',
+  // The route slice is the module that actually calls the loader, so it is
+  // where a module-scope `await loadQuestionBanks()` would most plausibly
+  // reappear — cover the likeliest regression path, not just the two the
+  // ticket named.
+  'src/pages/question-bank/cora-bank-editor.js',
 ]) {
   test(`#521 importing ${modulePath} reads no Question Bank artifact`, () => {
     const probe = probeImport(modulePath);

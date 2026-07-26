@@ -93,9 +93,8 @@ disposing the route effect, store, and memo cache on navigation. Do not call
 ## The mount lifetime
 
 The adapter owns the mount lifetime and exposes it on `tools`. `isActive()`
-returns `true` until the slice is unmounted; `signal` is the same lifetime as an
-`AbortSignal`, aborted at the same moment. Guard any dispatch that resumes after
-an `await` or a `.then()`:
+returns `true` until the slice is unmounted. Guard any dispatch that resumes
+after an `await` or a `.then()`:
 
 ```js
 start(tools) {
@@ -107,5 +106,9 @@ start(tools) {
 
 Do not hand-roll a `let active = true` latch and a teardown that flips it; that
 is the same lifetime reimplemented, and forgetting it dispatches into a disposed
-store. `signal` is not yet threaded into `SharePointClient` calls — the client
-interface takes no `AbortSignal`.
+store.
+
+`tools` also carries `signal`, the same lifetime in `AbortSignal` form. It is
+**reserved, not yet honoured**: `SharePointClient` takes no `AbortSignal`
+(#545), so passing it to a request today aborts nothing and the request runs to
+completion. Use `isActive()` until #545 lands.

@@ -40,9 +40,15 @@ export function patchRoute(state, name, patch) {
  * when no snapshot is loaded, which is what every call site's
  * `&& route.snapshot` guard expresses.
  *
+ * `patch` is typed the same way as `patchRoute`'s, for the same reason: these
+ * are the deepest writes in the reducer, so they are the ones most worth having
+ * a misspelled field name fail at `tsc` rather than at runtime. `NonNullable`
+ * strips the `snapshot: T | null` the slice declares — the null case is the
+ * no-op above, so it never reaches the patch.
+ *
  * @template {{ routes: { caseReview: { snapshot: any } } }} S
  * @param {S} state
- * @param {Record<string, any>} patch
+ * @param {Partial<NonNullable<S['routes']['caseReview']['snapshot']>>} patch
  * @returns {S}
  */
 export function patchSnapshot(state, patch) {
