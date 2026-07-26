@@ -1,22 +1,42 @@
 # Router integration
 
-A route exports `register(router, context)`, lazy-loads one page module, and
-hands that loader to `createStoreRoute()`. This keeps page code out of the boot
-graph and gives every page the same store, render, error, and cleanup contract.
+A route exports `register(router, context, loadPage)`, lazy-loads one page
+module, and hands that loader to `registerStoreRoute()`. This keeps page code
+out of the boot graph and gives every page the same store, render, error, and
+cleanup contract.
 
 ## Quick reference
 
 ```js
 // src/routes/my-page.js
-import { createStoreRoute } from '../core/store-route.js';
+import { registerStoreRoute } from '../core/store-route.js';
 
-export function register(router, context) {
-  router.register(
-    '#/my-page/:id',
-    createStoreRoute({ load: () => import('../pages/my-page.js'), context })
-  );
+export function register(
+  router,
+  context,
+  loadPage = () => import('../pages/my-page.js')
+) {
+  registerStoreRoute(router, {
+    paths: ['#/my-page/:id'],
+    load: loadPage,
+    context,
+  });
 }
 ```
+
+`registerStoreRoute(router, { paths, load, context, guard })` creates the
+`createStoreRoute()` adapter once and registers it on every pattern in `paths`
+— that is how `#/case/:caseType/:id` and `#/case/:id` share one handler. The
+optional `guard: () => boolean` runs on each mount, before the page is
+imported; returning `false` skips the mount, which is how `#/journey-cases`
+bounces an ineligible user without loading the page. The `loadPage` default
+parameter is the seam every `tests/routes-*.test.js` injects through, so keep
+it.
+
+The dynamic `import()` stays in the route module; the helper never names a
+page. A route with real mount-time behaviour still registers a handler of its
+own — `src/routes/team-cases.js` derives a query string from `location.hash`
+and merges it into `params`, which is behaviour, not a pass-through shell.
 
 Then register the route in `src/setup/register-routes.js`:
 
@@ -102,16 +122,18 @@ rules.
 The `#/my-cases` route is intentionally thin:
 
 ```js
-import { createStoreRoute } from '../core/store-route.js';
+import { registerStoreRoute } from '../core/store-route.js';
 
-export function register(router, context) {
-  router.register(
-    '#/my-cases',
-    createStoreRoute({
-      load: () => import('../pages/cora-responsible-party-dashboard.js'),
-      context,
-    })
-  );
+export function register(
+  router,
+  context,
+  loadPage = () => import('../pages/cora-responsible-party-dashboard.js')
+) {
+  registerStoreRoute(router, {
+    paths: ['#/my-cases'],
+    load: loadPage,
+    context,
+  });
 }
 ```
 

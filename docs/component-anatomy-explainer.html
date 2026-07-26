@@ -501,16 +501,18 @@
             <span>src/routes/greeting.js</span>
             <span>lazy route boundary</span>
           </div>
-          <pre><code><span class="kw">import</span> { createStoreRoute } <span class="kw">from</span> <span class="str">'../core/store-route.js'</span>;
+          <pre><code><span class="kw">import</span> { registerStoreRoute } <span class="kw">from</span> <span class="str">'../core/store-route.js'</span>;
 
-<span class="kw">export function</span> <span class="fn">register</span>(router, context) {
-  router.register(
-    <span class="str">'#/greeting'</span>,
-    createStoreRoute({
-      load: () =&gt; <span class="kw">import</span>(<span class="str">'../pages/greeting.js'</span>),
-      context,
-    })
-  );
+<span class="kw">export function</span> <span class="fn">register</span>(
+  router,
+  context,
+  loadPage = () =&gt; <span class="kw">import</span>(<span class="str">'../pages/greeting.js'</span>)
+) {
+  <span class="fn">registerStoreRoute</span>(router, {
+    paths: [<span class="str">'#/greeting'</span>],
+    load: loadPage,
+    context,
+  });
 }</code></pre>
         </div>
       </section>

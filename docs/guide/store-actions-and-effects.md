@@ -80,7 +80,8 @@ returns the route's initial state, reducer, and pure view. It may also return a
 an action module; lifecycle work does not belong in the view.
 
 The route stays responsible for its lazy dynamic import and passes that loader
-to `createStoreRoute({ load, context })`. The standard adapter creates the
+to `registerStoreRoute(router, { paths, load, context })`, which builds the
+standard `createStoreRoute({ load, context })` adapter. That adapter creates the
 route-local store and memo cache, renders the view through `morph()`, and
 returns the existing Router `{ mount, unmount }` handler shape.
 

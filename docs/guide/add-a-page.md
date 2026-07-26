@@ -132,15 +132,27 @@ break startup or a sibling route.
 
 ```js
 // src/routes/greeting.js
-import { createStoreRoute } from '../core/store-route.js';
+import { registerStoreRoute } from '../core/store-route.js';
 
-export function register(router, context) {
-  router.register(
-    '#/greeting',
-    createStoreRoute({ load: () => import('../pages/greeting.js'), context })
-  );
+export function register(
+  router,
+  context,
+  loadPage = () => import('../pages/greeting.js')
+) {
+  registerStoreRoute(router, {
+    paths: ['#/greeting'],
+    load: loadPage,
+    context,
+  });
 }
 ```
+
+`registerStoreRoute(...)` builds the `createStoreRoute()` adapter and registers
+it on every path in `paths`; pass a `guard: () => boolean` if the route needs an
+eligibility check before mounting. The `import()` stays here, in the route
+module, because that is what ADR-0002's page independence rests on. Keep the
+`loadPage` default parameter — it is the seam every `tests/routes-*.test.js`
+uses to inject a fake or failing page.
 
 Import that route module in `src/setup/register-routes.js` and register it
 through `safeRegister(...)`. Add navigation only when the page is meant to be
