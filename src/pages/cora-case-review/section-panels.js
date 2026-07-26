@@ -272,6 +272,9 @@ export const SECTION_PANELS = {
         sectionHeadings: snapshot.sectionHeadings,
         generalQuestions: config.generalQuestions ?? [],
         generalQuestionsPlacement: resolveGeneralQuestionsPlacement(config),
+        // The same audience the Remediation panel gets: it decides whether the
+        // Summary's remediation roll-up carries each resolution's details.
+        audience: remediationAudience(snapshot.machine?.roles ?? []),
       })
     ),
 

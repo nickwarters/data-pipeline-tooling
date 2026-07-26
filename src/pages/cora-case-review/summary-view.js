@@ -4,6 +4,7 @@ import { Outcome } from './outcome-view.js';
 import { caseDetailFields } from './details-view.js';
 import { buildSummaryModel } from '../../evaluators/summary-model.js';
 import {
+  REMEDIATION_DETAIL_LABELS,
   REMEDIATION_STATUS_LABELS,
   remediationRows,
 } from '../../evaluators/remediation-status.js';
@@ -35,6 +36,7 @@ import { GENERAL_QUESTIONS_TITLE } from './general-questions-view.js';
  * @property {Required<import('../../sharepoint-client.js').SectionLabels>} [sectionHeadings] Resolved section headings; defaults to the standard copy so the component stays usable standalone.
  * @property {import('../../sharepoint-client.js').GeneralQuestionField[]} [generalQuestions] The Case Type's General Questions, rolled up read-only. Display only — they reach no evaluator here either.
  * @property {import('../../evaluators/general-questions.js').GeneralQuestionsPlacement} [generalQuestionsPlacement] Which side of the configured Summary blocks the roll-up sits on. Already resolved by the caller via `resolveGeneralQuestionsPlacement()` (#522) — this view never sees the raw config value, so it cannot disagree with the Review tab. 'after' when absent, so the view stays usable standalone.
+ * @property {'reviewer' | 'responsibleParty'} [audience] Which side is reading, from `remediationAudience()` — the same value the Remediation tab gets. It selects one thing only: whether the remediation roll-up shows each resolution's details / justification. Absent means `responsibleParty`, the narrower rendering, so a caller that does not say fails closed.
  */
 
 /**
@@ -170,11 +172,15 @@ function renderIssues(props) {
  * tabs of one Case contradicting each other; ADR-0024's #497 amendment settled
  * which store is real, and this is the rendering following it.
  *
- * The resolution's *details / justification* is deliberately **not** shown. The
- * Summary has one rendering for every audience — including the Responsible
- * Party, who reads it once the Case is reportable — and those are the
- * Reviewer's record-of-truth fields, which the Remediation tab withholds from
- * that side (ADR-0037).
+ * The resolution's *details / justification* follows the **audience**, exactly as
+ * the Remediation tab does: withheld from the `responsibleParty` side, whose
+ * rendering ADR-0037 strips of the Reviewer's record-of-truth fields, and shown
+ * to reviewer-side observers, whose `!canResolve` branch on the tab renders it.
+ * This block first landed withholding it from everyone, on the grounds that the
+ * Summary had one rendering for every audience; it does not have to, it already
+ * knows the roles, and the narrowing cost Controls and the Case Type Owner the
+ * `cancelReason` the Summary carried before #497 (ADR-0037 asks for the
+ * withholding on one side only).
  *
  * @param {SummaryProps} props
  * @returns {HTMLElement}
@@ -182,6 +188,9 @@ function renderIssues(props) {
 function renderRemediationTracking(props) {
   const rows = remediationRows(props.catalogue, props.answers);
   const dueDate = props.caseRow?.remediationDueDate;
+  // Absent audience means the narrower rendering: a caller that has not said who
+  // is reading does not get to leak the Reviewer's fields.
+  const reviewerSide = props.audience === 'reviewer';
 
   return h(
     'section',
@@ -190,16 +199,19 @@ function renderRemediationTracking(props) {
     h('p', {}, `Remediation due: ${dueDate ? dueDate : '—'}`),
     rows.length === 0
       ? h('p', {}, 'No remediation actions sent.')
-      : h('ul', {}, ...rows.map((row) => renderTrackedRow(row)))
+      : h('ul', {}, ...rows.map((row) => renderTrackedRow(row, reviewerSide)))
   );
 }
 
 /**
  * @param {import('../../evaluators/remediation-status.js').RemediationRow} row
+ * @param {boolean} reviewerSide Whether to show the resolution's details / justification.
  * @returns {HTMLElement}
  */
-function renderTrackedRow(row) {
+function renderTrackedRow(row, reviewerSide) {
   const { question } = row;
+  const detailed =
+    reviewerSide && row.status && row.status !== 'complete' && row.details;
   return h(
     'li',
     {},
@@ -222,7 +234,14 @@ function renderTrackedRow(row) {
       row.status
         ? `Status: ${REMEDIATION_STATUS_LABELS[row.status]}`
         : 'Status: Awaiting the Reviewer'
-    )
+    ),
+    detailed
+      ? h(
+          'p',
+          { className: 'cora-summary-tracking-details' },
+          `${REMEDIATION_DETAIL_LABELS[/** @type {'partial' | 'cancelled'} */ (row.status)]}: ${row.details}`
+        )
+      : null
   );
 }
 

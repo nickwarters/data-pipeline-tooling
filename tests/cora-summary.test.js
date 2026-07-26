@@ -490,8 +490,9 @@ test('the Summary remediation block reads the same model as the Remediation tab 
   assert.match(root.textContent, /Status: Awaiting the Reviewer/);
 });
 
-test('the Summary remediation block never leaks the Reviewer-only details text (#497)', () => {
-  const root = rootOf(
+/** @param {Partial<Parameters<typeof summaryView>[0]>} [overrides] */
+function cancelledRemediation(overrides = {}) {
+  return rootOf(
     render({
       caseRow: makeCase({ status: 'Actions In Progress' }),
       summarySections: ['remediation'],
@@ -505,8 +506,31 @@ test('the Summary remediation block never leaks the Reviewer-only details text (
           },
         },
       },
+      ...overrides,
     })
   );
+}
+
+test('the Summary remediation block never leaks the Reviewer-only details text to the responsible-party audience (#497)', () => {
+  const root = cancelledRemediation({ audience: 'responsibleParty' });
   assert.match(root.textContent, /Status: Cancelled/);
   assert.doesNotMatch(root.textContent, /Customer declined contact/);
+});
+
+test('the Summary withholds the resolution details when the caller names no audience (#497)', () => {
+  // Fail closed: a caller that does not say who is reading gets the narrower of
+  // the two renderings.
+  const root = cancelledRemediation();
+  assert.doesNotMatch(root.textContent, /Customer declined contact/);
+});
+
+test('the Summary shows the resolution details to reviewer-side audiences, as the tab does (ADR-0037)', () => {
+  // ADR-0037 withholds the Reviewer's details/justification from the
+  // `responsibleParty` audience *only*; the Remediation tab's own `!canResolve`
+  // branch shows them to every reviewer-side observer. Withholding them from
+  // Controls and the Case Type Owner as well cost them the `cancelReason` the
+  // Summary used to carry, which is a narrowing ADR-0037 does not ask for.
+  const root = cancelledRemediation({ audience: 'reviewer' });
+  assert.match(root.textContent, /Status: Cancelled/);
+  assert.match(root.textContent, /Justification: Customer declined contact/);
 });
