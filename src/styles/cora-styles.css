@@ -2392,20 +2392,21 @@
 
 /* ── App navigation bar ──────────────────────────────────────────────────── */
 
-[data-cora-root] cora-app-nav {
-  display: block;
-  background: var(--cora-color-surface);
-  border-bottom: 1px solid var(--cora-color-border);
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-
+/* The nav bar's own element is the classed div `AppNav()` returns — there is no
+   `cora-app-nav` host, so the surface/border/sticky declarations live here with
+   the layout ones (#536). z-index 100 is the existing stack position: below the
+   save-status banner (110) and the command palette/toast host, above route
+   content. */
 [data-cora-root] .cora-app-nav-bar {
   display: flex;
   align-items: stretch;
   height: var(--cora-nav-height);
   padding: 0 var(--cora-space-4);
+  background: var(--cora-color-surface);
+  border-bottom: 1px solid var(--cora-color-border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
 }
 
 [data-cora-root] .cora-app-nav-brand {
