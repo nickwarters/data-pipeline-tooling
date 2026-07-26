@@ -15,7 +15,6 @@ import assert from 'node:assert/strict';
 import { exampleReviewCases as cases } from './_example-review-cases.js';
 import { cases as mockCases } from '../dev/fixtures/cases.js';
 import { personas } from '../dev/fixtures/personas.js';
-import { coerceRemediationActions } from '../src/evaluators/remediation-actions.js';
 import { isRemediationResolved } from '../src/evaluators/remediation-status.js';
 import { outstandingRemediation } from '../src/pages/responsible-party/view.js';
 
@@ -40,32 +39,6 @@ test('the Actions In Progress fixture stamps reportableAt/remediationDueDate but
   // The Outcome snapshot is frozen at the reportable milestone (ADR-0012/0023).
   assert.equal(typeof c.outcomeAtCompletion, 'string');
   assert.equal(c.outcomeOverridden, false);
-});
-
-test('Answers-blob Remediation Actions coerce from the new object shape and a legacy string (ADR-0024)', () => {
-  const c = cases.find((c) => c.status === 'Actions In Progress');
-  assert.ok(c);
-  const raw = c.answers['q-needs']?.capture?.remediationActions;
-  assert.ok(
-    Array.isArray(raw),
-    'the failed Answer carries a sent-actions array'
-  );
-
-  const actions = coerceRemediationActions(
-    /** @type {Array<string | import('../src/sharepoint-client.js').RemediationAction>} */ (
-      raw
-    ),
-    'remediationActions'
-  );
-  // Every entry — object or legacy string — normalises to the stateful record.
-  for (const a of actions) {
-    assert.equal(typeof a.id, 'string');
-    assert.notEqual(a.id, '');
-    assert.equal(typeof a.text, 'string');
-    assert.ok(['pending', 'complete', 'cancelled'].includes(a.status));
-  }
-  // The legacy bare string became a pending action with a synthesised id.
-  assert.ok(actions.some((a) => a.status === 'pending'));
 });
 
 // --- mock-served complaints fixtures (issue #495) -------------------------

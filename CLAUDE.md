@@ -291,7 +291,6 @@ src/
     issue-capture.js
     kpi-strip-model.js
     overdue-evaluator.js
-    remediation-actions.js
     remediation-details.js
     remediation-status.js         # question-level Remediation Resolution + completion gate (#499)
     question-group-progress.js   # per-Question-Group answered/total (was section-progress.js, #390)

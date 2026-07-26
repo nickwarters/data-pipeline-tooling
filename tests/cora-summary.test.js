@@ -237,42 +237,6 @@ test('summaryView renders an ungrouped failure without invented actions or captu
   assert.equal(findAllByClass(root, 'cora-summary-capture').length, 0);
 });
 
-test('summaryView renders sent remediation status, cancellation reason, and due date', () => {
-  const root = rootOf(
-    render({
-      caseRow: makeCase({ remediationDueDate: '2026-07-16' }),
-      summarySections: ['remediation'],
-      captureGroups: [
-        {
-          key: 'actions',
-          label: 'Actions',
-          fields: [{ key: 'sent', label: 'Sent', type: 'actions' }],
-        },
-      ],
-      answers: {
-        'q-open': {
-          value: 'No',
-          capture: {
-            sent: [
-              { id: 'a1', text: 'Re-issue letter', status: 'complete' },
-              {
-                id: 'a2',
-                text: 'Refund fee',
-                status: 'cancelled',
-                cancelReason: 'Already refunded',
-              },
-            ],
-          },
-        },
-      },
-    })
-  );
-
-  assert.match(root.textContent, /Remediation due: 2026-07-16/);
-  assert.match(root.textContent, /Re-issue letter — complete/);
-  assert.match(root.textContent, /Refund fee — cancelled \(Already refunded\)/);
-});
-
 test('summaryView renders the empty remediation tracking state', () => {
   const root = rootOf(
     render({
@@ -284,7 +248,7 @@ test('summaryView renders the empty remediation tracking state', () => {
   assert.match(root.textContent, /No remediation actions sent\./);
 });
 
-test('summaryView renders an ungrouped sent action and omits an empty cancellation reason', () => {
+test('summaryView renders an ungrouped remediation row', () => {
   const root = rootOf(
     render({
       catalogue: /** @type {any} */ ([
@@ -297,33 +261,18 @@ test('summaryView renders an ungrouped sent action and omits an empty cancellati
         },
       ]),
       summarySections: ['remediation'],
-      captureGroups: [
-        {
-          key: 'actions',
-          label: 'Actions',
-          fields: [{ key: 'sent', label: 'Sent', type: 'actions' }],
-        },
-      ],
       answers: {
         'q-bare': {
           value: 'No',
-          capture: {
-            sent: [
-              {
-                id: 'a1',
-                text: 'Close loop',
-                status: 'cancelled',
-                cancelReason: '',
-              },
-            ],
-          },
+          remediationActions: [{ id: 'a1', text: 'Close loop' }],
+          remediationStatus: { status: 'partial', details: 'Half done' },
         },
       },
     })
   );
   assert.match(root.textContent, /Ungrouped tracking/);
-  assert.match(root.textContent, /Close loop — cancelled/);
-  assert.doesNotMatch(root.textContent, /cancelled \(/);
+  assert.match(root.textContent, /Close loop/);
+  assert.match(root.textContent, /Status: Partially complete/);
 });
 
 test('summaryView ignores sections without a summary block and works without a row', () => {
@@ -506,4 +455,58 @@ test('a General Question answer does not reach the Summary counts or the Outcome
       .textContent,
     findAllByClass(summaryOf(base), 'cora-summary-remediation')[0].textContent
   );
+});
+
+test('the Summary remediation block reads the same model as the Remediation tab (#497)', () => {
+  const root = rootOf(
+    render({
+      caseRow: makeCase({
+        status: 'Actions In Progress',
+        remediationDueDate: '2026-07-16',
+      }),
+      summarySections: ['remediation'],
+      answers: {
+        'q-open': {
+          value: 'No',
+          remediationActions: [{ id: 'ra-1', text: 'Re-issue letter' }],
+          remediationStatus: { status: 'complete' },
+        },
+        'q-needs': {
+          value: 'No',
+          freeFormRemediation: 'Call the customer back',
+        },
+      },
+    })
+  );
+
+  assert.match(root.textContent, /Remediation due: 2026-07-16/);
+  assert.doesNotMatch(root.textContent, /No remediation actions sent\./);
+  // Both kinds of remediation the Reviewer can attach, with the Remediation
+  // tab's own resolution wording.
+  assert.match(root.textContent, /Opening: Greeted\?/);
+  assert.match(root.textContent, /Re-issue letter/);
+  assert.match(root.textContent, /Status: Complete/);
+  assert.match(root.textContent, /Call the customer back/);
+  assert.match(root.textContent, /Status: Awaiting the Reviewer/);
+});
+
+test('the Summary remediation block never leaks the Reviewer-only details text (#497)', () => {
+  const root = rootOf(
+    render({
+      caseRow: makeCase({ status: 'Actions In Progress' }),
+      summarySections: ['remediation'],
+      answers: {
+        'q-open': {
+          value: 'No',
+          freeFormRemediation: 'Call back',
+          remediationStatus: {
+            status: 'cancelled',
+            details: 'Customer declined contact',
+          },
+        },
+      },
+    })
+  );
+  assert.match(root.textContent, /Status: Cancelled/);
+  assert.doesNotMatch(root.textContent, /Customer declined contact/);
 });

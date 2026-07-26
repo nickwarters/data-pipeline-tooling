@@ -156,19 +156,32 @@ vacuously true on every real Case (no Case Type declares an `actions` field, so
 `allSentActions` always returned `[]`) beside the live one is worse than having
 no second gate: it reads like a safety net and catches nothing.
 
-What survives is **reading persisted data**, and only that:
+What was left standing at first was **reading persisted data**, and only that:
 `coerceRemediationAction` / `coerceRemediationActions` — including this ADR's
 `string` → `{ id, text, status: 'pending' }` migration read — and
-`actionFieldKeys`. Cases stored in SharePoint from before ADR-0037 may still
-carry `actions`-field values, and `summary-model.js` renders them in the
-Summary's remediation block, so the read path stays.
+`actionFieldKeys`, because `summary-model.js` still rendered capture-field
+actions in the Summary's remediation block.
 
-**Deliberately unchanged: the Summary.** Its remediation block still reads the
-capture store, so on a real Case it shows "No remediation actions sent." beside
-a fully populated Remediation tab. That is the blind spot ADR-0037 recorded as
-#497's remaining half; repointing the block at `remediationRows` changes what a
-Reviewer _sees_ on Summary, which is a Summary decision and not this one. The
-store question is settled here; the Summary's rendering of it is not yet.
+**The Summary now reads the one model too, and the shim is gone.** Its
+remediation block used to read the capture store, so on a real Case it showed
+"No remediation actions sent." beside a fully populated Remediation tab — one
+Case contradicting itself across two tabs, the blind spot ADR-0037 recorded as
+#497's remaining half. The block now renders `remediationRows`: one entry per
+Question carrying remediation, its Remediation Actions and free-form text, and
+its resolution in the Remediation tab's own wording.
+
+It deliberately omits the resolution's **details / justification**. The Summary
+has a single rendering for every audience, including the Responsible Party who
+reads it once the Case is reportable, and that text is a Reviewer field the
+Remediation tab withholds from that side (ADR-0037).
+
+With that call site repointed, `evaluators/remediation-actions.js` had no
+reader anywhere in `src/`: no Case Type declares an `actions` field, nothing
+writes one, and nothing renders one. The whole module — the coercion shim
+included — is **deleted**. The `RemediationAction` typedef stays in
+`sharepoint-client.js`, because a persisted blob may still carry such an array
+under `capture` and the shape describes what could be read back; what is gone is
+the pretence that something reads it.
 
 **One more store nothing wrote: `remediationActions[].completed`.** The
 selected-action record carried a `completed` boolean, written `false` on select

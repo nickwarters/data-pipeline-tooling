@@ -20,10 +20,18 @@
  * A **Remediation Action** as it lives on a Case. Elevated from a plain
  * string to a stateful record: `text` is the action wording, `status` tracks its
  * resolution after the actions are sent to the Responsible Party, and
- * `cancelReason` is required iff `status === 'cancelled'`. Stored in the the architecture decision
+ * `cancelReason` is required iff `status === 'cancelled'`. Stored in ADR-0024's
  * `actions`-typed Issue Capture Field value (`Answer.capture[key]`), an array of
- * these. Legacy string data is coerced to `{ id, text, status: 'pending' }` on
- * read (see `evaluators/remediation-actions.js`).
+ * these.
+ *
+ * **Retired store, kept only as a shape (#497).** No Case Type declares an
+ * `actions` field, nothing in `src/` writes or reads one, and the last reader —
+ * the Summary's remediation block — now reads the question-level model
+ * (`remediationActions` + `freeFormRemediation` + `remediationStatus`, ADR-0037)
+ * like the Remediation tab does. The typedef stays because a persisted Answers
+ * blob may still carry such an array under `capture`, and the shape describes
+ * what could be read back; `evaluators/remediation-actions.js`, the coercion
+ * shim that had no caller left, is deleted.
  *
  * @typedef {{ id: string, text: string, status: 'pending' | 'complete' | 'cancelled', cancelReason?: string }} RemediationAction
  */

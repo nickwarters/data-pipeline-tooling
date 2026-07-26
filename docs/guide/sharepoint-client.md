@@ -79,7 +79,7 @@ The full shape (the `Effective*` reporting columns, `Appeals`, etc.) lives in `s
  */
 ```
 
-A **Remediation Action** on a Case is `{ id, text, status, cancelReason? }`, stored in an `actions`-typed Issue Capture Field value; legacy bare strings are coerced on read (`src/evaluators/remediation-actions.js`).
+A **Remediation Action** the Reviewer selected on a failed Answer is `{ id, text }` in `answer.remediationActions`; how that Answer's remediation ended up is `answer.remediationStatus` (ADR-0037). The `{ id, text, status, cancelReason? }` shape in an `actions`-typed Issue Capture Field value is ADR-0024's retired store: no Case Type declares one and nothing reads it any more (#497).
 
 `value` is a plain string for `yes-no-na` and `single-choice` questions; a `string[]` for `multi-choice`. An empty array means unanswered.
 

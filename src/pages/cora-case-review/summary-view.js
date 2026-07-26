@@ -3,6 +3,10 @@ import { h } from '../../lib/html.js';
 import { Outcome } from './outcome-view.js';
 import { caseDetailFields } from './details-view.js';
 import { buildSummaryModel } from '../../evaluators/summary-model.js';
+import {
+  REMEDIATION_STATUS_LABELS,
+  remediationRows,
+} from '../../evaluators/remediation-status.js';
 import { isReportable } from '../../lib/case-machine.js';
 import { currentOutcome } from '../../evaluators/amended-outcome.js';
 import { DEFAULT_SECTION_HEADINGS } from '../../lib/section-labels.js';
@@ -140,8 +144,7 @@ function renderSectionBlock(props, section, caseRow) {
 function renderIssues(props) {
   const { remediationActionCount, failures } = buildSummaryModel(
     props.catalogue,
-    props.answers,
-    props.captureGroups
+    props.answers
   );
 
   return h(
@@ -157,18 +160,27 @@ function renderIssues(props) {
 
 /**
  * The **Remediation** tracking Summary block: the case-level
- * `remediationDueDate` plus, per failed Answer, each *sent* Remediation Action's
- * `status` (and `cancelReason` when cancelled).
+ * `remediationDueDate` plus one entry per *Question* carrying remediation, with
+ * how the Reviewer resolved it.
+ *
+ * It reads `remediationRows` — the same rows the Remediation tab renders (#497).
+ * It used to read the `actions`-typed Issue Capture Field store instead, which
+ * no Case Type declares and nothing writes, so on a real Case the Summary said
+ * "No remediation actions sent." beside a fully populated Remediation tab. Two
+ * tabs of one Case contradicting each other; ADR-0024's #497 amendment settled
+ * which store is real, and this is the rendering following it.
+ *
+ * The resolution's *details / justification* is deliberately **not** shown. The
+ * Summary has one rendering for every audience — including the Responsible
+ * Party, who reads it once the Case is reportable — and those are the
+ * Reviewer's record-of-truth fields, which the Remediation tab withholds from
+ * that side (ADR-0037).
+ *
  * @param {SummaryProps} props
  * @returns {HTMLElement}
  */
 function renderRemediationTracking(props) {
-  const { failures } = buildSummaryModel(
-    props.catalogue,
-    props.answers,
-    props.captureGroups
-  );
-  const withActions = failures.filter((f) => f.sentActions.length > 0);
+  const rows = remediationRows(props.catalogue, props.answers);
   const dueDate = props.caseRow?.remediationDueDate;
 
   return h(
@@ -176,43 +188,40 @@ function renderRemediationTracking(props) {
     { className: 'cora-summary-remediation-tracking' },
     h('h3', {}, headingsOf(props).remediation),
     h('p', {}, `Remediation due: ${dueDate ? dueDate : '—'}`),
-    withActions.length === 0
+    rows.length === 0
       ? h('p', {}, 'No remediation actions sent.')
-      : h(
-          'ul',
-          {},
-          ...withActions.map((failure) => renderTrackedFailure(failure))
-        )
+      : h('ul', {}, ...rows.map((row) => renderTrackedRow(row)))
   );
 }
 
 /**
- * @param {import('../../evaluators/summary-model.js').SummaryFailure} failure
+ * @param {import('../../evaluators/remediation-status.js').RemediationRow} row
  * @returns {HTMLElement}
  */
-function renderTrackedFailure(failure) {
+function renderTrackedRow(row) {
+  const { question } = row;
   return h(
     'li',
     {},
     h(
       'p',
       {},
-      failure.questionGroup
-        ? `${failure.questionGroup}: ${failure.text}`
-        : failure.text
+      question.questionGroup
+        ? `${question.questionGroup}: ${question.text}`
+        : question.text
     ),
     h(
       'ul',
       {},
-      ...failure.sentActions.map((action) =>
-        h(
-          'li',
-          {},
-          action.status === 'cancelled' && action.cancelReason
-            ? `${action.text} — ${action.status} (${action.cancelReason})`
-            : `${action.text} — ${action.status}`
-        )
-      )
+      ...row.actions.map((action) => h('li', {}, action.text)),
+      ...(row.freeForm ? [h('li', {}, row.freeForm)] : [])
+    ),
+    h(
+      'p',
+      {},
+      row.status
+        ? `Status: ${REMEDIATION_STATUS_LABELS[row.status]}`
+        : 'Status: Awaiting the Reviewer'
     )
   );
 }

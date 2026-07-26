@@ -1,19 +1,13 @@
 // @ts-check
 import { evaluate } from './applicability-evaluator.js';
 import { isFailure } from './failure-evaluator.js';
-import {
-  actionFieldKeys,
-  coerceRemediationActions,
-} from './remediation-actions.js';
 
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
-/** @typedef {import('../sharepoint-client.js').CaptureGroup} CaptureGroup */
-/** @typedef {import('../sharepoint-client.js').RemediationAction} RemediationAction */
 
 /**
  * @typedef {{ group: string, pass: number, fail: number }} GroupCount
- * @typedef {{ id: string, questionGroup: string | undefined, text: string, answer: string, actions: string[], sentActions: RemediationAction[] }} SummaryFailure
+ * @typedef {{ id: string, questionGroup: string | undefined, text: string, answer: string, actions: string[] }} SummaryFailure
  * @typedef {{ groupCounts: GroupCount[], remediationActionCount: number, failures: SummaryFailure[] }} SummaryModel
  */
 
@@ -26,11 +20,9 @@ import {
  *
  * @param {QuestionDefinition[]} catalogue
  * @param {Record<string, Answer>} answers
- * @param {CaptureGroup[]} [captureGroups] The Case Type's Issue Capture Groups,
- * used to read each failed Answer's *sent* Remediation Actions.
  * @returns {SummaryModel}
  */
-export function buildSummaryModel(catalogue, answers, captureGroups = []) {
+export function buildSummaryModel(catalogue, answers) {
   const active = catalogue.filter((q) => !q.deprecated);
   const applicableIds = evaluate(active, answers);
   const applicable = active.filter((q) => applicableIds.has(q.id));
@@ -64,20 +56,11 @@ export function buildSummaryModel(catalogue, answers, captureGroups = []) {
     return total + selected + free;
   }, 0);
 
-  const keys = actionFieldKeys(captureGroups);
-
   /** @type {SummaryFailure[]} */
   const failures = failedQuestions.map((q) => {
     // A failed question always has an Answer (isFailure is false without one).
     const answer = answers[q.id];
     const v = answer.value;
-    /** @type {RemediationAction[]} */
-    const sentActions = [];
-    for (const key of keys) {
-      const raw = answer.capture?.[key];
-      if (Array.isArray(raw))
-        sentActions.push(...coerceRemediationActions(raw, key));
-    }
     // Selected canned actions, plus any free-form action, shown as
     // read-only text. Falls back to nothing when the Reviewer selected none.
     const actions = (answer.remediationActions ?? []).map(
@@ -90,7 +73,6 @@ export function buildSummaryModel(catalogue, answers, captureGroups = []) {
       text: q.text,
       answer: Array.isArray(v) ? v.join(', ') : v,
       actions,
-      sentActions,
     };
   });
 
