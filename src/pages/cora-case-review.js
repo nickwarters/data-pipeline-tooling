@@ -463,10 +463,6 @@ export function createRouteSlice(params, context) {
     capabilities: context.chrome.permissions ?? context.capabilities,
   });
   const questionsView = createQuestionPanelView();
-  /** @type {ReturnType<typeof createCaseReviewSaveEffect> | null} */
-  let save = null;
-  /** @type {ReturnType<typeof createAppealEffects> | null} */
-  let appeals = null;
   /**
    * The id every write addresses: the row that was actually loaded, which is
    * what `params.id` resolved to. The route param is only the seed, because the
@@ -477,6 +473,23 @@ export function createRouteSlice(params, context) {
    */
   let loadedCaseId = params.id;
   const caseId = () => loadedCaseId;
+  // Built here rather than in `start()`: a persistence path is not a place for a
+  // window where the write silently does nothing. The store's `dispatch` is the
+  // only part that does not exist yet, so the effects close over the mutable
+  // local above — a no-op until `start()` swaps the real one in (#511).
+  const save = createCaseReviewSaveEffect({
+    saveQueue: context.saveQueue,
+    caseId,
+    dispatch: (action) => dispatch(action),
+  });
+  const appeals = createAppealEffects({
+    saveQueue: context.saveQueue,
+    caseId,
+    dispatch: (action) => dispatch(action),
+    onCaseRow: (row) => {
+      viewModel.caseRow = row;
+    },
+  });
   let requestedOnHold = false;
   /** @type {null | {
    *   root: HTMLElement,
@@ -552,7 +565,7 @@ export function createRouteSlice(params, context) {
   function editAnswers(next) {
     if (next === null) return;
     currentAnswers = next;
-    save?.answersEdited(next);
+    save.answersEdited(next);
   }
 
   /** @param {Element} container @param {any} tools */
@@ -738,7 +751,7 @@ export function createRouteSlice(params, context) {
               'aria-pressed': String(caseRow.onHold === true),
               onclick: () => {
                 requestedOnHold = !requestedOnHold;
-                save?.onHoldChanged(requestedOnHold);
+                save.onHoldChanged(requestedOnHold);
               },
             },
             'On hold'
@@ -802,7 +815,7 @@ export function createRouteSlice(params, context) {
                 access: snapshot.access.notes,
                 heading: snapshot.sectionHeadings.notes,
                 placeholders: snapshot.config.placeholders ?? {},
-                onFieldInput: (field, value) => save?.fieldEdited(field, value),
+                onFieldInput: (field, value) => save.fieldEdited(field, value),
               })
             : null
         );
@@ -960,7 +973,7 @@ export function createRouteSlice(params, context) {
                   catalogue: snapshot.catalogue,
                   answers: snapshot.answers,
                   onRaise: ({ rationale, citedAnswerKeys }) =>
-                    appeals?.raise({
+                    appeals.raise({
                       caseRow,
                       snapshot,
                       rationale,
@@ -985,7 +998,7 @@ export function createRouteSlice(params, context) {
                   currentUser: snapshot.currentUser,
                   outcomeOptions: snapshot.config.outcomeOptions ?? [],
                   onResolve: (resolution) =>
-                    appeals?.resolve({ caseRow, snapshot, resolution }),
+                    appeals.resolve({ caseRow, snapshot, resolution }),
                 })
               )
             : null
@@ -1004,7 +1017,7 @@ export function createRouteSlice(params, context) {
                   currentUser: snapshot.currentUser,
                   outcomeOptions: snapshot.config.outcomeOptions ?? [],
                   onAmend: ({ outcome, justification }) =>
-                    appeals?.amend({
+                    appeals.amend({
                       caseRow,
                       snapshot,
                       outcome,
@@ -1128,19 +1141,6 @@ export function createRouteSlice(params, context) {
     start(/** @type {any} */ tools) {
       dispatch = tools.dispatch;
       active = true;
-      save = createCaseReviewSaveEffect({
-        saveQueue: context.saveQueue,
-        caseId,
-        dispatch: tools.dispatch,
-      });
-      appeals = createAppealEffects({
-        saveQueue: context.saveQueue,
-        caseId,
-        dispatch: tools.dispatch,
-        onCaseRow: (row) => {
-          viewModel.caseRow = row;
-        },
-      });
       const disposeSaveStatus = observeSaveStatus(
         context.saveQueue,
         tools.dispatch
@@ -1183,8 +1183,7 @@ export function createRouteSlice(params, context) {
         attributionTimers.clear();
         pendingAttributionQueries.clear();
         questionsView.clear();
-        save = null;
-        appeals = null;
+        dispatch = () => {};
         disposeSaveStatus();
       };
     },

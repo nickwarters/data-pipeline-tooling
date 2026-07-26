@@ -5,6 +5,14 @@ import { amendOutcome, raiseAppeal, resolveAppeal } from './appeal-actions.js';
 /** @typedef {import('../../services/save-queue.js').SaveQueue} SaveQueue */
 
 /**
+ * The route snapshot, as much of it as these effects care about: the viewer the
+ * transition is attributed to. Everything else is carried through untouched to
+ * the `case/model-changed` dispatch, so it stays open.
+ *
+ * @typedef {{ currentUser?: { id: string } | null } & Record<string, any>} Snapshot
+ */
+
+/**
  * Route effects for the ADR-0027 Appeal and ADR-0026 Amended Outcome
  * transitions. `appeal-actions.js` holds the pure half — it takes `at` /
  * `amendedAt` as arguments and never reaches a clock or the SaveQueue; this is
@@ -18,7 +26,7 @@ import { amendOutcome, raiseAppeal, resolveAppeal } from './appeal-actions.js';
  * @param {{
  *   saveQueue: SaveQueue,
  *   caseId: () => string,
- *   dispatch: (action: {type: 'case/model-changed', snapshot: any}) => unknown,
+ *   dispatch: (action: {type: 'case/model-changed', snapshot: Snapshot}) => unknown,
  *   onCaseRow: (caseRow: CaseRow) => unknown,
  *   now?: () => Date,
  *   newId?: (prefix: string) => string,
@@ -37,7 +45,7 @@ export function createAppealEffects({
    * persisted, so an unresolved viewer records an empty author rather than
    * `undefined`.
    *
-   * @param {any} snapshot
+   * @param {Snapshot} snapshot
    */
   const viewer = (snapshot) => snapshot.currentUser?.id ?? '';
 
@@ -47,7 +55,7 @@ export function createAppealEffects({
    * without a reload.
    *
    * @param {{ caseRow: CaseRow }} result
-   * @param {any} snapshot
+   * @param {Snapshot} snapshot
    */
   function applied(result, snapshot) {
     onCaseRow(result.caseRow);
@@ -61,7 +69,7 @@ export function createAppealEffects({
     /**
      * @param {{
      *   caseRow: CaseRow,
-     *   snapshot: any,
+     *   snapshot: Snapshot,
      *   rationale: string,
      *   citedAnswerKeys: string[],
      * }} input
@@ -82,7 +90,7 @@ export function createAppealEffects({
     /**
      * @param {{
      *   caseRow: CaseRow,
-     *   snapshot: any,
+     *   snapshot: Snapshot,
      *   resolution: {
      *     appealId: string,
      *     verdict: 'agreed'|'rejected',
@@ -114,7 +122,7 @@ export function createAppealEffects({
     /**
      * @param {{
      *   caseRow: CaseRow,
-     *   snapshot: any,
+     *   snapshot: Snapshot,
      *   outcome: string,
      *   justification: string,
      * }} input

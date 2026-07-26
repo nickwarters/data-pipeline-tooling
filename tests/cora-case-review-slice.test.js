@@ -147,15 +147,17 @@ function snapshot() {
  * @param {any} initialState
  * @param {Record<string, any>} [contextOverrides]
  * @param {(container: any) => void} [seedContainer]
+ * @param {{ caseType: string, id: string }} [routeParams]
  */
 function renderShippedState(
   initialState,
   contextOverrides = {},
-  seedContainer = undefined
+  seedContainer = undefined,
+  routeParams = { caseType: 'example-review', id: 'c1' }
 ) {
   const never = new Promise(() => {});
   const slice = createRouteSlice(
-    { caseType: 'example-review', id: 'c1' },
+    routeParams,
     /** @type {any} */ ({
       currentUser: chrome.currentUser,
       capabilities: chrome.permissions,
@@ -1794,6 +1796,43 @@ test('Notes effect: a Case field edit dispatches then enqueues against the loade
       field: 'caseJustification',
       value: 'Because.',
     },
+  ]);
+});
+
+test('the route writes to the loaded Case row id, not the route param that found it (#511)', () => {
+  const loaded = snapshot();
+  loaded.caseRow = { ...loaded.caseRow, id: 'c1' };
+  let state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: loaded }
+  );
+  state = caseReviewReducer(state, { type: 'case/tab-selected', id: 'notes' });
+
+  /** @type {any[]} */
+  const queued = [];
+  const saveQueue = {
+    enqueue: (
+      /** @type {string} */ id,
+      /** @type {string} */ field,
+      /** @type {any} */ value
+    ) => queued.push({ id, field, value }),
+  };
+  // A route param that addresses the same row without being byte-identical to
+  // its id — the only way the two can diverge (`#/case/…/C1` for item `c1`).
+  const view = renderShippedState(state, { saveQueue }, undefined, {
+    caseType: 'example-review',
+    id: 'C1',
+  });
+
+  const notes = getByRole(view.container, 'textbox', { name: 'Case notes' });
+  notes.value = 'Written against the loaded row';
+  fireEvent(notes, 'input');
+
+  // Without the re-sync in renderRoute this writes to 'C1', and SaveQueue would
+  // create fresh state for that unknown id with an empty ETag — a write with no
+  // concurrency guard rather than a loud failure.
+  assert.deepEqual(queued, [
+    { id: 'c1', field: 'notes', value: 'Written against the loaded row' },
   ]);
 });
 
