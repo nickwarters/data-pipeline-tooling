@@ -25,14 +25,15 @@ function minimalConfig(overrides = {}) {
 
 // ===== resolveCaseSourcesFromCaseTypes (pure core, the app-wide rule) =====
 
-test('resolveCaseSourcesFromCaseTypes: grants via the list-access group derived from config.displayName', () => {
+test('resolveCaseSourcesFromCaseTypes: grants via the list-access group derived from the registry displayName', () => {
   const sources = resolveCaseSourcesFromCaseTypes(
     ['Reviewers - Product Sale Review'],
     [
       {
         slug: 'product-sale-review',
         listName: 'Cases-ProductSaleReview',
-        config: minimalConfig({ displayName: 'Product Sale Review' }),
+        displayName: 'Product Sale Review',
+        config: minimalConfig(),
       },
     ]
   );
@@ -53,10 +54,8 @@ test('resolveCaseSourcesFromCaseTypes: carries the optional allocation limit fro
       {
         slug: 'complaints',
         listName: 'Cases-Complaints',
-        config: minimalConfig({
-          displayName: 'Complaints',
-          maxInProgressCases: 3,
-        }),
+        displayName: 'Complaints',
+        config: minimalConfig({ maxInProgressCases: 3 }),
       },
     ]
   );
@@ -80,15 +79,14 @@ test('allocationSourcesFromCaseSources: isolates an invalid limit to that Case T
       {
         slug: 'complaints',
         listName: 'Cases-Complaints',
-        config: minimalConfig({
-          displayName: 'Complaints',
-          maxInProgressCases: 0,
-        }),
+        displayName: 'Complaints',
+        config: minimalConfig({ maxInProgressCases: 0 }),
       },
       {
         slug: 'example-review',
         listName: 'Cases-ExampleReview',
-        config: minimalConfig({ displayName: 'Example Review' }),
+        displayName: 'Example Review',
+        config: minimalConfig(),
       },
     ]
   );
@@ -113,12 +111,14 @@ test('resolveCaseSourcesFromCaseTypes: a Case Type Owner gets only their Case Ty
       {
         slug: 'complaints',
         listName: 'Cases-Complaints',
-        config: minimalConfig({ displayName: 'Complaints' }),
+        displayName: 'Complaints',
+        config: minimalConfig(),
       },
       {
         slug: 'example-review',
         listName: 'Cases-ExampleReview',
-        config: minimalConfig({ displayName: 'Example Review' }),
+        displayName: 'Example Review',
+        config: minimalConfig(),
       },
     ]
   );
@@ -137,12 +137,14 @@ test('resolveCaseSourcesFromCaseTypes: a Journey Owner gets only their Case Type
     {
       slug: 'complaints',
       listName: 'Cases-Complaints',
-      config: minimalConfig({ displayName: 'Complaints' }),
+      displayName: 'Complaints',
+      config: minimalConfig(),
     },
     {
       slug: 'example-review',
       listName: 'Cases-ExampleReview',
-      config: minimalConfig({ displayName: 'Example Review' }),
+      displayName: 'Example Review',
+      config: minimalConfig(),
     },
   ];
 
@@ -168,10 +170,8 @@ test('resolveCaseSourcesFromCaseTypes: grants via a blanket eligibleGroups entry
       {
         slug: 'example-review',
         listName: 'Cases-ExampleReview',
-        config: minimalConfig({
-          eligibleGroups: ['Reviewers'],
-          displayName: 'Example Review',
-        }),
+        displayName: 'Example Review',
+        config: minimalConfig({ eligibleGroups: ['Reviewers'] }),
       },
     ]
   );
@@ -193,7 +193,8 @@ test('resolveCaseSourcesFromCaseTypes: grants via reviewerGroup', () => {
         slug: 'complaints',
         listName: 'Cases-Complaints',
         reviewerGroup: 'Reviewers - Complaints',
-        config: minimalConfig({ displayName: 'Complaints' }),
+        displayName: 'Complaints',
+        config: minimalConfig(),
       },
     ]
   );
@@ -215,7 +216,8 @@ test('resolveCaseSourcesFromCaseTypes: base Reviewers group does not imply a per
         slug: 'complaints',
         listName: 'Cases-Complaints',
         reviewerGroup: 'Reviewers - Complaints',
-        config: minimalConfig({ displayName: 'Complaints' }),
+        displayName: 'Complaints',
+        config: minimalConfig(),
       },
     ]
   );
@@ -231,21 +233,7 @@ test('resolveCaseSourcesFromCaseTypes: excludes a Case Type when the user holds 
         slug: 'complaints',
         listName: 'Cases-Complaints',
         reviewerGroup: 'Reviewers - Complaints',
-        config: minimalConfig({ displayName: 'Complaints' }),
-      },
-    ]
-  );
-
-  assert.deepEqual(sources, []);
-});
-
-test('resolveCaseSourcesFromCaseTypes: a Case Type with no displayName is not granted via list access and reports an empty displayName', () => {
-  const sources = resolveCaseSourcesFromCaseTypes(
-    ['Reviewers - Stress Review'],
-    [
-      {
-        slug: 'stress-review',
-        listName: 'Cases-StressReview',
+        displayName: 'Complaints',
         config: minimalConfig(),
       },
     ]
@@ -254,17 +242,53 @@ test('resolveCaseSourcesFromCaseTypes: a Case Type with no displayName is not gr
   assert.deepEqual(sources, []);
 });
 
-test('resolveCaseSourcesFromCaseTypes: Reviewer Managers get every source (with empty displayName when a config declares none)', () => {
+// There is no "Case Type without a display name" case left to test: every
+// `CaseTypeSource` carries the registry's required `displayName` (#527), so a
+// nameless Case Type is a type error rather than a silently short source list.
+// Its three derived group names are therefore ALWAYS contributed — the case
+// below holds neither `eligibleGroups` nor `reviewerGroup`.
+test('resolveCaseSourcesFromCaseTypes: the three derived group names are contributed with no config aliases at all', () => {
+  const caseTypes = [
+    {
+      slug: 'stress-review',
+      listName: 'Cases-StressReview',
+      displayName: 'Stress Review',
+      config: minimalConfig(),
+    },
+  ];
+
+  for (const group of [
+    'Reviewers - Stress Review',
+    'CaseTypeOwner - Stress Review',
+    'JourneyOwner - Stress Review',
+  ]) {
+    assert.deepEqual(
+      resolveCaseSourcesFromCaseTypes([group], caseTypes),
+      [
+        {
+          slug: 'stress-review',
+          listName: 'Cases-StressReview',
+          displayName: 'Stress Review',
+        },
+      ],
+      `${group} must grant the source it names`
+    );
+  }
+});
+
+test('resolveCaseSourcesFromCaseTypes: Reviewer Managers get every source', () => {
   const caseTypes = [
     {
       slug: 'complaints',
       listName: 'Cases-Complaints',
       reviewerGroup: 'Reviewers - Complaints',
-      config: minimalConfig({ displayName: 'Complaints' }),
+      displayName: 'Complaints',
+      config: minimalConfig(),
     },
     {
-      slug: 'nameless',
-      listName: 'Cases-Nameless',
+      slug: 'stress-review',
+      listName: 'Cases-StressReview',
+      displayName: 'Stress Review',
       config: minimalConfig(),
     },
   ];
@@ -280,7 +304,11 @@ test('resolveCaseSourcesFromCaseTypes: Reviewer Managers get every source (with 
       listName: 'Cases-Complaints',
       displayName: 'Complaints',
     },
-    { slug: 'nameless', listName: 'Cases-Nameless', displayName: '' },
+    {
+      slug: 'stress-review',
+      listName: 'Cases-StressReview',
+      displayName: 'Stress Review',
+    },
   ]);
 });
 
@@ -289,12 +317,14 @@ test('resolveCaseSourcesFromCaseTypes: Controls get every Case Type source', () 
     {
       slug: 'complaints',
       listName: 'Cases-Complaints',
-      config: minimalConfig({ displayName: 'Complaints' }),
+      displayName: 'Complaints',
+      config: minimalConfig(),
     },
     {
       slug: 'example-review',
       listName: 'Cases-ExampleReview',
-      config: minimalConfig({ displayName: 'Example Review' }),
+      displayName: 'Example Review',
+      config: minimalConfig(),
     },
   ];
 
@@ -311,12 +341,14 @@ test('resolveCaseSourcesFromCaseTypes: Advisers get every Case Type source', () 
     {
       slug: 'complaints',
       listName: 'Cases-Complaints',
-      config: minimalConfig({ displayName: 'Complaints' }),
+      displayName: 'Complaints',
+      config: minimalConfig(),
     },
     {
       slug: 'example-review',
       listName: 'Cases-ExampleReview',
-      config: minimalConfig({ displayName: 'Example Review' }),
+      displayName: 'Example Review',
+      config: minimalConfig(),
     },
   ];
 
@@ -333,12 +365,14 @@ test('resolveCaseSourcesFromCaseTypes: Responsible Party Managers get every Case
     {
       slug: 'complaints',
       listName: 'Cases-Complaints',
-      config: minimalConfig({ displayName: 'Complaints' }),
+      displayName: 'Complaints',
+      config: minimalConfig(),
     },
     {
       slug: 'example-review',
       listName: 'Cases-ExampleReview',
-      config: minimalConfig({ displayName: 'Example Review' }),
+      displayName: 'Example Review',
+      config: minimalConfig(),
     },
   ];
 
@@ -409,7 +443,8 @@ test('resolveCaseSourcesFromCaseTypes: broad roles come from the permissions con
   const source = {
     slug: 'example-review',
     listName: 'Cases-ExampleReview',
-    config: minimalConfig({ displayName: 'Example Review' }),
+    displayName: 'Example Review',
+    config: minimalConfig(),
   };
   for (const group of [
     permissions.reviewerManager,

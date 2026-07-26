@@ -5,7 +5,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-import { CASE_TYPE_IMPORTERS } from '../case-types/manifest.js';
+import { CASE_TYPE_IMPORTERS, displayNameFor } from '../case-types/manifest.js';
 import { resolveCaseSources } from '../src/setup/resolve-eligible-case-types.js';
 import { permissions } from '../src/services/permissions.js';
 import { personas } from '../dev/fixtures/personas.js';
@@ -91,18 +91,29 @@ test('permissions.caseTypes: names every manifest slug so its display name and d
   );
 });
 
-test('permissions.caseTypes: each displayName matches the Case Type config displayName', async () => {
-  // The one remaining duplicate of a display name is the config's own
-  // `displayName` (#508 hoisted the permissions copy into the manifest). This is
-  // the assertion that registry and config still agree — a mismatch would
-  // silently derive the wrong SharePoint group names.
-  for (const { slug, displayName } of permissions.caseTypes) {
-    const { default: config } = await CASE_TYPE_IMPORTERS[slug]();
-    assert.equal(
-      displayName,
-      config.displayName,
-      `permissions.caseTypes displayName for "${slug}" ("${displayName}") must ` +
-        `match its Case Type config displayName ("${config.displayName}").`
+test('case types: no config module restates its display name — the registry is the one copy (#527)', async () => {
+  // #508 hoisted the permissions copy into the registry; #527 deleted the
+  // config copy, so there is nothing left to drift. A config that restated the
+  // name would let the capability side and the eligibility side derive
+  // DIFFERENT SharePoint group names again.
+  for (const [slug, importer] of Object.entries(CASE_TYPE_IMPORTERS)) {
+    const { default: config } = await importer();
+    assert.ok(
+      !Object.hasOwn(config, 'displayName'),
+      `Case Type "${slug}" declares displayName on its config module. The ` +
+        `display name composes three provisioned SharePoint group names and ` +
+        `lives ONLY on its CASE_TYPES entry (case-types/manifest.js).`
+    );
+  }
+});
+
+test('case types: the registry names every manifest slug, so displayNameFor never comes back short (#527)', () => {
+  for (const slug of Object.keys(CASE_TYPE_IMPORTERS)) {
+    const name = displayNameFor(slug);
+    assert.ok(
+      typeof name === 'string' && name.length > 0,
+      `Case Type "${slug}" resolved no display name; its Reviewers, Case Type ` +
+        `Owner and Journey Owner would silently lose their source.`
     );
   }
 });

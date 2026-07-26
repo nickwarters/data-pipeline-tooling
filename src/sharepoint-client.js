@@ -441,7 +441,6 @@
  * eligibleGroups?: string[],
  * listName?: string,
  * reviewerGroup?: string,
- * displayName?: string,
  * sections?: Partial<Record<import('./lib/section-registry.js').Section, SectionConfig>>,
  * questionGroups?: Record<string, QuestionGroupConfig>,
  * appeal?: AppealConfig,

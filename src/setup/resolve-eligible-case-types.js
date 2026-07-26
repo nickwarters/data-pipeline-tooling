@@ -1,11 +1,17 @@
 // @ts-check
 import { caseTypeGroupNames, permissions } from '../services/permissions.js';
+import { displayNameFor } from '../../case-types/manifest.js';
 
 /**
+ * `displayName` is required and comes from THE Case Type registry
+ * (`CASE_TYPES`), never from the Case Type config module (#527) — one string
+ * composes this type's three SharePoint group names, and the capability side
+ * (`permissions.caseTypes`) reads the same copy.
+ *
  * @typedef {{
  * slug: string,
  * listName: string,
- * displayName?: string,
+ * displayName: string,
  * reviewerGroup?: string,
  * config: import('../sharepoint-client.js').CaseTypeConfig
  * }} CaseTypeSource
@@ -31,17 +37,16 @@ import { caseTypeGroupNames, permissions } from '../services/permissions.js';
  */
 
 /**
- * Project a resolved Case Type down to the public `CaseSource` shape, coercing
- * an absent display name to an empty string in exactly one place.
+ * Project a resolved Case Type down to the public `CaseSource` shape.
  *
- * @param {{ slug: string, listName: string, displayName?: string, maxInProgressCases?: number }} source
+ * @param {{ slug: string, listName: string, displayName: string, maxInProgressCases?: number }} source
  * @returns {CaseSource}
  */
 function toCaseSource({ slug, listName, displayName, maxInProgressCases }) {
   return {
     slug,
     listName,
-    displayName: displayName ?? '',
+    displayName,
     ...(maxInProgressCases === undefined ? {} : { maxInProgressCases }),
   };
 }
@@ -97,7 +102,9 @@ async function loadCaseTypeSources(slugs, importers) {
       return /** @type {CaseTypeSource} */ ({
         slug,
         listName: /** @type {string} */ (config.listName),
-        displayName: config.displayName,
+        // From THE registry, not from the config module: the capability side
+        // derives its group names from the same string (#527).
+        displayName: displayNameFor(slug),
         reviewerGroup: config.reviewerGroup,
         config,
       });
@@ -112,9 +119,12 @@ async function loadCaseTypeSources(slugs, importers) {
  *
  * - `config.reviewerGroup`, if declared
  * - any of `config.eligibleGroups`, if declared
- * - `Reviewers - <config.displayName>`
- * - `CaseTypeOwner - <config.displayName>`
- * - `JourneyOwner - <config.displayName>`
+ * - `Reviewers - <displayName>`
+ * - `CaseTypeOwner - <displayName>`
+ * - `JourneyOwner - <displayName>`
+ *
+ * where `displayName` is the registry's, and a registered Case Type always has
+ * one — so the three derived group names are always contributed (#527).
  *
  * Controls, Reviewer Managers, Advisers, ResponsibleParty-Managers and
  * Maintainers span
@@ -137,26 +147,23 @@ export function resolveCaseSourcesFromCaseTypes(userGroups, caseTypes) {
     ].includes(group)
   )
     ? caseTypes
-    : caseTypes.filter(({ config, reviewerGroup }) => {
+    : caseTypes.filter(({ config, reviewerGroup, displayName }) => {
+        const derived = caseTypeGroupNames(displayName);
         const groups = [
           ...(config.eligibleGroups ?? []),
           ...(reviewerGroup ? [reviewerGroup] : []),
-          ...(config.displayName
-            ? [
-                caseTypeGroupNames(config.displayName).listAccess,
-                caseTypeGroupNames(config.displayName).caseTypeOwner,
-                caseTypeGroupNames(config.displayName).journeyOwner,
-              ]
-            : []),
+          derived.listAccess,
+          derived.caseTypeOwner,
+          derived.journeyOwner,
         ];
         return groups.some((g) => userGroups.includes(g));
       });
 
-  return eligible.map(({ slug, listName, config }) =>
+  return eligible.map(({ slug, listName, displayName, config }) =>
     toCaseSource({
       slug,
       listName,
-      displayName: config.displayName,
+      displayName,
       maxInProgressCases: config.maxInProgressCases,
     })
   );

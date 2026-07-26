@@ -19,7 +19,6 @@ const bank = await loadBank(
 
 /** @type {CaseTypeConfig} */
 const config = {
-  displayName: 'Example Review',
   eligibleGroups: ['Reviewers'],
   listName: 'Cases-ExampleReview',
   slaHours: 48,
