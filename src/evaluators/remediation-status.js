@@ -22,7 +22,7 @@
 
 import { evaluate } from './applicability-evaluator.js';
 import { isFailure } from './failure-evaluator.js';
-import { answerRemediation, hasRemediation } from './answer-remediation.js';
+import { answerRemediation } from './answer-remediation.js';
 
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
@@ -65,11 +65,15 @@ export const REMEDIATION_DETAIL_LABELS = {
  * @property {string} details The details / justification recorded with a non-`complete` status.
  */
 
-// `answerRemediation` / `hasRemediation` need neither the applicability graph nor
-// the failure rules, so they live in a leaf module that `section-access.js` can
-// import without dragging the evaluators onto the dashboard boot path. They are
+// `answerRemediation` answers the one question that *can* be answered from the
+// Answers blob alone — what remediation is written against **one** Answer — so
+// it lives in a leaf module the Responsible Party dashboard can import without
+// dragging the applicability graph and failure rules behind it. It is
 // re-exported here so this module stays the seam callers name.
-export { answerRemediation, hasRemediation };
+//
+// There is deliberately no Answers-blob-only "does this Case carry remediation?"
+// predicate. That question is catalogue-aware: see `hasTrackableRemediation`.
+export { answerRemediation };
 
 /**
  * Normalise a stored `remediationStatus`, tolerating absent or unrecognised
@@ -122,10 +126,16 @@ export function remediationRows(catalogue, answers) {
   ) {
     return rowsCache.rows;
   }
-  const applicable = evaluate(catalogue, answers ?? {});
+  // A deprecated Question Definition is out of the catalogue, not in it with a
+  // flag: Question Definitions are never deleted (CLAUDE.md), so deprecation is
+  // how a Case Type Owner retires one. `case-review-view-model.js` already
+  // filters them on both the live and the versioned path; filtering here too
+  // makes the seam correct for any caller rather than only the careful one.
+  const active = catalogue.filter((question) => !question.deprecated);
+  const applicable = evaluate(active, answers ?? {});
   /** @type {RemediationRow[]} */
   const rows = [];
-  for (const question of catalogue) {
+  for (const question of active) {
     if (!applicable.has(question.id)) continue;
     const answer = (answers ?? {})[question.id];
     if (!isFailure(question, answer)) continue;
@@ -136,6 +146,39 @@ export function remediationRows(catalogue, answers) {
   rowsCache = { catalogue, answers, rows };
   return rows;
 }
+
+/**
+ * **The** definition of "this Case carries remediation" (#502, #497): it has at
+ * least one row on the Remediation tab. Everything that turns on the question —
+ * the **Send Actions** fork and its `hadRemediation` stamp, the Remediation
+ * Section's visibility gate, the completion gate — reads it here, so a Case
+ * cannot be sent down the actions path for remediation the tab will not render
+ * and nobody can ever resolve.
+ *
+ * It is deliberately **catalogue-aware**, and that is the whole content of the
+ * decision. Remediation attached to a Question that has since left the
+ * catalogue — deprecated by a Case Type Owner, no longer applicable, or no
+ * longer failing after a republished bank changed its `optionOutcomes` — is
+ * *orphaned*, not outstanding. `materializeRemediationActions` already strips
+ * remediation the moment an Answer stops failing; this is the same rule applied
+ * to the cases that rule cannot reach, because the Question is no longer there
+ * to iterate over.
+ *
+ * An absent catalogue is no Questions, hence no remediation. Callers that hold
+ * a resolved catalogue must pass it: reading the Answers blob alone gives a
+ * strict *superset* of the rows, which is exactly the split this seam exists to
+ * close.
+ *
+ * @param {QuestionDefinition[] | null | undefined} catalogue
+ * @param {Record<string, Answer>} answers
+ * @returns {boolean}
+ */
+export function hasTrackableRemediation(catalogue, answers) {
+  return remediationRows(catalogue ?? NO_CATALOGUE, answers).length > 0;
+}
+
+/** One shared empty catalogue, so the absent-catalogue path does not evict `rowsCache` on every call. */
+const NO_CATALOGUE = /** @type {QuestionDefinition[]} */ ([]);
 
 /**
  * Record a resolution on one Answer, returning a fresh Answer. `complete`

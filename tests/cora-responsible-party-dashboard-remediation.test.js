@@ -222,3 +222,31 @@ test('free-form remediation is outstanding work too, and only once sent (#497)',
     []
   );
 });
+
+test('a Completed Case has no outstanding remediation, by construction (#502)', () => {
+  // This dashboard lists Cases across every Case Type and holds no catalogue for
+  // any of them, so it reads the Answers blob — a strict superset of the
+  // Remediation tab's rows. Scoped to `Actions In Progress`, the one status in
+  // which the Case is frozen *and* the tab is live, that superset can no longer
+  // strand work: a Case only reaches it with ≥1 real row (the catalogue-aware
+  // Send Actions fork), and it cannot leave it until every row is resolved (the
+  // completion gate).
+  //
+  // Before this, an Answer whose Question had been deprecated carried its
+  // remediation into the "Outstanding remediation" table of a Completed Case
+  // *forever*: `remediationStatus` was never written and could never be written,
+  // because its only writer is a row the tab does not render.
+  const orphaned = /** @type {any} */ (row('c3', 'complaints', ''));
+  orphaned.status = 'Completed';
+  orphaned.completedAt = '2026-07-30T00:00:00Z';
+  orphaned.answers = {
+    'q-old': { value: 'No', freeFormRemediation: 'Refund the customer £40' },
+  };
+  assert.deepEqual(outstandingRemediation(orphaned), []);
+
+  // …and so does a Case that closed with every row properly resolved.
+  const closed = /** @type {any} */ (row('c4', 'complaints', ''));
+  closed.status = 'Completed';
+  closed.answers.q1.remediationStatus = { status: 'complete' };
+  assert.deepEqual(outstandingRemediation(closed), []);
+});

@@ -56,16 +56,38 @@ const ATTRIBUTE_CONFIG = { ...EMPTY_CONFIG, attributeFailures: true };
 const ACTIONS_CONFIG = EMPTY_CONFIG;
 
 /**
+ * The Case's resolved catalogue. Whether a Case carries remediation is a
+ * question about the tab's *rows*, so every Question these tests answer has to
+ * be in it and able to fail (#502).
+ *
+ * @type {import('../src/sharepoint-client.js').QuestionDefinition[]}
+ */
+const CATALOGUE = ['q-a', 'q-needs', 'q-welcome'].map((id) => ({
+  id,
+  text: id,
+  responseType: /** @type {const} */ ('yes-no-na'),
+  failureValues: ['No'],
+  deprecated: false,
+}));
+
+/**
  * @param {'In-progress'|'Actions In Progress'|'Completed'} status
  * @param {import('../src/sharepoint-client.js').CaseTypeConfig} [config]
  * @param {Partial<import('../src/sharepoint-client.js').CaseRow>} [overrides]
+ * @param {import('../src/sharepoint-client.js').QuestionDefinition[]} [catalogue]
  */
-function machineFor(status, config = EMPTY_CONFIG, overrides = {}) {
+function machineFor(
+  status,
+  config = EMPTY_CONFIG,
+  overrides = {},
+  catalogue = CATALOGUE
+) {
   return new CaseMachine(
     { ...BASE_ROW, status, ...overrides },
     { id: 'u1' },
     NO_CAPABILITIES,
-    config
+    config,
+    { catalogue }
   );
 }
 
@@ -210,6 +232,40 @@ test('CaseMachine snapshots hadRemediation from free-form remediation too (#502)
   );
   assert.equal(fields.hadRemediation, true);
   assert.equal(fields.effectiveHadRemediation, true);
+});
+
+test('CaseMachine does not stamp hadRemediation for a Question that has left the catalogue (#502)', () => {
+  // A Maintainer deprecated the Question after the Reviewer typed the
+  // remediation — the operation CLAUDE.md mandates instead of deletion. The
+  // Answer keeps the text, but the Remediation tab has no row for it, so the
+  // Case does not go down the actions path and is not reported as having had
+  // remediation. Its Reviewer sees "Complete Case", not an SLA nobody can close.
+  const orphaned = {
+    'q-welcome': { value: 'No', freeFormRemediation: 'Refund the customer' },
+  };
+  const deprecated = CATALOGUE.map((q) =>
+    q.id === 'q-welcome' ? { ...q, deprecated: true } : q
+  );
+  const machine = machineFor('In-progress', EMPTY_CONFIG, {}, deprecated);
+
+  const fields = machine.transitionToActionsInProgress(
+    () => ({ outcome: 'fail' }),
+    orphaned,
+    null
+  );
+  assert.equal(fields.hadRemediation, false);
+  assert.equal(fields.effectiveHadRemediation, false);
+
+  // …and the tab it would have been resolved on is not offered either.
+  assert.equal(
+    machineFor(
+      'Actions In Progress',
+      EMPTY_CONFIG,
+      { answers: orphaned },
+      deprecated
+    ).access.remediation,
+    'hidden'
+  );
 });
 
 test('CaseMachine stamps every lifecycle timestamp from the injected clock (#511)', () => {

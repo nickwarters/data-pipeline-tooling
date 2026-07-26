@@ -10,13 +10,58 @@
 import assert from 'node:assert/strict';
 
 import {
-  evaluateAccess,
+  evaluateAccess as evaluateAccessWithCatalogue,
   remediationAudience,
   resolveRoles,
   showInSummary,
   SECTIONS,
   SUMMARY_SECTIONS,
 } from '../../src/services/section-access.js';
+
+/**
+ * The Case's resolved Question catalogue, holding the one Question the fixture
+ * Cases below answer. The Remediation cells ask whether the tab would render a
+ * row, which is a question about the catalogue and not only the Answers blob
+ * (#502) — so a Case that carries remediation needs its Question to exist.
+ *
+ * @type {import('../../src/sharepoint-client.js').QuestionDefinition[]}
+ */
+export const CATALOGUE = [
+  {
+    id: 'q1',
+    text: 'Greeted the customer?',
+    responseType: 'yes-no-na',
+    failureValues: ['No'],
+    deprecated: false,
+  },
+];
+
+/**
+ * `evaluateAccess` against `CATALOGUE` unless a test supplies its own — the
+ * ordinary case being that the Case's Questions are loaded.
+ *
+ * @param {Section} section
+ * @param {Role[]} roles
+ * @param {CaseRow} caseRow
+ * @param {CaseTypeConfig} config
+ * @param {import('../../src/sharepoint-client.js').QuestionDefinition[]} [catalogue]
+ * @returns {Mode}
+ */
+export function evaluateAccess(
+  section,
+  roles,
+  caseRow,
+  config,
+  catalogue = CATALOGUE
+) {
+  return evaluateAccessWithCatalogue(
+    section,
+    roles,
+    caseRow,
+    config,
+    catalogue
+  );
+}
 
 /** @returns {CaseRow} */
 export function makeCase(overrides = {}) {
@@ -124,7 +169,6 @@ export function assertGrid(grid, caseRow, config) {
 }
 
 export {
-  evaluateAccess,
   remediationAudience,
   resolveRoles,
   showInSummary,

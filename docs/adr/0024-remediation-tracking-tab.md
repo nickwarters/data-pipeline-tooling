@@ -190,11 +190,22 @@ and never set `true` anywhere in `src/`. The Responsible Party dashboard counted
 much remediation the Reviewer resolved — the same family of defect as the
 capture store, on a different surface. The dashboard now derives outstanding
 work from the model above: an Answer that carries remediation and whose
-`remediationStatus` is not yet _resolved_, on a Case past **Send Actions**
-(before that, nothing has been asked of the Responsible Party). `completed` is
-**deleted** from the Answer shape, with no coercion: unlike the `actions`
-capture field, nothing renders it, so a persisted blob still carrying the
-property simply round-trips unread.
+`remediationStatus` is not yet _resolved_, on a Case **`Actions In Progress`**.
+`completed` is **deleted** from the Answer shape, with no coercion: unlike the
+`actions` capture field, nothing renders it, so a persisted blob still carrying
+the property simply round-trips unread.
+
+**Why that status and not "reportable".** This dashboard lists Cases across
+every Case Type and holds no catalogue for any of them, so it reads the Answers
+blob — a strict _superset_ of the Remediation tab's rows (ADR-0037's Amendment
+2). Scoped to reportable, that superset resurrected the very defect this
+paragraph claims to have closed: an Answer stranded on a Question that had left
+the catalogue appeared as outstanding work on a **`Completed`** Case forever,
+because its `remediationStatus` had never been written and never could be — the
+only writer is a row the tab does not render. Scoped to `Actions In Progress` the
+superset is harmless, and by construction rather than by luck: a Case only
+_enters_ that status with ≥1 real row, and it cannot _leave_ it until every row
+is resolved. A `Completed` Case has no outstanding remediation, definitionally.
 
 The completion gate's safety property is now covered end to end: an
 `Actions In Progress` Case whose Answer carries Remediation Actions and no

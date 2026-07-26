@@ -7,7 +7,7 @@ import {
   REMEDIATION_STATUS_LABELS,
   REMEDIATION_DETAIL_LABELS,
   answerRemediation,
-  hasRemediation,
+  hasTrackableRemediation,
   remediationRows,
   isRemediationResolved,
   remediationComplete,
@@ -80,15 +80,46 @@ test('answerRemediation: reads selected actions and free-form text; null when ne
   );
 });
 
-test('hasRemediation: true when any Answer carries remediation', () => {
-  assert.equal(hasRemediation(failedWithActions()), true);
+test('hasTrackableRemediation: true when the Case has at least one remediation row', () => {
+  assert.equal(hasTrackableRemediation(CATALOGUE, failedWithActions()), true);
   assert.equal(
-    hasRemediation({ q1: { value: 'No', freeFormRemediation: 'Apologise' } }),
+    hasTrackableRemediation(CATALOGUE, {
+      q1: { value: 'No', freeFormRemediation: 'Apologise' },
+    }),
     true
   );
-  assert.equal(hasRemediation({ q1: { value: 'No' } }), false);
-  assert.equal(hasRemediation({}), false);
-  assert.equal(hasRemediation(/** @type {any} */ (undefined)), false);
+  assert.equal(
+    hasTrackableRemediation(CATALOGUE, { q1: { value: 'No' } }),
+    false
+  );
+  assert.equal(hasTrackableRemediation(CATALOGUE, {}), false);
+  assert.equal(
+    hasTrackableRemediation(CATALOGUE, /** @type {any} */ (undefined)),
+    false
+  );
+});
+
+test('hasTrackableRemediation: remediation on a Question that has left the catalogue is not remediation', () => {
+  // The whole point of the seam. An Answer whose Question is deprecated, no
+  // longer applicable or no longer failing keeps its remediation in the Answers
+  // blob, but there is no row to resolve it on — so it must not be counted as
+  // remediation by anything that decides the lifecycle either.
+  const orphaned = {
+    'q-old': { value: 'No', freeFormRemediation: 'Refund the customer £40' },
+  };
+  assert.equal(answerRemediation(orphaned['q-old']) !== null, true);
+  assert.equal(hasTrackableRemediation([], orphaned), false);
+  assert.equal(
+    hasTrackableRemediation(/** @type {any} */ (undefined), orphaned),
+    false
+  );
+});
+
+test('remediationRows: a deprecated Question is not in the catalogue', () => {
+  const deprecated = CATALOGUE.map((q) =>
+    q.id === 'q1' ? { ...q, deprecated: true } : q
+  );
+  assert.deepEqual(remediationRows(deprecated, failedWithActions()), []);
 });
 
 test('remediationRows: only applicable, failed Questions that carry remediation', () => {

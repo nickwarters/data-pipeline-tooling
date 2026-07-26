@@ -24,16 +24,15 @@ import {
   REMEDIATION_SLA_WORKING_DAYS,
 } from '../config/working-days.js';
 import { CASE_STATUS } from './case-statuses.js';
-// The one definition of "this Case carries remediation" (#502). Imported from
-// its leaf home rather than the `remediation-status.js` seam so the lifecycle
-// model does not pull the applicability graph and failure rules in behind it —
-// the same reason `services/section-access.js` imports the leaf.
-import { hasRemediation } from '../evaluators/answer-remediation.js';
+// The one definition of "this Case carries remediation" (#502): the Remediation
+// tab has ≥1 row. Deliberately catalogue-aware — see `hasTrackableRemediation`.
+import { hasTrackableRemediation } from '../evaluators/remediation-status.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').CurrentUser} CurrentUser */
 /** @typedef {import('../sharepoint-client.js').CaseTypeConfig} CaseTypeConfig */
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
+/** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../services/permissions.js').Capabilities} Capabilities */
 
 export class CaseMachine {
@@ -42,10 +41,21 @@ export class CaseMachine {
    * @param {CurrentUser | { id: string }} currentUser
    * @param {Capabilities} capabilities
    * @param {CaseTypeConfig} config
-   * @param {{ now?: () => Date }} [options] Injectable clock for the lifecycle
-   *   timestamps below. Optional so the existing call sites are unchanged; a
-   *   caller that cares about `reportableAt` / `completedAt` — a test, or any
-   *   future caller replaying a Case — supplies its own.
+   * @param {{ now?: () => Date, catalogue?: QuestionDefinition[] }} [options]
+   *   `now` is an injectable clock for the lifecycle timestamps below; a caller
+   *   that cares about `reportableAt` / `completedAt` — a test, or any future
+   *   caller replaying a Case — supplies its own.
+   *
+   *   `catalogue` is the Case's **resolved** Question catalogue: the live bank
+   *   while `In-progress`, the stamped versioned export once reportable, in
+   *   both cases with `failureValues` derived (`CaseReviewViewModel` builds
+   *   exactly this). It decides what remediation the Case carries — hence
+   *   whether the Remediation Section exists and what `hadRemediation` is
+   *   stamped as (#502). Omitting it means *no Questions*, so the Remediation
+   *   Section resolves `hidden` and a transition stamps
+   *   `hadRemediation: false`: build a CaseMachine without one only when you
+   *   need neither, as `cora-conversation-view.js` does for the Conversation
+   *   cell alone.
    */
   constructor(caseRow, currentUser, capabilities, config, options = {}) {
     this.caseRow = caseRow;
@@ -53,13 +63,21 @@ export class CaseMachine {
     this.capabilities = capabilities;
     this.config = config;
     this._now = options.now ?? (() => new Date());
+    /** @type {QuestionDefinition[]} */
+    this.catalogue = options.catalogue ?? [];
 
     this.roles = resolveRoles(caseRow, currentUser.id, capabilities);
 
     /** @type {Record<import('../services/section-access.js').Section, import('../services/section-access.js').Mode>} */
     this.access = /** @type {any} */ ({});
     for (const s of SECTIONS) {
-      this.access[s] = evaluateAccess(s, this.roles, caseRow, config);
+      this.access[s] = evaluateAccess(
+        s,
+        this.roles,
+        caseRow,
+        config,
+        this.catalogue
+      );
     }
   }
 
@@ -145,7 +163,7 @@ export class CaseMachine {
     const fields = {};
     if (computeOutcome && answers) {
       fields.outcomeAtCompletion = computeOutcome(answers).outcome;
-      fields.hadRemediation = hasRemediation(answers);
+      fields.hadRemediation = hasTrackableRemediation(this.catalogue, answers);
       fields.effectiveOutcome = fields.outcomeAtCompletion;
       fields.effectiveHadRemediation = fields.hadRemediation;
       fields.outcomeOverridden = false;

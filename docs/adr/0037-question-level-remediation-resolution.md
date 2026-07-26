@@ -111,8 +111,10 @@ re-failed Answer would render pre-resolved and the gate would count it as done.
 
 ### Two audiences, one breakdown
 
-The Section's visibility gate becomes "the Case is reportable **and** ≥1 Answer
-carries remediation". Both audiences see the same rows; `remediationAudience()`
+The Section's visibility gate becomes "the Case is reportable **and** the Case
+carries remediation" — where the second half is the tab's own row count, not a
+separate reading of the Answers blob (Amendment 2). Both audiences see the same
+rows; `remediationAudience()`
 (in `services/section-access.js`, derived from the viewer's roles) selects the
 rendering:
 
@@ -165,11 +167,11 @@ convention any more. ADR-0038 revisits the resolution sources — the Roles no
 longer share one — and decides that reconciliation machinery should not police
 the convention either.
 
-## Amendment (2026-07, #502) — "carries remediation" has one definition, and free-form counts
+## Amendment 1 (2026-07, #502) — "carries remediation" has one definition, and free-form counts
 
 This ADR defined a remediation row as an Answer with "≥1 selected Remediation
-Action **or** non-empty free-form remediation", and `answerRemediation` /
-`hasRemediation` implement exactly that. The **Send Actions** fork did not.
+Action **or** non-empty free-form remediation", and `answerRemediation`
+implements exactly that. The **Send Actions** fork did not.
 `hasRemediationActions` in `completion-actions.js` counted only
 `remediationActions`, and `CaseMachine._reportableSnapshot` stamped
 `hadRemediation` the same narrow way.
@@ -181,11 +183,14 @@ Reviewer had written down for them — while the Remediation tab, had it been
 reachable, would have listed that very row.
 
 **Decision. Free-form remediation counts as remediation, and there is one
-predicate.** `hasRemediation` (in `evaluators/answer-remediation.js`, the leaf
-that already owns the concept) is now the single definition. The two rival
-copies are **deleted**: `hasRemediationActions` is gone from
-`completion-actions.js`, and `CaseMachine` calls the leaf. Adding the free-form
-check in a second place would have recreated the split it was meant to close.
+predicate.** The two rival copies are **deleted**: `hasRemediationActions` is
+gone from `completion-actions.js`, and `CaseMachine` no longer spells the check
+out for itself. Adding the free-form check in a second place would have
+recreated the split it was meant to close.
+
+(The predicate this amendment first landed on — `hasRemediation(answers)`, over
+the Answers blob alone — turned out to be a _different_ fact from the one the
+tab renders. See Amendment 2 below, which replaces it.)
 
 The alternative — narrowing `answerRemediation` so free-form did _not_ count —
 was rejected: it would silently drop rows the Remediation tab renders today,
@@ -200,6 +205,76 @@ always _had_ outstanding remediation, and the old fork simply did not see it.
 `hadRemediation` / `effectiveHadRemediation` widen with it, so reporting counts
 these Cases as having had remediation from now on. Cases already `Completed` are
 frozen and are not revisited.
+
+## Amendment 2 (2026-07, #502) — "carries remediation" is a question about the _rows_, so it is catalogue-aware
+
+Amendment 1 made one predicate out of two. It picked the wrong one.
+
+`hasRemediation(answers)` read the Answers blob alone. `remediationRows` — the
+tab, and therefore `remediationComplete` and the completion gate — additionally
+requires the Question to be **in the loaded catalogue, applicable and failing**.
+`hasRemediation` was a strict **superset**, so a superset predicate decided the
+lifecycle while a subset predicate decided resolvability. That is the same split
+Amendment 1 set out to close, relocated.
+
+The gap is reachable through **sanctioned operations only**. A Reviewer fails a
+Question and types free-form remediation; a Case Type Owner then marks that
+Question `deprecated` — the operation CLAUDE.md _mandates_ instead of deletion —
+or republishes the bank with different `optionOutcomes` or `showWhen`. Either
+way `case-review-view-model.js` drops it from the catalogue, or it stops being
+applicable, or it stops failing. The Answer keeps its remediation; the tab has no
+row for it. The Reviewer reopened the Case to a **Send Actions** button, a
+transition to `Actions In Progress`, a stamped `remediationDueDate` and
+`hadRemediation: true`, and a visible Remediation tab reading "No remediation
+actions sent." beside that SLA date — with an **Overdue** badge ten working days
+later. `remediationComplete` was vacuously true over the empty row set, so the
+Case closed; and the Responsible Party's `#/my-cases` "Outstanding remediation"
+table then listed it **permanently**, because `remediationStatus` had never been
+written and could never be — its only writer is a row the tab does not render.
+
+**Decision. "This Case carries remediation" means "the Remediation tab has ≥1
+row", and nothing else.** `hasTrackableRemediation(catalogue, answers)` in
+`evaluators/remediation-status.js` _is_ `remediationRows(...).length > 0`, and it
+is what the **Send Actions** fork, `CaseMachine`'s `hadRemediation` stamp and the
+Section's visibility gate all read. `hasRemediation(answers)` is **deleted**:
+there is no longer an Answers-blob-only reading of the question to drift back to.
+`answerRemediation` survives, because "what remediation is written against _one_
+Answer" genuinely is answerable from the blob.
+
+**What happens when a Question carrying remediation leaves the catalogue: the
+remediation is _orphaned_, not outstanding.** This is the substantive choice, and
+the alternative — widening the tab so an out-of-catalogue Answer still gets a
+resolvable row — was rejected. The app already holds this rule:
+`materializeRemediationActions` strips `remediationActions`,
+`freeFormRemediation` and `remediationStatus` the moment an Answer stops failing,
+precisely so a stale instruction cannot outlive the finding it was attached to.
+Deprecation and republication are the same event; the strip cannot reach them
+only because the Question is no longer there to iterate over. Rendering a row for
+a Question the Reviewer can no longer see, read or re-answer would ask them to
+resolve an instruction whose basis the Case no longer contains — and would make
+the Remediation tab the one surface where a retired Question Definition lives on.
+
+The Reviewer still cannot get stuck: `remediationComplete` remains vacuously true
+over an empty row set, so every path to `Completed` stays satisfiable.
+
+Three call sites had to acquire the resolved catalogue — the live bank while
+`In-progress`, the stamped versioned export once reportable (ADR-0021):
+`CaseMachine` takes it as a constructor option and hands it to `evaluateAccess`,
+which passes it to the Remediation cells. A CaseMachine built without one sees no
+Questions, so Remediation resolves `hidden` and a transition stamps
+`hadRemediation: false` — correct for `cora-conversation-view.js`, the one caller
+that builds a machine for the Conversation cell alone.
+
+The fourth surface, the **Responsible Party dashboard**, cannot have a catalogue:
+it lists Cases across every Case Type and loading a bank per row is exactly the
+unbounded read ADR-0031 exists to prevent. It keeps reading the blob and is
+instead scoped to `Actions In Progress` — see ADR-0024's #497 amendment for why
+that makes the superset harmless rather than merely rarer.
+
+**Reporting note.** `hadRemediation` / `effectiveHadRemediation` narrow slightly
+against Amendment 1: a Case whose only remediation is orphaned is now stamped
+`false`. That is the honest value — no remediation was ever sent, and no SLA
+started. Cases already stamped are frozen and are not revisited.
 
 ## Considered options
 

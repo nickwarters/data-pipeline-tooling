@@ -1,7 +1,7 @@
 // @ts-check
 
 import {
-  hasRemediation,
+  hasTrackableRemediation,
   remediationComplete,
 } from '../../evaluators/remediation-status.js';
 import { navigateTo } from '../../lib/navigate.js';
@@ -71,13 +71,14 @@ export function completionControl(input) {
     disabled: gated,
     // Once the actions are sent there is nothing left to send, so the label is
     // the close either way; before that, remediation makes it the send.
-    // "Carries remediation" is `hasRemediation` — the *same* predicate the
-    // Remediation tab's rows are built from, so free-form text the Reviewer
-    // typed counts exactly as a ticked action does (#502). A second, narrower
-    // definition here is what let a free-form-only Case close straight out.
+    // "Carries remediation" is `hasTrackableRemediation` — literally "the
+    // Remediation tab has ≥1 row" — so free-form text the Reviewer typed counts
+    // exactly as a ticked action does (#502), and remediation stranded on a
+    // Question that has left the catalogue counts as neither, because there
+    // would be no row on which to resolve it.
     label:
       input.machine?.mayResolveRemediation !== true &&
-      hasRemediation(input.answers)
+      hasTrackableRemediation(input.catalogue, input.answers)
         ? 'Send Actions'
         : 'Complete Case',
     reason: gated ? REMEDIATION_GATE_REASON : null,
@@ -115,7 +116,7 @@ export function completionPatch(input) {
   ) {
     return null;
   }
-  const transition = hasRemediation(input.answers)
+  const transition = hasTrackableRemediation(input.catalogue, input.answers)
     ? machine.transitionToActionsInProgress
     : machine.transitionToCompleted;
   const transitionFields =

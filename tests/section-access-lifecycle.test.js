@@ -5,6 +5,7 @@ import {
   makeCase,
   makeConfig,
   makeCaseWithRemediation,
+  CATALOGUE,
   remediationAudience,
   openAppeal,
   resolvedAppeal,
@@ -347,6 +348,35 @@ test('remediation: a failed Answer with no remediation keeps the Section hidden'
     evaluateAccess('remediation', ['assignedReviewer'], c, cfg),
     'hidden'
   );
+});
+
+test('remediation: hidden when the remediation is on a Question that has left the catalogue (#502)', () => {
+  // The gate and the tab's rows are the same question asked once. Reading the
+  // Answers blob alone gave a strict superset, so a Case whose only remediation
+  // was stranded on a deprecated (or newly inapplicable, or no-longer-failing)
+  // Question opened a Remediation tab that rendered "No remediation actions
+  // sent." beside its SLA date and, ten working days later, an Overdue badge.
+  const cfg = makeConfig();
+  const c = makeCaseWithRemediation({ status: 'Actions In Progress' });
+  const deprecated = CATALOGUE.map((q) => ({ ...q, deprecated: true }));
+
+  for (const catalogue of [deprecated, []]) {
+    for (const role of /** @type {const} */ ([
+      'assignedReviewer',
+      'otherReviewer',
+      'reviewerManager',
+      'responsibleParty',
+      'responsiblePartyManager',
+      'journeyOwner',
+      'controls',
+    ])) {
+      assert.equal(
+        evaluateAccess('remediation', [role], c, cfg, catalogue),
+        'hidden',
+        role
+      );
+    }
+  }
 });
 
 test('remediation: the reviewer-side audience observes read-only; only the Assigned Reviewer edits', () => {

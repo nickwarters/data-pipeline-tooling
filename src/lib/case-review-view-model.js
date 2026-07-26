@@ -328,7 +328,19 @@ export class CaseReviewViewModel {
       isVisitor: false,
     };
 
-    this.machine = new CaseMachine(caseRow, { id: actualUserId }, caps, config);
+    // The resolved catalogue — live bank while In-progress, the stamped
+    // versioned export once reportable, `failureValues` derived either way — is
+    // what decides whether this Case carries remediation, so the lifecycle model
+    // gets the same one the tabs render from (#502).
+    this.machine = new CaseMachine(
+      caseRow,
+      { id: actualUserId },
+      caps,
+      config,
+      {
+        catalogue: this.catalogue,
+      }
+    );
     this.access = this.machine.access;
 
     if (SECTIONS.every((s) => this.access[s] === 'hidden')) {

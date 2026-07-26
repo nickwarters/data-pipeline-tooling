@@ -1,13 +1,21 @@
 // @ts-check
 /**
- * What remediation an Answer carries — the two questions that can be answered
- * from the Answers blob alone, with no applicability graph and no failure rules.
+ * What remediation **one** Answer carries — the only remediation question that
+ * can be answered from the Answers blob alone, with no applicability graph and
+ * no failure rules.
  *
- * They live in this leaf module because `services/section-access.js` asks
- * `hasRemediation` on the dashboard boot path, and pulling the applicability and
- * failure evaluators in behind it would widen that module graph for a check that
- * needs neither (#499). `evaluators/remediation-status.js` re-exports both, so it
- * remains the one seam callers name.
+ * It lives in this leaf module because the Responsible Party dashboard
+ * (`pages/responsible-party/view.js`) reads it per Answer across Cases of every
+ * Case Type, holding no catalogue for any of them (#499).
+ * `evaluators/remediation-status.js` re-exports it, so that module remains the
+ * one seam callers name.
+ *
+ * There is deliberately **no** `hasRemediation(answers)` here. "Does this Case
+ * carry remediation?" is a catalogue-aware question — remediation on a Question
+ * that has left the catalogue is orphaned, not outstanding — and answering it
+ * from the blob gave a strict superset of the Remediation tab's rows, which is
+ * how a Case could be sent down the actions path carrying work nobody could ever
+ * resolve. See `hasTrackableRemediation` (#502).
  */
 
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
@@ -27,17 +35,4 @@ export function answerRemediation(answer) {
   const freeForm = (answer?.freeFormRemediation ?? '').trim();
   if (actions.length === 0 && freeForm === '') return null;
   return { actions, freeForm };
-}
-
-/**
- * Whether *any* Answer on the Case carries remediation. This is the visibility
- * gate for the Remediation Section: with nothing to track there is no tab.
- *
- * @param {Record<string, Answer>} answers
- * @returns {boolean}
- */
-export function hasRemediation(answers) {
-  return Object.values(answers ?? {}).some(
-    (answer) => answerRemediation(answer) !== null
-  );
 }

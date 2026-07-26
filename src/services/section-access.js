@@ -13,9 +13,10 @@
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').CaseTypeConfig} CaseTypeConfig */
+/** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('./permissions.js').Capabilities} Capabilities */
 
-import { hasRemediation } from '../evaluators/answer-remediation.js';
+import { hasTrackableRemediation as carriesRemediation } from '../evaluators/remediation-status.js';
 import { CASE_STATUS } from '../lib/case-statuses.js';
 import {
   sectionIds,
@@ -81,9 +82,9 @@ function hasOpenAppeal(caseRow) {
 }
 
 /**
- * Whether the Case has remediation to track: ≥1 Answer carrying a
- * Reviewer-selected Remediation Action or free-form remediation text, **and** the
- * Case past the reportable milestone (i.e. the actions have been *sent*).
+ * Whether the Case has remediation to track: the Remediation tab would render
+ * **≥1 row**, and the Case is past the reportable milestone (i.e. the actions
+ * have been *sent*).
  *
  * Both halves matter. While the Case is `In-progress` the Reviewer is still
  * choosing actions on the Issues tab, so there is nothing to track yet; and
@@ -94,11 +95,21 @@ function hasOpenAppeal(caseRow) {
  * `actions`-typed Issue Capture Field. Gating on the latter is what kept this
  * Section hidden on every real Case (#499).
  *
+ * And note the catalogue. Asking the Answers blob alone gave a strict *superset*
+ * of the tab's rows, so a Case could show a Remediation tab that rendered "No
+ * remediation actions sent." beside its SLA date — the row's Question having
+ * been deprecated or made inapplicable since the Reviewer wrote it (#502). The
+ * gate and the rows are now the same question asked once.
+ *
  * @param {CaseRow} caseRow
+ * @param {QuestionDefinition[]} catalogue
  * @returns {boolean}
  */
-function hasTrackableRemediation(caseRow) {
-  return isReportable(caseRow.status) && hasRemediation(caseRow.answers);
+function hasTrackableRemediation(caseRow, catalogue) {
+  return (
+    isReportable(caseRow.status) &&
+    carriesRemediation(catalogue, caseRow.answers)
+  );
 }
 
 /**
@@ -106,10 +117,12 @@ function hasTrackableRemediation(caseRow) {
  * breakdown — which is everyone except the Assigned Reviewer, who resolves it.
  *
  * @param {CaseRow} c
+ * @param {CaseTypeConfig} _config
+ * @param {QuestionDefinition[]} catalogue
  * @returns {Mode}
  */
-const observesRemediation = (c) =>
-  hasTrackableRemediation(c) ? 'read-only' : 'hidden';
+const observesRemediation = (c, _config, catalogue) =>
+  hasTrackableRemediation(c, catalogue) ? 'read-only' : 'hidden';
 
 /**
  * Which of the Remediation Section's two renderings a viewer gets (#499).
@@ -191,7 +204,7 @@ export function showInSummary(section, caseTypeConfig) {
  * asserts `Object.keys(MATRIX)` equals the registry's Section ids so the two
  * never drift. Exported for that assertion — the RBAC policy itself stays here,
  * not in the registry.
- * @type {Record<Section, Record<Role, Mode | ((c: CaseRow, config: CaseTypeConfig) => Mode)>>}
+ * @type {Record<Section, Record<Role, Mode | ((c: CaseRow, config: CaseTypeConfig, catalogue: QuestionDefinition[]) => Mode)>>}
  */
 export const MATRIX = {
   // Case Details. Observed read-only by the reviewing/owning/Controls
@@ -269,8 +282,8 @@ export const MATRIX = {
   // reviewers, the Case Type Owner, the Journey Owner and Controls observe it
   // read-only.
   remediation: {
-    assignedReviewer: (c) => {
-      if (!hasTrackableRemediation(c)) return 'hidden';
+    assignedReviewer: (c, _config, catalogue) => {
+      if (!hasTrackableRemediation(c, catalogue)) return 'hidden';
       return c.status === CASE_STATUS.ACTIONS_IN_PROGRESS
         ? 'edit'
         : 'read-only';
@@ -458,13 +471,26 @@ export function resolveRoles(caseRow, userId, capabilities) {
 
 /**
  * Resolve the effective access mode for a section given the viewer's roles.
+ *
  * @param {Section} section
  * @param {Role[]} roles
  * @param {CaseRow} caseRow
  * @param {CaseTypeConfig} caseTypeConfig
+ * @param {QuestionDefinition[]} [catalogue] The Case's **resolved** Question
+ *   catalogue, with `failureValues` derived. Only the Remediation cells read it,
+ *   to ask whether the tab would render a row (#502). Absent means *no
+ *   Questions*, so Remediation resolves `hidden`: pass it from any caller that
+ *   renders the Section, and omit it only where the Section is out of scope (the
+ *   Conversation overlay reads its own cell alone).
  * @returns {Mode}
  */
-export function evaluateAccess(section, roles, caseRow, caseTypeConfig) {
+export function evaluateAccess(
+  section,
+  roles,
+  caseRow,
+  caseTypeConfig,
+  catalogue = []
+) {
   if (caseTypeConfig.sections && !(section in caseTypeConfig.sections)) {
     return 'hidden';
   }
@@ -473,7 +499,9 @@ export function evaluateAccess(section, roles, caseRow, caseTypeConfig) {
   for (const role of roles) {
     const cell = MATRIX[section][role];
     const mode =
-      typeof cell === 'function' ? cell(caseRow, caseTypeConfig) : cell;
+      typeof cell === 'function'
+        ? cell(caseRow, caseTypeConfig, catalogue)
+        : cell;
     if (RANK[mode] > RANK[best]) best = mode;
   }
   return best;

@@ -7,7 +7,6 @@ import {
   answerRemediation,
   isRemediationResolved,
 } from '../../evaluators/remediation-status.js';
-import { isReportable } from '../../services/section-access.js';
 import { caseActionsColumn } from '../../views/case-columns.js';
 import { dataTableView } from '../../views/data-table.js';
 
@@ -24,14 +23,26 @@ import { dataTableView } from '../../views/data-table.js';
  * never set `true` anywhere — so this count could never go down however much
  * remediation the Reviewer resolved (#497).
  *
- * Only *sent* remediation counts: before Send Actions the Reviewer is still
- * capturing, and nothing has been asked of the Responsible Party yet.
+ * **Only an `Actions In Progress` Case has outstanding work.** Before Send
+ * Actions the Reviewer is still capturing and nothing has been asked of the
+ * Responsible Party; once the Case is `Completed` the work is over by
+ * definition — the Reviewer cannot close an actions-path Case until every
+ * remediation row is resolved (ADR-0037's completion gate).
+ *
+ * That second half is load-bearing, not tidiness. This dashboard lists Cases
+ * across every Case Type and holds no catalogue for any of them, so it reads the
+ * Answers blob — a strict superset of the Remediation tab's rows. Scoping it to
+ * the one status in which the Case is *frozen with a live tab* is what
+ * guarantees the Responsible Party is never shown outstanding work that no row
+ * exists to resolve (#502). The catalogue-aware `hasTrackableRemediation` gate
+ * on the Send Actions fork is the other half: a Case only reaches
+ * `Actions In Progress` with ≥1 real row.
  *
  * @param {CaseRow} row
  * @returns {string[]}
  */
 export function outstandingRemediation(row) {
-  if (!isReportable(row.status)) return [];
+  if (row.status !== CASE_STATUS.ACTIONS_IN_PROGRESS) return [];
   return Object.values(row.answers ?? {}).flatMap((answer) => {
     const remediation = answerRemediation(answer);
     if (!remediation || isRemediationResolved(answer.remediationStatus)) {

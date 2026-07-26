@@ -50,8 +50,29 @@ const CONFIG = {
   defaultOutcomeId: 'pass',
 };
 
-function machine() {
-  return new CaseMachine(CASE_ROW, { id: 'u1' }, CAPABILITIES, CONFIG);
+/**
+ * The Case's resolved catalogue: `q1` is in it and fails on "No". Whether a Case
+ * carries remediation is a question about the Remediation tab's *rows*, so the
+ * fork can only be exercised against a catalogue that has the Question in it
+ * (#502).
+ *
+ * @type {import('../src/sharepoint-client.js').QuestionDefinition[]}
+ */
+const CATALOGUE = [
+  {
+    id: 'q1',
+    text: 'Greeted?',
+    responseType: 'yes-no-na',
+    failureValues: ['No'],
+    deprecated: false,
+  },
+];
+
+/** @param {import('../src/sharepoint-client.js').QuestionDefinition[]} [catalogue] */
+function machine(catalogue = CATALOGUE) {
+  return new CaseMachine(CASE_ROW, { id: 'u1' }, CAPABILITIES, CONFIG, {
+    catalogue,
+  });
 }
 
 test('completionPatch freezes outcome and ADR-0019 effective columns in the lifecycle PATCH', () => {
@@ -64,7 +85,7 @@ test('completionPatch freezes outcome and ADR-0019 effective columns in the life
   const patch = completionPatch({
     machine: machine(),
     caseRow: CASE_ROW,
-    catalogue: [],
+    catalogue: CATALOGUE,
     answers,
     allAnswered: true,
     computeOutcome: () => ({ outcome: 'fail' }),
@@ -91,7 +112,7 @@ test('completionPatch atomically clears hold fields when either transition leave
   const base = {
     machine: machine(),
     caseRow: heldCase,
-    catalogue: [],
+    catalogue: CATALOGUE,
     allAnswered: true,
     computeOutcome: () => ({ outcome: 'pass' }),
     exportHash: null,
@@ -128,7 +149,7 @@ test('completionPatch rejects incomplete or unauthorised completion and uses fin
   const base = {
     machine: machine(),
     caseRow: CASE_ROW,
-    catalogue: [],
+    catalogue: CATALOGUE,
     answers: {},
     allAnswered: false,
     computeOutcome: () => ({ outcome: 'pass' }),
@@ -254,17 +275,6 @@ test('completeCase returns false when dependencies or patch fields are absent', 
 });
 
 // --- The question-level Remediation gate (#499) ---
-
-/** @type {import('../src/sharepoint-client.js').QuestionDefinition[]} */
-const CATALOGUE = [
-  {
-    id: 'q1',
-    text: 'Greeted?',
-    responseType: 'yes-no-na',
-    failureValues: ['No'],
-    deprecated: false,
-  },
-];
 
 /** @type {Record<string, import('../src/sharepoint-client.js').Answer>} */
 const UNRESOLVED = {
@@ -430,15 +440,18 @@ test('completionPatch: refuses the final close while a remediation row is unreso
 });
 
 test('free-form remediation alone sends the Case down the actions path (#502)', () => {
-  // One definition of "carries remediation", shared with the Remediation tab:
-  // ≥1 selected Remediation Action *or* non-empty free-form text (ADR-0037).
+  // One definition of "carries remediation", and it is the Remediation tab's own
+  // rows: an applicable, failed Question in the catalogue with ≥1 selected
+  // Remediation Action *or* non-empty free-form text (ADR-0037). `q1` is all of
+  // those, so the free-form text alone forks the Case to the actions path — the
+  // row it forks for is the row the Reviewer will resolve.
   const answers = {
     q1: { value: 'No', freeFormRemediation: 'Call the customer back' },
   };
   const patch = completionPatch({
     machine: machine(),
     caseRow: CASE_ROW,
-    catalogue: [],
+    catalogue: CATALOGUE,
     answers,
     allAnswered: true,
     computeOutcome: () => ({ outcome: 'fail' }),
@@ -452,7 +465,7 @@ test('free-form remediation alone sends the Case down the actions path (#502)', 
   const control = completionControl({
     machine: machine(),
     caseRow: CASE_ROW,
-    catalogue: [],
+    catalogue: CATALOGUE,
     answers,
     allAnswered: true,
   });
@@ -464,11 +477,50 @@ test('whitespace-only free-form remediation is not remediation (#502)', () => {
   const patch = completionPatch({
     machine: machine(),
     caseRow: CASE_ROW,
-    catalogue: [],
+    catalogue: CATALOGUE,
     answers,
     allAnswered: true,
     computeOutcome: () => ({ outcome: 'fail' }),
     exportHash: null,
   });
   assert.equal(patch?.status, 'Completed');
+});
+
+test('remediation on a Question that has left the catalogue does not fork the Case (#502)', () => {
+  // The Reviewer failed `q1` and typed remediation; a Maintainer has since
+  // marked `q1` deprecated — the operation CLAUDE.md mandates instead of
+  // deletion — so it is filtered out of the loaded catalogue. The Answer keeps
+  // the text, but the Remediation tab has no row for it.
+  //
+  // Before this fix the fork read the Answers blob alone, a strict superset of
+  // the tab's rows: the button said "Send Actions", the Case took the actions
+  // path with a 10-working-day SLA, and the Remediation tab rendered "No
+  // remediation actions sent." beside that date. `remediationComplete` was
+  // vacuously true over the empty row set, so the Reviewer closed the Case —
+  // and the Responsible Party's "Outstanding remediation" table listed work
+  // that no row had ever existed to resolve.
+  const answers = {
+    q1: { value: 'No', freeFormRemediation: 'Refund the customer £40' },
+  };
+  const deprecated = CATALOGUE.map((q) => ({ ...q, deprecated: true }));
+
+  for (const catalogue of [deprecated, /** @type {typeof CATALOGUE} */ ([])]) {
+    const base = {
+      machine: machine(catalogue),
+      caseRow: CASE_ROW,
+      catalogue,
+      answers,
+      allAnswered: true,
+    };
+    assert.equal(completionControl(base).label, 'Complete Case');
+
+    const patch = completionPatch({
+      ...base,
+      computeOutcome: () => ({ outcome: 'fail' }),
+      exportHash: null,
+    });
+    assert.equal(patch?.status, 'Completed');
+    assert.equal(patch?.hadRemediation, false);
+    assert.equal('remediationDueDate' in (patch ?? {}), false);
+  }
 });
