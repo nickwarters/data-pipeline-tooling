@@ -519,6 +519,21 @@ export function createRouteSlice(params, context) {
   }
 
   /**
+   * The live Answers, which every Answer action reads as its input.
+   *
+   * Not `snapshot.answers`: store renders are microtask-coalesced, so a
+   * callback that captured a render's Answers is one edit behind for as long as
+   * it outlives that render — and memoised Question cards keep their callbacks
+   * across renders by design (#202). Reading here instead keeps the property
+   * the retired signal gave these mutations: the input is whatever was last
+   * written, not whatever was last drawn. Re-synced from the snapshot on every
+   * render, so a reload or a conflict resolution still wins (#510).
+   *
+   * @type {Record<string, import('../sharepoint-client.js').Answer>}
+   */
+  let currentAnswers = {};
+
+  /**
    * The page's only Answer writer. Every mutation is a pure action returning
    * either the next Answers or `null` for "write nothing"; from here on there
    * is one store update and one SaveQueue enqueue, so the two cannot diverge
@@ -528,6 +543,7 @@ export function createRouteSlice(params, context) {
    */
   function editAnswers(next) {
     if (next === null) return;
+    currentAnswers = next;
     save?.answersEdited(next);
   }
 
@@ -647,12 +663,18 @@ export function createRouteSlice(params, context) {
     const currentUser = snapshot.currentUser;
     const caseRow = snapshot.caseRow;
     const config = snapshot.config;
+    // The Answer actions read `currentAnswers`, not this render's snapshot, so
+    // that a memoised card's surviving callback is never one edit behind. Re-sync
+    // it here for the same reason the on-hold latch below re-syncs: a load,
+    // refresh or conflict resolution reaches the store without passing through
+    // `editAnswers`, and the store is still the owner (#510).
+    currentAnswers = snapshot.answers;
 
     /** @param {string} questionId @param {string | string[]} value */
     const onAnswer = (questionId, value) =>
       editAnswers(
         answerEdited({
-          answers: snapshot.answers,
+          answers: currentAnswers,
           catalogue: snapshot.catalogue,
           questionId,
           value,
@@ -664,7 +686,7 @@ export function createRouteSlice(params, context) {
     const selectAttribution = (questionId, party) => {
       editAnswers(
         failureAttributed({
-          answers: snapshot.answers,
+          answers: currentAnswers,
           questionId,
           attributedParty: party,
           canAttribute: snapshot.machine?.canAttribute ?? false,
@@ -810,7 +832,7 @@ export function createRouteSlice(params, context) {
                 dispatchCapture: (questionId, fieldKey, value) =>
                   editAnswers(
                     issueCaptured({
-                      answers: snapshot.answers,
+                      answers: currentAnswers,
                       captureGroups: config.captureGroups ?? [],
                       questionId,
                       fieldKey,
@@ -828,7 +850,7 @@ export function createRouteSlice(params, context) {
                 dispatchDetail: (questionId, key, value) =>
                   editAnswers(
                     editRemediationDetail({
-                      answers: snapshot.answers,
+                      answers: currentAnswers,
                       questionId,
                       key,
                       value,
@@ -841,7 +863,7 @@ export function createRouteSlice(params, context) {
                 dispatchRemediationAction: (questionId, action, selected) =>
                   editAnswers(
                     remediationActionToggled({
-                      answers: snapshot.answers,
+                      answers: currentAnswers,
                       questionId,
                       action,
                       selected,
@@ -852,7 +874,7 @@ export function createRouteSlice(params, context) {
                 dispatchRemediationFreeForm: (questionId, value) =>
                   editAnswers(
                     remediationFreeFormEdited({
-                      answers: snapshot.answers,
+                      answers: currentAnswers,
                       questionId,
                       value,
                       canSelectRemediation:
@@ -880,7 +902,7 @@ export function createRouteSlice(params, context) {
                 dispatchStatus: (questionId, status, details) =>
                   editAnswers(
                     remediationResolved({
-                      answers: snapshot.answers,
+                      answers: currentAnswers,
                       questionId,
                       status,
                       details,

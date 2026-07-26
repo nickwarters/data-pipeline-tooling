@@ -2323,6 +2323,107 @@ test('CASE-7 route: a read-only Reviewer on a reportable Case writes no Answer (
   }
 });
 
+test('CASE-7 route: sequential Answer edits accumulate (#510)', async () => {
+  // The main reviewer flow: answer one Question, then another. Question cards
+  // are memoised on `[answer, access]`, so answering `q-welcome` leaves
+  // `q-needs`' card — and its `onchange` closure — from the previous render.
+  // A callback that captured that render's Answers would compute the second
+  // edit against Answers without the first and write the loss straight through
+  // the whole-blob PATCH. Both Questions are independent in the fixture bank,
+  // which is what keeps the second card cached.
+  let storedRow = {
+    ...caseRow,
+    caseType: 'example-review',
+    answers: {},
+  };
+  /** @type {any[]} */
+  const patches = [];
+  const client = {
+    async getCase() {
+      return storedRow;
+    },
+    async getCurrentUser() {
+      return chrome.currentUser;
+    },
+    async getExportHash() {
+      return null;
+    },
+    async resolveUsers() {
+      return {};
+    },
+    async patchCase(/** @type {string} */ _id, /** @type {any} */ fields) {
+      patches.push(fields);
+      storedRow = { ...storedRow, ...fields, etag: 'e2' };
+      return { ok: true, status: 200, data: storedRow };
+    },
+  };
+  const saveQueue = new SaveQueue(/** @type {any} */ (client), {
+    debounceMs: 0,
+  });
+  const slice = createRouteSlice(
+    { caseType: 'example-review', id: 'c1' },
+    /** @type {any} */ ({
+      client,
+      saveQueue,
+      currentUser: chrome.currentUser,
+      capabilities: chrome.permissions,
+      chrome,
+    })
+  );
+  let state = slice.initialState;
+  const container = document.createElement('main');
+  /** @type {any} */
+  let tools;
+  tools = {
+    morph,
+    dispatch(/** @type {any} */ action) {
+      state = slice.reducer(state, action);
+      slice.render(container, state, tools);
+    },
+    listen() {},
+  };
+
+  let dispose;
+  try {
+    slice.render(container, state, tools);
+    dispose = slice.start?.(tools);
+    await waitFor(
+      () => state.routes.caseReview.snapshot?.loaded === true,
+      'store-driven Case Review load'
+    );
+
+    const answerControl = (/** @type {string} */ key) => {
+      const control = /** @type {any} */ (
+        container.querySelector(`[data-focus-key="${key}"]`)
+      );
+      assert.ok(control, `${key} renders`);
+      return control;
+    };
+
+    fireEvent(answerControl('answer:q-welcome:0'), 'change');
+    await saveQueue.whenIdle();
+    await flush();
+
+    fireEvent(answerControl('answer:q-needs:0'), 'change');
+    await saveQueue.whenIdle();
+    await flush();
+
+    assert.deepEqual(
+      patches[1],
+      {
+        answers: { 'q-welcome': { value: 'Yes' }, 'q-needs': { value: 'Yes' } },
+      },
+      'the second edit is written on top of the first, not instead of it'
+    );
+    assert.deepEqual(state.routes.caseReview.snapshot?.answers, {
+      'q-welcome': { value: 'Yes' },
+      'q-needs': { value: 'Yes' },
+    });
+  } finally {
+    if (typeof dispose === 'function') dispose();
+  }
+});
+
 test('CASE-4 view: the Summary rolls up the Reviewer’s General Question answers', () => {
   const generalSnapshot = snapshot();
   generalSnapshot.config.generalQuestions = [
