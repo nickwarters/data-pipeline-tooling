@@ -1,5 +1,5 @@
 // @ts-check
-import { createStoreRoute } from '../core/store-route.js';
+import { registerStoreRoute } from '../core/store-route.js';
 
 /**
  * @param {import('../lib/router.js').Router} router
@@ -11,8 +11,9 @@ export function register(
   context,
   loadPage = () => import('../pages/cora-case-review.js')
 ) {
-  const handler = createStoreRoute({ load: loadPage, context });
-
-  router.register('#/case/:caseType/:id', handler);
-  router.register('#/case/:id', handler);
+  registerStoreRoute(router, {
+    paths: ['#/case/:caseType/:id', '#/case/:id'],
+    load: loadPage,
+    context,
+  });
 }

@@ -1,5 +1,5 @@
 // @ts-check
-import { createStoreRoute } from '../core/store-route.js';
+import { registerStoreRoute } from '../core/store-route.js';
 import { redirectTo } from '../lib/navigate.js';
 
 /**
@@ -12,21 +12,18 @@ export function register(
   context,
   loadPage = () => import('../pages/cora-journey-cases.js')
 ) {
-  const storeRoute = createStoreRoute({ load: loadPage, context });
-  router.register('#/journey-cases', {
-    mount(container, params) {
-      // List-scope Journey Owner capability: only a user who
-      // owns at least one Case Type as a Journey Owner may see this view.
-      // The bounce replaces rather than pushes: a pushed entry would leave
-      // Back returning the user to the route that just bounced them (#519).
-      if (context.journeyCaseSources.length === 0) {
-        redirectTo('#/');
-        return;
-      }
-      return storeRoute.mount(container, params);
-    },
-    unmount() {
-      storeRoute.unmount();
+  registerStoreRoute(router, {
+    paths: ['#/journey-cases'],
+    load: loadPage,
+    context,
+    // List-scope Journey Owner capability: only a user who
+    // owns at least one Case Type as a Journey Owner may see this view.
+    // The bounce replaces rather than pushes: a pushed entry would leave
+    // Back returning the user to the route that just bounced them (#519).
+    guard: () => {
+      if (context.journeyCaseSources.length > 0) return true;
+      redirectTo('#/');
+      return false;
     },
   });
 }

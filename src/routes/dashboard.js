@@ -1,5 +1,5 @@
 // @ts-check
-import { createStoreRoute } from '../core/store-route.js';
+import { registerStoreRoute } from '../core/store-route.js';
 
 /**
  * @param {import('../lib/router.js').Router} router
@@ -11,13 +11,9 @@ export function register(
   context,
   loadPage = () => import('../pages/cora-dashboard.js')
 ) {
-  const storeRoute = createStoreRoute({ load: loadPage, context });
-  router.register('#/dashboard', {
-    mount(container, params) {
-      return storeRoute.mount(container, params);
-    },
-    unmount() {
-      storeRoute.unmount();
-    },
+  registerStoreRoute(router, {
+    paths: ['#/dashboard'],
+    load: loadPage,
+    context,
   });
 }

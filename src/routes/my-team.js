@@ -1,5 +1,5 @@
 // @ts-check
-import { createStoreRoute } from '../core/store-route.js';
+import { registerStoreRoute } from '../core/store-route.js';
 
 /**
  * @param {import('../lib/router.js').Router} router
@@ -11,5 +11,9 @@ export function register(
   context,
   loadPage = () => import('../pages/cora-my-team.js')
 ) {
-  router.register('#/my-team', createStoreRoute({ load: loadPage, context }));
+  registerStoreRoute(router, {
+    paths: ['#/my-team'],
+    load: loadPage,
+    context,
+  });
 }

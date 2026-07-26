@@ -129,3 +129,49 @@ export function createStoreRoute({ load, context }) {
     },
   };
 }
+
+/**
+ * Register one lazily-loaded store-driven page on one or more hash patterns.
+ *
+ * This exists because seven route modules had each re-declared a `mount`/
+ * `unmount` object literal that only forwarded to the adapter it wrapped
+ * (#520). Without a guard the adapter is registered directly, so nothing sits
+ * between the router and `createStoreRoute` — the `mountSequence` token and the
+ * `mounted` flag keep working exactly as they did (#437).
+ *
+ * `load` is the caller's: the dynamic `import()` of a page must stay inside
+ * `src/routes/*`, which is what ADR-0002's page independence and
+ * `tests/component-layering-contract.test.js` rest on. This helper never names
+ * a page.
+ *
+ * `guard` runs on every mount, before the page is loaded. Returning false skips
+ * the mount entirely — the shape an eligibility bounce needs, so the ineligible
+ * user never pays for the page module.
+ *
+ * @template Context
+ * @param {import('../lib/router.js').Router} router
+ * @param {{
+ *   paths: string[],
+ *   load: Parameters<typeof createStoreRoute<Context>>[0]['load'],
+ *   context: Context,
+ *   guard?: () => boolean,
+ * }} options
+ * @returns {void}
+ */
+export function registerStoreRoute(router, { paths, load, context, guard }) {
+  const handler = createStoreRoute({ load, context });
+  const registered = guard
+    ? {
+        /** @type {import('../lib/router.js').RouteHandler['mount']} */
+        mount(container, params) {
+          if (!guard()) return;
+          return handler.mount(container, params);
+        },
+        unmount() {
+          handler.unmount();
+        },
+      }
+    : handler;
+
+  for (const path of paths) router.register(path, registered);
+}

@@ -2,11 +2,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
-import { initRouter } from './helpers/router.js';
+import { initRouter, routeRegistrationSpy } from './helpers/router.js';
 
 installDom();
 
-const { createStoreRoute } = await import('../src/core/store-route.js');
+const { createStoreRoute, registerStoreRoute } =
+  await import('../src/core/store-route.js');
 const { Router } = await import('../src/lib/router.js');
 
 test('store route: navigation removes real listeners and disposes store renders and memo entries', async () => {
@@ -374,4 +375,132 @@ test('store route: stale lazy mount is discarded when a legacy route wins naviga
 
   assert.equal(slicesCreated, 0);
   assert.equal(container.textContent, 'Legacy route');
+});
+
+/**
+ * registerStoreRoute (#520): the shared registration shell the route modules
+ * collapse onto. The dynamic import() stays in the caller — a route module —
+ * so `load` is always injected here, never resolved by this helper.
+ */
+
+/** @returns {any} a slice module whose view renders a marked element */
+function markerModule(/** @type {string} */ text) {
+  return async () => ({
+    createRouteSlice: () => ({
+      initialState: {},
+      reducer: (/** @type {any} */ state) => state,
+      view: () => {
+        const el = document.createElement('h1');
+        el.textContent = text;
+        return el;
+      },
+    }),
+  });
+}
+
+test('registerStoreRoute: registers one shared handler on every path', () => {
+  const registration = routeRegistrationSpy();
+  registerStoreRoute(/** @type {any} */ (registration.router), {
+    paths: ['#/thing/:type/:id', '#/thing/:id'],
+    load: markerModule('Thing'),
+    context: {},
+  });
+
+  assert.equal(registration.has('#/thing/:type/:id'), true);
+  assert.equal(registration.has('#/thing/:id'), true);
+  assert.equal(
+    registration.handlerFor('#/thing/:type/:id'),
+    registration.handlerFor('#/thing/:id'),
+    'both patterns share one adapter, so one mount owns the store'
+  );
+});
+
+test('registerStoreRoute: without a guard the adapter is registered directly', async () => {
+  const registration = routeRegistrationSpy();
+  registerStoreRoute(/** @type {any} */ (registration.router), {
+    paths: ['#/plain'],
+    load: markerModule('Plain'),
+    context: {},
+  });
+
+  const container = document.createElement('main');
+  await registration.handlerFor('#/plain').mount(container, {});
+  assert.equal(container.querySelector('h1')?.textContent, 'Plain');
+});
+
+test('registerStoreRoute: a guard returning false skips mount and never loads the page', async () => {
+  const registration = routeRegistrationSpy();
+  let loaded = false;
+  registerStoreRoute(/** @type {any} */ (registration.router), {
+    paths: ['#/guarded'],
+    load: /** @type {any} */ (
+      async () => {
+        loaded = true;
+        return {};
+      }
+    ),
+    context: {},
+    guard: () => false,
+  });
+
+  const container = document.createElement('main');
+  await registration.handlerFor('#/guarded').mount(container, {});
+  assert.equal(loaded, false);
+  assert.equal(container.childNodes.length, 0);
+});
+
+test('registerStoreRoute: a guard returning true mounts, and unmount still disposes', async () => {
+  const registration = routeRegistrationSpy();
+  let disposed = false;
+  registerStoreRoute(/** @type {any} */ (registration.router), {
+    paths: ['#/guarded-ok'],
+    load: /** @type {any} */ (
+      async () => ({
+        createRouteSlice: () => ({
+          initialState: {},
+          reducer: (/** @type {any} */ state) => state,
+          view: () => document.createElement('section'),
+          start: () => () => {
+            disposed = true;
+          },
+        }),
+      })
+    ),
+    context: {},
+    guard: () => true,
+  });
+
+  const handler = registration.handlerFor('#/guarded-ok');
+  const container = document.createElement('main');
+  await handler.mount(container, {});
+  assert.equal(container.childNodes.length, 1);
+  handler.unmount();
+  assert.equal(disposed, true);
+});
+
+test('registerStoreRoute: the guard runs on every mount, not once at registration', async () => {
+  const registration = routeRegistrationSpy();
+  let allowed = false;
+  let guardCalls = 0;
+  registerStoreRoute(/** @type {any} */ (registration.router), {
+    paths: ['#/eligibility'],
+    load: markerModule('Eligible'),
+    context: {},
+    guard: () => {
+      guardCalls += 1;
+      return allowed;
+    },
+  });
+  assert.equal(guardCalls, 0, 'registration does not evaluate the guard');
+
+  const handler = registration.handlerFor('#/eligibility');
+  const first = document.createElement('main');
+  await handler.mount(first, {});
+  assert.equal(first.childNodes.length, 0);
+
+  allowed = true;
+  const second = document.createElement('main');
+  await handler.mount(second, {});
+  assert.equal(second.querySelector('h1')?.textContent, 'Eligible');
+  assert.equal(guardCalls, 2);
 });
