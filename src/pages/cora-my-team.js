@@ -6,7 +6,11 @@ import {
 import { h } from '../lib/html.js';
 import { patchRoute } from '../core/route-state.js';
 import { fetchTeamWorkloadCases } from '../services/team-cases-fetcher.js';
-import { dataTableView, nextTableSort } from '../views/data-table.js';
+import {
+  dataTableView,
+  reduceTableSort,
+  sortRequested,
+} from '../views/data-table.js';
 
 /** @typedef {import('../evaluators/team-workload-model.js').WorkloadRow} WorkloadRow */
 /** @typedef {import('../setup/resolve-eligible-case-types.js').CaseSource} CaseSource */
@@ -32,7 +36,7 @@ import { dataTableView, nextTableSort } from '../views/data-table.js';
  *   | { type: 'workload/refresh-requested' }
  *   | { type: 'workload/loaded', rows: WorkloadRow[] }
  *   | { type: 'workload/load-failed', message: string }
- *   | { type: 'table/sort-requested', key: string }
+ *   | { type: 'workload-table/sort-requested', key: string }
  * } MyTeamAction
  */
 
@@ -140,7 +144,7 @@ export function myTeamView(
             footerRows: totalRows,
             columns: myTeamColumns(caseSources),
             sort: route.sort,
-            onSort: (key) => dispatch({ type: 'table/sort-requested', key }),
+            onSort: (key) => dispatch(sortRequested('workload', key)),
             emptyMessage: 'No allocated outstanding Cases.',
             rowKey: (row) =>
               row.reviewerId === null
@@ -255,11 +259,8 @@ export function createRouteSlice(
           error: action.message,
         });
       }
-      if (action.type === 'table/sort-requested') {
-        return patchRoute(state, 'myTeam', {
-          sort: nextTableSort(route.sort, action.key),
-        });
-      }
+      const sort = reduceTableSort(route.sort, action, 'workload');
+      if (sort) return patchRoute(state, 'myTeam', { sort });
       return state;
     },
     view(

@@ -151,7 +151,7 @@ test('my team slice: loads fresh data, refreshes manually, sorts, and ignores st
   assert.deepEqual(actions[2], { type: 'workload/refresh-requested' });
 
   const sorted = slice.reducer(slice.initialState, {
-    type: 'table/sort-requested',
+    type: 'workload-table/sort-requested',
     key: 'reviewer',
   });
   assert.deepEqual(sorted.routes.myTeam.sort, {
