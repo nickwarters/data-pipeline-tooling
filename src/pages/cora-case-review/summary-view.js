@@ -317,12 +317,15 @@ function renderGeneralQuestions(props) {
 
 /**
  * A General Question answer as display text, '' when unanswered.
+ *
+ * Every General Question type — `text`, `textarea`, `select`, `radio` (see
+ * `GENERAL_QUESTION_TYPES`) — writes a string through `buildCaptureControl`, so
+ * a non-string value reads as unanswered rather than being coerced (#494).
  * @param {Answer | undefined} answer
  * @returns {string}
  */
 function answerText(answer) {
   const value = answer?.value;
-  if (Array.isArray(value)) return value.join(', ');
   return typeof value === 'string' ? value : '';
 }
 

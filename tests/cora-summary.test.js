@@ -406,6 +406,26 @@ test('summaryView omits unanswered General Questions, and the block when none is
   assert.equal(findByClass(blank, 'cora-summary-general-questions'), null);
 });
 
+test('a non-string General Question value is not rolled up (#494)', () => {
+  // Every General Question type — text, textarea, select, radio — writes a
+  // string, so the roll-up states that contract rather than second-guessing it:
+  // an array-valued `general:` answer (only reachable by hand-editing the blob)
+  // is treated as unanswered, exactly as any other non-string value is.
+  const root = rootOf(
+    render({
+      generalQuestions: GENERAL_QUESTIONS,
+      answers: {
+        'general:reviewChannel': /** @type {any} */ ({
+          value: ['Call recording', 'Case file only'],
+        }),
+        'general:observations': { value: 'Handled well' },
+      },
+    })
+  );
+  const block = findByClass(root, 'cora-summary-general-questions');
+  assert.equal(block.textContent, 'General QuestionsObservationsHandled well');
+});
+
 test('an answer whose General Question the Case Type no longer declares is not rolled up', () => {
   // The roll-up is catalogue-driven: it walks the *configured* fields, so an
   // orphaned `general:` answer (its field removed from the Case Type after the
