@@ -1,0 +1,327 @@
+// @ts-check
+/**
+ * One panel renderer per tab Section, keyed by Section id (#512).
+ *
+ * ADR-0032 made Section *existence* and *order* data. What a Section's panel
+ * renders stayed a `if (entry.id === …)` chain in `pages/cora-case-review.js`:
+ * nine near-identical blocks, so the render loop iterated the registry and then
+ * ignored it. This map is the missing half — the registry says which Sections
+ * exist, this says how each one's panel is filled, and `renderRoute` does the
+ * same three things for every entry.
+ *
+ * `tests/section-panels.test.js` asserts this map's key set equals
+ * `tabEntries().map((e) => e.id)`, so adding a Section to the registry without a
+ * panel fails a test instead of silently rendering an empty tab.
+ *
+ * The registry itself stays free of page imports (`lib/` is framework-level and
+ * must not reach into `src/pages/**`), which is why the map lives here and is
+ * keyed by id rather than hanging off the registry entry.
+ *
+ * Renderers are pure prop wiring: they read `ctx` and call a Section view. They
+ * do no async work, own no state, and never decide whether their panel is
+ * visible — `renderRoute` owns visibility and the `hidden` toggle.
+ */
+
+import { caseDetailsView } from './details-view.js';
+import { withGeneralQuestions } from './general-questions-view.js';
+import { notesView } from './notes-view.js';
+import { summaryView } from './summary-view.js';
+import { AppealSection } from './appeal-view.js';
+import { AppealReviewSection } from './appeal-review-view.js';
+import { AmendOutcomeSection } from './amend-outcome-view.js';
+import { editRemediationDetail } from './remediation-actions.js';
+import {
+  issueCaptured,
+  remediationActionToggled,
+  remediationFreeFormEdited,
+  remediationResolved,
+} from './answer-actions.js';
+import { RemediationSection } from './remediation-view.js';
+import { RemediationTracking } from './remediation-tracking-view.js';
+import { remediationAudience } from '../../services/section-access.js';
+
+/**
+ * Everything a panel renderer is allowed to read. Assembled once per render by
+ * `renderRoute`, which is also the only place the narrowing of `caseRow` and
+ * `config` to non-null happens.
+ *
+ * @typedef {Object} PanelContext
+ * @property {import('../cora-case-review.js').CaseReviewSnapshot} snapshot
+ *   The rendered snapshot.
+ * @property {import('../../sharepoint-client.js').CaseRow} caseRow
+ *   `snapshot.caseRow`, narrowed.
+ * @property {import('../../sharepoint-client.js').CaseTypeConfig} config
+ *   `snapshot.config`, narrowed.
+ * @property {{
+ *   activeTab: string,
+ *   conversationHidden: boolean,
+ *   captureCollapsed: Record<string, Map<string, boolean>>,
+ *   attributionSearch: Record<string, { query: string, people: import('../../sharepoint-client.js').PersonResult[] }>,
+ * }} route
+ *   The route slice's view state.
+ * @property {(action: any) => unknown} dispatch
+ * @property {PanelActions} actions
+ */
+
+/**
+ * The callbacks a panel wires into its Section view. These close over the route
+ * slice's mutable locals — notably the live Answers, which `currentAnswers()`
+ * reads at call time rather than at render time (#510).
+ *
+ * @typedef {Object} PanelActions
+ * @property {ReturnType<typeof import('./question-panel-view.js').createQuestionPanelView>} questionsView
+ * @property {() => Record<string, import('../../sharepoint-client.js').Answer>} currentAnswers
+ * @property {(next: Record<string, import('../../sharepoint-client.js').Answer> | null) => void} editAnswers
+ * @property {(questionId: string, value: string | string[]) => void} onAnswer
+ * @property {(questionId: string, party: { loginName: string, displayName: string } | null) => void} selectAttribution
+ * @property {(questionId: string, query: string) => void} requestAttributionSearch
+ * @property {{ fieldEdited: (field: string, value: string) => void }} save
+ * @property {{
+ *   raise: (input: any) => unknown,
+ *   resolve: (input: any) => unknown,
+ *   amend: (input: any) => unknown,
+ * }} appeals
+ */
+
+/**
+ * @typedef {(ctx: PanelContext) => Node | Node[] | null} PanelRenderer
+ */
+
+/**
+ * Preserve the existing scoped CSS selectors while the Case Review route owns
+ * rendering. These are inert light-DOM hosts, not registered custom elements.
+ *
+ * @param {string} tagName
+ * @param {Node[]} children
+ */
+function sectionStyleHost(tagName, children) {
+  const host = document.createElement(tagName);
+  host.replaceChildren(...children);
+  return host;
+}
+
+/**
+ * The Review tab's contents: the Applicable Questions, with the Case Type's
+ * General Questions before or after them. General Questions travel the same
+ * Answer path (namespaced keys, one SaveQueue write) but drive no Outcome —
+ * see general-questions-view.js.
+ *
+ * @param {import('../cora-case-review.js').CaseReviewSnapshot} snapshot
+ * @param {ReturnType<typeof import('./question-panel-view.js').createQuestionPanelView>} questionsView
+ * @param {(questionId: string, value: string | string[]) => void} onAnswer
+ * @returns {Node[]}
+ */
+export function questionsPanel(snapshot, questionsView, onAnswer) {
+  return withGeneralQuestions(
+    questionsView.render({
+      catalogue: snapshot.catalogue,
+      questions: snapshot.applicableQuestions,
+      answers: snapshot.answers,
+      access: snapshot.access.questions,
+      heading: snapshot.sectionHeadings.questions,
+      onAnswer,
+    }),
+    {
+      fields: snapshot.config?.generalQuestions ?? [],
+      answers: snapshot.answers,
+      access: snapshot.access.questions,
+      // `generalQuestionsPlacement` is also interpreted by the Summary roll-up
+      // (cora-case-review/summary-view.js) — keep the two in step, or hoist a
+      // shared resolver if a third consumer appears.
+      placement: snapshot.config?.generalQuestionsPlacement ?? 'after',
+      onAnswer,
+    }
+  );
+}
+
+/**
+ * One entry per tab Section. Key set is locked to `tabEntries()` by test.
+ *
+ * @type {Record<string, PanelRenderer>}
+ */
+export const SECTION_PANELS = {
+  details: ({ caseRow, config }) =>
+    caseDetailsView(caseRow, config.detailFields ?? []),
+
+  questions: ({ snapshot, actions }) =>
+    questionsPanel(snapshot, actions.questionsView, actions.onAnswer),
+
+  notes: ({ snapshot, caseRow, config, actions }) =>
+    notesView({
+      notes: caseRow.notes,
+      caseJustification: caseRow.caseJustification ?? '',
+      access: snapshot.access.notes,
+      heading: snapshot.sectionHeadings.notes,
+      placeholders: config.placeholders ?? {},
+      onFieldInput: (field, value) => actions.save.fieldEdited(field, value),
+    }),
+
+  issues: ({ snapshot, caseRow, config, route, dispatch, actions }) =>
+    RemediationSection({
+      catalogue: snapshot.catalogue,
+      answers: snapshot.answers,
+      attributeFailures: config.attributeFailures === true,
+      responsibleParty: caseRow.responsibleParty
+        ? {
+            loginName: caseRow.responsibleParty,
+            displayName: caseRow.responsibleParty,
+          }
+        : null,
+      canAttribute: snapshot.machine?.canAttribute ?? false,
+      remediationFields: config.remediationFields ?? [],
+      canCaptureDetails: snapshot.machine?.canCapture ?? false,
+      captureGroups: config.captureGroups ?? [],
+      canCapture: snapshot.machine?.canCapture ?? false,
+      captureCollapsed: route.captureCollapsed,
+      attributionSearch: route.attributionSearch,
+      canSelectRemediation: snapshot.machine?.canSelectRemediation ?? false,
+      dispatchCapture: (questionId, fieldKey, value) =>
+        actions.editAnswers(
+          issueCaptured({
+            answers: actions.currentAnswers(),
+            captureGroups: config.captureGroups ?? [],
+            questionId,
+            fieldKey,
+            value,
+            canCapture: snapshot.machine?.canCapture ?? false,
+          })
+        ),
+      dispatchCaptureToggle: (questionId, groupKey, collapsed) =>
+        dispatch({
+          type: 'case/capture-group-toggled',
+          questionId,
+          groupKey,
+          collapsed,
+        }),
+      dispatchDetail: (questionId, key, value) =>
+        actions.editAnswers(
+          editRemediationDetail({
+            answers: actions.currentAnswers(),
+            questionId,
+            key,
+            value,
+            canEdit: snapshot.machine?.canCapture ?? false,
+            fields: config.remediationFields ?? [],
+          })
+        ),
+      dispatchAttribute: actions.selectAttribution,
+      dispatchAttributeSearch: actions.requestAttributionSearch,
+      dispatchRemediationAction: (questionId, action, selected) =>
+        actions.editAnswers(
+          remediationActionToggled({
+            answers: actions.currentAnswers(),
+            questionId,
+            action,
+            selected,
+            canSelectRemediation:
+              snapshot.machine?.canSelectRemediation ?? false,
+          })
+        ),
+      dispatchRemediationFreeForm: (questionId, value) =>
+        actions.editAnswers(
+          remediationFreeFormEdited({
+            answers: actions.currentAnswers(),
+            questionId,
+            value,
+            canSelectRemediation:
+              snapshot.machine?.canSelectRemediation ?? false,
+          })
+        ),
+    }),
+
+  remediation: ({ snapshot, caseRow, route, dispatch, actions }) =>
+    RemediationTracking({
+      catalogue: snapshot.catalogue,
+      answers: snapshot.answers,
+      audience: remediationAudience(snapshot.machine?.roles ?? []),
+      canResolve: snapshot.access.remediation === 'edit',
+      conversationAvailable: snapshot.access.conversation !== 'hidden',
+      caseRow,
+      heading: snapshot.sectionHeadings.remediation,
+      dispatchStatus: (questionId, status, details) =>
+        actions.editAnswers(
+          remediationResolved({
+            answers: actions.currentAnswers(),
+            questionId,
+            status,
+            details,
+            canResolve: snapshot.access.remediation === 'edit',
+          })
+        ),
+      dispatchOpenConversation: () => {
+        if (route.conversationHidden) {
+          dispatch({ type: 'case/conversation-toggled' });
+        }
+      },
+    }),
+
+  summary: ({ snapshot, caseRow, config }) =>
+    sectionStyleHost(
+      'cora-summary',
+      summaryView({
+        computeOutcome: config.computeOutcome,
+        answers: snapshot.answers,
+        allAnswered: snapshot.allAnswered,
+        caseRow,
+        catalogue: snapshot.catalogue,
+        summarySections: snapshot.summarySections,
+        captureGroups: config.captureGroups ?? [],
+        detailFields: config.detailFields ?? [],
+        outcomeOptions: config.outcomeOptions ?? [],
+        sectionHeadings: snapshot.sectionHeadings,
+        generalQuestions: config.generalQuestions ?? [],
+        generalQuestionsPlacement: config.generalQuestionsPlacement,
+      })
+    ),
+
+  appealRequest: ({ snapshot, caseRow, actions }) =>
+    sectionStyleHost(
+      'cora-appeal',
+      AppealSection({
+        caseRow,
+        access: snapshot.access.appealRequest,
+        currentUser: snapshot.currentUser,
+        catalogue: snapshot.catalogue,
+        answers: snapshot.answers,
+        onRaise: ({ rationale, citedAnswerKeys }) =>
+          actions.appeals.raise({
+            caseRow,
+            snapshot,
+            rationale,
+            citedAnswerKeys,
+          }),
+        heading: snapshot.sectionHeadings.appealRequest,
+      })
+    ),
+
+  appealReview: ({ snapshot, caseRow, config, actions }) =>
+    sectionStyleHost(
+      'cora-appeal-review',
+      AppealReviewSection({
+        caseRow,
+        access: snapshot.access.appealReview,
+        currentUser: snapshot.currentUser,
+        outcomeOptions: config.outcomeOptions ?? [],
+        onResolve: (resolution) =>
+          actions.appeals.resolve({ caseRow, snapshot, resolution }),
+      })
+    ),
+
+  amendOutcome: ({ snapshot, caseRow, config, actions }) =>
+    sectionStyleHost(
+      'cora-amend-outcome',
+      AmendOutcomeSection({
+        caseRow,
+        access: snapshot.access.amendOutcome,
+        currentUser: snapshot.currentUser,
+        outcomeOptions: config.outcomeOptions ?? [],
+        onAmend: ({ outcome, justification }) =>
+          actions.appeals.amend({
+            caseRow,
+            snapshot,
+            outcome,
+            justification,
+          }),
+      })
+    ),
+};

@@ -7,36 +7,22 @@ import {
   evaluate,
 } from '../evaluators/applicability-evaluator.js';
 import { tabEntries } from '../lib/section-registry.js';
-import { caseDetailsView } from './cora-case-review/details-view.js';
 import {
   createCaseReviewSaveEffect,
   observeSaveStatus,
 } from './cora-case-review/case-actions.js';
 import { createQuestionPanelView } from './cora-case-review/question-panel-view.js';
-import { withGeneralQuestions } from './cora-case-review/general-questions-view.js';
 import {
   conversationView,
   postConversationMessage,
   refreshConversation,
 } from './cora-case-review/conversation-view.js';
-import { notesView } from './cora-case-review/notes-view.js';
-import { summaryView } from './cora-case-review/summary-view.js';
-import { AppealSection } from './cora-case-review/appeal-view.js';
-import { AppealReviewSection } from './cora-case-review/appeal-review-view.js';
-import { AmendOutcomeSection } from './cora-case-review/amend-outcome-view.js';
 import { createAppealEffects } from './cora-case-review/appeal-effects.js';
-import { editRemediationDetail } from './cora-case-review/remediation-actions.js';
 import {
   answerEdited,
   failureAttributed,
-  issueCaptured,
-  remediationActionToggled,
-  remediationFreeFormEdited,
-  remediationResolved,
 } from './cora-case-review/answer-actions.js';
-import { RemediationSection } from './cora-case-review/remediation-view.js';
-import { RemediationTracking } from './cora-case-review/remediation-tracking-view.js';
-import { remediationAudience } from '../services/section-access.js';
+import { SECTION_PANELS } from './cora-case-review/section-panels.js';
 import {
   completeCase,
   completionControl,
@@ -390,52 +376,6 @@ function saveStatusView(status) {
 }
 
 /**
- * Preserve the existing scoped CSS selectors while the Case Review route owns
- * rendering. These are inert light-DOM hosts, not registered custom elements.
- * @param {string} tagName
- * @param {Node[]} children
- */
-function sectionStyleHost(tagName, children) {
-  const host = document.createElement(tagName);
-  host.replaceChildren(...children);
-  return host;
-}
-
-/**
- * The Review tab's contents: the Applicable Questions, with the Case Type's
- * General Questions before or after them. General Questions travel the same
- * Answer path (namespaced keys, one SaveQueue write) but drive no Outcome —
- * see general-questions-view.js.
- *
- * @param {CaseReviewSnapshot} snapshot
- * @param {ReturnType<typeof createQuestionPanelView>} questionsView
- * @param {(questionId: string, value: string | string[]) => void} onAnswer
- * @returns {Node[]}
- */
-function questionsPanel(snapshot, questionsView, onAnswer) {
-  return withGeneralQuestions(
-    questionsView.render({
-      catalogue: snapshot.catalogue,
-      questions: snapshot.applicableQuestions,
-      answers: snapshot.answers,
-      access: snapshot.access.questions,
-      heading: snapshot.sectionHeadings.questions,
-      onAnswer,
-    }),
-    {
-      fields: snapshot.config?.generalQuestions ?? [],
-      answers: snapshot.answers,
-      access: snapshot.access.questions,
-      // `generalQuestionsPlacement` is also interpreted by the Summary roll-up
-      // (cora-case-review/summary-view.js) — keep the two in step, or hoist a
-      // shared resolver if a third consumer appears.
-      placement: snapshot.config?.generalQuestionsPlacement ?? 'after',
-      onAnswer,
-    }
-  );
-}
-
-/**
  * CASE-1 route slice. The view model adapts existing loading/domain behaviour
  * into store snapshots; the interim adapter owns only the unconverted Section
  * components.
@@ -717,6 +657,22 @@ export function createRouteSlice(params, context) {
       clearAttributionSearch(questionId);
     };
 
+    // The panel renderers' half of the contract. Rebuilt per render because
+    // `onAnswer` and `selectAttribution` close over this render's snapshot;
+    // `currentAnswers` stays a getter so a memoised card's surviving callback
+    // still reads the last Answers *written*, not the last ones drawn (#510).
+    /** @type {import('./cora-case-review/section-panels.js').PanelActions} */
+    const panelActions = {
+      questionsView,
+      currentAnswers: () => currentAnswers,
+      editAnswers,
+      onAnswer,
+      selectAttribution,
+      requestAttributionSearch,
+      save,
+      appeals,
+    };
+
     tools.morph(parts.header, [
       h('h1', {}, snapshot.caseRow.title),
       h('p', {}, `Reviewer: ${snapshot.caseRow.assignedReviewer}`),
@@ -782,253 +738,24 @@ export function createRouteSlice(params, context) {
       })
     );
 
+    // Every Section renders the same three ways: resolve visibility, toggle
+    // `hidden` (panels stay mounted so morph() keeps focus/caret/scroll across
+    // tab switches — ADR-0034/CORE-2), then morph in the panel its renderer
+    // returns. What differs per Section lives in SECTION_PANELS, not here.
+    const panelContext = {
+      snapshot,
+      caseRow,
+      config,
+      route,
+      dispatch: tools.dispatch,
+      actions: panelActions,
+    };
     for (const entry of tabEntries()) {
       const panel = parts.panels[entry.id];
       const visible = snapshot.access[entry.id] !== 'hidden';
       panel.hidden = !visible || route.activeTab !== entry.id;
-      if (entry.id === 'details') {
-        tools.morph(
-          panel,
-          visible
-            ? caseDetailsView(
-                snapshot.caseRow,
-                snapshot.config.detailFields ?? []
-              )
-            : null
-        );
-        continue;
-      }
-      if (entry.id === 'questions') {
-        tools.morph(
-          panel,
-          visible ? questionsPanel(snapshot, questionsView, onAnswer) : null
-        );
-        continue;
-      }
-      if (entry.id === 'notes') {
-        tools.morph(
-          panel,
-          visible
-            ? notesView({
-                notes: snapshot.caseRow.notes,
-                caseJustification: snapshot.caseRow.caseJustification ?? '',
-                access: snapshot.access.notes,
-                heading: snapshot.sectionHeadings.notes,
-                placeholders: snapshot.config.placeholders ?? {},
-                onFieldInput: (field, value) => save.fieldEdited(field, value),
-              })
-            : null
-        );
-        continue;
-      }
-      if (entry.id === 'issues') {
-        tools.morph(
-          panel,
-          visible
-            ? RemediationSection({
-                catalogue: snapshot.catalogue,
-                answers: snapshot.answers,
-                attributeFailures: snapshot.config.attributeFailures === true,
-                responsibleParty: snapshot.caseRow.responsibleParty
-                  ? {
-                      loginName: snapshot.caseRow.responsibleParty,
-                      displayName: snapshot.caseRow.responsibleParty,
-                    }
-                  : null,
-                canAttribute: snapshot.machine?.canAttribute ?? false,
-                remediationFields: snapshot.config.remediationFields ?? [],
-                canCaptureDetails: snapshot.machine?.canCapture ?? false,
-                captureGroups: snapshot.config.captureGroups ?? [],
-                canCapture: snapshot.machine?.canCapture ?? false,
-                captureCollapsed: route.captureCollapsed,
-                attributionSearch: route.attributionSearch,
-                canSelectRemediation:
-                  snapshot.machine?.canSelectRemediation ?? false,
-                dispatchCapture: (questionId, fieldKey, value) =>
-                  editAnswers(
-                    issueCaptured({
-                      answers: currentAnswers,
-                      captureGroups: config.captureGroups ?? [],
-                      questionId,
-                      fieldKey,
-                      value,
-                      canCapture: snapshot.machine?.canCapture ?? false,
-                    })
-                  ),
-                dispatchCaptureToggle: (questionId, groupKey, collapsed) =>
-                  tools.dispatch({
-                    type: 'case/capture-group-toggled',
-                    questionId,
-                    groupKey,
-                    collapsed,
-                  }),
-                dispatchDetail: (questionId, key, value) =>
-                  editAnswers(
-                    editRemediationDetail({
-                      answers: currentAnswers,
-                      questionId,
-                      key,
-                      value,
-                      canEdit: snapshot.machine?.canCapture ?? false,
-                      fields: config.remediationFields ?? [],
-                    })
-                  ),
-                dispatchAttribute: selectAttribution,
-                dispatchAttributeSearch: requestAttributionSearch,
-                dispatchRemediationAction: (questionId, action, selected) =>
-                  editAnswers(
-                    remediationActionToggled({
-                      answers: currentAnswers,
-                      questionId,
-                      action,
-                      selected,
-                      canSelectRemediation:
-                        snapshot.machine?.canSelectRemediation ?? false,
-                    })
-                  ),
-                dispatchRemediationFreeForm: (questionId, value) =>
-                  editAnswers(
-                    remediationFreeFormEdited({
-                      answers: currentAnswers,
-                      questionId,
-                      value,
-                      canSelectRemediation:
-                        snapshot.machine?.canSelectRemediation ?? false,
-                    })
-                  ),
-              })
-            : null
-        );
-        continue;
-      }
-      if (entry.id === 'remediation') {
-        tools.morph(
-          panel,
-          visible
-            ? RemediationTracking({
-                catalogue: snapshot.catalogue,
-                answers: snapshot.answers,
-                audience: remediationAudience(snapshot.machine?.roles ?? []),
-                canResolve: snapshot.access.remediation === 'edit',
-                conversationAvailable:
-                  snapshot.access.conversation !== 'hidden',
-                caseRow: snapshot.caseRow,
-                heading: snapshot.sectionHeadings.remediation,
-                dispatchStatus: (questionId, status, details) =>
-                  editAnswers(
-                    remediationResolved({
-                      answers: currentAnswers,
-                      questionId,
-                      status,
-                      details,
-                      canResolve: snapshot.access.remediation === 'edit',
-                    })
-                  ),
-                dispatchOpenConversation: () => {
-                  if (route.conversationHidden) {
-                    tools.dispatch({ type: 'case/conversation-toggled' });
-                  }
-                },
-              })
-            : null
-        );
-        continue;
-      }
-      if (entry.id === 'summary') {
-        tools.morph(
-          panel,
-          visible
-            ? sectionStyleHost(
-                'cora-summary',
-                summaryView({
-                  computeOutcome: snapshot.config.computeOutcome,
-                  answers: snapshot.answers,
-                  allAnswered: snapshot.allAnswered,
-                  caseRow: snapshot.caseRow,
-                  catalogue: snapshot.catalogue,
-                  summarySections: snapshot.summarySections,
-                  captureGroups: snapshot.config.captureGroups ?? [],
-                  detailFields: snapshot.config.detailFields ?? [],
-                  outcomeOptions: snapshot.config.outcomeOptions ?? [],
-                  sectionHeadings: snapshot.sectionHeadings,
-                  generalQuestions: snapshot.config.generalQuestions ?? [],
-                  generalQuestionsPlacement:
-                    snapshot.config.generalQuestionsPlacement,
-                })
-              )
-            : null
-        );
-        continue;
-      }
-      if (entry.id === 'appealRequest') {
-        tools.morph(
-          panel,
-          visible
-            ? sectionStyleHost(
-                'cora-appeal',
-                AppealSection({
-                  caseRow: snapshot.caseRow,
-                  access: snapshot.access.appealRequest,
-                  currentUser: snapshot.currentUser,
-                  catalogue: snapshot.catalogue,
-                  answers: snapshot.answers,
-                  onRaise: ({ rationale, citedAnswerKeys }) =>
-                    appeals.raise({
-                      caseRow,
-                      snapshot,
-                      rationale,
-                      citedAnswerKeys,
-                    }),
-                  heading: snapshot.sectionHeadings.appealRequest,
-                })
-              )
-            : null
-        );
-        continue;
-      }
-      if (entry.id === 'appealReview') {
-        tools.morph(
-          panel,
-          visible
-            ? sectionStyleHost(
-                'cora-appeal-review',
-                AppealReviewSection({
-                  caseRow: snapshot.caseRow,
-                  access: snapshot.access.appealReview,
-                  currentUser: snapshot.currentUser,
-                  outcomeOptions: snapshot.config.outcomeOptions ?? [],
-                  onResolve: (resolution) =>
-                    appeals.resolve({ caseRow, snapshot, resolution }),
-                })
-              )
-            : null
-        );
-        continue;
-      }
-      if (entry.id === 'amendOutcome') {
-        tools.morph(
-          panel,
-          visible
-            ? sectionStyleHost(
-                'cora-amend-outcome',
-                AmendOutcomeSection({
-                  caseRow: snapshot.caseRow,
-                  access: snapshot.access.amendOutcome,
-                  currentUser: snapshot.currentUser,
-                  outcomeOptions: snapshot.config.outcomeOptions ?? [],
-                  onAmend: ({ outcome, justification }) =>
-                    appeals.amend({
-                      caseRow,
-                      snapshot,
-                      outcome,
-                      justification,
-                    }),
-                })
-              )
-            : null
-        );
-        continue;
-      }
+      const render = SECTION_PANELS[entry.id];
+      tools.morph(panel, visible && render ? render(panelContext) : null);
     }
 
     parts.conversation.hidden =

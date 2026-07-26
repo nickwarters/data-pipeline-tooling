@@ -26,6 +26,14 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
   `domain/event` actions; async work and persistence live in effects. The
   `createStoreRoute()` adapter creates the store and memo cache, renders through
   keyed `morph()`, contains route failures, and cleans up on navigation.
+- **Case Review Sections are data plus a panel renderer.** `lib/section-registry.js`
+  (ADR-0032) says which Sections exist and in what order; `pages/cora-case-review/section-panels.js`
+  says how each one's panel is filled, keyed by Section id — the render loop in
+  `cora-case-review.js` never branches on the id. **Adding a Section recipe:** an
+  entry in `SECTION_REGISTRY` + its `MATRIX` access row in `services/section-access.js`
+  - its `DEFAULT_SECTION_LABELS` label + a `SECTION_PANELS` renderer. `tsc` demands
+    the first three; `tests/section-panels.test.js` demands the fourth. The panel map
+    lives with the page, not the registry, because `src/lib/` must not import `src/pages/**`.
 - **One authoring model.** Views are synchronous and side-effect free. They do
   not import clients or persistence services, and application pages do not use
   the internal notification primitive retained by `SaveQueue` and
@@ -174,6 +182,7 @@ src/
     cora-case-review.js        # store slice + pure tab shell
     cora-case-review/          # store actions/effects and pure Section views
       answer-actions.js        # the pure Answer mutations; the store is the single owner (#510)
+      section-panels.js        # SECTION_PANELS: one panel renderer per tab Section, keyed by id (#512)
       details-view.js          # config-driven, read-only Case Details pure view (mirrors current Section behaviour)
       case-actions.js          # Answer dispatch -> unchanged SaveQueue; save status dispatch bridge
       question-panel-view.js   # CASE-2 group-scoped Questions view with memoised cards

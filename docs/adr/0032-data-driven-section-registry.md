@@ -120,3 +120,27 @@ immediate goal is one source of truth, so adding a built-in Section becomes:
   every derived structure with no other edit.
 - Adding a built-in Section is now: a registry entry, a component, and a
   controller — the framework plumbing follows automatically.
+
+## How this landed (2026-07-26, #512)
+
+Two consumers named above no longer exist. `pages/cora-case-review/node-registry.js`
+and `tab-controller.js` were deleted during the ADR-0034 migration, taking
+`componentTag` and `nodeKey` with them; the "tab→panel map and the uniform panel
+nodes" this ADR describes were not rebuilt at the time. What replaced them was a
+275-line `if (entry.id === …)` chain in `pages/cora-case-review.js` — a loop over
+the registry that then ignored it.
+
+The missing half is now `pages/cora-case-review/section-panels.js`: `SECTION_PANELS`,
+one panel renderer per tab Section, keyed by Section id. The render loop is
+back to doing the same three things for every entry (resolve visibility, toggle
+`hidden`, morph in the renderer's output), and `tests/section-panels.test.js`
+asserts the map's key set equals `tabEntries()`' ids — so the decision's promise
+that the framework plumbing follows automatically is enforced again, by a test
+rather than by an exhaustive branch chain.
+
+The map lives with the page rather than on the registry entry, which is the one
+deviation from the original shape: `src/lib/` is framework-level and must not
+import `src/pages/**`, and `componentTag`'s values were wrapper-div names, not
+registered custom elements. Adding a built-in Section is now: a registry entry,
+a `MATRIX` access row, a `DEFAULT_SECTION_LABELS` label, and a `SECTION_PANELS`
+renderer.

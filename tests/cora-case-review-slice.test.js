@@ -2555,3 +2555,40 @@ test('CASE-4 view: the Summary rolls up the Reviewer’s General Question answer
   // Unanswered ones stay out rather than showing an empty row.
   assert.doesNotMatch(panel?.textContent ?? '', /How was this reviewed\?/);
 });
+
+test('#512 panel map: a tab switch keeps every panel mounted and its nodes identical', () => {
+  const view = renderShippedState(
+    caseReviewReducer(createInitialCaseReviewState(chrome, 'popover'), {
+      type: 'case/load-finished',
+      snapshot: snapshot(),
+    })
+  );
+  view.dispatch({ type: 'case/tab-selected', id: 'notes' });
+  const notesPanel = /** @type {any} */ (
+    view.container.querySelector('#case-panel-notes')
+  );
+  const notesField = queryAllByRole(
+    /** @type {any} */ (notesPanel),
+    'textbox'
+  )[0];
+  assert.ok(notesField, 'the Notes panel renders an editable field');
+
+  // Caret and focus survive a tab switch only because panels stay in the DOM
+  // and morph() patches them in place. Node identity is the mechanism: a
+  // re-created field would render identically and lose the caret silently.
+  view.dispatch({ type: 'case/tab-selected', id: 'summary' });
+  assert.equal(notesPanel?.hidden, true, 'the Notes panel is hidden, not gone');
+  view.dispatch({ type: 'case/tab-selected', id: 'notes' });
+  assert.equal(
+    view.container.querySelector('#case-panel-notes'),
+    notesPanel,
+    'the same panel element comes back'
+  );
+  assert.equal(
+    queryAllByRole(/** @type {any} */ (notesPanel), 'textbox')[0],
+    notesField,
+    'the same field element comes back'
+  );
+  assert.equal(notesPanel?.hidden, false);
+  view.dispose();
+});

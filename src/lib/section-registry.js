@@ -16,9 +16,10 @@
  * A contract test asserts nothing re-lists Section ids independently.
  *
  * The registry supplies which Sections exist and in what order; it does not say
- * how a Section's panel is rendered. That is a per-Section `if (entry.id === …)`
- * branch in `pages/cora-case-review.js`, because each panel takes a different
- * slice of state and a different set of dispatchers.
+ * how a Section's panel is rendered. That is `SECTION_PANELS` in
+ * `pages/cora-case-review/section-panels.js`, keyed by the ids below — it lives
+ * with the page because `src/lib/` must not import `src/pages/**`, and a test
+ * asserts its key set equals `tabEntries()`' ids (#512).
  *
  * Scope (per ADR-0032): the registry owns Section *existence*, tab *order* and
  * the Summary-block default. It deliberately does **not** own the role→mode
@@ -37,8 +38,10 @@
  * restated *type* is self-consistent. `tests/section-registry.test.js` locks it.
  *
  * Adding a Section is now: an entry here, plus its `MATRIX` access row (policy,
- * not existence — deliberately hand-written) and its `DEFAULT_SECTION_LABELS`
- * label. `tsc` demands both; before this projection it demanded neither.
+ * not existence — deliberately hand-written), its `DEFAULT_SECTION_LABELS`
+ * label, and — for a tab Section — its `SECTION_PANELS` renderer. `tsc` demands
+ * the first two; before this projection it demanded neither. A test demands the
+ * third (#512).
  *
  * @typedef {(typeof SECTION_REGISTRY)[number]['id']} Section
  */
