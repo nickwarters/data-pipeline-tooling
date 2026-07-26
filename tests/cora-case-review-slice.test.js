@@ -8,7 +8,6 @@ import {
   getByRole,
   getByTag,
   queryAllByRole,
-  queryAllByTag,
 } from './helpers/semantic-dom.js';
 
 installDom();
@@ -678,7 +677,7 @@ test('CASE-6 route: Appeal renders directly from store state without legacy cont
     (candidate) => candidate.getAttribute('id') === 'case-panel-appealRequest'
   );
   assert.ok(panel);
-  assert.equal(queryAllByTag(panel, 'cora-appeal').length, 1);
+  assert.equal(panel.querySelectorAll('.cora-appeal').length, 1);
   assert.equal(
     getByRole(panel, 'button', { name: 'Raise Appeal' }).textContent,
     'Raise Appeal'
@@ -1325,14 +1324,14 @@ test('CASE-4 view: Summary is rendered from store state and configured sections'
   assert.match(panel.textContent, /Case Details/);
   assert.match(panel.textContent, /Questions/);
   assert.match(panel.textContent, /Issues/);
-  const summaryHosts = queryAllByTag(panel, 'cora-summary');
+  const summaryHosts = panel.querySelectorAll('.cora-summary');
   assert.equal(
     summaryHosts.length,
     1,
     'the Summary keeps the light-DOM host targeted by its shipped CSS'
   );
   assert.equal(
-    queryAllByTag(summaryHosts[0], 'cora-outcome').length,
+    summaryHosts[0].querySelectorAll('.cora-outcome').length,
     1,
     'the Outcome keeps the nested host targeted by its Summary card CSS'
   );
@@ -1640,22 +1639,12 @@ test('CASE-1 view: conflict state is surfaced with the existing reload warning',
     getByRole(view, 'button', { name: 'Reload' }).textContent,
     'Reload'
   );
-  const root = /** @type {HTMLElement} */ (view.childNodes[0]);
-  const status = /** @type {HTMLElement} */ (root.childNodes[0]);
-  assert.deepEqual(
-    {
-      position: status.style.position,
-      bottom: status.style.bottom,
-      right: status.style.right,
-      zIndex: status.style.zIndex,
-    },
-    {
-      position: 'fixed',
-      bottom: 'var(--cora-space-4)',
-      right: 'var(--cora-space-4)',
-      zIndex: '110',
-    }
-  );
+  // The banner's placement is a stylesheet concern (#514); what the page owes it
+  // is the hook the stylesheet pins, and the banner rendered inside it.
+  const status = view.querySelector('.cora-case-review__save-status');
+  assert.ok(status, 'the save-status host carries its styling class');
+  assert.ok(status.querySelector('.cora-banner-conflict'));
+  assert.equal(status.getAttribute('style'), null, 'no inline positioning');
 });
 
 test('CASE-1 view: loading, error, denied, saving, and reconnecting states are explicit', () => {
@@ -2590,5 +2579,47 @@ test('#512 panel map: a tab switch keeps every panel mounted and its nodes ident
     'the same field element comes back'
   );
   assert.equal(notesPanel?.hidden, false);
+  view.dispose();
+});
+
+test('#513: a Case whose as-reviewed Question Bank is unavailable renders a live-region warning', () => {
+  const warned = snapshot();
+  warned.caseRow = { ...warned.caseRow, status: 'Reported' };
+  warned.versionWarning = 'as-reviewed version unavailable';
+  const state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: warned }
+  );
+  const view = renderShippedState(state);
+  const banner = view.container.querySelector('.cora-banner-warning');
+  assert.ok(banner, 'the version warning is rendered');
+  assert.equal(banner.getAttribute('role'), 'status');
+  assert.equal(banner.getAttribute('aria-live'), 'polite');
+  assert.match(banner.textContent, /as-reviewed Question Bank/);
+  assert.match(banner.textContent, /current Question Bank/);
+  view.dispose();
+});
+
+test('#513: a Case with a resolved as-reviewed snapshot renders no warning', () => {
+  const resolved = snapshot();
+  resolved.caseRow = { ...resolved.caseRow, status: 'Reported' };
+  resolved.versionWarning = null;
+  resolved.exportHash = 'abc123';
+  const state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: resolved }
+  );
+  const view = renderShippedState(state);
+  assert.equal(view.container.querySelector('.cora-banner-warning'), null);
+  view.dispose();
+});
+
+test('#513: an In-progress Case renders no version warning', () => {
+  const state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: snapshot() }
+  );
+  const view = renderShippedState(state);
+  assert.equal(view.container.querySelector('.cora-banner-warning'), null);
   view.dispose();
 });

@@ -45,6 +45,12 @@ import {
  * @property {boolean} allAnswered
  * @property {import('../services/section-access.js').Section[]} summarySections
  * @property {string | null} exportHash
+ * @property {string | null} versionWarning
+ *   Set when ADR-0021's as-reviewed Question Bank was stamped on the row but its
+ *   versioned export could not be fetched, so the *live* catalogue is what the
+ *   page is showing. Rendered as a page-level banner — see `versionWarningView`.
+ * @property {import('../services/section-access.js').Role[]} roles
+ * @property {boolean} conversationHidden
  * @property {Record<import('../services/section-access.js').Section, import('../services/section-access.js').Mode>} access
  * @property {Required<import('../sharepoint-client.js').SectionLabels>} sectionLabels
  * @property {Required<import('../sharepoint-client.js').SectionLabels>} sectionHeadings
@@ -384,6 +390,36 @@ function saveStatusView(status) {
 }
 
 /**
+ * ADR-0021 Step 4's fallback, made visible. When the as-reviewed export is
+ * missing the page falls back to the live Question Bank — deliberately, because
+ * a degraded read beats a blocked audit — but until #513 nothing said so, and
+ * the Cases affected are exactly the ones under audit. Page-level rather than
+ * tab-scoped: it qualifies every Section, not one of them. Not a toast, because
+ * a dismissed toast restores the silent-wrong state this exists to end.
+ *
+ * @param {string | null} warning
+ * @returns {HTMLElement | null}
+ */
+function versionWarningView(warning) {
+  if (!warning) return null;
+  return h(
+    'div',
+    {
+      className: 'cora-banner cora-banner-warning',
+      role: 'status',
+      'aria-live': 'polite',
+    },
+    h(
+      'p',
+      { className: 'cora-banner-text' },
+      'The as-reviewed Question Bank for this Case could not be loaded. ' +
+        'You are seeing the current Question Bank, which may differ from ' +
+        'what was reviewed at the time.'
+    )
+  );
+}
+
+/**
  * CASE-1 route slice. The view model adapts existing loading/domain behaviour
  * into store snapshots; the interim adapter owns only the unconverted Section
  * components.
@@ -520,14 +556,6 @@ export function createRouteSlice(params, context) {
   function ensureShell(container, tools) {
     if (shell) return shell;
     const status = h('div', { className: 'cora-case-review__save-status' });
-    // Preserve the retired status-banner host placement until its styles move
-    // to the store shell's stylesheet in a dedicated styling change.
-    Object.assign(status.style, {
-      position: 'fixed',
-      bottom: 'var(--cora-space-4)',
-      right: 'var(--cora-space-4)',
-      zIndex: '110',
-    });
     const header = h('header');
     const tablist = h('div', {
       role: 'tablist',
@@ -682,6 +710,7 @@ export function createRouteSlice(params, context) {
     };
 
     tools.morph(parts.header, [
+      versionWarningView(snapshot.versionWarning),
       h('h1', {}, snapshot.caseRow.title),
       h('p', {}, `Reviewer: ${snapshot.caseRow.assignedReviewer}`),
       snapshot.machine?.canToggleConversation

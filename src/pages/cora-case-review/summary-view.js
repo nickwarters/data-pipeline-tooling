@@ -61,10 +61,10 @@ export function summaryView(props) {
         allAnswered: props.allAnswered,
         outcomeOptions: props.outcomeOptions,
       });
-  // Keep this inert host here for the `cora-summary > cora-outcome` CSS contract;
-  // using h() for an intentionally unregistered cora-* tag would warn in development.
-  const outcome = document.createElement('cora-outcome');
-  outcome.replaceChildren(...outcomeNodes);
+  // A CSS hook for the `.cora-summary > .cora-outcome` contract, nothing more.
+  // Was an unregistered `cora-outcome` element via raw `createElement` until
+  // #514 retired that pattern — see the note at the top of section-panels.js.
+  const outcome = h('div', { className: 'cora-outcome' }, outcomeNodes);
 
   /** @type {Node[]} */
   const children = [heading, outcome];

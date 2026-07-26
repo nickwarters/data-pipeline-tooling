@@ -353,7 +353,11 @@
 
 /* ── Banner — reconnecting & conflict surfaces ───────────────────────────── */
 
-cora-status-banner {
+/* The save-status banner pins bottom-right, above the conversation panel and
+   below the command palette and toast host — 110 is that existing stack, not a
+   fresh number (#514). These declarations were inline on the element until the
+   retired `cora-status-banner` host's rule could be replaced by its class. */
+.cora-case-review__save-status {
   position: fixed;
   bottom: var(--cora-space-4);
   right: var(--cora-space-4);
@@ -371,6 +375,15 @@ cora-status-banner {
 .cora-banner-reconnecting {
   background: var(--cora-color-warning-bg);
   color: var(--cora-color-warning);
+}
+
+/* ADR-0021 fallback notice (#513). In the header's normal flow, not fixed like
+   the save-status banner: it qualifies the whole page for as long as it is open. */
+.cora-banner-warning {
+  background: var(--cora-color-warning-bg);
+  color: var(--cora-color-warning);
+  border-color: var(--cora-color-warning);
+  margin-bottom: var(--cora-space-3);
 }
 
 .cora-banner-conflict {
@@ -1880,20 +1893,20 @@ cora-status-banner {
    Unstyled they ran together as one undifferentiated stream. Lay them out as an
    even-gapped column of surface cards — the same card language as the Review tab
    and the other refined Sections — so each block reads as its own panel. */
-[data-cora-root] cora-summary {
+[data-cora-root] .cora-summary {
   display: grid;
   gap: var(--cora-space-5);
   align-content: start;
 }
 
 /* The page-level "Summary" title: let the grid gap own the rhythm below it. */
-[data-cora-root] cora-summary > h2 {
+[data-cora-root] .cora-summary > h2 {
   margin: 0;
 }
 
 /* The Outcome is the headline verdict: a card with the heading demoted to a
    quiet label above an enlarged verdict line (colour comes from .cora-outcome-*). */
-[data-cora-root] cora-summary > cora-outcome {
+[data-cora-root] .cora-summary > .cora-outcome {
   display: block;
   padding: var(--cora-space-4) var(--cora-space-5);
   background: var(--cora-color-surface);
@@ -1902,7 +1915,7 @@ cora-status-banner {
   box-shadow: var(--cora-shadow-sm);
 }
 
-[data-cora-root] cora-summary > cora-outcome h2 {
+[data-cora-root] .cora-summary > .cora-outcome h2 {
   font-family: var(--cora-font-body);
   font-size: var(--cora-font-size-sm);
   font-weight: var(--cora-font-weight-semibold);
@@ -1912,13 +1925,13 @@ cora-status-banner {
   margin: 0 0 var(--cora-space-1);
 }
 
-[data-cora-root] cora-summary > cora-outcome > p {
+[data-cora-root] .cora-summary > .cora-outcome > p {
   font-size: var(--cora-font-size-lg);
   margin: 0;
 }
 
 /* Each Summary Section as a surface card with a divider under its heading. */
-[data-cora-root] cora-summary > section {
+[data-cora-root] .cora-summary > section {
   margin: 0;
   padding: var(--cora-space-4) var(--cora-space-5);
   background: var(--cora-color-surface);
@@ -1927,7 +1940,7 @@ cora-status-banner {
   box-shadow: var(--cora-shadow-sm);
 }
 
-[data-cora-root] cora-summary > section > h3 {
+[data-cora-root] .cora-summary > section > h3 {
   margin: 0 0 var(--cora-space-3);
   padding-bottom: var(--cora-space-2);
   border-bottom: 1px solid var(--cora-color-border);
@@ -1935,26 +1948,26 @@ cora-status-banner {
 
 /* Key dates and Case Details render a <dl>; align it as label/value columns
    instead of the browser's indented definition-list default. */
-[data-cora-root] cora-summary dl {
+[data-cora-root] .cora-summary dl {
   display: grid;
   grid-template-columns: minmax(7rem, max-content) 1fr;
   gap: var(--cora-space-2) var(--cora-space-4);
   margin: 0;
 }
 
-[data-cora-root] cora-summary dt {
+[data-cora-root] .cora-summary dt {
   color: var(--cora-color-text-muted);
   font-weight: var(--cora-font-weight-medium);
 }
 
-[data-cora-root] cora-summary dd {
+[data-cora-root] .cora-summary dd {
   margin: 0;
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
 
 /* The Questions counts: a plain bulleted list, kept tidy with row spacing. */
-[data-cora-root] cora-summary .cora-summary-counts ul {
+[data-cora-root] .cora-summary .cora-summary-counts ul {
   margin: 0;
   padding-left: var(--cora-space-5);
   display: grid;
@@ -1962,16 +1975,16 @@ cora-status-banner {
 }
 
 /* The count/due lines that sit directly under an Issues / Remediation heading. */
-[data-cora-root] cora-summary .cora-summary-remediation > p,
-[data-cora-root] cora-summary .cora-summary-remediation-tracking > p {
+[data-cora-root] .cora-summary .cora-summary-remediation > p,
+[data-cora-root] .cora-summary .cora-summary-remediation-tracking > p {
   color: var(--cora-color-text-muted);
   font-size: var(--cora-font-size-sm);
 }
 
 /* Failed-Answer entries: drop the list marker and set each out as a left-accented
    block so the failures are individually scannable within the card. */
-[data-cora-root] cora-summary .cora-summary-remediation > ul,
-[data-cora-root] cora-summary .cora-summary-remediation-tracking > ul {
+[data-cora-root] .cora-summary .cora-summary-remediation > ul,
+[data-cora-root] .cora-summary .cora-summary-remediation-tracking > ul {
   list-style: none;
   margin: 0;
   padding-left: 0;
@@ -1979,20 +1992,20 @@ cora-status-banner {
   gap: var(--cora-space-3);
 }
 
-[data-cora-root] cora-summary .cora-summary-remediation > ul > li,
-[data-cora-root] cora-summary .cora-summary-remediation-tracking > ul > li {
+[data-cora-root] .cora-summary .cora-summary-remediation > ul > li,
+[data-cora-root] .cora-summary .cora-summary-remediation-tracking > ul > li {
   padding-left: var(--cora-space-3);
   border-left: 2px solid var(--cora-color-border);
 }
 
-[data-cora-root] cora-summary .cora-summary-remediation li p,
-[data-cora-root] cora-summary .cora-summary-remediation-tracking li p {
+[data-cora-root] .cora-summary .cora-summary-remediation li p,
+[data-cora-root] .cora-summary .cora-summary-remediation-tracking li p {
   margin: 0 0 var(--cora-space-1);
 }
 
 /* The Answer line and configured/sent action lists read as supporting detail. */
-[data-cora-root] cora-summary .cora-summary-remediation li ul,
-[data-cora-root] cora-summary .cora-summary-remediation-tracking li ul {
+[data-cora-root] .cora-summary .cora-summary-remediation li ul,
+[data-cora-root] .cora-summary .cora-summary-remediation-tracking li ul {
   margin: var(--cora-space-1) 0 0;
   padding-left: var(--cora-space-5);
   color: var(--cora-color-text-muted);
@@ -2006,22 +2019,22 @@ cora-status-banner {
    shared inline rows — label, control and button ran together — and the records
    were an undifferentiated paragraph stream. Lay both out as an even-gapped
    column and adopt the same card + form language as Amend Outcome / Summary. */
-[data-cora-root] cora-appeal,
-[data-cora-root] cora-appeal-review {
+[data-cora-root] .cora-appeal,
+[data-cora-root] .cora-appeal-review {
   display: grid;
   gap: var(--cora-space-5);
   align-content: start;
 }
 
-[data-cora-root] cora-appeal > h2,
-[data-cora-root] cora-appeal-review > h2 {
+[data-cora-root] .cora-appeal > h2,
+[data-cora-root] .cora-appeal-review > h2 {
   margin: 0;
 }
 
 /* Each Appeal / resolution record as a surface card, accented on the leading
    edge to read as an audit entry (cf. .cora-amend-outcome-record). */
-[data-cora-root] cora-appeal .cora-appeal-item,
-[data-cora-root] cora-appeal-review .cora-appeal-review-item {
+[data-cora-root] .cora-appeal .cora-appeal-item,
+[data-cora-root] .cora-appeal-review .cora-appeal-review-item {
   display: grid;
   gap: var(--cora-space-2);
   margin: 0;
@@ -2034,8 +2047,8 @@ cora-status-banner {
 }
 
 /* State is the card's eyebrow: a quiet uppercase label above the rationale. */
-[data-cora-root] cora-appeal .cora-appeal-state,
-[data-cora-root] cora-appeal-review .cora-appeal-review-state {
+[data-cora-root] .cora-appeal .cora-appeal-state,
+[data-cora-root] .cora-appeal-review .cora-appeal-review-state {
   margin: 0;
   font-size: var(--cora-font-size-sm);
   font-weight: var(--cora-font-weight-semibold);
@@ -2045,15 +2058,15 @@ cora-status-banner {
 }
 
 /* The rationale carries the card — plain body text. */
-[data-cora-root] cora-appeal .cora-appeal-item-rationale,
-[data-cora-root] cora-appeal-review .cora-appeal-review-rationale {
+[data-cora-root] .cora-appeal .cora-appeal-item-rationale,
+[data-cora-root] .cora-appeal-review .cora-appeal-review-rationale {
   margin: 0;
 }
 
 /* Cited Answers and the resolution line read as supporting detail. */
-[data-cora-root] cora-appeal .cora-appeal-item-cited,
-[data-cora-root] cora-appeal .cora-appeal-resolution,
-[data-cora-root] cora-appeal-review .cora-appeal-review-resolution {
+[data-cora-root] .cora-appeal .cora-appeal-item-cited,
+[data-cora-root] .cora-appeal .cora-appeal-resolution,
+[data-cora-root] .cora-appeal-review .cora-appeal-review-resolution {
   margin: 0;
   font-size: var(--cora-font-size-sm);
   color: var(--cora-color-text-muted);
@@ -2061,8 +2074,8 @@ cora-status-banner {
 
 /* The capture form: a card of stacked field groups so controls no longer
    collapse onto one line — same frame as .cora-amend-outcome-form. */
-[data-cora-root] cora-appeal .cora-appeal-form,
-[data-cora-root] cora-appeal-review .cora-appeal-review-form {
+[data-cora-root] .cora-appeal .cora-appeal-form,
+[data-cora-root] .cora-appeal-review .cora-appeal-review-form {
   display: grid;
   gap: var(--cora-space-4);
   max-width: 40rem;
@@ -2075,8 +2088,8 @@ cora-status-banner {
 }
 
 /* Standalone prompt labels sit as small, emphasised captions above their field. */
-[data-cora-root] cora-appeal .cora-appeal-form > label,
-[data-cora-root] cora-appeal-review .cora-appeal-review-form > label {
+[data-cora-root] .cora-appeal .cora-appeal-form > label,
+[data-cora-root] .cora-appeal-review .cora-appeal-review-form > label {
   margin-bottom: calc(-1 * var(--cora-space-2)); /* hug the control below it */
   font-size: var(--cora-font-size-sm);
   font-weight: var(--cora-font-weight-semibold);
@@ -2084,12 +2097,12 @@ cora-status-banner {
 
 /* Heading + guidance introducing the disputed-Answer citation checkboxes. The
    heading titles the group; the guidance is muted supporting text that hugs it. */
-[data-cora-root] cora-appeal .cora-appeal-cite-heading {
+[data-cora-root] .cora-appeal .cora-appeal-cite-heading {
   margin: 0;
   font-size: var(--cora-font-size-base);
 }
 
-[data-cora-root] cora-appeal .cora-appeal-cite-intro {
+[data-cora-root] .cora-appeal .cora-appeal-cite-intro {
   margin: calc(-1 * var(--cora-space-2)) 0 0;
   color: var(--cora-color-text-muted);
   font-size: var(--cora-font-size-sm);
@@ -2098,9 +2111,9 @@ cora-status-banner {
 /* Choice rows (cite checkboxes, Agree/Reject radios): inline control + text.
    Qualified with `label` so they out-rank the emphasised `> label` prompt rule
    above and read as plain, regular-weight options rather than field captions. */
-[data-cora-root] cora-appeal label.cora-appeal-cite,
-[data-cora-root] cora-appeal-review label.cora-appeal-review-agree-label,
-[data-cora-root] cora-appeal-review label.cora-appeal-review-reject-label {
+[data-cora-root] .cora-appeal label.cora-appeal-cite,
+[data-cora-root] .cora-appeal-review label.cora-appeal-review-agree-label,
+[data-cora-root] .cora-appeal-review label.cora-appeal-review-reject-label {
   display: flex;
   align-items: center;
   gap: var(--cora-space-2);
@@ -2110,15 +2123,15 @@ cora-status-banner {
 }
 
 /* Keep Agree and Reject together as one pair rather than a full form gap apart. */
-[data-cora-root] cora-appeal-review label.cora-appeal-review-reject-label {
+[data-cora-root] .cora-appeal-review label.cora-appeal-review-reject-label {
   margin-top: calc(-1 * var(--cora-space-2));
 }
 
 /* Text controls fill the card and pick up the shared focus treatment. */
-[data-cora-root] cora-appeal .cora-appeal-rationale,
-[data-cora-root] cora-appeal-review .cora-appeal-review-rationale-input,
-[data-cora-root] cora-appeal-review .cora-appeal-review-outcome-select,
-[data-cora-root] cora-appeal-review .cora-appeal-review-amend-justification {
+[data-cora-root] .cora-appeal .cora-appeal-rationale,
+[data-cora-root] .cora-appeal-review .cora-appeal-review-rationale-input,
+[data-cora-root] .cora-appeal-review .cora-appeal-review-outcome-select,
+[data-cora-root] .cora-appeal-review .cora-appeal-review-amend-justification {
   font: inherit;
   width: 100%;
   padding: var(--cora-space-2) var(--cora-space-3);
@@ -2129,41 +2142,41 @@ cora-status-banner {
   transition: border-color var(--cora-duration-fast) var(--cora-easing-standard);
 }
 
-[data-cora-root] cora-appeal .cora-appeal-rationale,
-[data-cora-root] cora-appeal-review .cora-appeal-review-rationale-input,
-[data-cora-root] cora-appeal-review .cora-appeal-review-amend-justification {
+[data-cora-root] .cora-appeal .cora-appeal-rationale,
+[data-cora-root] .cora-appeal-review .cora-appeal-review-rationale-input,
+[data-cora-root] .cora-appeal-review .cora-appeal-review-amend-justification {
   min-height: 6rem;
   resize: vertical;
 }
 
-[data-cora-root] cora-appeal .cora-appeal-rationale:focus,
-[data-cora-root] cora-appeal-review .cora-appeal-review-rationale-input:focus,
-[data-cora-root] cora-appeal-review .cora-appeal-review-outcome-select:focus,
+[data-cora-root] .cora-appeal .cora-appeal-rationale:focus,
+[data-cora-root] .cora-appeal-review .cora-appeal-review-rationale-input:focus,
+[data-cora-root] .cora-appeal-review .cora-appeal-review-outcome-select:focus,
 [data-cora-root]
-  cora-appeal-review
+  .cora-appeal-review
   .cora-appeal-review-amend-justification:focus {
   outline: none;
   border-color: var(--cora-color-accent);
   box-shadow: var(--cora-focus-ring);
 }
 
-[data-cora-root] cora-appeal .cora-appeal-error,
-[data-cora-root] cora-appeal-review .cora-appeal-review-error {
+[data-cora-root] .cora-appeal .cora-appeal-error,
+[data-cora-root] .cora-appeal-review .cora-appeal-review-error {
   margin: 0;
   font-size: var(--cora-font-size-sm);
   color: var(--cora-color-danger);
 }
 
 /* Keep the CTA to its own width rather than stretching across the grid. */
-[data-cora-root] cora-appeal .cora-appeal-submit,
-[data-cora-root] cora-appeal-review .cora-appeal-review-submit {
+[data-cora-root] .cora-appeal .cora-appeal-submit,
+[data-cora-root] .cora-appeal-review .cora-appeal-review-submit {
   justify-self: start;
 }
 
 /* Empty / already-open notices: muted, italic, matching the other Sections. */
-[data-cora-root] cora-appeal .cora-appeal-empty,
-[data-cora-root] cora-appeal .cora-appeal-open-note,
-[data-cora-root] cora-appeal-review .cora-appeal-review-empty {
+[data-cora-root] .cora-appeal .cora-appeal-empty,
+[data-cora-root] .cora-appeal .cora-appeal-open-note,
+[data-cora-root] .cora-appeal-review .cora-appeal-review-empty {
   margin: 0;
   color: var(--cora-color-text-muted);
   font-style: italic;

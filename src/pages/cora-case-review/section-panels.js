@@ -20,8 +20,20 @@
  * Renderers are pure prop wiring: they read `ctx` and call a Section view. They
  * do no async work, own no state, and never decide whether their panel is
  * visible — `renderRoute` owns visibility and the `hidden` toggle.
+ *
+ * Four Sections wrap their view in a `div` carrying a `cora-…` *class*
+ * (`cora-summary`, `cora-appeal`, `cora-appeal-review`, `cora-amend-outcome`).
+ * Those wrappers exist only as CSS hooks for the Section's scoped styles. They
+ * were unregistered `cora-*` *elements* built with raw `createElement` until
+ * #514 — the shape `h()`'s `warnIfUnregisteredCoraElement` guard exists to warn
+ * about, sidestepped by not going through `h()`. Registering them as real custom
+ * elements would be the wrong direction (ADR-0034 moved away from
+ * component-owned state); they are wrapper divs. The `cora-` prefix stays either
+ * way — it is the SharePoint style-isolation boundary (ADR-0001), and only the
+ * selector type changed.
  */
 
+import { h } from '../../lib/html.js';
 import { caseDetailsView } from './details-view.js';
 import { withGeneralQuestions } from './general-questions-view.js';
 import { notesView } from './notes-view.js';
@@ -83,19 +95,6 @@ import { remediationAudience } from '../../services/section-access.js';
 /**
  * @typedef {(ctx: PanelContext) => Node | Node[] | null} PanelRenderer
  */
-
-/**
- * Preserve the existing scoped CSS selectors while the Case Review route owns
- * rendering. These are inert light-DOM hosts, not registered custom elements.
- *
- * @param {string} tagName
- * @param {Node[]} children
- */
-function sectionStyleHost(tagName, children) {
-  const host = document.createElement(tagName);
-  host.replaceChildren(...children);
-  return host;
-}
 
 /**
  * The Review tab's contents: the Applicable Questions, with the Case Type's
@@ -259,8 +258,9 @@ export const SECTION_PANELS = {
     }),
 
   summary: ({ snapshot, caseRow, config }) =>
-    sectionStyleHost(
-      'cora-summary',
+    h(
+      'div',
+      { className: 'cora-summary' },
       summaryView({
         computeOutcome: config.computeOutcome,
         answers: snapshot.answers,
@@ -278,8 +278,9 @@ export const SECTION_PANELS = {
     ),
 
   appealRequest: ({ snapshot, caseRow, actions }) =>
-    sectionStyleHost(
-      'cora-appeal',
+    h(
+      'div',
+      { className: 'cora-appeal' },
       AppealSection({
         caseRow,
         access: snapshot.access.appealRequest,
@@ -298,8 +299,9 @@ export const SECTION_PANELS = {
     ),
 
   appealReview: ({ snapshot, caseRow, config, actions }) =>
-    sectionStyleHost(
-      'cora-appeal-review',
+    h(
+      'div',
+      { className: 'cora-appeal-review' },
       AppealReviewSection({
         caseRow,
         access: snapshot.access.appealReview,
@@ -311,8 +313,9 @@ export const SECTION_PANELS = {
     ),
 
   amendOutcome: ({ snapshot, caseRow, config, actions }) =>
-    sectionStyleHost(
-      'cora-amend-outcome',
+    h(
+      'div',
+      { className: 'cora-amend-outcome' },
       AmendOutcomeSection({
         caseRow,
         access: snapshot.access.amendOutcome,
