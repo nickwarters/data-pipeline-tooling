@@ -2665,12 +2665,10 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   cora-tabs — generic, domain-free tab navigation primitive
+   Tab strip — the `.cora-tabs*` classes the Case Review page renders. The
+   `cora-tabs` element primitive was deleted as dead code in #494; its
+   element-type rule went with it in #536.
    ───────────────────────────────────────────────────────────────────────── */
-cora-tabs {
-  display: block;
-}
-
 .cora-tabs-list {
   display: flex;
   flex: 1;
