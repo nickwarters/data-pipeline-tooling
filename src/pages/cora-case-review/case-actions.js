@@ -9,7 +9,7 @@
  * text fields of the Notes Section. User edits enter the store first, then the
  * unchanged SaveQueue owns field-level debounce and ETag concurrency.
  *
- * `caseId` is a getter, not a value: the effect is built in `start()`, before
+ * `caseId` is a getter, not a value: the effect is built with the route, before
  * the Case has loaded, and every write must address the row that was actually
  * loaded (#511).
  *

@@ -466,7 +466,7 @@ export function createRouteSlice(params, context) {
   /**
    * The id every write addresses: the row that was actually loaded, which is
    * what `params.id` resolved to. The route param is only the seed, because the
-   * effects are built in `start()` before the load lands. Previously the four
+   * effects are built with the route, before the load lands. Previously the four
    * write paths disagreed — two used `params.id`, two `caseRow.id` (#511).
    *
    * @type {string}
