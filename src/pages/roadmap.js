@@ -1,5 +1,6 @@
 // @ts-check
 import { h } from '../lib/html.js';
+import { patchRoute } from '../core/route-state.js';
 
 /** @typedef {import('../sharepoint-client.js').RoadmapItem} RoadmapItem */
 /** @typedef {import('../sharepoint-client.js').RoadmapStatus} RoadmapStatus */
@@ -53,20 +54,10 @@ export function bucketRoadmapItems(items) {
 export function roadmapReducer(state, action) {
   const route = state.routes.roadmap;
   if (action.type === 'roadmap/loaded') {
-    return {
-      ...state,
-      routes: {
-        roadmap: { ...route, items: action.items, error: null },
-      },
-    };
+    return patchRoute(state, 'roadmap', { items: action.items, error: null });
   }
   if (action.type === 'roadmap/load-failed') {
-    return {
-      ...state,
-      routes: {
-        roadmap: { ...route, error: action.message },
-      },
-    };
+    return patchRoute(state, 'roadmap', { error: action.message });
   }
   if (action.type === 'roadmap/description-toggled') {
     const expandedItemIds = new Set(route.expandedItemIds);
@@ -75,12 +66,7 @@ export function roadmapReducer(state, action) {
     } else {
       expandedItemIds.add(action.itemId);
     }
-    return {
-      ...state,
-      routes: {
-        roadmap: { ...route, expandedItemIds },
-      },
-    };
+    return patchRoute(state, 'roadmap', { expandedItemIds });
   }
   return state;
 }

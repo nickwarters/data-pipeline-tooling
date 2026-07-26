@@ -93,6 +93,25 @@ test('roadmapReducer: loads rows without mutating route state', () => {
   assert.equal(after.routes.roadmap.items, items);
 });
 
+test('roadmapReducer: unhandled actions keep identity and patches keep chrome', () => {
+  const before = state();
+
+  assert.strictEqual(
+    roadmapReducer(before, /** @type {any} */ ({ type: 'nothing/here' })),
+    before
+  );
+
+  const failed = roadmapReducer(before, {
+    type: 'roadmap/load-failed',
+    message: 'nope',
+  });
+  assert.strictEqual(failed.chrome, before.chrome);
+  assert.strictEqual(
+    failed.routes.roadmap.expandedItemIds,
+    before.routes.roadmap.expandedItemIds
+  );
+});
+
 test('roadmapReducer: toggles one expanded description immutably', () => {
   const before = state();
   const expanded = roadmapReducer(before, {
