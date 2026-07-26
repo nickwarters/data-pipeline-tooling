@@ -5,7 +5,8 @@ Date: 2026-07-01
 ## Status
 
 Accepted, partly amended by
-[ADR-0037](./0037-question-level-remediation-resolution.md).
+[ADR-0037](./0037-question-level-remediation-resolution.md) and, for the
+per-action record's write path, by **Amendment (2026-07, #497)** below.
 
 The two-Section split (Issues = capture, Remediation = tracking), the single
 case-level `remediationDueDate` and the reportable-freeze lifecycle remain
@@ -131,6 +132,48 @@ split above.
 
 The legacy panel helper and its call site were removed; the `.cora-remediation-panel`
 style is retained solely for the styleguide demo.
+
+## Amendment (2026-07, #497) — the per-action resolution store is read-only; there is one remediation store
+
+ADR-0037 moved the _unit_ of tracking to the Question and its store to
+`answer.remediationStatus`. It left the per-action `status` / `cancelReason`
+machinery in `evaluators/remediation-actions.js` standing, noting that
+`summary-model.js` still read it. What it did not say — and what #497 asks — is
+**which store is the real one**.
+
+**Decision. `answer.remediationActions` + `answer.freeFormRemediation` +
+`answer.remediationStatus` is the Remediation model. The `actions`-typed Issue
+Capture Field store this ADR introduced (D9) is retired to a read-only
+compatibility shim.**
+
+Concretely, the write and gate halves of the per-action record are **deleted**:
+`setActionStatus`, `validateRemediationAction` (the `cancelled` ⇒ `cancelReason`
+throw), `isActionResolved`, `sentActionsForAnswer`, `allSentActions` and
+`remediationTrackingComplete`. None had a caller in `src/` after ADR-0037 — the
+tab and the access matrix stopped reading them, and the completion gate became
+`readyToClose` in `completion-actions.js`. Keeping a _second_ gate that is
+vacuously true on every real Case (no Case Type declares an `actions` field, so
+`allSentActions` always returned `[]`) beside the live one is worse than having
+no second gate: it reads like a safety net and catches nothing.
+
+What survives is **reading persisted data**, and only that:
+`coerceRemediationAction` / `coerceRemediationActions` — including this ADR's
+`string` → `{ id, text, status: 'pending' }` migration read — and
+`actionFieldKeys`. Cases stored in SharePoint from before ADR-0037 may still
+carry `actions`-field values, and `summary-model.js` renders them in the
+Summary's remediation block, so the read path stays.
+
+**Deliberately unchanged: the Summary.** Its remediation block still reads the
+capture store, so on a real Case it shows "No remediation actions sent." beside
+a fully populated Remediation tab. That is the blind spot ADR-0037 recorded as
+#497's remaining half; repointing the block at `remediationRows` changes what a
+Reviewer _sees_ on Summary, which is a Summary decision and not this one. The
+store question is settled here; the Summary's rendering of it is not yet.
+
+The completion gate's safety property is now covered end to end: an
+`Actions In Progress` Case whose Answer carries Remediation Actions and no
+`remediationStatus` cannot reach `Completed`, proven at the flow-runner seam
+against a Case Type that declares no `actions` field.
 
 ## Consequences
 
