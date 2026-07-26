@@ -6,6 +6,7 @@ import {
   CASE_TYPES,
   CASE_TYPE_IMPORTERS,
   QUESTION_BANK_IMPORTERS,
+  DuplicateCaseTypeError,
   UnknownCaseTypeError,
   displayNameFor,
   loadCaseTypeConfig,
@@ -85,6 +86,24 @@ test('case type manifest: CASE_TYPES is the single registry every derived map co
       .map((entry) => entry.slug)
       .sort()
   );
+});
+
+test('case type manifest: registry entries are frozen, so the one copy of a display name stays one copy (#527)', () => {
+  for (const entry of CASE_TYPES) {
+    assert.ok(
+      Object.isFrozen(entry),
+      `${entry.slug}'s registry entry must be frozen — the display name it ` +
+        'carries composes three SharePoint group names, and both the ' +
+        'capability and eligibility sides read it'
+    );
+    assert.throws(
+      () => {
+        /** @type {any} */ (entry).displayName = 'Mutated In Place';
+      },
+      TypeError,
+      `${entry.slug}'s display name must not be mutable in place`
+    );
+  }
 });
 
 test('case type manifest: importing the manifest evaluates no Case Type module (importers stay thunks)', () => {
@@ -216,6 +235,62 @@ test('case type manifest: registerCaseType keeps the derived maps in step with t
     delete CASE_TYPE_IMPORTERS['late-registered'];
     delete QUESTION_BANK_IMPORTERS['late-registered'];
   }
+});
+
+test('case type manifest: registerCaseType rejects a duplicate slug (#527)', () => {
+  // A second entry for a live slug is the divergence #527 exists to prevent,
+  // in its most dangerous form: `displayNameFor` reads the FIRST row,
+  // `CASE_TYPE_IMPORTERS` takes the LAST, and `permissions.caseTypes` carries
+  // BOTH. A never-provisioned `Reviewers - <second display name>` group then
+  // grants list access to the original slug, bound to a substituted importer
+  // that can point at a different SharePoint list.
+  const before = CASE_TYPES.length;
+  assert.throws(
+    () =>
+      registerCaseType({
+        slug: 'complaints',
+        displayName: 'Complaints v2',
+        importer: async () => ({
+          default: /** @type {any} */ ({ listName: 'Cases-Evil' }),
+        }),
+      }),
+    (error) =>
+      error instanceof DuplicateCaseTypeError &&
+      error.slug === 'complaints' &&
+      /already registered/.test(error.message)
+  );
+
+  assert.equal(CASE_TYPES.length, before, 'the rejected entry never lands');
+  assert.equal(displayNameFor('complaints'), 'Complaints');
+  assert.equal(
+    CASE_TYPE_IMPORTERS['complaints'],
+    CASE_TYPES.find((entry) => entry.slug === 'complaints')?.importer,
+    'the original importer must not be substituted'
+  );
+});
+
+test('case type manifest: registerCaseType rejects an entry that cannot compose group names (#527)', () => {
+  // An unvalidated entry reaches `caseTypeGroupNames(undefined)` and provisions
+  // `Reviewers - undefined` — a group name that grants a real Case source and
+  // that somebody could actually be put in.
+  const before = CASE_TYPES.length;
+  const importer = async () => ({ default: /** @type {any} */ ({}) });
+
+  for (const [entry, why] of [
+    [{ displayName: 'No Slug', importer }, 'a missing slug'],
+    [{ slug: '', displayName: 'Blank Slug', importer }, 'a blank slug'],
+    [{ slug: 'no-name', importer }, 'a missing display name'],
+    [{ slug: 'blank-name', displayName: '   ', importer }, 'a blank name'],
+    [{ slug: 'no-importer', displayName: 'No Importer' }, 'no importer'],
+  ]) {
+    assert.throws(
+      () => registerCaseType(/** @type {any} */ (entry)),
+      TypeError,
+      `registerCaseType must reject ${why}`
+    );
+  }
+
+  assert.equal(CASE_TYPES.length, before, 'no partial entry lands');
 });
 
 test('case type manifest: rejects invalid outcome configuration before a Case Type is used', async () => {

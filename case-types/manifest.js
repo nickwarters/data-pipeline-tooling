@@ -31,12 +31,12 @@ import {
 
 /** @type {CaseTypeEntry[]} */
 const registry = [
-  {
+  Object.freeze({
     slug: 'complaints',
     displayName: 'Complaints',
     importer: () => import('./complaints.js'),
     bank: () => loadQuestionBank('./banks/complaints.txt'),
-  },
+  }),
 ];
 
 /**
@@ -48,6 +48,12 @@ const registry = [
  * capability side (`permissions.caseTypes`) and the Case-source eligibility side
  * (`resolveCaseSources`, via `displayNameFor`) read this one copy. A Case Type
  * config module must not restate it.
+ *
+ * Entries are FROZEN, so "one copy" is structural rather than a convention: a
+ * display name cannot be mutated in place behind either consumer's back. The
+ * array itself stays appendable — that is `registerCaseType()`'s job — and both
+ * consumers re-derive from it on every read, so an append is seen by both at
+ * once.
  *
  * @type {readonly CaseTypeEntry[]}
  */
@@ -82,11 +88,40 @@ for (const entry of registry) deriveImporters(entry);
  * (`tests/_register-example-review.js`) use this; production Case Types belong
  * in the `registry` literal above.
  *
+ * Validated, because an entry that reaches the registry is immediately
+ * load-bearing for ACCESS. A missing display name composes the SharePoint group
+ * name `Reviewers - undefined`; a duplicate slug splits the registry against
+ * itself, since `displayNameFor()` reads the first matching row while
+ * `deriveImporters()` overwrites with the last and `permissions.caseTypes`
+ * carries both.
+ *
  * @param {CaseTypeEntry} entry
+ * @throws {TypeError} when the entry cannot compose its group names
+ * @throws {DuplicateCaseTypeError} when the slug is already registered
  */
 export function registerCaseType(entry) {
-  registry.push(entry);
-  deriveImporters(entry);
+  const nonEmpty = (/** @type {unknown} */ value) =>
+    typeof value === 'string' && value.trim().length > 0;
+
+  if (!nonEmpty(entry?.slug))
+    throw new TypeError(
+      'registerCaseType: a Case Type must declare a non-empty `slug`.'
+    );
+  if (!nonEmpty(entry.displayName))
+    throw new TypeError(
+      `registerCaseType: Case Type "${entry.slug}" must declare a non-empty ` +
+        "`displayName` — it composes this type's three SharePoint group names."
+    );
+  if (typeof entry.importer !== 'function')
+    throw new TypeError(
+      `registerCaseType: Case Type "${entry.slug}" must declare an importer thunk.`
+    );
+  if (registry.some((caseType) => caseType.slug === entry.slug))
+    throw new DuplicateCaseTypeError(entry.slug);
+
+  const frozen = Object.freeze({ ...entry });
+  registry.push(frozen);
+  deriveImporters(frozen);
 }
 
 /**
@@ -128,6 +163,26 @@ export class UnknownCaseTypeError extends Error {
     this.name = 'UnknownCaseTypeError';
     this.slug = slug;
     this.knownSlugs = knownSlugs;
+  }
+}
+
+/**
+ * A second registration for a slug that is already registered. Rejected rather
+ * than deduped: the two entries would carry two different display names, and a
+ * caller that registers twice has a bug worth seeing, not a preference to
+ * silently honour.
+ */
+export class DuplicateCaseTypeError extends Error {
+  /** @param {string} slug */
+  constructor(slug) {
+    super(
+      `Case Type slug "${slug}" is already registered. A slug maps to exactly ` +
+        'one display name and one importer: a second entry would split the ' +
+        'registry, granting access under a group name derived from one entry ' +
+        "while loading the other entry's module."
+    );
+    this.name = 'DuplicateCaseTypeError';
+    this.slug = slug;
   }
 }
 

@@ -74,7 +74,18 @@ export const permissions = {
   // *thunks* only, so reading it here stays synchronous and evaluates no Case
   // Type module — capability resolution remains boot-critical and lazy
   // (ADR-0004).
-  caseTypes: CASE_TYPES.map(({ slug, displayName }) => ({ slug, displayName })),
+  //
+  // Derived ON READ, not snapshotted at module scope (#527). A snapshot was
+  // taken the moment this module was first evaluated, so any Case Type
+  // registered afterwards was invisible here while `resolveCaseSources()` —
+  // which reads the registry live through `displayNameFor()` — already granted
+  // it. The two sides then disagreed about the same user depending on nothing
+  // but module-evaluation order: the capability layer called them a Visitor
+  // with no role at all, while the eligibility layer handed them a Case source.
+  // A getter keeps the single source of truth single at every point in time.
+  get caseTypes() {
+    return CASE_TYPES.map(({ slug, displayName }) => ({ slug, displayName }));
+  },
 };
 
 /**

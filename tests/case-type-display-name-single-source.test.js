@@ -13,27 +13,39 @@
 // the source, or the reverse. This test proves there is now exactly ONE copy:
 // it renames the registry entry and asserts BOTH consumers move with it.
 //
-// The rename must land before `permissions.js` is first evaluated (it projects
-// `CASE_TYPES` at module scope), so every import below is dynamic and ordered.
+// Every import below is static. `permissions.caseTypes` is derived ON READ from
+// the live registry, so no ordering workaround is needed: a rename (or a late
+// `registerCaseType`) is seen by both consumers whenever it happens.
 
-import { test } from 'node:test';
+import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 
-const manifest = await import('../case-types/manifest.js');
+import { CASE_TYPES, registerCaseType } from '../case-types/manifest.js';
+import {
+  permissions,
+  resolveCapabilities,
+  caseTypeGroupNames,
+} from '../src/services/permissions.js';
+import { resolveCaseSources } from '../src/setup/resolve-eligible-case-types.js';
 
-const complaints = manifest.CASE_TYPES.find((c) => c.slug === 'complaints');
-assert.ok(complaints, 'the complaints Case Type must be registered');
-const ORIGINAL_NAME = complaints.displayName;
+/** @typedef {import('../case-types/manifest.js').CaseTypeEntry} CaseTypeEntry */
+
+// Registry entries are frozen, so a rename REPLACES the entry rather than
+// mutating it in place — and the original is put back afterwards. Leaving a
+// renamed production Case Type behind would only be invisible because
+// `node --test` gives each file its own process.
+const registry = /** @type {CaseTypeEntry[]} */ (CASE_TYPES);
+const index = registry.findIndex((entry) => entry.slug === 'complaints');
+assert.ok(index >= 0, 'the complaints Case Type must be registered');
+const ORIGINAL = registry[index];
 const RENAMED = 'Renamed Complaints';
-complaints.displayName = RENAMED;
-
-const { permissions, resolveCapabilities, caseTypeGroupNames } =
-  await import('../src/services/permissions.js');
-const { resolveCaseSources } =
-  await import('../src/setup/resolve-eligible-case-types.js');
+registry[index] = Object.freeze({ ...ORIGINAL, displayName: RENAMED });
+after(() => {
+  registry[index] = ORIGINAL;
+});
 
 const renamedGroups = caseTypeGroupNames(RENAMED);
-const staleGroups = caseTypeGroupNames(ORIGINAL_NAME);
+const staleGroups = caseTypeGroupNames(ORIGINAL.displayName);
 
 test('registry rename: permissions.caseTypes moves with the registry display name', () => {
   assert.deepEqual(
@@ -97,5 +109,46 @@ test('registry rename: the resolved Case source reports the registry display nam
     source?.displayName,
     RENAMED,
     'CaseSource.displayName is the registry name, not a config copy'
+  );
+});
+
+test('a Case Type registered AFTER permissions.js was evaluated reaches BOTH consumers (#527)', async () => {
+  // The regression this file exists to prevent, in its sharpest form.
+  // `permissions.caseTypes` used to be a module-scope snapshot of `CASE_TYPES`,
+  // so anything registered later was invisible to the capability side while
+  // the eligibility side saw it: a user the capability layer called a Visitor
+  // was simultaneously granted that Case Type's source.
+  registerCaseType({
+    slug: 'late-single-source',
+    displayName: 'Late Single Source',
+    importer: async () => ({
+      default: /** @type {any} */ ({
+        listName: 'Cases-LateSingleSource',
+        questions: [],
+        outcomeOptions: [{ id: 'pass', wording: 'Pass', severity: 0 }],
+        defaultOutcomeId: 'pass',
+      }),
+    }),
+  });
+
+  const groups = caseTypeGroupNames('Late Single Source');
+  const capabilities = resolveCapabilities([groups.listAccess]);
+  assert.deepEqual(
+    capabilities.listAccessCaseTypes,
+    ['late-single-source'],
+    'the capability side must read the live registry, not a boot-time snapshot'
+  );
+  assert.equal(capabilities.isReviewer, true, 'list access implies Reviewer');
+  assert.equal(
+    capabilities.isVisitor,
+    false,
+    'a user granted a Case source is never simultaneously a Visitor'
+  );
+
+  const sources = await resolveCaseSources([groups.listAccess]);
+  assert.deepEqual(
+    sources.map((s) => s.slug),
+    ['late-single-source'],
+    'and the eligibility side must agree with it'
   );
 });
