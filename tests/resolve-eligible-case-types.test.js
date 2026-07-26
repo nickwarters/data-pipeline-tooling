@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 
 import {
   allocationSourcesFromCaseSources,
+  loadCaseTypeSources,
   resolveCaseSourcesFromCaseTypes,
   resolveCaseSources,
   resolveAppCaseSources,
@@ -479,4 +480,156 @@ test('resolveAppCaseSources: threads only a Case Type Owner eligible source to a
     ['complaints']
   );
   assert.deepEqual(context.journeyCaseSources, []);
+  assert.deepEqual(context.unavailableCaseTypes, []);
+});
+
+// ===== per-Case-Type containment at boot (#493) =====
+//
+// A Case Type module that throws when it is evaluated — a syntax error, an
+// invalid outcome config, an unknown shared General Question key — must cost
+// only its own Case Type, exactly as a broken page costs only its own route.
+
+/** A Case Type module that blows up the moment it is evaluated. */
+const brokenImporter = () => {
+  throw new SyntaxError('example-review is broken');
+};
+
+/** @param {Partial<Record<string, any>>} [overrides] */
+function importersWithBrokenExampleReview(overrides = {}) {
+  return /** @type {any} */ ({
+    complaints: CASE_TYPE_IMPORTERS['complaints'],
+    'example-review': brokenImporter,
+    ...overrides,
+  });
+}
+
+test('loadCaseTypeSources: drops the Case Type whose module throws and keeps the rest', async () => {
+  /** @type {any[]} */
+  const reported = [];
+  const { sources, unavailable } = await loadCaseTypeSources(
+    ['complaints', 'example-review'],
+    importersWithBrokenExampleReview(),
+    (failure) => reported.push(failure)
+  );
+
+  assert.deepEqual(
+    sources.map((source) => source.slug),
+    ['complaints'],
+    'the working Case Type still resolves'
+  );
+  assert.deepEqual(
+    unavailable.map(({ slug, displayName }) => ({ slug, displayName })),
+    [{ slug: 'example-review', displayName: 'Example Review' }]
+  );
+  assert.equal(reported.length, 1, 'the failing slug is reported once');
+  assert.equal(reported[0].slug, 'example-review');
+  assert.ok(
+    reported[0].error instanceof SyntaxError,
+    'the underlying error is carried, not swallowed'
+  );
+});
+
+test('loadCaseTypeSources: logs the failing slug and its error by default', async () => {
+  const original = console.error;
+  /** @type {any[][]} */
+  const logged = [];
+  console.error = (...args) => logged.push(args);
+  try {
+    await loadCaseTypeSources(
+      ['example-review'],
+      importersWithBrokenExampleReview()
+    );
+  } finally {
+    console.error = original;
+  }
+
+  assert.equal(logged.length, 1);
+  assert.ok(
+    logged[0].some((arg) => String(arg).includes('example-review')),
+    'the failing slug is named in the log'
+  );
+  assert.ok(
+    logged[0].some((arg) => arg instanceof SyntaxError),
+    'the error is logged'
+  );
+});
+
+test('loadCaseTypeSources: falls back to the slug when the failure has no registered display name', async () => {
+  const { sources, unavailable } = await loadCaseTypeSources(
+    ['not-registered'],
+    /** @type {any} */ ({ 'not-registered': brokenImporter }),
+    () => {}
+  );
+
+  assert.deepEqual(sources, []);
+  assert.deepEqual(
+    unavailable.map(({ slug, displayName }) => ({ slug, displayName })),
+    [{ slug: 'not-registered', displayName: 'not-registered' }]
+  );
+});
+
+test('loadCaseTypeSources: an unregistered slug is dropped, never resolved namelessly', async () => {
+  const { sources, unavailable } = await loadCaseTypeSources(
+    ['not-registered'],
+    /** @type {any} */ ({
+      'not-registered': async () => ({ default: minimalConfig() }),
+    }),
+    () => {}
+  );
+
+  assert.deepEqual(sources, [], 'no source without a registry displayName');
+  assert.deepEqual(
+    unavailable.map((failure) => failure.slug),
+    ['not-registered']
+  );
+});
+
+test('resolveAppCaseSources: a broken Case Type cannot leak into any resolved source set', async () => {
+  const context = await resolveAppCaseSources(
+    ['Reviewer Managers', 'Reviewers - Example Review'],
+    ['example-review', 'complaints'],
+    {
+      importers: importersWithBrokenExampleReview(),
+      reportUnavailable: () => {},
+    }
+  );
+
+  for (const [name, sources] of [
+    ['caseSources', context.caseSources],
+    ['journeyCaseSources', context.journeyCaseSources],
+  ]) {
+    assert.equal(
+      /** @type {any[]} */ (sources).some(
+        (source) => source.slug === 'example-review'
+      ),
+      false,
+      `${name} must not carry the broken Case Type in any form`
+    );
+  }
+  assert.deepEqual(
+    context.caseSources.map((source) => source.slug),
+    ['complaints'],
+    'the working Case Type is still usable'
+  );
+  assert.deepEqual(
+    allocationSourcesFromCaseSources(context.caseSources).map((s) => s.slug),
+    ['complaints'],
+    'allocation cannot draw from the broken Case Type either'
+  );
+  assert.deepEqual(
+    context.unavailableCaseTypes.map(({ slug, displayName }) => ({
+      slug,
+      displayName,
+    })),
+    [{ slug: 'example-review', displayName: 'Example Review' }]
+  );
+});
+
+test('resolveCaseSources: a user whose only Case Type is broken gets an empty list, not a crash', async () => {
+  const sources = await resolveCaseSources(['Reviewers - Example Review'], {
+    importers: importersWithBrokenExampleReview(),
+    reportUnavailable: () => {},
+  });
+
+  assert.deepEqual(sources, []);
 });
