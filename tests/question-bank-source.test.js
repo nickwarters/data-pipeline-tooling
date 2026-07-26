@@ -2,9 +2,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { readFileSync } from 'node:fs';
-
-import * as source from '../src/pages/question-bank/question-bank-source.js';
 import {
   loadQuestionBanks,
   normaliseQuestionBank,
@@ -146,18 +143,11 @@ test('#521 loadQuestionBanks: a broken artifact costs its own bank, not the othe
   ]);
 });
 
-test('#521 question-bank-source performs no I/O at module evaluation', () => {
-  const text = readFileSync(
-    new URL(
-      '../src/pages/question-bank/question-bank-source.js',
-      import.meta.url
-    ),
-    'utf8'
-  );
-
-  assert.equal(/^export const \w+ = await/m.test(text), false);
-  assert.equal('questionBanks' in source, false);
-});
+// #521's "importing this module performs no I/O" contract is enforced by
+// tests/question-bank-import-io-contract.test.js, which imports the module in a
+// child process with the real bank-reading primitives counted. A source-text
+// assertion cannot do it: a rename, a parenthesised `await`, or a split
+// statement walks straight past one.
 
 test('questionBanks: every live case type carries label definitions', async () => {
   const { banks } = await loadQuestionBanks();

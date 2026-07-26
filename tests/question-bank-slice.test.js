@@ -671,7 +671,13 @@ function mountSlice(deps, ctx = context()) {
   };
 }
 
-test('#521 importing the bank source and slice performs no I/O; start() does the single load', async () => {
+// The "no I/O at import" half of #521 cannot be proved from inside this
+// process: a module-scope load would run the real QUESTION_BANK_IMPORTERS,
+// which the fake importer below never sees, so its counter would stay 0 either
+// way. tests/question-bank-import-io-contract.test.js proves it in a child
+// process with the real primitives counted; this test owns the other half —
+// start() performs exactly one load, through the injected seam.
+test('#521 start() performs the single bank load, through the injected importers', async () => {
   let calls = 0;
   const importers = {
     alpha: async () => {
@@ -692,11 +698,6 @@ test('#521 importing the bank source and slice performs no I/O; start() does the
       };
     },
   };
-  await import('../src/pages/question-bank/bank-slice.js');
-  await import('../src/pages/question-bank/question-bank-source.js');
-
-  assert.equal(calls, 0);
-
   const mounted = mountSlice({
     loadBanks: (/** @type {any} */ _unused) =>
       loadQuestionBanks(/** @type {any} */ (importers)),
