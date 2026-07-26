@@ -131,7 +131,7 @@ test('CaseMachine permits the final close only for the Assigned Reviewer of an A
   const answers = {
     'q-a': {
       value: 'No',
-      remediationActions: [{ id: 'a1', text: 'Call back', completed: false }],
+      remediationActions: [{ id: 'a1', text: 'Call back' }],
     },
   };
 
@@ -164,7 +164,7 @@ test('CaseMachine Send Actions stamps the reportable snapshot without completedA
   const answers = {
     'q-needs': {
       value: 'No',
-      remediationActions: [{ id: 'ra-0', text: 'Retrain.', completed: false }],
+      remediationActions: [{ id: 'ra-0', text: 'Retrain.' }],
     },
   };
   const fields = machineFor('In-progress').transitionToActionsInProgress(

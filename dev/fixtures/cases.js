@@ -209,7 +209,6 @@ export const cases = [
           {
             id: 'q-cm-ack-ra-0',
             text: 'Acknowledge the complaint in writing within the regulatory timeframe.',
-            completed: false,
           },
         ],
       },
@@ -224,7 +223,6 @@ export const cases = [
           {
             id: 'q-cm-redress-ra-0',
             text: 'Recalculate and offer appropriate redress to the customer.',
-            completed: false,
           },
         ],
       },
@@ -285,7 +283,6 @@ export const cases = [
           {
             id: 'q-cm-ack-ra-0',
             text: 'Acknowledge the complaint in writing within the regulatory timeframe.',
-            completed: true,
           },
         ],
         // Resolved on the Remediation tab (#499). The redress Question below is
@@ -317,7 +314,6 @@ export const cases = [
           {
             id: 'q-cm-redress-ra-0',
             text: 'Recalculate and offer appropriate redress to the customer.',
-            completed: false,
           },
         ],
         capture: {

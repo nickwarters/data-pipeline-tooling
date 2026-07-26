@@ -131,16 +131,14 @@ function panelState() {
         id: 'c1',
         caseType: 'complaints',
         title: 'c1',
-        status: 'In-progress',
+        status: 'Actions In Progress',
         assignedReviewer: 'reviewer',
         responsibleParty: 'rp-1',
-        dueDate: '2026-01-01T00:00:00Z',
+        remediationDueDate: '2026-01-01T00:00:00Z',
         answers: {
           q1: {
             value: 'No',
-            remediationActions: [
-              { id: 'a1', text: 'Fix c1', completed: false },
-            ],
+            remediationActions: [{ id: 'a1', text: 'Fix c1' }],
           },
         },
         conversation: [

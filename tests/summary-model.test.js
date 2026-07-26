@@ -100,9 +100,7 @@ test('buildSummaryModel: remediationActionCount sums selected actions + free-for
     // failed with one selected canned action → 1 (q-resolve is now not applicable)
     'q-needs': {
       value: 'No',
-      remediationActions: [
-        { id: 'q-needs-ra-0', text: 'Retrain agent.', completed: false },
-      ],
+      remediationActions: [{ id: 'q-needs-ra-0', text: 'Retrain agent.' }],
     },
   });
   const model = buildSummaryModel(catalogue, answers);
@@ -124,9 +122,7 @@ test('buildSummaryModel: failures list each failed Answer with its selected acti
     'q-needs': { value: 'Yes' },
     'q-resolve': {
       value: 'No',
-      remediationActions: [
-        { id: 'q-resolve-ra-0', text: 'Escalate.', completed: false },
-      ],
+      remediationActions: [{ id: 'q-resolve-ra-0', text: 'Escalate.' }],
       freeFormRemediation: 'Call back within 24h',
     },
   });
@@ -169,9 +165,7 @@ test('buildSummaryModel: failure with a multi-choice value joins selections for 
   const model = buildSummaryModel(cat, {
     'q-prod': {
       value: ['A', 'B'],
-      remediationActions: [
-        { id: 'q-prod-ra-0', text: 'Fix B.', completed: false },
-      ],
+      remediationActions: [{ id: 'q-prod-ra-0', text: 'Fix B.' }],
     },
   });
   assert.deepEqual(model.failures, [

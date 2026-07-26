@@ -241,7 +241,6 @@ test('in-memory flow runner completes the remediation loop through Send Actions 
         {
           id: 'q-needs-ra-0',
           text: 'Retrain agent on needs-identification protocol.',
-          completed: false,
         },
       ],
       remediationStatus: { status: 'complete' },
@@ -415,7 +414,6 @@ test('an Actions In Progress Case cannot close while a sent Remediation Action i
           {
             id: 'q-needs-ra-0',
             text: 'Retrain agent on needs-identification protocol.',
-            completed: false,
           },
         ],
       },

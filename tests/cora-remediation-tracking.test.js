@@ -83,9 +83,7 @@ const CATALOGUE = [
 const REMEDIATED = {
   q1: {
     value: 'No',
-    remediationActions: [
-      { id: 'a1', text: 'Call the customer back', completed: false },
-    ],
+    remediationActions: [{ id: 'a1', text: 'Call the customer back' }],
     freeFormRemediation: 'Apologise in writing',
   },
   // Failed, but the Reviewer attached no remediation — never a row.
@@ -159,7 +157,7 @@ test('RemediationTracking: a passed Question with remediation attached is not a 
   el.update(CATALOGUE, {
     q1: {
       value: 'Yes',
-      remediationActions: [{ id: 'a1', text: 'Stale', completed: false }],
+      remediationActions: [{ id: 'a1', text: 'Stale' }],
     },
   });
   assert.ok(findByClass(el, 'cora-empty cora-remediation-tracking-empty'));
@@ -173,7 +171,7 @@ test('RemediationTracking: an observer sees the resolution but no controls', () 
   el.update(CATALOGUE, {
     q1: {
       value: 'No',
-      remediationActions: [{ id: 'a1', text: 'Call back', completed: false }],
+      remediationActions: [{ id: 'a1', text: 'Call back' }],
       remediationStatus: { status: 'cancelled', details: 'Customer declined' },
     },
   });

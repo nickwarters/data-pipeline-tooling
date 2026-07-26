@@ -78,7 +78,7 @@ test('answerEdited: an Answer that stops failing sheds its failure-lifecycle key
       q1: {
         value: 'No',
         capture: { rootCause: 'Rushed' },
-        remediationActions: [{ id: 'ra-0', text: 'Retrain', completed: false }],
+        remediationActions: [{ id: 'ra-0', text: 'Retrain' }],
         freeFormRemediation: 'Escalate',
       },
     }),
@@ -196,7 +196,7 @@ test('remediationActionToggled: ticking writes the selection onto the Answer', (
   });
 
   assert.deepEqual(next?.q1.remediationActions, [
-    { id: 'ra-0', text: 'Retrain', completed: false },
+    { id: 'ra-0', text: 'Retrain' },
   ]);
 });
 
@@ -204,7 +204,7 @@ test('remediationActionToggled: ticking preserves the other selected actions', (
   const next = remediationActionToggled({
     answers: selectionAnswers({
       value: 'No',
-      remediationActions: [{ id: 'ra-0', text: 'Retrain', completed: false }],
+      remediationActions: [{ id: 'ra-0', text: 'Retrain' }],
     }),
     questionId: 'q1',
     action: { id: 'ra-1', text: 'Update script' },
@@ -213,8 +213,8 @@ test('remediationActionToggled: ticking preserves the other selected actions', (
   });
 
   assert.deepEqual(next?.q1.remediationActions, [
-    { id: 'ra-0', text: 'Retrain', completed: false },
-    { id: 'ra-1', text: 'Update script', completed: false },
+    { id: 'ra-0', text: 'Retrain' },
+    { id: 'ra-1', text: 'Update script' },
   ]);
 });
 
@@ -222,7 +222,7 @@ test('remediationActionToggled: unticking the last action drops the key', () => 
   const next = remediationActionToggled({
     answers: selectionAnswers({
       value: 'No',
-      remediationActions: [{ id: 'ra-0', text: 'Retrain', completed: false }],
+      remediationActions: [{ id: 'ra-0', text: 'Retrain' }],
     }),
     questionId: 'q1',
     action: { id: 'ra-0', text: 'Retrain' },
@@ -236,7 +236,7 @@ test('remediationActionToggled: unticking the last action drops the key', () => 
 test('remediationActionToggled: a redundant tick or untick writes nothing', () => {
   const selected = selectionAnswers({
     value: 'No',
-    remediationActions: [{ id: 'ra-0', text: 'Retrain', completed: false }],
+    remediationActions: [{ id: 'ra-0', text: 'Retrain' }],
   });
   const action = { id: 'ra-0', text: 'Retrain' };
   assert.equal(
@@ -332,7 +332,7 @@ test('remediationFreeFormEdited: writes nothing without the guard or the Answer'
 function trackedAnswers(
   answer = {
     value: 'No',
-    remediationActions: [{ id: 'a1', text: 'Do it', completed: false }],
+    remediationActions: [{ id: 'a1', text: 'Do it' }],
   }
 ) {
   return /** @type {any} */ ({ q1: answer });

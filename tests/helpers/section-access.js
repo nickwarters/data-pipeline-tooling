@@ -59,7 +59,7 @@ export function makeCaseWithRemediation(overrides = {}) {
     answers: {
       q1: {
         value: 'No',
-        remediationActions: [{ id: 'a', text: 'Call back', completed: false }],
+        remediationActions: [{ id: 'a', text: 'Call back' }],
       },
     },
     ...overrides,

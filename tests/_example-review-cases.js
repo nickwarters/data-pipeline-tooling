@@ -219,7 +219,6 @@ export const exampleReviewCases = [
           {
             id: 'ra-10-1',
             text: 'Ensure agent identifies customer needs before proceeding',
-            completed: false,
           },
         ],
       },
@@ -245,7 +244,6 @@ export const exampleReviewCases = [
           {
             id: 'ra-11-1',
             text: 'Review greeting standards and apply correct opening',
-            completed: false,
           },
         ],
       },

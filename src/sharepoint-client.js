@@ -41,7 +41,14 @@
  */
 
 /**
- * @typedef {{ value: string | string[], justification?: string, remediationActions?: Array<{id: string, text: string, completed: boolean}>, freeFormRemediation?: string, remediationStatus?: RemediationStatus, attributedParty?: { loginName: string, displayName: string }, remediationDetails?: Record<string, string>, capture?: Record<string, string | { loginName: string, displayName: string } | Array<string | RemediationAction>> }} Answer
+ * A selected Remediation Action carried no resolution of its own: `completed`
+ * was written `false` on select and never set `true` anywhere, so it is dropped
+ * from the shape (#497). Resolution is question-level, in `remediationStatus`
+ * (ADR-0037). Persisted Answers blobs written before this may still carry the
+ * property; it is simply not read — an unknown key round-trips harmlessly
+ * through the JSON blob, so no migration and no coercion is needed.
+ *
+ * @typedef {{ value: string | string[], justification?: string, remediationActions?: Array<{id: string, text: string}>, freeFormRemediation?: string, remediationStatus?: RemediationStatus, attributedParty?: { loginName: string, displayName: string }, remediationDetails?: Record<string, string>, capture?: Record<string, string | { loginName: string, displayName: string } | Array<string | RemediationAction>> }} Answer
  */
 
 /**

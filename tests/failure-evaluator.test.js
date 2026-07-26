@@ -214,9 +214,7 @@ test('materializeRemediationActions: preserves justification on failed answer', 
 test('materializeRemediationActions: preserves selected actions on a still-failing answer', () => {
   const out = materializeRemediationActions(Q_FAIL_NO, {
     value: 'No',
-    remediationActions: [
-      { id: 'q-needs-ra-0', text: 'Retrain agent.', completed: false },
-    ],
+    remediationActions: [{ id: 'q-needs-ra-0', text: 'Retrain agent.' }],
   });
   assert.equal(out.remediationActions?.length, 1);
   assert.equal(out.remediationActions?.[0].text, 'Retrain agent.');
@@ -225,9 +223,7 @@ test('materializeRemediationActions: preserves selected actions on a still-faili
 test('materializeRemediationActions: strips remediationActions when answer becomes passing', () => {
   const stale = {
     value: 'Yes',
-    remediationActions: [
-      { id: 'q-needs-ra-0', text: 'Retrain agent.', completed: false },
-    ],
+    remediationActions: [{ id: 'q-needs-ra-0', text: 'Retrain agent.' }],
   };
   const out = materializeRemediationActions(Q_FAIL_NO, stale);
   assert.equal('remediationActions' in out, false);
@@ -236,9 +232,7 @@ test('materializeRemediationActions: strips remediationActions when answer becom
 test('materializeRemediationActions: retains remediationStatus on a still-failing answer (#499)', () => {
   const out = materializeRemediationActions(Q_FAIL_NO, {
     value: 'No',
-    remediationActions: [
-      { id: 'q-needs-ra-0', text: 'Retrain agent.', completed: false },
-    ],
+    remediationActions: [{ id: 'q-needs-ra-0', text: 'Retrain agent.' }],
     remediationStatus: { status: 'complete' },
   });
   assert.deepEqual(out.remediationStatus, { status: 'complete' });
@@ -299,9 +293,7 @@ test('materializeRemediationActions: strips both attributedParty and remediation
   const stale = {
     value: 'Yes',
     attributedParty: { loginName: 'dev\\alex', displayName: 'Alex Doe' },
-    remediationActions: [
-      { id: 'q-needs-ra-0', text: 'Retrain agent.', completed: false },
-    ],
+    remediationActions: [{ id: 'q-needs-ra-0', text: 'Retrain agent.' }],
   };
   const out = materializeRemediationActions(Q_FAIL_NO, stale);
   assert.equal('attributedParty' in out, false);

@@ -183,9 +183,7 @@ test('summaryView renders failures, selected remediation and read-only capture',
         },
         'q-needs': {
           value: 'No',
-          remediationActions: [
-            { id: 'ra-1', text: 'Retrain.', completed: false },
-          ],
+          remediationActions: [{ id: 'ra-1', text: 'Retrain.' }],
         },
       },
     })

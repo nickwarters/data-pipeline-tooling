@@ -157,10 +157,7 @@ export function remediationActionToggled({
   let nextList;
   if (selected) {
     if (list.some((a) => a.id === action.id)) return null;
-    nextList = [
-      ...list,
-      { id: action.id, text: action.text, completed: false },
-    ];
+    nextList = [...list, { id: action.id, text: action.text }];
   } else {
     if (!list.some((a) => a.id === action.id)) return null;
     nextList = list.filter((a) => a.id !== action.id);

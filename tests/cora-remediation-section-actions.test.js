@@ -20,9 +20,7 @@ test('CORARemediationSection: read-only viewer shows only the selected remediati
   el.answers = {
     'q-needs': {
       value: 'No',
-      remediationActions: [
-        { id: 'q-needs-ra-1', text: 'Update script.', completed: false },
-      ],
+      remediationActions: [{ id: 'q-needs-ra-1', text: 'Update script.' }],
     },
   };
   el.connectedCallback();
@@ -96,9 +94,7 @@ test('CORARemediationSection: editable viewer pre-ticks actions already selected
   el.answers = {
     'q-needs': {
       value: 'No',
-      remediationActions: [
-        { id: 'q-needs-ra-1', text: 'Update script.', completed: false },
-      ],
+      remediationActions: [{ id: 'q-needs-ra-1', text: 'Update script.' }],
     },
   };
   el.connectedCallback();
@@ -144,9 +140,7 @@ test('CORARemediationSection: unticking a selected action dispatches selected:fa
   el.answers = {
     'q-needs': {
       value: 'No',
-      remediationActions: [
-        { id: 'q-needs-ra-0', text: 'Retrain agent.', completed: false },
-      ],
+      remediationActions: [{ id: 'q-needs-ra-0', text: 'Retrain agent.' }],
     },
   };
   el.connectedCallback();

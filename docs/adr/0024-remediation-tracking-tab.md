@@ -170,6 +170,19 @@ a fully populated Remediation tab. That is the blind spot ADR-0037 recorded as
 Reviewer _sees_ on Summary, which is a Summary decision and not this one. The
 store question is settled here; the Summary's rendering of it is not yet.
 
+**One more store nothing wrote: `remediationActions[].completed`.** The
+selected-action record carried a `completed` boolean, written `false` on select
+and never set `true` anywhere in `src/`. The Responsible Party dashboard counted
+`!action.completed` as "outstanding", so that count could never go down however
+much remediation the Reviewer resolved — the same family of defect as the
+capture store, on a different surface. The dashboard now derives outstanding
+work from the model above: an Answer that carries remediation and whose
+`remediationStatus` is not yet _resolved_, on a Case past **Send Actions**
+(before that, nothing has been asked of the Responsible Party). `completed` is
+**deleted** from the Answer shape, with no coercion: unlike the `actions`
+capture field, nothing renders it, so a persisted blob still carrying the
+property simply round-trips unread.
+
 The completion gate's safety property is now covered end to end: an
 `Actions In Progress` Case whose Answer carries Remediation Actions and no
 `remediationStatus` cannot reach `Completed`, proven at the flow-runner seam

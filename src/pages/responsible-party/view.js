@@ -3,16 +3,44 @@ import { h } from '../../lib/html.js';
 import { caseRouteFor } from '../../lib/case-route-links.js';
 import { CASE_STATUS } from '../../lib/case-statuses.js';
 import { isOverdue } from '../../evaluators/overdue-evaluator.js';
+import {
+  answerRemediation,
+  isRemediationResolved,
+} from '../../evaluators/remediation-status.js';
+import { isReportable } from '../../services/section-access.js';
 import { caseActionsColumn } from '../../views/case-columns.js';
 import { dataTableView } from '../../views/data-table.js';
 
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
 
-/** @param {CaseRow} row */
-export function openRemediationActions(row) {
-  return Object.values(row.answers).flatMap((answer) =>
-    (answer.remediationActions ?? []).filter((action) => !action.completed)
-  );
+/**
+ * What remediation is still outstanding on one Case, as the text of each thing
+ * that has to be put right.
+ *
+ * Derived from the **one remediation model** (ADR-0037, ADR-0024's #497
+ * amendment): the Remediation Actions and free-form text on each Answer, minus
+ * every Answer the Assigned Reviewer has resolved on the Remediation tab. It
+ * used to filter `action.completed`, a boolean written `false` on select and
+ * never set `true` anywhere — so this count could never go down however much
+ * remediation the Reviewer resolved (#497).
+ *
+ * Only *sent* remediation counts: before Send Actions the Reviewer is still
+ * capturing, and nothing has been asked of the Responsible Party yet.
+ *
+ * @param {CaseRow} row
+ * @returns {string[]}
+ */
+export function outstandingRemediation(row) {
+  if (!isReportable(row.status)) return [];
+  return Object.values(row.answers ?? {}).flatMap((answer) => {
+    const remediation = answerRemediation(answer);
+    if (!remediation || isRemediationResolved(answer.remediationStatus)) {
+      return [];
+    }
+    const texts = remediation.actions.map((action) => action.text);
+    if (remediation.freeForm) texts.push(remediation.freeForm);
+    return texts;
+  });
 }
 
 /** @param {CaseRow} row @param {string} currentUserId */
@@ -64,7 +92,7 @@ export function deriveResponsibleParty(cases, currentUserId, now = new Date()) {
         .map(([month, counts]) => ({ month, counts })),
     },
     remediationCases: cases.filter(
-      (row) => openRemediationActions(row).length > 0
+      (row) => outstandingRemediation(row).length > 0
     ),
     unreadCases: cases.filter((row) => hasUnreadMessages(row, currentUserId)),
   };
@@ -167,10 +195,7 @@ function remediationColumns() {
     {
       key: 'action',
       label: 'Action required',
-      value: (row) =>
-        openRemediationActions(row)
-          .map((action) => action.text)
-          .join('; '),
+      value: (row) => outstandingRemediation(row).join('; '),
     },
   ];
 }

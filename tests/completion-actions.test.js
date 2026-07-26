@@ -58,7 +58,7 @@ test('completionPatch freezes outcome and ADR-0019 effective columns in the life
   const answers = {
     q1: {
       value: 'No',
-      remediationActions: [{ id: 'a1', text: 'Fix', completed: false }],
+      remediationActions: [{ id: 'a1', text: 'Fix' }],
     },
   };
   const patch = completionPatch({
@@ -102,7 +102,7 @@ test('completionPatch atomically clears hold fields when either transition leave
     answers: {
       q1: {
         value: 'No',
-        remediationActions: [{ id: 'a1', text: 'Fix', completed: false }],
+        remediationActions: [{ id: 'a1', text: 'Fix' }],
       },
     },
   });
@@ -270,7 +270,7 @@ const CATALOGUE = [
 const UNRESOLVED = {
   q1: {
     value: 'No',
-    remediationActions: [{ id: 'a1', text: 'Call back', completed: false }],
+    remediationActions: [{ id: 'a1', text: 'Call back' }],
   },
 };
 

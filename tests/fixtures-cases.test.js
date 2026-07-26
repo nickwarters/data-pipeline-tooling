@@ -16,6 +16,8 @@ import { exampleReviewCases as cases } from './_example-review-cases.js';
 import { cases as mockCases } from '../dev/fixtures/cases.js';
 import { personas } from '../dev/fixtures/personas.js';
 import { coerceRemediationActions } from '../src/evaluators/remediation-actions.js';
+import { isRemediationResolved } from '../src/evaluators/remediation-status.js';
+import { outstandingRemediation } from '../src/pages/responsible-party/view.js';
 
 test('fixtures exercise all three lifecycle statuses (ADR-0023)', () => {
   const statuses = new Set(cases.map((c) => c.status));
@@ -101,11 +103,19 @@ test('a mock complaints Case has remediation sent and still in progress (#495)',
   assert.equal(row.effectiveOutcome, row.outcomeAtCompletion);
   assert.equal(row.outcomeOverridden, false);
 
-  // Still outstanding: at least one sent action is not yet completed.
-  const open = Object.values(row.answers).flatMap((answer) =>
-    (answer.remediationActions ?? []).filter((action) => !action.completed)
+  // Still outstanding: at least one Question's remediation is unresolved, and
+  // at least one other is resolved — so the demo Case exercises both halves of
+  // the Responsible Party's outstanding count (#497).
+  assert.ok(
+    outstandingRemediation(row).length > 0,
+    'at least one sent remediation is still outstanding'
   );
-  assert.ok(open.length > 0, 'at least one sent action is still outstanding');
+  assert.ok(
+    Object.values(row.answers).some((answer) =>
+      isRemediationResolved(answer.remediationStatus)
+    ),
+    'at least one sent remediation has been resolved'
+  );
 });
 
 test('the sent-to-adviser Case is addressed to a Responsible Party persona (#495)', () => {

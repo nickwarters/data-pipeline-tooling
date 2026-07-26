@@ -1040,7 +1040,7 @@ test('dashboard pure view composes every real panel for a multi-role user', () =
       answers: {
         q1: {
           value: 'No',
-          remediationActions: [{ id: 'r1', text: 'Fix it', completed: false }],
+          remediationActions: [{ id: 'r1', text: 'Fix it' }],
         },
       },
       conversation: [

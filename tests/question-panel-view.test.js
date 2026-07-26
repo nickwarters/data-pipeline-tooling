@@ -304,9 +304,7 @@ test('CASE-2 question cards preserve remediation display and enforce read-only a
       answers: {
         failed: {
           value: 'No',
-          remediationActions: [
-            { id: 'r1', text: 'Call the customer', completed: false },
-          ],
+          remediationActions: [{ id: 'r1', text: 'Call the customer' }],
           freeFormRemediation: 'Refund the fee',
         },
       },

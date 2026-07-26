@@ -5,7 +5,7 @@ import { installDom } from './_dom-stub.js';
 
 installDom();
 
-const { openRemediationActions, responsiblePartyView } =
+const { outstandingRemediation, responsiblePartyView } =
   await import('../src/pages/responsible-party/view.js');
 
 /** @param {string} id @param {string} caseType @param {string} dueDate */
@@ -14,16 +14,14 @@ function row(id, caseType, dueDate) {
     id,
     caseType,
     title: id,
-    status: 'In-progress',
+    status: 'Actions In Progress',
     assignedReviewer: 'reviewer',
     responsibleParty: 'rp-1',
     dueDate,
     answers: {
       q1: {
         value: 'No',
-        remediationActions: [
-          { id: `action-${id}`, text: `Fix ${id}`, completed: false },
-        ],
+        remediationActions: [{ id: `action-${id}`, text: `Fix ${id}` }],
       },
     },
     conversation: [],
@@ -79,18 +77,20 @@ test('Responsible Party remediation uses the generic table, filtering, and overd
   assert.equal(table._listeners.keydown.length, 1);
 });
 
-test('Responsible Party remediation ignores completed actions and absent action lists', () => {
-  const withCompleted = row('done', 'complaints', '2099-01-01T00:00:00Z');
-  /** @type {any} */ (
-    withCompleted.answers.q1
-  ).remediationActions[0].completed = true;
+test('Responsible Party remediation ignores Answers carrying no remediation', () => {
   const withoutActions = {
-    ...row('none', 'complaints', '2099-01-01T00:00:00Z'),
+    .../** @type {any} */ (row('none', 'complaints', '2099-01-01T00:00:00Z')),
+    status: 'Actions In Progress',
     answers: { q1: { value: 'Yes' } },
   };
-  assert.deepEqual(openRemediationActions(withCompleted), []);
   assert.deepEqual(
-    openRemediationActions(/** @type {any} */ (withoutActions)),
+    outstandingRemediation(/** @type {any} */ (withoutActions)),
+    []
+  );
+  assert.deepEqual(
+    outstandingRemediation(
+      /** @type {any} */ ({ ...withoutActions, answers: undefined })
+    ),
     []
   );
 });
@@ -185,5 +185,40 @@ test('a Case inside its remediation SLA is not overdue on the review clock (#498
   assert.equal(
     section?.querySelector('tbody')?.querySelector('tr')?.className,
     'cora-remediation-row'
+  );
+});
+
+test('resolved remediation stops being outstanding on the Responsible Party surface (#497)', () => {
+  const sent = /** @type {any} */ (row('c1', 'complaints', ''));
+  sent.status = 'Actions In Progress';
+  sent.remediationDueDate = '2026-08-01T00:00:00Z';
+  // The Reviewer recorded the resolution on the Remediation tab — the one store
+  // ADR-0037 made the record. Nothing ever writes `completed: true`.
+  sent.answers.q1.remediationStatus = { status: 'complete' };
+  assert.deepEqual(outstandingRemediation(sent), []);
+
+  // A `partial` resolution missing its required details is *not* resolved, so
+  // the work is still outstanding.
+  sent.answers.q1.remediationStatus = { status: 'partial', details: '' };
+  assert.deepEqual(outstandingRemediation(sent), ['Fix c1']);
+
+  sent.answers.q1.remediationStatus = {
+    status: 'partial',
+    details: 'Half done',
+  };
+  assert.deepEqual(outstandingRemediation(sent), []);
+});
+
+test('free-form remediation is outstanding work too, and only once sent (#497)', () => {
+  const sent = /** @type {any} */ (row('c2', 'complaints', ''));
+  sent.status = 'Actions In Progress';
+  sent.answers = { q1: { value: 'No', freeFormRemediation: 'Call back' } };
+  assert.deepEqual(outstandingRemediation(sent), ['Call back']);
+
+  // Before Send Actions the Reviewer is still capturing: nothing has been asked
+  // of the Responsible Party yet, so nothing is outstanding for them.
+  assert.deepEqual(
+    outstandingRemediation({ ...sent, status: 'In-progress' }),
+    []
   );
 });

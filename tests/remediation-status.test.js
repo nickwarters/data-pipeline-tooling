@@ -48,9 +48,7 @@ function failedWithActions() {
   return {
     q1: {
       value: 'No',
-      remediationActions: [
-        { id: 'a1', text: 'Call the customer back', completed: false },
-      ],
+      remediationActions: [{ id: 'a1', text: 'Call the customer back' }],
     },
   };
 }
@@ -70,7 +68,7 @@ test('answerRemediation: reads selected actions and free-form text; null when ne
   assert.deepEqual(
     answerRemediation({
       value: 'No',
-      remediationActions: [{ id: 'a1', text: 'Refund', completed: false }],
+      remediationActions: [{ id: 'a1', text: 'Refund' }],
       freeFormRemediation: 'Also apologise',
     }),
     { actions: [{ id: 'a1', text: 'Refund' }], freeForm: 'Also apologise' }
@@ -98,14 +96,14 @@ test('remediationRows: only applicable, failed Questions that carry remediation'
     // fails and has remediation -> a row
     q1: {
       value: 'No',
-      remediationActions: [{ id: 'a1', text: 'Call back', completed: false }],
+      remediationActions: [{ id: 'a1', text: 'Call back' }],
     },
     // fails but has no remediation (optional) -> no row
     q2: { value: 'No' },
     // applicable (q1 = No) and carries remediation, but passed -> no row
     q3: {
       value: 'Yes',
-      remediationActions: [{ id: 'a2', text: 'Nope', completed: false }],
+      remediationActions: [{ id: 'a2', text: 'Nope' }],
     },
   });
 
@@ -126,7 +124,7 @@ test('remediationRows: a non-applicable Question never produces a row', () => {
     q1: { value: 'Yes' },
     q3: {
       value: 'No',
-      remediationActions: [{ id: 'a3', text: 'Stale', completed: false }],
+      remediationActions: [{ id: 'a3', text: 'Stale' }],
     },
   });
   assert.deepEqual(rows, []);

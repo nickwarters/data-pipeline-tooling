@@ -1798,7 +1798,7 @@ test('CASE-4 view: the completion button is disabled with its reason while remed
   const answers = {
     q1: {
       value: 'No',
-      remediationActions: [{ id: 'a1', text: 'Call back', completed: false }],
+      remediationActions: [{ id: 'a1', text: 'Call back' }],
     },
   };
   const loadedSnapshot = {
@@ -2353,7 +2353,6 @@ test('CASE-7 route: mock-mode store shell keeps Review working at the existing U
     {
       id: 'q-needs-ra-0',
       text: 'Retrain agent on needs-identification protocol.',
-      completed: false,
     },
   ]);
   assert.deepEqual(savedAnswer.remediationDetails, {
@@ -2423,9 +2422,7 @@ test('CASE-5 route: the Remediation tab resolves a Question through the store se
     answers: {
       'q-needs': {
         value: 'No',
-        remediationActions: [
-          { id: 'sent-1', text: 'Coach the agent', completed: false },
-        ],
+        remediationActions: [{ id: 'sent-1', text: 'Coach the agent' }],
       },
     },
   };
