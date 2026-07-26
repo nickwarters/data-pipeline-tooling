@@ -5,7 +5,6 @@ import assert from 'node:assert/strict';
 
 import {
   allocationSourcesFromCaseSources,
-  loadCaseTypeSources,
   resolveCaseSourcesFromCaseTypes,
   resolveCaseSources,
   resolveAppCaseSources,
@@ -511,22 +510,28 @@ function importersWithBrokenExampleReview(overrides = {}) {
   });
 }
 
-test('loadCaseTypeSources: drops the Case Type whose module throws and keeps the rest', async () => {
+test('containment: drops the Case Type whose module throws and keeps the rest', async () => {
   /** @type {any[]} */
   const reported = [];
-  const { sources, unavailable } = await loadCaseTypeSources(
-    ['complaints', 'example-review'],
-    importersWithBrokenExampleReview(),
-    (failure) => reported.push(failure)
+  const { caseSources, unavailableCaseTypes } = await resolveAppCaseSources(
+    ['Reviewer Managers'],
+    [],
+    {
+      importers: importersWithBrokenExampleReview(),
+      reportUnavailable: (failure) => reported.push(failure),
+    }
   );
 
   assert.deepEqual(
-    sources.map((source) => source.slug),
+    caseSources.map((source) => source.slug),
     ['complaints'],
     'the working Case Type still resolves'
   );
   assert.deepEqual(
-    unavailable.map(({ slug, displayName }) => ({ slug, displayName })),
+    unavailableCaseTypes.map(({ slug, displayName }) => ({
+      slug,
+      displayName,
+    })),
     [{ slug: 'example-review', displayName: 'Example Review' }]
   );
   assert.equal(reported.length, 1, 'the failing slug is reported once');
@@ -537,16 +542,15 @@ test('loadCaseTypeSources: drops the Case Type whose module throws and keeps the
   );
 });
 
-test('loadCaseTypeSources: logs the failing slug and its error by default', async () => {
+test('containment: logs the failing slug and its error by default', async () => {
   const original = console.error;
   /** @type {any[][]} */
   const logged = [];
   console.error = (...args) => logged.push(args);
   try {
-    await loadCaseTypeSources(
-      ['example-review'],
-      importersWithBrokenExampleReview()
-    );
+    await resolveCaseSources([], {
+      importers: /** @type {any} */ ({ 'example-review': brokenImporter }),
+    });
   } finally {
     console.error = original;
   }
@@ -562,33 +566,145 @@ test('loadCaseTypeSources: logs the failing slug and its error by default', asyn
   );
 });
 
-test('loadCaseTypeSources: falls back to the slug when the failure has no registered display name', async () => {
-  const { sources, unavailable } = await loadCaseTypeSources(
-    ['not-registered'],
-    /** @type {any} */ ({ 'not-registered': brokenImporter }),
-    () => {}
-  );
+test('containment: falls back to the slug when the failure has no registered display name', async () => {
+  const { unavailableCaseTypes } = await resolveAppCaseSources([], [], {
+    importers: /** @type {any} */ ({ 'not-registered': brokenImporter }),
+    reportUnavailable: () => {},
+  });
 
-  assert.deepEqual(sources, []);
   assert.deepEqual(
-    unavailable.map(({ slug, displayName }) => ({ slug, displayName })),
+    unavailableCaseTypes.map(({ slug, displayName }) => ({
+      slug,
+      displayName,
+    })),
     [{ slug: 'not-registered', displayName: 'not-registered' }]
   );
 });
 
-test('loadCaseTypeSources: an unregistered slug is dropped, never resolved namelessly', async () => {
-  const { sources, unavailable } = await loadCaseTypeSources(
-    ['not-registered'],
-    /** @type {any} */ ({
-      'not-registered': async () => ({ default: minimalConfig() }),
-    }),
-    () => {}
+test('containment: an unregistered slug is dropped, never resolved namelessly', async () => {
+  const { caseSources, unavailableCaseTypes } = await resolveAppCaseSources(
+    ['Reviewer Managers'],
+    [],
+    {
+      importers: /** @type {any} */ ({
+        'not-registered': async () => ({
+          default: minimalConfig({ listName: 'Cases-NotRegistered' }),
+        }),
+      }),
+      reportUnavailable: () => {},
+    }
   );
 
-  assert.deepEqual(sources, [], 'no source without a registry displayName');
+  assert.deepEqual(caseSources, [], 'no source without a registry displayName');
   assert.deepEqual(
-    unavailable.map((failure) => failure.slug),
+    unavailableCaseTypes.map((failure) => failure.slug),
     ['not-registered']
+  );
+});
+
+test('containment: a config that loads but declares no listName is contained and named (#493)', async () => {
+  // The gap this closes: the try guarded only the IMPORT, and `config.listName`
+  // was a type CAST rather than a check. A module that evaluated fine but
+  // returned a partial config produced a source with `listName: undefined`,
+  // counted as available, absent from the banner — so nothing named the
+  // problem, and it resurfaced later as an opaque route error when a fetch
+  // built a request against `undefined`.
+  for (const listName of [undefined, '', '   ']) {
+    const { caseSources, unavailableCaseTypes } = await resolveAppCaseSources(
+      ['Reviewer Managers'],
+      [],
+      {
+        importers: /** @type {any} */ ({
+          'example-review': async () => ({
+            default: minimalConfig({ listName }),
+          }),
+        }),
+        reportUnavailable: () => {},
+      }
+    );
+
+    assert.deepEqual(
+      caseSources,
+      [],
+      `listName ${JSON.stringify(listName)} must yield no source at all`
+    );
+    assert.deepEqual(
+      unavailableCaseTypes.map(({ slug, displayName }) => ({
+        slug,
+        displayName,
+      })),
+      [{ slug: 'example-review', displayName: 'Example Review' }],
+      'and must be NAMED in the banner, not silently dropped'
+    );
+    assert.ok(
+      unavailableCaseTypes[0].error instanceof TypeError,
+      'the failure carries a real error for the console'
+    );
+  }
+});
+
+test('containment: an invalid outcome config is contained and named (#493)', async () => {
+  // The JSDoc listed "an invalid outcome config" as a contained failure mode,
+  // but the loader called the RAW importer and never ran
+  // `validateConfiguredOutcomeConfig`, so this resolved cleanly into
+  // `caseSources` and detonated later on the Case Review page. Routing through
+  // `loadCaseTypeConfig` makes the documented claim true.
+  const { caseSources, unavailableCaseTypes } = await resolveAppCaseSources(
+    ['Reviewer Managers'],
+    [],
+    {
+      importers: /** @type {any} */ ({
+        'example-review': async () => ({
+          default: minimalConfig({
+            listName: 'Cases-ExampleReview',
+            defaultOutcomeId: 'ghost',
+          }),
+        }),
+      }),
+      reportUnavailable: () => {},
+    }
+  );
+
+  assert.deepEqual(caseSources, []);
+  assert.deepEqual(
+    unavailableCaseTypes.map((failure) => failure.slug),
+    ['example-review']
+  );
+  assert.equal(
+    /** @type {any} */ (unavailableCaseTypes[0].error).name,
+    'InvalidCaseTypeConfigError'
+  );
+});
+
+test('resolveCaseSourcesFromCaseTypes: a nameless Case Type contributes no derived group names (#527)', () => {
+  // Defence in depth. No production caller can reach this — `displayNameFor()`
+  // throws before a nameless source is built — but the function is exported and
+  // its typedef now REQUIRES `displayName`, so an undefined name must not
+  // compose `Reviewers - undefined` and grant a real source under it.
+  const nameless = /** @type {any} */ ([
+    { slug: 'nameless', listName: 'Cases-Nameless', config: minimalConfig() },
+  ]);
+
+  for (const group of [
+    'Reviewers - undefined',
+    'CaseTypeOwner - undefined',
+    'JourneyOwner - undefined',
+  ]) {
+    assert.deepEqual(
+      resolveCaseSourcesFromCaseTypes([group], nameless),
+      [],
+      `${group} must grant nothing`
+    );
+  }
+});
+
+test('loadCaseTypeSources is not exported: options.importers is the one seam (#493)', async () => {
+  const module = await import('../src/setup/resolve-eligible-case-types.js');
+  assert.equal(
+    'loadCaseTypeSources' in module,
+    false,
+    'the production API must not carry a second export that exists only for ' +
+      'tests — `options.importers` already covers every case it covered'
   );
 });
 

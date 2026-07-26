@@ -1,6 +1,9 @@
 // @ts-check
 import { caseTypeGroupNames, permissions } from '../services/permissions.js';
-import { displayNameFor } from '../../case-types/manifest.js';
+import {
+  displayNameFor,
+  loadCaseTypeConfig,
+} from '../../case-types/manifest.js';
 
 /**
  * `displayName` is required and comes from THE Case Type registry
@@ -117,19 +120,26 @@ function labelFor(slug) {
  * importer, resolving each `listName` in exactly one place.
  *
  * Per-slug containment (#493), the Case Type analogue of `safeRegister` for
- * routes: a Case Type module that throws when it is evaluated — a syntax
- * error, an invalid outcome config, an unknown shared General Question key —
- * is logged, reported and DROPPED, and the remaining Case Types still resolve.
- * A dropped Case Type yields no `CaseTypeSource` at all, so it cannot reach
- * `resolveCaseSourcesFromCaseTypes` in any partial form: containment can only
- * ever narrow access, never widen it.
+ * routes: a Case Type that cannot produce a USABLE source — a module that
+ * throws when it is evaluated (a syntax error, an unknown shared General
+ * Question key), an invalid outcome config, a config that loads but declares no
+ * `listName`, or a slug with no registry display name — is logged, reported and
+ * DROPPED, and the remaining Case Types still resolve.
+ *
+ * "Throws during import" is deliberately not the boundary: a partially-formed
+ * config is contained too. The validation therefore happens INSIDE the try, so
+ * a dropped Case Type yields no `CaseTypeSource` at all and cannot reach
+ * `resolveCaseSourcesFromCaseTypes` in any partial form. Containment can only
+ * ever narrow access, never widen it — and a contained Case Type is always
+ * NAMED in the boot banner, so the failure surfaces where it happened rather
+ * than later as an opaque route error.
  *
  * @param {string[]} slugs
  * @param {Record<string, import('../../case-types/manifest.js').CaseTypeImporter>} importers
  * @param {(failure: UnavailableCaseType) => void} [reportUnavailable]
  * @returns {Promise<{ sources: CaseTypeSource[], unavailable: UnavailableCaseType[] }>}
  */
-export async function loadCaseTypeSources(
+async function loadCaseTypeSources(
   slugs,
   importers,
   reportUnavailable = ({ slug, error }) =>
@@ -140,11 +150,21 @@ export async function loadCaseTypeSources(
   const settled = await Promise.all(
     slugs.map(async (slug) => {
       try {
-        const { default: config } = await importers[slug]();
+        // Through `loadCaseTypeConfig`, not the raw importer, so the outcome
+        // configuration is validated here rather than detonating later on the
+        // Case Review page.
+        const config = await loadCaseTypeConfig(slug, importers);
+        const listName = config.listName;
+        if (typeof listName !== 'string' || listName.trim() === '')
+          throw new TypeError(
+            `Case Type "${slug}" declares no listName. Every Case Type must ` +
+              'name the SharePoint list its Cases live on; there is no ' +
+              'default store to fall back to (#249).'
+          );
         return {
           source: /** @type {CaseTypeSource} */ ({
             slug,
-            listName: /** @type {string} */ (config.listName),
+            listName,
             // From THE registry, not from the config module: the capability
             // side derives its group names from the same string (#527).
             displayName: displayNameFor(slug),
@@ -211,13 +231,22 @@ export function resolveCaseSourcesFromCaseTypes(userGroups, caseTypes) {
   )
     ? caseTypes
     : caseTypes.filter(({ config, reviewerGroup, displayName }) => {
-        const derived = caseTypeGroupNames(displayName);
+        // A nameless Case Type contributes NO derived names. `displayName` is
+        // required by the typedef and `displayNameFor()` throws before a
+        // nameless source can be built, so no production caller reaches this —
+        // but this function is exported, and `caseTypeGroupNames(undefined)`
+        // would otherwise compose `Reviewers - undefined` and grant a real
+        // source to anyone holding that literal group name.
+        const derived =
+          typeof displayName === 'string' && displayName.trim() !== ''
+            ? caseTypeGroupNames(displayName)
+            : null;
         const groups = [
           ...(config.eligibleGroups ?? []),
           ...(reviewerGroup ? [reviewerGroup] : []),
-          derived.listAccess,
-          derived.caseTypeOwner,
-          derived.journeyOwner,
+          ...(derived
+            ? [derived.listAccess, derived.caseTypeOwner, derived.journeyOwner]
+            : []),
         ];
         return groups.some((g) => userGroups.includes(g));
       });
@@ -233,9 +262,13 @@ export function resolveCaseSourcesFromCaseTypes(userGroups, caseTypes) {
 }
 
 /**
- * Test seam for the two resolvers below: which importers to load, and where a
- * per-Case-Type failure is reported. Both default to production behaviour —
+ * The ONE seam for the two resolvers below: which importers to load, and where
+ * a per-Case-Type failure is reported. Both default to production behaviour —
  * THE registry's importers, and a console error per broken Case Type.
+ *
+ * `loadCaseTypeSources` is deliberately NOT exported. It was, for tests, which
+ * widened the production API with a second way in for no behaviour the
+ * `importers` option does not already reach.
  *
  * @typedef {{
  *   importers?: Record<string, import('../../case-types/manifest.js').CaseTypeImporter>,
