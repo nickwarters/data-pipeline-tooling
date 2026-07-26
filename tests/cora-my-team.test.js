@@ -312,3 +312,20 @@ test('#517 my team slice: the adapter mount lifetime, not a page latch, suppress
     []
   );
 });
+
+test('my team reducer: an unhandled action returns the same state and chrome survives a patch', () => {
+  const slice = createRouteSlice({}, context(), { fetchCases: async () => [] });
+  const initial = slice.initialState;
+
+  assert.strictEqual(
+    slice.reducer(initial, /** @type {any} */ ({ type: 'nothing/here' })),
+    initial
+  );
+
+  const failed = slice.reducer(initial, {
+    type: 'workload/load-failed',
+    message: 'nope',
+  });
+  assert.strictEqual(failed.chrome, initial.chrome);
+  assert.strictEqual(failed.routes.myTeam.rows, initial.routes.myTeam.rows);
+});

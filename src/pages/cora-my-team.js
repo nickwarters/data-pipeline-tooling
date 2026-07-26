@@ -4,6 +4,7 @@ import {
   withReviewerDisplayNames,
 } from '../evaluators/team-workload-model.js';
 import { h } from '../lib/html.js';
+import { patchRoute } from '../core/route-state.js';
 import { fetchTeamWorkloadCases } from '../services/team-cases-fetcher.js';
 import { dataTableView, nextTableSort } from '../views/data-table.js';
 
@@ -239,48 +240,25 @@ export function createRouteSlice(
     reducer(state, action) {
       const route = state.routes.myTeam;
       if (action.type === 'workload/refresh-requested') {
-        return {
-          ...state,
-          routes: {
-            myTeam: { ...route, loading: true, error: null },
-          },
-        };
+        return patchRoute(state, 'myTeam', { loading: true, error: null });
       }
       if (action.type === 'workload/loaded') {
-        return {
-          ...state,
-          routes: {
-            myTeam: {
-              ...route,
-              rows: action.rows,
-              loading: false,
-              error: null,
-            },
-          },
-        };
+        return patchRoute(state, 'myTeam', {
+          rows: action.rows,
+          loading: false,
+          error: null,
+        });
       }
       if (action.type === 'workload/load-failed') {
-        return {
-          ...state,
-          routes: {
-            myTeam: {
-              ...route,
-              loading: false,
-              error: action.message,
-            },
-          },
-        };
+        return patchRoute(state, 'myTeam', {
+          loading: false,
+          error: action.message,
+        });
       }
       if (action.type === 'table/sort-requested') {
-        return {
-          ...state,
-          routes: {
-            myTeam: {
-              ...route,
-              sort: nextTableSort(route.sort, action.key),
-            },
-          },
-        };
+        return patchRoute(state, 'myTeam', {
+          sort: nextTableSort(route.sort, action.key),
+        });
       }
       return state;
     },
