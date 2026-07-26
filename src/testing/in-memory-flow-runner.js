@@ -339,9 +339,8 @@ export function createInMemoryFlowRunner(state, opts = {}) {
       caseType: action.caseType ?? null,
     });
     await vm.load();
-    if (vm.error.get())
-      throw new Error(vm.error.get() ?? 'Case failed to load.');
-    if (vm.accessDenied.get()) throw new Error('Case access denied.');
+    if (vm.error) throw new Error(vm.error);
+    if (vm.accessDenied) throw new Error('Case access denied.');
     return vm;
   }
 

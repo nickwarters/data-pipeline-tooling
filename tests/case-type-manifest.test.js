@@ -238,10 +238,10 @@ test('CaseReviewViewModel.load(): unknown primary Case Type slug sets a clear us
     await vm.load();
 
     assert.equal(
-      vm.error.get(),
+      vm.error,
       'This Case cannot be opened because its Case Type is not supported. Ask a maintainer to add "../unexpected" to the Case Type manifest.'
     );
-    assert.equal(vm.loaded.get(), false);
+    assert.equal(vm.loaded, false);
     assert.equal(vm.config, null);
     assert.equal(errors.length, 1);
     assert.ok(errors[0][0] instanceof UnknownCaseTypeError);
@@ -281,10 +281,10 @@ test('CaseReviewViewModel.load(): invalid Case Type outcome configuration sets a
     await vm.load();
 
     assert.equal(
-      vm.error.get(),
+      vm.error,
       'This Case cannot be opened because its Case Type outcome configuration is invalid. Ask a maintainer to correct it.'
     );
-    assert.equal(vm.loaded.get(), false);
+    assert.equal(vm.loaded, false);
     assert.equal(vm.config, null);
   } finally {
     delete CASE_TYPE_IMPORTERS[slug];

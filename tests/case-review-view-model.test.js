@@ -8,6 +8,25 @@ import { isolateBrowserGlobals } from './helpers/browser-globals.js';
 
 isolateBrowserGlobals();
 
+test('the loader holds its loading state as plain fields, not signals (#529)', () => {
+  const vm = new CaseReviewViewModel({
+    client: /** @type {any} */ ({}),
+    saveQueue: /** @type {any} */ ({ enqueue() {} }),
+    caseId: 'c1',
+    currentUserId: 'u1',
+    capabilities: null,
+  });
+
+  assert.equal(vm.loaded, false);
+  assert.equal(vm.error, null);
+  assert.equal(vm.accessDenied, false);
+
+  const snapshot = vm.toStoreSnapshot();
+  assert.equal(snapshot.loaded, false);
+  assert.equal(snapshot.error, null);
+  assert.equal(snapshot.accessDenied, false);
+});
+
 test('toStoreSnapshot: an empty multi-choice Answer is unanswered on load', () => {
   const vm = new CaseReviewViewModel({
     client: /** @type {any} */ ({}),

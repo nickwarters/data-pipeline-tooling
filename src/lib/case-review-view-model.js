@@ -4,7 +4,7 @@
 // resolved Section access. It hands the result over once, as a plain
 // snapshot, and owns no Answer mutation — the
 // store is the single Answer owner and the route's answer-actions are the only
-// writers (#510). Signals remain an internal loading-state detail.
+// writers (#510). `versionWarning` is the last signal it holds.
 
 import { signal } from './signal.js';
 import {
@@ -89,9 +89,13 @@ export class CaseReviewViewModel {
     /** @type {CaseListOptions} */
     this.caseListOptions = {};
 
-    this.loaded = signal(false);
-    this.error = signal(/** @type {string | null} */ (null));
-    this.accessDenied = signal(false);
+    // Loading state, written by `load()` and read once by
+    // `toStoreSnapshot()`. Plain fields: nothing subscribes, the store owns
+    // the page's reactive state (#529).
+    this.loaded = false;
+    /** @type {string | null} */
+    this.error = null;
+    this.accessDenied = false;
 
     /**
      * The loaded Case Row, handed to the store in `toStoreSnapshot()`. As with
@@ -149,9 +153,9 @@ export class CaseReviewViewModel {
   toStoreSnapshot() {
     const applicableIds = evaluate(this.catalogue, this.answers);
     return {
-      loaded: this.loaded.get(),
-      error: this.error.get(),
-      accessDenied: this.accessDenied.get(),
+      loaded: this.loaded,
+      error: this.error,
+      accessDenied: this.accessDenied,
       caseRow: this.caseRow,
       currentUser: this.currentUser,
       config: this.config,
@@ -183,7 +187,7 @@ export class CaseReviewViewModel {
         const message = caseTypeLoadErrorMessage(error, this.caseType, true);
         if (message) {
           console.error(error);
-          this.error.set(message);
+          this.error = message;
           return;
         }
         throw error;
@@ -198,7 +202,7 @@ export class CaseReviewViewModel {
     ]);
 
     if (!caseRow) {
-      this.error.set('Case not found.');
+      this.error = 'Case not found.';
       return;
     }
 
@@ -229,7 +233,7 @@ export class CaseReviewViewModel {
       const message = caseTypeLoadErrorMessage(error, caseRow.caseType, false);
       if (message) {
         console.error(error);
-        this.error.set(message);
+        this.error = message;
         return;
       }
       throw error;
@@ -322,8 +326,8 @@ export class CaseReviewViewModel {
     this.access = this.machine.access;
 
     if (SECTIONS.every((s) => this.access[s] === 'hidden')) {
-      this.accessDenied.set(true);
-      this.loaded.set(true);
+      this.accessDenied = true;
+      this.loaded = true;
       return;
     }
 
@@ -331,7 +335,7 @@ export class CaseReviewViewModel {
       (s) => this.access[s] !== 'hidden' && showInSummary(s, config)
     );
 
-    this.loaded.set(true);
+    this.loaded = true;
 
     await this._resolveAttributedParties();
   }
