@@ -44,8 +44,14 @@ export function peoplePickerOptions(people, query, onSelect) {
 }
 
 /**
+ * The input and its dropdown are one control, so they come back as one node:
+ * `.cora-people-picker` is `position: relative` and is therefore the containing
+ * block the absolutely positioned results list resolves against. Returning a
+ * loose pair let that containing block go missing whenever the caller spread
+ * them into a statically positioned parent (#536).
+ *
  * @param {PeoplePickerProps} props
- * @returns {Node[]}
+ * @returns {HTMLElement}
  */
 export function PeoplePicker(props) {
   const items = peoplePickerOptions(props.people, props.query, props.onSelect);
@@ -72,7 +78,7 @@ export function PeoplePicker(props) {
     ...items
   );
 
-  return [inputEl, resultsEl];
+  return h('div', { className: 'cora-people-picker' }, inputEl, resultsEl);
 }
 
 /**

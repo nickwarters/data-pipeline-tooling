@@ -79,15 +79,16 @@ export function AttributeMenu({
       );
     }
 
-    const picker = PeoplePicker({
-      placeholder: 'Search people…',
-      people,
-      query,
-      inputValue: query,
-      onQueryInput,
-      onSelect,
-    });
-    children.push(...picker);
+    children.push(
+      PeoplePicker({
+        placeholder: 'Search people…',
+        people,
+        query,
+        inputValue: query,
+        onQueryInput,
+        onSelect,
+      })
+    );
   }
 
   return h('div', { className: 'cora-attribute-menu' }, ...children);

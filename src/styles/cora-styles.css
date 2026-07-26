@@ -2608,7 +2608,10 @@
 
 /* ── People picker ───────────────────────────────────────────────────────── */
 
-cora-people-picker {
+/* The containing block for the absolutely positioned results list below —
+   matched by class, because `PeoplePicker()` returns a plain div and there is
+   no `cora-people-picker` element to match (#536). */
+.cora-people-picker {
   position: relative;
   display: block;
 }

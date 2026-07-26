@@ -15,10 +15,30 @@ const { PeoplePicker, peoplePickerOptions, searchPeople } =
 
 const PERSON = { loginName: 'jsmith', displayName: 'Jane Smith' };
 
+test('PeoplePicker wraps input and results in one positioned control', () => {
+  // The results list is `position: absolute`; the wrapper is its containing
+  // block. Returning a loose [input, results] array left that containing block
+  // to whatever the caller happened to spread the pair into (#536).
+  const host = /** @type {any} */ (
+    PeoplePicker({
+      placeholder: '',
+      people: [],
+      query: '',
+      inputValue: '',
+      onQueryInput() {},
+      onSelect() {},
+    })
+  );
+  assert.equal(host.tagName?.toLowerCase(), 'div');
+  assert.equal(host.className, 'cora-people-picker');
+  assert.ok(getByRole(host, 'combobox'));
+  assert.ok(getByRole(host, 'listbox'));
+});
+
 test('PeoplePicker renders an accessible input and hidden empty result list', () => {
   /** @type {string[]} */
   const inputs = [];
-  const nodes = PeoplePicker({
+  const host = PeoplePicker({
     placeholder: 'Find a colleague',
     people: [],
     query: '',
@@ -26,8 +46,6 @@ test('PeoplePicker renders an accessible input and hidden empty result list', ()
     onQueryInput: (value) => inputs.push(value),
     onSelect() {},
   });
-  const host = document.createElement('div');
-  host.append(...nodes);
   const input = /** @type {any} */ (getByRole(host, 'combobox'));
   assert.equal(input.placeholder, 'Find a colleague');
   assert.equal(input.value, 'Jan');
@@ -41,17 +59,14 @@ test('PeoplePicker renders an accessible input and hidden empty result list', ()
 test('PeoplePicker renders one selectable option per search result', () => {
   /** @type {any[]} */
   const selected = [];
-  const host = document.createElement('div');
-  host.append(
-    ...PeoplePicker({
-      placeholder: '',
-      people: [PERSON],
-      query: 'Jane',
-      inputValue: 'Jane',
-      onQueryInput() {},
-      onSelect: (person) => selected.push(person),
-    })
-  );
+  const host = PeoplePicker({
+    placeholder: '',
+    people: [PERSON],
+    query: 'Jane',
+    inputValue: 'Jane',
+    onQueryInput() {},
+    onSelect: (person) => selected.push(person),
+  });
   const [option] = queryAllByRole(host, 'option');
   assert.equal(option.textContent, 'Jane Smith — jsmith');
   fireEvent(option, 'click');

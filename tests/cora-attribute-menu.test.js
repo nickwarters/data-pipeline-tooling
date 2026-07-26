@@ -63,7 +63,13 @@ test('AttributeMenu: renders the inline "Attribute failure to" title', () => {
 test('AttributeMenu: unset renders the PeoplePicker combobox directly, no chip or clear', () => {
   const { host } = mount();
 
+  // The picker is a classed div wrapper (#536), never a `cora-people-picker`
+  // element — the class is the CSS hook, the element type is not.
   assert.equal(findByTag(host, 'cora-people-picker'), null);
+  assert.ok(
+    findByClass(host, 'cora-people-picker'),
+    'picker wrapper rendered so its results list has a containing block'
+  );
   assert.ok(host.querySelector('[role="combobox"]'), 'combobox shown inline');
   assert.equal(
     findByClass(host, 'cora-attribute-current'),
@@ -143,8 +149,9 @@ test('AttributeMenu: when set, shows the attributed person and a clear button, n
     findByClass(host, 'cora-attribute-clear'),
     'clear button rendered when attributed'
   );
+  assert.equal(findByTag(host, 'cora-people-picker'), null);
   assert.equal(
-    findByTag(host, 'cora-people-picker'),
+    findByClass(host, 'cora-people-picker'),
     null,
     'picker hidden once attributed; clear to re-attribute'
   );
