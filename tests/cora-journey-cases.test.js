@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
+import { tableHeaders } from './helpers/semantic-dom.js';
 
 installDom();
 /** @type {any} */ (globalThis).location = { hash: '' };
@@ -125,18 +126,11 @@ test('journey cases descriptors and pure view preserve links, empty state, and s
     },
     { dispatch: () => {} }
   );
-  assert.deepEqual(
-    [...sorted.querySelectorAll('th')].map((th) => [
-      th.textContent,
-      th.className,
-      th.getAttribute('aria-sort'),
-    ]),
-    [
-      ['Reference', 'cora-col-reference', 'none'],
-      ['Case Type', 'cora-col-caseType', 'none'],
-      ['Status', 'cora-col-status', 'descending'],
-    ]
-  );
+  assert.deepEqual(tableHeaders(sorted), [
+    ['Reference', 'cora-col-reference', 'none', true],
+    ['Case Type', 'cora-col-caseType', 'none', true],
+    ['Status', 'cora-col-status', 'descending', true],
+  ]);
 
   const slice = createRouteSlice({}, context());
   const loading = journeyCasesView(slice.initialState, { dispatch: () => {} });

@@ -2,28 +2,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
-import { fireEvent, getByRole } from './helpers/semantic-dom.js';
+import { fireEvent, getByRole, tableHeaders } from './helpers/semantic-dom.js';
 
 installDom();
 /** @type {any} */ (globalThis).location = { hash: '' };
 
 const { createRouteSlice, dashboardView } =
   await import('../src/pages/cora-dashboard.js');
-
-/**
- * The rendered column contract: heading text, the `cora-col-*` CSS hook and
- * `aria-sort`, in document order.
- *
- * @param {any} view
- * @returns {[string, string, string | null][]}
- */
-function tableHeaders(view) {
-  return [...view.querySelectorAll('th')].map((th) => [
-    th.textContent,
-    th.className,
-    th.getAttribute('aria-sort'),
-  ]);
-}
 
 function capabilities(overrides = {}) {
   return /** @type {any} */ ({
@@ -234,13 +219,13 @@ test('reviewer worklist preserves the legacy columns, filters, and Open action',
   assert.match(unfiltered.textContent, /Beta case/);
   assert.match(unfiltered.textContent, /fallback-reference/);
   assert.deepEqual(tableHeaders(unfiltered), [
-    ['Reference', 'cora-col-reference', 'none'],
-    ['Case Type', 'cora-col-caseType', 'none'],
-    ['Related Date', 'cora-col-relatedDate', 'none'],
-    ['Due Date', 'cora-col-dueDate', 'none'],
-    ['Status', 'cora-col-status', 'none'],
-    ['Assigned', 'cora-col-assigned', 'none'],
-    ['Actions', 'cora-col-actions', 'none'],
+    ['Reference', 'cora-col-reference', 'none', true],
+    ['Case Type', 'cora-col-caseType', 'none', true],
+    ['Related Date', 'cora-col-relatedDate', 'none', true],
+    ['Due Date', 'cora-col-dueDate', 'none', true],
+    ['Status', 'cora-col-status', 'none', true],
+    ['Assigned', 'cora-col-assigned', 'none', true],
+    ['Actions', 'cora-col-actions', 'none', false],
   ]);
   const sortedByReference = dashboardView(
     /** @type {any} */ (

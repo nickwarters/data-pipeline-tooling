@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
+import { tableHeaders } from './helpers/semantic-dom.js';
 
 installDom();
 
@@ -80,19 +81,12 @@ test('Responsible Party unread messages render through descriptors and invoke co
     '#/case/complaints/unread'
   );
   assert.match(section?.textContent ?? '', /—/);
-  assert.deepEqual(
-    [...section.querySelectorAll('th')].map((/** @type {any} */ th) => [
-      th.textContent,
-      th.className,
-      th.getAttribute('aria-sort'),
-    ]),
-    [
-      ['Reference', 'cora-col-reference', 'none'],
-      ['Case Type', 'cora-col-caseType', 'none'],
-      ['Last message', 'cora-col-lastMessage', 'descending'],
-      ['Actions', 'cora-col-actions', 'none'],
-    ]
-  );
+  assert.deepEqual(tableHeaders(section), [
+    ['Reference', 'cora-col-reference', 'none', false],
+    ['Case Type', 'cora-col-caseType', 'none', false],
+    ['Last message', 'cora-col-lastMessage', 'descending', true],
+    ['Actions', 'cora-col-actions', 'none', false],
+  ]);
   const open = /** @type {any} */ (
     [...section.querySelectorAll('button')].at(-1)
   );

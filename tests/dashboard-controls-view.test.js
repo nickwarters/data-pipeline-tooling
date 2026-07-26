@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
+import { tableHeaders } from './helpers/semantic-dom.js';
 
 installDom();
 /** @type {any} */ (globalThis).location = { hash: '' };
@@ -101,22 +102,15 @@ test('Controls appeal descriptors render through the generic table and keep navi
     ]
   );
 
-  assert.deepEqual(
-    [...view.querySelectorAll('th')].map((th) => [
-      th.textContent,
-      th.className,
-      th.getAttribute('aria-sort'),
-    ]),
-    [
-      ['Reference', 'cora-col-reference', 'none'],
-      ['Case Type', 'cora-col-caseType', 'none'],
-      ['Responsible Party', 'cora-col-responsibleParty', 'none'],
-      ['Appellant', 'cora-col-appellant', 'none'],
-      ['Raised', 'cora-col-raised', 'ascending'],
-      ['Appellant rationale', 'cora-col-rationale', 'none'],
-      ['Actions', 'cora-col-actions', 'none'],
-    ]
-  );
+  assert.deepEqual(tableHeaders(view), [
+    ['Reference', 'cora-col-reference', 'none', false],
+    ['Case Type', 'cora-col-caseType', 'none', false],
+    ['Responsible Party', 'cora-col-responsibleParty', 'none', false],
+    ['Appellant', 'cora-col-appellant', 'none', false],
+    ['Raised', 'cora-col-raised', 'ascending', true],
+    ['Appellant rationale', 'cora-col-rationale', 'none', false],
+    ['Actions', 'cora-col-actions', 'none', false],
+  ]);
 
   [...view.querySelectorAll('th')]
     .find((header) => header.querySelector('button'))

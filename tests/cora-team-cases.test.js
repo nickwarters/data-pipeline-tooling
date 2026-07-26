@@ -2,27 +2,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
+import { tableHeaders } from './helpers/semantic-dom.js';
 
 installDom();
 /** @type {any} */ (globalThis).location = { hash: '' };
 
 const { createRouteSlice, resolveDashboardColumns, teamCasesView } =
   await import('../src/pages/cora-team-cases.js');
-
-/**
- * The rendered column contract: heading text, the `cora-col-*` CSS hook and
- * `aria-sort`, in document order.
- *
- * @param {any} view
- * @returns {[string, string, string | null][]}
- */
-function tableHeaders(view) {
-  return [...view.querySelectorAll('th')].map((th) => [
-    th.textContent,
-    th.className,
-    th.getAttribute('aria-sort'),
-  ]);
-}
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 
@@ -152,14 +138,14 @@ test('team cases view renders the standard Case columns, the Case Type additions
   );
 
   assert.deepEqual(tableHeaders(view), [
-    ['Reference', 'cora-col-reference', 'descending'],
-    ['Case Type', 'cora-col-caseType', 'none'],
-    ['Related Date', 'cora-col-relatedDate', 'none'],
-    ['Due Date', 'cora-col-dueDate', 'none'],
-    ['Status', 'cora-col-status', 'none'],
-    ['Assigned', 'cora-col-assigned', 'none'],
-    ['Actions', 'cora-col-actions', 'none'],
-    ['Owner', 'cora-col-owner', 'none'],
+    ['Reference', 'cora-col-reference', 'descending', true],
+    ['Case Type', 'cora-col-caseType', 'none', true],
+    ['Related Date', 'cora-col-relatedDate', 'none', true],
+    ['Due Date', 'cora-col-dueDate', 'none', true],
+    ['Status', 'cora-col-status', 'none', true],
+    ['Assigned', 'cora-col-assigned', 'none', true],
+    ['Actions', 'cora-col-actions', 'none', false],
+    ['Owner', 'cora-col-owner', 'none', false],
   ]);
 
   location.hash = '';
