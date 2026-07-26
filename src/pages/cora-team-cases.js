@@ -4,7 +4,11 @@ import { patchRoute } from '../core/route-state.js';
 import { caseRouteFor } from '../lib/case-route-links.js';
 import { fetchTeamCases } from '../services/team-cases-fetcher.js';
 import { parseTeamCasesParams } from '../services/team-cases-params.js';
-import { dataTableView, nextTableSort } from '../views/data-table.js';
+import {
+  dataTableView,
+  reduceTableSort,
+  sortRequested,
+} from '../views/data-table.js';
 import {
   loadCaseTypeConfig,
   UnknownCaseTypeError,
@@ -136,7 +140,7 @@ export function teamCasesView(state, tools) {
       rows: route.cases,
       columns: teamCasesColumns(route.caseTableColumns),
       sort: route.sort,
-      onSort: (key) => tools.dispatch({ type: 'table/sort-requested', key }),
+      onSort: (key) => tools.dispatch(sortRequested('team', key)),
       emptyMessage: 'No cases match the selected filters.',
       rowKey: (row) => `${row.caseType}:${row.id}`,
       rowHref: caseRouteFor,
@@ -184,11 +188,8 @@ export function createRouteSlice(
           caseTableColumns: action.caseTableColumns,
         });
       }
-      if (action.type === 'table/sort-requested') {
-        return patchRoute(state, 'teamCases', {
-          sort: nextTableSort(route.sort, action.key),
-        });
-      }
+      const sort = reduceTableSort(route.sort, action, 'team');
+      if (sort) return patchRoute(state, 'teamCases', { sort });
       return state;
     },
     view: teamCasesView,

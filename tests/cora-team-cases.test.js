@@ -111,7 +111,7 @@ test('team cases slice: reducer owns loaded rows and generic table sort state', 
     caseTableColumns: [],
   });
   const sorted = slice.reducer(loaded, {
-    type: 'table/sort-requested',
+    type: 'team-table/sort-requested',
     key: 'reference',
   });
 
@@ -272,7 +272,7 @@ test('team cases view: keeps heading, empty state, and row links without retired
     ?.querySelector('button')
     ?.dispatchEvent(/** @type {any} */ ({ type: 'click' }));
   assert.deepEqual(actions, [
-    { type: 'table/sort-requested', key: 'reference' },
+    { type: 'team-table/sort-requested', key: 'reference' },
   ]);
 });
 
@@ -328,7 +328,7 @@ test('team cases reducer: an unhandled action returns the same state and chrome 
   assert.strictEqual(slice.reducer(initial, { type: 'nothing/here' }), initial);
 
   const sorted = slice.reducer(initial, {
-    type: 'table/sort-requested',
+    type: 'team-table/sort-requested',
     key: 'reference',
   });
   assert.strictEqual(sorted.chrome, initial.chrome);
