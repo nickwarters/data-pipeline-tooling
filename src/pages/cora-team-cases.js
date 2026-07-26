@@ -1,5 +1,6 @@
 // @ts-check
 import { h } from '../lib/html.js';
+import { patchRoute } from '../core/route-state.js';
 import { caseRouteFor } from '../lib/case-route-links.js';
 import { fetchTeamCases } from '../services/team-cases-fetcher.js';
 import { parseTeamCasesParams } from '../services/team-cases-params.js';
@@ -178,27 +179,15 @@ export function createRouteSlice(
     reducer(state, action) {
       const route = state.routes.teamCases;
       if (action.type === 'cases/loaded') {
-        return {
-          ...state,
-          routes: {
-            teamCases: {
-              ...route,
-              cases: action.cases,
-              caseTableColumns: action.caseTableColumns,
-            },
-          },
-        };
+        return patchRoute(state, 'teamCases', {
+          cases: action.cases,
+          caseTableColumns: action.caseTableColumns,
+        });
       }
       if (action.type === 'table/sort-requested') {
-        return {
-          ...state,
-          routes: {
-            teamCases: {
-              ...route,
-              sort: nextTableSort(route.sort, action.key),
-            },
-          },
-        };
+        return patchRoute(state, 'teamCases', {
+          sort: nextTableSort(route.sort, action.key),
+        });
       }
       return state;
     },

@@ -320,3 +320,20 @@ test('team cases slice: does not load without both a client and current user', (
     });
   }
 });
+
+test('team cases reducer: an unhandled action returns the same state and chrome survives a patch', () => {
+  const slice = createRouteSlice({}, context());
+  const initial = slice.initialState;
+
+  assert.strictEqual(slice.reducer(initial, { type: 'nothing/here' }), initial);
+
+  const sorted = slice.reducer(initial, {
+    type: 'table/sort-requested',
+    key: 'reference',
+  });
+  assert.strictEqual(sorted.chrome, initial.chrome);
+  assert.strictEqual(
+    sorted.routes.teamCases.cases,
+    initial.routes.teamCases.cases
+  );
+});
