@@ -23,9 +23,19 @@ export function navigateTo(hash) {
  * The path and query are carried over unchanged so the SharePoint host page
  * is not reloaded.
  *
- * @param {string} hash - a full route hash, e.g. '#/'
+ * That last part is the whole reason for the `#` check: only the fragment may
+ * differ from the current URL. An argument without one produces a URL the
+ * browser treats as a different document, which full-reloads the `.aspx` host
+ * page — the one thing a single-host-page SPA must never do by accident.
+ *
+ * @param {string} hash - a full route hash; must begin with '#', e.g. '#/'
  * @returns {void}
  */
 export function redirectTo(hash) {
+  if (!hash.startsWith('#')) {
+    throw new Error(
+      `redirectTo expects a route hash beginning with '#', got: ${hash}`
+    );
+  }
   location.replace(`${location.pathname}${location.search}${hash}`);
 }

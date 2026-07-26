@@ -41,3 +41,12 @@ test('redirectTo replaces the current entry, preserving path and query', () => {
   assert.deepEqual(replaced, ['/SitePages/uat.app.aspx?mock=1#/']);
   assert.equal(stub.hash, '#/before', 'does not also assign the hash');
 });
+
+test('redirectTo rejects an argument that is not a route hash', () => {
+  const { replaced } = stubLocation();
+  // Without the '#', the replacement URL is a different document and the
+  // browser full-reloads the .aspx host page — fail loudly instead.
+  assert.throws(() => redirectTo('/'), /must begin|beginning with '#'/);
+  assert.throws(() => redirectTo(''), /must begin|beginning with '#'/);
+  assert.deepEqual(replaced, [], 'no navigation is attempted');
+});
