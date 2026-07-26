@@ -5,7 +5,9 @@
 Accepted as amended by ADR-0016, ADR-0024, ADR-0026, and ADR-0027. The tabbed
 Section layout remains current; its state and rendering mechanism is now the
 store-driven model in
-[ADR-0034](./0034-store-driven-views-supersede-component-owned-state.md).
+[ADR-0034](./0034-store-driven-views-supersede-component-owned-state.md) — see
+**Amendment (2026-07, #494)** below for what that left of the `cora-tabs`
+primitive named here.
 
 > The **Remediation** tab is now a
 > distinct _tracking_ Section (per-action complete/cancelled), split from **Issues**
@@ -19,6 +21,24 @@ store-driven model in
 > [the architecture decision]:./0027-appeal-flow-journeyowner-controls.md
 
 The case review page presents its **Section**s as tabs instead of one long scroll. **Case Details** is a new sixth Section and the default tab; the tab row is **Details · Questions · Remediation · Outcome · Notes**. Tabs are rendered by a generic, domain-free `cora-tabs` primitive (label list + selected id + ARIA roles + arrow-key nav, emits `cora-tab-change`); `cora-case-review.js` owns the Section→tab mapping, the access-driven visibility, and the default/fallback selection.
+
+## Amendment (2026-07, #494)
+
+The **tab shell decision stands**; only the rendering mechanism described above
+has moved on. There is no longer a `cora-tabs` primitive and no
+`cora-tab-change` custom event: under [ADR-0034](./0034-store-driven-views-supersede-component-owned-state.md)
+the app layer left custom elements behind, and `cora-case-review.js` now renders
+its own tablist directly from `h()` — the same ARIA
+`tablist`/`tab`/`tabpanel` roles and arrow-key navigation, with tab selection
+dispatched into the route store instead of announced by a DOM event. The
+unimported `cora-tabs` element that outlived that move was deleted rather than
+adopted (#494); its `.cora-tabs-*` class names survive as the tablist's CSS
+contract.
+
+Everything the original decision assigned to the page — the Section→tab
+mapping, access-driven visibility, and default/fallback selection — is still the
+page's, so the reason for keeping the tab widget dumb (see **Considered
+alternatives**) is satisfied by having no widget at all.
 
 ## Two deliberate exclusions
 

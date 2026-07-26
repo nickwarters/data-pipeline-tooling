@@ -167,7 +167,6 @@ src/
       cora-people-picker.js        # pure People Picker renderer and search helpers
       cora-group-progress.js      # pure per-Question-Group progress strip
       cora-status-banner.js
-      cora-tabs.js
       cora-toast.js
     sections/                   # domain-feature units: take config, wire base components together
       cora-allocation.js          # pure allocation view and candidate loader

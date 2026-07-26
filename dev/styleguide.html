@@ -899,9 +899,6 @@
                 >KPI Tiles</a
               >
             </li>
-            <li>
-              <a href="#tabs" class="sg-nav-link" data-section="tabs">Tabs</a>
-            </li>
           </ul>
           <div class="sg-nav-section">Patterns</div>
           <ul class="sg-nav-list" role="list">
@@ -2644,53 +2641,6 @@ Agent did not check the fraud alert flag before discussing account balance.</tex
               </div>
             </div>
           </section>
-
-          <section id="tabs" class="sg-section">
-            <div class="sg-section-header">
-              <h2 class="sg-section-title">Tabs</h2>
-              <span class="sg-section-id">#tabs</span>
-            </div>
-
-            <div class="sg-subsection">
-              <p class="sg-subsection-title">
-                cora-tabs — generic, domain-free tab navigation
-              </p>
-              <p
-                style="
-                  font-size: 0.875rem;
-                  color: var(--cora-color-text-muted);
-                  max-width: 52ch;
-                  margin: 0 0 var(--cora-space-3);
-                  line-height: 1.55;
-                "
-              >
-                A reusable tablist primitive driven by a
-                <code>{ id, label, hidden }</code> list and a selected id. It
-                renders ARIA <code>tablist</code>/<code>tab</code>/<code
-                  >tabpanel</code
-                >
-                roles, shows only the active panel, owns left/right arrow-key
-                navigation between visible tabs, and emits
-                <code>cora-tab-change</code> with the newly-selected id. It holds
-                no domain knowledge — the consumer supplies tab metadata and
-                panel content nodes.
-              </p>
-              <div class="sg-demo" style="overflow: visible">
-                <cora-tabs id="sg-tabs"></cora-tabs>
-                <p
-                  id="sg-tabs-event"
-                  style="
-                    margin-top: var(--cora-space-3);
-                    font-family: var(--cora-font-mono);
-                    font-size: 0.8125rem;
-                    color: var(--cora-color-text-muted);
-                  "
-                >
-                  No tab change yet — click a tab or use ← / → keys.
-                </p>
-              </div>
-            </div>
-          </section>
         </main>
       </div>
       <!-- .sg-layout -->
@@ -2798,44 +2748,6 @@ Agent did not check the fraud alert flag before discussing account balance.</tex
       const out = document.getElementById('sg-people-selected');
       picker.addEventListener('cora-person-selected', (e) => {
         out.textContent = `selected → { loginName: "${e.detail.loginName}", displayName: "${e.detail.displayName}" }`;
-      });
-
-      // ── cora-tabs demo ──────────────────────────────────────────────────────
-      import('../src/components/base/cora-tabs.js').then(() => {
-        const tabs = document.getElementById('sg-tabs');
-
-        const panel = (text) => {
-          const p = document.createElement('p');
-          p.style.margin = '0';
-          p.style.color = 'var(--cora-color-on-surface)';
-          p.style.lineHeight = '1.55';
-          p.textContent = text;
-          return p;
-        };
-
-        tabs.tabs = [
-          { id: 'overview', label: 'Overview' },
-          { id: 'details', label: 'Details' },
-          { id: 'archived', label: 'Archived', hidden: true },
-          { id: 'activity', label: 'Activity' },
-        ];
-        tabs.panels = {
-          overview: panel(
-            'The Overview panel. Note the "Archived" tab is hidden, so it renders no button and no panel.'
-          ),
-          details: panel(
-            'The Details panel. Arrow keys move between visible tabs and wrap at the ends.'
-          ),
-          archived: panel('You should never see this — the tab is hidden.'),
-          activity: panel('The Activity panel.'),
-        };
-        tabs.selected = 'overview';
-        tabs.render();
-
-        const evtOut = document.getElementById('sg-tabs-event');
-        tabs.addEventListener('cora-tab-change', (e) => {
-          evtOut.textContent = `cora-tab-change → { id: "${e.detail.id}" }`;
-        });
       });
     </script>
   </body>
