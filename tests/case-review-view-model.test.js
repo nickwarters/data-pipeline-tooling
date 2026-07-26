@@ -461,7 +461,17 @@ test('CaseReviewViewModel.load(): missing versioned file falls back to live cata
     capabilities: null,
   });
 
-  await vm.load();
+  // A stamped-but-unpublished version is a broken publish, and the banner only
+  // reaches whoever opens the Case. The log is the operator's copy (#513).
+  const originalError = console.error;
+  /** @type {unknown[]} */
+  const logged = [];
+  console.error = (/** @type {unknown} */ message) => logged.push(message);
+  try {
+    await vm.load();
+  } finally {
+    console.error = originalError;
+  }
 
   const liveIds = new Set(vm.catalogue.map((q) => q.id));
   assert.ok(liveIds.has('q-welcome'), 'falls back to live bank');
@@ -469,6 +479,8 @@ test('CaseReviewViewModel.load(): missing versioned file falls back to live cata
     vm.versionWarning.get() !== null && vm.versionWarning.get() !== '',
     'versionWarning is set when versioned file is missing'
   );
+  assert.equal(logged.length, 1, 'the failed freeze is logged once');
+  assert.match(String(logged[0]), /sha256:abc123/);
 });
 
 test('CaseReviewViewModel.load(): In-progress Case loads live catalogue; versionWarning stays null (ADR-0021 Step 4)', async () => {
