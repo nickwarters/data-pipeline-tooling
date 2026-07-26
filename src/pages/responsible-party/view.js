@@ -2,6 +2,7 @@
 import { h } from '../../lib/html.js';
 import { caseRouteFor } from '../../lib/case-route-links.js';
 import { CASE_STATUS } from '../../lib/case-statuses.js';
+import { isOverdue } from '../../evaluators/overdue-evaluator.js';
 import { caseActionsColumn } from '../../views/case-columns.js';
 import { dataTableView } from '../../views/data-table.js';
 
@@ -127,6 +128,25 @@ function outcomeSummaryView(summary) {
   );
 }
 
+/**
+ * The deadline this table is about: the **case-level Remediation Due Date**,
+ * stamped at Send Actions as `reportableAt` + 10 working days, and the clock the
+ * Responsible Party actually works to. `dueDate` is the *review* SLA — the
+ * Assigned Reviewer's clock — and dating remediation work by it was #498.
+ *
+ * The fallback is retained deliberately: every Case that passes Send Actions is
+ * stamped, but a Case carried over from before that transition existed (or
+ * closed before #502 taught the fork to see free-form remediation) can still
+ * reach this table with only a review `dueDate`, and showing the wrong date
+ * beats showing none.
+ *
+ * @param {CaseRow} row
+ * @returns {string}
+ */
+function remediationDeadline(row) {
+  return row.remediationDueDate || row.dueDate || '';
+}
+
 /** @returns {import('../../views/data-table.js').ColumnDescriptor<CaseRow>[]} */
 function remediationColumns() {
   return [
@@ -137,9 +157,9 @@ function remediationColumns() {
     },
     { key: 'caseType', label: 'Case Type', value: 'caseType' },
     {
-      key: 'dueDate',
-      label: 'Due Date',
-      value: (row) => row.dueDate || '',
+      key: 'remediationDueDate',
+      label: 'Remediation due',
+      value: remediationDeadline,
       sortable: true,
       format: (value) =>
         value ? new Date(String(value)).toLocaleDateString() : '—',
@@ -201,7 +221,6 @@ export function responsiblePartyView(state, handlers, now = new Date()) {
   const remediationCases = state.filter
     ? derived.remediationCases.filter((row) => row.caseType === state.filter)
     : derived.remediationCases;
-  const today = now.toISOString();
   return h(
     'div',
     { className: 'cora-responsible-party-dashboard' },
@@ -231,10 +250,15 @@ export function responsiblePartyView(state, handlers, now = new Date()) {
         onSort: handlers.onRemediationSort,
         emptyMessage: 'No outstanding remediation actions.',
         rowKey: (row) => `${row.caseType}:${row.id}`,
-        rowClass: (row) =>
-          row.dueDate && row.dueDate < today
+        // Overdue against the *remediation* clock, exactly as the Remediation
+        // tab badges it — `isOverdue` reads `dueDate`, so the deadline this
+        // table is about is substituted in (#498).
+        rowClass: (row) => {
+          const dueDate = remediationDeadline(row);
+          return dueDate && isOverdue({ ...row, dueDate }, undefined, now)
             ? 'cora-remediation-row cora-overdue'
-            : 'cora-remediation-row',
+            : 'cora-remediation-row';
+        },
       })
     ),
     h(

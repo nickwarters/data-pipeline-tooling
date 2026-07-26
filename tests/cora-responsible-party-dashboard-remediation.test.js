@@ -136,3 +136,54 @@ test('Responsible Party tables preserve missing dates and optional conversation 
       ?.dispatchEvent(/** @type {any} */ ({ type: 'click' }))
   );
 });
+
+/** @param {Partial<import('../src/sharepoint-client.js').CaseRow>} patch */
+function rpView(patch) {
+  const base = row('c1', 'complaints', '2099-01-01T00:00:00Z');
+  return responsiblePartyView(
+    {
+      cases: [/** @type {any} */ ({ ...base, ...patch })],
+      currentUserId: 'rp-1',
+      filter: '',
+      remediationSort: null,
+      messageSort: null,
+    },
+    {
+      onFilterChange: () => {},
+      onRemediationSort: () => {},
+      onMessageSort: () => {},
+    },
+    new Date('2026-07-01T00:00:00Z')
+  ).querySelector('.cora-rp-remediation');
+}
+
+test('the Responsible Party works to the remediation clock, not the review SLA (#498)', () => {
+  const section = rpView({
+    dueDate: '2099-01-01T00:00:00Z',
+    remediationDueDate: '2026-06-01T00:00:00Z',
+  });
+  // The column is the remediation SLA, worded as the Remediation tab words it.
+  assert.match(section?.textContent ?? '', /Remediation due/);
+  assert.doesNotMatch(section?.textContent ?? '', /Due Date/);
+  assert.match(
+    section?.querySelector('tbody')?.querySelector('tr')?.textContent ?? '',
+    /2026/
+  );
+  // Overdue is judged against that same clock, so a Case inside its review SLA
+  // but past its remediation deadline is badged.
+  assert.equal(
+    section?.querySelector('tbody')?.querySelector('tr')?.className,
+    'cora-remediation-row cora-overdue'
+  );
+});
+
+test('a Case inside its remediation SLA is not overdue on the review clock (#498)', () => {
+  const section = rpView({
+    dueDate: '2020-01-01T00:00:00Z',
+    remediationDueDate: '2099-01-01T00:00:00Z',
+  });
+  assert.equal(
+    section?.querySelector('tbody')?.querySelector('tr')?.className,
+    'cora-remediation-row'
+  );
+});

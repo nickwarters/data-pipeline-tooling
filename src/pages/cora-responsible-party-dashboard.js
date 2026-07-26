@@ -19,7 +19,7 @@ export function initialResponsiblePartyState(currentUserId) {
     filter: '',
     remediationSort:
       /** @type {import('../views/data-table.js').TableSort | null} */ ({
-        key: 'dueDate',
+        key: 'remediationDueDate',
         dir: 'asc',
       }),
     messageSort:

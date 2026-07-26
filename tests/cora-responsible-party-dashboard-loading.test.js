@@ -108,7 +108,7 @@ test('Responsible Party reducer owns loaded rows, filters, and both table sorts'
   });
   state = slice.reducer(state, {
     type: 'remediation-table/sort-requested',
-    key: 'dueDate',
+    key: 'remediationDueDate',
   });
   state = slice.reducer(state, {
     type: 'unread-table/sort-requested',
@@ -154,16 +154,16 @@ function panelState() {
   };
 }
 
-test('#516 Responsible Party panel: clicking the remediation Due Date header dispatches its table sort action', () => {
+test('#516 Responsible Party panel: clicking the Remediation due header dispatches its table sort action', () => {
   /** @type {any[]} */
   const actions = [];
   const view = responsiblePartyPanelView(panelState(), {
     dispatch: (/** @type {any} */ action) => actions.push(action),
   });
 
-  fireEvent(getByRole(view, 'button', { name: 'Due Date' }), 'click');
+  fireEvent(getByRole(view, 'button', { name: 'Remediation due' }), 'click');
   assert.deepEqual(actions, [
-    { type: 'remediation-table/sort-requested', key: 'dueDate' },
+    { type: 'remediation-table/sort-requested', key: 'remediationDueDate' },
   ]);
 });
 

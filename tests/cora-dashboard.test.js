@@ -976,7 +976,7 @@ test('dashboard reducer composes Controls, Action Centre, and Responsible Party 
   });
   state = slice.reducer(state, {
     type: 'remediation-table/sort-requested',
-    key: 'dueDate',
+    key: 'remediationDueDate',
   });
   state = slice.reducer(state, {
     type: 'unread-table/sort-requested',
