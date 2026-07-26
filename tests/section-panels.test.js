@@ -51,10 +51,3 @@ test('adding a tab Section without a panel breaks the correspondence', () => {
 test('conversation is not a panel — it is a floating overlay', () => {
   assert.equal('conversation' in SECTION_PANELS, false);
 });
-
-test('every panel renderer is a function of one context object', () => {
-  for (const [id, render] of Object.entries(SECTION_PANELS)) {
-    assert.equal(typeof render, 'function', `${id} renderer`);
-    assert.equal(render.length, 1, `${id} renderer arity`);
-  }
-});

@@ -53,18 +53,26 @@ import {
  */
 
 /**
+ * The route slice's own state. Named rather than inlined into `CaseReviewState`
+ * because `section-panels.js` reads it too — a panel renderer receives this
+ * object on its context, and referencing one typedef from both places is what
+ * keeps the two from drifting.
+ *
+ * @typedef {Object} CaseReviewRouteState
+ * @property {string} activeTab
+ * @property {string} panelMode
+ * @property {SaveStatus} saveStatus
+ * @property {boolean} conversationHidden
+ * @property {boolean} completionPending
+ * @property {Record<string, Map<string, boolean>>} captureCollapsed
+ * @property {Record<string, { query: string, people: import('../sharepoint-client.js').PersonResult[] }>} attributionSearch
+ * @property {CaseReviewSnapshot | null} snapshot
+ */
+
+/**
  * @typedef {Object} CaseReviewState
  * @property {import('../core/chrome-state.js').ChromeState} chrome
- * @property {{ caseReview: {
- *   activeTab: string,
- *   panelMode: string,
- *   saveStatus: SaveStatus,
- *   conversationHidden: boolean,
- *   completionPending: boolean,
- *   captureCollapsed: Record<string, Map<string, boolean>>,
- *   attributionSearch: Record<string, { query: string, people: import('../sharepoint-client.js').PersonResult[] }>,
- *   snapshot: CaseReviewSnapshot | null,
- * } }} routes
+ * @property {{ caseReview: CaseReviewRouteState }} routes
  */
 
 /**

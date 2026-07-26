@@ -52,13 +52,9 @@ import { remediationAudience } from '../../services/section-access.js';
  *   `snapshot.caseRow`, narrowed.
  * @property {import('../../sharepoint-client.js').CaseTypeConfig} config
  *   `snapshot.config`, narrowed.
- * @property {{
- *   activeTab: string,
- *   conversationHidden: boolean,
- *   captureCollapsed: Record<string, Map<string, boolean>>,
- *   attributionSearch: Record<string, { query: string, people: import('../../sharepoint-client.js').PersonResult[] }>,
- * }} route
- *   The route slice's view state.
+ * @property {import('../cora-case-review.js').CaseReviewRouteState} route
+ *   The route slice's view state, as the page holds it. Referenced rather than
+ *   restated so a field added there cannot drift from what panels read.
  * @property {(action: any) => unknown} dispatch
  * @property {PanelActions} actions
  */
@@ -76,11 +72,12 @@ import { remediationAudience } from '../../services/section-access.js';
  * @property {(questionId: string, party: { loginName: string, displayName: string } | null) => void} selectAttribution
  * @property {(questionId: string, query: string) => void} requestAttributionSearch
  * @property {{ fieldEdited: (field: string, value: string) => void }} save
- * @property {{
- *   raise: (input: any) => unknown,
- *   resolve: (input: any) => unknown,
- *   amend: (input: any) => unknown,
- * }} appeals
+ *   Narrowed on purpose: panels may report a field edit, and nothing else on the
+ *   SaveQueue bridge.
+ * @property {ReturnType<typeof import('./appeal-effects.js').createAppealEffects>} appeals
+ *   The whole effect object, not a hand-written shape — these three are the
+ *   persisted ADR-0026/0027 state transitions, so their argument shapes are
+ *   worth keeping under `tsc`.
  */
 
 /**
@@ -111,7 +108,7 @@ function sectionStyleHost(tagName, children) {
  * @param {(questionId: string, value: string | string[]) => void} onAnswer
  * @returns {Node[]}
  */
-export function questionsPanel(snapshot, questionsView, onAnswer) {
+function questionsPanel(snapshot, questionsView, onAnswer) {
   return withGeneralQuestions(
     questionsView.render({
       catalogue: snapshot.catalogue,
@@ -135,9 +132,15 @@ export function questionsPanel(snapshot, questionsView, onAnswer) {
 }
 
 /**
- * One entry per tab Section. Key set is locked to `tabEntries()` by test.
+ * One entry per tab Section.
  *
- * @type {Record<string, PanelRenderer>}
+ * Keyed by `Section`, so a mistyped key is a `tsc` error rather than a test
+ * failure. `Partial<…>` because `conversation` is a Section and not a tab —
+ * which is also why `renderRoute` guards on the lookup being present, and why
+ * `tests/section-panels.test.js` still has to assert the key set *equals*
+ * `tabEntries()`' ids: the type stops wrong keys, the test stops missing ones.
+ *
+ * @type {Partial<Record<import('../../lib/section-registry.js').Section, PanelRenderer>>}
  */
 export const SECTION_PANELS = {
   details: ({ caseRow, config }) =>
