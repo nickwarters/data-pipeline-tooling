@@ -1,5 +1,6 @@
 // @ts-check
 import { h } from '../lib/html.js';
+import { patchRoute } from '../core/route-state.js';
 import { CaseMachine } from '../lib/case-machine.js';
 import {
   UnknownCaseTypeError,
@@ -117,36 +118,19 @@ export function createRouteSlice(params, context) {
     reducer(state, action) {
       const route = state.routes.conversation;
       if (action.type === 'conversation/loaded') {
-        return {
-          ...state,
-          routes: {
-            conversation: {
-              ...route,
-              caseRow: action.caseRow,
-              access: action.access,
-              caseListOptions: action.caseListOptions,
-            },
-          },
-        };
+        return patchRoute(state, 'conversation', {
+          caseRow: action.caseRow,
+          access: action.access,
+          caseListOptions: action.caseListOptions,
+        });
       }
       if (action.type === 'conversation/messages-changed' && route.caseRow) {
-        return {
-          ...state,
-          routes: {
-            conversation: {
-              ...route,
-              caseRow: { ...route.caseRow, conversation: action.messages },
-            },
-          },
-        };
+        return patchRoute(state, 'conversation', {
+          caseRow: { ...route.caseRow, conversation: action.messages },
+        });
       }
       if (action.type === 'conversation/load-failed') {
-        return {
-          ...state,
-          routes: {
-            conversation: { ...route, error: action.message },
-          },
-        };
+        return patchRoute(state, 'conversation', { error: action.message });
       }
       return state;
     },

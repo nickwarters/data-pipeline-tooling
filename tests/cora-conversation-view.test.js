@@ -183,10 +183,15 @@ test('CASE-3 standalone page and reducer render store state without a custom ele
     messages: [{ author: 'A', timestamp: '2026-07-19', body: 'B' }],
   });
   assert.equal(changed.routes.conversation.caseRow?.conversation[0].body, 'B');
-  assert.equal(
+  assert.strictEqual(
     slice.reducer(changed, { type: 'unrelated' }),
     changed,
     'unknown actions preserve state identity'
+  );
+  assert.strictEqual(changed.chrome, slice.initialState.chrome);
+  assert.strictEqual(
+    changed.routes.conversation.caseListOptions,
+    loaded.routes.conversation.caseListOptions
   );
 });
 
