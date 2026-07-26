@@ -2606,7 +2606,7 @@ Agent did not check the fraud alert flag before discussing account balance.</tex
 
             <div class="sg-subsection">
               <p class="sg-subsection-title">
-                cora-people-picker — live type-ahead (mock directory)
+                PeoplePicker() — live type-ahead (mock directory)
               </p>
               <p
                 style="
@@ -2619,14 +2619,15 @@ Agent did not check the fraud alert flag before discussing account balance.</tex
               >
                 Type a name (try <code>smith</code>, <code>jones</code>, or
                 <code>wei</code>) to search the mock directory. Selecting a
-                result emits <code>cora-person-selected</code> with the bare
+                result calls the <code>onSelect</code> prop with the bare
                 account name. With no matches, a free-text fallback offers the
-                typed text as a raw account.
+                typed text as a raw account. The picker is a pure view
+                function — state lives outside it and every keystroke re-renders
+                through <code>morph()</code>, which is what keeps the caret in
+                place.
               </p>
               <div class="sg-demo" style="overflow: visible">
-                <div style="max-width: 24rem">
-                  <cora-people-picker id="sg-people-picker"></cora-people-picker>
-                </div>
+                <div id="sg-people-picker" style="max-width: 24rem"></div>
                 <p
                   id="sg-people-selected"
                   style="
@@ -2729,26 +2730,70 @@ Agent did not check the fraud alert flag before discussing account balance.</tex
       sections.forEach((s) => obs.observe(s));
     </script>
 
-    <!-- ── Live cora-people-picker demo (mock directory, no fetch) ───────────── -->
+    <!-- ── Live People Picker demo (mock directory, no fetch) ─────────────────── -->
     <script type="module">
       import { MockSharePointClient } from '../src/services/mock-sharepoint-client.js';
       import { people } from './fixtures/people.js';
-      import { CORAPeoplePicker } from '../src/components/base/cora-people-picker.js';
+      import {
+        PeoplePicker,
+        searchPeople,
+      } from '../src/components/base/cora-people-picker.js';
+      import { morph } from '../src/core/morph.js';
 
-      const client = new MockSharePointClient({
-        personas: {},
-        people,
-      });
-
-      const picker = document.getElementById('sg-people-picker');
-      picker.client = client;
-      // Snappier than the production default for an interactive demo.
-      picker.debounceMs = 120;
-
+      const client = new MockSharePointClient({ personas: {}, people });
+      const host = document.getElementById('sg-people-picker');
       const out = document.getElementById('sg-people-selected');
-      picker.addEventListener('cora-person-selected', (e) => {
-        out.textContent = `selected → { loginName: "${e.detail.loginName}", displayName: "${e.detail.displayName}" }`;
-      });
+
+      // PeoplePicker is a pure view (#536), so the demo owns the state the way
+      // a route store would and re-renders through morph() — which is what
+      // keeps the caret in place across a keystroke.
+      const state = { inputValue: '', query: '', results: [] };
+      let timer = null;
+
+      function render() {
+        morph(
+          host,
+          PeoplePicker({
+            placeholder: 'Search people…',
+            people: state.results,
+            query: state.query,
+            inputValue: state.inputValue,
+            onQueryInput,
+            onSelect,
+          })
+        );
+      }
+
+      function onQueryInput(value) {
+        state.inputValue = value;
+        render();
+        clearTimeout(timer);
+        // Snappier than the production default for an interactive demo.
+        timer = setTimeout(() => {
+          searchPeople(
+            {
+              client,
+              renderResults(results, query) {
+                state.results = results;
+                state.query = query;
+                render();
+              },
+            },
+            value
+          );
+        }, 120);
+      }
+
+      function onSelect(person) {
+        clearTimeout(timer);
+        state.inputValue = person.displayName;
+        state.results = [];
+        state.query = '';
+        render();
+        out.textContent = `selected → { loginName: "${person.loginName}", displayName: "${person.displayName}" }`;
+      }
+
+      render();
     </script>
   </body>
 </html>
