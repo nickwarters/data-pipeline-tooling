@@ -13,6 +13,31 @@ const { baselineBank, diffCounts, isDirty, questionBankReducer } =
 const { BankList } =
   await import('../src/pages/question-bank/cora-bank-list.js');
 const { createMemo } = await import('../src/core/memo.js');
+const { loadQuestionBanks } =
+  await import('../src/pages/question-bank/question-bank-source.js');
+
+const { banks: liveBanks } = await loadQuestionBanks();
+
+/**
+ * The banks now arrive through `start()` rather than at import (#521). Tests
+ * that assert on a populated editor seat them up front, and inject the loader
+ * so `start()` does no real I/O.
+ * @param {any} [ctx]
+ * @returns {any}
+ */
+function loadedSlice(ctx = context()) {
+  const slice = createRouteSlice({}, ctx, {
+    loadBanks: async () => ({ banks: liveBanks, failures: [] }),
+  });
+  return {
+    ...slice,
+    initialState: slice.reducer(slice.initialState, {
+      type: 'bank/loaded',
+      banks: liveBanks,
+      failures: [],
+    }),
+  };
+}
 
 function context() {
   return /** @type {any} */ ({
@@ -27,7 +52,7 @@ function context() {
 }
 
 test('question bank slice owns bank selection, filters, and drawer state', () => {
-  const slice = createRouteSlice({}, context());
+  const slice = loadedSlice();
   const initial = selectQuestionBankState(slice.initialState);
   const selected = slice.reducer(slice.initialState, {
     type: 'bank/selected',
@@ -49,7 +74,7 @@ test('question bank slice owns bank selection, filters, and drawer state', () =>
 });
 
 test('question bank slice deprecates and restores definitions without deleting them', () => {
-  const slice = createRouteSlice({}, context());
+  const slice = loadedSlice();
   const before = selectQuestionBankState(slice.initialState);
   const question = before.cases[before.activeSlug].questions[0];
 
@@ -217,9 +242,7 @@ test('editing a Question ID refreshes condition targets in memoised neighbouring
 });
 
 test('bank selectors report added, changed, and deprecated Question Definitions', () => {
-  const route = selectQuestionBankState(
-    createRouteSlice({}, context()).initialState
-  );
+  const route = selectQuestionBankState(loadedSlice().initialState);
   const baseline = baselineBank(route);
   const changed = structuredClone(route);
   changed.cases[changed.activeSlug].questions[0].text += ' edited';
@@ -241,7 +264,7 @@ test('bank selectors report added, changed, and deprecated Question Definitions'
 });
 
 test('bank route reducer owns filters, samples, toast, revert, and publish state', () => {
-  const slice = createRouteSlice({}, context());
+  const slice = loadedSlice();
   let state = slice.initialState;
   for (const action of [
     { type: 'filters/changed', patch: { category: 'Opening' } },
@@ -269,7 +292,7 @@ test('bank route reducer owns filters, samples, toast, revert, and publish state
 });
 
 test('bank editor pure view wires tabs, drawer, simulation, and toast actions', () => {
-  const slice = createRouteSlice({}, context());
+  const slice = loadedSlice();
   const route = selectQuestionBankState(slice.initialState);
   const dirtyRoute = questionBankReducer(route, {
     type: 'question/field-changed',
@@ -332,7 +355,7 @@ test('bank route start owns keyboard, sample-load, and unmount effects', async (
       example: [{ id: 'case-1', title: 'Case', answers: {} }],
     }),
   });
-  const slice = createRouteSlice({}, ctx);
+  const slice = loadedSlice(ctx);
   /** @type {any[]} */
   const actions = [];
   /** @type {Function|null} */
@@ -341,6 +364,7 @@ test('bank route start owns keyboard, sample-load, and unmount effects', async (
   /** @type {any} */ (globalThis).location.search = '?simulate=1';
   const dispose = slice.start({
     dispatch: (/** @type {any} */ action) => actions.push(action),
+    isActive: () => true,
     listen: (
       /** @type {any} */ _target,
       /** @type {string} */ type,
@@ -373,8 +397,7 @@ test('Send for Review runs the publish effect and stores its exact artifacts', a
   const written = new Promise((resolve) => {
     wrote = resolve;
   });
-  const slice = createRouteSlice(
-    {},
+  const slice = loadedSlice(
     /** @type {any} */ ({
       ...context(),
       writeQuestionBankArtifacts: async (/** @type {any} */ artifacts) => {
@@ -416,8 +439,7 @@ test('publish effect reports writer failures and ignores work after unmount', as
     const attempt = new Promise((resolve) => {
       attempted = resolve;
     });
-    const slice = createRouteSlice(
-      {},
+    const slice = loadedSlice(
       /** @type {any} */ ({
         ...context(),
         writeQuestionBankArtifacts: async () => {
@@ -451,8 +473,7 @@ test('publish effect reports writer failures and ignores work after unmount', as
   const pending = new Promise((resolve) => {
     release = resolve;
   });
-  const slice = createRouteSlice(
-    {},
+  const slice = loadedSlice(
     /** @type {any} */ ({
       ...context(),
       writeQuestionBankArtifacts: async () => pending,
@@ -487,7 +508,7 @@ test('publish effect reports writer failures and ignores work after unmount', as
 });
 
 test('bank editor and route effects preserve rejected and disabled branches', async () => {
-  const slice = createRouteSlice({}, context());
+  const slice = loadedSlice();
   /** @type {any[]} */
   const actions = [];
   const originalConfirm = /** @type {any} */ (globalThis).confirm;
@@ -517,6 +538,7 @@ test('bank editor and route effects preserve rejected and disabled branches', as
     let key = /** @type {Function|null} */ (null);
     slice.start({
       dispatch: (/** @type {any} */ action) => actions.push(action),
+      isActive: () => true,
       listen: (
         /** @type {any} */ _target,
         /** @type {string} */ _type,
@@ -536,8 +558,7 @@ test('bank editor and route effects preserve rejected and disabled branches', as
   assert.ok(actions.some((action) => action.type === 'drawer/changed'));
 
   /** @type {any} */ (globalThis).location.search = '?simulate=1';
-  const invalidSamples = createRouteSlice(
-    {},
+  const invalidSamples = loadedSlice(
     /** @type {any} */ ({
       ...context(),
       loadQuestionBankSamples: async () => null,
@@ -545,6 +566,7 @@ test('bank editor and route effects preserve rejected and disabled branches', as
   );
   const dispose = invalidSamples.start({
     dispatch() {},
+    isActive: () => true,
     listen() {},
   });
   await flush();
@@ -568,8 +590,7 @@ test('#517 bank editor slice: the adapter mount lifetime, not a page latch, supp
     const atWriter = new Promise((resolve) => {
       reachedWriter = resolve;
     });
-    const slice = createRouteSlice(
-      {},
+    const slice = loadedSlice(
       /** @type {any} */ ({
         ...context(),
         writeQuestionBankArtifacts: async () => {
@@ -618,4 +639,192 @@ test('#517 bank editor slice: the adapter mount lifetime, not a page latch, supp
 
   assert.equal(mounted.status, 'succeeded');
   assert.equal(unmounted.status, 'publishing');
+});
+
+/**
+ * A store harness over the real slice: `start()` drives it exactly as the
+ * adapter would, so the load effect is exercised end to end (#521).
+ * @param {any} deps
+ * @param {any} [ctx]
+ */
+function mountSlice(deps, ctx = context()) {
+  const slice = createRouteSlice({}, ctx, deps);
+  let state = slice.initialState;
+  let active = true;
+  const tools = /** @type {any} */ ({
+    dispatch(/** @type {any} */ action) {
+      state = slice.reducer(state, action);
+    },
+    listen() {},
+    isActive: () => active,
+  });
+  const dispose = slice.start(tools);
+  return {
+    get route() {
+      return selectQuestionBankState(state);
+    },
+    view: () => slice.view(state, { ...tools, memo: createMemo() }),
+    unmount: () => {
+      active = false;
+      dispose?.();
+    },
+  };
+}
+
+test('#521 importing the bank source and slice performs no I/O; start() does the single load', async () => {
+  let calls = 0;
+  const importers = {
+    alpha: async () => {
+      calls += 1;
+      return {
+        default: {
+          slug: 'alpha',
+          label: 'Alpha',
+          questions: [
+            {
+              id: 'q-a',
+              text: 'A?',
+              responseType: 'yes-no-na',
+              deprecated: false,
+            },
+          ],
+        },
+      };
+    },
+  };
+  await import('../src/pages/question-bank/bank-slice.js');
+  await import('../src/pages/question-bank/question-bank-source.js');
+
+  assert.equal(calls, 0);
+
+  const mounted = mountSlice({
+    loadBanks: (/** @type {any} */ _unused) =>
+      loadQuestionBanks(/** @type {any} */ (importers)),
+  });
+  assert.equal(mounted.route.loading, true);
+  assert.equal(mounted.route.activeSlug, '');
+  await flush();
+  await flush();
+
+  assert.equal(calls, 1);
+  assert.equal(mounted.route.loading, false);
+  assert.equal(mounted.route.activeSlug, 'alpha');
+  assert.equal(mounted.route.cases.alpha.questions.length, 1);
+  mounted.unmount();
+});
+
+test('#521 the bank editor renders a loading state before its banks arrive', async () => {
+  let release = /** @type {(value?: any) => void} */ (() => {});
+  const pending = new Promise((resolve) => {
+    release = resolve;
+  });
+  const mounted = mountSlice({ loadBanks: () => pending });
+
+  const loadingView = mounted.view();
+  assert.match(loadingView.textContent ?? '', /Loading Question Banks/);
+
+  release({ banks: liveBanks, failures: [] });
+  await flush();
+  assert.equal(mounted.route.loading, false);
+  assert.doesNotMatch(
+    mounted.view().textContent ?? '',
+    /Loading Question Banks/
+  );
+  mounted.unmount();
+});
+
+test('#521 a bank load that resolves after unmount is discarded', async () => {
+  let release = /** @type {(value?: any) => void} */ (() => {});
+  const pending = new Promise((resolve) => {
+    release = resolve;
+  });
+  const mounted = mountSlice({ loadBanks: () => pending });
+  mounted.unmount();
+  release({ banks: liveBanks, failures: [] });
+  await flush();
+
+  assert.equal(mounted.route.loading, true);
+  assert.deepEqual(mounted.route.cases, {});
+});
+
+test('#521 a failed bank load leaves the editor with an error state, not a blank page', async () => {
+  const errors = [];
+  const originalError = console.error;
+  console.error = (/** @type {any[]} */ ...args) => errors.push(args);
+  let mounted;
+  try {
+    mounted = mountSlice({
+      loadBanks: async () => {
+        throw new Error('bank artifacts unreachable');
+      },
+    });
+    await flush();
+  } finally {
+    console.error = originalError;
+  }
+
+  assert.equal(mounted.route.loading, false);
+  assert.equal(mounted.route.loadError, 'bank artifacts unreachable');
+  const text = mounted.view().textContent ?? '';
+  assert.match(text, /No Question Bank could be loaded/);
+  assert.match(text, /bank artifacts unreachable/);
+  assert.equal(errors.length, 1);
+  mounted.unmount();
+});
+
+test('#521 a load that reports no banks at all still renders the error shell', async () => {
+  const mounted = mountSlice({
+    loadBanks: async () => ({ banks: {}, failures: [] }),
+  });
+  await flush();
+
+  assert.match(
+    mounted.view().textContent ?? '',
+    /No Question Bank artifacts are registered/
+  );
+  mounted.unmount();
+});
+
+test('#521 one unloadable bank still names itself while the others stay editable', async () => {
+  const mounted = mountSlice({
+    loadBanks: async () => ({
+      banks: liveBanks,
+      failures: [{ slug: 'broken', message: '404' }],
+    }),
+  });
+  await flush();
+
+  const text = mounted.view().textContent ?? '';
+  assert.match(text, /Some Question Banks could not be loaded: broken \(404\)/);
+  assert.equal(mounted.route.activeSlug, Object.keys(liveBanks)[0]);
+  mounted.unmount();
+});
+
+test('#521 the loaded draft and baseline are separate clones, so diffing still sees edits', async () => {
+  const mounted = mountSlice({
+    loadBanks: async () => ({ banks: liveBanks, failures: [] }),
+  });
+  await flush();
+  const route = mounted.route;
+
+  assert.notEqual(route.cases, route.baseline);
+  assert.equal(isDirty(route), false);
+  const edited = questionBankReducer(route, {
+    type: 'question/field-changed',
+    questionId: route.cases[route.activeSlug].questions[0].id,
+    field: 'text',
+    value: 'Changed by the curator',
+  });
+  assert.equal(isDirty(edited), true);
+  assert.deepEqual(diffCounts(edited), { added: 0, changed: 1, deprecated: 0 });
+  assert.notEqual(
+    baselineBank(edited).questions[0].text,
+    'Changed by the curator'
+  );
+  // The live bank map handed to the slice is never mutated by editing.
+  assert.notEqual(
+    liveBanks[route.activeSlug].questions[0].text,
+    'Changed by the curator'
+  );
+  mounted.unmount();
 });

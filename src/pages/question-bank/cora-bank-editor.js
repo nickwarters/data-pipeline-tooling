@@ -21,6 +21,7 @@ import { simulatorEnabled } from './question-bank-flags.js';
 import { SimulatePanel } from './simulate-panel.js';
 import { CompileDrawer } from './compile-drawer.js';
 import { CaseTabs } from '../../components/collections/cora-case-tabs.js';
+import { loadQuestionBanks } from './question-bank-source.js';
 
 /** @typedef {import('./bank-slice.js').QuestionBankRouteState} QuestionBankRouteState */
 /** @typedef {{ chrome: import('../../core/chrome-state.js').ChromeState, routes: { questionBank: QuestionBankRouteState } }} QuestionBankState */
@@ -92,6 +93,71 @@ function compileDrawerPropsFor(route, dispatch, publish, diff) {
   };
 }
 
+/** @returns {HTMLElement} */
+function masthead() {
+  return h(
+    'header',
+    { className: 'masthead' },
+    h(
+      'div',
+      {},
+      h(
+        'div',
+        { className: 'eyebrow' },
+        'Case Type Owner ',
+        h('span', { className: 'dot' }),
+        ' Question Bank'
+      ),
+      h('h1', {}, 'Question ', h('em', {}, 'Bank'))
+    ),
+    h(
+      'div',
+      { className: 'masthead-meta' },
+      'Session: ',
+      h('strong', {}, 'local · uncommitted'),
+      h('br'),
+      'Schema: ',
+      h('strong', {}, 'questions.v3')
+    )
+  );
+}
+
+/**
+ * The shell the editor shows before any bank has arrived, and when none can be
+ * loaded at all (#521).
+ * @param {string} heading
+ * @param {string} detail
+ * @returns {HTMLElement}
+ */
+function bankStatusShell(heading, detail) {
+  return h(
+    'div',
+    { className: 'cora-bank-editor' },
+    masthead(),
+    h(
+      'main',
+      { className: 'bank-main' },
+      h(
+        'section',
+        { className: 'editor' },
+        h(
+          'div',
+          { className: 'empty', role: 'status' },
+          h('h3', {}, heading),
+          h('p', {}, detail)
+        )
+      )
+    )
+  );
+}
+
+/** @param {import('./question-bank-source.js').BankLoadFailure[]} failures */
+function describeFailures(failures) {
+  return failures
+    .map((failure) => `${failure.slug} (${failure.message})`)
+    .join(', ');
+}
+
 /**
  * @param {QuestionBankState} state
  * @param {{ dispatch: (action: any) => any, memo?: (key: PropertyKey, deps: readonly unknown[], render: () => HTMLElement) => HTMLElement, publish?: () => void }} tools
@@ -99,38 +165,36 @@ function compileDrawerPropsFor(route, dispatch, publish, diff) {
  */
 export function bankEditorView(state, tools) {
   const route = selectQuestionBankState(state);
+  if (route.loading) {
+    return bankStatusShell(
+      'Loading Question Banks…',
+      'Reading the published bank artifacts.'
+    );
+  }
   const bank = currentBank(route);
+  if (!bank) {
+    return bankStatusShell(
+      'No Question Bank could be loaded.',
+      route.loadError ||
+        (route.loadFailures.length
+          ? `Failed: ${describeFailures(route.loadFailures)}`
+          : 'No Question Bank artifacts are registered for this site.')
+    );
+  }
   const dirty = isDirty(route);
   const diff = diffCounts(route);
 
   return h(
     'div',
     { className: 'cora-bank-editor' },
-    h(
-      'header',
-      { className: 'masthead' },
-      h(
-        'div',
-        {},
-        h(
+    masthead(),
+    route.loadFailures.length
+      ? h(
           'div',
-          { className: 'eyebrow' },
-          'Case Type Owner ',
-          h('span', { className: 'dot' }),
-          ' Question Bank'
-        ),
-        h('h1', {}, 'Question ', h('em', {}, 'Bank'))
-      ),
-      h(
-        'div',
-        { className: 'masthead-meta' },
-        'Session: ',
-        h('strong', {}, 'local · uncommitted'),
-        h('br'),
-        'Schema: ',
-        h('strong', {}, 'questions.v3')
-      )
-    ),
+          { className: 'bank-load-warning', role: 'status' },
+          `Some Question Banks could not be loaded: ${describeFailures(route.loadFailures)}`
+        )
+      : null,
     CaseTabs(caseTabsPropsFor(route, tools.dispatch, dirty)),
     h(
       'main',
@@ -191,8 +255,10 @@ export function bankEditorView(state, tools) {
 /**
  * @param {Record<string, string>} _params
  * @param {import('../../setup/register-routes.js').AppContext} context
+ * @param {{ loadBanks?: typeof loadQuestionBanks }} [deps]
  */
-export function createRouteSlice(_params, context) {
+export function createRouteSlice(_params, context, deps = {}) {
+  const loadBanks = deps.loadBanks ?? loadQuestionBanks;
   let latestRoute = initialQuestionBankState();
   // The mount lifetime comes from the adapter's tools, not a page-local latch (#517).
   /** @type {any|null} */
@@ -245,6 +311,22 @@ export function createRouteSlice(_params, context) {
     start(/** @type {any} */ tools) {
       effectTools = tools;
       context.appEl.classList.add('cora-fullbleed');
+      // The bank artifacts are fetched here, not at module evaluation, so
+      // importing this page performs no I/O (#521).
+      void loadBanks().then(
+        ({ banks, failures }) => {
+          if (!tools.isActive()) return;
+          tools.dispatch({ type: 'bank/loaded', banks, failures });
+        },
+        (error) => {
+          console.error('[CORA] question bank load failed', error);
+          if (!tools.isActive()) return;
+          tools.dispatch({
+            type: 'bank/load-failed',
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+      );
       const key = (/** @type {any} */ event) => {
         if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
           event.preventDefault?.();

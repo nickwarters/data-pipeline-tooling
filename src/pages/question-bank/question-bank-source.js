@@ -73,18 +73,42 @@ export function normaliseQuestionBank(bank) {
 }
 
 /**
+ * @typedef {{ slug: string, message: string }} BankLoadFailure
+ * @typedef {{ banks: Record<string, QuestionBank>, failures: BankLoadFailure[] }} LoadedQuestionBanks
+ */
+
+/**
+ * Load every Question Bank artifact, per bank. One unreachable or malformed
+ * artifact costs the editor that bank alone: the rest still load and the
+ * failure is reported by slug so the editor can name it (#521).
+ *
+ * This function performs I/O and is therefore never called at module scope —
+ * the bank editor route slice calls it from `start()`.
+ *
  * @param {Record<string, () => Promise<{ default: QuestionBank }>>} [importers]
- * @returns {Promise<Record<string, QuestionBank>>}
+ * @returns {Promise<LoadedQuestionBanks>}
  */
 export async function loadQuestionBanks(importers = QUESTION_BANK_IMPORTERS) {
-  const entries = await Promise.all(
-    Object.entries(importers).map(async ([slug, importer]) => {
-      const mod = await importer();
-      return [slug, normaliseQuestionBank(mod.default)];
-    })
+  const slugs = Object.keys(importers);
+  const settled = await Promise.allSettled(
+    slugs.map(async (slug) =>
+      normaliseQuestionBank((await importers[slug]()).default)
+    )
   );
-  return Object.fromEntries(entries);
+  /** @type {Record<string, QuestionBank>} */
+  const banks = {};
+  /** @type {BankLoadFailure[]} */
+  const failures = [];
+  settled.forEach((result, index) => {
+    if (result.status === 'fulfilled') banks[slugs[index]] = result.value;
+    else
+      failures.push({
+        slug: slugs[index],
+        message:
+          result.reason instanceof Error
+            ? result.reason.message
+            : String(result.reason),
+      });
+  });
+  return { banks, failures };
 }
-
-/** @type {Record<string, QuestionBank>} */
-export const questionBanks = await loadQuestionBanks();

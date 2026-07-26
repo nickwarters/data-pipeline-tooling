@@ -1,5 +1,4 @@
 // @ts-check
-import { questionBanks } from './question-bank-source.js';
 import {
   moveCategory,
   moveGroup,
@@ -10,19 +9,18 @@ import { parseShowWhen, serializeTree } from '../../lib/showwhen-tree.js';
 import { normaliseConfiguredActions } from '../../evaluators/configured-outcome.js';
 
 /** @typedef {import('./question-bank-source.js').QuestionBank} QuestionBank */
+/** @typedef {import('./question-bank-source.js').BankLoadFailure} BankLoadFailure */
 /** @typedef {import('./question-bank-source.js').DraftQuestion} DraftQuestion */
 /** @typedef {{ category: string|null, questionGroup: string|null, showDeprecated: boolean, conditionalOnly: boolean }} Filters */
-
-const initialBanks = /** @type {Record<string, QuestionBank>} */ (
-  structuredClone(questionBanks)
-);
-const defaultSlug = Object.keys(initialBanks)[0];
 
 /**
  * @typedef {Object} QuestionBankRouteState
  * @property {Record<string, QuestionBank>} cases
  * @property {Record<string, QuestionBank>} baseline
  * @property {string} activeSlug
+ * @property {boolean} loading
+ * @property {string} loadError
+ * @property {BankLoadFailure[]} loadFailures
  * @property {Filters} filters
  * @property {boolean} drawerOpen
  * @property {boolean} railOpen
@@ -34,12 +32,19 @@ const defaultSlug = Object.keys(initialBanks)[0];
  * @property {string} publishError
  */
 
-/** @returns {QuestionBankRouteState} */
+/**
+ * The banks are absent until `start()`'s load resolves — importing this module
+ * performs no I/O (#521).
+ * @returns {QuestionBankRouteState}
+ */
 export function initialQuestionBankState() {
   return {
-    cases: structuredClone(initialBanks),
-    baseline: structuredClone(initialBanks),
-    activeSlug: defaultSlug,
+    cases: {},
+    baseline: {},
+    activeSlug: '',
+    loading: true,
+    loadError: '',
+    loadFailures: [],
     filters: {
       category: null,
       questionGroup: null,
@@ -54,6 +59,28 @@ export function initialQuestionBankState() {
     publishStatus: 'idle',
     publishArtifacts: null,
     publishError: '',
+  };
+}
+
+/**
+ * Seat the loaded banks. `cases` and `baseline` are separately cloned on
+ * purpose: the editor diffs draft against baseline, and sharing one reference
+ * would make every diff — and the impact simulation — silently empty.
+ *
+ * @param {QuestionBankRouteState} state
+ * @param {Record<string, QuestionBank>} banks
+ * @param {BankLoadFailure[]} [failures]
+ * @returns {QuestionBankRouteState}
+ */
+export function banksLoaded(state, banks, failures = []) {
+  return {
+    ...state,
+    cases: structuredClone(banks),
+    baseline: structuredClone(banks),
+    activeSlug: state.activeSlug || Object.keys(banks)[0] || '',
+    loading: false,
+    loadError: '',
+    loadFailures: failures,
   };
 }
 
@@ -461,6 +488,12 @@ export function questionBankReducer(state, action) {
         }
       }
     });
+  }
+  if (action.type === 'bank/loaded') {
+    return banksLoaded(state, action.banks ?? {}, action.failures ?? []);
+  }
+  if (action.type === 'bank/load-failed') {
+    return { ...state, loading: false, loadError: action.message };
   }
   if (action.type === 'bank/selected') {
     return {

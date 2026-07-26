@@ -1752,6 +1752,15 @@
   border-radius: 50%;
 }
 
+/* ── Partial bank-load failure (#521) ─────────────────────────────────── */
+.cora-bank-editor .bank-load-warning {
+  padding: var(--cora-space-3) var(--cora-space-7);
+  background: var(--cora-color-surface);
+  border-bottom: 1px solid var(--cora-color-border);
+  color: var(--cora-color-text-muted);
+  font-size: var(--cora-font-size-sm);
+}
+
 /* ── Empty state ──────────────────────────────────────────────────────── */
 .cora-bank-editor .empty {
   text-align: center;

@@ -2,10 +2,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
+import { readFileSync } from 'node:fs';
+
+import * as source from '../src/pages/question-bank/question-bank-source.js';
 import {
   loadQuestionBanks,
   normaliseQuestionBank,
-  questionBanks,
 } from '../src/pages/question-bank/question-bank-source.js';
 import { compileBank } from '../src/pages/question-bank/question-bank-compile.js';
 
@@ -77,7 +79,7 @@ test('normaliseQuestionBank: defaults omitted bank fields and deep-clones editab
 });
 
 test('loadQuestionBanks: builds the bank map from standalone bank importer entries', async () => {
-  const banks = await loadQuestionBanks({
+  const { banks, failures } = await loadQuestionBanks({
     alpha: async () => ({
       default:
         /** @type {import('../src/pages/question-bank/question-bank-source.js').QuestionBank} */ ({
@@ -116,10 +118,50 @@ test('loadQuestionBanks: builds the bank map from standalone bank importer entri
   assert.deepEqual(Object.keys(banks), ['alpha', 'beta']);
   assert.equal(banks.alpha.questions[0].id, 'q-alpha');
   assert.equal(banks.beta.outcomeOptions?.[0].id, 'fail');
+  assert.deepEqual(failures, []);
 });
 
-test('questionBanks: every live case type carries label definitions', () => {
-  for (const [slug, bank] of Object.entries(questionBanks)) {
+test('#521 loadQuestionBanks: a broken artifact costs its own bank, not the others', async () => {
+  const { banks, failures } = await loadQuestionBanks({
+    alpha: async () => ({
+      default:
+        /** @type {import('../src/pages/question-bank/question-bank-source.js').QuestionBank} */ ({
+          label: 'Alpha',
+          slug: 'alpha',
+          questions: [],
+        }),
+    }),
+    broken: async () => {
+      throw new Error('404 loading bank');
+    },
+    alsoBroken: async () => {
+      throw 'not an Error';
+    },
+  });
+
+  assert.deepEqual(Object.keys(banks), ['alpha']);
+  assert.deepEqual(failures, [
+    { slug: 'broken', message: '404 loading bank' },
+    { slug: 'alsoBroken', message: 'not an Error' },
+  ]);
+});
+
+test('#521 question-bank-source performs no I/O at module evaluation', () => {
+  const text = readFileSync(
+    new URL(
+      '../src/pages/question-bank/question-bank-source.js',
+      import.meta.url
+    ),
+    'utf8'
+  );
+
+  assert.equal(/^export const \w+ = await/m.test(text), false);
+  assert.equal('questionBanks' in source, false);
+});
+
+test('questionBanks: every live case type carries label definitions', async () => {
+  const { banks } = await loadQuestionBanks();
+  for (const [slug, bank] of Object.entries(banks)) {
     assert.ok(
       (bank.labels ?? []).length > 0,
       `${slug} should define reporting labels`
@@ -127,8 +169,9 @@ test('questionBanks: every live case type carries label definitions', () => {
   }
 });
 
-test('questionBanks: every question labelId resolves within its case type', () => {
-  for (const [slug, bank] of Object.entries(questionBanks)) {
+test('questionBanks: every question labelId resolves within its case type', async () => {
+  const { banks } = await loadQuestionBanks();
+  for (const [slug, bank] of Object.entries(banks)) {
     const labelIds = new Set((bank.labels ?? []).map((label) => label.id));
     for (const question of bank.questions) {
       for (const labelId of question.labelIds ?? []) {
