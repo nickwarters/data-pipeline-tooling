@@ -97,9 +97,6 @@ function snapshot() {
     summarySections: ['details', 'questions', 'issues'],
     machine: null,
     exportHash: null,
-    // `toStoreSnapshot()` always supplies this, so the fixture does too — the
-    // reducer no longer defaults it (review on #513/#514).
-    conversationHidden: true,
     caseListOptions: {},
     access: {
       details: 'read-only',
@@ -322,6 +319,31 @@ test('CASE-1 state: route state owns loading, save status, and selected tab unde
     pending,
     'an unchanged completion state is referentially stable'
   );
+});
+
+test('CASE-1 state: the Conversation panel starts collapsed on every load (#537)', () => {
+  // The loader's snapshot carries no conversation-visibility field: the
+  // reducer owns "collapsed on load", not the handover.
+  const loadSnapshot = () => ({
+    ...snapshot(),
+    machine: { canToggleConversation: true },
+  });
+
+  let state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: loadSnapshot() }
+  );
+  assert.equal(state.routes.caseReview.conversationHidden, true);
+
+  state = caseReviewReducer(state, { type: 'case/conversation-toggled' });
+  assert.equal(state.routes.caseReview.conversationHidden, false);
+
+  // Loading again re-collapses the panel, whatever the reader had revealed.
+  state = caseReviewReducer(state, {
+    type: 'case/load-finished',
+    snapshot: loadSnapshot(),
+  });
+  assert.equal(state.routes.caseReview.conversationHidden, true);
 });
 
 test('On hold reducer: updates both hold fields in the loaded Case snapshot', () => {

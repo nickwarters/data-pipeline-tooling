@@ -1,7 +1,8 @@
 // @ts-check
 // CaseReviewViewModel loads the Case Review page: the Case row, the (possibly
-// as-reviewed) catalogue, the Case Type config, roles and access. It hands the
-// result over once, as a plain snapshot, and owns no Answer mutation — the
+// as-reviewed) catalogue, the Case Type config, the CaseMachine and its
+// resolved Section access. It hands the result over once, as a plain
+// snapshot, and owns no Answer mutation — the
 // store is the single Answer owner and the route's answer-actions are the only
 // writers (#510). Signals remain an internal loading-state detail.
 
@@ -133,14 +134,10 @@ export class CaseReviewViewModel {
 
     /** @type {CaseMachine | null} */
     this.machine = null;
-    /** @type {import('../services/section-access.js').Role[]} */
-    this.roles = [];
     /** @type {Record<import('../services/section-access.js').Section, import('../services/section-access.js').Mode>} */
     this.access = /** @type {any} */ ({});
     /** @type {import('../services/section-access.js').Section[]} */
     this.summarySections = [];
-
-    this.conversationHidden = signal(true);
   }
 
   /**
@@ -166,14 +163,12 @@ export class CaseReviewViewModel {
       allAnswered: allApplicableAnswered(this.catalogue, this.answers),
       machine: this.machine,
       access: this.access,
-      roles: this.roles,
       summarySections: this.summarySections,
       sectionLabels: this.sectionLabels,
       sectionHeadings: this.sectionHeadings,
       versionWarning: this.versionWarning.get(),
       exportHash: this.exportHash,
       caseListOptions: this.caseListOptions,
-      conversationHidden: this.conversationHidden.get(),
     };
   }
 
@@ -324,7 +319,6 @@ export class CaseReviewViewModel {
     };
 
     this.machine = new CaseMachine(caseRow, { id: actualUserId }, caps, config);
-    this.roles = this.machine.roles;
     this.access = this.machine.access;
 
     if (SECTIONS.every((s) => this.access[s] === 'hidden')) {

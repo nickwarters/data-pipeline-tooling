@@ -50,8 +50,6 @@ import {
  *   Set when ADR-0021's as-reviewed Question Bank was stamped on the row but its
  *   versioned export could not be fetched, so the *live* catalogue is what the
  *   page is showing. Rendered as a page-level banner — see `versionWarningView`.
- * @property {import('../services/section-access.js').Role[]} roles
- * @property {boolean} conversationHidden
  * @property {Record<import('../services/section-access.js').Section, import('../services/section-access.js').Mode>} access
  * @property {Required<import('../sharepoint-client.js').SectionLabels>} sectionLabels
  * @property {Required<import('../sharepoint-client.js').SectionLabels>} sectionHeadings
@@ -154,7 +152,8 @@ export function caseReviewReducer(state, action) {
     return patchRoute(state, 'caseReview', {
       snapshot: action.snapshot,
       activeTab: tabs[0]?.id ?? '',
-      conversationHidden: action.snapshot.conversationHidden,
+      // The Conversation panel starts collapsed on every load (#537).
+      conversationHidden: true,
     });
   }
   if (action.type === 'case/model-changed') {
