@@ -194,6 +194,7 @@ function renderShippedState(
       state = slice.reducer(state, action);
       slice.render(container, state, tools);
     },
+    isActive: () => true,
   };
   slice.render(container, state, tools);
   const dispose = slice.start(tools);
@@ -262,6 +263,7 @@ function renderAttributionSearchRoute(searchPeople) {
       slice.render(container, state, tools);
     },
     listen() {},
+    isActive: () => true,
   };
   slice.render(container, state, tools);
   const dispose = slice.start(tools);
@@ -2374,6 +2376,7 @@ test('CASE-7 route: a read-only Reviewer on a reportable Case writes no Answer (
       slice.render(container, state, tools);
     },
     listen() {},
+    isActive: () => true,
   };
 
   let dispose;
@@ -2475,6 +2478,7 @@ test('CASE-7 route: sequential Answer edits accumulate (#510)', async () => {
       slice.render(container, state, tools);
     },
     listen() {},
+    isActive: () => true,
   };
 
   let dispose;

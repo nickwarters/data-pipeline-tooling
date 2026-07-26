@@ -433,7 +433,8 @@ export function createRouteSlice(params, context) {
   const panelMode =
     new URLSearchParams(search).get('conversation') ?? 'popover';
   let dispatch = (/** @type {any} */ _action) => {};
-  let active = false;
+  // The adapter's mount lifetime, captured in start() (#517).
+  let isSliceActive = () => false;
   /** @type {Map<string, ReturnType<typeof setTimeout>>} */
   const attributionTimers = new Map();
   /** @type {Map<string, string>} */
@@ -511,7 +512,10 @@ export function createRouteSlice(params, context) {
       setTimeout(() => {
         attributionTimers.delete(questionId);
         void context.client.searchPeople(trimmed).then((people) => {
-          if (active && pendingAttributionQueries.get(questionId) === query) {
+          if (
+            isSliceActive() &&
+            pendingAttributionQueries.get(questionId) === query
+          ) {
             dispatch({
               type: 'case/attribution-search-results',
               questionId,
@@ -910,7 +914,7 @@ export function createRouteSlice(params, context) {
     },
     start(/** @type {any} */ tools) {
       dispatch = tools.dispatch;
-      active = true;
+      isSliceActive = tools.isActive;
       const disposeSaveStatus = observeSaveStatus(
         context.saveQueue,
         tools.dispatch
@@ -948,7 +952,6 @@ export function createRouteSlice(params, context) {
         });
       });
       return () => {
-        active = false;
         for (const timer of attributionTimers.values()) clearTimeout(timer);
         attributionTimers.clear();
         pendingAttributionQueries.clear();
