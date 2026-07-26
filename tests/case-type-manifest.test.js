@@ -18,9 +18,30 @@ import {
   validateAnswerKeyNamespace,
 } from '../src/evaluators/general-questions.js';
 
+/**
+ * The three assertions below pin today's registry as a CLOSED set: they name
+ * `complaints` literally, because `UnknownCaseTypeError` puts the known slugs in
+ * a message a developer reads. A new Case Type is therefore SUPPOSED to move
+ * them — which, to someone who has just run the scaffold, looks identical to
+ * having broken something. Say so in the failure itself; the scaffold's closing
+ * message names these same three tests.
+ */
+const SCAFFOLD_NOTE =
+  'EXPECTED FAILURE if you have just run scripts/scaffold_case_type.py — you ' +
+  'have not broken anything. This is a contract test over the Case Type ' +
+  'registry (case-types/manifest.js) and it pins the known slugs as a closed ' +
+  'set, so registering a Case Type legitimately moves it. Add your new slug to ' +
+  'the expected list here and in the two sibling assertions in this file. If ' +
+  'you have NOT just scaffolded a Case Type, this is a real failure: a slug ' +
+  'has appeared in or vanished from the registry.';
+
 test('case type manifest: known Case Type slugs resolve to their static import functions', async () => {
   const knownSlugs = ['complaints'];
-  assert.deepEqual(Object.keys(CASE_TYPE_IMPORTERS).sort(), knownSlugs);
+  assert.deepEqual(
+    Object.keys(CASE_TYPE_IMPORTERS).sort(),
+    knownSlugs,
+    SCAFFOLD_NOTE
+  );
 
   for (const slug of knownSlugs) {
     assert.equal(typeof CASE_TYPE_IMPORTERS[slug], 'function');
@@ -129,15 +150,22 @@ test('case type manifest: every registered Case Type module evaluates and passes
 test('case type manifest: unknown Case Type slugs reject with a developer-useful error', async () => {
   const slug = '../unexpected';
 
-  await assert.rejects(
-    loadCaseTypeConfig(slug),
-    (error) =>
-      error instanceof UnknownCaseTypeError &&
-      error.name === 'UnknownCaseTypeError' &&
-      error.slug === slug &&
-      error.knownSlugs.join(',') === 'complaints' &&
-      error.message ===
-        `Unsupported Case Type slug "${slug}". Known Case Type slugs: complaints.`
+  // Captured rather than matched with a predicate: a predicate that returns
+  // false reports only "the error did not pass the predicate", which tells a
+  // developer nothing about which half moved.
+  const error = await loadCaseTypeConfig(slug).then(
+    () => assert.fail('expected loadCaseTypeConfig to reject'),
+    (reason) => reason
+  );
+
+  assert.ok(error instanceof UnknownCaseTypeError);
+  assert.equal(error.name, 'UnknownCaseTypeError');
+  assert.equal(error.slug, slug);
+  assert.equal(error.knownSlugs.join(','), 'complaints', SCAFFOLD_NOTE);
+  assert.equal(
+    error.message,
+    `Unsupported Case Type slug "${slug}". Known Case Type slugs: complaints.`,
+    SCAFFOLD_NOTE
   );
 });
 
@@ -297,7 +325,7 @@ test('CaseReviewViewModel.load(): unknown primary Case Type slug sets a clear us
     assert.equal(errors.length, 1);
     assert.ok(errors[0][0] instanceof UnknownCaseTypeError);
     assert.equal(errors[0][0].slug, '../unexpected');
-    assert.deepEqual(errors[0][0].knownSlugs, ['complaints']);
+    assert.deepEqual(errors[0][0].knownSlugs, ['complaints'], SCAFFOLD_NOTE);
   } finally {
     console.error = originalConsoleError;
   }
