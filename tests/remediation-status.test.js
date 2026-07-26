@@ -283,6 +283,28 @@ test('remediationComplete: vacuously true when the Case carries no remediation',
   assert.equal(remediationComplete(CATALOGUE, { q1: { value: 'No' } }), true);
 });
 
+test('the gate treats an absent Answers map as no remediation, never as resolved', () => {
+  // The gate runs on every render, including one where the store has not
+  // handed its Answers over yet: an absent map must read as "nothing to
+  // resolve", the same as an empty one — and must not throw (#497).
+  assert.deepEqual(
+    remediationRows(CATALOGUE, /** @type {any} */ (undefined)),
+    []
+  );
+  assert.equal(
+    remediationComplete(CATALOGUE, /** @type {any} */ (undefined)),
+    true
+  );
+});
+
+test('remediationRows: a complete resolution carries no details', () => {
+  const answers = {
+    q1: setRemediationStatus(failedWithActions().q1, 'complete'),
+  };
+  assert.deepEqual(remediationRows(CATALOGUE, answers)[0].details, '');
+  assert.equal(remediationComplete(CATALOGUE, answers), true);
+});
+
 test('the status vocabulary is complete/partial/cancelled with viewer-facing labels', () => {
   assert.deepEqual(REMEDIATION_STATUSES, ['complete', 'partial', 'cancelled']);
   assert.deepEqual(REMEDIATION_STATUS_LABELS, {

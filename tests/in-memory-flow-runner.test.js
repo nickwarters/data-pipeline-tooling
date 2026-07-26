@@ -392,6 +392,79 @@ test('in-memory flow runner completes allocate, review, remediate, appeal, and a
   }
 });
 
+test('an Actions In Progress Case cannot close while a sent Remediation Action is unresolved (#497)', async () => {
+  // #497's safety claim, at the seam that actually writes the lifecycle. The
+  // Case Type declares **no** `actions`-typed Issue Capture Field — the
+  // production shape — so the gate can only come from the Answer-level store
+  // ADR-0037 made canonical (`remediationActions` + `remediationStatus`).
+  /** @type {import('../src/sharepoint-client.js').CaseRow} */
+  const sent = {
+    ...CASE_ROW,
+    status: 'Actions In Progress',
+    reportableAt: '2026-07-20T09:00:00.000Z',
+    remediationDueDate: '2026-08-03',
+    outcomeAtCompletion: 'fail',
+    hadRemediation: true,
+    answers: {
+      'q-welcome': { value: 'Yes' },
+      'q-channel': { value: 'Phone' },
+      'q-products': { value: ['Account'] },
+      'q-needs': {
+        value: 'No',
+        remediationActions: [
+          {
+            id: 'q-needs-ra-0',
+            text: 'Retrain agent on needs-identification protocol.',
+            completed: false,
+          },
+        ],
+      },
+    },
+  };
+  const runner = createInMemoryFlowRunner({
+    lists: { 'Cases-ExampleReview': [sent] },
+  });
+  const stored = () =>
+    /** @type {import('../src/sharepoint-client.js').CaseRow} */ (
+      runner
+        .snapshot()
+        .lists['Cases-ExampleReview'].find((c) => c.id === 'case-flow-1')
+    );
+
+  await runner.run([
+    { type: 'loadCasePage', caseId: 'case-flow-1', caseType: 'example-review' },
+    { type: 'clickCompleteCase' },
+  ]);
+  assert.equal(stored().status, 'Actions In Progress');
+  assert.equal(stored().completedAt, null);
+
+  // Picking a status is not resolving it: `partial` without its details leaves
+  // the row unresolved, so the gate still refuses.
+  await runner.run([
+    { type: 'setRemediationStatus', questionId: 'q-needs', status: 'partial' },
+    { type: 'clickCompleteCase' },
+  ]);
+  assert.deepEqual(stored().answers['q-needs'].remediationStatus, {
+    status: 'partial',
+    details: '',
+  });
+  assert.equal(stored().status, 'Actions In Progress');
+  assert.equal(stored().completedAt, null);
+
+  // Only once every row carries the text its status requires does it close.
+  await runner.run([
+    {
+      type: 'setRemediationStatus',
+      questionId: 'q-needs',
+      status: 'partial',
+      details: 'Coaching booked; refresher outstanding.',
+    },
+    { type: 'clickCompleteCase' },
+  ]);
+  assert.equal(stored().status, 'Completed');
+  assert.ok(stored().completedAt);
+});
+
 test('in-memory flow runner reports allocation failures', async () => {
   const missing = createInMemoryFlowRunner({
     lists: { 'Cases-ExampleReview': [] },

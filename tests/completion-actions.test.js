@@ -391,6 +391,29 @@ test('completionControl: the pre-send path still reads Send Actions and is enabl
   assert.equal(control.label, 'Send Actions');
 });
 
+test('readyToClose: an absent catalogue is no rows, not a thrown render', () => {
+  // The gate is recomputed on every render, so it must tolerate a caller that
+  // has no catalogue rather than throwing out of the view. No catalogue means
+  // no Questions, hence no remediation to resolve — the permission half is
+  // still required, exactly as on a Case that carries no remediation.
+  assert.equal(
+    readyToClose({
+      machine: closingMachine(true),
+      catalogue: /** @type {any} */ (undefined),
+      answers: UNRESOLVED,
+    }),
+    true
+  );
+  assert.equal(
+    readyToClose({
+      machine: closingMachine(false),
+      catalogue: /** @type {any} */ (undefined),
+      answers: UNRESOLVED,
+    }),
+    false
+  );
+});
+
 test('completionPatch: refuses the final close while a remediation row is unresolved', () => {
   assert.equal(
     completionPatch({
