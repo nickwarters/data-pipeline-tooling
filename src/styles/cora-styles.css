@@ -1692,28 +1692,17 @@
 
 /* ── Notes ───────────────────────────────────────────────────────────────── */
 
-/* The Notes tab renders a flat run of label/textarea pairs (Case notes, Case
-   Justification). Give it the same field rhythm as the other capture Sections:
-   the section title spaced above, each label a small emphasised caption hugging
-   its control, and a form-sized gap between the two field groups. */
-[data-cora-root] cora-notes > h2 {
-  margin: 0 0 var(--cora-space-4);
-}
-
-[data-cora-root] cora-notes > label {
-  display: block;
-  margin: 0 0 var(--cora-space-2);
-  font-size: var(--cora-font-size-sm);
-  font-weight: var(--cora-font-weight-semibold);
-}
-
-[data-cora-root] cora-notes > textarea {
-  margin: 0 0 var(--cora-space-5);
-}
-
-[data-cora-root] cora-notes > textarea:last-child {
-  margin-bottom: 0;
-}
+/* The Notes tab's field rhythm was described by four `cora-notes > …` rules
+   that matched nothing, and that the ratchet in
+   tests/cora-element-type-contract.test.js now forbids (#536). They are deleted
+   rather than re-pointed at `.cora-notes`, because their target DOM no longer
+   exists either: they assumed a flat run of sibling label/textarea pairs, and
+   `notes-view.js` renders each textarea *inside* its label. Class-converting
+   them as-is would push the caption's font-size/font-weight onto the textarea
+   (which is `font: inherit`) — a restyle, not a restoration. Reviving the
+   intended rhythm against the current DOM is a visual change and wants its own
+   ticket; deleting the dead rules leaves the Notes tab exactly as it renders
+   today. */
 
 /* ── Outcome ─────────────────────────────────────────────────────────────── */
 
