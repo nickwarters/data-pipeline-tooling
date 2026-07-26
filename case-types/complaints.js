@@ -25,7 +25,12 @@ const bank = await loadBank('./banks/complaints.txt');
  */
 const config = {
   listName: 'Cases-Complaints',
-  eligibleGroups: ['Reviewers - Complaints'],
+  // No `eligibleGroups`: `Reviewers - Complaints` is DERIVED from the registry
+  // display name (#527), and restating it here made it a second, independent
+  // grant. Renaming the registry entry moved the three derived names but left
+  // this copy still granting, so anyone left in the decommissioned SharePoint
+  // group kept the access the rename was supposed to move. `eligibleGroups` is
+  // for genuinely extra groups only.
   slaHours: 72,
   maxInProgressCases: 3,
   attributeFailures: true,

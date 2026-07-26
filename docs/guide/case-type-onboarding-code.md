@@ -200,7 +200,6 @@ const bank = await loadBank('./banks/widget-review.txt');
  */
 const config = {
   listName: 'Cases-WidgetReview',
-  eligibleGroups: ['Reviewers - Widget Review'],
   slaHours: 72,
   maxInProgressCases: 3,
   attributeFailures: true,
@@ -257,10 +256,12 @@ What each field does, and how to choose its value:
   your slug. The real list doesn't need to exist for any of the dev-loop work
   in this guide.
 - **`eligibleGroups`** — extra group names that grant access to this type's
-  Cases, beyond the three derived groups. Listing the derived
-  `Reviewers - Widget Review` here is conventional but redundant; a genuinely
-  blanket group (e.g. plain `Reviewers`) would open the type to every
-  reviewer — usually not what you want.
+  Cases, **beyond** the three derived groups. Omit it unless you have a
+  genuinely extra group. Do not restate a derived name such as
+  `Reviewers - Widget Review`: it is already granted, and the restated copy does
+  not move when the registry display name is renamed, so a decommissioned group
+  would keep granting access (#527). A blanket group (e.g. plain `Reviewers`)
+  would open the type to every reviewer — almost never what you want.
 - **`slaHours`** — drives the working-day due-date and the overdue evaluator.
 - **`maxInProgressCases`** — optional positive-integer soft limit for allocation.
   Before claiming a Case, the framework counts this Reviewer's `In-progress`

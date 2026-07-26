@@ -86,9 +86,13 @@ class ScaffoldCaseTypeTest(unittest.TestCase):
         # whose Case Type declares no listName throws and takes ?mock=1 down for
         # every other Case Type.
         self.assertIn("listName: 'Cases-WidgetReview',", module_source)
-        # #525: the derived per-Case-Type group, never the org-wide 'Reviewers'.
-        self.assertIn("eligibleGroups: ['Reviewers - Widget Review'],", module_source)
-        self.assertNotIn("eligibleGroups: ['Reviewers'],", module_source)
+        # #525/#527: no eligibleGroups at all. The org-wide 'Reviewers' would
+        # open the type to every reviewer, and the derived
+        # 'Reviewers - Widget Review' is already granted by the registry display
+        # name — restating it makes a second grant that a later rename of the
+        # registry entry does NOT move, silently keeping the decommissioned
+        # group's access alive.
+        self.assertNotIn("eligibleGroups:", module_source)
         # #527: the display name lives only on the CASE_TYPES registry entry.
         self.assertNotIn("displayName:", module_source)
         self.assertIn("caseTableColumns: [", module_source)

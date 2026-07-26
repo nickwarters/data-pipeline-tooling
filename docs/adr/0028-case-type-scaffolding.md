@@ -84,10 +84,17 @@ Three changes:
    The generated Case Type is now list-backed from the first run, which is what
    makes its sample Cases openable in `?mock=1` — the opposite of the original
    rationale, and for the same goal.
-2. **The generated `eligibleGroups` is the derived `Reviewers - <Display Name>`
-   group**, not the org-wide `Reviewers`. A brand-new Case Type granting itself
-   to every Reviewer in the organisation was a scaffolding accident, not a
-   decision; the generated personas already exercise the derived groups.
+2. **The scaffold generates no `eligibleGroups` at all.** It first emitted the
+   org-wide `Reviewers` — a brand-new Case Type granting itself to every
+   Reviewer in the organisation, a scaffolding accident rather than a decision —
+   and was then corrected to the derived `Reviewers - <Display Name>`. That was
+   still wrong, just less loudly: the three derived names are already granted
+   from the registry display name (#527), so restating one of them makes a
+   second, INDEPENDENT grant. Renaming the registry entry moves the derived
+   names but not the restated copy, leaving the decommissioned group still
+   granting access to anyone who was never removed from it — the opposite of
+   what a rename is for. `eligibleGroups` is for genuinely extra groups; the
+   generated personas already exercise the derived ones.
 3. **The scaffold appends its module to CLAUDE.md's Directory layout block**,
    which `tests/claude-md-layout-contract.test.js` checks.
 

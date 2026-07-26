@@ -159,9 +159,12 @@ const config = {{
   // case-types/manifest.js (#527) — the three SharePoint group names derive
   // from that one copy.
   listName: '{opts.list_name}',
-  // The derived per-Case-Type list-access group, not the org-wide `Reviewers`:
-  // a brand-new Case Type must not be visible to every Reviewer.
-  eligibleGroups: ['Reviewers - {opts.display_name}'],
+  // No `eligibleGroups`. Access comes from the three group names DERIVED from
+  // the registry display name — `Reviewers - {opts.display_name}` and its two
+  // siblings — so restating the derived name here would make it a second,
+  // independent grant that a later rename would not move (#527). Add
+  // `eligibleGroups` only for a genuinely EXTRA group, never the org-wide
+  // `Reviewers`: a brand-new Case Type must not be visible to every Reviewer.
   // TODO(case-type): Confirm the SLA hours before production use.
   slaHours: 72,
   attributeFailures: true,

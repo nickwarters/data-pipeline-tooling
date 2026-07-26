@@ -92,10 +92,16 @@ test('registry rename: Case source eligibility moves with the registry display n
       `${group} must resolve the complaints source from the registry name`
     );
 
-  // The stale `Reviewers - Complaints` is deliberately excluded here: the
-  // complaints config declares it explicitly in `eligibleGroups`, an alias that
-  // does not derive from the display name at all.
-  for (const group of [staleGroups.caseTypeOwner, staleGroups.journeyOwner])
+  // All THREE stale names, list access included. A rename must move the access
+  // it granted, or someone left in the decommissioned SharePoint group keeps
+  // reaching the Cases. `listAccess` used to be excluded here because the
+  // complaints config restated `Reviewers - Complaints` in `eligibleGroups` — a
+  // live third copy that kept granting after the rename. That copy is gone.
+  for (const group of [
+    staleGroups.listAccess,
+    staleGroups.caseTypeOwner,
+    staleGroups.journeyOwner,
+  ])
     assert.deepEqual(
       await resolveCaseSources([group]),
       [],

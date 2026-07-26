@@ -148,9 +148,11 @@ ResponsibleParty-Manager reads remain query-filtered by the Case row's
 Responsible Party or Responsible Party Manager field; broad list eligibility
 does not make those reads unscoped. This is resolved in exactly one place —
 `resolveCaseSources(userGroups)` (`src/setup/resolve-eligible-case-types.js`) — which
-returns `{ slug, listName, displayName }[]`. `example-review` keeps a blanket
-`Reviewers` in its `eligibleGroups`, so a plain Reviewer still sees it; every other type
-requires a per-type group.
+returns `{ slug, listName, displayName }[]`. Every type requires a per-type
+group: no Case Type declares a blanket `Reviewers` in its `eligibleGroups`, so
+the bare functional group grants no source on its own. (The `example-review`
+test fixture did until #527; it modelled a grant the scaffold had already
+stopped generating.)
 
 **Staging a Case Type out is a per-type group nobody holds — never a slug list in
 code.** `DASHBOARD_ENABLED_SLUGS` and `resolveEligibleCaseTypes` are deleted; a contract

@@ -394,16 +394,24 @@ test('resolveCaseSources: returns a Promise', async () => {
   await result;
 });
 
-test('resolveCaseSources: a plain Reviewers user resolves to only example-review', async () => {
+test('resolveCaseSources: the org-wide Reviewers group alone grants no Case source', async () => {
+  // The bare `Reviewers` functional group is axis 1 (what you can do); reading
+  // a Case Type's list is axis 2 (which list you can open), and only a
+  // per-Case-Type group crosses it. This used to resolve `example-review`,
+  // because the fixture declared the org-wide `Reviewers` in its
+  // `eligibleGroups` — the pattern #525 removed from the scaffold as an
+  // accident. Asserting the grant was therefore pinning the accident in place;
+  // what is worth pinning is that no Case Type opens itself to every Reviewer.
   const sources = await resolveCaseSources(['Reviewers']);
   assert.deepEqual(
     sources.map((s) => s.slug),
-    ['example-review']
+    [],
+    'no registered Case Type may grant itself to the whole Reviewers group'
   );
 });
 
 test('resolveCaseSources: example-review source carries its declared listName and displayName', async () => {
-  const sources = await resolveCaseSources(['Reviewers']);
+  const sources = await resolveCaseSources(['Reviewers - Example Review']);
   const exampleReview = sources.find((s) => s.slug === 'example-review');
   assert.deepEqual(exampleReview, {
     slug: 'example-review',
