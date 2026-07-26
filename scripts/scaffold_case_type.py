@@ -18,6 +18,16 @@ class ScaffoldOptions:
     root: Path
     slug: str
     display_name: str
+    list_name: str
+
+
+def pascal_slug(slug: str) -> str:
+    return "".join(part[:1].upper() + part[1:] for part in slug.split("-") if part)
+
+
+def default_list_name(slug: str) -> str:
+    """The `Cases-{PascalSlug}` convention every provisioned Case list follows."""
+    return f"Cases-{pascal_slug(slug)}"
 
 
 def parse_args(argv: list[str]) -> ScaffoldOptions:
@@ -39,6 +49,15 @@ def parse_args(argv: list[str]) -> ScaffoldOptions:
         dest="display_name",
         help='Human-readable display name, e.g. "Widget Review".',
     )
+    parser.add_argument(
+        "--list-name",
+        dest="list_name",
+        help=(
+            "SharePoint Case list name. Defaults to the Cases-{PascalSlug} "
+            "convention, e.g. Cases-WidgetReview. Every Case Type must declare "
+            "one: there is no default store (issue #249)."
+        ),
+    )
     args = parser.parse_args(argv)
 
     if not args.slug:
@@ -51,11 +70,14 @@ def parse_args(argv: list[str]) -> ScaffoldOptions:
         )
     if not args.display_name.strip():
         parser.error("--display must not be blank")
+    if args.list_name is not None and not args.list_name.strip():
+        parser.error("--list-name must not be blank")
 
     return ScaffoldOptions(
         root=args.root.resolve(),
         slug=args.slug,
         display_name=args.display_name,
+        list_name=args.list_name or default_list_name(args.slug),
     )
 
 
@@ -80,6 +102,27 @@ def insert_before(content: str, needle: str, insertion: str, file_path: Path) ->
     return f"{content[:index]}{insertion}{content[index:]}"
 
 
+def insert_before_match(content: str, pattern: str, insertion: str, file_path: Path) -> str:
+    match = re.search(pattern, content, re.MULTILINE)
+    if match is None:
+        raise RuntimeError(f"Could not find insertion anchor in {file_path}: {pattern}")
+    index = match.start()
+    return f"{content[:index]}{insertion}{content[index:]}"
+
+
+def layout_line(slug: str, display_name: str) -> str:
+    """One `case-types/` entry for CLAUDE.md's Directory layout block.
+
+    The block is a checked contract — `tests/claude-md-layout-contract.test.js`
+    fails for any production module under `src/` or `case-types/` whose basename
+    it does not mention — so the scaffold writes its own line rather than
+    leaving the developer a red test to decode.
+    """
+    name = f"  {slug}.js"
+    padding = " " * max(1, 32 - len(name))
+    return f"{name}{padding}# {display_name} Case Type scaffold (the architecture decision on Case Type scaffolding)\n"
+
+
 def insert_after_match(content: str, pattern: str, insertion: str, file_path: Path) -> str:
     match = re.search(pattern, content)
     if match is None:
@@ -102,8 +145,12 @@ import {{ computeConfiguredOutcome }} from '../src/evaluators/configured-outcome
  * `Reviewers - {opts.display_name}`, `CaseTypeOwner - {opts.display_name}`,
  * `JourneyOwner - {opts.display_name}`.
  *
- * NOTE (dev/mock): deliberately declares **no `listName`**, so its Cases live in
- * the default mock store and are openable via `?mock=1` until list-backing is wired.
+ * Declares its own `listName` (`{opts.list_name}`) like every other Case Type.
+ * It is load-bearing in both environments: the mock store partitions the fixture
+ * Cases by it (there is no default store — issue #249), so its sample Cases are
+ * openable via `?mock=1`, and the HTTP client reads and writes that list. The
+ * SharePoint list itself is provisioned separately — see the Case Type
+ * onboarding checklist.
  *
  * @type {{CaseTypeConfig}}
  */
@@ -111,7 +158,10 @@ const config = {{
   // The display name lives ONLY on this slug's CASE_TYPES entry in
   // case-types/manifest.js (#527) — the three SharePoint group names derive
   // from that one copy.
-  eligibleGroups: ['Reviewers'],
+  listName: '{opts.list_name}',
+  // The derived per-Case-Type list-access group, not the org-wide `Reviewers`:
+  // a brand-new Case Type must not be visible to every Reviewer.
+  eligibleGroups: ['Reviewers - {opts.display_name}'],
   // TODO(case-type): Confirm the SLA hours before production use.
   slaHours: 72,
   attributeFailures: true,
@@ -245,8 +295,8 @@ test('{opts.slug}: no cycles in showWhen graph', () => {{
   assert.strictEqual(detectCycles(config.questions), false);
 }});
 
-test('{opts.slug}: declares no listName so its Cases are openable in the mock store', () => {{
-  assert.equal(config.listName, undefined);
+test('{opts.slug}: declares its Case list explicitly (there is no default store, #249)', () => {{
+  assert.equal(config.listName, '{opts.list_name}');
 }});
 
 test('{opts.slug}: declares the standard Section set', () => {{
@@ -387,7 +437,7 @@ caught up with the application configuration.
 
 ## Decision
 
-Case Type provisioning starts with `python3 scripts/scaffold_case_type.py --slug <slug> --display "<Display Name>"`.
+Case Type provisioning starts with `python3 scripts/scaffold_case_type.py --slug <slug> --display "<Display Name>" [--list-name <Cases-List>]`.
 The scaffold creates a plain-data Case Type module for `{opts.display_name}` and
 registers it with a single entry in `CASE_TYPES` (`case-types/manifest.js`) — the
 one registry, carrying the display name from which the three per-Case-Type
@@ -396,22 +446,90 @@ permissions edit is needed (issue #508). The scaffold also adds mock personas,
 one outstanding and one Completed mock Case, and a focused test file for the
 generated contract.
 
-The generated Case Type deliberately has no `listName` so its sample Cases are
-openable in the mock store via `?mock=1` until list-backed Case Types are wired
-into the mock client. The script refuses to overwrite an existing Case Type slug;
+The generated Case Type declares `listName: '{opts.list_name}'` — defaulted from
+the slug by the `Cases-{{PascalSlug}}` convention and overridable with
+`--list-name`. It is not optional: the mock store partitions the fixture Cases by
+each Case Type's declared list and has no default bucket (issue #249), so a Case
+Type that writes mock Cases without a `listName` would break `?mock=1` for every
+other Case Type. Declaring it is what makes the generated sample Cases openable
+in the mock loop. The script refuses to overwrite an existing Case Type slug;
 maintainers should edit an existing type directly once it has real business
 configuration.
 
+The scaffold also appends the generated module to the Directory layout block in
+`CLAUDE.md`, which is a checked contract (`tests/claude-md-layout-contract.test.js`).
+
 ## Consequences
 
-- Maintainers get a runnable first slice before SharePoint list-backing exists.
+- Maintainers get a runnable first slice, openable in `?mock=1`, before the
+  SharePoint list named by `listName` has been provisioned.
 - The generated module includes TODO markers for the Question Bank, Outcome
   vocabulary, appeal raiser, Case Details fields, and SLA hours.
 - Section access remains shared in `src/services/section-access.js`; the scaffold
   relies on the standard Section set rather than creating per-type matrix rows.
 - Re-running with an existing slug is a hard error to avoid overwriting operator
   edits.
+- The registry-contract tests in `tests/case-type-manifest.test.js` pin today's
+  known slugs as a closed set and must be widened by hand; the scaffold does not
+  edit contract tests, it names them in its closing message.
 """
+
+
+"""The tests that pin today's Case Type registry as a CLOSED set.
+
+Each names `complaints` (the only live Case Type) in a literal expectation, so a
+newly scaffolded slug moves them by design. The scaffold does not edit contract
+tests — a script silently rewriting the assertions that guard the registry would
+defeat the point of having them — so it names them instead, precisely enough
+that a developer can match every red test to a line here.
+"""
+EXPECTED_FAILURES = [
+    (
+        "tests/case-type-manifest.test.js",
+        "known Case Type slugs resolve to their static import functions",
+        "its `knownSlugs` literal is the closed set of registered slugs",
+    ),
+    (
+        "tests/case-type-manifest.test.js",
+        "unknown Case Type slugs reject with a developer-useful error",
+        "UnknownCaseTypeError lists every known slug in its user-facing message",
+    ),
+    (
+        "tests/case-type-manifest.test.js",
+        "CaseReviewViewModel.load(): unknown primary Case Type slug sets a clear "
+        "user-facing error state",
+        "it asserts that same knownSlugs list reaches the console",
+    ),
+]
+
+
+def closing_message(opts: ScaffoldOptions) -> str:
+    lines = [
+        f"Scaffolded Case Type {opts.slug} ({opts.display_name}), "
+        f"Cases on list {opts.list_name}.",
+        "",
+        "  npm run check   should be GREEN.",
+        f"  node --test     should be GREEN except for {len(EXPECTED_FAILURES)} "
+        "registry-contract tests, which",
+        "                  a new Case Type is SUPPOSED to move:",
+        "",
+    ]
+    for file_name, test_name, why in EXPECTED_FAILURES:
+        lines.append(f"    - {file_name}")
+        lines.append(f"        {test_name}")
+        lines.append(f"        (expected: {why})")
+    lines += [
+        "",
+        f"  Add '{opts.slug}' to the expected slug lists in that file. Any OTHER",
+        "  failure is a real one — it is not caused by the scaffold.",
+        "",
+        "  Then work through the TODO(case-type) markers in "
+        f"case-types/{opts.slug}.js,",
+        f"  and provision the SharePoint list '{opts.list_name}' and the three",
+        f"  '<role> - {opts.display_name}' groups per "
+        "docs/case-type-onboarding.md.",
+    ]
+    return "\n".join(lines)
 
 
 def scaffold(opts: ScaffoldOptions) -> None:
@@ -496,9 +614,22 @@ def scaffold(opts: ScaffoldOptions) -> None:
         )
         cases_path.write_text(cases, encoding="utf-8")
 
-    print(
-        f"Scaffolded Case Type {opts.slug}. Run npm run check && node --test before committing."
-    )
+    # CLAUDE.md's Directory layout block is a checked contract: every `.js`
+    # under src/ and case-types/ must be named in it
+    # (tests/claude-md-layout-contract.test.js). The scaffold adds its own line
+    # so the generated module does not land as an unexplained red test.
+    claude_md_path = opts.root / "CLAUDE.md"
+    claude_md = claude_md_path.read_text(encoding="utf-8")
+    if f"  {opts.slug}.js" not in claude_md:
+        claude_md = insert_before_match(
+            claude_md,
+            r"^  banks/ ",
+            layout_line(opts.slug, opts.display_name),
+            claude_md_path,
+        )
+        claude_md_path.write_text(claude_md, encoding="utf-8")
+
+    print(closing_message(opts))
 
 
 def main(argv: list[str]) -> int:

@@ -27,6 +27,7 @@ class ScaffoldCaseTypeTest(unittest.TestCase):
             "src/services/section-access.js",
             "dev/fixtures/personas.js",
             "dev/fixtures/cases.js",
+            "CLAUDE.md",
         ]:
             shutil.copy2(REPO_ROOT / file_path, root / file_path)
         return root
@@ -66,6 +67,7 @@ class ScaffoldCaseTypeTest(unittest.TestCase):
         )
 
         self.assertIn("Scaffolded Case Type widget-review", result.stdout)
+        self.assertIn("Cases on list Cases-WidgetReview", result.stdout)
 
         module_path = root / "case-types" / "widget-review.js"
         test_path = root / "tests" / "widget-review.test.js"
@@ -78,10 +80,17 @@ class ScaffoldCaseTypeTest(unittest.TestCase):
         self.assertIn("The **Widget Review** Case Type", module_source)
         self.assertIn("TODO(case-type): Replace starter questions", module_source)
         self.assertIn("TODO(case-type): Confirm the SLA hours", module_source)
-        self.assertNotIn("listName:", module_source)
         self.assertNotIn("dashboardPanels", module_source)
-        # The config's displayName must agree with the registry entry (#508).
-        self.assertIn("displayName: 'Widget Review',", module_source)
+        # #525: the generated Case Type must declare its Case list. The mock
+        # store's partition is total (no default store, #249), so a fixture Case
+        # whose Case Type declares no listName throws and takes ?mock=1 down for
+        # every other Case Type.
+        self.assertIn("listName: 'Cases-WidgetReview',", module_source)
+        # #525: the derived per-Case-Type group, never the org-wide 'Reviewers'.
+        self.assertIn("eligibleGroups: ['Reviewers - Widget Review'],", module_source)
+        self.assertNotIn("eligibleGroups: ['Reviewers'],", module_source)
+        # #527: the display name lives only on the CASE_TYPES registry entry.
+        self.assertNotIn("displayName:", module_source)
         self.assertIn("caseTableColumns: [", module_source)
         self.assertIn("value: 'details.customerName'", module_source)
 
@@ -119,6 +128,92 @@ class ScaffoldCaseTypeTest(unittest.TestCase):
         )
         self.assertIn("# Case Type scaffolding contract", adr)
         self.assertIn("refuses to overwrite an existing Case Type slug", adr)
+        # #525: the ADR must describe what the code does. The old text claimed
+        # the Case Type had no listName so its Cases were mock-openable; the
+        # mock store has had no default bucket since #249.
+        self.assertIn("listName: 'Cases-WidgetReview'", adr)
+        self.assertNotIn("deliberately has no `listName`", adr)
+
+    def test_generated_test_file_asserts_the_declared_list_name(self) -> None:
+        root = self.make_fixture_root()
+        self.run_scaffold(root, "--slug", "widget-review", "--display", "Widget Review")
+
+        generated = (root / "tests/widget-review.test.js").read_text(encoding="utf-8")
+        self.assertIn("assert.equal(config.listName, 'Cases-WidgetReview');", generated)
+        self.assertNotIn("assert.equal(config.listName, undefined);", generated)
+
+    def test_list_name_defaults_from_the_slug_and_is_overridable(self) -> None:
+        root = self.make_fixture_root()
+        self.run_scaffold(
+            root,
+            "--slug",
+            "widget-review",
+            "--display",
+            "Widget Review",
+            "--list-name",
+            "Cases-LegacyWidgets",
+        )
+
+        module_source = (root / "case-types/widget-review.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("listName: 'Cases-LegacyWidgets',", module_source)
+        self.assertNotIn("Cases-WidgetReview", module_source)
+
+    def test_adds_the_module_to_the_claude_md_directory_layout(self) -> None:
+        root = self.make_fixture_root()
+        self.run_scaffold(root, "--slug", "widget-review", "--display", "Widget Review")
+
+        claude_md = (root / "CLAUDE.md").read_text(encoding="utf-8")
+        layout = claude_md.split("\n## Directory layout")[1].split("\n## ")[0]
+        self.assertIn("widget-review.js", layout)
+        # Inside the case-types/ block, above its banks/ sub-block — not
+        # appended somewhere the layout contract merely happens to accept.
+        self.assertLess(
+            layout.index("  widget-review.js"),
+            layout.index("  banks/ "),
+        )
+
+    def test_closing_message_enumerates_the_expected_red_tests(self) -> None:
+        root = self.make_fixture_root()
+
+        result = self.run_scaffold(
+            root, "--slug", "widget-review", "--display", "Widget Review"
+        )
+
+        # The sign-off must be matchable test-by-test: a developer should be able
+        # to map every remaining red test to a line here (#525).
+        self.assertIn("tests/case-type-manifest.test.js", result.stdout)
+        self.assertIn(
+            "known Case Type slugs resolve to their static import functions",
+            result.stdout,
+        )
+        self.assertIn(
+            "unknown Case Type slugs reject with a developer-useful error",
+            result.stdout,
+        )
+        self.assertIn(
+            "unknown primary Case Type slug sets a clear user-facing error state",
+            result.stdout,
+        )
+        self.assertIn("Any OTHER", result.stdout)
+        self.assertIn("Cases-WidgetReview", result.stdout)
+
+    def test_rejects_a_blank_list_name(self) -> None:
+        root = self.make_fixture_root()
+
+        with self.assertRaises(subprocess.CalledProcessError) as context:
+            self.run_scaffold(
+                root,
+                "--slug",
+                "widget-review",
+                "--display",
+                "Widget Review",
+                "--list-name",
+                "   ",
+            )
+
+        self.assertIn("--list-name must not be blank", context.exception.stderr)
 
     def test_refuses_to_overwrite_an_existing_slug(self) -> None:
         root = self.make_fixture_root()
