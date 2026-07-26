@@ -1057,6 +1057,103 @@ test('CASE-6 route: appeal views keep empty Case Type configuration defaults', (
   );
 });
 
+test('case page reducer: every identity guard returns the same state reference', () => {
+  const loaded = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: snapshot() }
+  );
+  const activeTab = loaded.routes.caseReview.activeTab;
+
+  assert.strictEqual(
+    caseReviewReducer(loaded, { type: 'case/tab-selected', id: activeTab }),
+    loaded,
+    're-selecting the active Section must not re-render'
+  );
+  assert.strictEqual(
+    caseReviewReducer(loaded, { type: 'case/tab-selected', id: 'remediation' }),
+    loaded,
+    'a hidden Section cannot become active'
+  );
+  assert.strictEqual(
+    caseReviewReducer(loaded, {
+      type: 'case/completion-pending',
+      pending: loaded.routes.caseReview.completionPending,
+    }),
+    loaded,
+    'an unchanged completion flag must not re-render'
+  );
+  assert.strictEqual(
+    caseReviewReducer(loaded, {
+      type: 'case/save-status-changed',
+      status: loaded.routes.caseReview.saveStatus,
+    }),
+    loaded,
+    'an unchanged save status must not re-render'
+  );
+
+  const searching = caseReviewReducer(loaded, {
+    type: 'case/attribution-search-input',
+    questionId: 'q1',
+    query: 'ada',
+  });
+  assert.strictEqual(
+    caseReviewReducer(searching, {
+      type: 'case/attribution-search-results',
+      questionId: 'q1',
+      query: 'ad',
+      people: [{ id: 'u9' }],
+    }),
+    searching,
+    'results for a stale query must not re-render'
+  );
+  assert.strictEqual(
+    caseReviewReducer(searching, {
+      type: 'case/attribution-search-results',
+      questionId: 'q-other',
+      query: 'ada',
+      people: [],
+    }),
+    searching,
+    'results for a question with no open search must not re-render'
+  );
+  assert.strictEqual(
+    caseReviewReducer(loaded, {
+      type: 'case/attribution-search-cleared',
+      questionId: 'q1',
+    }),
+    loaded,
+    'clearing a search that is not open must not re-render'
+  );
+  assert.strictEqual(
+    caseReviewReducer(loaded, { type: 'case/conversation-toggled' }),
+    loaded,
+    'toggling the Conversation the machine forbids must not re-render'
+  );
+});
+
+test('case page reducer: a patch preserves chrome and unrelated route fields', () => {
+  const initial = createInitialCaseReviewState(chrome, 'popover');
+  const loaded = caseReviewReducer(initial, {
+    type: 'case/load-finished',
+    snapshot: snapshot(),
+  });
+  const next = caseReviewReducer(loaded, {
+    type: 'case/save-status-changed',
+    status: 'saving',
+  });
+
+  assert.strictEqual(next.chrome, chrome);
+  assert.strictEqual(
+    next.routes.caseReview.snapshot,
+    loaded.routes.caseReview.snapshot
+  );
+  assert.equal(next.routes.caseReview.panelMode, 'popover');
+  assert.equal(
+    next.routes.caseReview.activeTab,
+    loaded.routes.caseReview.activeTab
+  );
+});
+
 test('CASE-1 state: model refreshes and Answer edits preserve valid selection and fall back when access changes', () => {
   const initial = createInitialCaseReviewState(chrome, 'popover');
   assert.equal(

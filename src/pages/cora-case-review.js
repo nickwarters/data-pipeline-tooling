@@ -1,5 +1,6 @@
 // @ts-check
 import { h } from '../lib/html.js';
+import { patchRoute, patchSnapshot } from '../core/route-state.js';
 import { CaseReviewViewModel } from '../lib/case-review-view-model.js';
 import { CASE_STATUS } from '../lib/case-statuses.js';
 import {
@@ -150,37 +151,28 @@ export function caseReviewReducer(state, action) {
   const route = state.routes.caseReview;
   if (action.type === 'case/load-finished') {
     const tabs = visibleCaseTabs(action.snapshot);
-    return {
-      ...state,
-      routes: {
-        caseReview: {
-          ...route,
-          snapshot: action.snapshot,
-          activeTab: tabs[0]?.id ?? '',
-          conversationHidden: action.snapshot.conversationHidden,
-        },
-      },
-    };
+    return patchRoute(state, 'caseReview', {
+      snapshot: action.snapshot,
+      activeTab: tabs[0]?.id ?? '',
+      conversationHidden: action.snapshot.conversationHidden,
+    });
   }
   if (action.type === 'case/model-changed') {
     const tabs = visibleCaseTabs(action.snapshot);
     const activeTab = tabs.some((entry) => entry.id === route.activeTab)
       ? route.activeTab
       : (tabs[0]?.id ?? '');
-    return {
-      ...state,
-      routes: {
-        caseReview: { ...route, snapshot: action.snapshot, activeTab },
-      },
-    };
+    return patchRoute(state, 'caseReview', {
+      snapshot: action.snapshot,
+      activeTab,
+    });
   }
   if (action.type === 'case/answers-edited' && route.snapshot) {
     const applicableIds = evaluate(route.snapshot.catalogue, action.answers);
     const applicableQuestions = route.snapshot.catalogue.filter((question) =>
       applicableIds.has(question.id)
     );
-    const snapshot = {
-      ...route.snapshot,
+    return patchSnapshot(state, {
       answers: action.answers,
       applicableQuestions,
       allAnswered: allApplicableAnswered(
@@ -190,82 +182,52 @@ export function caseReviewReducer(state, action) {
       caseRow: route.snapshot.caseRow
         ? { ...route.snapshot.caseRow, answers: action.answers }
         : null,
-    };
-    return {
-      ...state,
-      routes: { caseReview: { ...route, snapshot } },
-    };
+    });
   }
   if (action.type === 'case/tab-selected') {
     const visible = visibleCaseTabs(route.snapshot).some(
       (entry) => entry.id === action.id
     );
+    // Identity guard: re-selecting the active tab must not re-render.
     if (!visible || action.id === route.activeTab) return state;
-    return {
-      ...state,
-      routes: { caseReview: { ...route, activeTab: action.id } },
-    };
+    return patchRoute(state, 'caseReview', { activeTab: action.id });
   }
   if (action.type === 'case/capture-group-toggled') {
     const current = route.captureCollapsed[action.questionId] ?? new Map();
     const collapsed = new Map(current);
     collapsed.set(action.groupKey, action.collapsed);
-    return {
-      ...state,
-      routes: {
-        caseReview: {
-          ...route,
-          captureCollapsed: {
-            ...route.captureCollapsed,
-            [action.questionId]: collapsed,
-          },
-        },
+    return patchRoute(state, 'caseReview', {
+      captureCollapsed: {
+        ...route.captureCollapsed,
+        [action.questionId]: collapsed,
       },
-    };
+    });
   }
   if (action.type === 'case/attribution-search-input') {
-    return {
-      ...state,
-      routes: {
-        caseReview: {
-          ...route,
-          attributionSearch: {
-            ...route.attributionSearch,
-            [action.questionId]: { query: action.query, people: [] },
-          },
-        },
+    return patchRoute(state, 'caseReview', {
+      attributionSearch: {
+        ...route.attributionSearch,
+        [action.questionId]: { query: action.query, people: [] },
       },
-    };
+    });
   }
   if (action.type === 'case/attribution-search-results') {
     const current = route.attributionSearch[action.questionId];
+    // Identity guard: results for a query the reviewer has typed past.
     if (!current || current.query !== action.query) return state;
-    return {
-      ...state,
-      routes: {
-        caseReview: {
-          ...route,
-          attributionSearch: {
-            ...route.attributionSearch,
-            [action.questionId]: {
-              query: action.query,
-              people: action.people,
-            },
-          },
-        },
+    return patchRoute(state, 'caseReview', {
+      attributionSearch: {
+        ...route.attributionSearch,
+        [action.questionId]: { query: action.query, people: action.people },
       },
-    };
+    });
   }
   if (action.type === 'case/attribution-search-cleared') {
+    // Identity guard: clearing a search that is not open.
     if (!(action.questionId in route.attributionSearch)) return state;
     const attributionSearch = { ...route.attributionSearch };
     delete attributionSearch[action.questionId];
-    return {
-      ...state,
-      routes: {
-        caseReview: { ...route, attributionSearch },
-      },
-    };
+    return patchRoute(state, 'caseReview', { attributionSearch });
   }
   if (action.type === 'case/conversation-toggled') {
     if (
@@ -274,77 +236,40 @@ export function caseReviewReducer(state, action) {
     ) {
       return state;
     }
-    return {
-      ...state,
-      routes: {
-        caseReview: {
-          ...route,
-          conversationHidden: !route.conversationHidden,
-        },
-      },
-    };
+    return patchRoute(state, 'caseReview', {
+      conversationHidden: !route.conversationHidden,
+    });
   }
   if (action.type === 'case/conversation-changed' && route.snapshot?.caseRow) {
-    const caseRow = {
-      ...route.snapshot.caseRow,
-      conversation: action.messages,
-    };
-    return {
-      ...state,
-      routes: {
-        caseReview: {
-          ...route,
-          snapshot: { ...route.snapshot, caseRow },
-        },
-      },
-    };
+    return patchSnapshot(state, {
+      caseRow: { ...route.snapshot.caseRow, conversation: action.messages },
+    });
   }
   if (action.type === 'case/field-edited' && route.snapshot?.caseRow) {
-    const caseRow = {
-      ...route.snapshot.caseRow,
-      [action.field]: action.value,
-    };
-    return {
-      ...state,
-      routes: {
-        caseReview: {
-          ...route,
-          snapshot: { ...route.snapshot, caseRow },
-        },
-      },
-    };
+    return patchSnapshot(state, {
+      caseRow: { ...route.snapshot.caseRow, [action.field]: action.value },
+    });
   }
   if (action.type === 'case/on-hold-changed' && route.snapshot?.caseRow) {
-    const caseRow = {
-      ...route.snapshot.caseRow,
-      onHold: action.onHold,
-      placedOnHoldAt: action.placedOnHoldAt,
-    };
-    return {
-      ...state,
-      routes: {
-        caseReview: {
-          ...route,
-          snapshot: { ...route.snapshot, caseRow },
-        },
+    return patchSnapshot(state, {
+      caseRow: {
+        ...route.snapshot.caseRow,
+        onHold: action.onHold,
+        placedOnHoldAt: action.placedOnHoldAt,
       },
-    };
+    });
   }
   if (action.type === 'case/completion-pending') {
+    // Identity guard: the pending flag is already what the effect reports.
     if (action.pending === route.completionPending) return state;
-    return {
-      ...state,
-      routes: {
-        caseReview: { ...route, completionPending: action.pending },
-      },
-    };
+    return patchRoute(state, 'caseReview', {
+      completionPending: action.pending,
+    });
   }
   if (action.type === 'case/save-status-changed') {
+    // Identity guard: SaveQueue re-reports the status it last reported.
     if (action.status === route.saveStatus) return state;
-    return {
-      ...state,
-      routes: { caseReview: { ...route, saveStatus: action.status } },
-    };
+    return patchRoute(state, 'caseReview', { saveStatus: action.status });
   }
   return state;
 }
