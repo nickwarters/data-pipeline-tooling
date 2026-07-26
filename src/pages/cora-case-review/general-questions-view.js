@@ -8,6 +8,7 @@ import { generalAnswerKey } from '../../evaluators/general-questions.js';
 
 /** @typedef {import('../../sharepoint-client.js').GeneralQuestionField} GeneralQuestionField */
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
+/** @typedef {import('../../evaluators/general-questions.js').GeneralQuestionsPlacement} GeneralQuestionsPlacement */
 
 /**
  * The section title rendered above the General Questions. Fixed rather than
@@ -49,7 +50,7 @@ function currentValue(answers, fieldKey) {
  *   fields: GeneralQuestionField[],
  *   answers: Record<string, Answer>,
  *   access: 'edit'|'read-only'|'hidden',
- *   placement?: 'before'|'after',
+ *   placement?: GeneralQuestionsPlacement,
  *   onAnswer: (answerKey: string, value: string) => void,
  * }} props
  * @returns {HTMLElement[]}
