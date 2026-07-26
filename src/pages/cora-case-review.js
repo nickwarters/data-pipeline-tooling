@@ -24,11 +24,7 @@ import { summaryView } from './cora-case-review/summary-view.js';
 import { AppealSection } from './cora-case-review/appeal-view.js';
 import { AppealReviewSection } from './cora-case-review/appeal-review-view.js';
 import { AmendOutcomeSection } from './cora-case-review/amend-outcome-view.js';
-import {
-  amendOutcome,
-  raiseAppeal,
-  resolveAppeal,
-} from './cora-case-review/appeal-actions.js';
+import { createAppealEffects } from './cora-case-review/appeal-effects.js';
 import { editRemediationDetail } from './cora-case-review/remediation-actions.js';
 import {
   answerEdited,
@@ -469,6 +465,18 @@ export function createRouteSlice(params, context) {
   const questionsView = createQuestionPanelView();
   /** @type {ReturnType<typeof createCaseReviewSaveEffect> | null} */
   let save = null;
+  /** @type {ReturnType<typeof createAppealEffects> | null} */
+  let appeals = null;
+  /**
+   * The id every write addresses: the row that was actually loaded, which is
+   * what `params.id` resolved to. The route param is only the seed, because the
+   * effects are built in `start()` before the load lands. Previously the four
+   * write paths disagreed — two used `params.id`, two `caseRow.id` (#511).
+   *
+   * @type {string}
+   */
+  let loadedCaseId = params.id;
+  const caseId = () => loadedCaseId;
   let requestedOnHold = false;
   /** @type {null | {
    *   root: HTMLElement,
@@ -669,6 +677,7 @@ export function createRouteSlice(params, context) {
     // refresh or conflict resolution reaches the store without passing through
     // `editAnswers`, and the store is still the owner (#510).
     currentAnswers = snapshot.answers;
+    loadedCaseId = caseRow.id;
 
     /** @param {string} questionId @param {string | string[]} value */
     const onAnswer = (questionId, value) =>
@@ -793,14 +802,7 @@ export function createRouteSlice(params, context) {
                 access: snapshot.access.notes,
                 heading: snapshot.sectionHeadings.notes,
                 placeholders: snapshot.config.placeholders ?? {},
-                onFieldInput: (field, value) => {
-                  tools.dispatch({
-                    type: 'case/field-edited',
-                    field,
-                    value,
-                  });
-                  context.saveQueue.enqueue(params.id, field, value);
-                },
+                onFieldInput: (field, value) => save?.fieldEdited(field, value),
               })
             : null
         );
@@ -957,26 +959,13 @@ export function createRouteSlice(params, context) {
                   currentUser: snapshot.currentUser,
                   catalogue: snapshot.catalogue,
                   answers: snapshot.answers,
-                  onRaise: ({ rationale, citedAnswerKeys }) => {
-                    const result = raiseAppeal({
+                  onRaise: ({ rationale, citedAnswerKeys }) =>
+                    appeals?.raise({
                       caseRow,
-                      appellant: snapshot.currentUser?.id ?? '',
+                      snapshot,
                       rationale,
                       citedAnswerKeys,
-                      id: `appeal-${Date.now()}`,
-                      at: new Date().toISOString(),
-                    });
-                    viewModel.caseRow = result.caseRow;
-                    context.saveQueue.enqueue(
-                      caseRow.id,
-                      'appeals',
-                      result.appeals
-                    );
-                    tools.dispatch({
-                      type: 'case/model-changed',
-                      snapshot: { ...snapshot, caseRow: result.caseRow },
-                    });
-                  },
+                    }),
                   heading: snapshot.sectionHeadings.appealRequest,
                 })
               )
@@ -995,31 +984,8 @@ export function createRouteSlice(params, context) {
                   access: snapshot.access.appealReview,
                   currentUser: snapshot.currentUser,
                   outcomeOptions: snapshot.config.outcomeOptions ?? [],
-                  onResolve: (resolution) => {
-                    const result = resolveAppeal({
-                      caseRow,
-                      resolver: snapshot.currentUser?.id ?? '',
-                      at: new Date().toISOString(),
-                      ...resolution,
-                    });
-                    viewModel.caseRow = result.caseRow;
-                    if (result.transactional) {
-                      context.saveQueue.enqueueFields(
-                        caseRow.id,
-                        result.fields
-                      );
-                    } else {
-                      context.saveQueue.enqueue(
-                        caseRow.id,
-                        'appeals',
-                        result.fields.appeals
-                      );
-                    }
-                    tools.dispatch({
-                      type: 'case/model-changed',
-                      snapshot: { ...snapshot, caseRow: result.caseRow },
-                    });
-                  },
+                  onResolve: (resolution) =>
+                    appeals?.resolve({ caseRow, snapshot, resolution }),
                 })
               )
             : null
@@ -1037,21 +1003,13 @@ export function createRouteSlice(params, context) {
                   access: snapshot.access.amendOutcome,
                   currentUser: snapshot.currentUser,
                   outcomeOptions: snapshot.config.outcomeOptions ?? [],
-                  onAmend: ({ outcome, justification }) => {
-                    const result = amendOutcome({
+                  onAmend: ({ outcome, justification }) =>
+                    appeals?.amend({
                       caseRow,
+                      snapshot,
                       outcome,
                       justification,
-                      amendedBy: snapshot.currentUser?.id ?? '',
-                      amendedAt: new Date().toISOString(),
-                    });
-                    viewModel.caseRow = result.caseRow;
-                    context.saveQueue.enqueueFields(caseRow.id, result.fields);
-                    tools.dispatch({
-                      type: 'case/model-changed',
-                      snapshot: { ...snapshot, caseRow: result.caseRow },
-                    });
-                  },
+                    }),
                 })
               )
             : null
@@ -1172,8 +1130,16 @@ export function createRouteSlice(params, context) {
       active = true;
       save = createCaseReviewSaveEffect({
         saveQueue: context.saveQueue,
-        caseId: params.id,
+        caseId,
         dispatch: tools.dispatch,
+      });
+      appeals = createAppealEffects({
+        saveQueue: context.saveQueue,
+        caseId,
+        dispatch: tools.dispatch,
+        onCaseRow: (row) => {
+          viewModel.caseRow = row;
+        },
       });
       const disposeSaveStatus = observeSaveStatus(
         context.saveQueue,
@@ -1218,6 +1184,7 @@ export function createRouteSlice(params, context) {
         pendingAttributionQueries.clear();
         questionsView.clear();
         save = null;
+        appeals = null;
         disposeSaveStatus();
       };
     },

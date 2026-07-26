@@ -37,12 +37,17 @@ export class CaseMachine {
    * @param {CurrentUser | { id: string }} currentUser
    * @param {Capabilities} capabilities
    * @param {CaseTypeConfig} config
+   * @param {{ now?: () => Date }} [options] Injectable clock for the lifecycle
+   *   timestamps below. Optional so the existing call sites are unchanged; a
+   *   caller that cares about `reportableAt` / `completedAt` — a test, or any
+   *   future caller replaying a Case — supplies its own.
    */
-  constructor(caseRow, currentUser, capabilities, config) {
+  constructor(caseRow, currentUser, capabilities, config, options = {}) {
     this.caseRow = caseRow;
     this.currentUser = currentUser;
     this.capabilities = capabilities;
     this.config = config;
+    this._now = options.now ?? (() => new Date());
 
     this.roles = resolveRoles(caseRow, currentUser.id, capabilities);
 
@@ -160,7 +165,7 @@ export class CaseMachine {
    * @returns {Partial<CaseRow>}
    */
   transitionToActionsInProgress(computeOutcome, answers, questionBankVersion) {
-    const reportableAt = new Date().toISOString();
+    const reportableAt = this._now().toISOString();
     return {
       status: CASE_STATUS.ACTIONS_IN_PROGRESS,
       reportableAt,
@@ -188,7 +193,7 @@ export class CaseMachine {
    * @returns {Partial<CaseRow>}
    */
   transitionToCompleted(computeOutcome, answers, questionBankVersion) {
-    const now = new Date().toISOString();
+    const now = this._now().toISOString();
     return {
       status: CASE_STATUS.COMPLETED,
       reportableAt: now,
@@ -208,7 +213,7 @@ export class CaseMachine {
   transitionToFinalComplete() {
     return {
       status: CASE_STATUS.COMPLETED,
-      completedAt: new Date().toISOString(),
+      completedAt: this._now().toISOString(),
     };
   }
 }

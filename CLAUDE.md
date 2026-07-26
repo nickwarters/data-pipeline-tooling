@@ -187,6 +187,7 @@ src/
       remediation-view.js      # CASE-5 pure Issues and Remediation Actions view
       remediation-tracking-view.js # pure question-level Remediation tab, reviewer + responsible-party renderings (#499)
       appeal-actions.js        # CASE-6 immutable Appeal/resolution/amendment state transitions
+      appeal-effects.js        # the persistence half of those transitions: injected clock + id, SaveQueue writes (#511)
       appeal-view.js           # CASE-6 pure Appeal request form and history view
       appeal-review-view.js    # CASE-6 pure Controls resolution form and history view
       amend-outcome-view.js    # CASE-6 pure ADR-0026 Amend Outcome form and record view

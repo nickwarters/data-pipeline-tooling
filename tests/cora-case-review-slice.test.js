@@ -139,8 +139,10 @@ function snapshot() {
 }
 
 /**
- * Render through the same route-slice path production mounts. `start()` is
- * intentionally not called: these view tests provide store state directly.
+ * Render through the same route-slice path production mounts, in the same
+ * order: a first render, then `start()`. The store state is supplied directly,
+ * so the load hangs deliberately and never overwrites it — but the route's
+ * effects are built, which is where every write path now lives (#511).
  *
  * @param {any} initialState
  * @param {Record<string, any>} [contextOverrides]
@@ -151,15 +153,26 @@ function renderShippedState(
   contextOverrides = {},
   seedContainer = undefined
 ) {
+  const never = new Promise(() => {});
   const slice = createRouteSlice(
     { caseType: 'example-review', id: 'c1' },
     /** @type {any} */ ({
-      client: {},
-      saveQueue: {},
       currentUser: chrome.currentUser,
       capabilities: chrome.permissions,
       chrome,
       ...contextOverrides,
+      client: {
+        getCase: () => never,
+        getCurrentUser: () => never,
+        getExportHash: () => never,
+        resolveUsers: () => never,
+        searchPeople: () => never,
+        ...contextOverrides.client,
+      },
+      saveQueue: {
+        subscribeStatus: () => () => {},
+        ...contextOverrides.saveQueue,
+      },
     })
   );
   let state = initialState;
@@ -171,6 +184,7 @@ function renderShippedState(
   let tools;
   tools = {
     morph,
+    listen() {},
     dispatch(/** @type {any} */ action) {
       actions.push(action);
       state = slice.reducer(state, action);
@@ -178,7 +192,9 @@ function renderShippedState(
     },
   };
   slice.render(container, state, tools);
+  const dispose = slice.start(tools);
   return {
+    dispose,
     actions,
     container,
     dispatch(/** @type {any} */ action) {
@@ -1742,6 +1758,45 @@ test('CASE-7 route: Notes and Conversation write through store-owned callbacks',
   ]);
 });
 
+test('Notes effect: a Case field edit dispatches then enqueues against the loaded Case id (#511)', () => {
+  /** @type {any[]} */
+  const queued = [];
+  /** @type {any[]} */
+  const dispatched = [];
+  let loadedCaseId = 'route-param';
+  const save = createCaseReviewSaveEffect({
+    saveQueue: /** @type {any} */ ({
+      enqueue: (
+        /** @type {string} */ id,
+        /** @type {string} */ field,
+        /** @type {any} */ value
+      ) => queued.push({ id, field, value }),
+    }),
+    caseId: () => loadedCaseId,
+    dispatch: (action) => dispatched.push(action),
+  });
+
+  // The effect is built before the Case loads, so the id it writes to is
+  // whatever the getter resolves to at write time — not what it resolved to at
+  // construction.
+  loadedCaseId = 'c1';
+  save.fieldEdited('notes', 'Store-owned note');
+  save.fieldEdited('caseJustification', 'Because.');
+
+  assert.deepEqual(queued, [
+    { id: 'c1', field: 'notes', value: 'Store-owned note' },
+    { id: 'c1', field: 'caseJustification', value: 'Because.' },
+  ]);
+  assert.deepEqual(dispatched, [
+    { type: 'case/field-edited', field: 'notes', value: 'Store-owned note' },
+    {
+      type: 'case/field-edited',
+      field: 'caseJustification',
+      value: 'Because.',
+    },
+  ]);
+});
+
 test('CASE-1 save effect: rapid Answer dispatches coalesce through unchanged SaveQueue', async () => {
   /** @type {any[]} */
   const patches = [];
@@ -1764,7 +1819,7 @@ test('CASE-1 save effect: rapid Answer dispatches coalesce through unchanged Sav
   const dispatched = [];
   const save = createCaseReviewSaveEffect({
     saveQueue: queue,
-    caseId: 'c1',
+    caseId: () => 'c1',
     dispatch: (action) => dispatched.push(action),
   });
 
@@ -1801,7 +1856,7 @@ test('On hold effect: queues the paired fields as one PATCH and clears the times
   const dispatched = [];
   const save = createCaseReviewSaveEffect({
     saveQueue: queue,
-    caseId: 'c1',
+    caseId: () => 'c1',
     dispatch: (action) => dispatched.push(action),
     now: () => new Date('2026-07-23T09:30:00.000Z'),
   });

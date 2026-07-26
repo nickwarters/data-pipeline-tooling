@@ -5,14 +5,20 @@
 /** @typedef {'saved'|'saving'|'reconnecting'|'conflict'} SaveStatus */
 
 /**
- * Route effect for Answer persistence. User edits enter the store first, then
- * the unchanged SaveQueue owns field-level debounce and ETag concurrency.
+ * Route effect for Case persistence — Answers, the on-hold latch, and the plain
+ * text fields of the Notes Section. User edits enter the store first, then the
+ * unchanged SaveQueue owns field-level debounce and ETag concurrency.
+ *
+ * `caseId` is a getter, not a value: the effect is built in `start()`, before
+ * the Case has loaded, and every write must address the row that was actually
+ * loaded (#511).
  *
  * @param {{
  *   saveQueue: SaveQueue,
- *   caseId: string,
+ *   caseId: () => string,
  *   dispatch: (action:
  *     | {type: 'case/answers-edited', answers: Record<string, Answer>}
+ *     | {type: 'case/field-edited', field: string, value: string}
  *     | {type: 'case/on-hold-changed', onHold: boolean, placedOnHoldAt: string | null}
  *   ) => unknown,
  *   now?: () => Date,
@@ -28,7 +34,17 @@ export function createCaseReviewSaveEffect({
     /** @param {Record<string, Answer>} answers */
     answersEdited(answers) {
       dispatch({ type: 'case/answers-edited', answers });
-      saveQueue.enqueue(caseId, 'answers', answers);
+      saveQueue.enqueue(caseId(), 'answers', answers);
+    },
+    /**
+     * A plain-text Case field edited in the Notes Section — `notes` or
+     * `caseJustification`.
+     *
+     * @param {string} field @param {string} value
+     */
+    fieldEdited(field, value) {
+      dispatch({ type: 'case/field-edited', field, value });
+      saveQueue.enqueue(caseId(), field, value);
     },
     /** @param {boolean} onHold */
     onHoldChanged(onHold) {
@@ -38,7 +54,7 @@ export function createCaseReviewSaveEffect({
         onHold,
         placedOnHoldAt,
       });
-      saveQueue.enqueueFields(caseId, { onHold, placedOnHoldAt });
+      saveQueue.enqueueFields(caseId(), { onHold, placedOnHoldAt });
     },
   };
 }

@@ -207,6 +207,42 @@ test('CaseMachine no-actions completion stamps reportable and completed together
   assert.equal(Object.hasOwn(fields, 'remediationDueDate'), false);
 });
 
+test('CaseMachine stamps every lifecycle timestamp from the injected clock (#511)', () => {
+  const now = () => new Date('2026-07-23T09:30:00.000Z');
+  /** @param {'In-progress'|'Actions In Progress'} status */
+  const machine = (status) =>
+    new CaseMachine(
+      { ...BASE_ROW, status },
+      { id: 'u1' },
+      NO_CAPABILITIES,
+      EMPTY_CONFIG,
+      { now }
+    );
+
+  const sendActions = machine('In-progress').transitionToActionsInProgress(
+    null,
+    undefined,
+    null
+  );
+  assert.equal(sendActions.reportableAt, '2026-07-23T09:30:00.000Z');
+  // The SLA start moves with the clock; the working-day arithmetic behind it
+  // does not (ADR-0025 — the holiday list stays frozen).
+  assert.equal(sendActions.remediationDueDate, '2026-08-06');
+
+  const completed = machine('In-progress').transitionToCompleted(
+    null,
+    undefined,
+    null
+  );
+  assert.equal(completed.reportableAt, '2026-07-23T09:30:00.000Z');
+  assert.equal(completed.completedAt, '2026-07-23T09:30:00.000Z');
+
+  assert.equal(
+    machine('Actions In Progress').transitionToFinalComplete().completedAt,
+    '2026-07-23T09:30:00.000Z'
+  );
+});
+
 test('CaseMachine final close does not re-snapshot the reportable outcome', () => {
   const fields = machineFor('Actions In Progress').transitionToFinalComplete();
 
