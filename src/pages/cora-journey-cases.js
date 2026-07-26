@@ -1,5 +1,6 @@
 // @ts-check
 import { h } from '../lib/html.js';
+import { patchRoute } from '../core/route-state.js';
 import { caseRouteFor } from '../lib/case-route-links.js';
 import { fetchJourneyCases } from '../services/journey-cases-fetcher.js';
 import { dataTableView, nextTableSort } from '../views/data-table.js';
@@ -79,21 +80,12 @@ export function createRouteSlice(
     reducer(/** @type {JourneyCasesState} */ state, /** @type {any} */ action) {
       const route = state.routes.journeyCases;
       if (action.type === 'cases/loaded') {
-        return {
-          ...state,
-          routes: { journeyCases: { ...route, cases: action.cases } },
-        };
+        return patchRoute(state, 'journeyCases', { cases: action.cases });
       }
       if (action.type === 'table/sort-requested') {
-        return {
-          ...state,
-          routes: {
-            journeyCases: {
-              ...route,
-              sort: nextTableSort(route.sort, action.key),
-            },
-          },
-        };
+        return patchRoute(state, 'journeyCases', {
+          sort: nextTableSort(route.sort, action.key),
+        });
       }
       return state;
     },

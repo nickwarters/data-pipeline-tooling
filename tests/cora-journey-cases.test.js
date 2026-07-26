@@ -198,3 +198,17 @@ test('journey cases slice suppresses late loads and skips fetching without a cli
   await Promise.resolve();
   assert.deepEqual(actions, []);
 });
+
+test('journey cases reducer: an unhandled action returns the same state and chrome survives a patch', () => {
+  const slice = createRouteSlice({}, context());
+  const initial = slice.initialState;
+
+  assert.strictEqual(slice.reducer(initial, { type: 'nothing/here' }), initial);
+
+  const loaded = slice.reducer(initial, { type: 'cases/loaded', cases: [] });
+  assert.strictEqual(loaded.chrome, initial.chrome);
+  assert.strictEqual(
+    loaded.routes.journeyCases.sort,
+    initial.routes.journeyCases.sort
+  );
+});
