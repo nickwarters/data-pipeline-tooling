@@ -548,6 +548,14 @@ test('in-memory flow runner owns the Case Row; the loader hands it over once (#5
         isVisitor: false,
       },
     },
+  ]);
+  // Captured at the handover, so the assertions below can name the row the
+  // loader produced rather than a field it happens to lack.
+  const loadedRow = runner.viewModel?.caseRow;
+  assert.ok(loadedRow, 'the load produced a Case Row');
+  assert.equal(runner.caseRow, loadedRow, 'the runner takes it at handover');
+
+  await runner.run([
     {
       type: 'raiseAppeal',
       actorId: 'user-owner',
@@ -558,13 +566,82 @@ test('in-memory flow runner owns the Case Row; the loader hands it over once (#5
   // The runner is the single owner, exactly as the store is in the browser: the
   // transition's Case Row lands here and nowhere else.
   assert.equal(runner.caseRow?.appeals?.[0].state, 'raised');
+  assert.notEqual(
+    runner.caseRow,
+    loadedRow,
+    'the transition replaced the runner’s row rather than mutating it'
+  );
+  // Identity, not the absence of a field: the loader still holds the very row
+  // `load()` produced, whatever the fixture happens to define on it.
   assert.equal(
-    runner.viewModel?.caseRow?.appeals,
-    undefined,
+    runner.viewModel?.caseRow,
+    loadedRow,
     'the loader keeps the row it loaded; the Appeal is the store owner’s'
   );
   assert.equal(
     runner.snapshot().lists['Cases-ExampleReview'][0].appeals?.[0].state,
     'raised'
+  );
+});
+
+test('completing a Case updates the runner-owned Case Row, so later actions see the transition', async () => {
+  const runner = createInMemoryFlowRunner(
+    { lists: { 'Cases-ExampleReview': [CASE_ROW] } },
+    { persona: 'reviewer' }
+  );
+  await runner.run([
+    {
+      type: 'loadCasePage',
+      caseId: 'case-flow-1',
+      caseType: 'example-review',
+    },
+    { type: 'answer', questionId: 'q-welcome', value: 'Yes' },
+    { type: 'answer', questionId: 'q-needs', value: 'Yes' },
+    { type: 'answer', questionId: 'q-resolve', value: 'Yes' },
+    { type: 'answer', questionId: 'q-channel', value: 'Phone' },
+    { type: 'answer', questionId: 'q-products', value: ['Account'] },
+  ]);
+  assert.equal(runner.caseRow?.status, CASE_ROW.status);
+
+  await runner.run([{ type: 'clickCompleteCase' }]);
+
+  // The browser never needs this: `completeCase` navigates to the dashboard on
+  // success, so the mount ends before anything can read a stale row. The runner
+  // does not navigate, so a flow may keep acting on the Case — its row has to
+  // carry the transition or the next action reads pre-completion state.
+  const persisted = runner
+    .snapshot()
+    .lists['Cases-ExampleReview'].find((c) => c.id === 'case-flow-1');
+  assert.equal(persisted?.status, 'Completed');
+  assert.equal(
+    runner.caseRow?.status,
+    persisted?.status,
+    'the runner-owned row matches what was persisted'
+  );
+  assert.equal(
+    runner.caseRow?.outcomeAtCompletion,
+    persisted?.outcomeAtCompletion
+  );
+});
+
+test('a refused completion leaves the runner-owned Case Row untouched', async () => {
+  const runner = createInMemoryFlowRunner(
+    { lists: { 'Cases-ExampleReview': [CASE_ROW] } },
+    { persona: 'reviewer' }
+  );
+  await runner.run([
+    {
+      type: 'loadCasePage',
+      caseId: 'case-flow-1',
+      caseType: 'example-review',
+    },
+    // No Answers, so `completionPatch` returns null and nothing is written.
+    { type: 'clickCompleteCase' },
+  ]);
+
+  assert.equal(runner.caseRow?.status, CASE_ROW.status);
+  assert.equal(
+    runner.snapshot().lists['Cases-ExampleReview'][0].status,
+    CASE_ROW.status
   );
 });

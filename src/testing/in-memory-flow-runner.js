@@ -280,9 +280,15 @@ export function createInMemoryFlowRunner(state, opts = {}) {
         await flushCurrentCase();
         return;
       }
-      case 'clickCompleteCase':
-        await clickCompleteCase(requirePage(action), caseRow, answers);
+      case 'clickCompleteCase': {
+        const applied = await clickCompleteCase(
+          requirePage(action),
+          caseRow,
+          answers
+        );
+        if (applied && caseRow) caseRow = { ...caseRow, ...applied };
         return;
+      }
       case 'raiseAppeal':
         await raiseCurrentAppeal(action);
         return;
@@ -413,9 +419,18 @@ export function createInMemoryFlowRunner(state, opts = {}) {
 }
 
 /**
+ * Completing a Case is the one transition whose new fields the browser never
+ * folds back into the store: on success `completeCase` navigates to the
+ * dashboard, so the mount ends and the stale row is unobservable. The runner has
+ * no navigation, so a flow may keep acting on the Case afterwards — it returns
+ * the persisted patch and the caller applies it, keeping the runner-owned row
+ * the row as stored.
+ *
  * @param {CaseReviewViewModel} vm
  * @param {CaseRow | null} caseRow The runner-owned Case Row (#530).
  * @param {Record<string, import('../sharepoint-client.js').Answer>} answers
+ * @returns {Promise<Partial<CaseRow> | null>} The applied fields, or `null` if
+ *   the transition was not permitted or the write failed.
  */
 async function clickCompleteCase(vm, caseRow, answers) {
   if (!caseRow || !vm.config || !vm.machine) {
@@ -432,13 +447,14 @@ async function clickCompleteCase(vm, caseRow, answers) {
     exportHash: vm.exportHash,
   });
 
-  await completeCase({
+  const ok = await completeCase({
     caseId: caseRow.id,
     client: vm.client,
     saveQueue: vm.saveQueue,
     patchFields,
     caseListOptions: vm.caseListOptions,
   });
+  return ok ? patchFields : null;
 }
 
 /**

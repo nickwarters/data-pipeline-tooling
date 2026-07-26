@@ -65,19 +65,36 @@ test('the Case Review page has exactly one Answer owner (#510)', () => {
   );
 });
 
+/**
+ * The two modules allowed to hold a Case Row on an object: the loader, which
+ * hands it to the store in `toStoreSnapshot()`, and `CaseMachine`, which
+ * captures it at construction. Adding a third means a new copy that can drift
+ * from `snapshot.caseRow` — argue for it in review, do not just extend this.
+ */
+const CASE_ROW_HOLDERS = new Set([
+  'lib/case-review-view-model.js',
+  'lib/case-machine.js',
+]);
+
 test('the Case Review page has exactly one Case Row owner (#530)', () => {
-  // The store owns the Case Row. `CaseReviewViewModel` keeps a copy only long
-  // enough to hand it over in `toStoreSnapshot()`, so nothing outside the
-  // loader's own `load()` may assign it: a second writer there is the
+  // The store owns the Case Row. The loader keeps a copy only long enough to
+  // hand it over, so no other module may assign one: a second writer is the
   // hand-rolled sync #510 removed for Answers, one level up.
-  const assignsLoaderCaseRow = /\b(?:viewModel|vm|loader)\.caseRow\s*=[^=]/;
+  //
+  // Deliberately matches *any* `.caseRow =` rather than the `viewModel|vm`
+  // spellings the #530 regression used, so a writer through a differently
+  // named binding still trips it. Limitation worth knowing: this is text
+  // matching, so it cannot see `Object.assign(target, { caseRow })`, a
+  // destructured alias, or a computed `target['caseRow'] =`. It holds the
+  // shape the codebase actually writes today, not a proof.
+  const assignsCaseRow = /\.caseRow\s*=[^=]/;
   for (const [path, source] of sourceFiles(
     new URL('../src/', import.meta.url)
   )) {
-    if (path === 'lib/case-review-view-model.js') continue;
+    if (CASE_ROW_HOLDERS.has(path)) continue;
     assert.ok(
-      !assignsLoaderCaseRow.test(source),
-      `${path} assigns the loader's Case Row; the store is the owner (#530)`
+      !assignsCaseRow.test(source),
+      `${path} assigns a Case Row onto an object; the store is the owner (#530)`
     );
   }
 });
