@@ -936,7 +936,7 @@ export function createRouteSlice(params, context) {
             caseId: params.id,
             caseListOptions: viewModel.caseListOptions,
           }).then((row) => {
-            if (row) {
+            if (row && tools.isActive()) {
               tools.dispatch({
                 type: 'case/conversation-changed',
                 messages: row.conversation,
@@ -946,6 +946,7 @@ export function createRouteSlice(params, context) {
         });
       }
       void viewModel.load().then(() => {
+        if (!tools.isActive()) return;
         tools.dispatch({
           type: 'case/load-finished',
           snapshot: viewModel.toStoreSnapshot(),

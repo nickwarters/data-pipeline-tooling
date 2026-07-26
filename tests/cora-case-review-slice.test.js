@@ -254,6 +254,9 @@ function renderAttributionSearchRoute(searchPeople) {
     /** @type {any} */ ({ client, saveQueue, chrome })
   );
   const container = document.createElement('main');
+  // The adapter's mount lifetime, mirrored here so disposal exercises the
+  // route's `isActive()` guard rather than only its timer/queue clearing (#517).
+  let active = true;
   /** @type {any} */
   let tools;
   tools = {
@@ -263,13 +266,16 @@ function renderAttributionSearchRoute(searchPeople) {
       slice.render(container, state, tools);
     },
     listen() {},
-    isActive: () => true,
+    isActive: () => active,
   };
   slice.render(container, state, tools);
-  const dispose = slice.start(tools);
+  const teardown = slice.start(tools);
   return {
     container,
-    dispose,
+    dispose() {
+      active = false;
+      teardown?.();
+    },
     get state() {
       return state;
     },
@@ -2019,6 +2025,7 @@ test('CASE-7 route: mock-mode store shell keeps Review working at the existing U
     ) {
       target.addEventListener(type, listener);
     },
+    isActive: () => true,
   };
   slice.render(container, state, tools);
   const dispose = slice.start?.(tools);
@@ -2284,6 +2291,7 @@ test('CASE-5 route: the Remediation tab resolves a Question through the store se
     ) {
       target.addEventListener(type, listener);
     },
+    isActive: () => true,
   };
 
   let dispose;
@@ -2634,4 +2642,140 @@ test('#513: an In-progress Case renders no version warning', () => {
   const view = renderShippedState(state);
   assert.equal(view.container.querySelector('.cora-banner-warning'), null);
   view.dispose();
+});
+
+/**
+ * Start the real route slice against a Case load the test releases by hand, so
+ * the mount lifetime can be ended while the load is still in flight (#517).
+ * @param {{ getCase: (...args: any[]) => Promise<any> }} clientOverrides
+ */
+function startPendingLoadRoute(clientOverrides) {
+  const client = /** @type {any} */ ({
+    getCurrentUser: async () => chrome.currentUser,
+    getExportHash: async () => null,
+    getVersionedExport: async () => null,
+    resolveUsers: async () => ({}),
+    searchPeople: async () => [],
+    ...clientOverrides,
+  });
+  const saveQueue = new SaveQueue(client, { debounceMs: 0 });
+  const slice = createRouteSlice(
+    { caseType: 'example-review', id: 'c1' },
+    /** @type {any} */ ({ client, saveQueue, chrome })
+  );
+  /** @type {any[]} */
+  const actions = [];
+  /** @type {Map<string, Function>} */
+  const listeners = new Map();
+  let active = true;
+  const teardown = slice.start(
+    /** @type {any} */ ({
+      morph,
+      dispatch: (/** @type {any} */ action) => actions.push(action),
+      listen: (
+        /** @type {any} */ _target,
+        /** @type {string} */ type,
+        /** @type {Function} */ listener
+      ) => listeners.set(type, listener),
+      isActive: () => active,
+    })
+  );
+  return {
+    actions,
+    listeners,
+    dispose() {
+      active = false;
+      teardown?.();
+    },
+  };
+}
+
+/** A promise the test releases by hand, created before the route asks for it. */
+function deferred() {
+  /** @type {(value: any) => void} */
+  let release = () => {};
+  const promise = new Promise((resolve) => {
+    release = resolve;
+  });
+  return { promise, release };
+}
+
+/**
+ * Drain the awaited turns of the Case load. Microtasks only, and every test
+ * using it also asserts the still-mounted control route did dispatch, so a
+ * drain that were too short would fail the test rather than fake a pass.
+ */
+async function drain() {
+  for (let turn = 0; turn < 50; turn += 1) await Promise.resolve();
+}
+
+test('#517: a Case load resolving after unmount dispatches nothing', async () => {
+  const pendingMounted = deferred();
+  const mounted = startPendingLoadRoute({
+    getCase: () => pendingMounted.promise,
+  });
+  const pendingUnmounted = deferred();
+  const unmounted = startPendingLoadRoute({
+    getCase: () => pendingUnmounted.promise,
+  });
+  unmounted.dispose();
+
+  pendingMounted.release({ ...caseRow });
+  pendingUnmounted.release({ ...caseRow });
+  await drain();
+
+  assert.equal(
+    mounted.actions.some((action) => action.type === 'case/load-finished'),
+    true,
+    'the still-mounted route must finish its load'
+  );
+  assert.deepEqual(
+    unmounted.actions.filter((action) => action.type === 'case/load-finished'),
+    []
+  );
+  mounted.dispose();
+});
+
+test('#517: a conversation refresh resolving after unmount dispatches nothing', async () => {
+  // The visibilitychange handler is invoked synchronously below, before the
+  // Case load has finished awaiting its Case Type config — so the refresh is
+  // the first `getCase` and the load, which stays pending, is the second.
+  /** @param {Promise<any>} refresh */
+  const startRefreshRoute = (refresh) => {
+    let calls = 0;
+    return startPendingLoadRoute({
+      getCase: () => (++calls === 1 ? refresh : new Promise(() => {})),
+    });
+  };
+  const pendingMounted = deferred();
+  const mounted = startRefreshRoute(pendingMounted.promise);
+  const pendingUnmounted = deferred();
+  const unmounted = startRefreshRoute(pendingUnmounted.promise);
+
+  for (const route of [mounted, unmounted]) {
+    const onVisibilityChange = route.listeners.get('visibilitychange');
+    assert.equal(typeof onVisibilityChange, 'function');
+    /** @type {any} */ (onVisibilityChange)();
+  }
+  unmounted.dispose();
+
+  const row = { ...caseRow, conversation: [{ id: 'm1' }] };
+  pendingMounted.release(row);
+  pendingUnmounted.release(row);
+  await drain();
+
+  assert.equal(
+    mounted.actions.some(
+      (action) => action.type === 'case/conversation-changed'
+    ),
+    true,
+    'the still-mounted route must apply the refreshed Conversation'
+  );
+  assert.deepEqual(
+    unmounted.actions.filter(
+      (action) => action.type === 'case/conversation-changed'
+    ),
+    []
+  );
+  mounted.dispose();
 });

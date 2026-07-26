@@ -166,14 +166,14 @@ export function createRouteSlice(
   context,
   { fetchCases = fetchTeamWorkloadCases, now = () => new Date() } = {}
 ) {
-  let active = false;
   let loadSequence = 0;
-  /** @type {null | { dispatch: (action: MyTeamAction) => void, context: import('../setup/register-routes.js').AppContext }} */
+  // The mount lifetime comes from the adapter's tools, not a page-local latch (#517).
+  /** @type {null | { dispatch: (action: MyTeamAction) => void, context: import('../setup/register-routes.js').AppContext, isActive: () => boolean }} */
   let effectTools = null;
 
   function runRefreshEffect() {
     const tools = effectTools;
-    if (!active || !tools) return;
+    if (!tools || !tools.isActive()) return;
     const sequence = ++loadSequence;
     void fetchCases(
       tools.context.client,
@@ -181,7 +181,7 @@ export function createRouteSlice(
       tools.context.caseSources
     ).then(
       async (cases) => {
-        if (!active || sequence !== loadSequence) return;
+        if (!tools.isActive() || sequence !== loadSequence) return;
         const rows = buildTeamWorkload(cases, tools.context.caseSources, now());
         const reviewerIds = rows.flatMap((row) =>
           row.reviewerId === null ? [] : [row.reviewerId]
@@ -195,7 +195,7 @@ export function createRouteSlice(
         } catch {
           // Workload data remains useful when directory enrichment is unavailable.
         }
-        if (active && sequence === loadSequence) {
+        if (tools.isActive() && sequence === loadSequence) {
           tools.dispatch({
             type: 'workload/loaded',
             rows: withReviewerDisplayNames(rows, displayNames),
@@ -203,7 +203,7 @@ export function createRouteSlice(
         }
       },
       (error) => {
-        if (active && sequence === loadSequence) {
+        if (tools.isActive() && sequence === loadSequence) {
           tools.dispatch({
             type: 'workload/load-failed',
             message:
@@ -295,15 +295,13 @@ export function createRouteSlice(
       });
     },
     start(
-      /** @type {{ dispatch: (action: MyTeamAction) => void, context: import('../setup/register-routes.js').AppContext }} */ tools
+      /** @type {{ dispatch: (action: MyTeamAction) => void, context: import('../setup/register-routes.js').AppContext, isActive: () => boolean }} */ tools
     ) {
-      active = true;
       effectTools = tools;
       tools.dispatch({ type: 'workload/refresh-requested' });
       runRefreshEffect();
 
       return () => {
-        active = false;
         effectTools = null;
         loadSequence += 1;
       };

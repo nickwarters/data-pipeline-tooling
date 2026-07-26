@@ -387,11 +387,13 @@ test('Send for Review runs the publish effect and stores its exact artifacts', a
     type: 'drawer/changed',
     open: true,
   });
+  let active = true;
   const tools = /** @type {any} */ ({
     dispatch(/** @type {any} */ action) {
       state = slice.reducer(state, action);
     },
     listen() {},
+    isActive: () => active,
   });
   const view = slice.view(state, tools);
   const dispose = slice.start(tools);
@@ -428,11 +430,13 @@ test('publish effect reports writer failures and ignores work after unmount', as
       type: 'drawer/changed',
       open: true,
     });
+    let active = true;
     const tools = /** @type {any} */ ({
       dispatch(/** @type {any} */ action) {
         state = slice.reducer(state, action);
       },
       listen() {},
+      isActive: () => active,
     });
     const view = slice.view(state, tools);
     const dispose = slice.start(tools);
@@ -458,11 +462,13 @@ test('publish effect reports writer failures and ignores work after unmount', as
     type: 'drawer/changed',
     open: true,
   });
+  let active = true;
   const tools = /** @type {any} */ ({
     dispatch(/** @type {any} */ action) {
       state = slice.reducer(state, action);
     },
     listen() {},
+    isActive: () => active,
   });
   const view = slice.view(state, tools);
   fireEvent(getByRole(view, 'button', { name: 'Send for Review' }), 'click');
@@ -473,6 +479,7 @@ test('publish effect reports writer failures and ignores work after unmount', as
     getByRole(activeView, 'button', { name: 'Send for Review' }),
     'click'
   );
+  active = false;
   dispose();
   release();
   await flush();
@@ -543,4 +550,72 @@ test('bank editor and route effects preserve rejected and disabled branches', as
   await flush();
   dispose();
   /** @type {any} */ (globalThis).location.search = search;
+});
+
+test('#517 bank editor slice: the adapter mount lifetime, not a page latch, suppresses a late publish', async () => {
+  /**
+   * Start a publish that the test releases by hand, keeping the page's own
+   * `start()` teardown out of it so only the adapter's lifetime is under test.
+   */
+  const startPublish = () => {
+    let release = /** @type {(value?: unknown) => void} */ (() => {});
+    const pending = new Promise((resolve) => {
+      release = resolve;
+    });
+    // Resolved once the effect has finished its async compile and reached the
+    // writer, so the test never has to guess when the hash is done.
+    let reachedWriter = /** @type {(value?: unknown) => void} */ (() => {});
+    const atWriter = new Promise((resolve) => {
+      reachedWriter = resolve;
+    });
+    const slice = createRouteSlice(
+      {},
+      /** @type {any} */ ({
+        ...context(),
+        writeQuestionBankArtifacts: async () => {
+          reachedWriter();
+          await pending;
+        },
+      })
+    );
+    let state = slice.reducer(slice.initialState, {
+      type: 'drawer/changed',
+      open: true,
+    });
+    let active = true;
+    const tools = /** @type {any} */ ({
+      dispatch(/** @type {any} */ action) {
+        state = slice.reducer(state, action);
+      },
+      listen() {},
+      isActive: () => active,
+    });
+    slice.start(tools);
+    const view = slice.view(state, tools);
+    fireEvent(getByRole(view, 'button', { name: 'Send for Review' }), 'click');
+    assert.equal(selectQuestionBankState(state).publishStatus, 'publishing');
+    return {
+      atWriter,
+      release,
+      unmount: () => {
+        active = false;
+      },
+      get status() {
+        return selectQuestionBankState(state).publishStatus;
+      },
+    };
+  };
+
+  const mounted = startPublish();
+  const unmounted = startPublish();
+  await Promise.all([mounted.atWriter, unmounted.atWriter]);
+  unmounted.unmount();
+  mounted.release();
+  unmounted.release();
+  // Microtasks only, from a point the effect has demonstrably reached: the
+  // still-mounted control below fails if this drain is ever too short.
+  for (let turn = 0; turn < 20; turn += 1) await Promise.resolve();
+
+  assert.equal(mounted.status, 'succeeded');
+  assert.equal(unmounted.status, 'publishing');
 });

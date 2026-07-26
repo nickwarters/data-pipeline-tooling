@@ -123,11 +123,13 @@ test('my team slice: loads fresh data, refreshes manually, sorts, and ignores st
     fetchCases: /** @type {any} */ (fetchCases),
     now: () => new Date('2026-07-24T00:00:00.000Z'),
   });
+  let active = true;
   const dispose = slice.start?.({
     dispatch(action) {
       actions.push(action);
     },
     context: context(),
+    isActive: () => active,
   });
 
   assert.deepEqual(actions[0], { type: 'workload/refresh-requested' });
@@ -158,6 +160,7 @@ test('my team slice: loads fresh data, refreshes manually, sorts, and ignores st
   });
   assert.equal(slice.reducer(sorted, { type: 'ignored' }), sorted);
 
+  active = false;
   dispose?.();
   pending[1].release();
   await pending[1].promise;
@@ -259,6 +262,7 @@ test('my team slice: resolves reviewer display names and falls back to account i
       actions.push(action);
     },
     context: context(client),
+    isActive: () => true,
   });
   await Promise.resolve();
   await Promise.resolve();
@@ -276,4 +280,35 @@ test('my team slice: resolves reviewer display names and falls back to account i
     ]
   );
   assert.equal(Object.hasOwn(slice.initialState, 'myTeamCaseSources'), false);
+});
+
+test('#517 my team slice: the adapter mount lifetime, not a page latch, suppresses a late load', async () => {
+  /** @type {(rows: any[]) => void} */
+  let releaseCases = () => {};
+  const pending = new Promise((resolve) => {
+    releaseCases = resolve;
+  });
+  const slice = createRouteSlice({}, context(), {
+    fetchCases: /** @type {any} */ (() => pending),
+    now: () => new Date('2026-07-24T00:00:00.000Z'),
+  });
+  /** @type {any[]} */
+  const actions = [];
+  let active = true;
+  slice.start?.(
+    /** @type {any} */ ({
+      dispatch: (/** @type {any} */ action) => actions.push(action),
+      context: context(),
+      isActive: () => active,
+    })
+  );
+  active = false;
+  releaseCases([]);
+  await pending;
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.deepEqual(
+    actions.filter((action) => action.type === 'workload/loaded'),
+    []
+  );
 });

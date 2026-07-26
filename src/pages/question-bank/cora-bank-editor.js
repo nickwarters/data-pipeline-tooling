@@ -194,12 +194,13 @@ export function bankEditorView(state, tools) {
  */
 export function createRouteSlice(_params, context) {
   let latestRoute = initialQuestionBankState();
+  // The mount lifetime comes from the adapter's tools, not a page-local latch (#517).
   /** @type {any|null} */
   let effectTools = null;
-  let active = false;
   const publish = async () => {
-    if (!effectTools || !active) return;
-    effectTools.dispatch({ type: 'publish/requested' });
+    const tools = effectTools;
+    if (!tools || !tools.isActive()) return;
+    tools.dispatch({ type: 'publish/requested' });
     try {
       const write =
         context.writeQuestionBankArtifacts ??
@@ -215,11 +216,11 @@ export function createRouteSlice(_params, context) {
         null,
         write
       );
-      if (active)
-        effectTools.dispatch({ type: 'publish/succeeded', artifacts });
+      if (tools.isActive())
+        tools.dispatch({ type: 'publish/succeeded', artifacts });
     } catch (error) {
-      if (active) {
-        effectTools.dispatch({
+      if (tools.isActive()) {
+        tools.dispatch({
           type: 'publish/failed',
           message: error instanceof Error ? error.message : String(error),
         });
@@ -242,7 +243,6 @@ export function createRouteSlice(_params, context) {
       return bankEditorView(state, { ...tools, publish });
     },
     start(/** @type {any} */ tools) {
-      active = true;
       effectTools = tools;
       context.appEl.classList.add('cora-fullbleed');
       const key = (/** @type {any} */ event) => {
@@ -271,7 +271,6 @@ export function createRouteSlice(_params, context) {
         });
       }
       return () => {
-        active = false;
         effectTools = null;
         context.appEl.classList.remove('cora-fullbleed');
       };
