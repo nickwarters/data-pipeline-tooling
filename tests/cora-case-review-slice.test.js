@@ -2324,17 +2324,25 @@ test('CASE-7 route: a read-only Reviewer on a reportable Case writes no Answer (
 });
 
 test('CASE-7 route: sequential Answer edits accumulate (#510)', async () => {
-  // The main reviewer flow: answer one Question, then another. Question cards
-  // are memoised on `[answer, access]`, so answering `q-welcome` leaves
-  // `q-needs`' card — and its `onchange` closure — from the previous render.
-  // A callback that captured that render's Answers would compute the second
-  // edit against Answers without the first and write the loss straight through
-  // the whole-blob PATCH. Both Questions are independent in the fixture bank,
-  // which is what keeps the second card cached.
+  // The main reviewer flow: answer one Question, then another, then another.
+  // Question cards are memoised on `[answer, access]`, so an edit rebuilds only
+  // its own card; every other card keeps the `onchange` closure from the
+  // previous render. A callback that captured that render's Answers would
+  // compute each edit against Answers as they stood before the *first* one and
+  // write the result straight through the whole-blob PATCH.
+  //
+  // Three edits, starting from one pre-answered Question, because the loss has
+  // two shapes and only the second is obvious:
+  //   - `q-channel` is already answered, so re-answering it silently reverts to
+  //     the stored value — the key survives, which hides the bug from any
+  //     key-only assertion.
+  //   - `q-welcome` is then dropped outright by the `q-needs` edit.
+  // The three Questions are independent in the fixture bank, which is what
+  // keeps the untouched cards cached.
   let storedRow = {
     ...caseRow,
     caseType: 'example-review',
-    answers: {},
+    answers: { 'q-channel': { value: 'Email' } },
   };
   /** @type {any[]} */
   const patches = [];
@@ -2400,25 +2408,27 @@ test('CASE-7 route: sequential Answer edits accumulate (#510)', async () => {
       return control;
     };
 
-    fireEvent(answerControl('answer:q-welcome:0'), 'change');
-    await saveQueue.whenIdle();
-    await flush();
+    for (const key of [
+      'answer:q-channel:0', // Phone, over the stored Email
+      'answer:q-welcome:0',
+      'answer:q-needs:0',
+    ]) {
+      fireEvent(answerControl(key), 'change');
+      await saveQueue.whenIdle();
+      await flush();
+    }
 
-    fireEvent(answerControl('answer:q-needs:0'), 'change');
-    await saveQueue.whenIdle();
-    await flush();
-
-    assert.deepEqual(
-      patches[1],
-      {
-        answers: { 'q-welcome': { value: 'Yes' }, 'q-needs': { value: 'Yes' } },
-      },
-      'the second edit is written on top of the first, not instead of it'
-    );
-    assert.deepEqual(state.routes.caseReview.snapshot?.answers, {
+    const accumulated = {
+      'q-channel': { value: 'Phone' },
       'q-welcome': { value: 'Yes' },
       'q-needs': { value: 'Yes' },
-    });
+    };
+    assert.deepEqual(
+      patches.at(-1),
+      { answers: accumulated },
+      'each edit is written on top of the last, not instead of it'
+    );
+    assert.deepEqual(state.routes.caseReview.snapshot?.answers, accumulated);
   } finally {
     if (typeof dispose === 'function') dispose();
   }
