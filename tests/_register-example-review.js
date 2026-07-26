@@ -13,17 +13,22 @@
 // `loadCaseTypeConfig('example-review')` / the question-bank importer to
 // resolve.
 
-import {
-  CASE_TYPE_IMPORTERS,
-  QUESTION_BANK_IMPORTERS,
-} from '../case-types/manifest.js';
+// Registration goes through `CASE_TYPES` (#527), never straight into the
+// derived importer maps: the registry is where a Case Type's `displayName`
+// lives, and eligibility composes `Reviewers - Example Review` and its two
+// siblings from it. Writing only to the derived maps would leave the fixture
+// nameless — the exact divergence this helper must not model.
+
+import { registerCaseType } from '../case-types/manifest.js';
 import { loadBank } from '../case-types/load-bank.js';
 
-CASE_TYPE_IMPORTERS['example-review'] = () =>
-  import('./_example-review-case-type.js');
-
-QUESTION_BANK_IMPORTERS['example-review'] = async () => ({
-  default: await loadBank(
-    new URL('./_example-review-bank.txt', import.meta.url)
-  ),
+registerCaseType({
+  slug: 'example-review',
+  displayName: 'Example Review',
+  importer: () => import('./_example-review-case-type.js'),
+  bank: async () => ({
+    default: await loadBank(
+      new URL('./_example-review-bank.txt', import.meta.url)
+    ),
+  }),
 });

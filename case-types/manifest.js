@@ -29,16 +29,8 @@ import {
  * }} CaseTypeEntry
  */
 
-/**
- * THE Case Type registry. Adding a Case Type is one entry here, plus its config
- * module under `case-types/` and (optionally) its bank artifact under
- * `case-types/banks/`. `displayName` is load-bearing: it composes the three
- * provisioned SharePoint group names — see `caseTypeGroupNames()` in
- * `src/services/permissions.js`.
- *
- * @type {readonly CaseTypeEntry[]}
- */
-export const CASE_TYPES = [
+/** @type {CaseTypeEntry[]} */
+const registry = [
   {
     slug: 'complaints',
     displayName: 'Complaints',
@@ -48,22 +40,73 @@ export const CASE_TYPES = [
 ];
 
 /**
+ * THE Case Type registry. Adding a Case Type is one entry here, plus its config
+ * module under `case-types/` and (optionally) its bank artifact under
+ * `case-types/banks/`. `displayName` is load-bearing and lives ONLY here (#527):
+ * it composes the three provisioned SharePoint group names — see
+ * `caseTypeGroupNames()` in `src/services/permissions.js` — and both the
+ * capability side (`permissions.caseTypes`) and the Case-source eligibility side
+ * (`resolveCaseSources`, via `displayNameFor`) read this one copy. A Case Type
+ * config module must not restate it.
+ *
+ * @type {readonly CaseTypeEntry[]}
+ */
+export const CASE_TYPES = registry;
+
+/**
  * Derived from `CASE_TYPES` — the shape existing consumers already depend on.
  * @type {Record<string, CaseTypeImporter>}
  */
-export const CASE_TYPE_IMPORTERS = Object.fromEntries(
-  CASE_TYPES.map((caseType) => [caseType.slug, caseType.importer])
-);
+export const CASE_TYPE_IMPORTERS = {};
 
 /**
  * Derived from `CASE_TYPES` — only the Case Types that declare a bank artifact.
  * @type {Record<string, QuestionBankImporter>}
  */
-export const QUESTION_BANK_IMPORTERS = Object.fromEntries(
-  CASE_TYPES.flatMap((caseType) =>
-    caseType.bank ? [[caseType.slug, caseType.bank]] : []
-  )
-);
+export const QUESTION_BANK_IMPORTERS = {};
+
+/**
+ * The single derivation of the two importer maps from one registry entry.
+ * @param {CaseTypeEntry} entry
+ */
+function deriveImporters(entry) {
+  CASE_TYPE_IMPORTERS[entry.slug] = entry.importer;
+  if (entry.bank) QUESTION_BANK_IMPORTERS[entry.slug] = entry.bank;
+}
+
+for (const entry of registry) deriveImporters(entry);
+
+/**
+ * Register a Case Type after module evaluation, through the registry, so the
+ * derived importer maps cannot diverge from `CASE_TYPES` (#527). Test fixtures
+ * (`tests/_register-example-review.js`) use this; production Case Types belong
+ * in the `registry` literal above.
+ *
+ * @param {CaseTypeEntry} entry
+ */
+export function registerCaseType(entry) {
+  registry.push(entry);
+  deriveImporters(entry);
+}
+
+/**
+ * The registered display name for a slug — the ONE copy that composes a Case
+ * Type's SharePoint group names. Synchronous and lazy: the registry holds
+ * importer thunks only, so this evaluates no Case Type module (ADR-0004).
+ *
+ * @param {string} slug
+ * @returns {string}
+ */
+export function displayNameFor(slug) {
+  const entry = registry.find((caseType) => caseType.slug === slug);
+  if (!entry) {
+    throw new UnknownCaseTypeError(
+      slug,
+      registry.map((caseType) => caseType.slug).sort()
+    );
+  }
+  return entry.displayName;
+}
 
 /**
  * @param {string} path

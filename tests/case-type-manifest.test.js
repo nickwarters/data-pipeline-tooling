@@ -7,7 +7,9 @@ import {
   CASE_TYPE_IMPORTERS,
   QUESTION_BANK_IMPORTERS,
   UnknownCaseTypeError,
+  displayNameFor,
   loadCaseTypeConfig,
+  registerCaseType,
 } from '../case-types/manifest.js';
 import { CaseReviewViewModel } from '../src/lib/case-review-view-model.js';
 import { validateCaptureGroups } from '../src/evaluators/issue-capture.js';
@@ -137,6 +139,55 @@ test('case type manifest: unknown Case Type slugs reject with a developer-useful
       error.message ===
         `Unsupported Case Type slug "${slug}". Known Case Type slugs: complaints.`
   );
+});
+
+test('case type manifest: displayNameFor returns the registry display name, synchronously and lazily (#527)', () => {
+  assert.equal(displayNameFor('complaints'), 'Complaints');
+
+  // Reading a name must not evaluate a Case Type module — permissions and
+  // eligibility both read it on the boot path (ADR-0004).
+  for (const entry of CASE_TYPES)
+    assert.equal(typeof entry.importer, 'function');
+});
+
+test('case type manifest: displayNameFor fails loudly for an unregistered slug (#527)', () => {
+  assert.throws(
+    () => displayNameFor('../unexpected'),
+    (error) =>
+      error instanceof UnknownCaseTypeError &&
+      error.slug === '../unexpected' &&
+      error.knownSlugs.includes('complaints'),
+    'an absent display name must throw, never silently yield nothing — that ' +
+      'is how a Case Type became invisible to its own Reviewers'
+  );
+});
+
+test('case type manifest: registerCaseType keeps the derived maps in step with the registry (#527)', () => {
+  const importer = async () => ({ default: /** @type {any} */ ({}) });
+  const bank = async () => ({ default: /** @type {any} */ ({}) });
+  registerCaseType({
+    slug: 'late-registered',
+    displayName: 'Late Registered',
+    importer,
+    bank,
+  });
+
+  try {
+    assert.equal(displayNameFor('late-registered'), 'Late Registered');
+    assert.equal(CASE_TYPE_IMPORTERS['late-registered'], importer);
+    assert.equal(QUESTION_BANK_IMPORTERS['late-registered'], bank);
+    assert.ok(
+      CASE_TYPES.some((entry) => entry.slug === 'late-registered'),
+      'registration lands on the registry itself, not only on the derived maps'
+    );
+  } finally {
+    const index = CASE_TYPES.findIndex((e) => e.slug === 'late-registered');
+    /** @type {import('../case-types/manifest.js').CaseTypeEntry[]} */ (
+      CASE_TYPES
+    ).splice(index, 1);
+    delete CASE_TYPE_IMPORTERS['late-registered'];
+    delete QUESTION_BANK_IMPORTERS['late-registered'];
+  }
 });
 
 test('case type manifest: rejects invalid outcome configuration before a Case Type is used', async () => {
