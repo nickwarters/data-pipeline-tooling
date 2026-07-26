@@ -1694,15 +1694,24 @@
 
 /* The Notes tab's field rhythm was described by four `cora-notes > …` rules
    that matched nothing, and that the ratchet in
-   tests/cora-element-type-contract.test.js now forbids (#536). They are deleted
-   rather than re-pointed at `.cora-notes`, because their target DOM no longer
-   exists either: they assumed a flat run of sibling label/textarea pairs, and
-   `notes-view.js` renders each textarea *inside* its label. Class-converting
-   them as-is would push the caption's font-size/font-weight onto the textarea
-   (which is `font: inherit`) — a restyle, not a restoration. Reviving the
-   intended rhythm against the current DOM is a visual change and wants its own
-   ticket; deleting the dead rules leaves the Notes tab exactly as it renders
-   today. */
+   tests/cora-element-type-contract.test.js now forbids (#536). All four are
+   deleted rather than re-pointed at `.cora-notes`, but for two different
+   reasons — worth recording, because whoever picks up the follow-up needs to
+   know which is which:
+
+     - `> textarea` and `> textarea:last-child` (the bottom-margin rhythm) are
+       genuinely dead. `notes-view.js` renders each textarea *inside* its label,
+       so there is no textarea child of `.cora-notes` to select at all.
+     - `> h2` (margin) and `> label` (display/margin/font-size/font-weight) do
+       still match the current DOM. The `> h2` rule could have been
+       class-converted losslessly; the `> label` rule could not, because its
+       font-size/font-weight would now inherit into the nested textarea (which
+       is `font: inherit`) — a restyle, not a restoration.
+
+   Since the Notes tab has rendered without any of them for as long as the
+   element selectors have been inert, reinstating the two live ones is a visual
+   change on its own merits and wants its own ticket. Deleting all four leaves
+   the tab exactly as it renders today. */
 
 /* ── Outcome ─────────────────────────────────────────────────────────────── */
 

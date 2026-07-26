@@ -4,7 +4,8 @@ Date: 2026-07-18
 
 ## Status
 
-Accepted
+Accepted, as amended 2026-07 (#536) — see **Amendment (2026-07, #536)** below,
+which closes decision 7's conditional custom-element seam.
 
 Implemented through SUNSET-1 on 2026-07-20. The legacy view shell and scroll-
 snapshot helper are deleted, and contract tests now prevent class components,
@@ -132,6 +133,36 @@ Adopt a **store-driven, pure-view architecture** for the app layer.
    seam, UI is pure view functions rendered by `morph()`, not `<cora-*>`
    components. The `cora-` CSS prefix (isolation) is unaffected — that is a Hard
    rule and stays.
+
+### Amendment (2026-07, #536) — decision 7 tightened to zero custom elements
+
+Decision 7 above left a conditional door open: custom elements "retained only at
+route boundaries, and only if SharePoint embedding requires a tag". SharePoint
+embedding turned out not to require one. The router mounts into a plain host
+element on the `.aspx` page, no `customElements.define()` call survives
+SUNSET-1, and the last unregistered `cora-*` hosts were removed by #514 and
+#494.
+
+The door is therefore closed: **no `cora-*` element is registered or constructed
+anywhere.** What remained after SUNSET-1 was not a seam but a hazard — an
+unregistered `<cora-app-nav>` renders as an inert unknown element, and the
+element-type CSS written for it (`cora-app-nav { position: sticky; … }`) matches
+nothing and drops every declaration silently. That is how the nav bar lost its
+sticky surface and the People Picker's dropdown lost its containing block; the
+same scan found four `cora-notes > …` rules nobody had noticed.
+
+Both halves are now ratcheted by `tests/cora-element-type-contract.test.js`: no
+`h('cora-…')` or `createElement('cora-…')` under `src/`, and no element-type
+`cora-*` selector in `src/styles/**` — including inside a functional
+pseudo-class or a nested rule, where such a selector is just as live and just as
+invisible.
+
+**The `cora-` prefix itself is untouched**, exactly as decision 7 already said:
+it remains the CSS/SharePoint isolation namespace of [ADR-0001](./0001-target-sharepoint-se-and-edge-chromium.md)
+and [ADR-0029](./0029-cora-branding-and-cr-prefix-rename.md), carried on class
+names and custom properties. The amendment narrows _what kind of thing_ may
+carry the prefix, not the prefix. The corresponding CLAUDE.md hard rule is
+reworded to match.
 
 ### What is deliberately preserved, unchanged
 

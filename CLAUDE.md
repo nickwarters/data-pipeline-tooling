@@ -69,7 +69,14 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
 - **Views never call `fetch()` directly** — effects use the `SharePointClient`
   interface. This is what makes the mock-first development loop work.
 - **No `innerHTML` for user data.** XSS prevention; also preserves input state.
-- **Custom elements use the `cora-` prefix** (also the CSS namespace).
+- **`cora-` is a CSS namespace, not an element registry.** The prefix stays the
+  SharePoint isolation boundary for every class name and custom property
+  (ADR-0001, ADR-0029) — but no `cora-*` custom element is registered or
+  constructed any more (ADR-0034 as amended): render a plain element carrying a
+  `cora-…` `className`. `tests/cora-element-type-contract.test.js` ratchets both
+  halves — no `h('cora-…')`/`createElement('cora-…')` under `src/`, and no
+  element-type `cora-*` selector in `src/styles/**`, which would match nothing
+  and silently drop its declarations.
 - **Question Definitions are never deleted** — use a `deprecated` flag (avoids dangling references from Case Type modules).
 - **Case Type descriptors express genuine Case Type variation; branching behaviour stays in code** (ADR-0035). Descriptors may select stable keys, labels, property paths, ordering, membership, and simple flags. Permission/lifecycle decisions, navigation, conditional formatting, event handling, and effects belong in code. Dashboard composition is dashboard-owned and must not be declared by Case Type configuration (ADR-0036); the dashboard consumes resolved `caseSources` only for Case data access.
 

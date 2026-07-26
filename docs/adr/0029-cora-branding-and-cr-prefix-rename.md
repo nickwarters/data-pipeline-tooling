@@ -7,6 +7,13 @@ Accepted
 The `cora-` naming and CSS-isolation boundary remain current under
 [ADR-0034](./0034-store-driven-views-supersede-component-owned-state.md).
 
+Two of the renamed surfaces below no longer exist to carry the prefix: there are
+no `cora-*` custom element tags and no `cora-*` custom events, retired by
+ADR-0034 and closed off entirely by its **Amendment (2026-07, #536)**. The
+prefix itself is unaffected — it lives on class names, custom properties, the
+`[data-cora-root]` scoping hook, and filenames — and the reworded CLAUDE.md hard
+rule now says so.
+
 ## Context
 
 The platform is now named **CORA**. Since the architecture decision, every custom element tag,
