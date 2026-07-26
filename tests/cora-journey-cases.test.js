@@ -67,19 +67,19 @@ test('journey cases slice: fetches owned Case Types and dispatches loaded rows',
     },
   });
 
-  const dispose = slice.start?.({
+  slice.start?.({
     dispatch: (/** @type {any} */ action) => {
       actions.push(action);
       markLoaded();
     },
     params: {},
     context: ctx,
+    isActive: () => true,
   });
   await loadedAction;
 
   assert.deepEqual(fetchCalls, [[ctx.client, ctx.journeyCaseSources]]);
   assert.deepEqual(actions, [{ type: 'cases/loaded', cases }]);
-  dispose?.();
 });
 
 test('journey cases slice: reducer owns loaded rows and generic table sort state', () => {
@@ -186,12 +186,14 @@ test('journey cases slice suppresses late loads and skips fetching without a cli
   });
   /** @type {any[]} */
   const actions = [];
-  const dispose = slice.start?.({
+  let active = true;
+  slice.start?.({
     context: context(),
     params: {},
     dispatch: (/** @type {any} */ action) => actions.push(action),
+    isActive: () => active,
   });
-  dispose?.();
+  active = false;
   resolveRows([row('late', 'complaints')]);
   await Promise.resolve();
   assert.deepEqual(actions, []);

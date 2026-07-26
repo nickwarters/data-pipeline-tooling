@@ -80,7 +80,7 @@ test('team cases slice: fetches with parsed route params and dispatches loaded d
     }
   );
 
-  const dispose = slice.start?.({
+  slice.start?.({
     dispatch: (action) => {
       actions.push(action);
       markLoaded();
@@ -89,6 +89,7 @@ test('team cases slice: fetches with parsed route params and dispatches loaded d
       queryString: '?manager=me&role=reviewer-manager&caseType=complaints',
     },
     context: context(),
+    isActive: () => true,
   });
   await loadedAction;
 
@@ -100,7 +101,6 @@ test('team cases slice: fetches with parsed route params and dispatches loaded d
     cases,
     caseTableColumns,
   });
-  dispose?.();
 });
 
 test('team cases slice: reducer owns loaded rows and generic table sort state', () => {
@@ -152,7 +152,7 @@ test('team cases descriptors preserve legacy empty-date sort values', () => {
     const column = columns.find((candidate) => candidate.key === key);
     assert.equal(typeof column?.value, 'function');
     assert.equal(
-      /** @type {(row: CaseRow) => unknown} */ (column?.value)(missingDates),
+      /** @type {(row: CaseRow) => unknown} */ (column?.value)?.(missingDates),
       ''
     );
   }
@@ -288,13 +288,15 @@ test('team cases slice: cleanup suppresses a late fetch result', async () => {
       }),
     resolveColumns: async () => [],
   });
-  const dispose = slice.start?.({
+  let active = true;
+  slice.start?.({
     dispatch: (action) => actions.push(action),
     params: {},
     context: context(),
+    isActive: () => active,
   });
 
-  dispose?.();
+  active = false;
   resolveFetch([row('late')]);
   await Promise.resolve();
   await Promise.resolve();
@@ -310,11 +312,11 @@ test('team cases slice: does not load without both a client and current user', (
     if (missing === 'client') ctx.client = null;
     else ctx.chrome.currentUser = null;
     const slice = createRouteSlice({}, ctx, { fetchCases });
-    const dispose = slice.start({
+    slice.start({
       dispatch: assert.fail,
       params: {},
       context: ctx,
+      isActive: () => true,
     });
-    dispose();
   }
 });

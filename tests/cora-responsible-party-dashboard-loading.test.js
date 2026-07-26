@@ -52,6 +52,7 @@ test('Responsible Party slice fetches across authorized sources with the current
       actions.push(action);
       markLoaded();
     },
+    isActive: () => true,
   });
   await loaded;
 
@@ -72,12 +73,14 @@ test('Responsible Party slice cleanup suppresses a late fetch result', async () 
   });
   /** @type {any[]} */
   const actions = [];
-  const dispose = slice.start({
+  let active = true;
+  slice.start({
     context: ctx,
     params: {},
     dispatch: (/** @type {any} */ action) => actions.push(action),
+    isActive: () => active,
   });
-  dispose?.();
+  active = false;
   resolveRows([]);
   await Promise.resolve();
   assert.deepEqual(actions, []);

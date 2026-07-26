@@ -189,6 +189,7 @@ test('createRouteSlice: loads through the client and owns full-width cleanup', a
   const slice = createRouteSlice({}, context);
   const cleanup = slice.start({
     dispatch: (/** @type {any} */ action) => actions.push(action),
+    isActive: () => true,
   });
   await Promise.resolve();
 

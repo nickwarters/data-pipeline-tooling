@@ -230,14 +230,14 @@ export function createRouteSlice(_params, context) {
     reducer: roadmapReducer,
     view: roadmapView,
     start(/** @type {any} */ tools) {
-      let active = true;
       context.appEl.classList.add('cora-fullbleed');
       void context.client.listRoadmapItems().then(
         (items) => {
-          if (active) tools.dispatch({ type: 'roadmap/loaded', items });
+          if (tools.isActive())
+            tools.dispatch({ type: 'roadmap/loaded', items });
         },
         (error) => {
-          if (active) {
+          if (tools.isActive()) {
             tools.dispatch({
               type: 'roadmap/load-failed',
               message:
@@ -249,7 +249,6 @@ export function createRouteSlice(_params, context) {
         }
       );
       return () => {
-        active = false;
         context.appEl.classList.remove('cora-fullbleed');
       };
     },

@@ -99,17 +99,13 @@ export function createRouteSlice(
     },
     view: journeyCasesView,
     start(/** @type {any} */ tools) {
-      let active = true;
-      if (!tools.context.client) return () => {};
+      if (!tools.context.client) return;
       void fetchCases(
         tools.context.client,
         tools.context.journeyCaseSources
       ).then((cases) => {
-        if (active) tools.dispatch({ type: 'cases/loaded', cases });
+        if (tools.isActive()) tools.dispatch({ type: 'cases/loaded', cases });
       });
-      return () => {
-        active = false;
-      };
     },
   };
 }

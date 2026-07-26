@@ -160,7 +160,6 @@ export function createRouteSlice(params, context) {
       );
     },
     start(/** @type {any} */ tools) {
-      let active = true;
       /** @type {CaseListOptions} */
       let caseListOptions = {};
 
@@ -177,7 +176,7 @@ export function createRouteSlice(params, context) {
             params.id,
             caseListOptions
           );
-          if (!caseRow || !active) return;
+          if (!caseRow || !tools.isActive()) return;
           config ??= await loadCaseTypeConfig(caseRow.caseType);
           const access = currentUser
             ? new CaseMachine(
@@ -195,7 +194,7 @@ export function createRouteSlice(params, context) {
             caseListOptions,
           });
         } catch (error) {
-          if (!active) return;
+          if (!tools.isActive()) return;
           if (error instanceof UnknownCaseTypeError) {
             tools.dispatch({
               type: 'conversation/load-failed',
@@ -216,7 +215,7 @@ export function createRouteSlice(params, context) {
             caseId: params.id,
             caseListOptions,
           }).then((caseRow) => {
-            if (active && caseRow) {
+            if (tools.isActive() && caseRow) {
               tools.dispatch({
                 type: 'conversation/messages-changed',
                 messages: caseRow.conversation,
@@ -225,9 +224,6 @@ export function createRouteSlice(params, context) {
           });
         });
       }
-      return () => {
-        active = false;
-      };
     },
   };
 }

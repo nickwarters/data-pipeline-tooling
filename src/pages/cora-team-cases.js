@@ -156,7 +156,7 @@ export function teamCasesView(state, tools) {
  *   initialState: TeamCasesState,
  *   reducer: (state: TeamCasesState, action: any) => TeamCasesState,
  *   view: typeof teamCasesView,
- *   start: (tools: { dispatch: (action: any) => any, params: Record<string, string>, context: import('../setup/register-routes.js').AppContext }) => () => void,
+ *   start: (tools: { dispatch: (action: any) => any, params: Record<string, string>, context: import('../setup/register-routes.js').AppContext, isActive: () => boolean }) => void,
  * }}
  */
 export function createRouteSlice(
@@ -204,10 +204,9 @@ export function createRouteSlice(
     },
     view: teamCasesView,
     start(tools) {
-      let active = true;
       const client = tools.context.client;
       const currentUser = tools.context.chrome.currentUser;
-      if (!client || !currentUser) return () => {};
+      if (!client || !currentUser) return;
 
       const parsed = parseTeamCasesParams(
         tools.params.queryString ?? params.queryString ?? ''
@@ -216,14 +215,10 @@ export function createRouteSlice(
         fetchCases(client, parsed, currentUser.id, tools.context.caseSources),
         resolveColumns(parsed.caseType),
       ]).then(([cases, caseTableColumns]) => {
-        if (active) {
+        if (tools.isActive()) {
           tools.dispatch({ type: 'cases/loaded', cases, caseTableColumns });
         }
       });
-
-      return () => {
-        active = false;
-      };
     },
   };
 }

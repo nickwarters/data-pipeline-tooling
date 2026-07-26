@@ -110,18 +110,15 @@ export function createRouteSlice(
       return responsiblePartyPanelView(state.routes.responsibleParty, tools);
     },
     start(/** @type {any} */ tools) {
-      let active = true;
       const client = tools.context.client;
       const currentUserId = tools.context.chrome.currentUser.id;
-      if (!client || !currentUserId) return () => {};
+      if (!client || !currentUserId) return;
       void listAcrossSources(client, tools.context.caseSources, {
         responsibleParty: currentUserId,
       }).then((cases) => {
-        if (active) tools.dispatch({ type: 'responsible-party/loaded', cases });
+        if (tools.isActive())
+          tools.dispatch({ type: 'responsible-party/loaded', cases });
       });
-      return () => {
-        active = false;
-      };
     },
   };
 }
