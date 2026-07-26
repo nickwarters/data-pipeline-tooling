@@ -106,6 +106,9 @@ class ScaffoldCaseTypeTest(unittest.TestCase):
         self.assert_js_parses(manifest_path)
         self.assertIn("slug: 'widget-review',", manifest)
         self.assertIn("displayName: 'Widget Review',", manifest)
+        # #527: frozen like every other entry, so the one copy of the display
+        # name that composes three SharePoint group names stays one copy.
+        self.assertIn("Object.freeze({", manifest)
         self.assertIn("importer: () => import('./widget-review.js'),", manifest)
         # The scaffold writes no Question Bank artifact, so it declares no bank
         # thunk — `bank` is optional on a CASE_TYPES entry.

@@ -601,11 +601,14 @@ def scaffold(opts: ScaffoldOptions) -> None:
         manifest = insert_after_match(
             manifest,
             r"const registry = \[\n",
-            f"  {{\n"
+            # Frozen like every other registry entry (#527): the display name it
+            # carries composes three SharePoint group names, and both the
+            # capability and eligibility sides read that one copy.
+            f"  Object.freeze({{\n"
             f"    slug: '{opts.slug}',\n"
             f"    displayName: '{js_display}',\n"
             f"    importer: () => import('./{opts.slug}.js'),\n"
-            f"  }},\n",
+            f"  }}),\n",
             manifest_path,
         )
         manifest_path.write_text(manifest, encoding="utf-8")
