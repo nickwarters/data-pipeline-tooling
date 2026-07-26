@@ -26,9 +26,12 @@ test('the loader holds its loading state as plain fields, not signals (#529)', (
   // it cannot on its own prove the conversion: `toStoreSnapshot()` read the
   // same values through `.get()` before. One structural assertion carries the
   // ticket's actual claim — the loading state is no longer a notifier.
-  for (const field of ['loaded', 'error', 'accessDenied']) {
+  for (const field of ['loaded', 'error', 'accessDenied', 'versionWarning']) {
+    const value = /** @type {Record<string, any>} */ (
+      /** @type {unknown} */ (vm)
+    )[field];
     assert.equal(
-      typeof /** @type {any} */ ((vm)[field] ?? {}).get,
+      typeof (value ?? {}).get,
       'undefined',
       `${field} must be a plain field, not a signal`
     );
@@ -351,7 +354,11 @@ test('CaseReviewViewModel.load(): Actions In Progress Case freezes on the versio
     !ids.has('q-welcome'),
     'a live-bank Question does not reopen a reportable Case'
   );
-  assert.equal(vm.versionWarning.get(), null, 'snapshot resolved, no warning');
+  assert.equal(
+    vm.toStoreSnapshot().versionWarning,
+    null,
+    'snapshot resolved, no warning'
+  );
 });
 
 test('CaseReviewViewModel.load(): versioned catalogue mapping normalises null optional fields to undefined', async () => {
@@ -503,7 +510,7 @@ test('CaseReviewViewModel.load(): missing versioned file falls back to live cata
   const liveIds = new Set(vm.catalogue.map((q) => q.id));
   assert.ok(liveIds.has('q-welcome'), 'falls back to live bank');
   assert.ok(
-    vm.versionWarning.get() !== null && vm.versionWarning.get() !== '',
+    !!vm.toStoreSnapshot().versionWarning,
     'versionWarning is set when versioned file is missing'
   );
   assert.equal(logged.length, 1, 'the failed freeze is logged once');
@@ -527,7 +534,7 @@ test('CaseReviewViewModel.load(): In-progress Case loads live catalogue; version
   const liveIds = new Set(vm.catalogue.map((q) => q.id));
   assert.ok(liveIds.has('q-welcome'), 'live bank loaded');
   assert.equal(
-    vm.versionWarning.get(),
+    vm.toStoreSnapshot().versionWarning,
     null,
     'no warning for in-progress case'
   );
@@ -549,7 +556,11 @@ test('CaseReviewViewModel.load(): Completed Case without questionBankVersion fal
 
   const liveIds = new Set(vm.catalogue.map((q) => q.id));
   assert.ok(liveIds.has('q-welcome'), 'legacy: live bank loaded');
-  assert.equal(vm.versionWarning.get(), null, 'no warning for legacy cases');
+  assert.equal(
+    vm.toStoreSnapshot().versionWarning,
+    null,
+    'no warning for legacy cases'
+  );
 });
 
 // --- Case Type sectionLabels resolution (MAINT-11) ---

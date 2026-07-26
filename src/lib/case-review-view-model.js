@@ -4,9 +4,9 @@
 // resolved Section access. It hands the result over once, as a plain
 // snapshot, and owns no Answer mutation — the
 // store is the single Answer owner and the route's answer-actions are the only
-// writers (#510). `versionWarning` is the last signal it holds.
+// writers (#510). It holds no signals: every field it loads is plain, handed
+// over once through `toStoreSnapshot()` (#529).
 
-import { signal } from './signal.js';
 import {
   allApplicableAnswered,
   evaluate,
@@ -134,7 +134,13 @@ export class CaseReviewViewModel {
     /** @type {string | null} */
     this.exportHash = null;
 
-    this.versionWarning = signal(/** @type {string | null} */ (null));
+    /**
+     * Set only on the ADR-0021 Step 4 fallback path — a Case stamped with an
+     * as-reviewed Question Bank version whose export could not be loaded.
+     * Plain field: nothing subscribes, the store owns the banner (#529).
+     * @type {string | null}
+     */
+    this.versionWarning = null;
 
     /** @type {CaseMachine | null} */
     this.machine = null;
@@ -170,7 +176,7 @@ export class CaseReviewViewModel {
       summarySections: this.summarySections,
       sectionLabels: this.sectionLabels,
       sectionHeadings: this.sectionHeadings,
-      versionWarning: this.versionWarning.get(),
+      versionWarning: this.versionWarning,
       exportHash: this.exportHash,
       caseListOptions: this.caseListOptions,
     };
@@ -281,7 +287,7 @@ export class CaseReviewViewModel {
     } else {
       if (versionHash && !versionedExport) {
         // Versioned file was stamped but not published — fall back with a warning.
-        this.versionWarning.set('as-reviewed version unavailable');
+        this.versionWarning = 'as-reviewed version unavailable';
         // A stamped-but-unpublished version means a publish went wrong. The
         // banner tells the reader; this is the only trace an operator gets (#513).
         console.error(

@@ -1,3 +1,4 @@
+import { readdirSync, readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { signal, computed, effect } from '../src/lib/signal.js';
@@ -178,4 +179,25 @@ test('effect: dispose removes subscriptions from computed dependents', () => {
 
   assert.deepEqual(log, [2]);
   assert.equal(evalCount, 1);
+});
+
+// --- scope ---
+
+test('signal: SaveQueue is the only consumer left under src/ (#529)', () => {
+  // ADR-0034 retired signals from the app layer and #529 finished the job in
+  // the loader, so the primitive's real scope is one file. Pinning that is the
+  // whole point of the conversion: a reader who meets `signal()` should be able
+  // to see, from here, exactly where it is still load-bearing.
+  const root = new URL('../', import.meta.url);
+  const consumers = readdirSync(new URL('src/', root), { recursive: true })
+    .map(String)
+    .filter((rel) => rel.endsWith('.js') && !rel.endsWith('lib/signal.js'))
+    .filter((rel) =>
+      /\bfrom\s+['"][^'"]*\/signal\.js['"]/.test(
+        readFileSync(new URL(`src/${rel}`, root), 'utf8')
+      )
+    )
+    .sort();
+
+  assert.deepEqual(consumers, ['services/save-queue.js']);
 });

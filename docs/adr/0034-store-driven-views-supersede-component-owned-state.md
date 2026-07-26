@@ -11,9 +11,9 @@ Implemented through SUNSET-1 on 2026-07-20. The legacy view shell and scroll-
 snapshot helper are deleted, and contract tests now prevent class components,
 legacy view APIs, app-layer signal imports, and view-to-client imports from
 returning. `lib/signal.js` is retained only as an internal notification
-primitive for `SaveQueue` and `CaseReviewViewModel`; application surfaces
-(`actions`, `components`, `pages`, `routes`, `setup`, and `views`) cannot import
-it.
+primitive for `SaveQueue` — its last other consumer, the Case Review loader,
+was converted to plain fields in #529 — and application surfaces (`actions`,
+`components`, `pages`, `routes`, `setup`, and `views`) cannot import it.
 
 Supersedes [ADR-0003](./0003-web-components-with-signals.md). Deliberately
 preserves [ADR-0002](./0002-spa-shell-with-hash-routing.md) (SPA shell + hash

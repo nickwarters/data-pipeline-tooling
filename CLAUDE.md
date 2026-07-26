@@ -38,8 +38,8 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
     lives with the page, not the registry, because `src/lib/` must not import `src/pages/**`.
 - **One authoring model.** Views are synchronous and side-effect free. They do
   not import clients or persistence services, and application pages do not use
-  the internal notification primitive retained by `SaveQueue` and
-  `CaseReviewViewModel`. Start with
+  the internal notification primitive retained by `SaveQueue` — now its only
+  consumer. Start with
   [`docs/guide/add-a-page.md`](./docs/guide/add-a-page.md); use
   [`docs/guide/store-actions-and-effects.md`](./docs/guide/store-actions-and-effects.md)
   and [`docs/guide/router.md`](./docs/guide/router.md) as reference.
