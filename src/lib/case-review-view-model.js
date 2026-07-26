@@ -92,7 +92,12 @@ export class CaseReviewViewModel {
     this.error = signal(/** @type {string | null} */ (null));
     this.accessDenied = signal(false);
 
-    /** @type {CaseRow | null} */
+    /**
+     * The loaded Case Row, handed to the store in `toStoreSnapshot()`. As with
+     * `answers`, the loader stops touching it at that point: the store is the
+     * owner, and the Appeal/amend transitions replace only its copy (#530).
+     * @type {CaseRow | null}
+     */
     this.caseRow = null;
     /** @type {CurrentUser | null} */
     this.currentUser = null;

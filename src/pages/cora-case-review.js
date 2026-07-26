@@ -397,9 +397,6 @@ export function createRouteSlice(params, context) {
     saveQueue: context.saveQueue,
     caseId,
     dispatch: (action) => dispatch(action),
-    onCaseRow: (row) => {
-      viewModel.caseRow = row;
-    },
   });
   let requestedOnHold = false;
   /** @type {null | {

@@ -30,8 +30,13 @@ function harness() {
   const writes = [];
   /** @type {any[]} */
   const dispatched = [];
-  /** @type {import('../src/sharepoint-client.js').CaseRow[]} */
-  const rows = [];
+  /**
+   * The Case Rows the effects produced, read back where the single owner keeps
+   * them: the store. There is no second channel — the loader's copy is not
+   * updated, and nothing re-reads it (#530).
+   * @returns {any[]}
+   */
+  const storeRows = () => dispatched.map((action) => action.snapshot.caseRow);
   const effects = createAppealEffects({
     saveQueue: /** @type {any} */ ({
       enqueue: (
@@ -44,15 +49,14 @@ function harness() {
     }),
     caseId: () => 'c1',
     dispatch: (action) => dispatched.push(action),
-    onCaseRow: (row) => rows.push(row),
     now: () => new Date('2026-07-23T09:30:00.000Z'),
     newId: (prefix) => `${prefix}-fixed`,
   });
-  return { effects, writes, dispatched, rows };
+  return { effects, writes, dispatched, storeRows };
 }
 
 test('raising an Appeal stamps the injected clock and id, and enqueues only appeals', () => {
-  const { effects, writes, dispatched, rows } = harness();
+  const { effects, writes, dispatched, storeRows } = harness();
 
   effects.raise({
     caseRow: CASE_ROW,
@@ -79,9 +83,8 @@ test('raising an Appeal stamps the injected clock and id, and enqueues only appe
   });
   assert.equal(dispatched.length, 1);
   assert.equal(dispatched[0].type, 'case/model-changed');
-  assert.deepEqual(dispatched[0].snapshot.caseRow.appeals, writes[0].value);
-  assert.equal(rows.length, 1);
-  assert.deepEqual(rows[0].appeals, writes[0].value);
+  assert.equal(storeRows().length, 1);
+  assert.deepEqual(storeRows()[0].appeals, writes[0].value);
 });
 
 test('rejecting an Appeal writes appeals alone; agreeing writes the corrected columns atomically (ADR-0019)', () => {
@@ -92,7 +95,7 @@ test('rejecting an Appeal writes appeals alone; agreeing writes the corrected co
     rationale: 'Wrong.',
     citedAnswerKeys: [],
   });
-  const appealedRow = raised.rows[0];
+  const appealedRow = raised.storeRows()[0];
 
   const rejected = harness();
   rejected.effects.resolve({
@@ -146,7 +149,7 @@ test('rejecting an Appeal writes appeals alone; agreeing writes the corrected co
 });
 
 test('amending an Outcome writes the amendment fields atomically with the injected clock', () => {
-  const { effects, writes, dispatched, rows } = harness();
+  const { effects, writes, dispatched, storeRows } = harness();
 
   effects.amend({
     caseRow: CASE_ROW,
@@ -167,7 +170,7 @@ test('amending an Outcome writes the amendment fields atomically with the inject
     amendedAt: '2026-07-23T09:30:00.000Z',
   });
   assert.equal(dispatched[0].type, 'case/model-changed');
-  assert.equal(rows[0].effectiveOutcome, 'pass');
+  assert.equal(storeRows()[0].effectiveOutcome, 'pass');
 });
 
 /**
@@ -188,7 +191,6 @@ function raiseWithDefaults(options = {}, snapshot = SNAPSHOT) {
     }),
     caseId: () => 'c1',
     dispatch: () => {},
-    onCaseRow: () => {},
     ...options,
   }).raise({
     caseRow: CASE_ROW,
@@ -240,9 +242,10 @@ test('round trip: raise, resolve and amend land on the persisted row through the
   const effects = createAppealEffects({
     saveQueue,
     caseId: () => 'c1',
-    dispatch: () => {},
-    onCaseRow: (next) => {
-      row = next;
+    // The store is the owner, so the row each transition produces comes back
+    // through the dispatch — the way the route's reducer receives it (#530).
+    dispatch: (action) => {
+      row = /** @type {any} */ (action.snapshot).caseRow;
     },
     now: () => new Date('2026-07-23T09:30:00.000Z'),
     newId: (prefix) => `${prefix}-1`,

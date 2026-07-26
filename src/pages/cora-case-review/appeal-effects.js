@@ -27,7 +27,6 @@ import { amendOutcome, raiseAppeal, resolveAppeal } from './appeal-actions.js';
  *   saveQueue: SaveQueue,
  *   caseId: () => string,
  *   dispatch: (action: {type: 'case/model-changed', snapshot: Snapshot}) => unknown,
- *   onCaseRow: (caseRow: CaseRow) => unknown,
  *   now?: () => Date,
  *   newId?: (prefix: string) => string,
  * }} input
@@ -36,7 +35,6 @@ export function createAppealEffects({
   saveQueue,
   caseId,
   dispatch,
-  onCaseRow,
   now = () => new Date(),
   newId = (prefix) => `${prefix}-${now().getTime()}`,
 }) {
@@ -50,15 +48,15 @@ export function createAppealEffects({
   const viewer = (snapshot) => snapshot.currentUser?.id ?? '';
 
   /**
-   * Every transition ends the same way: the loaded row is replaced in place and
-   * the store is told about it, so the page re-renders from the new Case row
-   * without a reload.
+   * Every transition ends the same way: the store is told about the new Case
+   * Row, so the page re-renders from it without a reload. The store is the only
+   * owner — the loader keeps its copy only until `toStoreSnapshot()` hands it
+   * over, and nothing reads it again within the mount (#530).
    *
    * @param {{ caseRow: CaseRow }} result
    * @param {Snapshot} snapshot
    */
   function applied(result, snapshot) {
-    onCaseRow(result.caseRow);
     dispatch({
       type: 'case/model-changed',
       snapshot: { ...snapshot, caseRow: result.caseRow },

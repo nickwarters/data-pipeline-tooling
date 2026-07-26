@@ -103,6 +103,7 @@ import { loadCaseTypeConfig } from '../../case-types/manifest.js';
  * saveQueue: SaveQueue,
  * viewModel: CaseReviewViewModel | null,
  * answers: Record<string, import('../sharepoint-client.js').Answer>,
+ * caseRow: CaseRow | null,
  * snapshot: () => { lists: Record<string, CaseRow[]> },
  * run: (actions: FlowAction[]) => Promise<{ lists: Record<string, CaseRow[]> }>
  * }} InMemoryFlowRunner
@@ -160,6 +161,13 @@ export function createInMemoryFlowRunner(state, opts = {}) {
    * @type {Record<string, import('../sharepoint-client.js').Answer>}
    */
   let answers = {};
+  /**
+   * The Case Row, owned here for the same reason (#530): the loader hands it
+   * over once and the Appeal/amend transitions read and replace this copy, so
+   * `CaseReviewViewModel.caseRow` is written only by `load()`.
+   * @type {CaseRow | null}
+   */
+  let caseRow = null;
 
   /** @param {Record<string, import('../sharepoint-client.js').Answer> | null} next */
   function editAnswers(next) {
@@ -177,6 +185,9 @@ export function createInMemoryFlowRunner(state, opts = {}) {
     },
     get answers() {
       return answers;
+    },
+    get caseRow() {
+      return caseRow;
     },
     snapshot() {
       return client.snapshot();
@@ -197,6 +208,7 @@ export function createInMemoryFlowRunner(state, opts = {}) {
       case 'loadCasePage':
         viewModel = await loadCasePage(action);
         answers = viewModel.answers;
+        caseRow = viewModel.caseRow;
         return;
       case 'answer': {
         const vm = requirePage(action);
@@ -269,7 +281,7 @@ export function createInMemoryFlowRunner(state, opts = {}) {
         return;
       }
       case 'clickCompleteCase':
-        await clickCompleteCase(requirePage(action), answers);
+        await clickCompleteCase(requirePage(action), caseRow, answers);
         return;
       case 'raiseAppeal':
         await raiseCurrentAppeal(action);
@@ -337,17 +349,16 @@ export function createInMemoryFlowRunner(state, opts = {}) {
     if (vm.access.appealRequest !== 'edit') {
       throw new Error('Current actor cannot raise an Appeal.');
     }
-    if (!vm.caseRow)
-      throw new Error('Cannot raise before the Case has loaded.');
+    if (!caseRow) throw new Error('Cannot raise before the Case has loaded.');
     const result = raiseAppeal({
-      caseRow: vm.caseRow,
+      caseRow,
       appellant: action.actorId,
       rationale: action.rationale,
       citedAnswerKeys: action.citedAnswerKeys ?? [],
       id: `flow-appeal-${Date.now()}`,
       at: new Date().toISOString(),
     });
-    vm.caseRow = result.caseRow;
+    caseRow = result.caseRow;
     saveQueue.enqueue(vm.caseId, 'appeals', result.appeals);
     await flushCurrentCase();
   }
@@ -359,15 +370,15 @@ export function createInMemoryFlowRunner(state, opts = {}) {
       throw new Error('Current actor cannot resolve an Appeal.');
     }
     const appeal = /** @type {import('../sharepoint-client.js').Appeal} */ (
-      (vm.caseRow?.appeals ?? []).find(
+      (caseRow?.appeals ?? []).find(
         (candidate) => candidate.state !== 'resolved'
       )
     );
-    if (!vm.caseRow || !appeal) {
+    if (!caseRow || !appeal) {
       throw new Error('Cannot resolve without an open Appeal.');
     }
     const result = resolveAppeal({
-      caseRow: vm.caseRow,
+      caseRow,
       appealId: appeal.id,
       verdict: action.verdict,
       rationale: action.rationale,
@@ -376,7 +387,7 @@ export function createInMemoryFlowRunner(state, opts = {}) {
       outcome: action.outcome,
       justification: action.justification,
     });
-    vm.caseRow = result.caseRow;
+    caseRow = result.caseRow;
     if (result.transactional) {
       saveQueue.enqueueFields(vm.caseId, result.fields);
     } else {
@@ -403,16 +414,17 @@ export function createInMemoryFlowRunner(state, opts = {}) {
 
 /**
  * @param {CaseReviewViewModel} vm
+ * @param {CaseRow | null} caseRow The runner-owned Case Row (#530).
  * @param {Record<string, import('../sharepoint-client.js').Answer>} answers
  */
-async function clickCompleteCase(vm, answers) {
-  if (!vm.caseRow || !vm.config || !vm.machine) {
+async function clickCompleteCase(vm, caseRow, answers) {
+  if (!caseRow || !vm.config || !vm.machine) {
     throw new Error('Cannot complete before the Case page has loaded.');
   }
 
   const patchFields = completionPatch({
     machine: vm.machine,
-    caseRow: vm.caseRow,
+    caseRow,
     catalogue: vm.catalogue,
     answers,
     allAnswered: allApplicableAnswered(vm.catalogue, answers),
@@ -421,7 +433,7 @@ async function clickCompleteCase(vm, answers) {
   });
 
   await completeCase({
-    caseId: vm.caseRow.id,
+    caseId: caseRow.id,
     client: vm.client,
     saveQueue: vm.saveQueue,
     patchFields,

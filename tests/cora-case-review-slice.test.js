@@ -798,6 +798,81 @@ test('CASE-6 route: raising an Appeal persists through the store-owned panel', (
   assert.equal(writes[0].value[0].state, 'raised');
 });
 
+test('CASE-6 route: a raised Appeal is resolvable in the same mount from the store-owned Case Row (#530)', () => {
+  const appealSnapshot = snapshot();
+  appealSnapshot.caseRow = {
+    ...appealSnapshot.caseRow,
+    status: 'Completed',
+    outcomeAtCompletion: 'fail',
+    appeals: [],
+  };
+  appealSnapshot.access = {
+    ...appealSnapshot.access,
+    appealRequest: 'edit',
+    appealReview: 'edit',
+  };
+  let state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: appealSnapshot }
+  );
+  /** @type {Array<{id: string, field: string, value: any}>} */
+  const writes = [];
+  /** @type {Array<{id: string, fields: any}>} */
+  const fieldWrites = [];
+  const route = renderShippedState(state, {
+    saveQueue: {
+      enqueue(
+        /** @type {string} */ id,
+        /** @type {string} */ field,
+        /** @type {any} */ value
+      ) {
+        writes.push({ id, field, value });
+      },
+      enqueueFields(/** @type {string} */ id, /** @type {any} */ fields) {
+        fieldWrites.push({ id, fields });
+      },
+    },
+  });
+
+  fireEvent(getByRole(route.container, 'tab', { name: 'Appeal' }), 'click');
+  const raisePanel = queryAllByRole(route.container, 'tabpanel').find(
+    (candidate) => candidate.getAttribute('id') === 'case-panel-appealRequest'
+  );
+  assert.ok(raisePanel);
+  getByRole(raisePanel, 'textbox', { name: 'Appeal rationale' }).value =
+    'The result is wrong.';
+  fireEvent(getByRole(raisePanel, 'button', { name: 'Raise Appeal' }), 'click');
+  assert.equal(writes.length, 1);
+  const raisedId = writes[0].value[0].id;
+
+  // The Appeal exists only in the store now. Resolving it in the same mount is
+  // the read-back that would fail if the loader still held a competing copy —
+  // and the proof the loader's copy is not needed.
+  fireEvent(
+    getByRole(route.container, 'tab', { name: 'Appeal Review' }),
+    'click'
+  );
+  const reviewPanel = queryAllByRole(route.container, 'tabpanel').find(
+    (candidate) => candidate.getAttribute('id') === 'case-panel-appealReview'
+  );
+  assert.ok(reviewPanel);
+  getByRole(reviewPanel, 'radio', { name: 'Reject' }).checked = true;
+  getByRole(reviewPanel, 'textbox', { name: 'Resolution rationale' }).value =
+    'The original outcome stands.';
+  fireEvent(
+    getByRole(reviewPanel, 'button', { name: 'Resolve Appeal' }),
+    'click'
+  );
+
+  assert.equal(writes.length, 2);
+  assert.equal(writes[1].value[0].id, raisedId);
+  assert.equal(writes[1].value[0].state, 'resolved');
+  assert.equal(
+    route.state.routes.caseReview.snapshot?.caseRow?.appeals?.[0].state,
+    'resolved'
+  );
+});
+
 test('CASE-6 route: Appeal action remains live after switching from another tab', () => {
   const appealSnapshot = snapshot();
   appealSnapshot.caseRow = { ...appealSnapshot.caseRow, appeals: [] };

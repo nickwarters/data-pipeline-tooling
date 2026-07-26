@@ -517,3 +517,54 @@ test('in-memory flow runner can reject an Appeal without amending the Outcome', 
   assert.equal(saved.appeals?.[0].resolution?.verdict, 'rejected');
   assert.equal(saved.amendedOutcome, undefined);
 });
+
+test('in-memory flow runner owns the Case Row; the loader hands it over once (#530)', async () => {
+  /** @type {import('../src/sharepoint-client.js').CaseRow} */
+  const completed = {
+    ...CASE_ROW,
+    status: 'Completed',
+    completedAt: '2026-07-19T10:00:00Z',
+    outcomeAtCompletion: 'fail',
+  };
+  const runner = createInMemoryFlowRunner({
+    lists: { 'Cases-ExampleReview': [completed] },
+  });
+  await runner.run([
+    {
+      type: 'loadCasePage',
+      caseId: 'case-flow-1',
+      caseType: 'example-review',
+      currentUserId: 'user-owner',
+      capabilities: {
+        isReviewer: false,
+        listAccessCaseTypes: [],
+        isAdviser: false,
+        ownedCaseTypes: [],
+        ownedJourneyCaseTypes: ['example-review'],
+        isControls: false,
+        isReviewerManager: false,
+        isResponsiblePartyManager: false,
+        isMaintainer: false,
+        isVisitor: false,
+      },
+    },
+    {
+      type: 'raiseAppeal',
+      actorId: 'user-owner',
+      rationale: 'The completed outcome is too severe.',
+    },
+  ]);
+
+  // The runner is the single owner, exactly as the store is in the browser: the
+  // transition's Case Row lands here and nowhere else.
+  assert.equal(runner.caseRow?.appeals?.[0].state, 'raised');
+  assert.equal(
+    runner.viewModel?.caseRow?.appeals,
+    undefined,
+    'the loader keeps the row it loaded; the Appeal is the store owner’s'
+  );
+  assert.equal(
+    runner.snapshot().lists['Cases-ExampleReview'][0].appeals?.[0].state,
+    'raised'
+  );
+});
