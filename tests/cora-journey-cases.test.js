@@ -89,7 +89,7 @@ test('journey cases slice: reducer owns loaded rows and generic table sort state
     cases: [row('c1', 'complaints')],
   });
   const sorted = slice.reducer(loaded, {
-    type: 'table/sort-requested',
+    type: 'journey-table/sort-requested',
     key: 'reference',
   });
 
@@ -152,7 +152,7 @@ test('journey cases descriptors and pure view preserve links, empty state, and s
     ?.querySelector('button')
     ?.dispatchEvent(/** @type {any} */ ({ type: 'click' }));
   assert.deepEqual(actions, [
-    { type: 'table/sort-requested', key: 'reference' },
+    { type: 'journey-table/sort-requested', key: 'reference' },
   ]);
   // Existing DOM-stub debt retained until the shared debt ledger can move.
   assert.ok(/** @type {any} */ (loaded)._children);

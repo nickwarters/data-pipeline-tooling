@@ -3,7 +3,11 @@ import { h } from '../lib/html.js';
 import { patchRoute } from '../core/route-state.js';
 import { caseRouteFor } from '../lib/case-route-links.js';
 import { fetchJourneyCases } from '../services/journey-cases-fetcher.js';
-import { dataTableView, nextTableSort } from '../views/data-table.js';
+import {
+  dataTableView,
+  reduceTableSort,
+  sortRequested,
+} from '../views/data-table.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 
@@ -54,7 +58,7 @@ export function journeyCasesView(state, tools) {
       rows: route.cases,
       columns: journeyCasesColumns(),
       sort: route.sort,
-      onSort: (key) => tools.dispatch({ type: 'table/sort-requested', key }),
+      onSort: (key) => tools.dispatch(sortRequested('journey', key)),
       emptyMessage: 'No cases of your Case Type(s) yet.',
       rowKey: (row) => `${row.caseType}:${row.id}`,
       rowHref: caseRouteFor,
@@ -82,11 +86,8 @@ export function createRouteSlice(
       if (action.type === 'cases/loaded') {
         return patchRoute(state, 'journeyCases', { cases: action.cases });
       }
-      if (action.type === 'table/sort-requested') {
-        return patchRoute(state, 'journeyCases', {
-          sort: nextTableSort(route.sort, action.key),
-        });
-      }
+      const sort = reduceTableSort(route.sort, action, 'journey');
+      if (sort) return patchRoute(state, 'journeyCases', { sort });
       return state;
     },
     view: journeyCasesView,
