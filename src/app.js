@@ -7,7 +7,10 @@
 // fatal-with-message (the app is unusable without it), a broken palette is
 // logged and skipped. Case Type modules are contained per slug the same way
 // (#493): a Case Type that fails to evaluate is dropped from every resolved
-// source set and named in a non-blocking banner, and boot continues.
+// source set and named in a non-blocking banner, and boot continues. That holds
+// in BOTH environments — `createSharePointClient` below is awaited first, and
+// under `?mock=1` it partitions the fixture Cases by Case Type, so it contains
+// per Case Type too rather than throwing ahead of the containment.
 
 /** @returns {Promise<void>} */
 async function boot() {
@@ -63,9 +66,19 @@ async function boot() {
   const ok = await mountAppChrome(appEl, capabilities);
   if (!ok) return;
 
-  const { mountCaseTypeUnavailableBanner } =
-    await import('./setup/case-type-unavailable-banner.js');
-  mountCaseTypeUnavailableBanner(unavailableCaseTypes, appEl);
+  // Loaded only when there is something to say, and guarded: in the 100% case
+  // there is nothing to mount, and a module that fails to fetch must not kill
+  // boot inside the feature whose whole purpose is that boot survives a broken
+  // Case Type. The console already carries each underlying error.
+  if (unavailableCaseTypes.length) {
+    try {
+      const { mountCaseTypeUnavailableBanner } =
+        await import('./setup/case-type-unavailable-banner.js');
+      mountCaseTypeUnavailableBanner(unavailableCaseTypes, appEl);
+    } catch (error) {
+      console.error('[CORA] Case Type unavailable banner failed:', error);
+    }
+  }
 
   const routerContainer = document.createElement('div');
   routerContainer.className = 'cora-page-content';

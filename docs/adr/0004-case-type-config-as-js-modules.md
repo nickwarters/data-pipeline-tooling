@@ -39,6 +39,24 @@ eligibility rule, and cannot appear in `caseSources`, `journeyCaseSources` or an
 allocation source in any partial form. Containment can only ever narrow access,
 never widen it, and the eligibility rule itself is unchanged.
 
+The boundary is **"cannot produce a usable source"**, not "threw during
+import" — the weaker reading left a real hole. A module that evaluated cleanly
+but returned a partial config yielded a source whose `listName` was `undefined`;
+it was counted as available, so it was never named in the banner, and it
+resurfaced later as an opaque route error. Validation therefore runs inside the
+per-slug catch, and the load goes through `loadCaseTypeConfig`, so a missing
+`listName` and an invalid outcome configuration are contained and named on the
+same path as a syntax error.
+
+Containment covers **both environments**. `?mock=1` partitions the fixture Cases
+by each Case Type's declared list inside `createSharePointClient`, which boot
+awaits _before_ it resolves Case sources; uncontained, that made a broken Case
+Type an app-wide outage in the dev loop, ~30 lines ahead of the containment
+meant to prevent it. That partition is now caught per Case Type too: the broken
+type's fixture Cases are dropped and reported, the rest still load. Dropping
+them widens nothing — a read without a `listName` still throws and there is
+still no default store ([issue #249](./0022-two-axis-role-model.md)).
+
 Silence would be the wrong containment here, because removing a Case Type
 removes _Cases_: a Reviewer whose list is suddenly empty cannot tell a broken
 deploy from "nothing assigned to me". Boot therefore states the removal once,

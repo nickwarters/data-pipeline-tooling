@@ -109,16 +109,88 @@ test('partitionCasesByList: routes every Case to its named list store (total, no
   );
 });
 
-test('partitionCasesByList: throws for a Case Type whose config declares no listName', async () => {
+test('partitionCasesByList: contains a Case Type whose config declares no listName', async () => {
   /** @type {any} */
-  const cases = [{ id: 'a', caseType: 'listless', answers: {} }];
-  /** @param {string} _slug */
-  const loadCaseTypeConfig = async (_slug) => /** @type {any} */ ({});
+  const cases = [
+    { id: 'a', caseType: 'listless', answers: {} },
+    { id: 'b', caseType: 'beta', answers: {} },
+  ];
+  /** @param {string} slug */
+  const loadCaseTypeConfig = async (slug) =>
+    /** @type {any} */ (slug === 'beta' ? { listName: 'Cases-Beta' } : {});
+  /** @type {any[]} */
+  const reported = [];
 
-  await assert.rejects(
-    () => partitionCasesByList(cases, loadCaseTypeConfig),
-    /declares no listName/
+  const lists = await partitionCasesByList(cases, loadCaseTypeConfig, (f) =>
+    reported.push(f)
   );
+
+  assert.deepEqual(
+    Object.keys(lists),
+    ['Cases-Beta'],
+    'the good type survives'
+  );
+  assert.deepEqual(
+    reported.map(({ slug }) => slug),
+    ['listless'],
+    'the listless Case Type is reported, not thrown out of boot'
+  );
+  assert.match(String(reported[0].error?.message), /declares no listName/);
+});
+
+test('partitionCasesByList: a Case Type module that throws costs only its own Cases (#493)', async () => {
+  // ?mock=1 boot ran this 33 lines BEFORE #493's containment, inside
+  // `createSharePointClient`, so a Case Type module that throws still took the
+  // whole app down in the dev loop — in the feature whose entire point is that
+  // boot survives one.
+  /** @type {any} */
+  const cases = [
+    { id: 'a', caseType: 'boom', answers: {} },
+    { id: 'b', caseType: 'beta', answers: {} },
+  ];
+  /** @param {string} slug */
+  const loadCaseTypeConfig = async (slug) => {
+    if (slug === 'boom') throw new SyntaxError('boom is broken');
+    return /** @type {any} */ ({ listName: 'Cases-Beta' });
+  };
+  /** @type {any[]} */
+  const reported = [];
+
+  const lists = await partitionCasesByList(cases, loadCaseTypeConfig, (f) =>
+    reported.push(f)
+  );
+
+  assert.deepEqual(Object.keys(lists), ['Cases-Beta']);
+  assert.deepEqual(
+    lists['Cases-Beta'].map((/** @type {any} */ c) => c.id),
+    ['b']
+  );
+  assert.equal(reported.length, 1);
+  assert.equal(reported[0].slug, 'boom');
+  assert.ok(reported[0].error instanceof SyntaxError);
+});
+
+test('partitionCasesByList: reports a contained Case Type to the console by default', async () => {
+  // The default reporter is what `createSharePointClient` relies on under
+  // ?mock=1 — the raw error must still reach whoever fixes it.
+  /** @type {any} */
+  const cases = [{ id: 'a', caseType: 'boom', answers: {} }];
+  const original = console.error;
+  /** @type {any[][]} */
+  const logged = [];
+  console.error = (...args) => logged.push(args);
+  try {
+    const lists = await partitionCasesByList(cases, async () => {
+      throw new SyntaxError('boom is broken');
+    });
+    assert.deepEqual(lists, {}, 'no Cases, and no throw');
+  } finally {
+    console.error = original;
+  }
+
+  assert.equal(logged.length, 1);
+  assert.ok(logged[0].some((arg) => String(arg).includes('boom')));
+  assert.ok(logged[0].some((arg) => arg instanceof SyntaxError));
 });
 
 test('createSharePointClient: passes the environment listPrefix and exportBasePath to the HTTP client (#366)', async () => {

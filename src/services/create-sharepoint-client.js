@@ -86,31 +86,56 @@ export function resolveHostWebUrl(
 /**
  * Partition a flat fixture Case array into per-list stores, keyed by each Case
  * Type's declared `listName`. The partition is total — there is no default
- * store — so a Case Type whose config declares no list is a fixture/config
- * error and throws loudly rather than stranding its Cases.
+ * store — so a Case Type whose config declares no list cannot have its Cases
+ * placed anywhere.
+ *
+ * Contained per Case Type (#493), exactly as the HTTP path is. This runs inside
+ * `createSharePointClient`, which boot awaits ~30 lines BEFORE
+ * `resolveAppCaseSources`, so a Case Type module that throws here — or one that
+ * declares no `listName` — used to take the whole app down under `?mock=1`,
+ * in the feature whose entire purpose is that boot survives exactly that. Its
+ * Cases are dropped and the failure is reported; the other Case Types still
+ * load. Dropping never widens access: a read without a `listName` still throws,
+ * and there is still no default store to fall back to (#249).
  *
  * @param {import('../sharepoint-client.js').CaseRow[]} cases
  * @param {(slug: string) => Promise<import('../sharepoint-client.js').CaseTypeConfig>} loadCaseTypeConfig
+ * @param {(failure: { slug: string, error: unknown }) => void} [reportUnavailable]
  * @returns {Promise<Record<string, import('../sharepoint-client.js').CaseRow[]>>}
  */
-export async function partitionCasesByList(cases, loadCaseTypeConfig) {
+export async function partitionCasesByList(
+  cases,
+  loadCaseTypeConfig,
+  reportUnavailable = ({ slug, error }) =>
+    console.error(
+      `[CORA] Case Type "${slug}" failed to load; its mock Cases are unavailable:`,
+      error
+    )
+) {
   /** @type {Record<string, string>} */
   const listNameByCaseType = {};
   for (const caseType of new Set(cases.map((c) => c.caseType))) {
-    const config = await loadCaseTypeConfig(caseType);
-    if (!config.listName) {
-      throw new Error(
-        `partitionCasesByList: Case Type "${caseType}" declares no listName; ` +
-          `every fixture Case must map to a named list (there is no default store).`
-      );
+    try {
+      const config = await loadCaseTypeConfig(caseType);
+      if (!config.listName) {
+        throw new Error(
+          `partitionCasesByList: Case Type "${caseType}" declares no listName; ` +
+            `every fixture Case must map to a named list (there is no default store).`
+        );
+      }
+      listNameByCaseType[caseType] = config.listName;
+    } catch (error) {
+      reportUnavailable({ slug: caseType, error });
     }
-    listNameByCaseType[caseType] = config.listName;
   }
 
   /** @type {Record<string, import('../sharepoint-client.js').CaseRow[]>} */
   const lists = {};
   for (const c of cases) {
     const listName = listNameByCaseType[c.caseType];
+    // A contained Case Type has no list: its Cases are dropped, never pooled
+    // into a default bucket.
+    if (listName === undefined) continue;
     (lists[listName] ??= []).push(c);
   }
   return lists;
