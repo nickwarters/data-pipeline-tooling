@@ -4,7 +4,6 @@ import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
 
 installDom();
-/** @type {any} */ (globalThis).location = { hash: '' };
 
 const { dataTableView, nextTableSort, reduceTableSort, sortRequested } =
   await import('../src/views/data-table.js');
@@ -97,7 +96,9 @@ test('data table view: renders its configured empty state without a table', () =
   assert.equal(view.querySelector('table'), null);
 });
 
-test('data table view: row activation follows the configured row link', () => {
+test('data table view: row activation navigates through the injected seam', () => {
+  /** @type {string[]} */
+  const navigated = [];
   const view = dataTableView({
     rows,
     columns,
@@ -106,13 +107,14 @@ test('data table view: row activation follows the configured row link', () => {
     emptyMessage: 'No people.',
     rowKey: (row) => row.id,
     rowHref: (row) => `#/people/${row.id}`,
+    onNavigate: (hash) => navigated.push(hash),
   });
 
   view
     .querySelector('tbody')
     ?.querySelector('tr')
     ?.dispatchEvent(/** @type {any} */ ({ type: 'keydown', key: 'Enter' }));
-  assert.equal(/** @type {any} */ (globalThis).location.hash, '#/people/2');
+  assert.deepEqual(navigated, ['#/people/2']);
 });
 
 test('data table view: arrow keys move focus between grid cells', () => {

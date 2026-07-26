@@ -1,5 +1,6 @@
 // @ts-check
 import { h } from '../lib/html.js';
+import { navigateTo } from '../lib/navigate.js';
 import { patchRoute } from '../core/route-state.js';
 import { CaseMachine } from '../lib/case-machine.js';
 import {
@@ -50,9 +51,7 @@ export function conversationPageView(state, tools, send) {
         {
           type: 'button',
           className: 'cora-back-btn',
-          onclick: () => {
-            location.hash = '#/my-reviews';
-          },
+          onclick: () => navigateTo('#/my-reviews'),
         },
         '← My Reviews'
       ),

@@ -1,6 +1,7 @@
 // @ts-check
 import { h } from '../../lib/html.js';
 import { caseRouteFor } from '../../lib/case-route-links.js';
+import { navigateTo } from '../../lib/navigate.js';
 import { dataTableView } from '../../views/data-table.js';
 
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
@@ -92,9 +93,7 @@ export function appealColumns() {
             type: 'button',
             className: 'cora-case-open-btn',
             'aria-label': `Open ${value}`,
-            onclick: () => {
-              location.hash = caseRouteFor(row);
-            },
+            onclick: () => navigateTo(caseRouteFor(row)),
           },
           'Open'
         ),

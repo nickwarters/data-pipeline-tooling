@@ -1,5 +1,6 @@
 // @ts-check
 import { h } from '../lib/html.js';
+import { navigateTo } from '../lib/navigate.js';
 
 /**
  * Declarative variation supported by the generic data-table view. A column
@@ -34,6 +35,9 @@ import { h } from '../lib/html.js';
  * @property {string} emptyMessage
  * @property {(row: Row) => string} rowKey
  * @property {(row: Row) => string} [rowHref]
+ * @property {(hash: string) => void} [onNavigate] How row activation changes
+ *   route. Defaults to the `lib/navigate.js` seam so no call site has to pass
+ *   it; injectable so this generic renderer never has to reach for a global.
  * @property {(row: Row) => string} [rowClass]
  */
 
@@ -171,6 +175,7 @@ export function dataTableView({
   emptyMessage,
   rowKey,
   rowHref,
+  onNavigate = navigateTo,
   rowClass = () => '',
 }) {
   if (rows.length === 0 && footerRows.length === 0)
@@ -200,7 +205,7 @@ export function dataTableView({
     if (className) rowProps.className = className;
     if (focusable && rowHref) {
       rowProps.onkeydown = (/** @type {KeyboardEvent} */ event) => {
-        if (event.key === 'Enter') location.hash = rowHref(row);
+        if (event.key === 'Enter') onNavigate(rowHref(row));
       };
     }
     return h(

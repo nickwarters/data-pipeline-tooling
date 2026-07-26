@@ -137,6 +137,7 @@ src/
     case-statuses.js            # CASE_STATUS: the persisted Case lifecycle values — do not change them
     empty-state.js              # shared muted "nothing here yet" placeholder element
     html.js                     # h() plain-function view primitive
+    navigate.js                 # navigateTo/redirectTo: the only writers of location.hash (#519)
     question-order.js           # generic question/category ordering helpers (was question-bank/)
     response-options.js         # single source of truth for response options + the NA_VALUE literal (#391)
     route-error-panel.js        # shared route-failure panel, used by router.js and core/store-route.js (#437)

@@ -1,6 +1,7 @@
 // @ts-check
 
 import { remediationComplete } from '../../evaluators/remediation-status.js';
+import { navigateTo } from '../../lib/navigate.js';
 
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
@@ -154,7 +155,7 @@ export async function completeCase(input) {
     input.caseListOptions ?? input.opts ?? {}
   );
   if (result.ok && typeof location !== 'undefined') {
-    location.hash = '#/dashboard';
+    navigateTo('#/dashboard');
   }
   return result.ok;
 }

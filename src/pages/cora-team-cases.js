@@ -2,6 +2,7 @@
 import { h } from '../lib/html.js';
 import { patchRoute } from '../core/route-state.js';
 import { caseRouteFor } from '../lib/case-route-links.js';
+import { navigateTo } from '../lib/navigate.js';
 import { fetchTeamCases } from '../services/team-cases-fetcher.js';
 import { parseTeamCasesParams } from '../services/team-cases-params.js';
 import {
@@ -114,9 +115,7 @@ export function teamCasesColumns(caseTableColumns = []) {
             type: 'button',
             className: 'cora-case-open-btn',
             'aria-label': `Open ${value}`,
-            onclick: () => {
-              location.hash = caseRouteFor(row);
-            },
+            onclick: () => navigateTo(caseRouteFor(row)),
           },
           'Open'
         ),

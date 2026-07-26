@@ -2,6 +2,7 @@
 import { h } from '../lib/html.js';
 import { patchRoute } from '../core/route-state.js';
 import { caseRouteFor } from '../lib/case-route-links.js';
+import { navigateTo } from '../lib/navigate.js';
 import {
   Allocation,
   getAllocationAvailability,
@@ -111,9 +112,7 @@ export function reviewerCaseColumns() {
             type: 'button',
             className: 'cora-case-open-btn',
             'aria-label': `Open ${value}`,
-            onclick: () => {
-              location.hash = caseRouteFor(row);
-            },
+            onclick: () => navigateTo(caseRouteFor(row)),
           },
           'Open'
         ),
@@ -237,9 +236,7 @@ export function dashboardView(state, tools) {
           tools.actionCentreActions?.toggleGroup(route.actionCentre, reason),
         onShowMore: (reason) =>
           tools.actionCentreActions?.showMore(route.actionCentre, reason),
-        onOpenCase: (row) => {
-          location.hash = caseRouteFor(row);
-        },
+        onOpenCase: (row) => navigateTo(caseRouteFor(row)),
       }),
     ownerSummary: () => OwnerSummary({ summaries: route.ownerSummaries }),
     reviewerCases: () => reviewerCasesView(route, tools.dispatch),

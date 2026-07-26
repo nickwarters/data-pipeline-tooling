@@ -1,5 +1,6 @@
 // @ts-check
 import { conversationRouteFor } from '../lib/case-route-links.js';
+import { navigateTo } from '../lib/navigate.js';
 import { listCasesAcrossSources } from '../services/across-sources.js';
 import { reduceTableSort, sortRequested } from '../views/data-table.js';
 import { responsiblePartyView } from './responsible-party/view.js';
@@ -65,9 +66,7 @@ export function responsiblePartyPanelView(
       tools.dispatch(sortRequested(REMEDIATION_TABLE, key)),
     onMessageSort: (key) => tools.dispatch(sortRequested(UNREAD_TABLE, key)),
     onOpenConversation: navigateToConversation
-      ? (row) => {
-          location.hash = conversationRouteFor(row);
-        }
+      ? (row) => navigateTo(conversationRouteFor(row))
       : undefined,
   });
 }

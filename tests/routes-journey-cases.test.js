@@ -11,7 +11,17 @@ installDom();
   addEventListener() {},
   removeEventListener() {},
 };
-/** @type {any} */ (globalThis).location = { hash: '' };
+/** @type {string[]} */
+const replacedUrls = [];
+/** @type {any} */ (globalThis).location = {
+  hash: '',
+  pathname: '/SitePages/app.aspx',
+  search: '',
+  /** @param {string} url */
+  replace(url) {
+    replacedUrls.push(url);
+  },
+};
 
 import { Router } from '../src/lib/router.js';
 import { register } from '../src/routes/journey-cases.js';
@@ -68,6 +78,7 @@ test('journey cases route: mounts the store-driven slice', async () => {
 });
 
 test('journey cases route: redirects a non-Journey-Owner without loading the page', async () => {
+  replacedUrls.length = 0;
   let loaded = false;
   const registration = routeRegistrationSpy();
   register(
@@ -84,7 +95,11 @@ test('journey cases route: redirects a non-Journey-Owner without loading the pag
   await registration
     .handlerFor('#/journey-cases')
     .mount(document.createElement('main'), {});
-  assert.equal(location.hash, '#/');
+  // Deliberate behaviour change (#519): the bounce replaces the history entry
+  // instead of pushing one, so Back does not return the ineligible user to the
+  // route that just bounced them. Where it bounces to is unchanged.
+  assert.deepEqual(replacedUrls, ['/SitePages/app.aspx#/']);
+  assert.equal(location.hash, '', 'does not push a history entry');
   assert.equal(loaded, false);
 });
 
