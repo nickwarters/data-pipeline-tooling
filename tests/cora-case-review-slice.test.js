@@ -97,6 +97,9 @@ function snapshot() {
     summarySections: ['details', 'questions', 'issues'],
     machine: null,
     exportHash: null,
+    // `toStoreSnapshot()` always supplies this, so the fixture does too — the
+    // reducer no longer defaults it (review on #513/#514).
+    conversationHidden: true,
     caseListOptions: {},
     access: {
       details: 'read-only',
@@ -2582,7 +2585,12 @@ test('#512 panel map: a tab switch keeps every panel mounted and its nodes ident
   view.dispose();
 });
 
-test('#513: a Case whose as-reviewed Question Bank is unavailable renders a live-region warning', () => {
+// The banner is present from the first render and never changes, so the
+// live-region attributes will not announce anything — a live region has to be in
+// the DOM before its contents change. They are kept because they cost nothing and
+// correctly describe the node's role; what this test checks is the banner's
+// presence, copy and attributes, not an announcement.
+test('#513: a Case whose as-reviewed Question Bank is unavailable renders a status-role warning banner', () => {
   const warned = snapshot();
   warned.caseRow = { ...warned.caseRow, status: 'Reported' };
   warned.versionWarning = 'as-reviewed version unavailable';

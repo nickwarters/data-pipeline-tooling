@@ -281,7 +281,7 @@ export class CaseReviewViewModel {
         // A stamped-but-unpublished version means a publish went wrong. The
         // banner tells the reader; this is the only trace an operator gets (#513).
         console.error(
-          `Case ${caseId}: as-reviewed Question Bank version ${versionHash} is stamped on the row but its versioned export could not be loaded. Falling back to the live Question Bank (ADR-0021 Step 4).`
+          `[CORA] Case ${caseId}: as-reviewed Question Bank version ${versionHash} is stamped on the row but its versioned export could not be loaded. Falling back to the live Question Bank (ADR-0021 Step 4).`
         );
       }
       this.catalogue = config.questions.filter((q) => !q.deprecated);

@@ -353,17 +353,6 @@
 
 /* ── Banner — reconnecting & conflict surfaces ───────────────────────────── */
 
-/* The save-status banner pins bottom-right, above the conversation panel and
-   below the command palette and toast host — 110 is that existing stack, not a
-   fresh number (#514). These declarations were inline on the element until the
-   retired `cora-status-banner` host's rule could be replaced by its class. */
-.cora-case-review__save-status {
-  position: fixed;
-  bottom: var(--cora-space-4);
-  right: var(--cora-space-4);
-  z-index: 110;
-}
-
 .cora-banner {
   border-radius: var(--cora-radius-md);
   padding: var(--cora-space-3) var(--cora-space-4);
@@ -2683,6 +2672,17 @@ cora-tabs {
   flex: 1;
   gap: var(--cora-space-1);
   border-bottom: 1px solid var(--cora-color-border);
+}
+
+/* The save-status banner pins bottom-right, above the conversation panel and
+   below the command palette and toast host — 110 is that existing stack, not a
+   fresh number (#514). These declarations were inline on the element until the
+   retired `cora-status-banner` host's rule could be replaced by its class. */
+.cora-case-review__save-status {
+  position: fixed;
+  bottom: var(--cora-space-4);
+  right: var(--cora-space-4);
+  z-index: 110;
 }
 
 .cora-case-review__tab-strip {

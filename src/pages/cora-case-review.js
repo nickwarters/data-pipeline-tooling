@@ -157,7 +157,7 @@ export function caseReviewReducer(state, action) {
           ...route,
           snapshot: action.snapshot,
           activeTab: tabs[0]?.id ?? '',
-          conversationHidden: action.snapshot.conversationHidden ?? true,
+          conversationHidden: action.snapshot.conversationHidden,
         },
       },
     };
@@ -405,6 +405,7 @@ function versionWarningView(warning) {
   return h(
     'div',
     {
+      key: 'version-warning',
       className: 'cora-banner cora-banner-warning',
       role: 'status',
       'aria-live': 'polite',
@@ -711,12 +712,17 @@ export function createRouteSlice(params, context) {
 
     tools.morph(parts.header, [
       versionWarningView(snapshot.versionWarning),
-      h('h1', {}, snapshot.caseRow.title),
-      h('p', {}, `Reviewer: ${snapshot.caseRow.assignedReviewer}`),
+      h('h1', { key: 'title' }, snapshot.caseRow.title),
+      h(
+        'p',
+        { key: 'reviewer' },
+        `Reviewer: ${snapshot.caseRow.assignedReviewer}`
+      ),
       snapshot.machine?.canToggleConversation
         ? h(
             'button',
             {
+              key: 'conversation-toggle',
               className: 'cora-conversation-toggle-btn',
               'aria-expanded': String(!route.conversationHidden),
               'aria-label': 'Toggle conversation panel (⌥C / Alt+C)',

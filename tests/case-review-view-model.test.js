@@ -481,6 +481,9 @@ test('CaseReviewViewModel.load(): missing versioned file falls back to live cata
   );
   assert.equal(logged.length, 1, 'the failed freeze is logged once');
   assert.match(String(logged[0]), /sha256:abc123/);
+  // The console is shared with SharePoint's own noise; the prefix is how an
+  // operator filters to us, and this line exists to be found.
+  assert.match(String(logged[0]), /^\[CORA\] /);
 });
 
 test('CaseReviewViewModel.load(): In-progress Case loads live catalogue; versionWarning stays null (ADR-0021 Step 4)', async () => {
