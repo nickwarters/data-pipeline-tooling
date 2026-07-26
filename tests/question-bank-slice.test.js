@@ -828,3 +828,30 @@ test('#521 the loaded draft and baseline are separate clones, so diffing still s
   );
   mounted.unmount();
 });
+
+test('#521 a sample load that resolves after unmount is discarded', async () => {
+  let release = /** @type {(value?: any) => void} */ (() => {});
+  const pending = new Promise((resolve) => {
+    release = resolve;
+  });
+  const search = /** @type {any} */ (globalThis).location.search;
+  /** @type {any} */ (globalThis).location.search = '?simulate=1';
+  let mounted;
+  try {
+    mounted = mountSlice(
+      { loadBanks: async () => ({ banks: liveBanks, failures: [] }) },
+      /** @type {any} */ ({
+        ...context(),
+        loadQuestionBankSamples: () => pending,
+      })
+    );
+    await flush();
+    mounted.unmount();
+    release({ example: [{ id: 'case-1', title: 'Case', answers: {} }] });
+    await flush();
+  } finally {
+    /** @type {any} */ (globalThis).location.search = search;
+  }
+
+  assert.deepEqual(mounted.route.sampleCases, {});
+});

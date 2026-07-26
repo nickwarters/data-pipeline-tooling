@@ -346,6 +346,7 @@ export function createRouteSlice(_params, context, deps = {}) {
               module.loadSampleCases(context.client, context.caseSources)
             ));
         void loadSamples().then((loaded) => {
+          if (!tools.isActive()) return;
           if (!loaded || typeof loaded !== 'object') return;
           for (const [slug, cases] of Object.entries(loaded)) {
             tools.dispatch({ type: 'samples/loaded', slug, cases });
