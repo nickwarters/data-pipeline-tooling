@@ -16,10 +16,16 @@
  * Patch one route's slice of state, preserving `chrome`, sibling routes, and
  * every sibling field of the patched route.
  *
+ * `patch` is a `Partial` of the named route's slice rather than a loose record,
+ * so a misspelled field name is a `tsc` error — the one check the hand-written
+ * spread nest did give us, and the reason this is a strict improvement on it
+ * rather than a trade.
+ *
  * @template {{ routes: Record<string, any> }} S
+ * @template {keyof S['routes'] & string} N
  * @param {S} state
- * @param {string} name - the route key, e.g. 'dashboard'
- * @param {Record<string, any>} patch
+ * @param {N} name - the route key, e.g. 'dashboard'
+ * @param {Partial<S['routes'][N]>} patch
  * @returns {S}
  */
 export function patchRoute(state, name, patch) {
