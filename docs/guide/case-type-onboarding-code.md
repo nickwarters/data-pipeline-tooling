@@ -703,8 +703,8 @@ still-empty list):
 And if after reading this you'd rather not hand-type the boilerplate:
 `python3 scripts/scaffold_case_type.py --slug widget-review --display "Widget Review"`
 performs most of Steps 1–7 with starter content (ADR-0028) — you now know
-exactly what it's doing, and what to replace. One caveat: at the time of
-writing the scaffold generates a module with **no `listName`** (a pre-#383
-assumption), which the mock client's total partition now rejects at `?mock=1`
-boot once the scaffold's fixture Cases load — so give the generated module a
-`listName` (Step 2) as your first edit.
+exactly what it's doing, and what to replace. It declares a `listName` for you,
+defaulted from the slug as `Cases-{PascalSlug}`; pass `--list-name` if the list
+was provisioned under another name (#525). Its closing message names the three
+registry-contract tests in `tests/case-type-manifest.test.js` that a new slug is
+supposed to move — widen those by hand, and treat any other red test as real.
