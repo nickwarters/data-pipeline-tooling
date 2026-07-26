@@ -48,6 +48,42 @@ export function nextTableSort(current, key) {
 }
 
 /**
+ * The action a sortable table's `onSort` dispatches. Every table names its
+ * action after itself — `${table}-table/sort-requested` — because a page with
+ * two tables (the Dashboard) cannot share one `table/` namespace.
+ *
+ * @param {string} table - the table's name, e.g. 'reviewer'
+ * @param {string} key - the column key that was clicked
+ * @returns {{ type: string, key: string }}
+ */
+export const sortRequested = (table, key) => ({
+  type: `${table}-table/sort-requested`,
+  key,
+});
+
+/**
+ * Reduce a sort action for one named table. Returns the next sort value, or
+ * `undefined` when the action is not this table's sort action — so a reducer
+ * branch reads as `const sort = reduceTableSort(...); if (sort) return …` with
+ * no nested conditional.
+ *
+ * `undefined` is an unambiguous "not mine" signal because `nextTableSort`
+ * always returns a freshly built `{ key, dir }` object: there is no falsy
+ * sort value it can legitimately produce, and "unsorted" (`null`) is only ever
+ * an initial state, never a reduction result.
+ *
+ * @param {TableSort | null} current
+ * @param {any} action
+ * @param {string} table - matches `${table}-table/sort-requested`
+ * @returns {TableSort | undefined}
+ */
+export function reduceTableSort(current, action, table) {
+  return action.type === `${table}-table/sort-requested`
+    ? nextTableSort(current, action.key)
+    : undefined;
+}
+
+/**
  * @template Row
  * @param {Row} row
  * @param {ColumnDescriptor<Row>} column

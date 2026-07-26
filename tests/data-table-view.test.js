@@ -6,7 +6,7 @@ import { installDom } from './_dom-stub.js';
 installDom();
 /** @type {any} */ (globalThis).location = { hash: '' };
 
-const { dataTableView, nextTableSort } =
+const { dataTableView, nextTableSort, reduceTableSort, sortRequested } =
   await import('../src/views/data-table.js');
 
 const rows = [
@@ -237,4 +237,55 @@ test('data table view: nextTableSort starts ascending and toggles direction', ()
     key: 'name',
     dir: 'asc',
   });
+});
+
+test('data table view: sortRequested names the action after its table', () => {
+  assert.deepEqual(sortRequested('journey', 'reference'), {
+    type: 'journey-table/sort-requested',
+    key: 'reference',
+  });
+});
+
+test('data table view: reduceTableSort reduces its own table sort action', () => {
+  assert.deepEqual(
+    reduceTableSort(null, sortRequested('journey', 'reference'), 'journey'),
+    { key: 'reference', dir: 'asc' }
+  );
+  assert.deepEqual(
+    reduceTableSort(
+      { key: 'reference', dir: 'asc' },
+      sortRequested('journey', 'reference'),
+      'journey'
+    ),
+    { key: 'reference', dir: 'desc' }
+  );
+});
+
+test('data table view: reduceTableSort ignores another table on the same page', () => {
+  assert.equal(
+    reduceTableSort(null, sortRequested('appeals', 'raised'), 'reviewer'),
+    undefined
+  );
+  assert.equal(
+    reduceTableSort(null, { type: 'cases/loaded' }, 'journey'),
+    undefined
+  );
+});
+
+test('data table view: reduceTableSort never returns a falsy sort, so `if (sort)` is safe', () => {
+  // `nextTableSort` always builds a fresh object; the only falsy result the
+  // helper can produce is the `undefined` "not my action" signal.
+  for (const current of [
+    null,
+    { key: 'a', dir: 'asc' },
+    { key: 'a', dir: 'desc' },
+  ]) {
+    assert.ok(
+      reduceTableSort(
+        /** @type {any} */ (current),
+        sortRequested('t', 'a'),
+        't'
+      )
+    );
+  }
 });
