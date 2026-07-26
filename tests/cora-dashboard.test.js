@@ -965,11 +965,11 @@ test('dashboard reducer composes Controls, Action Centre, and Responsible Party 
     value: 'complaints',
   });
   state = slice.reducer(state, {
-    type: 'responsible-party/remediation-sort-requested',
+    type: 'remediation-table/sort-requested',
     key: 'dueDate',
   });
   state = slice.reducer(state, {
-    type: 'responsible-party/message-sort-requested',
+    type: 'unread-table/sort-requested',
     key: 'lastMessage',
   });
   const unchanged = slice.reducer(state, { type: 'ignored' });

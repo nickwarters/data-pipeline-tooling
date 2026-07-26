@@ -1,7 +1,7 @@
 // @ts-check
 import { conversationRouteFor } from '../lib/case-route-links.js';
 import { listCasesAcrossSources } from '../services/across-sources.js';
-import { nextTableSort } from '../views/data-table.js';
+import { reduceTableSort, sortRequested } from '../views/data-table.js';
 import { responsiblePartyView } from './responsible-party/view.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
@@ -33,18 +33,14 @@ export function reduceResponsibleParty(state, action) {
   if (action.type === 'responsible-party/filter-changed') {
     return { ...state, filter: action.value };
   }
-  if (action.type === 'responsible-party/remediation-sort-requested') {
-    return {
-      ...state,
-      remediationSort: nextTableSort(state.remediationSort, action.key),
-    };
-  }
-  if (action.type === 'responsible-party/message-sort-requested') {
-    return {
-      ...state,
-      messageSort: nextTableSort(state.messageSort, action.key),
-    };
-  }
+  const remediationSort = reduceTableSort(
+    state.remediationSort,
+    action,
+    'remediation'
+  );
+  if (remediationSort) return { ...state, remediationSort };
+  const messageSort = reduceTableSort(state.messageSort, action, 'unread');
+  if (messageSort) return { ...state, messageSort };
   return state;
 }
 
@@ -62,12 +58,8 @@ export function responsiblePartyPanelView(
     onFilterChange: (value) =>
       tools.dispatch({ type: 'responsible-party/filter-changed', value }),
     onRemediationSort: (key) =>
-      tools.dispatch({
-        type: 'responsible-party/remediation-sort-requested',
-        key,
-      }),
-    onMessageSort: (key) =>
-      tools.dispatch({ type: 'responsible-party/message-sort-requested', key }),
+      tools.dispatch(sortRequested('remediation', key)),
+    onMessageSort: (key) => tools.dispatch(sortRequested('unread', key)),
     onOpenConversation: navigateToConversation
       ? (row) => {
           location.hash = conversationRouteFor(row);

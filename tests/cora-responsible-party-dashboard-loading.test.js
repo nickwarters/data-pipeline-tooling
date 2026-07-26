@@ -103,11 +103,11 @@ test('Responsible Party reducer owns loaded rows, filters, and both table sorts'
     value: 'complaints',
   });
   state = slice.reducer(state, {
-    type: 'responsible-party/remediation-sort-requested',
+    type: 'remediation-table/sort-requested',
     key: 'dueDate',
   });
   state = slice.reducer(state, {
-    type: 'responsible-party/message-sort-requested',
+    type: 'unread-table/sort-requested',
     key: 'lastMessage',
   });
 
