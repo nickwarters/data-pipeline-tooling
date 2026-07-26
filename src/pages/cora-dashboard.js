@@ -32,6 +32,7 @@ import {
   reduceTableSort,
   sortRequested,
 } from '../views/data-table.js';
+import { standardCaseColumns } from '../views/case-columns.js';
 import { visibleDashboardPanels } from './dashboard/panel-descriptors.js';
 import { kpiStripView } from './dashboard/kpi-view.js';
 import {
@@ -70,55 +71,6 @@ const APPEALS_TABLE = 'appeals';
  * @property {import('../core/chrome-state.js').ChromeState} chrome
  * @property {{ dashboard: DashboardRouteState }} routes
  */
-
-/** @returns {import('../views/data-table.js').ColumnDescriptor<CaseRow>[]} */
-export function reviewerCaseColumns() {
-  return [
-    {
-      key: 'reference',
-      label: 'Reference',
-      value: (row) => row.title || row.id,
-      sortable: true,
-      href: caseRouteFor,
-    },
-    { key: 'caseType', label: 'Case Type', value: 'caseType', sortable: true },
-    {
-      key: 'relatedDate',
-      label: 'Related Date',
-      value: (row) => /** @type {any} */ (row).relatedDate || '',
-      sortable: true,
-    },
-    {
-      key: 'dueDate',
-      label: 'Due Date',
-      value: (row) => row.dueDate || '',
-      sortable: true,
-    },
-    { key: 'status', label: 'Status', value: 'status', sortable: true },
-    {
-      key: 'assigned',
-      label: 'Assigned',
-      value: (row) => row.created || '',
-      sortable: true,
-    },
-    {
-      key: 'actions',
-      label: 'Actions',
-      value: (row) => row.title || row.id,
-      format: (value, row) =>
-        h(
-          'button',
-          {
-            type: 'button',
-            className: 'cora-case-open-btn',
-            'aria-label': `Open ${value}`,
-            onclick: () => navigateTo(caseRouteFor(row)),
-          },
-          'Open'
-        ),
-    },
-  ];
-}
 
 /** @param {DashboardRouteState} route @param {(action: any) => any} dispatch */
 export function reviewerCasesView(route, dispatch) {
@@ -175,7 +127,9 @@ export function reviewerCasesView(route, dispatch) {
     ),
     dataTableView({
       rows,
-      columns: reviewerCaseColumns(),
+      columns: standardCaseColumns({
+        onOpen: (row) => navigateTo(caseRouteFor(row)),
+      }),
       sort: route.reviewerSort,
       onSort: (key) => dispatch(sortRequested(REVIEWER_TABLE, key)),
       emptyMessage: 'No outstanding cases.',

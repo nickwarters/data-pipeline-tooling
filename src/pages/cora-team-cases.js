@@ -5,6 +5,7 @@ import { caseRouteFor } from '../lib/case-route-links.js';
 import { navigateTo } from '../lib/navigate.js';
 import { fetchTeamCases } from '../services/team-cases-fetcher.js';
 import { parseTeamCasesParams } from '../services/team-cases-params.js';
+import { standardCaseColumns } from '../views/case-columns.js';
 import {
   dataTableView,
   reduceTableSort,
@@ -58,73 +59,6 @@ export async function resolveDashboardColumns(
 }
 
 /**
- * Team Cases is the first real page to declare the generic table's variation.
- * Value selection and presentation remain declarative; the Actions cell keeps
- * its navigation behaviour in code.
- *
- * @param {CaseColumnDescriptor[]} [caseTableColumns]
- * @returns {CaseColumnDescriptor[]}
- */
-export function teamCasesColumns(caseTableColumns = []) {
-  return [
-    {
-      key: 'reference',
-      label: 'Reference',
-      value: (row) => row.title || row.id,
-      sortable: true,
-      href: caseRouteFor,
-    },
-    {
-      key: 'caseType',
-      label: 'Case Type',
-      value: 'caseType',
-      sortable: true,
-    },
-    {
-      key: 'relatedDate',
-      label: 'Related Date',
-      value: (row) => /** @type {any} */ (row).relatedDate || '',
-      sortable: true,
-    },
-    {
-      key: 'dueDate',
-      label: 'Due Date',
-      value: (row) => row.dueDate || '',
-      sortable: true,
-    },
-    {
-      key: 'status',
-      label: 'Status',
-      value: 'status',
-      sortable: true,
-    },
-    {
-      key: 'assigned',
-      label: 'Assigned',
-      value: (row) => row.created || '',
-      sortable: true,
-    },
-    {
-      key: 'actions',
-      label: 'Actions',
-      value: (row) => row.title || row.id,
-      format: (value, row) =>
-        h(
-          'button',
-          {
-            type: 'button',
-            className: 'cora-case-open-btn',
-            'aria-label': `Open ${value}`,
-            onclick: () => navigateTo(caseRouteFor(row)),
-          },
-          'Open'
-        ),
-    },
-    ...caseTableColumns,
-  ];
-}
-
-/**
  * @param {TeamCasesState} state
  * @param {{ dispatch: (action: any) => any }} tools
  * @returns {HTMLElement}
@@ -140,7 +74,10 @@ export function teamCasesView(state, tools) {
     heading,
     dataTableView({
       rows: route.cases,
-      columns: teamCasesColumns(route.caseTableColumns),
+      columns: standardCaseColumns({
+        onOpen: (row) => navigateTo(caseRouteFor(row)),
+        extra: route.caseTableColumns,
+      }),
       sort: route.sort,
       onSort: (key) => tools.dispatch(sortRequested(TABLE, key)),
       emptyMessage: 'No cases match the selected filters.',

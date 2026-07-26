@@ -6,12 +6,23 @@ import { installDom } from './_dom-stub.js';
 installDom();
 /** @type {any} */ (globalThis).location = { hash: '' };
 
-const {
-  createRouteSlice,
-  resolveDashboardColumns,
-  teamCasesColumns,
-  teamCasesView,
-} = await import('../src/pages/cora-team-cases.js');
+const { createRouteSlice, resolveDashboardColumns, teamCasesView } =
+  await import('../src/pages/cora-team-cases.js');
+
+/**
+ * The rendered column contract: heading text, the `cora-col-*` CSS hook and
+ * `aria-sort`, in document order.
+ *
+ * @param {any} view
+ * @returns {[string, string, string | null][]}
+ */
+function tableHeaders(view) {
+  return [...view.querySelectorAll('th')].map((th) => [
+    th.textContent,
+    th.className,
+    th.getAttribute('aria-sort'),
+  ]);
+}
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 
@@ -123,39 +134,39 @@ test('team cases slice: reducer owns loaded rows and generic table sort state', 
   assert.equal(slice.reducer(sorted, { type: 'ignored' }), sorted);
 });
 
-test('team cases descriptors retain the Case link, sortable columns, and Case Type additions', () => {
-  const columns = teamCasesColumns([
-    { key: 'owner', label: 'Owner', value: 'responsibleParty' },
+test('team cases view renders the standard Case columns, the Case Type additions, and the Open action', () => {
+  const view = teamCasesView(
+    {
+      ...createRouteSlice({}, context()).initialState,
+      routes: {
+        teamCases: {
+          cases: [row('c1')],
+          caseTableColumns: [
+            { key: 'owner', label: 'Owner', value: 'responsibleParty' },
+          ],
+          sort: { key: 'reference', dir: 'desc' },
+        },
+      },
+    },
+    { dispatch: () => {} }
+  );
+
+  assert.deepEqual(tableHeaders(view), [
+    ['Reference', 'cora-col-reference', 'descending'],
+    ['Case Type', 'cora-col-caseType', 'none'],
+    ['Related Date', 'cora-col-relatedDate', 'none'],
+    ['Due Date', 'cora-col-dueDate', 'none'],
+    ['Status', 'cora-col-status', 'none'],
+    ['Assigned', 'cora-col-assigned', 'none'],
+    ['Actions', 'cora-col-actions', 'none'],
+    ['Owner', 'cora-col-owner', 'none'],
   ]);
 
-  assert.deepEqual(
-    columns.map((column) => column.key),
-    [
-      'reference',
-      'caseType',
-      'relatedDate',
-      'dueDate',
-      'status',
-      'assigned',
-      'actions',
-      'owner',
-    ]
-  );
-  assert.equal(columns.filter((column) => column.sortable).length, 6);
-  assert.equal(columns[0].href?.(row('c1')), '#/case/complaints/c1');
-});
-
-test('team cases descriptors preserve legacy empty-date sort values', () => {
-  const columns = teamCasesColumns();
-  const missingDates = row('c1');
-  for (const key of ['relatedDate', 'dueDate', 'assigned']) {
-    const column = columns.find((candidate) => candidate.key === key);
-    assert.equal(typeof column?.value, 'function');
-    assert.equal(
-      /** @type {(row: CaseRow) => unknown} */ (column?.value)?.(missingDates),
-      ''
-    );
-  }
+  location.hash = '';
+  view
+    .querySelector('.cora-case-open-btn')
+    ?.dispatchEvent(/** @type {any} */ ({ type: 'click' }));
+  assert.equal(location.hash, '#/case/complaints/c1');
 });
 
 test('team cases columns: mixed and unknown Case Types have no extension columns', async () => {

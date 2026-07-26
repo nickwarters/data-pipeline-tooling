@@ -245,6 +245,7 @@ src/
       simulate-panel.js         # pure golden-tested impact-simulation view
 
   views/                        # generic store-driven pure renderers
+    case-columns.js             # shared Case-table column descriptors (#515): the Case-aware consumer of data-table.js
     data-table.js               # descriptor-driven table view (value, sort, format, links)
 
   routes/                       # route handler modules, one per hash route
