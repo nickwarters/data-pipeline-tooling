@@ -107,6 +107,20 @@ test('buildSummaryModel: remediationActionCount sums selected actions + free-for
   assert.equal(model.remediationActionCount, 2);
 });
 
+test('buildSummaryModel: whitespace-only free-form remediation is not an action (#497)', () => {
+  // The Summary was the fourth reading of "carries remediation" and the only
+  // untrimmed one: `answerRemediation` trims, so a single space in the box gave
+  // the Reviewer "Remediation Actions: 1" and a blank bullet on the Summary
+  // while the Send Actions fork said "Complete Case" and the Remediation tab
+  // showed nothing.
+  const answers = /** @type {Record<string, Answer>} */ ({
+    'q-open': { value: 'No', freeFormRemediation: '   ' },
+  });
+  const model = buildSummaryModel(catalogue, answers);
+  assert.equal(model.remediationActionCount, 0);
+  assert.deepEqual(model.failures[0].actions, []);
+});
+
 test('buildSummaryModel: remediationActionCount is 0 when there are no failures', () => {
   const answers = /** @type {Record<string, Answer>} */ ({
     'q-open': { value: 'Yes' },

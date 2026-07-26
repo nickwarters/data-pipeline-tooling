@@ -1,6 +1,7 @@
 // @ts-check
 import { evaluate } from './applicability-evaluator.js';
 import { isFailure } from './failure-evaluator.js';
+import { answerRemediation } from './answer-remediation.js';
 
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
@@ -46,14 +47,23 @@ export function buildSummaryModel(catalogue, answers) {
   }
 
   const failedQuestions = applicable.filter((q) => isFailure(q, answers[q.id]));
+
+  // What a failed Answer carries has **one** definition — `answerRemediation`
+  // (#497). The Summary used to spell it out again and, alone among the
+  // readings, did not trim the free-form box: a single typed space counted as a
+  // Remediation Action here and as nothing on the Send Actions fork or the
+  // Remediation tab, so one Case said "Remediation actions: 1" with a blank
+  // bullet beside a "Complete Case" button.
+  const remediationOf = (/** @type {QuestionDefinition} */ q) =>
+    answerRemediation(answers[q.id]);
+
   // The Summary reflects only what the Reviewer *selected* on each failed Answer
   // — the chosen canned actions plus any free-form entry — not the
   // question's full configured catalogue.
   const remediationActionCount = failedQuestions.reduce((total, q) => {
-    const answer = answers[q.id];
-    const selected = answer?.remediationActions?.length ?? 0;
-    const free = answer?.freeFormRemediation ? 1 : 0;
-    return total + selected + free;
+    const remediation = remediationOf(q);
+    if (!remediation) return total;
+    return total + remediation.actions.length + (remediation.freeForm ? 1 : 0);
   }, 0);
 
   /** @type {SummaryFailure[]} */
@@ -63,10 +73,9 @@ export function buildSummaryModel(catalogue, answers) {
     const v = answer.value;
     // Selected canned actions, plus any free-form action, shown as
     // read-only text. Falls back to nothing when the Reviewer selected none.
-    const actions = (answer.remediationActions ?? []).map(
-      (action) => action.text
-    );
-    if (answer.freeFormRemediation) actions.push(answer.freeFormRemediation);
+    const remediation = remediationOf(q);
+    const actions = (remediation?.actions ?? []).map((action) => action.text);
+    if (remediation?.freeForm) actions.push(remediation.freeForm);
     return {
       id: q.id,
       questionGroup: q.questionGroup,
