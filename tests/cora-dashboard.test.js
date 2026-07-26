@@ -1273,3 +1273,61 @@ test('dashboard Action Centre controller reloads scope, groups, and pages throug
   assert.ok(pageLoads >= 3);
   dispose?.();
 });
+
+test('#516 dashboard view: clicking a reviewer column header dispatches the reviewer table sort action', () => {
+  const ctx = context(capabilities({ isReviewer: true }));
+  const slice = createRouteSlice({}, ctx);
+  const loaded = slice.reducer(slice.initialState, {
+    type: 'reviewer-cases/loaded',
+    cases: [
+      {
+        id: 'alpha',
+        title: 'Alpha case',
+        caseType: 'complaints',
+        status: 'In-progress',
+        relatedDate: '2026-01-01',
+        dueDate: '2026-01-10',
+        overdue: false,
+      },
+    ],
+  });
+  /** @type {any[]} */
+  const actions = [];
+  const view = dashboardView(/** @type {any} */ (loaded), {
+    context: ctx,
+    dispatch: (/** @type {any} */ action) => actions.push(action),
+  });
+
+  fireEvent(getByRole(view, 'button', { name: 'Related Date' }), 'click');
+  assert.deepEqual(actions, [
+    { type: 'reviewer-table/sort-requested', key: 'relatedDate' },
+  ]);
+});
+
+test('#516 dashboard view: clicking an appeals column header dispatches the appeals table sort action', () => {
+  const ctx = context(capabilities({ isControls: true }));
+  const slice = createRouteSlice({}, ctx);
+  const loaded = slice.reducer(slice.initialState, {
+    type: 'appeals/loaded',
+    cases: [
+      {
+        id: 'appeal',
+        title: 'Appealed case',
+        caseType: 'complaints',
+        responsibleParty: 'rp-1',
+        appeal: { raisedAt: '2026-01-01T00:00:00Z', raisedBy: 'rp-1' },
+      },
+    ],
+  });
+  /** @type {any[]} */
+  const actions = [];
+  const view = dashboardView(/** @type {any} */ (loaded), {
+    context: ctx,
+    dispatch: (/** @type {any} */ action) => actions.push(action),
+  });
+
+  fireEvent(getByRole(view, 'button', { name: 'Raised' }), 'click');
+  assert.deepEqual(actions, [
+    { type: 'appeals-table/sort-requested', key: 'raised' },
+  ]);
+});

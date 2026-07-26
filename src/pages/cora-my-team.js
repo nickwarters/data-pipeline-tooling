@@ -12,6 +12,9 @@ import {
   sortRequested,
 } from '../views/data-table.js';
 
+/** The one table name this page sorts by: used by both the view and the reducer. */
+const TABLE = 'workload';
+
 /** @typedef {import('../evaluators/team-workload-model.js').WorkloadRow} WorkloadRow */
 /** @typedef {import('../setup/resolve-eligible-case-types.js').CaseSource} CaseSource */
 /** @typedef {import('../views/data-table.js').ColumnDescriptor<WorkloadRow>} WorkloadColumn */
@@ -144,7 +147,7 @@ export function myTeamView(
             footerRows: totalRows,
             columns: myTeamColumns(caseSources),
             sort: route.sort,
-            onSort: (key) => dispatch(sortRequested('workload', key)),
+            onSort: (key) => dispatch(sortRequested(TABLE, key)),
             emptyMessage: 'No allocated outstanding Cases.',
             rowKey: (row) =>
               row.reviewerId === null
@@ -259,7 +262,7 @@ export function createRouteSlice(
           error: action.message,
         });
       }
-      const sort = reduceTableSort(route.sort, action, 'workload');
+      const sort = reduceTableSort(route.sort, action, TABLE);
       if (sort) return patchRoute(state, 'myTeam', { sort });
       return state;
     },

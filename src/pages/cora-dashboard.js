@@ -38,6 +38,10 @@ import {
   fetchOpenAppeals,
 } from './dashboard/controls-view.js';
 
+/** The two table names this page sorts by: used by both the views and the reducer. */
+const REVIEWER_TABLE = 'reviewer';
+const APPEALS_TABLE = 'appeals';
+
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../views/data-table.js').TableSort} TableSort */
 /** @typedef {import('../evaluators/kpi-strip-model.js').KpiLane} KpiLane */
@@ -174,7 +178,7 @@ export function reviewerCasesView(route, dispatch) {
       rows,
       columns: reviewerCaseColumns(),
       sort: route.reviewerSort,
-      onSort: (key) => dispatch(sortRequested('reviewer', key)),
+      onSort: (key) => dispatch(sortRequested(REVIEWER_TABLE, key)),
       emptyMessage: 'No outstanding cases.',
       rowKey: (row) => `${row.caseType}:${row.id}`,
       rowHref: caseRouteFor,
@@ -251,7 +255,7 @@ export function dashboardView(state, tools) {
       }),
     appeals: () =>
       controlsAppealsView(route.appealCases, route.appealSort, (key) =>
-        tools.dispatch(sortRequested('appeals', key))
+        tools.dispatch(sortRequested(APPEALS_TABLE, key))
       ),
   };
 
@@ -530,7 +534,7 @@ export function createRouteSlice(
       const reviewerSort = reduceTableSort(
         route.reviewerSort,
         action,
-        'reviewer'
+        REVIEWER_TABLE
       );
       if (reviewerSort) return patchRoute(state, 'dashboard', { reviewerSort });
       if (action.type === 'reviewer-table/filter-text-changed') {
@@ -543,7 +547,11 @@ export function createRouteSlice(
           reviewerStatusFilter: action.value,
         });
       }
-      const appealSort = reduceTableSort(route.appealSort, action, 'appeals');
+      const appealSort = reduceTableSort(
+        route.appealSort,
+        action,
+        APPEALS_TABLE
+      );
       if (appealSort) return patchRoute(state, 'dashboard', { appealSort });
       if (action.type === 'action-centre/scope-changed') {
         return patchRoute(state, 'dashboard', {

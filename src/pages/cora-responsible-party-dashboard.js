@@ -4,6 +4,10 @@ import { listCasesAcrossSources } from '../services/across-sources.js';
 import { reduceTableSort, sortRequested } from '../views/data-table.js';
 import { responsiblePartyView } from './responsible-party/view.js';
 
+/** The two table names this panel sorts by: used by both the view and the reducer. */
+const REMEDIATION_TABLE = 'remediation';
+const UNREAD_TABLE = 'unread';
+
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 
 /** @param {string} currentUserId */
@@ -36,10 +40,10 @@ export function reduceResponsibleParty(state, action) {
   const remediationSort = reduceTableSort(
     state.remediationSort,
     action,
-    'remediation'
+    REMEDIATION_TABLE
   );
   if (remediationSort) return { ...state, remediationSort };
-  const messageSort = reduceTableSort(state.messageSort, action, 'unread');
+  const messageSort = reduceTableSort(state.messageSort, action, UNREAD_TABLE);
   if (messageSort) return { ...state, messageSort };
   return state;
 }
@@ -58,8 +62,8 @@ export function responsiblePartyPanelView(
     onFilterChange: (value) =>
       tools.dispatch({ type: 'responsible-party/filter-changed', value }),
     onRemediationSort: (key) =>
-      tools.dispatch(sortRequested('remediation', key)),
-    onMessageSort: (key) => tools.dispatch(sortRequested('unread', key)),
+      tools.dispatch(sortRequested(REMEDIATION_TABLE, key)),
+    onMessageSort: (key) => tools.dispatch(sortRequested(UNREAD_TABLE, key)),
     onOpenConversation: navigateToConversation
       ? (row) => {
           location.hash = conversationRouteFor(row);

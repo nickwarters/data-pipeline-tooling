@@ -2,11 +2,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
+import { fireEvent, getByRole } from './helpers/semantic-dom.js';
 
 installDom();
 
-const { createRouteSlice } =
-  await import('../src/pages/cora-responsible-party-dashboard.js');
+const {
+  createRouteSlice,
+  initialResponsiblePartyState,
+  responsiblePartyPanelView,
+} = await import('../src/pages/cora-responsible-party-dashboard.js');
 
 function context() {
   return /** @type {any} */ ({
@@ -116,4 +120,62 @@ test('Responsible Party reducer owns loaded rows, filters, and both table sorts'
   assert.equal(state.routes.responsibleParty.remediationSort?.dir, 'desc');
   assert.equal(state.routes.responsibleParty.messageSort?.dir, 'asc');
   assert.equal(slice.reducer(state, { type: 'ignored' }), state);
+});
+
+/** The panel needs one Case that is both remediation-outstanding and unread. */
+function panelState() {
+  return {
+    ...initialResponsiblePartyState('rp-1'),
+    cases: [
+      /** @type {any} */ ({
+        id: 'c1',
+        caseType: 'complaints',
+        title: 'c1',
+        status: 'In-progress',
+        assignedReviewer: 'reviewer',
+        responsibleParty: 'rp-1',
+        dueDate: '2026-01-01T00:00:00Z',
+        answers: {
+          q1: {
+            value: 'No',
+            remediationActions: [
+              { id: 'a1', text: 'Fix c1', completed: false },
+            ],
+          },
+        },
+        conversation: [
+          { author: 'reviewer', timestamp: '2026-02-01T00:00:00Z', text: 'hi' },
+        ],
+        notes: '',
+        completedAt: null,
+        etag: 'e',
+      }),
+    ],
+  };
+}
+
+test('#516 Responsible Party panel: clicking the remediation Due Date header dispatches its table sort action', () => {
+  /** @type {any[]} */
+  const actions = [];
+  const view = responsiblePartyPanelView(panelState(), {
+    dispatch: (/** @type {any} */ action) => actions.push(action),
+  });
+
+  fireEvent(getByRole(view, 'button', { name: 'Due Date' }), 'click');
+  assert.deepEqual(actions, [
+    { type: 'remediation-table/sort-requested', key: 'dueDate' },
+  ]);
+});
+
+test('#516 Responsible Party panel: clicking the unread Last message header dispatches its table sort action', () => {
+  /** @type {any[]} */
+  const actions = [];
+  const view = responsiblePartyPanelView(panelState(), {
+    dispatch: (/** @type {any} */ action) => actions.push(action),
+  });
+
+  fireEvent(getByRole(view, 'button', { name: 'Last message' }), 'click');
+  assert.deepEqual(actions, [
+    { type: 'unread-table/sort-requested', key: 'lastMessage' },
+  ]);
 });

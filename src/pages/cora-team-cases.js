@@ -14,6 +14,9 @@ import {
   UnknownCaseTypeError,
 } from '../../case-types/manifest.js';
 
+/** The one table name this page sorts by: used by both the view and the reducer. */
+const TABLE = 'team';
+
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../views/data-table.js').ColumnDescriptor<CaseRow>} CaseColumnDescriptor */
 /** @typedef {import('../views/data-table.js').TableSort} TableSort */
@@ -140,7 +143,7 @@ export function teamCasesView(state, tools) {
       rows: route.cases,
       columns: teamCasesColumns(route.caseTableColumns),
       sort: route.sort,
-      onSort: (key) => tools.dispatch(sortRequested('team', key)),
+      onSort: (key) => tools.dispatch(sortRequested(TABLE, key)),
       emptyMessage: 'No cases match the selected filters.',
       rowKey: (row) => `${row.caseType}:${row.id}`,
       rowHref: caseRouteFor,
@@ -188,7 +191,7 @@ export function createRouteSlice(
           caseTableColumns: action.caseTableColumns,
         });
       }
-      const sort = reduceTableSort(route.sort, action, 'team');
+      const sort = reduceTableSort(route.sort, action, TABLE);
       if (sort) return patchRoute(state, 'teamCases', { sort });
       return state;
     },

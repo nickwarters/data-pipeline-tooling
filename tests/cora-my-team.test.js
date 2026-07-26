@@ -329,3 +329,38 @@ test('my team reducer: an unhandled action returns the same state and chrome sur
   assert.strictEqual(failed.chrome, initial.chrome);
   assert.strictEqual(failed.routes.myTeam.rows, initial.routes.myTeam.rows);
 });
+
+test('#516 my team view: clicking a column header dispatches the workload table sort action', () => {
+  const slice = createRouteSlice({}, context(), {
+    fetchCases: async () => [],
+    now: () => new Date('2026-07-24T00:00:00.000Z'),
+  });
+  const loaded = slice.reducer(slice.initialState, {
+    type: 'workload/loaded',
+    rows: [
+      {
+        reviewerId: 'reviewer-a',
+        reviewer: 'reviewer-a',
+        countsByCaseType: { complaints: 2, conduct: 1 },
+        totalOutstanding: 3,
+        onHold: 1,
+        longestHoldDays: 4,
+        isTotal: false,
+      },
+    ],
+  });
+  /** @type {any[]} */
+  const actions = [];
+  const view = myTeamView(loaded, {
+    dispatch: (/** @type {any} */ action) => actions.push(action),
+    caseSources: sources,
+  });
+
+  fireEvent(
+    getByRole(view, 'button', { name: 'Longest hold (days)' }),
+    'click'
+  );
+  assert.deepEqual(actions, [
+    { type: 'workload-table/sort-requested', key: 'longestHoldDays' },
+  ]);
+});

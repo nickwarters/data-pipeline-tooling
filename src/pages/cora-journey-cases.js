@@ -9,6 +9,9 @@ import {
   sortRequested,
 } from '../views/data-table.js';
 
+/** The one table name this page sorts by: used by both the view and the reducer. */
+const TABLE = 'journey';
+
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 
 /**
@@ -58,7 +61,7 @@ export function journeyCasesView(state, tools) {
       rows: route.cases,
       columns: journeyCasesColumns(),
       sort: route.sort,
-      onSort: (key) => tools.dispatch(sortRequested('journey', key)),
+      onSort: (key) => tools.dispatch(sortRequested(TABLE, key)),
       emptyMessage: 'No cases of your Case Type(s) yet.',
       rowKey: (row) => `${row.caseType}:${row.id}`,
       rowHref: caseRouteFor,
@@ -86,7 +89,7 @@ export function createRouteSlice(
       if (action.type === 'cases/loaded') {
         return patchRoute(state, 'journeyCases', { cases: action.cases });
       }
-      const sort = reduceTableSort(route.sort, action, 'journey');
+      const sort = reduceTableSort(route.sort, action, TABLE);
       if (sort) return patchRoute(state, 'journeyCases', { sort });
       return state;
     },
