@@ -32,6 +32,28 @@ export function generalAnswerKey(fieldKey) {
   return `${GENERAL_ANSWER_PREFIX}${fieldKey}`;
 }
 
+/** @typedef {'before' | 'after'} GeneralQuestionsPlacement */
+
+/**
+ * Resolve where a Case Type's General Questions sit relative to its Question
+ * Groups. The single interpreter of `config.generalQuestionsPlacement` — the
+ * Review tab and the Summary roll-up must not read the raw config value, which
+ * is how the two used to normalise it differently (#522).
+ *
+ * Anything other than `'before'` resolves to `'after'`, including `undefined`:
+ * the default is after, and an invalid value must not produce a third layout.
+ * The coercion is deliberate and silent — a Case Type with a typo'd placement
+ * renders beneath the Question Groups rather than failing to load. If a third
+ * legal placement is ever added, `validateGeneralQuestions()` is where a loud
+ * load-time rejection would belong.
+ *
+ * @param {Pick<import('../sharepoint-client.js').CaseTypeConfig, 'generalQuestionsPlacement'> | null | undefined} config
+ * @returns {GeneralQuestionsPlacement}
+ */
+export function resolveGeneralQuestionsPlacement(config) {
+  return config?.generalQuestionsPlacement === 'before' ? 'before' : 'after';
+}
+
 /**
  * Load-time check on a Case Type's declared General Questions: every `key` is
  * unique (duplicates would silently share one answer) and every `type` is one

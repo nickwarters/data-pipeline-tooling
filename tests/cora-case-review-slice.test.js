@@ -2657,6 +2657,93 @@ test('CASE-4 view: the Summary rolls up the Reviewer’s General Question answer
   assert.doesNotMatch(panel?.textContent ?? '', /How was this reviewed\?/);
 });
 
+test('#522: the Review tab and the Summary put General Questions on the same side, for every placement value', () => {
+  // One resolver, two consumers. The interesting inputs are the two legal
+  // values, an absent one (the default), and an out-of-vocabulary one — which
+  // used to be the case where the two views could disagree, because the Review
+  // tab passed a typo straight through while the Summary read it as 'after'.
+  /** @param {unknown} placement */
+  const sidesFor = (placement) => {
+    const generalSnapshot = snapshot();
+    generalSnapshot.config.generalQuestions = [
+      { key: 'observations', label: 'Observations', type: 'textarea' },
+    ];
+    generalSnapshot.config.generalQuestionsPlacement = placement;
+    generalSnapshot.answers = {
+      ...generalSnapshot.answers,
+      'general:observations': { value: 'Nothing systemic here' },
+    };
+
+    const { container } = renderShippedState(
+      caseReviewReducer(createInitialCaseReviewState(chrome, 'popover'), {
+        type: 'case/load-finished',
+        snapshot: generalSnapshot,
+      })
+    );
+
+    /**
+     * Document-order position of the first element carrying `className`, or -1.
+     * @param {any} root
+     * @param {string} className
+     */
+    const positionOf = (root, className) => {
+      let seen = 0;
+      let found = -1;
+      /** @param {any} node */
+      const walk = (node) => {
+        for (const child of node.childNodes ?? []) {
+          seen += 1;
+          if (
+            found === -1 &&
+            String(child.className ?? '')
+              .split(' ')
+              .includes(className)
+          ) {
+            found = seen;
+          }
+          walk(child);
+        }
+      };
+      walk(root);
+      return found;
+    };
+
+    /**
+     * Which side of the anchor block the General Questions sit on, read from
+     * the rendered order rather than from any placement value.
+     * @param {string} panelId
+     * @param {string} generalClass
+     * @param {string} anchorClass
+     */
+    const side = (panelId, generalClass, anchorClass) => {
+      const panel = container.querySelector(`#case-panel-${panelId}`);
+      const general = positionOf(panel, generalClass);
+      const anchor = positionOf(panel, anchorClass);
+      assert.ok(general > 0, `${panelId} renders the General Questions`);
+      assert.ok(anchor > 0, `${panelId} renders the anchor block`);
+      return general < anchor ? 'before' : 'after';
+    };
+
+    return {
+      review: side(
+        'questions',
+        'cora-general-questions',
+        'cora-question-panel'
+      ),
+      summary: side(
+        'summary',
+        'cora-summary-general-questions',
+        'cora-summary-details'
+      ),
+    };
+  };
+
+  assert.deepEqual(sidesFor('before'), { review: 'before', summary: 'before' });
+  assert.deepEqual(sidesFor('after'), { review: 'after', summary: 'after' });
+  assert.deepEqual(sidesFor(undefined), { review: 'after', summary: 'after' });
+  assert.deepEqual(sidesFor('beneath'), { review: 'after', summary: 'after' });
+});
+
 test('#512 panel map: a tab switch keeps every panel mounted and its nodes identical', () => {
   const view = renderShippedState(
     caseReviewReducer(createInitialCaseReviewState(chrome, 'popover'), {

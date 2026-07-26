@@ -8,6 +8,7 @@ const {
   GENERAL_QUESTION_TYPES,
   validateGeneralQuestions,
   validateAnswerKeyNamespace,
+  resolveGeneralQuestionsPlacement,
 } = await import('../src/evaluators/general-questions.js');
 
 /** @typedef {import('../src/sharepoint-client.js').GeneralQuestionField} GeneralQuestionField */
@@ -77,5 +78,44 @@ test('a Question Definition id may not look like a namespaced key', () => {
         /** @type {any} */ ({ id: 'general:reviewChannel', text: 'Nope' }),
       ]),
     /contains ":", which is reserved/
+  );
+});
+
+test('the placement resolver returns the two legal values unchanged', () => {
+  assert.equal(
+    resolveGeneralQuestionsPlacement({ generalQuestionsPlacement: 'before' }),
+    'before'
+  );
+  assert.equal(
+    resolveGeneralQuestionsPlacement({ generalQuestionsPlacement: 'after' }),
+    'after'
+  );
+});
+
+test('an absent placement resolves to the documented default, after', () => {
+  assert.equal(resolveGeneralQuestionsPlacement(undefined), 'after');
+  assert.equal(resolveGeneralQuestionsPlacement(null), 'after');
+  assert.equal(resolveGeneralQuestionsPlacement({}), 'after');
+  assert.equal(
+    resolveGeneralQuestionsPlacement({ generalQuestionsPlacement: undefined }),
+    'after'
+  );
+});
+
+test('an out-of-vocabulary placement coerces to after rather than a third layout', () => {
+  // Deliberate (#522): a typo'd Case Type value renders beneath the Question
+  // Groups instead of failing to load. `validateGeneralQuestions()` is where a
+  // loud rejection would go if a third legal placement is ever added.
+  assert.equal(
+    resolveGeneralQuestionsPlacement(
+      /** @type {any} */ ({ generalQuestionsPlacement: 'BEFORE' })
+    ),
+    'after'
+  );
+  assert.equal(
+    resolveGeneralQuestionsPlacement(
+      /** @type {any} */ ({ generalQuestionsPlacement: 'top' })
+    ),
+    'after'
   );
 });

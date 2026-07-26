@@ -30,7 +30,7 @@ import { GENERAL_QUESTIONS_TITLE } from './general-questions-view.js';
  * @property {import('../../sharepoint-client.js').OutcomeOption[]} outcomeOptions
  * @property {Required<import('../../sharepoint-client.js').SectionLabels>} [sectionHeadings] Resolved section headings; defaults to the standard copy so the component stays usable standalone.
  * @property {import('../../sharepoint-client.js').GeneralQuestionField[]} [generalQuestions] The Case Type's General Questions, rolled up read-only. Display only — they reach no evaluator here either.
- * @property {'before'|'after'} [generalQuestionsPlacement] Which side of the configured Summary blocks the roll-up sits on; matches the Review tab's placement ('after' when absent).
+ * @property {import('../../evaluators/general-questions.js').GeneralQuestionsPlacement} [generalQuestionsPlacement] Which side of the configured Summary blocks the roll-up sits on. Already resolved by the caller via `resolveGeneralQuestionsPlacement()` (#522) — this view never sees the raw config value, so it cannot disagree with the Review tab. 'after' when absent, so the view stays usable standalone.
  */
 
 /**
@@ -72,9 +72,6 @@ export function summaryView(props) {
   if (props.caseRow) {
     children.push(renderKeyDates(props.caseRow));
     const general = renderGeneralQuestions(props);
-    // `generalQuestionsPlacement` is also interpreted by the Review tab
-    // (cora-case-review.js, where absent likewise means 'after') — keep the two
-    // in step, or hoist a shared resolver if a third consumer appears.
     const before = props.generalQuestionsPlacement === 'before';
     if (general && before) children.push(general);
     for (const section of props.summarySections) {

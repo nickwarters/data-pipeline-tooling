@@ -51,6 +51,7 @@ import {
 import { RemediationSection } from './remediation-view.js';
 import { RemediationTracking } from './remediation-tracking-view.js';
 import { remediationAudience } from '../../services/section-access.js';
+import { resolveGeneralQuestionsPlacement } from '../../evaluators/general-questions.js';
 
 /**
  * Everything a panel renderer is allowed to read. Assembled once per render by
@@ -121,10 +122,7 @@ function questionsPanel(snapshot, questionsView, onAnswer) {
       fields: snapshot.config?.generalQuestions ?? [],
       answers: snapshot.answers,
       access: snapshot.access.questions,
-      // `generalQuestionsPlacement` is also interpreted by the Summary roll-up
-      // (cora-case-review/summary-view.js) — keep the two in step, or hoist a
-      // shared resolver if a third consumer appears.
-      placement: snapshot.config?.generalQuestionsPlacement ?? 'after',
+      placement: resolveGeneralQuestionsPlacement(snapshot.config),
       onAnswer,
     }
   );
@@ -273,7 +271,7 @@ export const SECTION_PANELS = {
         outcomeOptions: config.outcomeOptions ?? [],
         sectionHeadings: snapshot.sectionHeadings,
         generalQuestions: config.generalQuestions ?? [],
-        generalQuestionsPlacement: config.generalQuestionsPlacement,
+        generalQuestionsPlacement: resolveGeneralQuestionsPlacement(config),
       })
     ),
 
