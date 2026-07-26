@@ -7,7 +7,13 @@ Date: 2026-07-25
 Accepted — amends [ADR-0024](./0024-remediation-tracking-tab.md)
 (per-action completion, Responsible Party `hidden`) and
 [ADR-0011](./0011-section-level-role-based-access.md) (the Role set and the
-Conversation's participants). The two-Section split,
+Conversation's participants). Itself amended by
+[ADR-0038](./0038-manager-fields-split-reporting-snapshot-vs-live-access-role.md):
+because this ADR gave the **Responsible Party Manager** Role `edit` on the
+Conversation, the Role is no longer resolved from the denormalised
+`responsiblePartyManager` field but live from the directory. `reviewerManager`
+is unaffected and keeps resolving from `assignedReviewerManager`, which ADR-0038
+redefines as a snapshot frozen at Reportable. The two-Section split,
 the single case-level `remediationDueDate` and the reportable-freeze lifecycle
 that ADR-0024 established are unchanged.
 
@@ -153,9 +159,11 @@ fetch is a worse failure than the access-denied panel they got before).
 
 A consequence worth stating: **Reviewer Manager and Responsible Party Manager now
 compose safely.** CONTEXT.md records a Maintainer convention that a user is one or
-the other, never both; with both Roles resolved from Case row fields and
+the other, never both; with both Roles resolved per Case and
 `remediationAudience` resolving reviewer-side-wins, no code depends on that
-convention any more.
+convention any more. ADR-0038 revisits the resolution sources — the Roles no
+longer share one — and decides that reconciliation machinery should not police
+the convention either.
 
 ## Amendment (2026-07, #502) — "carries remediation" has one definition, and free-form counts
 

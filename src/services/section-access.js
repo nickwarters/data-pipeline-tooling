@@ -406,11 +406,17 @@ export function resolveRoles(caseRow, userId, capabilities) {
   }
   // "Reviewer X is managed by Reviewer Manager Y" is denormalised onto the Case
   // row as `assignedReviewerManager` (CONTEXT.md), so the role is resolved from
-  // that field rather than from the platform-wide `Reviewer Managers` group —
-  // mirroring the Responsible Party Manager below. A manager therefore reads the
-  // Cases of the Reviewers they manage, not every Case of every Case Type
-  // (#499). It composes with whatever else the viewer is on this Case, and
-  // across the matrix observes exactly what a non-assigned Reviewer observes.
+  // that field rather than from the platform-wide `Reviewer Managers` group. A
+  // manager therefore reads the Cases of the Reviewers they manage, not every
+  // Case of every Case Type (#499). It composes with whatever else the viewer is
+  // on this Case, and across the matrix observes exactly what a non-assigned
+  // Reviewer observes.
+  //
+  // ADR-0038: this field is a *reporting snapshot* — current while the Case is
+  // In-progress, frozen at Reportable — and resolving a read-only Role from it
+  // is deliberate. It does NOT mirror the Responsible Party Manager below, which
+  // ADR-0038 moves to live directory resolution precisely because that Role
+  // carries `edit` on the Conversation.
   if (caseRow.assignedReviewerManager === userId) {
     roles.push('reviewerManager');
   }
@@ -421,6 +427,15 @@ export function resolveRoles(caseRow, userId, capabilities) {
   // denormalised onto the Case row (CONTEXT.md), so the Manager role is resolved
   // from the row field rather than group membership alone — mirroring how the
   // Responsible Party role is matched.
+  //
+  // ADR-0038 decides this is the WRONG authority for this Role and is to change:
+  // since ADR-0037 the Role carries `edit` on the Conversation, so a stale row
+  // leaves a former manager posting on a live thread. The Role is to be resolved
+  // live from the Case's Responsible Party's current manager (a single forward
+  // directory lookup on the load path the page already runs), failing closed if
+  // the lookup fails; the column is retained as a written record and as the
+  // query key a future Responsible Party Manager report would need. Not yet
+  // implemented — see ADR-0038 Consequences.
   if (caseRow.responsiblePartyManager === userId) {
     roles.push('responsiblePartyManager');
   }

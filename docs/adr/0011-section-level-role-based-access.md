@@ -2,9 +2,13 @@
 
 ## Status
 
-Accepted as amended by ADR-0016, ADR-0022, ADR-0026, ADR-0027, ADR-0032, and
+Accepted as amended by ADR-0016, ADR-0022, ADR-0026, ADR-0027, ADR-0032,
 ADR-0037 (which adds the `reviewerManager` Role and makes the **Responsible
-Party Manager** a Conversation participant). The global, code-owned
+Party Manager** a Conversation participant), and
+[ADR-0038](./0038-manager-fields-split-reporting-snapshot-vs-live-access-role.md)
+(which decides that the `responsiblePartyManager` Role is resolved **live** from
+the directory rather than from the denormalised Case row field, while
+`reviewerManager` keeps resolving from the row). The global, code-owned
 access-policy decision remains current.
 
 The case page renders five sections — **Questions**, **Conversation**, **Notes**, **Remediation**, **Outcome** — and a user's access to each is resolved by a global evaluator `(section, role, case) → 'edit' | 'read-only' | 'hidden'`. Roles are derived from the user's relationship to _this specific_ Case — **Assigned Reviewer**, **Other Reviewer** (in the Reviewers group but not assigned), **Responsible Party**, **Case Type Owner**, or **None** — not from group membership alone. The default access matrix is a single platform-level constant; Case Type modules opt sections out via an optional `sections` allow-list, but do not override individual cells. Multi-role users get the most-permissive mode across their roles (`edit > read-only > hidden`); a user with no applicable role renders a dedicated access-denied panel rather than an empty section layout.

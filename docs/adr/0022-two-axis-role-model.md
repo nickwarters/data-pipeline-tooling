@@ -146,7 +146,11 @@ ResponsibleParty-Managers and Maintainers span **every** source. Maintainers
 need this access to preview sample Cases while editing every Question Bank. Adviser and
 ResponsibleParty-Manager reads remain query-filtered by the Case row's
 Responsible Party or Responsible Party Manager field; broad list eligibility
-does not make those reads unscoped. This is resolved in exactly one place —
+does not make those reads unscoped. (In practice only the Adviser half of that
+sentence is built: there is no `responsiblePartyManager` predicate in
+`ListCasesFilter` and no Responsible Party Manager report — see
+[ADR-0038](./0038-manager-fields-split-reporting-snapshot-vs-live-access-role.md),
+which decides what that field is for.) This is resolved in exactly one place —
 `resolveCaseSources(userGroups)` (`src/setup/resolve-eligible-case-types.js`) — which
 returns `{ slug, listName, displayName }[]`. Every type requires a per-type
 group: no Case Type declares a blanket `Reviewers` in its `eligibleGroups`, so

@@ -160,6 +160,15 @@
  * at reportable, despite the `Completion` name) and are re-fed from a case-level
  * **Amended Outcome**, not from per-Answer overrides.
  *
+ * `assignedReviewerManager` and `responsiblePartyManager` denormalise two
+ * org-chart edges onto the row. They look alike and, per **ADR-0038**, are not:
+ * `assignedReviewerManager` is a **reporting snapshot** — the query key behind
+ * `#/team-cases` and `#/my-team`, current while `In-progress` and frozen at
+ * Reportable — while `responsiblePartyManager` is a written record whose Section
+ * access Role is to be resolved **live** from the directory, because since
+ * ADR-0037 that Role carries `edit` on the Conversation and a stale copy would
+ * leave a former manager posting on a live thread.
+ *
  * @typedef {{
  * id: string,
  * caseType: string,
