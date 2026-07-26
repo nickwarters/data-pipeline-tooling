@@ -868,6 +868,30 @@ test('dashboard reducer stores owner-summary state', () => {
   ]);
 });
 
+test('dashboard reducer returns the same state for an action no slice handles', () => {
+  const slice = createRouteSlice({}, context(capabilities()));
+
+  assert.strictEqual(
+    slice.reducer(slice.initialState, { type: 'nothing/here' }),
+    slice.initialState
+  );
+});
+
+test('dashboard reducer keeps chrome by reference across a patch', () => {
+  const ctx = context(capabilities());
+  const slice = createRouteSlice({}, ctx);
+  const next = slice.reducer(slice.initialState, {
+    type: 'reviewer-cases/loaded',
+    cases: [{ id: 'c1' }],
+  });
+
+  assert.strictEqual(next.chrome, slice.initialState.chrome);
+  assert.strictEqual(
+    next.routes.dashboard.actionCentre,
+    slice.initialState.routes.dashboard.actionCentre
+  );
+});
+
 test('dashboard reducer composes Controls, Action Centre, and Responsible Party transitions', () => {
   const ctx = context(
     capabilities({

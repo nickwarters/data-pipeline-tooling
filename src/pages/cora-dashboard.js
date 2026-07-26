@@ -1,5 +1,6 @@
 // @ts-check
 import { h } from '../lib/html.js';
+import { patchRoute } from '../core/route-state.js';
 import { caseRouteFor } from '../lib/case-route-links.js';
 import {
   Allocation,
@@ -476,160 +477,97 @@ export function createRouteSlice(
     reducer(/** @type {DashboardState} */ state, /** @type {any} */ action) {
       const route = state.routes.dashboard;
       if (action.type === 'reviewer-cases/loaded') {
-        return {
-          ...state,
-          routes: { dashboard: { ...route, reviewerCases: action.cases } },
-        };
+        return patchRoute(state, 'dashboard', { reviewerCases: action.cases });
       }
       if (action.type === 'appeals/loaded') {
-        return {
-          ...state,
-          routes: { dashboard: { ...route, appealCases: action.cases } },
-        };
+        return patchRoute(state, 'dashboard', { appealCases: action.cases });
       }
       if (action.type === 'owner-summaries/loaded') {
-        return {
-          ...state,
-          routes: {
-            dashboard: { ...route, ownerSummaries: action.summaries },
-          },
-        };
+        return patchRoute(state, 'dashboard', {
+          ownerSummaries: action.summaries,
+        });
       }
       if (action.type === 'allocation/availability-changed') {
-        return {
-          ...state,
-          routes: {
-            dashboard: {
-              ...route,
-              allocationEmpty: action.isEmpty,
-              allocationAtCapacity: action.isAtCapacity,
-            },
-          },
-        };
+        return patchRoute(state, 'dashboard', {
+          allocationEmpty: action.isEmpty,
+          allocationAtCapacity: action.isAtCapacity,
+        });
       }
       if (action.type === 'kpis/loaded') {
-        return {
-          ...state,
-          routes: {
-            dashboard: {
-              ...route,
-              kpiLanes: action.lanes,
-              openKpiLanes: new Set(
-                action.lanes
-                  .filter((/** @type {KpiLane} */ lane) => lane.defaultOpen)
-                  .map((/** @type {KpiLane} */ lane) => lane.role)
-              ),
-              expandedKpiTiles: new Set(
-                action.lanes.flatMap((/** @type {KpiLane} */ lane) =>
-                  lane.tiles
-                    .filter((tile) => tile.defaultExpanded)
-                    .map((tile) => `${lane.role}:${tile.key}`)
-                )
-              ),
-            },
-          },
-        };
+        return patchRoute(state, 'dashboard', {
+          kpiLanes: action.lanes,
+          openKpiLanes: new Set(
+            action.lanes
+              .filter((/** @type {KpiLane} */ lane) => lane.defaultOpen)
+              .map((/** @type {KpiLane} */ lane) => lane.role)
+          ),
+          expandedKpiTiles: new Set(
+            action.lanes.flatMap((/** @type {KpiLane} */ lane) =>
+              lane.tiles
+                .filter((tile) => tile.defaultExpanded)
+                .map((tile) => `${lane.role}:${tile.key}`)
+            )
+          ),
+        });
       }
       if (action.type === 'kpi/lane-toggled') {
         const open = new Set(route.openKpiLanes);
         if (open.has(action.role)) open.delete(action.role);
         else open.add(action.role);
-        return {
-          ...state,
-          routes: { dashboard: { ...route, openKpiLanes: open } },
-        };
+        return patchRoute(state, 'dashboard', { openKpiLanes: open });
       }
       if (action.type === 'kpi/tile-toggled') {
         const id = `${action.role}:${action.key}`;
         const expanded = new Set(route.expandedKpiTiles);
         if (expanded.has(id)) expanded.delete(id);
         else expanded.add(id);
-        return {
-          ...state,
-          routes: { dashboard: { ...route, expandedKpiTiles: expanded } },
-        };
+        return patchRoute(state, 'dashboard', { expandedKpiTiles: expanded });
       }
       if (action.type === 'reviewer-table/sort-requested') {
-        return {
-          ...state,
-          routes: {
-            dashboard: {
-              ...route,
-              reviewerSort: nextTableSort(route.reviewerSort, action.key),
-            },
-          },
-        };
+        return patchRoute(state, 'dashboard', {
+          reviewerSort: nextTableSort(route.reviewerSort, action.key),
+        });
       }
       if (action.type === 'reviewer-table/filter-text-changed') {
-        return {
-          ...state,
-          routes: {
-            dashboard: { ...route, reviewerFilterText: action.value },
-          },
-        };
+        return patchRoute(state, 'dashboard', {
+          reviewerFilterText: action.value,
+        });
       }
       if (action.type === 'reviewer-table/status-filter-changed') {
-        return {
-          ...state,
-          routes: {
-            dashboard: { ...route, reviewerStatusFilter: action.value },
-          },
-        };
+        return patchRoute(state, 'dashboard', {
+          reviewerStatusFilter: action.value,
+        });
       }
       if (action.type === 'appeals-table/sort-requested') {
-        return {
-          ...state,
-          routes: {
-            dashboard: {
-              ...route,
-              appealSort: nextTableSort(route.appealSort, action.key),
-            },
-          },
-        };
+        return patchRoute(state, 'dashboard', {
+          appealSort: nextTableSort(route.appealSort, action.key),
+        });
       }
       if (action.type === 'action-centre/scope-changed') {
-        return {
-          ...state,
-          routes: {
-            dashboard: {
-              ...route,
-              actionCentre: actionCentreScopeState(
-                route.actionCentre,
-                action.value
-              ),
-            },
-          },
-        };
+        return patchRoute(state, 'dashboard', {
+          actionCentre: actionCentreScopeState(
+            route.actionCentre,
+            action.value
+          ),
+        });
       }
       if (action.type === 'action-centre/counts-loaded') {
-        return {
-          ...state,
-          routes: {
-            dashboard: {
-              ...route,
-              actionCentre: {
-                ...route.actionCentre,
-                counts: action.counts,
-                peeks: action.peeks,
-                headline: action.headline,
-              },
-            },
+        return patchRoute(state, 'dashboard', {
+          actionCentre: {
+            ...route.actionCentre,
+            counts: action.counts,
+            peeks: action.peeks,
+            headline: action.headline,
           },
-        };
+        });
       }
       if (action.type === 'action-centre/group-toggled') {
         const expanded = new Set(route.actionCentre.expanded);
         if (expanded.has(action.reasonId)) expanded.delete(action.reasonId);
         else expanded.add(action.reasonId);
-        return {
-          ...state,
-          routes: {
-            dashboard: {
-              ...route,
-              actionCentre: { ...route.actionCentre, expanded },
-            },
-          },
-        };
+        return patchRoute(state, 'dashboard', {
+          actionCentre: { ...route.actionCentre, expanded },
+        });
       }
       if (action.type === 'action-centre/page-loaded') {
         const existing =
@@ -637,37 +575,24 @@ export function createRouteSlice(
             ? []
             : (route.actionCentre.pages[action.reasonId] ?? []);
         const rows = [...existing, ...action.rows];
-        return {
-          ...state,
-          routes: {
-            dashboard: {
-              ...route,
-              actionCentre: {
-                ...route.actionCentre,
-                pages: {
-                  ...route.actionCentre.pages,
-                  [action.reasonId]: rows,
-                },
-                counts: action.exhausted
-                  ? {
-                      ...route.actionCentre.counts,
-                      [action.reasonId]: rows.length,
-                    }
-                  : route.actionCentre.counts,
-              },
-            },
+        return patchRoute(state, 'dashboard', {
+          actionCentre: {
+            ...route.actionCentre,
+            pages: { ...route.actionCentre.pages, [action.reasonId]: rows },
+            counts: action.exhausted
+              ? { ...route.actionCentre.counts, [action.reasonId]: rows.length }
+              : route.actionCentre.counts,
           },
-        };
+        });
       }
+      // The sub-reducer fall-through: `reduceResponsibleParty` signals "nothing
+      // changed" by reference, and the dashboard must relay that identity.
       const responsibleParty = reduceResponsibleParty(
         route.responsibleParty,
         action
       );
       if (responsibleParty !== route.responsibleParty) {
-        return {
-          ...state,
-          routes: { dashboard: { ...route, responsibleParty } },
-        };
+        return patchRoute(state, 'dashboard', { responsibleParty });
       }
       return state;
     },
