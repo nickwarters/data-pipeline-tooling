@@ -33,6 +33,35 @@ Actions use `domain/event` names such as `query/changed` or `case/saved`.
 microtask and is coalesced: multiple dispatches in the same turn cause one
 render with the latest state.
 
+## Writing a reducer branch
+
+A branch that changes route state uses `patchRoute` from `core/route-state.js`
+rather than spelling the `{ ...state, routes: { name: { ...route, … } } }` nest
+by hand. It preserves `chrome`, sibling routes, and every sibling field of the
+patched route, so a forgotten spread cannot silently drop state:
+
+```js
+if (action.type === 'cases/loaded') {
+  return patchRoute(state, 'dashboard', { reviewerCases: action.cases });
+}
+```
+
+The Case Review page's third level has `patchSnapshot(state, patch)`, which
+patches `routes.caseReview.snapshot` and returns the same state when no
+snapshot is loaded.
+
+These are plain functions a reducer calls — not middleware, not a
+`createSlice`-style framework, and not a mutable or proxy draft. Two branch
+kinds keep their hand-written shape:
+
+- **Identity-returning guards.** When nothing changed, `return state` — the same
+  object reference is what stops a re-render. `patchRoute` always allocates, so
+  a guard converted to a patch becomes a re-render storm that no unit test sees.
+  Assert these with `assert.strictEqual(reducer(state, action), state)`.
+- **Sub-reducer delegation.** A slice reducer that signals "nothing changed" by
+  returning its input is compared by reference; relay that identity, and patch
+  only inside the changed branch.
+
 Views are pure synchronous functions: state in, DOM tree out, callbacks dispatch
 actions back. **Views never await.** They do not import `SaveQueue` or a
 `SharePointClient`, make requests, debounce work, or write state directly.

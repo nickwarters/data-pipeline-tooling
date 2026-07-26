@@ -155,6 +155,8 @@ src/
     store.js                    # single route-local store: dispatch/reducer, coalesced render — CORE-3 (#405)
     memo.js                     # per-view memo cache, keyed by position, cleared on unmount — CORE-4 (#406)
     store-route.js               # adapts a store-driven route module to the Router handler shape — CORE-6 (#407)
+    route-state.js              # patchRoute/patchSnapshot: the immutable route-slice patch
+                                #   reducers call instead of respelling the nest (#518)
 
   actions/                      # effects: async work reached only via dispatch
     case-actions.js             # persistence effect example: SharePointClient + SaveQueue re-entering via dispatch
