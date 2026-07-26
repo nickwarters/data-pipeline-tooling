@@ -428,3 +428,47 @@ test('completionPatch: refuses the final close while a remediation row is unreso
     null
   );
 });
+
+test('free-form remediation alone sends the Case down the actions path (#502)', () => {
+  // One definition of "carries remediation", shared with the Remediation tab:
+  // ≥1 selected Remediation Action *or* non-empty free-form text (ADR-0037).
+  const answers = {
+    q1: { value: 'No', freeFormRemediation: 'Call the customer back' },
+  };
+  const patch = completionPatch({
+    machine: machine(),
+    caseRow: CASE_ROW,
+    catalogue: [],
+    answers,
+    allAnswered: true,
+    computeOutcome: () => ({ outcome: 'fail' }),
+    exportHash: null,
+  });
+
+  assert.equal(patch?.status, 'Actions In Progress');
+  assert.equal(patch?.hadRemediation, true);
+  assert.equal(typeof patch?.remediationDueDate, 'string');
+
+  const control = completionControl({
+    machine: machine(),
+    caseRow: CASE_ROW,
+    catalogue: [],
+    answers,
+    allAnswered: true,
+  });
+  assert.equal(control.label, 'Send Actions');
+});
+
+test('whitespace-only free-form remediation is not remediation (#502)', () => {
+  const answers = { q1: { value: 'No', freeFormRemediation: '   ' } };
+  const patch = completionPatch({
+    machine: machine(),
+    caseRow: CASE_ROW,
+    catalogue: [],
+    answers,
+    allAnswered: true,
+    computeOutcome: () => ({ outcome: 'fail' }),
+    exportHash: null,
+  });
+  assert.equal(patch?.status, 'Completed');
+});

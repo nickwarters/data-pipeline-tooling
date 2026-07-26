@@ -24,6 +24,11 @@ import {
   REMEDIATION_SLA_WORKING_DAYS,
 } from '../config/working-days.js';
 import { CASE_STATUS } from './case-statuses.js';
+// The one definition of "this Case carries remediation" (#502). Imported from
+// its leaf home rather than the `remediation-status.js` seam so the lifecycle
+// model does not pull the applicability graph and failure rules in behind it —
+// the same reason `services/section-access.js` imports the leaf.
+import { hasRemediation } from '../evaluators/answer-remediation.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').CurrentUser} CurrentUser */
@@ -140,9 +145,7 @@ export class CaseMachine {
     const fields = {};
     if (computeOutcome && answers) {
       fields.outcomeAtCompletion = computeOutcome(answers).outcome;
-      fields.hadRemediation = Object.values(answers).some(
-        (a) => (a.remediationActions?.length ?? 0) > 0
-      );
+      fields.hadRemediation = hasRemediation(answers);
       fields.effectiveOutcome = fields.outcomeAtCompletion;
       fields.effectiveHadRemediation = fields.hadRemediation;
       fields.outcomeOverridden = false;

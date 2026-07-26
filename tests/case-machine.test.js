@@ -207,6 +207,16 @@ test('CaseMachine no-actions completion stamps reportable and completed together
   assert.equal(Object.hasOwn(fields, 'remediationDueDate'), false);
 });
 
+test('CaseMachine snapshots hadRemediation from free-form remediation too (#502)', () => {
+  const fields = machineFor('In-progress').transitionToActionsInProgress(
+    () => ({ outcome: 'fail' }),
+    { 'q-welcome': { value: 'No', freeFormRemediation: 'Call back' } },
+    null
+  );
+  assert.equal(fields.hadRemediation, true);
+  assert.equal(fields.effectiveHadRemediation, true);
+});
+
 test('CaseMachine stamps every lifecycle timestamp from the injected clock (#511)', () => {
   const now = () => new Date('2026-07-23T09:30:00.000Z');
   /** @param {'In-progress'|'Actions In Progress'} status */

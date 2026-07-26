@@ -157,6 +157,42 @@ the other, never both; with both Roles resolved from Case row fields and
 `remediationAudience` resolving reviewer-side-wins, no code depends on that
 convention any more.
 
+## Amendment (2026-07, #502) — "carries remediation" has one definition, and free-form counts
+
+This ADR defined a remediation row as an Answer with "≥1 selected Remediation
+Action **or** non-empty free-form remediation", and `answerRemediation` /
+`hasRemediation` implement exactly that. The **Send Actions** fork did not.
+`hasRemediationActions` in `completion-actions.js` counted only
+`remediationActions`, and `CaseMachine._reportableSnapshot` stamped
+`hadRemediation` the same narrow way.
+
+The consequence was a Case whose only remediation was free-form text going
+**straight to `Completed`**: never reportable-with-actions, never stamped with a
+`remediationDueDate`, and the Responsible Party never asked to do the thing the
+Reviewer had written down for them — while the Remediation tab, had it been
+reachable, would have listed that very row.
+
+**Decision. Free-form remediation counts as remediation, and there is one
+predicate.** `hasRemediation` (in `evaluators/answer-remediation.js`, the leaf
+that already owns the concept) is now the single definition. The two rival
+copies are **deleted**: `hasRemediationActions` is gone from
+`completion-actions.js`, and `CaseMachine` calls the leaf. Adding the free-form
+check in a second place would have recreated the split it was meant to close.
+
+The alternative — narrowing `answerRemediation` so free-form did _not_ count —
+was rejected: it would silently drop rows the Remediation tab renders today,
+and it contradicts what a Reviewer typing into the box plainly means.
+
+**This changes lifecycle behaviour, deliberately.** A Case whose only
+remediation is free-form used to close in one click; it now goes to
+`Actions In Progress`, acquires the case-level `remediationDueDate` (+10 working
+days) and its SLA, and closes only once the Reviewer resolves the row on the
+Remediation tab. That is the intended effect, not a side effect: such a Case
+always _had_ outstanding remediation, and the old fork simply did not see it.
+`hadRemediation` / `effectiveHadRemediation` widen with it, so reporting counts
+these Cases as having had remediation from now on. Cases already `Completed` are
+frozen and are not revisited.
+
 ## Considered options
 
 - **Keep per-action resolution and add an `actions`-typed capture field to every

@@ -1,17 +1,13 @@
 // @ts-check
 
-import { remediationComplete } from '../../evaluators/remediation-status.js';
+import {
+  hasRemediation,
+  remediationComplete,
+} from '../../evaluators/remediation-status.js';
 import { navigateTo } from '../../lib/navigate.js';
 
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
-
-/** @param {Record<string, Answer>} answers */
-export function hasRemediationActions(answers) {
-  return Object.values(answers).some(
-    (answer) => (answer.remediationActions?.length ?? 0) > 0
-  );
-}
 
 /**
  * The final-complete gate on the actions path: the Assigned Reviewer may close
@@ -74,10 +70,14 @@ export function completionControl(input) {
     visible: readyToSend || canClose || gated,
     disabled: gated,
     // Once the actions are sent there is nothing left to send, so the label is
-    // the close either way; before that, selected actions make it the send.
+    // the close either way; before that, remediation makes it the send.
+    // "Carries remediation" is `hasRemediation` — the *same* predicate the
+    // Remediation tab's rows are built from, so free-form text the Reviewer
+    // typed counts exactly as a ticked action does (#502). A second, narrower
+    // definition here is what let a free-form-only Case close straight out.
     label:
       input.machine?.mayResolveRemediation !== true &&
-      hasRemediationActions(input.answers)
+      hasRemediation(input.answers)
         ? 'Send Actions'
         : 'Complete Case',
     reason: gated ? REMEDIATION_GATE_REASON : null,
@@ -115,7 +115,7 @@ export function completionPatch(input) {
   ) {
     return null;
   }
-  const transition = hasRemediationActions(input.answers)
+  const transition = hasRemediation(input.answers)
     ? machine.transitionToActionsInProgress
     : machine.transitionToCompleted;
   const transitionFields =
