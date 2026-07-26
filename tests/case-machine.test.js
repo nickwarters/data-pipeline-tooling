@@ -48,17 +48,12 @@ const EMPTY_CONFIG = {
 /** @type {import('../src/sharepoint-client.js').CaseTypeConfig} */
 const ATTRIBUTE_CONFIG = { ...EMPTY_CONFIG, attributeFailures: true };
 
-/** @type {import('../src/sharepoint-client.js').CaseTypeConfig} */
-const ACTIONS_CONFIG = {
-  ...EMPTY_CONFIG,
-  captureGroups: [
-    {
-      key: 'g',
-      label: 'G',
-      fields: [{ key: 'acts', label: 'Acts', type: 'actions' }],
-    },
-  ],
-};
+// The Remediation Section used to be gated on a Case Type declaring an
+// `actions`-typed Issue Capture Field. ADR-0037 moved tracking to
+// `answer.remediationStatus` and #497 made `'actions'` undeclarable, so the
+// remediation gate is exercised against a Case Type with no capture groups at
+// all — which is every real Case Type.
+const ACTIONS_CONFIG = EMPTY_CONFIG;
 
 /**
  * @param {'In-progress'|'Actions In Progress'|'Completed'} status

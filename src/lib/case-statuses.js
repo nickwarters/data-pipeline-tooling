@@ -9,8 +9,13 @@
  * Scope: this module covers Case row lifecycle status only. Other literal
  * families that happen to reuse the word "status" are separate domain
  * concepts and are out of scope:
- * - `RemediationAction.status` (`'pending' | 'complete' | 'cancelled'`),
- *   see `src/evaluators/remediation-actions.js` / `src/sharepoint-client.js`.
+ * - `RemediationAction.status` (`'pending' | 'complete' | 'cancelled'`) — the
+ *   retired per-action record, see `src/sharepoint-client.js`. Its evaluator was
+ *   deleted by ADR-0024's #497 amendment; only the typedef survives, for blobs
+ *   persisted under the old shape.
+ * - `RemediationStatus.status` (`'complete' | 'partial' | 'cancelled'`) — the
+ *   live question-level Remediation Resolution, see
+ *   `src/evaluators/remediation-status.js`.
  * - Team Cases filter status (`'overdue' | 'outstanding' | 'completed' | null`),
  *   see `src/services/team-cases-params.js`.
  * - `SaveQueue`'s own `'conflict'` status, see `src/services/save-queue.js`.

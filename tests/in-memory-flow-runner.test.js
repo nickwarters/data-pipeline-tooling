@@ -122,145 +122,115 @@ test('in-memory flow runner preserves list-scoped case state when the route case
 });
 
 test('in-memory flow runner completes the remediation loop through Send Actions and final completion', async () => {
-  const originalCaptureGroups = exampleReviewConfig.captureGroups;
-  exampleReviewConfig.captureGroups = [
-    ...(originalCaptureGroups ?? []),
-    {
-      key: 'actions',
-      label: 'Actions',
-      collapsed: false,
-      fields: [{ key: 'sentActions', label: 'Actions', type: 'actions' }],
-    },
-  ];
-  try {
-    const snapshot = await runFlowFixture({
-      state: {
-        lists: {
-          'Cases-ExampleReview': [
-            {
-              ...CASE_ROW,
-              answers: {
-                'q-needs': {
-                  value: 'No',
-                  capture: {
-                    sentActions: [
-                      { id: 'sent-1', text: 'Coach agent', status: 'pending' },
-                    ],
-                  },
+  const snapshot = await runFlowFixture({
+    state: {
+      lists: {
+        'Cases-ExampleReview': [
+          {
+            ...CASE_ROW,
+            answers: {
+              'q-needs': {
+                value: 'No',
+                capture: {
+                  sentActions: [
+                    { id: 'sent-1', text: 'Coach agent', status: 'pending' },
+                  ],
                 },
               },
             },
-          ],
-        },
-      },
-      scenario: {
-        persona: 'reviewer',
-        actions: [
-          {
-            type: 'loadCasePage',
-            caseId: 'case-flow-1',
-            caseType: 'example-review',
           },
-          { type: 'answer', questionId: 'q-welcome', value: 'Yes' },
-          { type: 'answer', questionId: 'q-channel', value: 'Phone' },
-          { type: 'answer', questionId: 'q-products', value: ['Account'] },
-          {
-            type: 'captureIssue',
-            questionId: 'q-needs',
-            fieldKey: 'rootCause',
-            value: 'Reviewer missed the evidence.',
-          },
-          {
-            type: 'freeFormRemediation',
-            questionId: 'q-needs',
-            value: 'Coach the reviewer.',
-          },
-          {
-            type: 'selectRemediationAction',
-            questionId: 'q-needs',
-            action: {
-              id: 'q-needs-ra-0',
-              text: 'Retrain agent on needs-identification protocol.',
-            },
-            selected: false,
-          },
-          {
-            type: 'selectRemediationAction',
-            questionId: 'q-needs',
-            action: {
-              id: 'q-needs-ra-0',
-              text: 'Retrain agent on needs-identification protocol.',
-            },
-          },
-          { type: 'clickCompleteCase' },
-          {
-            type: 'loadCasePage',
-            caseId: 'case-flow-1',
-            caseType: 'example-review',
-          },
-          {
-            type: 'setRemediationStatus',
-            questionId: 'q-needs',
-            status: 'complete',
-          },
-          {
-            type: 'loadCasePage',
-            caseId: 'case-flow-1',
-            caseType: 'example-review',
-          },
-          { type: 'clickCompleteCase' },
         ],
       },
-    });
-
-    const row = snapshot.lists['Cases-ExampleReview'].find(
-      (candidate) => candidate.id === 'case-flow-1'
-    );
-    assert.ok(row);
-    assert.equal(row.status, 'Completed');
-    assert.equal(row.outcomeAtCompletion, 'fail');
-    assert.equal(row.hadRemediation, true);
-    assert.ok(
-      row.remediationDueDate,
-      'Send Actions stores the working-day SLA'
-    );
-    assert.ok(
-      row.completedAt,
-      'the second lifecycle transition closes the Case'
-    );
-    // The persisted Answer shape is the contract (ADR-0007 / ADR-0013): moving
-    // the write path to the store must be invisible to a stored Case (#510).
-    assert.deepEqual(row.answers['q-needs'], {
-      value: 'No',
-      capture: {
-        sentActions: [{ id: 'sent-1', text: 'Coach agent', status: 'pending' }],
-        rootCause: 'Reviewer missed the evidence.',
-      },
-      freeFormRemediation: 'Coach the reviewer.',
-      remediationActions: [
+    },
+    scenario: {
+      persona: 'reviewer',
+      actions: [
         {
-          id: 'q-needs-ra-0',
-          text: 'Retrain agent on needs-identification protocol.',
+          type: 'loadCasePage',
+          caseId: 'case-flow-1',
+          caseType: 'example-review',
         },
+        { type: 'answer', questionId: 'q-welcome', value: 'Yes' },
+        { type: 'answer', questionId: 'q-channel', value: 'Phone' },
+        { type: 'answer', questionId: 'q-products', value: ['Account'] },
+        {
+          type: 'captureIssue',
+          questionId: 'q-needs',
+          fieldKey: 'rootCause',
+          value: 'Reviewer missed the evidence.',
+        },
+        {
+          type: 'freeFormRemediation',
+          questionId: 'q-needs',
+          value: 'Coach the reviewer.',
+        },
+        {
+          type: 'selectRemediationAction',
+          questionId: 'q-needs',
+          action: {
+            id: 'q-needs-ra-0',
+            text: 'Retrain agent on needs-identification protocol.',
+          },
+          selected: false,
+        },
+        {
+          type: 'selectRemediationAction',
+          questionId: 'q-needs',
+          action: {
+            id: 'q-needs-ra-0',
+            text: 'Retrain agent on needs-identification protocol.',
+          },
+        },
+        { type: 'clickCompleteCase' },
+        {
+          type: 'loadCasePage',
+          caseId: 'case-flow-1',
+          caseType: 'example-review',
+        },
+        {
+          type: 'setRemediationStatus',
+          questionId: 'q-needs',
+          status: 'complete',
+        },
+        {
+          type: 'loadCasePage',
+          caseId: 'case-flow-1',
+          caseType: 'example-review',
+        },
+        { type: 'clickCompleteCase' },
       ],
-      remediationStatus: { status: 'complete' },
-    });
-  } finally {
-    exampleReviewConfig.captureGroups = originalCaptureGroups;
-  }
+    },
+  });
+
+  const row = snapshot.lists['Cases-ExampleReview'].find(
+    (candidate) => candidate.id === 'case-flow-1'
+  );
+  assert.ok(row);
+  assert.equal(row.status, 'Completed');
+  assert.equal(row.outcomeAtCompletion, 'fail');
+  assert.equal(row.hadRemediation, true);
+  assert.ok(row.remediationDueDate, 'Send Actions stores the working-day SLA');
+  assert.ok(row.completedAt, 'the second lifecycle transition closes the Case');
+  // The persisted Answer shape is the contract (ADR-0007 / ADR-0013): moving
+  // the write path to the store must be invisible to a stored Case (#510).
+  assert.deepEqual(row.answers['q-needs'], {
+    value: 'No',
+    capture: {
+      sentActions: [{ id: 'sent-1', text: 'Coach agent', status: 'pending' }],
+      rootCause: 'Reviewer missed the evidence.',
+    },
+    freeFormRemediation: 'Coach the reviewer.',
+    remediationActions: [
+      {
+        id: 'q-needs-ra-0',
+        text: 'Retrain agent on needs-identification protocol.',
+      },
+    ],
+    remediationStatus: { status: 'complete' },
+  });
 });
 
 test('in-memory flow runner completes allocate, review, remediate, appeal, and amend lifecycle', async () => {
-  const originalCaptureGroups = exampleReviewConfig.captureGroups;
-  exampleReviewConfig.captureGroups = [
-    ...(originalCaptureGroups ?? []),
-    {
-      key: 'actions',
-      label: 'Actions',
-      collapsed: false,
-      fields: [{ key: 'sentActions', label: 'Actions', type: 'actions' }],
-    },
-  ];
   const noCapabilities = {
     isReviewer: false,
     listAccessCaseTypes: [],
@@ -273,122 +243,118 @@ test('in-memory flow runner completes allocate, review, remediate, appeal, and a
     isMaintainer: false,
     isVisitor: false,
   };
-  try {
-    const snapshot = await runFlowFixture({
-      state: {
-        lists: {
-          'Cases-ExampleReview': [
-            {
-              ...CASE_ROW,
-              assignedReviewer: '',
-              answers: {
-                'q-needs': {
-                  value: 'No',
-                  capture: {
-                    sentActions: [
-                      { id: 'sent-1', text: 'Coach agent', status: 'pending' },
-                    ],
-                  },
+  const snapshot = await runFlowFixture({
+    state: {
+      lists: {
+        'Cases-ExampleReview': [
+          {
+            ...CASE_ROW,
+            assignedReviewer: '',
+            answers: {
+              'q-needs': {
+                value: 'No',
+                capture: {
+                  sentActions: [
+                    { id: 'sent-1', text: 'Coach agent', status: 'pending' },
+                  ],
                 },
               },
             },
-          ],
-        },
-      },
-      scenario: {
-        persona: 'reviewer',
-        actions: [
-          {
-            type: 'allocateCase',
-            caseId: 'case-flow-1',
-            caseType: 'example-review',
-            reviewerId: 'user-reviewer',
-          },
-          {
-            type: 'loadCasePage',
-            caseId: 'case-flow-1',
-            caseType: 'example-review',
-          },
-          { type: 'answer', questionId: 'q-welcome', value: 'Yes' },
-          { type: 'answer', questionId: 'q-channel', value: 'Phone' },
-          { type: 'answer', questionId: 'q-products', value: ['Account'] },
-          {
-            type: 'selectRemediationAction',
-            questionId: 'q-needs',
-            action: {
-              id: 'q-needs-ra-0',
-              text: 'Retrain agent on needs-identification protocol.',
-            },
-          },
-          { type: 'clickCompleteCase' },
-          {
-            type: 'loadCasePage',
-            caseId: 'case-flow-1',
-            caseType: 'example-review',
-          },
-          {
-            type: 'setRemediationStatus',
-            questionId: 'q-needs',
-            status: 'complete',
-          },
-          {
-            type: 'loadCasePage',
-            caseId: 'case-flow-1',
-            caseType: 'example-review',
-          },
-          { type: 'clickCompleteCase' },
-          {
-            type: 'loadCasePage',
-            caseId: 'case-flow-1',
-            caseType: 'example-review',
-            currentUserId: 'user-owner',
-            capabilities: {
-              ...noCapabilities,
-              ownedJourneyCaseTypes: ['example-review'],
-            },
-          },
-          {
-            type: 'raiseAppeal',
-            actorId: 'user-owner',
-            rationale: 'The completed outcome is too severe.',
-            citedAnswerKeys: ['q-needs'],
-          },
-          {
-            type: 'loadCasePage',
-            caseId: 'case-flow-1',
-            caseType: 'example-review',
-            currentUserId: 'user-controls',
-            capabilities: { ...noCapabilities, isControls: true },
-          },
-          {
-            type: 'resolveAppeal',
-            actorId: 'user-controls',
-            verdict: 'agreed',
-            rationale: 'The evidence supports the appeal.',
-            outcome: 'pass',
-            justification: 'Corrected after Controls review.',
           },
         ],
       },
-    });
+    },
+    scenario: {
+      persona: 'reviewer',
+      actions: [
+        {
+          type: 'allocateCase',
+          caseId: 'case-flow-1',
+          caseType: 'example-review',
+          reviewerId: 'user-reviewer',
+        },
+        {
+          type: 'loadCasePage',
+          caseId: 'case-flow-1',
+          caseType: 'example-review',
+        },
+        { type: 'answer', questionId: 'q-welcome', value: 'Yes' },
+        { type: 'answer', questionId: 'q-channel', value: 'Phone' },
+        { type: 'answer', questionId: 'q-products', value: ['Account'] },
+        {
+          type: 'selectRemediationAction',
+          questionId: 'q-needs',
+          action: {
+            id: 'q-needs-ra-0',
+            text: 'Retrain agent on needs-identification protocol.',
+          },
+        },
+        { type: 'clickCompleteCase' },
+        {
+          type: 'loadCasePage',
+          caseId: 'case-flow-1',
+          caseType: 'example-review',
+        },
+        {
+          type: 'setRemediationStatus',
+          questionId: 'q-needs',
+          status: 'complete',
+        },
+        {
+          type: 'loadCasePage',
+          caseId: 'case-flow-1',
+          caseType: 'example-review',
+        },
+        { type: 'clickCompleteCase' },
+        {
+          type: 'loadCasePage',
+          caseId: 'case-flow-1',
+          caseType: 'example-review',
+          currentUserId: 'user-owner',
+          capabilities: {
+            ...noCapabilities,
+            ownedJourneyCaseTypes: ['example-review'],
+          },
+        },
+        {
+          type: 'raiseAppeal',
+          actorId: 'user-owner',
+          rationale: 'The completed outcome is too severe.',
+          citedAnswerKeys: ['q-needs'],
+        },
+        {
+          type: 'loadCasePage',
+          caseId: 'case-flow-1',
+          caseType: 'example-review',
+          currentUserId: 'user-controls',
+          capabilities: { ...noCapabilities, isControls: true },
+        },
+        {
+          type: 'resolveAppeal',
+          actorId: 'user-controls',
+          verdict: 'agreed',
+          rationale: 'The evidence supports the appeal.',
+          outcome: 'pass',
+          justification: 'Corrected after Controls review.',
+        },
+      ],
+    },
+  });
 
-    const row = snapshot.lists['Cases-ExampleReview'].find(
-      (candidate) => candidate.id === 'case-flow-1'
-    );
-    assert.ok(row);
-    assert.equal(row.assignedReviewer, 'user-reviewer');
-    assert.equal(row.status, 'Completed');
-    assert.equal(row.appeals?.[0].state, 'resolved');
-    assert.deepEqual(row.appeals?.[0].citedAnswerKeys, ['q-needs']);
-    assert.equal(row.appeals?.[0].resolution?.verdict, 'agreed');
-    assert.equal(row.amendedOutcome?.outcome, 'pass');
-    assert.equal(row.amendedOutcome?.fromAppealId, row.appeals?.[0].id);
-    assert.equal(row.outcomeAtCompletion, 'fail');
-    assert.equal(row.effectiveOutcome, 'pass');
-    assert.equal(row.outcomeOverridden, true);
-  } finally {
-    exampleReviewConfig.captureGroups = originalCaptureGroups;
-  }
+  const row = snapshot.lists['Cases-ExampleReview'].find(
+    (candidate) => candidate.id === 'case-flow-1'
+  );
+  assert.ok(row);
+  assert.equal(row.assignedReviewer, 'user-reviewer');
+  assert.equal(row.status, 'Completed');
+  assert.equal(row.appeals?.[0].state, 'resolved');
+  assert.deepEqual(row.appeals?.[0].citedAnswerKeys, ['q-needs']);
+  assert.equal(row.appeals?.[0].resolution?.verdict, 'agreed');
+  assert.equal(row.amendedOutcome?.outcome, 'pass');
+  assert.equal(row.amendedOutcome?.fromAppealId, row.appeals?.[0].id);
+  assert.equal(row.outcomeAtCompletion, 'fail');
+  assert.equal(row.effectiveOutcome, 'pass');
+  assert.equal(row.outcomeOverridden, true);
 });
 
 test('an Actions In Progress Case cannot close while a sent Remediation Action is unresolved (#497)', async () => {

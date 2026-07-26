@@ -70,7 +70,7 @@
 /**
  * One **Issue Capture Field** declared by a Case Type: a typed input
  * captured against a *failed* Answer. The closed type set is
- * `text | textarea | select | radio | person | actions`; this slice exercises
+ * `text | textarea | select | radio | person`; this slice exercises
  * only the four string types. `options` lists the choices for `select`/`radio`
  * (validated at capture time). `required` participates in the completion gate
  * only while the field is visible. `role` is an optional cross-Case-Type
@@ -78,7 +78,17 @@
  * same Answer (not yet built). `placeholder` is optional hint text shown while a
  * `text`/`textarea` control is empty; ignored for choice types, blank when absent.
  *
- * @typedef {{ key: string, label: string, type: 'text' | 'textarea' | 'select' | 'radio' | 'person' | 'actions', options?: string[], required?: boolean, role?: string, showWhen?: Record<string, unknown>, placeholder?: string }} CaptureField
+ * `'actions'` is **not** declarable (#497). ADR-0024 introduced it as the store
+ * for per-action Remediation tracking; ADR-0037 moved that tracking to
+ * `answer.remediationStatus` and ADR-0024's #497 amendment deleted the whole
+ * per-action module. Nothing renders an `actions` field — `buildCaptureControl`
+ * falls through to a plain text box — and nothing validates one, so a Case Type
+ * Owner following the typedef got a silent text input writing a string into a
+ * slot typed `RemediationAction[]`. The `RemediationAction` typedef below stays,
+ * because a blob persisted under the old shape may still carry such an array and
+ * round-trips unread; what is gone is the pretence that it can be *declared*.
+ *
+ * @typedef {{ key: string, label: string, type: 'text' | 'textarea' | 'select' | 'radio' | 'person', options?: string[], required?: boolean, role?: string, showWhen?: Record<string, unknown>, placeholder?: string }} CaptureField
  */
 
 /**

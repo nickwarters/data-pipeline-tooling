@@ -114,14 +114,11 @@ test('complaints: its General Questions are shared ones, resolved to the catalog
 });
 
 test('complaints: every capture field is a supported type with options for choices', () => {
-  const allowed = new Set([
-    'text',
-    'textarea',
-    'select',
-    'radio',
-    'person',
-    'actions',
-  ]);
+  // The closed `CaptureField.type` set. `'actions'` was removed with the
+  // per-action Remediation record (#497): nothing renders it, nothing validates
+  // it, and declaring one silently produced a text box writing a string into a
+  // slot typed `RemediationAction[]`.
+  const allowed = new Set(['text', 'textarea', 'select', 'radio', 'person']);
   for (const group of config.captureGroups ?? []) {
     for (const field of group.fields) {
       assert.ok(
