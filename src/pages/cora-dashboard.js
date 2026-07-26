@@ -310,14 +310,22 @@ export function createRouteSlice(
 
   /** @type {any} */
   let effectTools = null;
-  let effectsActive = false;
   let allocationRequestActive = false;
+
+  /**
+   * The mount lifetime, read from the tools the route effect captured. The
+   * module-scope effects below cannot see `start`'s locals, so they ask the
+   * adapter instead of a second hand-rolled latch (#517).
+   */
+  function effectsActive() {
+    return effectTools?.isActive() === true;
+  }
 
   /**
    * @param {{ candidates: unknown[], isAtCapacity: boolean }} availability
    */
   function publishAllocationAvailability(availability) {
-    if (!effectsActive) return;
+    if (!effectsActive()) return;
     effectTools.dispatch({
       type: 'allocation/availability-changed',
       isEmpty:
@@ -338,7 +346,7 @@ export function createRouteSlice(
         assignedReviewer: effectTools.context.chrome.currentUser.id,
       }
     );
-    if (effectsActive) {
+    if (effectsActive()) {
       effectTools.dispatch({
         type: 'reviewer-cases/loaded',
         cases: rows.map((row) => ({ ...row, overdue: isOverdue(row) })),
@@ -356,7 +364,7 @@ export function createRouteSlice(
       reasons: actionState.reasons,
       currentUserId: effectTools.context.chrome.currentUser.id,
     });
-    if (effectsActive) {
+    if (effectsActive()) {
       effectTools.dispatch({ type: 'action-centre/counts-loaded', ...loaded });
     }
   }
@@ -376,7 +384,7 @@ export function createRouteSlice(
       currentUserId: effectTools.context.chrome.currentUser.id,
       skip,
     });
-    if (effectsActive) {
+    if (effectsActive()) {
       effectTools.dispatch({
         type: 'action-centre/page-loaded',
         reasonId: reason.id,
@@ -440,7 +448,7 @@ export function createRouteSlice(
             candidate._listOptions
           );
           if (result.ok) {
-            if (!effectsActive) return;
+            if (!effectsActive()) return;
             const [nextAvailability] = await Promise.all([
               loadAllocationAvailability({
                 client,
@@ -670,9 +678,7 @@ export function createRouteSlice(
         dashboardActions,
       }),
     start(/** @type {any} */ tools) {
-      let active = true;
       effectTools = tools;
-      effectsActive = true;
       const client = tools.context.client;
       const currentUser = tools.context.chrome.currentUser;
       const capabilities = tools.context.chrome.permissions;
@@ -684,7 +690,7 @@ export function createRouteSlice(
             ownedCaseTypes: capabilities.ownedCaseTypes,
             allCaseSources: tools.context.caseSources,
           }).then((summaries) => {
-            if (active) {
+            if (tools.isActive()) {
               tools.dispatch({ type: 'owner-summaries/loaded', summaries });
             }
           });
@@ -696,11 +702,12 @@ export function createRouteSlice(
           caseSources: tools.context.caseSources,
           allCaseSources: tools.context.caseSources,
         }).then((lanes) => {
-          if (active) tools.dispatch({ type: 'kpis/loaded', lanes });
+          if (tools.isActive()) tools.dispatch({ type: 'kpis/loaded', lanes });
         });
         if (capabilities.isControls) {
           void loadAppeals(client, tools.context.caseSources).then((cases) => {
-            if (active) tools.dispatch({ type: 'appeals/loaded', cases });
+            if (tools.isActive())
+              tools.dispatch({ type: 'appeals/loaded', cases });
           });
         }
         void refreshReviewerCases();
@@ -708,7 +715,7 @@ export function createRouteSlice(
           void listAcrossSources(client, tools.context.caseSources, {
             responsibleParty: currentUser.id,
           }).then((cases) => {
-            if (active) {
+            if (tools.isActive()) {
               tools.dispatch({ type: 'responsible-party/loaded', cases });
             }
           });
@@ -720,7 +727,7 @@ export function createRouteSlice(
           const actionState = initialState.routes.dashboard.actionCentre;
           void refreshActionCounts(actionState).then(() => {
             const [first] = actionState.reasons;
-            if (!active || !first) return;
+            if (!tools.isActive() || !first) return;
             tools.dispatch({
               type: 'action-centre/group-toggled',
               reasonId: first.id,
@@ -731,8 +738,6 @@ export function createRouteSlice(
       }
 
       return () => {
-        active = false;
-        effectsActive = false;
         effectTools = null;
       };
     },

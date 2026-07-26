@@ -107,6 +107,7 @@ test('dashboard slice: effects load reviewer rows, KPI lanes, and Controls appea
       /** @type {string} */ type,
       /** @type {any} */ listener
     ) => target.addEventListener(type, listener),
+    isActive: () => true,
   });
   await loaded;
 
@@ -351,6 +352,7 @@ test('dashboard owner summary loads through the route slice and renders from sta
     params: {},
     dispatch: (/** @type {any} */ action) => actions.push(action),
     listen: () => {},
+    isActive: () => true,
   });
   await Promise.resolve();
   await Promise.resolve();
@@ -385,13 +387,17 @@ test('dashboard owner summary suppresses a late result after route disposal', as
       loadOwnerSummary: async () => summaries,
     })
   );
+  let active = true;
   const dispose = slice.start({
     context: ctx,
     params: {},
     dispatch: (/** @type {any} */ action) => actions.push(action),
     listen: () => {},
+    isActive: () => active,
   });
+  // The adapter aborts the lifetime as part of the same disposal.
   dispose();
+  active = false;
   resolveSummaries([{ caseType: 'late' }]);
   await summaries;
   await Promise.resolve();
@@ -438,6 +444,7 @@ test('dashboard allocation claims a candidate and refreshes reviewer rows throug
     params: {},
     dispatch: (/** @type {any} */ action) => actions.push(action),
     listen: () => {},
+    isActive: () => true,
   });
   slice.start(tools);
   const view = slice.view(slice.initialState, tools);
@@ -505,6 +512,7 @@ test('dashboard allocation retries a stale candidate before claiming the next Ca
     params: {},
     dispatch: (/** @type {any} */ action) => actions.push(action),
     listen: () => {},
+    isActive: () => true,
   });
   slice.start(tools);
   fireEvent(
@@ -559,6 +567,7 @@ test('dashboard allocation exhausts stale candidates and renders the resulting e
     params: {},
     dispatch: (/** @type {any} */ action) => actions.push(action),
     listen: () => {},
+    isActive: () => true,
   });
   slice.start(tools);
   slice
@@ -611,6 +620,7 @@ test('dashboard allocation action is inert before start and after route disposal
     params: {},
     dispatch: (/** @type {any} */ action) => actions.push(action),
     listen: () => {},
+    isActive: () => true,
   });
 
   slice
@@ -672,6 +682,7 @@ test('dashboard allocation does not publish exhausted state after route disposal
     params: {},
     dispatch: (/** @type {any} */ action) => actions.push(action),
     listen: () => {},
+    isActive: () => true,
   });
   const dispose = slice.start(tools);
   slice
@@ -762,6 +773,7 @@ test('dashboard allocation immediately publishes capacity after the claim that r
       }
     },
     listen: () => {},
+    isActive: () => true,
   });
   slice.start(tools);
 
@@ -826,6 +838,7 @@ test('dashboard allocation coalesces concurrent requests into one capacity check
       if (action.type === 'allocation/availability-changed') markPublished();
     },
     listen: () => {},
+    isActive: () => true,
   });
   slice.start(tools);
   const request = () =>
@@ -1197,6 +1210,7 @@ test('dashboard Action Centre controller reloads scope, groups, and pages throug
       /** @type {string} */ type,
       /** @type {any} */ listener
     ) => target.addEventListener(type, listener),
+    isActive: () => true,
   });
   await initialPage;
 
