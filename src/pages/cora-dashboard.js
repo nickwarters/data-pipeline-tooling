@@ -26,7 +26,11 @@ import { isOverdue } from '../evaluators/overdue-evaluator.js';
 import { loadKpiModel } from '../evaluators/kpi-strip-model.js';
 import { CASE_STATUS } from '../lib/case-statuses.js';
 import { listCasesAcrossSources } from '../services/across-sources.js';
-import { dataTableView, nextTableSort } from '../views/data-table.js';
+import {
+  dataTableView,
+  reduceTableSort,
+  sortRequested,
+} from '../views/data-table.js';
 import { visibleDashboardPanels } from './dashboard/panel-descriptors.js';
 import { kpiStripView } from './dashboard/kpi-view.js';
 import {
@@ -170,7 +174,7 @@ export function reviewerCasesView(route, dispatch) {
       rows,
       columns: reviewerCaseColumns(),
       sort: route.reviewerSort,
-      onSort: (key) => dispatch({ type: 'reviewer-table/sort-requested', key }),
+      onSort: (key) => dispatch(sortRequested('reviewer', key)),
       emptyMessage: 'No outstanding cases.',
       rowKey: (row) => `${row.caseType}:${row.id}`,
       rowHref: caseRouteFor,
@@ -247,7 +251,7 @@ export function dashboardView(state, tools) {
       }),
     appeals: () =>
       controlsAppealsView(route.appealCases, route.appealSort, (key) =>
-        tools.dispatch({ type: 'appeals-table/sort-requested', key })
+        tools.dispatch(sortRequested('appeals', key))
       ),
   };
 
@@ -523,11 +527,12 @@ export function createRouteSlice(
         else expanded.add(id);
         return patchRoute(state, 'dashboard', { expandedKpiTiles: expanded });
       }
-      if (action.type === 'reviewer-table/sort-requested') {
-        return patchRoute(state, 'dashboard', {
-          reviewerSort: nextTableSort(route.reviewerSort, action.key),
-        });
-      }
+      const reviewerSort = reduceTableSort(
+        route.reviewerSort,
+        action,
+        'reviewer'
+      );
+      if (reviewerSort) return patchRoute(state, 'dashboard', { reviewerSort });
       if (action.type === 'reviewer-table/filter-text-changed') {
         return patchRoute(state, 'dashboard', {
           reviewerFilterText: action.value,
@@ -538,11 +543,8 @@ export function createRouteSlice(
           reviewerStatusFilter: action.value,
         });
       }
-      if (action.type === 'appeals-table/sort-requested') {
-        return patchRoute(state, 'dashboard', {
-          appealSort: nextTableSort(route.appealSort, action.key),
-        });
-      }
+      const appealSort = reduceTableSort(route.appealSort, action, 'appeals');
+      if (appealSort) return patchRoute(state, 'dashboard', { appealSort });
       if (action.type === 'action-centre/scope-changed') {
         return patchRoute(state, 'dashboard', {
           actionCentre: actionCentreScopeState(
