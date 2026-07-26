@@ -17,14 +17,22 @@ test('the loader holds its loading state as plain fields, not signals (#529)', (
     capabilities: null,
   });
 
-  assert.equal(vm.loaded, false);
-  assert.equal(vm.error, null);
-  assert.equal(vm.accessDenied, false);
-
   const snapshot = vm.toStoreSnapshot();
   assert.equal(snapshot.loaded, false);
   assert.equal(snapshot.error, null);
   assert.equal(snapshot.accessDenied, false);
+
+  // The snapshot is the public seam and proves the handover is unchanged, but
+  // it cannot on its own prove the conversion: `toStoreSnapshot()` read the
+  // same values through `.get()` before. One structural assertion carries the
+  // ticket's actual claim — the loading state is no longer a notifier.
+  for (const field of ['loaded', 'error', 'accessDenied']) {
+    assert.equal(
+      typeof /** @type {any} */ ((vm)[field] ?? {}).get,
+      'undefined',
+      `${field} must be a plain field, not a signal`
+    );
+  }
 });
 
 test('toStoreSnapshot: an empty multi-choice Answer is unanswered on load', () => {
