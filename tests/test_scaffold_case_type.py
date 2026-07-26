@@ -219,6 +219,57 @@ class ScaffoldCaseTypeTest(unittest.TestCase):
 
         self.assertIn("--list-name must not be blank", context.exception.stderr)
 
+    def test_rejects_a_display_name_that_could_break_out_of_generated_code(
+        self,
+    ) -> None:
+        # --display and --list-name were interpolated UNESCAPED into generated
+        # JS string literals, JSDoc comments and Markdown; only non-blank was
+        # checked. A value carrying a quote, a comment terminator or a newline
+        # could close the literal it lands in and inject code into a file the
+        # maintainer is about to commit.
+        root = self.make_fixture_root()
+
+        for flag, value in [
+            ("--display", "Widget */ evil"),
+            ("--display", "Widget'; globalThis.pwned = 1; const x = '"),
+            ("--display", "Widget\nReview"),
+            ("--display", "Widget`Review"),
+            ("--display", "Widget\\Review"),
+            ("--list-name", "Cases-Widget'; drop"),
+        ]:
+            with self.subTest(flag=flag, value=value):
+                with self.assertRaises(subprocess.CalledProcessError) as context:
+                    args = ["--slug", "widget-review", "--display", "Widget Review"]
+                    if flag == "--display":
+                        args[3] = value
+                    else:
+                        args += [flag, value]
+                    self.run_scaffold(root, *args)
+                self.assertIn(f"Invalid {flag}", context.exception.stderr)
+
+    def test_escapes_an_apostrophe_in_a_legitimate_display_name(self) -> None:
+        # "O'Brien Review" is a perfectly ordinary Case Type name, and it used
+        # to emit `eligibleGroups: ['Reviewers - O'Brien Review']` — a module
+        # that does not parse. It must be escaped, not rejected.
+        root = self.make_fixture_root()
+        self.run_scaffold(
+            root, "--slug", "obrien-review", "--display", "O'Brien Review"
+        )
+
+        module_path = root / "case-types" / "obrien-review.js"
+        self.assert_js_parses(module_path)
+        self.assert_js_parses(root / "tests" / "obrien-review.test.js")
+        self.assert_js_parses(root / "case-types" / "manifest.js")
+        self.assert_js_parses(root / "dev" / "fixtures" / "personas.js")
+        self.assert_js_parses(root / "dev" / "fixtures" / "cases.js")
+
+        manifest = (root / "case-types" / "manifest.js").read_text(encoding="utf-8")
+        self.assertIn(r"displayName: 'O\'Brien Review',", manifest)
+        personas = (root / "dev" / "fixtures" / "personas.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(r"groups: ['Reviewers - O\'Brien Review'],", personas)
+
     def test_refuses_to_overwrite_an_existing_slug(self) -> None:
         root = self.make_fixture_root()
         shutil.copy2(

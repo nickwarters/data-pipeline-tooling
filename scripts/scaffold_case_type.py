@@ -70,8 +70,19 @@ def parse_args(argv: list[str]) -> ScaffoldOptions:
         )
     if not args.display_name.strip():
         parser.error("--display must not be blank")
+    if not DISPLAY_NAME_ALLOWED.fullmatch(args.display_name):
+        parser.error(
+            f'Invalid --display "{args.display_name}". Use letters, digits, spaces '
+            "and - & ' ( ) , . only — the value is written into generated JS "
+            "string literals, JSDoc comments and Markdown."
+        )
     if args.list_name is not None and not args.list_name.strip():
         parser.error("--list-name must not be blank")
+    if args.list_name is not None and not LIST_NAME_ALLOWED.fullmatch(args.list_name):
+        parser.error(
+            f'Invalid --list-name "{args.list_name}". Use letters, digits, spaces, '
+            "hyphens and underscores only."
+        )
 
     return ScaffoldOptions(
         root=args.root.resolve(),
@@ -83,6 +94,24 @@ def parse_args(argv: list[str]) -> ScaffoldOptions:
 
 def escape_regexp(source: str) -> str:
     return re.escape(source)
+
+
+# Operator-supplied text reaches generated JS string literals, JSDoc comments and
+# Markdown. Unescaped, `--display "O'Brien Review"` emitted
+# `label: 'O'Brien Review reference'` — a module that does not parse — and a
+# crafted value could close the literal and inject arbitrary code into a file the
+# maintainer is about to commit. Two defences, because escaping alone does not
+# save a JSDoc block from a `*/`:
+#
+#   1. an allow-list of characters that are safe in all three contexts, and
+#   2. proper escaping at every generated JS string literal.
+DISPLAY_NAME_ALLOWED = re.compile(r"^[\w \-&'(),.]+$", re.UNICODE)
+LIST_NAME_ALLOWED = re.compile(r"^[\w \-]+$", re.UNICODE)
+
+
+def js_escape(value: str) -> str:
+    """Escape `value` for embedding inside a single-quoted JS string literal."""
+    return value.replace("\\", "\\\\").replace("'", "\\'")
 
 
 def title_case_words(source: str) -> str:
@@ -120,7 +149,7 @@ def layout_line(slug: str, display_name: str) -> str:
     """
     name = f"  {slug}.js"
     padding = " " * max(1, 32 - len(name))
-    return f"{name}{padding}# {display_name} Case Type scaffold (the architecture decision on Case Type scaffolding)\n"
+    return f"{name}{padding}# {display_name} Case Type scaffold (ADR-0028)\n"
 
 
 def insert_after_match(content: str, pattern: str, insertion: str, file_path: Path) -> str:
@@ -133,6 +162,8 @@ def insert_after_match(content: str, pattern: str, insertion: str, file_path: Pa
 
 def case_type_module(opts: ScaffoldOptions) -> str:
     prefix = question_prefix(opts.slug)
+    js_display = js_escape(opts.display_name)
+    js_list = js_escape(opts.list_name)
     return f"""// @ts-check
 /** @typedef {{import('../src/sharepoint-client.js').CaseTypeConfig}} CaseTypeConfig */
 /** @typedef {{import('../src/sharepoint-client.js').Answer}} Answer */
@@ -158,7 +189,7 @@ const config = {{
   // The display name lives ONLY on this slug's CASE_TYPES entry in
   // case-types/manifest.js (#527) — the three SharePoint group names derive
   // from that one copy.
-  listName: '{opts.list_name}',
+  listName: '{js_list}',
   // No `eligibleGroups`. Access comes from the three group names DERIVED from
   // the registry display name — `Reviewers - {opts.display_name}` and its two
   // siblings — so restating the derived name here would make it a second,
@@ -170,7 +201,7 @@ const config = {{
   attributeFailures: true,
   // TODO(case-type): Replace starter Case Details fields with this Case Type's source fields.
   detailFields: [
-    {{ key: 'reference', label: '{opts.display_name} reference' }},
+    {{ key: 'reference', label: '{js_display} reference' }},
     {{ key: 'customerName', label: 'Customer name' }},
     {{ key: 'reviewDate', label: 'Review date' }},
   ],
@@ -262,6 +293,8 @@ export default config;
 
 def case_type_test(opts: ScaffoldOptions) -> str:
     prefix = question_prefix(opts.slug)
+    js_display = js_escape(opts.display_name)
+    js_list = js_escape(opts.list_name)
     return f"""// @ts-check
 
 import {{ test }} from 'node:test';
@@ -299,7 +332,7 @@ test('{opts.slug}: no cycles in showWhen graph', () => {{
 }});
 
 test('{opts.slug}: declares its Case list explicitly (there is no default store, #249)', () => {{
-  assert.equal(config.listName, '{opts.list_name}');
+  assert.equal(config.listName, '{js_list}');
 }});
 
 test('{opts.slug}: declares the standard Section set', () => {{
@@ -355,7 +388,7 @@ test('{opts.slug} computeOutcome: the highest-scoring applicable outcome wins', 
   );
 }});
 
-test('{opts.slug} fixtures: an outstanding and a completed {opts.display_name} Case exist', () => {{
+test('{opts.slug} fixtures: an outstanding and a completed {js_display} Case exist', () => {{
   const fixtures = cases.filter((c) => c.caseType === '{opts.slug}');
   assert.ok(fixtures.some((c) => c.status === 'In-progress'));
   assert.ok(fixtures.some((c) => c.status === 'Completed'));
@@ -371,11 +404,12 @@ test('{opts.slug} fixtures: the Completed Case reference answers compute to its 
 
 def fixture_cases(opts: ScaffoldOptions) -> str:
     prefix = question_prefix(opts.slug)
+    js_display = js_escape(opts.display_name)
     return f"""  // --- {opts.slug} fixture cases ({opts.display_name} scaffold) ---
   {{
     id: '{opts.slug}-case-1',
     caseType: '{opts.slug}',
-    title: '{opts.display_name} #1',
+    title: '{js_display} #1',
     status: 'In-progress',
     assignedReviewer: 'user-reviewer-{opts.slug}',
     responsibleParty: 'user-agent-a',
@@ -397,7 +431,7 @@ def fixture_cases(opts: ScaffoldOptions) -> str:
   {{
     id: '{opts.slug}-case-2',
     caseType: '{opts.slug}',
-    title: '{opts.display_name} #2',
+    title: '{js_display} #2',
     status: 'Completed',
     assignedReviewer: 'user-reviewer-{opts.slug}',
     responsibleParty: 'user-agent-b',
@@ -478,14 +512,13 @@ The scaffold also appends the generated module to the Directory layout block in
 """
 
 
-"""The tests that pin today's Case Type registry as a CLOSED set.
-
-Each names `complaints` (the only live Case Type) in a literal expectation, so a
-newly scaffolded slug moves them by design. The scaffold does not edit contract
-tests — a script silently rewriting the assertions that guard the registry would
-defeat the point of having them — so it names them instead, precisely enough
-that a developer can match every red test to a line here.
-"""
+# The tests that pin today's Case Type registry as a CLOSED set.
+#
+# Each names `complaints` (the only live Case Type) in a literal expectation, so
+# a newly scaffolded slug moves them by design. The scaffold does not edit
+# contract tests — a script silently rewriting the assertions that guard the
+# registry would defeat the point of having them — so it names them instead,
+# precisely enough that a developer can match every red test to a line here.
 EXPECTED_FAILURES = [
     (
         "tests/case-type-manifest.test.js",
@@ -561,6 +594,7 @@ def scaffold(opts: ScaffoldOptions) -> None:
     # `permissions.caseTypes` are all derived from it (issue #508), so there is
     # nothing to add in src/services/permissions.js. No `bank` thunk is emitted:
     # the scaffold writes no Question Bank artifact, and `bank` is optional.
+    js_display = js_escape(opts.display_name)
     manifest_path = opts.root / "case-types" / "manifest.js"
     manifest = manifest_path.read_text(encoding="utf-8")
     if not re.search(rf"slug:\s*['\"]{escape_regexp(opts.slug)}['\"]", manifest):
@@ -569,7 +603,7 @@ def scaffold(opts: ScaffoldOptions) -> None:
             r"const registry = \[\n",
             f"  {{\n"
             f"    slug: '{opts.slug}',\n"
-            f"    displayName: '{opts.display_name}',\n"
+            f"    displayName: '{js_display}',\n"
             f"    importer: () => import('./{opts.slug}.js'),\n"
             f"  }},\n",
             manifest_path,
@@ -583,17 +617,17 @@ def scaffold(opts: ScaffoldOptions) -> None:
         insertion = f"""  'reviewer-{opts.slug}': {{
     userId: 'user-reviewer-{opts.slug}',
     displayName: 'Alex Reviewer {display_slug}',
-    groups: ['Reviewers - {opts.display_name}'],
+    groups: ['Reviewers - {js_display}'],
   }},
   'case-type-owner-{opts.slug}': {{
     userId: 'user-case-type-owner-{opts.slug}',
     displayName: 'Cam Case Type Owner {display_slug}',
-    groups: ['CaseTypeOwner - {opts.display_name}'],
+    groups: ['CaseTypeOwner - {js_display}'],
   }},
   'journey-owner-{opts.slug}': {{
     userId: 'user-journey-owner-{opts.slug}',
     displayName: 'Jules Journey Owner {display_slug}',
-    groups: ['JourneyOwner - {opts.display_name}'],
+    groups: ['JourneyOwner - {js_display}'],
   }},
 """
         personas = insert_before(personas, "};\n", insertion, personas_path)

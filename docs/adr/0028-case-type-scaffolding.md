@@ -66,10 +66,13 @@ app-writes-it provenance).
 ## Amendment (2026-07, #525) — the scaffold declares a `listName`, and its sign-off is exact
 
 The original decision's "deliberately has no `listName`" rationale stopped being
-true when [issue #249](../../src/services/create-sharepoint-client.js) removed
-the mock client's default store. `partitionCasesByList` is now a _total_
-partition: every fixture Case must map to a Case Type's declared list, and a
-Case Type without one throws. The scaffold wrote mock Cases _and_ omitted the
+true when issue #249 removed the mock client's default store in
+[create-sharepoint-client.js](../../src/services/create-sharepoint-client.js).
+`partitionCasesByList` is now a _total_ partition: every fixture Case must map
+to a Case Type's declared list, and a Case Type without one has nowhere to put
+its Cases, so they are dropped and reported (contained per Case Type under
+[ADR-0004](./0004-case-type-config-as-js-modules.md); it threw outright until
+then). The scaffold wrote mock Cases _and_ omitted the
 `listName` those Cases require, so the two halves of its own output contradicted
 each other — and because the partition runs before the mock client is
 constructed, one scaffolded Case Type broke `?mock=1` for **every** Case Type,
