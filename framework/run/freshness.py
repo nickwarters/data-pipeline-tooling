@@ -39,7 +39,7 @@ class FreshnessRequirement:
         """Return the equivalent public requirement predicate."""
 
         return Requirement.succeeded(
-            RunAddress.pipeline(
+            RunAddress.for_pipeline(
                 self.upstream_pipeline,
                 subject=self.upstream_subject or default_subject,
             )

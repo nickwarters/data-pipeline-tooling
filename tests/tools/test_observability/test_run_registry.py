@@ -209,7 +209,7 @@ def test_latest_success_for_pipeline_address_uses_latest_ok_run_summary(tmp_path
     registry.ingest(log_path)
 
     latest = registry.latest_success(
-        RunAddress.pipeline("pipeline_4"), on=date(2026, 6, 23)
+        RunAddress.for_pipeline("pipeline_4"), on=date(2026, 6, 23)
     )
     assert latest is not None
     assert latest["pipeline_run_id"] == "latest-ok"
@@ -263,7 +263,7 @@ def test_latest_success_backfills_legacy_rows_without_step_address(tmp_path):
     finally:
         con.close()
 
-    latest = RunRegistry(db_path).latest_success(RunAddress.pipeline("pipeline_4"))
+    latest = RunRegistry(db_path).latest_success(RunAddress.for_pipeline("pipeline_4"))
 
     assert latest is not None
     assert latest["pipeline_run_id"] == "legacy-ok"

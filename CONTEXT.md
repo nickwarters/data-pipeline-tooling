@@ -87,7 +87,7 @@ A stable, named unit of work inside a `Pipeline` builder run. A Task may read, p
 _Avoid_: stage (older/informal for a run step), job, layer
 
 **Run Address**:
-A stable dependency-target label for either a whole Pipeline or one named run step inside it. The four label forms are `pipeline`, `subject/pipeline`, `pipeline.step`, and `subject/pipeline.step`; `framework.run.RunAddress` owns parsing and formatting so logs, dependency declarations, and registry queries use the same vocabulary. This follows the DAG design's `pipeline_2.step_4` address shape while the builder can still expose `.task(...)` as the authoring method. Invalid labels are configuration failures, not data or runtime failures.
+A stable dependency-target label for either a whole Pipeline or one named run step inside it. The four label forms are `pipeline`, `subject/pipeline`, `pipeline.step`, and `subject/pipeline.step`; `framework.run.RunAddress` owns parsing and formatting so logs, dependency declarations, and registry queries use the same vocabulary. This follows the DAG design's `pipeline_2.step_4` address shape while the builder can still expose `.task(...)` as the authoring method. Invalid labels are configuration failures, not data or runtime failures. A Run Address is a **value**, not an identity: a frozen dataclass whose equality and hashing come from its three parts, constructed by `RunAddress.for_pipeline(...)` / `RunAddress.for_step(...)` (renamed in #316 so the constructors no longer share names with the `pipeline` / `step` attributes). Its rendered label is a live on-disk format — it is stored as `step_address` — so the names may change but the rendering may not.
 _Avoid_: ad hoc pipeline key, path (unless referring to a filesystem path)
 
 **Ingest**:

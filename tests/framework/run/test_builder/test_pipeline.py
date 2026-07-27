@@ -120,7 +120,7 @@ def test_pipeline_wires_run_addresses_onto_steps():
     step = p.task("step_4", adding_processor("clean"), read)
     p.write(writer, step, name="write_silver")
 
-    assert step.address == RunAddress.step("pipeline_2", "step_4")
+    assert step.address == RunAddress.for_step("pipeline_2", "step_4")
 
     p.run()
 
@@ -134,7 +134,7 @@ def test_pipeline_wires_subject_qualified_run_addresses_from_runner_labels():
     p = Pipeline("cases/selection", run_log=run_log)
     read = p.read(reader, name="read")
 
-    assert read.address == RunAddress.step("selection", "read", subject="cases")
+    assert read.address == RunAddress.for_step("selection", "read", subject="cases")
     assert read.address.label == "cases/selection.read"
 
 

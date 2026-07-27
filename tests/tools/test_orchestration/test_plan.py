@@ -181,7 +181,7 @@ def test_plan_returns_blocked_when_freshness_requirement_is_stale(tmp_path):
                     Weekdays(),
                     depends_on=(
                         Requirement.succeeded(
-                            RunAddress.pipeline("ingest")
+                            RunAddress.for_pipeline("ingest")
                         ).within_days(1),
                     ),
                 ),
@@ -333,7 +333,9 @@ def test_plan_is_not_blocked_by_an_upstream_that_landed_after_local_midnight(
                     "pipelines/reporting",
                     Weekdays(),
                     depends_on=(
-                        Requirement.succeeded(RunAddress.pipeline("ingest")).same_day(),
+                        Requirement.succeeded(
+                            RunAddress.for_pipeline("ingest")
+                        ).same_day(),
                     ),
                 ),
             ),

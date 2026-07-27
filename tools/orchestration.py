@@ -909,7 +909,7 @@ class Orchestrator:
         # Check if it already succeeded today.
         from framework.run.address import RunAddress
 
-        address = RunAddress.pipeline(item.name)
+        address = RunAddress.for_pipeline(item.name)
         if run_registry.latest_success(address, on=run_date) is not None:
             return PlanItem(
                 run_date=run_date,
