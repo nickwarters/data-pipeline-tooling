@@ -70,6 +70,11 @@ class Filter:
 
     An optional ``name`` labels the gate for row-level explainability. Unnamed
     filters still work; they trace under a generic ``"filter"`` label.
+
+    The kept rows' index is reset, matching :class:`VectorizedFilter` and the
+    other row-dropping processors: the two filters are presented as
+    interchangeable, so they must not differ in index semantics, and a surviving
+    gappy or repeated index would leave later label-based work to trip over.
     """
 
     trace_role = "filter"
@@ -80,7 +85,9 @@ class Filter:
 
     def __call__(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
-        kept = frame.loc[frame.apply(lambda row: self._predicate(row), axis=1)]
+        kept = frame.loc[
+            frame.apply(lambda row: self._predicate(row), axis=1)
+        ].reset_index(drop=True)
         return Dataset.from_pandas(kept)
 
     def describe(self) -> str:
@@ -120,6 +127,10 @@ class VectorizedFilter:
     ``predicate`` receives the backing pandas frame once and must return a
     boolean mask with the same length. Use this for common column expressions on
     large feeds where row-wise Python callbacks would dominate runtime.
+
+    Index semantics match :class:`Filter` exactly — the kept rows' index is
+    reset — so swapping one filter for the other changes only how the rule is
+    expressed, never the shape of what comes out.
     """
 
     trace_role = "filter"

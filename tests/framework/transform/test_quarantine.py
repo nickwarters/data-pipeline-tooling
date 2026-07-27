@@ -157,6 +157,40 @@ def test_unique_violating_mask_returns_true_for_duplicate_rows():
     assert list(mask) == [False, True, False, True]
 
 
+class StartsWithBad:
+    """A value rule implementing the protocol and inheriting nothing.
+
+    The ``ValueRule`` contract is structural, so quarantine must keep working
+    for a rule an application wrote itself, with no framework base class in
+    sight.
+    """
+
+    def violating_mask(self, series: "pd.Series") -> "pd.Series":
+        return pd.Series(
+            [bool(v is not None and str(v).startswith("bad")) for v in series],
+            index=series.index,
+        )
+
+    def check(self, series: "pd.Series") -> str | None:
+        breaches = series[self.violating_mask(series).to_numpy()]
+        return None if breaches.empty else "is a bad value"
+
+
+@dataclass
+class HandRolledRuleCase:
+    code: Annotated[str, StartsWithBad()]
+
+
+def test_partitioner_routes_rows_failing_a_hand_rolled_rule():
+    ds = _dataset(code=["ok", "bad-one", "fine"])
+
+    good, rejected = SchemaValueRulePartitioner(HandRolledRuleCase).partition(ds)
+
+    assert list(good.to_pandas()["code"]) == ["ok", "fine"]
+    assert list(rejected.to_pandas()["code"]) == ["bad-one"]
+    assert list(rejected.to_pandas()["failed_rule"]) == ["column 'code' is a bad value"]
+
+
 def test_pipeline_quarantine_routes_rejected_rows_to_reject_writer(tmp_path):
     # A pipeline configured with quarantine should write bad rows to the reject
     # writer and good rows to the main writer — in the same run.

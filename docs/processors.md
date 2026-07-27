@@ -211,6 +211,11 @@ pipeline = (
 )
 ```
 
+The two filters are **interchangeable in index semantics**: both reset the kept
+rows' index, so switching between them changes only how the rule is expressed,
+never the shape of what comes out and never whether a downstream label-based
+operation sees a gappy index.
+
 The equivalent row-callable form is still valid and remains the clearer choice
 for rules that read best one Case at a time:
 

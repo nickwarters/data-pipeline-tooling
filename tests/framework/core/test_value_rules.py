@@ -316,6 +316,177 @@ def test_non_null_field_passes_on_an_empty_dataset():
     SchemaValidator(RequiredCase).validate(Dataset.from_pandas(frame))
 
 
+def _rules_columns_and_masks():
+    """Each value rule paired with a column it judges and its expected mask.
+
+    One duplicated-index frame (built the way application code builds one: two
+    frames concatenated without resetting the index) drives every rule, so the
+    shared masking contract is exercised once per rule.
+    """
+    return [
+        (Pattern(r"[AB]{2}"), "code", [False, False, True, False]),
+        (Length(minimum=2), "code", [False, False, True, False]),
+        (Range(minimum=0, maximum=100), "amount", [False, False, True, False]),
+        (Unique(), "code", [True, False, False, True]),
+        (OneOf("AA", "BB"), "code", [False, False, True, False]),
+    ]
+
+
+def _duplicated_index_frame():
+    # Two batches concatenated the way a custom processor would, so index labels
+    # repeat: 0, 1, 0, 1. Row 2 ('X' / 500.0) breaches the format/size rules,
+    # rows 0 and 3 duplicate 'AA', and the null row 1 is out of scope for all.
+    first = pd.DataFrame(
+        {
+            "code": pd.Series(["AA", pd.NA], dtype="string"),
+            "amount": pd.Series([10.0, None], dtype="float64"),
+        }
+    )
+    second = pd.DataFrame(
+        {
+            "code": pd.Series(["X", "AA"], dtype="string"),
+            "amount": pd.Series([500.0, 20.0], dtype="float64"),
+        }
+    )
+    return pd.concat([first, second])
+
+
+@pytest.mark.parametrize("rule,column,expected", _rules_columns_and_masks())
+def test_violating_mask_is_positional_on_a_duplicated_index(rule, column, expected):
+    # A frame whose index labels repeat must not derail a rule: label-based
+    # assignment either raises outright or silently masks the wrong rows.
+    frame = _duplicated_index_frame()
+    assert list(frame.index) == [0, 1, 0, 1]
+
+    mask = rule.violating_mask(frame[column])
+
+    assert list(mask) == expected
+    assert list(mask.index) == [0, 1, 0, 1]
+
+
+@pytest.mark.parametrize("rule,column,expected", _rules_columns_and_masks())
+def test_violating_mask_is_a_numpy_bool_mask_usable_for_row_selection(
+    rule, column, expected
+):
+    # Quarantine selects rows with `frame.index[mask]` / `frame.loc[mask]`, both
+    # of which need a plain numpy bool mask: a *nullable* boolean mask carrying
+    # pd.NA raises there. Pin the dtype, and that selection actually works.
+    frame = _duplicated_index_frame()
+
+    mask = rule.violating_mask(frame[column])
+
+    assert mask.dtype == bool  # numpy bool, never pandas' nullable "boolean"
+    assert not mask.isna().any()
+    assert len(frame.loc[mask]) == sum(expected)
+
+
+def test_violating_mask_stays_numpy_bool_over_a_nullable_boolean_column():
+    # Coercion can land pandas' nullable "boolean" dtype, whose comparisons
+    # produce nullable boolean results. The mask must still come back as plain
+    # numpy bool so downstream row selection keeps working.
+    series = pd.Series([True, None, False], dtype="boolean")
+
+    mask = OneOf(True).violating_mask(series)
+
+    assert mask.dtype == bool
+    assert list(mask) == [False, False, True]
+    assert len(series[mask]) == 1
+
+
+@pytest.mark.parametrize(
+    "rule,values,dtype,expected",
+    [
+        (
+            Pattern(r"\d{9,10}"),
+            ["123456789", "ABC", "12"],
+            "string",
+            r"violates pattern '\\d{9,10}' (e.g. '12', 'ABC')",
+        ),
+        (
+            Length(minimum=2, maximum=4),
+            ["ok", "x", "toolong"],
+            "string",
+            "length not in [2, 4] (e.g. 'toolong', 'x')",
+        ),
+        (
+            Range(minimum=0, maximum=100),
+            [0, -5, 150],
+            "int64",
+            "value not in [0, 100] (e.g. '-5', '150')",
+        ),
+        (
+            Unique(),
+            ["a", "dup", "dup"],
+            "string",
+            "has duplicate value(s): 'dup'",
+        ),
+        (
+            OneOf("open", "closed"),
+            ["open", "pending"],
+            "string",
+            "has value(s) outside {'closed', 'open'}: 'pending'",
+        ),
+    ],
+)
+def test_check_message_is_exact_for_every_rule(rule, values, dtype, expected):
+    # Breach phrases are operator-facing: they land in reject tables and stored
+    # quarantine evidence, so pin them character for character.
+    assert rule.check(pd.Series(values, dtype=dtype)) == expected
+
+
+@pytest.mark.parametrize("rule,column,_expected", _rules_columns_and_masks())
+def test_check_returns_none_when_no_present_value_breaches(rule, column, _expected):
+    # A conforming slice that still carries repeated index labels (1, 1).
+    frame = _duplicated_index_frame()
+    conforming = frame.iloc[[1, 3]]
+    assert list(conforming.index) == [1, 1]
+
+    assert rule.check(conforming[column]) is None
+
+
+def test_check_returns_none_for_an_all_null_column():
+    # Nulls are out of scope for every value rule, so a wholly-missing column
+    # is not a value breach (nullability is the separate contract).
+    empty = pd.Series([None, None], dtype="string")
+
+    assert OneOf("A").check(empty) is None
+    assert Pattern(r"\d+").check(empty) is None
+    assert Unique().check(empty) is None
+
+
+class HandRolledRule:
+    """A rule that implements the protocol and inherits nothing.
+
+    The ValueRule contract is structural, so a third-party rule that satisfies
+    the two methods must keep validating and quarantining without deriving from
+    the framework's shared base.
+    """
+
+    def violating_mask(self, series: "pd.Series") -> "pd.Series":
+        return pd.Series(
+            [bool(v is not None and str(v).startswith("bad")) for v in series],
+            index=series.index,
+        )
+
+    def check(self, series: "pd.Series") -> str | None:
+        breaches = series[self.violating_mask(series).to_numpy()]
+        if breaches.empty:
+            return None
+        return "is a bad value"
+
+
+@dataclass
+class HandRolledCase:
+    code: Annotated[str, HandRolledRule()]
+
+
+def test_a_rule_inheriting_nothing_still_validates():
+    frame = pd.DataFrame({"code": pd.Series(["ok", "bad-one"], dtype="string")})
+
+    with pytest.raises(ValidationError, match="column 'code' is a bad value"):
+        SchemaValidator(HandRolledCase).validate(Dataset.from_pandas(frame))
+
+
 @dataclass
 class ConflictingNullabilityCase:
     case_ref: Annotated[str, Nullable(), NonNull()]
