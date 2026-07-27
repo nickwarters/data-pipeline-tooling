@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom, flush } from './_dom-stub.js';
-import { fireEvent, getByRole } from './helpers/semantic-dom.js';
+import { fireEvent, getByRole, queryByRole } from './helpers/semantic-dom.js';
 
 installDom();
 
@@ -682,13 +682,18 @@ function mountSlice(deps, ctx = context()) {
   let active = true;
   const tools = /** @type {any} */ ({
     dispatch(/** @type {any} */ action) {
+      // Returning the next state is part of the store's contract
+      // (`createStore().dispatch`), and the retry effect reads state back at
+      // dispatch time through it.
       state = slice.reducer(state, action);
+      return state;
     },
     listen() {},
     isActive: () => active,
   });
   const dispose = slice.start(tools);
   return {
+    dispatch: tools.dispatch,
     get route() {
       return selectQuestionBankState(state);
     },
@@ -1194,4 +1199,487 @@ test('#550 a second bank/loaded also reselects rather than dangling', () => {
   assert.notEqual(currentBank(again), undefined);
   assert.notEqual(again.cases, again.baseline);
   assert.notEqual(again.cases.gamma, again.baseline.gamma);
+});
+
+/**
+ * #549 — a two-bank workbench where `beta` fails its initial load, so the
+ * failure banner (and its Retry) is on screen. The fake loader records the
+ * `only` argument of every call, which is what "re-fetches only the failed
+ * slugs" is actually about.
+ * @param {(call: number) => any} respond called with the 1-based call number
+ * @returns {{ calls: any[], loadBanks: (importers: any, only?: string[]) => Promise<any> }}
+ */
+function recordingLoader(respond) {
+  /** @type {any[]} */
+  const calls = [];
+  return {
+    calls,
+    loadBanks: async (/** @type {any} */ _importers, only) => {
+      calls.push(only);
+      return respond(calls.length);
+    },
+  };
+}
+
+/** One failed bank out of two, the shape every #549 test starts from. */
+function partiallyLoaded() {
+  return {
+    banks: { alpha: syntheticBank('alpha', 'A?') },
+    failures: [{ slug: 'beta', message: '404' }],
+  };
+}
+
+/** @param {any} mounted */
+function clickRetry(mounted) {
+  fireEvent(getByRole(mounted.view(), 'button', { name: /Retry/ }), 'click');
+}
+
+test('#549 a retry re-fetches only the failed slugs and seats the recovered bank', async () => {
+  const loader = recordingLoader((call) =>
+    call === 1
+      ? partiallyLoaded()
+      : { banks: { beta: syntheticBank('beta', 'B?') }, failures: [] }
+  );
+  const mounted = mountSlice({ loadBanks: loader.loadBanks });
+  await flush();
+  assert.match(
+    mounted.view().textContent ?? '',
+    /Some Question Banks could not be loaded: beta \(404\)/
+  );
+
+  clickRetry(mounted);
+  await flush();
+  await flush();
+
+  // The whole point: the retry asked for the failed slug and nothing else.
+  assert.deepEqual(loader.calls, [undefined, ['beta']]);
+  assert.deepEqual(Object.keys(mounted.route.cases), ['alpha', 'beta']);
+  assert.deepEqual(Object.keys(mounted.route.baseline), ['alpha', 'beta']);
+  assert.equal(mounted.route.cases.beta.questions[0].text, 'B?');
+  // The bank that had loaded is still there, and still current.
+  assert.equal(mounted.route.cases.alpha.questions[0].text, 'A?');
+  assert.deepEqual(mounted.route.loadFailures, []);
+  assert.equal(mounted.route.retrying, false);
+  assert.equal(isDirty(mounted.route), false);
+  // Draft and baseline stay separate objects on every bank, or the diff and the
+  // impact simulation silently go empty.
+  assert.notEqual(mounted.route.cases, mounted.route.baseline);
+  assert.notEqual(mounted.route.cases.alpha, mounted.route.baseline.alpha);
+  assert.notEqual(mounted.route.cases.beta, mounted.route.baseline.beta);
+  const text = mounted.view().textContent ?? '';
+  assert.doesNotMatch(text, /could not be loaded/);
+  mounted.unmount();
+});
+
+test('#549 a retry cannot discard an in-progress draft', async () => {
+  const loader = recordingLoader((call) =>
+    call === 1
+      ? partiallyLoaded()
+      : { banks: { beta: syntheticBank('beta', 'B?') }, failures: [] }
+  );
+  const mounted = mountSlice({ loadBanks: loader.loadBanks });
+  await flush();
+  mounted.dispatch({
+    type: 'question/field-changed',
+    questionId: 'alpha-q1',
+    field: 'text',
+    value: 'PRECIOUS UNSAVED WORK',
+  });
+  assert.equal(isDirty(mounted.route), true);
+
+  clickRetry(mounted);
+  await flush();
+  await flush();
+
+  assert.equal(
+    mounted.route.cases.alpha.questions[0].text,
+    'PRECIOUS UNSAVED WORK'
+  );
+  assert.equal(isDirty(mounted.route), true);
+  // The draft is still diffable: its baseline survived the retry untouched, so
+  // the edit reads as one change rather than as a whole added bank.
+  assert.equal(mounted.route.baseline.alpha.questions[0].text, 'A?');
+  assert.deepEqual(diffCounts(mounted.route), {
+    added: 0,
+    changed: 1,
+    deprecated: 0,
+  });
+  assert.equal(mounted.route.cases.beta.questions[0].text, 'B?');
+  assert.notEqual(mounted.route.cases.alpha, mounted.route.baseline.alpha);
+  assert.notEqual(mounted.route.cases.beta, mounted.route.baseline.beta);
+  mounted.unmount();
+});
+
+test('#549 a retry that fails again leaves the curator no worse off', async () => {
+  const loader = recordingLoader((call) =>
+    call === 1
+      ? partiallyLoaded()
+      : {
+          banks: {},
+          failures: [{ slug: 'beta', message: `503 (attempt ${call})` }],
+        }
+  );
+  const mounted = mountSlice({ loadBanks: loader.loadBanks });
+  await flush();
+  mounted.dispatch({
+    type: 'question/field-changed',
+    questionId: 'alpha-q1',
+    field: 'text',
+    value: 'PRECIOUS UNSAVED WORK',
+  });
+
+  clickRetry(mounted);
+  await flush();
+  await flush();
+
+  // Every loaded bank is still loaded, still drafted, still diffable.
+  assert.deepEqual(Object.keys(mounted.route.cases), ['alpha']);
+  assert.deepEqual(Object.keys(mounted.route.baseline), ['alpha']);
+  assert.equal(
+    mounted.route.cases.alpha.questions[0].text,
+    'PRECIOUS UNSAVED WORK'
+  );
+  assert.equal(mounted.route.baseline.alpha.questions[0].text, 'A?');
+  assert.equal(isDirty(mounted.route), true);
+  assert.notEqual(mounted.route.cases.alpha, mounted.route.baseline.alpha);
+  // The failure is still named, with the message from this attempt.
+  assert.deepEqual(mounted.route.loadFailures, [
+    { slug: 'beta', message: '503 (attempt 2)' },
+  ]);
+  assert.equal(mounted.route.retrying, false);
+  assert.match(mounted.view().textContent ?? '', /beta \(503 \(attempt 2\)\)/);
+
+  // And the control is armed again rather than stuck at "Retrying…".
+  clickRetry(mounted);
+  await flush();
+  await flush();
+  assert.deepEqual(loader.calls, [undefined, ['beta'], ['beta']]);
+  assert.deepEqual(mounted.route.loadFailures, [
+    { slug: 'beta', message: '503 (attempt 3)' },
+  ]);
+  mounted.unmount();
+});
+
+test('#549 a loader that rejects wholesale still names the failed slugs', async () => {
+  const loader = recordingLoader((call) => {
+    if (call === 1) return partiallyLoaded();
+    throw new Error('bank artifacts unreachable');
+  });
+  const mounted = mountSlice({ loadBanks: loader.loadBanks });
+  await flush();
+
+  clickRetry(mounted);
+  await flush();
+  await flush();
+
+  assert.deepEqual(mounted.route.loadFailures, [
+    { slug: 'beta', message: 'bank artifacts unreachable' },
+  ]);
+  assert.deepEqual(Object.keys(mounted.route.cases), ['alpha']);
+  assert.equal(mounted.route.retrying, false);
+  mounted.unmount();
+});
+
+test('#549 a second press while a retry is in flight does not fetch twice', async () => {
+  let release = /** @type {(value?: any) => void} */ (() => {});
+  const loader = recordingLoader((call) =>
+    call === 1
+      ? partiallyLoaded()
+      : new Promise((resolve) => {
+          release = resolve;
+        })
+  );
+  const mounted = mountSlice({ loadBanks: loader.loadBanks });
+  await flush();
+
+  clickRetry(mounted);
+  await flush();
+  assert.equal(mounted.route.retrying, true);
+  const button = getByRole(mounted.view(), 'button', { name: /Retry/ });
+  assert.equal(button.textContent, 'Retrying…');
+  assert.equal(button.getAttribute('aria-disabled'), 'true');
+  clickRetry(mounted);
+  await flush();
+  assert.deepEqual(loader.calls, [undefined, ['beta']]);
+
+  release({ banks: { beta: syntheticBank('beta', 'B?') }, failures: [] });
+  await flush();
+  await flush();
+  assert.equal(mounted.route.retrying, false);
+  assert.deepEqual(Object.keys(mounted.route.cases), ['alpha', 'beta']);
+  mounted.unmount();
+});
+
+test('#549 a retry that resolves after unmount is discarded', async () => {
+  let release = /** @type {(value?: any) => void} */ (() => {});
+  const loader = recordingLoader((call) =>
+    call === 1
+      ? partiallyLoaded()
+      : new Promise((resolve) => {
+          release = resolve;
+        })
+  );
+  const mounted = mountSlice({ loadBanks: loader.loadBanks });
+  await flush();
+  clickRetry(mounted);
+  await flush();
+  mounted.unmount();
+  release({ banks: { beta: syntheticBank('beta', 'B?') }, failures: [] });
+  await flush();
+  await flush();
+
+  assert.deepEqual(Object.keys(mounted.route.cases), ['alpha']);
+  assert.deepEqual(mounted.route.loadFailures, [
+    { slug: 'beta', message: '404' },
+  ]);
+});
+
+test('#549 nothing loaded at all is still recoverable in place', async () => {
+  const loader = recordingLoader((call) =>
+    call === 1
+      ? { banks: {}, failures: [{ slug: 'alpha', message: '404' }] }
+      : { banks: { alpha: syntheticBank('alpha', 'A?') }, failures: [] }
+  );
+  const mounted = mountSlice({ loadBanks: loader.loadBanks });
+  await flush();
+  assert.match(
+    mounted.view().textContent ?? '',
+    /No Question Bank could be loaded/
+  );
+
+  clickRetry(mounted);
+  await flush();
+  await flush();
+
+  assert.deepEqual(loader.calls, [undefined, ['alpha']]);
+  assert.equal(mounted.route.activeSlug, 'alpha');
+  assert.doesNotMatch(
+    mounted.view().textContent ?? '',
+    /No Question Bank could be loaded/
+  );
+  mounted.unmount();
+});
+
+test('#549 a retry is offered only where a bank actually failed', async () => {
+  const clean = mountSlice({
+    loadBanks: async () => ({ banks: liveBanks, failures: [] }),
+  });
+  await flush();
+  assert.equal(queryByRole(clean.view(), 'button', { name: /Retry/ }), null);
+  clean.unmount();
+
+  // Nor when there is nothing loaded and nothing named as failed: there is no
+  // slug to re-fetch, so a control would do nothing.
+  const empty = mountSlice({
+    loadBanks: async () => ({ banks: {}, failures: [] }),
+  });
+  await flush();
+  const view = empty.view();
+  assert.match(view.textContent ?? '', /No Question Bank artifacts/);
+  assert.equal(queryByRole(view, 'button', { name: /Retry/ }), null);
+  empty.unmount();
+});
+
+test('#549 bank/retry-requested marks the retry without clearing the failures', () => {
+  const loaded = questionBankReducer(emptyRoute(), {
+    type: 'bank/loaded',
+    banks: { alpha: syntheticBank('alpha', 'A?') },
+    failures: [{ slug: 'beta', message: '404' }],
+  });
+  assert.equal(loaded.retrying, false);
+
+  const retrying = questionBankReducer(loaded, {
+    type: 'bank/retry-requested',
+  });
+
+  assert.equal(retrying.retrying, true);
+  // The failure is still true until the retry says otherwise.
+  assert.deepEqual(retrying.loadFailures, [{ slug: 'beta', message: '404' }]);
+  assert.deepEqual(retrying.cases, loaded.cases);
+  assert.equal(
+    questionBankReducer(retrying, {
+      type: 'bank/refreshed',
+      banks: { alpha: syntheticBank('alpha', 'A?') },
+      failures: [],
+    }).retrying,
+    false
+  );
+});
+
+test('#549 a publish landing during an in-flight retry is not rolled back', async () => {
+  // The retry's union of "already loaded" and "just recovered" is built inside
+  // the reducer, from the state at dispatch time. Built instead from anything
+  // the effect captured before it awaited, the publish below is silently undone
+  // — both halves reverting to the pre-publish artifact while publishStatus
+  // still reads 'succeeded' and isDirty reads false.
+  let release = /** @type {(value?: any) => void} */ (() => {});
+  const loader = recordingLoader((call) =>
+    call === 1
+      ? partiallyLoaded()
+      : new Promise((resolve) => {
+          release = resolve;
+        })
+  );
+  const mounted = mountSlice({ loadBanks: loader.loadBanks });
+  await flush();
+  mounted.dispatch({
+    type: 'question/field-changed',
+    questionId: 'alpha-q1',
+    field: 'text',
+    value: 'PUBLISHED WORDING',
+  });
+
+  clickRetry(mounted);
+  await flush();
+  assert.equal(mounted.route.retrying, true);
+
+  // The curator publishes while the retry is still in the air; publishing
+  // promotes their draft to the baseline.
+  mounted.dispatch({ type: 'publish/succeeded', artifacts: {} });
+  assert.equal(
+    mounted.route.baseline.alpha.questions[0].text,
+    'PUBLISHED WORDING'
+  );
+
+  release({ banks: { beta: syntheticBank('beta', 'B?') }, failures: [] });
+  await flush();
+  await flush();
+
+  assert.equal(
+    mounted.route.cases.alpha.questions[0].text,
+    'PUBLISHED WORDING'
+  );
+  assert.equal(
+    mounted.route.baseline.alpha.questions[0].text,
+    'PUBLISHED WORDING'
+  );
+  assert.equal(mounted.route.publishStatus, 'succeeded');
+  assert.equal(isDirty(mounted.route), false);
+  assert.equal(mounted.route.cases.beta.questions[0].text, 'B?');
+  assert.notEqual(mounted.route.cases.alpha, mounted.route.baseline.alpha);
+  mounted.unmount();
+});
+
+test('#549 a wholesale initial load failure is recoverable in place too', async () => {
+  let attempt = 0;
+  /** @type {any[]} */
+  const calls = [];
+  const loadBanks = async (
+    /** @type {any} */ _importers,
+    /** @type {string[]|undefined} */ only
+  ) => {
+    calls.push(only);
+    attempt += 1;
+    if (attempt <= 2) throw new Error(`artifacts unreachable (${attempt})`);
+    return { banks: { alpha: syntheticBank('alpha', 'A?') }, failures: [] };
+  };
+  const mounted = mountSlice({ loadBanks });
+  await flush();
+  assert.equal(mounted.route.loadError, 'artifacts unreachable (1)');
+  assert.deepEqual(mounted.route.loadFailures, []);
+
+  // Attempt 2 fails the same way, and must leave the control armed rather than
+  // stuck at "Retrying…" — otherwise the first attempt is reload-only.
+  clickRetry(mounted);
+  await flush();
+  await flush();
+  assert.equal(mounted.route.loadError, 'artifacts unreachable (2)');
+  assert.equal(mounted.route.retrying, false);
+
+  clickRetry(mounted);
+  await flush();
+  await flush();
+
+  // No named slugs to narrow to, so the retry re-runs the whole load.
+  assert.deepEqual(calls, [undefined, undefined, undefined]);
+  assert.equal(mounted.route.loadError, '');
+  assert.equal(mounted.route.activeSlug, 'alpha');
+  assert.equal(mounted.route.retrying, false);
+  assert.notEqual(mounted.route.cases.alpha, mounted.route.baseline.alpha);
+  mounted.unmount();
+});
+
+test('#549 bank/load-failed clears an in-flight retry', () => {
+  const failed = questionBankReducer(
+    { ...emptyRoute(), retrying: true },
+    { type: 'bank/load-failed', message: 'unreachable' }
+  );
+  assert.equal(failed.retrying, false);
+  assert.equal(failed.loadError, 'unreachable');
+  assert.equal(failed.loading, false);
+});
+
+test('#549 bank/retry-requested refuses when there is nothing to re-fetch', () => {
+  // Latching `retrying` with no effect behind it is the dead end this guard
+  // exists to prevent: nothing else clears it.
+  const loaded = questionBankReducer(emptyRoute(), {
+    type: 'bank/loaded',
+    banks: { alpha: syntheticBank('alpha', 'A?') },
+    failures: [],
+  });
+  assert.equal(
+    questionBankReducer(loaded, { type: 'bank/retry-requested' }),
+    loaded
+  );
+});
+
+test('#549 the Retry control is rendered only when a retry tool backs it', () => {
+  // Without one there is nothing to run: the control would set `retrying` and
+  // strand itself at "Retrying…" forever.
+  const state = {
+    chrome: context().chrome,
+    routes: {
+      questionBank: questionBankReducer(emptyRoute(), {
+        type: 'bank/loaded',
+        banks: { alpha: syntheticBank('alpha', 'A?') },
+        failures: [{ slug: 'beta', message: '404' }],
+      }),
+    },
+  };
+  const dispatch = (/** @type {any} */ action) => action;
+
+  const bare = bankEditorView(/** @type {any} */ (state), { dispatch });
+  assert.match(bare.textContent ?? '', /Some Question Banks could not be/);
+  assert.equal(queryByRole(bare, 'button', { name: /Retry/ }), null);
+
+  const wired = bankEditorView(/** @type {any} */ (state), {
+    dispatch,
+    retry: () => {},
+  });
+  assert.notEqual(queryByRole(wired, 'button', { name: /Retry/ }), null);
+});
+
+test('#549 the Retry control sits outside the live region and keeps focus', async () => {
+  const loader = recordingLoader((call) =>
+    call === 1
+      ? partiallyLoaded()
+      : new Promise(() => {
+          // never settles: the assertions below are about the busy state
+        })
+  );
+  const mounted = mountSlice({ loadBanks: loader.loadBanks });
+  await flush();
+
+  const idle = getByRole(mounted.view(), 'button', { name: /Retry/ });
+  // `disabled` would drop focus to the document on click; `aria-disabled`
+  // announces the same state and keeps the keyboard curator where they are.
+  assert.equal(Boolean(idle.disabled), false);
+  assert.equal(idle.getAttribute('aria-disabled'), 'false');
+  assert.equal(idle.getAttribute('aria-busy'), 'false');
+  // The live region covers the failure message only: with the control inside
+  // it, every label toggle re-announces the whole failure list.
+  assert.equal(
+    queryByRole(getByRole(mounted.view(), 'status'), 'button', {
+      name: /Retry/,
+    }),
+    null
+  );
+
+  clickRetry(mounted);
+  await flush();
+  const busy = getByRole(mounted.view(), 'button', { name: /Retrying/ });
+  assert.equal(Boolean(busy.disabled), false);
+  assert.equal(busy.getAttribute('aria-disabled'), 'true');
+  assert.equal(busy.getAttribute('aria-busy'), 'true');
+  mounted.unmount();
 });

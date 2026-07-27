@@ -1189,6 +1189,18 @@
   color: var(--cora-color-danger);
   border-color: var(--cora-color-danger);
 }
+/* Busy controls keep focus, so they are `aria-disabled` rather than `disabled`
+   (see the Retry control in cora-bank-editor.js); both spellings read the
+   same. */
+.cora-bank-editor .mini-btn:disabled,
+.cora-bank-editor .mini-btn[aria-disabled='true'] {
+  opacity: 0.6;
+  cursor: default;
+}
+.cora-bank-editor .mini-btn[aria-disabled='true']:hover {
+  color: var(--cora-color-text-muted);
+  border-color: var(--cora-color-border);
+}
 
 .cora-bank-editor .group-children {
   padding-left: 0;
@@ -1759,6 +1771,9 @@
   border-bottom: 1px solid var(--cora-color-border);
   color: var(--cora-color-text-muted);
   font-size: var(--cora-font-size-sm);
+  display: flex;
+  align-items: center;
+  gap: var(--cora-space-3);
 }
 
 /* ── Empty state ──────────────────────────────────────────────────────── */
@@ -1773,6 +1788,9 @@
   font-size: var(--cora-font-size-lg);
   color: var(--cora-color-text-muted);
   margin-bottom: var(--cora-space-2);
+}
+.cora-bank-editor .empty .mini-btn {
+  margin-top: var(--cora-space-3);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -85,15 +85,33 @@ export function normaliseQuestionBank(bank) {
  * This function performs I/O and is therefore never called at module scope —
  * the bank editor route slice calls it from `start()`.
  *
+ * `only` narrows the load to the named slugs, which is what a #549 retry needs:
+ * re-running every importer to recover one artifact would re-fetch the banks
+ * that were fine, and a curator may already be editing them. A named slug with
+ * no importer is deliberately NOT filtered out — it is run like any other and
+ * lands in `failures`, because a retry that silently drops the slug it was
+ * asked about would clear the failure banner while nothing had been recovered.
+ * It fails with a message written for the curator who will read it in the
+ * banner, rather than with the `importers[slug] is not a function` TypeError
+ * that calling the missing importer would raise.
+ *
  * @param {Record<string, () => Promise<{ default: QuestionBank }>>} [importers]
+ * @param {string[]} [only] slugs to load; every registered slug by default
  * @returns {Promise<LoadedQuestionBanks>}
  */
-export async function loadQuestionBanks(importers = QUESTION_BANK_IMPORTERS) {
-  const slugs = Object.keys(importers);
+export async function loadQuestionBanks(
+  importers = QUESTION_BANK_IMPORTERS,
+  only
+) {
+  const slugs = only ?? Object.keys(importers);
   const settled = await Promise.allSettled(
-    slugs.map(async (slug) =>
-      normaliseQuestionBank((await importers[slug]()).default)
-    )
+    slugs.map(async (slug) => {
+      const importer = importers[slug];
+      if (typeof importer !== 'function') {
+        throw new Error(`No Question Bank importer registered for "${slug}"`);
+      }
+      return normaliseQuestionBank((await importer()).default);
+    })
   );
   /** @type {Record<string, QuestionBank>} */
   const banks = {};

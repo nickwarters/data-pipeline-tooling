@@ -128,9 +128,10 @@ function masthead() {
  * loaded at all (#521).
  * @param {string} heading
  * @param {string} detail
+ * @param {HTMLElement|null} [action]
  * @returns {HTMLElement}
  */
-function bankStatusShell(heading, detail) {
+function bankStatusShell(heading, detail, action = null) {
   return h(
     'div',
     { className: 'cora-bank-editor' },
@@ -143,9 +144,16 @@ function bankStatusShell(heading, detail) {
         { className: 'editor' },
         h(
           'div',
-          { className: 'empty', role: 'status' },
-          h('h3', {}, heading),
-          h('p', {}, detail)
+          { className: 'empty' },
+          // The live region covers the message only. With the Retry control
+          // inside it, every label toggle re-announces the whole failure.
+          h(
+            'div',
+            { role: 'status' },
+            h('h3', {}, heading),
+            h('p', {}, detail)
+          ),
+          action
         )
       )
     )
@@ -160,12 +168,45 @@ function describeFailures(failures) {
 }
 
 /**
+ * The control that makes a named failure recoverable in place (#549). Before
+ * this, the only way out of a transient blip on one artifact was reloading the
+ * page, which re-fetches every bank — including the ones the curator may be
+ * part-way through editing.
+ *
+ * In-flight state is `aria-busy` + `aria-disabled`, not the `disabled`
+ * property: a disabled button is removed from the tab order, so a keyboard
+ * curator who pressed Retry would have focus dropped to the document mid-retry
+ * and have to find their way back. `aria-disabled` announces the same thing and
+ * keeps focus. It does not stop the click, so the effect owns the in-flight
+ * latch — which it must anyway, since a pointer user can outrun a render.
+ * @param {QuestionBankRouteState} route
+ * @param {() => void} retry
+ * @returns {HTMLElement}
+ */
+function retryButton(route, retry) {
+  return h(
+    'button',
+    {
+      className: 'mini-btn',
+      'aria-busy': String(route.retrying),
+      'aria-disabled': String(route.retrying),
+      onclick: retry,
+    },
+    route.retrying ? 'Retrying…' : 'Retry'
+  );
+}
+
+/**
  * @param {QuestionBankState} state
- * @param {{ dispatch: (action: any) => any, memo?: (key: PropertyKey, deps: readonly unknown[], render: () => HTMLElement) => HTMLElement, publish?: () => void }} tools
+ * @param {{ dispatch: (action: any) => any, memo?: (key: PropertyKey, deps: readonly unknown[], render: () => HTMLElement) => HTMLElement, publish?: () => void, retry?: () => void }} tools
  * @returns {HTMLElement}
  */
 export function bankEditorView(state, tools) {
   const route = selectQuestionBankState(state);
+  // No retry tool, no control. There is no useful fallback: dispatching
+  // `bank/retry-requested` with nothing behind it only sets `retrying`, and the
+  // button that set it is the thing that would have cleared it.
+  const retry = tools.retry ?? null;
   if (route.loading) {
     return bankStatusShell(
       'Loading Question Banks…',
@@ -179,7 +220,15 @@ export function bankEditorView(state, tools) {
       route.loadError ||
         (route.loadFailures.length
           ? `Failed: ${describeFailures(route.loadFailures)}`
-          : 'No Question Bank artifacts are registered for this site.')
+          : 'No Question Bank artifacts are registered for this site.'),
+      // Nothing loaded is the case where a full page reload costs the most and
+      // the retry is worth the most, so the shell carries it too — including
+      // when the loader failed wholesale (`loadError`, no named slugs), where
+      // the retry re-runs the whole load. Only a site with no artifacts
+      // registered at all gets no control: there is nothing to re-fetch.
+      retry && (route.loadFailures.length || route.loadError)
+        ? retryButton(route, retry)
+        : null
     );
   }
   const dirty = isDirty(route);
@@ -192,8 +241,16 @@ export function bankEditorView(state, tools) {
     route.loadFailures.length
       ? h(
           'div',
-          { className: 'bank-load-warning', role: 'status' },
-          `Some Question Banks could not be loaded: ${describeFailures(route.loadFailures)}`
+          { className: 'bank-load-warning' },
+          // `role="status"` scopes to the message, not the whole banner: the
+          // Retry label toggles between renders, and inside the live region
+          // that re-announces the entire failure list every time.
+          h(
+            'span',
+            { role: 'status' },
+            `Some Question Banks could not be loaded: ${describeFailures(route.loadFailures)}`
+          ),
+          retry ? retryButton(route, retry) : null
         )
       : null,
     CaseTabs(caseTabsPropsFor(route, tools.dispatch, dirty)),
@@ -294,6 +351,71 @@ export function createRouteSlice(_params, context, deps = {}) {
       }
     }
   };
+  let retryInFlight = false;
+  /**
+   * Re-run the load for the failed slugs only (#549), and seat the result
+   * through `bank/recovered`, which never overwrites a draft the curator holds.
+   *
+   * What to retry is read back out of the store — `dispatch()` returns the next
+   * state — rather than out of the render-derived snapshot this module keeps
+   * for `publish`. Same for the union of already-loaded and recovered banks,
+   * which `bank/recovered` builds inside the reducer at dispatch time. Nothing
+   * here depends on a render having happened, so nothing here breaks if the
+   * store's render scheduling changes.
+   *
+   * The retry deliberately does not re-fetch the banks that loaded: they are
+   * current, and re-reading them is the cost of the full page reload this
+   * control exists to replace. The one exception is a load that failed
+   * wholesale — no banks, no named slugs, only `loadError` — where there is
+   * nothing partial to preserve and the retry re-runs the entire load.
+   */
+  const retry = async () => {
+    const tools = effectTools;
+    if (!tools || !tools.isActive() || retryInFlight) return;
+    const route = selectQuestionBankState(
+      tools.dispatch({ type: 'bank/retry-requested' })
+    );
+    // The reducer refuses when there is nothing to re-fetch.
+    if (!route.retrying) return;
+    const slugs = route.loadFailures.map((failure) => failure.slug);
+    retryInFlight = true;
+    try {
+      const loaded = await loadBanks(
+        undefined,
+        slugs.length ? slugs : undefined
+      );
+      if (!tools.isActive()) return;
+      tools.dispatch({
+        type: 'bank/recovered',
+        banks: loaded.banks,
+        failures: loaded.failures,
+      });
+    } catch (error) {
+      console.error('[CORA] question bank retry failed', error);
+      const message = error instanceof Error ? error.message : String(error);
+      if (!tools.isActive()) return;
+      if (slugs.length) {
+        // loadQuestionBanks contains per-bank failures itself, so this is the
+        // loader failing wholesale. Keep the slugs named rather than dropping
+        // them: an empty failure list would read as "all recovered".
+        tools.dispatch({
+          type: 'bank/recovered',
+          banks: {},
+          failures: slugs.map((slug) => ({ slug, message })),
+        });
+      } else {
+        // The whole-load retry failed the same way the initial load did, so it
+        // lands back where the initial failure did — still retryable.
+        tools.dispatch({ type: 'bank/load-failed', message });
+      }
+    } finally {
+      retryInFlight = false;
+    }
+  };
+  // Hoisted, not rebuilt per render: an inline arrow changes the button's
+  // `onclick` identity every pass, so morph() detaches and reattaches the
+  // listener on every render.
+  const retryHandler = () => void retry();
   return {
     initialState: {
       chrome: context.chrome,
@@ -307,7 +429,7 @@ export function createRouteSlice(_params, context, deps = {}) {
     },
     view(/** @type {QuestionBankState} */ state, /** @type {any} */ tools) {
       latestRoute = selectQuestionBankState(state);
-      return bankEditorView(state, { ...tools, publish });
+      return bankEditorView(state, { ...tools, publish, retry: retryHandler });
     },
     start(/** @type {any} */ tools) {
       effectTools = tools;

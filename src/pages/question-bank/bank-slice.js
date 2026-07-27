@@ -21,6 +21,7 @@ import { normaliseConfiguredActions } from '../../evaluators/configured-outcome.
  * @property {boolean} loading
  * @property {string} loadError
  * @property {BankLoadFailure[]} loadFailures
+ * @property {boolean} retrying
  * @property {Filters} filters
  * @property {boolean} drawerOpen
  * @property {boolean} railOpen
@@ -45,6 +46,7 @@ export function initialQuestionBankState() {
     loading: true,
     loadError: '',
     loadFailures: [],
+    retrying: false,
     filters: {
       category: null,
       questionGroup: null,
@@ -151,21 +153,40 @@ export function banksLoaded(state, banks, failures = []) {
  * and nothing anywhere names the bank whose baseline moved underneath them.
  * Recovery is soft too — `bank/reverted` recovers the baseline only by
  * discarding the draft wholesale, and a remount dispatches `bank/loaded`, which
- * overwrites the draft anyway. We do NOT raise a conflict prompt here: no
- * second load is reachable today, so a modal would be speculative UX. The
- * follow-on is a per-bank "baseline moved" signal — a flag recorded on refresh
- * and surfaced next to the diff — and #549, which makes the second load
- * reachable, is where it should land.
+ * overwrites the draft anyway. We do NOT raise a conflict prompt here, and
+ * there is still no per-bank "baseline moved" signal.
+ *
+ * **#549 assessed that follow-on and did not build it, because neither of this
+ * action's two callers can reach the conflict.** A retry (`bank/recovered`)
+ * re-fetches only the slugs that FAILED to load, which therefore hold no draft
+ * — the curator has never seen them — and it carries the already-loaded
+ * artifacts through unchanged from `state.baseline`. The other writer of
+ * `baseline` is `publish/succeeded`, which does not go through this action at
+ * all: it promotes the curator's own `cases` to `baseline`, so the baseline it
+ * moves is by definition the one the draft already matches. The two cannot
+ * interleave into a conflict either, because `bank/recovered` reads the union
+ * out of `state.baseline` inside this reducer — at dispatch time, after any
+ * publish that landed while the retry was in flight — rather than out of
+ * anything the effect captured before it awaited.
+ *
+ * The signal becomes worth building for the first caller that re-fetches a bank
+ * the curator may be editing: a post-publish *reload* of the artifacts, or any
+ * periodic refresh. Neither exists yet. Whoever adds one owns the signal.
  *
  * The loaded slug set is authoritative for the baseline and the selection: a
  * slug the refresh does not carry leaves `baseline`, and `activeSlug` reselects
  * rather than dangling. It is NOT authoritative for the draft. A refresh's
- * `banks` may be a partial set — a #549 retry most plausibly resolves with only
- * the one artifact that failed — so an omitted slug that carries a curator edit
+ * `banks` may be a partial set, so an omitted slug that carries a curator edit
  * keeps its draft in `cases` (with no baseline left, which `diffCounts`
  * tolerates and reads as wholly added). Dropping it would be the same silent,
  * unrecoverable data loss this action exists to prevent. An omitted slug with
  * no local edit is dropped.
+ *
+ * Because that drop is real, the #549 retry does not hand this action its
+ * fetched subset: `bank/recovered` unions it with the banks already loaded,
+ * since both are current. Passing the subset alone would drop every unedited
+ * bank from `cases` and every bank from `baseline` — a curator retrying one
+ * artifact would watch the others disappear.
  *
  * `cases` and `baseline` never share a reference — each retained or carried
  * bank keeps its own draft object, and each replaced one is cloned separately
@@ -197,7 +218,36 @@ export function banksRefreshed(state, banks, failures = []) {
     loading: false,
     loadError: '',
     loadFailures: failures,
+    retrying: false,
   };
+}
+
+/**
+ * Seat the result of a #549 retry: the artifacts it recovered, unioned with the
+ * ones that were already loaded.
+ *
+ * The union is built **here**, from `state.baseline` at dispatch time, and that
+ * placement is the whole point of this function existing rather than the effect
+ * spreading a captured snapshot into `bank/refreshed`. An effect can only hold
+ * state it read before it awaited, and `publish/succeeded` writes `baseline`
+ * too. A publish landing during an in-flight retry would then be silently
+ * rolled back — `cases` and `baseline` both reverting to the pre-publish
+ * artifact while `publishStatus` still read `'succeeded'` and `isDirty` read
+ * false, which is exactly the invisible data loss #550 exists to prevent.
+ * Reading the union in the reducer makes that unreachable by construction
+ * instead of by an undocumented render-ordering invariant.
+ *
+ * The base is `baseline`, never `cases`: `cases` holds the curator's draft, and
+ * unioning from it would promote that draft into the new baseline, zeroing the
+ * diff and reporting "no changes" to the impact simulation.
+ *
+ * @param {QuestionBankRouteState} state
+ * @param {Record<string, QuestionBank>} banks the freshly recovered artifacts
+ * @param {BankLoadFailure[]} [failures]
+ * @returns {QuestionBankRouteState}
+ */
+export function banksRecovered(state, banks, failures = []) {
+  return banksRefreshed(state, { ...state.baseline, ...banks }, failures);
 }
 
 /** @param {QuestionBankRouteState} state */
@@ -611,8 +661,28 @@ export function questionBankReducer(state, action) {
   if (action.type === 'bank/refreshed') {
     return banksRefreshed(state, action.banks ?? {}, action.failures ?? []);
   }
+  if (action.type === 'bank/retry-requested') {
+    // Nothing named as failed and no wholesale load error: there is nothing to
+    // re-fetch, so refuse rather than latching `retrying` on with no effect
+    // running to clear it. The effect reads this back to decide whether to run.
+    if (!state.loadFailures.length && !state.loadError) return state;
+    // The named failures stay on screen while the retry runs: they are still
+    // true, and clearing them would flash an all-clear the retry has not earned.
+    return { ...state, retrying: true };
+  }
+  if (action.type === 'bank/recovered') {
+    return banksRecovered(state, action.banks ?? {}, action.failures ?? []);
+  }
   if (action.type === 'bank/load-failed') {
-    return { ...state, loading: false, loadError: action.message };
+    // `retrying` clears here too: this is where a retry of a wholesale load
+    // failure lands when it fails again, and leaving it set would disable the
+    // control that is the only way out.
+    return {
+      ...state,
+      loading: false,
+      loadError: action.message,
+      retrying: false,
+    };
   }
   if (action.type === 'bank/selected') {
     return {

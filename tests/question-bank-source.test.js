@@ -143,6 +143,49 @@ test('#521 loadQuestionBanks: a broken artifact costs its own bank, not the othe
   ]);
 });
 
+test('#549 loadQuestionBanks: a retry loads only the slugs it is given', async () => {
+  /** @type {string[]} */
+  const ran = [];
+  /** @param {string} slug */
+  const importer = (slug) => async () => {
+    ran.push(slug);
+    return {
+      default:
+        /** @type {import('../src/pages/question-bank/question-bank-source.js').QuestionBank} */ ({
+          label: slug,
+          slug,
+          questions: [],
+        }),
+    };
+  };
+
+  const { banks, failures } = await loadQuestionBanks(
+    { alpha: importer('alpha'), beta: importer('beta') },
+    ['beta']
+  );
+
+  assert.deepEqual(ran, ['beta']);
+  assert.deepEqual(Object.keys(banks), ['beta']);
+  assert.deepEqual(failures, []);
+});
+
+test('#549 loadQuestionBanks: a named slug with no importer is reported, not dropped', async () => {
+  // A retry that silently ignored the slug it was asked about would clear the
+  // failure banner while nothing had been recovered.
+  const { banks, failures } = await loadQuestionBanks({}, ['ghost']);
+
+  assert.deepEqual(banks, {});
+  // The message is the curator-facing text in the failure banner, so it is
+  // pinned: calling the missing importer would surface the raw
+  // `importers[slug] is not a function` TypeError instead.
+  assert.deepEqual(failures, [
+    {
+      slug: 'ghost',
+      message: 'No Question Bank importer registered for "ghost"',
+    },
+  ]);
+});
+
 // #521's "importing this module performs no I/O" contract is enforced by
 // tests/question-bank-import-io-contract.test.js, which imports the module in a
 // child process with the real bank-reading primitives counted. A source-text
