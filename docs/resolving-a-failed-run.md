@@ -41,7 +41,7 @@ it back from the run store ([operator-cli.md](operator-cli.md)):
 ```sh
 python -m cli status --base-dir /data                  # latest run per pipeline
 python -m cli runs   --base-dir /data --pipeline ingest --status error
-python -m cli log    ingest --base-dir /data --run-id 5f8ff8c7   # the failing run's steps
+python -m cli log    ingest --base-dir /data --pipeline-run-id 5f8ff8c7   # the failing run's steps
 ```
 
 `log` prints one line per step and ends with a summary, so you can see **which
@@ -143,7 +143,7 @@ run's rows. Wait for the competing writer to finish and re-drive.
 
 ```sh
 python -m cli status --base-dir /data --pipeline ingest   # latest run now `ok`
-python -m cli log    ingest --base-dir /data --run-id <new-id>   # 0 failed, 0 warned
+python -m cli log    ingest --base-dir /data --pipeline-run-id <new-id>   # 0 failed, 0 warned
 ```
 
 A downstream that was **blocked** by the failure (its upstream was stale) clears

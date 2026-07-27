@@ -17,7 +17,7 @@ what that hop does, composed through the public facades (``framework.core`` /
 Address it by its location on disk -- the framework imports
 ``pipelines.myfeed.pipeline`` and runs its ``run(context)`` callable::
 
-    python -m cli run pipelines/myfeed [BASE_DIR]
+    python -m cli run pipelines/myfeed --base-dir BASE_DIR
 
 or run the module directly with a default run context::
 

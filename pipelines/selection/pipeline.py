@@ -11,7 +11,7 @@ per-Case verdict of why each available Case was or wasn't selected.
 
 It declares ``ingest`` as a freshness upstream, so::
 
-    python -m cli run pipelines/selection /tmp/demo --run-date 2026-05-29
+    python -m cli run pipelines/selection --base-dir /tmp/demo --run-date 2026-05-29
 
 checks for recent successful ``ingest`` history before Selection runs.
 """

@@ -397,12 +397,12 @@ planned per-file runs.
 ## `status` — the latest run per pipeline
 
 ```sh
-python -m cli status [--base-dir DIR] [--env ENV] [--case-type cases] [--pipeline ingest]
+python -m cli status [--base-dir DIR] [--env ENV] [--subject cases] [--pipeline ingest]
 ```
 
 With no filter, prints the most recent run summary for **every** pipeline.
 `--pipeline` shows a single pipeline's latest run by its run-history label — the
-leaf name a path-addressed pipeline records under. `--case-type` narrows to
+leaf name a path-addressed pipeline records under. `--subject` narrows to
 labels carrying a `subject/` prefix (legacy subject-qualified runs); path-addressed
 runs use bare leaf names, so filter those with `--pipeline`.
 

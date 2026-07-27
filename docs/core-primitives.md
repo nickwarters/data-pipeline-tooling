@@ -806,7 +806,7 @@ p.profile(
 
 ### `PipelineRunner` — thin domain orchestration + requirement guard
 `PipelineRunner` (`framework.run.runner`) is the minimal orchestration layer above
-the builder. It registers domain Pipelines by `(case_type, pipeline)` and runs
+the builder. It registers domain Pipelines by `(subject, pipeline)` and runs
 one requested Pipeline by name, without changing the builder contract:
 
 ```python

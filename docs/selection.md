@@ -274,7 +274,7 @@ Each pipeline records its run summary under its name (`ingest`, `selection`) and
 run's logical run id (default `<pipeline>:run_date`) and `pipeline_run_id`.
 Re-driving a business run under the same id replaces its rows rather than
 duplicating them — over the CLI, `python -m cli run pipelines/selection
-/tmp/demo --logical-run-id <id>` (see [operator-cli.md](operator-cli.md)). The
+--base-dir /tmp/demo --logical-run-id <id>` (see [operator-cli.md](operator-cli.md)). The
 `as_of` date is fixed so the working-day window lines up with the sample feed and
 the run is deterministic. Each pipeline can also be run directly with a default
 run context (`python -m pipelines.ingest.pipeline /tmp/demo`).

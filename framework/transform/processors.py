@@ -18,11 +18,8 @@ This module holds reusable transforms: ``Filter`` and ``Score`` carry
 plain-Python row callables, ``VectorizedFilter`` and ``VectorizedDerive`` carry
 whole-frame callables for batch-friendly transforms, ``Sort`` and ``Rename``
 reshape the frame, ``Parse`` decodes a packed text column through a callable
-(``json.loads`` by default) and ``SplitColumn`` / ``JoinColumns`` are the
-inverse pair that fans one delimited column into several and recombines several
-into one, ``Zfill`` left-pads text columns with leading zeros to a fixed width,
-``IntegerText`` renders a whole-number column widened to float as clean integer
-text, ``JoinWith`` joins an explicit read-only dependency in Python, and
+(``json.loads`` by default), ``JoinColumns`` recombines several columns into one
+delimited column, ``JoinWith`` joins an explicit read-only dependency in Python, and
 ``AntiJoinWith`` excludes rows whose key is present in a read-only dependency.
 """
 
@@ -288,8 +285,8 @@ class JoinColumns:
     (``drop=False``) — joining typically adds a composite alongside its parts;
     pass ``drop=True`` to consume them.
 
-    The inverse of :class:`SplitColumn`, and a plain-text sibling of
-    :class:`DeriveKey` (which hashes the joined key into a UUID). Raises
+    The plain-text sibling of :class:`DeriveKey` (which hashes the joined key
+    into a UUID) — this one leaves the composite readable. Raises
     ``ValueError`` if any source column is absent.
     """
 
