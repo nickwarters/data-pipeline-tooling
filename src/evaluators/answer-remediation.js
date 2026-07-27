@@ -10,6 +10,17 @@
  * `evaluators/remediation-status.js` re-exports it, so that module remains the
  * one seam callers name.
  *
+ * The dashboard is now the *only* reason. #499 also split this out to keep the
+ * applicability and failure evaluators off `services/section-access.js`'s import
+ * graph; that constraint lapsed in #502, when the Remediation cells became
+ * catalogue-aware and `section-access.js` moved to `remediation-status.js`,
+ * which pulls both. The cost was measured and accepted: `failure-evaluator.js`
+ * imports nothing and `applicability-evaluator.js` imports only
+ * `lib/response-options.js`, so it is three small leaf modules and no cycles —
+ * three extra module fetches on a boot path with no bundler, against a gate that
+ * is now correct. Do not reinstate the old split on `section-access.js`'s
+ * account; it no longer has one.
+ *
  * There is deliberately **no** `hasRemediation(answers)` here. "Does this Case
  * carry remediation?" is a catalogue-aware question — remediation on a Question
  * that has left the catalogue is orphaned, not outstanding — and answering it

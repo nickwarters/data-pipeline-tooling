@@ -40,6 +40,14 @@ export const CATALOGUE = [
  * `evaluateAccess` against `CATALOGUE` unless a test supplies its own — the
  * ordinary case being that the Case's Questions are loaded.
  *
+ * **This default is the shim's, not production's.** `evaluateAccess` in
+ * `src/services/section-access.js` defaults `catalogue` to `[]` and so fails
+ * closed: no Questions, no remediation rows, no Remediation Section. A test that
+ * wants that path must pass `[]` explicitly — importing this helper and omitting
+ * the argument silently supplies a populated catalogue instead, which is the
+ * opposite of the production default. `section-access-lifecycle.test.js` covers
+ * the fail-closed path directly.
+ *
  * @param {Section} section
  * @param {Role[]} roles
  * @param {CaseRow} caseRow

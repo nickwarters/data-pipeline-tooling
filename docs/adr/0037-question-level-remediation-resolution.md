@@ -269,12 +269,41 @@ The fourth surface, the **Responsible Party dashboard**, cannot have a catalogue
 it lists Cases across every Case Type and loading a bank per row is exactly the
 unbounded read ADR-0031 exists to prevent. It keeps reading the blob and is
 instead scoped to `Actions In Progress` — see ADR-0024's #497 amendment for why
-that makes the superset harmless rather than merely rarer.
+that bounds the superset rather than merely making it rarer.
+
+Bounded is not eliminated, and the difference is worth stating. The scoping holds
+at _entry_ (a Case reaches `Actions In Progress` only with ≥1 real row) and at
+_exit_ (it cannot leave until every row is resolved), so no work shown there is
+permanently unresolvable — which is the defect this amendment fixes. It is not a
+continuous invariant: deprecate a Question mid-Case and the dashboard lists an
+orphaned instruction the tab no longer renders, until the Reviewer resolves the
+remaining rows and the Case closes. That window is transient and self-clearing,
+and it is the accepted residue of not loading a bank per dashboard row.
 
 **Reporting note.** `hadRemediation` / `effectiveHadRemediation` narrow slightly
 against Amendment 1: a Case whose only remediation is orphaned is now stamped
 `false`. That is the honest value — no remediation was ever sent, and no SLA
 started. Cases already stamped are frozen and are not revisited.
+
+**There is therefore a reporting discontinuity at the deployment boundary, and
+anyone reading a had-remediation trend needs to know it exists.** Because stamped
+rows are frozen (ADR-0012) and deliberately not migrated, a report spanning the
+deploy mixes two definitions of the same column:
+
+| Stamped            | `hadRemediation: true` means                                                             |
+| ------------------ | ---------------------------------------------------------------------------------------- |
+| Before Amendment 1 | The Reviewer ticked ≥1 configured Remediation Action                                     |
+| Amendment 1 onward | …or typed free-form text (a widening)                                                    |
+| Amendment 2 onward | …and the Question is still in the catalogue, applicable and failing (a slight narrowing) |
+
+The **Responsible Party Manager report** (12 months, broken down by
+had-remediation) is exactly such a report, so expect a step **up** in the
+had-remediation share at the deploy date — free-form-only Cases start counting,
+and they are the larger of the two effects. That step is a definition change, not
+a change in how Reviewers work and not a data bug. Migrating the old rows was
+rejected: the pre-Amendment-1 stamp is a faithful record of what the app decided
+at the time, and ADR-0012 freezes reportable rows precisely so a later rule
+cannot rewrite history.
 
 ## Considered options
 

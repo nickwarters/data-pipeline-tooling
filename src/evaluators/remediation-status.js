@@ -92,6 +92,12 @@ function readStatus(answer) {
 }
 
 /**
+ * One shared empty catalogue, so every absent-catalogue path reads the same
+ * reference and none of them evicts `rowsCache`.
+ */
+const NO_CATALOGUE = /** @type {QuestionDefinition[]} */ ([]);
+
+/**
  * The last result, keyed by the identity of the inputs that produced it. Both
  * the tab and the completion gate ask for the rows on every render — and the
  * details textarea re-renders on every keystroke — so without this the
@@ -177,9 +183,6 @@ export function hasTrackableRemediation(catalogue, answers) {
   return remediationRows(catalogue ?? NO_CATALOGUE, answers).length > 0;
 }
 
-/** One shared empty catalogue, so the absent-catalogue path does not evict `rowsCache` on every call. */
-const NO_CATALOGUE = /** @type {QuestionDefinition[]} */ ([]);
-
 /**
  * Record a resolution on one Answer, returning a fresh Answer. `complete`
  * carries no text, so any stale details are dropped; `partial` / `cancelled`
@@ -230,12 +233,17 @@ export function isRemediationResolved(status) {
  * The completion gate: every remediation row resolved. Vacuously true when the
  * Case carries no remediation, so the no-actions path is never blocked.
  *
- * @param {QuestionDefinition[]} catalogue
+ * Tolerates an absent catalogue exactly as `hasTrackableRemediation` does — no
+ * Questions, hence no rows, hence nothing outstanding. The two are read together
+ * on the completion path, so they should not disagree about what a missing
+ * catalogue means or make each caller guard it a different way.
+ *
+ * @param {QuestionDefinition[] | null | undefined} catalogue
  * @param {Record<string, Answer>} answers
  * @returns {boolean}
  */
 export function remediationComplete(catalogue, answers) {
-  return remediationRows(catalogue, answers).every((row) =>
+  return remediationRows(catalogue ?? NO_CATALOGUE, answers).every((row) =>
     isRemediationResolved(row)
   );
 }

@@ -32,11 +32,25 @@ import { dataTableView } from '../../views/data-table.js';
  * That second half is load-bearing, not tidiness. This dashboard lists Cases
  * across every Case Type and holds no catalogue for any of them, so it reads the
  * Answers blob — a strict superset of the Remediation tab's rows. Scoping it to
- * the one status in which the Case is *frozen with a live tab* is what
- * guarantees the Responsible Party is never shown outstanding work that no row
- * exists to resolve (#502). The catalogue-aware `hasTrackableRemediation` gate
- * on the Send Actions fork is the other half: a Case only reaches
- * `Actions In Progress` with ≥1 real row.
+ * the one status in which the Case is *frozen with a live tab* is what keeps
+ * that superset from stranding anyone (#502). The catalogue-aware
+ * `hasTrackableRemediation` gate on the Send Actions fork is the other half: a
+ * Case only reaches `Actions In Progress` with ≥1 real row, and cannot leave it
+ * until every row is resolved.
+ *
+ * Be precise about what that does and does not guarantee, because the next
+ * person will reason from this comment. It holds at *entry* and at *exit*; it is
+ * not an invariant that holds continuously in between. A Case Type Owner can
+ * deprecate a Question Definition while a Case sits in `Actions In Progress`,
+ * and then the tab renders one fewer row than this function lists: the
+ * deprecated Question's remediation is orphaned, but it is still in the Answers
+ * blob, so it still shows here. That window is **transient and self-clearing** —
+ * the Reviewer resolves the rows that do exist, the completion gate opens, the
+ * Case closes, and the row drops out of this table. What is ruled out is the
+ * *permanent* stranding this change fixed: work shown here that no row will ever
+ * exist to resolve and no status transition will ever clear. What is not ruled
+ * out is the Responsible Party seeing a stale instruction for as long as a
+ * mid-Case deprecation leaves the Case open.
  *
  * @param {CaseRow} row
  * @returns {string[]}

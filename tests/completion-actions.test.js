@@ -103,6 +103,38 @@ test('completionPatch freezes outcome and ADR-0019 effective columns in the life
   assert.equal('placedOnHoldAt' in (patch ?? {}), false);
 });
 
+test('completionPatch chooses the transition from the catalogue CaseMachine stamps', () => {
+  // The fork and the `hadRemediation` stamp are the same fact read twice, so
+  // they must come from one object. Handing the machine an empty catalogue while
+  // the caller passes a populated one is not a real state — both are the one
+  // CaseReviewViewModel catalogue in production — but it is the only way to
+  // prove which copy is authoritative, and that the patch cannot say
+  // "Actions In Progress" while stamping `hadRemediation: false`.
+  const answers = {
+    q1: { value: 'No', remediationActions: [{ id: 'a1', text: 'Fix' }] },
+  };
+  const patch = completionPatch({
+    machine: machine([]),
+    caseRow: CASE_ROW,
+    catalogue: CATALOGUE,
+    answers,
+    allAnswered: true,
+    computeOutcome: () => ({ outcome: 'fail' }),
+    exportHash: null,
+  });
+
+  assert.equal(
+    patch?.status,
+    'Completed',
+    'the machine has no Question carrying remediation, so there is no actions path'
+  );
+  assert.equal(
+    patch?.hadRemediation,
+    false,
+    'and the stamp agrees with the transition that was chosen'
+  );
+});
+
 test('completionPatch atomically clears hold fields when either transition leaves In-progress', () => {
   const heldCase = {
     ...CASE_ROW,

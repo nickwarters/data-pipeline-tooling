@@ -28,7 +28,7 @@ import { navigateTo } from '../../lib/navigate.js';
 export function readyToClose(input) {
   return (
     input.machine?.mayResolveRemediation === true &&
-    remediationComplete(input.catalogue ?? [], input.answers)
+    remediationComplete(input.catalogue, input.answers)
   );
 }
 
@@ -116,7 +116,13 @@ export function completionPatch(input) {
   ) {
     return null;
   }
-  const transition = hasTrackableRemediation(input.catalogue, input.answers)
+  // Read the machine's catalogue, not the caller's. `CaseMachine` stamps
+  // `hadRemediation` from `this.catalogue`, so choosing the transition from any
+  // other copy would be the same fact read twice — the exact split this change
+  // exists to close. Today both are the one `CaseReviewViewModel` catalogue and
+  // the two readings cannot differ; sourcing them from one object is what keeps
+  // that true rather than incidental.
+  const transition = hasTrackableRemediation(machine.catalogue, input.answers)
     ? machine.transitionToActionsInProgress
     : machine.transitionToCompleted;
   const transitionFields =
