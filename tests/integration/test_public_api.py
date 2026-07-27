@@ -224,7 +224,7 @@ def test_internal_plumbing_stays_out_of_the_public_facades():
         "RowTrace",  # framework.run.trace — generic trace mechanics
         "RemoteRunner",  # framework.io.remote — stubbed remote client seam
         "FreshnessGuard",  # framework.run.runner — internal guard
-        "StepMetrics",  # framework.run.run_log — internal timing record
+        "StepMetrics",  # tools.observability.run_log — internal timing record
         "pipeline_label",  # framework.run.runner — internal label helper
     }
     for facade in (core, io, transform, run):

@@ -76,7 +76,7 @@ the implementation modules living alongside it:
 - `framework/transform/` — the dataset-reshaping primitives: `processors`,
   `coercion` (`SchemaCoercion` — the *coerce* half of the schema adapter),
   `quarantine`.
-- `framework/run/` — `builder`, `execution`, `pipeline_steps`,
+- `framework/run/` — `builder`, `execution`, `address`,
   `trace`, `runner`, `run_context`, `dry_run` (the preview report behind
   `dry_run_pipeline`). It also re-exports the observability seam
   (`RunLog`, `RunRegistry`) that lives in the sibling `tools.observability`
@@ -196,9 +196,12 @@ without notice:
   enum was removed from `framework.core` (#232).
 - `framework.run.trace` (`RowTrace`) — the generic per-row trace mechanics behind
   `Pipeline.explain()`; reached through the builder, not imported directly.
-- `framework.run.pipeline_steps` (`PipelineStep`, `PipelineExecution`, …) — the
-  builder's internal ordered execution plan; inspected by `.describe()` and
-  executed by `.run()`, not imported by pipeline scripts.
+- `framework.run.builder` (`Node` and its subclasses) / `framework.run.execution`
+  (`PipelineExecution`) — the one execution engine: the wired node graph the
+  builder mints, rendered by `.describe()` and executed in topological order by
+  `.run()`, against the per-run mutable state in `PipelineExecution`. Reached
+  through `Pipeline`, not imported by pipeline scripts. (A second, never-wired
+  step-based engine, `framework.run.pipeline_steps`, was deleted in #303.)
 - `framework._internal.describe` (`render`, `redact_url`) — shared helpers for the opt-in
   `describe()` protocol; a component implements `describe()` using these
   to render its own safe plan summary, not imported by pipeline scripts.

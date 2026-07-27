@@ -2,18 +2,11 @@
 
 from __future__ import annotations
 
-import logging
 from functools import partial
-from typing import ContextManager
 
-from framework.core.dataset import Dataset
-from framework.core.protocols import Severity, Validator
-from framework.core.validators import ValidationError
 from framework.run.run_context import RunContext
 from framework.run.trace import RowTrace
-from tools.observability.run_log import RunLog, StepMetrics
-
-log = logging.getLogger(__name__)
+from tools.observability.run_log import RunLog
 
 
 class PipelineExecution:
@@ -44,11 +37,6 @@ class PipelineExecution:
             logical_run_id=context.logical_run_id,
         )
 
-    def timed_step(
-        self, name: str, rows_in: int | None = None
-    ) -> ContextManager[StepMetrics]:
-        return self.step(name, rows_in=rows_in)
-
     def materialize_dependencies(self, processors: list[object]) -> None:
         seen: set[int] = set()
         for processor in processors:
@@ -63,24 +51,6 @@ class PipelineExecution:
                     continue
                 seen.add(identity)
                 name = getattr(dependency, "name", "dependency")
-                with self.timed_step(f"dependency:{name}") as metrics:
+                with self.step(f"dependency:{name}") as metrics:
                     dataset = read()
                     metrics.rows_out = len(dataset)
-
-    def validate(
-        self,
-        validators: list[tuple[Validator, Severity]],
-        dataset: Dataset,
-        phase: str,
-        metrics: StepMetrics,
-    ) -> None:
-        for validator, severity in validators:
-            try:
-                validator.validate(dataset)
-            except ValidationError as exc:
-                if severity == "error":
-                    raise ValidationError(
-                        f"{self.pipeline_name} {phase} failed: {exc}"
-                    ) from exc
-                log.warning("%s %s warn: %s", self.pipeline_name, phase, exc)
-                metrics.warn_hits.append(str(exc))
