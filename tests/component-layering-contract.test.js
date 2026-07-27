@@ -8,9 +8,9 @@
  * Two rules are enforced:
  *
  *  1. Generic helpers were relocated to `src/lib/` (showWhen-tree manipulation →
- *     `lib/showwhen-tree.js`; question/category ordering → `lib/question-order.js`;
- *     the transient toast primitive → `lib/toast.js`). No component may import
- *     those concerns from the question-bank subsystem any more.
+ *     `lib/showwhen-tree.js`; question/category ordering → `lib/question-order.js`).
+ *     No component may import those concerns from the question-bank subsystem
+ *     any more.
  *
  *  2. No component imports from the question-bank subsystem at all. The last
  *     former couplings have now moved into the store-driven bank page as pure
@@ -70,14 +70,6 @@ test('layering: no component imports the relocated generic helpers from question
     offenders,
     [],
     'these files must import showWhen-tree/order helpers from src/lib/, not src/pages/question-bank/'
-  );
-});
-
-test('layering: cora-toast (a base primitive) does not import from question-bank/', () => {
-  assert.equal(
-    importsQuestionBank('src/components/base/cora-toast.js'),
-    false,
-    'the base toast reads the transient toast primitive from src/lib/toast.js'
   );
 });
 

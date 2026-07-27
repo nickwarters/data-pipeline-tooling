@@ -165,7 +165,6 @@ src/
     section-registry.js         # ADR-0032 single source of truth for which Sections exist and their order
     showwhen-tree.js            # generic showWhen tree parse/serialise/mutate (was question-bank/)
     signal.js                   # internal state/service notification primitive; SaveQueue is its only consumer (#555)
-    toast.js                    # transient toast store + showToast action
 
   core/                         # store-driven view runtime (ADR-0034)
                                 #   see docs/guide/store-actions-and-effects.md for the contract
