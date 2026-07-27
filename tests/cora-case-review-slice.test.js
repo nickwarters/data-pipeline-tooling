@@ -2371,6 +2371,77 @@ test('Notes effect: a Case field edit dispatches then enqueues against the loade
   ]);
 });
 
+test('Notes effect: `fieldEdited` takes only the plain-text Case fields — a type, not a convention (#554)', () => {
+  /**
+   * `fieldEdited` is the one *generic* Case Row writer: its reducer branch
+   * assigns `[action.field]` onto `snapshot.caseRow`. `snapshot.machine` holds
+   * its own load-time copy of the row, and every `machine.can*` guard reads
+   * exactly `status` and `assignedReviewer` — so a caller writing either
+   * through here would move the store's row while completion, capture,
+   * attribution and Remediation selection kept answering from the old one.
+   *
+   * The assertion here is `tsc`, not the runtime: each `@ts-expect-error`
+   * fails the build with "Unused '@ts-expect-error' directive" the moment the
+   * parameter widens back to `string`. Nothing is invoked — this is a
+   * persistence path, and a nonsense write has no business reaching even a
+   * stubbed queue.
+   *
+   * @param {ReturnType<typeof createCaseReviewSaveEffect>} save
+   */
+  const typeContract = (save) => {
+    save.fieldEdited('notes', 'ok');
+    save.fieldEdited('caseJustification', 'ok');
+    // @ts-expect-error — `status` is a lifecycle field. It is written by
+    // CaseMachine's transitions and folded in via `case/case-row-patched`.
+    save.fieldEdited('status', 'Completed');
+    // @ts-expect-error — `assignedReviewer` is the other field the machine's
+    // guards read, and is not the Notes Section's to edit.
+    save.fieldEdited('assignedReviewer', 'someone-else');
+  };
+  assert.equal(typeof typeContract, 'function');
+});
+
+test('the reducer ignores a case/field-edited for a field outside the plain-text pair (#554)', () => {
+  // The type closes the effect seam, but `caseReviewReducer` takes `any`, so a
+  // raw `tools.dispatch` from anywhere in the page still compiles. This is the
+  // one branch that writes a computed key, so it is the last entrance: a
+  // `status` write here would advance the row while every `machine.can*`
+  // guard kept answering from its own load-time copy.
+  const loaded = snapshot();
+  loaded.caseRow = { ...loaded.caseRow, status: 'In-progress', notes: 'kept' };
+  const state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: loaded }
+  );
+
+  const afterLifecycle = caseReviewReducer(state, {
+    type: 'case/field-edited',
+    field: 'status',
+    value: 'Completed',
+  });
+  assert.equal(
+    afterLifecycle.routes.caseReview.snapshot?.caseRow?.status,
+    'In-progress',
+    'a lifecycle field dispatched through the generic writer is ignored'
+  );
+  assert.equal(
+    afterLifecycle,
+    state,
+    'and the state is returned unchanged, so nothing re-renders'
+  );
+
+  const afterNotes = caseReviewReducer(state, {
+    type: 'case/field-edited',
+    field: 'notes',
+    value: 'edited',
+  });
+  assert.equal(
+    afterNotes.routes.caseReview.snapshot?.caseRow?.notes,
+    'edited',
+    'the plain-text fields still write'
+  );
+});
+
 test('the route writes to the loaded Case row id, not the route param that found it (#511)', () => {
   const loaded = snapshot();
   loaded.caseRow = { ...loaded.caseRow, id: 'c1' };

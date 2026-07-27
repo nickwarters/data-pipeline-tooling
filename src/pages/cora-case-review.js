@@ -182,9 +182,16 @@ export function caseReviewReducer(state, action) {
   // `snapshot.machine` holds its own load-time copy and does not advance with
   // the row, so on the non-terminal Send Actions path the two now actively
   // disagree — `machine.mayResolveRemediation` false against a row reading
-  // `Actions In Progress`. That divergence is sanctioned and belongs to #554,
-  // which owns how the machine stops being a separate copy; rebuilding it here
-  // as a side effect is explicitly out of scope.
+  // `Actions In Progress`. That divergence is sanctioned; rebuilding the
+  // machine here as a side effect is out of scope.
+  //
+  // #554 narrowed the *writer* so a Notes field edit can no longer create the
+  // divergence, and declined to derive the machine: its `access` is computed at
+  // construction and republished as `snapshot.access`, so deriving it would
+  // convert ADR-0011's access matrix from a load-time evaluation to a live one.
+  // That is a permission-surface decision, not a staleness fix. The derivation
+  // belongs with #467, which introduces the memoised selector seam the other
+  // load-time derivations (`applicableQuestions`, `allAnswered`) also need.
   if (action.type === 'case/case-row-patched' && route.snapshot?.caseRow) {
     return patchSnapshot(state, {
       caseRow: { ...route.snapshot.caseRow, ...action.fields },
@@ -269,6 +276,16 @@ export function caseReviewReducer(state, action) {
     });
   }
   if (action.type === 'case/field-edited' && route.snapshot?.caseRow) {
+    // This branch writes a computed key, so it is the one place a caller could
+    // put any Case Row field into the store. `fieldEdited`'s parameter is typed
+    // to the plain-text fields (#554), which closes the effect seam — but the
+    // reducer takes `any`, so a raw `tools.dispatch` still compiles. Ignore
+    // anything else: `status` and `assignedReviewer` in particular are what
+    // `snapshot.machine`'s guards read from their own load-time copy, so a
+    // write here would move the row while every `can*` answer stayed behind.
+    if (action.field !== 'notes' && action.field !== 'caseJustification') {
+      return state;
+    }
     return patchSnapshot(state, {
       caseRow: { ...route.snapshot.caseRow, [action.field]: action.value },
     });

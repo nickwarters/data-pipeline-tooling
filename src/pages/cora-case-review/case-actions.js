@@ -5,6 +5,28 @@
 /** @typedef {'saved'|'saving'|'reconnecting'|'conflict'} SaveStatus */
 
 /**
+ * The plain-text Case Row fields the Notes Section edits, and the **only**
+ * fields `fieldEdited` may write.
+ *
+ * This is a closed union rather than `string` on purpose (#554). `fieldEdited`
+ * is the one generic Case Row writer — it dispatches `case/field-edited`, whose
+ * reducer branch assigns `[action.field]` — so a caller passing `status` or
+ * `assignedReviewer` would advance `snapshot.caseRow` while
+ * `snapshot.machine` kept the copy of the row it was constructed with at load.
+ * Every `machine.can*` guard that reads the Case Row reads exactly those two
+ * fields, so the store would show the new value while completion, capture,
+ * attribution and Remediation selection kept answering from the old one — a
+ * silent permission bug with a green suite. The restriction used to live in a
+ * JSDoc sentence; it is now a `tsc` error, and the reducer branch ignores
+ * anything else so a raw dispatch cannot route around the type.
+ *
+ * Lifecycle fields have their own writer: `CaseMachine`'s transitions, persisted
+ * by `completeCase` and folded back in through `case/case-row-patched`.
+ *
+ * @typedef {'notes' | 'caseJustification'} PlainTextCaseField
+ */
+
+/**
  * Route effect for Case persistence — Answers, the on-hold latch, and the plain
  * text fields of the Notes Section. User edits enter the store first, then the
  * unchanged SaveQueue owns field-level debounce and ETag concurrency.
@@ -18,7 +40,7 @@
  *   caseId: () => string,
  *   dispatch: (action:
  *     | {type: 'case/answers-edited', answers: Record<string, Answer>}
- *     | {type: 'case/field-edited', field: string, value: string}
+ *     | {type: 'case/field-edited', field: PlainTextCaseField, value: string}
  *     | {type: 'case/on-hold-changed', onHold: boolean, placedOnHoldAt: string | null}
  *   ) => unknown,
  *   now?: () => Date,
@@ -38,9 +60,10 @@ export function createCaseReviewSaveEffect({
     },
     /**
      * A plain-text Case field edited in the Notes Section — `notes` or
-     * `caseJustification`.
+     * `caseJustification`, and nothing else. See `PlainTextCaseField` for why
+     * the parameter is a closed union rather than a `string`.
      *
-     * @param {string} field @param {string} value
+     * @param {PlainTextCaseField} field @param {string} value
      */
     fieldEdited(field, value) {
       dispatch({ type: 'case/field-edited', field, value });

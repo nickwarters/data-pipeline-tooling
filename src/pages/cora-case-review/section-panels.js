@@ -84,9 +84,12 @@ import { resolveGeneralQuestionsPlacement } from '../../evaluators/general-quest
  * @property {(questionId: string, value: string | string[]) => void} onAnswer
  * @property {(questionId: string, party: { loginName: string, displayName: string } | null) => void} selectAttribution
  * @property {(questionId: string, query: string) => void} requestAttributionSearch
- * @property {{ fieldEdited: (field: string, value: string) => void }} save
- *   Narrowed on purpose: panels may report a field edit, and nothing else on the
- *   SaveQueue bridge.
+ * @property {{ fieldEdited: (field: import('./case-actions.js').PlainTextCaseField, value: string) => void }} save
+ *   Narrowed on purpose, twice over: panels may report a field edit and nothing
+ *   else on the SaveQueue bridge, and the field itself may only be one of the
+ *   plain-text Case fields. Restating `field` as a bare `string` here would widen
+ *   the effect's own union straight back open at the seam panels actually call
+ *   (#554).
  * @property {ReturnType<typeof import('./appeal-effects.js').createAppealEffects>} appeals
  *   The whole effect object, not a hand-written shape — these three are the
  *   persisted ADR-0026/0027 state transitions, so their argument shapes are
