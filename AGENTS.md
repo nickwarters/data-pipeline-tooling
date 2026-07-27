@@ -94,7 +94,8 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   `connect` factory in `framework._internal.connection`), `Pipeline` (deferred
   DAG builder; nodes wired by `.read` / `.transform` /
   `.validate` / `.write`; at `.run()` the graph is walked from its leaves, each
-  node executing after its inputs — a cyclic wiring raises `PipelineGraphError`
+  node executing after its inputs — a graph where *every* node is an input to
+  another leaves that walk no starting point, and raises `PipelineGraphError`
   rather than silently executing nothing).
 
 ### Commands
