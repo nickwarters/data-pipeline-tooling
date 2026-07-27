@@ -391,7 +391,7 @@ def render(
     ``feed_file`` seeds the scaffold from a real sample CSV (header -> schema
     fields, contents -> bundled sample, first rows -> the test's sample rows). It
     isn't supported with ``case_type`` (the Case Type variant also needs a
-    natural-key decision -- #155/#163).
+    natural-key decision).
 
     Raises ``ValueError`` for an invalid feed name or an unsupported flag
     combination, ``FileNotFoundError`` for a missing feed file, and

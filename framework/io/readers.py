@@ -366,7 +366,7 @@ class SasFileReader:
     :class:`Dataset`s. Gzip-compressed extracts (``extract.sas7bdat.gz``) are
     read on the fly — pandas infers the compression from the extension.
 
-    This is deliberately **not** the ADR-0012 ``SasReader``: it runs no SAS
+    This is deliberately **not** the ``SasReader``: it runs no SAS
     script, does no remote execution, and copies no file — it only *reads* a
     landed file. The two are complementary (``SasReader`` lands a file from a
     remote SAS host; this streams one once it is there) and the distinct name

@@ -42,7 +42,7 @@ class ChunkReader(Protocol):
     whole source in memory at once, ``chunks(size)`` yields a lazy iterator of
     bounded :class:`Dataset`s so a source far too large to materialise (hundreds
     of GB) can be processed with bounded memory. The in-memory ``Dataset``
-    contract (ADR-0002) holds *per chunk*, never for the whole source; the
+    contract holds *per chunk*, never for the whole source; the
     concrete chunking engine (pandas ``chunksize``) stays behind the seam and
     never appears in this signature.
     """

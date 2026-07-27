@@ -1,4 +1,4 @@
-"""Dry-run / preview mode for the deferred ``Pipeline`` builder (issue #102).
+"""Dry-run / preview mode for the deferred ``Pipeline`` builder.
 
 A run executed in dry-run mode reads, processes, and validates real data but
 **skips every commit**: no Write, Quarantine, or Explain node calls its writer,

@@ -9,7 +9,7 @@ it can be **trended across runs**. That turns "the data looks weird this run"
 values) from an undetectable problem into a trendable one.
 
 The pieces here sit beside the operational metadata on the same
-``tools.observability`` surface (#284 is the statistical sibling of #89):
+``tools.observability`` surface:
 
 - :func:`profile_dataset` computes a :class:`DatasetProfile` from a ``Dataset``.
   Cost is bounded by ``top_n`` (the distribution is capped) and by an optional

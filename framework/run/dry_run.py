@@ -1,4 +1,4 @@
-"""Dry-run preview: a per-step record of what a pipeline *would* do (issue #102).
+"""Dry-run preview: a per-step record of what a pipeline *would* do.
 
 A ``Pipeline.run()`` carried out under ``RunContext(dry_run=True)`` reads,
 processes, and validates real data but commits nothing: every node whose purpose

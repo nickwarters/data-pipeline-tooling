@@ -178,7 +178,7 @@ def test_streaming_readers_are_available_through_the_io_facade(tmp_path):
     assert sizes == [2, 1]
 
     # The chunk-level row filter composes over any ChunkReader and is itself one,
-    # narrowing the stream to an allow-list before anything accumulates (#287).
+    # narrowing the stream to an allow-list before anything accumulates.
     filtered = KeyFilterChunkReader(ChunkedCsvReader(src), "id", allowed_keys={1, 3})
     assert isinstance(filtered, ChunkReader)
     kept = [
