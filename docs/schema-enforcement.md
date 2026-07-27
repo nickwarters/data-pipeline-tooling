@@ -70,7 +70,7 @@ What it checks:
   | `str`                | object / string       |
   | `int`                | integer               |
   | `float`              | float                 |
-  | `bool`               | bool                  |
+  | `bool`               | bool / boolean        |
   | `date` / `datetime`  | datetime64            |
 
 Every breach is collected and reported **at once** in one located message
@@ -123,7 +123,28 @@ the round-trip-lossy declared types**:
 | Declared type | Coerced from | Coerced to |
 |---------------|--------------|------------|
 | `date` / `datetime` | text (`"2026-01-01"`) | datetime64 |
-| `bool` | `TRUE`/`FALSE` text (case-insensitive) or `1`/`0` | bool |
+| `bool` | `TRUE`/`FALSE`, `Y`/`N`, `YES`/`NO` text, or `1`/`0` (incl. the `1.0`/`0.0` a nulled numeric column comes back as) | pandas `"boolean"` |
+
+Boolean encodings are compared **case-folded and whitespace-stripped**, so
+`true`, `True` and `TRUE ` all map.
+
+A `bool` lands as pandas' **nullable `"boolean"`** dtype, not numpy `bool`. The
+reason is that numpy `bool` has no null, so a gap would have to be invented as
+`False`. **Nullability is enforced by the declared value rules, not the
+coercer**: a null is the *absence* of an encoding, so the coercer passes it
+through as `pd.NA` and never reports it as an unrecognized boolean encoding.
+An `Annotated[bool, Nullable()]` column therefore coerces cleanly with its gaps
+intact, while a null in a non-nullable column is reported by `SchemaValidator`
+as the nullability breach it is (`column 'active' contains null value(s)`),
+pointing at the declaration rather than blaming the feed's data. This keeps
+`bool` consistent with every other declared type, which already leaves presence
+to the rules.
+
+The validator's `bool` dtype check accepts both `"boolean"` and numpy `bool`, so
+nothing downstream has to know the difference. No storage migration is implied
+either: SQLite is dynamically typed and stores a boolean column as `1`/`0`/NULL
+whichever dtype was written, so `Refresh` and `AccumulateByRun` write and
+re-read a table whose boolean dtype changed mid-life without a schema change.
 
 `str` / `int` / `float` **survive storage**, so they pass through untouched and
 stay the validator's gate — and columns the schema doesn't declare are left
