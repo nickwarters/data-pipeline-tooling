@@ -216,7 +216,9 @@ function makeCausesResolver(baseQuestions, draftQuestions, diff) {
  * loader drops the Answer of any catalogue question that stops being
  * applicable, which can in turn de-apply downstream questions. Iterate to the
  * fixed point so the simulation reflects where a Case would settle. Answers
- * to ids outside the catalogue are kept, mirroring `handleAnswer`.
+ * to ids outside the catalogue are kept, mirroring `answerEdited` in
+ * `pages/cora-case-review/answer-actions.js` — the Answer write path that
+ * replaced the `handleAnswer` this used to name (ADR-0034, #555).
  *
  * @param {QuestionDefinition[]} questions
  * @param {Record<string, Answer>} answers

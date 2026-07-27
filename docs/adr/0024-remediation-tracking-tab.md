@@ -126,12 +126,20 @@ split above.
   marker. Removing all feedback at answer-time is the deliberate, literal choice
   (open question 1 of #247); failure is surfaced when the Reviewer moves to Issues.
 - **Materialization is unchanged.** _When_ configured actions attach to an Answer
-  (`materializeRemediationActions`, wired through `CaseReviewViewModel.handleAnswer`) is
+  (`materializeRemediationActions`, wired through the Answer write path) is
   untouched; #247 changes only _where_ actions render. This amend is a render-only
   removal on the Review tab.
 
 The legacy panel helper and its call site were removed; the `.cora-remediation-panel`
 style is retained solely for the styleguide demo.
+
+> **Update (#555):** the Answer write path named above was
+> `CaseReviewViewModel.handleAnswer` when this was recorded. ADR-0034's
+> store-driven conversion moved it to `answerEdited` in
+> `pages/cora-case-review/answer-actions.js`, which is where
+> `materializeRemediationActions` is wired today, and the class itself was later
+> renamed to `CaseLoader` (`src/lib/case-loader.js`) and no longer handles
+> Answers. _When_ configured actions attach is still unchanged.
 
 ## Amendment (2026-07, #497) — the per-action resolution store is read-only; there is one remediation store
 

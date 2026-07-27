@@ -17,6 +17,11 @@ redefines as a snapshot frozen at Reportable. The two-Section split,
 the single case-level `remediationDueDate` and the reportable-freeze lifecycle
 that ADR-0024 established are unchanged.
 
+> **Update (#555):** the module this ADR was recorded against,
+> `lib/case-review-view-model.js`, has since been renamed to
+> `lib/case-loader.js`; the reference below uses the current name. The rename
+> carried no behavioural change.
+
 ## Context
 
 ADR-0024 defined the **Remediation** tab as per-**Remediation Action** tracking,
@@ -221,7 +226,7 @@ The gap is reachable through **sanctioned operations only**. A Reviewer fails a
 Question and types free-form remediation; a Case Type Owner then marks that
 Question `deprecated` — the operation CLAUDE.md _mandates_ instead of deletion —
 or republishes the bank with different `optionOutcomes` or `showWhen`. Either
-way `case-review-view-model.js` drops it from the catalogue, or it stops being
+way `case-loader.js` drops it from the catalogue, or it stops being
 applicable, or it stops failing. The Answer keeps its remediation; the tab has no
 row for it. The Reviewer reopened the Case to a **Send Actions** button, a
 transition to `Actions In Progress`, a stamped `remediationDueDate` and

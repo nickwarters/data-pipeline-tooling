@@ -24,9 +24,15 @@ Accepted
 > uses `.txt` because SharePoint SE can block or mis-serve `.json`; the content is
 > still JSON text and is parsed explicitly.
 
+> **Amendment (2026-07, #555).** The class this ADR was recorded against,
+> `CaseReviewViewModel`, has since been renamed to `CaseLoader`
+> (`src/lib/case-loader.js`); the references below use the current name. The
+> rename carried no behavioural change — `load()` still resolves a reportable
+> Case's catalogue from the versioned export, with live fallback on a miss.
+
 ## Context
 
-A **Case** loads its **Question Bank** live: `CaseReviewViewModel.load()` imports the
+A **Case** loads its **Question Bank** live: `CaseLoader.load()` imports the
 current `case-types/{slug}.js`, whose operational config references the current
 standalone `case-types/banks/{slug}.txt`, filters out `deprecated` questions,
 and recomputes the **Applicable Question** set from that catalogue against the
@@ -223,7 +229,7 @@ The Python pipeline uses the **same** artifacts, gaining point-in-time stability
 3. Publish writes the content-addressed `{slug}.{hash}.json`, appends to
    `{slug}.history.json`, and updates the `{slug}.json` pointer.
 4. Completion stamps `questionBankVersion` on the Case row.
-5. `CaseReviewViewModel.load()` resolves a Completed Case's catalogue from the
+5. `CaseLoader.load()` resolves a Completed Case's catalogue from the
    versioned file, with live fallback + warning on miss.
 6. Add `labelIds` (frozen) and the label table to the export; reporting resolves
    label name/color from current.
