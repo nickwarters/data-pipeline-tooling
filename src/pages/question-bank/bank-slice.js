@@ -63,9 +63,57 @@ export function initialQuestionBankState() {
 }
 
 /**
- * Seat the loaded banks. `cases` and `baseline` are separately cloned on
- * purpose: the editor diffs draft against baseline, and sharing one reference
- * would make every diff — and the impact simulation — silently empty.
+ * Keep the selection only while the loaded banks still carry it, and otherwise
+ * fall back to the first available slug (#550). `||` alone only covered the
+ * empty case, so a later load with a different slug set left `activeSlug`
+ * naming a bank that is gone and the editor rendered its no-bank empty state
+ * after a *successful* load.
+ *
+ * The membership test is `Object.hasOwn`, not a truthiness check on
+ * `banks[activeSlug]`: inherited keys (`constructor`, `toString`) read as
+ * present through the prototype chain and would survive a load that does not
+ * carry them — exactly the dangling selection this guard removes.
+ *
+ * @param {string} activeSlug
+ * @param {Record<string, QuestionBank>} banks
+ * @returns {string}
+ */
+function selectSlug(activeSlug, banks) {
+  return Object.hasOwn(banks, activeSlug)
+    ? activeSlug
+    : (Object.keys(banks)[0] ?? '');
+}
+
+/**
+ * Whether the curator holds a local edit for `slug`: a draft that exists as an
+ * own key of `cases` and differs from the baseline it was seated against. A
+ * draft carried through an earlier partial refresh has no baseline left, and
+ * counts as edited — it is unsaved work either way.
+ *
+ * Both lookups are own-property lookups for the reason spelled out on
+ * {@link selectSlug}.
+ *
+ * @param {QuestionBankRouteState} state
+ * @param {string} slug
+ * @returns {boolean}
+ */
+function isEdited(state, slug) {
+  if (!Object.hasOwn(state.cases, slug)) return false;
+  const baseline = Object.hasOwn(state.baseline, slug)
+    ? state.baseline[slug]
+    : undefined;
+  return JSON.stringify(state.cases[slug]) !== JSON.stringify(baseline);
+}
+
+/**
+ * Seat the banks from the **initial** load: both the curator's draft (`cases`)
+ * and what it is diffed against (`baseline`) come from the loaded artifacts.
+ * A later load must use {@link banksRefreshed} instead — this one overwrites
+ * the draft (#550).
+ *
+ * `cases` and `baseline` are separately cloned on purpose: the editor diffs
+ * draft against baseline, and sharing one reference would make every diff —
+ * and the impact simulation — silently empty.
  *
  * @param {QuestionBankRouteState} state
  * @param {Record<string, QuestionBank>} banks
@@ -77,7 +125,75 @@ export function banksLoaded(state, banks, failures = []) {
     ...state,
     cases: structuredClone(banks),
     baseline: structuredClone(banks),
-    activeSlug: state.activeSlug || Object.keys(banks)[0] || '',
+    activeSlug: selectSlug(state.activeSlug, banks),
+    loading: false,
+    loadError: '',
+    loadFailures: failures,
+  };
+}
+
+/**
+ * Seat the banks from a **later** load — a retry of a failed artifact (#549),
+ * or a refresh after publishing. The freshly loaded artifacts always become the
+ * new `baseline`; they replace a bank's draft only where the curator has no
+ * local edit for that slug.
+ *
+ * **Conflict behaviour (#550): when a bank has both a curator edit and a
+ * changed baseline, the draft wins and the upstream change is not applied.**
+ * This is deliberate, and the reason is asymmetry of harm: a draft is unsaved,
+ * curator-authored work that exists nowhere else, so discarding it is
+ * unrecoverable data loss, whereas a superseded baseline can be reloaded.
+ *
+ * Be clear about what that costs, because it is not free. The moved baseline
+ * is currently **indistinguishable from the curator's own edits**: `diffCounts`
+ * folds both into one `changed` count per question, so an upstream change to a
+ * question the curator also touched renders as if the curator had reverted it,
+ * and nothing anywhere names the bank whose baseline moved underneath them.
+ * Recovery is soft too — `bank/reverted` recovers the baseline only by
+ * discarding the draft wholesale, and a remount dispatches `bank/loaded`, which
+ * overwrites the draft anyway. We do NOT raise a conflict prompt here: no
+ * second load is reachable today, so a modal would be speculative UX. The
+ * follow-on is a per-bank "baseline moved" signal — a flag recorded on refresh
+ * and surfaced next to the diff — and #549, which makes the second load
+ * reachable, is where it should land.
+ *
+ * The loaded slug set is authoritative for the baseline and the selection: a
+ * slug the refresh does not carry leaves `baseline`, and `activeSlug` reselects
+ * rather than dangling. It is NOT authoritative for the draft. A refresh's
+ * `banks` may be a partial set — a #549 retry most plausibly resolves with only
+ * the one artifact that failed — so an omitted slug that carries a curator edit
+ * keeps its draft in `cases` (with no baseline left, which `diffCounts`
+ * tolerates and reads as wholly added). Dropping it would be the same silent,
+ * unrecoverable data loss this action exists to prevent. An omitted slug with
+ * no local edit is dropped.
+ *
+ * `cases` and `baseline` never share a reference — each retained or carried
+ * bank keeps its own draft object, and each replaced one is cloned separately
+ * from the baseline clone.
+ *
+ * @param {QuestionBankRouteState} state
+ * @param {Record<string, QuestionBank>} banks
+ * @param {BankLoadFailure[]} [failures]
+ * @returns {QuestionBankRouteState}
+ */
+export function banksRefreshed(state, banks, failures = []) {
+  /** @type {Record<string, QuestionBank>} */
+  const cases = {};
+  for (const slug of Object.keys(banks)) {
+    cases[slug] = isEdited(state, slug)
+      ? state.cases[slug]
+      : structuredClone(banks[slug]);
+  }
+  for (const slug of Object.keys(state.cases)) {
+    if (!Object.hasOwn(banks, slug) && isEdited(state, slug)) {
+      cases[slug] = state.cases[slug];
+    }
+  }
+  return {
+    ...state,
+    cases,
+    baseline: structuredClone(banks),
+    activeSlug: selectSlug(state.activeSlug, banks),
     loading: false,
     loadError: '',
     loadFailures: failures,
@@ -491,6 +607,9 @@ export function questionBankReducer(state, action) {
   }
   if (action.type === 'bank/loaded') {
     return banksLoaded(state, action.banks ?? {}, action.failures ?? []);
+  }
+  if (action.type === 'bank/refreshed') {
+    return banksRefreshed(state, action.banks ?? {}, action.failures ?? []);
   }
   if (action.type === 'bank/load-failed') {
     return { ...state, loading: false, loadError: action.message };
