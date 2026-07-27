@@ -34,9 +34,9 @@ parameter is the seam every `tests/routes-*.test.js` injects through, so keep
 it.
 
 The dynamic `import()` stays in the route module; the helper never names a
-page. A route with real mount-time behaviour still registers a handler of its
-own — `src/routes/team-cases.js` derives a query string from `location.hash`
-and merges it into `params`, which is behaviour, not a pass-through shell.
+page. Every route in `src/routes/` now goes through `registerStoreRoute` — a
+route module no longer needs a `mount`/`unmount` literal to see the query
+string, because the router supplies it (see below).
 
 Then register the route in `src/setup/register-routes.js`:
 
@@ -52,10 +52,21 @@ safeRegister('my-page', registerMyPage, router, context);
 against registered patterns, unmounts the current handler, and mounts the next
 one. A segment beginning with `:` becomes a string in the `params` object.
 
-| Pattern         | Hash           | `params`       |
-| --------------- | -------------- | -------------- |
-| `#/dashboard`   | `#/dashboard`  | `{}`           |
-| `#/my-page/:id` | `#/my-page/42` | `{ id: '42' }` |
+The router splits the query string off the hash to match the path, so it hands
+that raw query string back as `params.queryString` — always present, `''` when
+the hash has no query. It stays a raw string (leading `?` included): the page
+owns what its parameters mean, so `#/team-cases` reads it through
+`parseTeamCasesParams()` in `src/services/team-cases-params.js`.
+
+| Pattern         | Hash               | `params`                        |
+| --------------- | ------------------ | ------------------------------- |
+| `#/dashboard`   | `#/dashboard`      | `{ queryString: '' }`           |
+| `#/my-page/:id` | `#/my-page/42`     | `{ id: '42', queryString: '' }` |
+| `#/team-cases`  | `#/team-cases?a=1` | `{ queryString: '?a=1' }`       |
+
+`queryString` is reserved. It is assigned after the `:param` extraction, so a
+pattern declaring `:queryString` would have its path param silently overwritten
+— name the segment something else.
 
 Every page import stays inside its route's `load` callback. The router contains
 load failures inside the route container, and a navigation sequence prevents a

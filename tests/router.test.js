@@ -45,7 +45,7 @@ test('Router: mount is called with a forwarding container handle and the route p
 
   router.navigate('#/dashboard');
   assert.equal(calls.length, 1);
-  assert.deepEqual(calls[0].params, {});
+  assert.deepEqual(calls[0].params, { queryString: '' });
   assert.equal(calls[0].tag, 'DIV');
   // mount receives a guarded handle, not the raw container, but writes through
   // it reach the real container while the navigation is current.
@@ -66,7 +66,7 @@ test('Router: named param is extracted from hash pattern', () => {
   });
 
   router.navigate('#/case/abc-123');
-  assert.deepEqual(captured, { id: 'abc-123' });
+  assert.deepEqual(captured, { id: 'abc-123', queryString: '' });
 });
 
 test('Router: named params are decoded from hash path segments', () => {
@@ -83,7 +83,11 @@ test('Router: named params are decoded from hash path segments', () => {
   });
 
   router.navigate('#/case/product%20sale/case%2F123');
-  assert.deepEqual(captured, { caseType: 'product sale', id: 'case/123' });
+  assert.deepEqual(captured, {
+    caseType: 'product sale',
+    id: 'case/123',
+    queryString: '',
+  });
 });
 
 test('Router: multiple named params are extracted', () => {
@@ -100,7 +104,7 @@ test('Router: multiple named params are extracted', () => {
   });
 
   router.navigate('#/org/acme/case/99');
-  assert.deepEqual(captured, { org: 'acme', id: '99' });
+  assert.deepEqual(captured, { org: 'acme', id: '99', queryString: '' });
 });
 
 test('Router: navigating away calls unmount before the next mount', () => {
@@ -213,6 +217,32 @@ test('Router: route matches hash that has query params appended', () => {
 
   router.navigate('#/team-cases?manager=me&status=overdue');
   assert.equal(calls.length, 1, 'should match even with query params in hash');
+  // The router already split the query off to match the path, so it hands the
+  // raw query string back rather than making the route read location.hash.
+  assert.deepEqual(calls[0].params, {
+    queryString: '?manager=me&status=overdue',
+  });
+});
+
+test('Router: queryString keeps everything after the first ? verbatim, alongside named params', () => {
+  const router = new Router();
+  initRouter(router, /** @type {any} */ ({}));
+  /** @type {Record<string, string> | null} */
+  let captured = null;
+
+  router.register('#/case/:id', {
+    mount: (_, params) => {
+      captured = params;
+    },
+    unmount: () => {},
+  });
+
+  // A '?' inside a parameter value belongs to the query, not to a second split.
+  router.navigate('#/case/42?note=what%3F&raw=a?b');
+  assert.deepEqual(captured, {
+    id: '42',
+    queryString: '?note=what%3F&raw=a?b',
+  });
 });
 
 test('Router: a rejecting async mount renders a cora-route-error panel into the container', async () => {

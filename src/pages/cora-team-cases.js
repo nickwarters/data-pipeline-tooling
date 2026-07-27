@@ -90,7 +90,7 @@ export function teamCasesView(state, tools) {
 }
 
 /**
- * @param {Record<string, string>} params
+ * @param {Record<string, string>} _params
  * @param {import('../setup/register-routes.js').AppContext} context
  * @param {{
  *   fetchCases?: typeof fetchTeamCases,
@@ -104,7 +104,7 @@ export function teamCasesView(state, tools) {
  * }}
  */
 export function createRouteSlice(
-  params,
+  _params,
   context,
   { fetchCases = fetchTeamCases, resolveColumns = resolveDashboardColumns } = {}
 ) {
@@ -137,9 +137,9 @@ export function createRouteSlice(
       const currentUser = tools.context.chrome.currentUser;
       if (!client || !currentUser) return;
 
-      const parsed = parseTeamCasesParams(
-        tools.params.queryString ?? params.queryString ?? ''
-      );
+      // The router supplies params.queryString for every route — '' when the
+      // hash has no query (#548), so there is nothing to fall back to.
+      const parsed = parseTeamCasesParams(tools.params.queryString);
       void Promise.all([
         fetchCases(client, parsed, currentUser.id, tools.context.caseSources),
         resolveColumns(parsed.caseType),

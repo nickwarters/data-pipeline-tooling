@@ -38,11 +38,26 @@ export class Router {
   }
 
   /**
+   * Match a hash against the registered patterns. The router already has to
+   * split the query string off in order to match the path, so it hands that
+   * query string back to the handler as `params.queryString` rather than
+   * making a route reach for `location.hash` itself (#548). It is the raw
+   * string, leading `?` included (or `''` when there is no query), because the
+   * vocabulary of what a page's parameters mean belongs to that page — see
+   * `services/team-cases-params.js`.
+   *
+   * `queryString` is a reserved key: it is assigned after the `:param` loop, so
+   * a pattern declaring `:queryString` has its path param overwritten. The
+   * router's own contract wins deliberately — a page must be able to trust the
+   * key is the query — but no route declares one today.
+   *
    * @param {string} hash
    * @returns {{ handler: RouteHandler, params: Record<string, string> } | null}
    */
   _match(hash) {
-    const path = hash.split('?')[0];
+    const queryIndex = hash.indexOf('?');
+    const path = queryIndex === -1 ? hash : hash.slice(0, queryIndex);
+    const queryString = queryIndex === -1 ? '' : hash.slice(queryIndex);
     for (const route of this._routes) {
       const m = path.match(route.re);
       if (m) {
@@ -51,6 +66,7 @@ export class Router {
         route.keys.forEach((key, i) => {
           params[key] = decodeURIComponent(m[i + 1]);
         });
+        params.queryString = queryString;
         return { handler: route.handler, params };
       }
     }

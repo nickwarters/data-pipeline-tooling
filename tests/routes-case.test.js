@@ -194,7 +194,7 @@ test('case route: source-key route passes caseType through to the page', async (
   );
   assert.deepEqual(
     receivedParams,
-    { caseType: 'example-review', id: '456' },
+    { caseType: 'example-review', id: '456', queryString: '' },
     'the source-key and id params reach the store-driven slice'
   );
 });

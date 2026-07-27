@@ -1,5 +1,5 @@
 // @ts-check
-import { createStoreRoute } from '../core/store-route.js';
+import { registerStoreRoute } from '../core/store-route.js';
 
 /**
  * @param {import('../lib/router.js').Router} router
@@ -11,17 +11,9 @@ export function register(
   context,
   loadPage = () => import('../pages/cora-team-cases.js')
 ) {
-  const storeRoute = createStoreRoute({ load: loadPage, context });
-  router.register('#/team-cases', {
-    mount(container, params) {
-      const hash = location.hash;
-      const queryString = hash.includes('?')
-        ? hash.slice(hash.indexOf('?'))
-        : '';
-      return storeRoute.mount(container, { ...params, queryString });
-    },
-    unmount() {
-      storeRoute.unmount();
-    },
+  registerStoreRoute(router, {
+    paths: ['#/team-cases'],
+    load: loadPage,
+    context,
   });
 }
