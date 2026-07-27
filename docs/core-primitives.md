@@ -923,6 +923,19 @@ daily schedule, using `WorkingDayCalendar` for weekends and holidays; other
 schedules are `SpecificWeekdays`, `DayOfMonth`, `NthWorkingDayOfMonth`,
 `LastWorkingDayOfMonth`, and `ManualOnly`.
 
+A `Schedule` is declared in **one place: its class** (#313). The class body
+carries when it is due (`is_due`), how it names itself (`schedule_label`), how
+it explains a date it was not due (`not_due_reason` — so a monthly schedule
+answers in dates, not weekday names), and the `type:` value plus keys an
+overrides file names it by (`config_key`, optional `config_aliases`, and
+`from_config`). Defining the class registers it, via `__init_subclass__`, so a
+new schedule reaches YAML config with no second edit; a `config_key` two classes
+claim fails at import rather than resolving silently by definition order. The
+existing keys are unchanged — `weekdays` (alias `weekday`), `specific_weekdays`
+(`weekdays: [0, 2]`), `day_of_month` (`day: 21`), `nth_working_day_of_month`
+(`n: 2`), `last_working_day_of_month`, `manual_only` — so overrides files
+already written keep parsing.
+
 Each invocation writes decisions to `<base_dir>/_orchestration/runs.db` with a
 stable item key of `set_name/pipeline/run_date`. Each decision also
 records the `logical_run_id` the pass assigned the item (the stable business key)
@@ -939,9 +952,30 @@ set and every other `PipelineSet` continue. `run_until_complete(...)` performs a
 bounded Python polling loop over the same run date; it does not retry failed
 items from the same invocation.
 
+Whether an item counted as *due work* is data on the decision, not something read
+back out of its message: `OrchestrationDecision.was_due` is `False` for disabled
+and not-due items and `True` for everything else, and it is what the polling loop
+uses to decide the day's work has settled (#313). `reason` is prose for an
+operator, and no control flow reads it — rewording one used to move skipped items
+into the due set and change when a `--loop` orchestration terminated.
+
+Freshness is decided by one rule for both the run and its preview:
+`framework.run.freshness.evaluate_requirement` returns a `FreshnessVerdict`, the
+runner's `FreshnessGuard` is the side-effecting wrapper that records it and
+raises `FreshnessError`, and `Orchestrator.plan()` is the read-only caller that
+renders it. The two used to hold separate copies that had already drifted apart
+in wording.
+
 Python definitions are canonical. YAML overrides may disable a scheduled item,
 replace its schedule timing, or override freshness windows for operations
-without changing the registered pipeline code.
+without changing the registered pipeline code. An override naming a set or
+pipeline that does not exist is a start-up error; one that resolves but cannot
+take effect — `freshness_days` on an item declaring no dependencies, which is
+applied by rewriting each dependency — warns rather than passing silently. It is
+a real `warnings.warn`, so an application that runs under `-W error` turns that
+no-op override into a start-up failure. That is usually what you want from a
+config mistake; if not, the fix is to remove the override rather than to silence
+the warning.
 
 ### `ForEach` — independent per-item builder runs
 `ForEach` (`tools.orchestration`) is the small runnable orchestration

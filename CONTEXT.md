@@ -287,11 +287,31 @@ expressed with the friendly `Schedule.*` constructors (`Schedule.daily()`,
 `Schedule.on_weekdays("monday", …)`, `Schedule.day_of_month(n)`,
 `Schedule.nth_working_day_of_month(n)`, `Schedule.last_working_day_of_month()`,
 `Schedule.manual_only()`) over the concrete schedule classes, keeping `is_due`
-the core protocol. Decisions are
+the core protocol. A schedule is **declared once, in its own class** (#313):
+alongside `is_due` it carries its label, how it explains a date it was *not* due
+(so a monthly schedule answers in dates rather than weekday names), and the
+`type:` key an overrides file names it by — defining the class registers it, and
+a key claimed twice fails at import. Decisions are
 recorded in `_orchestration/runs.db`; actual executions remain in
-`RunLog` / `RunRegistry`. Failures are isolated: a failed scheduled item blocks
+`RunLog` / `RunRegistry`. A decision's `reason` is **prose for an operator that
+no control flow reads**; whether the item counted as due work for the run date is
+the separate `was_due` flag, and that flag — not the message text — is what the
+polling loop uses to decide the day has settled (#313). Failures are isolated: a
+failed scheduled item blocks
 its downstream dependants for that orchestrator run, but independent items and
 other PipelineSets continue.
+
+**Freshness rule**:
+The single predicate deciding whether a declared upstream is current enough for a
+run date (`evaluate_requirement` in `framework/run/freshness.py`, #313). _Here_:
+it is a **pure verdict** — it reads run history and returns a `FreshnessVerdict`
+(satisfied, the sentence explaining it, whether there was no history at all) and
+does nothing else. The runner's `FreshnessGuard` is the **side-effecting
+wrapper** that records the verdict to the run log and raises `FreshnessError`;
+`Orchestrator.plan()` is the **read-only caller** that renders it as a `blocked`
+plan item. One rule, two presentations: a plan preview whose promise is *this is
+what will happen* cannot describe a block in different words than the run that
+enforces it.
 
 ## Relationships
 

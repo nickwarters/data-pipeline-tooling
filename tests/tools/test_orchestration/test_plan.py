@@ -8,6 +8,7 @@ from framework.run import Requirement, RunAddress
 from tools.calendar import WorkingDayCalendar
 from tools.observability import timestamps
 from tools.orchestration import (
+    DayOfMonth,
     ManualOnly,
     Orchestrator,
     PipelineSet,
@@ -110,6 +111,31 @@ def test_plan_returns_skipped_for_not_due_item(tmp_path):
     assert result.items[0].status == "skipped"
     assert "manual only" in result.items[0].reason
     assert "is not due on" in result.items[0].reason
+
+
+def test_plan_not_due_reason_names_the_schedule_that_was_not_due(tmp_path):
+    """A monthly schedule must not explain itself in weekday language.
+
+    The plan preview used to compute one weekday name for the whole pass and
+    paste it onto every skipped item, so a day-of-month schedule reported "is
+    not due on monday" — an operator reading it would go looking for a weekday
+    rule that does not exist. Each schedule now says why *it* was not due.
+    """
+    orchestrator, _ = _orchestrator(
+        PipelineSet(
+            "claims",
+            (ScheduledPipeline("pipelines/monthly_snapshot", DayOfMonth(21)),),
+        ),
+    )
+
+    # _DUE_DATE is Monday the 15th, so a day-21 schedule is not due.
+    item = orchestrator.plan(tmp_path, run_date=_DUE_DATE).items[0]
+
+    assert item.status == "skipped"
+    assert "day 21 of month" in item.reason
+    assert "monday" not in item.reason.lower(), (
+        f"a monthly schedule explained itself as a weekday: {item.reason!r}"
+    )
 
 
 # ── test_plan_returns_disabled_for_disabled_item ──────────────────────────────

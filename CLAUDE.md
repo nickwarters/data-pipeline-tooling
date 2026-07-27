@@ -21,7 +21,10 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   profile over it — is application infrastructure in the sibling `tools` package
   (`tools.store`, `tools.medallion`), not framework vocabulary), `framework/io`
   (just the `Reader` / `Writer` ports and load strategies now), `framework/transform` (reshaping,
-  incl. `SchemaCoercion`), and `framework/run`; plus the private
+  incl. `SchemaCoercion`), and `framework/run` (composing/executing/observing a
+  run; its `freshness` module holds the **one** upstream-freshness rule, which
+  the runner's `FreshnessGuard` wraps and `tools.orchestration`'s plan preview
+  reads — #313); plus the private
   `framework/_internal` (`connection`, `describe`, `schema`: cross-cutting
   helpers with no public name)). The `python -m cli` entry point (`scaffold`
   plus the operator commands; see below) lives in the top-level `cli/` package,

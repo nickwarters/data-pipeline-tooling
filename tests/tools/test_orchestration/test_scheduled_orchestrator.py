@@ -1,5 +1,6 @@
 import datetime as dt
 import json
+import warnings
 
 import pandas as pd
 import pytest
@@ -423,6 +424,68 @@ pipelines:
             WorkingDayCalendar(),
             overrides,
             invoker=_FakeInvoker([]),
+        )
+
+
+def test_freshness_days_override_on_an_item_without_dependencies_warns(tmp_path):
+    """An override that cannot change anything must say so, not pass silently.
+
+    ``freshness_days`` is applied by rewriting each declared dependency, so an
+    item that declares none absorbs the override into an empty loop. The
+    reference check only proved the set/pipeline names resolved, so an operator
+    who tuned freshness on the wrong item got a clean start-up and no effect.
+    """
+    overrides = tmp_path / "overrides.yml"
+    overrides.write_text(
+        """
+pipelines:
+  - set: cases
+    pipeline: ingest
+    freshness_days: 2
+""",
+        encoding="utf-8",
+    )
+    sets = (
+        PipelineSet(
+            "cases",
+            (ScheduledPipeline("pipelines/ingest", Weekdays()),),
+        ),
+    )
+
+    with pytest.warns(UserWarning, match="freshness_days"):
+        Orchestrator.from_yaml(
+            sets, WorkingDayCalendar(), overrides, invoker=_FakeInvoker([])
+        )
+
+
+def test_freshness_days_override_on_an_item_with_dependencies_is_silent(tmp_path):
+    overrides = tmp_path / "overrides.yml"
+    overrides.write_text(
+        """
+pipelines:
+  - set: cases
+    pipeline: selection
+    freshness_days: 2
+""",
+        encoding="utf-8",
+    )
+    sets = (
+        PipelineSet(
+            "cases",
+            (
+                ScheduledPipeline(
+                    "pipelines/selection",
+                    Weekdays(),
+                    depends_on=(FreshnessRequirement("ingest"),),
+                ),
+            ),
+        ),
+    )
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        Orchestrator.from_yaml(
+            sets, WorkingDayCalendar(), overrides, invoker=_FakeInvoker([])
         )
 
 
