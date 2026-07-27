@@ -1,15 +1,15 @@
 // @ts-check
 
 /**
- * Immutable route-state patch helpers.
+ * Immutable route-state patch and replace helpers.
  *
  * These are plain functions a reducer may call — not middleware, not a
  * `createSlice`-style framework, and not a mutable/proxy draft. They exist so a
  * reducer branch reads as the one field it changes instead of the two-level
  * spread nest, and so forgetting a spread cannot silently drop sibling fields.
  *
- * `chrome` is a boot-owned shared reference (see `core/chrome-state.js`); both
- * helpers spread `state`, so it survives every patch untouched.
+ * `chrome` is a boot-owned shared reference (see `core/chrome-state.js`); every
+ * helper spreads `state`, so it survives every write untouched.
  */
 
 /**
@@ -33,6 +33,30 @@ export function patchRoute(state, name, patch) {
     ...state,
     routes: { ...state.routes, [name]: { ...state.routes[name], ...patch } },
   };
+}
+
+/**
+ * Replace one route's slice wholesale, preserving `chrome` and sibling routes.
+ *
+ * Unlike `patchRoute`, the previous slice is discarded rather than spread
+ * underneath, so a key the sub-reducer dropped stays dropped. Use this — and
+ * only this — where a sub-reducer returns the complete next slice; running that
+ * through `patchRoute` would silently resurrect deleted keys.
+ *
+ * `slice` is the named route's slice type rather than a loose record, so a
+ * sub-reducer returning the wrong shape is a `tsc` error — but only where the
+ * calling reducer types its `state` param. Both call sites do; a reducer that
+ * takes `any` infers `S` from `any` and gets no check at all.
+ *
+ * @template {{ routes: Record<string, any> }} S
+ * @template {keyof S['routes'] & string} N
+ * @param {S} state
+ * @param {N} name - the route key, e.g. 'questionBank'
+ * @param {S['routes'][N]} slice
+ * @returns {S}
+ */
+export function setRoute(state, name, slice) {
+  return { ...state, routes: { ...state.routes, [name]: slice } };
 }
 
 /**

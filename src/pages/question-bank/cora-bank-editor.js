@@ -1,4 +1,5 @@
 // @ts-check
+import { setRoute } from '../../core/route-state.js';
 import { h } from '../../lib/html.js';
 import {
   baselineBank,
@@ -302,7 +303,7 @@ export function createRouteSlice(_params, context, deps = {}) {
       const current = selectQuestionBankState(state);
       const next = questionBankReducer(current, action);
       if (next === current) return state;
-      return { ...state, routes: { questionBank: next } };
+      return setRoute(state, 'questionBank', next);
     },
     view(/** @type {QuestionBankState} */ state, /** @type {any} */ tools) {
       latestRoute = selectQuestionBankState(state);

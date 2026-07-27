@@ -50,6 +50,23 @@ The Case Review page's third level has `patchSnapshot(state, patch)`, which
 patches `routes.caseReview.snapshot` and returns the same state when no
 snapshot is loaded.
 
+When a sub-reducer returns the **complete next slice** rather than a patch, use
+`setRoute(state, name, slice)` instead. It discards the previous slice rather
+than spreading it underneath, so a key the sub-reducer dropped stays dropped —
+`patchRoute` would silently resurrect it. The Responsible Party dashboard and
+the Question Bank editor are the two call sites:
+
+```js
+const next = questionBankReducer(current, action);
+if (next === current) return state;
+return setRoute(state, 'questionBank', next);
+```
+
+Reach for `patchRoute` when your branch names the fields it changes, and
+`setRoute` when something else has already produced the whole slice. Picking
+the wrong one is a silent data bug, not a type error, in the one direction that
+matters: `patchRoute` over a replacement slice resurrects deleted keys.
+
 These are plain functions a reducer calls — not middleware, not a
 `createSlice`-style framework, and not a mutable or proxy draft. Two branch
 kinds keep their hand-written shape:
@@ -59,8 +76,9 @@ kinds keep their hand-written shape:
   a guard converted to a patch becomes a re-render storm that no unit test sees.
   Assert these with `assert.strictEqual(reducer(state, action), state)`.
 - **Sub-reducer delegation.** A slice reducer that signals "nothing changed" by
-  returning its input is compared by reference; relay that identity, and patch
-  only inside the changed branch.
+  returning its input is compared by reference; relay that identity. Then
+  `patchRoute` only inside the changed branch if you are naming fields, or
+  `setRoute` if the sub-reducer handed you the whole slice.
 
 Views are pure synchronous functions: state in, DOM tree out, callbacks dispatch
 actions back. **Views never await.** They do not import `SaveQueue` or a

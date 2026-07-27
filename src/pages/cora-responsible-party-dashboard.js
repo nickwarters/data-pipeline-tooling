@@ -1,4 +1,5 @@
 // @ts-check
+import { setRoute } from '../core/route-state.js';
 import { conversationRouteFor } from '../lib/case-route-links.js';
 import { navigateTo } from '../lib/navigate.js';
 import { listCasesAcrossSources } from '../services/across-sources.js';
@@ -10,6 +11,8 @@ const REMEDIATION_TABLE = 'remediation';
 const UNREAD_TABLE = 'unread';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
+/** @typedef {ReturnType<typeof initialResponsiblePartyState>} ResponsiblePartyRouteState */
+/** @typedef {{ chrome: import('../core/chrome-state.js').ChromeState, routes: { responsibleParty: ResponsiblePartyRouteState } }} ResponsiblePartyState */
 
 /** @param {string} currentUserId */
 export function initialResponsiblePartyState(currentUserId) {
@@ -91,13 +94,16 @@ export function createRouteSlice(
   };
   return {
     initialState,
-    reducer(/** @type {any} */ state, /** @type {any} */ action) {
+    reducer(
+      /** @type {ResponsiblePartyState} */ state,
+      /** @type {any} */ action
+    ) {
       const next = reduceResponsibleParty(
         state.routes.responsibleParty,
         action
       );
       if (next === state.routes.responsibleParty) return state;
-      return { ...state, routes: { responsibleParty: next } };
+      return setRoute(state, 'responsibleParty', next);
     },
     view(/** @type {any} */ state, /** @type {any} */ tools) {
       // The standalone #/my-cases route intentionally keeps the historic
