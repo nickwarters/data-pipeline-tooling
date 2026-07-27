@@ -998,11 +998,11 @@ class Pipeline:
 
     def _step_address(self, step_name: str) -> RunAddress:
         subject, pipeline = self._address_parts()
-        return RunAddress.step(pipeline, step_name, subject=subject)
+        return RunAddress.for_step(pipeline, step_name, subject=subject)
 
     def _pipeline_address(self) -> RunAddress:
         subject, pipeline = self._address_parts()
-        return RunAddress.pipeline(pipeline, subject=subject)
+        return RunAddress.for_pipeline(pipeline, subject=subject)
 
     def _address_parts(self) -> tuple[str | None, str]:
         if "/" not in self._name:

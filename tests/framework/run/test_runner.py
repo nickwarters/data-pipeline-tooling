@@ -481,7 +481,7 @@ def test_same_day_freshness_accepts_an_upstream_that_landed_after_local_midnight
     FreshnessGuard().check(
         context,
         Requirement.succeeded(
-            RunAddress.pipeline("ingest", subject="cases")
+            RunAddress.for_pipeline("ingest", subject="cases")
         ).same_day(),
     )
 
@@ -501,7 +501,7 @@ def test_same_day_freshness_still_rejects_a_genuinely_previous_local_day(
         FreshnessGuard().check(
             context,
             Requirement.succeeded(
-                RunAddress.pipeline("ingest", subject="cases")
+                RunAddress.for_pipeline("ingest", subject="cases")
             ).same_day(),
         )
 
@@ -520,7 +520,7 @@ def test_max_age_freshness_uses_the_local_date_too(tmp_path, uk_summer):
     FreshnessGuard().check(
         context,
         Requirement.succeeded(
-            RunAddress.pipeline("ingest", subject="cases")
+            RunAddress.for_pipeline("ingest", subject="cases")
         ).within_days(1),
     )
 

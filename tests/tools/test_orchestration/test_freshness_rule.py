@@ -114,8 +114,8 @@ def _plan_reason(tmp_path, requirement, *, run_date=DUE_DATE) -> str:
 @pytest.mark.parametrize(
     "requirement",
     [
-        Requirement.succeeded(RunAddress.pipeline("ingest")).within_days(1),
-        Requirement.succeeded(RunAddress.pipeline("ingest")).same_day(),
+        Requirement.succeeded(RunAddress.for_pipeline("ingest")).within_days(1),
+        Requirement.succeeded(RunAddress.for_pipeline("ingest")).same_day(),
         Requirement.succeeded(RunAddress.task("ingest", "normalise")).within_days(2),
         FreshnessRequirement("ingest"),
     ],
@@ -133,7 +133,7 @@ def test_the_guard_and_the_plan_render_one_condition_identically(tmp_path, requi
 
 
 def test_a_blocking_first_run_reads_the_same_both_ways(tmp_path):
-    requirement = Requirement.succeeded(RunAddress.pipeline("ingest")).on_first_run(
+    requirement = Requirement.succeeded(RunAddress.for_pipeline("ingest")).on_first_run(
         "block"
     )
 
@@ -154,7 +154,9 @@ def test_both_callers_go_through_the_shared_predicate(tmp_path, monkeypatch):
     import tools.orchestration as orchestration_module
 
     _record_run(tmp_path / "_runs" / "ingest.log", pipeline="ingest", timestamp=STALE)
-    requirement = Requirement.succeeded(RunAddress.pipeline("ingest")).within_days(1)
+    requirement = Requirement.succeeded(RunAddress.for_pipeline("ingest")).within_days(
+        1
+    )
 
     def always_blocked(*args, **kwargs):
         return freshness_module.FreshnessVerdict(
@@ -214,7 +216,7 @@ def _verdict(history, requirement, run_date=DUE_DATE):
 
 def test_the_shared_predicate_reads_the_stored_instant_as_a_local_date(monkeypatch):
     monkeypatch.setattr(timestamps, "local_timezone", lambda: _UTC_PLUS_ONE)
-    requirement = Requirement.succeeded(RunAddress.pipeline("ingest")).same_day()
+    requirement = Requirement.succeeded(RunAddress.for_pipeline("ingest")).same_day()
 
     verdict = _verdict(_Latest(_JUST_AFTER_LOCAL_MIDNIGHT), requirement)
 
@@ -225,7 +227,7 @@ def test_the_shared_predicate_would_disagree_reading_the_instant_as_utc(monkeypa
     # The same timestamp under a UTC-local box really is the previous day, so the
     # test above is proving the conversion rather than an accident of the data.
     monkeypatch.setattr(timestamps, "local_timezone", lambda: dt.timezone.utc)
-    requirement = Requirement.succeeded(RunAddress.pipeline("ingest")).same_day()
+    requirement = Requirement.succeeded(RunAddress.for_pipeline("ingest")).same_day()
 
     verdict = _verdict(_Latest(_JUST_AFTER_LOCAL_MIDNIGHT), requirement)
 
@@ -242,7 +244,7 @@ def test_the_shared_predicate_uses_the_offset_in_force_on_the_day(monkeypatch):
     of them.
     """
     monkeypatch.setattr(timestamps, "local_timezone", _SummerTimeZone)
-    same_day = Requirement.succeeded(RunAddress.pipeline("ingest")).same_day()
+    same_day = Requirement.succeeded(RunAddress.for_pipeline("ingest")).same_day()
 
     after_the_change = _verdict(
         _Latest("2026-03-30T23:30:00+00:00"), same_day, run_date=dt.date(2026, 3, 31)
@@ -262,7 +264,7 @@ def test_both_callers_agree_across_the_local_midnight_boundary(tmp_path, monkeyp
         pipeline="ingest",
         timestamp=_JUST_AFTER_LOCAL_MIDNIGHT,
     )
-    requirement = Requirement.succeeded(RunAddress.pipeline("ingest")).same_day()
+    requirement = Requirement.succeeded(RunAddress.for_pipeline("ingest")).same_day()
 
     # The plan reports ready…
     orchestrator = Orchestrator(
@@ -331,7 +333,7 @@ def test_first_run_allow_is_silent_on_the_run_log(tmp_path):
 
     FreshnessGuard().check(
         context,
-        Requirement.succeeded(RunAddress.pipeline("ingest")).on_first_run("allow"),
+        Requirement.succeeded(RunAddress.for_pipeline("ingest")).on_first_run("allow"),
     )
 
     records = [json.loads(line) for line in log_path.read_text().splitlines()]

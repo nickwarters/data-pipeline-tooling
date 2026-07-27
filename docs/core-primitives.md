@@ -692,7 +692,7 @@ registry.query_runs(pipeline="cases", status="error")  # narrow by pipeline/stat
 registry.latest_run_per_pipeline()                     # one row per pipeline
 registry.runs_that_warned()                            # tolerated warns (incl. drift)
 registry.records_for_run(pipeline_run_id)              # every step of one run
-registry.latest_success(RunAddress.pipeline("cases"), on=date(2026, 6, 23))
+registry.latest_success(RunAddress.for_pipeline("cases"), on=date(2026, 6, 23))
 registry.latest_success(
     RunAddress.task("pipeline_2", "step_4"),
     on_or_after=date(2026, 6, 16),
@@ -819,7 +819,7 @@ runner.register(
     "selection",
     run_selection,
     freshness=(
-        Requirement.succeeded(RunAddress.pipeline("ingest", subject="cases"))
+        Requirement.succeeded(RunAddress.for_pipeline("ingest", subject="cases"))
         .same_day()
         .on_first_run("block"),
     ),
@@ -876,12 +876,12 @@ Requirement.succeeded(
 
 # Pipeline 6 requires Pipeline 4 on the same day.
 Requirement.succeeded(
-    RunAddress.pipeline("pipeline_4"),
+    RunAddress.for_pipeline("pipeline_4"),
 ).same_day()
 ```
 
 `FreshnessRequirement(upstream_pipeline, max_age_days=n)` remains supported and
-adapts to `Requirement.succeeded(RunAddress.pipeline(...)).within_days(n)`,
+adapts to `Requirement.succeeded(RunAddress.for_pipeline(...)).within_days(n)`,
 using the downstream subject when no upstream subject is supplied. Its no-history
 behavior remains the historical default: allow the first run with a warning.
 Stale history aborts before the handler executes and writes both a `freshness`
@@ -1156,9 +1156,9 @@ Construct addresses explicitly when code already has structured pieces:
 ```python
 from framework.run import RunAddress
 
-RunAddress.pipeline("claims", subject="case-review")
-RunAddress.step("claims", "validate_schema", subject="case-review")
-RunAddress.step("pipeline_2", "step_4")
+RunAddress.for_pipeline("claims", subject="case-review")
+RunAddress.for_step("claims", "validate_schema", subject="case-review")
+RunAddress.for_step("pipeline_2", "step_4")
 ```
 
 Parse labels when accepting configuration or registry input:
@@ -1167,6 +1167,17 @@ Parse labels when accepting configuration or registry input:
 address = RunAddress.parse("case-review/claims.validate_schema")
 assert address.label == "case-review/claims.validate_schema"
 ```
+
+`RunAddress` is a frozen, slotted dataclass (`pipeline`, plus keyword-only
+`subject` and `step`), so it is immutable and compared **by value**: two
+addresses built from the same parts are equal, hash the same, and are
+interchangeable as dict keys or set members. `RunAddress.task(...)` remains as
+an alias of `for_step(...)` for the builder's Task vocabulary. Since #316 the
+constructors are named `for_pipeline(...)` / `for_step(...)` — previously
+`pipeline(...)` / `step(...)`, which collided with the attributes of the same
+name and needed a custom descriptor to disambiguate. The **rendered label is
+unchanged**: it is a stored `step_address` value in every existing registry, so
+it is a live on-disk format.
 
 `.label` and `str(address)` return the same stable string, suitable for logs,
 dependency declarations, and run-registry queries. Invalid labels raise
