@@ -104,6 +104,7 @@ import { loadCaseTypeConfig } from '../../case-types/manifest.js';
  * viewModel: CaseReviewViewModel | null,
  * answers: Record<string, import('../sharepoint-client.js').Answer>,
  * caseRow: CaseRow | null,
+ * navigations: string[],
  * snapshot: () => { lists: Record<string, CaseRow[]> },
  * run: (actions: FlowAction[]) => Promise<{ lists: Record<string, CaseRow[]> }>
  * }} InMemoryFlowRunner
@@ -168,6 +169,15 @@ export function createInMemoryFlowRunner(state, opts = {}) {
    * @type {CaseRow | null}
    */
   let caseRow = null;
+  /**
+   * Where the app would have navigated. The runner has no `location`, and the
+   * action it drives no longer sniffs for one (#547): `completeCase` takes the
+   * navigation as a callback, so the harness records it and a flow can assert
+   * that completing a Case leaves the Case page rather than merely tolerating
+   * that it tried.
+   * @type {string[]}
+   */
+  const navigations = [];
 
   /** @param {Record<string, import('../sharepoint-client.js').Answer> | null} next */
   function editAnswers(next) {
@@ -188,6 +198,9 @@ export function createInMemoryFlowRunner(state, opts = {}) {
     },
     get caseRow() {
       return caseRow;
+    },
+    get navigations() {
+      return [...navigations];
     },
     snapshot() {
       return client.snapshot();
@@ -284,7 +297,8 @@ export function createInMemoryFlowRunner(state, opts = {}) {
         const applied = await clickCompleteCase(
           requirePage(action),
           caseRow,
-          answers
+          answers,
+          (hash) => navigations.push(hash)
         );
         if (applied && caseRow) caseRow = { ...caseRow, ...applied };
         return;
@@ -420,18 +434,20 @@ export function createInMemoryFlowRunner(state, opts = {}) {
 /**
  * Completing a Case is the one transition whose new fields the browser never
  * folds back into the store: on success `completeCase` navigates to the
- * dashboard, so the mount ends and the stale row is unobservable. The runner has
- * no navigation, so a flow may keep acting on the Case afterwards — it returns
- * the persisted patch and the caller applies it, keeping the runner-owned row
- * the row as stored.
+ * dashboard, so the mount ends and the stale row is unobservable. The runner
+ * records that navigation rather than performing it, so a flow may keep acting
+ * on the Case afterwards — it returns the persisted patch and the caller applies
+ * it, keeping the runner-owned row the row as stored.
  *
  * @param {CaseReviewViewModel} vm
  * @param {CaseRow | null} caseRow The runner-owned Case Row (#530).
  * @param {Record<string, import('../sharepoint-client.js').Answer>} answers
+ * @param {(hash: string) => void} navigate Recorder standing in for the browser
+ *   seam (#547).
  * @returns {Promise<Partial<CaseRow> | null>} The applied fields, or `null` if
  *   the transition was not permitted or the write failed.
  */
-async function clickCompleteCase(vm, caseRow, answers) {
+async function clickCompleteCase(vm, caseRow, answers, navigate) {
   if (!caseRow || !vm.config || !vm.machine) {
     throw new Error('Cannot complete before the Case page has loaded.');
   }
@@ -452,6 +468,7 @@ async function clickCompleteCase(vm, caseRow, answers) {
     saveQueue: vm.saveQueue,
     patchFields,
     caseListOptions: vm.caseListOptions,
+    navigate,
   });
   return ok ? patchFields : null;
 }

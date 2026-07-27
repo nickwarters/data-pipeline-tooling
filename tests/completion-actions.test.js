@@ -246,6 +246,43 @@ test('completeCase flushes first and sends the frozen snapshot in the same PATCH
   assert.equal(location.hash, '#/dashboard');
 });
 
+test('completeCase navigates through an injected callback, leaving location alone', async () => {
+  /** @type {string[]} */
+  const navigations = [];
+  const saveQueue = /** @type {any} */ ({
+    async flushCase() {
+      return true;
+    },
+    getEtag() {
+      return 'e2';
+    },
+  });
+  const client = /** @type {any} */ ({
+    async patchCase() {
+      return { ok: true, status: 200 };
+    },
+  });
+  location.hash = 'untouched';
+
+  assert.equal(
+    await completeCase({
+      caseId: 'c1',
+      client,
+      saveQueue,
+      patchFields: { status: 'Completed' },
+      navigate: (hash) => navigations.push(hash),
+    }),
+    true
+  );
+
+  assert.deepEqual(navigations, ['#/dashboard']);
+  assert.equal(
+    location.hash,
+    'untouched',
+    'an injected navigation replaces the seam rather than adding to it'
+  );
+});
+
 test('completeCase does not PATCH after a failed flush or navigate after a failed PATCH', async () => {
   let patches = 0;
   const client = /** @type {any} */ ({

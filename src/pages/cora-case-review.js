@@ -345,6 +345,24 @@ function versionWarningView(warning) {
 }
 
 /**
+ * How the Conversation panel is presented, from the page's `?conversation=`
+ * query param — the same opt-in-via-query-string convention as `?mock=1` and
+ * `?simulate=1` (`pages/question-bank/question-bank-flags.js`), and read the
+ * same way: the query string is a defaulted parameter, so this is a read of an
+ * injected value rather than a reach for a browser global, and a caller with no
+ * `location` passes its own string instead of the function testing for one
+ * (#547).
+ *
+ * @param {string} [search] query string; defaults to the current page's
+ * @returns {string}
+ */
+export function conversationPanelMode(
+  search = /** @type {any} */ (globalThis).location?.search ?? ''
+) {
+  return new URLSearchParams(search).get('conversation') ?? 'popover';
+}
+
+/**
  * CASE-1 route slice. The view model adapts existing loading/domain behaviour
  * into store snapshots; the interim adapter owns only the unconverted Section
  * components.
@@ -353,9 +371,7 @@ function versionWarningView(warning) {
  * @param {import('../setup/register-routes.js').AppContext} context
  */
 export function createRouteSlice(params, context) {
-  const search = typeof location === 'undefined' ? '' : (location.search ?? '');
-  const panelMode =
-    new URLSearchParams(search).get('conversation') ?? 'popover';
+  const panelMode = conversationPanelMode();
   let dispatch = (/** @type {any} */ _action) => {};
   // The adapter's mount lifetime, captured in start() (#517).
   let isSliceActive = () => false;

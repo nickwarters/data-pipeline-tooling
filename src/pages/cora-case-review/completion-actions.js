@@ -150,19 +150,30 @@ export function completionPatch(input) {
  *   patchFields: Partial<import('../../sharepoint-client.js').CaseRow> | null,
  *   caseListOptions?: import('../../sharepoint-client.js').CaseListOptions,
  *   opts?: import('../../sharepoint-client.js').CaseListOptions,
- * }} input
+ *   navigate?: (hash: string) => void,
+ * }} input `navigate` is where a successful completion goes next. Defaults to
+ *   the `lib/navigate.js` seam so no page call site has to pass it; injectable
+ *   so a non-browser caller — `src/testing/in-memory-flow-runner.js` drives real
+ *   completions in Node — can record the navigation instead of this action
+ *   sniffing for a `location` global (#547).
  */
-export async function completeCase(input) {
-  if (!input.client || !input.saveQueue || !input.patchFields) return false;
-  if (!(await input.saveQueue.flushCase(input.caseId))) return false;
-  const result = await input.client.patchCase(
-    input.caseId,
-    input.patchFields,
-    input.saveQueue.getEtag(input.caseId),
-    input.caseListOptions ?? input.opts ?? {}
+export async function completeCase({
+  caseId,
+  client,
+  saveQueue,
+  patchFields,
+  caseListOptions,
+  opts,
+  navigate = navigateTo,
+}) {
+  if (!client || !saveQueue || !patchFields) return false;
+  if (!(await saveQueue.flushCase(caseId))) return false;
+  const result = await client.patchCase(
+    caseId,
+    patchFields,
+    saveQueue.getEtag(caseId),
+    caseListOptions ?? opts ?? {}
   );
-  if (result.ok && typeof location !== 'undefined') {
-    navigateTo('#/dashboard');
-  }
+  if (result.ok) navigate('#/dashboard');
   return result.ok;
 }

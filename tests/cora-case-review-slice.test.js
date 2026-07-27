@@ -12,8 +12,12 @@ import {
 
 installDom();
 
-const { caseReviewReducer, createRouteSlice, createInitialCaseReviewState } =
-  await import('../src/pages/cora-case-review.js');
+const {
+  caseReviewReducer,
+  conversationPanelMode,
+  createRouteSlice,
+  createInitialCaseReviewState,
+} = await import('../src/pages/cora-case-review.js');
 const { caseDetailsView } =
   await import('../src/pages/cora-case-review/details-view.js');
 const { createCaseReviewSaveEffect, observeSaveStatus } =
@@ -3056,4 +3060,39 @@ test('#517: a conversation refresh resolving after unmount dispatches nothing', 
     []
   );
   mounted.dispose();
+});
+
+test('conversationPanelMode reads the query string it is given', () => {
+  assert.equal(conversationPanelMode('?conversation=sidebar'), 'sidebar');
+  assert.equal(
+    conversationPanelMode('?mock=1'),
+    'popover',
+    'no ?conversation= is the popover default'
+  );
+  assert.equal(conversationPanelMode(''), 'popover');
+});
+
+test('conversationPanelMode defaults to the current page query string', () => {
+  // The `globalThis.location?.` default is what replaced the
+  // `typeof location === 'undefined'` sniff (#547), so the no-location case is
+  // the branch that has to be exercised — a Node harness driving Case Review
+  // has no `location` at all. Same shape as tests/question-bank-flags.test.js,
+  // the precedent this default follows.
+  const original = /** @type {any} */ (globalThis).location;
+  try {
+    /** @type {any} */ (globalThis).location = {
+      search: '?conversation=sidebar',
+    };
+    assert.equal(conversationPanelMode(), 'sidebar');
+    /** @type {any} */ (globalThis).location = { search: '' };
+    assert.equal(conversationPanelMode(), 'popover');
+    /** @type {any} */ (globalThis).location = undefined;
+    assert.equal(
+      conversationPanelMode(),
+      'popover',
+      'no location at all still resolves the Conversation default'
+    );
+  } finally {
+    /** @type {any} */ (globalThis).location = original;
+  }
 });

@@ -659,6 +659,35 @@ test('completing a Case updates the runner-owned Case Row, so later actions see 
     runner.caseRow?.outcomeAtCompletion,
     persisted?.outcomeAtCompletion
   );
+  // The navigation the browser would have performed, asserted rather than
+  // tolerated: the runner has no `location`, so it passes a recorder in place of
+  // the seam (#547).
+  assert.deepEqual(runner.navigations, ['#/dashboard']);
+  // The getter copies, so a caller reading the record cannot rewrite it.
+  runner.navigations.push('#/junk');
+  assert.deepEqual(
+    runner.navigations,
+    ['#/dashboard'],
+    'the navigation record is copy-on-read'
+  );
+});
+
+test('a refused completion navigates nowhere', async () => {
+  const runner = createInMemoryFlowRunner(
+    { lists: { 'Cases-ExampleReview': [CASE_ROW] } },
+    { persona: 'reviewer' }
+  );
+  await runner.run([
+    {
+      type: 'loadCasePage',
+      caseId: 'case-flow-1',
+      caseType: 'example-review',
+    },
+    // No Answers, so `completionPatch` returns null and nothing is written.
+    { type: 'clickCompleteCase' },
+  ]);
+
+  assert.deepEqual(runner.navigations, []);
 });
 
 test('a refused completion leaves the runner-owned Case Row untouched', async () => {
