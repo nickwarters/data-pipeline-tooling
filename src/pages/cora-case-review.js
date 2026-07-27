@@ -167,23 +167,29 @@ export function caseReviewReducer(state, action) {
     });
   }
   // The lifecycle fields a completion write persisted, folded into the Case Row
-  // the store holds *now* (#557). Deliberately not `case/model-changed`: that
-  // replaces the whole snapshot, and the only snapshot the click handler can
-  // hand back is the one captured before two network round-trips — so an Answer
-  // or Conversation edit dispatched while the write was in flight would be
-  // reverted, and the Answer-action owner re-synced to the stale map on the next
-  // render. Patching against current state here is the same idiom
-  // `case/answers-edited` below uses.
+  // the store holds *now* (#557). Send Actions is a non-terminal transition for
+  // the *Case*, but `completeCase` navigates to `#/dashboard` on every
+  // successful completion, so the Reviewer leaves the page either way and this
+  // fold has no reader today: it is defence-in-depth, not a fix for an observed
+  // stale read.
   //
-  // `case/model-changed`'s `activeTab` recompute is not wanted and not repeated:
-  // tab visibility reads `snapshot.access` only, which a Case Row patch cannot
-  // move.
+  // The shape is load-bearing regardless. Deliberately not `case/model-changed`:
+  // that replaces the whole snapshot, and the only snapshot the click handler
+  // can hand back is the one captured before two network round-trips — so an
+  // Answer or Conversation edit dispatched while the write was in flight would
+  // be reverted, and the Answer-action owner re-synced to the stale map on the
+  // next render, losing an edit in SharePoint and not merely on screen. Only the
+  // fields travel. Patching against current state here is the same idiom
+  // `case/answers-edited` below uses. `case/model-changed`'s `activeTab`
+  // recompute is not wanted and not repeated: tab visibility reads
+  // `snapshot.access` only, which a Case Row patch cannot move.
   //
   // `snapshot.machine` holds its own load-time copy and does not advance with
-  // the row, so on the non-terminal Send Actions path the two now actively
-  // disagree — `machine.mayResolveRemediation` false against a row reading
-  // `Actions In Progress`. That divergence is sanctioned; rebuilding the
-  // machine here as a side effect is out of scope.
+  // the row, so after the fold `machine.mayResolveRemediation` can read false
+  // against a row reading `Actions In Progress`. That divergence is harmless
+  // only *because* completion navigates away. Whoever decides Send Actions
+  // should keep the Reviewer on the Case makes the divergence live and this fold
+  // load-bearing in the same change, and owns deriving the machine there.
   //
   // #554 narrowed the *writer* so a Notes field edit can no longer create the
   // divergence, and declined to derive the machine: its `access` is computed at
@@ -854,17 +860,20 @@ export function createRouteSlice(params, context) {
                       caseListOptions: snapshot.caseListOptions,
                     });
                     // Fold the persisted transition into the store, the same way
-                    // every other Case Row transition does. Until #557 this was
-                    // the one write whose fields never reached the store, and
-                    // the only reason nothing read the stale row was that
-                    // completion navigates away — including on the Send Actions
-                    // path, which is not the end of the Case (#557).
+                    // every other Case Row transition does. `completeCase`
+                    // navigates to `#/dashboard` on success — on the Send
+                    // Actions path too, non-terminal though that is for the
+                    // Case — so this store is already on its way to being
+                    // disposed and nothing reads the fold today. Defence in
+                    // depth, not a fix for an observed stale read (#557).
                     //
                     // Only the fields travel, never this closure's `snapshot` or
-                    // `caseRow`: both are as of the last render, which is two
-                    // network round-trips ago by the time we get here. The
-                    // reducer patches whatever the store holds now, so a
-                    // concurrent Answer or Conversation edit survives.
+                    // `caseRow`: both are as of the last render, two network
+                    // round-trips ago. Replaying either would revert a concurrent
+                    // Answer or Conversation edit and re-sync the Answer-action
+                    // owner to the stale map — losing an edit in SharePoint, not
+                    // just on screen. The reducer patches whatever the store
+                    // holds now.
                     if (persisted && tools.isActive()) {
                       tools.dispatch({
                         type: 'case/case-row-patched',
