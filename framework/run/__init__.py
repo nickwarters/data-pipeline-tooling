@@ -11,11 +11,12 @@ Import from here rather than the underlying modules::
 
 The modules behind this facade (``framework.run.builder``,
 ``framework.run.address``,
-``framework.run.execution``,
-``framework.run.pipeline_steps``, ``framework.run.runner``,
-``framework.run.run_context``, ``framework.run.run_log``,
-``framework.run.run_registry``) are internal layout: re-exports here are the
-public contract, the submodule paths are not. See ``docs/public-api.md``.
+``framework.run.execution``, ``framework.run.runner``,
+``framework.run.run_context``, ``framework.run.trace``,
+``framework.run.dry_run``) are internal layout: re-exports here are the
+public contract, the submodule paths are not. The ``RunLog`` / ``RunRegistry``
+types re-exported here live in the sibling ``tools.observability`` package.
+See ``docs/public-api.md``.
 """
 
 from framework.run.address import RunAddress, RunAddressError

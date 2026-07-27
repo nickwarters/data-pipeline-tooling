@@ -39,7 +39,7 @@ than open its own.
 
 If no `RunLog` is composed, `.run()` behaves identically but emits nothing (a
 null sink keeps the terminus branch-free). The human-readable console lines are
-logged at `INFO` on the `framework.run.run_log` logger, so an entry-point that calls
+logged at `INFO` on the `tools.observability.run_log` logger, so an entry-point that calls
 `logging.basicConfig(level=logging.INFO)` (as `pipelines/demo_csv_to_raw.py`
 does) will surface them. The `.log` file is always written when a `RunLog` is
 present, regardless of logging configuration.

@@ -23,7 +23,7 @@ __all__ = [
 
 
 class RecordingRunLog(RunLog):
-    """A :class:`~framework.run.run_log.RunLog` that captures records in memory.
+    """A :class:`~tools.observability.run_log.RunLog` that captures records in memory.
 
     Compose it with ``Pipeline(..., run_log=run_log)`` to assert a run's
     structured records without a file on disk. It inherits the base ``step``
@@ -86,7 +86,7 @@ def read_run_log(path: str | os.PathLike[str]) -> list[dict[str, Any]]:
     """Parse an on-disk JSONL run-log file into its record dicts, in order.
 
     The file dual of :class:`RecordingRunLog`: a pipeline that lands its
-    :class:`~framework.run.run_log.RunLog` to disk (like the demos) is asserted by
+    :class:`~tools.observability.run_log.RunLog` to disk (like the demos) is asserted by
     reading the file back. Tolerates blank lines (e.g. a trailing newline),
     matching the run registry's own ingest.
     """
