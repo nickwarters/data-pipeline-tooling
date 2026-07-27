@@ -40,13 +40,57 @@ pipelines/orders` imports `pipelines.orders.pipeline` and executes
 (not-yet-run) pipeline — the *one* definition of what that hop does:
 
 - **`raw_builder`** gates the source with a `ColumnValidator` and lands a
-  faithful copy.
+  faithful copy. It composes the shared `tools.recipes.source_to_raw` recipe.
 - **`silver_builder`** renames source columns to the schema's vocabulary
   (`RENAME`), coerces the dtypes storage loses (`SchemaCoercion`), partitions
   bad rows into a quarantine dataset (`SchemaValueRulePartitioner`), and validates
-  the declared schema (`SchemaValidator`).
+  the declared schema (`SchemaValidator`). It composes the shared
+  `tools.recipes.raw_to_silver` recipe.
 - **`gold_builder`** is a passthrough to start — reads silver, writes gold — with
   a `TODO` to build the assembly (it's per-feed and an open decision).
+
+### Recipe-first authoring, and how to diverge
+
+The first two hops are the same in every feed, so they have **one definition**:
+the hop recipes in [`tools/recipes.py`](../tools/recipes.py). A generated
+`raw_builder` is a call, not a copy:
+
+```python
+from tools.recipes import raw_to_silver, source_to_raw
+
+def raw_builder(reader, writer, run_log=None):
+    return source_to_raw(
+        reader,
+        writer,
+        expected_columns=[f.name for f in fields(OrdersRow)],
+        name=f"{FEED_NAME}:raw",
+        run_log=run_log,
+    )
+```
+
+A recipe is **composition, not inheritance**. It returns a plain, not-yet-run
+`Pipeline` that your builder owns and can go on wiring; there is no framework
+hook calling back into your feed and nothing to subclass. That keeps the whole
+point of scaffolding — a generated feed you can edit freely — while giving the
+standard hop somewhere to evolve: adding a step to the standard raw hop is a
+one-line change in `source_to_raw`, and every feed composed from it inherits the
+change without a `grep` for the feeds you'd otherwise have to hand-edit.
+
+**To diverge, inline the recipe's body into your builder and edit it.** The
+recipes are short and deliberately readable for exactly this: copy the six or so
+lines of `raw_to_silver` into `silver_builder`, add your step, and the feed stops
+tracking the standard (which is the honest outcome — it isn't the standard hop
+any more). Reach for that when the hop genuinely differs; take the recipe's
+options (`expected_columns`, `rename`, `reject_writer`) when it doesn't.
+
+The recipes take the hop's **ports** — a `Reader` and a `Writer` — rather than a
+medallion profile, for two reasons: the *source* end of a raw hop isn't a
+medallion layer at all, and injecting the ports is what lets the generated test
+drive the real hop in memory against a `RecordingWriter`. `run()` wires the real
+medallion layer Writers. They live in `tools.recipes` rather than the framework
+because raw and silver are application vocabulary — the framework is kept
+domain-free ([ADR-0013](adr/0013-keep-the-framework-domain-free.md)) and the
+medallion moved out of it (#232).
 
 `run()` wires the real `CsvReader` and the subject's layer Writers (deriving the
 raw/silver `AccumulateByRun` strategy from the `RunContext`, so re-drives under
@@ -177,8 +221,9 @@ tests/pipelines/
   omits it.
 - **It refines through the settled ingest spine** — source → raw (a faithful,
   accumulated copy, the system of record) → silver (schema coerced + validated,
-  composing `SchemaCoercion` + `SchemaValidator` onto the hop) — importing only
-  `case_review` + the public facades, never framework internals.
+  composing `SchemaCoercion` + `SchemaValidator` onto the hop) — through the same
+  `tools.recipes` hop recipes the generic scaffold uses, importing only
+  `case_review`, `tools.*` and the public facades, never framework internals.
 
 **It deliberately stops at silver.** How accumulated silver is reduced or
 assembled into **gold** — a single-feed current reduce, a multi-feed *join*
@@ -224,10 +269,13 @@ shape-hardening (`schema-enforcement.md`). The step order is:
 2. **`SchemaCoercion`** — repair the dtypes storage round-trips lose.
 3. **`SchemaValidator`** (as a post-validator) — check at the silver boundary.
 
-The raw → silver hop is **composed explicitly** (there is no recipe builder), so
-slipping the canonicalisation in is just another step: a spaced feed adds a
-`Rename` *before* `SchemaCoercion` and the validator, so the renamed columns reach
-the schema check under their canonical names:
+The standard raw → silver recipe already takes this as its `rename` option —
+`raw_to_silver(reader, writer, schema=CasesRow, rename={"Case Number":
+"case_number"})` inserts the step in exactly this position. The hop is ordinary
+composition underneath, so the manual form below is what that option expands to,
+and what you'd write if the hop diverges further: a spaced feed adds a `Rename`
+*before* `SchemaCoercion` and the validator, so the renamed columns reach the
+schema check under their canonical names:
 
 ```python
 from framework.io import Refresh

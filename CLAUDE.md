@@ -25,8 +25,8 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   `framework/_internal` (`connection`, `describe`, `schema`: cross-cutting
   helpers with no public name)). The `python -m cli` entry point (`scaffold`
   plus the operator commands; see below) lives in the top-level `cli/` package,
-  and the cross-cutting `retry` / `calendar` / `medallion` / `environments` /
-  orchestration /
+  and the cross-cutting `retry` / `calendar` / `medallion` / `recipes` /
+  `environments` / orchestration /
   observability utilities in the top-level `tools/` package — both siblings of
   `framework/`,
   not facades. The run-record schema is declared **once, as data**, in
@@ -67,8 +67,8 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   `framework.io` / `framework.transform` / `framework.run`, not the modules
   behind them (those are internal layout); the cross-cutting `tools.*` helpers
   (`tools.retry` / `tools.calendar` / `tools.orchestration` /
-  `tools.observability` / `tools.environments`) are a sibling utility package,
-  not a facade.
+  `tools.observability` / `tools.environments` / `tools.recipes`) are a sibling
+  utility package, not a facade.
   The facades are the stable contract;
   [`docs/public-api.md`](docs/public-api.md) lists the surface, the internal
   modules, and the packaging non-goal. `tests/integration/test_public_api.py`
@@ -146,7 +146,11 @@ and its test as `tests/pipelines/test_<feed>.py`, from the template under
 `cli/scaffold_templates/feed/`, ready to run and customise. The
 generic feed refines source -> raw -> silver -> gold, one `*_builder` per hop
 (`raw_builder` lands faithfully; `silver_builder` renames via `RENAME` + coerces + quarantines +
-validates the schema; `gold_builder` is a passthrough stub with a `TODO`), wired
+validates the schema; `gold_builder` is a passthrough stub with a `TODO`) — the
+first two **compose the shared hop recipes** in `tools.recipes`
+(`source_to_raw` / `raw_to_silver`, #312) rather than carrying a copy of the
+standard hop, so a change to the standard reaches every feed that composes it;
+a feed that must diverge inlines the recipe's body into its own builder — wired
 in order by `run(context, *, describe=False)` and an argparse `main`. Pass
 `--from-feed-file <path>` to seed the scaffold from a real sample CSV: the header
 becomes the schema's fields (canonicalised to identifiers, dtypes inferred from
