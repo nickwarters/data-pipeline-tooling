@@ -46,12 +46,16 @@ class RecordingRunLog(RunLog):
         pipeline: str,
         step: str,
         status: str,
+        committed: bool = False,
         **fields: Any,
     ) -> None:
         # Built from the same field declaration the file sink uses, and stamped
         # from the same clock, so a captured record really does have the on-disk
         # shape — a field added to the schema is visible to a test without
-        # touching this helper.
+        # touching this helper. ``committed`` is named explicitly because it is
+        # the one field the sink defaults rather than leaving empty: forwarding
+        # it through ``**fields`` would capture ``None`` where a real run writes
+        # ``false``, so a test could not tell the two apart.
         self.records.append(
             build_run_record(
                 timestamp=utc_now_iso(),
@@ -59,6 +63,7 @@ class RecordingRunLog(RunLog):
                 pipeline=pipeline,
                 step=step,
                 status=status,
+                committed=committed,
                 **fields,
             )
         )
