@@ -1299,9 +1299,10 @@ where applicable, and read-only/side-effect metadata for plan-validation and the
 **dry-run preview**, but pipeline scripts still use only the builder methods. A
 run carried out under `RunContext(dry_run=True)` (the `dry_run_pipeline` core
 behind `cli run --dry-run`) reads, transforms, and validates real data but
-skips every write, quarantine, and explain commit — and touches no run log —
-accumulating a `DryRunReport` of columns, dtypes, row counts, and a bounded row
-sample per step; it falls back to an ambient run context so an author's bare
+skips every side effect — write, quarantine and explain commits, and the
+`action` escape hatch, whose callable is not called at all — and touches no run
+log, accumulating a `DryRunReport` of columns, dtypes, row counts, and a bounded
+row sample per step; it falls back to an ambient run context so an author's bare
 `p.run()` inherits the dry-run flag without threading it by hand. The authoring
 vocabulary is the DAG builder's nodes: `.task()` / `.transform()` for
 dataset→dataset work, `.validate()` for a gate, `.write()` on an intermediate

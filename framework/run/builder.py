@@ -505,6 +505,16 @@ class ActionNode(Node):
     def _do_execute(
         self, session: PipelineExecution, context: RunContext, *deps: Any
     ) -> StepResult:
+        if context.dry_run:
+            # An action exists only for its side effect, and the framework cannot
+            # see what that effect touches — a mail, a remote job, a file. So a
+            # preview cannot let it fire and still promise it commits nothing;
+            # like every other side-effecting node it reports its intent instead
+            # (issue #300). A lambda or a callable object has no useful
+            # ``__name__``, so fall back to something an operator can still read.
+            label = getattr(self.action, "__name__", None) or repr(self.action)
+            self.dry_run_note = f"would run action {label}"
+            return StepResult()
         self.action()
         return StepResult()
 

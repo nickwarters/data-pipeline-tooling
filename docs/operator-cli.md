@@ -110,11 +110,13 @@ available cases: 3 -> SelectionPool: 2 cases (Question Bank qb-100, logical run 
 
 Pass `--dry-run` to **preview** a pipeline during local development without
 landing anything. The handler runs against real data — every read, transform,
-and validation executes — but each write, quarantine commit, and explain trace
-is **skipped**, and no run log or run registry is touched. The command prints a
-per-step report: the node type and name, the row count, the columns with their
-dtypes, a small bounded sample of rows, and the *intent* of each skipped commit
-(`would write N row(s)`, `would quarantine N row(s)`).
+and validation executes — but every side effect is **skipped**: each write,
+quarantine commit and explain trace, and any `action` step (its callable is not
+called, since the framework cannot see what side effect it would have). No run
+log or run registry is touched either. The command prints a per-step report: the
+node type and name, the row count, the columns with their dtypes, a small bounded
+sample of rows, and the *intent* of each skipped side effect (`would write N
+row(s)`, `would quarantine N row(s)`, `would run action <name>`).
 
 ```console
 $ python -m cli run pipelines/ingest --base-dir /data --run-date 2026-05-29 --dry-run

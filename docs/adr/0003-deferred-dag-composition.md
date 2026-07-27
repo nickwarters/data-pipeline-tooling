@@ -46,8 +46,9 @@ the graph *is* the structure.
 - **Inspectable before it executes.** `.describe()` renders the planned graph from
   the same node list `.run()` walks, so the inspected plan and the executed plan
   cannot drift. A run under `RunContext(dry_run=True)` reads, transforms, and
-  validates real data but skips every side-effecting commit, accumulating a
-  `DryRunReport` of intended writes.
+  validates real data but skips every side effect — the write, quarantine and
+  explain commits and the `action` escape hatch alike — accumulating a
+  `DryRunReport` of what it would have done.
 
 ## Considered options
 
