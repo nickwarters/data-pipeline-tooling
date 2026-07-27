@@ -153,6 +153,17 @@ async function loadCaseTypeSources(
         // Through `loadCaseTypeConfig`, not the raw importer, so the outcome
         // configuration is validated here rather than detonating later on the
         // Case Review page.
+        //
+        // This deliberately *widens* when an invalid outcome config bites, and
+        // the trade is worth naming. Before, the Case Type booted and broke
+        // only when someone opened one of its Cases; now it is dropped at boot,
+        // for every user, and vanishes from every dashboard, list and
+        // allocation surface. Wider blast radius for the same defect — but the
+        // failure is now contained, announced by name in the boot banner, and
+        // fails closed (a dropped Case Type yields no source, so containment
+        // can only narrow access). The alternative is a Case Type that looks
+        // healthy everywhere except the one page that matters, which is the
+        // shape of bug that reaches production and stays there.
         const config = await loadCaseTypeConfig(slug, importers);
         const listName = config.listName;
         if (typeof listName !== 'string' || listName.trim() === '')

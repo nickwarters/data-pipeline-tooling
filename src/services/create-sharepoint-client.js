@@ -98,20 +98,19 @@ export function resolveHostWebUrl(
  * load. Dropping never widens access: a read without a `listName` still throws,
  * and there is still no default store to fall back to (#249).
  *
+ * The failure goes to the console rather than the boot banner, and takes no
+ * injection seam to say so. This is the `?mock=1` dev path; both of the ways a
+ * Case Type fails here — the module throws, or its config declares no
+ * `listName` — fail `resolveAppCaseSources` for the same Case Type moments
+ * later, so the banner already names it. A reporter parameter would be
+ * production API with only test callers, which is the same trade this change
+ * declined when it kept `loadCaseTypeSources` un-exported.
+ *
  * @param {import('../sharepoint-client.js').CaseRow[]} cases
  * @param {(slug: string) => Promise<import('../sharepoint-client.js').CaseTypeConfig>} loadCaseTypeConfig
- * @param {(failure: { slug: string, error: unknown }) => void} [reportUnavailable]
  * @returns {Promise<Record<string, import('../sharepoint-client.js').CaseRow[]>>}
  */
-export async function partitionCasesByList(
-  cases,
-  loadCaseTypeConfig,
-  reportUnavailable = ({ slug, error }) =>
-    console.error(
-      `[CORA] Case Type "${slug}" failed to load; its mock Cases are unavailable:`,
-      error
-    )
-) {
+export async function partitionCasesByList(cases, loadCaseTypeConfig) {
   /** @type {Record<string, string>} */
   const listNameByCaseType = {};
   for (const caseType of new Set(cases.map((c) => c.caseType))) {
@@ -125,7 +124,10 @@ export async function partitionCasesByList(
       }
       listNameByCaseType[caseType] = config.listName;
     } catch (error) {
-      reportUnavailable({ slug: caseType, error });
+      console.error(
+        `[CORA] Case Type "${caseType}" failed to load; its mock Cases are unavailable:`,
+        error
+      );
     }
   }
 

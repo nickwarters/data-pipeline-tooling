@@ -55,6 +55,13 @@ const registry = [
  * consumers re-derive from it on every read, so an append is seen by both at
  * once.
  *
+ * Note where "structural" stops: `readonly` is a `tsc` claim, not a runtime one.
+ * This is the live registry array, so `CASE_TYPES.push({})` at runtime bypasses
+ * the validation, the freeze and the duplicate check that `registerCaseType()`
+ * applies. Compile-time-only enforcement is the repo's normal bargain — there is
+ * no build step to enforce more — and the frozen *entries* are the half that
+ * does hold at runtime, which is the half that protects the group names.
+ *
  * @type {readonly CaseTypeEntry[]}
  */
 export const CASE_TYPES = registry;
