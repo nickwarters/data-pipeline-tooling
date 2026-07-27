@@ -304,8 +304,14 @@ Four shared properties:
   malformed `Pattern` regex, a `Length`/`Range` with `min > max`, or an empty `OneOf`
   raises when the rule is constructed — mirroring the validator's
   unsupported-dtype guard.
-- **Breaches are sampled, not dumped.** A message lists up to five offending
-  values (sorted, then `...`), so a wholly-wrong column stays one readable line.
+- **Breaches are sampled, not dumped — in the *validator's* message.** An
+  aborting validator message describes a **column**, so it lists up to five of
+  that column's offending values (sorted, then `...`) and a wholly-wrong column
+  stays one readable line. A **quarantined row's** `failed_rule` reason
+  describes **one row**, so it names the rule's expectation and samples
+  nothing — the row's own values are already beside the reason in the reject
+  table. Two callers, two presentations, one traversal (see
+  [ADR-0007](adr/0007-row-level-quarantine.md)).
 - **The breach mask is positional and plainly boolean.** `violating_mask()`
   marks rows by position, not by index label, so a frame whose index labels
   repeat — the ordinary result of concatenating two frames behind the `Dataset`
@@ -324,6 +330,14 @@ exported from `framework.core`, so an application rule implements the two
 methods directly rather than inheriting. That keeps inheritance from becoming
 the de-facto contract, and keeps the base class free to change shape without
 breaking application code.
+
+One consequence worth knowing when you write your own: the built-in rules
+describe a quarantine breach per row without sampling other rows' values, but a
+rule that implements the protocol directly is asked for its message through
+`check()`, which describes the whole column. Its rejected rows therefore carry a
+column-sampled reason rather than a purely per-row one. The rejected row itself
+is stored beside the reason either way, so the offending value is always
+present.
 
 Either way, authoring a rule means **working inside the engine seam**: the rule
 is handed the column's pandas `Series` directly, because judging a whole column
@@ -347,6 +361,44 @@ CaseA schema: column 'case_ref' violates pattern '\d{9,10}' (e.g. '12', 'ABC'); 
 A value rule is **skipped for a column whose dtype is wrong** — the dtype breach
 is the prior problem to fix, and running a string-shaped rule over a mistyped
 column would only add a spurious second failure.
+
+### One traversal, two presentations
+
+`SchemaValidator` (which *aborts*) and `SchemaValueRulePartitioner` (which
+*routes rows aside*) read the **same** evaluation of the declared rules. A rule
+author therefore satisfies **one** contract, not two subtly different ones, and
+each rule is consulted exactly once per frame — one mask, one phrase, regardless
+of how many rows breach.
+
+Where the two callers agree, and where they deliberately differ:
+
+| Concern | `SchemaValidator` | `SchemaValueRulePartitioner` |
+|---|---|---|
+| Missing column | rule **does not run**; the *column* is reported as a structural breach and the run aborts | rule **does not run**; nothing to route aside, and the validator ahead of the node already aborted |
+| Ill-typed column | rules skipped, dtype breach reported | not applicable — a dtype breach has already aborted upstream |
+| Breach phrasing | the rule's expectation **plus a sample** of the column's offenders | the rule's expectation, **no sample** (the row supplies its own values) |
+| Row checks | every breaching row, deduplicated by phrase with a row count | every breaching row, per row |
+
+The missing-column behaviour is now **identical in both** and chosen
+deliberately: a rule over a column that isn't there never runs, and the absence
+itself is the `SchemaValidator`'s to report. The consequence is worth knowing —
+**a typo'd column name in a schema means its rules silently never run during
+quarantine**, so the `SchemaValidator` in front of the quarantine node (the
+ADR-0007 ordering invariant) is what makes the typo visible.
+
+### What a rule costs
+
+- A **value rule** is vectorised: one pass over the column per rule, using the
+  engine's own operations. Cost is `O(rows × rules)`.
+- A **row check** is a Python callable over one row, so the framework constructs
+  a `Series` per row per check and calls into Python each time. On a 1M-row feed
+  (ADR-0002's stated ceiling) three row checks mean three million Python-level
+  calls — **orders of magnitude** more than a value rule over the same data.
+
+That is the deliberate trade for expressiveness (ADR-0006): *which* cross-field
+relationships matter is domain logic, and a callable is the honest shape for it.
+But prefer a value rule when the expectation fits one column, and keep the
+number of declared row checks small on the widest feeds.
 
 ### Where they bite
 

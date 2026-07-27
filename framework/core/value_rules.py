@@ -91,7 +91,27 @@ class ValueRuleBase:
         breaches = series[self.violating_mask(series).to_numpy()]
         if breaches.empty:
             return None
-        return self._phrase() + self._EVIDENCE.format(sample=_sample(breaches))
+        return self.describe_breach_with_sample(breaches)
+
+    def describe_breach(self) -> str:
+        """Return the rule's expectation, naming **no** offending values.
+
+        The phrasing for a caller that is describing *one row* — a quarantined
+        row's reason, where the row's own values already sit beside the reason.
+        Sampling there would stamp every rejected row with values belonging to
+        other rows, so the rule speaks only for itself.
+        """
+        return self._phrase()
+
+    def describe_breach_with_sample(self, breaches: "pd.Series") -> str:
+        """Return the rule's expectation plus a sample of ``breaches``.
+
+        The phrasing for a caller that is describing *a column* — an aborting
+        validator message, where a handful of the column's offending values is
+        exactly the diagnosis wanted. The caller passes the already-masked
+        offenders, so no second pass over the column is needed.
+        """
+        return self.describe_breach() + self._EVIDENCE.format(sample=_sample(breaches))
 
     def _violates(self, present: "pd.Series") -> "pd.Series":
         """Return a boolean Series over ``present`` — the non-null values only."""

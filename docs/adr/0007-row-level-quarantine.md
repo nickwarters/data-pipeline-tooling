@@ -40,6 +40,48 @@ by the quarantine node:
 Rejects accumulate across runs via `QuarantineWriter` (delete-by-`logical_run_id` +
 append), so a re-driven day replaces only its own prior rejects (ADR-0004).
 
+### Amendment (#310) — what "a located reason" contains
+
+This ADR's premise is that a quarantined row is *routed aside with a located
+reason*. As originally implemented that was not true: the partitioner asked each
+breached rule to `check()` the **whole column**, so every rejected row was
+stamped with the same message naming up to five offending values sampled from
+across the column — values belonging to *other* rows. On a wide feed that is not
+an explanation, it is a distraction.
+
+A reject reason now describes the **rule's expectation** and samples **no**
+values:
+
+```
+column 'code' has value(s) outside {'A', 'B'}
+```
+
+The located part is the pairing: the reason says what was expected, and the
+rejected row sitting beside it in the reject table carries the value that failed
+it. The aborting `SchemaValidator` keeps its sampled phrasing
+(`... outside {'A', 'B'}: 'X', 'Y', 'Z'`) — it describes a *column*, where a
+sample of offenders is exactly the right diagnosis. Both read one shared
+evaluation of the declared rules; only the presentation differs.
+
+**This changes stored text.** `failed_rule` is an audit artifact, and a reject
+table that spans this change will hold old rows whose reasons carry a sample and
+new rows whose reasons do not. The old text is wrong — it attributes other rows'
+values to a row — so the change is deliberate and not back-filled; a reader
+comparing rows across the boundary should expect the two shapes. The reject
+table's **columns** are unchanged, so nothing downstream of it moves.
+
+Two further corrections ride along:
+
+- **Rows are routed by position, not by index label.** Keying reasons by index
+  label merged two rows' reasons whenever labels repeated (the ordinary result
+  of concatenating frames behind the `Dataset` seam) and crashed outright on a
+  non-integer index.
+- **A rule whose column is missing does not run — in the partitioner *and* the
+  validator**, identically and by choice. There is no row to route aside for a
+  column that does not exist, and the missing column is a structural breach the
+  `SchemaValidator` in front of the quarantine node reports and aborts on. See
+  [schema-enforcement.md](../schema-enforcement.md#one-traversal-two-presentations).
+
 ## Why
 
 - **Operational reality.** A 650-column SharePoint/SAS export with one bad cell
