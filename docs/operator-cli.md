@@ -305,13 +305,30 @@ same set and all other `PipelineSet`s continue. Blocked decisions include the
 stale, missing, or failed upstream reason in `<base>/_orchestration/runs.db`.
 
 Each output line is `run_date  set_name  pipeline  status`, where `pipeline` is
-the scheduled item's leaf name:
+the scheduled item's leaf name, followed by the decision's reason when it has
+one:
 
 ```console
 $ python -m cli orchestrate --base-dir /data --app my_app.schedules --run-date 2026-05-29 --once
 2026-05-29  claims  claims_ingest  succeeded
 2026-05-29  claims  claims_selection  succeeded
+2026-05-29  claims  claims_month_close  skipped  schedule last working day of month is not due on 2026-05-29
 ```
+
+The `status` vocabulary is unchanged — `succeeded`, `failed`, `blocked`,
+`skipped` — and `reason` is prose written for you to read. Since #313 nothing in
+the orchestrator branches on that prose: whether an item counted as *due work*
+for the run date is carried by a separate `was_due` flag on the decision, stored
+alongside it in `<base>/_orchestration/runs.db`. That flag is what `--loop` uses
+to decide the day's work has settled, so a reworded message can no longer change
+when an orchestration stops polling. Disabled and not-due items are the ones
+recorded with `was_due = 0`; rows written before the flag existed read back
+`NULL` (see [run-log-format.md](run-log-format.md)).
+
+The not-due reason names the schedule that was not due, in that schedule's own
+terms: a weekday schedule names the weekday, a monthly one names the date. It
+used to describe every schedule in weekday language, so a day-of-month schedule
+reported "is not due on monday".
 
 ## Orchestration plan preview — `Orchestrator.plan()`
 
@@ -345,6 +362,14 @@ print(result)
 
 `str(result)` renders an aligned table using only stdlib; columns are sized to
 the widest value so the output stays readable regardless of pipeline name length.
+
+A `blocked` reason here is produced by the *same* freshness rule the run itself
+applies — `evaluate_requirement` in `framework.run.freshness`, of which the
+runner's `FreshnessGuard` is the side-effecting wrapper. Before #313 the preview
+carried its own copy, which had already drifted (it omitted the `for <pipeline>`
+that the guard's message ends with), so the same condition read differently
+depending on which command you ran. The preview's promise is *this is what will
+happen*, and it is now kept by construction rather than by discipline.
 
 For per-file source artifact planning (catch-up scenarios where a backlog of
 files needs processing), use the standalone `plan_for_each()` helper:

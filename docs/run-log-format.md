@@ -219,6 +219,16 @@ upstream failure in the same orchestration pass produces a `blocked` decision in
 requirement failure text so operators can see which `RunAddress` prevented the
 scheduled item from running.
 
+The freshness decision itself is made in exactly one place —
+`evaluate_requirement` in `framework/run/freshness.py` (#313) — of which the
+runner's `FreshnessGuard` is the recording-and-raising wrapper and
+`Orchestrator.plan()` the read-only caller, so the run log's `freshness` step,
+the `blocked` decision, and the plan preview all describe a condition the same
+way. The decision store also records `was_due` (0/1): whether the item was
+scheduled work for that run date at all. It was appended to that store's
+declaration, so rows written earlier read back `NULL` — the orchestrator only
+reads the flag on decisions it has just made, so the older rows are unaffected.
+
 ### Happy path (a successful run of 4 rows)
 
 ```json

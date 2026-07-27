@@ -208,6 +208,13 @@ without notice:
   enum was removed from `framework.core` (#232).
 - `framework.run.trace` (`RowTrace`) — the generic per-row trace mechanics behind
   `Pipeline.explain()`; reached through the builder, not imported directly.
+- `framework.run.freshness` (`evaluate_requirement`, `FreshnessVerdict`) — the
+  one rule deciding whether a declared upstream is current enough, shared by the
+  runner's `FreshnessGuard` (which records and raises) and
+  `tools.orchestration`'s plan preview (which renders), so the two cannot drift
+  apart (#313). The public `Requirement` / `FreshnessRequirement` types are
+  defined here and re-exported through `framework.run`; the predicate itself is
+  reached through the guard or the plan, not imported by pipeline scripts.
 - `framework.run.builder` (`Node` and its subclasses) / `framework.run.execution`
   (`PipelineExecution`) — the one execution engine: the wired node graph the
   builder mints, rendered by `.describe()` and executed in topological order by

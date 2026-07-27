@@ -22,12 +22,36 @@ from typing import Callable
 
 from framework.core.dataset import Dataset
 from framework.core.errors import ErrorCategory, PipelineError
-from framework.run.address import RunAddress
 from framework.run.dry_run import DryRunReport
+from framework.run.freshness import (
+    FreshnessRequirement,
+    FreshnessVerdict,
+    Requirement,
+    evaluate_requirement,
+)
 from framework.run.run_context import RunContext, active_context
 from tools.observability.run_log import RunLog
 from tools.observability.run_store import RunStore
-from tools.observability.timestamps import local_date
+
+# The requirement vocabulary is defined alongside the rule that evaluates it and
+# re-exported here, so the long-standing ``framework.run.runner`` import path
+# keeps working for both requirement types.
+__all__ = [
+    "FreshnessError",
+    "FreshnessGuard",
+    "FreshnessRequirement",
+    "FreshnessVerdict",
+    "LoadedPipeline",
+    "PipelineRunner",
+    "Requirement",
+    "RunRequirement",
+    "UnknownPipelineError",
+    "dry_run_pipeline",
+    "evaluate_requirement",
+    "load_pipeline",
+    "pipeline_label",
+    "run_pipeline",
+]
 
 
 class UnknownPipelineError(PipelineError):
@@ -42,76 +66,6 @@ class FreshnessError(PipelineError):
     category = ErrorCategory.OPERATIONAL
 
 
-@dataclass(frozen=True)
-class FreshnessRequirement:
-    """The upstream domain Pipeline a run requires to be current."""
-
-    upstream_pipeline: str
-    upstream_subject: str | None = None
-    max_age_days: int = 0
-
-    def as_requirement(self, default_subject: str | None = None) -> "Requirement":
-        """Return the equivalent public requirement predicate."""
-
-        return Requirement.succeeded(
-            RunAddress.pipeline(
-                self.upstream_pipeline,
-                subject=self.upstream_subject or default_subject,
-            )
-        ).within_days(self.max_age_days)
-
-
-@dataclass(frozen=True)
-class Requirement:
-    """A run-history predicate that must pass before a downstream run starts."""
-
-    address: RunAddress
-    max_age_days: int | None = None
-    require_same_day: bool = False
-    first_run_policy: str = "warn"
-
-    @classmethod
-    def succeeded(cls, address: RunAddress | str) -> "Requirement":
-        """Require a successful run record for a pipeline or task address."""
-
-        target = RunAddress.parse(address) if isinstance(address, str) else address
-        return cls(target)
-
-    def within_days(self, days: int) -> "Requirement":
-        """Require the latest success to be on or after run date minus ``days``."""
-
-        if days < 0:
-            raise ValueError("days must be zero or greater")
-        return Requirement(
-            self.address,
-            max_age_days=days,
-            require_same_day=False,
-            first_run_policy=self.first_run_policy,
-        )
-
-    def same_day(self) -> "Requirement":
-        """Require a success on the downstream run date."""
-
-        return Requirement(
-            self.address,
-            max_age_days=self.max_age_days,
-            require_same_day=True,
-            first_run_policy=self.first_run_policy,
-        )
-
-    def on_first_run(self, policy: str) -> "Requirement":
-        """Set the no-history policy: ``allow``, ``warn``, or ``block``."""
-
-        if policy not in {"allow", "warn", "block"}:
-            raise ValueError("first-run policy must be 'allow', 'warn', or 'block'")
-        return Requirement(
-            self.address,
-            max_age_days=self.max_age_days,
-            require_same_day=self.require_same_day,
-            first_run_policy=policy,
-        )
-
-
 def pipeline_label(subject: str | None, pipeline: str) -> str:
     """Return the stable registry label for a domain Pipeline.
 
@@ -124,51 +78,35 @@ def pipeline_label(subject: str | None, pipeline: str) -> str:
 
 
 class FreshnessGuard:
-    """Checks that a declared upstream has a recent successful run."""
+    """Blocks a run whose declared upstream has no recent enough success.
+
+    The side-effecting half of the freshness rule: it asks
+    :func:`~framework.run.freshness.evaluate_requirement` — the same predicate
+    the orchestration plan preview reads — and then does what only a real run
+    can do, namely record the outcome to the run log and refuse to continue. The
+    decision, and the sentence explaining it, come from the shared rule, so a
+    preview and the run it previews can never disagree.
+    """
 
     def check(
         self, context: RunContext, requirement: FreshnessRequirement | Requirement
     ) -> None:
-        predicate = _as_requirement(requirement, context)
-        latest = context.run_registry.latest_success(predicate.address)
-        if latest is None:
-            _handle_first_run(context, predicate)
-            return
-
-        # The stored instant is UTC; the run date it is compared against is a
-        # local calendar date, so the instant is converted before its date is
-        # taken. Comparing the raw UTC date would call an upstream that landed
-        # just after local midnight "yesterday" and block a fresh downstream.
-        latest_date = local_date(latest["timestamp"])
-        if predicate.require_same_day:
-            if latest_date == context.run_date:
-                _record_requirement_ok(context)
-                return
-            message = (
-                f"upstream {predicate.address.label} is stale: latest successful "
-                f"run was {latest_date.isoformat()}, required on "
-                f"{context.run_date.isoformat()} for {context.label}"
-            )
-            _record_requirement_error(context, message)
-            raise FreshnessError(message)
-
-        max_age_days = (
-            context.freshness_days
-            if predicate.max_age_days is None
-            else max(predicate.max_age_days, context.freshness_days)
+        verdict = evaluate_requirement(
+            requirement,
+            context.run_registry,
+            run_date=context.run_date,
+            label=context.label,
+            freshness_days=context.freshness_days,
+            default_subject=context.subject,
         )
-        oldest_allowed = context.run_date - dt.timedelta(days=max_age_days)
-        if latest_date >= oldest_allowed:
-            _record_requirement_ok(context)
-            return
-
-        message = (
-            f"upstream {predicate.address.label} is stale: latest successful run was "
-            f"{latest_date.isoformat()}, required on or after "
-            f"{oldest_allowed.isoformat()} for {context.label}"
-        )
-        _record_requirement_error(context, message)
-        raise FreshnessError(message)
+        if not verdict.satisfied:
+            _record_requirement_error(context, verdict.reason)
+            raise FreshnessError(verdict.reason)
+        # A satisfied first run is still worth saying out loud: there was no
+        # history to check, so the reason carries the warning (empty under the
+        # "allow" policy, which asks for silence).
+        warn_hits = [verdict.reason] if verdict.first_run and verdict.reason else []
+        _record_requirement_ok(context, warn_hits)
 
 
 Handler = Callable[[RunContext], object]
@@ -445,24 +383,7 @@ def _diagnostic_params(params: RunParams) -> dict[str, str]:
     return safe
 
 
-def _as_requirement(
-    requirement: FreshnessRequirement | Requirement, context: RunContext
-) -> Requirement:
-    if isinstance(requirement, FreshnessRequirement):
-        return requirement.as_requirement(default_subject=context.subject)
-    return requirement
-
-
-def _handle_first_run(context: RunContext, requirement: Requirement) -> None:
-    message = f"no successful run history for upstream {requirement.address.label}"
-    if requirement.first_run_policy == "block":
-        error = f"{message}; blocking first run"
-        _record_requirement_error(context, error)
-        raise FreshnessError(error)
-
-    warn_hits = []
-    if requirement.first_run_policy == "warn":
-        warn_hits = [f"{message}; allowing first run"]
+def _record_requirement_ok(context: RunContext, warn_hits: list[str]) -> None:
     context.run_log.record(
         context.pipeline_run_id,
         context.label,
@@ -470,17 +391,6 @@ def _handle_first_run(context: RunContext, requirement: Requirement) -> None:
         "ok",
         logical_run_id=context.logical_run_id,
         warn_hits=warn_hits,
-    )
-
-
-def _record_requirement_ok(context: RunContext) -> None:
-    context.run_log.record(
-        context.pipeline_run_id,
-        context.label,
-        "freshness",
-        "ok",
-        logical_run_id=context.logical_run_id,
-        warn_hits=[],
     )
 
 

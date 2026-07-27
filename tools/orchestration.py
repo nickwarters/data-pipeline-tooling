@@ -5,10 +5,11 @@ from __future__ import annotations
 import datetime as dt
 import time
 import uuid
-from collections.abc import Callable, Iterable
+import warnings
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Generic, Protocol, TypeVar
+from typing import Any, ClassVar, Generic, Protocol, TypeVar
 
 from framework._internal.connection import connect
 from framework.core.dataset import Dataset
@@ -20,6 +21,7 @@ from framework.run.runner import (
     FreshnessRequirement,
     Requirement,
     RunRequirement,
+    evaluate_requirement,
     load_pipeline,
     run_pipeline,
 )
@@ -32,7 +34,7 @@ from tools.observability.record_schema import (
     select_columns,
 )
 from tools.observability.run_store import RunStore
-from tools.observability.timestamps import local_date, utc_now_iso
+from tools.observability.timestamps import utc_now_iso
 
 _WEEKDAY_NAMES = [
     "monday",
@@ -198,13 +200,92 @@ class Schedule:
     the friendly constructors on this base class instead — ``Schedule.daily()``,
     ``Schedule.on_weekdays("monday", "wednesday")``, ``Schedule.day_of_month(21)``,
     and so on — so they need not remember class names or weekday integer ordinals.
+
+    A schedule declares everything about itself in one place: when it is due
+    (:meth:`is_due`), how it names itself (:meth:`schedule_label`), how it
+    explains a day it was not due (:meth:`not_due_reason`), and the ``type:``
+    value plus keys it answers to in an overrides file (:attr:`config_key` and
+    :meth:`from_config`). Adding a schedule is therefore a single class, with no
+    parallel list to keep in step: defining it registers it.
     """
+
+    #: The ``type:`` value an overrides file names this schedule by. Empty on a
+    #: class that should not be reachable from configuration.
+    config_key: ClassVar[str] = ""
+    #: Additional accepted spellings of :attr:`config_key`, kept so overrides
+    #: files already written against an older spelling keep parsing.
+    config_aliases: ClassVar[tuple[str, ...]] = ()
+
+    #: Every configurable spelling, mapped to the schedule class that owns it.
+    _config_registry: ClassVar[dict[str, type["Schedule"]]] = {}
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        """Register a schedule under the config keys it declares, as it is defined.
+
+        Registration by definition rather than by a lookup table elsewhere: the
+        class body is the one place a schedule is declared. Only keys declared on
+        *this* class count — an inherited one already belongs to its owner — and a
+        key two classes claim is a mistake that would otherwise resolve silently by
+        definition order, so it fails at import instead of at the operator's
+        overrides file.
+        """
+        super().__init_subclass__(**kwargs)
+        declared = (
+            cls.__dict__.get("config_key", ""),
+            *cls.__dict__.get("config_aliases", ()),
+        )
+        # Check every declared key before claiming any of them, so a class that
+        # declares a fresh key alongside a duplicate alias leaves the registry
+        # untouched rather than half-registered to a class that never finished
+        # being defined.
+        keys = [key for key in declared if key]
+        for key in keys:
+            claimed = Schedule._config_registry.get(key)
+            if claimed is not None:
+                raise ValueError(
+                    f"schedule config key {key!r} is already registered by "
+                    f"{claimed.__name__}; each key belongs to one schedule"
+                )
+        for key in keys:
+            Schedule._config_registry[key] = cls
 
     def is_due(self, run_date: dt.date, calendar: WorkingDayCalendar) -> bool:
         raise NotImplementedError
 
     def schedule_label(self) -> str:
         raise NotImplementedError
+
+    def not_due_reason(self, run_date: dt.date) -> str:
+        """Explain, in this schedule's own terms, why it is not due on a date.
+
+        The schedule answers for itself because only it knows which fact about
+        the date mattered. A shared weekday-shaped sentence made a monthly
+        schedule report "day 21 of month is not due on monday", sending an
+        operator looking for a weekday rule that does not exist.
+        """
+        return (
+            f"schedule {self.schedule_label()} is not due on "
+            f"{self.not_due_detail(run_date)}"
+        )
+
+    def not_due_detail(self, run_date: dt.date) -> str:
+        """The aspect of ``run_date`` this schedule judged. The date, by default."""
+        return run_date.isoformat()
+
+    @classmethod
+    def from_config(cls, config: Mapping[str, Any]) -> "Schedule":
+        """Build this schedule from an overrides-file mapping.
+
+        The default takes no arguments; a parameterised schedule overrides this
+        to read its own keys, so the key names live next to the class that gives
+        them meaning.
+        """
+        return cls()
+
+    @classmethod
+    def config_types(cls) -> dict[str, type["Schedule"]]:
+        """A snapshot of the configurable spellings and the classes owning them."""
+        return dict(Schedule._config_registry)
 
     # -- Friendly constructors -------------------------------------------------
     # Common operator language over the concrete schedule classes. These read
@@ -272,18 +353,30 @@ def _weekday_ordinal(name: str) -> int:
 class Weekdays(Schedule):
     """Run on working days according to the supplied calendar."""
 
+    config_key: ClassVar[str] = "weekdays"
+    config_aliases: ClassVar[tuple[str, ...]] = ("weekday",)
+
     def is_due(self, run_date: dt.date, calendar: WorkingDayCalendar) -> bool:
         return calendar.is_working_day(run_date)
 
     def schedule_label(self) -> str:
         return "daily"
 
+    def not_due_detail(self, run_date: dt.date) -> str:
+        return _WEEKDAY_NAMES[run_date.weekday()]
+
 
 @dataclass(frozen=True)
 class SpecificWeekdays(Schedule):
     """Run on specific weekday ordinals, Monday=0 through Sunday=6."""
 
+    config_key: ClassVar[str] = "specific_weekdays"
+
     weekdays: frozenset[int]
+
+    @classmethod
+    def from_config(cls, config: Mapping[str, Any]) -> "Schedule":
+        return cls(config["weekdays"])
 
     def __init__(self, weekdays: Iterable[int]) -> None:
         object.__setattr__(self, "weekdays", frozenset(weekdays))
@@ -298,12 +391,21 @@ class SpecificWeekdays(Schedule):
         names = sorted(_WEEKDAY_NAMES[day] for day in self.weekdays)
         return ",".join(names)
 
+    def not_due_detail(self, run_date: dt.date) -> str:
+        return _WEEKDAY_NAMES[run_date.weekday()]
+
 
 @dataclass(frozen=True)
 class DayOfMonth(Schedule):
     """Run on the Nth calendar day when that day is a working day."""
 
+    config_key: ClassVar[str] = "day_of_month"
+
     day: int
+
+    @classmethod
+    def from_config(cls, config: Mapping[str, Any]) -> "Schedule":
+        return cls(int(config["day"]))
 
     def __post_init__(self) -> None:
         if self.day < 1 or self.day > 31:
@@ -320,7 +422,13 @@ class DayOfMonth(Schedule):
 class NthWorkingDayOfMonth(Schedule):
     """Run on the Nth working day of the month."""
 
+    config_key: ClassVar[str] = "nth_working_day_of_month"
+
     n: int
+
+    @classmethod
+    def from_config(cls, config: Mapping[str, Any]) -> "Schedule":
+        return cls(int(config["n"]))
 
     def __post_init__(self) -> None:
         if self.n < 1:
@@ -346,6 +454,8 @@ class NthWorkingDayOfMonth(Schedule):
 class LastWorkingDayOfMonth(Schedule):
     """Run on the last working day of the month."""
 
+    config_key: ClassVar[str] = "last_working_day_of_month"
+
     def is_due(self, run_date: dt.date, calendar: WorkingDayCalendar) -> bool:
         if not calendar.is_working_day(run_date):
             return False
@@ -363,6 +473,8 @@ class LastWorkingDayOfMonth(Schedule):
 @dataclass(frozen=True)
 class ManualOnly(Schedule):
     """Never run in automatic due-work passes."""
+
+    config_key: ClassVar[str] = "manual_only"
 
     def is_due(self, run_date: dt.date, calendar: WorkingDayCalendar) -> bool:
         return False
@@ -428,6 +540,12 @@ class OrchestrationDecision:
     status: str
     reason: str = ""
     duration: float | None = None
+    # Whether this item was scheduled work for the run date at all. Disabled and
+    # not-due items are excluded from "has everything due settled?"; everything
+    # else counts. It is a field rather than a reading of the reason text because
+    # the reason is prose for an operator — rewording it once silently turned
+    # skipped items into due ones and changed when a --loop orchestration stopped.
+    was_due: bool = True
     # The business run key the orchestrator assigned this item (stable across
     # re-drives of the same run date). None for items that never ran (skipped /
     # disabled, or blocked before invocation).
@@ -509,6 +627,10 @@ ORCHESTRATION_RECORD_FIELDS: tuple[Field, ...] = (
     # The correlation columns that tie a decision to the run it triggered.
     Field("logical_run_id", "TEXT"),
     Field("pipeline_run_id", "TEXT"),
+    # Whether the item was due at all, stored as 0/1. Appended, never inserted:
+    # the order of this list is the on-disk column order of a live file. Reads
+    # back NULL on rows written before it joined the schema.
+    Field("was_due", "INTEGER"),
 )
 
 _CREATE_ORCHESTRATION_RECORDS = create_table_sql(
@@ -570,6 +692,7 @@ class OrchestrationStore:
                     decision.duration,
                     decision.logical_run_id,
                     decision.pipeline_run_id,
+                    int(decision.was_due),
                 ),
             )
             con.commit()
@@ -741,7 +864,6 @@ class Orchestrator:
         """
         root = Path(base_dir)
         day = run_date or dt.date.today()
-        weekday_name = _WEEKDAY_NAMES[day.weekday()]
 
         # Sweep the registry once before evaluating any item.
         run_registry = RunStore(root).catch_up()
@@ -750,9 +872,7 @@ class Orchestrator:
         for pipeline_set in self._sets:
             for scheduled in pipeline_set.pipelines:
                 item = self._apply_override(pipeline_set.name, scheduled)
-                plan_item = self._plan_item(
-                    pipeline_set.name, item, day, weekday_name, run_registry
-                )
+                plan_item = self._plan_item(pipeline_set.name, item, day, run_registry)
                 items.append(plan_item)
 
         return PlanResult(run_date=day, items=tuple(items))
@@ -762,7 +882,6 @@ class Orchestrator:
         set_name: str,
         item: ScheduledPipeline,
         run_date: dt.date,
-        weekday_name: str,
         run_registry: object,
     ) -> PlanItem:
         from tools.observability.run_registry import RunRegistry
@@ -784,10 +903,7 @@ class Orchestrator:
                 set_name=set_name,
                 pipeline=item.name,
                 status="skipped",
-                reason=(
-                    f"schedule {item.schedule.schedule_label()}"
-                    f" is not due on {weekday_name}"
-                ),
+                reason=item.schedule.not_due_reason(run_date),
             )
 
         # Check if it already succeeded today.
@@ -803,19 +919,28 @@ class Orchestrator:
                 reason=f"already succeeded on {run_date.isoformat()}",
             )
 
-        # Check freshness requirements without running handlers.
+        # Check freshness requirements without running handlers, through the very
+        # rule the run itself will apply — so a preview cannot promise a run that
+        # the guard then refuses, or explain the same block in different words.
         freshness_days = _freshness_days(item)
         for requirement in item.depends_on:
-            blocked, reason = _check_requirement_plan(
-                requirement, run_registry, run_date, freshness_days
+            verdict = evaluate_requirement(
+                requirement,
+                run_registry,
+                run_date=run_date,
+                label=item.name,
+                freshness_days=freshness_days,
+                # Path-addressed upstreams record under their leaf name, so a
+                # bare upstream name has no subject to resolve within.
+                default_subject=None,
             )
-            if blocked:
+            if not verdict.satisfied:
                 return PlanItem(
                     run_date=run_date,
                     set_name=set_name,
                     pipeline=item.name,
                     status="blocked",
-                    reason=reason,
+                    reason=verdict.reason,
                 )
 
         return PlanItem(
@@ -846,6 +971,7 @@ class Orchestrator:
                 run_date,
                 "skipped",
                 "disabled",
+                was_due=False,
             )
         if not item.schedule.is_due(run_date, self._calendar):
             return _decision(
@@ -855,7 +981,8 @@ class Orchestrator:
                 item,
                 run_date,
                 "skipped",
-                "not due",
+                item.schedule.not_due_reason(run_date),
+                was_due=False,
             )
         blocked_by = self._blocked_dependency(item, set_failed)
         if blocked_by is not None:
@@ -948,30 +1075,50 @@ class Orchestrator:
         return None
 
     def _all_due_terminal(self, result: OrchestrationPassResult) -> bool:
-        due = [
-            decision
-            for decision in result.decisions
-            if decision.reason not in {"not due", "disabled"}
-        ]
+        """Has every item that *was* due for this run date reached a final state?
+
+        Reads the decision's own ``was_due`` flag. It used to filter on the
+        reason text, which meant an editorial change to a console message — the
+        safest edit imaginable — moved skipped items into the due set and changed
+        when a ``--loop`` orchestration stopped polling.
+        """
+        due = [decision for decision in result.decisions if decision.was_due]
         return bool(due) and all(
             decision.status in {"succeeded", "failed", "blocked", "skipped"}
             for decision in due
         )
 
     def _validate_overrides(self) -> None:
+        """Check each override entry names something it can actually change.
+
+        An unresolvable set/pipeline is a configuration error and stops start-up.
+        An entry that resolves but cannot take effect is not fatal — the rest of
+        the file is still valid — so it warns: ``freshness_days`` is applied by
+        rewriting each declared dependency, so an item declaring none absorbs it
+        into an empty loop and an operator who tuned the wrong item would
+        otherwise get a clean start-up and no effect.
+        """
         if not self._overrides:
             return
         declared = {
-            (pipeline_set.name, item.name)
+            (pipeline_set.name, item.name): item
             for pipeline_set in self._sets
             for item in pipeline_set.pipelines
         }
         for raw in _override_items(self._overrides):
             key = (raw["set"], raw["pipeline"])
-            if key not in declared:
+            item = declared.get(key)
+            if item is None:
                 raise ValueError(
                     "orchestration override references unknown scheduled pipeline "
                     f"{key[0]}/{key[1]}"
+                )
+            if "freshness_days" in raw and not item.depends_on:
+                warnings.warn(
+                    f"orchestration override sets freshness_days for "
+                    f"{key[0]}/{key[1]}, which declares no dependencies: the "
+                    "override has no effect",
+                    stacklevel=2,
                 )
 
     def _apply_override(
@@ -996,75 +1143,6 @@ class Orchestrator:
                 ),
             )
         return changed
-
-
-def _check_requirement_plan(
-    requirement: RunRequirement,
-    run_registry: object,
-    run_date: dt.date,
-    freshness_days: int,
-) -> tuple[bool, str]:
-    """Pure freshness check for plan preview — no side-effects.
-
-    Returns ``(blocked, reason)``.  ``blocked=False`` means the requirement is
-    satisfied (or has no history and the first-run policy allows it);
-    ``blocked=True`` means the downstream should be marked ``blocked``.
-    """
-    from tools.observability.run_registry import RunRegistry
-
-    assert isinstance(run_registry, RunRegistry)
-
-    # Normalise to a Requirement so we have one code path. Path-addressed
-    # upstreams record under their leaf name, so there is no default subject.
-    if isinstance(requirement, FreshnessRequirement):
-        req = requirement.as_requirement(default_subject=None)
-    elif isinstance(requirement, Requirement):
-        req = requirement
-    else:
-        raise TypeError(f"unsupported requirement type {requirement!r}")
-
-    latest = run_registry.latest_success(req.address)
-
-    if latest is None:
-        # No history — consult the first-run policy.
-        if req.first_run_policy == "block":
-            return (
-                True,
-                f"no successful run history for upstream {req.address.label};"
-                " blocking first run",
-            )
-        # "warn" or "allow" → not blocked
-        return False, ""
-
-    # The stored instant is UTC and the run date is a local calendar date, so
-    # the instant is converted before its date is taken — the same rule the
-    # runner's freshness guard applies. The two checks state the rule twice for
-    # now; consolidating them is a separate piece of work.
-    latest_date = local_date(latest["timestamp"])
-
-    if req.require_same_day:
-        if latest_date == run_date:
-            return False, ""
-        return (
-            True,
-            f"upstream {req.address.label} is stale: latest successful run was "
-            f"{latest_date.isoformat()}, required on {run_date.isoformat()}",
-        )
-
-    effective_max_age = (
-        freshness_days
-        if req.max_age_days is None
-        else max(req.max_age_days, freshness_days)
-    )
-    oldest_allowed = run_date - dt.timedelta(days=effective_max_age)
-    if latest_date >= oldest_allowed:
-        return False, ""
-
-    return (
-        True,
-        f"upstream {req.address.label} is stale: latest successful run was "
-        f"{latest_date.isoformat()}, required on or after {oldest_allowed.isoformat()}",
-    )
 
 
 def plan_for_each(
@@ -1110,6 +1188,7 @@ def _decision(
     reason: str = "",
     duration: float | None = None,
     *,
+    was_due: bool = True,
     logical_run_id: str | None = None,
     pipeline_run_id: str | None = None,
 ) -> OrchestrationDecision:
@@ -1122,6 +1201,7 @@ def _decision(
         status=status,
         reason=reason,
         duration=duration,
+        was_due=was_due,
         logical_run_id=logical_run_id,
         pipeline_run_id=pipeline_run_id,
     )
@@ -1182,22 +1262,19 @@ def _find_override(overrides: dict, set_name: str, pipeline: str) -> dict | None
 
 
 def _schedule_from_config(config: dict | str) -> Schedule:
+    """Build the schedule an overrides entry names.
+
+    The parser knows how to find a schedule, not which schedules exist: it asks
+    the ``Schedule`` hierarchy for the class claiming this ``type:`` and hands
+    the mapping to that class, which reads its own keys.
+    """
     if isinstance(config, str):
         config = {"type": config}
     kind = str(config.get("type", "")).replace("-", "_").lower()
-    if kind in {"weekdays", "weekday"}:
-        return Weekdays()
-    if kind == "specific_weekdays":
-        return SpecificWeekdays(config["weekdays"])
-    if kind == "day_of_month":
-        return DayOfMonth(int(config["day"]))
-    if kind == "nth_working_day_of_month":
-        return NthWorkingDayOfMonth(int(config["n"]))
-    if kind == "last_working_day_of_month":
-        return LastWorkingDayOfMonth()
-    if kind == "manual_only":
-        return ManualOnly()
-    raise ValueError(f"unknown schedule override type {config.get('type')!r}")
+    schedule_type = Schedule.config_types().get(kind)
+    if schedule_type is None:
+        raise ValueError(f"unknown schedule override type {config.get('type')!r}")
+    return schedule_type.from_config(config)
 
 
 def _item_context(
