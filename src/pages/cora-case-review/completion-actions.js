@@ -153,7 +153,7 @@ export function completionPatch(input) {
  *   navigate?: (hash: string) => void,
  * }} input `navigate` is where a successful completion goes next. Defaults to
  *   the `lib/navigate.js` seam so no page call site has to pass it; injectable
- *   so a non-browser caller — `src/testing/in-memory-flow-runner.js` drives real
+ *   so a non-browser caller — `tests/_in-memory-flow-runner.js` drives real
  *   completions in Node — can record the navigation instead of this action
  *   sniffing for a `location` global (#547).
  */

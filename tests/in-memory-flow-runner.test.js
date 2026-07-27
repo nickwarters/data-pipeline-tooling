@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {
   createInMemoryFlowRunner,
   runFlowFixture,
-} from '../src/testing/in-memory-flow-runner.js';
+} from './_in-memory-flow-runner.js';
 import exampleReviewConfig from './_example-review-case-type.js';
 
 /** @type {import('../src/sharepoint-client.js').CaseRow} */

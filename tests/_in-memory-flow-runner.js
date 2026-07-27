@@ -1,31 +1,31 @@
 // @ts-check
 
-/** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
-/** @typedef {import('../sharepoint-client.js').PersonResult} PersonResult */
-/** @typedef {import('../sharepoint-client.js').VersionedExport} VersionedExport */
-/** @typedef {import('../services/permissions.js').Capabilities} Capabilities */
+/** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
+/** @typedef {import('../src/sharepoint-client.js').PersonResult} PersonResult */
+/** @typedef {import('../src/sharepoint-client.js').VersionedExport} VersionedExport */
+/** @typedef {import('../src/services/permissions.js').Capabilities} Capabilities */
 
-import { CaseLoader } from '../lib/case-loader.js';
-import { MockSharePointClient } from '../services/mock-sharepoint-client.js';
-import { resolveCapabilities } from '../services/permissions.js';
-import { SaveQueue } from '../services/save-queue.js';
+import { CaseLoader } from '../src/lib/case-loader.js';
+import { MockSharePointClient } from '../src/services/mock-sharepoint-client.js';
+import { resolveCapabilities } from '../src/services/permissions.js';
+import { SaveQueue } from '../src/services/save-queue.js';
 import {
   completeCase,
   completionPatch,
-} from '../pages/cora-case-review/completion-actions.js';
+} from '../src/pages/cora-case-review/completion-actions.js';
 import {
   raiseAppeal,
   resolveAppeal,
-} from '../pages/cora-case-review/appeal-actions.js';
+} from '../src/pages/cora-case-review/appeal-actions.js';
 import {
   answerEdited,
   issueCaptured,
   remediationActionToggled,
   remediationFreeFormEdited,
   remediationResolved,
-} from '../pages/cora-case-review/answer-actions.js';
-import { allApplicableAnswered } from '../evaluators/applicability-evaluator.js';
-import { loadCaseTypeConfig } from '../../case-types/manifest.js';
+} from '../src/pages/cora-case-review/answer-actions.js';
+import { allApplicableAnswered } from '../src/evaluators/applicability-evaluator.js';
+import { loadCaseTypeConfig } from '../case-types/manifest.js';
 
 /**
  * @typedef {{
@@ -102,7 +102,7 @@ import { loadCaseTypeConfig } from '../../case-types/manifest.js';
  * client: MockSharePointClient,
  * saveQueue: SaveQueue,
  * caseLoader: CaseLoader | null,
- * answers: Record<string, import('../sharepoint-client.js').Answer>,
+ * answers: Record<string, import('../src/sharepoint-client.js').Answer>,
  * caseRow: CaseRow | null,
  * navigations: string[],
  * snapshot: () => { lists: Record<string, CaseRow[]> },
@@ -159,7 +159,7 @@ export function createInMemoryFlowRunner(state, opts = {}) {
    * The runner stands in for the store: it is the single Answer owner, exactly
    * as the route is in the browser (#510). The loader hands its Answers over
    * once, and every later edit goes through one writer.
-   * @type {Record<string, import('../sharepoint-client.js').Answer>}
+   * @type {Record<string, import('../src/sharepoint-client.js').Answer>}
    */
   let answers = {};
   /**
@@ -179,7 +179,7 @@ export function createInMemoryFlowRunner(state, opts = {}) {
    */
   const navigations = [];
 
-  /** @param {Record<string, import('../sharepoint-client.js').Answer> | null} next */
+  /** @param {Record<string, import('../src/sharepoint-client.js').Answer> | null} next */
   function editAnswers(next) {
     if (next === null || !caseLoader) return;
     answers = next;
@@ -388,7 +388,7 @@ export function createInMemoryFlowRunner(state, opts = {}) {
     if (loader.access.appealReview !== 'edit') {
       throw new Error('Current actor cannot resolve an Appeal.');
     }
-    const appeal = /** @type {import('../sharepoint-client.js').Appeal} */ (
+    const appeal = /** @type {import('../src/sharepoint-client.js').Appeal} */ (
       (caseRow?.appeals ?? []).find(
         (candidate) => candidate.state !== 'resolved'
       )
@@ -442,7 +442,7 @@ export function createInMemoryFlowRunner(state, opts = {}) {
  *
  * @param {CaseLoader} loader
  * @param {CaseRow | null} caseRow The runner-owned Case Row (#530).
- * @param {Record<string, import('../sharepoint-client.js').Answer>} answers
+ * @param {Record<string, import('../src/sharepoint-client.js').Answer>} answers
  * @param {(hash: string) => void} navigate Recorder standing in for the browser
  *   seam (#547).
  * @returns {Promise<Partial<CaseRow> | null>} The applied fields, or `null` if

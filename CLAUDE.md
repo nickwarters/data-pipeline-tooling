@@ -320,9 +320,6 @@ src/
     cora-design-tokens.css
     cora-styles.css
 
-  testing/
-    in-memory-flow-runner.js
-
 case-types/                     # one module per Case Type, lazy-loaded via manifest.js
   manifest.js                   # CASE_TYPES: THE Case Type registry (slug + displayName +
                                 #   lazy importer/bank thunks); CASE_TYPE_IMPORTERS,
@@ -351,5 +348,8 @@ dev/                            # local dev loop; not deployed
     roadmap.js
 
 tests/                          # node:test unit tests — flat, one file per subject by filename
-                                # (e.g. cora-toast.test.js imports the pure Toast view)
+                                # (e.g. cora-toast.test.js imports the pure Toast view).
+                                # `_`-prefixed files are shared helpers, not suites:
+                                # _in-memory-flow-runner.js is the headless flow
+                                # harness (also driven by scripts/run_in_memory_flow.js)
 ```

@@ -2,7 +2,7 @@
 // @ts-check
 
 import { readFile, writeFile } from 'node:fs/promises';
-import { runFlowFixture } from '../src/testing/in-memory-flow-runner.js';
+import { runFlowFixture } from '../tests/_in-memory-flow-runner.js';
 
 const args = parseArgs(process.argv.slice(2));
 

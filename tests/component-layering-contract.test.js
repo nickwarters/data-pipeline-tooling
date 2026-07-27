@@ -94,19 +94,12 @@ test('layering: no component imports from the question-bank subsystem', () => {
  * this scan by construction.
  */
 test('layering: no static page import outside src/pages/; dynamic page import() only in src/routes/', () => {
-  // Files that legitimately reach a page module by static import. The in-memory
-  // flow runner is a dev/test harness (scripts/run_in_memory_flow.js + tests),
-  // not part of the boot graph.
-  const STATIC_PAGE_ALLOWLIST = new Set([
-    'src/testing/in-memory-flow-runner.js',
-  ]);
   // `from '…'` and side-effect `import '…'` are static; `import('…')` is dynamic.
   const staticPage = /(?:from\s+|import\s+)['"][^'"]*\bpages\//;
   const dynamicPage = /import\(\s*['"][^'"]*\bpages\//;
 
   const staticOffenders = srcFiles.filter((rel) => {
     if (rel.startsWith('src/pages/')) return false;
-    if (STATIC_PAGE_ALLOWLIST.has(rel)) return false;
     return staticPage.test(readCode(rel));
   });
   assert.deepEqual(
