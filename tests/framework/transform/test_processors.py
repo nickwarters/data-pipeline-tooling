@@ -70,6 +70,23 @@ def test_filter_handles_an_empty_feed():
     assert len(kept) == 0
 
 
+def test_both_filters_agree_on_index_semantics():
+    # Filter and VectorizedFilter are presented as interchangeable ways to
+    # express one rule, so they must not differ in what index they leave behind:
+    # both reset it, so no gappy index survives a dropped row.
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({"case_ref": ["c1", "c2", "c3"], "score": [5, 10, 20]})
+    )
+
+    row = Filter((lambda row: row["score"] >= 10))(dataset).to_pandas()
+    vectorized = VectorizedFilter((lambda frame: frame["score"] >= 10))(
+        dataset
+    ).to_pandas()
+
+    assert list(row.index) == [0, 1]
+    assert list(vectorized.index) == list(row.index)
+
+
 def test_score_writes_a_column_computed_per_row():
     dataset = Dataset.from_pandas(
         pd.DataFrame({"case_ref": ["c1", "c2"], "amount": [100, 50]})

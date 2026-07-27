@@ -291,18 +291,48 @@ configuration error raised when `SchemaValidator` is built.
 | `Unique()` | no duplicate values in the column | `has duplicate value(s): 'dup'` |
 | `OneOf(*allowed)` | membership in an allowed set (value-set / encoding) | `has value(s) outside {'closed', 'open'}: 'pending'` |
 
-Three shared properties:
+Four shared properties:
 
 - **Value rules check present values only.** Null values are handled by the
   field's nullability marker: allowed for `Nullable()`/plain fields, rejected by
   `NonNull()`. A nullable `Pattern`, `Length`, `Range`, `Unique`, or `OneOf`
-  field can therefore be missing without creating a value-rule breach.
+  field can therefore be missing without creating a value-rule breach. The null
+  guard lives **once**, in the shared `ValueRuleBase` the five rules derive
+  from; a rule only says which of the *present* values breach and how to phrase
+  it.
 - **Configuration errors fail where the schema is composed**, not mid-run: a
   malformed `Pattern` regex, a `Length`/`Range` with `min > max`, or an empty `OneOf`
   raises when the rule is constructed — mirroring the validator's
   unsupported-dtype guard.
 - **Breaches are sampled, not dumped.** A message lists up to five offending
   values (sorted, then `...`), so a wholly-wrong column stays one readable line.
+- **The breach mask is positional and plainly boolean.** `violating_mask()`
+  marks rows by position, not by index label, so a frame whose index labels
+  repeat — the ordinary result of concatenating two frames behind the `Dataset`
+  seam — is masked correctly rather than raising or silently flagging the wrong
+  rows. The mask's dtype is plain `bool`, never pandas' nullable `boolean`,
+  because the validator and the quarantine partitioner select rows with it.
+
+### Writing your own rule — an engine-confined act
+
+A value rule is anything with `check(series)` and `violating_mask(series)`: the
+`ValueRule` contract is a **structural protocol**, so a rule an application
+writes itself, inheriting nothing, is as much a value rule as the five built-in
+ones. `ValueRuleBase` — which hands the five built-ins their shared null guard
+and mask construction — is **framework-internal**: it is deliberately not
+exported from `framework.core`, so an application rule implements the two
+methods directly rather than inheriting. That keeps inheritance from becoming
+the de-facto contract, and keeps the base class free to change shape without
+breaking application code.
+
+Either way, authoring a rule means **working inside the engine seam**: the rule
+is handed the column's pandas `Series` directly, because judging a whole column
+one value at a time in plain Python would be unusably slow. This is the same
+bargain readers, writers and transforms make, and
+[ADR-0002](adr/0002-python-processing-opaque-dataset-carrier.md) names value
+rules in its engine-confined list for exactly this reason. Pipeline scripts and
+the domain layer still never name the engine — they only *declare* rules on a
+schema.
 
 ### One message, naming column + rule
 
