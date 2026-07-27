@@ -258,9 +258,20 @@ function messageColumns(
     // This button opens the Conversation, not the Case, and the row's
     // Reference cell already links to the Case — so the name has to say which
     // is which (#541).
-    caseActionsColumn((row) => onOpenConversation?.(row), {
-      openLabel: (value) => `Open conversation for ${value}`,
-    }),
+    //
+    // No handler, no button. The standalone #/my-cases route deliberately
+    // keeps the historic no-navigation behaviour and passes none, and a
+    // button announcing "Open conversation for …" that does nothing when
+    // clicked is worse than no button — it reads as broken rather than as
+    // absent, and a screen-reader user is told about an action they cannot
+    // take. Found in the #551 browser pass.
+    ...(onOpenConversation
+      ? [
+          caseActionsColumn((row) => onOpenConversation(row), {
+            openLabel: (value) => `Open conversation for ${value}`,
+          }),
+        ]
+      : []),
   ];
 }
 

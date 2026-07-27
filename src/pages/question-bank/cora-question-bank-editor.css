@@ -1765,11 +1765,18 @@
 }
 
 /* ── Partial bank-load failure (#521) ─────────────────────────────────── */
+/*
+ * A named Question Bank failed to load and the curator can retry it (#521,
+ * #549). This carried surface/muted styling until the #551 browser pass, which
+ * read it as neutral chrome rather than a warning — the one place in the
+ * editor that has to catch the eye looked like a caption. It now uses the same
+ * warning tokens as `cora-banner-warning`.
+ */
 .cora-bank-editor .bank-load-warning {
   padding: var(--cora-space-3) var(--cora-space-7);
-  background: var(--cora-color-surface);
-  border-bottom: 1px solid var(--cora-color-border);
-  color: var(--cora-color-text-muted);
+  background: var(--cora-color-warning-bg);
+  border-bottom: 1px solid var(--cora-color-warning);
+  color: var(--cora-color-warning);
   font-size: var(--cora-font-size-sm);
   display: flex;
   align-items: center;

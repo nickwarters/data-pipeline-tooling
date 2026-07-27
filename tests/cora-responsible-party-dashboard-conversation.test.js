@@ -116,3 +116,44 @@ test('Responsible Party unread messages render through descriptors and invoke co
   assert.ok(open._listeners.click);
   assert.equal(open._listeners.click.length, 1);
 });
+
+test('#551: without a Conversation handler the Unread Messages table renders no Open button', () => {
+  // The standalone #/my-cases route deliberately keeps the historic
+  // no-navigation behaviour and passes no onOpenConversation. The button was
+  // rendered anyway, so it announced "Open conversation for …" and did
+  // nothing when clicked — found in the #551 browser pass. An affordance that
+  // does nothing reads as broken rather than absent, and tells a
+  // screen-reader user about an action they cannot take.
+  const view = responsiblePartyView(
+    {
+      cases: [
+        row('missing-timestamp', [
+          { author: 'reviewer', timestamp: '2026-06-01T00:00:00Z', body: 'hi' },
+        ]),
+      ],
+      currentUserId: 'rp-1',
+      filter: '',
+      remediationSort: null,
+      messageSort: null,
+    },
+    {
+      onFilterChange: () => {},
+      onRemediationSort: () => {},
+      onMessageSort: () => {},
+      // onOpenConversation deliberately absent
+    },
+    new Date('2026-07-01T00:00:00Z')
+  );
+  const section = view.querySelector('.cora-rp-messages');
+
+  assert.equal(
+    queryAllByRole(section, 'button', { name: /^Open/ }).length,
+    0,
+    'no Open button without a handler to back it'
+  );
+  assert.deepEqual(
+    tableHeaders(section).map((h) => h[0]),
+    ['Reference', 'Case Type', 'Last message'],
+    'and the Actions column goes with it'
+  );
+});
