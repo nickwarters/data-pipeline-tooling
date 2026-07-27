@@ -64,11 +64,15 @@ export function journeyCasesView(state, tools) {
       // all, and now every row carries the base `cora-case-row` as well as the
       // overdue modifier — a third rendered change beyond #542's two decisions.
       // Kept deliberately, because it is what makes Journey Cases match the
-      // Dashboard and Team Cases rather than a fourth spelling. It should be
-      // invisible: `.cora-case-row` sets padding, border, radius and shadow,
-      // none of which apply to a `tr` under the table's `border-collapse`, and
-      // its `--cora-color-surface` background is already the `.cora-data-table`
-      // background.
+      // Dashboard and Team Cases rather than a fourth spelling. Not that the
+      // class renders nothing on a `tr`: only its padding and border-radius are
+      // inert there — its border participates in the table's `border-collapse`,
+      // and its background and box-shadow paint. The delta is small because
+      // both borrow what the table already uses: 1px in the same
+      // `--cora-color-border` as the `td` `border-bottom`, over the same
+      // `--cora-color-surface` the `.cora-data-table` is already filled with.
+      // The justification is the convergence, not invisibility — whatever the
+      // class paints, it has always painted on the other two tables.
       rowClass: overdueCaseRowClass,
     })
   );
