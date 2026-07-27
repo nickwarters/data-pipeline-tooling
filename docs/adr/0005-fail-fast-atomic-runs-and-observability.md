@@ -82,5 +82,11 @@ stated once rather than re-derived per Writer.
   and idempotency key (ADR-0004), so there is nothing to "unpublish" before a
   re-drive.
 - The JSONL schema (`pipeline_run_id`, per-step metrics, `committed`,
-  `error_category`) is the contract the `RunRegistry` consumes.
+  `error_category`) is the contract the `RunRegistry` consumes. That contract is
+  **one declaration in code**, not a description: `RUN_RECORD_FIELDS` in
+  `tools/observability/record_schema.py` states the fields once, in order, and
+  the log record, the registry DDL, its additive column migration, the `INSERT`,
+  the row decode and the console line are all derived from it (#307). A field is
+  added there, once; nothing else has a field list to fall behind. The order is a
+  live on-disk format — append to it, never reorder it.
 </content>

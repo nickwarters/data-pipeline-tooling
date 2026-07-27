@@ -29,7 +29,12 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   orchestration /
   observability utilities in the top-level `tools/` package — both siblings of
   `framework/`,
-  not facades. Then `case_review/` (the case-review *application* — domain types
+  not facades. The run-record schema is declared **once, as data**, in
+  `tools/observability/record_schema.py` (`RUN_RECORD_FIELDS`): the JSONL record,
+  the registry's DDL, its additive column migration, the `INSERT`, the row decode
+  and the console line are all derived from that one ordered list, so adding a
+  field is one entry (#307) — and its order is a live on-disk format, so append,
+  never reorder. Then `case_review/` (the case-review *application* — domain types
   like `CaseType`/`CasePool` and its gold helpers, which live outside the
   framework), `pipelines/` (scripts), `tests/` (pytest, with author test helpers
   in `tests/framework_testing/`), `docs/` (architecture, ADRs).

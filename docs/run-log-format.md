@@ -82,7 +82,28 @@ orchestration decision store, joined to the run log via `pipeline_run_id`.
 
 Every line is a JSON object with a **stable key set** — fields that don't apply
 to a step are `null` (or `[]`), so the registry sees one shape. `timestamp`
-leads each line; the examples below elide it for width but it is always present:
+leads each line; the examples below elide it for width but it is always present.
+
+**The schema is declared once, in code**: `RUN_RECORD_FIELDS` in
+[`tools/observability/record_schema.py`](../tools/observability/record_schema.py)
+is the authoritative field list — names, order, SQL types, encodings, and which
+fields show on the console. Read it for *what* the fields are; the table below
+says what they *mean*. Everything else is derived from that declaration: the
+JSONL record, the registry's `CREATE TABLE`, its additive column migration
+(`ensure_columns`), the `INSERT`, the row decode, and the console line. Adding a
+field is **one entry** in that list — and since the declaration order is the
+JSONL key order and the column order of live files on the share, **append to it,
+never reorder it**.
+
+The console line renders its fragments in that same declared order, so it is a
+projection of the record rather than a separately-maintained format. One
+consequence: the warn-hit fragment now prints before `committed`/`profiled`
+rather than at the end of the line. The console line is for humans and nothing
+parses it — the JSONL is the machine-readable contract.
+
+Two fields differ between the two surfaces, by design: `step_ordinal` is the
+store's own (assigned at ingest, so re-ingesting a line is a no-op) and never
+appears in the log; `params` is logged but has no column.
 
 | Field       | Type                | Meaning |
 |-------------|---------------------|---------|
@@ -99,8 +120,10 @@ leads each line; the examples below elide it for width but it is always present:
 | `rows_excluded` | int \| null     | Cases a gate excluded on an `explain` step (Selection explainability — ADR-0008); `null` elsewhere. |
 | `duration`  | float \| null       | Wall-clock seconds for the step/run. |
 | `errors`    | string[]            | Error messages when `status` is `error`; `[]` otherwise. |
+| `error_category` | string \| null | The triage category of an expected failure (`data` / `operational` / `config`) so an operator can route it without reading every message. `null` for a bug (a non-`PipelineError`) — the absence is the signal. |
 | `warn_hits` | string[]            | Warn-severity validator messages tolerated at this step; `[]` otherwise. |
 | `committed` | bool                | `true` on a step that durably wrote an artifact (`write`, `quarantine` with rejects, `explain`, `checkpoint`) — independently committed evidence that **survives a later step's failure** (ADR-0005). Set only on the success record; `false` everywhere else. |
+| `params`    | object              | The run's parameters, recorded only after caller-side redaction; `{}` when none. Logged for traceability but **not** stored by the registry — it has no column for them. |
 | `profile`   | object \| null      | The per-column statistical profile a `profile` step recorded (#284): a `DatasetProfile` record (`row_count` + per-column `null_rate`, `distinct_count`, `min`/`max`, bounded top-N distribution). `null` on every non-profile step. The registry stores it in a queryable `profile` column and trends it across runs via `recent_profiles(address)`. |
 
 ### Steps per run
@@ -225,3 +248,12 @@ idempotency — no record is double-counted even if earlier content is revisited
 
 **Idempotent.** A second call on the same unchanged file returns 0 and costs
 only a stat + DB lookup.
+
+**Schema migration.** Registry databases on the share are long-lived, so opening
+one is also how it catches up with the declaration: `ensure_columns` adds any
+declared column the table lacks (nullable, in place — never a re-create) and
+returns the names it added. A database written before `committed`, `step_address`,
+`logical_run_id` or `profile` existed therefore keeps ingesting, and its older
+rows read back with those fields empty. `tools.orchestration`'s decision store
+uses the same helper over its own separate declaration — shared machinery, two
+distinct contracts.
