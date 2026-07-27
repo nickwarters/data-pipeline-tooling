@@ -292,9 +292,11 @@ test('reviewer worklist preserves the legacy columns, filters, and Open action',
   );
   statusFilter.value = 'In-progress';
   statusFilter.dispatchEvent({ type: 'change', target: statusFilter });
-  [...view.querySelectorAll('.cora-case-open-btn')]
-    .at(-1)
-    ?.dispatchEvent(/** @type {any} */ ({ type: 'click' }));
+  // This table opens the Case, so `Open ${reference}` is the right name and
+  // stays the default (#541).
+  const open = getByRole(view, 'button', { name: 'Open Beta case' });
+  assert.equal(open.className, 'cora-case-open-btn');
+  open.dispatchEvent(/** @type {any} */ ({ type: 'click' }));
 
   assert.deepEqual(actions, [
     { type: 'reviewer-table/filter-text-changed', value: 'conduct' },

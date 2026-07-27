@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
-import { tableHeaders } from './helpers/semantic-dom.js';
+import { getByRole, tableHeaders } from './helpers/semantic-dom.js';
 
 installDom();
 /** @type {any} */ (globalThis).location = { hash: '' };
@@ -149,9 +149,11 @@ test('team cases view renders the standard Case columns, the Case Type additions
   ]);
 
   location.hash = '';
-  view
-    .querySelector('.cora-case-open-btn')
-    ?.dispatchEvent(/** @type {any} */ ({ type: 'click' }));
+  // This table opens the Case, so `Open ${reference}` is the right name and
+  // stays the default (#541).
+  const open = getByRole(view, 'button', { name: 'Open Case c1' });
+  assert.equal(open.className, 'cora-case-open-btn');
+  open.dispatchEvent(/** @type {any} */ ({ type: 'click' }));
   assert.equal(location.hash, '#/case/complaints/c1');
 });
 

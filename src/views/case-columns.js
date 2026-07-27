@@ -80,10 +80,28 @@ const caseAssignedColumn = () => ({
  * tables navigate, the Responsible Party's messages table opens a
  * Conversation.
  *
+ * Because the destination varies, so must the accessible name. The default,
+ * `Open ${reference}`, is right for every table that opens the Case; a table
+ * that opens something else passes `openLabel` and says so, or a screen-reader
+ * user hears the same name from this button and from the row's Reference link
+ * while the two go to different places (#541).
+ *
+ * Deliberately not called `ariaLabel`: `ColumnDescriptor.ariaLabel` already
+ * means something else one file away — the generic renderer applies it to a
+ * cell's `href` link, taking the row, and this column has no `href`. Same name
+ * for a different argument on a different element is the kind of collision a
+ * comment stops being able to hold apart.
+ *
  * @param {(row: CaseRow) => void} onOpen
+ * @param {{ openLabel?: (value: unknown) => string }} [options] Named because
+ *   it is the optional half — the three Case tables keep calling with `onOpen`
+ *   alone, exactly as before.
  * @returns {CaseColumn}
  */
-export const caseActionsColumn = (onOpen) => ({
+export const caseActionsColumn = (
+  onOpen,
+  { openLabel = (value) => `Open ${value}` } = {}
+) => ({
   key: 'actions',
   label: 'Actions',
   value: (row) => row.title || row.id,
@@ -93,7 +111,7 @@ export const caseActionsColumn = (onOpen) => ({
       {
         type: 'button',
         className: 'cora-case-open-btn',
-        'aria-label': `Open ${value}`,
+        'aria-label': openLabel(value),
         onclick: () => onOpen(row),
       },
       'Open'

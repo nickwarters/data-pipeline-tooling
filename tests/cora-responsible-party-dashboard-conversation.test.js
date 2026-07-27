@@ -2,7 +2,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
-import { tableHeaders } from './helpers/semantic-dom.js';
+import {
+  getByRole,
+  queryAllByRole,
+  tableHeaders,
+} from './helpers/semantic-dom.js';
 
 installDom();
 
@@ -87,8 +91,18 @@ test('Responsible Party unread messages render through descriptors and invoke co
     ['Last message', 'cora-col-lastMessage', 'descending', true],
     ['Actions', 'cora-col-actions', 'none', false],
   ]);
+  // The Open button opens the Conversation while the row's Reference link
+  // opens the Case, so its accessible name must not be the Case's (#541).
   const open = /** @type {any} */ (
-    [...section.querySelectorAll('button')].at(-1)
+    getByRole(section, 'button', {
+      name: 'Open conversation for missing-timestamp',
+    })
+  );
+  assert.deepEqual(
+    queryAllByRole(section, 'button', { name: /^Open / }).map((button) =>
+      button.getAttribute('aria-label')
+    ),
+    ['Open conversation for unread', 'Open conversation for missing-timestamp']
   );
   open.dispatchEvent({ type: 'click' });
   assert.deepEqual(opened, ['missing-timestamp']);

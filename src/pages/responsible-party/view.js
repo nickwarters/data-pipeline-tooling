@@ -245,7 +245,12 @@ function messageColumns(
       format: (value) =>
         value ? new Date(String(value)).toLocaleString() : '—',
     },
-    caseActionsColumn((row) => onOpenConversation?.(row)),
+    // This button opens the Conversation, not the Case, and the row's
+    // Reference cell already links to the Case — so the name has to say which
+    // is which (#541).
+    caseActionsColumn((row) => onOpenConversation?.(row), {
+      openLabel: (value) => `Open conversation for ${value}`,
+    }),
   ];
 }
 

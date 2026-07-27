@@ -91,6 +91,22 @@ test('the Actions column renders an Open button that calls the injected opener',
   assert.deepEqual(opened, [subject]);
 });
 
+test('the Actions column takes an accessible name for openers that are not the Case', () => {
+  const column = caseActionsColumn(() => {}, {
+    openLabel: (value) => `Open conversation for ${value}`,
+  });
+  const subject = row();
+  const value = /** @type {(row: CaseRow) => unknown} */ (column.value)(
+    subject
+  );
+  const button = /** @type {any} */ (column.format?.(value, subject));
+  assert.equal(
+    button.getAttribute('aria-label'),
+    'Open conversation for Case c1'
+  );
+  assert.equal(button.textContent, 'Open');
+});
+
 test('the standard Case table is the seven columns in their established order', () => {
   const columns = standardCaseColumns({ onOpen: () => {} });
   assert.deepEqual(
