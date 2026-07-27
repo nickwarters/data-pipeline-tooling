@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import time
+from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from framework.core.dataset import Dataset
@@ -36,6 +37,28 @@ class PipelineGraphError(PipelineError):
     category = ErrorCategory.CONFIG
 
 
+@dataclass
+class StepResult:
+    """What a node produced and what it measured, handed back to the wrapper.
+
+    A node never writes to the run log. It returns its dataset (``None`` for a
+    node that produces none), any counts only it could know — ``rows_quarantined``,
+    ``rows_excluded``, a profile payload — and whether it durably committed an
+    artifact. ``Node.execute`` turns that into exactly one record, so a new node
+    type gets correct recording without writing any, and cannot record twice.
+
+    ``metrics`` keys are run-log record field names. They override the generic
+    row counts the wrapper derives, which is how a step whose meaningful
+    ``rows_in``/``rows_out`` are not simply its input and output sizes states its
+    own. An unknown key is a ``TypeError`` from the run log's explicit keyword
+    contract rather than a field that silently never lands.
+    """
+
+    dataset: Dataset | None = None
+    metrics: dict[str, Any] = field(default_factory=dict)
+    committed: bool = False
+
+
 class Node:
     """A single deferred operation in the DAG."""
 
@@ -56,13 +79,6 @@ class Node:
         # A dry-run note this node contributes to the preview (e.g. the intent of
         # a skipped commit). Set by side-effecting nodes; None for plain steps.
         self.dry_run_note: str | None = None
-        # Set by a side-effecting node once it has durably written an artifact;
-        # surfaced on this node's run-log record so the log shows independently
-        # committed evidence that outlives a later failure (ADR-0005).
-        self.committed: bool = False
-        # Set by a profile node to the per-column profile record (#284); surfaced
-        # on this node's run-log record so the registry can trend it across runs.
-        self.profile: dict | None = None
 
     def describe(self) -> str:
         deps = [n.name for n in self.inputs]
@@ -78,35 +94,37 @@ class Node:
 
         started = time.perf_counter()
         try:
-            self._result = self._do_execute(session, context, *input_results)
+            step = self._do_execute(session, context, *input_results)
+            self._result = step.dataset
             self._executed = True
 
             rows_in = None
             if input_results:
-                from framework.core.dataset import Dataset
-
                 datasets_in = [r for r in input_results if isinstance(r, Dataset)]
                 if datasets_in:
                     rows_in = sum(len(ds) for ds in datasets_in)
 
             rows_out = None
-            if self._result is not None:
-                from framework.core.dataset import Dataset
+            if isinstance(self._result, Dataset):
+                rows_out = len(self._result)
 
-                if isinstance(self._result, Dataset):
-                    rows_out = len(self._result)
-
-            # Log success for this node
+            # The one place a step is recorded. The wrapper owns what it can see
+            # for every node — the timing, the warn hits, the row counts either
+            # side, the stable address — and the node's own metrics are layered
+            # over the top, so a node reports numbers instead of logging them.
+            measured = {
+                "rows_in": rows_in,
+                "rows_out": rows_out,
+                **step.metrics,
+            }
             session.record(
                 self.name,
                 "ok",
                 duration=time.perf_counter() - started,
                 warn_hits=self.warn_hits,
-                rows_in=rows_in,
-                rows_out=rows_out,
-                committed=self.committed,
-                profile=self.profile,
+                committed=step.committed,
                 step_address=self.address.label if self.address is not None else None,
+                **measured,
             )
             if context.dry_run and context.dry_run_report is not None:
                 context.dry_run_report.observe(
@@ -136,7 +154,12 @@ class Node:
 
     def _do_execute(
         self, session: PipelineExecution, context: RunContext, *inputs: Any
-    ) -> Any:
+    ) -> StepResult:
+        """Do the node's work and return what it produced and measured.
+
+        Never records: :meth:`execute` writes the single record from what this
+        returns.
+        """
         raise NotImplementedError
 
 
@@ -153,7 +176,7 @@ class ReadNode(Node):
 
     def _do_execute(
         self, session: PipelineExecution, context: RunContext, *deps: Any
-    ) -> Dataset:
+    ) -> StepResult:
         try:
             dataset = self.reader.read()
         finally:
@@ -165,7 +188,7 @@ class ReadNode(Node):
         ):
             session.trace.consider(dataset)
             session._trace_considered = True
-        return dataset
+        return StepResult(dataset)
 
 
 class TransformNode(Node):
@@ -181,7 +204,7 @@ class TransformNode(Node):
 
     def _do_execute(
         self, session: PipelineExecution, context: RunContext, *datasets: Dataset
-    ) -> Dataset:
+    ) -> StepResult:
         before = datasets[0] if datasets else None
 
         processor = getattr(self.func, "__self__", self.func)
@@ -198,7 +221,7 @@ class TransformNode(Node):
                 type(processor).__name__ if processor else self.name,
             )
             session.trace.observe(role, name, before, after)
-        return after
+        return StepResult(after)
 
 
 class ValidateNode(Node):
@@ -216,7 +239,7 @@ class ValidateNode(Node):
 
     def _do_execute(
         self, session: PipelineExecution, context: RunContext, dataset: Dataset
-    ) -> Dataset:
+    ) -> StepResult:
         # A validator's contract is raise-or-nothing: a breach it is designed to
         # detect arrives as a ValidationError, and that is the only failure a
         # warn severity may downgrade. Anything else — a typo'd column name, a
@@ -234,7 +257,7 @@ class ValidateNode(Node):
                 raise ValidationError(
                     f"{session.pipeline_name} {self.name} failed: {exc}"
                 ) from exc
-        return dataset
+        return StepResult(dataset)
 
 
 class ExplainNode(Node):
@@ -254,32 +277,36 @@ class ExplainNode(Node):
 
     def _do_execute(
         self, session: PipelineExecution, context: RunContext, dataset: Dataset
-    ) -> Dataset:
-        if session.trace is not None:
-            trace_ds = session.trace.finalize(dataset)
-            if context.dry_run:
-                # Dry-run: build the trace to report its shape, but commit nothing.
-                self.dry_run_note = (
-                    f"would write trace: {len(trace_ds)} row(s) "
-                    f"({session.trace.selected} selected, "
-                    f"{session.trace.excluded} excluded)"
-                )
-            else:
-                self.writer.write(trace_ds)
-                self.committed = True
+    ) -> StepResult:
+        if session.trace is None:
+            # Nothing traced this run, so there is no verdict to write.
+            return StepResult(dataset)
 
-            # The original architecture recorded these counts in the metrics
-            # of the explain step
-            session.record(
-                self.name,
-                "ok",
-                rows_in=session.trace.considered,
-                rows_out=session.trace.selected,
-                rows_excluded=session.trace.excluded,
-                committed=self.committed,
-                step_address=self.address.label if self.address is not None else None,
+        trace_ds = session.trace.finalize(dataset)
+        committed = False
+        if context.dry_run:
+            # Dry-run: build the trace to report its shape, but commit nothing.
+            self.dry_run_note = (
+                f"would write trace: {len(trace_ds)} row(s) "
+                f"({session.trace.selected} selected, "
+                f"{session.trace.excluded} excluded)"
             )
-        return dataset
+        else:
+            self.writer.write(trace_ds)
+            committed = True
+
+        # The governance counts are the trace's, not this node's inputs and
+        # outputs: how many Cases were considered, how many survived, how many a
+        # gate excluded. They stand in for the generic row counts.
+        return StepResult(
+            dataset,
+            {
+                "rows_in": session.trace.considered,
+                "rows_out": session.trace.selected,
+                "rows_excluded": session.trace.excluded,
+            },
+            committed=committed,
+        )
 
 
 class QuarantineNode(Node):
@@ -297,22 +324,16 @@ class QuarantineNode(Node):
 
     def _do_execute(
         self, session: PipelineExecution, context: RunContext, dataset: Dataset
-    ) -> Dataset:
+    ) -> StepResult:
         good, rejected = self.validator.partition(dataset)
+        measured = {"rows_quarantined": len(rejected)}
 
         if context.dry_run:
             # Dry-run: report the quarantine count, but commit no rejects.
             self.dry_run_note = f"would quarantine {len(rejected)} row(s)"
-            session.record(
-                self.name,
-                "ok",
-                rows_in=len(dataset),
-                rows_out=len(good),
-                rows_quarantined=len(rejected),
-                committed=False,
-            )
-            return good
+            return StepResult(good, measured)
 
+        committed = False
         if len(rejected) > 0:
             frame = rejected.to_pandas()
             frame["logical_run_id"] = context.logical_run_id
@@ -320,18 +341,9 @@ class QuarantineNode(Node):
             frame["load_date"] = context.load_date
             enriched_rejected = Dataset.from_pandas(frame)
             self.writer.write(enriched_rejected)
-            self.committed = True
+            committed = True
 
-        session.record(
-            self.name,
-            "ok",
-            rows_in=len(dataset),
-            rows_out=len(good),
-            rows_quarantined=len(rejected),
-            committed=self.committed,
-            step_address=self.address.label if self.address is not None else None,
-        )
-        return good
+        return StepResult(good, measured, committed=committed)
 
 
 class WriteNode(Node):
@@ -347,19 +359,18 @@ class WriteNode(Node):
 
     def _do_execute(
         self, session: PipelineExecution, context: RunContext, dataset: Dataset
-    ) -> Dataset:
+    ) -> StepResult:
         if context.dry_run:
             # Dry-run: skip the commit, report intent only (issue #102).
             self.dry_run_note = f"would write {len(dataset)} row(s)"
-            return dataset
+            return StepResult(dataset)
         try:
             self.writer.write(dataset)
-            self.committed = True
         finally:
             if hasattr(self.writer, "retry_attempts"):
                 self.warn_hits.extend(self.writer.retry_attempts)
                 session.warn_hits.extend(self.writer.retry_attempts)
-        return dataset
+        return StepResult(dataset, committed=True)
 
 
 class ActionNode(Node):
@@ -375,8 +386,9 @@ class ActionNode(Node):
 
     def _do_execute(
         self, session: PipelineExecution, context: RunContext, *deps: Any
-    ) -> None:
+    ) -> StepResult:
         self.action()
+        return StepResult()
 
 
 class ProfileNode(Node):
@@ -405,14 +417,13 @@ class ProfileNode(Node):
 
     def _do_execute(
         self, session: PipelineExecution, context: RunContext, dataset: Dataset
-    ) -> Dataset:
+    ) -> StepResult:
         payload, warnings = self.profiler.profile(dataset)
-        self.profile = payload
         for message in warnings:
             located = f"{self.name}: {message}"
             self.warn_hits.append(located)
             session.warn_hits.append(located)
-        return dataset
+        return StepResult(dataset, {"profile": payload})
 
 
 class Pipeline:

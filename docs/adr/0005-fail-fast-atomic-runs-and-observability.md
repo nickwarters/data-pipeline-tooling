@@ -75,6 +75,15 @@ stated once rather than re-derived per Writer.
   when rows were rejected, `explain`, a checkpoint write). On a failed run the
   `committed` markers are the authoritative list of what landed; the `RunRegistry`
   stores them.
+- **One node execution produces exactly one run-log record** — an invariant, not
+  a convention. Recording happens in one place (the node wrapper in
+  `framework/run/builder.py`); a node returns what it measured rather than
+  logging it, so the record carries the node's own counts *and* the wrapper's
+  timing, address and warn hits together. Until #311 the side-effecting node
+  types recorded themselves *and* were wrapped, emitting two disagreeing records
+  per step, so "the quarantine record for this run" had two answers and any
+  per-run step count was inflated. Read paths must still tolerate historic
+  double-recorded runs already in a `_registry/runs.db` — nothing is migrated.
 - Each expected failure carries a triage category (`data` / `operational` /
   `config`) on the run log so an operator can route a failure without reading
   every message; a bug carries none, and keeps its traceback.

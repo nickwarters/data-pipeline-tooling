@@ -112,7 +112,7 @@ appears in the log; `params` is logged but has no column.
 | `logical_run_id` | string \| null | The business run / idempotency key this attempt belongs to (`<label>:<run_date>`). Stable across re-drives of the same run date. |
 | `pipeline`  | string              | The feed/pipeline name (the builder's `name`) or the runner's stable domain label (`<case_type>/<pipeline>`, e.g. `cases/selection`). |
 | `step`      | string              | `read`, `pre-validate`, `quarantine`, `process`, `profile`, `explain`, `post-validate`, `write`, `freshness`, or `run` (the summary). |
-| `step_address` | string \| null   | The stable dependency address for this record. Builder steps are recorded as `<pipeline>.<step>` (for example `pipeline_2.step_4`); the `run` summary is recorded as the pipeline address. The registry stores this field so downstream dependency checks can ask whether a specific upstream step has succeeded. |
+| `step_address` | string \| null   | The stable dependency address for this record, supplied by the one place a step is recorded — so it is present identically on the real and the dry-run path. Builder steps are recorded as `<pipeline>.<step>` (for example `pipeline_2.step_4`); the `run` summary is recorded as the pipeline address. The registry stores this field so downstream dependency checks can ask whether a specific upstream step has succeeded. |
 | `status`    | `"ok"` \| `"error"` | Step/run outcome. |
 | `rows_in`   | int \| null         | Rows the step consumed (`null` where N/A, e.g. `read`). |
 | `rows_out`  | int \| null         | Rows the step produced. |
@@ -160,7 +160,18 @@ apply the rule identically.
 
 ### Steps per run
 
-One record per step, in execution order, then a final `run` summary:
+**Exactly one record per step**, in execution order, then a final `run` summary.
+That is an invariant of the engine, not a convention: recording lives in one
+place (the node wrapper), and a node reports its counts by returning them rather
+than by logging (#311). Before that, `quarantine` and `explain` each emitted
+*two* records — one carrying the counts, one carrying the duration, and the
+quarantine pair disagreed on `step_address` under a dry run. Registry databases
+written before the fix still hold those pairs; `RunRegistry.ingest()` keeps
+assigning a `step_ordinal` per `(pipeline_run_id, step)`, so both historic rows
+remain readable and `cli log` / `cli status` still render them. Nothing is
+migrated or deleted — only new runs are single-record.
+
+The steps of a run:
 
 1. `read` — `rows_out` is the rows the Reader produced.
 2. `pre-validate` — input validators; `warn_hits` lists any tolerated failures.

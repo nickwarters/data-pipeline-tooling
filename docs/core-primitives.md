@@ -1190,6 +1190,21 @@ then returns the bulk-tier `Dataset`.
   artifact on disk as **independently committed evidence** (ADR-0005).
   The run-log `committed` marker flags which steps durably wrote.
 
+**One node execution, one run-log record (#311).** Recording is the wrapper's
+job and lives in exactly one place: the node wrapper times the node, drains its
+warn hits, categorises a failure, supplies the stable `step_address`, and writes
+*the* record. A node does the work and **returns** what it measured — its
+dataset, any counts only it could know (`rows_quarantined`, `rows_excluded`, a
+profile payload), and whether it durably committed an artifact. Those metrics are
+layered over the row counts the wrapper derives, which is how a step whose
+meaningful `rows_in`/`rows_out` are not simply its input and output sizes (an
+`explain` step reports Cases considered / selected) states its own. No node
+touches the run log itself. Before this, a side-effecting node recorded its own
+metrics *and* got wrapped, so `quarantine` and `explain` each emitted two records
+that disagreed — one with the counts, one with the duration — and a quarantine
+step lost its `step_address` under a dry run. Centralising it means the next node
+type gets correct recording without writing any, and cannot repeat either defect.
+
 The builder still makes **no** write decisions — no layer logic, no
 refresh-vs-accumulate branching; that all lives on the Writer. Because the
 terminus owns execution, it is the home of the cross-cutting concerns: it uses
