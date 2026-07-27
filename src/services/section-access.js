@@ -25,16 +25,14 @@ import {
 } from '../lib/section-registry.js';
 
 /**
- * A Case is **reportable** once it has passed the freeze milestone:
- * either the Reviewer has sent Remediation Actions (`'Actions In Progress'`) or
- * the Case has been completed outright (`'Completed'`). Equivalently
- * `reportable ⟺ status ∈ { 'Actions In Progress', 'Completed' }`.
+ * A Case is **reportable** once it has passed the freeze milestone: the Reviewer
+ * has sent Remediation Actions (`'Actions In Progress'`) or the Case is
+ * `'Completed'`.
  *
- * Before that (`'In-progress'`) the Answers are live: a newly-applicable
- * Question Definition still applies and blocks completion. From reportable on,
- * the Answers and Outcome snapshot are frozen and no new Question reopens the
- * Case. Both the access matrix (freeze/gate cells below) and `CaseMachine` key
- * off this predicate rather than a hard-coded status string.
+ * Before that the Answers are live and a newly-applicable Question Definition
+ * still blocks completion. From reportable on, the Answers and Outcome snapshot
+ * are frozen. The matrix below and `CaseMachine` both key off this predicate
+ * rather than a hard-coded status string.
  *
  * @param {string} status
  * @returns {boolean}
@@ -47,9 +45,8 @@ export function isReportable(status) {
 }
 
 /**
- * The Sections that exist on the Case Review page, in canonical order. Derived
- * from the data-driven Section registry (ADR-0032) — the single source of truth
- * for Section existence — rather than restated here.
+ * The Sections that exist on the Case Review page, in canonical order, derived
+ * from the Section registry (ADR-0032).
  * @type {Section[]}
  */
 export const SECTIONS = sectionIds();
@@ -83,23 +80,16 @@ function hasOpenAppeal(caseRow) {
 
 /**
  * Whether the Case has remediation to track: the Remediation tab would render
- * **≥1 row**, and the Case is past the reportable milestone (i.e. the actions
- * have been *sent*).
+ * **≥1 row**, and the Case is past the reportable milestone.
  *
  * Both halves matter. While the Case is `In-progress` the Reviewer is still
  * choosing actions on the Issues tab, so there is nothing to track yet; and
  * remediation is optional, so a reportable Case may carry none at all.
  *
- * Note the store: the Reviewer's selections live on `answer.remediationActions`
- * / `answer.freeFormRemediation` (what the Issues tab writes), **not** in an
- * `actions`-typed Issue Capture Field. Gating on the latter is what kept this
- * Section hidden on every real Case (#499).
- *
- * And note the catalogue. Asking the Answers blob alone gave a strict *superset*
- * of the tab's rows, so a Case could show a Remediation tab that rendered "No
- * remediation actions sent." beside its SLA date — the row's Question having
- * been deprecated or made inapplicable since the Reviewer wrote it (#502). The
- * gate and the rows are now the same question asked once.
+ * The gate asks the *catalogue*, not the Answers blob alone: a Question
+ * deprecated or made inapplicable since the Reviewer wrote it must not keep the
+ * tab open on a row the tab will not render. The gate and the rows are the same
+ * question asked once.
  *
  * @param {CaseRow} caseRow
  * @param {QuestionDefinition[]} catalogue
@@ -199,18 +189,16 @@ export function showInSummary(section, caseTypeConfig) {
 }
 
 /**
- * Default access matrix. Function-valued cells receive the CaseRow and CaseTypeConfig and return a Mode.
- * Keyed by the Section ids owned by the registry (ADR-0032); a contract test
- * asserts `Object.keys(MATRIX)` equals the registry's Section ids so the two
- * never drift. Exported for that assertion — the RBAC policy itself stays here,
- * not in the registry.
+ * Default access matrix. Function-valued cells receive the CaseRow and
+ * CaseTypeConfig and return a Mode. Keyed by the registry's Section ids
+ * (ADR-0032); a contract test asserts the two key sets never drift. The RBAC
+ * policy itself stays here, not in the registry.
  * @type {Record<Section, Record<Role, Mode | ((c: CaseRow, config: CaseTypeConfig, catalogue: QuestionDefinition[]) => Mode)>>}
  */
 export const MATRIX = {
-  // Case Details. Observed read-only by the reviewing/owning/Controls
-  // roles; the Responsible Party (Adviser) and their Manager no longer see a
-  // standalone Details tab — those fields are folded into the Summary they read
-  //.
+  // Case Details. Observed read-only by the reviewing/owning/Controls roles;
+  // for the Responsible Party and their Manager these fields are folded into
+  // the Summary they read.
   details: {
     assignedReviewer: 'read-only',
     otherReviewer: 'read-only',
@@ -222,11 +210,10 @@ export const MATRIX = {
     controls: 'read-only',
     none: 'hidden',
   },
-  // Review (the Questions Section). The Assigned Reviewer edits it until the Case
-  // is **reportable**, after which the Answers freeze and it goes
-  // read-only. Controls, the Case Type Owner and the Journey Owner observe the
-  // reviewed Answers read-only; the Adviser and their Manager do not see it
-  //.
+  // Review (the Questions Section). The Assigned Reviewer edits it until the
+  // Case is reportable, after which the Answers freeze. Controls, the Case Type
+  // Owner and the Journey Owner observe read-only; the Responsible Party side
+  // does not see it.
   questions: {
     assignedReviewer: (c) => (isReportable(c.status) ? 'read-only' : 'edit'),
     otherReviewer: 'read-only',
@@ -254,14 +241,11 @@ export const MATRIX = {
     controls: 'read-only',
     none: 'hidden',
   },
-  // Summary is never `edit` — only `read-only` or `hidden`. It
-  // inherits the function-valued Outcome × Responsible Party gate that governed
-  // the removed Outcome Section: hidden from the Adviser while In-progress,
-  // read-only once **reportable**, so they can see it while
-  // remediation is underway. Their Manager gets a narrower gate — read-only only
-  // once the Case is fully `Completed`. The Journey Owner reads
-  // every Summary of their case type(s), so `journeyOwner: read-only`
-  // makes the per-Case link resolve.
+  // Summary is never `edit` — only `read-only` or `hidden`. Hidden from the
+  // Responsible Party while In-progress and read-only once reportable, so they
+  // can see it while remediation is underway; their Manager gets the narrower
+  // gate of `Completed`. The Journey Owner reads every Summary of their Case
+  // Types, so the per-Case link resolves.
   summary: {
     assignedReviewer: 'read-only',
     otherReviewer: 'read-only',
@@ -274,13 +258,10 @@ export const MATRIX = {
     controls: 'read-only',
     none: 'hidden',
   },
-  // Remediation — *tracking*: lists every **sent** Remediation Action;
-  // the Assigned Reviewer resolves each. The tab is hidden entirely until actions
-  // have been sent, then `edit` while `Actions In Progress` and `read-only` once
-  // `Completed`. The Responsible Party (and their Manager) never see it — they do
-  // the work off-system and report back via the Conversation (D10). Other
-  // reviewers, the Case Type Owner, the Journey Owner and Controls observe it
-  // read-only.
+  // Remediation — *tracking*: lists every sent Remediation Action; the Assigned
+  // Reviewer resolves each. Hidden until actions have been sent, then `edit`
+  // while `Actions In Progress` and `read-only` once `Completed`. Everyone else
+  // observes the same breakdown read-only.
   remediation: {
     assignedReviewer: (c, _config, catalogue) => {
       if (!hasTrackableRemediation(c, catalogue)) return 'hidden';
@@ -290,10 +271,9 @@ export const MATRIX = {
     },
     otherReviewer: observesRemediation,
     reviewerManager: observesRemediation,
-    // The party who actually does the remediation work — and the two roles who
-    // chase it — read the same breakdown, minus the Reviewer's resolution
-    // controls. The view routes them to the Conversation instead
-    // (`remediationAudience`, #499).
+    // The party doing the work and the two roles who chase it read the same
+    // breakdown without the Reviewer's resolution controls; the view routes them
+    // to the Conversation instead (`remediationAudience`).
     responsibleParty: observesRemediation,
     responsiblePartyManager: observesRemediation,
     caseTypeOwner: observesRemediation,
@@ -318,12 +298,10 @@ export const MATRIX = {
     none: 'hidden',
   },
   // The Conversation is the thread between the Assigned Reviewer and the
-  // Responsible Party side — the Adviser and their Manager — each posting subject
-  // to the Case Type's `allowMessagesWhen` status gate. The Manager was
-  // originally excluded (ADR-0011), but the Remediation tab now routes the whole
-  // responsible-party audience here to discuss remediation and report it done
-  // (#499), so the Manager participates too. Other reviewers, the Case Type
-  // Owner, the Journey Owner and Controls observe it read-only.
+  // Responsible Party side — including their Manager, who is routed here by the
+  // Remediation tab to discuss remediation and report it done — each posting
+  // subject to the Case Type's `allowMessagesWhen` status gate. Everyone else
+  // observes it read-only.
   conversation: {
     assignedReviewer: postsWhenAllowed,
     otherReviewer: 'read-only',
@@ -335,12 +313,10 @@ export const MATRIX = {
     controls: 'read-only',
     none: 'hidden',
   },
-  // Appeal Request — where a Completed Case's Outcome is appealed. The
-  // raiser is configured per Case Type (`appeal.raisedBy`): the Journey Owner for
-  // Complaints-style journeys, otherwise the Responsible Party Manager. Only that
-  // role gets `edit`, and only on a `Completed` Case. The Assigned Reviewer, Case
-  // Type Owner, Controls and a non-raiser Journey Owner observe it read-only; the
-  // Adviser, their non-raiser Manager and other reviewers see nothing.
+  // Appeal Request — where a Completed Case's Outcome is appealed. Only the
+  // Case Type's configured `appeal.raisedBy` role gets `edit`, and only on a
+  // `Completed` Case. The Assigned Reviewer, Case Type Owner, Controls and a
+  // non-raiser Journey Owner observe read-only; everyone else sees nothing.
   appealRequest: {
     assignedReviewer: 'read-only',
     otherReviewer: 'hidden',
@@ -360,11 +336,10 @@ export const MATRIX = {
     controls: 'read-only',
     none: 'hidden',
   },
-  // Appeal Review — where **Controls** resolves an open Appeal on a
-  // `Completed` Case, then (on agree) authors the case-level Amended Outcome.
-  // Controls gets `edit` only while an Appeal is open; otherwise it, the Assigned
-  // Reviewer, the Case Type Owner, the Journey Owner and the raiser's Manager
-  // observe it read-only. The Adviser and other reviewers see nothing.
+  // Appeal Review — where Controls resolves an open Appeal on a `Completed`
+  // Case, then (on agree) authors the case-level Amended Outcome. Controls gets
+  // `edit` only while an Appeal is open; the Assigned Reviewer, Case Type Owner,
+  // Journey Owner and the raiser's Manager observe read-only.
   appealReview: {
     assignedReviewer: 'read-only',
     otherReviewer: 'hidden',
@@ -379,10 +354,9 @@ export const MATRIX = {
         : 'read-only',
     none: 'hidden',
   },
-  // Amend Outcome — the case-level corrective Outcome. **Controls**
-  // is the only role that sees this tab: `edit` on a `Completed` Case, `hidden`
-  // otherwise. Everyone else is `hidden` — observers see the resulting Current
-  // Outcome in the read-only Summary, not this tab.
+  // Amend Outcome — the case-level corrective Outcome. Controls is the only
+  // role that sees this tab: `edit` on a `Completed` Case, `hidden` otherwise.
+  // Everyone else reads the resulting Current Outcome in the Summary.
   amendOutcome: {
     assignedReviewer: 'hidden',
     otherReviewer: 'hidden',
@@ -418,51 +392,40 @@ export function resolveRoles(caseRow, userId, capabilities) {
     roles.push('otherReviewer');
   }
   // "Reviewer X is managed by Reviewer Manager Y" is denormalised onto the Case
-  // row as `assignedReviewerManager` (CONTEXT.md), so the role is resolved from
-  // that field rather than from the platform-wide `Reviewer Managers` group. A
-  // manager therefore reads the Cases of the Reviewers they manage, not every
-  // Case of every Case Type (#499). It composes with whatever else the viewer is
-  // on this Case, and across the matrix observes exactly what a non-assigned
-  // Reviewer observes.
+  // row (CONTEXT.md), so the role resolves from that field rather than the
+  // platform-wide group: a manager reads the Cases of the Reviewers they manage,
+  // not every Case of every Case Type.
   //
-  // ADR-0038: this field is a *reporting snapshot* — current while the Case is
-  // In-progress, frozen at Reportable — and resolving a read-only Role from it
-  // is deliberate. It does NOT mirror the Responsible Party Manager below, which
-  // ADR-0038 moves to live directory resolution precisely because that Role
-  // carries `edit` on the Conversation.
+  // Per ADR-0038 the field is a reporting snapshot, frozen at Reportable, and
+  // resolving a read-only Role from it is deliberate — unlike the Responsible
+  // Party Manager below, which ADR-0038 moves to live directory resolution
+  // because that Role carries `edit` on the Conversation.
   if (caseRow.assignedReviewerManager === userId) {
     roles.push('reviewerManager');
   }
   if (caseRow.responsibleParty === userId) {
     roles.push('responsibleParty');
   }
-  // The "Responsible Party X is managed by Manager Y" relationship is
-  // denormalised onto the Case row (CONTEXT.md), so the Manager role is resolved
-  // from the row field rather than group membership alone — mirroring how the
-  // Responsible Party role is matched.
+  // Denormalised onto the Case row (CONTEXT.md), mirroring how the Responsible
+  // Party role is matched.
   //
-  // ADR-0038 decides this is the WRONG authority for this Role and is to change:
-  // since ADR-0037 the Role carries `edit` on the Conversation, so a stale row
-  // leaves a former manager posting on a live thread. The Role is to be resolved
-  // live from the Case's Responsible Party's current manager (a single forward
-  // directory lookup on the load path the page already runs), failing closed if
-  // the lookup fails; the column is retained as a written record and as the
-  // query key a future Responsible Party Manager report would need. Not yet
-  // implemented — see ADR-0038 Consequences.
+  // ADR-0038 decides this is the wrong authority for this Role: it carries
+  // `edit` on the Conversation, so a stale row leaves a former manager posting
+  // on a live thread. It is to resolve live from the Responsible Party's current
+  // manager, failing closed. Not yet implemented — see ADR-0038 Consequences.
   if (caseRow.responsiblePartyManager === userId) {
     roles.push('responsiblePartyManager');
   }
   if (capabilities.ownedCaseTypes.includes(caseRow.caseType)) {
     roles.push('caseTypeOwner');
   }
-  // The Journey Owner owns a Case Type's end-to-end journey; the role
-  // is resolved the same way as the Case Type Owner, from the per-Case-Type
-  // `JourneyOwner - <type>` group membership (capabilities.ownedJourneyCaseTypes).
+  // The Journey Owner owns a Case Type's end-to-end journey, resolved like the
+  // Case Type Owner from `JourneyOwner - <type>` group membership.
   if (capabilities.ownedJourneyCaseTypes.includes(caseRow.caseType)) {
     roles.push('journeyOwner');
   }
-  // The Controls group is a standalone functional role held
-  // regardless of whether the user also reviewed or owns the Case Type.
+  // Controls is a standalone functional role, held regardless of whether the
+  // user also reviewed or owns the Case Type.
   if (capabilities.isControls) {
     roles.push('controls');
   }
@@ -477,11 +440,10 @@ export function resolveRoles(caseRow, userId, capabilities) {
  * @param {CaseRow} caseRow
  * @param {CaseTypeConfig} caseTypeConfig
  * @param {QuestionDefinition[]} [catalogue] The Case's **resolved** Question
- *   catalogue, with `failureValues` derived. Only the Remediation cells read it,
- *   to ask whether the tab would render a row (#502). Absent means *no
- *   Questions*, so Remediation resolves `hidden`: pass it from any caller that
- *   renders the Section, and omit it only where the Section is out of scope (the
- *   Conversation overlay reads its own cell alone).
+ *   catalogue, with `failureValues` derived. Only the Remediation cells read it.
+ *   Absent means *no Questions*, so Remediation resolves `hidden`: pass it from
+ *   any caller that renders the Section, and omit it only where the Section is
+ *   out of scope.
  * @returns {Mode}
  */
 export function evaluateAccess(

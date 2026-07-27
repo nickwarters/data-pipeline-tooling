@@ -89,14 +89,13 @@ export function resolveHostWebUrl(
  * store — so a Case Type whose config declares no list cannot have its Cases
  * placed anywhere.
  *
- * Contained per Case Type (#493), exactly as the HTTP path is. This runs inside
- * `createSharePointClient`, which boot awaits ~30 lines BEFORE
- * `resolveAppCaseSources`, so a Case Type module that throws here — or one that
- * declares no `listName` — used to take the whole app down under `?mock=1`,
- * in the feature whose entire purpose is that boot survives exactly that. Its
- * Cases are dropped and the failure is reported; the other Case Types still
- * load. Dropping never widens access: a read without a `listName` still throws,
- * and there is still no default store to fall back to (#249).
+ * Contained per Case Type, exactly as the HTTP path is. This runs inside
+ * `createSharePointClient`, which boot awaits before `resolveAppCaseSources`, so
+ * a Case Type module that throws here — or one that declares no `listName` —
+ * would otherwise take the whole app down under `?mock=1`. Its Cases are dropped
+ * and the failure reported; the other Case Types still load. Dropping never
+ * widens access: a read without a `listName` still throws, and there is no
+ * default store to fall back to.
  *
  * The failure goes to the console rather than the boot banner, and takes no
  * injection seam to say so. This is the `?mock=1` dev path; both of the ways a

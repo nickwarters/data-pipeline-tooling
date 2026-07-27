@@ -1,47 +1,28 @@
 // @ts-check
 /**
- * Data-driven registry of the built-in Case Review Sections — the single
- * source of truth for which Sections exist and how they are ordered (ADR-0032).
+ * Data-driven registry of the built-in Case Review Sections — the single source
+ * of truth for which Sections exist and how they are ordered (ADR-0032). Its two
+ * consumers derive their structures from it: `services/section-access.js`
+ * (`SECTIONS`, `SUMMARY_SECTIONS`, `showInSummaryDefault`) and
+ * `pages/cora-case-review.js` (`tabEntries()` for the tab strip and render
+ * loop). A contract test asserts nothing re-lists Section ids independently.
  *
- * Before this module, Section *existence* was restated in three hand-maintained
- * lists with no runtime check they agreed. This registry describes each built-in
- * Section once, and its two live consumers derive their structures from it:
- *
- * - `services/section-access.js` re-exports `sectionIds()` as `SECTIONS` and
- *   `summaryBlockIds()` as `SUMMARY_SECTIONS`, and reads
- *   `showInSummaryDefault` via `sectionById()`.
- * - `pages/cora-case-review.js` calls `tabEntries()` to build the tab strip and
- *   its panel elements, and to iterate the Sections on render.
- *
- * A contract test asserts nothing re-lists Section ids independently.
- *
- * The registry supplies which Sections exist and in what order; it does not say
- * how a Section's panel is rendered. That is `SECTION_PANELS` in
- * `pages/cora-case-review/section-panels.js`, keyed by the ids below — it lives
- * with the page because `src/lib/` must not import `src/pages/**`, and a test
- * asserts its key set equals `tabEntries()`' ids (#512).
- *
- * Scope (per ADR-0032): the registry owns Section *existence*, tab *order* and
- * the Summary-block default. It deliberately does **not** own the role→mode
- * access policy — the `MATRIX` in `services/section-access.js` stays where it
- * is; the registry only supplies the key set that MATRIX is asserted to match.
+ * The registry does not say how a Section's panel is rendered — that is
+ * `SECTION_PANELS` in `pages/cora-case-review/section-panels.js`, which lives
+ * with the page because `src/lib/` must not import `src/pages/**`. Nor does it
+ * own the role→mode access policy, which stays in `MATRIX`.
  */
 
 /**
- * The Section id union, projected from `SECTION_REGISTRY` itself rather than
- * restated by hand. An entry below is the only place a Section *id* is written:
- * this type, the `MATRIX` key set, the Case Type `sections` allow-list, the tab
- * list and the Summary block set all derive from it.
+ * The Section id union, projected from `SECTION_REGISTRY` rather than restated
+ * by hand: an entry below is the only place a Section id is written, and the
+ * `MATRIX` key set, the Case Type `sections` allow-list, the tab list and the
+ * Summary block set all derive from it.
  *
- * `section-access.js` and `sharepoint-client.js` import this type; they used to
- * spell the union out, which `tsc` could not police because a typo in a
- * restated *type* is self-consistent. `tests/section-registry.test.js` locks it.
- *
- * Adding a Section is now: an entry here, plus its `MATRIX` access row (policy,
- * not existence — deliberately hand-written), its `DEFAULT_SECTION_LABELS`
- * label, and — for a tab Section — its `SECTION_PANELS` renderer. `tsc` demands
- * the first two; before this projection it demanded neither. A test demands the
- * third (#512).
+ * Adding a Section is: an entry here, plus its `MATRIX` access row (policy, not
+ * existence — deliberately hand-written), its `DEFAULT_SECTION_LABELS` label,
+ * and — for a tab Section — its `SECTION_PANELS` renderer. `tsc` demands the
+ * first two, a test the third.
  *
  * @typedef {(typeof SECTION_REGISTRY)[number]['id']} Section
  */
@@ -70,16 +51,12 @@
 /**
  * The built-in Sections, declared once. Declaration order is the canonical
  * Section order (what `SECTIONS` exposes); tab and Summary order are carried
- * explicitly because they differ from it (tabs put Remediation before Summary;
- * the Summary block set omits Summary itself, Conversation and the appeal /
- * amend Sections).
+ * explicitly because they differ from it.
  *
  * Deliberately carries no `@type {readonly SectionDefinition[]}` annotation: the
- * literal `id` strings have to survive inference for `Section` above to be
- * projected from them, and a widening annotation would erase them (annotating
- * it is also circular, since `SectionDefinition.id` is itself a `Section`).
- * Entry *shape* is still checked — every helper below defaults its `registry`
- * parameter to this array, so a malformed entry fails at the default.
+ * literal `id` strings must survive inference for `Section` above to project
+ * from them, and a widening annotation would erase them. Entry *shape* is still
+ * checked, via each helper's `registry` parameter default.
  */
 export const SECTION_REGISTRY = /** @type {const} */ ([
   {
@@ -165,8 +142,8 @@ export const SECTION_REGISTRY = /** @type {const} */ ([
 ]);
 
 /**
- * The Section ids in canonical (declaration) order. This is what
- * `services/section-access.js` re-exports as `SECTIONS`.
+ * The Section ids in canonical (declaration) order; re-exported by
+ * `services/section-access.js` as `SECTIONS`.
  *
  * @param {readonly SectionDefinition[]} [registry]
  * @returns {Section[]}
@@ -177,7 +154,7 @@ export function sectionIds(registry = SECTION_REGISTRY) {
 
 /**
  * The tab Sections in left-to-right order. Callers place each panel by `id`; the
- * label is resolved separately (per Case Type) by `resolveSectionLabels`.
+ * label is resolved per Case Type by `resolveSectionLabels`.
  *
  * @param {readonly SectionDefinition[]} [registry]
  * @returns {SectionDefinition[]}
@@ -189,8 +166,8 @@ export function tabEntries(registry = SECTION_REGISTRY) {
 }
 
 /**
- * The Section ids that can contribute a Summary block, in render order. This is
- * what `services/section-access.js` re-exports as `SUMMARY_SECTIONS`.
+ * The Section ids that can contribute a Summary block, in render order;
+ * re-exported by `services/section-access.js` as `SUMMARY_SECTIONS`.
  *
  * @param {readonly SectionDefinition[]} [registry]
  * @returns {Section[]}

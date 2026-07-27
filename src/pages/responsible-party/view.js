@@ -20,12 +20,9 @@ import { dataTableView } from '../../views/data-table.js';
  * What remediation is still outstanding on one Case, as the text of each thing
  * that has to be put right.
  *
- * Derived from the **one remediation model** (ADR-0037, ADR-0024's #497
- * amendment): the Remediation Actions and free-form text on each Answer, minus
- * every Answer the Assigned Reviewer has resolved on the Remediation tab. It
- * used to filter `action.completed`, a boolean written `false` on select and
- * never set `true` anywhere — so this count could never go down however much
- * remediation the Reviewer resolved (#497).
+ * Derived from the **one remediation model** (ADR-0037): the Remediation
+ * Actions and free-form text on each Answer, minus every Answer the Assigned
+ * Reviewer has resolved on the Remediation tab.
  *
  * **Only an `Actions In Progress` Case has outstanding work.** Before Send
  * Actions the Reviewer is still capturing and nothing has been asked of the
@@ -37,7 +34,7 @@ import { dataTableView } from '../../views/data-table.js';
  * across every Case Type and holds no catalogue for any of them, so it reads the
  * Answers blob — a strict superset of the Remediation tab's rows. Scoping it to
  * the one status in which the Case is *frozen with a live tab* is what keeps
- * that superset from stranding anyone (#502). The catalogue-aware
+ * that superset from stranding anyone. The catalogue-aware
  * `hasTrackableRemediation` gate on the Send Actions fork is the other half: a
  * Case only reaches `Actions In Progress` with ≥1 real row, and cannot leave it
  * until every row is resolved.

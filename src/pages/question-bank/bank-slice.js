@@ -66,10 +66,9 @@ export function initialQuestionBankState() {
 
 /**
  * Keep the selection only while the loaded banks still carry it, and otherwise
- * fall back to the first available slug (#550). `||` alone only covered the
- * empty case, so a later load with a different slug set left `activeSlug`
- * naming a bank that is gone and the editor rendered its no-bank empty state
- * after a *successful* load.
+ * fall back to the first available slug — otherwise a later load with a
+ * different slug set leaves `activeSlug` naming a bank that is gone, and the
+ * editor renders its no-bank empty state after a *successful* load.
  *
  * The membership test is `Object.hasOwn`, not a truthiness check on
  * `banks[activeSlug]`: inherited keys (`constructor`, `toString`) read as

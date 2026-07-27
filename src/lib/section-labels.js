@@ -1,9 +1,7 @@
 // @ts-check
 // Single source of truth for Case Review tab labels and section headings.
 // A Case Type may override any entry via `CaseTypeConfig.sectionLabels`
-// (src/sharepoint-client.js) — DEFAULT_SECTION_LABELS supplies the rest, so a
-// Case Type declaring no overrides renders byte-identical to before this
-// module existed (MAINT-11).
+// (src/sharepoint-client.js); DEFAULT_SECTION_LABELS supplies the rest.
 
 /** @typedef {import('../sharepoint-client.js').SectionLabels} SectionLabels */
 

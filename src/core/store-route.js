@@ -41,13 +41,11 @@ export function createStoreRoute({ load, context }) {
       const removeListeners = [];
       /** @type {ReturnType<typeof createStore<any, any>>} */
       let store;
-      // Set once the initial synchronous render (inside the try/catch below)
-      // has succeeded. Before that point a render failure is left to
-      // propagate to mount()'s own catch, which disposes and rethrows so the
-      // router's existing ADR-0002 containment handles it. After that point
-      // renders run on a schedule (see createStore's queueMicrotask
-      // coalescing) with no other try/catch on the path, so this render
-      // callback must contain failures itself (#437).
+      // Set once the initial synchronous render has succeeded. Before that, a
+      // render failure propagates to mount()'s catch, which disposes and
+      // rethrows so the router's ADR-0002 containment handles it. After it,
+      // renders run coalesced on a microtask with no other try/catch on the
+      // path, so this callback must contain failures itself.
       let mounted = false;
       // The mount lifetime, owned here and exposed to the slice. A route effect
       // guards a late `.then()` with isActive() instead of hand-rolling its own
@@ -133,11 +131,8 @@ export function createStoreRoute({ load, context }) {
 /**
  * Register one lazily-loaded store-driven page on one or more hash patterns.
  *
- * This exists because seven route modules had each re-declared a `mount`/
- * `unmount` object literal that only forwarded to the adapter it wrapped
- * (#520). Without a guard the adapter is registered directly, so nothing sits
- * between the router and `createStoreRoute` — the `mountSequence` token and the
- * `mounted` flag keep working exactly as they did (#437).
+ * Without a guard the adapter is registered directly, so nothing sits between
+ * the router and `createStoreRoute`.
  *
  * `load` is the caller's: the dynamic `import()` of a page must stay inside
  * `src/routes/*`, which is what ADR-0002's page independence and

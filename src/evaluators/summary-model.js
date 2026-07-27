@@ -48,12 +48,10 @@ export function buildSummaryModel(catalogue, answers) {
 
   const failedQuestions = applicable.filter((q) => isFailure(q, answers[q.id]));
 
-  // What a failed Answer carries has **one** definition — `answerRemediation`
-  // (#497). The Summary used to spell it out again and, alone among the
-  // readings, did not trim the free-form box: a single typed space counted as a
-  // Remediation Action here and as nothing on the Send Actions fork or the
-  // Remediation tab, so one Case said "Remediation actions: 1" with a blank
-  // bullet beside a "Complete Case" button.
+  // What a failed Answer carries has one definition — `answerRemediation`. In
+  // particular it trims the free-form box, so a single typed space counts as a
+  // Remediation Action here, on the Send Actions fork and on the Remediation
+  // tab alike.
   const remediationOf = (/** @type {QuestionDefinition} */ q) =>
     answerRemediation(answers[q.id]);
 

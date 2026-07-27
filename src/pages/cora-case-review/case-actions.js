@@ -8,17 +8,14 @@
  * The plain-text Case Row fields the Notes Section edits, and the **only**
  * fields `fieldEdited` may write.
  *
- * This is a closed union rather than `string` on purpose (#554). `fieldEdited`
- * is the one generic Case Row writer — it dispatches `case/field-edited`, whose
- * reducer branch assigns `[action.field]` — so a caller passing `status` or
- * `assignedReviewer` would advance `snapshot.caseRow` while
- * `snapshot.machine` kept the copy of the row it was constructed with at load.
- * Every `machine.can*` guard that reads the Case Row reads exactly those two
- * fields, so the store would show the new value while completion, capture,
- * attribution and Remediation selection kept answering from the old one — a
- * silent permission bug with a green suite. The restriction used to live in a
- * JSDoc sentence; it is now a `tsc` error, and the reducer branch ignores
- * anything else so a raw dispatch cannot route around the type.
+ * A closed union rather than `string` on purpose. `fieldEdited` is the one
+ * generic Case Row writer, so a caller passing `status` or `assignedReviewer`
+ * would advance `snapshot.caseRow` while `snapshot.machine` kept the copy of the
+ * row it was constructed with at load. Every `machine.can*` guard reads exactly
+ * those two fields, so the store would show the new value while completion,
+ * capture, attribution and Remediation selection answered from the old one. The
+ * reducer branch ignores anything else, so a raw dispatch cannot route around
+ * the type.
  *
  * Lifecycle fields have their own writer: `CaseMachine`'s transitions, persisted
  * by `completeCase` and folded back in through `case/case-row-patched`.

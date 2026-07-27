@@ -167,37 +167,22 @@ export function caseReviewReducer(state, action) {
     });
   }
   // The lifecycle fields a completion write persisted, folded into the Case Row
-  // the store holds *now* (#557). Send Actions is a non-terminal transition for
-  // the *Case*, but `completeCase` navigates to `#/dashboard` on every
-  // successful completion, so the Reviewer leaves the page either way and this
-  // fold has no reader today: it is defence-in-depth, not a fix for an observed
-  // stale read.
+  // the store holds *now*. Completion navigates to `#/dashboard`, so the fold
+  // has no reader today: defence-in-depth, not a fix for an observed stale read.
   //
-  // The shape is load-bearing regardless. Deliberately not `case/model-changed`:
-  // that replaces the whole snapshot, and the only snapshot the click handler
-  // can hand back is the one captured before two network round-trips — so an
-  // Answer or Conversation edit dispatched while the write was in flight would
-  // be reverted, and the Answer-action owner re-synced to the stale map on the
-  // next render, losing an edit in SharePoint and not merely on screen. Only the
-  // fields travel. Patching against current state here is the same idiom
-  // `case/answers-edited` below uses. `case/model-changed`'s `activeTab`
-  // recompute is not wanted and not repeated: tab visibility reads
-  // `snapshot.access` only, which a Case Row patch cannot move.
+  // Deliberately not `case/model-changed`, which replaces the whole snapshot:
+  // the only snapshot the click handler can hand back is the one captured
+  // before two network round-trips, so an Answer or Conversation edit
+  // dispatched while the write was in flight would be reverted. Only the fields
+  // travel, patched against current state.
   //
   // `snapshot.machine` holds its own load-time copy and does not advance with
-  // the row, so after the fold `machine.mayResolveRemediation` can read false
-  // against a row reading `Actions In Progress`. That divergence is harmless
-  // only *because* completion navigates away. Whoever decides Send Actions
-  // should keep the Reviewer on the Case makes the divergence live and this fold
-  // load-bearing in the same change, and owns deriving the machine there.
-  //
-  // #554 narrowed the *writer* so a Notes field edit can no longer create the
-  // divergence, and declined to derive the machine: its `access` is computed at
-  // construction and republished as `snapshot.access`, so deriving it would
-  // convert ADR-0011's access matrix from a load-time evaluation to a live one.
-  // That is a permission-surface decision, not a staleness fix. The derivation
-  // belongs with #467, which introduces the memoised selector seam the other
-  // load-time derivations (`applicableQuestions`, `allAnswered`) also need.
+  // the row, so `machine.mayResolveRemediation` can read false against a row
+  // reading `Actions In Progress`. That is harmless only *because* completion
+  // navigates away; whoever keeps the Reviewer on the Case after Send Actions
+  // owns deriving the machine there. Deriving it here would convert ADR-0011's
+  // access matrix from a load-time evaluation to a live one — a
+  // permission-surface decision, not a staleness fix.
   if (action.type === 'case/case-row-patched' && route.snapshot?.caseRow) {
     return patchSnapshot(state, {
       caseRow: { ...route.snapshot.caseRow, ...action.fields },
@@ -284,11 +269,11 @@ export function caseReviewReducer(state, action) {
   if (action.type === 'case/field-edited' && route.snapshot?.caseRow) {
     // This branch writes a computed key, so it is the one place a caller could
     // put any Case Row field into the store. `fieldEdited`'s parameter is typed
-    // to the plain-text fields (#554), which closes the effect seam — but the
-    // reducer takes `any`, so a raw `tools.dispatch` still compiles. Ignore
-    // anything else: `status` and `assignedReviewer` in particular are what
-    // `snapshot.machine`'s guards read from their own load-time copy, so a
-    // write here would move the row while every `can*` answer stayed behind.
+    // to the plain-text fields, but the reducer takes `any`, so a raw
+    // `tools.dispatch` still compiles. Ignore anything else: `status` and
+    // `assignedReviewer` are what `snapshot.machine`'s guards read from their
+    // own load-time copy, so a write here would move the row while every `can*`
+    // answer stayed behind.
     if (action.field !== 'notes' && action.field !== 'caseJustification') {
       return state;
     }
@@ -362,11 +347,10 @@ function saveStatusView(status) {
 
 /**
  * ADR-0021 Step 4's fallback, made visible. When the as-reviewed export is
- * missing the page falls back to the live Question Bank — deliberately, because
- * a degraded read beats a blocked audit — but until #513 nothing said so, and
- * the Cases affected are exactly the ones under audit. Page-level rather than
- * tab-scoped: it qualifies every Section, not one of them. Not a toast, because
- * a dismissed toast restores the silent-wrong state this exists to end.
+ * missing the page falls back to the live Question Bank — a degraded read beats
+ * a blocked audit — and the Cases affected are exactly the ones under audit.
+ * Page-level rather than tab-scoped, because it qualifies every Section; not a
+ * toast, because a dismissed toast restores the silent-wrong state.
  *
  * @param {string | null} warning
  * @returns {HTMLElement | null}
@@ -394,11 +378,8 @@ function versionWarningView(warning) {
 /**
  * How the Conversation panel is presented, from the page's `?conversation=`
  * query param — the same opt-in-via-query-string convention as `?mock=1` and
- * `?simulate=1` (`pages/question-bank/question-bank-flags.js`), and read the
- * same way: the query string is a defaulted parameter, so this is a read of an
- * injected value rather than a reach for a browser global, and a caller with no
- * `location` passes its own string instead of the function testing for one
- * (#547).
+ * `?simulate=1`. The query string is a defaulted parameter, so this reads an
+ * injected value rather than reaching for a browser global.
  *
  * @param {string} [search] query string; defaults to the current page's
  * @returns {string}
@@ -439,8 +420,7 @@ export function createRouteSlice(params, context) {
   /**
    * The id every write addresses: the row that was actually loaded, which is
    * what `params.id` resolved to. The route param is only the seed, because the
-   * effects are built with the route, before the load lands. Previously the four
-   * write paths disagreed — two used `params.id`, two `caseRow.id` (#511).
+   * effects are built with the route, before the load lands.
    *
    * @type {string}
    */
@@ -518,10 +498,9 @@ export function createRouteSlice(params, context) {
    * Not `snapshot.answers`: store renders are microtask-coalesced, so a
    * callback that captured a render's Answers is one edit behind for as long as
    * it outlives that render — and memoised Question cards keep their callbacks
-   * across renders by design (#202). Reading here instead keeps the property
-   * the retired signal gave these mutations: the input is whatever was last
-   * written, not whatever was last drawn. Re-synced from the snapshot on every
-   * render, so a reload or a conflict resolution still wins (#510).
+   * across renders by design. The input is whatever was last *written*, not
+   * whatever was last drawn. Re-synced from the snapshot on every render, so a
+   * reload or a conflict resolution still wins.
    *
    * @type {Record<string, import('../sharepoint-client.js').Answer>}
    */
@@ -530,8 +509,7 @@ export function createRouteSlice(params, context) {
   /**
    * The page's only Answer writer. Every mutation is a pure action returning
    * either the next Answers or `null` for "write nothing"; from here on there
-   * is one store update and one SaveQueue enqueue, so the two cannot diverge
-   * (#510).
+   * is one store update and one SaveQueue enqueue, so the two cannot diverge.
    *
    * @param {Record<string, import('../sharepoint-client.js').Answer> | null} next
    */
@@ -650,10 +628,9 @@ export function createRouteSlice(params, context) {
     const caseRow = snapshot.caseRow;
     const config = snapshot.config;
     // The Answer actions read `currentAnswers`, not this render's snapshot, so
-    // that a memoised card's surviving callback is never one edit behind. Re-sync
-    // it here for the same reason the on-hold latch below re-syncs: a load,
-    // refresh or conflict resolution reaches the store without passing through
-    // `editAnswers`, and the store is still the owner (#510).
+    // a memoised card's surviving callback is never one edit behind. Re-sync
+    // here because a load, refresh or conflict resolution reaches the store
+    // without passing through `editAnswers`.
     currentAnswers = snapshot.answers;
     loadedCaseId = caseRow.id;
 
@@ -685,7 +662,7 @@ export function createRouteSlice(params, context) {
     // The panel renderers' half of the contract. Rebuilt per render because
     // `onAnswer` and `selectAttribution` close over this render's snapshot;
     // `currentAnswers` stays a getter so a memoised card's surviving callback
-    // still reads the last Answers *written*, not the last ones drawn (#510).
+    // still reads the last Answers *written*, not the last ones drawn.
     /** @type {import('./cora-case-review/section-panels.js').PanelActions} */
     const panelActions = {
       questionsView,
@@ -859,21 +836,11 @@ export function createRouteSlice(params, context) {
                       patchFields,
                       caseListOptions: snapshot.caseListOptions,
                     });
-                    // Fold the persisted transition into the store, the same way
-                    // every other Case Row transition does. `completeCase`
-                    // navigates to `#/dashboard` on success — on the Send
-                    // Actions path too, non-terminal though that is for the
-                    // Case — so this store is already on its way to being
-                    // disposed and nothing reads the fold today. Defence in
-                    // depth, not a fix for an observed stale read (#557).
-                    //
-                    // Only the fields travel, never this closure's `snapshot` or
-                    // `caseRow`: both are as of the last render, two network
-                    // round-trips ago. Replaying either would revert a concurrent
-                    // Answer or Conversation edit and re-sync the Answer-action
-                    // owner to the stale map — losing an edit in SharePoint, not
-                    // just on screen. The reducer patches whatever the store
-                    // holds now.
+                    // Only the fields travel, never this closure's `snapshot`
+                    // or `caseRow`: both are as of the last render, two network
+                    // round-trips ago, so replaying either would revert a
+                    // concurrent Answer or Conversation edit. The reducer
+                    // patches whatever the store holds now.
                     if (persisted && tools.isActive()) {
                       tools.dispatch({
                         type: 'case/case-row-patched',

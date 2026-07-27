@@ -17,21 +17,15 @@
  */
 
 /**
- * A **Remediation Action** as it lives on a Case. Elevated from a plain
- * string to a stateful record: `text` is the action wording, `status` tracks its
- * resolution after the actions are sent to the Responsible Party, and
- * `cancelReason` is required iff `status === 'cancelled'`. Stored in ADR-0024's
- * `actions`-typed Issue Capture Field value (`Answer.capture[key]`), an array of
- * these.
+ * A **Remediation Action** as it lives on a Case: `text` is the action wording,
+ * `status` tracks its resolution, and `cancelReason` is required iff
+ * `status === 'cancelled'`. Stored in ADR-0024's `actions`-typed Issue Capture
+ * Field value (`Answer.capture[key]`), an array of these.
  *
- * **Retired store, kept only as a shape (#497).** No Case Type declares an
- * `actions` field, nothing in `src/` writes or reads one, and the last reader —
- * the Summary's remediation block — now reads the question-level model
- * (`remediationActions` + `freeFormRemediation` + `remediationStatus`, ADR-0037)
- * like the Remediation tab does. The typedef stays because a persisted Answers
- * blob may still carry such an array under `capture`, and the shape describes
- * what could be read back; `evaluators/remediation-actions.js`, the coercion
- * shim that had no caller left, is deleted.
+ * A retired store, kept only as a shape: nothing writes or reads one, and
+ * resolution is question-level in `remediationStatus` (ADR-0037). The typedef
+ * stays because a persisted Answers blob may still carry such an array under
+ * `capture`.
  *
  * @typedef {{ id: string, text: string, status: 'pending' | 'complete' | 'cancelled', cancelReason?: string }} RemediationAction
  */
@@ -49,12 +43,10 @@
  */
 
 /**
- * A selected Remediation Action carried no resolution of its own: `completed`
- * was written `false` on select and never set `true` anywhere, so it is dropped
- * from the shape (#497). Resolution is question-level, in `remediationStatus`
- * (ADR-0037). Persisted Answers blobs written before this may still carry the
- * property; it is simply not read — an unknown key round-trips harmlessly
- * through the JSON blob, so no migration and no coercion is needed.
+ * One Answer to an Applicable Question. Resolution is question-level, in
+ * `remediationStatus` (ADR-0037), not per selected Remediation Action. An
+ * unknown key round-trips harmlessly through the JSON blob, so a blob written
+ * under an older shape needs no migration.
  *
  * @typedef {{ value: string | string[], justification?: string, remediationActions?: Array<{id: string, text: string}>, freeFormRemediation?: string, remediationStatus?: RemediationStatus, attributedParty?: { loginName: string, displayName: string }, remediationDetails?: Record<string, string>, capture?: Record<string, string | { loginName: string, displayName: string } | Array<string | RemediationAction>> }} Answer
  */
@@ -68,25 +60,17 @@
  */
 
 /**
- * One **Issue Capture Field** declared by a Case Type: a typed input
- * captured against a *failed* Answer. The closed type set is
- * `text | textarea | select | radio | person`; this slice exercises
- * only the four string types. `options` lists the choices for `select`/`radio`
+ * One **Issue Capture Field** declared by a Case Type: a typed input captured
+ * against a *failed* Answer. `options` lists the choices for `select`/`radio`
  * (validated at capture time). `required` participates in the completion gate
  * only while the field is visible. `role` is an optional cross-Case-Type
  * reporting tag (not yet built). `showWhen` conditions on a sibling field on the
- * same Answer (not yet built). `placeholder` is optional hint text shown while a
- * `text`/`textarea` control is empty; ignored for choice types, blank when absent.
+ * same Answer (not yet built). `placeholder` is hint text for `text`/`textarea`,
+ * ignored for choice types.
  *
- * `'actions'` is **not** declarable (#497). ADR-0024 introduced it as the store
- * for per-action Remediation tracking; ADR-0037 moved that tracking to
- * `answer.remediationStatus` and ADR-0024's #497 amendment deleted the whole
- * per-action module. Nothing renders an `actions` field — `buildCaptureControl`
- * falls through to a plain text box — and nothing validates one, so a Case Type
- * Owner following the typedef got a silent text input writing a string into a
- * slot typed `RemediationAction[]`. The `RemediationAction` typedef below stays,
- * because a blob persisted under the old shape may still carry such an array and
- * round-trips unread; what is gone is the pretence that it can be *declared*.
+ * `'actions'` is **not** declarable: ADR-0037 moved per-action Remediation
+ * tracking to `answer.remediationStatus`, and nothing renders or validates such
+ * a field.
  *
  * @typedef {{ key: string, label: string, type: 'text' | 'textarea' | 'select' | 'radio' | 'person', options?: string[], required?: boolean, role?: string, showWhen?: Record<string, unknown>, placeholder?: string }} CaptureField
  */
@@ -103,9 +87,8 @@
 /**
  * One **General Question** declared by a Case Type: a `CaptureField` restricted
  * to the types the General Questions section actually renders. `person` and
- * `actions` are deliberately excluded — `buildCaptureControl` falls through to
- * a plain text box for them, and an Owner should be told at load time
- * (`validateGeneralQuestions`) rather than shipping a degraded field.
+ * `actions` are excluded, and `validateGeneralQuestions` rejects them at load
+ * time rather than shipping a degraded field.
  *
  * @typedef {{ key: string, label: string, type: 'text' | 'textarea' | 'select' | 'radio', options?: string[], placeholder?: string }} GeneralQuestionField
  */
@@ -140,12 +123,10 @@
 
 /**
  * A case-level **Amended Outcome**: Controls' explicit, hand-set
- * post-completion verdict on a Completed Case. Unlike the retired Answer Override
- * this is a single additive record on the Case row — it never mutates the frozen
- * `outcomeAtCompletion`. `outcome` is the new Outcome value chosen directly;
- * `justification` is the mandatory rationale; `amendedBy` (bare account login) and
- * `amendedAt` (ISO timestamp) are captured on the record for audit rather than
- * mined from SharePoint version history. The **Current Outcome** is
+ * post-completion verdict on a Completed Case. A single additive record on the
+ * Case row — it never mutates the frozen `outcomeAtCompletion`. `amendedBy`
+ * (bare account login) and `amendedAt` (ISO timestamp) are captured for audit
+ * rather than mined from SharePoint version history. The **Current Outcome** is
  * `amendedOutcome?.outcome ?? outcomeAtCompletion`.
  *
  * @typedef {{
@@ -171,13 +152,12 @@
  * **Amended Outcome**, not from per-Answer overrides.
  *
  * `assignedReviewerManager` and `responsiblePartyManager` denormalise two
- * org-chart edges onto the row. They look alike and, per **ADR-0038**, are not:
- * `assignedReviewerManager` is a **reporting snapshot** — the query key behind
- * `#/team-cases` and `#/my-team`, current while `In-progress` and frozen at
- * Reportable — while `responsiblePartyManager` is a written record whose Section
- * access Role is to be resolved **live** from the directory, because since
- * ADR-0037 that Role carries `edit` on the Conversation and a stale copy would
- * leave a former manager posting on a live thread.
+ * org-chart edges onto the row and are not equivalent (**ADR-0038**):
+ * `assignedReviewerManager` is a reporting snapshot — the query key behind
+ * `#/team-cases` and `#/my-team`, frozen at Reportable — while
+ * `responsiblePartyManager` is a written record whose Section access Role is to
+ * be resolved live from the directory, since that Role carries `edit` on the
+ * Conversation.
  *
  * @typedef {{
  * id: string,
@@ -268,12 +248,10 @@
  * `labelIds` references the owning Case Type's `labels` by id. It is
  * reporting metadata only and does not affect how a question is presented.
  *
- * Grouping is two-level (#390): `category` is the top, presentation-only
- * level (displayed to Reviewers under whatever name the Case Type gives it,
- * e.g. "COGG Section") and never touches applicability or Outcome;
- * `questionGroup` is the inner level (what `category` meant before the
- * rename) — progress, Summary counts and bulk-marking operate per Question
- * Group. Both are optional.
+ * Grouping is two-level, both optional: `category` is the top,
+ * presentation-only level and never touches applicability or Outcome;
+ * `questionGroup` is the inner level — progress, Summary counts and
+ * bulk-marking operate per Question Group.
  *
  * @typedef {{
  * id: string,
@@ -295,20 +273,18 @@
 /**
  * A server-side Case query. Every scalar field is an ANDed
  * equality on an **indexed** Case column so a filtered count/`$top` stays
- * cheap past the 5000-item threshold (ties to the architecture decision: reason-defining data is
- * hoisted onto queryable columns, never mined from the `Answers`/`appeals`
- * blobs). `awaitingResponsibleParty`, `hasOpenAppeal` and `reopened` are the
+ * cheap past the 5000-item threshold: reason-defining data is hoisted onto
+ * queryable columns, never mined from the `Answers`/`appeals` blobs.
+ * `awaitingResponsibleParty`, `hasOpenAppeal` and `reopened` are the
  * Action Centre reason flags. `anyOf` is an OR-of-filters (each sub-filter is
  * itself ANDed, then the sub-filters are ORed) used for the server-deduped
  * "N cases need you" headline, whose count is deliberately *not* the sum of the
  * per-reason group counts.
  *
- * `completedAfter` (inclusive) and `completedBefore` (exclusive) bound a read to a
- * `CompletedAt` window on the indexed date column. They exist so a
- * windowed completion metric leads with the selective date column and — for a
- * window that could itself exceed the List View Threshold (e.g. "completed in the
- * last 7 days" on the busy Case Type) — is summed from sub-threshold per-day
- * `countCases` slices rather than one large fetch.
+ * `completedAfter` (inclusive) and `completedBefore` (exclusive) bound a read
+ * to a `CompletedAt` window on the indexed date column, so a windowed
+ * completion metric leads with the selective column and can be summed from
+ * sub-threshold per-day `countCases` slices.
  *
  * `orderBy` names a **`CaseRow` key**, never a SharePoint internal column name:
  * both clients speak the row vocabulary, and `HttpSharePointClient` maps the key
@@ -328,17 +304,11 @@
  *
  * Reads only. A queued write must survive navigation (ADR-0008's debounce +
  * ETag concurrency); cancelling one would silently drop a Reviewer's edit.
- * `patchCase` is typed with plain `CaseListOptions` to say so, but do not rely
- * on the type as the guarantee: JavaScript is structurally typed, and
- * excess-property checking only fires on object literals, so a variable typed
- * `CaseReadOptions` passed to `patchCase` type-checks. The protections are the
- * runtime ones — `withAbortSignal` wraps reads only, `SaveQueue.loadCase`
- * strips any `signal` from the options it stores, and `HttpSharePointClient`
- * never reads `opts.signal` on a write path (its 412 confirmation re-read
- * re-scopes to the list name alone). The read methods that carry no options bag
- * (`listRoadmapItems`, `searchPeople`, `resolveUsers`, the export reads) are
- * single, small requests and are deliberately left alone rather than growing a
- * parameter across both clients for no measurable win.
+ * `patchCase` is typed with plain `CaseListOptions` to say so, but the type is
+ * not the guarantee — structural typing lets a `CaseReadOptions` value through.
+ * The real protections are runtime: `withAbortSignal` wraps reads only,
+ * `SaveQueue.loadCase` strips any `signal`, and `HttpSharePointClient` never
+ * reads `opts.signal` on a write path.
  *
  * @typedef {CaseListOptions & { signal?: AbortSignal }} CaseReadOptions
  */

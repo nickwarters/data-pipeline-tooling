@@ -165,22 +165,13 @@ function renderIssues(props) {
  * `remediationDueDate` plus one entry per *Question* carrying remediation, with
  * how the Reviewer resolved it.
  *
- * It reads `remediationRows` — the same rows the Remediation tab renders (#497).
- * It used to read the `actions`-typed Issue Capture Field store instead, which
- * no Case Type declares and nothing writes, so on a real Case the Summary said
- * "No remediation actions sent." beside a fully populated Remediation tab. Two
- * tabs of one Case contradicting each other; ADR-0024's #497 amendment settled
- * which store is real, and this is the rendering following it.
+ * It reads `remediationRows` — the same rows the Remediation tab renders, so
+ * the two tabs of one Case cannot contradict each other.
  *
- * The resolution's *details / justification* follows the **audience**, exactly as
- * the Remediation tab does: withheld from the `responsibleParty` side, whose
+ * The resolution's *details / justification* follows the **audience**, exactly
+ * as the Remediation tab does: withheld from the `responsibleParty` side, whose
  * rendering ADR-0037 strips of the Reviewer's record-of-truth fields, and shown
  * to reviewer-side observers, whose `!canResolve` branch on the tab renders it.
- * This block first landed withholding it from everyone, on the grounds that the
- * Summary had one rendering for every audience; it does not have to, it already
- * knows the roles, and the narrowing cost Controls and the Case Type Owner the
- * `cancelReason` the Summary carried before #497 (ADR-0037 asks for the
- * withholding on one side only).
  *
  * @param {SummaryProps} props
  * @returns {HTMLElement}

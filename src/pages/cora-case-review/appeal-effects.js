@@ -16,12 +16,12 @@ import { amendOutcome, raiseAppeal, resolveAppeal } from './appeal-actions.js';
  * Route effects for the ADR-0027 Appeal and ADR-0026 Amended Outcome
  * transitions. `appeal-actions.js` holds the pure half — it takes `at` /
  * `amendedAt` as arguments and never reaches a clock or the SaveQueue; this is
- * the persistence half that used to sit inline in the page's render function.
+ * the persistence half.
  *
  * Both the clock and the id minter are injected, because everything these
  * effects write is persisted and audit-relevant: a test can assert the exact
  * Appeal id and timestamp that reach the queue without freezing the global
- * clock (#511).
+ * clock.
  *
  * @param {{
  *   saveQueue: SaveQueue,

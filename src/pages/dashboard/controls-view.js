@@ -56,9 +56,8 @@ export async function fetchOpenAppeals(client, sources) {
 
 /**
  * Reference and Case Type are the shared Case descriptors, which is what makes
- * them sortable here (#542) — this table used to spell them out locally, minus
- * `sortable`, for no reason anyone could name. The default sort is untouched:
- * Appeals still open on `{ key: 'raised', dir: 'asc' }`, oldest Appeal first.
+ * them sortable here. The default sort is `{ key: 'raised', dir: 'asc' }` —
+ * oldest Appeal first.
  *
  * @returns {import('../../views/data-table.js').ColumnDescriptor<CaseRow>[]}
  */
