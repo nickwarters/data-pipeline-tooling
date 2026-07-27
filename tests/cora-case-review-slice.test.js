@@ -13,7 +13,7 @@ import { registerCaseType } from '../case-types/manifest.js';
 
 installDom();
 
-// A second fixture Case Type whose config never arrives. `viewModel.load()`
+// A second fixture Case Type whose config never arrives. `CaseLoader.load()`
 // awaits `loadCaseTypeConfig(params.caseType)` before it reaches
 // `client.getCase(params.id)`, so mounting with this slug parks the load at its
 // first await: the loader — the one legitimate reader of the route param —

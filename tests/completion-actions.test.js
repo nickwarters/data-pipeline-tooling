@@ -107,7 +107,7 @@ test('completionPatch chooses the transition from the catalogue CaseMachine stam
   // The fork and the `hadRemediation` stamp are the same fact read twice, so
   // they must come from one object. Handing the machine an empty catalogue while
   // the caller passes a populated one is not a real state — both are the one
-  // CaseReviewViewModel catalogue in production — but it is the only way to
+  // CaseLoader catalogue in production — but it is the only way to
   // prove which copy is authoritative, and that the patch cannot say
   // "Actions In Progress" while stamping `hadRemediation: false`.
   const answers = {

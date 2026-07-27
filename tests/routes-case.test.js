@@ -21,7 +21,7 @@ const { register } = await import('../src/routes/case.js');
 
 /**
  * A client that records the id/opts each getCase is called with. Returning null
- * short-circuits the view-model load after the fetch, which is all these route
+ * short-circuits the loader load after the fetch, which is all these route
  * tests need: they verify the route plumbs its params into the store module.
  * @param {Array<{ id: string, opts: any }>} calls
  */
@@ -132,7 +132,7 @@ test('case route: mount composes the store route and fetches the id from the rou
   assert.deepEqual(
     calls.map((c) => c.id),
     ['456'],
-    'the :id param reaches the view-model fetch'
+    'the :id param reaches the loader fetch'
   );
 });
 

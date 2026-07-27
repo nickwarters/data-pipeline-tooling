@@ -26,7 +26,7 @@ export function deriveFailureValues(question, defaultOutcomeId) {
 /**
  * Annotates a catalogue with each question's derived `failureValues`. Called
  * wherever questions are materialised alongside their Case Type's
- * `defaultOutcomeId` (view-model load, bank simulation); consumers then call
+ * `defaultOutcomeId` (loader load, bank simulation); consumers then call
  * `isFailure(question, answer)` without needing the outcome configuration.
  * Questions that cannot fail are passed through untouched (any stale
  * annotation is stripped); the input array is never mutated.

@@ -3,7 +3,7 @@
 // capabilities and the Case Type config, it derives roles, the section access
 // matrix, and the lifecycle transition PATCH fields. It holds
 // no DOM and no signals — the function-component page (CaseReviewPage) reads it
-// through the view-model, so it is plain domain state, not a UI orchestration
+// through the loader, so it is plain domain state, not a UI orchestration
 // layer around view rendering.
 
 import {
@@ -48,7 +48,7 @@ export class CaseMachine {
    *
    *   `catalogue` is the Case's **resolved** Question catalogue: the live bank
    *   while `In-progress`, the stamped versioned export once reportable, in
-   *   both cases with `failureValues` derived (`CaseReviewViewModel` builds
+   *   both cases with `failureValues` derived (`CaseLoader` builds
    *   exactly this). It decides what remediation the Case carries — hence
    *   whether the Remediation Section exists and what `hadRemediation` is
    *   stamped as (#502). Omitting it means *no Questions*, so the Remediation

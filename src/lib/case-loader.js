@@ -1,5 +1,5 @@
 // @ts-check
-// CaseReviewViewModel loads the Case Review page: the Case row, the (possibly
+// CaseLoader loads the Case Review page: the Case row, the (possibly
 // as-reviewed) catalogue, the Case Type config, the CaseMachine and its
 // resolved Section access. It hands the result over once, as a plain
 // snapshot, and owns no Answer mutation — the
@@ -61,7 +61,7 @@ function caseTypeLoadErrorMessage(error, caseType, isRouteCaseType) {
 }
 
 /**
- * @typedef {Object} CaseReviewViewModelOptions
+ * @typedef {Object} CaseLoaderOptions
  * @property {SharePointClient} client
  * @property {SaveQueue} saveQueue
  * @property {string} caseId
@@ -70,8 +70,8 @@ function caseTypeLoadErrorMessage(error, caseType, isRouteCaseType) {
  * @property {string | null} [caseType]
  */
 
-export class CaseReviewViewModel {
-  /** @param {CaseReviewViewModelOptions} options */
+export class CaseLoader {
+  /** @param {CaseLoaderOptions} options */
   constructor({
     client,
     saveQueue,

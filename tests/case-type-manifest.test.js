@@ -12,7 +12,7 @@ import {
   loadCaseTypeConfig,
   registerCaseType,
 } from '../case-types/manifest.js';
-import { CaseReviewViewModel } from '../src/lib/case-review-view-model.js';
+import { CaseLoader } from '../src/lib/case-loader.js';
 import { validateCaptureGroups } from '../src/evaluators/issue-capture.js';
 import {
   validateGeneralQuestions,
@@ -357,14 +357,14 @@ test('case type manifest: rejects invalid outcome configuration before a Case Ty
   }
 });
 
-test('CaseReviewViewModel.load(): unknown primary Case Type slug sets a clear user-facing error state', async () => {
+test('CaseLoader.load(): unknown primary Case Type slug sets a clear user-facing error state', async () => {
   /** @type {any[]} */
   const errors = [];
   const originalConsoleError = console.error;
   console.error = (...args) => errors.push(args);
 
   try {
-    const vm = new CaseReviewViewModel({
+    const loader = new CaseLoader({
       client: /** @type {any} */ ({
         getCase: async () => ({
           id: 'c1',
@@ -389,14 +389,14 @@ test('CaseReviewViewModel.load(): unknown primary Case Type slug sets a clear us
       capabilities: null,
     });
 
-    await vm.load();
+    await loader.load();
 
     assert.equal(
-      vm.error,
+      loader.error,
       'This Case cannot be opened because its Case Type is not supported. Ask a maintainer to add "../unexpected" to the Case Type manifest.'
     );
-    assert.equal(vm.loaded, false);
-    assert.equal(vm.config, null);
+    assert.equal(loader.loaded, false);
+    assert.equal(loader.config, null);
     assert.equal(errors.length, 1);
     assert.ok(errors[0][0] instanceof UnknownCaseTypeError);
     assert.equal(errors[0][0].slug, '../unexpected');
@@ -406,7 +406,7 @@ test('CaseReviewViewModel.load(): unknown primary Case Type slug sets a clear us
   }
 });
 
-test('CaseReviewViewModel.load(): invalid Case Type outcome configuration sets a clear user-facing error state', async () => {
+test('CaseLoader.load(): invalid Case Type outcome configuration sets a clear user-facing error state', async () => {
   const slug = 'invalid-outcome-config';
   const originalConsoleError = console.error;
   console.error = () => {};
@@ -420,7 +420,7 @@ test('CaseReviewViewModel.load(): invalid Case Type outcome configuration sets a
   });
 
   try {
-    const vm = new CaseReviewViewModel({
+    const loader = new CaseLoader({
       client: /** @type {any} */ ({
         getCase: async () => null,
         getCurrentUser: async () => ({ id: 'u1', displayName: 'User 1' }),
@@ -432,14 +432,14 @@ test('CaseReviewViewModel.load(): invalid Case Type outcome configuration sets a
       caseType: slug,
     });
 
-    await vm.load();
+    await loader.load();
 
     assert.equal(
-      vm.error,
+      loader.error,
       'This Case cannot be opened because its Case Type outcome configuration is invalid. Ask a maintainer to correct it.'
     );
-    assert.equal(vm.loaded, false);
-    assert.equal(vm.config, null);
+    assert.equal(loader.loaded, false);
+    assert.equal(loader.config, null);
   } finally {
     delete CASE_TYPE_IMPORTERS[slug];
     console.error = originalConsoleError;

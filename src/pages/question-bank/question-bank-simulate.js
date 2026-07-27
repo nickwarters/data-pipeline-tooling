@@ -213,7 +213,7 @@ function makeCausesResolver(baseQuestions, draftQuestions, diff) {
 
 /**
  * Applicability with the runtime's cascade applied: the case review
- * view-model drops the Answer of any catalogue question that stops being
+ * loader drops the Answer of any catalogue question that stops being
  * applicable, which can in turn de-apply downstream questions. Iterate to the
  * fixed point so the simulation reflects where a Case would settle. Answers
  * to ids outside the catalogue are kept, mirroring `handleAnswer`.
@@ -250,7 +250,7 @@ function isUnanswered(answer) {
 
 /**
  * Computes a bank's configured Outcome for one sample Case, pruning Answers
- * to the applicable set the way the case review view-model does. Returns null
+ * to the applicable set the way the Case Review loader does. Returns null
  * when the bank has no Outcome configuration or the configuration is invalid
  * — the simulator degrades instead of aborting the whole report.
  *

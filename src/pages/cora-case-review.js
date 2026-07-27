@@ -1,7 +1,7 @@
 // @ts-check
 import { h } from '../lib/html.js';
 import { patchRoute, patchSnapshot } from '../core/route-state.js';
-import { CaseReviewViewModel } from '../lib/case-review-view-model.js';
+import { CaseLoader } from '../lib/case-loader.js';
 import { CASE_STATUS } from '../lib/case-statuses.js';
 import {
   allApplicableAnswered,
@@ -404,7 +404,7 @@ export function conversationPanelMode(
 }
 
 /**
- * CASE-1 route slice. The view model adapts existing loading/domain behaviour
+ * CASE-1 route slice. The loader adapts existing loading/domain behaviour
  * into store snapshots; the interim adapter owns only the unconverted Section
  * components.
  *
@@ -420,7 +420,7 @@ export function createRouteSlice(params, context) {
   const attributionTimers = new Map();
   /** @type {Map<string, string>} */
   const pendingAttributionQueries = new Map();
-  const viewModel = new CaseReviewViewModel({
+  const caseLoader = new CaseLoader({
     client: context.client,
     saveQueue: context.saveQueue,
     caseId: params.id,
@@ -935,7 +935,7 @@ export function createRouteSlice(params, context) {
           void refreshConversation({
             client: context.client,
             caseId: caseId(),
-            caseListOptions: viewModel.caseListOptions,
+            caseListOptions: caseLoader.caseListOptions,
           }).then((row) => {
             if (row && tools.isActive()) {
               tools.dispatch({
@@ -946,11 +946,11 @@ export function createRouteSlice(params, context) {
           });
         });
       }
-      void viewModel.load().then(() => {
+      void caseLoader.load().then(() => {
         if (!tools.isActive()) return;
         tools.dispatch({
           type: 'case/load-finished',
-          snapshot: viewModel.toStoreSnapshot(),
+          snapshot: caseLoader.toStoreSnapshot(),
         });
       });
       return () => {

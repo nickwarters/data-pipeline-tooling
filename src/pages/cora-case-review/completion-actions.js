@@ -119,7 +119,7 @@ export function completionPatch(input) {
   // Read the machine's catalogue, not the caller's. `CaseMachine` stamps
   // `hadRemediation` from `this.catalogue`, so choosing the transition from any
   // other copy would be the same fact read twice — the exact split this change
-  // exists to close. Today both are the one `CaseReviewViewModel` catalogue and
+  // exists to close. Today both are the one `CaseLoader` catalogue and
   // the two readings cannot differ; sourcing them from one object is what keeps
   // that true rather than incidental.
   const transition = hasTrackableRemediation(machine.catalogue, input.answers)

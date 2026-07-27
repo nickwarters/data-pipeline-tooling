@@ -138,8 +138,8 @@ src/
   lib/                          # framework-level primitives (no domain knowledge)
     add-working-days.js
     capture-engine.js
+    case-loader.js              # loads a Case Review page and hands it over once via toStoreSnapshot() (was case-review-view-model.js, #555)
     case-machine.js
-    case-review-view-model.js
     case-route-links.js
     case-statuses.js            # CASE_STATUS: the persisted Case lifecycle values — do not change them
     empty-state.js              # shared muted "nothing here yet" placeholder element
@@ -152,7 +152,7 @@ src/
     section-labels.js           # DEFAULT_SECTION_LABELS + per-Case-Type sectionLabels overrides
     section-registry.js         # ADR-0032 single source of truth for which Sections exist and their order
     showwhen-tree.js            # generic showWhen tree parse/serialise/mutate (was question-bank/)
-    signal.js                   # internal state/service notification primitive
+    signal.js                   # internal state/service notification primitive; SaveQueue is its only consumer (#555)
     toast.js                    # transient toast store + showToast action
 
   core/                         # store-driven view runtime (ADR-0034)

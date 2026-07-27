@@ -134,7 +134,7 @@ export function remediationRows(catalogue, answers) {
   }
   // A deprecated Question Definition is out of the catalogue, not in it with a
   // flag: Question Definitions are never deleted (CLAUDE.md), so deprecation is
-  // how a Case Type Owner retires one. `case-review-view-model.js` already
+  // how a Case Type Owner retires one. `case-loader.js` already
   // filters them on both the live and the versioned path; filtering here too
   // makes the seam correct for any caller rather than only the careful one.
   const active = catalogue.filter((question) => !question.deprecated);

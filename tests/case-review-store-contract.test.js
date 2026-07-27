@@ -53,7 +53,7 @@ test('the Case Review page has exactly one Answer owner (#510)', () => {
   // Answers live in the store. A view callback that reached past it into the
   // loader would create the second owner this page was refactored to remove.
   assert.doesNotMatch(page, /answersSignal/);
-  assert.doesNotMatch(page, /viewModel\.handle/);
+  assert.doesNotMatch(page, /caseLoader\.handle/);
 
   // And exactly one writer: `editAnswers` is the only caller of the Answer
   // save effect, which is in turn the only place Answers are dispatched and
@@ -71,17 +71,14 @@ test('the Case Review page has exactly one Answer owner (#510)', () => {
  * captures it at construction. Adding a third means a new copy that can drift
  * from `snapshot.caseRow` — argue for it in review, do not just extend this.
  */
-const CASE_ROW_HOLDERS = new Set([
-  'lib/case-review-view-model.js',
-  'lib/case-machine.js',
-]);
+const CASE_ROW_HOLDERS = new Set(['lib/case-loader.js', 'lib/case-machine.js']);
 
 test('the Case Review page has exactly one Case Row owner (#530)', () => {
   // The store owns the Case Row. The loader keeps a copy only long enough to
   // hand it over, so no other module may assign one: a second writer is the
   // hand-rolled sync #510 removed for Answers, one level up.
   //
-  // Deliberately matches *any* `.caseRow =` rather than the `viewModel|vm`
+  // Deliberately matches *any* `.caseRow =` rather than the `caseLoader|loader`
   // spellings the #530 regression used, so a writer through a differently
   // named binding still trips it. Limitation worth knowing: this is text
   // matching, so it cannot see `Object.assign(target, { caseRow })`, a

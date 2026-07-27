@@ -612,7 +612,7 @@ set, Question Group spread — see the complaints tests for the fuller menu).
 [tests/case-type-manifest.test.js](../../tests/case-type-manifest.test.js)
 deliberately pin the manifest's slug list (`['complaints']`) — the
 known-slugs assertion, the `UnknownCaseTypeError` message assertion, and the
-`CaseReviewViewModel` unknown-slug error-state assertion. Adding your slug to
+`CaseLoader` unknown-slug error-state assertion. Adding your slug to
 the manifest fails all three until you extend the expected list. This is by
 design: the live Case Type set is a reviewed contract, not an incidental
 side effect of the registry.

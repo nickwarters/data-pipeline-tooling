@@ -133,7 +133,7 @@ function selectedValues(answer) {
  * configured Outcomes, and the **highest-scoring applicable Outcome wins**. The
  * response drives the Outcome — Remediation Actions play no part (question bank
  * redesign). Questions are expected to already be the *applicable* set for the
- * current Answers (the case review view-model prunes non-applicable Answers), so
+ * current Answers (the Case Review loader prunes non-applicable Answers), so
  * only answered questions contribute.
  *
  * The baseline is the configured `defaultOutcomeId`; any mapped response

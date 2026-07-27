@@ -91,7 +91,7 @@ test('complaints: declares Issue Capture Groups with unique field keys', () => {
     keys.length,
     'capture field keys must be unique across groups'
   );
-  // Passes the same validation gate the view model applies at load time.
+  // Passes the same validation gate the loader applies at load time.
   assert.doesNotThrow(() => validateCaptureGroups(groups));
 });
 

@@ -2,7 +2,7 @@
 
 The in-memory flow runner is a browser-free workflow harness for pipeline and
 sync tests. It reads SharePoint-like list state from a JSON fixture, loads a Case
-Review page through `CaseReviewViewModel`, executes domain-level page actions
+Review page through `CaseLoader`, executes domain-level page actions
 through the page's own Answer actions, flushes the normal `SaveQueue`, and
 writes the resulting list state back out.
 
@@ -105,5 +105,5 @@ If `personas` is omitted, the runner provides a minimal `reviewer` persona with
 - `flush`: explicitly drains pending saves for the currently loaded case.
 
 Every mutating action flushes the `SaveQueue` before the next action, so the
-snapshot represents persisted list state rather than only local view-model
+snapshot represents persisted list state rather than only local loader
 state.

@@ -5,7 +5,7 @@
 /** @typedef {import('../sharepoint-client.js').VersionedExport} VersionedExport */
 /** @typedef {import('../services/permissions.js').Capabilities} Capabilities */
 
-import { CaseReviewViewModel } from '../lib/case-review-view-model.js';
+import { CaseLoader } from '../lib/case-loader.js';
 import { MockSharePointClient } from '../services/mock-sharepoint-client.js';
 import { resolveCapabilities } from '../services/permissions.js';
 import { SaveQueue } from '../services/save-queue.js';
@@ -101,7 +101,7 @@ import { loadCaseTypeConfig } from '../../case-types/manifest.js';
  * @typedef {{
  * client: MockSharePointClient,
  * saveQueue: SaveQueue,
- * viewModel: CaseReviewViewModel | null,
+ * caseLoader: CaseLoader | null,
  * answers: Record<string, import('../sharepoint-client.js').Answer>,
  * caseRow: CaseRow | null,
  * navigations: string[],
@@ -153,8 +153,8 @@ export function createInMemoryFlowRunner(state, opts = {}) {
     { persona }
   );
   const saveQueue = new SaveQueue(client, { debounceMs: 0 });
-  /** @type {CaseReviewViewModel | null} */
-  let viewModel = null;
+  /** @type {CaseLoader | null} */
+  let caseLoader = null;
   /**
    * The runner stands in for the store: it is the single Answer owner, exactly
    * as the route is in the browser (#510). The loader hands its Answers over
@@ -165,7 +165,7 @@ export function createInMemoryFlowRunner(state, opts = {}) {
   /**
    * The Case Row, owned here for the same reason (#530): the loader hands it
    * over once and the Appeal/amend transitions read and replace this copy, so
-   * `CaseReviewViewModel.caseRow` is written only by `load()`.
+   * `CaseLoader.caseRow` is written only by `load()`.
    * @type {CaseRow | null}
    */
   let caseRow = null;
@@ -181,17 +181,17 @@ export function createInMemoryFlowRunner(state, opts = {}) {
 
   /** @param {Record<string, import('../sharepoint-client.js').Answer> | null} next */
   function editAnswers(next) {
-    if (next === null || !viewModel) return;
+    if (next === null || !caseLoader) return;
     answers = next;
-    saveQueue.enqueue(viewModel.caseId, 'answers', answers);
+    saveQueue.enqueue(caseLoader.caseId, 'answers', answers);
   }
 
   /** @type {InMemoryFlowRunner} */
   const runner = {
     client,
     saveQueue,
-    get viewModel() {
-      return viewModel;
+    get caseLoader() {
+      return caseLoader;
     },
     get answers() {
       return answers;
@@ -207,7 +207,7 @@ export function createInMemoryFlowRunner(state, opts = {}) {
     },
     async run(actions) {
       for (const action of actions) await runAction(action);
-      if (viewModel) await saveQueue.flushCase(viewModel.caseId);
+      if (caseLoader) await saveQueue.flushCase(caseLoader.caseId);
       return client.snapshot();
     },
   };
@@ -219,75 +219,75 @@ export function createInMemoryFlowRunner(state, opts = {}) {
         await allocateCase(action);
         return;
       case 'loadCasePage':
-        viewModel = await loadCasePage(action);
-        answers = viewModel.answers;
-        caseRow = viewModel.caseRow;
+        caseLoader = await loadCasePage(action);
+        answers = caseLoader.answers;
+        caseRow = caseLoader.caseRow;
         return;
       case 'answer': {
-        const vm = requirePage(action);
+        const loader = requirePage(action);
         editAnswers(
           answerEdited({
             answers,
-            catalogue: vm.catalogue,
+            catalogue: loader.catalogue,
             questionId: action.questionId,
             value: action.value,
-            canEdit: vm.access.questions === 'edit',
+            canEdit: loader.access.questions === 'edit',
           })
         );
         await flushCurrentCase();
         return;
       }
       case 'captureIssue': {
-        const vm = requirePage(action);
+        const loader = requirePage(action);
         editAnswers(
           issueCaptured({
             answers,
-            captureGroups: vm.config?.captureGroups ?? [],
+            captureGroups: loader.config?.captureGroups ?? [],
             questionId: action.questionId,
             fieldKey: action.fieldKey,
             value: action.value,
-            canCapture: vm.machine?.canCapture ?? false,
+            canCapture: loader.machine?.canCapture ?? false,
           })
         );
         await flushCurrentCase();
         return;
       }
       case 'selectRemediationAction': {
-        const vm = requirePage(action);
+        const loader = requirePage(action);
         editAnswers(
           remediationActionToggled({
             answers,
             questionId: action.questionId,
             action: action.action,
             selected: action.selected ?? true,
-            canSelectRemediation: vm.machine?.canSelectRemediation ?? false,
+            canSelectRemediation: loader.machine?.canSelectRemediation ?? false,
           })
         );
         await flushCurrentCase();
         return;
       }
       case 'freeFormRemediation': {
-        const vm = requirePage(action);
+        const loader = requirePage(action);
         editAnswers(
           remediationFreeFormEdited({
             answers,
             questionId: action.questionId,
             value: action.value,
-            canSelectRemediation: vm.machine?.canSelectRemediation ?? false,
+            canSelectRemediation: loader.machine?.canSelectRemediation ?? false,
           })
         );
         await flushCurrentCase();
         return;
       }
       case 'setRemediationStatus': {
-        const vm = requirePage(action);
+        const loader = requirePage(action);
         editAnswers(
           remediationResolved({
             answers,
             questionId: action.questionId,
             status: action.status,
             details: action.details,
-            canResolve: vm.access.remediation === 'edit',
+            canResolve: loader.access.remediation === 'edit',
           })
         );
         await flushCurrentCase();
@@ -341,7 +341,7 @@ export function createInMemoryFlowRunner(state, opts = {}) {
   async function loadCasePage(action) {
     const userGroups = await client.getCurrentUserGroups();
     const currentUser = await client.getCurrentUser();
-    const vm = new CaseReviewViewModel({
+    const loader = new CaseLoader({
       client,
       saveQueue,
       caseId: action.caseId,
@@ -352,20 +352,20 @@ export function createInMemoryFlowRunner(state, opts = {}) {
           : action.capabilities,
       caseType: action.caseType ?? null,
     });
-    await vm.load();
-    if (vm.error) throw new Error(vm.error);
-    if (vm.accessDenied) throw new Error('Case access denied.');
-    return vm;
+    await loader.load();
+    if (loader.error) throw new Error(loader.error);
+    if (loader.accessDenied) throw new Error('Case access denied.');
+    return loader;
   }
 
   async function flushCurrentCase() {
-    if (viewModel) await saveQueue.flushCase(viewModel.caseId);
+    if (caseLoader) await saveQueue.flushCase(caseLoader.caseId);
   }
 
   /** @param {Extract<FlowAction, { type: 'raiseAppeal' }>} action */
   async function raiseCurrentAppeal(action) {
-    const vm = requirePage(action);
-    if (vm.access.appealRequest !== 'edit') {
+    const loader = requirePage(action);
+    if (loader.access.appealRequest !== 'edit') {
       throw new Error('Current actor cannot raise an Appeal.');
     }
     if (!caseRow) throw new Error('Cannot raise before the Case has loaded.');
@@ -378,14 +378,14 @@ export function createInMemoryFlowRunner(state, opts = {}) {
       at: new Date().toISOString(),
     });
     caseRow = result.caseRow;
-    saveQueue.enqueue(vm.caseId, 'appeals', result.appeals);
+    saveQueue.enqueue(loader.caseId, 'appeals', result.appeals);
     await flushCurrentCase();
   }
 
   /** @param {Extract<FlowAction, { type: 'resolveAppeal' }>} action */
   async function resolveCurrentAppeal(action) {
-    const vm = requirePage(action);
-    if (vm.access.appealReview !== 'edit') {
+    const loader = requirePage(action);
+    if (loader.access.appealReview !== 'edit') {
       throw new Error('Current actor cannot resolve an Appeal.');
     }
     const appeal = /** @type {import('../sharepoint-client.js').Appeal} */ (
@@ -408,24 +408,24 @@ export function createInMemoryFlowRunner(state, opts = {}) {
     });
     caseRow = result.caseRow;
     if (result.transactional) {
-      saveQueue.enqueueFields(vm.caseId, result.fields);
+      saveQueue.enqueueFields(loader.caseId, result.fields);
     } else {
-      saveQueue.enqueue(vm.caseId, 'appeals', result.fields.appeals);
+      saveQueue.enqueue(loader.caseId, 'appeals', result.fields.appeals);
     }
     await flushCurrentCase();
   }
 
   /**
    * @param {FlowAction} action
-   * @returns {CaseReviewViewModel}
+   * @returns {CaseLoader}
    */
   function requirePage(action) {
-    if (!viewModel) {
+    if (!caseLoader) {
       throw new Error(
         `Cannot run "${action.type}" before a loadCasePage action.`
       );
     }
-    return viewModel;
+    return caseLoader;
   }
 
   return runner;
@@ -440,7 +440,7 @@ export function createInMemoryFlowRunner(state, opts = {}) {
  * patch and the caller applies it, which is how the runner-owned row stays the
  * row as stored.
  *
- * @param {CaseReviewViewModel} vm
+ * @param {CaseLoader} loader
  * @param {CaseRow | null} caseRow The runner-owned Case Row (#530).
  * @param {Record<string, import('../sharepoint-client.js').Answer>} answers
  * @param {(hash: string) => void} navigate Recorder standing in for the browser
@@ -448,27 +448,27 @@ export function createInMemoryFlowRunner(state, opts = {}) {
  * @returns {Promise<Partial<CaseRow> | null>} The applied fields, or `null` if
  *   the transition was not permitted or the write failed.
  */
-async function clickCompleteCase(vm, caseRow, answers, navigate) {
-  if (!caseRow || !vm.config || !vm.machine) {
+async function clickCompleteCase(loader, caseRow, answers, navigate) {
+  if (!caseRow || !loader.config || !loader.machine) {
     throw new Error('Cannot complete before the Case page has loaded.');
   }
 
   const patchFields = completionPatch({
-    machine: vm.machine,
+    machine: loader.machine,
     caseRow,
-    catalogue: vm.catalogue,
+    catalogue: loader.catalogue,
     answers,
-    allAnswered: allApplicableAnswered(vm.catalogue, answers),
-    computeOutcome: vm.config.computeOutcome,
-    exportHash: vm.exportHash,
+    allAnswered: allApplicableAnswered(loader.catalogue, answers),
+    computeOutcome: loader.config.computeOutcome,
+    exportHash: loader.exportHash,
   });
 
   const ok = await completeCase({
     caseId: caseRow.id,
-    client: vm.client,
-    saveQueue: vm.saveQueue,
+    client: loader.client,
+    saveQueue: loader.saveQueue,
     patchFields,
-    caseListOptions: vm.caseListOptions,
+    caseListOptions: loader.caseListOptions,
     navigate,
   });
   return ok ? patchFields : null;

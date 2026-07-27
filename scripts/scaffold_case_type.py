@@ -532,7 +532,7 @@ EXPECTED_FAILURES = [
     ),
     (
         "tests/case-type-manifest.test.js",
-        "CaseReviewViewModel.load(): unknown primary Case Type slug sets a clear "
+        "CaseLoader.load(): unknown primary Case Type slug sets a clear "
         "user-facing error state",
         "it asserts that same knownSlugs list reaches the console",
     ),

@@ -38,7 +38,7 @@ test('in-memory flow runner rejects actions that cannot run without a loaded Cas
     { persona: 'missing-persona' }
   );
 
-  assert.equal(runner.viewModel, null);
+  assert.equal(runner.caseLoader, null);
   assert.ok(runner.snapshot().lists['Cases-ExampleReview']);
   await runner.run([{ type: 'flush' }]);
   await assert.rejects(
@@ -588,7 +588,7 @@ test('in-memory flow runner owns the Case Row; the loader hands it over once (#5
   ]);
   // Captured at the handover, so the assertions below can name the row the
   // loader produced rather than a field it happens to lack.
-  const loadedRow = runner.viewModel?.caseRow;
+  const loadedRow = runner.caseLoader?.caseRow;
   assert.ok(loadedRow, 'the load produced a Case Row');
   assert.equal(runner.caseRow, loadedRow, 'the runner takes it at handover');
 
@@ -611,7 +611,7 @@ test('in-memory flow runner owns the Case Row; the loader hands it over once (#5
   // Identity, not the absence of a field: the loader still holds the very row
   // `load()` produced, whatever the fixture happens to define on it.
   assert.equal(
-    runner.viewModel?.caseRow,
+    runner.caseLoader?.caseRow,
     loadedRow,
     'the loader keeps the row it loaded; the Appeal is the store owner’s'
   );
