@@ -22,6 +22,28 @@ The strategies:
   the cases an accumulate or refresh doesn't fit (e.g. minting stable surrogate
   keys, or merging on a business key).
 
+## How the ownership is mechanised
+
+The ownership above is literal, not merely asserted: **each strategy realises
+its own Writer** (#305). A strategy exposes `writer_for(db_path, table,
+busy_timeout_ms=...)`, which mints the SQLite Writer that implements it, and the
+optional `apply_to_frame(frame, read_existing)` for the whole-file rewrite a
+file Writer performs. `store.writer(table, strategy)` therefore delegates in one
+line — a namespace `Store` still resolves only *which file*, and now knows
+nothing about the set of strategies at all.
+
+Methods on the strategies were chosen over a registry keyed at class-definition
+time: the behaviour lives with the value it belongs to, needs no import-order
+guarantees, and keeps a new strategy to one class plus one export line. Strategies
+are handed a db **path**, never a `Store`, so `framework.io` keeps its one-way
+dependency and never imports the application-level `tools` package.
+
+A strategy that cannot be expressed as a whole-file rewrite (`UpsertStrategy`,
+`InsertIfAbsent` — their merges need the target's constraints or its
+key→surrogate mapping) simply defines no `apply_to_frame`, and a file Writer
+handed one fails with a message naming both. This ADR's decision is unchanged:
+only the mechanism that enforces it is recorded here.
+
 ## Two identities on a run, not one
 
 A run carries a shared `RunContext` that separates the two notions of "which run"

@@ -33,7 +33,8 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   each test dir is a package.
 - **Core primitives:** `Dataset` (opaque tabular carrier, pandas behind the
   seam), `Reader` (`read() -> Dataset`; `CsvReader`, `SqliteReader`),
-  `Writer` (`write(dataset) -> None`; owns target location + load strategy —
+  `Writer` (`write(dataset) -> None`; owns target location and carries the load
+  strategy that realised it —
   added by #14), `Store` / `StoreRegistry` (namespace → file factory minting
   Writers/Readers over one logical database; `StoreRegistry` also registers named
   Readers/Writers a pipeline fetches by name. Lives in the sibling `tools.store`,

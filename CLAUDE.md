@@ -67,9 +67,14 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   check so it cannot quietly stop guarding anything.
 - **Core primitives:** `Dataset` (opaque tabular carrier, pandas behind the
   seam), `Reader` (`read() -> Dataset`; `CsvReader`, `SqliteReader`),
-  `Writer` (`write(dataset) -> None`; owns target location + load strategy —
-  added by #14), `Store` (namespace → file factory minting `writer(table,
-  strategy)` / `reader(table)` over one logical database; **lives in the sibling
+  `Writer` (`write(dataset) -> None`; owns target location and carries the load
+  strategy — added by #14; each **strategy realises its own Writer** via
+  `writer_for(db_path, table, busy_timeout_ms=...)` plus the optional file-side
+  `apply_to_frame(frame, read_existing)`, so nothing outside
+  `framework/io/strategy.py` branches on which strategy it was handed and a new
+  strategy is one class plus one export line — #305), `Store` (namespace → file
+  factory minting `writer(table, strategy)` — a one-line delegation to
+  `strategy.writer_for(...)` — / `reader(table)` over one logical database; **lives in the sibling
   `tools.store`, not `framework.io`** — where a feed lands is application
   infrastructure, not framework vocabulary (#15/#232).
   `StoreRegistry` mints namespace stores via `store(namespace)` **and** registers

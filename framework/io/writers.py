@@ -1,7 +1,10 @@
 """Writers persist datasets to destinations they own.
 
-A Writer owns both its target location and load strategy. The pipeline hands it
-the dataset and makes no write decisions of its own.
+A Writer owns its target location and carries the load strategy. The pipeline
+hands it the dataset and makes no write decisions of its own. *How* a strategy
+loads is the strategy's own knowledge (``framework.io.strategy``), not a branch
+here: a file Writer asks its strategy for the frame to write, and a SQLite
+Writer is minted by the strategy in the first place.
 """
 
 from __future__ import annotations
@@ -20,12 +23,7 @@ from framework._internal.describe import render
 from framework.core.dataset import Dataset
 from framework.core.protocols import Writer
 from framework.io.sql import quote_identifier
-from framework.io.strategy import (
-    AccumulateByRun,
-    InsertOrIgnore,
-    Refresh,
-    UpsertStrategy,
-)
+from framework.io.strategy import LoadStrategy
 
 # ``Writer`` is imported only to be re-exported through ``framework.io``; listing
 # it in ``__all__`` marks it as intentional public surface so lint won't strip it.
@@ -45,38 +43,28 @@ __all__ = [
 
 
 def _frame_for_strategy(
+    writer: object,
     dataset: Dataset,
-    strategy: Refresh | AccumulateByRun | InsertOrIgnore | UpsertStrategy,
+    strategy: LoadStrategy,
     read_existing: Callable[[], pd.DataFrame],
 ) -> pd.DataFrame:
-    frame = dataset.to_pandas()
-    if isinstance(strategy, Refresh):
-        return frame
-    if isinstance(strategy, AccumulateByRun):
-        frame = _stamp_accumulate_frame(frame, strategy)
+    """Ask ``strategy`` for the whole frame this file Writer should write out.
 
-        existing = read_existing()
-        if len(existing) > 0 and "logical_run_id" in existing.columns:
-            existing = existing[existing["logical_run_id"] != strategy.logical_run_id]
-        return pd.concat([existing, frame], ignore_index=True)
-    if isinstance(strategy, InsertOrIgnore):
-        # Files carry no table constraints, so every incoming row is appended —
-        # equivalent to a plain append, matching SQLite's no-constraint behaviour.
-        existing = read_existing()
-        if len(existing) == 0:
-            return frame
-        return pd.concat([existing, frame], ignore_index=True)
-    raise TypeError(f"Unsupported load strategy: {type(strategy).__name__}")
-
-
-def _stamp_accumulate_frame(
-    frame: pd.DataFrame, strategy: AccumulateByRun
-) -> pd.DataFrame:
-    frame["logical_run_id"] = strategy.logical_run_id
-    if strategy.pipeline_run_id is not None:
-        frame["pipeline_run_id"] = strategy.pipeline_run_id
-    frame["load_date"] = strategy.load_date
-    return frame
+    A file Writer rewrites its target wholesale, so the strategy is handed the
+    incoming frame plus a way to read what is already there and returns the
+    result. A strategy that cannot express itself that way — because its merge
+    is SQL-side, or needs the target's key mapping — defines no
+    ``apply_to_frame``, and the mismatch is reported here naming both the
+    Writer and the strategy rather than silently falling off the end.
+    """
+    apply_to_frame = getattr(strategy, "apply_to_frame", None)
+    if apply_to_frame is None:
+        raise TypeError(
+            f"{type(writer).__name__} cannot use the "
+            f"{type(strategy).__name__} load strategy: it defines no "
+            "apply_to_frame, so it is available only to table-backed Writers."
+        )
+    return apply_to_frame(dataset.to_pandas(), read_existing)
 
 
 class CsvWriter:
@@ -92,13 +80,13 @@ class CsvWriter:
     def __init__(
         self,
         path: str | os.PathLike[str],
-        strategy: Refresh | AccumulateByRun | InsertOrIgnore,
+        strategy: LoadStrategy,
     ) -> None:
         self._path = Path(path)
         self._strategy = strategy
 
     def write(self, dataset: Dataset) -> None:
-        frame = _frame_for_strategy(dataset, self._strategy, self._read_existing)
+        frame = _frame_for_strategy(self, dataset, self._strategy, self._read_existing)
         self._path.parent.mkdir(parents=True, exist_ok=True)
         frame.to_csv(self._path, index=False, lineterminator="\n")
 
@@ -117,7 +105,7 @@ class ExcelWriter:
     def __init__(
         self,
         path: str | os.PathLike[str],
-        strategy: Refresh | AccumulateByRun | InsertOrIgnore,
+        strategy: LoadStrategy,
         sheet: str = "Sheet1",
     ) -> None:
         self._path = Path(path)
@@ -125,7 +113,7 @@ class ExcelWriter:
         self._sheet = sheet
 
     def write(self, dataset: Dataset) -> None:
-        frame = _frame_for_strategy(dataset, self._strategy, self._read_existing)
+        frame = _frame_for_strategy(self, dataset, self._strategy, self._read_existing)
         self._path.parent.mkdir(parents=True, exist_ok=True)
         with pd.ExcelWriter(self._path) as writer:
             frame.to_excel(writer, sheet_name=self._sheet, index=False)
@@ -145,13 +133,13 @@ class JsonWriter:
     def __init__(
         self,
         path: str | os.PathLike[str],
-        strategy: Refresh | AccumulateByRun | InsertOrIgnore,
+        strategy: LoadStrategy,
     ) -> None:
         self._path = Path(path)
         self._strategy = strategy
 
     def write(self, dataset: Dataset) -> None:
-        frame = _frame_for_strategy(dataset, self._strategy, self._read_existing)
+        frame = _frame_for_strategy(self, dataset, self._strategy, self._read_existing)
         self._path.parent.mkdir(parents=True, exist_ok=True)
         frame.to_json(
             self._path,

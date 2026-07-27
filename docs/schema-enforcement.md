@@ -203,7 +203,8 @@ Because `.run()` is fail-fast and atomic (ADR-0005), either a coercion failure a
 the **transform** step or a schema breach at the **post-validate** step raises
 *before* the Writer is called — so **no `silver.db` is written** and nothing
 partial lands. The pipeline makes no write or load decisions: the `Store` mints
-the Writer, which owns its location and load strategy (ADR-0003, ADR-0004). For
+the Writer, which owns its location and carries the load strategy that realised
+it (ADR-0003, ADR-0004). For
 the full feed pattern (raw accumulation, filtering the current run before
 coercion), see [`pipelines/ingest/pipeline.py`](../pipelines/ingest/pipeline.py)
 and [adding-a-feed.md](adding-a-feed.md).
