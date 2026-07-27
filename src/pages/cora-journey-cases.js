@@ -9,6 +9,7 @@ import {
   caseReferenceColumn,
   caseStatusColumn,
   caseTypeColumn,
+  overdueCaseRowClass,
 } from '../views/case-columns.js';
 import {
   dataTableView,
@@ -57,6 +58,18 @@ export function journeyCasesView(state, tools) {
       emptyMessage: 'No cases of your Case Type(s) yet.',
       rowKey: (row) => `${row.caseType}:${row.id}`,
       rowHref: caseRouteFor,
+      // Overdue is a property of the Case, not of the viewer's role (#542).
+      //
+      // Recorded consequence: these rows previously carried *no* className at
+      // all, and now every row carries the base `cora-case-row` as well as the
+      // overdue modifier — a third rendered change beyond #542's two decisions.
+      // Kept deliberately, because it is what makes Journey Cases match the
+      // Dashboard and Team Cases rather than a fourth spelling. It should be
+      // invisible: `.cora-case-row` sets padding, border, radius and shadow,
+      // none of which apply to a `tr` under the table's `border-collapse`, and
+      // its `--cora-color-surface` background is already the `.cora-data-table`
+      // background.
+      rowClass: overdueCaseRowClass,
     })
   );
 }

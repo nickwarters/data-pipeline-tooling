@@ -7,7 +7,10 @@ import { caseRouteFor } from '../lib/case-route-links.js';
 import { navigateTo } from '../lib/navigate.js';
 import { fetchTeamCases } from '../services/team-cases-fetcher.js';
 import { parseTeamCasesParams } from '../services/team-cases-params.js';
-import { standardCaseColumns } from '../views/case-columns.js';
+import {
+  overdueCaseRowClass,
+  standardCaseColumns,
+} from '../views/case-columns.js';
 import {
   dataTableView,
   reduceTableSort,
@@ -85,8 +88,7 @@ export function teamCasesView(state, tools) {
       emptyMessage: 'No cases match the selected filters.',
       rowKey: (row) => `${row.caseType}:${row.id}`,
       rowHref: caseRouteFor,
-      rowClass: (row) =>
-        row.overdue ? 'cora-case-row cora-case-row--overdue' : 'cora-case-row',
+      rowClass: overdueCaseRowClass,
     })
   );
 }

@@ -7,7 +7,11 @@ import {
   answerRemediation,
   isRemediationResolved,
 } from '../../evaluators/remediation-status.js';
-import { caseActionsColumn } from '../../views/case-columns.js';
+import {
+  caseActionsColumn,
+  caseReferenceColumn,
+  caseTypeColumn,
+} from '../../views/case-columns.js';
 import { dataTableView } from '../../views/data-table.js';
 
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
@@ -200,15 +204,24 @@ function remediationDeadline(row) {
   return row.remediationDueDate || row.dueDate || '';
 }
 
-/** @returns {import('../../views/data-table.js').ColumnDescriptor<CaseRow>[]} */
+/**
+ * Reference and Case Type sort here as on every other Case table (#542).
+ *
+ * Reference is the shared `caseReferenceColumn()` *minus its `href`*, derived by
+ * dropping that one field rather than re-spelled locally. The link is the only
+ * intended divergence — this table's Reference cells render no link, unlike the
+ * messages table below it — and answering whether it should link is out of
+ * #542's scope. Deriving keeps that the only divergence: a later change to the
+ * shared descriptor's label, `value` or sort identity reaches here too, where a
+ * local copy would have silently drifted on three fields to preserve one.
+ *
+ * @returns {import('../../views/data-table.js').ColumnDescriptor<CaseRow>[]}
+ */
 function remediationColumns() {
+  const { href: _href, ...unlinkedReference } = caseReferenceColumn();
   return [
-    {
-      key: 'reference',
-      label: 'Reference',
-      value: (row) => row.title || row.id,
-    },
-    { key: 'caseType', label: 'Case Type', value: 'caseType' },
+    unlinkedReference,
+    caseTypeColumn(),
     {
       key: 'remediationDueDate',
       label: 'Remediation due',
@@ -230,13 +243,10 @@ function messageColumns(
   /** @type {((row: CaseRow) => void) | undefined} */ onOpenConversation
 ) {
   return [
-    {
-      key: 'reference',
-      label: 'Reference',
-      value: (row) => row.title || row.id,
-      href: caseRouteFor,
-    },
-    { key: 'caseType', label: 'Case Type', value: 'caseType' },
+    // The shared Case descriptors, so Reference and Case Type sort here too
+    // (#542). The default sort is untouched: newest message first.
+    caseReferenceColumn(),
+    caseTypeColumn(),
     {
       key: 'lastMessage',
       label: 'Last message',

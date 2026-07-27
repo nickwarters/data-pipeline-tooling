@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
-import { getByRole, tableHeaders } from './helpers/semantic-dom.js';
+import { fireEvent, getByRole, tableHeaders } from './helpers/semantic-dom.js';
 
 installDom();
 /** @type {any} */ (globalThis).location = { hash: '' };
@@ -102,9 +102,11 @@ test('Controls appeal descriptors render through the generic table and keep navi
     ]
   );
 
+  // Reference and Case Type are interactive here as on every other Case table
+  // (#542); `Raised` keeps the table's default sort, unmoved.
   assert.deepEqual(tableHeaders(view), [
-    ['Reference', 'cora-col-reference', 'none', false],
-    ['Case Type', 'cora-col-caseType', 'none', false],
+    ['Reference', 'cora-col-reference', 'none', true],
+    ['Case Type', 'cora-col-caseType', 'none', true],
     ['Responsible Party', 'cora-col-responsibleParty', 'none', false],
     ['Appellant', 'cora-col-appellant', 'none', false],
     ['Raised', 'cora-col-raised', 'ascending', true],
@@ -112,10 +114,7 @@ test('Controls appeal descriptors render through the generic table and keep navi
     ['Actions', 'cora-col-actions', 'none', false],
   ]);
 
-  [...view.querySelectorAll('th')]
-    .find((header) => header.querySelector('button'))
-    ?.querySelector('button')
-    ?.dispatchEvent(/** @type {any} */ ({ type: 'click' }));
+  fireEvent(getByRole(view, 'button', { name: 'Raised' }), 'click');
   assert.deepEqual(sorts, ['raised']);
   // This table opens the Case, so `Open ${reference}` is the right name and
   // stays the default (#541).

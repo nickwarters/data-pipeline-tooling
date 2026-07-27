@@ -572,11 +572,21 @@
   font-weight: var(--cora-font-weight-bold);
 }
 
-[data-cora-root] .cora-overdue td {
+/* Overdue rows, on every Case-shaped table: a tinted cell background plus a
+   danger rule down the leading edge. Two class hooks, one treatment.
+   `cora-overdue` is what the Responsible Party remediation table puts on a
+   breached row; `cora-case-row--overdue` is what `overdueCaseRowClass()` in
+   views/case-columns.js puts on the Dashboard reviewer worklist, Team Cases and
+   Journey Cases rows. The modifier had no rule at all until #542, so those
+   three tables emitted the class and rendered no differently — grouped here
+   rather than duplicated so the four tables cannot drift apart again. */
+[data-cora-root] .cora-overdue td,
+[data-cora-root] .cora-case-row--overdue td {
   background: var(--cora-color-danger-bg);
 }
 
-[data-cora-root] .cora-overdue td:first-child {
+[data-cora-root] .cora-overdue td:first-child,
+[data-cora-root] .cora-case-row--overdue td:first-child {
   border-left: 3px solid var(--cora-color-danger);
 }
 

@@ -34,7 +34,10 @@ import {
   reduceTableSort,
   sortRequested,
 } from '../views/data-table.js';
-import { standardCaseColumns } from '../views/case-columns.js';
+import {
+  overdueCaseRowClass,
+  standardCaseColumns,
+} from '../views/case-columns.js';
 import { visibleDashboardPanels } from './dashboard/panel-descriptors.js';
 import { kpiStripView } from './dashboard/kpi-view.js';
 import {
@@ -137,8 +140,7 @@ export function reviewerCasesView(route, dispatch) {
       emptyMessage: 'No outstanding cases.',
       rowKey: (row) => `${row.caseType}:${row.id}`,
       rowHref: caseRouteFor,
-      rowClass: (row) =>
-        row.overdue ? 'cora-case-row cora-case-row--overdue' : 'cora-case-row',
+      rowClass: overdueCaseRowClass,
     })
   );
 }

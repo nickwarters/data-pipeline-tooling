@@ -177,6 +177,33 @@ test('journey cases descriptors and pure view preserve links, empty state, and s
   assert.ok(/** @type {any} */ (loaded)._children.length > 0);
 });
 
+test('#542 journey cases: an overdue Case carries the overdue row class, like every other Case table', () => {
+  const slice = createRouteSlice({}, context());
+  /** @param {CaseRow[]} cases */
+  const rowClasses = (cases) =>
+    [
+      ...(journeyCasesView(
+        {
+          ...slice.initialState,
+          routes: { journeyCases: { cases, sort: null } },
+        },
+        { dispatch: () => {} }
+      )
+        .querySelector('tbody')
+        ?.querySelectorAll('tr') ?? []),
+    ].map((/** @type {any} */ tr) => tr.className);
+
+  // Overdue is a property of the Case, not of the viewer's role: a Journey
+  // Owner sees the same breach the Dashboard and Team Cases already show.
+  assert.deepEqual(
+    rowClasses([
+      /** @type {any} */ ({ ...row('late', 'complaints'), overdue: true }),
+      /** @type {any} */ ({ ...row('ontime', 'complaints'), overdue: false }),
+    ]),
+    ['cora-case-row cora-case-row--overdue', 'cora-case-row']
+  );
+});
+
 test('journey cases slice suppresses late loads and skips fetching without a client', async () => {
   const noClient = context();
   noClient.client = null;

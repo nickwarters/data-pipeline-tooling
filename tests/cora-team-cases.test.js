@@ -126,7 +126,10 @@ test('team cases view renders the standard Case columns, the Case Type additions
       ...createRouteSlice({}, context()).initialState,
       routes: {
         teamCases: {
-          cases: [row('c1')],
+          cases: [
+            /** @type {any} */ ({ ...row('c1'), overdue: true }),
+            /** @type {any} */ ({ ...row('c2'), overdue: false }),
+          ],
           caseTableColumns: [
             { key: 'owner', label: 'Owner', value: 'responsibleParty' },
           ],
@@ -135,6 +138,18 @@ test('team cases view renders the standard Case columns, the Case Type additions
       },
     },
     { dispatch: () => {} }
+  );
+
+  // #542 centralised this table's `rowClass` on the shared
+  // `overdueCaseRowClass`, so pin what it renders here too — otherwise only the
+  // Journey Cases test fails when the shared helper is broken, and Team Cases
+  // loses its overdue styling silently. Sorted Reference-descending, so `c2`
+  // (not overdue) leads.
+  assert.deepEqual(
+    [...(view.querySelector('tbody')?.querySelectorAll('tr') ?? [])].map(
+      (tableRow) => tableRow.className
+    ),
+    ['cora-case-row', 'cora-case-row cora-case-row--overdue']
   );
 
   assert.deepEqual(tableHeaders(view), [

@@ -85,9 +85,11 @@ test('Responsible Party unread messages render through descriptors and invoke co
     '#/case/complaints/unread'
   );
   assert.match(section?.textContent ?? '', /—/);
+  // Reference and Case Type are the shared descriptors, so they sort here as
+  // on every other Case table (#542); `Last message` keeps the default sort.
   assert.deepEqual(tableHeaders(section), [
-    ['Reference', 'cora-col-reference', 'none', false],
-    ['Case Type', 'cora-col-caseType', 'none', false],
+    ['Reference', 'cora-col-reference', 'none', true],
+    ['Case Type', 'cora-col-caseType', 'none', true],
     ['Last message', 'cora-col-lastMessage', 'descending', true],
     ['Actions', 'cora-col-actions', 'none', false],
   ]);

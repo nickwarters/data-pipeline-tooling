@@ -96,33 +96,28 @@ test('the Outstanding Remediation Actions table renders the columns it renders t
   );
   const section = view.querySelector('.cora-rp-remediation');
 
-  // This pins what the table renders *today*, divergences included. It is
-  // deliberately not harmonised with the other Case-shaped tables: whether the
-  // Reference and Case Type columns should adopt the shared descriptors is
-  // #542's question, and the Remediation due column is #498's. The contract
-  // exists so a future sweep that decides either has something to fail against.
+  // #542 converged the sorting half of this contract: Reference and Case Type
+  // are now interactive here as on all six Case tables, because the same
+  // Case-shaped column should not be inert on one of them. What remains pinned
+  // is the divergence #542 deliberately did *not* touch:
   //
-  //   - Reference and Case Type do not sort (fourth element `false`), unlike
-  //     the shared caseReferenceColumn()/caseTypeColumn() descriptors in
-  //     views/case-columns.js that mark both sortable, and which the Dashboard
-  //     reviewer worklist, Team Cases and Journey Cases are built from. The
-  //     Cases with Unread Messages and Controls Appeals tables do not sort them
-  //     either, so this is a three-against-three split, not a lone holdout.
-  //     Their 'aria-sort' reads 'none' because the active sort key is
-  //     remediationDueDate, not because the columns are unsortable —
-  //     data-table.js derives the two independently.
-  //   - Remediation due is the only sortable column, so it is the only heading
-  //     rendered as a control.
+  //   - Remediation due is #498's column, left exactly as it was. Its
+  //     'ascending' is the active sort; the other headings read 'none' because
+  //     they are not the sort key, not because they are unsortable —
+  //     data-table.js derives `aria-sort` and interactivity independently.
+  //   - Action required stays plain text, as it has no sortable meaning.
   assert.deepEqual(tableHeaders(section), [
-    ['Reference', 'cora-col-reference', 'none', false],
-    ['Case Type', 'cora-col-caseType', 'none', false],
+    ['Reference', 'cora-col-reference', 'none', true],
+    ['Case Type', 'cora-col-caseType', 'none', true],
     ['Remediation due', 'cora-col-remediationDueDate', 'ascending', true],
     ['Action required', 'cora-col-action', 'none', false],
   ]);
 
   // No column renders a link: the Reference column carries no `href`, unlike
   // the Cases with Unread Messages table below it, whose Reference cells link
-  // to the Case. Pinned, not fixed — see #542.
+  // to the Case. Still pinned, not fixed: #542 decided sorting, not linking, so
+  // this table keeps its own Reference descriptor rather than adopting
+  // caseReferenceColumn() and gaining a link as a side effect.
   //
   // Scope worth knowing: this pins the absence of a *column* href only. The
   // table also passes no `rowHref`, where the messages table does (view.js),

@@ -184,7 +184,8 @@ test('reviewer worklist preserves the legacy columns, filters, and Open action',
       relatedDate: '2026-01-01',
       dueDate: '2026-01-10',
       created: 'reviewer-a',
-      overdue: false,
+      // Overdue, so the row class this table renders is pinned below (#542).
+      overdue: true,
     },
     {
       id: 'beta',
@@ -218,6 +219,23 @@ test('reviewer worklist preserves the legacy columns, filters, and Open action',
   assert.match(unfiltered.textContent, /Alpha case/);
   assert.match(unfiltered.textContent, /Beta case/);
   assert.match(unfiltered.textContent, /fallback-reference/);
+  // #542 centralised this table's `rowClass` on the shared
+  // `overdueCaseRowClass`, so pin what it renders here too — otherwise only the
+  // Journey Cases test fails when the shared helper is broken, and the
+  // reviewer worklist loses its overdue styling silently. The Dashboard is the
+  // one table that derives `overdue` itself — the load effect stamps
+  // `isOverdue(row)` onto each row before dispatching `reviewer-cases/loaded` —
+  // so the flag arrives on the action, as it does here, and the reducer and
+  // view take it as given.
+  assert.deepEqual(
+    [
+      ...(unfiltered
+        .querySelector('.cora-reviewer-cases')
+        ?.querySelector('tbody')
+        ?.querySelectorAll('tr') ?? []),
+    ].map((tableRow) => tableRow.className),
+    ['cora-case-row cora-case-row--overdue', 'cora-case-row', 'cora-case-row']
+  );
   assert.deepEqual(tableHeaders(unfiltered), [
     ['Reference', 'cora-col-reference', 'none', true],
     ['Case Type', 'cora-col-caseType', 'none', true],
@@ -1342,6 +1360,76 @@ test('#516 dashboard view: clicking an appeals column header dispatches the appe
   assert.deepEqual(actions, [
     { type: 'appeals-table/sort-requested', key: 'raised' },
   ]);
+});
+
+test('#542 dashboard appeals: Reference and Case Type sort for real — click, dispatch, sorted render', () => {
+  const ctx = context(capabilities({ isControls: true }));
+  const slice = createRouteSlice({}, ctx);
+  // The Appeals table's deliberate default, unmoved by gaining two sortable
+  // columns (#516).
+  assert.deepEqual(slice.initialState.routes.dashboard.appealSort, {
+    key: 'raised',
+    dir: 'asc',
+  });
+
+  /** @param {string} id @param {string} caseType */
+  const appealRow = (id, caseType) => ({
+    id,
+    title: id,
+    caseType,
+    responsibleParty: 'rp-1',
+    appeals: [
+      {
+        id: `appeal-${id}`,
+        appellant: 'owner',
+        at: '2026-01-01T00:00:00Z',
+        state: 'raised',
+        rationale: 'why',
+      },
+    ],
+  });
+  const loaded = slice.reducer(slice.initialState, {
+    type: 'appeals/loaded',
+    cases: [appealRow('Zed case', 'sales'), appealRow('Alpha case', 'banking')],
+  });
+
+  /** @param {any} state @param {any[]} actions */
+  const render = (state, actions) =>
+    dashboardView(/** @type {any} */ (state), {
+      context: ctx,
+      dispatch: (/** @type {any} */ action) => actions.push(action),
+    });
+  // Scoped to the Appeals panel: Controls happens to render one table today,
+  // so an unscoped 'tbody' would read the right rows by luck.
+  /** @param {any} view */
+  const references = (view) =>
+    [
+      ...(view
+        .querySelector('.cora-controls-appeals')
+        ?.querySelector('tbody')
+        ?.querySelectorAll('tr') ?? []),
+    ].map(
+      (/** @type {any} */ row) => row.querySelectorAll('td')[0].textContent
+    );
+
+  for (const [column, key, expected] of [
+    ['Reference', 'reference', ['Alpha case', 'Zed case']],
+    ['Case Type', 'caseType', ['Alpha case', 'Zed case']],
+  ]) {
+    /** @type {any[]} */
+    const actions = [];
+    fireEvent(
+      getByRole(render(loaded, actions), 'button', {
+        name: /** @type {string} */ (column),
+      }),
+      'click'
+    );
+    assert.deepEqual(actions, [{ type: 'appeals-table/sort-requested', key }]);
+
+    const sorted = slice.reducer(loaded, actions[0]);
+    assert.deepEqual(sorted.routes.dashboard.appealSort, { key, dir: 'asc' });
+    assert.deepEqual(references(render(sorted, [])), expected);
+  }
 });
 
 test('dashboard slice: navigating away aborts the fan-out reads with no error UI (#545)', async () => {

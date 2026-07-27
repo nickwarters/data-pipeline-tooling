@@ -15,6 +15,17 @@ import { caseRouteFor } from '../lib/case-route-links.js';
  *
  * Column `key`s are sort identity *and* CSS hooks (`cora-col-${key}`), so they
  * are part of the contract and never change.
+ *
+ * **Reference and Case Type sort on every Case table (#542).** They did not
+ * used to: the Dashboard reviewer worklist, Team Cases and Journey Cases sorted
+ * them, while Controls' Appeals table and both Responsible Party tables
+ * rendered the same two columns as inert text. The six tables show the same
+ * Case-shaped data, so someone who learns to sort by Reference on the Dashboard
+ * should not find the same column dead on Controls. Nothing was lost by
+ * converging — the three tables that gained sort gained a capability — so
+ * `sortable` lives on the shared descriptor rather than being decided per call
+ * site. A table that wants a column unsortable now has to say so, which is the
+ * right way round for a divergence that was never intended.
  */
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
@@ -117,6 +128,36 @@ export const caseActionsColumn = (
       'Open'
     ),
 });
+
+/**
+ * The row class every Case-listing table passes as `rowClass`.
+ *
+ * **Overdue styling belongs on every Case table (#542).** The Dashboard
+ * reviewer worklist and Team Cases have always emitted this modifier; Journey
+ * Cases emitted no row class at all. Overdue is a property of the *Case* — its
+ * SLA date has passed — not of the viewer's role, and a Journey Owner looking
+ * at a Case that has breached its SLA is exactly who needs to see it.
+ * Suppressing it on one table of six reads as an omission, not a decision, so
+ * the rule is stated once here rather than repeated per page.
+ *
+ * Worth knowing, because the comment that used to sit here said otherwise:
+ * before #542 the `cora-case-row--overdue` class had *no stylesheet rule*, so
+ * the Dashboard and Team Cases emitted it and rendered an overdue Case exactly
+ * like any other. Converging Journey Cases onto a class that styled nothing
+ * would have been an empty decision, so #542 also added the rule —
+ * `[data-cora-root] .cora-case-row--overdue td` in `styles/cora-styles.css`,
+ * grouped with the `.cora-overdue` selectors the Responsible Party remediation
+ * table already used, so all four Case-shaped tables show a breach the same way.
+ *
+ * `overdue` is the flag the SharePoint client derives on read (In-progress and
+ * past `DueDate`); the Dashboard recomputes it locally for its own worklist.
+ * Either way the class is the same, so the stylesheet has one hook.
+ *
+ * @param {CaseRow} row
+ * @returns {string}
+ */
+export const overdueCaseRowClass = (row) =>
+  row.overdue ? 'cora-case-row cora-case-row--overdue' : 'cora-case-row';
 
 /**
  * The seven-column Case table shared by the Dashboard and Team Cases. `extra`

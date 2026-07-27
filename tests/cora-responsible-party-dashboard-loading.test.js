@@ -9,6 +9,7 @@ installDom();
 const {
   createRouteSlice,
   initialResponsiblePartyState,
+  reduceResponsibleParty,
   responsiblePartyPanelView,
 } = await import('../src/pages/cora-responsible-party-dashboard.js');
 
@@ -176,4 +177,94 @@ test('#516 Responsible Party panel: clicking the unread Last message header disp
   assert.deepEqual(actions, [
     { type: 'unread-table/sort-requested', key: 'lastMessage' },
   ]);
+});
+
+/**
+ * Two Cases, both remediation-outstanding and both unread, whose Reference and
+ * Case Type disagree with the order they are listed in — so a sorted render is
+ * distinguishable from an unsorted one.
+ *
+ * @param {string} id @param {string} caseType
+ */
+function unsortedCase(id, caseType) {
+  return /** @type {any} */ ({
+    id,
+    caseType,
+    title: id,
+    status: 'Actions In Progress',
+    assignedReviewer: 'reviewer',
+    responsibleParty: 'rp-1',
+    remediationDueDate: '2026-01-01T00:00:00Z',
+    answers: {
+      q1: { value: 'No', remediationActions: [{ id: `a-${id}`, text: 'Fix' }] },
+    },
+    conversation: [
+      { author: 'reviewer', timestamp: '2026-02-01T00:00:00Z', body: 'hi' },
+    ],
+    notes: '',
+    completedAt: null,
+    etag: 'e',
+  });
+}
+
+/** @param {string} sectionClass @param {any} view */
+function referencesIn(sectionClass, view) {
+  return [
+    ...(view
+      .querySelector(sectionClass)
+      ?.querySelector('tbody')
+      ?.querySelectorAll('tr') ?? []),
+  ].map((/** @type {any} */ row) => row.querySelectorAll('td')[0].textContent);
+}
+
+test('#542 Responsible Party tables: Reference and Case Type sort for real on both tables', () => {
+  const base = {
+    ...initialResponsiblePartyState('rp-1'),
+    cases: [
+      unsortedCase('Zed case', 'sales'),
+      unsortedCase('Alpha case', 'banking'),
+    ],
+  };
+  // Neither table's deliberate default sort moves by gaining two sortable
+  // columns (#516).
+  assert.deepEqual(base.remediationSort, {
+    key: 'remediationDueDate',
+    dir: 'asc',
+  });
+  assert.deepEqual(base.messageSort, { key: 'lastMessage', dir: 'desc' });
+
+  for (const [table, sectionClass, sortKey] of [
+    ['remediation', '.cora-rp-remediation', 'remediationSort'],
+    ['unread', '.cora-rp-messages', 'messageSort'],
+  ]) {
+    for (const [column, key] of [
+      ['Reference', 'reference'],
+      ['Case Type', 'caseType'],
+    ]) {
+      /** @type {any[]} */
+      const actions = [];
+      const view = responsiblePartyPanelView(base, {
+        dispatch: (/** @type {any} */ action) => actions.push(action),
+      });
+      // Scoped to the section, because both tables carry both headings.
+      const section = view.querySelector(/** @type {string} */ (sectionClass));
+      fireEvent(getByRole(section, 'button', { name: column }), 'click');
+      assert.deepEqual(actions, [
+        { type: `${table}-table/sort-requested`, key },
+      ]);
+
+      const sorted = reduceResponsibleParty(base, actions[0]);
+      assert.deepEqual(/** @type {any} */ (sorted)[sortKey], {
+        key,
+        dir: 'asc',
+      });
+      assert.deepEqual(
+        referencesIn(
+          /** @type {string} */ (sectionClass),
+          responsiblePartyPanelView(sorted, { dispatch: () => {} })
+        ),
+        ['Alpha case', 'Zed case']
+      );
+    }
+  }
 });

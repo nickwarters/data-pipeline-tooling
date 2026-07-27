@@ -2,7 +2,11 @@
 import { h } from '../../lib/html.js';
 import { caseRouteFor } from '../../lib/case-route-links.js';
 import { navigateTo } from '../../lib/navigate.js';
-import { caseActionsColumn } from '../../views/case-columns.js';
+import {
+  caseActionsColumn,
+  caseReferenceColumn,
+  caseTypeColumn,
+} from '../../views/case-columns.js';
 import { dataTableView } from '../../views/data-table.js';
 
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
@@ -50,16 +54,18 @@ export async function fetchOpenAppeals(client, sources) {
   });
 }
 
-/** @returns {import('../../views/data-table.js').ColumnDescriptor<CaseRow>[]} */
+/**
+ * Reference and Case Type are the shared Case descriptors, which is what makes
+ * them sortable here (#542) — this table used to spell them out locally, minus
+ * `sortable`, for no reason anyone could name. The default sort is untouched:
+ * Appeals still open on `{ key: 'raised', dir: 'asc' }`, oldest Appeal first.
+ *
+ * @returns {import('../../views/data-table.js').ColumnDescriptor<CaseRow>[]}
+ */
 export function appealColumns() {
   return [
-    {
-      key: 'reference',
-      label: 'Reference',
-      value: (row) => row.title || row.id,
-      href: caseRouteFor,
-    },
-    { key: 'caseType', label: 'Case Type', value: 'caseType' },
+    caseReferenceColumn(),
+    caseTypeColumn(),
     {
       key: 'responsibleParty',
       label: 'Responsible Party',
