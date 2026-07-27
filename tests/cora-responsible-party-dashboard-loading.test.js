@@ -268,3 +268,33 @@ test('#542 Responsible Party tables: Reference and Case Type sort for real on bo
     }
   }
 });
+
+test('#544 Responsible Party panel: choosing a Case Type filter dispatches the filter action', () => {
+  const base = panelState();
+  /** @type {any[]} */
+  const actions = [];
+  const view = responsiblePartyPanelView(base, {
+    dispatch: (/** @type {any} */ action) => actions.push(action),
+  });
+
+  const filter = getByRole(view, 'combobox', { name: 'Filter by Case Type' });
+  filter.value = 'complaints';
+  fireEvent(filter, 'change', { target: filter });
+  assert.deepEqual(actions, [
+    { type: 'responsible-party/filter-changed', value: 'complaints' },
+  ]);
+
+  // …and the filter the reducer stores is the one the panel applies: a Case
+  // Type nobody matches empties both tables.
+  const filtered = reduceResponsibleParty(base, {
+    type: 'responsible-party/filter-changed',
+    value: 'banking',
+  });
+  assert.equal(
+    responsiblePartyPanelView(filtered, { dispatch: () => {} })
+      .querySelector('.cora-rp-remediation')
+      ?.querySelector('tbody')
+      ?.querySelectorAll('tr').length ?? 0,
+    0
+  );
+});

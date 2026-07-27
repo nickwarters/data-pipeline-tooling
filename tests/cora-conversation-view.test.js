@@ -9,6 +9,7 @@ installDom();
 
 const { conversationPageView, createRouteSlice } =
   await import('../src/pages/cora-conversation-view.js');
+const { morph } = await import('../src/core/morph.js');
 const { conversationView, postConversationMessage, refreshConversation } =
   await import('../src/pages/cora-case-review/conversation-view.js');
 
@@ -210,4 +211,101 @@ test('CASE-3 refresh fetches the routed case', async () => {
   });
   assert.equal(row, CASE_ROW);
   assert.deepEqual(calls, [['case-1', { listName: 'Example Cases' }]]);
+});
+
+test('#544 conversation page: Send posts the typed Message through the route’s own effect', async () => {
+  /** @type {any[]} */
+  const patches = [];
+  const saveQueue = {
+    getEtag: () => 'v1',
+    loadCase: () => {},
+  };
+  const client = {
+    async patchCase(
+      /** @type {string} */ id,
+      /** @type {any} */ fields,
+      /** @type {string} */ etag,
+      /** @type {any} */ options
+    ) {
+      patches.push([id, fields, etag, options]);
+      return { ok: true, data: { ...CASE_ROW, etag: 'v2' } };
+    },
+  };
+  const slice = createRouteSlice(
+    { id: 'case-1', caseType: 'example-review' },
+    /** @type {any} */ ({
+      chrome: { currentUser: CURRENT_USER, permissions: {} },
+      currentUser: CURRENT_USER,
+      client,
+      saveQueue,
+    })
+  );
+  let state = slice.reducer(slice.initialState, {
+    type: 'conversation/loaded',
+    caseRow: CASE_ROW,
+    access: 'edit',
+    caseListOptions: { listName: 'Example Cases' },
+  });
+  const container = document.createElement('main');
+  /** @type {any} */
+  let tools;
+  tools = {
+    morph,
+    dispatch(/** @type {any} */ action) {
+      state = slice.reducer(state, action);
+      slice.render(container, state, tools);
+    },
+    isActive: () => true,
+  };
+  slice.render(container, state, tools);
+
+  const textarea = container.querySelector('textarea');
+  assert.ok(textarea, 'the composer is rendered for an edit-access viewer');
+  textarea.value = 'Chasing the remediation';
+  const send = [...container.querySelectorAll('button')].find(
+    (/** @type {any} */ button) =>
+      button.getAttribute('aria-label') === 'Send message'
+  );
+  fireEvent(send, 'click');
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.equal(patches.length, 1, 'the page wired Send to its posting effect');
+  assert.equal(patches[0][0], 'case-1');
+  assert.equal(
+    patches[0][1].conversation.at(-1).body,
+    'Chasing the remediation'
+  );
+  assert.deepEqual(patches[0][3], { listName: 'Example Cases' });
+  // …and the optimistic messages reached the store, so the thread re-renders.
+  assert.equal(
+    state.routes.conversation.caseRow?.conversation.at(-1)?.body,
+    'Chasing the remediation'
+  );
+});
+
+test('#544 conversation page: the back button returns to My Reviews', () => {
+  // Derive the state through the reducer rather than hand-writing the route
+  // slice: a literal drifts silently when the slice shape changes (#544).
+  const slice = createRouteSlice(
+    { id: 'case-1', caseType: 'example-review' },
+    /** @type {any} */ ({
+      chrome: { currentUser: CURRENT_USER, permissions: {} },
+      currentUser: CURRENT_USER,
+    })
+  );
+  const state = slice.reducer(slice.initialState, {
+    type: 'conversation/loaded',
+    caseRow: CASE_ROW,
+    access: 'read-only',
+    caseListOptions: {},
+  });
+  const node = conversationPageView(
+    /** @type {any} */ (state),
+    /** @type {any} */ ({ dispatch() {} }),
+    () => {}
+  );
+  /** @type {any} */ (globalThis).location = { hash: '#/conversation/x/y' };
+  fireEvent(node.querySelector('.cora-back-btn'), 'click');
+  assert.equal(location.hash, '#/my-reviews');
 });

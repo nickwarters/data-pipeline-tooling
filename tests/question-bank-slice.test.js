@@ -1683,3 +1683,282 @@ test('#549 the Retry control sits outside the live region and keeps focus', asyn
   assert.equal(busy.getAttribute('aria-busy'), 'true');
   mounted.unmount();
 });
+
+/**
+ * Two banks whose questions span two Categories and, inside one of them, two
+ * Question Groups — the shape the rail's selection and reorder controls need.
+ *
+ * @param {string} slug @param {string} label
+ */
+function editorFixtureBank(slug, label) {
+  return {
+    slug,
+    label,
+    labels: [],
+    outcomeOptions: [],
+    questions: [
+      {
+        id: `${slug}-q1`,
+        text: 'Opening question',
+        category: 'Opening',
+        questionGroup: 'Greeting',
+        responseType: 'yes-no-na',
+        deprecated: false,
+      },
+      {
+        id: `${slug}-q2`,
+        text: 'Second opening question',
+        category: 'Opening',
+        questionGroup: 'Identity',
+        responseType: 'yes-no-na',
+        deprecated: false,
+      },
+      {
+        id: `${slug}-q3`,
+        text: 'Closing question',
+        category: 'Closing',
+        questionGroup: 'Wrap-up',
+        responseType: 'yes-no-na',
+        deprecated: false,
+      },
+    ],
+  };
+}
+
+/**
+ * The bank editor's own wiring, end to end: render the page's view, fire a real
+ * event, assert the exact action, then re-render the reduced state and assert
+ * the user-visible consequence. A view test with stub handlers cannot see the
+ * page passing the wrong one (#544).
+ *
+ * One harness, one `test()` per control: eleven seams inside a single case
+ * meant the first failing assertion masked the other ten, and the failure named
+ * none of them.
+ */
+function editorHarness() {
+  const ctx = context();
+  const slice = createRouteSlice({}, ctx, {
+    loadBanks: async () => ({ banks: {}, failures: [] }),
+  });
+  const loaded = slice.reducer(slice.initialState, {
+    type: 'bank/loaded',
+    banks: {
+      alpha: editorFixtureBank('alpha', 'Alpha'),
+      beta: editorFixtureBank('beta', 'Beta'),
+    },
+    failures: [],
+  });
+
+  /** @param {any} state @param {any[]} actions */
+  const render = (state, actions) =>
+    bankEditorView(state, {
+      dispatch: (/** @type {any} */ action) => actions.push(action),
+      memo: createMemo(),
+    });
+  /**
+   * @param {any} state
+   * @param {(view: any) => any} find
+   * @param {string} event
+   * @param {any} expected
+   * @param {any} [init]
+   */
+  const dispatched = (state, find, event, expected, init) => {
+    /** @type {any[]} */
+    const actions = [];
+    const target = find(render(state, actions));
+    assert.ok(target, `control for ${JSON.stringify(expected)} is rendered`);
+    fireEvent(target, event, init);
+    const wanted = Array.isArray(expected) ? expected : [expected];
+    assert.deepEqual(actions, wanted);
+    return actions.reduce(
+      (/** @type {any} */ next, /** @type {any} */ action) =>
+        slice.reducer(next, action),
+      state
+    );
+  };
+
+  // Every control below the Case Type bar is exercised on the second bank, so
+  // each assertion also proves the tab selection reached the editor body.
+  const onBeta = slice.reducer(loaded, {
+    type: 'bank/selected',
+    slug: 'beta',
+  });
+  return { slice, loaded, onBeta, render, dispatched };
+}
+
+test('#544 bank editor: the Case Type tab dispatches bank/selected', () => {
+  const { loaded, render, dispatched } = editorHarness();
+  assert.equal(selectQuestionBankState(loaded).activeSlug, 'alpha');
+
+  const onBeta = dispatched(
+    loaded,
+    (view) => getByRole(view, 'button', { name: /Beta/ }),
+    'click',
+    { type: 'bank/selected', slug: 'beta' }
+  );
+  assert.equal(selectQuestionBankState(onBeta).activeSlug, 'beta');
+  assert.match(
+    String(render(onBeta, []).querySelector('.editor-head')?.textContent),
+    /Beta/
+  );
+});
+
+test('#544 bank editor: the Case Type bar opens and closes the compile drawer', () => {
+  const { onBeta, render, dispatched } = editorHarness();
+  const opened = dispatched(
+    onBeta,
+    (view) => getByRole(view, 'button', { name: /Compile & Submit/ }),
+    'click',
+    { type: 'drawer/changed', open: true }
+  );
+  assert.equal(selectQuestionBankState(opened).drawerOpen, true);
+  assert.match(
+    String(render(opened, []).querySelector('.drawer')?.className),
+    /open/
+  );
+
+  const closed = dispatched(
+    opened,
+    (view) => view.querySelector('.drawer-close'),
+    'click',
+    { type: 'drawer/changed', open: false }
+  );
+  assert.equal(selectQuestionBankState(closed).drawerOpen, false);
+});
+
+test('#544 bank editor: the dock opens and closes the compile drawer', () => {
+  const { onBeta, render, dispatched } = editorHarness();
+  const opened = dispatched(
+    onBeta,
+    (view) =>
+      [...view.querySelectorAll('.dock-btn')].find(
+        (/** @type {any} */ button) => button.textContent === 'Preview Config'
+      ),
+    'click',
+    { type: 'drawer/changed', open: true }
+  );
+  assert.equal(selectQuestionBankState(opened).drawerOpen, true);
+  assert.match(
+    String(render(opened, []).querySelector('.drawer')?.className),
+    /open/
+  );
+
+  const closed = dispatched(
+    opened,
+    (view) => view.querySelector('.drawer-close'),
+    'click',
+    { type: 'drawer/changed', open: false }
+  );
+  assert.equal(selectQuestionBankState(closed).drawerOpen, false);
+});
+
+test('#544 bank editor: a Category chip filters the Question Definition list', () => {
+  const { onBeta, render, dispatched } = editorHarness();
+  const filtered = dispatched(
+    onBeta,
+    (view) =>
+      [...view.querySelectorAll('.filter-chip')].find(
+        (/** @type {any} */ chip) => chip.textContent.startsWith('Closing')
+      ),
+    'click',
+    [
+      {
+        type: 'filters/changed',
+        patch: { category: 'Closing', questionGroup: null },
+      },
+      // Choosing a Category also closes the rail: on a narrow viewport it is an
+      // overlay, and the list it filters is behind it.
+      { type: 'rail/changed', open: false },
+    ]
+  );
+  assert.equal(selectQuestionBankState(filtered).filters.category, 'Closing');
+  assert.equal(
+    render(filtered, []).querySelectorAll('.q-text').length,
+    1,
+    'the Category the click dispatched for is the one the list narrows to'
+  );
+});
+
+test('#544 bank editor: the Category reorder control dispatches category/moved', () => {
+  const { onBeta, dispatched } = editorHarness();
+  dispatched(
+    onBeta,
+    (view) => getByRole(view, 'button', { name: 'Move Closing category up' }),
+    'click',
+    { type: 'category/moved', category: 'Closing', direction: -1 },
+    // The reorder controls sit inside the Category chip and stop the click
+    // propagating; the DOM stub's event object has no stopPropagation, so the
+    // non-bubbling dispatch stands in for it.
+    { bubbles: false }
+  );
+});
+
+test('#544 bank editor: the Question Group reorder control dispatches group/moved', () => {
+  const { onBeta, dispatched } = editorHarness();
+  dispatched(
+    onBeta,
+    (view) =>
+      getByRole(view, 'button', { name: 'Move Identity question group up' }),
+    'click',
+    {
+      type: 'group/moved',
+      category: 'Opening',
+      group: 'Identity',
+      direction: -1,
+    },
+    { bubbles: false }
+  );
+});
+
+test('#544 bank editor: the rail toggle opens the rail', () => {
+  const { onBeta, render, dispatched } = editorHarness();
+  const railOpen = dispatched(
+    onBeta,
+    (view) => view.querySelector('.rail-toggle'),
+    'click',
+    { type: 'rail/changed', open: true }
+  );
+  assert.equal(selectQuestionBankState(railOpen).railOpen, true);
+  assert.match(
+    String(render(railOpen, []).querySelector('.rail')?.className),
+    /open/
+  );
+});
+
+test('#544 bank editor: the add card drafts a Question Definition', () => {
+  const { onBeta, dispatched } = editorHarness();
+  const added = dispatched(
+    onBeta,
+    (view) => view.querySelector('.add-card'),
+    'click',
+    { type: 'question/added' }
+  );
+  assert.equal(
+    selectQuestionBankState(added).cases.beta.questions.length,
+    selectQuestionBankState(onBeta).cases.beta.questions.length + 1
+  );
+});
+
+test('#544 bank editor: the BankList dispatch carries a card edit', () => {
+  const { slice, onBeta, render } = editorHarness();
+  /** @type {any[]} */
+  const edits = [];
+  const wording = /** @type {any} */ (
+    render(onBeta, edits).querySelector('.q-text')
+  );
+  wording.value = 'Reworded question';
+  fireEvent(wording, 'input', { target: wording });
+  assert.deepEqual(edits, [
+    {
+      type: 'question/field-changed',
+      questionId: 'beta-q1',
+      field: 'text',
+      value: 'Reworded question',
+    },
+  ]);
+  assert.equal(
+    selectQuestionBankState(slice.reducer(onBeta, edits[0])).cases.beta
+      .questions[0].text,
+    'Reworded question'
+  );
+});

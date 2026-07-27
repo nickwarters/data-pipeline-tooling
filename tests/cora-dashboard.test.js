@@ -1167,9 +1167,31 @@ test('dashboard pure view composes every real panel for a multi-role user', () =
   assert.equal(view.querySelector('cora-allocation'), null);
 
   [...view.querySelectorAll('button')].forEach((button) =>
-    button.dispatchEvent(/** @type {any} */ ({ type: 'click' }))
+    fireEvent(button, 'click', { bubbles: false })
   );
-  assert.ok(actions.length > 0);
+  // Not `actions.length > 0`: that aggregate stayed true while individual
+  // Action Centre seams were no-ops (#544). Name every controller callback the
+  // panel is supposed to reach, in document order.
+  const reasonIds =
+    slice.initialState.routes.dashboard.actionCentre.reasons.map(
+      (/** @type {any} */ reason) => reason.id
+    );
+  assert.deepEqual(
+    actions.filter((action) => Array.isArray(action)),
+    [
+      ['scope', true],
+      ['scope', false],
+      ['group', reasonIds[0]],
+      // Only the first reason is expanded, so only it renders rows and a
+      // Show more control.
+      ['more', reasonIds[0]],
+      ...reasonIds.slice(1).map((/** @type {string} */ id) => ['group', id]),
+    ]
+  );
+  assert.ok(
+    actions.some((action) => !Array.isArray(action)),
+    'and the store-driven panels dispatched too'
+  );
   assert.equal(location.hash, '#/case/complaints/c1');
 
   const withoutController = dashboardView(/** @type {any} */ (state), {
@@ -1180,9 +1202,7 @@ test('dashboard pure view composes every real panel for a multi-role user', () =
     ...(withoutController
       .querySelector('.cora-action-centre')
       ?.querySelectorAll('button') ?? []),
-  ].forEach((button) =>
-    button.dispatchEvent(/** @type {any} */ ({ type: 'click' }))
-  );
+  ].forEach((button) => fireEvent(button, 'click', { bubbles: false }));
 });
 
 test('dashboard Action Centre controller reloads scope, groups, and pages through store actions', async () => {
@@ -1607,4 +1627,249 @@ test('dashboard slice: a client-less mount with a mount signal renders an empty 
 
   assert.deepEqual(actions, [], 'no client means no loads and no failures');
   assert.deepEqual(ctx.chrome.toasts, []);
+});
+
+/*
+ * #544 audit — seams deliberately left uncovered here, and why. (The audit's
+ * page-wiring assertions live in this file, cora-case-review-slice.test.js,
+ * cora-conversation-view.test.js, cora-responsible-party-dashboard-loading.test.js
+ * and question-bank-slice.test.js.)
+ *
+ * - Table sort headers on the Dashboard reviewer + appeals tables, My Team, and
+ *   the Responsible Party remediation + unread tables: already asserted
+ *   click→dispatch by #516 and #542. Covered elsewhere, not gaps.
+ * - The question-bank sub-editors (options-editor, wording-editor, showwhen-*,
+ *   question-labels): every card edit reaches the store through the one
+ *   `BankList` dispatch prop, which the `#544 bank editor: the BankList dispatch
+ *   carries a card edit` test asserts. Covering each sub-editor separately would
+ *   re-assert the same seam.
+ * - Case Review Section panels (summary/outcome/notes/appeal views): asserted
+ *   through the shipped route render in cora-case-review-slice.test.js rather
+ *   than by stub handlers, so the page wiring is already in the assertion path.
+ * - `dashboard/controls-view.js`'s row links and `action-centre-view.js`'s row
+ *   anchors: plain `href` navigation with no page-supplied callback, so there is
+ *   no wiring seam to mis-wire.
+ */
+
+test('#544 dashboard KPI strip: a lane header and a tile dispatch the disclosure actions the reducer owns', () => {
+  const ctx = context(capabilities({ isReviewer: true }));
+  const slice = createRouteSlice({}, ctx);
+  const loaded = slice.reducer(slice.initialState, {
+    type: 'kpis/loaded',
+    lanes: [
+      {
+        role: 'reviewer',
+        label: 'As Reviewer',
+        scopeLabel: 'Complaints',
+        isPrimary: true,
+        defaultOpen: false,
+        totalItems: 2,
+        tiles: [
+          {
+            key: 'overdue',
+            label: 'Overdue',
+            tone: 'overdue',
+            count: 2,
+            defaultExpanded: false,
+            breakdown: {
+              axis: 'caseType',
+              rows: [{ label: 'Complaints', count: 2 }],
+            },
+          },
+        ],
+      },
+    ],
+  });
+  /** @param {any} state @param {any[]} actions */
+  const render = (state, actions) =>
+    dashboardView(/** @type {any} */ (state), {
+      context: ctx,
+      dispatch: (/** @type {any} */ action) => actions.push(action),
+    });
+  /** @param {any} view @param {string} selector */
+  const inStrip = (view, selector) =>
+    view.querySelector('.cora-kpi-strip')?.querySelector(selector);
+
+  // The lane starts closed, so its tiles are not rendered at all: the header
+  // click is the only way a Reviewer reaches the counts.
+  /** @type {any[]} */
+  const laneActions = [];
+  const closed = render(loaded, laneActions);
+  assert.equal(inStrip(closed, '.cora-kpi-tile'), null);
+  fireEvent(inStrip(closed, '.cora-kpi-lane__header'), 'click');
+  assert.deepEqual(laneActions, [
+    { type: 'kpi/lane-toggled', role: 'reviewer' },
+  ]);
+
+  const open = slice.reducer(loaded, laneActions[0]);
+  /** @type {any[]} */
+  const tileActions = [];
+  const openView = render(open, tileActions);
+  assert.equal(
+    inStrip(openView, '.cora-kpi-tile')?.getAttribute('aria-expanded'),
+    'false'
+  );
+  fireEvent(inStrip(openView, '.cora-kpi-tile'), 'click');
+  assert.deepEqual(tileActions, [
+    { type: 'kpi/tile-toggled', role: 'reviewer', key: 'overdue' },
+  ]);
+
+  const expanded = slice.reducer(open, tileActions[0]);
+  const expandedView = render(expanded, []);
+  assert.equal(
+    inStrip(expandedView, '.cora-kpi-tile')?.getAttribute('aria-expanded'),
+    'true'
+  );
+  assert.equal(inStrip(expandedView, '.cora-kpi-row__count')?.textContent, '2');
+});
+
+test('#544 dashboard Action Centre: its own Open button navigates to the Case', () => {
+  // Deliberately not a Reviewer: the reviewer worklist has an Open button too,
+  // and this assertion must fail when *this* panel stops navigating.
+  const ctx = context(capabilities({ isControls: true }));
+  const slice = createRouteSlice({}, ctx);
+  const route = slice.initialState.routes.dashboard;
+  const [reason] = route.actionCentre.reasons;
+  const state = {
+    ...slice.initialState,
+    routes: {
+      dashboard: {
+        ...route,
+        actionCentre: {
+          ...route.actionCentre,
+          counts: { [reason.id]: 1 },
+          expanded: new Set([reason.id]),
+          pages: {
+            [reason.id]: [
+              {
+                id: 'c7',
+                caseType: 'complaints',
+                title: 'Appealed case',
+                status: 'Completed',
+              },
+            ],
+          },
+        },
+      },
+    },
+  };
+  const view = dashboardView(/** @type {any} */ (state), {
+    context: ctx,
+    dispatch: () => {},
+  });
+
+  location.hash = '';
+  const open = [
+    ...(view.querySelector('.cora-action-centre')?.querySelectorAll('button') ??
+      []),
+  ].find(
+    (/** @type {any} */ button) =>
+      button.getAttribute('aria-label') === 'Open Appealed case'
+  );
+  fireEvent(open, 'click');
+  assert.equal(location.hash, '#/case/complaints/c7');
+});
+
+test('#544 dashboard Action Centre: the group header and Show more reach the panel’s own controller', () => {
+  // `onToggleGroup` and `onShowMore` are the last two Action Centre seams the
+  // page owns. Stubbing either to a no-op used to leave the suite green while
+  // the header stopped expanding and pagination died silently.
+  const ctx = context(capabilities({ isControls: true }));
+  const slice = createRouteSlice({}, ctx);
+  const route = slice.initialState.routes.dashboard;
+  const [reason] = route.actionCentre.reasons;
+  const actionCentre = {
+    ...route.actionCentre,
+    // Five cases behind one loaded row, so the Show more control renders.
+    counts: { [reason.id]: 5 },
+    expanded: new Set([reason.id]),
+    pages: {
+      [reason.id]: [
+        {
+          id: 'c7',
+          caseType: 'complaints',
+          title: 'Appealed case',
+          status: 'Completed',
+        },
+      ],
+    },
+  };
+  /** @type {any[]} */
+  const calls = [];
+  const view = dashboardView(
+    /** @type {any} */ ({
+      ...slice.initialState,
+      routes: { dashboard: { ...route, actionCentre } },
+    }),
+    {
+      context: ctx,
+      dispatch: () => {},
+      actionCentreActions: {
+        toggleNeedsAction: (/** @type {any} */ panel, value) =>
+          calls.push(['scope', panel === actionCentre, value]),
+        toggleGroup: (/** @type {any} */ panel, /** @type {any} */ target) =>
+          calls.push(['group', panel === actionCentre, target.id]),
+        showMore: (/** @type {any} */ panel, /** @type {any} */ target) =>
+          calls.push(['more', panel === actionCentre, target.id]),
+      },
+    }
+  );
+  const group = view
+    .querySelector('.cora-action-centre')
+    ?.querySelector(`[data-reason="${reason.id}"]`);
+  assert.ok(group, 'the reason group is rendered');
+
+  fireEvent(group.querySelector('.cora-ac-group-header'), 'click');
+  assert.deepEqual(calls, [['group', true, reason.id]]);
+
+  fireEvent(group.querySelector('.cora-ac-more'), 'click');
+  assert.deepEqual(calls, [
+    ['group', true, reason.id],
+    ['more', true, reason.id],
+  ]);
+});
+
+test('#544 dashboard Responsible Party panel: Open conversation navigates to the Conversation route', () => {
+  // The embedded panel is the only one that opts into navigation; #/my-cases
+  // deliberately keeps the historic no-navigation Open (see the slice).
+  const ctx = context(capabilities({ isAdviser: true }));
+  const slice = createRouteSlice({}, ctx);
+  const route = slice.initialState.routes.dashboard;
+  const unread = {
+    id: 'c4',
+    caseType: 'complaints',
+    title: 'Unread case',
+    status: 'Actions In Progress',
+    assignedReviewer: 'reviewer',
+    responsibleParty: 'u1',
+    remediationDueDate: '2026-01-01T00:00:00Z',
+    answers: {
+      q1: { value: 'No', remediationActions: [{ id: 'a1', text: 'Fix' }] },
+    },
+    conversation: [
+      { author: 'reviewer', timestamp: '2026-02-01T00:00:00Z', body: 'hi' },
+    ],
+    notes: '',
+    completedAt: null,
+    etag: 'e',
+  };
+  const view = dashboardView(
+    /** @type {any} */ ({
+      ...slice.initialState,
+      routes: {
+        dashboard: {
+          ...route,
+          responsibleParty: { ...route.responsibleParty, cases: [unread] },
+        },
+      },
+    }),
+    { context: ctx, dispatch: () => {} }
+  );
+
+  location.hash = '';
+  fireEvent(
+    getByRole(view, 'button', { name: 'Open conversation for Unread case' }),
+    'click'
+  );
+  assert.equal(location.hash, '#/conversation/complaints/c4');
 });

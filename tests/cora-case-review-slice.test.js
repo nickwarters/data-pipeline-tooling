@@ -3682,3 +3682,132 @@ test('conversationPanelMode defaults to the current page query string', () => {
     /** @type {any} */ (globalThis).location = original;
   }
 });
+
+test('#544 route: the header Conversation button toggles the Conversation panel', () => {
+  const toggleSnapshot = snapshot();
+  toggleSnapshot.machine = { canToggleConversation: true };
+  let state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: toggleSnapshot }
+  );
+
+  const { container, actions } = renderShippedState(state);
+  const host = /** @type {any} */ (
+    container.querySelector('.cora-case-review__conversation')
+  );
+  // The Conversation starts collapsed on every load (#537), so the button is
+  // the only way in.
+  assert.equal(host.hidden, true);
+
+  fireEvent(
+    getByRole(container, 'button', {
+      name: 'Toggle conversation panel (⌥C / Alt+C)',
+    }),
+    'click'
+  );
+  assert.deepEqual(actions, [{ type: 'case/conversation-toggled' }]);
+  assert.equal(host.hidden, false, 'the panel the button dispatched for opens');
+});
+
+/** A Case whose one applicable Question failed and carries a Remediation Action. */
+function remediationSnapshot() {
+  const answers = {
+    q1: {
+      value: 'No',
+      remediationActions: [{ id: 'q1-ra-0', text: 'Fix it' }],
+    },
+  };
+  const catalogue = [
+    {
+      id: 'q1',
+      text: 'Question one',
+      responseType: 'yes-no-na',
+      failureValues: ['No'],
+      remediationActions: ['Fix it'],
+      deprecated: false,
+    },
+  ];
+  const base = snapshot();
+  return {
+    ...base,
+    answers,
+    catalogue,
+    applicableQuestions: catalogue,
+    caseRow: { ...caseRow, status: 'Actions In Progress', answers },
+    access: { ...base.access, remediation: 'read-only' },
+    machine: { canToggleConversation: true, roles: ['responsibleParty'] },
+  };
+}
+
+test('#544 route: the Remediation tab’s Open conversation button opens the Conversation panel', () => {
+  let state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: remediationSnapshot() }
+  );
+  state = caseReviewReducer(state, {
+    type: 'case/tab-selected',
+    id: 'remediation',
+  });
+
+  const { container, actions } = renderShippedState(state);
+  const host = /** @type {any} */ (
+    container.querySelector('.cora-case-review__conversation')
+  );
+  assert.equal(host.hidden, true);
+
+  const open = container
+    .querySelector('#case-panel-remediation')
+    ?.querySelector('.cora-remediation-conversation-btn');
+  assert.ok(open, 'the Remediation pointer to the Conversation is rendered');
+  fireEvent(open, 'click');
+  assert.deepEqual(actions, [{ type: 'case/conversation-toggled' }]);
+  assert.equal(host.hidden, false);
+});
+
+test('#544 route: collapsing an Issue Capture Group dispatches the route’s toggle action', () => {
+  const base = remediationSnapshot();
+  const captureSnapshot = {
+    ...base,
+    access: { ...base.access, issues: 'edit' },
+    machine: { canCapture: true, canSelectRemediation: true },
+    config: {
+      ...base.config,
+      captureGroups: [
+        {
+          key: 'context',
+          label: 'Context',
+          collapsed: false,
+          fields: [{ key: 'summary', label: 'What happened', type: 'text' }],
+        },
+      ],
+    },
+  };
+  let state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: captureSnapshot }
+  );
+  state = caseReviewReducer(state, { type: 'case/tab-selected', id: 'issues' });
+
+  const { container, actions } = renderShippedState(state);
+  /** @returns {any} */
+  const group = () =>
+    container
+      .querySelector('#case-panel-issues')
+      ?.querySelector('.cora-capture-group-header');
+  assert.equal(group()?.getAttribute('aria-expanded'), 'true');
+
+  fireEvent(group(), 'click');
+  assert.deepEqual(actions, [
+    {
+      type: 'case/capture-group-toggled',
+      questionId: 'q1',
+      groupKey: 'context',
+      collapsed: true,
+    },
+  ]);
+  assert.equal(
+    group()?.getAttribute('aria-expanded'),
+    'false',
+    'the group the click dispatched for is the group that collapsed'
+  );
+});
