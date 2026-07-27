@@ -55,6 +55,19 @@ the project exists to avoid.
   would absorb `database is locked` as well, and an absorbed lock timeout on the
   delete-by-logical-run step would silently turn an idempotent replace into a
   duplicate append. Only a genuinely absent table takes the first-run path.
+- **A read path must not write** (#308). Because the journal is a rollback
+  journal, a writer's lock is *exclusive* — it locks readers out, not just other
+  writers. So any statement issued "just in case" on the way to a query is a
+  contention source: the run registry and the orchestration decision store used
+  to run their schema migration (DDL, and a full-table `UPDATE` backfill) on
+  every connection, which meant a read-only `cli status` briefly locked the file
+  against every running pipeline, and with several pipelines running was a
+  plausible source of intermittent, hard-to-attribute `database is locked`.
+  Opening and migrating are now separate steps: migration is attempted once per
+  store instance and writes only when the file is actually behind, so a query
+  takes no write lock. A one-off data backfill records itself in a ledger table
+  written in the same transaction, so it is neither repeated on every open nor
+  skipped when an earlier attempt was interrupted.
 - **The single-writer-per-file rule is load-bearing.** If a second host ever
   writes the same file, corruption risk returns. It is enforced operationally and
   is unaffected by splitting a subject into per-layer pipelines (distinct files).

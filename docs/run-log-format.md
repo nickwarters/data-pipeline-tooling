@@ -107,7 +107,7 @@ appears in the log; `params` is logged but has no column.
 
 | Field       | Type                | Meaning |
 |-------------|---------------------|---------|
-| `timestamp` | string              | ISO-8601 **UTC** instant the record was emitted (step close / run end). The time dimension the run-registry orders by — "latest run per pipeline", "row counts over time". |
+| `timestamp` | string              | ISO-8601 **UTC** instant the record was emitted (step close / run end), timezone-aware and carrying an explicit `+00:00` offset. The time dimension the run-registry orders by — "latest run per pipeline", "row counts over time". See [Instants are UTC, calendar dates are local](#instants-are-utc-calendar-dates-are-local). |
 | `pipeline_run_id` | string        | The pipeline attempt's correlating id (same on every line of the run). The key the registry groups a run's records by. |
 | `logical_run_id` | string \| null | The business run / idempotency key this attempt belongs to (`<label>:<run_date>`). Stable across re-drives of the same run date. |
 | `pipeline`  | string              | The feed/pipeline name (the builder's `name`) or the runner's stable domain label (`<case_type>/<pipeline>`, e.g. `cases/selection`). |
@@ -125,6 +125,38 @@ appears in the log; `params` is logged but has no column.
 | `committed` | bool                | `true` on a step that durably wrote an artifact (`write`, `quarantine` with rejects, `explain`, `checkpoint`) — independently committed evidence that **survives a later step's failure** (ADR-0005). Set only on the success record; `false` everywhere else. |
 | `params`    | object              | The run's parameters, recorded only after caller-side redaction; `{}` when none. Logged for traceability but **not** stored by the registry — it has no column for them. |
 | `profile`   | object \| null      | The per-column statistical profile a `profile` step recorded (#284): a `DatasetProfile` record (`row_count` + per-column `null_rate`, `distinct_count`, `min`/`max`, bounded top-N distribution). `null` on every non-profile step. The registry stores it in a queryable `profile` column and trends it across runs via `recent_profiles(address)`. |
+
+### Instants are UTC, calendar dates are local
+
+Two clocks meet in the run metadata, and mixing them silently is how a nightly
+batch blocks itself on a perfectly fresh upstream. The rule is decided in one
+place — `tools/observability/timestamps.py` (#308) — and every surface reads it
+from there:
+
+- **Instants are UTC.** A record's `timestamp` is a timezone-aware UTC moment,
+  stored as ISO-8601 text with an explicit `+00:00` offset. That is the on-disk
+  format and it is unchanged: it sorts correctly as text and never depends on
+  the reading machine's zone. The orchestration decision store stamps its rows
+  the same way.
+- **Calendar dates are local.** A `run_date` — and an operator's "did last
+  night's run succeed?" — is the box's local calendar date; `run_date` defaults
+  to the local `date.today()`.
+- **Every comparison between the two converts first.** A freshness check takes
+  the **local** date of the stored instant before comparing it with the run
+  date, and a "successes on this run date" query bounds on **local midnight
+  expressed as UTC**, formatted exactly as the emitter formats a record so
+  SQLite's text comparison compares like with like.
+
+The behavioural consequence, and the bug that motivated it: the deployment
+target is a UK box, at UTC+1 for roughly half the year. An upstream that
+succeeded at 00:10 local on the 28th is stamped `2026-07-27T23:10:00+00:00`. A
+downstream starting at 00:30 local on the 28th used to compute `run_date = 28th`
+against a **UTC** `latest_date = 27th` and fail a `.same_day()` requirement —
+blocking as stale twenty minutes after the upstream had succeeded. It now reads
+the local date (the 28th) and proceeds. **This changes which runs count as
+fresh**: a run stamped in the previous UTC day but the same local day is now
+accepted, both by `FreshnessGuard` and by the `orchestrate` plan preview, which
+apply the rule identically.
 
 ### Steps per run
 

@@ -45,12 +45,8 @@ from framework.run import (
 )
 from tools.calendar import WorkingDayCalendar
 from tools.environments import ENV_VAR, known_environments, resolve_base_dir
+from tools.observability.run_store import RunStore
 from tools.orchestration import Orchestrator
-
-# Mirrors the layout PipelineRunner writes: a per-base run registry and the
-# per-case-type JSONL run logs the runner emits alongside it.
-_REGISTRY_RELPATH = ("_registry", "runs.db")
-_RUNS_RELPATH = "_runs"
 
 
 def _resolve_app(name: str):
@@ -113,10 +109,10 @@ def _add_base_dir_args(parser: argparse.ArgumentParser) -> None:
 
 def _open_registry(base_dir: str | Path) -> RunRegistry | None:
     """Open the run registry under ``base_dir``, or ``None`` if none exists yet."""
-    path = Path(base_dir).joinpath(*_REGISTRY_RELPATH)
-    if not path.exists():
+    store = RunStore(base_dir)
+    if not store.registry_path.exists():
         return None
-    return RunRegistry(path)
+    return store.registry()
 
 
 def _load_registry_or_report(base_dir: str | Path) -> RunRegistry | None:
@@ -261,7 +257,7 @@ def _log(args: argparse.Namespace) -> int:
     base_dir = _base_dir_or_report(args)
     if base_dir is None:
         return 1
-    path = base_dir / _RUNS_RELPATH / f"{args.subject}.log"
+    path = RunStore(base_dir).log_path_for(args.subject)
     if not path.exists():
         print(f"no run log at {path}", file=sys.stderr)
         return 1

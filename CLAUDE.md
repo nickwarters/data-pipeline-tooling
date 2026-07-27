@@ -34,7 +34,13 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   the registry's DDL, its additive column migration, the `INSERT`, the row decode
   and the console line are all derived from that one ordered list, so adding a
   field is one entry (#307) — and its order is a live on-disk format, so append,
-  never reorder. Then `case_review/` (the case-review *application* — domain types
+  never reorder. Where a base directory's *run metadata* lands (`_runs/`,
+  `_registry/runs.db`, `_orchestration/runs.db`) is owned by `RunStore` in
+  `tools/observability/run_store.py` — the counterpart of `tools.store`'s
+  `StoreRegistry`, which owns where the *data* lands — and the UTC-instant /
+  local-calendar-date rule every freshness check reads is settled once in
+  `tools/observability/timestamps.py` (#308). Then `case_review/` (the
+  case-review *application* — domain types
   like `CaseType`/`CasePool` and its gold helpers, which live outside the
   framework), `pipelines/` (scripts), `tests/` (pytest, with author test helpers
   in `tests/framework_testing/`), `docs/` (architecture, ADRs).

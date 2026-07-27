@@ -21,15 +21,35 @@ python -m cli <command> ...
 ```
 
 All commands take the **base directory** of the run store — the same path you
-pass to `run`. The runner lays out `<base>/_runs/<pipeline>.log` (the JSONL run
-logs, one per pipeline) and `<base>/_registry/runs.db` (the queryable run
-registry) underneath it; `status` / `runs` / `log` read from there. `orchestrate`
+pass to `run`. The layout underneath it has one owner in code, `RunStore`
+(`tools/observability/run_store.py`, #308), and nothing else spells the
+fragments out:
+
+| Path | What |
+|------|------|
+| `<base>/_runs/<pipeline>.log` | the JSONL run logs, one per subject / path-addressed pipeline |
+| `<base>/_registry/runs.db` | the queryable run registry those logs are ingested into |
+| `<base>/_orchestration/runs.db` | the scheduled-work decision log |
+
+`status` / `runs` / `log` read from there. `orchestrate`
 also writes `<base>/_orchestration/runs.db`, a separate SQLite decision log for
 due, skipped, succeeded, failed, and blocked scheduled items. Each decision
 carries the `logical_run_id` the pass assigned and the `pipeline_run_id` it read
 back, so one orchestration pass joins to every pipeline execution it triggered
 (`pipeline_run_id` is the key into the run registry). Actual pipeline execution
 records remain in `RunLog` / `RunRegistry` only.
+
+The read-only commands (`status`, `runs`, `log`) are **safe to run while
+pipelines are running**. Opening a registry and migrating it are separate steps
+since #308: against an up-to-date file a query opens a connection and reads
+without executing a single write statement, so it takes no write lock and cannot
+collide with a running pipeline's commit. The exception is the *first* open of a
+file that is behind — that one still migrates, and so still writes; if a
+concurrent writer holds the file it fails loudly rather than reading a
+half-migrated table. (WAL is unavailable on a
+network share — ADR-0001 — so a writer's lock is exclusive; before the split,
+every read ran the schema migration first and briefly locked the file against
+every concurrent writer.)
 
 ### The base directory — `--base-dir` or `--env`
 

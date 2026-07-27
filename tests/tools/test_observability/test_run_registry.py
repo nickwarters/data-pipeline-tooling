@@ -795,3 +795,136 @@ def test_ingest_migrates_a_pre_committed_registry_db(tmp_path):
 
     by_step = {r["step"]: r for r in registry.records_for_run(run_id)}
     assert by_step["write"]["committed"] is True
+
+
+# --- migration is a startup concern, not something every query pays for -------
+#
+# Opening a connection and migrating the file are separate jobs. Migration writes
+# (DDL, and a one-off backfill of the step_address column), and with the rollback
+# journal a writer's lock is exclusive — so running it per connection made every
+# read-only operator query briefly lock the registry against running pipelines.
+
+
+_LEGACY_TABLE = """
+    CREATE TABLE run_records (
+        timestamp        TEXT,
+        pipeline_run_id  TEXT NOT NULL,
+        pipeline         TEXT,
+        step             TEXT NOT NULL,
+        step_ordinal     INTEGER NOT NULL,
+        status           TEXT,
+        rows_in          INTEGER,
+        rows_out         INTEGER,
+        duration         REAL,
+        errors           TEXT,
+        warn_hits        TEXT,
+        PRIMARY KEY (pipeline_run_id, step, step_ordinal)
+    )
+"""
+
+_LEGACY_ROWS = [
+    ("2026-07-20T09:00:00+00:00", "old1", "cases/ingest", "run", 0, "ok"),
+    ("2026-07-20T09:00:00+00:00", "old1", "cases/ingest", "read", 0, "ok"),
+]
+
+
+def _legacy_db(path, *, with_step_address: bool = False):
+    """A registry file as an earlier release left it, optionally mid-migration."""
+    con = sqlite3.connect(path)
+    con.execute(_LEGACY_TABLE)
+    if with_step_address:
+        # The state a process that added the column but died before the backfill
+        # committed leaves behind: the column is there, the values are not.
+        con.execute("ALTER TABLE run_records ADD COLUMN step_address TEXT")
+    con.executemany(
+        "INSERT INTO run_records "
+        "(timestamp, pipeline_run_id, pipeline, step, step_ordinal, status) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        _LEGACY_ROWS,
+    )
+    con.commit()
+    con.close()
+    return path
+
+
+def _stored_addresses(path):
+    con = sqlite3.connect(path)
+    try:
+        return dict(con.execute("SELECT step, step_address FROM run_records"))
+    finally:
+        con.close()
+
+
+def test_a_db_predating_step_address_is_migrated_and_backfilled(tmp_path):
+    db_path = _legacy_db(tmp_path / "legacy.db")
+
+    RunRegistry(db_path).query_runs()
+
+    assert _stored_addresses(db_path) == {
+        "run": "cases/ingest",
+        "read": "cases/ingest.read",
+    }
+
+
+def test_an_interrupted_backfill_is_completed_on_the_next_open(tmp_path):
+    # The column already exists, so "backfill only what we just added" would skip
+    # it forever and leave address lookups permanently blind.
+    db_path = _legacy_db(tmp_path / "half.db", with_step_address=True)
+
+    RunRegistry(db_path).query_runs()
+
+    assert _stored_addresses(db_path) == {
+        "run": "cases/ingest",
+        "read": "cases/ingest.read",
+    }
+
+
+def test_a_backfilled_db_carries_its_address_lookups(tmp_path):
+    db_path = _legacy_db(tmp_path / "legacy.db")
+
+    registry = RunRegistry(db_path)
+
+    assert registry.has_successful_address("cases/ingest") is True
+    assert registry.latest_success("cases/ingest") is not None
+
+
+def test_a_read_only_query_takes_no_write_lock(tmp_path):
+    # A concurrent writer holding a RESERVED lock still permits readers. If a
+    # query path migrated, it would try to write and time out instead.
+    log_path = tmp_path / "cases.log"
+    _run_pipeline(log_path)
+    db_path = tmp_path / "registry.db"
+    RunRegistry(db_path).ingest(log_path)
+
+    writer = sqlite3.connect(db_path)
+    writer.execute("BEGIN IMMEDIATE")
+    try:
+        # A fresh instance, so this is the first connect (migration attempt) too.
+        registry = RunRegistry(db_path, busy_timeout_ms=200)
+        assert len(registry.query_runs()) == 1
+        assert registry.latest_run_per_pipeline()
+        assert registry.records_for_address("cases")
+    finally:
+        writer.rollback()
+        writer.close()
+
+
+def test_an_already_migrated_db_is_not_rescanned_to_open_it(tmp_path):
+    # Once the backfill is recorded as applied, opening the file consults the
+    # ledger instead of scanning run_records for outstanding rows.
+    db_path = _legacy_db(tmp_path / "legacy.db")
+    RunRegistry(db_path).query_runs()
+
+    con = sqlite3.connect(db_path)
+    try:
+        applied = [r[0] for r in con.execute("SELECT name FROM registry_migrations")]
+        # A row left NULL by hand is *not* picked up once the ledger says done —
+        # which is exactly what makes the fast path a fast path.
+        con.execute("UPDATE run_records SET step_address = NULL WHERE step = 'read'")
+        con.commit()
+    finally:
+        con.close()
+    assert applied == ["step_address_backfill"]
+
+    RunRegistry(db_path).query_runs()
+    assert _stored_addresses(db_path)["read"] is None

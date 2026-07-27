@@ -16,6 +16,7 @@ from typing import Any
 
 from tools.observability.record_schema import build_run_record
 from tools.observability.run_log import RunLog
+from tools.observability.timestamps import utc_now_iso
 
 __all__ = [
     "RecordingRunLog",
@@ -47,11 +48,13 @@ class RecordingRunLog(RunLog):
         status: str,
         **fields: Any,
     ) -> None:
-        # Built from the same field declaration the file sink uses, so a
-        # captured record really does have the on-disk shape — a field added to
-        # the schema is visible to a test without touching this helper.
+        # Built from the same field declaration the file sink uses, and stamped
+        # from the same clock, so a captured record really does have the on-disk
+        # shape — a field added to the schema is visible to a test without
+        # touching this helper.
         self.records.append(
             build_run_record(
+                timestamp=utc_now_iso(),
                 pipeline_run_id=pipeline_run_id,
                 pipeline=pipeline,
                 step=step,

@@ -800,15 +800,19 @@ re-driven business run reuses for accumulated rows. A run's history label is
 `<case_type>/<pipeline>` when registered with a subject (the registry /
 `orchestrate` path) or the bare `<pipeline>` name when run by path (see below);
 metadata is stored under `<base_dir>/_runs/<label-stem>.log` and
-`<base_dir>/_registry/`.
+`<base_dir>/_registry/`. That layout has a single owner in code — `RunStore`
+(`tools.observability.run_store`), the run-metadata counterpart of
+`tools.store`'s `StoreRegistry` — so the runner, the orchestrator and the
+operator CLI all read the paths from one place rather than each restating them
+(#308).
 
 `run_pipeline` (`framework.run`) is the execution core `PipelineRunner.run`
 delegates to, and the path-addressed `run` command calls directly: given a
 handler, a pipeline `name`, an optional `subject`, an `upstreams` tuple, and
 optional run `params`, it builds the `RunContext`, catches the shared
 `RunRegistry` up from every
-`_runs/*.log` (so an upstream's history is visible regardless of which log
-partitioned it), runs the requirement checks, dispatches the handler, and records
+`_runs/*.log` via `RunStore.catch_up()` (so an upstream's history is visible
+regardless of which log partitioned it), runs the requirement checks, dispatches the handler, and records
 the run summary. Run summary records include the parameters after default
 redaction of likely secret keys.
 
@@ -816,7 +820,12 @@ redaction of likely secret keys.
 `Requirement.succeeded(address).within_days(n)` requires the latest successful
 record for that `RunAddress` to be no older than `n` calendar days before the
 downstream `run_date`; `same_day()` requires a success on the downstream
-`run_date`. Failed upstream records do not count. First-run behavior is explicit:
+`run_date`. "The same day as" is judged in **local** time: the upstream's stored
+`timestamp` is a UTC instant and `run_date` is a local calendar date, so the
+instant is converted to its local date before the comparison (#308 — see
+[run-log-format.md](run-log-format.md#instants-are-utc-calendar-dates-are-local)).
+On a UTC+1 box an upstream that landed at 00:10 local counts as today's run, not
+yesterday's. Failed upstream records do not count. First-run behavior is explicit:
 `.on_first_run("allow")` proceeds silently, `"warn"` proceeds with a `freshness`
 warning, and `"block"` aborts before the handler executes.
 
