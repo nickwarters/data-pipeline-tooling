@@ -364,3 +364,41 @@ test('#516 my team view: clicking a column header dispatches the workload table 
     { type: 'workload-table/sort-requested', key: 'longestHoldDays' },
   ]);
 });
+
+test('my team slice: a client-less mount with a mount signal still degrades to the load-failed message (#545)', async () => {
+  const ctx = context(null);
+  const controller = new AbortController();
+  /** @type {any[]} */
+  const actions = [];
+  /** @type {any[]} */
+  const seenClients = [];
+  const slice = createRouteSlice({}, ctx, {
+    fetchCases: /** @type {any} */ (
+      (/** @type {any} */ client) => {
+        seenClients.push(client);
+        return Promise.reject(new Error('No SharePoint client is available.'));
+      }
+    ),
+  });
+
+  // Binding the mount signal must not be what decides whether the route
+  // survives a context with no client.
+  assert.doesNotThrow(() =>
+    slice.start?.(
+      /** @type {any} */ ({
+        dispatch: (/** @type {any} */ action) => actions.push(action),
+        context: ctx,
+        isActive: () => true,
+        signal: controller.signal,
+      })
+    )
+  );
+
+  for (let i = 0; i < 20; i += 1) await Promise.resolve();
+
+  assert.deepEqual(seenClients, [null], 'there was nothing to wrap');
+  assert.deepEqual(
+    actions.map((action) => action.type),
+    ['workload/refresh-requested', 'workload/load-failed']
+  );
+});

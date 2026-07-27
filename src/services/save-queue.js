@@ -91,14 +91,25 @@ export class SaveQueue {
   /**
    * Initialize ETag and baseline answers from a freshly-fetched CaseRow.
    * Call this after every successful getCase or patchCase.
+   *
+   * **The queue opts out of the mount-lifetime AbortSignal (#545).** A page
+   * hands `loadCase` the same options bag it read the Case with, and after
+   * #545 that bag may carry a route-scoped `signal`. The signal is dropped
+   * here rather than stored: a write must survive navigation — the whole point
+   * of the 1500 ms debounce plus ETag concurrency (ADR-0008) is that an edit
+   * outlives the user moving on — and a cancelled PATCH would silently drop a
+   * Reviewer's Answer. The 412 conflict re-read is part of that write and is
+   * covered by the same rule.
+   *
    * @param {CaseRow} row
-   * @param {CaseListOptions} [opts]
+   * @param {import('../sharepoint-client.js').CaseReadOptions} [opts]
    */
   loadCase(row, opts = {}) {
     const existing = this._state[row.id];
+    const { signal: _mountLifetime, ...writeOpts } = opts;
     this._state[row.id] = {
       etag: row.etag,
-      opts,
+      opts: writeOpts,
       baselineAnswers: row.answers ? { ...row.answers } : null,
       pending: existing?.pending ?? {},
       inFlight: existing?.inFlight ?? new Set(),

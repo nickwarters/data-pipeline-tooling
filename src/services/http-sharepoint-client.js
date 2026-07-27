@@ -6,6 +6,7 @@ import { CASE_STATUS } from '../lib/case-statuses.js';
 /** @typedef {import('../sharepoint-client.js').PersonResult} PersonResult */
 /** @typedef {import('../sharepoint-client.js').ListCasesFilter} ListCasesFilter */
 /** @typedef {import('../sharepoint-client.js').CaseListOptions} CaseListOptions */
+/** @typedef {import('../sharepoint-client.js').CaseReadOptions} CaseReadOptions */
 /** @typedef {import('../sharepoint-client.js').PatchResult} PatchResult */
 /** @typedef {import('../sharepoint-client.js').CurrentUser} CurrentUser */
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
@@ -106,13 +107,13 @@ export class HttpSharePointClient {
 
   /**
    * @param {string} id
-   * @param {CaseListOptions} [opts]
+   * @param {CaseReadOptions} [opts]
    * @returns {Promise<CaseRow|null>}
    */
   async getCase(id, opts = {}) {
     const url = this._listItemUrl(this._requireListName(opts), id);
     try {
-      const body = await this._read(url);
+      const body = await this._read(url, opts.signal);
       return rowFromItem(body, readEtag(body));
     } catch (err) {
       if (/** @type {any} */ (err).status === 404) return null;
@@ -133,7 +134,12 @@ export class HttpSharePointClient {
     try {
       const data = await this._write(url, 'PATCH', { 'If-Match': etag }, body);
       if (data === null) {
-        const row = await this.getCase(id, opts);
+        // The confirmation re-read belongs to the write, not to whoever asked
+        // for it: it is deliberately re-scoped to the list name alone so no
+        // caller-supplied signal can cancel half of a PATCH (#545).
+        const row = await this.getCase(id, {
+          listName: this._requireListName(opts),
+        });
         if (!row) return { ok: false, status: 404 };
         return { ok: true, status: 204, data: row };
       }
@@ -152,7 +158,7 @@ export class HttpSharePointClient {
 
   /**
    * @param {ListCasesFilter} filter
-   * @param {CaseListOptions} [opts]
+   * @param {CaseReadOptions} [opts]
    * @returns {Promise<CaseRow[]>}
    */
   async listCases(filter, opts = {}) {
@@ -177,8 +183,8 @@ export class HttpSharePointClient {
     // unpaged read keeps the historical walk-every-page behaviour.
     const items =
       opts.top !== undefined
-        ? await this._readPage(url)
-        : await this._getAllPages(url);
+        ? await this._readPage(url, opts.signal)
+        : await this._getAllPages(url, opts.signal);
     return items.map((raw) => {
       const item = /** @type {Record<string, unknown>} */ (raw);
       return rowFromItem(item, readEtag(item));
@@ -202,7 +208,7 @@ export class HttpSharePointClient {
    * reason — an unbounded count over a large list would walk every page.
    *
    * @param {ListCasesFilter} filter
-   * @param {CaseListOptions} [opts]
+   * @param {CaseReadOptions} [opts]
    * @returns {Promise<number>}
    */
   async countCases(filter, opts = {}) {
@@ -211,7 +217,8 @@ export class HttpSharePointClient {
     const query = [`$select=Id`, `$top=${COUNT_PAGE_SIZE}`];
     if (expr) query.unshift(`$filter=${encodeURIComponent(expr)}`);
     const items = await this._getAllPages(
-      `${this._listItemsUrl(listName)}?${query.join('&')}`
+      `${this._listItemsUrl(listName)}?${query.join('&')}`,
+      opts.signal
     );
     return items.length;
   }
@@ -404,12 +411,21 @@ export class HttpSharePointClient {
     return data;
   }
 
-  /** @param {string} url @returns {Promise<any>} */
-  async _read(url) {
+  /**
+   * A GET. `signal` is the caller's mount lifetime (#545) and is omitted
+   * entirely when absent, so a read issued without one produces byte-identical
+   * `RequestInit` to before.
+   *
+   * @param {string} url
+   * @param {AbortSignal} [signal]
+   * @returns {Promise<any>}
+   */
+  async _read(url, signal) {
     return this._request(url, {
       method: 'GET',
       credentials: 'include',
       headers: { Accept: ACCEPT_JSON },
+      ...(signal ? { signal } : {}),
     });
   }
 
@@ -417,10 +433,11 @@ export class HttpSharePointClient {
    * Reads a single response page's `value` array without following
    * `odata.nextLink` — the paged-read counterpart to `_getAllPages`.
    * @param {string} url
+   * @param {AbortSignal} [signal]
    * @returns {Promise<unknown[]>}
    */
-  async _readPage(url) {
-    const body = await this._read(url);
+  async _readPage(url, signal) {
+    const body = await this._read(url, signal);
     return Array.isArray(body?.value)
       ? body.value
       : Array.isArray(/** @type {any} */ (body?.d)?.results)
@@ -431,15 +448,16 @@ export class HttpSharePointClient {
   /**
    * Walks `odata.nextLink` (or legacy `__next`) until exhausted.
    * @param {string} initialUrl
+   * @param {AbortSignal} [signal]
    * @returns {Promise<unknown[]>}
    */
-  async _getAllPages(initialUrl) {
+  async _getAllPages(initialUrl, signal) {
     /** @type {unknown[]} */
     const out = [];
     /** @type {string | null} */
     let url = initialUrl;
     while (url) {
-      const body = await this._read(url);
+      const body = await this._read(url, signal);
       const items = Array.isArray(body?.value)
         ? body.value
         : Array.isArray(/** @type {any} */ (body?.d)?.results)
@@ -506,12 +524,22 @@ export class HttpSharePointClient {
 
   /**
    * Wraps fetch with 429 throttle handling. Honors `Retry-After` (seconds or HTTP-date).
+   *
+   * A read carries the caller's mount lifetime on `init.signal` (#545), so the
+   * retry loop rechecks it: without this, an abort during a long `Retry-After`
+   * wait is only noticed by the next `fetch`. The sleep timer itself is still
+   * not cancelled — `_sleep` is an injectable `(ms) => Promise<void>` that
+   * several tests substitute, and giving it a signal would change that seam for
+   * one dangling timer — so the wait runs out and *then* throws. Writes never
+   * set `init.signal`, so they never take this path.
+   *
    * @param {string} url
    * @param {RequestInit} init
    * @returns {Promise<Response>}
    */
   async _fetchWithThrottle(url, init) {
     while (true) {
+      init.signal?.throwIfAborted();
       const res = await this._fetch(url, init);
       if (res.status !== 429) return res;
       const ra = res.headers.get('Retry-After');

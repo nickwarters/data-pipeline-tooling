@@ -4,6 +4,7 @@ import { CASE_STATUS } from '../lib/case-statuses.js';
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').ListCasesFilter} ListCasesFilter */
 /** @typedef {import('../sharepoint-client.js').CaseListOptions} CaseListOptions */
+/** @typedef {import('../sharepoint-client.js').CaseReadOptions} CaseReadOptions */
 /** @typedef {import('../sharepoint-client.js').PatchResult} PatchResult */
 /** @typedef {import('../sharepoint-client.js').PersonResult} PersonResult */
 /** @typedef {import('../sharepoint-client.js').RoadmapItem} RoadmapItem */
@@ -76,12 +77,12 @@ export class MockSharePointClient {
 
   /**
    * @param {string} id
-   * @param {CaseListOptions} [opts]
+   * @param {CaseReadOptions} [opts]
    * @returns {Promise<CaseRow|null>}
    */
   async getCase(id, opts = {}) {
     const c = this._caseStore(opts).find((c) => c.id === id);
-    return c ? { ...c } : null;
+    return settle(opts.signal, c ? { ...c } : null);
   }
 
   /**
@@ -214,7 +215,7 @@ export class MockSharePointClient {
 
   /**
    * @param {ListCasesFilter} filter
-   * @param {CaseListOptions} [opts]
+   * @param {CaseReadOptions} [opts]
    * @returns {Promise<CaseRow[]>}
    */
   async listCases(filter, opts = {}) {
@@ -234,7 +235,10 @@ export class MockSharePointClient {
 
     const skip = opts.skip ?? 0;
     const end = opts.top !== undefined ? skip + opts.top : undefined;
-    return rows.slice(skip, end).map((c) => ({ ...c }));
+    return settle(
+      opts.signal,
+      rows.slice(skip, end).map((c) => ({ ...c }))
+    );
   }
 
   /**
@@ -243,11 +247,14 @@ export class MockSharePointClient {
    * without ever holding the matched rows in memory.
    *
    * @param {ListCasesFilter} filter
-   * @param {CaseListOptions} [opts]
+   * @param {CaseReadOptions} [opts]
    * @returns {Promise<number>}
    */
   async countCases(filter, opts = {}) {
-    return this._caseStore(opts).filter(this._predicate(filter)).length;
+    return settle(
+      opts.signal,
+      this._caseStore(opts).filter(this._predicate(filter)).length
+    );
   }
 
   /** @returns {Promise<RoadmapItem[]>} */
@@ -332,6 +339,38 @@ export class MockSharePointClient {
   async getVersionedExport(_slug, hash) {
     return this._versionedExports[hash] ?? null;
   }
+}
+
+/**
+ * Honour a read's `AbortSignal` (#545). A mock that ignored cancellation
+ * entirely would make every test of the new behaviour a lie, so a signalled
+ * read yields a turn and re-checks, and a caller that aborts within that window
+ * gets the rejection a real `fetch` would give it.
+ *
+ * The window is honestly small: exactly one microtask. A real navigation aborts
+ * many macrotasks after the read was issued, by which time the mock has already
+ * resolved — so under `?mock=1` an abort will usually *not* fire, and the mock
+ * models the contract rather than the timing. Widening it would mean a
+ * wall-clock delay, which `tests/timing-assumptions-contract.test.js` bans, and
+ * would slow every mock-first read to buy nothing the tests need. Tests that
+ * want a genuinely in-flight read use a promise that settles only on abort.
+ *
+ * A read with no signal keeps the previous synchronous settling, so nothing
+ * about the existing mock-first loop shifts by a microtask.
+ *
+ * Writes are absent from this path on purpose: `patchCase` is not cancellable.
+ *
+ * @template T
+ * @param {AbortSignal | undefined} signal
+ * @param {T} value
+ * @returns {Promise<T>}
+ */
+async function settle(signal, value) {
+  if (!signal) return value;
+  signal.throwIfAborted();
+  await Promise.resolve();
+  signal.throwIfAborted();
+  return value;
 }
 
 /** @param {CaseRow} row */

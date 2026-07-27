@@ -1,6 +1,8 @@
 // @ts-check
 import { h } from '../lib/html.js';
 import { patchRoute } from '../core/route-state.js';
+import { ignoreAbortError } from '../lib/abort.js';
+import { withAbortSignal } from '../services/abortable-client.js';
 import { caseRouteFor } from '../lib/case-route-links.js';
 import { fetchJourneyCases } from '../services/journey-cases-fetcher.js';
 import {
@@ -86,12 +88,14 @@ export function createRouteSlice(
     view: journeyCasesView,
     start(/** @type {any} */ tools) {
       if (!tools.context.client) return;
-      void fetchCases(
-        tools.context.client,
-        tools.context.journeyCaseSources
-      ).then((cases) => {
-        if (tools.isActive()) tools.dispatch({ type: 'cases/loaded', cases });
-      });
+      // The signal cancels the per-source fan-out on navigation; the
+      // isActive() guard still stops a late dispatch (#545 / #517).
+      const client = withAbortSignal(tools.context.client, tools.signal);
+      void fetchCases(client, tools.context.journeyCaseSources)
+        .then((cases) => {
+          if (tools.isActive()) tools.dispatch({ type: 'cases/loaded', cases });
+        })
+        .catch(ignoreAbortError);
     },
   };
 }

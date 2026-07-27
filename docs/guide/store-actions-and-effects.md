@@ -126,7 +126,57 @@ Do not hand-roll a `let active = true` latch and a teardown that flips it; that
 is the same lifetime reimplemented, and forgetting it dispatches into a disposed
 store.
 
-`tools` also carries `signal`, the same lifetime in `AbortSignal` form. It is
-**reserved, not yet honoured**: `SharePointClient` takes no `AbortSignal`
-(#545), so passing it to a request today aborts nothing and the request runs to
-completion. Use `isActive()` until #545 lands.
+`tools` also carries `signal`, the same lifetime in `AbortSignal` form, and it
+is honoured (#545). Bind it to the client's reads once, at the top of the
+effect:
+
+```js
+import { ignoreAbortError } from '../lib/abort.js';
+import { withAbortSignal } from '../services/abortable-client.js';
+
+start(tools) {
+  const client = withAbortSignal(tools.context.client, tools.signal);
+  void fetchCases(client, tools.context.caseSources)
+    .then((cases) => {
+      if (tools.isActive()) tools.dispatch({ type: 'cases/loaded', cases });
+    })
+    .catch(ignoreAbortError);
+}
+```
+
+The two guards are complementary, not alternatives: the signal stops the
+**request**, `isActive()` stops the **dispatch**. Keep both.
+
+An aborted read rejects, and that rejection must go no further than the effect
+that issued it. `ignoreAbortError` swallows an abort and rethrows anything else,
+so navigation never renders a `cora-route-error`, never raises a toast, and
+never dispatches a `load-failed`. An effect that already routes failures through
+an `isActive()`-guarded rejection handler is covered as it stands — an abort
+arrives with the lifetime already over.
+
+`withAbortSignal` binds **reads only** (`getCase`, `listCases`, `countCases`).
+Writes are deliberately excluded: a queued edit must survive the user moving on,
+which is what the 1500 ms debounce plus ETag concurrency buys. `SaveQueue` holds
+the raw client and drops any `signal` passed to `loadCase`, so handing an effect's
+read options straight to the queue is safe.
+
+Bind only where there is a client to bind. A route can be mounted with no
+client at all, and pages already guard for that; do the wrap **inside** that
+guard, so a client-less mount still degrades the way it used to instead of
+failing the route. (`withAbortSignal` also returns a falsy client unchanged, as
+a second layer — but the guard is the design.)
+
+**The migration is partial.** #545 bound the signal on the pages that fan out
+across Case sources, where cancellation actually pays: the Dashboard, Team
+Cases, Journey Cases, My Team, and the Responsible Party dashboard. These still
+issue **unsignalled** reads and are follow-up work, not oversights:
+
+| Page                                      | Why it was left                              |
+| ----------------------------------------- | -------------------------------------------- |
+| `pages/cora-case-review.js`               | single-Case load, entangled with `SaveQueue` |
+| `pages/cora-conversation-view.js`         | single-Case load                             |
+| `pages/roadmap.js`                        | `listRoadmapItems()` takes no options bag    |
+| `pages/question-bank/cora-bank-editor.js` | sample/bank loads, not Case reads            |
+
+When adding a read to one of those, binding the signal is the improvement, not
+a deviation.

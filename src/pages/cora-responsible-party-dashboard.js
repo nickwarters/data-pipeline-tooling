@@ -1,4 +1,6 @@
 // @ts-check
+import { ignoreAbortError } from '../lib/abort.js';
+import { withAbortSignal } from '../services/abortable-client.js';
 import { setRoute } from '../core/route-state.js';
 import { conversationRouteFor } from '../lib/case-route-links.js';
 import { navigateTo } from '../lib/navigate.js';
@@ -114,12 +116,18 @@ export function createRouteSlice(
       const client = tools.context.client;
       const currentUserId = tools.context.chrome.currentUser.id;
       if (!client || !currentUserId) return;
-      void listAcrossSources(client, tools.context.caseSources, {
-        responsibleParty: currentUserId,
-      }).then((cases) => {
-        if (tools.isActive())
-          tools.dispatch({ type: 'responsible-party/loaded', cases });
-      });
+      // The signal cancels the per-source fan-out on navigation; the
+      // isActive() guard still stops a late dispatch (#545 / #517).
+      void listAcrossSources(
+        withAbortSignal(client, tools.signal),
+        tools.context.caseSources,
+        { responsibleParty: currentUserId }
+      )
+        .then((cases) => {
+          if (tools.isActive())
+            tools.dispatch({ type: 'responsible-party/loaded', cases });
+        })
+        .catch(ignoreAbortError);
     },
   };
 }

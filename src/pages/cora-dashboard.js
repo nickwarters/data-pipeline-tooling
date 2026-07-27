@@ -1,4 +1,6 @@
 // @ts-check
+import { ignoreAbortError } from '../lib/abort.js';
+import { withAbortSignal } from '../services/abortable-client.js';
 import { h } from '../lib/html.js';
 import { patchRoute } from '../core/route-state.js';
 import { caseRouteFor } from '../lib/case-route-links.js';
@@ -270,6 +272,14 @@ export function createRouteSlice(
 
   /** @type {any} */
   let effectTools = null;
+  // The mount lifetime bound to the client's reads (#545). Every dashboard
+  // panel fans out one request per Case source (ADR-0022), so navigating away
+  // mid-load is exactly where cancellation pays. Null until `start()` binds it
+  // — and it stays null when the mount has no client at all. Deliberately not
+  // used by the allocation claim's own read/write/read cycle below: that
+  // belongs to the write.
+  /** @type {null | import('../sharepoint-client.js').SharePointClient} */
+  let readClient = null;
   let allocationRequestActive = false;
 
   /**
@@ -295,17 +305,24 @@ export function createRouteSlice(
   }
 
   async function refreshReviewerCases() {
-    const client = effectTools?.context.client;
+    // `readClient` and `effectTools` are set and cleared together, so this is
+    // the single source: there is no unwrapped client to fall back to.
+    const client = readClient;
     const capabilities = effectTools?.context.chrome.permissions;
     if (!client || !capabilities?.isReviewer) return;
-    const rows = await listAcrossSources(
-      client,
-      effectTools.context.caseSources,
-      {
+    /** @type {import('../sharepoint-client.js').CaseRow[]} */
+    let rows;
+    try {
+      rows = await listAcrossSources(client, effectTools.context.caseSources, {
         status: CASE_STATUS.IN_PROGRESS,
         assignedReviewer: effectTools.context.chrome.currentUser.id,
-      }
-    );
+      });
+    } catch (error) {
+      // Navigation cancelled the fan-out. That is not a dashboard failure:
+      // nothing is dispatched, nothing is rendered, nothing is toasted (#545).
+      ignoreAbortError(error);
+      return;
+    }
     if (effectsActive()) {
       effectTools.dispatch({
         type: 'reviewer-cases/loaded',
@@ -316,14 +333,21 @@ export function createRouteSlice(
 
   /** @param {ReturnType<typeof initialActionCentreState>} actionState */
   async function refreshActionCounts(actionState) {
-    const client = effectTools?.context.client;
+    const client = readClient;
     if (!client || typeof client.countCases !== 'function') return;
-    const loaded = await loadActionCounts({
-      client,
-      sources: effectTools.context.caseSources,
-      reasons: actionState.reasons,
-      currentUserId: effectTools.context.chrome.currentUser.id,
-    });
+    /** @type {Awaited<ReturnType<typeof loadActionCounts>>} */
+    let loaded;
+    try {
+      loaded = await loadActionCounts({
+        client,
+        sources: effectTools.context.caseSources,
+        reasons: actionState.reasons,
+        currentUserId: effectTools.context.chrome.currentUser.id,
+      });
+    } catch (error) {
+      ignoreAbortError(error);
+      return;
+    }
     if (effectsActive()) {
       effectTools.dispatch({ type: 'action-centre/counts-loaded', ...loaded });
     }
@@ -335,15 +359,22 @@ export function createRouteSlice(
    * @param {number} skip
    */
   async function refreshActionPage(actionState, reason, skip) {
-    const client = effectTools?.context.client;
+    const client = readClient;
     if (!client) return;
-    const loaded = await loadActionPage({
-      client,
-      sources: effectTools.context.caseSources,
-      reason,
-      currentUserId: effectTools.context.chrome.currentUser.id,
-      skip,
-    });
+    /** @type {Awaited<ReturnType<typeof loadActionPage>>} */
+    let loaded;
+    try {
+      loaded = await loadActionPage({
+        client,
+        sources: effectTools.context.caseSources,
+        reason,
+        currentUserId: effectTools.context.chrome.currentUser.id,
+        skip,
+      });
+    } catch (error) {
+      ignoreAbortError(error);
+      return;
+    }
     if (effectsActive()) {
       effectTools.dispatch({
         type: 'action-centre/page-loaded',
@@ -387,6 +418,11 @@ export function createRouteSlice(
   const dashboardActions = {
     async requestNextCase() {
       const tools = effectTools;
+      // Deliberately the raw client: this flow writes, and neither the claim
+      // PATCH nor the availability reads that bracket it may be cancelled
+      // half-way by navigation (#545). Only that bracketed read/write/read
+      // cycle is protected — the `refreshReviewerCases()` below is an ordinary
+      // cancellable read and uses the signalled client like any other.
       const client = tools?.context.client;
       if (!client || allocationRequestActive) return;
       allocationRequestActive = true;
@@ -565,21 +601,27 @@ export function createRouteSlice(
       }),
     start(/** @type {any} */ tools) {
       effectTools = tools;
-      const client = tools.context.client;
       const currentUser = tools.context.chrome.currentUser;
       const capabilities = tools.context.chrome.permissions;
 
-      if (client) {
+      // The wrap happens inside the guard, never before it: a mount with no
+      // client renders an empty dashboard, and binding the mount signal must
+      // not be what turns that into a `cora-route-error` (#545).
+      if (tools.context.client) {
+        const client = withAbortSignal(tools.context.client, tools.signal);
+        readClient = client;
         if (capabilities.ownedCaseTypes.length > 0) {
           void loadOwnerSummary({
             client,
             ownedCaseTypes: capabilities.ownedCaseTypes,
             allCaseSources: tools.context.caseSources,
-          }).then((summaries) => {
-            if (tools.isActive()) {
-              tools.dispatch({ type: 'owner-summaries/loaded', summaries });
-            }
-          });
+          })
+            .then((summaries) => {
+              if (tools.isActive()) {
+                tools.dispatch({ type: 'owner-summaries/loaded', summaries });
+              }
+            })
+            .catch(ignoreAbortError);
         }
         void loadKpis({
           client,
@@ -587,24 +629,31 @@ export function createRouteSlice(
           capabilities,
           caseSources: tools.context.caseSources,
           allCaseSources: tools.context.caseSources,
-        }).then((lanes) => {
-          if (tools.isActive()) tools.dispatch({ type: 'kpis/loaded', lanes });
-        });
-        if (capabilities.isControls) {
-          void loadAppeals(client, tools.context.caseSources).then((cases) => {
+        })
+          .then((lanes) => {
             if (tools.isActive())
-              tools.dispatch({ type: 'appeals/loaded', cases });
-          });
+              tools.dispatch({ type: 'kpis/loaded', lanes });
+          })
+          .catch(ignoreAbortError);
+        if (capabilities.isControls) {
+          void loadAppeals(client, tools.context.caseSources)
+            .then((cases) => {
+              if (tools.isActive())
+                tools.dispatch({ type: 'appeals/loaded', cases });
+            })
+            .catch(ignoreAbortError);
         }
         void refreshReviewerCases();
         if (capabilities.isAdviser) {
           void listAcrossSources(client, tools.context.caseSources, {
             responsibleParty: currentUser.id,
-          }).then((cases) => {
-            if (tools.isActive()) {
-              tools.dispatch({ type: 'responsible-party/loaded', cases });
-            }
-          });
+          })
+            .then((cases) => {
+              if (tools.isActive()) {
+                tools.dispatch({ type: 'responsible-party/loaded', cases });
+              }
+            })
+            .catch(ignoreAbortError);
         }
         if (
           typeof client.countCases === 'function' &&
@@ -625,6 +674,7 @@ export function createRouteSlice(
 
       return () => {
         effectTools = null;
+        readClient = null;
       };
     },
   };

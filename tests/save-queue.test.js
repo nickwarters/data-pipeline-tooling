@@ -723,3 +723,49 @@ test('SaveQueue: writes and conflict refreshes use the Case list options capture
   });
   assert.deepEqual(client.patchCalls[1].opts, { listName: 'complaints' });
 });
+
+test('SaveQueue: a queued write survives navigation — the mount signal never reaches a write (#545)', async () => {
+  const client = makeClient();
+  const controller = new AbortController();
+  const q = new SaveQueue(client, { debounceMs: 0 });
+  // A page that reads with the mount-lifetime signal may hand the very same
+  // options bag to loadCase. The queue must drop the signal: a Reviewer's edit
+  // is persisted whether or not they are still looking at the Case.
+  q.loadCase(BASE_ROW, {
+    listName: 'complaints',
+    signal: controller.signal,
+  });
+
+  q.enqueue('c1', 'notes', 'typed then navigated away');
+  controller.abort();
+  await q.whenIdle();
+
+  assert.equal(client.patchCalls.length, 1, 'the write was still issued');
+  assert.deepEqual(
+    client.patchCalls[0].opts,
+    { listName: 'complaints' },
+    'the write carries no AbortSignal'
+  );
+  assert.equal(client.patchCalls[0].fields.notes, 'typed then navigated away');
+  assert.equal(q.status.get(), 'saved');
+});
+
+test('SaveQueue: a conflict re-read after navigation is not cancelled either', async () => {
+  const client = makeClient({
+    patchResponses: [{ ok: false, status: 412 }],
+    getCaseRow: { ...BASE_ROW, etag: 'etag-2' },
+  });
+  const controller = new AbortController();
+  const q = new SaveQueue(client, { debounceMs: 0 });
+  q.loadCase(BASE_ROW, { listName: 'complaints', signal: controller.signal });
+
+  q.enqueue('c1', 'notes', 'updated');
+  controller.abort();
+  await q.whenIdle();
+
+  assert.deepEqual(client.getCalls[0], {
+    id: 'c1',
+    opts: { listName: 'complaints' },
+  });
+  assert.equal(q.status.get(), 'saved');
+});

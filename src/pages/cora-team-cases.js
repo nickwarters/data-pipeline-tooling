@@ -1,6 +1,8 @@
 // @ts-check
 import { h } from '../lib/html.js';
 import { patchRoute } from '../core/route-state.js';
+import { ignoreAbortError } from '../lib/abort.js';
+import { withAbortSignal } from '../services/abortable-client.js';
 import { caseRouteFor } from '../lib/case-route-links.js';
 import { navigateTo } from '../lib/navigate.js';
 import { fetchTeamCases } from '../services/team-cases-fetcher.js';
@@ -100,7 +102,7 @@ export function teamCasesView(state, tools) {
  *   initialState: TeamCasesState,
  *   reducer: (state: TeamCasesState, action: any) => TeamCasesState,
  *   view: typeof teamCasesView,
- *   start: (tools: { dispatch: (action: any) => any, params: Record<string, string>, context: import('../setup/register-routes.js').AppContext, isActive: () => boolean }) => void,
+ *   start: (tools: { dispatch: (action: any) => any, params: Record<string, string>, context: import('../setup/register-routes.js').AppContext, isActive: () => boolean, signal?: AbortSignal }) => void,
  * }}
  */
 export function createRouteSlice(
@@ -140,14 +142,24 @@ export function createRouteSlice(
       // The router supplies params.queryString for every route — '' when the
       // hash has no query (#548), so there is nothing to fall back to.
       const parsed = parseTeamCasesParams(tools.params.queryString);
+      // The signal cancels the per-source fan-out on navigation; the
+      // isActive() guard still stops a late dispatch (#545 / #517).
+      const readClient = withAbortSignal(client, tools.signal);
       void Promise.all([
-        fetchCases(client, parsed, currentUser.id, tools.context.caseSources),
+        fetchCases(
+          readClient,
+          parsed,
+          currentUser.id,
+          tools.context.caseSources
+        ),
         resolveColumns(parsed.caseType),
-      ]).then(([cases, caseTableColumns]) => {
-        if (tools.isActive()) {
-          tools.dispatch({ type: 'cases/loaded', cases, caseTableColumns });
-        }
-      });
+      ])
+        .then(([cases, caseTableColumns]) => {
+          if (tools.isActive()) {
+            tools.dispatch({ type: 'cases/loaded', cases, caseTableColumns });
+          }
+        })
+        .catch(ignoreAbortError);
     },
   };
 }

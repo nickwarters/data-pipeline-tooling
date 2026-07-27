@@ -504,3 +504,69 @@ test('registerStoreRoute: the guard runs on every mount, not once at registratio
   assert.equal(second.querySelector('h1')?.textContent, 'Eligible');
   assert.equal(guardCalls, 2);
 });
+
+test('store route: unmounting mid-read aborts the request and produces no error UI (#545)', async () => {
+  const { withAbortSignal } =
+    await import('../src/services/abortable-client.js');
+  const { ignoreAbortError } = await import('../src/lib/abort.js');
+  const container = document.createElement('div');
+  /** @type {any[]} */
+  const toasts = [];
+  /** @type {AbortSignal | null} */
+  let readSignal = null;
+  let loadedDispatched = false;
+
+  // A request that is still in flight: it settles only when the server answers
+  // or the caller aborts — the shape MockSharePointClient and fetch both have,
+  // and the only one that can still be pending at unmount.
+  const client = /** @type {any} */ ({
+    listCases: (/** @type {any} */ _filter, /** @type {any} */ opts) =>
+      new Promise((_resolve, reject) => {
+        opts.signal.addEventListener('abort', () => reject(opts.signal.reason));
+      }),
+  });
+
+  const handler = createStoreRoute({
+    load: async () => ({
+      createRouteSlice: () => ({
+        initialState: { cases: null },
+        reducer: (state, action) =>
+          action.type === 'cases/loaded' ? { cases: action.cases } : state,
+        view: () => {
+          const el = document.createElement('p');
+          el.className = 'cora-loaded';
+          return el;
+        },
+        start: (tools) => {
+          const bound = withAbortSignal(
+            /** @type {any} */ (client),
+            tools.signal
+          );
+          readSignal = tools.signal;
+          void bound
+            .listCases({}, { listName: 'L' })
+            .then((cases) => {
+              loadedDispatched = true;
+              if (tools.isActive())
+                tools.dispatch({ type: 'cases/loaded', cases });
+            })
+            .catch(ignoreAbortError);
+        },
+      }),
+    }),
+    context: /** @type {any} */ ({ toasts }),
+  });
+
+  await handler.mount(container, {});
+  handler.unmount();
+  for (let i = 0; i < 20; i += 1) await Promise.resolve();
+
+  assert.equal(/** @type {any} */ (readSignal).aborted, true);
+  assert.equal(loadedDispatched, false, 'the in-flight read never resolved');
+  assert.equal(
+    container.querySelector('.cora-route-error'),
+    null,
+    'an abort is not a route failure'
+  );
+  assert.deepEqual(toasts, [], 'an abort raises no toast');
+});

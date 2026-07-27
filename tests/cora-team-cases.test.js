@@ -336,3 +336,88 @@ test('team cases reducer: an unhandled action returns the same state and chrome 
     initial.routes.teamCases.cases
   );
 });
+
+test('team cases slice: navigating away aborts the per-source fan-out and shows nothing', async () => {
+  /** @type {any[]} */
+  const actions = [];
+  const controller = new AbortController();
+  let aborted = false;
+  const ctx = context();
+  // A request still in flight: it settles only when the caller aborts.
+  ctx.client = {
+    listCases: (/** @type {any} */ _filter, /** @type {any} */ opts) =>
+      new Promise((_resolve, reject) => {
+        opts.signal.addEventListener('abort', () => {
+          aborted = true;
+          reject(opts.signal.reason);
+        });
+      }),
+  };
+
+  const slice = createRouteSlice({ queryString: '' }, ctx, {
+    resolveColumns: async () => [],
+  });
+
+  slice.start?.(
+    /** @type {any} */ ({
+      dispatch: (/** @type {any} */ action) => actions.push(action),
+      params: { queryString: '' },
+      context: ctx,
+      isActive: () => !controller.signal.aborted,
+      signal: controller.signal,
+    })
+  );
+  controller.abort();
+
+  // An unhandled AbortError rejection fails the run under `node --test`, so
+  // draining the effect here also proves the effect handles the abort itself.
+  for (let i = 0; i < 20; i += 1) await Promise.resolve();
+
+  assert.equal(aborted, true, 'the in-flight fan-out read was cancelled');
+  assert.deepEqual(
+    actions,
+    [],
+    'no cases/loaded and no failure action after navigation'
+  );
+  assert.deepEqual(ctx.chrome.toasts, [], 'an abort raises no toast');
+});
+
+test('team cases slice: a read that completes before navigation is unaffected', async () => {
+  const { MockSharePointClient } =
+    await import('../src/services/mock-sharepoint-client.js');
+
+  /** @type {any[]} */
+  const actions = [];
+  const controller = new AbortController();
+  const ctx = context();
+  ctx.client = new MockSharePointClient({
+    personas: { reviewer: { groups: [] } },
+    lists: {
+      'Cases-Complaints': [
+        { ...row('c1'), assignedReviewerManager: 'manager-1' },
+      ],
+    },
+  });
+
+  const slice = createRouteSlice({ queryString: '' }, ctx, {
+    resolveColumns: async () => [],
+  });
+  slice.start?.(
+    /** @type {any} */ ({
+      dispatch: (/** @type {any} */ action) => actions.push(action),
+      params: { queryString: '' },
+      context: ctx,
+      isActive: () => !controller.signal.aborted,
+      signal: controller.signal,
+    })
+  );
+
+  for (let i = 0; i < 20; i += 1) await Promise.resolve();
+
+  assert.equal(actions.length, 1);
+  assert.equal(actions[0].type, 'cases/loaded');
+  assert.deepEqual(
+    actions[0].cases.map((/** @type {any} */ c) => c.id),
+    ['c1']
+  );
+});

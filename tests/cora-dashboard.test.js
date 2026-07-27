@@ -1343,3 +1343,180 @@ test('#516 dashboard view: clicking an appeals column header dispatches the appe
     { type: 'appeals-table/sort-requested', key: 'raised' },
   ]);
 });
+
+test('dashboard slice: navigating away aborts the fan-out reads with no error UI (#545)', async () => {
+  const ctx = context(capabilities({ isReviewer: true }));
+  const controller = new AbortController();
+  let aborted = false;
+  // A request still in flight: it settles only when the caller aborts.
+  ctx.client = {
+    listCases: (/** @type {any} */ _filter, /** @type {any} */ opts) =>
+      new Promise((_resolve, reject) => {
+        opts.signal.addEventListener('abort', () => {
+          aborted = true;
+          reject(opts.signal.reason);
+        });
+      }),
+  };
+  /** @type {any[]} */
+  const actions = [];
+  const slice = createRouteSlice(
+    {},
+    ctx,
+    /** @type {any} */ ({ loadKpis: async () => [] })
+  );
+
+  slice.start({
+    context: ctx,
+    params: {},
+    dispatch: (/** @type {any} */ action) => actions.push(action),
+    listen: () => {},
+    isActive: () => !controller.signal.aborted,
+    signal: controller.signal,
+  });
+  controller.abort();
+
+  // An unhandled AbortError rejection fails the run under `node --test`, so
+  // draining the effects here also proves each one handles its own abort.
+  for (let i = 0; i < 20; i += 1) await Promise.resolve();
+
+  assert.equal(aborted, true, 'the in-flight fan-out read was cancelled');
+  assert.equal(
+    actions.some((action) => action.type === 'reviewer-cases/loaded'),
+    false,
+    'the aborted fan-out dispatches nothing'
+  );
+  assert.deepEqual(ctx.chrome.toasts, [], 'an abort raises no toast');
+});
+
+test('dashboard Action Centre: an aborted count or page load dispatches nothing (#545)', async () => {
+  const ctx = context(capabilities({ isReviewer: true, isAdviser: true }));
+  ctx.client = { countCases() {} };
+  const controller = new AbortController();
+  /** @param {AbortSignal} signal */
+  const abortedRead = (signal) =>
+    Promise.reject(
+      signal.reason ??
+        Object.assign(new Error('aborted'), { name: 'AbortError' })
+    );
+  const slice = createRouteSlice(
+    {},
+    ctx,
+    /** @type {any} */ ({
+      listAcrossSources: async () => [],
+      loadAppeals: async () => [],
+      loadKpis: async () => [],
+      loadOwnerSummary: async () => [],
+      loadActionCounts: () => abortedRead(controller.signal),
+      loadActionPage: () => abortedRead(controller.signal),
+    })
+  );
+  /** @type {any[]} */
+  const actions = [];
+  controller.abort();
+
+  slice.start({
+    context: ctx,
+    params: {},
+    dispatch: (/** @type {any} */ action) => actions.push(action),
+    listen: () => {},
+    isActive: () => !controller.signal.aborted,
+    signal: controller.signal,
+  });
+
+  // An unhandled AbortError rejection fails the run under `node --test`.
+  for (let i = 0; i < 20; i += 1) await Promise.resolve();
+
+  assert.equal(
+    actions.some((action) =>
+      String(action.type).startsWith('action-centre/counts')
+    ),
+    false
+  );
+  assert.equal(
+    actions.some((action) => action.type === 'action-centre/page-loaded'),
+    false
+  );
+  assert.deepEqual(ctx.chrome.toasts, [], 'an abort raises no toast');
+});
+
+test('dashboard Action Centre: an aborted reason-page read renders no rows and no error (#545)', async () => {
+  const ctx = context(capabilities({ isReviewer: true, isAdviser: true }));
+  ctx.client = { countCases() {} };
+  const abortError = Object.assign(new Error('aborted'), {
+    name: 'AbortError',
+  });
+  const slice = createRouteSlice(
+    {},
+    ctx,
+    /** @type {any} */ ({
+      listAcrossSources: async () => [],
+      loadAppeals: async () => [],
+      loadKpis: async () => [],
+      loadOwnerSummary: async () => [],
+      loadActionCounts: async (/** @type {any} */ { reasons }) => ({
+        counts: Object.fromEntries(
+          reasons.map((/** @type {any} */ reason) => [reason.id, 1])
+        ),
+        peeks: Object.fromEntries(
+          reasons.map((/** @type {any} */ reason) => [reason.id, null])
+        ),
+        headline: 1,
+      }),
+      // The user navigated away between the counts and the first page.
+      loadActionPage: () => Promise.reject(abortError),
+    })
+  );
+  /** @type {any[]} */
+  const actions = [];
+
+  slice.start({
+    context: ctx,
+    params: {},
+    dispatch: (/** @type {any} */ action) => actions.push(action),
+    listen: () => {},
+    isActive: () => true,
+    signal: new AbortController().signal,
+  });
+
+  for (let i = 0; i < 20; i += 1) await Promise.resolve();
+
+  assert.equal(
+    actions.some((action) => action.type === 'action-centre/counts-loaded'),
+    true,
+    'the counts that did land are still shown'
+  );
+  assert.equal(
+    actions.some((action) => action.type === 'action-centre/page-loaded'),
+    false,
+    'the aborted page read dispatches nothing'
+  );
+  assert.deepEqual(ctx.chrome.toasts, [], 'an abort raises no toast');
+});
+
+test('dashboard slice: a client-less mount with a mount signal renders an empty dashboard rather than failing the route (#545)', async () => {
+  const ctx = context(capabilities({ isReviewer: true, isControls: true }));
+  ctx.client = null;
+  const controller = new AbortController();
+  /** @type {any[]} */
+  const actions = [];
+  const slice = createRouteSlice({}, ctx);
+
+  // Boot can hand a route a context with no client at all. Binding the mount
+  // signal must not be what decides whether the route survives that.
+  assert.doesNotThrow(() =>
+    slice.start({
+      context: ctx,
+      params: {},
+      dispatch: (/** @type {any} */ action) => actions.push(action),
+      listen: () => {},
+      isActive: () => true,
+      signal: controller.signal,
+    })
+  );
+
+  for (let i = 0; i < 20; i += 1) await Promise.resolve();
+
+  assert.deepEqual(actions, [], 'no client means no loads and no failures');
+  assert.deepEqual(ctx.chrome.toasts, []);
+});

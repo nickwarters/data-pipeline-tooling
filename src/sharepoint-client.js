@@ -320,6 +320,30 @@
  */
 
 /**
+ * A Case **read**'s options: the list options plus the caller's mount-lifetime
+ * `AbortSignal` (#545). A route effect binds it once via
+ * `services/abortable-client.js`, so navigating away cancels the reads the
+ * abandoned page had in flight — which for a page that fans out across Case
+ * sources (ADR-0022) is one request per Case Type list.
+ *
+ * Reads only. A queued write must survive navigation (ADR-0008's debounce +
+ * ETag concurrency); cancelling one would silently drop a Reviewer's edit.
+ * `patchCase` is typed with plain `CaseListOptions` to say so, but do not rely
+ * on the type as the guarantee: JavaScript is structurally typed, and
+ * excess-property checking only fires on object literals, so a variable typed
+ * `CaseReadOptions` passed to `patchCase` type-checks. The protections are the
+ * runtime ones — `withAbortSignal` wraps reads only, `SaveQueue.loadCase`
+ * strips any `signal` from the options it stores, and `HttpSharePointClient`
+ * never reads `opts.signal` on a write path (its 412 confirmation re-read
+ * re-scopes to the list name alone). The read methods that carry no options bag
+ * (`listRoadmapItems`, `searchPeople`, `resolveUsers`, the export reads) are
+ * single, small requests and are deliberately left alone rather than growing a
+ * parameter across both clients for no measurable win.
+ *
+ * @typedef {CaseListOptions & { signal?: AbortSignal }} CaseReadOptions
+ */
+
+/**
  * A directory person returned by `searchPeople`, already reduced to a bare
  * account `loginName` (claims prefix + domain stripped, see the architecture decision).
  *
@@ -378,10 +402,10 @@
  * and HttpSharePointClient satisfy it identically.
  *
  * @typedef {{
- * getCase: (id: string, opts?: CaseListOptions) => Promise<CaseRow|null>,
+ * getCase: (id: string, opts?: CaseReadOptions) => Promise<CaseRow|null>,
  * patchCase: (id: string, fields: Partial<CaseRow>, etag: string, opts?: CaseListOptions) => Promise<PatchResult>,
- * listCases: (filter: ListCasesFilter, opts?: CaseListOptions) => Promise<CaseRow[]>,
- * countCases: (filter: ListCasesFilter, opts?: CaseListOptions) => Promise<number>,
+ * listCases: (filter: ListCasesFilter, opts?: CaseReadOptions) => Promise<CaseRow[]>,
+ * countCases: (filter: ListCasesFilter, opts?: CaseReadOptions) => Promise<number>,
  * getCurrentUserGroups: () => Promise<string[]>,
  * getCurrentUser: () => Promise<CurrentUser>,
  * listRoadmapItems: () => Promise<RoadmapItem[]>,
