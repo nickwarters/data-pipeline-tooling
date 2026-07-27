@@ -48,9 +48,7 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
     the first three; `tests/section-panels.test.js` demands the fourth. The panel map
     lives with the page, not the registry, because `src/lib/` must not import `src/pages/**`.
 - **One authoring model.** Views are synchronous and side-effect free. They do
-  not import clients or persistence services, and application pages do not use
-  the internal notification primitive retained by `SaveQueue` — now its only
-  consumer. Start with
+  not import clients or persistence services. Start with
   [`docs/guide/add-a-page.md`](./docs/guide/add-a-page.md); use
   [`docs/guide/store-actions-and-effects.md`](./docs/guide/store-actions-and-effects.md)
   and [`docs/guide/router.md`](./docs/guide/router.md) as reference.
@@ -164,7 +162,6 @@ src/
     section-labels.js           # DEFAULT_SECTION_LABELS + per-Case-Type sectionLabels overrides
     section-registry.js         # ADR-0032 single source of truth for which Sections exist and their order
     showwhen-tree.js            # generic showWhen tree parse/serialise/mutate (was question-bank/)
-    signal.js                   # internal state/service notification primitive; SaveQueue is its only consumer (#555)
 
   core/                         # store-driven view runtime (ADR-0034)
                                 #   see docs/guide/store-actions-and-effects.md for the contract

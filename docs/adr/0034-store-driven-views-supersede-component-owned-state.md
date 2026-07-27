@@ -10,10 +10,13 @@ which closes decision 7's conditional custom-element seam.
 Implemented through SUNSET-1 on 2026-07-20. The legacy view shell and scroll-
 snapshot helper are deleted, and contract tests now prevent class components,
 legacy view APIs, app-layer signal imports, and view-to-client imports from
-returning. `lib/signal.js` is retained only as an internal notification
-primitive for `SaveQueue` — its last other consumer, the Case Review loader,
-was converted to plain fields in #529 — and application surfaces (`actions`,
-`components`, `pages`, `routes`, `setup`, and `views`) cannot import it.
+returning. `lib/signal.js` is deleted: its last app-layer consumers went with
+this decision, the Case Review loader was converted to plain fields in #529,
+and `SaveQueue` — the only consumer that remained — now notifies status
+subscribers from a plain listener set. The contract test forbidding application
+surfaces (`actions`, `components`, `pages`, `routes`, `setup`, and `views`)
+from importing a signals module is kept as a ratchet against reintroducing
+one.
 
 Supersedes [ADR-0003](./0003-web-components-with-signals.md). Deliberately
 preserves [ADR-0002](./0002-spa-shell-with-hash-routing.md) (SPA shell + hash

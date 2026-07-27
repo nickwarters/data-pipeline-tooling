@@ -5,7 +5,6 @@
 /** @typedef {import('../sharepoint-client.js').PatchResult} PatchResult */
 /** @typedef {import('../sharepoint-client.js').CaseListOptions} CaseListOptions */
 
-import { effect, signal } from '../lib/signal.js';
 
 /** @typedef {'saved' | 'saving' | 'reconnecting' | 'conflict'} SaveStatus */
 
@@ -54,26 +53,49 @@ export class SaveQueue {
         }));
     /** @type {Record<string, CaseState>} */
     this._state = {};
-    this._statusSignal = signal(/** @type {SaveStatus} */ ('saved'));
+    /** @type {SaveStatus} */
+    this._status = 'saved';
+    /** @type {Set<(status: SaveStatus) => void>} */
+    this._statusListeners = new Set();
     /** @type {Set<() => void>} */
     this._idleWaiters = new Set();
   }
 
   /** @returns {{ get: () => SaveStatus }} */
   get status() {
-    return this._statusSignal;
+    return { get: () => this._status };
   }
 
   /**
-   * Observe status transitions without exposing the queue's reactive
-   * implementation to consumers. The listener is called immediately with the
-   * current status and again after each transition.
+   * Observe status transitions. The listener is called immediately with the
+   * current status and again after each transition, including a transition to
+   * the status it already holds.
    *
    * @param {(status: SaveStatus) => void} listener
    * @returns {() => void}
    */
   subscribeStatus(listener) {
-    return effect(() => listener(this._statusSignal.get()));
+    this._statusListeners.add(listener);
+    listener(this._status);
+    return () => this._statusListeners.delete(listener);
+  }
+
+  /**
+   * Set the status and notify. Notification is unconditional — a transition to
+   * the status already held still fires, which is what the retry path relies on
+   * to re-announce 'reconnecting' on each attempt.
+   *
+   * Iterates a copy, and re-checks membership, so a listener that unsubscribes
+   * during notification is not called afterwards.
+   *
+   * @param {SaveStatus} status
+   * @returns {void}
+   */
+  _setStatus(status) {
+    this._status = status;
+    for (const listener of [...this._statusListeners]) {
+      if (this._statusListeners.has(listener)) listener(status);
+    }
   }
 
   /**
@@ -158,7 +180,7 @@ export class SaveQueue {
       const flushed = await this._flush(caseId, pending.value, 0);
       if (!flushed) return false;
     }
-    return this.status.get() !== 'conflict';
+    return this._status !== 'conflict';
   }
 
   /**
@@ -216,7 +238,7 @@ export class SaveQueue {
       }, this._debounceMs),
     };
 
-    this._statusSignal.set('saving');
+    this._setStatus('saving');
   }
 
   /**
@@ -277,7 +299,7 @@ export class SaveQueue {
       this._backoffSchedule[
         Math.min(retryIdx, this._backoffSchedule.length - 1)
       ];
-    this._statusSignal.set('reconnecting');
+    this._setStatus('reconnecting');
     await this._sleep(delay);
     return await this._flushAttempt(caseId, fields, retryIdx + 1);
   }
@@ -293,7 +315,7 @@ export class SaveQueue {
     const fresh = await this._client.getCase(caseId, state.opts);
 
     if (!fresh) {
-      this._statusSignal.set('conflict');
+      this._setStatus('conflict');
       return false;
     }
 
@@ -301,7 +323,7 @@ export class SaveQueue {
     const freshJson = JSON.stringify(fresh.answers ?? {});
 
     if (freshJson !== baseJson) {
-      this._statusSignal.set('conflict');
+      this._setStatus('conflict');
       return false;
     }
 
@@ -319,8 +341,8 @@ export class SaveQueue {
 
   _markSavedIfIdle() {
     if (this._hasWork()) return;
-    if (this.status.get() !== 'conflict') {
-      this._statusSignal.set('saved');
+    if (this._status !== 'conflict') {
+      this._setStatus('saved');
     }
     for (const resolve of this._idleWaiters) resolve();
     this._idleWaiters.clear();
