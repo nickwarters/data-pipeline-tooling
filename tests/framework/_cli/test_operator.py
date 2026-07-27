@@ -186,6 +186,42 @@ def test_dry_run_previews_without_writing_artifacts(tmp_path):
     assert "rows" in result.stdout
 
 
+def test_dry_run_passes_params_to_the_previewed_pipeline(tmp_path):
+    # A preview must see the same run parameters a real run does, or a pipeline
+    # that reads context.params fails only under --dry-run.
+    result = _cli(
+        "run",
+        "clipipelines/_source",
+        "--base-dir",
+        str(tmp_path),
+        "--run-date",
+        "2026-06-22",
+        "--param",
+        "source_file=/share/upstream/claims/claims_20260622_a.csv",
+        "--dry-run",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "source_file=/share/upstream/claims/claims_20260622_a.csv" in result.stdout
+    assert not (tmp_path / "fixture" / "raw.db").exists()
+
+
+def test_orchestrate_unknown_app_reports_clear_error(tmp_path):
+    result = _cli(
+        "orchestrate",
+        "--app",
+        "no_such_app_module",
+        "--base-dir",
+        str(tmp_path),
+        "--run-date",
+        "2026-05-29",
+    )
+
+    assert result.returncode != 0
+    assert "no_such_app_module" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
 def test_run_unknown_pipeline_reports_clear_error(tmp_path):
     result = _cli("run", "clipipelines/nope", "--base-dir", str(tmp_path))
 

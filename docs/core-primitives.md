@@ -881,8 +881,15 @@ def pipeline_builder(path, context):
 ForEach(files, pipeline_builder, logical_run_id=item_run_id).run(context)
 ```
 
-For every item, the orchestrator creates a per-item `RunContext`, calls
-`pipeline_builder(item, context)`, and runs the returned builder. The factory
+For every item, the orchestrator **derives** a per-item `RunContext` from the
+parent (the same `for_nested_pipeline` derivation a bare `p.run()` hop uses,
+with the item's logical run id overriding the parent's), calls
+`pipeline_builder(item, context)`, and runs the returned builder. Deriving rather
+than rebuilding is what keeps the whole context along for the ride: the items
+share the attempt's `pipeline_run_id` (so every record a fan-out produces joins
+back to its run summary) and inherit `params` and the dry-run flag with its
+shared report — so previewing a fan-out previews instead of writing (#300). The
+factory
 must return a **fresh** `Pipeline`; the orchestration object never mutates and
 reuses one builder across items. By default it derives logical ids as
 `<parent logical_run_id>:<index>`; pass `logical_run_id(item, index, context)`

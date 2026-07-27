@@ -108,6 +108,14 @@ dry run — no artifacts were written
       would write 5 row(s)
 ```
 
+A preview runs the handler exactly as a real run does apart from the commits, so
+`--param` applies to `--dry-run` too: `context.params` holds the same values
+under both, and a pipeline that reads `context.params["source_file"]` previews
+without error (#300). The no-write promise covers **every** composition, not just
+a single `Pipeline`: a `ForEach` fan-out previews each item — its per-item
+contexts are derived from the dry-run context, so they carry the flag — and the
+one report accumulates the steps of every item.
+
 A dry run **reads against committed data**: it skips the *current* run's writes,
 so a later hop that reads an intermediate store sees what is already on disk, not
 what this dry run would have written. Land the upstream hops for real once, then
@@ -175,8 +183,13 @@ python -m cli orchestrate [--base-dir DIR] [--env ENV] --app MODULE \
 ```
 
 Runs the configured `PipelineSet`s for the given run date. `--once` performs one
-due-work pass. `--loop` keeps polling the same run date until work due that day
-has settled or the idle poll limit is reached.
+due-work pass and is the default when neither mode is named. `--loop` keeps
+polling the same run date until work due that day has settled or the idle poll
+limit is reached.
+
+A `--app` that names a module which cannot be imported, or which exposes no
+`build_pipeline_sets()`, is a configuration error: it exits non-zero with the
+same clean, traceback-free message every other CLI failure prints.
 
 `orchestrate` runs the **same path-addressed pipelines** as `run`. Each
 `ScheduledPipeline` names a `pipelines/<name>` path; when it comes due the

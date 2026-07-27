@@ -58,8 +58,24 @@ def _resolve_app(name: str):
 
     A thin seam so the framework imports the app by name at runtime (keeping the
     dependency one-way) and so tests can substitute a fake ``build_pipeline_sets``.
+
+    A mistyped or unimportable module is an operator-facing configuration error,
+    so it is raised as :class:`UnknownPipelineError` and rendered through the
+    same clean failure block every other CLI error path uses.
     """
-    return importlib.import_module(name)
+    try:
+        module = importlib.import_module(name)
+    except ImportError as exc:
+        raise UnknownPipelineError(
+            f"cannot import application module {name!r} for --app "
+            "(expected a module exposing build_pipeline_sets(), "
+            "importable from the repo root)"
+        ) from exc
+    if not callable(getattr(module, "build_pipeline_sets", None)):
+        raise UnknownPipelineError(
+            f"application module {name!r} defines no build_pipeline_sets() callable"
+        )
+    return module
 
 
 def _base_dir_or_report(args: argparse.Namespace) -> Path | None:
@@ -145,6 +161,7 @@ def _run(args: argparse.Namespace) -> int:
             base_dir,
             run_date=args.run_date,
             logical_run_id=args.logical_run_id,
+            params=dict(args.params),
             freshness_days=args.freshness_days,
         )
         print(report.render())
@@ -173,13 +190,18 @@ def _orchestrate(args: argparse.Namespace) -> int:
     base_dir = _base_dir_or_report(args)
     if base_dir is None:
         return 1
-    app = _resolve_app(args.app)
     try:
+        app = _resolve_app(args.app)
         orchestrator = Orchestrator(
             app.build_pipeline_sets(),
             WorkingDayCalendar(),
         )
-        if args.loop:
+        # The two modes are mutually exclusive at the parser, and a single pass
+        # is the default when neither is named.
+        if args.once or not args.loop:
+            result = orchestrator.run_due_once(base_dir, run_date=args.run_date)
+            decisions = list(result.decisions)
+        else:
             results = orchestrator.run_until_complete(
                 base_dir,
                 run_date=args.run_date,
@@ -187,9 +209,6 @@ def _orchestrate(args: argparse.Namespace) -> int:
                 max_idle_polls=args.max_idle_polls,
             )
             decisions = [d for result in results for d in result.decisions]
-        else:
-            result = orchestrator.run_due_once(base_dir, run_date=args.run_date)
-            decisions = list(result.decisions)
     except PipelineError as exc:
         print(format_failure(exc), file=sys.stderr)
         return 1
