@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import fields
-from typing import TYPE_CHECKING, get_type_hints
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -35,8 +35,9 @@ from framework._internal.schema import (
     _DTYPE_CHECKS,
     _declared_fields,
     _declared_row_checks,
-    _declared_rules,
+    _resolved_hints,
     _unwrap,
+    evaluate_rules,
 )
 from framework.core.dataset import Dataset
 from framework.core.validators import ValidationError
@@ -51,7 +52,7 @@ def _declared_nullability(schema: type) -> dict[str, bool]:
     ``Annotated[T, Nullable()]`` records the default explicitly. Declaring both
     on one field is a schema configuration error.
     """
-    hints = get_type_hints(schema, include_extras=True)
+    hints = _resolved_hints(schema)
     declared: dict[str, bool] = {}
     for f in fields(schema):
         metadata = _unwrap(hints[f.name])[1]
@@ -78,7 +79,6 @@ class SchemaValidator:
     def __init__(self, schema: type) -> None:
         self._schema = schema
         self._expected = _declared_fields(schema)
-        self._rules = _declared_rules(schema)
         self._row_checks = _declared_row_checks(schema)
         self._nullable = _declared_nullability(schema)
         # Fail at build time on a type the adapter cannot map to a dtype, so a
@@ -114,18 +114,18 @@ class SchemaValidator:
                 ill_typed.add(name)
             elif not self._nullable[name] and frame[name].isna().any():
                 problems.append(f"column {name!r} contains null value(s)")
-        # Value rules run on the same frame, but only over columns
-        # that are present and carry the declared dtype — a wrong-typed column's
+        # Value rules run on the same frame via the shared traversal, but only
+        # over columns that carry the declared dtype — a wrong-typed column's
         # dtype breach is the prior problem to fix, and running e.g. a string rule
-        # over it would report a spurious second failure. Every breach still lands
-        # in the one located message alongside the shape problems.
-        for name, rules in self._rules:
-            if name not in present or name in ill_typed:
+        # over it would report a spurious second failure. A rule whose column is
+        # absent does not run either; the missing column is already reported
+        # above, as the structural breach it is. Every breach still lands in the
+        # one located message alongside the shape problems, phrased with a sample
+        # of the column's offenders — the validator's job is to describe a column.
+        for outcome in evaluate_rules(self._schema, frame, skip_columns=ill_typed):
+            if outcome.missing_column or not outcome.mask.any():
                 continue
-            for rule in rules:
-                breach = rule.check(frame[name])
-                if breach is not None:
-                    problems.append(f"column {name!r} {breach}")
+            problems.append(f"column {outcome.column!r} {outcome.sampled_phrase}")
         # Row checks run last, over the relationship between a row's fields. A
         # check is skipped when any column it spans is missing or ill-typed —
         # the same per-column guard the value rules get, so a broken column
