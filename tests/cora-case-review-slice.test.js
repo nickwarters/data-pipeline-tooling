@@ -214,6 +214,7 @@ function renderShippedState(
     })
   );
   let state = initialState;
+  let active = true;
   /** @type {any[]} */
   const actions = [];
   const container = document.createElement('main');
@@ -230,12 +231,19 @@ function renderShippedState(
       state = slice.reducer(state, action);
       slice.render(container, state, tools);
     },
-    isActive: () => true,
+    isActive: () => active,
   };
   slice.render(container, state, tools);
   const dispose = slice.start(tools);
   return {
     dispose,
+    // Stand in for `createStoreRoute` disposing the mount: after this,
+    // `tools.isActive()` reports false exactly as it would after the reviewer
+    // navigated away mid-effect (#517).
+    deactivate() {
+      active = false;
+      dispose?.();
+    },
     actions,
     container,
     listeners,
@@ -1782,6 +1790,336 @@ test('CASE-4 action: completion flushes saves and persists only the CaseMachine 
   );
   assert.equal(view.state.routes.caseReview.completionPending, false);
   assert.equal(location.hash, '#/dashboard');
+});
+
+test('CASE-4 action: completion folds the persisted transition into the store Case Row (#557)', async () => {
+  // The transition the Case Row must carry afterwards. Correctness here must not
+  // rest on the navigation: the route reads its Case Row from the store, and
+  // completing is the one transition whose fields never reached it — invisible
+  // only because the mount ends. Remove the navigation and this is the
+  // assertion that fails.
+  const transitionPatch = {
+    status: 'Completed',
+    completedAt: '2026-07-19T12:00:00Z',
+    outcomeAtCompletion: 'pass',
+    hadRemediation: false,
+    questionBankVersion: 'bank-hash',
+  };
+  const loadedSnapshot = {
+    ...snapshot(),
+    machine: /** @type {any} */ ({
+      canComplete: true,
+      mayResolveRemediation: false,
+      catalogue: [],
+      transitionToCompleted: () => transitionPatch,
+    }),
+    allAnswered: true,
+    exportHash: 'bank-hash',
+  };
+  const state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: loadedSnapshot }
+  );
+  /** @type {any} */
+  let persistedFields = null;
+  const view = renderShippedState(state, {
+    saveQueue: {
+      async flushCase() {
+        return true;
+      },
+      getEtag: () => 'e1',
+    },
+    client: {
+      async patchCase(/** @type {string} */ _id, /** @type {any} */ fields) {
+        persistedFields = fields;
+        return { ok: true, status: 200 };
+      },
+    },
+  });
+
+  fireEvent(
+    getByRole(view.container, 'button', { name: 'Complete Case' }),
+    'click'
+  );
+  await flush();
+
+  const stored = view.state.routes.caseReview.snapshot.caseRow;
+  assert.equal(persistedFields?.status, 'Completed');
+  assert.equal(
+    stored.status,
+    persistedFields.status,
+    'the store Case Row carries the status that was persisted'
+  );
+  assert.equal(stored.completedAt, persistedFields.completedAt);
+  assert.equal(stored.outcomeAtCompletion, persistedFields.outcomeAtCompletion);
+  // The rest of the row and the rest of the snapshot are carried through, not
+  // replaced by the patch.
+  assert.equal(stored.id, caseRow.id);
+  assert.equal(stored.assignedReviewer, caseRow.assignedReviewer);
+  assert.equal(
+    view.state.routes.caseReview.snapshot.catalogue,
+    loadedSnapshot.catalogue
+  );
+});
+
+test('CASE-4 action: the Send Actions transition folds into the store Case Row too (#557)', async () => {
+  // The non-terminal half of the same path: sending Remediation Actions is not
+  // the end of the Case, yet it goes through `completeCase` and navigates away.
+  // A Case Type that kept the Reviewer in the Remediation loop would read a
+  // pre-transition row on the very next render.
+  const catalogue = [
+    {
+      id: 'q1',
+      text: 'Question one',
+      responseType: 'yes-no-na',
+      failureValues: ['No'],
+      remediationActions: ['Fix it'],
+      deprecated: false,
+    },
+  ];
+  const answers = {
+    q1: {
+      value: 'No',
+      remediationActions: [{ id: 'q1-ra-0', text: 'Fix it' }],
+    },
+  };
+  const transitionPatch = {
+    status: 'Actions In Progress',
+    hadRemediation: true,
+    outcomeAtCompletion: 'fail',
+    questionBankVersion: 'bank-hash',
+  };
+  const loadedSnapshot = {
+    ...snapshot(),
+    catalogue,
+    applicableQuestions: catalogue,
+    answers,
+    caseRow: { ...caseRow, answers },
+    machine: /** @type {any} */ ({
+      canComplete: true,
+      mayResolveRemediation: false,
+      catalogue,
+      transitionToActionsInProgress: () => transitionPatch,
+    }),
+    allAnswered: true,
+    exportHash: 'bank-hash',
+  };
+  const state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: loadedSnapshot }
+  );
+  /** @type {any} */
+  let persistedFields = null;
+  const view = renderShippedState(state, {
+    saveQueue: {
+      async flushCase() {
+        return true;
+      },
+      getEtag: () => 'e1',
+    },
+    client: {
+      async patchCase(/** @type {string} */ _id, /** @type {any} */ fields) {
+        persistedFields = fields;
+        return { ok: true, status: 200 };
+      },
+    },
+  });
+
+  fireEvent(
+    getByRole(view.container, 'button', { name: 'Send Actions' }),
+    'click'
+  );
+  await flush();
+
+  const stored = view.state.routes.caseReview.snapshot.caseRow;
+  assert.equal(persistedFields?.status, 'Actions In Progress');
+  assert.equal(
+    stored.status,
+    persistedFields.status,
+    'the store Case Row carries the sent-actions status that was persisted'
+  );
+  assert.equal(stored.hadRemediation, true);
+  assert.equal(
+    stored.answers,
+    answers,
+    'the Answers on the row are untouched by the lifecycle patch'
+  );
+});
+
+test('CASE-4 action: a failed completion PATCH leaves the store Case Row as it was (#557)', async () => {
+  const loadedSnapshot = {
+    ...snapshot(),
+    machine: /** @type {any} */ ({
+      canComplete: true,
+      mayResolveRemediation: false,
+      catalogue: [],
+      transitionToCompleted: () => ({ status: 'Completed' }),
+    }),
+    allAnswered: true,
+  };
+  const state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: loadedSnapshot }
+  );
+  let attempted = false;
+  const view = renderShippedState(state, {
+    saveQueue: {
+      async flushCase() {
+        return true;
+      },
+      getEtag: () => 'e1',
+    },
+    client: {
+      async patchCase() {
+        attempted = true;
+        return { ok: false, status: 412 };
+      },
+    },
+  });
+
+  fireEvent(
+    getByRole(view.container, 'button', { name: 'Complete Case' }),
+    'click'
+  );
+  await flush();
+
+  // Without this the assertion below would also pass if `completionPatch`
+  // returned null and no write was ever attempted — a rejected write is only
+  // the subject if a write happened.
+  assert.equal(attempted, true, 'the completion PATCH was attempted');
+  assert.equal(
+    view.state.routes.caseReview.snapshot.caseRow.status,
+    'In-progress',
+    'a rejected write must not leave the store claiming the Case is Completed'
+  );
+});
+
+test('CASE-4 action: an Answer edited while the completion PATCH is in flight survives (#557)', async () => {
+  // The whole reason the transition is folded in as a *field patch* rather than
+  // as a replayed snapshot. The click handler's `snapshot`/`caseRow` are as of
+  // the last render — two network round-trips (`flushCase`, then `patchCase`)
+  // before this dispatch lands. Anything that reached the store in that window
+  // would be reverted by a whole-snapshot replace, and the Answer-action owner
+  // re-synced from the stale map on the next render, so the *next* edit would be
+  // built on the stale base and enqueued — losing the edit in SharePoint too.
+  const editedAnswers = { q1: { value: 'Yes' } };
+  const loadedSnapshot = {
+    ...snapshot(),
+    machine: /** @type {any} */ ({
+      canComplete: true,
+      mayResolveRemediation: false,
+      catalogue: [],
+      transitionToCompleted: () => ({
+        status: 'Completed',
+        completedAt: '2026-07-19T12:00:00Z',
+      }),
+    }),
+    allAnswered: true,
+  };
+  const state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: loadedSnapshot }
+  );
+  /** @type {any} */
+  let view;
+  view = renderShippedState(state, {
+    saveQueue: {
+      async flushCase() {
+        return true;
+      },
+      getEtag: () => 'e1',
+    },
+    client: {
+      async patchCase() {
+        // Mid-flight: the Reviewer answers a Question while the write is out.
+        view.dispatch({
+          type: 'case/answers-edited',
+          answers: editedAnswers,
+        });
+        return { ok: true, status: 200 };
+      },
+    },
+  });
+
+  fireEvent(
+    getByRole(view.container, 'button', { name: 'Complete Case' }),
+    'click'
+  );
+  await flush();
+
+  const stored = view.state.routes.caseReview.snapshot;
+  assert.equal(
+    stored.caseRow.status,
+    'Completed',
+    'the lifecycle patch still lands'
+  );
+  assert.deepEqual(
+    stored.answers,
+    editedAnswers,
+    'the concurrent Answer edit is not reverted by the completion dispatch'
+  );
+  assert.deepEqual(
+    stored.caseRow.answers,
+    editedAnswers,
+    'and the row the next Answer edit is built from carries it too'
+  );
+});
+
+test('CASE-4 action: a completion resolving after the mount is disposed dispatches nothing (#517)', async () => {
+  const loadedSnapshot = {
+    ...snapshot(),
+    machine: /** @type {any} */ ({
+      canComplete: true,
+      mayResolveRemediation: false,
+      catalogue: [],
+      transitionToCompleted: () => ({ status: 'Completed' }),
+    }),
+    allAnswered: true,
+  };
+  const state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: loadedSnapshot }
+  );
+  /** @type {() => void} */
+  let release = () => {};
+  const inFlight = new Promise((resolve) => {
+    release = () => resolve(undefined);
+  });
+  const view = renderShippedState(state, {
+    saveQueue: {
+      async flushCase() {
+        return true;
+      },
+      getEtag: () => 'e1',
+    },
+    client: {
+      async patchCase() {
+        await inFlight;
+        return { ok: true, status: 200 };
+      },
+    },
+  });
+
+  fireEvent(
+    getByRole(view.container, 'button', { name: 'Complete Case' }),
+    'click'
+  );
+  await flush();
+  // The Reviewer navigates away while the write is still out.
+  view.deactivate();
+  const dispatched = view.actions.length;
+  release();
+  await flush();
+
+  assert.equal(
+    view.actions.length,
+    dispatched,
+    'neither the row patch nor the pending flag reaches a disposed mount'
+  );
+  assert.equal(
+    view.state.routes.caseReview.snapshot.caseRow.status,
+    'In-progress'
+  );
 });
 
 test('CASE-4 action: a missing CaseMachine transition cannot dispatch completion', async () => {

@@ -432,12 +432,13 @@ export function createInMemoryFlowRunner(state, opts = {}) {
 }
 
 /**
- * Completing a Case is the one transition whose new fields the browser never
- * folds back into the store: on success `completeCase` navigates to the
- * dashboard, so the mount ends and the stale row is unobservable. The runner
- * records that navigation rather than performing it, so a flow may keep acting
- * on the Case afterwards — it returns the persisted patch and the caller applies
- * it, keeping the runner-owned row the row as stored.
+ * Completing a Case persists lifecycle fields that the route now folds back into
+ * its store as a Case Row patch (#557) — it no longer relies on `completeCase`
+ * navigating to the dashboard to make the stale row unobservable. The runner has
+ * no browser to navigate: it records the navigation rather than performing it,
+ * so a flow may keep acting on the Case afterwards. It returns the persisted
+ * patch and the caller applies it, which is how the runner-owned row stays the
+ * row as stored.
  *
  * @param {CaseReviewViewModel} vm
  * @param {CaseRow | null} caseRow The runner-owned Case Row (#530).

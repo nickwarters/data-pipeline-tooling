@@ -166,6 +166,30 @@ export function caseReviewReducer(state, action) {
       activeTab,
     });
   }
+  // The lifecycle fields a completion write persisted, folded into the Case Row
+  // the store holds *now* (#557). Deliberately not `case/model-changed`: that
+  // replaces the whole snapshot, and the only snapshot the click handler can
+  // hand back is the one captured before two network round-trips — so an Answer
+  // or Conversation edit dispatched while the write was in flight would be
+  // reverted, and the Answer-action owner re-synced to the stale map on the next
+  // render. Patching against current state here is the same idiom
+  // `case/answers-edited` below uses.
+  //
+  // `case/model-changed`'s `activeTab` recompute is not wanted and not repeated:
+  // tab visibility reads `snapshot.access` only, which a Case Row patch cannot
+  // move.
+  //
+  // `snapshot.machine` holds its own load-time copy and does not advance with
+  // the row, so on the non-terminal Send Actions path the two now actively
+  // disagree — `machine.mayResolveRemediation` false against a row reading
+  // `Actions In Progress`. That divergence is sanctioned and belongs to #554,
+  // which owns how the machine stops being a separate copy; rebuilding it here
+  // as a side effect is explicitly out of scope.
+  if (action.type === 'case/case-row-patched' && route.snapshot?.caseRow) {
+    return patchSnapshot(state, {
+      caseRow: { ...route.snapshot.caseRow, ...action.fields },
+    });
+  }
   if (action.type === 'case/answers-edited' && route.snapshot) {
     const applicableIds = evaluate(route.snapshot.catalogue, action.answers);
     const applicableQuestions = route.snapshot.catalogue.filter((question) =>
@@ -805,18 +829,41 @@ export function createRouteSlice(params, context) {
                     pending: true,
                   });
                   try {
-                    await completeCase({
+                    const persisted = await completeCase({
                       caseId: caseId(),
                       client: context.client,
                       saveQueue: context.saveQueue,
                       patchFields,
                       caseListOptions: snapshot.caseListOptions,
                     });
+                    // Fold the persisted transition into the store, the same way
+                    // every other Case Row transition does. Until #557 this was
+                    // the one write whose fields never reached the store, and
+                    // the only reason nothing read the stale row was that
+                    // completion navigates away — including on the Send Actions
+                    // path, which is not the end of the Case (#557).
+                    //
+                    // Only the fields travel, never this closure's `snapshot` or
+                    // `caseRow`: both are as of the last render, which is two
+                    // network round-trips ago by the time we get here. The
+                    // reducer patches whatever the store holds now, so a
+                    // concurrent Answer or Conversation edit survives.
+                    if (persisted && tools.isActive()) {
+                      tools.dispatch({
+                        type: 'case/case-row-patched',
+                        fields: patchFields,
+                      });
+                    }
                   } finally {
-                    tools.dispatch({
-                      type: 'case/completion-pending',
-                      pending: false,
-                    });
+                    // Both dispatches are post-`await`, so both take the #517
+                    // guard — dispatching into a disposed mount still runs the
+                    // reducer, and only the render is suppressed.
+                    if (tools.isActive()) {
+                      tools.dispatch({
+                        type: 'case/completion-pending',
+                        pending: false,
+                      });
+                    }
                   }
                 },
               },
