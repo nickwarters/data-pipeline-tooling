@@ -102,7 +102,17 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   rather than silently executing nothing. A node **returns** a `StepResult` (its
   dataset, the metrics only it could know, whether it committed) and never
   records: the wrapper writes **exactly one** run-log record per node execution,
-  so recording lives in one place — #311).
+  so recording lives in one place — #311. `.read_chunks(chunk_reader, name=...,
+  chunk_size=...)` is the **streaming** read (#314): the sub-graph *below* that
+  node is driven once per bounded chunk, so a source too big to hold whole keeps
+  the validators/quarantine/dry-run/profiling/addresses, while the per-chunk
+  records are folded into one summed record per step and every Writer below the
+  source spends the drive inside one `ChunkWritable.writing_chunks()` session.
+  Pairings that cannot be made chunk-safe are refused **at wiring time** with a
+  `PipelineGraphError` naming the component: a target-replacing Writer
+  (`Refresh`, the file Writers), a `whole_dataset` Validator (`UniqueValidator`,
+  `VolumeAnomalyValidator` — `StreamingUniqueValidator` is the surviving form),
+  `explain` (its trace holds every row), and a second streamed source).
 
 ### Commands
 

@@ -10,6 +10,7 @@ only to name a type.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
+from contextlib import AbstractContextManager
 from typing import Literal, Protocol, runtime_checkable
 
 from framework.core.dataset import Dataset
@@ -57,6 +58,30 @@ class Writer(Protocol):
 
     def write(self, dataset: Dataset) -> None:
         """Persist the dataset to this Writer's target."""
+        ...
+
+
+@runtime_checkable
+class ChunkWritable(Protocol):
+    """A Writer that can also take one source's rows as a *sequence* of writes.
+
+    The write-side dual of :class:`ChunkReader`. Handing a plain Writer one chunk
+    at a time is not generally safe: a Writer that replaces its target (a
+    truncate-and-reload, or a delete-then-append keyed by the run) does that
+    replacement on *every* ``write``, so the second chunk would wipe the first.
+    A Writer that can express "these many writes are one logical load" says so by
+    implementing this: ``writing_chunks()`` opens a session and yields the Writer
+    to use for the duration, doing any once-per-load work (the delete of the
+    run's prior rows) exactly once on entry rather than once per chunk.
+
+    Deliberately opt-in and separate from :class:`Writer`. A Writer that cannot
+    express it simply does not implement it, and pairing it with a chunked read
+    is refused when the graph is wired instead of corrupting the target at run
+    time.
+    """
+
+    def writing_chunks(self) -> AbstractContextManager[Writer]:
+        """Open a session whose many writes land as one logical load."""
         ...
 
 

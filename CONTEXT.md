@@ -313,6 +313,19 @@ plan item. One rule, two presentations: a plan preview whose promise is *this is
 what will happen* cannot describe a block in different words than the run that
 enforces it.
 
+### Streamed Feed
+A **Feed** whose source is too large to hold whole (a 100M-row SAS extract), read
+as a *sequence of bounded `Dataset`s* rather than one. Wired into the deferred
+`Pipeline` with **`.read_chunks(...)`**, which drives the sub-graph below it once
+per chunk, so a Streamed Feed keeps the validators, quarantine, dry run,
+profiling, run addresses and per-step run records an ordinary Feed gets — the
+per-chunk records folded into **one summed record per step**. The in-memory
+`Dataset` contract (ADR-0002) holds **per chunk**, never for the source; there is
+no lazy carrier. Pairings that cannot be made chunk-safe are refused **at wiring
+time**, before a byte is read: a Writer that replaces its target, a Validator
+that needs the whole population, and the row-level `explain` trace. See
+`docs/streaming-large-sources.md` and the ADR-0002 amendment (#314).
+
 ## Relationships
 
 - A **Case** is produced by exactly one **feed** but conforms to a single common shape regardless of origin
@@ -372,5 +385,6 @@ So **CasePool** and **SelectionPool** relate to **Ingest** and **Selection** onl
 - **Selection's two writes (gold audit + Deliverable)** — RESOLVED: Selection both writes the **SelectionPool** to its gold (audit trail) and emits it as a **Deliverable** to the SharePoint list. These are **two pipelines, not one run with two writes**: the Selection pipeline lands gold, then a **second pipeline reads the gold SelectionPool and writes to the SharePoint list** — consistent with ADR-0009's "single-Writer pipelines over a shared source" (no multi-Writer terminus, no checkpoint required). Mid-run lineage (a `.write()` node placed mid-graph) is a separate, general-purpose feature and is **not** the mechanism here.
 - **One feed, many tables** — RESOLVED (ADR-0009): the old "one feed → one silver table → one gold table" assumption is dropped. A Feed yields **one Case table and zero or more Detail Tables**; the wide feed is fanned out by **N single-table pipelines over the shared raw table**, each projecting its columns and sharing one reusable normalisation `Processor`. No new core seam (rejected a multi-Writer terminus and a splitting Processor — both break the single-Writer/single-Dataset shape). Built through `SelectColumns`, `Unpivot`, `DeriveKey`, `LatestPerKey`, `UniqueValidator`, and the case-review gold helpers.
 - **Case identity** — RESOLVED (ADR-0009): a Case's identity is a **deterministic** surrogate `case_id = uuid5(case_type_namespace, natural_key)`, derived from the feed's stable natural key — same Case → same id every run/machine, so idempotency holds and the Case ↔ Detail link needs no join. A random `uuid4` is rejected (breaks idempotency); a persistent identity map is the deferred fallback for a feed with no natural key.
+- **Streaming vs the small-volume premise** — RESOLVED (ADR-0002 amendment, #314): ADR-0002's Consequences said volumes were small (≤ ~1M rows/feed/run) so "no chunking/streaming machinery is needed up front. Revisit only if a feed grows large." A feed *did* grow large (~100M rows, ~500MB landed per run, ~1.5GB after three — #287) and the revisit happened in code, but the ADR was never amended and so contradicted both the code and `docs/streaming-large-sources.md` while carrying `status: accepted`. Now amended. The **opaque-carrier decision stands unchanged**: the in-memory contract holds per chunk, there is no lazy `Dataset` variant, and `ChunkReader` is deliberately *not* unified with `Reader` by a materialising `read()`. Only the volume premise is corrected.
 - **Load strategy vs layer** — RESOLVED (ADR-0004): load strategy is **per-feed, owned by the Writer**; the Store maps `layer → location` only (no load decision). The global "refresh upstream / accumulate downstream" rule becomes the *default* profile, not a law. Ingest can adopt **history-upstream / current-gold**; Selection/Sync/Reporting keep accumulate-by-run gold. Consequence: where the source is destructive, accumulated raw/silver are a **system of record** (backup matters) and volume grows `records × snapshots`. Built through explicit Writer strategies (`Refresh`, `AccumulateByRun`, `UpsertStrategy`, `InsertOrIgnore`, `InsertIfAbsent`), each of which mints the Writer that implements it (#305).
 - **Atomicity of run artifacts (publish unit)** — RESOLVED (ADR-0005): a run's artifacts — **quarantine** rejects, the **Selection trace**, **checkpoints**, and the final output — are **independently committed evidence**, *not* one all-or-nothing publish unit. Atomicity is **per writer, per layer DB** (a single delete+insert), not across writers; an abort *after* an artifact write leaves that artifact on disk. Chosen deliberately: evidence is most valuable when the run then fails. Each run-log step carries a **`committed`** marker so operators can see what landed before an abort — and, since #311, each step carries exactly one such record. Hardening the per-writer transaction itself is a separate concern.
