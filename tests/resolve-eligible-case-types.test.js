@@ -11,6 +11,7 @@ import {
 } from '../src/setup/resolve-eligible-case-types.js';
 import { permissions } from '../src/services/permissions.js';
 import { CASE_TYPE_IMPORTERS } from '../case-types/manifest.js';
+import { captureConsoleError } from './_console.js';
 
 /** @param {Partial<import('../src/sharepoint-client.js').CaseTypeConfig>} overrides */
 function minimalConfig(overrides = {}) {
@@ -70,9 +71,7 @@ test('resolveCaseSourcesFromCaseTypes: carries the optional allocation limit fro
   ]);
 });
 
-test('allocationSourcesFromCaseSources: isolates an invalid limit to that Case Type', () => {
-  /** @type {Error[]} */
-  const errors = [];
+test('allocationSourcesFromCaseSources: isolates an invalid limit to that Case Type', async () => {
   const caseSources = resolveCaseSourcesFromCaseTypes(
     ['Reviewer Managers'],
     [
@@ -91,16 +90,22 @@ test('allocationSourcesFromCaseSources: isolates an invalid limit to that Case T
     ]
   );
 
-  assert.deepEqual(
-    allocationSourcesFromCaseSources(caseSources, (error) =>
-      errors.push(error)
-    ),
-    [{ slug: 'example-review', listName: 'Cases-ExampleReview' }]
+  const { result, logged } = await captureConsoleError(() =>
+    allocationSourcesFromCaseSources(caseSources)
   );
+
+  assert.deepEqual(result, [
+    { slug: 'example-review', listName: 'Cases-ExampleReview' },
+  ]);
   assert.equal(caseSources.length, 2, 'other app surfaces keep both sources');
-  assert.match(
-    errors[0]?.message ?? '',
-    /Case Type "complaints" maxInProgressCases must be a positive integer/
+  assert.equal(logged.length, 1, 'the invalid limit is reported once');
+  assert.ok(
+    logged[0].some((arg) =>
+      /Case Type "complaints" maxInProgressCases must be a positive integer/.test(
+        arg?.message ?? ''
+      )
+    ),
+    'the reported error names the Case Type and the constraint'
   );
 });
 
@@ -477,7 +482,7 @@ test('resolveCaseSources: returns no sources when the user holds no matching gro
 });
 
 test('resolveAppCaseSources: threads only a Case Type Owner eligible source to app surfaces', async () => {
-  const context = await resolveAppCaseSources(
+  const context = await quietlyResolveAppCaseSources(
     ['CaseTypeOwner - Complaints'],
     []
   );
@@ -502,6 +507,43 @@ const brokenImporter = () => {
 };
 
 /** @param {Partial<Record<string, any>>} [overrides] */
+/**
+ * `resolveAppCaseSources` / `resolveCaseSources` with the console captured.
+ *
+ * Several tests below deliberately feed in a Case Type that cannot load, to
+ * prove the failure is contained. Containment reports to `console.error` and
+ * takes no reporter seam, so these wrappers keep an intentional failure from
+ * printing noise into an otherwise clean run. A test that asserts on what was
+ * logged calls the real function through `captureConsoleError` instead.
+ *
+ * @param {Parameters<typeof resolveAppCaseSources>[0]} userGroups
+ * @param {Parameters<typeof resolveAppCaseSources>[1]} ownedJourneyCaseTypes
+ * @param {Parameters<typeof resolveAppCaseSources>[2]} [options]
+ * @returns {ReturnType<typeof resolveAppCaseSources>}
+ */
+async function quietlyResolveAppCaseSources(
+  userGroups,
+  ownedJourneyCaseTypes,
+  options
+) {
+  const { result } = await captureConsoleError(() =>
+    resolveAppCaseSources(userGroups, ownedJourneyCaseTypes, options)
+  );
+  return result;
+}
+
+/**
+ * @param {Parameters<typeof resolveCaseSources>[0]} userGroups
+ * @param {Parameters<typeof resolveCaseSources>[1]} [options]
+ * @returns {ReturnType<typeof resolveCaseSources>}
+ */
+async function quietlyResolveCaseSources(userGroups, options) {
+  const { result } = await captureConsoleError(() =>
+    resolveCaseSources(userGroups, options)
+  );
+  return result;
+}
+
 function importersWithBrokenExampleReview(overrides = {}) {
   return /** @type {any} */ ({
     complaints: CASE_TYPE_IMPORTERS['complaints'],
@@ -511,16 +553,13 @@ function importersWithBrokenExampleReview(overrides = {}) {
 }
 
 test('containment: drops the Case Type whose module throws and keeps the rest', async () => {
-  /** @type {any[]} */
-  const reported = [];
-  const { caseSources, unavailableCaseTypes } = await resolveAppCaseSources(
-    ['Reviewer Managers'],
-    [],
-    {
+  const { result, logged } = await captureConsoleError(() =>
+    resolveAppCaseSources(['Reviewer Managers'], [], {
       importers: importersWithBrokenExampleReview(),
-      reportUnavailable: (failure) => reported.push(failure),
-    }
+    })
   );
+  const { caseSources, unavailableCaseTypes } =
+    /** @type {Awaited<ReturnType<typeof resolveAppCaseSources>>} */ (result);
 
   assert.deepEqual(
     caseSources.map((source) => source.slug),
@@ -534,26 +573,23 @@ test('containment: drops the Case Type whose module throws and keeps the rest', 
     })),
     [{ slug: 'example-review', displayName: 'Example Review' }]
   );
-  assert.equal(reported.length, 1, 'the failing slug is reported once');
-  assert.equal(reported[0].slug, 'example-review');
+  assert.equal(logged.length, 1, 'the failing slug is reported once');
   assert.ok(
-    reported[0].error instanceof SyntaxError,
+    logged[0].some((arg) => String(arg).includes('example-review')),
+    'the failing slug is named'
+  );
+  assert.ok(
+    logged[0].some((arg) => arg instanceof SyntaxError),
     'the underlying error is carried, not swallowed'
   );
 });
 
 test('containment: logs the failing slug and its error by default', async () => {
-  const original = console.error;
-  /** @type {any[][]} */
-  const logged = [];
-  console.error = (...args) => logged.push(args);
-  try {
-    await resolveCaseSources([], {
+  const { logged } = await captureConsoleError(() =>
+    resolveCaseSources([], {
       importers: /** @type {any} */ ({ 'example-review': brokenImporter }),
-    });
-  } finally {
-    console.error = original;
-  }
+    })
+  );
 
   assert.equal(logged.length, 1);
   assert.ok(
@@ -567,9 +603,8 @@ test('containment: logs the failing slug and its error by default', async () => 
 });
 
 test('containment: falls back to the slug when the failure has no registered display name', async () => {
-  const { unavailableCaseTypes } = await resolveAppCaseSources([], [], {
+  const { unavailableCaseTypes } = await quietlyResolveAppCaseSources([], [], {
     importers: /** @type {any} */ ({ 'not-registered': brokenImporter }),
-    reportUnavailable: () => {},
   });
 
   assert.deepEqual(
@@ -582,7 +617,7 @@ test('containment: falls back to the slug when the failure has no registered dis
 });
 
 test('containment: an unregistered slug is dropped, never resolved namelessly', async () => {
-  const { caseSources, unavailableCaseTypes } = await resolveAppCaseSources(
+  const { caseSources, unavailableCaseTypes } = await quietlyResolveAppCaseSources(
     ['Reviewer Managers'],
     [],
     {
@@ -591,7 +626,6 @@ test('containment: an unregistered slug is dropped, never resolved namelessly', 
           default: minimalConfig({ listName: 'Cases-NotRegistered' }),
         }),
       }),
-      reportUnavailable: () => {},
     }
   );
 
@@ -610,7 +644,7 @@ test('containment: a config that loads but declares no listName is contained and
   // problem, and it resurfaced later as an opaque route error when a fetch
   // built a request against `undefined`.
   for (const listName of [undefined, '', '   ']) {
-    const { caseSources, unavailableCaseTypes } = await resolveAppCaseSources(
+    const { caseSources, unavailableCaseTypes } = await quietlyResolveAppCaseSources(
       ['Reviewer Managers'],
       [],
       {
@@ -619,7 +653,6 @@ test('containment: a config that loads but declares no listName is contained and
             default: minimalConfig({ listName }),
           }),
         }),
-        reportUnavailable: () => {},
       }
     );
 
@@ -649,7 +682,7 @@ test('containment: an invalid outcome config is contained and named (#493)', asy
   // `validateConfiguredOutcomeConfig`, so this resolved cleanly into
   // `caseSources` and detonated later on the Case Review page. Routing through
   // `loadCaseTypeConfig` makes the documented claim true.
-  const { caseSources, unavailableCaseTypes } = await resolveAppCaseSources(
+  const { caseSources, unavailableCaseTypes } = await quietlyResolveAppCaseSources(
     ['Reviewer Managers'],
     [],
     {
@@ -661,7 +694,6 @@ test('containment: an invalid outcome config is contained and named (#493)', asy
           }),
         }),
       }),
-      reportUnavailable: () => {},
     }
   );
 
@@ -709,12 +741,11 @@ test('loadCaseTypeSources is not exported: options.importers is the one seam (#4
 });
 
 test('resolveAppCaseSources: a broken Case Type cannot leak into any resolved source set', async () => {
-  const context = await resolveAppCaseSources(
+  const context = await quietlyResolveAppCaseSources(
     ['Reviewer Managers', 'Reviewers - Example Review'],
     ['example-review', 'complaints'],
     {
       importers: importersWithBrokenExampleReview(),
-      reportUnavailable: () => {},
     }
   );
 
@@ -750,9 +781,8 @@ test('resolveAppCaseSources: a broken Case Type cannot leak into any resolved so
 });
 
 test('resolveCaseSources: a user whose only Case Type is broken gets an empty list, not a crash', async () => {
-  const sources = await resolveCaseSources(['Reviewers - Example Review'], {
+  const sources = await quietlyResolveCaseSources(['Reviewers - Example Review'], {
     importers: importersWithBrokenExampleReview(),
-    reportUnavailable: () => {},
   });
 
   assert.deepEqual(sources, []);

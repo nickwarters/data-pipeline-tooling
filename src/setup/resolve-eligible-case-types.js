@@ -60,20 +60,16 @@ function toCaseSource({ slug, listName, displayName, maxInProgressCases }) {
  * the rest of the app and the other Case Types continue to allocate.
  *
  * @param {CaseSource[]} caseSources
- * @param {(error: TypeError) => void} [reportInvalid]
  * @returns {AllocationSource[]}
  */
-export function allocationSourcesFromCaseSources(
-  caseSources,
-  reportInvalid = (error) =>
-    console.error('[RALPH] Allocation source disabled:', error)
-) {
+export function allocationSourcesFromCaseSources(caseSources) {
   return caseSources.flatMap(({ slug, listName, maxInProgressCases }) => {
     if (
       maxInProgressCases !== undefined &&
       (!Number.isInteger(maxInProgressCases) || maxInProgressCases <= 0)
     ) {
-      reportInvalid(
+      console.error(
+        '[CORA] Allocation source disabled:',
         new TypeError(
           `Case Type "${slug}" maxInProgressCases must be a positive integer.`
         )
@@ -136,15 +132,9 @@ function labelFor(slug) {
  *
  * @param {string[]} slugs
  * @param {Record<string, import('../../case-types/manifest.js').CaseTypeImporter>} importers
- * @param {(failure: UnavailableCaseType) => void} [reportUnavailable]
  * @returns {Promise<{ sources: CaseTypeSource[], unavailable: UnavailableCaseType[] }>}
  */
-async function loadCaseTypeSources(
-  slugs,
-  importers,
-  reportUnavailable = ({ slug, error }) =>
-    console.error(`[CORA] Case Type "${slug}" failed to load:`, error)
-) {
+async function loadCaseTypeSources(slugs, importers) {
   // Settled per slug first, partitioned second, so both lists stay in the
   // caller's slug order however the imports interleave.
   const settled = await Promise.all(
@@ -201,7 +191,9 @@ async function loadCaseTypeSources(
   const unavailable = settled.flatMap((result) =>
     result.failure ? [result.failure] : []
   );
-  for (const failure of unavailable) reportUnavailable(failure);
+  for (const { slug, error } of unavailable) {
+    console.error(`[CORA] Case Type "${slug}" failed to load:`, error);
+  }
 
   return { sources, unavailable };
 }
@@ -282,8 +274,7 @@ export function resolveCaseSourcesFromCaseTypes(userGroups, caseTypes) {
  * `importers` option does not already reach.
  *
  * @typedef {{
- *   importers?: Record<string, import('../../case-types/manifest.js').CaseTypeImporter>,
- *   reportUnavailable?: (failure: UnavailableCaseType) => void
+ *   importers?: Record<string, import('../../case-types/manifest.js').CaseTypeImporter>
  * }} ResolveOptions
  */
 
@@ -302,8 +293,7 @@ async function resolveAvailableCaseSources(userGroups, options) {
 
   const { sources, unavailable } = await loadCaseTypeSources(
     Object.keys(importers),
-    importers,
-    options.reportUnavailable
+    importers
   );
 
   return {

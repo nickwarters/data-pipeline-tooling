@@ -6,6 +6,7 @@ import {
   createSharePointClient,
   partitionCasesByList,
 } from '../src/services/create-sharepoint-client.js';
+import { captureConsoleError } from './_console.js';
 
 test('createSharePointClient: returns a Promise', () => {
   const result = createSharePointClient(new URLSearchParams(''));
@@ -108,27 +109,6 @@ test('partitionCasesByList: routes every Case to its named list store (total, no
     ['b']
   );
 });
-
-/**
- * Run `fn` with `console.error` captured, returning what it logged. The
- * containment path reports to the console and takes no reporter seam, so this
- * is how a test reads what it said — and it keeps a deliberate failure from
- * printing noise into an otherwise clean run.
- *
- * @param {() => Promise<any>} fn
- * @returns {Promise<{ result: any, logged: any[][] }>}
- */
-async function captureConsoleError(fn) {
-  const original = console.error;
-  /** @type {any[][]} */
-  const logged = [];
-  console.error = (...args) => logged.push(args);
-  try {
-    return { result: await fn(), logged };
-  } finally {
-    console.error = original;
-  }
-}
 
 test('partitionCasesByList: contains a Case Type whose config declares no listName', async () => {
   /** @type {any} */
