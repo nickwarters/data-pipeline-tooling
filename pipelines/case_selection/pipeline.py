@@ -13,7 +13,7 @@ the framework IO, the schema enforcement, and the gold write.
 Address it by its location on disk -- the framework imports
 ``pipelines.case_selection.pipeline`` and runs its ``run(context)`` callable::
 
-    python -m cli run pipelines/case_selection [BASE_DIR]
+    python -m cli run pipelines/case_selection --base-dir BASE_DIR
 
 or run the module directly with a default run context::
 

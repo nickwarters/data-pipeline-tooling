@@ -267,7 +267,8 @@ def test_internal_plumbing_stays_out_of_the_public_facades():
 def test_demo_pipelines_import_framework_only_through_the_public_facades():
     # downstream scripts depend on the stable surface, not internal modules
     # by accident. Every framework import in pipelines/ must go through a facade —
-    # including feed subpackages (pipelines/<feed>/, scaffolded by ). Test
+    # including feed subpackages (pipelines/<feed>/, rendered by the scaffold
+    # command from its templates). Test
     # modules are excluded: their tests legitimately import tests.framework_testing.
     assert not _facade_offenders(PIPELINES_DIR), (
         f"pipelines bypassing the public facades: {_facade_offenders(PIPELINES_DIR)}"

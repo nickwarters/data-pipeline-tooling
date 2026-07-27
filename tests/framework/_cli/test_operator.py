@@ -511,3 +511,22 @@ def test_status_and_log_resolve_base_dir_from_env(tmp_path):
     log = cli_env("log", "_source", "--env", "dev")
     assert log.returncode == 0, log.stderr
     assert "_source" in log.stdout
+
+
+def test_every_usage_example_in_the_module_docstring_parses():
+    # The docstring is the first thing an author reads, so a stale example there
+    # is worse than a stale one in the docs. Each `python -m cli ...` line it
+    # shows is fed back through the real parser, so an option that is renamed or
+    # turned into a flag cannot leave a broken example behind.
+    import re
+    import shlex
+
+    import cli.operator as operator
+
+    examples = re.findall(r"^    python -m cli (.+)$", operator.__doc__, re.MULTILINE)
+    assert len(examples) == 4, examples
+    parser = operator.build_parser()
+    for example in examples:
+        args = shlex.split(example.replace("<", "_").replace(">", "_"))
+        parsed = parser.parse_args(args)  # SystemExit here means a stale example
+        assert parsed.command == args[0]

@@ -39,7 +39,7 @@ Run from the repo root::
 
 or via the CLI::
 
-    python -m cli run pipelines/retail_analytics [BASE_DIR]
+    python -m cli run pipelines/retail_analytics --base-dir BASE_DIR
 """
 
 from __future__ import annotations

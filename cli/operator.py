@@ -7,10 +7,13 @@ stays local SQLite + JSONL, with no external services.
 
 Run from the repository root so the import-only ``framework`` package resolves::
 
-    python -m cli run pipelines/orders /data --run-date 2026-05-29
-    python -m cli status /data --subject cases
-    python -m cli runs /data --pipeline cases/ingest --limit 5
-    python -m cli log /data cases --pipeline-run-id <pipeline-run-id>
+    python -m cli run pipelines/orders --base-dir /data --run-date 2026-05-29
+    python -m cli status --base-dir /data --subject cases
+    python -m cli runs --base-dir /data --pipeline cases/ingest --limit 5
+    python -m cli log cases --base-dir /data --pipeline-run-id <pipeline-run-id>
+
+The base directory is the option ``--base-dir`` (or ``--env <name>``, which
+resolves one), never a positional argument.
 
 ``run`` addresses a pipeline by *its location on disk*: ``pipelines/orders`` maps
 to the module ``pipelines.orders.pipeline``, imported at runtime, whose
