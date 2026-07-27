@@ -17,7 +17,7 @@ The remote exec and transfer sit behind a small **`RemoteRunner`** seam
 that no-ops the exec and assumes the output files are already landed, so a SAS
 feed is testable end-to-end against local fixtures with no SAS and no network. A
 shell `ssh`/`scp` runner (and later a library such as paramiko) is the same seam's
-richer adapter (ADR-0011).
+richer adapter.
 
 ## Why
 

@@ -9,13 +9,13 @@ A pipeline may be configured with an opt-in **quarantine path** via
 value-rule-failing rows are routed to the reject writer rather than aborting the
 run; good rows continue through the graph to their write. Quarantine is **not the
 default** — a pipeline with no `.quarantine()` node keeps the fail-fast,
-all-or-nothing behaviour of ADR-0005.
+all-or-nothing behaviour.
 
 ## The abort-vs-quarantine boundary
 
 | Breach type | Behaviour |
 |---|---|
-| Structural — missing column, wrong dtype (`SchemaValidator`) | **Abort** — fail-fast (ADR-0005/0006) |
+| Structural — missing column, wrong dtype (`SchemaValidator`) | **Abort** — fail-fast |
 | Value-rule — `Pattern`, `Length`, `Unique`, `OneOf`, … (`SchemaValueRulePartitioner`) | **Quarantine** when configured |
 
 Structural breaches abort because they indicate the feed is fundamentally broken
@@ -38,9 +38,9 @@ by the quarantine node:
 | `load_date` | when the row was quarantined |
 
 Rejects accumulate across runs via `QuarantineWriter` (delete-by-`logical_run_id` +
-append), so a re-driven day replaces only its own prior rejects (ADR-0004).
+append), so a re-driven day replaces only its own prior rejects.
 
-### Amendment (#310) — what "a located reason" contains
+### Amendment — what "a located reason" contains
 
 This ADR's premise is that a quarantined row is *routed aside with a located
 reason*. As originally implemented that was not true: the partitioner asked each
@@ -90,7 +90,7 @@ Two further corrections ride along:
 - **Visibility over silence.** Rejects are never silently dropped — they land in a
   reject table with a reason, a run correlation, and a date, *more* visible than
   the original fail-fast, not less. This is the eligibility-stage sibling of
-  selection explainability (ADR-0008): both *route aside with a located reason*.
+  selection explainability: both *route aside with a located reason*.
 - **Compliance boundary preserved.** Structural breaches still abort; only
   value-rule breaches are eligible, and only when the pipeline opts in.
 
@@ -98,7 +98,7 @@ Two further corrections ride along:
 
 - A pipeline that configures quarantine accepts partial progress: good rows land,
   bad rows go to the reject table, and operators must monitor it.
-- The reject table is **independently-committed evidence** (ADR-0005): it survives
+- The reject table is **independently-committed evidence**: it survives
   a later step's failure, and its run-log step carries `committed: true` when rows
   were rejected.
 - `RunLog` records a `quarantine` step for every run that has quarantine

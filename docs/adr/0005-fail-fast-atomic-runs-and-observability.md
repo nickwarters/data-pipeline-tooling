@@ -11,10 +11,10 @@ validator raises for a breach it is designed to detect — nothing else. A bug
 *inside* a validator (a `KeyError`, an `OSError` opening a baseline) propagates
 with its traceback at either severity, because "expected failure vs. genuine
 bug" below applies to validators too: a `warn` that swallowed it would report
-success for a check that never ran (#301). **Rows are never silently dropped** — in a
+success for a check that never ran. **Rows are never silently dropped** — in a
 regulated review domain, excluding a reviewable Case must be explicit and
 visible, so bad data either fails the run, is routed aside with a located reason
-(quarantine — ADR-0007), or is recorded in a trace (explainability — ADR-0008),
+(quarantine), or is recorded in a trace (explainability),
 but never quietly disappears.
 
 Every run emits **structured JSONL** — one JSON object per line to a `.log` file
@@ -30,9 +30,9 @@ delete-then-insert (or truncate+reload) is all-or-nothing, so a failed write
 never half-wipes its *own* target table. It does **not** bracket multiple writers
 into one publish unit.
 
-A run can write more than its final output: a quarantine reject table (ADR-0007),
-a selection/explain trace table (ADR-0008), and zero or more mid-graph checkpoint
-writes (ADR-0003) — each backed by its own writer.
+A run can write more than its final output: a quarantine reject table,
+a selection/explain trace table, and zero or more mid-graph checkpoint
+writes — each backed by its own writer.
 
 **These are independently-committed evidence, not one publish unit.** Each commits
 when its node runs and **survives a later step's failure**. There is deliberately
@@ -47,7 +47,7 @@ needs to resolve that abort.
 | One writer's delete+insert into one table | all-or-nothing |
 | Across the artifacts of one run (quarantine / trace / checkpoint / output) | **independent commits** |
 
-Since #306 that per-writer boundary has **one implementation**: every SQLite
+That per-writer boundary has **one implementation**: every SQLite
 Writer opens its connection, runs its statements and commits through the shared
 `_writing_connection` / `_staged_merge` helpers in `framework/io/writers.py`. The
 commit happens only when the write body returns normally, and the scratch staging
@@ -79,7 +79,7 @@ stated once rather than re-derived per Writer.
   a convention. Recording happens in one place (the node wrapper in
   `framework/run/builder.py`); a node returns what it measured rather than
   logging it, so the record carries the node's own counts *and* the wrapper's
-  timing, address and warn hits together. Until #311 the side-effecting node
+  timing, address and warn hits together. Previously the side-effecting node
   types recorded themselves *and* were wrapped, emitting two disagreeing records
   per step, so "the quarantine record for this run" had two answers and any
   per-run step count was inflated. Read paths must still tolerate historic
@@ -88,14 +88,14 @@ stated once rather than re-derived per Writer.
   `config`) on the run log so an operator can route a failure without reading
   every message; a bug carries none, and keeps its traceback.
 - Re-driving stays idempotent per artifact: each writer owns its own load strategy
-  and idempotency key (ADR-0004), so there is nothing to "unpublish" before a
+  and idempotency key, so there is nothing to "unpublish" before a
   re-drive.
 - The JSONL schema (`pipeline_run_id`, per-step metrics, `committed`,
   `error_category`) is the contract the `RunRegistry` consumes. That contract is
   **one declaration in code**, not a description: `RUN_RECORD_FIELDS` in
   `tools/observability/record_schema.py` states the fields once, in order, and
   the log record, the registry DDL, its additive column migration, the `INSERT`,
-  the row decode and the console line are all derived from it (#307). A field is
+  the row decode and the console line are all derived from it. A field is
   added there, once; nothing else has a field list to fall behind. The order is a
   live on-disk format — append to it, never reorder it.
 </content>

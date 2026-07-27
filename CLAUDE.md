@@ -4,19 +4,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-The **walking skeleton** is in place (issue #2): the CSV → raw path through the
+The **walking skeleton** is in place: the CSV → raw path through the
 core primitives. Architecture is governed by the ADRs in `docs/adr/` and the
 domain language in `CONTEXT.md`; the core primitives are documented in
 [`docs/core-primitives.md`](docs/core-primitives.md).
 
 - **Language/runtime:** Python 3.12. The `framework/` package is **import-only**
   (on `sys.path`, never `pip install`ed); `pipelines/` holds runnable scripts.
-  Packaging/installing the framework is an **explicit non-goal** (#95).
+  Packaging/installing the framework is an **explicit non-goal**.
 - **Layout:** `framework/` (reusable engine, organised into the four public
   facade sub-packages `framework/core` (the base vocabulary — `Dataset`, plus
   the declared-schema contract: the `validate(dataset)` checks, `SchemaValidator`,
   and the value rules — which everything else builds on; the medallion `Layer`
-  enum was **removed** here in #232, and where a feed lands — the opaque
+  enum was **removed** here, and where a feed lands — the opaque
   `namespace` → file `Store` / `StoreRegistry` and the raw/silver/gold medallion
   profile over it — is application infrastructure in the sibling `tools` package
   (`tools.store`, `tools.medallion`), not framework vocabulary), `framework/io`
@@ -24,7 +24,7 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   incl. `SchemaCoercion`), and `framework/run` (composing/executing/observing a
   run; its `freshness` module holds the **one** upstream-freshness rule, which
   the runner's `FreshnessGuard` wraps and `tools.orchestration`'s plan preview
-  reads — #313); plus the private
+  reads); plus the private
   `framework/_internal` (`connection`, `describe`, `schema`: cross-cutting
   helpers with no public name)). The `python -m cli` entry point (`scaffold`
   plus the operator commands; see below) lives in the top-level `cli/` package,
@@ -36,13 +36,13 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   `tools/observability/record_schema.py` (`RUN_RECORD_FIELDS`): the JSONL record,
   the registry's DDL, its additive column migration, the `INSERT`, the row decode
   and the console line are all derived from that one ordered list, so adding a
-  field is one entry (#307) — and its order is a live on-disk format, so append,
+  field is one entry — and its order is a live on-disk format, so append,
   never reorder. Where a base directory's *run metadata* lands (`_runs/`,
   `_registry/runs.db`, `_orchestration/runs.db`) is owned by `RunStore` in
   `tools/observability/run_store.py` — the counterpart of `tools.store`'s
   `StoreRegistry`, which owns where the *data* lands — and the UTC-instant /
   local-calendar-date rule every freshness check reads is settled once in
-  `tools/observability/timestamps.py` (#308). Then `case_review/` (the
+  `tools/observability/timestamps.py`. Then `case_review/` (the
   case-review *application* — domain types
   like `CaseType`/`CasePool` and its gold helpers, which live outside the
   framework), `pipelines/` (scripts), `tests/` (pytest, with author test helpers
@@ -60,12 +60,12 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   unique under pytest's default import mode — no basename collisions. This is
   enforced by convention, not tooling, and had drifted: five `tests/` dirs and
   the three `tools/` package dirs were missing `__init__.py`, with a real
-  basename collision present. All were added in #304 — every `tests/` and
+  basename collision present. All have since been added — every `tests/` and
   `tools/` directory is a regular package, and no two test files share a
   basename without distinct package paths. A
-  scaffolded feed (#97) follows the same convention: its code lands in
+  scaffolded feed follows the same convention: its code lands in
   `pipelines/<feed>/` and its test in `tests/pipelines/test_<feed>.py`.
-- **Public API (#95):** application code (`pipelines/` + the `case_review/`
+- **Public API:** application code (`pipelines/` + the `case_review/`
   domain layer) imports through the four facades `framework.core` /
   `framework.io` / `framework.transform` / `framework.run`, not the modules
   behind them (those are internal layout); the cross-cutting `tools.*` helpers
@@ -75,22 +75,22 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   The facades are the stable contract;
   [`docs/public-api.md`](docs/public-api.md) lists the surface, the internal
   modules, and the packaging non-goal. `tests/integration/test_public_api.py`
-  holds both `pipelines/` and `case_review/` to this boundary — since #304 it
+  holds both `pipelines/` and `case_review/` to this boundary — it
   rejects reaching *behind* a facade (`framework.core.value_rules`) as well as
   naming a non-facade module (`framework._internal.schema`), and self-tests the
   check so it cannot quietly stop guarding anything.
 - **Core primitives:** `Dataset` (opaque tabular carrier, pandas behind the
   seam), `Reader` (`read() -> Dataset`; `CsvReader`, `SqliteReader`),
   `Writer` (`write(dataset) -> None`; owns target location and carries the load
-  strategy — added by #14; each **strategy realises its own Writer** via
+  strategy; each **strategy realises its own Writer** via
   `writer_for(db_path, table, busy_timeout_ms=...)` plus the optional file-side
   `apply_to_frame(frame, read_existing)`, so nothing outside
   `framework/io/strategy.py` branches on which strategy it was handed and a new
-  strategy is one class plus one export line — #305), `Store` (namespace → file
+  strategy is one class plus one export line), `Store` (namespace → file
   factory minting `writer(table, strategy)` — a one-line delegation to
   `strategy.writer_for(...)` — / `reader(table)` over one logical database; **lives in the sibling
   `tools.store`, not `framework.io`** — where a feed lands is application
-  infrastructure, not framework vocabulary (#15/#232).
+  infrastructure, not framework vocabulary.
   `StoreRegistry` mints namespace stores via `store(namespace)` **and** registers
   named Readers/Writers — `register(name, reader|writer)` then `reader(name)` /
   `writer(name)` — so a pipeline refers to a component by name; the raw/silver/gold
@@ -103,8 +103,8 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   rather than silently executing nothing. A node **returns** a `StepResult` (its
   dataset, the metrics only it could know, whether it committed) and never
   records: the wrapper writes **exactly one** run-log record per node execution,
-  so recording lives in one place — #311. `.read_chunks(chunk_reader, name=...,
-  chunk_size=...)` is the **streaming** read (#314): the sub-graph *below* that
+  so recording lives in one place. `.read_chunks(chunk_reader, name=...,
+  chunk_size=...)` is the **streaming** read: the sub-graph *below* that
   node is driven once per bounded chunk, so a source too big to hold whole keeps
   the validators/quarantine/dry-run/profiling/addresses, while the per-chunk
   records are folded into one summed record per step and every Writer below the
@@ -123,9 +123,9 @@ python3 -m venv .venv
 .venv/bin/pre-commit install                      # activate the lint/format git hooks (once per clone)
 .venv/bin/python -m pytest                       # run the suite
 .venv/bin/python -m pipelines.demo_csv_to_raw /tmp/demo   # run the demo (module form, from repo root)
-.venv/bin/python -m cli scaffold orders            # scaffold a feed -> pipelines/orders/ + tests/pipelines/test_orders.py (#97)
+.venv/bin/python -m cli scaffold orders            # scaffold a feed -> pipelines/orders/ + tests/pipelines/test_orders.py
 .venv/bin/python -m cli scaffold orders --from-feed-file sample.csv  # seed schema/sample/test from a real CSV header
-.venv/bin/python -m cli scaffold --case-type claims # scaffold a Case Type ingest feed (source->raw->silver, identity declared; #155)
+.venv/bin/python -m cli scaffold --case-type claims # scaffold a Case Type ingest feed (source->raw->silver, identity declared)
 .venv/bin/python -m cli run pipelines/ingest --base-dir /tmp/demo  # operator CLI: run/orchestrate/status/runs/log (see docs/operator-cli.md)
 .venv/bin/pre-commit run --all-files             # lint + format the whole tree on demand
 ```
@@ -162,7 +162,7 @@ generic feed refines source -> raw -> silver -> gold, one `*_builder` per hop
 (`raw_builder` lands faithfully; `silver_builder` renames via `RENAME` + coerces + quarantines +
 validates the schema; `gold_builder` is a passthrough stub with a `TODO`) — the
 first two **compose the shared hop recipes** in `tools.recipes`
-(`source_to_raw` / `raw_to_silver`, #312) rather than carrying a copy of the
+(`source_to_raw` / `raw_to_silver`) rather than carrying a copy of the
 standard hop, so a change to the standard reaches every feed that composes it;
 a feed that must diverge inlines the recipe's body into its own builder — wired
 in order by `run(context, *, describe=False)` and an argparse `main`. Pass
@@ -174,11 +174,11 @@ clean identifier (spaces/punctuation/capitals) the source names are emitted as a
 `RAW_FEED_COLUMNS` constant the raw `ColumnValidator` gates on and the
 `silver_builder`'s `RENAME` map is populated to canonicalise them (raw stays
 faithful; silver renames to the schema's canonical shape). Add `--case-type`
-for the Case Type ingest variant (#155): a case-review-flavoured slice from
+for the Case Type ingest variant: a case-review-flavoured slice from
 `cli/scaffold_templates/case_type/` that additionally declares the Case
 Type's identity contract (`case_type.py`) and refines source → raw → silver,
 **stopping at silver** — how silver is assembled into gold is per-Case-Type and
-an open decision (snapshot-vs-join — #163), so it's left as a commented seam. See
+an open decision (snapshot-vs-join), so it's left as a commented seam. See
 [`docs/adding-a-feed.md`](docs/adding-a-feed.md).
 
 ## Core constraint: cross-platform (Windows-first, macOS-compatible)

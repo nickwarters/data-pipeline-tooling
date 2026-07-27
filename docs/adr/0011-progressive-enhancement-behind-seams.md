@@ -13,15 +13,13 @@ Seams already in place, each with its simple-now / rich-later pair:
 
 - **In-memory engine:** pandas now → polars (or other) later; the concrete engine
   is confined to Readers/Writers/transforms behind the `Dataset` seam, never in a
-  `Protocol`, a script, or the domain layer (ADR-0002).
+  `Protocol`, a script, or the domain layer.
 - **Authoring:** Python DAG-builder scripts now → declarative config later; the
-  deferred graph *is* the spec, so a config loader builds the same nodes (ADR-0003).
+  deferred graph *is* the spec, so a config loader builds the same nodes.
 - **Schema/typing:** dataclasses now → Pydantic later; validation is derived from
-  annotations via an adapter, so the swap is the model base + adapter only
-  (ADR-0006).
+  annotations via an adapter, so the swap is the model base + adapter only.
 - **Remote execution:** shell `ssh`/`scp` behind a `RemoteRunner` seam now → a
-  library (e.g. paramiko) later; the remote SAS exec is stubbed until needed
-  (ADR-0012).
+  library (e.g. paramiko) later; the remote SAS exec is stubbed until needed.
 
 ## Why
 
@@ -37,7 +35,7 @@ Seams already in place, each with its simple-now / rich-later pair:
 Progressive enhancement is easy to invert into *speculative* enhancement —
 building the seam **and** the rich implementation ahead of any real consumer. That
 is the failure mode the framework's history records (see [`RETROSPECTIVE.md`](../../RETROSPECTIVE.md)).
-So this ADR is paired with a hard rule (ADR-0013): you may **name** a future seam,
+So this ADR is paired with a hard rule: you may **name** a future seam,
 but you may not **build past it** until a second real consumer exists. The seam is
 the deliverable up front; the enhancement waits for demand.
 

@@ -5,8 +5,9 @@ through the **medallion profile**: `medallion(StoreRegistry(root), subject)` min
 the `.raw` / `.silver` / `.gold` namespace Stores over that subject's
 `<subject>/{raw,silver,gold}.db`, and a Store maps *only* `(namespace, table) →
 location` ([core-primitives.md](core-primitives.md#store--storeregistry--a-namespace--file-factory),
-[ADR-0001](adr/0001-sqlite-per-subject-medallion-store.md)). That mapping is
-what keeps every pipeline ignorant of physical layout and every subject isolated.
+[the SQLite per-subject medallion store](adr/0001-sqlite-per-subject-medallion-store.md)).
+That mapping is what keeps every pipeline
+ignorant of physical layout and every subject isolated.
 
 Sometimes you are not ready for that. You have a one-off `.db` someone handed
 you, or a SQL query you want to drive a `Dataset` from *right now* to see whether
@@ -17,8 +18,8 @@ mapping, plus the rules that keep it honest and a clear path back to the real
 pattern.
 
 > **This is debt, on purpose.** An escape-hatch store skips subject isolation,
-> the raw→silver→gold refinement, and the strategy-on-the-Writer contract
-> (ADR-0003, ADR-0004). Treat it as a spike: reach for it to *learn*, then
+> the raw→silver→gold refinement, and the strategy-on-the-Writer contract.
+> Treat it as a spike: reach for it to *learn*, then
 > [migrate](#migrating-back-to-the-namespace-store). Anything that survives more
 > than a spike belongs on `StoreRegistry` / the medallion profile.
 
@@ -30,7 +31,7 @@ can't migrate:
 
 - **The `Dataset` seam.** pandas (or any engine) lives *behind* `Dataset` and
   never appears in a pipeline script or the domain layer
-  ([ADR-0002](adr/0002-python-processing-opaque-dataset-carrier.md)).
+  ([the opaque Dataset carrier](adr/0002-python-processing-opaque-dataset-carrier.md)).
   An ad-hoc Reader still returns a `Dataset`; an ad-hoc Writer still takes one.
 - **The `Reader` / `Writer` shape.** `read() -> Dataset` and
   `write(dataset) -> None`. If your escape hatch honours these, the `Pipeline`
@@ -38,7 +39,7 @@ can't migrate:
   which is the whole point of cutting the corner *here* and nowhere else.
 - **The connection conventions.** Open SQLite through the shared `connect`
   factory (`busy_timeout`, rollback journal — WAL is unavailable on a network
-  share, [ADR-0001](adr/0001-sqlite-per-subject-medallion-store.md)) rather
+  share, [the SQLite store on a network share](adr/0001-sqlite-per-subject-medallion-store.md)) rather
   than a bare `sqlite3.connect`, and quote every table/column with
   `quote_identifier`. Paths are `pathlib` so the spike still runs on Windows and
   macOS.
@@ -192,9 +193,9 @@ p.run()
 
 | The medallion profile gives you | The escape hatch drops |
 |---|---|
-| **Subject isolation** — each Case Type / Reference Data set owns its own files, independent blast radius and onboarding (ADR-0001). | One flat file shared by everything in the spike. |
+| **Subject isolation** — each Case Type / Reference Data set owns its own files, independent blast radius and onboarding. | One flat file shared by everything in the spike. |
 | **raw → silver → gold refinement** — schema-light landing, the silver schema boundary, gold accumulation. | No layers; you read and write wherever you point. |
-| **Strategy on the Writer** — `Refresh` / `AccumulateByRun` / `UpsertStrategy` chosen per feed (ADR-0003, ADR-0004). | Full-refresh only; no idempotent accumulation, no upsert. |
+| **Strategy on the Writer** — `Refresh` / `AccumulateByRun` / `UpsertStrategy` chosen per feed. | Full-refresh only; no idempotent accumulation, no upsert. |
 | **Location hidden from scripts** — `StoreRegistry` owns physical layout. | The db path is hardcoded in the spike. |
 
 If a spike starts needing any row in the left column — a second subject, a silver
@@ -220,7 +221,7 @@ mechanical:
 4. **Add the schema boundary.** Refine the feed raw → silver by composing
    `SchemaCoercion(schema)` + `SchemaValidator(schema)` onto the hop, so a declared
    Case Type contract is enforced at silver
-   ([schema-enforcement.md](schema-enforcement.md), ADR-0006).
+   ([schema-enforcement.md](schema-enforcement.md)).
 5. **Delete `SqliteQueryReader` and `ScratchStore`** once nothing imports them.
    They are not part of the public surface ([public-api.md](public-api.md)); a
    lingering escape hatch is the defect, not the migration.

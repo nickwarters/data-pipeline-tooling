@@ -9,10 +9,10 @@ A Selection pipeline may be configured with an opt-in **explainability path** vi
 the run follows each considered Case across the transform stages and writes a
 per-Case **verdict** — selected/excluded, the gate that excluded it, its score,
 and a survivor's rank — to a **sibling trace table** stamped with the same logical
-and execution identity as the SelectionPool (ADR-0004). The SelectionPool write is
+and execution identity as the SelectionPool. The SelectionPool write is
 unchanged; the trace lands alongside it.
 
-This is the **eligibility-stage twin of quarantine** (ADR-0007). Both share one
+This is the **eligibility-stage twin of quarantine**. Both share one
 shape — *route aside with a located reason, never silently drop* — at different
 stages:
 
@@ -28,7 +28,7 @@ stages:
 This is a review/**governance** platform: *which Advisers' Cases get reviewed* is
 itself a governed decision that will be challenged after the fact ("why wasn't this
 Adviser picked up last quarter?"). The Selection transforms (`Filter`/`Score`/
-`Sort`/`JoinWith`) carry plain-Python callables (ADR-0002) that would otherwise
+`Sort`/`JoinWith`) carry plain-Python callables that would otherwise
 **silently drop** Cases, leaving no trace. Visibility over silence, applied to
 eligibility: an excluded Case is never silently absent — it lands in the trace
 with the gate that excluded it, a run correlation, and a date.
@@ -64,12 +64,12 @@ identity (`logical_run_id`, `load_date`, `pipeline_run_id`).
 
 - Explainability is **not the default**: a Selection pipeline with no `.explain()`
   node is unaffected (the same opt-in design as quarantine). The trace table is
-  independently-committed evidence (ADR-0005).
+  independently-committed evidence.
 - `RunLog` records an `explain` step with `rows_in` (Cases considered), `rows_out`
   (Cases selected), and `rows_excluded`.
 - The trace describes a **single run**. Re-deriving what Selection *would* have
   picked "as of" a past date is a distinct concern (reproducible against
-  accumulated silver — ADR-0010 covers the sampler's part), deferred to a
+  accumulated silver — reproducible sampling covers the sampler's part), deferred to a
   follow-up.
 - Attribution is **stage-positional**: a Case is attributed to the first stage that
   drops it, so the id column must survive every stage for the trace to hold.

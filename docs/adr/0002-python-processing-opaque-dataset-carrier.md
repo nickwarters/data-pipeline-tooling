@@ -53,7 +53,7 @@ no joins-as-logic). Data moves through Python on a **two-tier carrier**:
   only generic shapes (`Dataset`, `columns`, `len`) so the public surface stays
   tiny.
 
-## Scope note: the engine in an engine-confined `Protocol` (amended, #309)
+## Scope note: the engine in an engine-confined `Protocol` (amended)
 
 The original wording said the concrete engine must never appear in a `Protocol`
 signature. That is the rule for the *public* seams, but two engine-confined
@@ -78,7 +78,7 @@ never name the engine, and the bulk carrier stays opaque. Only the list of
 acknowledged engine-confined components is corrected.
 </content>
 
-## Amendment, 2026-07-27 (#314, finding `C2`): streaming *was* needed
+## Amendment, 2026-07-27 (finding `C2`): streaming *was* needed
 
 The Consequences above say memory is a risk "in principle" but that volumes are
 small (≤ ~1M rows per feed/run), so "no chunking/streaming machinery is needed up
@@ -92,7 +92,7 @@ while carrying `status: accepted`. This amendment records the revisit.
 
 A SAS extract feeding one Case Type is on the order of **100M rows**, of which
 fewer than ~100K are ids we track. Landing it faithfully added roughly **500MB
-per run** — about **1.5GB after three runs** (#287) — and the source cannot be
+per run** — about **1.5GB after three runs** — and the source cannot be
 materialised as one `Dataset` at all. The ≤ ~1M-rows-per-feed premise simply did
 not hold for that feed.
 
@@ -102,10 +102,10 @@ Streaming was added **beside** the in-memory carrier, not instead of it:
 
 - A `ChunkReader` port, `chunks(size) -> Iterator[Dataset]` — the streaming dual
   of `Reader`, with concrete `ChunkedCsvReader` / `SasFileReader` sources and the
-  `PredicateChunkReader` / `KeyFilterChunkReader` per-chunk row filters (#287).
+  `PredicateChunkReader` / `KeyFilterChunkReader` per-chunk row filters.
 - `Pipeline.read_chunks(...)`, which drives the sub-graph below it once per chunk
   so a streamed feed keeps the validators, quarantine, dry run, profiling and
-  per-step run records the builder provides (#314).
+  per-step run records the builder provides.
 - A `ChunkWritable` write-side session (`writing_chunks()`) so many chunk writes
   land as one logical load, and wiring-time refusal of the pairings that cannot
   be made chunk-safe.
