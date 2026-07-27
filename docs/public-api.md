@@ -12,7 +12,12 @@ rule that follows from that split.
 > modules behind them. The facade names are the stable surface; the submodule
 > paths can be reorganised without notice. A test
 > (`tests/integration/test_public_api.py`) holds both `pipelines/` and
-> `case_review/` to this boundary.
+> `case_review/` to this boundary — and since #304 it checks *both* halves:
+> `framework._internal.schema` fails because it names no facade, and
+> `framework.core.value_rules` fails because it reaches **behind** one. (Before
+> #304 the check compared only the second dotted segment, so the second — and
+> more important — half passed silently; the test has its own self-test now so
+> it cannot go hollow again unnoticed.)
 
 ```python
 from framework.core import Dataset
@@ -149,6 +154,7 @@ Moving data across the boundary. (Where it *lands* — the namespace `Store` /
 |-------|------|
 | `Processor` | The mid-pipeline transform seam — `Callable[..., Dataset]`: one or more `Dataset`s in (one per wired upstream node), exactly one out. |
 | `Filter`, `Score`, `VectorizedFilter`, `VectorizedDerive`, `Stamp`, `Sort`, `Rename`, `JoinColumns`, `JoinDependency`, `JoinWith`, `AntiJoinWith`, `LatestPerKey`, `SelectColumns`, `DropColumns`, `Unpivot`, `DeriveKey` | The concrete Selection / Ingest / fan-out transforms. |
+| `TopNPerGroup`, `Sample`, `SamplePerGroup`, `Parse` | The bounded-subset reductions — top-`n` per group and the seeded, reproducible draws (ADR-0010, pure functions of input + a fixed seed) — plus `Parse`, which decodes a packed text column through a callable. These existed in `framework.transform.processors` but were **absent from the facade** until #304; the omission is silent (unlike a missing Reader, an unexported processor raises nothing), and it caused a duplicate copy of them to grow in `tools/analytics/`. That fork is retired and this facade is now their only supported import. |
 | `SchemaCoercion` | The *coerce* half of the schema adapter: casts round-trip-lossy columns (`date` / `datetime` / `bool`) to the declared types — a reshape, so it lives here, not with the schema check. |
 | `CoercionError` | Raised by `SchemaCoercion` on an uncastable value. |
 | `SchemaValueRulePartitioner` | The quarantine partitioner that routes value-rule / row-check rejects aside while preserving good rows for the main path. Usually reached through `Pipeline.quarantine(...)`, but exported for advanced schema/quarantine wiring. |
@@ -166,8 +172,13 @@ Moving data across the boundary. (Where it *lands* — the namespace `Store` /
 
 ## The `tools` package — sibling utilities
 
-`tools` is a top-level package beside `framework`, not a framework facade. Its
-public helpers carry stable names and are imported directly:
+`tools` is a top-level package beside `framework`, not a framework facade. Like
+every other top-level package here it is a **regular** package — `tools/`,
+`tools/observability/` and `tools/integrations/` each carry an `__init__.py`
+(#304) — but that `__init__.py` re-exports nothing: each helper is imported by
+its own module path, so adding a module under `tools/` makes no public-surface
+commitment on its own. Its public helpers carry stable names and are imported
+directly:
 
 | Import | What |
 |--------|------|

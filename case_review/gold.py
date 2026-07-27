@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from case_review.case_type import CaseType
 from framework.core import UniqueValidator
-from framework.io.strategy import Refresh
+from framework.io import Refresh
 from framework.run import Pipeline, RunLog
 from framework.transform import DeriveKey, LatestPerKey, Unpivot
 from tools.medallion import Medallion

@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Annotated
 
-from framework.core.value_rules import OneOf
+from framework.core import OneOf
 
 
 @dataclass

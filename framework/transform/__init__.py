@@ -7,7 +7,8 @@ The stable import surface for everything that reshapes or gates a
 ``Rename`` / ``Stamp``, the column-shaping ``JoinColumns``,
 the lazy ``JoinWith`` / ``AntiJoinWith``, the Ingest / fan-out
 ``SelectColumns`` / ``DropColumns`` / ``Unpivot`` / ``DeriveKey`` /
-``LatestPerKey``)
+``LatestPerKey``, the packed-column ``Parse``, and the bounded-subset
+``TopNPerGroup`` / ``Sample`` / ``SamplePerGroup``)
 and ``SchemaCoercion`` — the *coerce* half of the schema adapter, which casts a
 column's round-trip-lossy values to the declared types (a reshape, not a check) —
 plus ``SchemaValueRulePartitioner`` for quarantine routing.
@@ -38,11 +39,15 @@ from framework.transform.processors import (
     JoinDependency,
     JoinWith,
     LatestPerKey,
+    Parse,
     Rename,
+    Sample,
+    SamplePerGroup,
     Score,
     SelectColumns,
     Sort,
     Stamp,
+    TopNPerGroup,
     Unpivot,
     VectorizedDerive,
     VectorizedFilter,
@@ -69,6 +74,10 @@ __all__ = [
     "DropColumns",
     "Unpivot",
     "DeriveKey",
+    "Parse",
+    "TopNPerGroup",
+    "Sample",
+    "SamplePerGroup",
     "CoercionError",
     # The coerce half of the schema adapter
     "SchemaCoercion",
