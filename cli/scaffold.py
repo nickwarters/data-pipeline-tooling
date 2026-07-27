@@ -302,10 +302,10 @@ def _render_pipeline(text: str, feed: str, spec: _FeedSpec) -> str:
     cls = _pascal(feed) + "Row"
     anchor = f'SAMPLE_CSV = Path(__file__).parent / "sample_data" / "{feed}.csv"\n'
     text = text.replace(anchor, anchor + "\n" + _raw_columns_literal(spec))
-    # Replace ColumnValidator initialization to use RAW_FEED_COLUMNS
+    # Gate the raw hop's recipe on RAW_FEED_COLUMNS instead of the schema fields
     text = text.replace(
-        f"ColumnValidator([f.name for f in fields({cls})])",
-        "ColumnValidator(RAW_FEED_COLUMNS)",
+        f"[f.name for f in fields({cls})]",
+        "RAW_FEED_COLUMNS",
     )
     text = text.replace("RENAME: dict[str, str] = {}\n", _rename_literal(spec))
     text = text.replace("from dataclasses import fields\n", "")
