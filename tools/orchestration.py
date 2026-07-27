@@ -31,6 +31,8 @@ from tools.observability.record_schema import (
     insert_sql,
     select_columns,
 )
+from tools.observability.run_store import RunStore
+from tools.observability.timestamps import local_date, utc_now_iso
 
 _WEEKDAY_NAMES = [
     "monday",
@@ -522,16 +524,34 @@ class OrchestrationStore:
 
     def __init__(self, db_path: str | Path) -> None:
         self._db_path = Path(db_path)
+        self._migrated = False
 
     def _connect(self):
-        self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        """Open a connection, migrating the file once per instance.
+
+        The same split the run registry makes, for the same reason: migration is
+        write work, and running it on every connection made a read-only query
+        take an exclusive lock against every concurrent writer.
+        """
+        if not self._migrated:
+            self._db_path.parent.mkdir(parents=True, exist_ok=True)
         con = connect(self._db_path)
-        con.execute(_CREATE_ORCHESTRATION_RECORDS)
-        # A store created before a field joined the decision schema lacks its
-        # column, and the INSERT below names every declared one. Add whatever is
-        # missing in place — the same additive migration the run registry uses.
-        ensure_columns(con, _ORCHESTRATION_TABLE, ORCHESTRATION_RECORD_FIELDS)
+        if not self._migrated:
+            self._migrate(con)
+            self._migrated = True
         return con
+
+    def _migrate(self, con) -> None:
+        """Bring the file up to the declared shape; write only if it is behind.
+
+        A store created before a field joined the decision schema lacks its
+        column, and the INSERT names every declared one. Add whatever is missing
+        in place — the same additive migration the run registry uses. There is
+        no data backfill here, so an already-current file is untouched.
+        """
+        con.execute(_CREATE_ORCHESTRATION_RECORDS)
+        ensure_columns(con, _ORCHESTRATION_TABLE, ORCHESTRATION_RECORD_FIELDS)
+        con.commit()
 
     def record(self, decision: OrchestrationDecision) -> None:
         con = self._connect()
@@ -539,7 +559,7 @@ class OrchestrationStore:
             con.execute(
                 _INSERT_ORCHESTRATION_RECORD,
                 (
-                    dt.datetime.now(dt.UTC).isoformat(),
+                    utc_now_iso(),
                     decision.orchestration_run_id,
                     decision.item_key,
                     decision.set_name,
@@ -643,7 +663,7 @@ class Orchestrator:
         root = Path(base_dir)
         day = run_date or dt.date.today()
         pass_run_id = orchestration_run_id or uuid.uuid4().hex
-        store = OrchestrationStore(root / "_orchestration" / "runs.db")
+        store = OrchestrationStore(RunStore(root).orchestration_path)
         decisions: list[OrchestrationDecision] = []
         terminal: dict[str, str] = {}
 
@@ -719,19 +739,12 @@ class Orchestrator:
         The returned :class:`PlanResult` formats as an aligned table via
         ``str(result)``.
         """
-        from tools.observability.run_registry import RunRegistry
-
         root = Path(base_dir)
         day = run_date or dt.date.today()
         weekday_name = _WEEKDAY_NAMES[day.weekday()]
 
         # Sweep the registry once before evaluating any item.
-        registry_path = root / "_registry" / "runs.db"
-        runs_dir = root / "_runs"
-        run_registry = RunRegistry(registry_path)
-        if runs_dir.exists():
-            for log_file in sorted(runs_dir.glob("*.log")):
-                run_registry.ingest(log_file)
+        run_registry = RunStore(root).catch_up()
 
         items: list[PlanItem] = []
         for pipeline_set in self._sets:
@@ -1023,11 +1036,11 @@ def _check_requirement_plan(
         # "warn" or "allow" → not blocked
         return False, ""
 
-    import datetime as _dt
-
-    latest_date = _dt.datetime.fromisoformat(
-        latest["timestamp"].replace("Z", "+00:00")
-    ).date()
+    # The stored instant is UTC and the run date is a local calendar date, so
+    # the instant is converted before its date is taken — the same rule the
+    # runner's freshness guard applies. The two checks state the rule twice for
+    # now; consolidating them is a separate piece of work.
+    latest_date = local_date(latest["timestamp"])
 
     if req.require_same_day:
         if latest_date == run_date:
@@ -1124,9 +1137,7 @@ def _latest_pipeline_run_id(base_dir: Path, label: str) -> str | None:
     when no run summary exists yet (e.g. a freshness block that errored before
     the summary was written).
     """
-    from tools.observability.run_registry import RunRegistry
-
-    registry = RunRegistry(base_dir / "_registry" / "runs.db")
+    registry = RunStore(base_dir).registry()
     runs = registry.query_runs(pipeline=label)
     return runs[-1]["pipeline_run_id"] if runs else None
 

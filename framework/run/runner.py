@@ -26,7 +26,8 @@ from framework.run.address import RunAddress
 from framework.run.dry_run import DryRunReport
 from framework.run.run_context import RunContext, active_context
 from tools.observability.run_log import RunLog
-from tools.observability.run_registry import RunRegistry
+from tools.observability.run_store import RunStore
+from tools.observability.timestamps import local_date
 
 
 class UnknownPipelineError(PipelineError):
@@ -134,7 +135,11 @@ class FreshnessGuard:
             _handle_first_run(context, predicate)
             return
 
-        latest_date = _timestamp(latest["timestamp"]).date()
+        # The stored instant is UTC; the run date it is compared against is a
+        # local calendar date, so the instant is converted before its date is
+        # taken. Comparing the raw UTC date would call an upstream that landed
+        # just after local midnight "yesterday" and block a fresh downstream.
+        latest_date = local_date(latest["timestamp"])
         if predicate.require_same_day:
             if latest_date == context.run_date:
                 _record_requirement_ok(context)
@@ -200,22 +205,20 @@ def run_pipeline(
     outside ``_runs/`` won't be picked up by the freshness sweep below, so prefer
     the default unless you have a reason to redirect it.
 
-    The shared ``RunRegistry`` is caught up from *every* ``_runs/*.log`` before
-    freshness runs, so a declared upstream's history is visible no matter which
-    log file partitioned it. ``ingest`` is incremental and idempotent, so the
-    sweep is cheap and safe to repeat.
+    Where those files sit under ``base_dir`` is not decided here: ``RunStore``
+    owns the run-metadata layout, and the shared ``RunRegistry`` it opens is
+    caught up from *every* run log before freshness runs, so a declared
+    upstream's history is visible no matter which log file partitioned it.
+    ``ingest`` is incremental and idempotent, so the sweep is cheap and safe to
+    repeat.
     """
     guard = freshness_guard or FreshnessGuard()
     root = Path(base_dir)
-    runs_dir = root / "_runs"
-    registry_path = root / "_registry" / "runs.db"
+    run_store = RunStore(root)
     if run_log is None:
-        run_log = RunLog(runs_dir / f"{subject or name}.log")
+        run_log = run_store.log_for(subject or name)
     run_log_path = run_log.path
-    run_registry = RunRegistry(registry_path)
-    if runs_dir.exists():
-        for log_file in sorted(runs_dir.glob("*.log")):
-            run_registry.ingest(log_file)
+    run_registry = run_store.catch_up()
 
     context = RunContext(
         base_dir=root,
@@ -440,11 +443,6 @@ def _diagnostic_params(params: RunParams) -> dict[str, str]:
         else:
             safe[key] = value
     return safe
-
-
-def _timestamp(value: str) -> dt.datetime:
-    """Parse the ISO timestamp emitted by RunLog."""
-    return dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
 def _as_requirement(

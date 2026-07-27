@@ -210,6 +210,29 @@ declaration order is a live on-disk contract (JSONL key order, column order):
 append, never reorder. The orchestration decision store keeps its **own**
 declaration of a different contract, sharing only the machinery.
 
+**Run store**:
+The owner of a base directory's **run-metadata layout** — `_runs/<subject>.log`,
+`_registry/runs.db`, `_orchestration/runs.db` — and the pieces it opens over
+them (`RunStore` in `tools/observability/run_store.py`, #308). _Here_: it is the
+**counterpart** of the `StoreRegistry`, not an extension of it — that one owns
+where the *rows* land, this one owns where the *runs* are recorded, and neither
+constructs the other. `catch_up()` is the "sweep every run log into the
+registry" step a run or a plan takes before consulting history. Before it, the
+same three path fragments were spelled out in the runner, the orchestrator and
+the operator CLI; a layout with no owner drifts.
+
+**Run time semantics**:
+Two clocks meet in the run metadata, and the rule for reconciling them lives in
+one module (`tools/observability/timestamps.py`, #308). _Here_: an **instant** —
+when a record was emitted — is **UTC**, timezone-aware, stored as ISO-8601 text
+with an explicit `+00:00` offset (the on-disk format). A **calendar date** — a
+run date, "did last night's run succeed?" — is **local**, because an operator's
+today is the box's today and `run_date` defaults to the local `date.today()`.
+So every comparison between the two converts the stored instant to the *local*
+date first: on a UK box at UTC+1 an upstream that succeeded at 00:10 local is
+stamped 23:10 UTC the previous day, and taking the UTC date there blocked a
+downstream as stale twenty minutes after its upstream had run.
+
 **Fail-fast**:
 Detect a violation and stop at the **earliest** boundary, rather than letting bad
 data propagate downstream where the failure is harder to trace. _Here_:

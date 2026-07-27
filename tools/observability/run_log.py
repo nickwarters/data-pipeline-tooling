@@ -17,7 +17,6 @@ record goes and when it is emitted.
 
 from __future__ import annotations
 
-import datetime
 import json
 import logging
 import os
@@ -28,6 +27,7 @@ from typing import Iterator
 
 from framework._internal.describe import render
 from tools.observability.record_schema import build_run_record, console_parts
+from tools.observability.timestamps import utc_now_iso
 
 log = logging.getLogger(__name__)
 
@@ -148,10 +148,12 @@ class RunLog:
         The keyword parameters are the explicit contract callers write against;
         the *record* they produce — its keys, their order, and the empty-value
         defaults — comes from the single field declaration in
-        :mod:`tools.observability.record_schema`.
+        :mod:`tools.observability.record_schema`. Its instant comes from
+        :mod:`tools.observability.timestamps`, which is where the UTC-instant /
+        local-date rule lives.
         """
         record = build_run_record(
-            timestamp=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            timestamp=utc_now_iso(),
             pipeline_run_id=pipeline_run_id,
             logical_run_id=logical_run_id,
             pipeline=pipeline,
