@@ -335,31 +335,74 @@ test('CASE-2 question cards preserve remediation display and enforce read-only a
   );
 });
 
-test('CASE-2 real Questions view keeps the 500-question steady-state median within the five millisecond gate', () => {
+test('CASE-2 real Questions view answers one of 500 Questions by rebuilding one card, not the list', (t) => {
   const catalogue = Array.from({ length: 500 }, (_, index) =>
     question(
       `q-${String(index + 1).padStart(3, '0')}`,
       `Group ${String(Math.floor(index / 25) + 1).padStart(2, '0')}`
     )
   );
-  const view = createQuestionPanelView();
   const base = props({ catalogue, questions: catalogue });
-  view.render(base);
 
-  const samples = [];
-  for (let index = 0; index < 25; index += 1) {
+  // The deterministic half of the contract: answering `q-001` rebuilds that one
+  // card and reuses the node of every other Question in the bank.
+  const view = createQuestionPanelView();
+  const before = findAllByClass(view.render(base), 'cora-question-card');
+  const after = findAllByClass(
+    view.render({ ...base, answers: { 'q-001': { value: 'Yes' } } }),
+    'cora-question-card'
+  );
+  assert.equal(before.length, 500);
+  assert.equal(after.length, 500);
+  assert.notEqual(after[0], before[0], 'the answered card is rebuilt');
+  const reused = after.filter((card, index) => card === before[index]);
+  assert.equal(reused.length, 499, 'every untouched card keeps its node');
+
+  // The timing half is a *ratio*, not a wall-clock budget. What memoisation
+  // buys is that answering one Question rebuilds one card instead of 500, so
+  // the honest regression signal is "an answer costs a fraction of a cold
+  // render" — and a fraction is the same number on a fast laptop and a loaded
+  // CI box. The absolute 5 ms budget this replaced measured the hardware as
+  // much as the code (#534, #540): the same failure mode already fixed in
+  // tests/question-bank-slice.test.js.
+  //
+  // A cold render — fresh view, fresh memo, every card built — is the cost of
+  // no memoisation at all, i.e. exactly what a regression here would look like.
+  const coldSamples = [];
+  for (let index = 0; index < 20; index += 1) {
+    const coldView = createQuestionPanelView();
     const started = performance.now();
-    view.render({
+    coldView.render(base);
+    if (index >= 5) coldSamples.push(performance.now() - started);
+  }
+
+  const answerSamples = [];
+  for (let index = 0; index < 60; index += 1) {
+    const next = {
       ...base,
       answers: { 'q-001': { value: index % 2 ? 'Yes' : 'No' } },
-    });
-    samples.push(performance.now() - started);
+    };
+    const started = performance.now();
+    view.render(next);
+    if (index >= 10) answerSamples.push(performance.now() - started);
   }
-  samples.sort((a, b) => a - b);
-  const median = samples[Math.floor(samples.length / 2)];
 
+  /** @param {number[]} values */
+  const median = (values) =>
+    [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
+  const answerMedian = median(answerSamples);
+  const coldMedian = median(coldSamples);
+  const ratio = answerMedian / coldMedian;
+  t.diagnostic(
+    `500-question answer median ${answerMedian.toFixed(2)} ms vs cold ${coldMedian.toFixed(2)} ms (${(ratio * 100).toFixed(2)}%)`
+  );
+  // Memoised, an answer measures 2-3% of a cold render — the residue is the
+  // per-render work that is not memoised (group progress, the unanswered
+  // filter, the group anchors). With the card memo defeated it measures
+  // 87-99%. 20% sits ~7x above the observed value and ~4x below the mildest
+  // observed regression, which is about as evenly as the two can be split.
   assert.ok(
-    median <= 5,
-    `500-question grouped steady-state median was ${median.toFixed(3)} ms`
+    ratio <= 0.2,
+    `answering one of 500 Questions cost ${(ratio * 100).toFixed(2)}% of a full rebuild (${answerMedian.toFixed(2)} ms vs ${coldMedian.toFixed(2)} ms) — memoisation is not holding`
   );
 });
