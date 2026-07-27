@@ -1195,19 +1195,18 @@ def _item_context(
     parent_context: RunContext,
     logical_run_id: LogicalRunId[Item] | None,
 ) -> RunContext:
+    """Derive the child context one for-each item runs under.
+
+    A per-item business key (so each item's accumulating writes replace rather
+    than duplicate) over an otherwise inherited context. Deriving it — rather
+    than re-constructing a fresh ``RunContext`` from a hand-copied field list —
+    is what keeps the whole context along for the ride: notably the dry-run flag
+    and its shared report, so a preview of a fan-out previews instead of writing,
+    and the run parameters the per-item pipeline builder reads.
+    """
     item_logical_run_id = (
         logical_run_id(item, index, parent_context)
         if logical_run_id is not None
         else f"{parent_context.logical_run_id}:{index}"
     )
-    return RunContext(
-        run_date=parent_context.run_date,
-        logical_run_id=item_logical_run_id,
-        load_date=parent_context.load_date,
-        run_log=parent_context.run_log,
-        run_registry=parent_context.run_registry,
-        base_dir=parent_context.base_dir,
-        subject=parent_context.subject,
-        pipeline=parent_context.pipeline,
-        freshness_days=parent_context.freshness_days,
-    )
+    return parent_context.for_nested_pipeline(logical_run_id=item_logical_run_id)

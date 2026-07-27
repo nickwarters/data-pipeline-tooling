@@ -217,9 +217,11 @@ silent regression like a field quietly sliding 5% → 60% null.
 A repeated-run shape for independent items that all use the same pipeline recipe.
 _Here_: `ForEach(items, pipeline_builder, ...).run(context)` calls
 `pipeline_builder(item, context)` for each item, using a fresh `Pipeline`
-builder and per-item `RunContext` every time. Use it when each file/source item
-is its own logical run (including its own logical run id for idempotent
-`AccumulateByRun` writes). It is fail-fast by default, or can explicitly run
+builder and per-item `RunContext` every time. That context is *derived* from the
+parent — it overrides only the logical run id, so the items share the attempt's
+`pipeline_run_id` and inherit the run's parameters and its dry-run preview. Use
+it when each file/source item is its own logical run (including its own logical
+run id for idempotent `AccumulateByRun` writes). It is fail-fast by default, or can explicitly run
 best-effort and return one success/failure outcome per item while preserving the
 original exception for failed items. Do **not** use it for many files that
 together form one Feed snapshot; that is a multi-file Reader returning one

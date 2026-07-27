@@ -329,6 +329,7 @@ def dry_run_pipeline(
     subject: str | None = None,
     run_date: dt.date | None = None,
     logical_run_id: str | None = None,
+    params: RunParams | None = None,
     freshness_days: int = 0,
 ) -> DryRunReport:
     """Preview a pipeline handler without committing anything (issue #102).
@@ -340,6 +341,10 @@ def dry_run_pipeline(
     a fail-fast :class:`PipelineError` (e.g. an error-severity validation
     failure) is recorded on the report rather than raised, so the caller still
     gets the preview of every step up to the stop.
+
+    ``params`` carries the same run parameters a real run passes, so a handler
+    that reads ``context.params`` behaves identically under a preview — a preview
+    that dropped them would fail on exactly the pipelines it exists to check.
     """
     context = RunContext(
         base_dir=Path(base_dir),
@@ -347,6 +352,7 @@ def dry_run_pipeline(
         pipeline=name,
         run_date=run_date or dt.date.today(),
         logical_run_id=logical_run_id,
+        params=params,
         freshness_days=freshness_days,
         dry_run=True,
     )

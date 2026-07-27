@@ -202,7 +202,12 @@ def test_for_each_passes_per_item_context_with_derived_logical_run_id():
         "selection:2026-06-09:1:b",
     ]
     assert [context.load_date for context in contexts] == ["2026-06-09", "2026-06-09"]
-    assert contexts[0].pipeline_run_id != contexts[1].pipeline_run_id
+    # A per-item business key over one attempt: the items differ by
+    # logical_run_id (so their accumulating writes replace independently) while
+    # sharing the attempt's pipeline_run_id, the key that joins every record the
+    # fan-out produces back to the run that produced it.
+    assert contexts[0].pipeline_run_id == parent.pipeline_run_id
+    assert contexts[1].pipeline_run_id == parent.pipeline_run_id
 
 
 def test_for_each_context_supports_per_item_accumulate_by_run_writes(tmp_path):
