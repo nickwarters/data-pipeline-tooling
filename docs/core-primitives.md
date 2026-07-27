@@ -247,8 +247,10 @@ class Writer(Protocol):
     def write(self, dataset: Dataset) -> None: ...
 ```
 
-A Writer owns **both** its target location (a layer db file + table, or a file
-Deliverable path) **and** its load strategy (ADR-0004). Swapping the Writer is
+A Writer owns its target location (a layer db file + table, or a file
+Deliverable path) and **carries** the load strategy (ADR-0004) — the strategy
+itself knows *how* to load, and mints the SQLite Writer that does it (see
+[A strategy realises its own Writer](#a-strategy-realises-its-own-writer)). Swapping the Writer is
 how you target a different sink — the builder never learns about medallion
 layers, file formats, or load rules. Concrete writers ship for file
 Deliverables and SQLite tables:
@@ -302,10 +304,35 @@ strategies: `Refresh()` overwrites the file; `AccumulateByRun(...)` reads any
 existing file, replaces rows for that logical run, stamps the new rows, and
 rewrites the file; `InsertOrIgnore()` appends incoming rows to the existing file
 (files carry no table constraints, so no rows are ignored — equivalent to a plain
-append). Round-tripping through matching Readers is stable for CSV and Excel at
+append). `UpsertStrategy(...)` and `InsertIfAbsent(...)` are **table-backed
+only** — their merges need the target's own constraints or key→surrogate
+mapping, which a whole-file rewrite cannot supply — so handing one to a file
+Writer raises a `TypeError` naming both the Writer and the strategy (#305).
+Round-tripping through matching Readers is stable for CSV and Excel at
 the Dataset shape level; exact pandas dtype inference can still differ after a
 file round-trip, so schema-sensitive flows should continue to validate after
 reading.
+
+#### A strategy realises its own Writer
+
+Which Writer implements a strategy is the **strategy's own knowledge**, not a
+branch anywhere else (#305, finding `A1`). Every strategy exposes:
+
+- `writer_for(db_path, table, *, busy_timeout_ms)` — mints the SQLite Writer
+  that implements it. `store.writer(table, strategy)` is a one-line delegation
+  to this, which is why a `Store` needs no knowledge of the strategy set at all.
+- `apply_to_frame(frame, read_existing)` — the file-writer half: given the
+  incoming frame and a callable that reads whatever is already on disk, it
+  returns the frame to write out whole. **Optional**: a strategy whose merge is
+  SQL-side simply does not define it, so an unsupported combination is a
+  visibly missing method rather than an invisibly missing `isinstance` branch.
+
+`framework.io.LoadStrategy` names the `writer_for` contract. Anything satisfying
+it works with `Store.writer` — there is no registry to add to and no unknown-
+strategy `TypeError`. Adding a strategy is therefore one class in
+`framework/io/strategy.py` plus one export line in `framework/io/__init__.py`;
+the direction of the dependency is preserved, because strategies are handed a
+db *path*, never a `Store` (`framework.io` must not import `tools.*`).
 
 ### `Store` / `StoreRegistry` — a namespace → file factory
 `Store` / `StoreRegistry` live in `tools.store` — **application infrastructure**,
@@ -321,7 +348,9 @@ holds **no business logic** (ADR-0002) and makes **no** load decision (ADR-0003)
 - `store.writer(table, strategy)` — mints a Writer over a table in this namespace
   using the caller's explicit `Refresh()`, `AccumulateByRun(...)`,
   `UpsertStrategy(...)`, `InsertOrIgnore()`, or `InsertIfAbsent(key_columns)`
-  strategy. Context-driven accumulation uses `AccumulateByRun.from_context(context)`.
+  strategy — by asking that strategy to realise itself (`writer_for`), so the
+  store branches on nothing and any `LoadStrategy` works. Context-driven
+  accumulation uses `AccumulateByRun.from_context(context)`.
 - `store.reader(table)` — a `SqliteReader` over the same file.
 
 The strategy lives on the Writer the store mints, not on the store. The

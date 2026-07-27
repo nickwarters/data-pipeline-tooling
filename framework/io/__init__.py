@@ -38,6 +38,7 @@ from framework.io.strategy import (
     AccumulateByRun,
     InsertIfAbsent,
     InsertOrIgnore,
+    LoadStrategy,
     Refresh,
     UpsertStrategy,
 )
@@ -79,6 +80,7 @@ __all__ = [
     "AccumulateByRunWriter",
     "QuarantineWriter",
     "StdoutWriter",
+    "LoadStrategy",
     "Refresh",
     "AccumulateByRun",
     "UpsertStrategy",

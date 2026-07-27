@@ -17,7 +17,6 @@ from framework._internal.describe import redact_url, render
 from framework.core.dataset import Dataset
 from framework.io.readers import GlobCsvReader
 from framework.io.strategy import AccumulateByRun, Refresh
-from framework.io.writers import _stamp_accumulate_frame
 
 
 @runtime_checkable
@@ -184,9 +183,7 @@ class SharePointWriter:
 
     def write(self, dataset: Dataset) -> None:
         if isinstance(self._strategy, AccumulateByRun):
-            dataset = Dataset.from_pandas(
-                _stamp_accumulate_frame(dataset.to_pandas(), self._strategy)
-            )
+            dataset = Dataset.from_pandas(self._strategy.stamp(dataset.to_pandas()))
         self._pusher.push(
             self._site,
             self._list_name,

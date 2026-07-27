@@ -5,7 +5,24 @@ feed, independent of which medallion layer it targets. The Store resolves only
 the *location* (which ``<subject>/<layer>.db``); the Writer owns both location
 and strategy.
 
-Five strategies exist:
+Each strategy knows how to **realise itself**, so nothing outside this module
+has to branch on which strategy it was handed:
+
+- ``writer_for(db_path, table, busy_timeout_ms=...)`` mints the SQLite Writer
+  that implements the strategy against one table. ``Store.writer`` just calls
+  it, which is why a store needs no knowledge of the strategies at all.
+- ``apply_to_frame(frame, read_existing)`` is the file-writer half: given the
+  incoming frame and a callable that reads whatever is already on disk, it
+  returns the frame to write out whole. It is **optional** — a strategy whose
+  semantics depend on SQL table constraints or on SQL-side merging simply does
+  not define it, and a file Writer handed such a strategy fails with a message
+  naming both. An unsupported combination is therefore a visibly missing
+  method rather than an invisibly missing branch.
+
+A new strategy is a new class here plus one export line; no dispatch table,
+registry, or ``isinstance`` chain anywhere else needs to learn about it.
+
+The strategies shipped today:
 
 - :class:`Refresh` — truncate + reload each run; the table mirrors the current
   source snapshot after every run.
@@ -27,12 +44,74 @@ Five strategies exist:
 
 from __future__ import annotations
 
+import os
+from collections.abc import Callable
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Protocol
+
+from framework.core.protocols import Writer
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    import pandas as pd
+
+__all__ = [
+    "LoadStrategy",
+    "Refresh",
+    "AccumulateByRun",
+    "UpsertStrategy",
+    "InsertOrIgnore",
+    "InsertIfAbsent",
+]
+
+# A callable returning whatever a file Writer's target already holds (an empty
+# frame when it holds nothing yet). Passed rather than read eagerly so a
+# strategy that replaces wholesale never pays for the read.
+ReadExisting = Callable[[], "pd.DataFrame"]
+
+
+class LoadStrategy(Protocol):
+    """What a Writer-minting caller needs from a load strategy.
+
+    Satisfied by any object that can mint the SQLite Writer implementing it.
+    ``apply_to_frame`` is deliberately *not* part of this contract: file
+    Writers ask for it by name and report a clear failure when a strategy does
+    not offer one, so a SQL-only strategy stays a legitimate strategy.
+    """
+
+    def writer_for(
+        self,
+        db_path: str | os.PathLike[str],
+        table: str,
+        *,
+        busy_timeout_ms: int = 5000,
+    ) -> Writer:
+        """Mint the Writer that loads ``table`` in ``db_path`` this way."""
+        ...
 
 
 @dataclass(frozen=True)
 class Refresh:
     """Truncate + reload on each run (current-state snapshot)."""
+
+    def writer_for(
+        self,
+        db_path: str | os.PathLike[str],
+        table: str,
+        *,
+        busy_timeout_ms: int = 5000,
+    ) -> Writer:
+        from framework.io.writers import SqliteTruncateReloadWriter
+
+        return SqliteTruncateReloadWriter(
+            db_path, table, busy_timeout_ms=busy_timeout_ms
+        )
+
+    def apply_to_frame(
+        self, frame: "pd.DataFrame", read_existing: ReadExisting
+    ) -> "pd.DataFrame":
+        # Replace wholesale: the incoming frame is the whole answer, so
+        # whatever the target already holds is never even read.
+        return frame
 
 
 @dataclass(frozen=True)
@@ -63,6 +142,52 @@ class AccumulateByRun:
             pipeline_run_id=context.pipeline_run_id,
         )
 
+    def writer_for(
+        self,
+        db_path: str | os.PathLike[str],
+        table: str,
+        *,
+        busy_timeout_ms: int = 5000,
+    ) -> Writer:
+        from framework.io.writers import AccumulateByRunWriter
+
+        return AccumulateByRunWriter(
+            db_path,
+            table,
+            self.logical_run_id,
+            self.load_date,
+            pipeline_run_id=self.pipeline_run_id,
+            busy_timeout_ms=busy_timeout_ms,
+        )
+
+    def stamp(self, frame: "pd.DataFrame") -> "pd.DataFrame":
+        """Stamp this run's identity onto ``frame`` in place and return it.
+
+        The run columns every accumulating sink needs, wherever it persists:
+        ``logical_run_id`` (the idempotency key a re-driven run deletes by),
+        ``load_date``, and ``pipeline_run_id`` when the strategy came from a
+        RunContext.
+        """
+        frame["logical_run_id"] = self.logical_run_id
+        if self.pipeline_run_id is not None:
+            frame["pipeline_run_id"] = self.pipeline_run_id
+        frame["load_date"] = self.load_date
+        return frame
+
+    def apply_to_frame(
+        self, frame: "pd.DataFrame", read_existing: ReadExisting
+    ) -> "pd.DataFrame":
+        import pandas as pd
+
+        frame = self.stamp(frame)
+
+        # Idempotent re-run: drop this logical run's prior rows, keep every
+        # other run's, then append the incoming ones.
+        existing = read_existing()
+        if len(existing) > 0 and "logical_run_id" in existing.columns:
+            existing = existing[existing["logical_run_id"] != self.logical_run_id]
+        return pd.concat([existing, frame], ignore_index=True)
+
 
 class UpsertStrategy:
     """Merge incoming rows by a declared key set (update-or-insert).
@@ -74,6 +199,10 @@ class UpsertStrategy:
 
         UpsertStrategy("case_id")           # single key
         UpsertStrategy(("region", "code"))  # composite key
+
+    Deliberately offers no ``apply_to_frame``: the merge is done SQL-side
+    against the target table, so there is no meaningful whole-file rewrite for
+    a file Writer to perform.
     """
 
     __slots__ = ("key_columns",)
@@ -101,6 +230,19 @@ class UpsertStrategy:
     def __repr__(self) -> str:
         return f"UpsertStrategy(key_columns={self.key_columns!r})"
 
+    def writer_for(
+        self,
+        db_path: str | os.PathLike[str],
+        table: str,
+        *,
+        busy_timeout_ms: int = 5000,
+    ) -> Writer:
+        from framework.io.writers import SqliteUpsertWriter
+
+        return SqliteUpsertWriter(
+            db_path, table, self.key_columns, busy_timeout_ms=busy_timeout_ms
+        )
+
 
 @dataclass(frozen=True)
 class InsertOrIgnore:
@@ -116,6 +258,32 @@ class InsertOrIgnore:
     this strategy.  When the table carries no constraints every incoming row is
     appended (equivalent to a plain append).
     """
+
+    def writer_for(
+        self,
+        db_path: str | os.PathLike[str],
+        table: str,
+        *,
+        busy_timeout_ms: int = 5000,
+    ) -> Writer:
+        from framework.io.writers import SqliteInsertOrIgnoreWriter
+
+        return SqliteInsertOrIgnoreWriter(
+            db_path, table, busy_timeout_ms=busy_timeout_ms
+        )
+
+    def apply_to_frame(
+        self, frame: "pd.DataFrame", read_existing: ReadExisting
+    ) -> "pd.DataFrame":
+        import pandas as pd
+
+        # Files carry no table constraints, so every incoming row is appended —
+        # equivalent to a plain append, matching SQLite's no-constraint
+        # behaviour.
+        existing = read_existing()
+        if len(existing) == 0:
+            return frame
+        return pd.concat([existing, frame], ignore_index=True)
 
 
 class InsertIfAbsent:
@@ -140,6 +308,9 @@ class InsertIfAbsent:
         InsertIfAbsent("value")
         InsertIfAbsent(("region", "code"))
         InsertIfAbsent("value", surrogate_column="ref_id")
+
+    Deliberately offers no ``apply_to_frame``: minting surrogates requires the
+    target's existing key→id mapping, which only a table-backed Writer holds.
     """
 
     __slots__ = ("key_columns", "surrogate_column")
@@ -175,4 +346,21 @@ class InsertIfAbsent:
         return (
             f"InsertIfAbsent(key_columns={self.key_columns!r}, "
             f"surrogate_column={self.surrogate_column!r})"
+        )
+
+    def writer_for(
+        self,
+        db_path: str | os.PathLike[str],
+        table: str,
+        *,
+        busy_timeout_ms: int = 5000,
+    ) -> Writer:
+        from framework.io.writers import SqliteInsertIfAbsentWriter
+
+        return SqliteInsertIfAbsentWriter(
+            db_path,
+            table,
+            self.key_columns,
+            surrogate_column=self.surrogate_column,
+            busy_timeout_ms=busy_timeout_ms,
         )

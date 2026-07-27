@@ -23,19 +23,10 @@ from typing import Protocol
 
 from framework._internal.connection import connect
 from framework.io import (
-    AccumulateByRun,
-    AccumulateByRunWriter,
-    InsertIfAbsent,
-    InsertOrIgnore,
+    LoadStrategy,
     QuarantineWriter,
     Reader,
-    Refresh,
-    SqliteInsertIfAbsentWriter,
-    SqliteInsertOrIgnoreWriter,
     SqliteReader,
-    SqliteTruncateReloadWriter,
-    SqliteUpsertWriter,
-    UpsertStrategy,
     Writer,
 )
 from framework.io.sql import quote_identifier
@@ -94,50 +85,16 @@ class Store:
         )
         self._busy_timeout_ms = busy_timeout_ms
 
-    def writer(
-        self,
-        table: str,
-        strategy: Refresh
-        | AccumulateByRun
-        | UpsertStrategy
-        | InsertOrIgnore
-        | InsertIfAbsent,
-    ) -> Writer:
-        """Mint a Writer over a table in this namespace with the given strategy."""
-        db_path = self._db_path
-        if isinstance(strategy, Refresh):
-            return SqliteTruncateReloadWriter(
-                db_path, table, busy_timeout_ms=self._busy_timeout_ms
-            )
-        if isinstance(strategy, AccumulateByRun):
-            return AccumulateByRunWriter(
-                db_path,
-                table,
-                strategy.logical_run_id,
-                strategy.load_date,
-                pipeline_run_id=strategy.pipeline_run_id,
-                busy_timeout_ms=self._busy_timeout_ms,
-            )
-        if isinstance(strategy, UpsertStrategy):
-            return SqliteUpsertWriter(
-                db_path,
-                table,
-                strategy.key_columns,
-                busy_timeout_ms=self._busy_timeout_ms,
-            )
-        if isinstance(strategy, InsertOrIgnore):
-            return SqliteInsertOrIgnoreWriter(
-                db_path, table, busy_timeout_ms=self._busy_timeout_ms
-            )
-        if isinstance(strategy, InsertIfAbsent):
-            return SqliteInsertIfAbsentWriter(
-                db_path,
-                table,
-                strategy.key_columns,
-                surrogate_column=strategy.surrogate_column,
-                busy_timeout_ms=self._busy_timeout_ms,
-            )
-        raise TypeError(f"unknown strategy {strategy!r}")
+    def writer(self, table: str, strategy: LoadStrategy) -> Writer:
+        """Mint a Writer over a table in this namespace with the given strategy.
+
+        The store resolves only the *location* and the contention timeout; the
+        strategy realises the Writer that implements it, so a store never
+        learns the set of strategies and a new one needs no change here.
+        """
+        return strategy.writer_for(
+            self._db_path, table, busy_timeout_ms=self._busy_timeout_ms
+        )
 
     def reader(self, table: str) -> Reader:
         """Mint a Reader over a table in this namespace."""
