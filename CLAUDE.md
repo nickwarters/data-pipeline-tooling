@@ -43,7 +43,12 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   the public-API and framework/domain boundary tests).
   Shared helpers (`tests/_schema_fixtures.py`, `tests/fixtures/`) sit at the
   `tests/` root. Each test dir is a package (`__init__.py`) so module paths are
-  unique under pytest's default import mode — no basename collisions. A
+  unique under pytest's default import mode — no basename collisions. This is
+  enforced by convention, not tooling, and had drifted: five `tests/` dirs and
+  the three `tools/` package dirs were missing `__init__.py`, with a real
+  basename collision present. All were added in #304 — every `tests/` and
+  `tools/` directory is a regular package, and no two test files share a
+  basename without distinct package paths. A
   scaffolded feed (#97) follows the same convention: its code lands in
   `pipelines/<feed>/` and its test in `tests/pipelines/test_<feed>.py`.
 - **Public API (#95):** application code (`pipelines/` + the `case_review/`
@@ -56,7 +61,10 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   The facades are the stable contract;
   [`docs/public-api.md`](docs/public-api.md) lists the surface, the internal
   modules, and the packaging non-goal. `tests/integration/test_public_api.py`
-  holds both `pipelines/` and `case_review/` to this boundary.
+  holds both `pipelines/` and `case_review/` to this boundary — since #304 it
+  rejects reaching *behind* a facade (`framework.core.value_rules`) as well as
+  naming a non-facade module (`framework._internal.schema`), and self-tests the
+  check so it cannot quietly stop guarding anything.
 - **Core primitives:** `Dataset` (opaque tabular carrier, pandas behind the
   seam), `Reader` (`read() -> Dataset`; `CsvReader`, `SqliteReader`),
   `Writer` (`write(dataset) -> None`; owns target location + load strategy —

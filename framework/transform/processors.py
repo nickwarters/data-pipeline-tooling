@@ -674,16 +674,25 @@ def _cut_per_group(frame, key, select):
     The shared spine of the per-group processors: :class:`TopNPerGroup` and
     :class:`SamplePerGroup` differ only in *which* rows they keep from each group
     — ``select(group_key, group)`` returns that group's kept sub-frame. Groups
-    are iterated in canonical key order and the kept rows concatenated, so the
-    output is deterministic regardless of incoming row order. An empty feed in
-    yields an empty feed out (consistent with :class:`Filter`).
+    are iterated in canonical key order and the kept sub-frames concatenated, so
+    the output is deterministic regardless of incoming row order. An empty feed
+    in yields an empty feed out (consistent with :class:`Filter`).
+
+    Two details matter for not losing rows. Grouping keeps null keys
+    (``dropna=False``): a missing group key is still a group, and dropping it
+    would silently shrink a ranked or sampled feed with nothing downstream to
+    notice. And the kept sub-frames are concatenated rather than re-selected out
+    of the input by index label, so a frame whose index labels repeat — which an
+    upstream reshape can easily leave behind — cannot pull in every row sharing
+    a label and inflate the result.
     """
+    import pandas as pd
+
     if len(frame) == 0:
         return frame
-    keep_index: list[Any] = []
-    for group_key, group in frame.groupby(key, sort=True):
-        keep_index.extend(select(group_key, group).index)
-    return frame.loc[keep_index].reset_index(drop=True)
+    grouped = frame.groupby(key, sort=True, dropna=False)
+    cut = [select(group_key, group) for group_key, group in grouped]
+    return pd.concat(cut, ignore_index=True) if cut else frame.iloc[:0]
 
 
 class TopNPerGroup:

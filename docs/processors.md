@@ -1,7 +1,7 @@
 # Processors — the Selection & Ingest transforms
 
 This documents the concrete `Processor` primitives in `framework.transform.processors`.
-They fall into two workload families:
+They fall into three workload families:
 
 - **Selection narrowing** — `Filter`, `Score`,
   `VectorizedFilter`, `VectorizedDerive`, `Sort`, `Rename`, `Stamp`, `JoinWith`,
@@ -14,6 +14,9 @@ They fall into two workload families:
   `DeriveKey`, `LatestPerKey`: the transforms that fan one wide feed into a Case
   table and its Detail Tables, derive the deterministic `case_id`, and reduce
   accumulated history to current-state gold (ADR-0009).
+- **Bounded-subset & decoding** — `TopNPerGroup`, `Sample`, `SamplePerGroup`,
+  and `Parse`: reduce a population to a bounded, reproducible subset (ADR-0010)
+  or decode a packed text column.
 
 For the *why*, see
 [ADR-0002](adr/0002-python-processing-opaque-dataset-carrier.md)
@@ -549,6 +552,66 @@ Both pipelines read the *same* raw table and share one `Rename` normalisation
 instance; each is independently validated and writes its own gold. See
 [gold-accumulation.md](gold-accumulation.md) for the gold builders and
 [ADR-0009](adr/0009-case-identity-and-gold-grain.md) for the fan-out rationale.
+
+## Bounded-subset processors — `TopNPerGroup`, `Sample`, `SamplePerGroup`
+
+These reduce a population to a bounded subset rather than reshaping it. All
+three are exported from `framework.transform` (#304 — they existed but were
+unreachable through the facade, which is what caused a duplicate copy to grow in
+`tools/analytics/`; that fork is now retired and this module is their single
+home).
+
+### `TopNPerGroup` — keep the top `n` rows per group
+
+```python
+from framework.transform import TopNPerGroup
+
+TopNPerGroup(key="adviser", by="score", n=5, ascending=False, tiebreak="case_id")
+```
+
+Generalises `LatestPerKey(key=K, by=B)` to top-`n` per key. It carries its own
+sort, so it does not depend on a preceding `Sort` surviving the grouping, and
+applies a stable ascending tie-break on `tiebreak` so tied scores rank
+reproducibly. A group smaller than `n` passes through whole; an empty feed in
+yields an empty feed out.
+
+### `Sample` / `SamplePerGroup` — a seeded, reproducible draw
+
+```python
+from framework.transform import Sample, SamplePerGroup
+
+Sample(n=100, seed=7, order="case_id")          # or Sample(fraction=0.1, seed=7)
+SamplePerGroup(key="adviser", n=5, seed=7, order="case_id")
+```
+
+Both are a **pure function of (input dataset, seed)** — never the run id or the
+clock — per [ADR-0010](adr/0010-reproducible-sampling.md): the run-to-run
+variation comes from the upstream population shrinking, not from varying the
+randomness. Each orders by `order` before drawing, so the result is invariant to
+incoming row order; `SamplePerGroup` derives a per-group seed by stdlib hashing
+(stable across Windows/macOS, unlike the salted builtin `hash`) so each group is
+drawn independently. `Sample` takes exactly one of `n` or `fraction`
+(`0 < fraction <= 1`, resolved against the run's actual population).
+
+**Null group keys are kept.** `TopNPerGroup` and `SamplePerGroup` group with
+`dropna=False`: a missing group key is still a group. Dropping it would silently
+shrink the output with nothing downstream to notice — the bug the retired fork
+had already fixed and the framework copy had not (#304).
+
+### `Parse` — decode a packed text column
+
+```python
+from framework.transform import Parse
+
+Parse("payload")                      # json.loads by default
+Parse(["a", "b"], parser=int)
+```
+
+Runs each value of the named column(s) through a `value -> value` callable,
+replacing it in place — a JSON text column becomes structured Python values
+ready for a downstream reshape; any parser works (`datetime.fromisoformat`, a
+custom record parser). A missing column raises `ValueError`, consistent with the
+other column processors.
 
 ## Not yet (follow-on tickets)
 
