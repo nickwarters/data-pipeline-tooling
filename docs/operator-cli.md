@@ -10,8 +10,8 @@ list recent **runs**, and inspect a run **log**. It is a thin shell
 over the public `framework.run` runtime surface (`run_pipeline`,
 `Orchestrator`) and the `RunLog` / `RunRegistry` observability seam —
 everything stays local SQLite + JSONL, with no external services
-([ADR-0001](adr/0001-sqlite-per-subject-medallion-store.md),
-[ADR-0005](adr/0005-fail-fast-atomic-runs-and-observability.md)).
+([the SQLite per-subject medallion store](adr/0001-sqlite-per-subject-medallion-store.md),
+[structured JSONL observability](adr/0005-fail-fast-atomic-runs-and-observability.md)).
 
 Run it as a module from the repository root so the import-only `framework`
 package resolves on `sys.path`:
@@ -22,7 +22,7 @@ python -m cli <command> ...
 
 All commands take the **base directory** of the run store — the same path you
 pass to `run`. The layout underneath it has one owner in code, `RunStore`
-(`tools/observability/run_store.py`, #308), and nothing else spells the
+(`tools/observability/run_store.py`), and nothing else spells the
 fragments out:
 
 | Path | What |
@@ -40,14 +40,14 @@ back, so one orchestration pass joins to every pipeline execution it triggered
 records remain in `RunLog` / `RunRegistry` only.
 
 The read-only commands (`status`, `runs`, `log`) are **safe to run while
-pipelines are running**. Opening a registry and migrating it are separate steps
-since #308: against an up-to-date file a query opens a connection and reads
+pipelines are running**. Opening a registry and migrating it are separate
+steps: against an up-to-date file a query opens a connection and reads
 without executing a single write statement, so it takes no write lock and cannot
 collide with a running pipeline's commit. The exception is the *first* open of a
 file that is behind — that one still migrates, and so still writes; if a
 concurrent writer holds the file it fails loudly rather than reading a
 half-migrated table. (WAL is unavailable on a
-network share — ADR-0001 — so a writer's lock is exclusive; before the split,
+network share, so a writer's lock is exclusive; before the split,
 every read ran the schema migration first and briefly locked the file against
 every concurrent writer.)
 
@@ -133,7 +133,7 @@ dry run — no artifacts were written
 A preview runs the handler exactly as a real run does apart from the commits, so
 `--param` applies to `--dry-run` too: `context.params` holds the same values
 under both, and a pipeline that reads `context.params["source_file"]` previews
-without error (#300). The no-write promise covers **every** composition, not just
+without error. The no-write promise covers **every** composition, not just
 a single `Pipeline`: a `ForEach` fan-out previews each item — its per-item
 contexts are derived from the dry-run context, so they carry the flag — and the
 one report accumulates the steps of every item.
@@ -154,7 +154,9 @@ is non-zero — same fail-fast contract as a real run, without writing anything.
 A run's **logical run id** is the idempotency key for its accumulated rows: a
 re-run under the *same* logical id replaces that run's rows rather than adding
 duplicates, while each execution stays individually traceable by its own
-`pipeline_run_id` ([ADR-0004](adr/0004-per-feed-load-strategy-owned-by-writer.md)). When omitted it defaults to `<pipeline>:run_date`, so re-running a
+`pipeline_run_id`
+([accumulation is idempotent by logical run](adr/0004-per-feed-load-strategy-owned-by-writer.md)).
+When omitted it defaults to `<pipeline>:run_date`, so re-running a
 given date is already idempotent.
 
 Pass `--logical-run-id` to re-drive a specific business run explicitly — for
@@ -318,7 +320,7 @@ $ python -m cli orchestrate --base-dir /data --app my_app.schedules --run-date 2
 ```
 
 The `status` vocabulary is unchanged — `succeeded`, `failed`, `blocked`,
-`skipped` — and `reason` is prose written for you to read. Since #313 nothing in
+`skipped` — and `reason` is prose written for you to read. Nothing in
 the orchestrator branches on that prose: whether an item counted as *due work*
 for the run date is carried by a separate `was_due` flag on the decision, stored
 alongside it in `<base>/_orchestration/runs.db`. That flag is what `--loop` uses
@@ -367,8 +369,8 @@ the widest value so the output stays readable regardless of pipeline name length
 
 A `blocked` reason here is produced by the *same* freshness rule the run itself
 applies — `evaluate_requirement` in `framework.run.freshness`, of which the
-runner's `FreshnessGuard` is the side-effecting wrapper. Before #313 the preview
-carried its own copy, which had already drifted (it omitted the `for <pipeline>`
+runner's `FreshnessGuard` is the side-effecting wrapper. The preview used to
+carry its own copy, which had already drifted (it omitted the `for <pipeline>`
 that the guard's message ends with), so the same condition read differently
 depending on which command you ran. The preview's promise is *this is what will
 happen*, and it is now kept by construction rather than by discipline.

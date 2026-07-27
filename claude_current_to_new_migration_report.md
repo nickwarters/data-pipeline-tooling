@@ -222,7 +222,7 @@ loose workbook:
 | S3.2 extra-case-type XLSX | **Deleted.** In-memory `JoinWith`/processor step of the Selection run. |
 | S3.3 one-per-adviser XLSX | **Deleted.** `TopNPerGroup(n=1)` step of the Selection run. |
 | S3.4 "merge S3.2+S3.3, overwrite S3.3" XLSX | **Deleted entirely.** "Merge two files then overwrite a third" is pure file-passing ceremony — it's just two processor steps in one run. |
-| S3.5 input XLSX → upload | The **input** file is deleted (reads the SelectionPool gold); the **upload** stays as a genuine outbound **Deliverable** (needs the platform-upload Writer from gap #3). |
+| S3.5 input XLSX → upload | The **input** file is deleted (reads the SelectionPool gold); the **upload** stays as a genuine outbound **Deliverable** (needs the platform-upload Writer from the outbound-Writers gap). |
 
 Net: every intermediate workbook disappears. The only outputs that survive are
 **genuine outbound Deliverables** — the platform upload, plus any file an
@@ -257,7 +257,8 @@ must be *replaced*, not removed:
 **Settled:** with the human-edit-gate ruled out and the selection-pool XLSX going
 to gold, the file chain is eliminated **end-to-end**. The only surviving output
 is the **platform upload** (genuine outbound Deliverable, needs the upload Writer
-from gap #3) — unless a file is later found to feed an external consumer.
+from the outbound-Writers gap) — unless a file is later found to feed an external
+consumer.
 
 ---
 
@@ -275,7 +276,7 @@ from gap #3) — unless a file is later found to feed an external consumer.
   whether scoring lives in Ingest gold or is stamped at Selection.
 - **Platform upload contract.** Is the target a SharePoint SE list (matches
   CONTEXT) or something else? Idempotency on re-upload? Partial-batch failure
-  behaviour? This sizes gap #3's hardest part.
+  behaviour? This sizes the hardest part of the outbound-Writers gap.
 - **Flag ordering source of truth.** Where does the canonical order of the ~150
   flags live today, and how often does it change? That decides how
   declarative/data-driven the `FlagRuleSet` must be.

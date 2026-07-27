@@ -4,12 +4,12 @@ Availability criteria are phrased in **working days**: "candidate Cases … thes
 Advisers within the last 20 working days" ([`../CONTEXT.md`](../CONTEXT.md)).
 `WorkingDayCalendar` answers those questions deterministically. It is a
 **config-seeded pure utility** — Python only, no `Store`, no in-memory engine,
-no `Dataset` (ADR-0002). Because it depends only on the stdlib `datetime`, it
+no `Dataset`. Because it depends only on the stdlib `datetime`, it
 behaves identically on Windows and macOS.
 
 It is deliberately **not a Feed**: cross-cutting Reference Data lives in
 per-subject medallions, but the working-day calendar is seeded from config, not
-ingested (ADR-0001; `CONTEXT.md` Reference Data note).
+ingested (`CONTEXT.md` Reference Data note).
 
 ## Construction (the config)
 

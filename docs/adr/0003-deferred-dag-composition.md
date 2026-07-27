@@ -41,7 +41,7 @@ the graph *is* the structure.
   rewrite.
 - **Cross-cutting concerns are centralised.** Because `.run()` owns execution, it
   wraps every node uniformly with timing, structured logging, lineage, dry-run
-  handling, and fail-fast error handling (ADR-0005). An author composes *what*
+  handling, and fail-fast error handling. An author composes *what*
   runs; the runner owns *how* it runs.
 - **Inspectable before it executes.** `.describe()` renders the planned graph from
   the same node list `.run()` walks, so the inspected plan and the executed plan
@@ -70,17 +70,17 @@ the graph *is* the structure.
   `PipelineError`, so a run boundary catches it with the rest of the fail-fast
   family) naming the pipeline and the condition — that every node is an input to
   another, so there is nowhere to start; it does not name the nodes forming the
-  cycle. The guard sits before any node runs,
-  so a dry run refuses the same graph for the same reason (#301).
+  cycle. The guard sits before any node runs, so a dry run refuses the same
+  graph for the same reason.
 - `.run()` returns the bulk `Dataset` from the graph's terminal node(s); the
-  domain edge (CasePool) returns typed `Case` objects (ADR-0002).
+  domain edge (CasePool) returns typed `Case` objects.
 - A **checkpoint is not a special primitive** — it is simply a `write` node placed
   mid-graph whose dataset other nodes still depend on. It snapshots the data at
   that point and the graph continues; its commit is independently-committed
-  evidence (ADR-0005), and it appears as an ordinary write step in the run log.
+  evidence, and it appears as an ordinary write step in the run log.
 - Multi-table fan-out from one feed (a Case table plus its Detail Tables) is
   expressed as separate single-table pipelines over the shared raw table, not a
-  multi-output node (ADR-0009).
+  multi-output node.
 - Every node carries a stable **run address** (`pipeline.step`, optionally
   `subject/pipeline.step`) so logs, declared dependencies, and registry queries
   name the same thing. Keeping every component parameter-constructed is the

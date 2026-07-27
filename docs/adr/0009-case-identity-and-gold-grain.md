@@ -4,7 +4,7 @@ status: accepted
 
 # Case identity and the gold grain: deterministic keys, one row per Case, Detail Tables for the rest
 
-An **Ingest** feed is refined into a **current-state gold** (ADR-0004) whose grain
+An **Ingest** feed is refined into a **current-state gold** whose grain
 is **one row per Case**. A Case's identity is a **deterministic surrogate** —
 `case_id = uuid5(case_type_namespace, natural_key)` — derived from the feed's
 stable natural key. Data that does not fit the one-row-per-Case grain (repeated
@@ -17,7 +17,7 @@ columns it needs — not by a multi-output node or a splitting transform.
 ## Why
 
 - **Deterministic identity preserves idempotency.** A random `uuid4` would break
-  delete-by-logical-run-then-insert (ADR-0004): a re-run would mint *different*
+  delete-by-logical-run-then-insert: a re-run would mint *different*
   ids, so a re-driven run is no longer identical and a Case cannot be tracked
   across runs. `uuid5(namespace, natural_key)` is a pure function of the input —
   the same Case yields the same id on every run and machine (pure stdlib,
@@ -29,7 +29,7 @@ columns it needs — not by a multi-output node or a splitting transform.
   review-platform Deliverable, and Reporting all want an unambiguous *current* Case
   — not a multi-version history to dedup on read. The grain is enforced at the gold
   boundary: a `LatestPerKey(case_id, by=load_date)` reduction collapses accumulated
-  silver history to current, and a `UniqueValidator` on `case_id` (ADR-0006) aborts
+  silver history to current, and a `UniqueValidator` on `case_id` aborts
   the run if the grain is ever breached.
 - **Detail Tables keep the Case grain intact.** Repeated or child-collection data
   cannot sit one-row-per-Case without either widening the Case unmanageably or
@@ -40,7 +40,7 @@ columns it needs — not by a multi-output node or a splitting transform.
   write, one run-log line — and touch no core seam. The thin cross-cutting
   normalisation is one reusable transform attached to each pipeline; column
   projection keeps each pipeline narrow over a 650-column feed. It is the fan-*out*
-  mirror of the DAG's fan-*in* join (ADR-0003).
+  mirror of the DAG's fan-*in* join.
 
 ## Considered options
 

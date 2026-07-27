@@ -4,18 +4,18 @@ This documents the `Schema` + `SchemaValidator` adapter and the
 `SchemaCoercion` processor that repairs raw's round-trip-lossy types ahead of the
 validator, plus how they compose onto a `Pipeline` to enforce the schema at
 the silver boundary. For the *why*, see
-[ADR-0006](adr/0006-graduated-schema-enforcement.md); for the surrounding
-primitives, [core-primitives.md](core-primitives.md).
+[graduated schema enforcement](adr/0006-graduated-schema-enforcement.md); for the
+surrounding primitives, [core-primitives.md](core-primitives.md).
 
 ## The three layers, and where the schema bites
 
-Enforcement is **graduated** across the medallion (ADR-0006):
+Enforcement is **graduated** across the medallion:
 
 | Layer | Shape discipline |
 |-------|------------------|
 | **raw** | **Schema-light.** A faithful mirror of the source snapshot as landed — booleans still as `TRUE`/`FALSE` text, dates still unparsed, warts and all. At most a loud column-presence check so a wholesale source change fails immediately. |
 | **silver** | **Validated — the schema boundary.** A Case Type's declared columns + dtypes are enforced here, as a post-validator, before the data lands. This is where "is this data valid and processable?" gets its authoritative answer. |
-| **gold** | **Validated on the same footing as silver** (ADR-0006) — by composing the same `SchemaValidator` as a post-validator onto the gold-building pipeline (see below). |
+| **gold** | **Validated on the same footing as silver** — by composing the same `SchemaValidator` as a post-validator onto the gold-building pipeline (see below). |
 
 **Why silver, not raw?** Raw must stay faithful to the source so the landing
 zone is diagnosable and re-runnable; hardening the shape is a silver-stage
@@ -42,7 +42,7 @@ class CaseA:
 
 No base class, no registration. Declaring the schema does **not** force you to
 materialise typed objects — it is a *validation contract first*; typed objects
-(`Iterator[CaseA]`) are an opt-in convenience for later (ADR-0006).
+(`Iterator[CaseA]`) are an opt-in convenience for later.
 
 Because the **field names are the column contract**, they must be valid Python
 identifiers — a source whose columns carry spaces or punctuation (`Case Number`)
@@ -98,7 +98,7 @@ operations over actual values. Re-exposing all of that engine-agnostically would
 re-implement a dataframe API on the `Dataset` seam. So `SchemaValidator`
 reaches the backing frame via `to_pandas()` exactly as a Reader/Writer/processor
 does — keeping `Dataset`'s public surface tiny and the pandas-dtype mapping in
-one place (`framework._internal.schema`). See ADR-0002 and ADR-0006.
+one place (`framework._internal.schema`).
 
 ## `SchemaCoercion` — repairing what storage loses
 
@@ -117,7 +117,7 @@ coerced = SchemaCoercion(CaseA)(dataset)   # returns a transformed dataset
 
 It is a callable transform (`(dataset) -> Dataset`) and, like the validator,
 **engine-confined** — a cast needs the engine's vectorised operations, so it
-reaches the frame via `to_pandas()`/`from_pandas()` (ADR-0002). It casts **only
+reaches the frame via `to_pandas()`/`from_pandas()`. It casts **only
 the round-trip-lossy declared types**:
 
 | Declared type | Coerced from | Coerced to |
@@ -154,7 +154,7 @@ storage; validation enforces the contract.**
 A value the coercer cannot cast — an unparseable date, a boolean encoding
 outside the known set (`"maybe"`) — is **not** silently dropped: it raises a
 `CoercionError` with one located message naming the schema, the column, and the
-reason, and the run aborts fail-fast (ADR-0005):
+reason, and the run aborts fail-fast:
 
 ```
 CaseA coercion: column 'active' has unrecognized boolean encoding(s): 'maybe'
@@ -199,19 +199,18 @@ per-run step order is:
 read → coerce (transform) → post-validate (schema) → write
 ```
 
-Because `.run()` is fail-fast and atomic (ADR-0005), either a coercion failure at
+Because `.run()` is fail-fast and atomic, either a coercion failure at
 the **transform** step or a schema breach at the **post-validate** step raises
 *before* the Writer is called — so **no `silver.db` is written** and nothing
 partial lands. The pipeline makes no write or load decisions: the `Store` mints
 the Writer, which owns its location and carries the load strategy that realised
-it (ADR-0003, ADR-0004). For
-the full feed pattern (raw accumulation, filtering the current run before
+it. For the full feed pattern (raw accumulation, filtering the current run before
 coercion), see [`pipelines/ingest/pipeline.py`](../pipelines/ingest/pipeline.py)
 and [adding-a-feed.md](adding-a-feed.md).
 
 ## The same schema, at the gold boundary
 
-Gold is validated *on the same footing as silver* (ADR-0006): the **same**
+Gold is validated *on the same footing as silver*: the **same**
 `SchemaValidator` composes as a post-validator onto whatever pipeline builds gold,
 before the gold write. Two deliberate differences from the silver hop:
 
@@ -222,7 +221,7 @@ before the gold write. Two deliberate differences from the silver hop:
   reduction, not mirrored from ingest) rather than re-checking ingest mirrors. It
   is therefore **optional** — a gold builder may attach `SchemaValidator` or not.
 
-A breach raises at the validate step, before the writer runs (ADR-0005) — so a
+A breach raises at the validate step, before the writer runs — so a
 failed run writes no gold and leaves prior gold intact. How accumulated silver is
 assembled into gold is an application concern (the `case_review.gold` helpers, and
 the open snapshot-vs-join decision); see
@@ -311,7 +310,7 @@ Four shared properties:
   describes **one row**, so it names the rule's expectation and samples
   nothing — the row's own values are already beside the reason in the reject
   table. Two callers, two presentations, one traversal (see
-  [ADR-0007](adr/0007-row-level-quarantine.md)).
+  [opt-in row-level quarantine](adr/0007-row-level-quarantine.md)).
 - **The breach mask is positional and plainly boolean.** `violating_mask()`
   marks rows by position, not by index label, so a frame whose index labels
   repeat — the ordinary result of concatenating two frames behind the `Dataset`
@@ -343,9 +342,9 @@ Either way, authoring a rule means **working inside the engine seam**: the rule
 is handed the column's pandas `Series` directly, because judging a whole column
 one value at a time in plain Python would be unusably slow. This is the same
 bargain readers, writers and transforms make, and
-[ADR-0002](adr/0002-python-processing-opaque-dataset-carrier.md) names value
-rules in its engine-confined list for exactly this reason. Pipeline scripts and
-the domain layer still never name the engine — they only *declare* rules on a
+[Python-only processing with an opaque Dataset carrier](adr/0002-python-processing-opaque-dataset-carrier.md)
+names value rules in its engine-confined list for exactly this reason. Pipeline
+scripts and the domain layer still never name the engine — they only *declare* rules on a
 schema.
 
 ### One message, naming column + rule
@@ -384,7 +383,7 @@ deliberately: a rule over a column that isn't there never runs, and the absence
 itself is the `SchemaValidator`'s to report. The consequence is worth knowing —
 **a typo'd column name in a schema means its rules silently never run during
 quarantine**, so the `SchemaValidator` in front of the quarantine node (the
-ADR-0007 ordering invariant) is what makes the typo visible.
+quarantine ordering invariant) is what makes the typo visible.
 
 ### What a rule costs
 
@@ -392,10 +391,10 @@ ADR-0007 ordering invariant) is what makes the typo visible.
   engine's own operations. Cost is `O(rows × rules)`.
 - A **row check** is a Python callable over one row, so the framework constructs
   a `Series` per row per check and calls into Python each time. On a 1M-row feed
-  (ADR-0002's stated ceiling) three row checks mean three million Python-level
+  (the stated ceiling) three row checks mean three million Python-level
   calls — **orders of magnitude** more than a value rule over the same data.
 
-That is the deliberate trade for expressiveness (ADR-0006): *which* cross-field
+That is the deliberate trade for expressiveness: *which* cross-field
 relationships matter is domain logic, and a callable is the honest shape for it.
 But prefer a value rule when the expectation fits one column, and keep the
 number of declared row checks small on the widest feeds.
@@ -406,10 +405,10 @@ number of declared row checks small on the widest feeds.
 together, so wherever it is composed — at the silver boundary, and again at gold —
 nullability and value rules enforce with no extra wiring. As with dtype breaches, a nullability or value-rule
 breach raises at the post-validate step **before** the writer runs — so the run
-aborts fail-fast and atomically (ADR-0005) and nothing partial lands. `Unique`
+aborts fail-fast and atomically and nothing partial lands. `Unique`
 here is the field-annotation form of uniqueness; the one-row-per-Case *grain*
 on a (possibly composite) key stays the job of `UniqueValidator` at the gold
-boundary (ADR-0009).
+boundary.
 
 ## Row checks — relationships *between* a row's fields
 

@@ -6,7 +6,7 @@ status: accepted
 
 A Case Type's **schema** is a declared statement of its expected columns, types,
 and field-level content rules — a dataclass whose annotations *are* the contract
-(dataclass → Pydantic later is a seam, ADR-0011). Enforcement is **graduated** by
+(dataclass → Pydantic later is a seam). Enforcement is **graduated** by
 layer:
 
 - **Raw — schema-light.** Land what the (snapshot) source gives. Raw carries two
@@ -26,7 +26,7 @@ The schema is a **validation contract first**; materializing typed objects
 
 Beyond columns and dtypes, a schema declares two axes of content rule, both
 feeding the same two consumers (abort, collected into one `SchemaValidator`
-message; or quarantine, as a `failed_rule` reason — ADR-0007):
+message; or quarantine, as a `failed_rule` reason):
 
 - A **value rule** is *vertical* — one column across many rows (format/`Pattern`,
   `Length`, `Range`, membership/`OneOf`, `Unique`, `NonNull`/`Nullable`) —
@@ -61,7 +61,7 @@ warns once, not every run.
 
 - Each Case Type declares its silver/gold shape once; `SchemaValidator` is derived
   from it, and that dataclass → validator adapter is the dataclass → Pydantic seam.
-- Combined with ADR-0005, a schema breach aborts the run atomically with a located
+- A schema breach aborts the run atomically with a located
   error — no silent wrong output. Raw remains a faithful mirror of the snapshot;
   shape hardening is silver's job.
 - **The schema/value validators are engine-confined.** Structural validators
@@ -69,7 +69,7 @@ warns once, not every run.
   (`columns` / `len`). A schema check inspects dtypes, and value rules need the
   engine's vectorised operations over actual values, so `SchemaValidator` reaches
   the backing frame via `to_pandas()` exactly like a Reader/Writer/transform does
-  (ADR-0002) — keeping `Dataset`'s public surface tiny. The Python-type ↔
+  — keeping `Dataset`'s public surface tiny. The Python-type ↔
   pandas-dtype mapping lives in one place so the rest of the system names only
   Python types, and an unmappable declared type fails where the validator is
   built, not mid-run.

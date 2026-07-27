@@ -9,7 +9,7 @@ pipelines. It does not encode the case-review domain — or any domain — in it
 names, primitives, or structure. Business vocabulary, recipes, and policy live in
 the application layer (`case_review/`, `pipelines/`); the framework knows only
 generic shapes (`Dataset`, `Reader`, `Writer`, `Pipeline`, nodes, and the DAG that
-composes them — ADR-0003).
+composes them).
 
 This is the load-bearing constraint behind the framework's lean shape. The
 [`RETROSPECTIVE.md`](../../RETROSPECTIVE.md) records why it has to be a rule and
@@ -32,7 +32,7 @@ so that lesson is enforced going forward rather than rediscovered.
 
 3. **An ADR must name a requirement that breaks *today*.** If the honest answer to
    "what breaks if we don't decide this now?" is "nothing, we might refactor
-   later," it is a note, not an ADR. You may *name* a future seam (ADR-0011); you
+   later," it is a note, not an ADR. You may *name* a future seam; you
    may not *build past* it speculatively.
 
 4. **Features are pulled, not pushed.** A capability enters the framework because a

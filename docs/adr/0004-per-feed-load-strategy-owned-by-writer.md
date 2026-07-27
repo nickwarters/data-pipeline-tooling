@@ -7,7 +7,7 @@ status: accepted
 How a table is loaded — full refresh vs accumulate — is a **per-feed choice
 carried by the Writer**, not a property of the layer. `store.writer(table,
 strategy)` takes the strategy explicitly and the namespace `Store` only resolves
-*which* file the Writer targets (ADR-0001; with the medallion profile that file
+*which* file the Writer targets (with the medallion profile that file
 is `<subject>/<layer>.db` for `med.<layer>`). Two feeds may land in the same
 layer with different strategies; the composition machinery makes no load decision
 of its own.
@@ -25,7 +25,7 @@ The strategies:
 ## How the ownership is mechanised
 
 The ownership above is literal, not merely asserted: **each strategy realises
-its own Writer** (#305). A strategy exposes `writer_for(db_path, table,
+its own Writer**. A strategy exposes `writer_for(db_path, table,
 busy_timeout_ms=...)`, which mints the SQLite Writer that implements it, and the
 optional `apply_to_frame(frame, read_existing)` for the whole-file rewrite a
 file Writer performs. `store.writer(table, strategy)` therefore delegates in one
@@ -77,7 +77,7 @@ RunRegistry record without guessing which "run id" applies.
 Several sources are **destructive current-state systems** — they overwrite, and
 history cannot be re-pulled. For those, the framework must be the historian: an
 Ingest feed **accumulates raw and silver** (the change-over-time record) and
-reduces to a **current-only gold** of one row per Case (ADR-0009). Gold becomes
+reduces to a **current-only gold** of one row per Case. Gold becomes
 the clean, enforced consumption layer feeding Selection and Reporting rather than
 a multi-version pile deduped on read.
 
@@ -101,7 +101,7 @@ no longer the only one.
 
 - **Raw is no longer always rebuildable from source.** Where the source is
   destructive, accumulated raw/silver are a **system of record** needing
-  backup/retention (ADR-0001), not a transient landing zone.
+  backup/retention, not a transient landing zone.
 - **The volume envelope grows.** Accumulating raw + silver scales `records ×
   snapshots`, beyond the original ≤~1M assumption; revisit retention/compaction
   per feed when one warrants it.

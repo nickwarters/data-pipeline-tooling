@@ -25,7 +25,7 @@ gates), not by varying the randomness itself.
   remaining trivially replayable: reconstruct the past input (from accumulated
   silver as-of-date) and re-feed the same fixed seed to get the identical draw. No
   per-run seed to record and replay; no dependence on run-id semantics.
-- **Purity keeps the seam clean.** A transform is `Dataset -> Dataset` (ADR-0002),
+- **Purity keeps the seam clean.** A transform is `Dataset -> Dataset`,
   engine-confined and context-free. Injecting a run id or the clock would smuggle
   run context into a transform that should know nothing of it, and would make the
   same data + same config non-reproducible across machines and times.
@@ -33,7 +33,7 @@ gates), not by varying the randomness itself.
   key (`case_id`) and drawn via `hash(seed, group_key)`, so the result is invariant
   to incoming row/group ordering and each group is independent — "same *set* in ⇒
   same sample out," even if an upstream join reshuffled rows. This mirrors the
-  deterministic-identity reasoning of ADR-0009 (pure stdlib hashing, identical on
+  deterministic-identity reasoning behind Case identity (pure stdlib hashing, identical on
   Windows/macOS).
 
 ## Considered options

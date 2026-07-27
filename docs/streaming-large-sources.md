@@ -12,7 +12,7 @@ If your source fits in memory, you don't need any of this — use an ordinary
 `Reader` and `Pipeline.read(...)`. Reach here only when a source can't be one
 `Dataset`.
 
-> **History (#314).** Until wave 4 of the review remediation the `ChunkReader`
+> **History.** Until wave 4 of the review remediation the `ChunkReader`
 > family had **no** consumer in the DAG: `Pipeline.read()` took a `Reader` and
 > called `.read()`, and the only chunk loop in the repository was the standalone
 > `tools.observability.stream_step`. A feed that outgrew memory therefore lost
@@ -220,8 +220,8 @@ readers' zero-row-chunk skip), and both wrappers expose `rows_scanned` /
 
 `RetryingChunkReader(inner, policy)` is the streaming counterpart of
 `RetryingReader`. The streaming readers are the ones most exposed to transient
-failure — they reach network shares and remote SAS extracts — and until #314 they
-were the only readers retry could not cover, since a `ChunkReader` has no
+failure — they reach network shares and remote SAS extracts — and they were
+previously the only readers retry could not cover, since a `ChunkReader` has no
 `read()` to wrap.
 
 **The semantics, chosen explicitly:** a failure is retried **only while the stream
@@ -326,4 +326,4 @@ if "case_id" not in expected_columns:
 - [run-log-format.md](run-log-format.md) — the JSONL record schema and the run registry.
 - [operator-cli.md](operator-cli.md) — running a `pipelines/<feed>/` module by location.
 - [public-api.md](public-api.md) — the `framework.io` filter surface.
-- [adr/0002-python-processing-opaque-dataset-carrier.md](adr/0002-python-processing-opaque-dataset-carrier.md) — the opaque carrier, and the amendment recording why streaming was needed after all.
+- [Python-only processing, dumb store, opaque Dataset carrier](adr/0002-python-processing-opaque-dataset-carrier.md) — the opaque carrier, and the amendment recording why streaming was needed after all.

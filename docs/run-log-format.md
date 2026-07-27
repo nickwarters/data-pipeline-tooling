@@ -3,8 +3,8 @@
 Every `.run()` can emit **structured run observability**: one JSON object per
 line to a `.log` file, plus a human-readable line per record to the console for
 development. The file is deliberately infrastructure-free now, yet it is the
-**seam the run-registry ingests** (ADR-0011) without parsing free text. See
-ADR-0005 for the *why* (fail-fast, atomic, no silent drops).
+**seam the run-registry ingests** without parsing free text. The *why*: runs are
+fail-fast and atomic, with no silent drops.
 
 ## Wiring it in
 
@@ -116,21 +116,21 @@ appears in the log; `params` is logged but has no column.
 | `status`    | `"ok"` \| `"error"` | Step/run outcome. |
 | `rows_in`   | int \| null         | Rows the step consumed (`null` where N/A, e.g. a one-shot `read`, which consumes nothing). A **streamed** read is the exception: it reports the rows it scanned from the source, so a filtering source's record shows the whole scan rather than only the survivors it passed on. |
 | `rows_out`  | int \| null         | Rows the step produced. |
-| `rows_quarantined` | int \| null  | Rows routed aside on a `quarantine` step (value-rule breaches — ADR-0007); `null` elsewhere. |
-| `rows_excluded` | int \| null     | Cases a gate excluded on an `explain` step (Selection explainability — ADR-0008); `null` elsewhere. |
+| `rows_quarantined` | int \| null  | Rows routed aside on a `quarantine` step (value-rule breaches); `null` elsewhere. |
+| `rows_excluded` | int \| null     | Cases a gate excluded on an `explain` step (Selection explainability); `null` elsewhere. |
 | `duration`  | float \| null       | Wall-clock seconds for the step/run. |
 | `errors`    | string[]            | Error messages when `status` is `error`; `[]` otherwise. |
 | `error_category` | string \| null | The triage category of an expected failure (`data` / `operational` / `config`) so an operator can route it without reading every message. `null` for a bug (a non-`PipelineError`) — the absence is the signal. |
 | `warn_hits` | string[]            | Warn-severity validator messages tolerated at this step; `[]` otherwise. |
-| `committed` | bool                | `true` on a step that durably wrote an artifact (`write`, `quarantine` with rejects, `explain`, `checkpoint`) — independently committed evidence that **survives a later step's failure** (ADR-0005). Set only on the success record; `false` everywhere else. |
+| `committed` | bool                | `true` on a step that durably wrote an artifact (`write`, `quarantine` with rejects, `explain`, `checkpoint`) — independently committed evidence that **survives a later step's failure**. Set only on the success record; `false` everywhere else. |
 | `params`    | object              | The run's parameters, recorded only after caller-side redaction; `{}` when none. Logged for traceability but **not** stored by the registry — it has no column for them. |
-| `profile`   | object \| null      | The per-column statistical profile a `profile` step recorded (#284): a `DatasetProfile` record (`row_count` + per-column `null_rate`, `distinct_count`, `min`/`max`, bounded top-N distribution). `null` on every non-profile step. The registry stores it in a queryable `profile` column and trends it across runs via `recent_profiles(address)`. |
+| `profile`   | object \| null      | The per-column statistical profile a `profile` step recorded: a `DatasetProfile` record (`row_count` + per-column `null_rate`, `distinct_count`, `min`/`max`, bounded top-N distribution). `null` on every non-profile step. The registry stores it in a queryable `profile` column and trends it across runs via `recent_profiles(address)`. |
 
 ### Instants are UTC, calendar dates are local
 
 Two clocks meet in the run metadata, and mixing them silently is how a nightly
 batch blocks itself on a perfectly fresh upstream. The rule is decided in one
-place — `tools/observability/timestamps.py` (#308) — and every surface reads it
+place — `tools/observability/timestamps.py` — and every surface reads it
 from there:
 
 - **Instants are UTC.** A record's `timestamp` is a timezone-aware UTC moment,
@@ -163,7 +163,7 @@ apply the rule identically.
 **Exactly one record per step**, in execution order, then a final `run` summary.
 That is an invariant of the engine, not a convention: recording lives in one
 place (the node wrapper), and a node reports its counts by returning them rather
-than by logging (#311). Before that, `quarantine` and `explain` each emitted
+than by logging. Before that, `quarantine` and `explain` each emitted
 *two* records — one carrying the counts, one carrying the duration, and the
 quarantine pair disagreed on `step_address` under a dry run. Registry databases
 written before the fix still hold those pairs; `RunRegistry.ingest()` keeps
@@ -175,16 +175,17 @@ The steps of a run:
 
 1. `read` — `rows_out` is the rows the Reader produced.
 2. `pre-validate` — input validators; `warn_hits` lists any tolerated failures.
-3. `post-validate` — output validators (the home of ADR-0006 schema checks).
+3. `post-validate` — output validators (the home of the schema checks).
 4. `write` — present only when a Writer is composed; `rows_in` is the rows handed to it.
 5. `run` — the **summary**: overall `status`, total `duration`, and the
    run's aggregated `warn_hits`.
 
 Opt-in steps appear only when their path is configured: `quarantine` (between
-`pre-validate` and the processors — ADR-0007, with `rows_quarantined`),
+`pre-validate` and the processors, with `rows_quarantined`),
 `dependency:<name>` (a read-only join dependency materialized before the
 processor that consumes it), `profile` (a read-only per-column profile recorded
-on the step's `profile` field — #284), and `explain` (after `post-validate` — ADR-0008, with `rows_excluded`; its `rows_in`/`rows_out` are the Cases
+on the step's `profile` field), and `explain` (after `post-validate`, with
+`rows_excluded`; its `rows_in`/`rows_out` are the Cases
 considered/selected by Selection). A `process` step is recorded per attached
 processor, so dependency reads are distinguishable from downstream join
 processing.
@@ -220,7 +221,7 @@ requirement failure text so operators can see which `RunAddress` prevented the
 scheduled item from running.
 
 The freshness decision itself is made in exactly one place —
-`evaluate_requirement` in `framework/run/freshness.py` (#313) — of which the
+`evaluate_requirement` in `framework/run/freshness.py` — of which the
 runner's `FreshnessGuard` is the recording-and-raising wrapper and
 `Orchestrator.plan()` the read-only caller, so the run log's `freshness` step,
 the `blocked` decision, and the plan preview all describe a condition the same
@@ -242,8 +243,8 @@ reads the flag on decisions it has just made, so the older rows are unaffected.
 ### Fail-fast abort (error-severity validator)
 
 The failing step is recorded `error` with its message, the `run` summary closes
-the run as `error`, **no `write` record is emitted** (nothing partial lands —
-ADR-0005), and `.run()` re-raises `ValidationError`:
+the run as `error`, **no `write` record is emitted** (nothing partial lands), and
+`.run()` re-raises `ValidationError`:
 
 ```json
 {"pipeline_run_id": "…", "pipeline": "cases", "step": "read",         "status": "ok",    "rows_out": 1, "errors": [],                                                     "warn_hits": []}
@@ -255,7 +256,8 @@ ADR-0005), and `.run()` re-raises `ValidationError`:
 
 A run that writes an artifact (quarantine reject, explain/trace, or checkpoint)
 and *then* fails leaves that artifact **on disk** — it is independently committed
-evidence, not rolled back ([ADR-0005](adr/0005-fail-fast-atomic-runs-and-observability.md)).
+evidence, not rolled back ([fail-fast atomic runs, independently-committed
+artifacts](adr/0005-fail-fast-atomic-runs-and-observability.md)).
 The `committed` marker is the operator's index of what already landed: the
 quarantine step below committed (`committed: true`) before the terminus `write`
 blew up, so the reject table is real even though the run is `error`.
@@ -271,7 +273,7 @@ blew up, so the reject table is real even though the run is `error`.
 
 A warn-severity failure is recorded as a `warn_hit` on its step (status stays
 `ok`), the run continues to the write, and the `run` summary surfaces the
-aggregated `warn_hits` — so a tolerated condition is still visible (ADR-0005).
+aggregated `warn_hits` — so a tolerated condition is still visible.
 
 ## Reading the log back
 
@@ -288,7 +290,7 @@ records = [json.loads(line) for line in open("runs.log")]
 consumed line is persisted in the registry DB's `ingest_progress` table, keyed
 by the normalised absolute path of the log file.  On each call only the tail
 bytes beyond that offset are read, so cost is proportional to new records rather
-than total history — important on a network-share deployment (ADR-0001).
+than total history — important on a network-share deployment.
 
 **Partial-line safety.** The tail is read in binary mode.  If the tail does not
 end with `\n` (the writer is mid-append), the trailing fragment is left for the
