@@ -1,11 +1,11 @@
 """The raw → silver → gold medallion, as an application-level store profile.
 
-The medallion is no longer framework vocabulary (#232): ``framework.io`` stores
+The medallion is no longer framework vocabulary: ``framework.io`` stores
 an opaque ``namespace`` (a logical database) → file, and this helper layers the
 conventional three-layer medallion on top. A subject's three layers are three
 namespaces under it — ``<subject>/raw``, ``<subject>/silver``, ``<subject>/gold``
 — so the on-disk layout stays ``<root>/<subject>/{raw,silver,gold}.db``, isolated
-per subject (ADR-0001).
+per subject.
 
 Usage::
 
@@ -32,7 +32,7 @@ from dataclasses import dataclass
 from tools.store import Store, StoreRegistry
 
 # The conventional medallion layer names. They are a profile convention here, not
-# a framework enum — the framework knows only namespaces (ADR-0001 amendment).
+# a framework enum — the framework knows only namespaces.
 RAW = "raw"
 SILVER = "silver"
 GOLD = "gold"

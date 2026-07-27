@@ -6,7 +6,7 @@ The stable import surface for getting a feed *in* and a result *out*: every
 on ``framework.core``. Where a feed *lands* — the namespace ``Store`` /
 ``StoreRegistry`` (one logical database → file) and the raw/silver/gold medallion
 profile over it — is **application infrastructure** in the sibling ``tools``
-package (``tools.store``, ``tools.medallion``), not framework vocabulary (#232).
+package (``tools.store``, ``tools.medallion``), not framework vocabulary.
 
 Import from here rather than the underlying modules::
 

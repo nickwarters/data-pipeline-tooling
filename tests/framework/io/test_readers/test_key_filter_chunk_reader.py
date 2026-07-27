@@ -1,4 +1,4 @@
-"""Tests for the chunk-level row filters (issue #287).
+"""Tests for the chunk-level row filters.
 
 ``KeyFilterChunkReader`` is the headline id-allow-list (semi-join) filter and
 ``PredicateChunkReader`` the general per-chunk filter it is built on. Both wrap

@@ -80,7 +80,7 @@ class RunLog:
 
         ``committed`` marks a step that durably wrote an artifact (a write,
         quarantine, explain/trace, or checkpoint) — independently committed
-        evidence that survives a *later* step's failure (ADR-0005). It is
+        evidence that survives a *later* step's failure. It is
         recorded only on the success path: a step that raised committed nothing.
         """
         metrics = StepMetrics()

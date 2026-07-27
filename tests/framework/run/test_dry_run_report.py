@@ -1,4 +1,4 @@
-"""The DryRunReport rendering: compact, bounded, human-readable (issue #102)."""
+"""The DryRunReport rendering: compact, bounded, human-readable."""
 
 from __future__ import annotations
 

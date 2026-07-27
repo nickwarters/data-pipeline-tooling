@@ -339,7 +339,7 @@ def test_ingest_preserves_the_error_triage_category(tmp_path):
 
 def test_ingest_tolerates_a_pre_timestamp_log(tmp_path):
     # The registry must read a log written before the timestamp field existed
-    # (, the format the emitter produced previously): the record ingests,
+    # (the format the emitter produced previously): the record ingests,
     # its missing timestamp lands as null, and it is still queryable by run_id.
     log_path = tmp_path / "old.log"
     old_record = {  # the pre-amendment shape — no "timestamp" key
@@ -364,7 +364,7 @@ def test_ingest_tolerates_a_pre_timestamp_log(tmp_path):
 
 
 def test_runs_that_warned_surfaces_tolerated_warn_hits(tmp_path):
-    # A warn-severity breach (the home of a schema-drift warning, ) is
+    # A warn-severity breach (the home of a schema-drift warning) is
     # tolerated — the run stays "ok" — but its message is carried on the run
     # summary's warn_hits. runs_that_warned returns exactly those runs, with the
     # messages decoded back to a list, so a drift is visible without re-grepping
@@ -521,7 +521,7 @@ def test_repeated_process_steps_are_kept_distinct_not_deduped(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Incremental-ingest tests (issue #146)
+# Incremental-ingest tests
 # ---------------------------------------------------------------------------
 
 
@@ -742,7 +742,7 @@ def test_incremental_ingest_offset_persisted_across_registry_instances(tmp_path)
 
 
 def test_committed_marker_round_trips_through_ingest(tmp_path):
-    # The write step's `committed` artifact marker (ADR-0005) survives the
+    # The write step's `committed` artifact marker survives the
     # emitter -> registry seam: it reads back as True on write, False on read.
     log_path = tmp_path / "cases.log"
     run_id = _run_pipeline(log_path)

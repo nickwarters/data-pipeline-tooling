@@ -26,7 +26,7 @@ centralized.
 Ingest is incremental: each ``.log`` file's last consumed byte position is
 persisted in the registry DB (``ingest_progress`` table).  On the next call,
 only the new tail bytes are read so cost does not grow with total history — an
-important property when the file lives on a network share (ADR-0001).  If the
+important property when the file lives on a network share.  If the
 file is shorter than the recorded offset (truncation / rotation), the offset is
 reset to 0 and the whole file is re-read from the top; idempotency via
 ``INSERT OR IGNORE`` guarantees no double-counting.

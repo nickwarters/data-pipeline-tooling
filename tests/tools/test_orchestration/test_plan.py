@@ -1,4 +1,4 @@
-"""Tests for Orchestrator.plan() and plan_for_each() (issue #245)."""
+"""Tests for Orchestrator.plan() and plan_for_each()."""
 
 import datetime as dt
 import json

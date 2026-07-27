@@ -12,7 +12,7 @@ framework vocabulary. The framework knows only the ``Reader`` / ``Writer`` ports
 (``framework.io``); where a feed lands (``namespace`` → file) and how named
 components are wired is an application concern. The raw/silver/gold medallion is a
 profile layered on top of this (``tools.medallion``), itself an application
-convention (#232).
+convention.
 """
 
 from __future__ import annotations
@@ -54,7 +54,7 @@ class DirectoryStoreBackend:
 
     A namespace may nest with ``/`` (e.g. ``cases/silver``), which maps to
     ``<root>/cases/silver.db`` — the layout the medallion profile uses to keep a
-    subject's layer files together and isolated (ADR-0001).
+    subject's layer files together and isolated.
     """
 
     def db_file(
@@ -68,7 +68,7 @@ class Store:
     """One namespace (a logical database): mints Writers/Readers over its tables.
 
     ``Store`` binds a single database file and mints components over named tables
-    in it. It makes no load decision (ADR-0003); the caller chooses the strategy
+    in it. It makes no load decision; the caller chooses the strategy
     when minting a Writer.
     """
 

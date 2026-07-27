@@ -273,7 +273,7 @@ def dry_run_pipeline(
     params: RunParams | None = None,
     freshness_days: int = 0,
 ) -> DryRunReport:
-    """Preview a pipeline handler without committing anything (issue #102).
+    """Preview a pipeline handler without committing anything.
 
     Runs ``handler`` under a dry-run :class:`RunContext` made ambient for the
     call, so every nested ``Pipeline.run()`` reads, processes, and validates real

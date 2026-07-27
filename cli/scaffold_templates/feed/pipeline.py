@@ -10,7 +10,7 @@ test drives the actual hop rather than a rebuild of it.
 - ``raw_builder``   reads the source and lands it faithfully (column-gated).
 - ``silver_builder`` renames source columns, coerces dtypes, and validates.
 - ``gold_builder``  assembles silver into gold -- a passthrough to start; the
-  assembly is yours to build (see the TODO and #163).
+  assembly is yours to build (see the TODO).
 
 Address it by its location on disk -- the framework imports
 ``pipelines.myfeed.pipeline`` and runs its ``run(context)`` callable::

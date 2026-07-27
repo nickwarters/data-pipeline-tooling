@@ -164,7 +164,7 @@ class Node:
                 step_address=self.address.label if self.address is not None else None,
             )
             # A dry run still surfaces the failing step so the preview shows the
-            # shape so far and the clear reason it stopped (issue #102).
+            # shape so far and the clear reason it stopped.
             if context.dry_run and context.dry_run_report is not None:
                 context.dry_run_report.observe(
                     self.name, self.node_type, note=f"FAILED: {exc}"
@@ -479,7 +479,7 @@ class WriteNode(Node):
         self, session: PipelineExecution, context: RunContext, dataset: Dataset
     ) -> StepResult:
         if context.dry_run:
-            # Dry-run: skip the commit, report intent only (issue #102).
+            # Dry-run: skip the commit, report intent only.
             self.dry_run_note = f"would write {len(dataset)} row(s)"
             return StepResult(dataset)
         try:
@@ -509,9 +509,9 @@ class ActionNode(Node):
             # An action exists only for its side effect, and the framework cannot
             # see what that effect touches — a mail, a remote job, a file. So a
             # preview cannot let it fire and still promise it commits nothing;
-            # like every other side-effecting node it reports its intent instead
-            # (issue #300). A lambda or a callable object has no useful
-            # ``__name__``, so fall back to something an operator can still read.
+            # like every other side-effecting node it reports its intent instead.
+            # A lambda or a callable object has no useful ``__name__``, so fall
+            # back to something an operator can still read.
             label = getattr(self.action, "__name__", None) or repr(self.action)
             self.dry_run_note = f"would run action {label}"
             return StepResult()
@@ -522,7 +522,7 @@ class ActionNode(Node):
 class ProfileNode(Node):
     """Drive an injected profiler, record its payload, pass the dataset through.
 
-    A read-only *Task* (#284): it hands the dataset to a
+    A read-only *Task*: it hands the dataset to a
     :class:`~framework.core.protocols.DatasetProfiler` (the application's
     statistical computation, injected like a ``RunLog``), attaches the structured
     payload that profiler returns to this node's run-log record (so the registry
@@ -700,7 +700,7 @@ class Pipeline:
         *,
         name: str = "profile",
     ) -> Node:
-        """Wire a read-only profiling Task over ``input_node`` (#284).
+        """Wire a read-only profiling Task over ``input_node``.
 
         ``profiler`` is an injected
         :class:`~framework.core.protocols.DatasetProfiler` — the application's
