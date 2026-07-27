@@ -9,8 +9,23 @@ import {
   getByTag,
   queryAllByRole,
 } from './helpers/semantic-dom.js';
+import { registerCaseType } from '../case-types/manifest.js';
 
 installDom();
+
+// A second fixture Case Type whose config never arrives. `viewModel.load()`
+// awaits `loadCaseTypeConfig(params.caseType)` before it reaches
+// `client.getCase(params.id)`, so mounting with this slug parks the load at its
+// first await: the loader — the one legitimate reader of the route param —
+// never runs, and a test that supplies its own store state can assert on the
+// route param without racing it. `getCurrentUser: () => never` cannot achieve
+// this: it shares a `Promise.all` with `getCase`, which has already been
+// called by then.
+registerCaseType({
+  slug: 'pending-config-review',
+  displayName: 'Pending Config Review',
+  importer: () => new Promise(() => {}),
+});
 
 const {
   caseReviewReducer,
@@ -142,6 +157,24 @@ function snapshot() {
 }
 
 /**
+ * A `tools.listen` that records the route's document-level handlers by event
+ * type, so a test can invoke them directly.
+ *
+ * Keyed by type alone: two listeners of one type would silently overwrite. That
+ * is fine today — the route registers exactly one `keydown` and one
+ * `visibilitychange`.
+ *
+ * @param {Map<string, Function>} listeners
+ */
+function captureListeners(listeners) {
+  return (
+    /** @type {any} */ _target,
+    /** @type {string} */ type,
+    /** @type {Function} */ listener
+  ) => listeners.set(type, listener);
+}
+
+/**
  * Render through the same route-slice path production mounts, in the same
  * order: a first render, then `start()`. The store state is supplied directly,
  * so the load hangs deliberately and never overwrites it — but the route's
@@ -185,11 +218,13 @@ function renderShippedState(
   const actions = [];
   const container = document.createElement('main');
   seedContainer?.(container);
+  /** @type {Map<string, Function>} */
+  const listeners = new Map();
   /** @type {any} */
   let tools;
   tools = {
     morph,
-    listen() {},
+    listen: captureListeners(listeners),
     dispatch(/** @type {any} */ action) {
       actions.push(action);
       state = slice.reducer(state, action);
@@ -203,6 +238,7 @@ function renderShippedState(
     dispose,
     actions,
     container,
+    listeners,
     dispatch(/** @type {any} */ action) {
       tools.dispatch(action);
     },
@@ -2034,6 +2070,129 @@ test('the route writes to the loaded Case row id, not the route param that found
   ]);
 });
 
+test('#556: every persistence path addresses the loaded Case id, not the route param that found it', async () => {
+  // The assertion #511 could not make while the spellings disagreed: one mount
+  // where the loaded row's id differs from `params.id`, driving every path that
+  // names a Case id. The Conversation post was the live defect — it is inline in
+  // the render function rather than in an effect, so #511's move onto the
+  // accessor passed it by, and it posted a Message against the unresolved route
+  // param. The Notes write is deliberately absent: it is already locked by the
+  // #511 test above, which owns that path.
+  //
+  // The mount uses `pending-config-review`, so the Case load parks before
+  // `client.getCase` and never contributes a call of its own — the loader is
+  // otherwise a legitimate reader of the route param, and every call recorded
+  // below would be racing it.
+  const transitionPatch = { status: 'Completed', completedAt: '2026-01-01' };
+  const interactive = snapshot();
+  interactive.caseRow = { ...interactive.caseRow, id: 'c1' };
+  interactive.allAnswered = true;
+  interactive.machine = /** @type {any} */ ({
+    canToggleConversation: true,
+    canComplete: true,
+    mayResolveRemediation: false,
+    transitionToCompleted: () => transitionPatch,
+  });
+  let state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: interactive }
+  );
+  state = caseReviewReducer(state, { type: 'case/conversation-toggled' });
+
+  /** @type {Array<[string, string]>} */
+  const addressed = [];
+  let read = 0;
+  /** Every id addressed since the previous step, in call order. */
+  const sinceLastStep = () => {
+    const calls = addressed.slice(read);
+    read = addressed.length;
+    return calls;
+  };
+  const saveQueue = {
+    async flushCase(/** @type {string} */ id) {
+      addressed.push(['flushCase', id]);
+      return true;
+    },
+    // Recorded, because the ETag read is the sharpest consequence of the bug:
+    // an unknown id yields `''`, i.e. `If-Match: ''` — an unguarded write
+    // rather than a loud failure.
+    getEtag: (/** @type {string} */ id) => {
+      addressed.push(['getEtag', id]);
+      return 'e1';
+    },
+    loadCase: () => {},
+  };
+  const client = {
+    async patchCase(/** @type {string} */ id, /** @type {any} */ fields) {
+      addressed.push(['patchCase', id]);
+      return { ok: true, status: 200, data: { ...caseRow, ...fields } };
+    },
+    async getCase(/** @type {string} */ id) {
+      addressed.push(['getCase', id]);
+      return { ...caseRow, conversation: [] };
+    },
+  };
+  // A route param that addresses the same row without being byte-identical to
+  // its id — `#/case/…/C1` for item `c1`.
+  const view = renderShippedState(state, { client, saveQueue }, undefined, {
+    caseType: 'pending-config-review',
+    id: 'C1',
+  });
+
+  // 1. The Conversation Message post (the defect): a write.
+  const message = getByRole(view.container, 'textbox', {
+    name: 'Message to Responsible Party',
+  });
+  message.value = 'Please review this.';
+  fireEvent(
+    getByRole(view.container, 'button', { name: 'Send message' }),
+    'click'
+  );
+  await flush();
+  assert.deepEqual(
+    sinceLastStep(),
+    [
+      ['getEtag', 'c1'],
+      ['patchCase', 'c1'],
+    ],
+    'the Conversation Message is posted against the loaded row, not `params.id`'
+  );
+
+  // 2. Completion: the SaveQueue flush, the ETag read and the lifecycle PATCH.
+  // Order-free: whether `completeCase` flushes before it PATCHes is its own
+  // business, not this test's subject.
+  fireEvent(
+    getByRole(view.container, 'button', { name: 'Complete Case' }),
+    'click'
+  );
+  await flush();
+  assert.deepEqual(
+    sinceLastStep()
+      .map((call) => call.join(' '))
+      .sort(),
+    ['flushCase c1', 'getEtag c1', 'patchCase c1'],
+    'completion flushes, guards and PATCHes the loaded row, not `params.id`'
+  );
+
+  // 3. The Conversation refresh on tab focus: a read of the same row.
+  const onVisibilityChange = view.listeners.get('visibilitychange');
+  assert.equal(typeof onVisibilityChange, 'function');
+  /** @type {any} */ (onVisibilityChange)();
+  await flush();
+  assert.deepEqual(
+    sinceLastStep(),
+    [['getCase', 'c1']],
+    'the Conversation refresh reads the loaded row, not `params.id`'
+  );
+
+  assert.equal(
+    addressed.some(([, id]) => id === 'C1'),
+    false,
+    'no path anywhere reached for the route param'
+  );
+  view.dispose();
+});
+
 test('CASE-1 save effect: rapid Answer dispatches coalesce through unchanged SaveQueue', async () => {
   /** @type {any[]} */
   const patches = [];
@@ -2954,11 +3113,7 @@ function startPendingLoadRoute(clientOverrides) {
     /** @type {any} */ ({
       morph,
       dispatch: (/** @type {any} */ action) => actions.push(action),
-      listen: (
-        /** @type {any} */ _target,
-        /** @type {string} */ type,
-        /** @type {Function} */ listener
-      ) => listeners.set(type, listener),
+      listen: captureListeners(listeners),
       isActive: () => active,
     })
   );
@@ -2990,6 +3145,28 @@ function deferred() {
 async function drain() {
   for (let turn = 0; turn < 50; turn += 1) await Promise.resolve();
 }
+
+test('Alt+C toggles the Conversation panel from the document keydown shortcut', () => {
+  const route = startPendingLoadRoute({ getCase: () => new Promise(() => {}) });
+  const onKeydown = route.listeners.get('keydown');
+  assert.equal(typeof onKeydown, 'function');
+  const press = (/** @type {any} */ event) =>
+    /** @type {any} */ (onKeydown)(event);
+
+  press({ altKey: true, code: 'KeyC' });
+  // Neither half of the shortcut alone toggles anything.
+  press({ altKey: false, code: 'KeyC' });
+  press({ altKey: true, code: 'KeyD' });
+
+  assert.deepEqual(
+    route.actions.filter(
+      (action) => action.type === 'case/conversation-toggled'
+    ),
+    [{ type: 'case/conversation-toggled' }],
+    'only Alt+C toggles, and it toggles once per press'
+  );
+  route.dispose();
+});
 
 test('#517: a Case load resolving after unmount dispatches nothing', async () => {
   const pendingMounted = deferred();

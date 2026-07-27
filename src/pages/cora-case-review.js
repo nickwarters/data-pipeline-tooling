@@ -756,7 +756,7 @@ export function createRouteSlice(params, context) {
               await postConversationMessage({
                 client: context.client,
                 saveQueue: context.saveQueue,
-                caseId: params.id,
+                caseId: caseId(),
                 messages: caseRow.conversation,
                 currentUser,
                 caseListOptions: snapshot.caseListOptions,
@@ -806,7 +806,7 @@ export function createRouteSlice(params, context) {
                   });
                   try {
                     await completeCase({
-                      caseId: caseRow.id,
+                      caseId: caseId(),
                       client: context.client,
                       saveQueue: context.saveQueue,
                       patchFields,
@@ -870,7 +870,7 @@ export function createRouteSlice(params, context) {
           if (document.hidden) return;
           void refreshConversation({
             client: context.client,
-            caseId: params.id,
+            caseId: caseId(),
             caseListOptions: viewModel.caseListOptions,
           }).then((row) => {
             if (row && tools.isActive()) {
