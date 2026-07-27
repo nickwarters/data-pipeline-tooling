@@ -12,6 +12,7 @@ from tools.orchestration import (
     LastWorkingDayOfMonth,
     ManualOnly,
     NthWorkingDayOfMonth,
+    OrchestrationDecision,
     OrchestrationStore,
     Orchestrator,
     PipelineSet,
@@ -484,3 +485,67 @@ def test_orchestration_lineage_links_a_pass_to_each_pipeline_execution(tmp_path)
         assert {r["pipeline_run_id"] for r in records} == {row["pipeline_run_id"]}
         summary = [r for r in records if r["step"] == "run"]
         assert summary and summary[0]["logical_run_id"] == row["logical_run_id"]
+
+
+def test_a_store_predating_the_correlation_columns_migrates_in_place(tmp_path):
+    # The decision store is a live file on the share: one created before the
+    # correlation columns joined the schema must keep recording, so the shared
+    # additive migration adds what the declaration names.
+    import sqlite3
+
+    db_path = tmp_path / "_orchestration" / "runs.db"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(db_path)
+    con.execute(
+        """
+        CREATE TABLE orchestration_records (
+            timestamp TEXT NOT NULL,
+            orchestration_run_id TEXT NOT NULL,
+            item_key TEXT NOT NULL,
+            set_name TEXT NOT NULL,
+            pipeline TEXT NOT NULL,
+            run_date TEXT NOT NULL,
+            status TEXT NOT NULL,
+            reason TEXT,
+            duration REAL
+        )
+        """
+    )
+    con.execute(
+        "INSERT INTO orchestration_records VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            "2026-06-11T00:00:00",
+            "orch-0",
+            "k0",
+            "daily",
+            "feed_a",
+            "2026-06-11",
+            "succeeded",
+            None,
+            0.5,
+        ),
+    )
+    con.commit()
+    con.close()
+
+    store = OrchestrationStore(db_path)
+    store.record(
+        OrchestrationDecision(
+            orchestration_run_id="orch-1",
+            item_key="k1",
+            set_name="daily",
+            pipeline="feed_a",
+            run_date=dt.date(2026, 6, 12),
+            status="succeeded",
+            reason="",
+            duration=1.0,
+            logical_run_id="feed_a:2026-06-12",
+            pipeline_run_id="run-1",
+        )
+    )
+
+    records = store.records()
+    assert [r["orchestration_run_id"] for r in records] == ["orch-0", "orch-1"]
+    # The pre-migration row reads back with the new columns empty.
+    assert records[0]["pipeline_run_id"] is None
+    assert records[1]["pipeline_run_id"] == "run-1"

@@ -7,6 +7,11 @@ answer
 "did last night's Ingest for Case Type B succeed, how many rows, did anything
 warn?" without grepping free text.
 
+The stored shape is not restated here: the table, the additive column migration,
+the ``INSERT`` and the row decode are all derived from the single field
+declaration in :mod:`tools.observability.record_schema`, so what is written and
+what is read can never drift from what the log emits.
+
 It is a *query* store, not a ``Dataset`` carrier, so it stays stdlib-only
 (``json`` + ``sqlite3``) and never touches pandas. It opens through the shared
 ``connect`` factory in ``framework._internal.connection`` so SQLite settings stay
@@ -30,9 +35,24 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from framework._internal.connection import connect
+from tools.observability.record_schema import (
+    RUN_RECORD_COLUMNS,
+    RUN_RECORD_PRIMARY_KEY,
+    create_table_sql,
+    ensure_columns,
+    insert_sql,
+)
 
 if TYPE_CHECKING:
     from framework.run.address import RunAddress
+
+_TABLE = "run_records"
+# Both statements are derived from the one field declaration, so the stored
+# shape and what is written into it cannot disagree.
+_CREATE_RUN_RECORDS = create_table_sql(
+    _TABLE, RUN_RECORD_COLUMNS, RUN_RECORD_PRIMARY_KEY
+)
+_INSERT_RUN_RECORD = insert_sql(_TABLE, RUN_RECORD_COLUMNS, or_ignore=True)
 
 
 class RunRegistry:
@@ -47,49 +67,12 @@ class RunRegistry:
     def _connect(self):
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         con = connect(self._db_path, self._busy_timeout_ms)
-        con.execute(
-            """
-            CREATE TABLE IF NOT EXISTS run_records (
-                timestamp        TEXT,
-                pipeline_run_id  TEXT NOT NULL,
-                logical_run_id   TEXT,
-                pipeline         TEXT,
-                step             TEXT NOT NULL,
-                step_address     TEXT,
-                step_ordinal     INTEGER NOT NULL,
-                status           TEXT,
-                rows_in          INTEGER,
-                rows_out         INTEGER,
-                rows_quarantined INTEGER,
-                rows_excluded    INTEGER,
-                duration         REAL,
-                errors           TEXT,
-                error_category   TEXT,
-                warn_hits        TEXT,
-                committed        INTEGER,
-                profile          TEXT,
-                PRIMARY KEY (pipeline_run_id, step, step_ordinal)
-            )
-            """
-        )
-        # Forward-compatible migration: a registry DB created before the
-        # `committed` artifact marker (ADR-0005) lacks the column, and the
-        # INSERT below names it. Add it in place rather than forcing a re-create —
-        # the store lives on a shared drive (ADR-0001) and is not disposable.
-        existing = {row[1] for row in con.execute("PRAGMA table_info(run_records)")}
-        if "committed" not in existing:
-            con.execute("ALTER TABLE run_records ADD COLUMN committed INTEGER")
-        if "step_address" not in existing:
-            con.execute("ALTER TABLE run_records ADD COLUMN step_address TEXT")
-        # Forward-compatible migration for the business-run key: a registry
-        # created before logical_run_id joined the record schema lacks the
-        # column the INSERT below names.
-        if "logical_run_id" not in existing:
-            con.execute("ALTER TABLE run_records ADD COLUMN logical_run_id TEXT")
-        # Same forward-compatible migration for the per-column profile (#284):
-        # a registry predating it lacks the column the INSERT below names.
-        if "profile" not in existing:
-            con.execute("ALTER TABLE run_records ADD COLUMN profile TEXT")
+        con.execute(_CREATE_RUN_RECORDS)
+        # A registry DB created before a field joined the record schema lacks its
+        # column, and the INSERT below names every declared one. Add whatever is
+        # missing in place rather than forcing a re-create — the store lives on a
+        # shared drive and is not disposable.
+        ensure_columns(con, _TABLE, RUN_RECORD_COLUMNS)
         con.execute(
             """
             UPDATE run_records
@@ -219,35 +202,16 @@ class RunRegistry:
                 key = (rec["pipeline_run_id"], rec["step"])
                 ordinal = seen.get(key, 0)
                 seen[key] = ordinal + 1
+                # The two columns the store owns rather than the log: the
+                # ordinal, and the address a legacy record predates.
+                values = {
+                    **rec,
+                    "step_address": _step_address(rec),
+                    "step_ordinal": ordinal,
+                }
                 cur = con.execute(
-                    """
-                    INSERT OR IGNORE INTO run_records (
-                        timestamp, pipeline_run_id, logical_run_id, pipeline,
-                        step, step_address, step_ordinal, status, rows_in,
-                        rows_out, rows_quarantined, rows_excluded, duration,
-                        errors, error_category, warn_hits, committed, profile
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        rec.get("timestamp"),
-                        rec["pipeline_run_id"],
-                        rec.get("logical_run_id"),
-                        rec.get("pipeline"),
-                        rec["step"],
-                        _step_address(rec),
-                        ordinal,
-                        rec.get("status"),
-                        rec.get("rows_in"),
-                        rec.get("rows_out"),
-                        rec.get("rows_quarantined"),
-                        rec.get("rows_excluded"),
-                        rec.get("duration"),
-                        json.dumps(rec.get("errors") or []),
-                        rec.get("error_category"),
-                        json.dumps(rec.get("warn_hits") or []),
-                        1 if rec.get("committed") else 0,
-                        json.dumps(rec["profile"]) if rec.get("profile") else None,
-                    ),
+                    _INSERT_RUN_RECORD,
+                    tuple(f.to_sql(values.get(f.name)) for f in RUN_RECORD_COLUMNS),
                 )
                 inserted += cur.rowcount
 
@@ -461,20 +425,14 @@ class RunRegistry:
 
 
 def _row_to_record(row: dict) -> dict:
-    """Decode the JSON-encoded list columns back to lists for the caller."""
-    row["errors"] = json.loads(row["errors"]) if row["errors"] else []
-    row["warn_hits"] = json.loads(row["warn_hits"]) if row["warn_hits"] else []
-    # The artifact marker stores as 0/1 (or null on pre-migration rows); the
-    # caller reads the same bool the RunLog wrote.
-    row["committed"] = bool(row.get("committed"))
-    # The per-column profile stores as a JSON blob (or null where the step is not
-    # a profile); decode it back to the dict the RunLog wrote. ``get`` tolerates a
-    # pre-migration row dict that never selected the column.
-    if row.get("profile"):
-        row["profile"] = json.loads(row["profile"])
-    else:
-        row["profile"] = None
-    return row
+    """Decode a stored row back to the record the RunLog wrote.
+
+    Each field decodes itself — the JSON-encoded lists back to lists, the 0/1
+    artifact marker back to a bool — so the read path cannot fall behind the
+    write path. Reading by name (rather than position) keeps a migrated store
+    correct: its added columns sit at the end of the physical table.
+    """
+    return {**row, **{f.name: f.from_sql(row.get(f.name)) for f in RUN_RECORD_COLUMNS}}
 
 
 def _start_of_day(value: date) -> str:

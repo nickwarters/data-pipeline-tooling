@@ -24,6 +24,13 @@ from framework.run.runner import (
     run_pipeline,
 )
 from tools.calendar import WorkingDayCalendar
+from tools.observability.record_schema import (
+    Field,
+    create_table_sql,
+    ensure_columns,
+    insert_sql,
+    select_columns,
+)
 
 _WEEKDAY_NAMES = [
     "monday",
@@ -481,6 +488,35 @@ class PlanResult:
         return "\n".join(lines)
 
 
+_ORCHESTRATION_TABLE = "orchestration_records"
+
+#: The orchestration decision schema, declared once and in order. A separate
+#: contract from the run record — a decision about scheduled work, not an
+#: observation of a step — that reuses the same declaration machinery, so its
+#: DDL, additive migration, INSERT and SELECT all derive from this one list.
+ORCHESTRATION_RECORD_FIELDS: tuple[Field, ...] = (
+    Field("timestamp", "TEXT", not_null=True),
+    Field("orchestration_run_id", "TEXT", not_null=True),
+    Field("item_key", "TEXT", not_null=True),
+    Field("set_name", "TEXT", not_null=True),
+    Field("pipeline", "TEXT", not_null=True),
+    Field("run_date", "TEXT", not_null=True),
+    Field("status", "TEXT", not_null=True),
+    Field("reason", "TEXT"),
+    Field("duration", "REAL"),
+    # The correlation columns that tie a decision to the run it triggered.
+    Field("logical_run_id", "TEXT"),
+    Field("pipeline_run_id", "TEXT"),
+)
+
+_CREATE_ORCHESTRATION_RECORDS = create_table_sql(
+    _ORCHESTRATION_TABLE, ORCHESTRATION_RECORD_FIELDS
+)
+_INSERT_ORCHESTRATION_RECORD = insert_sql(
+    _ORCHESTRATION_TABLE, ORCHESTRATION_RECORD_FIELDS
+)
+
+
 class OrchestrationStore:
     """SQLite decision log for scheduled work, separate from RunRegistry."""
 
@@ -490,49 +526,18 @@ class OrchestrationStore:
     def _connect(self):
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         con = connect(self._db_path)
-        con.execute(
-            """
-            CREATE TABLE IF NOT EXISTS orchestration_records (
-                timestamp TEXT NOT NULL,
-                orchestration_run_id TEXT NOT NULL,
-                item_key TEXT NOT NULL,
-                set_name TEXT NOT NULL,
-                pipeline TEXT NOT NULL,
-                run_date TEXT NOT NULL,
-                status TEXT NOT NULL,
-                reason TEXT,
-                duration REAL,
-                logical_run_id TEXT,
-                pipeline_run_id TEXT
-            )
-            """
-        )
-        # Forward-compatible migration: a store created before run-execution
-        # traceability lacks the two correlation columns the INSERT below names.
-        existing = {
-            row[1] for row in con.execute("PRAGMA table_info(orchestration_records)")
-        }
-        if "logical_run_id" not in existing:
-            con.execute(
-                "ALTER TABLE orchestration_records ADD COLUMN logical_run_id TEXT"
-            )
-        if "pipeline_run_id" not in existing:
-            con.execute(
-                "ALTER TABLE orchestration_records ADD COLUMN pipeline_run_id TEXT"
-            )
+        con.execute(_CREATE_ORCHESTRATION_RECORDS)
+        # A store created before a field joined the decision schema lacks its
+        # column, and the INSERT below names every declared one. Add whatever is
+        # missing in place — the same additive migration the run registry uses.
+        ensure_columns(con, _ORCHESTRATION_TABLE, ORCHESTRATION_RECORD_FIELDS)
         return con
 
     def record(self, decision: OrchestrationDecision) -> None:
         con = self._connect()
         try:
             con.execute(
-                """
-                INSERT INTO orchestration_records (
-                    timestamp, orchestration_run_id, item_key, set_name,
-                    pipeline, run_date, status, reason, duration,
-                    logical_run_id, pipeline_run_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
+                _INSERT_ORCHESTRATION_RECORD,
                 (
                     dt.datetime.now(dt.UTC).isoformat(),
                     decision.orchestration_run_id,
@@ -555,13 +560,8 @@ class OrchestrationStore:
         con = self._connect()
         try:
             cur = con.execute(
-                """
-                SELECT timestamp, orchestration_run_id, item_key, set_name,
-                       pipeline, run_date, status, reason, duration,
-                       logical_run_id, pipeline_run_id
-                FROM orchestration_records
-                ORDER BY timestamp, rowid
-                """
+                f"SELECT {select_columns(ORCHESTRATION_RECORD_FIELDS)} "
+                f"FROM {_ORCHESTRATION_TABLE} ORDER BY timestamp, rowid"
             )
             cols = [desc[0] for desc in cur.description]
             return [dict(zip(cols, row)) for row in cur.fetchall()]

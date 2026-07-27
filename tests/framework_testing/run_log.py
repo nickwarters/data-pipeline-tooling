@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from tools.observability.record_schema import build_run_record
 from tools.observability.run_log import RunLog
 
 __all__ = [
@@ -46,22 +47,18 @@ class RecordingRunLog(RunLog):
         status: str,
         **fields: Any,
     ) -> None:
-        record = {
-            "pipeline_run_id": pipeline_run_id,
-            "logical_run_id": fields.get("logical_run_id"),
-            "pipeline": pipeline,
-            "step": step,
-            "step_address": fields.get("step_address"),
-            "status": status,
-            "rows_in": fields.get("rows_in"),
-            "rows_out": fields.get("rows_out"),
-            "rows_quarantined": fields.get("rows_quarantined"),
-            "rows_excluded": fields.get("rows_excluded"),
-            "duration": fields.get("duration"),
-            "errors": fields.get("errors") or [],
-            "warn_hits": fields.get("warn_hits") or [],
-        }
-        self.records.append(record)
+        # Built from the same field declaration the file sink uses, so a
+        # captured record really does have the on-disk shape — a field added to
+        # the schema is visible to a test without touching this helper.
+        self.records.append(
+            build_run_record(
+                pipeline_run_id=pipeline_run_id,
+                pipeline=pipeline,
+                step=step,
+                status=status,
+                **fields,
+            )
+        )
 
     def records_for_step(self, step: str) -> list[dict[str, Any]]:
         """Every captured record for the named step, in execution order."""

@@ -198,6 +198,18 @@ through isolation. _Here_: per-subject medallions mean a bad load or corrupt
 file is contained to one subject rather than poisoning the whole store
 (ADR-0001).
 
+**Run record**:
+One observation of one step (or of a whole run): the JSON object a `RunLog`
+appends to the `.log` file, the row the `RunRegistry` stores, and the console
+line an operator reads — three surfaces of **one** shape. _Here_: the field set
+is **declared once, as data**, in `tools/observability/record_schema.py`
+(`RUN_RECORD_FIELDS`), and the DDL, the additive column migration, the `INSERT`,
+the row decode and the console line are all derived from it (#307). Adding a
+field is one entry in that list, not six hand-edits that can half-land. The
+declaration order is a live on-disk contract (JSONL key order, column order):
+append, never reorder. The orchestration decision store keeps its **own**
+declaration of a different contract, sharing only the machinery.
+
 **Fail-fast**:
 Detect a violation and stop at the **earliest** boundary, rather than letting bad
 data propagate downstream where the failure is harder to trace. _Here_:
