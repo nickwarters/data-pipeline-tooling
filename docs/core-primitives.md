@@ -170,10 +170,11 @@ for just a couple of columns keeps every chunk narrow (CSV pushes it into
 `usecols`; SAS slices each chunk, since `read_sas` has no projection). A source
 with no data rows (a header-only CSV, an empty file, a zero-row SAS table)
 streams as **zero** chunks; a small non-empty source as exactly **one**. These
-readers expose `chunks()`, not `read()`, so they sit *beside* the single-shot
-`Reader` set rather than wiring into the deferred `Pipeline` builder — the
-streaming consumers (e.g. a monthly projection that appends each chunk to an
-indexed silver table) compose on top of them.
+readers expose `chunks()`, not `read()`, so they are a distinct port from the
+single-shot `Reader` set — deliberately so: unifying them by giving a
+`ChunkReader` a `read()` that materialises everything would be a trap door
+straight back to the memory problem. They wire into the deferred `Pipeline` via
+`read_chunks()` (below), not via `read()`.
 
 **Chunk-level row filtering (allow-list / predicate pushdown).** When a source
 is enormous (100M+ rows) but only a small, known subset is wanted (e.g. <100K
@@ -205,12 +206,48 @@ skip), and both wrappers expose `rows_scanned` / `rows_kept` for the most recent
 `ChunkedCsvReader` / `SasFileReader` / any future chunk reader, keeping the
 readers themselves single-purpose.
 
-Because a `ChunkReader` can't wire into the single-shot deferred `Pipeline`
-builder (a source too big to hold whole is never one `Dataset`), a streaming feed
-runs as a `pipelines/<feed>/` module that loops the chunks itself.
-`tools.observability.stream_step` drives that loop — read→filter→write — under a
-single fail-fast run-log step, recording `rows_in`/`rows_out`/`rows_excluded`. See
+**`Pipeline.read_chunks(chunk_reader, *, name, chunk_size=DEFAULT_CHUNK_SIZE)`
+is the DAG seam** (#314). It wires a node exactly as `read()` does; what differs
+is the drive — at `.run()` the pipeline executes the whole sub-graph **below**
+that node once per chunk, so a streamed feed keeps the transforms, validators,
+quarantine partitioning, dry run, profiling, run addresses and per-step run-log
+records the builder provides. Only the sub-graph below the streamed source
+forgets its memo between chunks, so a whole-dataset input joined into the stream
+is read once, not per chunk; the per-chunk records are folded into **one record
+per step** with the counts summed; and every Writer below the source spends the
+drive inside a single chunk-write session.
+
+What cannot be made chunk-safe is refused when the graph is *wired*, before a
+byte is read: a Writer that replaces its target (`Refresh`, every file Writer), a
+Validator that declares `whole_dataset` (`UniqueValidator`,
+`VolumeAnomalyValidator` — `StreamingUniqueValidator` is the form that survives a
+boundary), an `explain` step (its row trace remembers every row), and a second
+streamed source in one pipeline. `tools.observability.stream_step` remains as the
+low-level primitive for a feed that wants no graph at all. See
 [`streaming-large-sources.md`](streaming-large-sources.md) for the full pattern.
+
+#### `ChunkWritable` — many writes, one logical load
+
+The write-side dual of `ChunkReader`. Handing a plain `Writer` one chunk at a
+time is not generally safe: a Writer that replaces its target does that on
+*every* `write`, so the second chunk would wipe the first — and the accumulating
+Writer's delete-by-`logical_run_id` would delete the chunks this same run had
+already landed, which is the sharpest correctness hazard in the whole seam.
+
+```python
+class ChunkWritable(Protocol):
+    def writing_chunks(self) -> AbstractContextManager[Writer]: ...
+```
+
+A Writer that can express "these many writes are one logical load" implements it;
+whatever must happen once per load happens when the session opens.
+`AccumulateByRun` clears the run's prior rows **once, on entry**, then appends;
+`InsertOrIgnore` / `UpsertStrategy` / `InsertIfAbsent` are already
+per-batch-independent and take a chunked load unchanged; `QuarantineWriter`
+clears with the first chunk that has rejects. `Refresh` and the file Writers
+offer no session at all, which is what makes the wiring-time refusal possible.
+`framework.io.writing_chunks(writer)` / `supports_chunk_writes(writer)` are the
+helpers.
 
 **Table and column names you configure** (the `table` and `columns=[...]` you pass
 to a `SqliteReader`/Writer) accept **any string** — spaces, hyphens, mixed case,

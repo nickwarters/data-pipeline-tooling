@@ -77,3 +77,50 @@ The decision itself is unchanged: pipeline scripts and the domain layer still
 never name the engine, and the bulk carrier stays opaque. Only the list of
 acknowledged engine-confined components is corrected.
 </content>
+
+## Amendment, 2026-07-27 (#314, finding `C2`): streaming *was* needed
+
+The Consequences above say memory is a risk "in principle" but that volumes are
+small (≤ ~1M rows per feed/run), so "no chunking/streaming machinery is needed up
+front. Revisit only if a feed grows large."
+
+**A feed grew large, the revisit happened, and this ADR was never amended to say
+so** — leaving it contradicting both the code and `docs/streaming-large-sources.md`
+while carrying `status: accepted`. This amendment records the revisit.
+
+### What triggered it
+
+A SAS extract feeding one Case Type is on the order of **100M rows**, of which
+fewer than ~100K are ids we track. Landing it faithfully added roughly **500MB
+per run** — about **1.5GB after three runs** (#287) — and the source cannot be
+materialised as one `Dataset` at all. The ≤ ~1M-rows-per-feed premise simply did
+not hold for that feed.
+
+### What was chosen
+
+Streaming was added **beside** the in-memory carrier, not instead of it:
+
+- A `ChunkReader` port, `chunks(size) -> Iterator[Dataset]` — the streaming dual
+  of `Reader`, with concrete `ChunkedCsvReader` / `SasFileReader` sources and the
+  `PredicateChunkReader` / `KeyFilterChunkReader` per-chunk row filters (#287).
+- `Pipeline.read_chunks(...)`, which drives the sub-graph below it once per chunk
+  so a streamed feed keeps the validators, quarantine, dry run, profiling and
+  per-step run records the builder provides (#314).
+- A `ChunkWritable` write-side session (`writing_chunks()`) so many chunk writes
+  land as one logical load, and wiring-time refusal of the pairings that cannot
+  be made chunk-safe.
+
+### Why the decision above still stands
+
+The opaque-carrier decision is **unchanged**, and deliberately so. The in-memory
+`Dataset` contract holds **per chunk**: each chunk is one ordinary `Dataset` and
+every consumer downstream of the read sees exactly what it always saw. There is
+no lazy or iterator-backed `Dataset` variant, and `ChunkReader` is deliberately
+*not* unified with `Reader` by giving it a `read()` that materialises everything
+— that would be a trap door straight back to the memory problem. Business logic
+stays in Python, the store stays dumb, and the engine (pandas `chunksize` /
+`read_sas` behind the seam) is as confined as it ever was.
+
+What is corrected is only the *volume premise*: chunking/streaming machinery is
+no longer "not needed up front". It is needed, it exists, and a feed at that
+scale is expected rather than hypothetical.
