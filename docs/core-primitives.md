@@ -1263,9 +1263,10 @@ then returns the bulk-tier `Dataset`.
   conditions. It applies to the `ValidationError` a Validator raises, not to a
   bug inside the Validator: any other exception propagates with its traceback
   regardless of severity (#301).
-- A **cyclic graph** never runs at all: the leaf-first walk has no starting
-  point, so `.run()` raises `PipelineGraphError` (config category) before any
-  node executes, under a dry run as much as a real one (#301).
+- A graph where **every node is an input to another** never runs at all: the
+  leaf-first walk has no starting point, so `.run()` raises `PipelineGraphError`
+  (config category) before any node executes, under a dry run as much as a real
+  one (#301).
 - Atomicity is **per writer**, not per run. A run's intermediate artifacts —
   quarantine rejects, an explain/trace, a checkpoint — each commit through their
   own writer as their node runs, so an abort *after* one of them leaves that
