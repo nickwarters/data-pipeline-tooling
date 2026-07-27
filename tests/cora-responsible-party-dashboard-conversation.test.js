@@ -63,7 +63,7 @@ test('Responsible Party unread messages render through descriptors and invoke co
       cases: [unread, missingTimestamp],
       currentUserId: 'rp-1',
       filter: '',
-      remediationSort: { key: 'dueDate', dir: 'asc' },
+      remediationSort: { key: 'remediationDueDate', dir: 'asc' },
       messageSort: { key: 'lastMessage', dir: 'desc' },
     },
     {

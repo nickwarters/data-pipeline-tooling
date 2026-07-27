@@ -80,7 +80,7 @@ test('Responsible Party pure view renders outcome totals and the month matrix', 
       cases: [completed, failed],
       currentUserId: 'rp-1',
       filter: '',
-      remediationSort: { key: 'dueDate', dir: 'asc' },
+      remediationSort: { key: 'remediationDueDate', dir: 'asc' },
       messageSort: { key: 'lastMessage', dir: 'desc' },
     },
     {

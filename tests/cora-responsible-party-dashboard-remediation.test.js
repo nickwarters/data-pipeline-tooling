@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
+import { tableHeaders } from './helpers/semantic-dom.js';
 
 installDom();
 
@@ -43,7 +44,7 @@ test('Responsible Party remediation uses the generic table, filtering, and overd
       cases,
       currentUserId: 'rp-1',
       filter: 'complaints',
-      remediationSort: { key: 'dueDate', dir: 'asc' },
+      remediationSort: { key: 'remediationDueDate', dir: 'asc' },
       messageSort: { key: 'lastMessage', dir: 'desc' },
     },
     {
@@ -75,6 +76,61 @@ test('Responsible Party remediation uses the generic table, filtering, and overd
   assert.ok(table._children[0]);
   assert.ok(table._listeners.keydown);
   assert.equal(table._listeners.keydown.length, 1);
+});
+
+test('the Outstanding Remediation Actions table renders the columns it renders today (#543)', () => {
+  const view = responsiblePartyView(
+    {
+      cases: [row('c1', 'complaints', '2099-01-01T00:00:00Z')],
+      currentUserId: 'rp-1',
+      filter: '',
+      remediationSort: { key: 'remediationDueDate', dir: 'asc' },
+      messageSort: null,
+    },
+    {
+      onFilterChange: () => {},
+      onRemediationSort: () => {},
+      onMessageSort: () => {},
+    },
+    new Date('2026-07-01T00:00:00Z')
+  );
+  const section = view.querySelector('.cora-rp-remediation');
+
+  // This pins what the table renders *today*, divergences included. It is
+  // deliberately not harmonised with the other Case-shaped tables: whether the
+  // Reference and Case Type columns should adopt the shared descriptors is
+  // #542's question, and the Remediation due column is #498's. The contract
+  // exists so a future sweep that decides either has something to fail against.
+  //
+  //   - Reference and Case Type do not sort (fourth element `false`), unlike
+  //     the shared caseReferenceColumn()/caseTypeColumn() descriptors in
+  //     views/case-columns.js that mark both sortable, and which the Dashboard
+  //     reviewer worklist, Team Cases and Journey Cases are built from. The
+  //     Cases with Unread Messages and Controls Appeals tables do not sort them
+  //     either, so this is a three-against-three split, not a lone holdout.
+  //     Their 'aria-sort' reads 'none' because the active sort key is
+  //     remediationDueDate, not because the columns are unsortable —
+  //     data-table.js derives the two independently.
+  //   - Remediation due is the only sortable column, so it is the only heading
+  //     rendered as a control.
+  assert.deepEqual(tableHeaders(section), [
+    ['Reference', 'cora-col-reference', 'none', false],
+    ['Case Type', 'cora-col-caseType', 'none', false],
+    ['Remediation due', 'cora-col-remediationDueDate', 'ascending', true],
+    ['Action required', 'cora-col-action', 'none', false],
+  ]);
+
+  // No column renders a link: the Reference column carries no `href`, unlike
+  // the Cases with Unread Messages table below it, whose Reference cells link
+  // to the Case. Pinned, not fixed — see #542.
+  //
+  // Scope worth knowing: this pins the absence of a *column* href only. The
+  // table also passes no `rowHref`, where the messages table does (view.js),
+  // so its rows are not Enter-navigable either — but `rowHref` renders no
+  // anchor at all (data-table.js turns it into a keydown handler), so nothing
+  // here can see it. Asserting it needs an Enter-key round trip through
+  // `onNavigate`, not a DOM query; left unpinned rather than faked.
+  assert.equal(section?.querySelector('a'), null);
 });
 
 test('Responsible Party remediation ignores Answers carrying no remediation', () => {
