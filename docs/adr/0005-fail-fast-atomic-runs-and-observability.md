@@ -47,6 +47,13 @@ needs to resolve that abort.
 | One writer's delete+insert into one table | all-or-nothing |
 | Across the artifacts of one run (quarantine / trace / checkpoint / output) | **independent commits** |
 
+Since #306 that per-writer boundary has **one implementation**: every SQLite
+Writer opens its connection, runs its statements and commits through the shared
+`_writing_connection` / `_staged_merge` helpers in `framework/io/writers.py`. The
+commit happens only when the write body returns normally, and the scratch staging
+table a merge uses is dropped only *after* that commit — so the boundary is
+stated once rather than re-derived per Writer.
+
 ## Why
 
 - **Compliance over throughput.** Silent row-level loss risks dropping Cases that

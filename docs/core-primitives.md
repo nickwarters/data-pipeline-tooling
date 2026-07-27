@@ -313,6 +313,47 @@ the Dataset shape level; exact pandas dtype inference can still differ after a
 file round-trip, so schema-sensitive flows should continue to validate after
 reading.
 
+#### One transaction boundary, one staging convention (#306)
+
+The SQLite Writers above differ only in their merge statement; everything around
+it is shared (#306, findings `D6` / `D7` / `D9`):
+
+- **One connection lifetime.** A private `_writing_connection` helper does the
+  `mkdir` → `connect` → body → `commit` → `close` dance for every SQLite Writer.
+  The commit happens only when the body returns normally, so a failing write
+  leaves its transaction uncommitted and the close discards it — the per-writer
+  atomicity ADR-0005 promises now has a single implementation rather than five
+  hand-maintained copies.
+- **One staging convention.** The merge Writers (`SqliteUpsertWriter`,
+  `SqliteInsertOrIgnoreWriter`) share a `_staged_merge` helper that lands the
+  incoming rows in `_stage_<table>`, ensures the target exists, yields the
+  connection plus the quoted operands, commits, and only then drops the scratch
+  table. Each Writer's body is its merge statement and nothing else. The former
+  per-strategy names (`_upsert_stage_<table>`, `_insert_or_ignore_stage_<table>`)
+  are dropped alongside the current one during that cleanup, so a scratch table
+  stranded by a process killed mid-write under an older build is swept up on the
+  next write to the same table rather than left on the share forever.
+- **One delete-then-append.** "Clear this logical run's prior rows, then append"
+  exists once (`_replace_logical_run`) and is used by both `AccumulateByRunWriter`
+  and `QuarantineWriter`; the whole-file equivalent stays in
+  `AccumulateByRun.apply_to_frame`, since a file rewrite is a different medium,
+  not the same statement.
+- **A probe, not a swallowed error.** That delete used to be wrapped in
+  `except sqlite3.OperationalError: pass`, meaning "the table does not exist
+  yet". It also absorbed `database is locked` — on the network share ADR-0001
+  targets, a lock timeout there would turn "replace this run's rows" into
+  "append them again", a silent duplicate. Table existence is now *probed* with
+  `PRAGMA table_info` (the same check `TableColumns` uses), so only a genuinely
+  absent table skips the delete and any operational failure fails the run.
+  `SqliteInsertIfAbsentWriter` probes the same way before reading its
+  key→surrogate mapping, instead of catching a bare `Exception` — a locked
+  database must never read as "no mapping yet" and remint existing surrogates.
+- **One file-Writer body.** `CsvWriter` / `ExcelWriter` / `JsonWriter` share a
+  private `_FileWriter` base and each supply only a serialise/deserialise pair.
+  The base is an implementation detail of `framework/io/writers.py`: the `Writer`
+  contract stays **structural**, so any object with `write(dataset)` is still a
+  Writer and nothing outside the module needs to inherit anything.
+
 #### A strategy realises its own Writer
 
 Which Writer implements a strategy is the **strategy's own knowledge**, not a
