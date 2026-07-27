@@ -55,8 +55,13 @@ INSERT INTO <table> ...                                      -- then re-insert t
 
 Both statements commit as a **single SQLite transaction** (ADR-0005): if the
 insert fails, the delete rolls back, so a failed re-run never half-wipes prior
-rows. The result: re-running a given load is safe and deterministic, while the
-historical record of prior loads is preserved.
+rows. The delete is skipped only on a feed's very first run, when the table does
+not exist yet — and that is *probed* (`PRAGMA table_info`), not inferred from a
+caught error, so a `database is locked` on the share fails the run instead of
+quietly downgrading the replace to an append (#306). The step itself lives in one
+place (`_replace_logical_run` in `framework/io/writers.py`), shared by the gold
+Writer and the quarantine Writer. The result: re-running a given load is safe and
+deterministic, while the historical record of prior loads is preserved.
 
 ## `logical_run_id` is *not* the pipeline attempt id
 

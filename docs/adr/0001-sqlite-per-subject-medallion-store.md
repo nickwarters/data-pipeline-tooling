@@ -49,6 +49,12 @@ the project exists to avoid.
 - **Rollback-journal mode, not WAL** — WAL is unavailable over a network share.
 - The connection factory sets a `busy_timeout` (and readers retry) so read-only
   clients ride out the writer's in-place commits instead of erroring.
+- **A lock timeout on the write path is a failure, never a skip** (#306). The
+  writers' "has this table been created yet?" checks are *probes*
+  (`PRAGMA table_info`), not caught `OperationalError`s: on a share, catching
+  would absorb `database is locked` as well, and an absorbed lock timeout on the
+  delete-by-logical-run step would silently turn an idempotent replace into a
+  duplicate append. Only a genuinely absent table takes the first-run path.
 - **The single-writer-per-file rule is load-bearing.** If a second host ever
   writes the same file, corruption risk returns. It is enforced operationally and
   is unaffected by splitting a subject into per-layer pipelines (distinct files).

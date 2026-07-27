@@ -132,6 +132,13 @@ Running it twice replaces the batch's rows both times; the row count stays stabl
 instead of doubling. Each execution remains individually traceable by its own
 `pipeline_run_id` in the RunRegistry even though the logical id is shared.
 
+If a re-drive now fails with `database is locked` where it previously appeared to
+succeed, that is deliberate. The replace step probes for the target table and
+skips its delete only when the table genuinely does not exist yet; every other
+database error — a locked file on the share included — fails the run rather than
+silently downgrading the replace to an append, which is what would duplicate the
+run's rows. Wait for the competing writer to finish and re-drive.
+
 ## 5. Confirm — green status, clean log
 
 ```sh
