@@ -19,7 +19,7 @@ public contract, the submodule paths are not. See ``docs/public-api.md``.
 """
 
 from framework.run.address import RunAddress, RunAddressError
-from framework.run.builder import Pipeline
+from framework.run.builder import Pipeline, PipelineGraphError
 from framework.run.dry_run import DryRunReport
 from framework.run.run_context import RunContext
 from framework.run.runner import (
@@ -38,6 +38,7 @@ from tools.observability.run_registry import RunRegistry
 
 __all__ = [
     "Pipeline",
+    "PipelineGraphError",
     "RunAddress",
     "RunAddressError",
     "PipelineRunner",

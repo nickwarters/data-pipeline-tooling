@@ -2,8 +2,8 @@
 
 A ``Pipeline`` composes a graph of readers, transformers, validators, and writers
 without running anything. Execution happens only at the ``.run()`` terminus, which
-topologically sorts the nodes and owns the cross-cutting concerns of timing,
-logging, lineage, and error handling.
+walks the graph from its leaves, executing each node after its inputs, and owns
+the cross-cutting concerns of timing, logging, lineage, and error handling.
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ import time
 from typing import Any, Callable
 
 from framework.core.dataset import Dataset
+from framework.core.errors import ErrorCategory, PipelineError
 from framework.core.protocols import (
     DatasetProfiler,
     Processor,
@@ -27,6 +28,12 @@ from framework.run.run_context import RunContext, current_context
 from tools.observability.run_log import NULL_RUN_LOG, RunLog
 
 log = logging.getLogger(__name__)
+
+
+class PipelineGraphError(PipelineError):
+    """The wired graph cannot be executed — the fix is in the wiring, not the data."""
+
+    category = ErrorCategory.CONFIG
 
 
 class Node:
@@ -210,31 +217,23 @@ class ValidateNode(Node):
     def _do_execute(
         self, session: PipelineExecution, context: RunContext, dataset: Dataset
     ) -> Dataset:
-        # The validator throws or returns an error message depending on the
-        # protocol (assuming it returns an error string or raises
-        # ValidationError - we will handle raised ValidationErrors).
+        # A validator's contract is raise-or-nothing: a breach it is designed to
+        # detect arrives as a ValidationError, and that is the only failure a
+        # warn severity may downgrade. Anything else — a typo'd column name, a
+        # half-finished validator, a source that won't open — is a bug or an
+        # environment fault, and propagates with its traceback so the run never
+        # reports success for a check that did not actually happen.
         try:
-            error = self.validator.validate(dataset)
-            if error:
-                if self.severity == "warn":
-                    msg = f"{self.name}: {error}"
-                    self.warn_hits.append(msg)
-                    session.warn_hits.append(msg)
-                else:
-                    raise ValidationError(
-                        f"{session.pipeline_name} {self.name} failed: {error}"
-                    )
-        except Exception as exc:
+            self.validator.validate(dataset)
+        except ValidationError as exc:
             if self.severity == "warn":
-                msg = f"{self.name}: {str(exc)}"
+                msg = f"{self.name}: {exc}"
                 self.warn_hits.append(msg)
                 session.warn_hits.append(msg)
             else:
-                if isinstance(exc, ValidationError):
-                    raise ValidationError(
-                        f"{session.pipeline_name} {self.name} failed: {exc}"
-                    ) from exc
-                raise
+                raise ValidationError(
+                    f"{session.pipeline_name} {self.name} failed: {exc}"
+                ) from exc
         return dataset
 
 
@@ -575,6 +574,14 @@ class Pipeline:
         try:
             # Execute leaf nodes (nodes that nothing else depends on).
             leaf_nodes = self._get_leaf_nodes()
+            if self._nodes and not leaf_nodes:
+                # Every node is some other node's input, so the walk has nowhere
+                # to start: without this guard the run would execute nothing at
+                # all and still report success.
+                raise PipelineGraphError(
+                    f"pipeline {self._name!r} graph has a cycle: every node is an "
+                    "input to another node, so there is no node to execute from"
+                )
             results = [node.execute(session, context) for node in leaf_nodes]
 
             # Compute total rows in/out for the summary if possible

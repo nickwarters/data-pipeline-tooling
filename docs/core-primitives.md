@@ -408,10 +408,20 @@ narrow seam (`RunHistory` / `PriorColumns`) for the run-over-run comparison:
   warning rides `warn_hits` onto the run summary (see drift surfacing under
   [`RunRegistry`](#runregistry--the-run-history-that-ingests-the-jsonl)).
 
+A Validator's contract is **raise-or-nothing**: `validate(dataset) -> None`
+raises `ValidationError` on a breach and returns nothing otherwise. It never
+*returns* an error message — there is exactly one way to report a breach, so
+every failure reads the same in the run log.
+
 A Validator knows only how to *check*; it does **not** decide what a failure
 means. **Severity is set where the Validator is attached to the builder**
 (`severity="error" | "warn"`, default `error` — ADR-0005), so the same Validator
-can abort one pipeline and merely warn another. These are **engine-agnostic**
+can abort one pipeline and merely warn another. Severity governs the
+`ValidationError` **and nothing else**: any other exception out of a validator —
+a `KeyError` from a typo'd column, an `OSError` from a locked prior-columns
+database — is a bug or an environment fault, not a data breach, so it propagates
+with its traceback even at `severity="warn"` (#301). A `warn` that swallowed
+those would report success for a check that never ran. These are **engine-agnostic**
 (the check reads shape only; `SchemaDriftValidator`'s `PriorColumns` seam reads
 the prior table via stdlib `sqlite3`, never pandas); the richer `SchemaValidator`
 below is the *engine-confined* kind.
@@ -1089,7 +1099,12 @@ then returns the bulk-tier `Dataset`.
   all-or-nothing even on a mid-write error.)
 - A **warn**-severity failure logs a warning naming the problem and the run
   continues — the explicit, deliberate escape hatch for known-tolerable
-  conditions.
+  conditions. It applies to the `ValidationError` a Validator raises, not to a
+  bug inside the Validator: any other exception propagates with its traceback
+  regardless of severity (#301).
+- A **cyclic graph** never runs at all: the leaf-first walk has no starting
+  point, so `.run()` raises `PipelineGraphError` (config category) before any
+  node executes, under a dry run as much as a real one (#301).
 - Atomicity is **per writer**, not per run. A run's intermediate artifacts —
   quarantine rejects, an explain/trace, a checkpoint — each commit through their
   own writer as their node runs, so an abort *after* one of them leaves that

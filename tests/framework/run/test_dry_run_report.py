@@ -5,6 +5,7 @@ from __future__ import annotations
 import pandas as pd
 
 from framework.core.dataset import Dataset
+from framework.core.validators import ValidationError
 from framework.io.readers import DatasetReader
 from framework.run import dry_run_pipeline
 from framework.run.builder import Pipeline
@@ -46,8 +47,8 @@ def test_render_marks_a_failed_step_and_the_stop_reason():
 
 
 class _AlwaysFails:
-    def validate(self, dataset: Dataset) -> str:
-        return "row count below floor"
+    def validate(self, dataset: Dataset) -> None:
+        raise ValidationError("row count below floor")
 
 
 def test_dry_run_pipeline_records_a_fail_fast_error_without_raising(tmp_path):

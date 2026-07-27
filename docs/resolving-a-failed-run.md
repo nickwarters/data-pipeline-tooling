@@ -89,6 +89,10 @@ Pick by *why* it failed; they are not interchangeable.
    reference column that's legitimately sparse, a drift you've accepted),
    `severity="warn"` logs-and-continues instead of aborting. This is the
    sanctioned escape hatch — use it deliberately, not to silence a real problem.
+   It downgrades the `ValidationError` a validator raises for a breach, not a
+   bug inside the validator: a `KeyError` or a locked-database `OSError` out of a
+   `warn` validator still stops the run with its traceback, because a check that
+   crashed is a check that did not happen (#301).
 3. **Quarantine the bad rows.** For *value-rule* rejects where the good rows
    should still flow, route the rejects aside and keep the rest
    ([ADR-0007](adr/0007-row-level-quarantine.md)). The quarantined rows

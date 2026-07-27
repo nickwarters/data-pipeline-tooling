@@ -8,8 +8,8 @@ A pipeline is described as an explicit **directed acyclic graph (DAG)** of nodes
 and executed lazily. Each operation — `read`, `transform`, `validate`, `write`,
 `explain`, `quarantine`, `action` — is a method on a `Pipeline` that **returns a
 node**, and downstream operations take prior nodes as their inputs. Nothing runs
-until `.run()`, which topologically sorts the graph from its leaves and executes
-each node after its inputs:
+until `.run()`, which walks the graph from its leaves, executing each node after
+its inputs:
 
 ```python
 p = Pipeline("orders/ingest")
@@ -62,6 +62,15 @@ the graph *is* the structure.
 
 ## Consequences
 
+- **The "acyclic" in DAG is enforced, not assumed.** The walk starts from the
+  leaves — the nodes nothing else depends on — so a cyclic wiring has no starting
+  point at all. Rather than let that execute zero nodes and report success,
+  `.run()` raises a `PipelineGraphError` (an `ErrorCategory.CONFIG`
+  `PipelineError`, so a run boundary catches it with the rest of the fail-fast
+  family) naming the pipeline and the condition — that every node is an input to
+  another, so there is nowhere to start; it does not name the nodes forming the
+  cycle. The guard sits before any node runs,
+  so a dry run refuses the same graph for the same reason (#301).
 - `.run()` returns the bulk `Dataset` from the graph's terminal node(s); the
   domain edge (CasePool) returns typed `Case` objects (ADR-0002).
 - A **checkpoint is not a special primitive** — it is simply a `write` node placed
