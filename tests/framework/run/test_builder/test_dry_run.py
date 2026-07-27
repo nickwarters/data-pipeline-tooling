@@ -147,8 +147,8 @@ def test_dry_run_explain_reports_trace_without_writing_it():
 class AlwaysFails:
     """An error-severity validator that always reports a failure."""
 
-    def validate(self, dataset: Dataset) -> str:
-        return "row count below floor"
+    def validate(self, dataset: Dataset) -> None:
+        raise ValidationError("row count below floor")
 
 
 def test_dry_run_reports_a_validation_failure_clearly_then_fails_fast():

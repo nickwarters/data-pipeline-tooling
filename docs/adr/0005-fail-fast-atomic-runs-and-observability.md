@@ -6,7 +6,12 @@ status: accepted
 
 `.run()` is **fail-fast**: any validator or transform failure aborts the run.
 Validators default to **error severity (abort)**; an individual validator can be
-marked `warn` to log-and-continue. **Rows are never silently dropped** — in a
+marked `warn` to log-and-continue. Severity governs the `ValidationError` a
+validator raises for a breach it is designed to detect — nothing else. A bug
+*inside* a validator (a `KeyError`, an `OSError` opening a baseline) propagates
+with its traceback at either severity, because "expected failure vs. genuine
+bug" below applies to validators too: a `warn` that swallowed it would report
+success for a check that never ran (#301). **Rows are never silently dropped** — in a
 regulated review domain, excluding a reviewable Case must be explicit and
 visible, so bad data either fails the run, is routed aside with a located reason
 (quarantine — ADR-0007), or is recorded in a trace (explainability — ADR-0008),

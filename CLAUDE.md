@@ -70,7 +70,9 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   medallion is the `tools.medallion` profile over it, `<subject>/{raw,silver,gold}.db`;
   `connect` factory in `framework._internal.connection`), `Pipeline` (deferred DAG
   builder; nodes wired by `.read` / `.transform` /
-  `.validate` / `.write` and executed in topological order at `.run()`).
+  `.validate` / `.write`; at `.run()` the graph is walked from its leaves, each
+  node executing after its inputs — a cyclic wiring raises `PipelineGraphError`
+  rather than silently executing nothing).
 
 ### Commands
 
