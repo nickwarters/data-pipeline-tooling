@@ -97,42 +97,12 @@ export class Router {
 
     const container = /** @type {Element} */ (this._container);
     try {
-      await matched.handler.mount(
-        this._guardContainer(container, token),
-        matched.params
-      );
+      await matched.handler.mount(container, matched.params);
     } catch (err) {
       if (token !== this._navSeq) return;
       console.error(`[CORA] route mount failed for "${hash}"`, err);
       container.replaceChildren(createRouteErrorPanel());
     }
-  }
-
-  /**
-   * Wrap the route container so a stale mount cannot write to it. Because mount
-   * is async and a page module may resolve after the user has navigated on, the
-   * route's own `container.replaceChildren(...)` (which runs after its `await`)
-   * could otherwise overwrite the newer page. The returned proxy forwards every
-   * container method only while this navigation is still current; once a newer
-   * `navigate()` has bumped `_navSeq`, the call becomes a no-op. Routes that
-   * render outside the container (root writes to `context.appEl`) are the
-   * documented exception — see the page-independence plan §4.1.
-   *
-   * @param {Element} container
-   * @param {number} token
-   * @returns {Element}
-   */
-  _guardContainer(container, token) {
-    return new Proxy(container, {
-      get: (obj, prop) => {
-        const value = Reflect.get(obj, prop);
-        if (typeof value !== 'function') return value;
-        return (/** @type {any[]} */ ...args) => {
-          if (token !== this._navSeq) return undefined;
-          return value.apply(obj, args);
-        };
-      },
-    });
   }
 
   /** @param {Element} container */

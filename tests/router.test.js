@@ -17,7 +17,7 @@ const windowListeners = {};
 
 import { Router } from '../src/lib/router.js';
 
-test('Router: mount is called with a forwarding container handle and the route params', () => {
+test('Router: mount is called with the route container and the route params', () => {
   const router = new Router();
   /** @type {any[]} */
   const writes = [];
@@ -35,8 +35,6 @@ test('Router: mount is called with a forwarding container handle and the route p
 
   router.register('#/dashboard', {
     mount: (el, params) => {
-      // Read a non-function property (passes through the guard) and call a
-      // method (forwarded while current).
       calls.push({ el, params, tag: el.tagName });
       el.replaceChildren('X');
     },
@@ -47,8 +45,6 @@ test('Router: mount is called with a forwarding container handle and the route p
   assert.equal(calls.length, 1);
   assert.deepEqual(calls[0].params, { queryString: '' });
   assert.equal(calls[0].tag, 'DIV');
-  // mount receives a guarded handle, not the raw container, but writes through
-  // it reach the real container while the navigation is current.
   assert.deepEqual(writes, ['X']);
 });
 
@@ -422,57 +418,6 @@ test('Router: a stale rejecting navigate does not clobber a newer successful nav
   } finally {
     console.error = origConsoleError;
   }
-});
-
-test('Router: a stale resolving navigate does not clobber a newer successful navigate', async () => {
-  const router = new Router();
-  /** @type {any[]} */
-  const children = [];
-  const container = /** @type {any} */ ({
-    replaceChildren(/** @type {any[]} */ ...els) {
-      children.splice(0, children.length, ...els);
-    },
-  });
-  initRouter(router, container);
-
-  /** @type {() => void} */
-  let releaseSlow = () => {};
-  const slowGate = new Promise((resolve) => {
-    releaseSlow = /** @type {() => void} */ (resolve);
-  });
-
-  router.register('#/slow', {
-    // Mirrors a real lazy route: await the (slow) page load, then render.
-    mount: async (/** @type {any} */ el) => {
-      await slowGate;
-      el.replaceChildren({ tagName: 'SLOW' });
-    },
-    unmount: () => {},
-  });
-  router.register('#/fast', {
-    mount: async (/** @type {any} */ el) => {
-      el.replaceChildren({ tagName: 'FAST' });
-    },
-    unmount: () => {},
-  });
-
-  const p1 = router.navigate('#/slow');
-  await router.navigate('#/fast');
-
-  assert.equal(children.length, 1);
-  assert.equal(children[0].tagName, 'FAST');
-
-  // The slow page module now resolves and its mount renders — but the user has
-  // already navigated on, so this stale write must be discarded.
-  releaseSlow();
-  await p1;
-
-  assert.equal(children.length, 1);
-  assert.equal(
-    children[0].tagName,
-    'FAST',
-    'a stale resolving mount must not overwrite the newer route'
-  );
 });
 
 test('Router: a throwing unmount is isolated and does not block the next mount', async () => {

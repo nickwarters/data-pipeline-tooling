@@ -15,7 +15,7 @@
 // and scroll position survive a render with **no** snapshot/restore machinery.
 //
 // The pieces that make that work:
-//   - Keyed identity. A node carries a `key` (or `data-key`) attribute; keyed
+//   - Keyed identity. A node carries a `key` attribute; keyed
 //     children are matched across renders by key, so a reorder *moves* the same
 //     DOM node rather than rebuilding it. Unkeyed children match by position.
 //   - Controlled form props. `value`/`checked` are applied as properties and
@@ -78,14 +78,15 @@ function isText(node) {
 
 /**
  * The reconciliation key of a node, or `null` if it has none. Authors pass
- * `{ key }` (or `{ 'data-key': … }`) to h(); both land as attributes.
+ * `{ key }` to h(), which lands as an attribute. One spelling on purpose: a
+ * `data-key` alias was also accepted and no view ever used it, and two spellings
+ * for one concept is a thing to look up rather than know.
  * @param {any} node
  * @returns {string | null}
  */
 function keyOf(node) {
   if (isText(node)) return null;
-  const k = node.getAttribute('data-key');
-  return k != null ? k : node.getAttribute('key');
+  return node.getAttribute('key');
 }
 
 /**

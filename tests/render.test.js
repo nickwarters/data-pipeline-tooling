@@ -448,32 +448,6 @@ test('render: unkeyed children patch by position, replacing on type mismatch', (
   assert.equal(div.childNodes[1].tagName, 'B', 'mismatched position replaced');
 });
 
-test('render: data-key is honoured as the key attribute', () => {
-  const root = container();
-  render(
-    root,
-    h(
-      'ul',
-      {},
-      h('li', { 'data-key': '1' }, 'a'),
-      h('li', { 'data-key': '2' }, 'b')
-    )
-  );
-  const ul = root.childNodes[0];
-  const [one, two] = ul.childNodes;
-  render(
-    root,
-    h(
-      'ul',
-      {},
-      h('li', { 'data-key': '2' }, 'b'),
-      h('li', { 'data-key': '1' }, 'a')
-    )
-  );
-  assert.equal(ul.childNodes[0], two);
-  assert.equal(ul.childNodes[1], one);
-});
-
 // ===== ROOT SHAPES =====
 
 test('render: an array of root nodes is reconciled', () => {
