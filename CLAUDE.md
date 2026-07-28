@@ -95,6 +95,15 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
   halves — no `h('cora-…')`/`createElement('cora-…')` under `src/`, and no
   element-type `cora-*` selector in `src/styles/**`, which would match nothing
   and silently drop its declarations.
+- **No issue, PR or ADR references in `.js` files.** Comments, test names and
+  assertion messages must not cite `#123`, `ADR-00XX`, or work-item tags
+  (`CASE-1`, `CORE-2`, `GRID-4`, `BANK-2`, `MAINT-11`). A comment explains
+  **why the code is the way it is**, in its own words, so it reads without a
+  tracker or the ADR index open — if a reference is doing the explaining, write
+  the reason out instead. This applies to `src/`, `case-types/`, `dev/`,
+  `tests/` and `scripts/` alike; ADR numbers still belong in `docs/adr/`,
+  markdown, commit messages and PR bodies. JSDoc types are untouched by this
+  rule.
 - **Question Definitions are never deleted** — use a `deprecated` flag (avoids dangling references from Case Type modules).
 - **Case Type descriptors express genuine Case Type variation; branching behaviour stays in code** (ADR-0035). Descriptors may select stable keys, labels, property paths, ordering, membership, and simple flags. Permission/lifecycle decisions, navigation, conditional formatting, event handling, and effects belong in code. Dashboard composition is dashboard-owned and must not be declared by Case Type configuration (ADR-0036); the dashboard consumes resolved `caseSources` only for Case data access.
 
