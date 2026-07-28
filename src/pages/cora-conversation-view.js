@@ -1,6 +1,8 @@
 // @ts-check
 import { h } from '../lib/html.js';
 import { LoadingState } from '../lib/empty-state.js';
+import { ignoreAbortError, isAbortError } from '../lib/abort.js';
+import { withAbortSignal } from '../services/abortable-client.js';
 import { navigateTo } from '../lib/navigate.js';
 import { patchRoute } from '../core/route-state.js';
 import { CaseMachine } from '../lib/case-machine.js';
@@ -146,6 +148,10 @@ export function createRouteSlice(params, context) {
     start(/** @type {any} */ tools) {
       /** @type {CaseListOptions} */
       let caseListOptions = {};
+      // The mount lifetime bound to this route's reads, so navigating away
+      // cancels the Case read rather than only discarding it (#567). Writes go
+      // through `context.saveQueue`, which keeps the raw client (ADR-0008).
+      const readClient = withAbortSignal(context.client, tools.signal);
 
       async function load() {
         try {
@@ -156,10 +162,7 @@ export function createRouteSlice(params, context) {
               ? { listName: config.listName }
               : {};
           }
-          const caseRow = await context.client.getCase(
-            params.id,
-            caseListOptions
-          );
+          const caseRow = await readClient.getCase(params.id, caseListOptions);
           if (!caseRow || !tools.isActive()) return;
           config ??= await loadCaseTypeConfig(caseRow.caseType);
           const access = currentUser
@@ -178,6 +181,10 @@ export function createRouteSlice(params, context) {
             caseListOptions,
           });
         } catch (error) {
+          // An abort is navigation, never a load failure (#545) — and it is
+          // stated rather than left to the isActive() latch below, so the
+          // intent survives a future change to when the latch flips.
+          if (isAbortError(error)) return;
           if (!tools.isActive()) return;
           if (error instanceof UnknownCaseTypeError) {
             tools.dispatch({
@@ -195,17 +202,19 @@ export function createRouteSlice(params, context) {
         tools.listen(document, 'visibilitychange', () => {
           if (document.hidden) return;
           void refreshConversation({
-            client: context.client,
+            client: readClient,
             caseId: params.id,
             caseListOptions,
-          }).then((caseRow) => {
-            if (tools.isActive() && caseRow) {
-              tools.dispatch({
-                type: 'conversation/messages-changed',
-                messages: caseRow.conversation,
-              });
-            }
-          });
+          })
+            .then((caseRow) => {
+              if (tools.isActive() && caseRow) {
+                tools.dispatch({
+                  type: 'conversation/messages-changed',
+                  messages: caseRow.conversation,
+                });
+              }
+            })
+            .catch(ignoreAbortError);
         });
       }
     },

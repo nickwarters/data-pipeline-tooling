@@ -309,3 +309,43 @@ test('#544 conversation page: the back button returns to My Reviews', () => {
   fireEvent(node.querySelector('.cora-back-btn'), 'click');
   assert.equal(location.hash, '#/my-reviews');
 });
+
+test('conversation slice: navigating away aborts the in-flight Case read with no error UI (#567)', async () => {
+  const controller = new AbortController();
+  let aborted = false;
+  /** @type {any[]} */
+  const actions = [];
+  const context = /** @type {any} */ ({
+    chrome: { currentUser: CURRENT_USER, permissions: {} },
+    currentUser: CURRENT_USER,
+    client: {
+      getCase: (/** @type {any} */ _id, /** @type {any} */ opts = {}) =>
+        new Promise((_resolve, reject) => {
+          opts.signal?.addEventListener('abort', () => {
+            aborted = true;
+            reject(opts.signal.reason);
+          });
+        }),
+    },
+    saveQueue: {},
+  });
+  const slice = createRouteSlice({ id: 'case-1' }, context);
+
+  slice.start(
+    /** @type {any} */ ({
+      context,
+      params: { id: 'case-1' },
+      dispatch: (/** @type {any} */ action) => actions.push(action),
+      listen: () => {},
+      isActive: () => !controller.signal.aborted,
+      signal: controller.signal,
+    })
+  );
+  controller.abort();
+
+  // An unhandled AbortError rejection fails the run under `node --test`.
+  for (let i = 0; i < 20; i += 1) await Promise.resolve();
+
+  assert.equal(aborted, true, 'the in-flight Case read was cancelled');
+  assert.deepEqual(actions, [], 'the aborted load dispatches nothing at all');
+});

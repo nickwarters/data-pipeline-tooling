@@ -34,11 +34,14 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
   so navigating away cancels the requests the abandoned page had in flight, and
   handle the rejection with `ignoreAbortError` — an abort is navigation, never a
   toast or a `cora-route-error` (#545). Writes are never cancelled: `SaveQueue`
-  holds the raw client and drops any `signal` handed to `loadCase`. **The
-  binding is partial (#545 covered the Case-source fan-out pages only):**
-  `cora-case-review.js`, `cora-conversation-view.js`, `roadmap.js` and
-  `question-bank/cora-bank-editor.js` still read unsignalled — follow-up
-  (#567), not precedent.
+  holds the raw client and drops any `signal` handed to `loadCase`. **Every
+  route slice that reads Cases now binds it** (#545, #567), and
+  `tests/abort-binding-contract.test.js` is the ratchet — a new page cannot be
+  added unbound. The one exemption is `roadmap.js`: `withAbortSignal` binds only
+  the reads carrying an options bag (`getCase`/`listCases`/`countCases`), and
+  `listRoadmapItems()` takes none, so wrapping it would read as covered while
+  cancelling nothing. The contract test names that exemption and fails if it
+  stops being true.
 - **Case Review Sections are data plus a panel renderer.** `lib/section-registry.js`
   (ADR-0032) says which Sections exist and in what order; `pages/cora-case-review/section-panels.js`
   says how each one's panel is filled, keyed by Section id — the render loop in

@@ -2,6 +2,8 @@
 import { setRoute } from '../../core/route-state.js';
 import { h } from '../../lib/html.js';
 import { Toast } from '../../components/base/cora-toast.js';
+import { ignoreAbortError } from '../../lib/abort.js';
+import { withAbortSignal } from '../../services/abortable-client.js';
 import {
   baselineBank,
   currentBank,
@@ -458,19 +460,26 @@ export function createRouteSlice(_params, context, deps = {}) {
       };
       tools.listen(document, 'keydown', key);
       if (simulatorEnabled()) {
+        // The sample fan-out is a read across every Case source, so it carries
+        // the mount lifetime (#567). `loadSampleCases` already tolerates a
+        // per-source failure, which an abort now arrives as: navigating away
+        // leaves the drawer's empty state rather than the editor failing.
+        const readClient = withAbortSignal(context.client, tools.signal);
         const loadSamples =
           context.loadQuestionBankSamples ??
           (() =>
             import('./question-bank-samples.js').then((module) =>
-              module.loadSampleCases(context.client, context.caseSources)
+              module.loadSampleCases(readClient, context.caseSources)
             ));
-        void loadSamples().then((loaded) => {
-          if (!tools.isActive()) return;
-          if (!loaded || typeof loaded !== 'object') return;
-          for (const [slug, cases] of Object.entries(loaded)) {
-            tools.dispatch({ type: 'samples/loaded', slug, cases });
-          }
-        });
+        void loadSamples()
+          .then((loaded) => {
+            if (!tools.isActive()) return;
+            if (!loaded || typeof loaded !== 'object') return;
+            for (const [slug, cases] of Object.entries(loaded)) {
+              tools.dispatch({ type: 'samples/loaded', slug, cases });
+            }
+          })
+          .catch(ignoreAbortError);
       }
       return () => {
         effectTools = null;

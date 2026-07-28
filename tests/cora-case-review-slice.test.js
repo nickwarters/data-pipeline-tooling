@@ -3811,3 +3811,110 @@ test('#544 route: collapsing an Issue Capture Group dispatches the route’s tog
     'the group the click dispatched for is the group that collapsed'
   );
 });
+
+test('case review slice: navigating away aborts the in-flight Case read with no error UI (#567)', async () => {
+  const controller = new AbortController();
+  let aborted = false;
+  /** @type {any[]} */
+  const actions = [];
+  // No `caseType` param, so `CaseLoader.load()` skips the manifest and parks on
+  // the Case read itself — which settles only when the caller aborts.
+  const context = /** @type {any} */ ({
+    client: {
+      getCase: (/** @type {any} */ _id, /** @type {any} */ opts = {}) =>
+        new Promise((_resolve, reject) => {
+          opts.signal?.addEventListener('abort', () => {
+            aborted = true;
+            reject(opts.signal.reason);
+          });
+        }),
+      getCurrentUser: async () => ({ id: 'reviewer', groups: [] }),
+    },
+    saveQueue: { subscribeStatus: () => () => {} },
+    chrome: { currentUser: { id: 'reviewer' }, permissions: {}, toasts: [] },
+  });
+  const slice = createRouteSlice({ id: 'c1' }, context);
+
+  slice.start(
+    /** @type {any} */ ({
+      context,
+      params: { id: 'c1' },
+      dispatch: (/** @type {any} */ action) => actions.push(action),
+      listen: () => {},
+      isActive: () => !controller.signal.aborted,
+      signal: controller.signal,
+    })
+  );
+  controller.abort();
+
+  // An unhandled AbortError rejection fails the run under `node --test`, so
+  // draining here also proves the load handles its own abort.
+  for (let i = 0; i < 20; i += 1) await Promise.resolve();
+
+  assert.equal(aborted, true, 'the in-flight Case read was cancelled');
+  assert.equal(
+    actions.some((action) => action.type === 'case/load-finished'),
+    false,
+    'the aborted load hands no snapshot to the store'
+  );
+});
+
+test('case review slice: the read carries the signal while the write path keeps the raw client (#567)', async () => {
+  /** @type {any} */
+  let readOptions = null;
+  /** @type {any[]} */
+  const loadedByQueue = [];
+  const caseRow = {
+    id: 'c1',
+    caseType: 'example-review',
+    title: 'Case',
+    status: 'In-progress',
+    assignedReviewer: 'reviewer',
+    responsibleParty: 'rp',
+    answers: {},
+    conversation: [],
+    notes: '',
+    etag: 'e1',
+  };
+  const context = /** @type {any} */ ({
+    client: {
+      getCase: async (/** @type {any} */ _id, /** @type {any} */ opts = {}) => {
+        readOptions = opts;
+        return caseRow;
+      },
+      getCurrentUser: async () => ({ id: 'reviewer', groups: [] }),
+      getExportHash: async () => null,
+    },
+    // Writes are never cancelled (ADR-0008): the queue is handed the Case Row
+    // by the loader and holds the boot-built client, not the read wrapper.
+    saveQueue: {
+      subscribeStatus: () => () => {},
+      loadCase: (/** @type {any} */ row) => loadedByQueue.push(row),
+    },
+    chrome: {
+      currentUser: chrome.currentUser,
+      permissions: chrome.permissions,
+      toasts: [],
+    },
+  });
+  const signal = new AbortController().signal;
+  const slice = createRouteSlice({ id: 'c1' }, context);
+  slice.start(
+    /** @type {any} */ ({
+      context,
+      params: { id: 'c1' },
+      dispatch: () => {},
+      listen: () => {},
+      isActive: () => true,
+      signal,
+    })
+  );
+  for (let i = 0; i < 20; i += 1) await Promise.resolve();
+
+  assert.equal(readOptions?.signal, signal, 'the Case read carries the signal');
+  assert.deepEqual(
+    loadedByQueue,
+    [caseRow],
+    'the SaveQueue still receives the loaded Case Row'
+  );
+});

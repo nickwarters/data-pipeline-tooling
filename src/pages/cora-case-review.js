@@ -1,6 +1,8 @@
 // @ts-check
 import { h } from '../lib/html.js';
 import { LoadingState } from '../lib/empty-state.js';
+import { ignoreAbortError } from '../lib/abort.js';
+import { withAbortSignal } from '../services/abortable-client.js';
 import { patchRoute, patchSnapshot } from '../core/route-state.js';
 import { CaseLoader } from '../lib/case-loader.js';
 import { CASE_STATUS } from '../lib/case-statuses.js';
@@ -408,15 +410,25 @@ export function createRouteSlice(params, context) {
   const attributionTimers = new Map();
   /** @type {Map<string, string>} */
   const pendingAttributionQueries = new Map();
-  const caseLoader = new CaseLoader({
-    client: context.client,
-    saveQueue: context.saveQueue,
-    caseId: params.id,
-    caseType: params.caseType ?? null,
-    currentUserId:
-      context.chrome.currentUser?.id ?? context.currentUser?.id ?? '',
-    capabilities: context.chrome.permissions ?? context.capabilities,
-  });
+  /**
+   * The client this route **reads** through. Swapped in `start()` for the same
+   * client with the mount lifetime bound to its reads (#567), so navigating
+   * away cancels what this page still has in flight.
+   *
+   * Reads only. `context.saveQueue` was built at boot around the raw client and
+   * is never rebound here: a queued Answer save must survive navigation
+   * (ADR-0008), and cancelling one would be data loss.
+   *
+   * @type {import('../sharepoint-client.js').SharePointClient}
+   */
+  let readClient = context.client;
+  /**
+   * Created in `start()`, once the mount lifetime exists to bind to. Nothing
+   * reads it earlier: the first synchronous render runs before `start()` but
+   * shows the loading placeholder from `snapshot: null`, never the loader.
+   * @type {CaseLoader | null}
+   */
+  let caseLoader = null;
   const questionsView = createQuestionPanelView();
   /**
    * The id every write addresses: the row that was actually loaded, which is
@@ -893,6 +905,21 @@ export function createRouteSlice(params, context) {
     start(/** @type {any} */ tools) {
       dispatch = tools.dispatch;
       isSliceActive = tools.isActive;
+      // Bind the mount lifetime to this route's reads, then build the loader
+      // around the bound client (#567). `withAbortSignal` is total, so a
+      // client-less mount degrades exactly as it did before rather than
+      // failing the route here.
+      readClient = withAbortSignal(context.client, tools.signal);
+      caseLoader = new CaseLoader({
+        client: readClient,
+        saveQueue: context.saveQueue,
+        caseId: params.id,
+        caseType: params.caseType ?? null,
+        currentUserId:
+          context.chrome.currentUser?.id ?? context.currentUser?.id ?? '',
+        capabilities: context.chrome.permissions ?? context.capabilities,
+      });
+      const loader = caseLoader;
       const disposeSaveStatus = observeSaveStatus(
         context.saveQueue,
         tools.dispatch
@@ -910,26 +937,31 @@ export function createRouteSlice(params, context) {
         tools.listen(document, 'visibilitychange', () => {
           if (document.hidden) return;
           void refreshConversation({
-            client: context.client,
+            client: readClient,
             caseId: caseId(),
-            caseListOptions: caseLoader.caseListOptions,
-          }).then((row) => {
-            if (row && tools.isActive()) {
-              tools.dispatch({
-                type: 'case/conversation-changed',
-                messages: row.conversation,
-              });
-            }
-          });
+            caseListOptions: loader.caseListOptions,
+          })
+            .then((row) => {
+              if (row && tools.isActive()) {
+                tools.dispatch({
+                  type: 'case/conversation-changed',
+                  messages: row.conversation,
+                });
+              }
+            })
+            .catch(ignoreAbortError);
         });
       }
-      void caseLoader.load().then(() => {
-        if (!tools.isActive()) return;
-        tools.dispatch({
-          type: 'case/load-finished',
-          snapshot: caseLoader.toStoreSnapshot(),
-        });
-      });
+      void loader
+        .load()
+        .then(() => {
+          if (!tools.isActive()) return;
+          tools.dispatch({
+            type: 'case/load-finished',
+            snapshot: loader.toStoreSnapshot(),
+          });
+        })
+        .catch(ignoreAbortError);
       return () => {
         for (const timer of attributionTimers.values()) clearTimeout(timer);
         attributionTimers.clear();
