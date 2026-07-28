@@ -3,7 +3,8 @@
 This documents the **gold** layer's load semantics — the `AccumulateByRun`
 strategy: rows stamped `logical_run_id` / `load_date`, accumulating across runs,
 with an idempotent re-run via *delete-by-logical-run then insert*. For the
-*why*, see [ADR-0004](adr/0004-per-feed-load-strategy-owned-by-writer.md);
+*why*, see
+[load strategy is per-feed and owned by the Writer](adr/0004-per-feed-load-strategy-owned-by-writer.md);
 for the surrounding primitives, [core-primitives.md](core-primitives.md); for the
 domain terms (CasePool, SelectionPool, Review Outcomes), [`../CONTEXT.md`](../CONTEXT.md).
 
@@ -53,14 +54,19 @@ DELETE FROM <table> WHERE logical_run_id = :logical_run_id;  -- clear this run's
 INSERT INTO <table> ...                                      -- then re-insert this run
 ```
 
-Both statements commit as a **single SQLite transaction** (ADR-0005): if the
+Both statements commit as a **single SQLite transaction**: if the
 insert fails, the delete rolls back, so a failed re-run never half-wipes prior
-rows. The result: re-running a given load is safe and deterministic, while the
-historical record of prior loads is preserved.
+rows. The delete is skipped only on a feed's very first run, when the table does
+not exist yet — and that is *probed* (`PRAGMA table_info`), not inferred from a
+caught error, so a `database is locked` on the share fails the run instead of
+quietly downgrading the replace to an append. The step itself lives in one
+place (`_replace_logical_run` in `framework/io/writers.py`), shared by the gold
+Writer and the quarantine Writer. The result: re-running a given load is safe and
+deterministic, while the historical record of prior loads is preserved.
 
 ## `logical_run_id` is *not* the pipeline attempt id
 
-The run-log (ADR-0005) mints a **fresh `pipeline_run_id` per `.run()`** to
+The run-log mints a **fresh `pipeline_run_id` per `.run()`** to
 correlate every record of one execution. Gold's `logical_run_id` is a
 **different thing** — a stable, logical load key — and the two are kept as
 **separate, explicitly named columns**:
@@ -77,7 +83,7 @@ them from the shared `RunContext` so `--logical-run-id` flows straight through.
 The two are *linked* without being conflated: an accumulated row also carries
 `pipeline_run_id` (matching the run-log/registry key), so an operator can
 correlate a logical load's rows back to the exact execution that wrote them via
-the `RunRegistry` (ADR-0004).
+the `RunRegistry`.
 
 ## How a changing record is represented across runs
 
@@ -114,7 +120,7 @@ The always-correct query is *"the row with the greatest `load_date` for each
   `max(load_date)` per `case_ref` — latest-run alone would miss records last
   written by an earlier run.
 
-Per ADR-0002 this "latest per record" logic lives in **Python** (e.g. on the
+This "latest per record" logic lives in **Python** (e.g. on the
 CasePool's `fetch_*` retrievals), never in the Writer — the Writer stays a dumb
 stamp-and-append. A record that disappears from the source simply stops appearing
 in new runs: the current view (max `load_date`) drops it, while its historical
@@ -126,12 +132,13 @@ rows remain.
 
 - **Periodic snapshot** — every run re-writes the full set (Sync, ingest). Simple
   and self-correcting, but **unchanged records are re-copied every run**: 10k
-  stable records × 100 daily runs ≈ 1M rows, mostly identical. ADR-0004 bounds
-  this at ~1M rows; beyond that, change-detection or retention becomes a real
-  decision. There is no built-in "is-current" flag — consumers derive it.
+  stable records × 100 daily runs ≈ 1M rows, mostly identical. The load-strategy
+  design bounds this at ~1M rows; beyond that, change-detection or retention
+  becomes a real decision. There is no built-in "is-current" flag — consumers
+  derive it.
 - **Event / decision log** — each run appends only new facts (selections made,
-  outcomes received) that never restate prior rows. This is what ADR-0004
-  originally framed gold around; it grows with events, not with records × runs.
+  outcomes received) that never restate prior rows. This is what gold was
+  originally framed around; it grows with events, not with records × runs.
 
 In both, `logical_run_id` is the **unit of replacement**: you can re-drive a whole
 load idempotently, but you cannot "correct one record" via delete-by-logical-run —
@@ -141,7 +148,7 @@ you re-run the load that produced it.
 
 Gold is the one layer that is *both* written by a pipeline and read by others
 (the Selection pipeline reads ingested gold). Reads open through the shared
-`connect` factory with a `busy_timeout` (ADR-0001), so a read-only client **rides
+`connect` factory with a `busy_timeout`, so a read-only client **rides
 out** the single writer's in-place commit instead of erroring — it waits for the
 lock rather than failing fast. (WAL is unavailable over a network share, so this
 is on the default rollback journal.)
@@ -171,18 +178,18 @@ p.run()
 ```
 
 The `Store` mints the `AccumulateByRunWriter`, which owns the location and the
-delete-by-logical-run/insert accumulate behaviour (ADR-0003, ADR-0004); the
+delete-by-logical-run/insert accumulate behaviour; the
 pipeline makes no load decision of its own. `AccumulateByRun.from_context(context)`
 derives the `logical_run_id` / `load_date` (and the `pipeline_run_id` trace key)
 from the shared `RunContext`, so a re-drive under the same `--logical-run-id`
 replaces that load idempotently.
 
 To enforce the schema on the same footing as silver, insert a `SchemaValidator`
-validate step before the write (ADR-0006,
+validate step before the write (see
 [`schema-enforcement.md`](schema-enforcement.md)) — a belt-and-braces guard for
 rows assembled at gold rather than mirrored from ingest; no `SchemaCoercion` is
 needed because gold reads already-coerced silver. A breach raises *before* the
-Writer's delete-by-run/insert transaction (ADR-0005), so nothing is deleted or
+Writer's delete-by-run/insert transaction, so nothing is deleted or
 accumulated and prior gold rows stay intact.
 
 ### Current-only gold vs accumulation
@@ -194,4 +201,4 @@ is a current snapshot, not a per-run history. **Selection** / **Sync** gold use
 `AccumulateByRun`, where history must survive. *Which* model a Case Type's gold
 takes — and how multiple feeds fan into it (snapshot-vs-join) — is a per-Case-Type
 choice; the `case_review.gold` helpers are where that assembly lives, in the
-application layer rather than the framework (ADR-0013).
+application layer rather than the framework.

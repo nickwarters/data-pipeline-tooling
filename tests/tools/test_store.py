@@ -110,7 +110,7 @@ def test_directory_backend_maps_a_nested_namespace_to_a_nested_file(tmp_path):
 def test_normalised_schema_across_logical_databases(tmp_path):
     # A namespace is a logical database holding many related tables; a normalised
     # schema spans several of them, addressed through the catalog. Cross-database
-    # joins happen in Python (ADR-0002), so splitting files costs nothing.
+    # joins happen in Python, so splitting files costs nothing.
     registry = StoreRegistry(tmp_path)
     customers = registry.store("customers")  # one logical database…
     reference = registry.store("reference")  # …a second, read-only to the first

@@ -2,9 +2,9 @@
 
 This is a candid account of how the framework over-reached before commit
 `1b8488b`, why, and what would have caught it sooner. It exists so the lessons
-are enforced going forward (see
-[ADR-0013](docs/adr/0013-keep-the-framework-domain-free.md)) rather than
-rediscovered. It is written looking back from the lighter design we landed on:
+are enforced going forward
+(see [keeping the framework domain-free](docs/adr/0013-keep-the-framework-domain-free.md))
+rather than rediscovered. It is written looking back from the lighter design we landed on:
 **a DAG of generic steps, with business terms and logic removed from the
 framework entirely.**
 
@@ -19,7 +19,8 @@ Three artifacts capture it:
   generic engine.
 - **13 ADRs**, several stamped "**Decided; not yet built**" (the load-idempotency
   amendment, the case-identity and fan-out work). Design kept racing ahead of code:
-  the walking skeleton was issue #2, but the history reaches issue #183.
+  the walking skeleton was the very first issue, but the history runs into the
+  hundreds.
 - **Four "ruthless cut" passes removed ~1,800 lines** — `recipes/medallion.py`,
   a 670-line `orchestration.py`, a 328-line `run_registry.py`, `retry`,
   `calendar`, bespoke processors (SplitColumn / JoinColumns / Zfill /
@@ -57,7 +58,7 @@ which justified more structure.
 
 **What would have caught it:** for each ADR, *"what breaks today if we DON'T
 decide this now?"* If the answer is "nothing, we might refactor later," it is a
-note, not an ADR. ADR-0011 ("progressive enhancement behind stable seams") was
+note, not an ADR. "Progressive enhancement behind stable seams" was
 right in principle, but the practice inverted it: we built the seams *and* the
 enhancements speculatively. You may *name* a future seam; you may not *build
 past* it until a second real consumer exists.
@@ -77,7 +78,8 @@ is structure as procrastination.
 ## What we will do differently
 
 These are the durable tripwires, most of them a single question asked earlier.
-They are encoded as rules in [ADR-0013](docs/adr/0013-keep-the-framework-domain-free.md).
+They are encoded as rules in
+[keeping the framework domain-free](docs/adr/0013-keep-the-framework-domain-free.md).
 
 1. **No business nouns in `framework/`** — enforced from commit one. This one
    rule would have prevented the largest cut.

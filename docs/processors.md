@@ -1,7 +1,7 @@
 # Processors — the Selection & Ingest transforms
 
 This documents the concrete `Processor` primitives in `framework.transform.processors`.
-They fall into two workload families:
+They fall into three workload families:
 
 - **Selection narrowing** — `Filter`, `Score`,
   `VectorizedFilter`, `VectorizedDerive`, `Sort`, `Rename`, `Stamp`, `JoinWith`,
@@ -13,16 +13,19 @@ They fall into two workload families:
 - **Ingest & fan-out reshaping** — `SelectColumns`, `DropColumns`, `Unpivot`,
   `DeriveKey`, `LatestPerKey`: the transforms that fan one wide feed into a Case
   table and its Detail Tables, derive the deterministic `case_id`, and reduce
-  accumulated history to current-state gold (ADR-0009).
+  accumulated history to current-state gold.
+- **Bounded-subset & decoding** — `TopNPerGroup`, `Sample`, `SamplePerGroup`,
+  and `Parse`: reduce a population to a bounded, reproducible subset
+  or decode a packed text column.
 
 For the *why*, see
-[ADR-0002](adr/0002-python-processing-opaque-dataset-carrier.md)
-(Python-only processing),
-[ADR-0003](adr/0003-deferred-dag-composition.md) (deferred
+[Python-only processing, dumb store, opaque Dataset carrier](adr/0002-python-processing-opaque-dataset-carrier.md),
+[deferred DAG composition](adr/0003-deferred-dag-composition.md) (deferred
 builder, explicit join dependencies), and
-[ADR-0009](adr/0009-case-identity-and-gold-grain.md) (case identity, gold grain,
-multi-table feeds). The schema-driven `SchemaCoercion` processor lives with the
-schema and is documented separately — [core-primitives.md](core-primitives.md)
+[case identity and the gold grain](adr/0009-case-identity-and-gold-grain.md)
+(deterministic keys, multi-table feeds). The schema-driven `SchemaCoercion`
+processor lives with the schema and is documented separately —
+[core-primitives.md](core-primitives.md)
 and [schema-enforcement.md](schema-enforcement.md).
 
 ## What a processor is
@@ -39,9 +42,9 @@ It is attached with `.transform(...)` and runs as the builder's `process`
 step, in attach order, between the pre- and post-validators. Unlike the
 structural validators it is **engine-confined** — a transform needs the engine's
 vectorised operations, so it reaches the backing frame via
-`to_pandas()`/`from_pandas()` exactly as a Reader/Writer does (ADR-0002). A
+`to_pandas()`/`from_pandas()` exactly as a Reader/Writer does. A
 processor has **no severity**: a transform either applies or it can't, so a
-failure is always fail-fast (ADR-0005) — it raises and the run aborts.
+failure is always fail-fast — it raises and the run aborts.
 
 The sections below cover the **Selection** transforms first (the
 `filter/score/sort/join` of `CONTEXT.md`): the Selection Pipeline reads the
@@ -63,8 +66,9 @@ silver-to-gold example using this pattern.
 
 `Filter` and `Score` carry their business rule as a **plain-Python callable over
 a row mapping** (`{column: value}`), not a SQL string or a column-operator DSL.
-This is ADR-0002 made concrete: all business logic happens in Python, and the
-store stays dumb. The rule is ordinary Python and never names the engine — the
+This is the Python-only processing rule made concrete: all business logic
+happens in Python, and the store stays dumb. The rule is ordinary Python and
+never names the engine — the
 processor applies it row-wise behind the `Dataset` seam:
 
 ```python
@@ -208,6 +212,11 @@ pipeline = (
 )
 ```
 
+The two filters are **interchangeable in index semantics**: both reset the kept
+rows' index, so switching between them changes only how the rule is expressed,
+never the shape of what comes out and never whether a downstream label-based
+operation sees a gappy index.
+
 The equivalent row-callable form is still valid and remains the clearer choice
 for rules that read best one Case at a time:
 
@@ -291,7 +300,7 @@ UUID; reach for `JoinColumns` when you want the readable composite itself, and
 
 A Case Type's Selection joins against other feeds — most commonly **Reference
 Data** (the Adviser hierarchy, product codes, mappings), which is read-only to
-Case Types and joined in Python, never written by them (`CONTEXT.md`, ADR-0002).
+Case Types and joined in Python, never written by them (`CONTEXT.md`).
 `JoinWith` is that join, and it is a `Processor`:
 
 ```python
@@ -399,14 +408,14 @@ full Selection flow — `CaseType`/`Variation` + `CasePool` → `SelectionPool`,
 stamping the Variation's `question_bank_id` onto the chosen Cases. See
 [`selection.md`](selection.md).
 
-## Ingest & fan-out processors — multi-table feeds (ADR-0009)
+## Ingest & fan-out processors — multi-table feeds
 
 The transforms above narrow the CasePool *into* the SelectionPool. The four
 below sit on the other side of the medallion: **Ingest**, where one wide source
 feed (650+ columns) is fanned out into a Case table and zero or more **Detail
-Tables**, each a single-table pipeline over the shared raw table (
-[ADR-0009](adr/0009-case-identity-and-gold-grain.md)). They are ordinary
-callables — same `(dataset) -> Dataset` shape, same engine-confined,
+Tables**, each a single-table pipeline over the shared raw table (see
+[case identity and the gold grain](adr/0009-case-identity-and-gold-grain.md)).
+They are ordinary callables — same `(dataset) -> Dataset` shape, same engine-confined,
 fail-fast contract — composed on the `raw → silver` and `silver → gold` builders.
 
 ### `SelectColumns` — project the columns this pipeline needs
@@ -418,8 +427,8 @@ SelectColumns(["case_ref", "adviser", "activity_date", "amount"])
 ```
 
 Keeps only the listed columns and drops the rest. It is the **projection seam**
-that keeps each single-table pipeline narrow over a wide shared raw table
-(ADR-0009): the Case pipeline projects the Case columns, each Detail pipeline
+that keeps each single-table pipeline narrow over a wide shared raw table:
+the Case pipeline projects the Case columns, each Detail pipeline
 projects its own slice + the natural key. A requested column that is **absent**
 raises `ValueError` naming the missing column(s) and the available ones — so a
 mis-typed projection fails at run time rather than silently producing an
@@ -480,9 +489,10 @@ Computes `uuid5(namespace, natural_key_string)` for every row and writes it into
 the `into` column (new or overwrite). The natural-key string joins the `str()` of
 each `natural_key` column's value with `"|"`, in declared order — so the **same
 values always produce the same UUID on every run and every machine** (pure stdlib
-`uuid`, no platform variance). This is the deterministic `case_id` of ADR-0009:
-because the Case pipeline and each Detail pipeline derive it from the *same*
-`namespace` + `natural_key`, a Detail row links back to its Case with **no join**
+`uuid`, no platform variance). This is the deterministic `case_id` of the
+case-identity contract: because the Case pipeline and each Detail pipeline
+derive it from the *same* `namespace` + `natural_key`, a Detail row links back
+to its Case with **no join**
 and idempotency holds across runs. (Contrast `Stamp`, which writes one constant;
 `DeriveKey` computes a per-row key from the row's natural-key columns.)
 
@@ -496,8 +506,8 @@ LatestPerKey(key="case_id", by="load_date")
 
 Keeps the **latest row per `key`**, where "latest" is the maximum `by` value (a
 timestamp or load column). `key` is one column or a list. This is the
-*current-gold* reduction of the history-upstream / current-gold Ingest profile
-(ADR-0004): raw + silver accumulate the change-over-time record, and
+*current-gold* reduction of the history-upstream / current-gold Ingest profile:
+raw + silver accumulate the change-over-time record, and
 `LatestPerKey` reduces accumulated silver to the one-row-per-Case current state
 the CasePool reads. **Tie-break:** when rows for a key share the maximum `by`
 value, the row appearing **last in the input** is kept — deterministic given a
@@ -533,7 +543,7 @@ validated = p.validate(SchemaValidator(CaseSchema), coerced, name="post-validate
 p.write(med.silver.writer("cases", AccumulateByRun(RUN_ID, RUN_ID)), validated, name="write")
 p.run()
 # CASES is the feed's CaseType — it owns the identity contract (namespace +
-# natural_key), so both builders below derive the same case_id (ADR-0009).
+# natural_key), so both builders below derive the same case_id.
 # Cases gold: DeriveKey → LatestPerKey → UniqueValidator → current-only gold
 ingest_silver_to_gold(med, CASES, "cases").run()
 
@@ -548,10 +558,71 @@ detail_ingest_silver_to_gold(
 Both pipelines read the *same* raw table and share one `Rename` normalisation
 instance; each is independently validated and writes its own gold. See
 [gold-accumulation.md](gold-accumulation.md) for the gold builders and
-[ADR-0009](adr/0009-case-identity-and-gold-grain.md) for the fan-out rationale.
+[case identity and the gold grain](adr/0009-case-identity-and-gold-grain.md)
+for the fan-out rationale.
+
+## Bounded-subset processors — `TopNPerGroup`, `Sample`, `SamplePerGroup`
+
+These reduce a population to a bounded subset rather than reshaping it. All
+three are exported from `framework.transform` (they existed but were
+unreachable through the facade, which is what caused a duplicate copy to grow in
+`tools/analytics/`; that fork is now retired and this module is their single
+home).
+
+### `TopNPerGroup` — keep the top `n` rows per group
+
+```python
+from framework.transform import TopNPerGroup
+
+TopNPerGroup(key="adviser", by="score", n=5, ascending=False, tiebreak="case_id")
+```
+
+Generalises `LatestPerKey(key=K, by=B)` to top-`n` per key. It carries its own
+sort, so it does not depend on a preceding `Sort` surviving the grouping, and
+applies a stable ascending tie-break on `tiebreak` so tied scores rank
+reproducibly. A group smaller than `n` passes through whole; an empty feed in
+yields an empty feed out.
+
+### `Sample` / `SamplePerGroup` — a seeded, reproducible draw
+
+```python
+from framework.transform import Sample, SamplePerGroup
+
+Sample(n=100, seed=7, order="case_id")          # or Sample(fraction=0.1, seed=7)
+SamplePerGroup(key="adviser", n=5, seed=7, order="case_id")
+```
+
+Both are a **pure function of (input dataset, seed)** — never the run id or the
+clock — per [reproducible sampling](adr/0010-reproducible-sampling.md): the run-to-run
+variation comes from the upstream population shrinking, not from varying the
+randomness. Each orders by `order` before drawing, so the result is invariant to
+incoming row order; `SamplePerGroup` derives a per-group seed by stdlib hashing
+(stable across Windows/macOS, unlike the salted builtin `hash`) so each group is
+drawn independently. `Sample` takes exactly one of `n` or `fraction`
+(`0 < fraction <= 1`, resolved against the run's actual population).
+
+**Null group keys are kept.** `TopNPerGroup` and `SamplePerGroup` group with
+`dropna=False`: a missing group key is still a group. Dropping it would silently
+shrink the output with nothing downstream to notice — the bug the retired fork
+had already fixed and the framework copy had not.
+
+### `Parse` — decode a packed text column
+
+```python
+from framework.transform import Parse
+
+Parse("payload")                      # json.loads by default
+Parse(["a", "b"], parser=int)
+```
+
+Runs each value of the named column(s) through a `value -> value` callable,
+replacing it in place — a JSON text column becomes structured Python values
+ready for a downstream reshape; any parser works (`datetime.fromisoformat`, a
+custom record parser). A missing column raises `ValueError`, consistent with the
+other column processors.
 
 ## Not yet (follow-on tickets)
 
 - **Typed `Case` objects** at the domain edge: the CasePool returns the bulk-tier
   `Dataset` today; materialising fully typed Cases on demand is the
-  typed-on-demand edge at the domain layer (ADR-0002).
+  typed-on-demand edge at the domain layer.

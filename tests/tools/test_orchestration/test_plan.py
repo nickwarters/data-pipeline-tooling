@@ -1,4 +1,4 @@
-"""Tests for Orchestrator.plan() and plan_for_each() (issue #245)."""
+"""Tests for Orchestrator.plan() and plan_for_each()."""
 
 import datetime as dt
 import json
@@ -6,7 +6,9 @@ from pathlib import Path
 
 from framework.run import Requirement, RunAddress
 from tools.calendar import WorkingDayCalendar
+from tools.observability import timestamps
 from tools.orchestration import (
+    DayOfMonth,
     ManualOnly,
     Orchestrator,
     PipelineSet,
@@ -111,6 +113,31 @@ def test_plan_returns_skipped_for_not_due_item(tmp_path):
     assert "is not due on" in result.items[0].reason
 
 
+def test_plan_not_due_reason_names_the_schedule_that_was_not_due(tmp_path):
+    """A monthly schedule must not explain itself in weekday language.
+
+    The plan preview used to compute one weekday name for the whole pass and
+    paste it onto every skipped item, so a day-of-month schedule reported "is
+    not due on monday" — an operator reading it would go looking for a weekday
+    rule that does not exist. Each schedule now says why *it* was not due.
+    """
+    orchestrator, _ = _orchestrator(
+        PipelineSet(
+            "claims",
+            (ScheduledPipeline("pipelines/monthly_snapshot", DayOfMonth(21)),),
+        ),
+    )
+
+    # _DUE_DATE is Monday the 15th, so a day-21 schedule is not due.
+    item = orchestrator.plan(tmp_path, run_date=_DUE_DATE).items[0]
+
+    assert item.status == "skipped"
+    assert "day 21 of month" in item.reason
+    assert "monday" not in item.reason.lower(), (
+        f"a monthly schedule explained itself as a weekday: {item.reason!r}"
+    )
+
+
 # ── test_plan_returns_disabled_for_disabled_item ──────────────────────────────
 
 
@@ -154,7 +181,7 @@ def test_plan_returns_blocked_when_freshness_requirement_is_stale(tmp_path):
                     Weekdays(),
                     depends_on=(
                         Requirement.succeeded(
-                            RunAddress.pipeline("ingest")
+                            RunAddress.for_pipeline("ingest")
                         ).within_days(1),
                     ),
                 ),
@@ -270,3 +297,51 @@ def test_plan_result_str_empty():
     output = str(result)
     assert "no scheduled items" in output
     assert _DUE_DATE.isoformat() in output
+
+
+# ── the plan preview reads the same clock rule the runner does ────────────────
+#
+# A stored timestamp is a UTC instant; a run date is a local calendar date. On a
+# UK box at UTC+1, an upstream that succeeded at 00:10 local on the due date is
+# stamped 23:10 UTC the day before, and taking the UTC date blocked the
+# downstream as stale. The plan preview must not disagree with the runner about
+# which upstream runs count as today's.
+
+_BST = dt.timezone(dt.timedelta(hours=1))
+# 23:10 UTC the day before _DUE_DATE == 00:10 local on _DUE_DATE at UTC+1.
+_JUST_AFTER_LOCAL_MIDNIGHT = "2026-06-14T23:10:00+00:00"
+
+
+def test_plan_is_not_blocked_by_an_upstream_that_landed_after_local_midnight(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(timestamps, "local_timezone", lambda: _BST)
+    log_path = tmp_path / "_runs" / "ingest.log"
+    _record_run(
+        log_path,
+        pipeline="ingest",
+        step="run",
+        status="ok",
+        timestamp=_JUST_AFTER_LOCAL_MIDNIGHT,
+    )
+
+    orchestrator, _ = _orchestrator(
+        PipelineSet(
+            "claims",
+            (
+                ScheduledPipeline(
+                    "pipelines/reporting",
+                    Weekdays(),
+                    depends_on=(
+                        Requirement.succeeded(
+                            RunAddress.for_pipeline("ingest")
+                        ).same_day(),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    item = orchestrator.plan(tmp_path, run_date=_DUE_DATE).items[0]
+
+    assert item.status == "ready", item.reason

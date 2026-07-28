@@ -186,6 +186,42 @@ def test_dry_run_previews_without_writing_artifacts(tmp_path):
     assert "rows" in result.stdout
 
 
+def test_dry_run_passes_params_to_the_previewed_pipeline(tmp_path):
+    # A preview must see the same run parameters a real run does, or a pipeline
+    # that reads context.params fails only under --dry-run.
+    result = _cli(
+        "run",
+        "clipipelines/_source",
+        "--base-dir",
+        str(tmp_path),
+        "--run-date",
+        "2026-06-22",
+        "--param",
+        "source_file=/share/upstream/claims/claims_20260622_a.csv",
+        "--dry-run",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "source_file=/share/upstream/claims/claims_20260622_a.csv" in result.stdout
+    assert not (tmp_path / "fixture" / "raw.db").exists()
+
+
+def test_orchestrate_unknown_app_reports_clear_error(tmp_path):
+    result = _cli(
+        "orchestrate",
+        "--app",
+        "no_such_app_module",
+        "--base-dir",
+        str(tmp_path),
+        "--run-date",
+        "2026-05-29",
+    )
+
+    assert result.returncode != 0
+    assert "no_such_app_module" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
 def test_run_unknown_pipeline_reports_clear_error(tmp_path):
     result = _cli("run", "clipipelines/nope", "--base-dir", str(tmp_path))
 
@@ -475,3 +511,22 @@ def test_status_and_log_resolve_base_dir_from_env(tmp_path):
     log = cli_env("log", "_source", "--env", "dev")
     assert log.returncode == 0, log.stderr
     assert "_source" in log.stdout
+
+
+def test_every_usage_example_in_the_module_docstring_parses():
+    # The docstring is the first thing an author reads, so a stale example there
+    # is worse than a stale one in the docs. Each `python -m cli ...` line it
+    # shows is fed back through the real parser, so an option that is renamed or
+    # turned into a flag cannot leave a broken example behind.
+    import re
+    import shlex
+
+    import cli.operator as operator
+
+    examples = re.findall(r"^    python -m cli (.+)$", operator.__doc__, re.MULTILINE)
+    assert len(examples) == 4, examples
+    parser = operator.build_parser()
+    for example in examples:
+        args = shlex.split(example.replace("<", "_").replace(">", "_"))
+        parsed = parser.parse_args(args)  # SystemExit here means a stale example
+        assert parsed.command == args[0]

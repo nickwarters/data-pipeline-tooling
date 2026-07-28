@@ -16,11 +16,20 @@ from __future__ import annotations
 
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from typing import TypeVar
 
+from framework._internal.describe import component_summary
 from framework.core.dataset import Dataset
-from framework.core.protocols import Reader, Writer
+from framework.core.protocols import (
+    DEFAULT_CHUNK_SIZE,
+    ChunkReader,
+    Reader,
+    Writer,
+)
+from framework.io.writers import supports_chunk_writes
+from framework.io.writers import writing_chunks as open_chunk_writes
 
 log = logging.getLogger(__name__)
 
@@ -78,17 +87,31 @@ class RetryPolicy:
 class _RetryingEdge:
     """Shared retry bookkeeping for the reader/writer decorators.
 
-    Holds the policy and records each retried attempt as a human note on
-    :attr:`retry_attempts` (reset per call), which the builder drains into the
-    read/write step's run-log ``warn_hits``; every attempt is also logged for
-    live console visibility. ``_edge`` names the I/O edge in those notes.
+    Holds the component being retried and the policy, and records each retried
+    attempt as a human note on :attr:`retry_attempts` (reset per call), which the
+    builder drains into the read/write step's run-log ``warn_hits``; every
+    attempt is also logged for live console visibility. ``_edge`` names the I/O
+    edge in those notes.
+
+    It also renders the plan line for whatever it wraps, delegating through the
+    inner component's own ``describe()``. A decorator that did not would replace
+    a reader's summary with its own bare class name, so applying retry — an
+    operational concern that changes nothing about *what* is read — would quietly
+    cost the plan the one line saying where the data comes from.
     """
 
     _edge = "io"
 
-    def __init__(self, policy: RetryPolicy) -> None:
+    def __init__(self, inner: object, policy: RetryPolicy) -> None:
+        self._inner = inner
         self._policy = policy
         self.retry_attempts: list[str] = []
+
+    def describe(self) -> str:
+        return (
+            f"Retrying({component_summary(self._inner)}, "
+            f"attempts={self._policy.attempts})"
+        )
 
     def _run(self, operation: Callable[[], T]) -> T:
         self.retry_attempts = []
@@ -114,11 +137,71 @@ class RetryingReader(_RetryingEdge):
     _edge = "read"
 
     def __init__(self, inner: Reader, policy: RetryPolicy) -> None:
-        super().__init__(policy)
-        self._inner = inner
+        super().__init__(inner, policy)
 
     def read(self) -> Dataset:
         return self._run(self._inner.read)
+
+
+class RetryingChunkReader(_RetryingEdge):
+    """Decorate a :class:`ChunkReader`, retrying the *start* of its stream.
+
+    The streaming readers are the ones most exposed to a transient failure —
+    they are the ones reaching a network share or an extract dropped by a remote
+    host — and until now they were the only readers retry could not cover, since
+    a ``ChunkReader`` has no ``read()`` to wrap.
+
+    **What is retried, and why only that.** A failure is retried while the stream
+    has yielded *nothing*: the source is re-opened and iterated from the
+    beginning. Once a chunk has been handed downstream that is no longer safe —
+    the consumer has already written those rows, so restarting would land them
+    twice, and a ``ChunkReader`` cannot be resumed from where it broke because
+    nothing in the contract says where that was. So a mid-stream failure
+    propagates and the run aborts, exactly as it does without retry.
+
+    That is not the weak half of the bargain it sounds like: opening the source
+    is where the transient failures this exists for actually happen — the share
+    unreachable, the extract not yet released, the handle refused. Making a
+    stream resumable is a property of a source, and a source that has one can
+    offer it as its own reader.
+    """
+
+    _edge = "read"
+
+    def __init__(self, inner: ChunkReader, policy: RetryPolicy) -> None:
+        super().__init__(inner, policy)
+
+    def chunks(self, size: int = DEFAULT_CHUNK_SIZE) -> Iterator[Dataset]:
+        self.retry_attempts = []
+        for attempt in range(1, self._policy.attempts + 1):
+            yielded = False
+            try:
+                for chunk in self._inner.chunks(size):
+                    yielded = True
+                    yield chunk
+                return
+            except self._policy.retry_on as exc:
+                if yielded or attempt >= self._policy.attempts:
+                    raise
+                self._note(attempt, exc)
+                if self._policy.backoff_seconds:
+                    self._policy._sleep(self._policy.backoff_seconds)
+
+    @property
+    def rows_scanned(self) -> int:
+        """The wrapped reader's scan tally, when it keeps one.
+
+        Forwarded rather than reimplemented so a filtering reader keeps
+        reporting how much of the source it had to look at even through the
+        decorator; a reader that keeps no tally has no attribute here either,
+        which is how a caller tells the two apart.
+        """
+        return self._inner.rows_scanned  # type: ignore[attr-defined]
+
+    @property
+    def rows_kept(self) -> int:
+        """The wrapped reader's kept tally, when it keeps one."""
+        return self._inner.rows_kept  # type: ignore[attr-defined]
 
 
 class RetryingWriter(_RetryingEdge):
@@ -131,8 +214,25 @@ class RetryingWriter(_RetryingEdge):
     _edge = "write"
 
     def __init__(self, inner: Writer, policy: RetryPolicy) -> None:
-        super().__init__(policy)
-        self._inner = inner
+        super().__init__(inner, policy)
+        if not supports_chunk_writes(inner):
+            # Retry adds no ability to take a streamed source, so the decorator
+            # must not appear to have one the wrapped Writer lacks: hiding the
+            # method keeps the wire-time refusal accurate through the wrapper
+            # instead of deferring the failure to the first chunk.
+            self.writing_chunks = None
 
     def write(self, dataset: Dataset) -> None:
         self._run(lambda: self._inner.write(dataset))
+
+    @contextmanager
+    def writing_chunks(self) -> Iterator[Writer]:
+        """Retry each chunk of the wrapped Writer's chunk-write session.
+
+        Retry is per write, so it composes with a chunked load unchanged: the
+        wrapped Writer decides what happens once per load, and each chunk that
+        lands inside the session gets the same allowlisted retry a single write
+        would.
+        """
+        with open_chunk_writes(self._inner) as chunk_writer:
+            yield RetryingWriter(chunk_writer, self._policy)

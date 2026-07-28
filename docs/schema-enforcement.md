@@ -4,18 +4,18 @@ This documents the `Schema` + `SchemaValidator` adapter and the
 `SchemaCoercion` processor that repairs raw's round-trip-lossy types ahead of the
 validator, plus how they compose onto a `Pipeline` to enforce the schema at
 the silver boundary. For the *why*, see
-[ADR-0006](adr/0006-graduated-schema-enforcement.md); for the surrounding
-primitives, [core-primitives.md](core-primitives.md).
+[graduated schema enforcement](adr/0006-graduated-schema-enforcement.md); for the
+surrounding primitives, [core-primitives.md](core-primitives.md).
 
 ## The three layers, and where the schema bites
 
-Enforcement is **graduated** across the medallion (ADR-0006):
+Enforcement is **graduated** across the medallion:
 
 | Layer | Shape discipline |
 |-------|------------------|
 | **raw** | **Schema-light.** A faithful mirror of the source snapshot as landed — booleans still as `TRUE`/`FALSE` text, dates still unparsed, warts and all. At most a loud column-presence check so a wholesale source change fails immediately. |
 | **silver** | **Validated — the schema boundary.** A Case Type's declared columns + dtypes are enforced here, as a post-validator, before the data lands. This is where "is this data valid and processable?" gets its authoritative answer. |
-| **gold** | **Validated on the same footing as silver** (ADR-0006) — by composing the same `SchemaValidator` as a post-validator onto the gold-building pipeline (see below). |
+| **gold** | **Validated on the same footing as silver** — by composing the same `SchemaValidator` as a post-validator onto the gold-building pipeline (see below). |
 
 **Why silver, not raw?** Raw must stay faithful to the source so the landing
 zone is diagnosable and re-runnable; hardening the shape is a silver-stage
@@ -42,7 +42,7 @@ class CaseA:
 
 No base class, no registration. Declaring the schema does **not** force you to
 materialise typed objects — it is a *validation contract first*; typed objects
-(`Iterator[CaseA]`) are an opt-in convenience for later (ADR-0006).
+(`Iterator[CaseA]`) are an opt-in convenience for later.
 
 Because the **field names are the column contract**, they must be valid Python
 identifiers — a source whose columns carry spaces or punctuation (`Case Number`)
@@ -70,7 +70,7 @@ What it checks:
   | `str`                | object / string       |
   | `int`                | integer               |
   | `float`              | float                 |
-  | `bool`               | bool                  |
+  | `bool`               | bool / boolean        |
   | `date` / `datetime`  | datetime64            |
 
 Every breach is collected and reported **at once** in one located message
@@ -98,7 +98,7 @@ operations over actual values. Re-exposing all of that engine-agnostically would
 re-implement a dataframe API on the `Dataset` seam. So `SchemaValidator`
 reaches the backing frame via `to_pandas()` exactly as a Reader/Writer/processor
 does — keeping `Dataset`'s public surface tiny and the pandas-dtype mapping in
-one place (`framework._internal.schema`). See ADR-0002 and ADR-0006.
+one place (`framework._internal.schema`).
 
 ## `SchemaCoercion` — repairing what storage loses
 
@@ -117,13 +117,34 @@ coerced = SchemaCoercion(CaseA)(dataset)   # returns a transformed dataset
 
 It is a callable transform (`(dataset) -> Dataset`) and, like the validator,
 **engine-confined** — a cast needs the engine's vectorised operations, so it
-reaches the frame via `to_pandas()`/`from_pandas()` (ADR-0002). It casts **only
+reaches the frame via `to_pandas()`/`from_pandas()`. It casts **only
 the round-trip-lossy declared types**:
 
 | Declared type | Coerced from | Coerced to |
 |---------------|--------------|------------|
 | `date` / `datetime` | text (`"2026-01-01"`) | datetime64 |
-| `bool` | `TRUE`/`FALSE` text (case-insensitive) or `1`/`0` | bool |
+| `bool` | `TRUE`/`FALSE`, `Y`/`N`, `YES`/`NO` text, or `1`/`0` (incl. the `1.0`/`0.0` a nulled numeric column comes back as) | pandas `"boolean"` |
+
+Boolean encodings are compared **case-folded and whitespace-stripped**, so
+`true`, `True` and `TRUE ` all map.
+
+A `bool` lands as pandas' **nullable `"boolean"`** dtype, not numpy `bool`. The
+reason is that numpy `bool` has no null, so a gap would have to be invented as
+`False`. **Nullability is enforced by the declared value rules, not the
+coercer**: a null is the *absence* of an encoding, so the coercer passes it
+through as `pd.NA` and never reports it as an unrecognized boolean encoding.
+An `Annotated[bool, Nullable()]` column therefore coerces cleanly with its gaps
+intact, while a null in a non-nullable column is reported by `SchemaValidator`
+as the nullability breach it is (`column 'active' contains null value(s)`),
+pointing at the declaration rather than blaming the feed's data. This keeps
+`bool` consistent with every other declared type, which already leaves presence
+to the rules.
+
+The validator's `bool` dtype check accepts both `"boolean"` and numpy `bool`, so
+nothing downstream has to know the difference. No storage migration is implied
+either: SQLite is dynamically typed and stores a boolean column as `1`/`0`/NULL
+whichever dtype was written, so `Refresh` and `AccumulateByRun` write and
+re-read a table whose boolean dtype changed mid-life without a schema change.
 
 `str` / `int` / `float` **survive storage**, so they pass through untouched and
 stay the validator's gate — and columns the schema doesn't declare are left
@@ -133,7 +154,7 @@ storage; validation enforces the contract.**
 A value the coercer cannot cast — an unparseable date, a boolean encoding
 outside the known set (`"maybe"`) — is **not** silently dropped: it raises a
 `CoercionError` with one located message naming the schema, the column, and the
-reason, and the run aborts fail-fast (ADR-0005):
+reason, and the run aborts fail-fast:
 
 ```
 CaseA coercion: column 'active' has unrecognized boolean encoding(s): 'maybe'
@@ -178,18 +199,18 @@ per-run step order is:
 read → coerce (transform) → post-validate (schema) → write
 ```
 
-Because `.run()` is fail-fast and atomic (ADR-0005), either a coercion failure at
+Because `.run()` is fail-fast and atomic, either a coercion failure at
 the **transform** step or a schema breach at the **post-validate** step raises
 *before* the Writer is called — so **no `silver.db` is written** and nothing
 partial lands. The pipeline makes no write or load decisions: the `Store` mints
-the Writer, which owns its location and load strategy (ADR-0003, ADR-0004). For
-the full feed pattern (raw accumulation, filtering the current run before
+the Writer, which owns its location and carries the load strategy that realised
+it. For the full feed pattern (raw accumulation, filtering the current run before
 coercion), see [`pipelines/ingest/pipeline.py`](../pipelines/ingest/pipeline.py)
 and [adding-a-feed.md](adding-a-feed.md).
 
 ## The same schema, at the gold boundary
 
-Gold is validated *on the same footing as silver* (ADR-0006): the **same**
+Gold is validated *on the same footing as silver*: the **same**
 `SchemaValidator` composes as a post-validator onto whatever pipeline builds gold,
 before the gold write. Two deliberate differences from the silver hop:
 
@@ -200,7 +221,7 @@ before the gold write. Two deliberate differences from the silver hop:
   reduction, not mirrored from ingest) rather than re-checking ingest mirrors. It
   is therefore **optional** — a gold builder may attach `SchemaValidator` or not.
 
-A breach raises at the validate step, before the writer runs (ADR-0005) — so a
+A breach raises at the validate step, before the writer runs — so a
 failed run writes no gold and leaves prior gold intact. How accumulated silver is
 assembled into gold is an application concern (the `case_review.gold` helpers, and
 the open snapshot-vs-join decision); see
@@ -269,18 +290,62 @@ configuration error raised when `SchemaValidator` is built.
 | `Unique()` | no duplicate values in the column | `has duplicate value(s): 'dup'` |
 | `OneOf(*allowed)` | membership in an allowed set (value-set / encoding) | `has value(s) outside {'closed', 'open'}: 'pending'` |
 
-Three shared properties:
+Four shared properties:
 
 - **Value rules check present values only.** Null values are handled by the
   field's nullability marker: allowed for `Nullable()`/plain fields, rejected by
   `NonNull()`. A nullable `Pattern`, `Length`, `Range`, `Unique`, or `OneOf`
-  field can therefore be missing without creating a value-rule breach.
+  field can therefore be missing without creating a value-rule breach. The null
+  guard lives **once**, in the shared `ValueRuleBase` the five rules derive
+  from; a rule only says which of the *present* values breach and how to phrase
+  it.
 - **Configuration errors fail where the schema is composed**, not mid-run: a
   malformed `Pattern` regex, a `Length`/`Range` with `min > max`, or an empty `OneOf`
   raises when the rule is constructed — mirroring the validator's
   unsupported-dtype guard.
-- **Breaches are sampled, not dumped.** A message lists up to five offending
-  values (sorted, then `...`), so a wholly-wrong column stays one readable line.
+- **Breaches are sampled, not dumped — in the *validator's* message.** An
+  aborting validator message describes a **column**, so it lists up to five of
+  that column's offending values (sorted, then `...`) and a wholly-wrong column
+  stays one readable line. A **quarantined row's** `failed_rule` reason
+  describes **one row**, so it names the rule's expectation and samples
+  nothing — the row's own values are already beside the reason in the reject
+  table. Two callers, two presentations, one traversal (see
+  [opt-in row-level quarantine](adr/0007-row-level-quarantine.md)).
+- **The breach mask is positional and plainly boolean.** `violating_mask()`
+  marks rows by position, not by index label, so a frame whose index labels
+  repeat — the ordinary result of concatenating two frames behind the `Dataset`
+  seam — is masked correctly rather than raising or silently flagging the wrong
+  rows. The mask's dtype is plain `bool`, never pandas' nullable `boolean`,
+  because the validator and the quarantine partitioner select rows with it.
+
+### Writing your own rule — an engine-confined act
+
+A value rule is anything with `check(series)` and `violating_mask(series)`: the
+`ValueRule` contract is a **structural protocol**, so a rule an application
+writes itself, inheriting nothing, is as much a value rule as the five built-in
+ones. `ValueRuleBase` — which hands the five built-ins their shared null guard
+and mask construction — is **framework-internal**: it is deliberately not
+exported from `framework.core`, so an application rule implements the two
+methods directly rather than inheriting. That keeps inheritance from becoming
+the de-facto contract, and keeps the base class free to change shape without
+breaking application code.
+
+One consequence worth knowing when you write your own: the built-in rules
+describe a quarantine breach per row without sampling other rows' values, but a
+rule that implements the protocol directly is asked for its message through
+`check()`, which describes the whole column. Its rejected rows therefore carry a
+column-sampled reason rather than a purely per-row one. The rejected row itself
+is stored beside the reason either way, so the offending value is always
+present.
+
+Either way, authoring a rule means **working inside the engine seam**: the rule
+is handed the column's pandas `Series` directly, because judging a whole column
+one value at a time in plain Python would be unusably slow. This is the same
+bargain readers, writers and transforms make, and
+[Python-only processing with an opaque Dataset carrier](adr/0002-python-processing-opaque-dataset-carrier.md)
+names value rules in its engine-confined list for exactly this reason. Pipeline
+scripts and the domain layer still never name the engine — they only *declare* rules on a
+schema.
 
 ### One message, naming column + rule
 
@@ -296,16 +361,54 @@ A value rule is **skipped for a column whose dtype is wrong** — the dtype brea
 is the prior problem to fix, and running a string-shaped rule over a mistyped
 column would only add a spurious second failure.
 
+### One traversal, two presentations
+
+`SchemaValidator` (which *aborts*) and `SchemaValueRulePartitioner` (which
+*routes rows aside*) read the **same** evaluation of the declared rules. A rule
+author therefore satisfies **one** contract, not two subtly different ones, and
+each rule is consulted exactly once per frame — one mask, one phrase, regardless
+of how many rows breach.
+
+Where the two callers agree, and where they deliberately differ:
+
+| Concern | `SchemaValidator` | `SchemaValueRulePartitioner` |
+|---|---|---|
+| Missing column | rule **does not run**; the *column* is reported as a structural breach and the run aborts | rule **does not run**; nothing to route aside, and the validator ahead of the node already aborted |
+| Ill-typed column | rules skipped, dtype breach reported | not applicable — a dtype breach has already aborted upstream |
+| Breach phrasing | the rule's expectation **plus a sample** of the column's offenders | the rule's expectation, **no sample** (the row supplies its own values) |
+| Row checks | every breaching row, deduplicated by phrase with a row count | every breaching row, per row |
+
+The missing-column behaviour is now **identical in both** and chosen
+deliberately: a rule over a column that isn't there never runs, and the absence
+itself is the `SchemaValidator`'s to report. The consequence is worth knowing —
+**a typo'd column name in a schema means its rules silently never run during
+quarantine**, so the `SchemaValidator` in front of the quarantine node (the
+quarantine ordering invariant) is what makes the typo visible.
+
+### What a rule costs
+
+- A **value rule** is vectorised: one pass over the column per rule, using the
+  engine's own operations. Cost is `O(rows × rules)`.
+- A **row check** is a Python callable over one row, so the framework constructs
+  a `Series` per row per check and calls into Python each time. On a 1M-row feed
+  (the stated ceiling) three row checks mean three million Python-level
+  calls — **orders of magnitude** more than a value rule over the same data.
+
+That is the deliberate trade for expressiveness: *which* cross-field
+relationships matter is domain logic, and a callable is the honest shape for it.
+But prefer a value rule when the expectation fits one column, and keep the
+number of declared row checks small on the widest feeds.
+
 ### Where they bite
 
 `SchemaValidator` carries the column/dtype, nullability, **and** value rules
 together, so wherever it is composed — at the silver boundary, and again at gold —
 nullability and value rules enforce with no extra wiring. As with dtype breaches, a nullability or value-rule
 breach raises at the post-validate step **before** the writer runs — so the run
-aborts fail-fast and atomically (ADR-0005) and nothing partial lands. `Unique`
+aborts fail-fast and atomically and nothing partial lands. `Unique`
 here is the field-annotation form of uniqueness; the one-row-per-Case *grain*
 on a (possibly composite) key stays the job of `UniqueValidator` at the gold
-boundary (ADR-0009).
+boundary.
 
 ## Row checks — relationships *between* a row's fields
 

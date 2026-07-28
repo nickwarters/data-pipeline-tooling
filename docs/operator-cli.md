@@ -10,8 +10,8 @@ list recent **runs**, and inspect a run **log**. It is a thin shell
 over the public `framework.run` runtime surface (`run_pipeline`,
 `Orchestrator`) and the `RunLog` / `RunRegistry` observability seam —
 everything stays local SQLite + JSONL, with no external services
-([ADR-0001](adr/0001-sqlite-per-subject-medallion-store.md),
-[ADR-0005](adr/0005-fail-fast-atomic-runs-and-observability.md)).
+([the SQLite per-subject medallion store](adr/0001-sqlite-per-subject-medallion-store.md),
+[structured JSONL observability](adr/0005-fail-fast-atomic-runs-and-observability.md)).
 
 Run it as a module from the repository root so the import-only `framework`
 package resolves on `sys.path`:
@@ -21,15 +21,35 @@ python -m cli <command> ...
 ```
 
 All commands take the **base directory** of the run store — the same path you
-pass to `run`. The runner lays out `<base>/_runs/<pipeline>.log` (the JSONL run
-logs, one per pipeline) and `<base>/_registry/runs.db` (the queryable run
-registry) underneath it; `status` / `runs` / `log` read from there. `orchestrate`
+pass to `run`. The layout underneath it has one owner in code, `RunStore`
+(`tools/observability/run_store.py`), and nothing else spells the
+fragments out:
+
+| Path | What |
+|------|------|
+| `<base>/_runs/<pipeline>.log` | the JSONL run logs, one per subject / path-addressed pipeline |
+| `<base>/_registry/runs.db` | the queryable run registry those logs are ingested into |
+| `<base>/_orchestration/runs.db` | the scheduled-work decision log |
+
+`status` / `runs` / `log` read from there. `orchestrate`
 also writes `<base>/_orchestration/runs.db`, a separate SQLite decision log for
 due, skipped, succeeded, failed, and blocked scheduled items. Each decision
 carries the `logical_run_id` the pass assigned and the `pipeline_run_id` it read
 back, so one orchestration pass joins to every pipeline execution it triggered
 (`pipeline_run_id` is the key into the run registry). Actual pipeline execution
 records remain in `RunLog` / `RunRegistry` only.
+
+The read-only commands (`status`, `runs`, `log`) are **safe to run while
+pipelines are running**. Opening a registry and migrating it are separate
+steps: against an up-to-date file a query opens a connection and reads
+without executing a single write statement, so it takes no write lock and cannot
+collide with a running pipeline's commit. The exception is the *first* open of a
+file that is behind — that one still migrates, and so still writes; if a
+concurrent writer holds the file it fails loudly rather than reading a
+half-migrated table. (WAL is unavailable on a
+network share, so a writer's lock is exclusive; before the split,
+every read ran the schema migration first and briefly locked the file against
+every concurrent writer.)
 
 ### The base directory — `--base-dir` or `--env`
 
@@ -90,11 +110,13 @@ available cases: 3 -> SelectionPool: 2 cases (Question Bank qb-100, logical run 
 
 Pass `--dry-run` to **preview** a pipeline during local development without
 landing anything. The handler runs against real data — every read, transform,
-and validation executes — but each write, quarantine commit, and explain trace
-is **skipped**, and no run log or run registry is touched. The command prints a
-per-step report: the node type and name, the row count, the columns with their
-dtypes, a small bounded sample of rows, and the *intent* of each skipped commit
-(`would write N row(s)`, `would quarantine N row(s)`).
+and validation executes — but every side effect is **skipped**: each write,
+quarantine commit and explain trace, and any `action` step (its callable is not
+called, since the framework cannot see what side effect it would have). No run
+log or run registry is touched either. The command prints a per-step report: the
+node type and name, the row count, the columns with their dtypes, a small bounded
+sample of rows, and the *intent* of each skipped side effect (`would write N
+row(s)`, `would quarantine N row(s)`, `would run action <name>`).
 
 ```console
 $ python -m cli run pipelines/ingest --base-dir /data --run-date 2026-05-29 --dry-run
@@ -107,6 +129,14 @@ dry run — no artifacts were written
       ...
       would write 5 row(s)
 ```
+
+A preview runs the handler exactly as a real run does apart from the commits, so
+`--param` applies to `--dry-run` too: `context.params` holds the same values
+under both, and a pipeline that reads `context.params["source_file"]` previews
+without error. The no-write promise covers **every** composition, not just
+a single `Pipeline`: a `ForEach` fan-out previews each item — its per-item
+contexts are derived from the dry-run context, so they carry the flag — and the
+one report accumulates the steps of every item.
 
 A dry run **reads against committed data**: it skips the *current* run's writes,
 so a later hop that reads an intermediate store sees what is already on disk, not
@@ -124,7 +154,9 @@ is non-zero — same fail-fast contract as a real run, without writing anything.
 A run's **logical run id** is the idempotency key for its accumulated rows: a
 re-run under the *same* logical id replaces that run's rows rather than adding
 duplicates, while each execution stays individually traceable by its own
-`pipeline_run_id` ([ADR-0004](adr/0004-per-feed-load-strategy-owned-by-writer.md)). When omitted it defaults to `<pipeline>:run_date`, so re-running a
+`pipeline_run_id`
+([accumulation is idempotent by logical run](adr/0004-per-feed-load-strategy-owned-by-writer.md)).
+When omitted it defaults to `<pipeline>:run_date`, so re-running a
 given date is already idempotent.
 
 Pass `--logical-run-id` to re-drive a specific business run explicitly — for
@@ -175,8 +207,13 @@ python -m cli orchestrate [--base-dir DIR] [--env ENV] --app MODULE \
 ```
 
 Runs the configured `PipelineSet`s for the given run date. `--once` performs one
-due-work pass. `--loop` keeps polling the same run date until work due that day
-has settled or the idle poll limit is reached.
+due-work pass and is the default when neither mode is named. `--loop` keeps
+polling the same run date until work due that day has settled or the idle poll
+limit is reached.
+
+A `--app` that names a module which cannot be imported, or which exposes no
+`build_pipeline_sets()`, is a configuration error: it exits non-zero with the
+same clean, traceback-free message every other CLI failure prints.
 
 `orchestrate` runs the **same path-addressed pipelines** as `run`. Each
 `ScheduledPipeline` names a `pipelines/<name>` path; when it comes due the
@@ -272,13 +309,30 @@ same set and all other `PipelineSet`s continue. Blocked decisions include the
 stale, missing, or failed upstream reason in `<base>/_orchestration/runs.db`.
 
 Each output line is `run_date  set_name  pipeline  status`, where `pipeline` is
-the scheduled item's leaf name:
+the scheduled item's leaf name, followed by the decision's reason when it has
+one:
 
 ```console
 $ python -m cli orchestrate --base-dir /data --app my_app.schedules --run-date 2026-05-29 --once
 2026-05-29  claims  claims_ingest  succeeded
 2026-05-29  claims  claims_selection  succeeded
+2026-05-29  claims  claims_month_close  skipped  schedule last working day of month is not due on 2026-05-29
 ```
+
+The `status` vocabulary is unchanged — `succeeded`, `failed`, `blocked`,
+`skipped` — and `reason` is prose written for you to read. Nothing in
+the orchestrator branches on that prose: whether an item counted as *due work*
+for the run date is carried by a separate `was_due` flag on the decision, stored
+alongside it in `<base>/_orchestration/runs.db`. That flag is what `--loop` uses
+to decide the day's work has settled, so a reworded message can no longer change
+when an orchestration stops polling. Disabled and not-due items are the ones
+recorded with `was_due = 0`; rows written before the flag existed read back
+`NULL` (see [run-log-format.md](run-log-format.md)).
+
+The not-due reason names the schedule that was not due, in that schedule's own
+terms: a weekday schedule names the weekday, a monthly one names the date. It
+used to describe every schedule in weekday language, so a day-of-month schedule
+reported "is not due on monday".
 
 ## Orchestration plan preview — `Orchestrator.plan()`
 
@@ -313,6 +367,14 @@ print(result)
 `str(result)` renders an aligned table using only stdlib; columns are sized to
 the widest value so the output stays readable regardless of pipeline name length.
 
+A `blocked` reason here is produced by the *same* freshness rule the run itself
+applies — `evaluate_requirement` in `framework.run.freshness`, of which the
+runner's `FreshnessGuard` is the side-effecting wrapper. The preview used to
+carry its own copy, which had already drifted (it omitted the `for <pipeline>`
+that the guard's message ends with), so the same condition read differently
+depending on which command you ran. The preview's promise is *this is what will
+happen*, and it is now kept by construction rather than by discipline.
+
 For per-file source artifact planning (catch-up scenarios where a backlog of
 files needs processing), use the standalone `plan_for_each()` helper:
 
@@ -339,12 +401,12 @@ planned per-file runs.
 ## `status` — the latest run per pipeline
 
 ```sh
-python -m cli status [--base-dir DIR] [--env ENV] [--case-type cases] [--pipeline ingest]
+python -m cli status [--base-dir DIR] [--env ENV] [--subject cases] [--pipeline ingest]
 ```
 
 With no filter, prints the most recent run summary for **every** pipeline.
 `--pipeline` shows a single pipeline's latest run by its run-history label — the
-leaf name a path-addressed pipeline records under. `--case-type` narrows to
+leaf name a path-addressed pipeline records under. `--subject` narrows to
 labels carrying a `subject/` prefix (legacy subject-qualified runs); path-addressed
 runs use bare leaf names, so filter those with `--pipeline`.
 

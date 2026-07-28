@@ -11,11 +11,12 @@ they pass through untouched and stay the validator's gate.
 
 from dataclasses import dataclass
 from datetime import date
+from typing import Annotated
 
 import pandas as pd
 import pytest
 
-from framework.core import SchemaValidator
+from framework.core import NonNull, Nullable, SchemaValidator, ValidationError
 from framework.core.dataset import Dataset
 from framework.transform import SchemaCoercion
 from framework.transform.processors import CoercionError
@@ -31,6 +32,18 @@ class DatedCase:
 class FlaggedCase:
     case_ref: str
     active: bool
+
+
+@dataclass
+class OptionallyFlaggedCase:
+    case_ref: str
+    active: Annotated[bool, Nullable()]
+
+
+@dataclass
+class RequiredFlagCase:
+    case_ref: str
+    active: Annotated[bool, NonNull()]
 
 
 @dataclass
@@ -106,6 +119,96 @@ def test_unrecognized_boolean_encoding_fails_fast_with_a_located_message():
 
     with pytest.raises(CoercionError, match="active.*maybe"):
         SchemaCoercion(FlaggedCase)(dataset)
+
+
+def test_coerces_a_nullable_bool_column_keeping_the_null():
+    # A null is the absence of an encoding, not a bad one: a Nullable() bool
+    # coerces without error and the gap survives as pd.NA rather than being
+    # reported as an unrecognized encoding blaming the feed.
+    raw = pd.DataFrame(
+        {"case_ref": ["c1", "c2", "c3"], "active": ["TRUE", None, "FALSE"]}
+    )
+    dataset = Dataset.from_pandas(raw)
+
+    coerced = SchemaCoercion(OptionallyFlaggedCase)(dataset)
+
+    SchemaValidator(OptionallyFlaggedCase).validate(coerced)  # does not raise
+    active = coerced.to_pandas()["active"]
+    assert active.isna().tolist() == [False, True, False]
+    assert active.dropna().tolist() == [True, False]
+
+
+def test_unrecognized_boolean_encoding_names_only_the_bad_value_not_the_nulls():
+    # The unrecognized-encoding report must exclude nulls, so an operator is
+    # pointed at the one value that is actually wrong.
+    raw = pd.DataFrame(
+        {"case_ref": ["c1", "c2", "c3"], "active": ["TRUE", None, "MAYBE"]}
+    )
+    dataset = Dataset.from_pandas(raw)
+
+    with pytest.raises(CoercionError) as excinfo:
+        SchemaCoercion(OptionallyFlaggedCase)(dataset)
+
+    message = str(excinfo.value)
+    assert "MAYBE" in message
+    assert "nan" not in message and "<NA>" not in message and "None" not in message
+
+
+def test_null_in_a_non_null_bool_is_a_nullability_breach_not_a_coercion_error():
+    # Presence is the rules' job, not the coercer's: a missing flag in a
+    # NonNull() column coerces cleanly and is then reported by the validator as
+    # a null, pointing at the declaration rather than at the encoding set.
+    raw = pd.DataFrame({"case_ref": ["c1", "c2"], "active": ["TRUE", None]})
+    dataset = Dataset.from_pandas(raw)
+
+    coerced = SchemaCoercion(RequiredFlagCase)(dataset)  # does not raise
+
+    with pytest.raises(ValidationError, match="active.*null"):
+        SchemaValidator(RequiredFlagCase).validate(coerced)
+
+
+def test_validator_accepts_the_nullable_boolean_dtype_the_coercer_lands():
+    # The landed dtype is pandas' nullable "boolean" (numpy bool cannot hold
+    # NA); assert the validator's dtype check accepts it rather than assuming.
+    frame = pd.DataFrame(
+        {"case_ref": ["c1", "c2"], "active": pd.array([True, False], dtype="boolean")}
+    )
+
+    SchemaValidator(FlaggedCase).validate(Dataset.from_pandas(frame))  # does not raise
+
+
+@pytest.mark.parametrize(
+    ("encoding", "expected"),
+    [
+        ("1.0", True),
+        ("0.0", False),
+        ("Y", True),
+        ("N", False),
+        ("YES", True),
+        ("NO", False),
+        ("  true  ", True),
+        ("no", False),
+    ],
+)
+def test_recognises_the_wider_boolean_encodings(encoding, expected):
+    # Float-typed 1.0/0.0 stringify with a decimal point after a round-trip,
+    # and Y/N/YES/NO are everyday source spellings; all are compared case-folded
+    # and whitespace-stripped.
+    raw = pd.DataFrame({"case_ref": ["c1"], "active": [encoding]})
+
+    coerced = SchemaCoercion(FlaggedCase)(Dataset.from_pandas(raw))
+
+    assert coerced.to_pandas()["active"].tolist() == [expected]
+
+
+def test_recognises_float_typed_one_zero_after_a_lossy_round_trip():
+    # A 1/0 boolean that came back as float (which a null in the column is
+    # enough to cause) stringifies as "1.0"/"0.0"; it must still be recognised.
+    raw = pd.DataFrame({"case_ref": ["c1", "c2"], "active": [1.0, 0.0]})
+
+    coerced = SchemaCoercion(FlaggedCase)(Dataset.from_pandas(raw))
+
+    assert coerced.to_pandas()["active"].dropna().tolist() == [True, False]
 
 
 def test_coerces_a_declared_bool_from_one_zero_encoding():

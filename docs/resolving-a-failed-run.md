@@ -3,7 +3,7 @@
 A run fails **loudly and cleanly**: `.run()` is fail-fast and atomic, so a
 validation breach (or a coercion failure, or a stale upstream) aborts the run and
 rolls back the failing writer's single SQLite transaction — **no layer is left
-half-written** ([ADR-0005](adr/0005-fail-fast-atomic-runs-and-observability.md)).
+half-written** ([fail-fast atomic runs](adr/0005-fail-fast-atomic-runs-and-observability.md)).
 The failure is recorded in the RunLog / RunRegistry with the failing step and
 message, and at a run boundary it surfaces as a short
 `framework.core.format_failure` block rather than a traceback. This guide is the
@@ -13,7 +13,7 @@ operator loop from *that block* back to a green run.
 > DB — it does not span a run's writers. If the run already wrote a **quarantine**
 > reject table, an **explain/trace**, or a **checkpoint** before it failed, those
 > artifacts are **independently committed evidence** and stay on disk
-> ([ADR-0005](adr/0005-fail-fast-atomic-runs-and-observability.md)). The
+> ([independently-committed artifacts](adr/0005-fail-fast-atomic-runs-and-observability.md)). The
 > run log's `committed` markers list exactly what landed — read them before you
 > re-drive so you know which evidence is already present (re-driving replaces an
 > artifact's rows under the same logical run id, so there is nothing to clean up).
@@ -41,7 +41,7 @@ it back from the run store ([operator-cli.md](operator-cli.md)):
 ```sh
 python -m cli status --base-dir /data                  # latest run per pipeline
 python -m cli runs   --base-dir /data --pipeline ingest --status error
-python -m cli log    ingest --base-dir /data --run-id 5f8ff8c7   # the failing run's steps
+python -m cli log    ingest --base-dir /data --pipeline-run-id 5f8ff8c7   # the failing run's steps
 ```
 
 `log` prints one line per step and ends with a summary, so you can see **which
@@ -75,30 +75,36 @@ A genuine bug (not a `PipelineError`) keeps its traceback **and has no category*
 (`error_category` is null in the log) — that's a code defect to fix, not an
 operator-resolvable data problem. The deliberate non-categories: a source that
 won't open, a failed write, and a transform bug all stay raw tracebacks rather
-than being dressed up as expected failures (ADR-0005's expected-failure-vs-bug
-line).
+than being dressed up as expected failures — that is the expected-failure-vs-bug
+line.
 
 ## 3. Resolve — four legitimate moves
 
 Pick by *why* it failed; they are not interchangeable.
 
 1. **Fix the source and re-pull.** The default for a non-destructive source: the
-   export was wrong, so correct it upstream and re-drive. ADR-0005's contract is
-   "bad upstream data stops the pipeline; fix the source."
+   export was wrong, so correct it upstream and re-drive. The fail-fast contract
+   is "bad upstream data stops the pipeline; fix the source."
 2. **Mark a validator `warn`.** When the condition is *known-tolerable* (a
    reference column that's legitimately sparse, a drift you've accepted),
    `severity="warn"` logs-and-continues instead of aborting. This is the
    sanctioned escape hatch — use it deliberately, not to silence a real problem.
+   It downgrades the `ValidationError` a validator raises for a breach, not a
+   bug inside the validator: a `KeyError` or a locked-database `OSError` out of a
+   `warn` validator still stops the run with its traceback, because a check that
+   crashed is a check that did not happen.
 3. **Quarantine the bad rows.** For *value-rule* rejects where the good rows
    should still flow, route the rejects aside and keep the rest
-   ([ADR-0007](adr/0007-row-level-quarantine.md)). The quarantined rows
+   ([opt-in row-level quarantine](adr/0007-row-level-quarantine.md)). The quarantined rows
    are persisted for inspection, not silently dropped.
 4. **Amend the contract.** If the data is right and the *rule* was wrong, change
    the schema field / value rule (and its docs) — that's a code change with a
    test, not a re-run.
 
 > **Destructive sources can't be re-pulled.** Where the source is a current-state
-> system that overwrites ([ADR-0004](adr/0004-per-feed-load-strategy-owned-by-writer.md)), option 1 isn't available — you can't re-fetch yesterday. Resolve
+> system that overwrites
+> ([the per-feed load strategy](adr/0004-per-feed-load-strategy-owned-by-writer.md)),
+> option 1 isn't available — you can't re-fetch yesterday. Resolve
 > with a **correction batch** (below) against the raw/silver you already
 > accumulated, or with options 2–4.
 
@@ -107,7 +113,7 @@ Pick by *why* it failed; they are not interchangeable.
 Re-running is **safe**: re-execution under the same *logical run id* replaces that
 run's rows rather than duplicating them — `Refresh()` truncates and reloads,
 `AccumulateByRun` does delete-by-logical-run-then-insert
-([ADR-0004](adr/0004-per-feed-load-strategy-owned-by-writer.md)).
+([idempotent by logical run](adr/0004-per-feed-load-strategy-owned-by-writer.md)).
 Because the failed run rolled back, there's nothing to clean up first.
 
 Re-run the same business day — the logical run id defaults to
@@ -128,11 +134,18 @@ Running it twice replaces the batch's rows both times; the row count stays stabl
 instead of doubling. Each execution remains individually traceable by its own
 `pipeline_run_id` in the RunRegistry even though the logical id is shared.
 
+If a re-drive now fails with `database is locked` where it previously appeared to
+succeed, that is deliberate. The replace step probes for the target table and
+skips its delete only when the table genuinely does not exist yet; every other
+database error — a locked file on the share included — fails the run rather than
+silently downgrading the replace to an append, which is what would duplicate the
+run's rows. Wait for the competing writer to finish and re-drive.
+
 ## 5. Confirm — green status, clean log
 
 ```sh
 python -m cli status --base-dir /data --pipeline ingest   # latest run now `ok`
-python -m cli log    ingest --base-dir /data --run-id <new-id>   # 0 failed, 0 warned
+python -m cli log    ingest --base-dir /data --pipeline-run-id <new-id>   # 0 failed, 0 warned
 ```
 
 A downstream that was **blocked** by the failure (its upstream was stale) clears

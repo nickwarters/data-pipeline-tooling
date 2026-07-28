@@ -1,4 +1,5 @@
 import json
+import sqlite3
 from pathlib import Path
 
 import pandas as pd
@@ -6,6 +7,7 @@ import pytest
 
 from framework._internal.connection import connect
 from framework.core.dataset import Dataset
+from framework.io import writers as writers_module
 from framework.io.readers import CsvReader, ExcelReader, SqliteReader
 from framework.io.strategy import AccumulateByRun, InsertOrIgnore, Refresh
 from framework.io.writers import (
@@ -13,7 +15,11 @@ from framework.io.writers import (
     CsvWriter,
     ExcelWriter,
     JsonWriter,
+    QuarantineWriter,
+    SqliteInsertIfAbsentWriter,
+    SqliteInsertOrIgnoreWriter,
     SqliteTruncateReloadWriter,
+    SqliteUpsertWriter,
     StdoutWriter,
 )
 from framework.run.builder import Pipeline
@@ -250,3 +256,187 @@ def test_accumulate_by_run_writer_is_atomic_when_the_write_fails(tmp_path):
     survivors = SqliteReader(db, "selection_pool").read()
     assert len(survivors) == 2
     assert "surprise" not in survivors.columns
+
+
+class _DeleteRefusingConnection(sqlite3.Connection):
+    """A connection whose DELETE always reports the database as locked.
+
+    Simulates the one moment that matters on a shared network drive: the
+    delete-by-run step losing the race for the write lock while everything
+    around it still works.
+    """
+
+    def execute(self, sql, *parameters):  # type: ignore[override]
+        if sql.lstrip().upper().startswith("DELETE"):
+            raise sqlite3.OperationalError("database is locked")
+        return super().execute(sql, *parameters)
+
+
+def _connect_refusing_delete(db_path, busy_timeout_ms=5000):
+    con = sqlite3.connect(db_path, factory=_DeleteRefusingConnection)
+    con.execute(f"PRAGMA busy_timeout = {busy_timeout_ms}")
+    return con
+
+
+def test_accumulate_by_run_writer_fails_when_its_delete_is_locked_out(
+    tmp_path, monkeypatch
+):
+    # A locked delete must fail the run. Absorbing it would turn "replace this
+    # logical run's rows" into "append them again" — a silent duplicate.
+    db = tmp_path / "gold.db"
+    dataset = Dataset.from_pandas(pd.DataFrame({"id": [1, 2]}))
+    writer = AccumulateByRunWriter(db, "selection_pool", "r1", "2026-05-29")
+    writer.write(dataset)
+
+    monkeypatch.setattr(writers_module, "connect", _connect_refusing_delete)
+    with pytest.raises(sqlite3.OperationalError):
+        writer.write(dataset)
+
+    assert len(SqliteReader(db, "selection_pool").read()) == 2
+
+
+def test_quarantine_writer_fails_when_its_delete_is_locked_out(tmp_path, monkeypatch):
+    # The reject table's re-drive carries the same guarantee as gold's.
+    db = tmp_path / "rejects.db"
+    frame = pd.DataFrame({"case_ref": ["BAD"], "logical_run_id": ["r1"]})
+    writer = QuarantineWriter(db, "rejects")
+    writer.write(Dataset.from_pandas(frame))
+
+    monkeypatch.setattr(writers_module, "connect", _connect_refusing_delete)
+    with pytest.raises(sqlite3.OperationalError):
+        writer.write(Dataset.from_pandas(frame))
+
+    assert len(SqliteReader(db, "rejects").read()) == 1
+
+
+def test_accumulate_by_run_writer_surfaces_a_locked_database(tmp_path):
+    # The same guarantee against a really locked file rather than a stand-in.
+    db = tmp_path / "gold.db"
+    dataset = Dataset.from_pandas(pd.DataFrame({"id": [1, 2]}))
+    writer = AccumulateByRunWriter(
+        db, "selection_pool", "r1", "2026-05-29", busy_timeout_ms=50
+    )
+    writer.write(dataset)
+
+    blocker = connect(db, 50)
+    try:
+        blocker.execute("BEGIN EXCLUSIVE")
+        with pytest.raises(sqlite3.OperationalError):
+            writer.write(dataset)
+    finally:
+        blocker.rollback()
+        blocker.close()
+
+    assert len(SqliteReader(db, "selection_pool").read()) == 2
+
+
+def test_insert_if_absent_writer_surfaces_a_locked_database(tmp_path):
+    # Reading the existing key->surrogate mapping is probed, not caught: a
+    # locked database must not read as "no mapping yet" and remint surrogates.
+    db = tmp_path / "ref.db"
+    dataset = Dataset.from_pandas(pd.DataFrame({"value": ["A", "B"]}))
+    writer = SqliteInsertIfAbsentWriter(db, "ref", ("value",), busy_timeout_ms=50)
+    writer.write(dataset)
+
+    blocker = connect(db, 50)
+    try:
+        blocker.execute("BEGIN EXCLUSIVE")
+        with pytest.raises(sqlite3.OperationalError):
+            writer.write(Dataset.from_pandas(pd.DataFrame({"value": ["C"]})))
+    finally:
+        blocker.rollback()
+        blocker.close()
+
+    landed = SqliteReader(db, "ref").read().to_pandas()
+    assert sorted(landed["id"]) == [1, 2]
+
+
+def _table_names(db_path) -> set[str]:
+    con = connect(db_path, 5000)
+    try:
+        rows = con.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+        return {row[0] for row in rows}
+    finally:
+        con.close()
+
+
+def test_merge_writers_leave_no_staging_table_behind(tmp_path):
+    # Every merge writer stages under one convention and drops it after the
+    # merge commits, whichever writer targeted the table.
+    db = tmp_path / "silver.db"
+    dataset = Dataset.from_pandas(pd.DataFrame({"id": [1], "name": ["Alice"]}))
+
+    SqliteUpsertWriter(db, "entities", ("id",)).write(dataset)
+    SqliteInsertOrIgnoreWriter(db, "entities").write(dataset)
+
+    assert _table_names(db) == {"entities"}
+
+
+def test_merge_sweeps_up_a_staging_table_stranded_by_an_older_build(tmp_path):
+    # The staging names changed with this consolidation; a scratch table left by
+    # a process killed mid-write under an older name is swept up rather than
+    # stranded on the share forever.
+    db = tmp_path / "silver.db"
+    con = connect(db, 5000)
+    try:
+        con.execute('CREATE TABLE "_upsert_stage_entities" (id INTEGER)')
+        con.execute('CREATE TABLE "_insert_or_ignore_stage_entities" (id INTEGER)')
+        con.commit()
+    finally:
+        con.close()
+
+    SqliteUpsertWriter(db, "entities", ("id",)).write(
+        Dataset.from_pandas(pd.DataFrame({"id": [1]}))
+    )
+
+    assert _table_names(db) == {"entities"}
+
+
+# --------------------------------------------------------------------------
+# The chunk-write session: many writes, one logical load.
+# --------------------------------------------------------------------------
+
+
+def _read_table(db_path, table):
+    with sqlite3.connect(db_path) as con:
+        return pd.read_sql(f"SELECT * FROM {table}", con)
+
+
+def test_a_writer_that_replaces_its_target_offers_no_chunk_write_session(tmp_path):
+    from framework.io.writers import supports_chunk_writes, writing_chunks
+
+    writer = SqliteTruncateReloadWriter(tmp_path / "raw.db", "feed")
+    assert supports_chunk_writes(writer) is False
+
+    with pytest.raises(TypeError) as caught:
+        writing_chunks(writer)
+
+    assert "SqliteTruncateReloadWriter" in str(caught.value)
+    assert "only the last chunk" in str(caught.value)
+
+
+def test_a_file_writer_offers_no_chunk_write_session_either(tmp_path):
+    from framework.io.writers import supports_chunk_writes
+
+    assert supports_chunk_writes(CsvWriter(tmp_path / "out.csv", Refresh())) is False
+
+
+def test_the_accumulating_session_clears_the_run_once_then_appends(tmp_path):
+    from framework.io.writers import writing_chunks
+
+    db = tmp_path / "raw.db"
+    writer = AccumulateByRunWriter(db, "feed", "run-a", "2026-07-27")
+    with writing_chunks(writer) as chunk_writer:
+        for start in (0, 2, 4):
+            frame = pd.DataFrame({"id": [start, start + 1]})
+            chunk_writer.write(Dataset.from_pandas(frame))
+
+    landed = _read_table(db, "feed")
+    assert sorted(landed["id"]) == [0, 1, 2, 3, 4, 5]
+    assert set(landed["logical_run_id"]) == {"run-a"}
+
+    # A second session for the same logical run replaces it wholesale.
+    with writing_chunks(AccumulateByRunWriter(db, "feed", "run-a", "2026-07-28")) as w:
+        w.write(Dataset.from_pandas(pd.DataFrame({"id": [9]})))
+
+    assert _read_table(db, "feed")["id"].tolist() == [9]

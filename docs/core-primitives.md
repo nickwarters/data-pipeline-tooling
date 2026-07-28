@@ -6,11 +6,11 @@ names. The pieces are: `Dataset` (the opaque carrier), `Reader` / `Writer`
 (`SchemaValidator`, value rules), the transforms (`SchemaCoercion`, `Filter` /
 `Score` / `JoinWith` and the Ingest reshapers), and the deferred `Pipeline` DAG
 builder with its `RunLog` observability. **Where** a feed lands is *not* framework
-vocabulary (#232): `framework.io` knows only the `Reader` / `Writer` ports and the
+vocabulary: `framework.io` knows only the `Reader` / `Writer` ports and the
 load strategies. The namespace → file `Store` / `StoreRegistry` and the
 raw/silver/gold **medallion** profile over it are **application infrastructure**
 in the sibling `tools` package (`tools.store`, `tools.medallion`). For the *why*
-behind each, see the ADRs referenced inline; for domain language (Case, CasePool,
+behind each, see the ADRs in [`adr/`](adr/); for domain language (Case, CasePool,
 Feed, Reference Data, …) see [`../CONTEXT.md`](../CONTEXT.md).
 
 Application code (`pipelines/` + the `case_review/` domain layer) imports these
@@ -34,27 +34,27 @@ tables — and mints Readers/Writers over the tables in it. `StoreRegistry` also
 `reader(name)` / `writer(name)`, so a pipeline can refer to a component by name
 rather than re-deriving it. A normalised schema can span several namespaces (one
 database per namespace, related tables in each; cross-database joins stay in
-Python — ADR-0002).
+Python).
 
 The raw/silver/gold **medallion** is an application-level *profile* layered on
 top by `tools.medallion`, **not** a framework enum. `medallion(registry, subject)`
 exposes three namespace Stores — `.raw` / `.silver` / `.gold` — for one subject,
 mapping to that subject's own files `<subject>/{raw,silver,gold}.db` on a network
 share. Each **subject** — a Case Type or a shared Reference Data set — owns its
-**own** medallion, isolated from every other subject's files (ADR-0001:
-blast-radius isolation, independent onboarding). A Feed is ingested and refined
+**own** medallion, isolated from every other subject's files (blast-radius
+isolation, independent onboarding). A Feed is ingested and refined
 upward; the Selection pipeline reads the ingested silver/gold and writes the
 SelectionPool back into gold. (The layer names are placeholders pending a domain
 rename — see CONTEXT.)
 
 | Layer  | Holds                                  | Load behaviour |
 |--------|----------------------------------------|----------------|
-| **raw** | A faithful, schema-light snapshot of the source as landed — the framework's landing zone. | **Full refresh** each run: truncate + reload from the source snapshot, so re-runs are deterministic (ADR-0004). |
-| silver | Validated, normalised data: the **schema boundary** — a Case Type's declared columns + dtypes are enforced here as a post-validator before the data lands (ADR-0006). Normalising *coercion* (parsing dates, casting booleans) runs as a transform step ahead of that check. | Full refresh from raw. |
-| gold   | Refined ingest outputs **and** the accumulating SelectionPool / Review Outcomes. A gold hop composes an explicit `Pipeline` whose Writer carries the load strategy. | **Current-only** (ingest gold: `Refresh`, one row per Case) **or accumulating** (Selection / Sync: `AccumulateByRun`, stamped with `logical_run_id` / `load_date` and, when context-driven, `pipeline_run_id`; idempotent re-run via delete-by-logical-run then insert — ADR-0004; [gold-accumulation doc](gold-accumulation.md)). |
+| **raw** | A faithful, schema-light snapshot of the source as landed — the framework's landing zone. | **Full refresh** each run: truncate + reload from the source snapshot, so re-runs are deterministic. |
+| silver | Validated, normalised data: the **schema boundary** — a Case Type's declared columns + dtypes are enforced here as a post-validator before the data lands. Normalising *coercion* (parsing dates, casting booleans) runs as a transform step ahead of that check. | Full refresh from raw. |
+| gold   | Refined ingest outputs **and** the accumulating SelectionPool / Review Outcomes. A gold hop composes an explicit `Pipeline` whose Writer carries the load strategy. | **Current-only** (ingest gold: `Refresh`, one row per Case) **or accumulating** (Selection / Sync: `AccumulateByRun`, stamped with `logical_run_id` / `load_date` and, when context-driven, `pipeline_run_id`; idempotent re-run via delete-by-logical-run then insert; [gold-accumulation doc](gold-accumulation.md)). |
 
 raw stays schema-light on purpose: it mirrors the source so the landing zone is
-faithful, and schema enforcement arrives at silver and gold (ADR-0006).
+faithful, and schema enforcement arrives at silver and gold.
 
 > **Load strategies are explicit.** The Store maps `namespace → file` only; each
 > Writer owns its load strategy. Callers choose `Refresh()`,
@@ -62,13 +62,12 @@ faithful, and schema enforcement arrives at silver and gold (ADR-0006).
 > `AccumulateByRun.from_context(context)`, `UpsertStrategy(key_columns)`,
 > `InsertOrIgnore()`, or `InsertIfAbsent(key_columns)` when asking the Store
 > for a Writer. This supports both current-state hops and accumulated histories
-> without baking a universal layer→strategy rule into the Store (ADR-0004,
-> ADR-0009).
+> without baking a universal layer→strategy rule into the Store.
 
 ## The primitives
 
 ### `Dataset` — the opaque tabular carrier
-The bulk tier of the two-tier data carrier (ADR-0002). It wraps the concrete
+The bulk tier of the two-tier data carrier. It wraps the concrete
 in-memory engine (**pandas today, swappable to e.g. polars later**) so that
 engine never leaks into the rest of the system. The public surface is
 deliberately tiny:
@@ -117,11 +116,11 @@ order, concatenates them behind the `Dataset` seam, and raises
 selectable by name or zero-based index; pandas + **openpyxl** behind the seam);
 `SqliteReader(db_path, table)` is the read-side dual of the Sqlite Writers — it
 reads one table from a layer db back into a `Dataset` (a subject's own layer, or
-another subject's read-only Reference Data medallion, joined in Python —
-ADR-0002). `SasReader(script, copy_glob, dest)` and
+another subject's read-only Reference Data medallion, joined in Python).
+`SasReader(script, copy_glob, dest)` and
 `SharePointReader(site, list_name, auth)` follow the same `read()` shape but
 reach a remote source whose client is **stubbed for now**, behind a swappable
-seam in `tools.integrations.remote` (ADR-0012, ADR-0011); see
+seam in `tools.integrations.remote`; see
 [`adding-a-feed.md`](adding-a-feed.md#remote-feeds-sas-sharepoint). Readers are
 the home of the concrete engine and are tested against **local fixture files** —
 no network, no SAS, no SharePoint. Paths are handled with `pathlib` so they
@@ -139,7 +138,7 @@ unchanged. This is what keeps each single-table pipeline narrow when a wide feed
 `read() -> Dataset` lands a whole source in memory at once — right for a
 feed-sized file, impossible for a multi-hundred-GB extract. `ChunkReader` is the
 **streaming dual**: `chunks(size) -> Iterator[Dataset]` yields a lazy sequence
-of *bounded* Datasets, so the in-memory contract (ADR-0002) holds **per chunk**,
+of *bounded* Datasets, so the in-memory contract holds **per chunk**,
 never for the whole source. The concrete chunking engine (pandas `chunksize`)
 stays behind the `Dataset` seam exactly as `read()` keeps pandas behind it.
 
@@ -157,7 +156,7 @@ inferred from the extension), and the SAS format is inferred from the extension
 sas7bdat/xport needs **no extra dependency** (pandas' SAS reader is pure-Python),
 so it is first-class on Windows and macOS alike.
 
-`SasFileReader` is deliberately **not** the ADR-0012 `SasReader`: it runs no SAS
+`SasFileReader` is deliberately **not** the remote `SasReader`: it runs no SAS
 script, does no remote execution, and copies no file — it only *reads* a file
 already on local disk. The two are complementary — `SasReader` *lands* a file
 from a remote SAS host (see the source-type table below); `SasFileReader` is one
@@ -170,10 +169,11 @@ for just a couple of columns keeps every chunk narrow (CSV pushes it into
 `usecols`; SAS slices each chunk, since `read_sas` has no projection). A source
 with no data rows (a header-only CSV, an empty file, a zero-row SAS table)
 streams as **zero** chunks; a small non-empty source as exactly **one**. These
-readers expose `chunks()`, not `read()`, so they sit *beside* the single-shot
-`Reader` set rather than wiring into the deferred `Pipeline` builder — the
-streaming consumers (e.g. a monthly projection that appends each chunk to an
-indexed silver table) compose on top of them.
+readers expose `chunks()`, not `read()`, so they are a distinct port from the
+single-shot `Reader` set — deliberately so: unifying them by giving a
+`ChunkReader` a `read()` that materialises everything would be a trap door
+straight back to the memory problem. They wire into the deferred `Pipeline` via
+`read_chunks()` (below), not via `read()`.
 
 **Chunk-level row filtering (allow-list / predicate pushdown).** When a source
 is enormous (100M+ rows) but only a small, known subset is wanted (e.g. <100K
@@ -181,7 +181,7 @@ ids we already track), filtering *after* a whole read is impossible — the rows
 can never be materialised at once. The filter has to be **pushed down into the
 per-chunk loop**, beside where column projection already happens, so both memory
 *and* the landed table stay bounded. Two wrappers over any `ChunkReader` provide
-this (#287):
+this:
 
 - `KeyFilterChunkReader(inner, key_column, allowed_keys)` — the id-membership
   (**semi-join**) case: keep only rows whose `key_column` is in `allowed_keys`,
@@ -205,12 +205,48 @@ skip), and both wrappers expose `rows_scanned` / `rows_kept` for the most recent
 `ChunkedCsvReader` / `SasFileReader` / any future chunk reader, keeping the
 readers themselves single-purpose.
 
-Because a `ChunkReader` can't wire into the single-shot deferred `Pipeline`
-builder (a source too big to hold whole is never one `Dataset`), a streaming feed
-runs as a `pipelines/<feed>/` module that loops the chunks itself.
-`tools.observability.stream_step` drives that loop — read→filter→write — under a
-single fail-fast run-log step, recording `rows_in`/`rows_out`/`rows_excluded`. See
+**`Pipeline.read_chunks(chunk_reader, *, name, chunk_size=DEFAULT_CHUNK_SIZE)`
+is the DAG seam**. It wires a node exactly as `read()` does; what differs
+is the drive — at `.run()` the pipeline executes the whole sub-graph **below**
+that node once per chunk, so a streamed feed keeps the transforms, validators,
+quarantine partitioning, dry run, profiling, run addresses and per-step run-log
+records the builder provides. Only the sub-graph below the streamed source
+forgets its memo between chunks, so a whole-dataset input joined into the stream
+is read once, not per chunk; the per-chunk records are folded into **one record
+per step** with the counts summed; and every Writer below the source spends the
+drive inside a single chunk-write session.
+
+What cannot be made chunk-safe is refused when the graph is *wired*, before a
+byte is read: a Writer that replaces its target (`Refresh`, every file Writer), a
+Validator that declares `whole_dataset` (`UniqueValidator`,
+`VolumeAnomalyValidator` — `StreamingUniqueValidator` is the form that survives a
+boundary), an `explain` step (its row trace remembers every row), and a second
+streamed source in one pipeline. `tools.observability.stream_step` remains as the
+low-level primitive for a feed that wants no graph at all. See
 [`streaming-large-sources.md`](streaming-large-sources.md) for the full pattern.
+
+#### `ChunkWritable` — many writes, one logical load
+
+The write-side dual of `ChunkReader`. Handing a plain `Writer` one chunk at a
+time is not generally safe: a Writer that replaces its target does that on
+*every* `write`, so the second chunk would wipe the first — and the accumulating
+Writer's delete-by-`logical_run_id` would delete the chunks this same run had
+already landed, which is the sharpest correctness hazard in the whole seam.
+
+```python
+class ChunkWritable(Protocol):
+    def writing_chunks(self) -> AbstractContextManager[Writer]: ...
+```
+
+A Writer that can express "these many writes are one logical load" implements it;
+whatever must happen once per load happens when the session opens.
+`AccumulateByRun` clears the run's prior rows **once, on entry**, then appends;
+`InsertOrIgnore` / `UpsertStrategy` / `InsertIfAbsent` are already
+per-batch-independent and take a chunked load unchanged; `QuarantineWriter`
+clears with the first chunk that has rejects. `Refresh` and the file Writers
+offer no session at all, which is what makes the wiring-time refusal possible.
+`framework.io.writing_chunks(writer)` / `supports_chunk_writes(writer)` are the
+helpers.
 
 **Table and column names you configure** (the `table` and `columns=[...]` you pass
 to a `SqliteReader`/Writer) accept **any string** — spaces, hyphens, mixed case,
@@ -240,15 +276,17 @@ directions are explicit:
 
 ### `Writer` — the destination, behind one method
 A `Writer` is the component-role **dual of `Reader`**: a Reader brings data in,
-a Writer takes it out (ADR-0003).
+a Writer takes it out.
 
 ```python
 class Writer(Protocol):
     def write(self, dataset: Dataset) -> None: ...
 ```
 
-A Writer owns **both** its target location (a layer db file + table, or a file
-Deliverable path) **and** its load strategy (ADR-0004). Swapping the Writer is
+A Writer owns its target location (a layer db file + table, or a file
+Deliverable path) and **carries** the load strategy — the strategy
+itself knows *how* to load, and mints the SQLite Writer that does it (see
+[A strategy realises its own Writer](#a-strategy-realises-its-own-writer)). Swapping the Writer is
 how you target a different sink — the builder never learns about medallion
 layers, file formats, or load rules. Concrete writers ship for file
 Deliverables and SQLite tables:
@@ -292,7 +330,7 @@ Deliverables and SQLite tables:
   Existing rows are never modified or deleted; re-running the same input is a
   no-op (the reference table is a stable system of record). The surrogate is
   minted above the store seam — not delegated to SQLite `AUTOINCREMENT` —
-  so identity logic stays in Python (ADR-0002). This is distinct from
+  so identity logic stays in Python. This is distinct from
   `InsertOrIgnore`: conflict resolution here is key-driven (the strategy
   declares `key_columns`), not constraint-driven (no table constraints are
   required). Minted by `Store.writer(layer, table, InsertIfAbsent(key_columns))`.
@@ -302,26 +340,94 @@ strategies: `Refresh()` overwrites the file; `AccumulateByRun(...)` reads any
 existing file, replaces rows for that logical run, stamps the new rows, and
 rewrites the file; `InsertOrIgnore()` appends incoming rows to the existing file
 (files carry no table constraints, so no rows are ignored — equivalent to a plain
-append). Round-tripping through matching Readers is stable for CSV and Excel at
+append). `UpsertStrategy(...)` and `InsertIfAbsent(...)` are **table-backed
+only** — their merges need the target's own constraints or key→surrogate
+mapping, which a whole-file rewrite cannot supply — so handing one to a file
+Writer raises a `TypeError` naming both the Writer and the strategy.
+Round-tripping through matching Readers is stable for CSV and Excel at
 the Dataset shape level; exact pandas dtype inference can still differ after a
 file round-trip, so schema-sensitive flows should continue to validate after
 reading.
 
+#### One transaction boundary, one staging convention
+
+The SQLite Writers above differ only in their merge statement; everything around
+it is shared:
+
+- **One connection lifetime.** A private `_writing_connection` helper does the
+  `mkdir` → `connect` → body → `commit` → `close` dance for every SQLite Writer.
+  The commit happens only when the body returns normally, so a failing write
+  leaves its transaction uncommitted and the close discards it — the per-writer
+  atomicity the framework promises now has a single implementation rather than
+  five hand-maintained copies.
+- **One staging convention.** The merge Writers (`SqliteUpsertWriter`,
+  `SqliteInsertOrIgnoreWriter`) share a `_staged_merge` helper that lands the
+  incoming rows in `_stage_<table>`, ensures the target exists, yields the
+  connection plus the quoted operands, commits, and only then drops the scratch
+  table. Each Writer's body is its merge statement and nothing else. The former
+  per-strategy names (`_upsert_stage_<table>`, `_insert_or_ignore_stage_<table>`)
+  are dropped alongside the current one during that cleanup, so a scratch table
+  stranded by a process killed mid-write under an older build is swept up on the
+  next write to the same table rather than left on the share forever.
+- **One delete-then-append.** "Clear this logical run's prior rows, then append"
+  exists once (`_replace_logical_run`) and is used by both `AccumulateByRunWriter`
+  and `QuarantineWriter`; the whole-file equivalent stays in
+  `AccumulateByRun.apply_to_frame`, since a file rewrite is a different medium,
+  not the same statement.
+- **A probe, not a swallowed error.** That delete used to be wrapped in
+  `except sqlite3.OperationalError: pass`, meaning "the table does not exist
+  yet". It also absorbed `database is locked` — on the network share the
+  framework targets, a lock timeout there would turn "replace this run's rows" into
+  "append them again", a silent duplicate. Table existence is now *probed* with
+  `PRAGMA table_info` (the same check `TableColumns` uses), so only a genuinely
+  absent table skips the delete and any operational failure fails the run.
+  `SqliteInsertIfAbsentWriter` probes the same way before reading its
+  key→surrogate mapping, instead of catching a bare `Exception` — a locked
+  database must never read as "no mapping yet" and remint existing surrogates.
+- **One file-Writer body.** `CsvWriter` / `ExcelWriter` / `JsonWriter` share a
+  private `_FileWriter` base and each supply only a serialise/deserialise pair.
+  The base is an implementation detail of `framework/io/writers.py`: the `Writer`
+  contract stays **structural**, so any object with `write(dataset)` is still a
+  Writer and nothing outside the module needs to inherit anything.
+
+#### A strategy realises its own Writer
+
+Which Writer implements a strategy is the **strategy's own knowledge**, not a
+branch anywhere else. Every strategy exposes:
+
+- `writer_for(db_path, table, *, busy_timeout_ms)` — mints the SQLite Writer
+  that implements it. `store.writer(table, strategy)` is a one-line delegation
+  to this, which is why a `Store` needs no knowledge of the strategy set at all.
+- `apply_to_frame(frame, read_existing)` — the file-writer half: given the
+  incoming frame and a callable that reads whatever is already on disk, it
+  returns the frame to write out whole. **Optional**: a strategy whose merge is
+  SQL-side simply does not define it, so an unsupported combination is a
+  visibly missing method rather than an invisibly missing `isinstance` branch.
+
+`framework.io.LoadStrategy` names the `writer_for` contract. Anything satisfying
+it works with `Store.writer` — there is no registry to add to and no unknown-
+strategy `TypeError`. Adding a strategy is therefore one class in
+`framework/io/strategy.py` plus one export line in `framework/io/__init__.py`;
+the direction of the dependency is preserved, because strategies are handed a
+db *path*, never a `Store` (`framework.io` must not import `tools.*`).
+
 ### `Store` / `StoreRegistry` — a namespace → file factory
 `Store` / `StoreRegistry` live in `tools.store` — **application infrastructure**,
-a sibling `tools` utility, not framework vocabulary (#232). `framework.io` knows
+a sibling `tools` utility, not framework vocabulary. `framework.io` knows
 only the `Reader` / `Writer` ports and the load strategies; *where* those ports
 read and write is an application concern.
 
 `Store(db_path, *, namespace=None, busy_timeout_ms=5000)` is the mouth of **one
 namespace** — a logical database, one SQLite file holding many related tables. It
-holds **no business logic** (ADR-0002) and makes **no** load decision (ADR-0003)
-— it merely mints components over the tables in its file:
+holds **no business logic** and makes **no** load decision — it merely mints
+components over the tables in its file:
 
 - `store.writer(table, strategy)` — mints a Writer over a table in this namespace
   using the caller's explicit `Refresh()`, `AccumulateByRun(...)`,
   `UpsertStrategy(...)`, `InsertOrIgnore()`, or `InsertIfAbsent(key_columns)`
-  strategy. Context-driven accumulation uses `AccumulateByRun.from_context(context)`.
+  strategy — by asking that strategy to realise itself (`writer_for`), so the
+  store branches on nothing and any `LoadStrategy` works. Context-driven
+  accumulation uses `AccumulateByRun.from_context(context)`.
 - `store.reader(table)` — a `SqliteReader` over the same file.
 
 The strategy lives on the Writer the store mints, not on the store. The
@@ -343,13 +449,13 @@ it would otherwise wire by hand.
 The **medallion profile** (`tools.medallion.medallion(registry, subject)`) layers
 raw/silver/gold over this: it mints three namespace Stores — `med.raw` /
 `med.silver` / `med.gold` — for one subject, each a `Store` over
-`<subject>/<layer>.db`, isolated per subject (ADR-0001). Reference Data sets are
+`<subject>/<layer>.db`, isolated per subject. Reference Data sets are
 subjects too; a Case Type reads another subject's namespace through a `Reader`
-and joins in Python (ADR-0002), so splitting files costs nothing on the join
+and joins in Python, so splitting files costs nothing on the join
 path.
 
 The connection factory `connect(db_path, busy_timeout_ms)` lives in
-`framework._internal.connection` — the single place connections are configured (ADR-0001),
+`framework._internal.connection` — the single place connections are configured,
 which Readers, Writers, and the Store all open through. Keeping it in its own
 module is the seam that lets the `Store` mint Writers/Readers without a
 `store`↔`writers` import cycle. It sets a `busy_timeout` so read-only clients
@@ -374,7 +480,7 @@ class Validator(Protocol):
 ```
 
 These ship now, each reading only the dataset's public shape (so they stay behind
-the Dataset seam — ADR-0002); the history-/prior-derived ones take an extra
+the Dataset seam); the history-/prior-derived ones take an extra
 narrow seam (`RunHistory` / `PriorColumns`) for the run-over-run comparison:
 
 - `ColumnValidator(required_columns)` — every required column is present
@@ -401,17 +507,27 @@ narrow seam (`RunHistory` / `PriorColumns`) for the run-over-run comparison:
   adding/dropping a column *at the door*, one layer before it would surface as a
   silver **Schema Breach**. The diff is **names-only** and a case-sensitive set
   difference (a rename reads as a drop + an add; order and dtype are not drift —
-  dtype is silver's job, ADR-0006). The prior set comes from `prior` — a
+  dtype is silver's job). The prior set comes from `prior` — a
   `PriorColumns` seam minted by `med.raw.columns_of(table)`, which reads the
   live raw table's columns via `PRAGMA` (no rows) and returns `None` for the
   first-ever run, making it a clean no-op. Attach at `severity="warn"`; the
   warning rides `warn_hits` onto the run summary (see drift surfacing under
   [`RunRegistry`](#runregistry--the-run-history-that-ingests-the-jsonl)).
 
+A Validator's contract is **raise-or-nothing**: `validate(dataset) -> None`
+raises `ValidationError` on a breach and returns nothing otherwise. It never
+*returns* an error message — there is exactly one way to report a breach, so
+every failure reads the same in the run log.
+
 A Validator knows only how to *check*; it does **not** decide what a failure
 means. **Severity is set where the Validator is attached to the builder**
-(`severity="error" | "warn"`, default `error` — ADR-0005), so the same Validator
-can abort one pipeline and merely warn another. These are **engine-agnostic**
+(`severity="error" | "warn"`, default `error`), so the same Validator
+can abort one pipeline and merely warn another. Severity governs the
+`ValidationError` **and nothing else**: any other exception out of a validator —
+a `KeyError` from a typo'd column, an `OSError` from a locked prior-columns
+database — is a bug or an environment fault, not a data breach, so it propagates
+with its traceback even at `severity="warn"`. A `warn` that swallowed
+those would report success for a check that never ran. These are **engine-agnostic**
 (the check reads shape only; `SchemaDriftValidator`'s `PriorColumns` seam reads
 the prior table via stdlib `sqlite3`, never pandas); the richer `SchemaValidator`
 below is the *engine-confined* kind.
@@ -419,7 +535,7 @@ below is the *engine-confined* kind.
 ### `Schema` & `SchemaValidator` — the declared contract, enforced at silver
 A Case Type's **`Schema`** is an ordinary **dataclass** whose annotations *are*
 the contract — each field is a column name and its declared Python type, the
-single source of truth (ADR-0006):
+single source of truth:
 
 ```python
 @dataclass
@@ -430,10 +546,10 @@ class CaseA:
 ```
 
 `SchemaValidator(CaseA)` is the **dataclass→validator adapter** (the seam to
-dataclass→Pydantic later, ADR-0011). It is a `Validator` of the same shape as
+dataclass→Pydantic later). It is a `Validator` of the same shape as
 above, but **engine-confined**: where `ColumnValidator` reads only `dataset.columns`,
 a schema check inspects column *dtypes*, so it reaches the frame via
-`to_pandas()` exactly as a Reader/Writer/processor does (ADR-0002). It checks:
+`to_pandas()` exactly as a Reader/Writer/processor does. It checks:
 
 - every declared column is **present** (extra, undeclared columns are ignored);
 - each present column's **dtype** matches the declared Python type — the
@@ -454,7 +570,7 @@ extend the same dataclass through `typing.Annotated`.
 ### Schema enforcement at the silver boundary
 There is no recipe builder for this; the raw→silver hop composes the primitives
 **explicitly** onto a `Pipeline` — read the subject's raw, coerce, validate, write
-silver — so the ADR-0006 convention is visible in the pipeline like any other hop:
+silver — so the convention is visible in the pipeline like any other hop:
 
 ```python
 p = Pipeline("cases")
@@ -466,7 +582,7 @@ p.run()   # coerces, validates, then writes silver.db
 ```
 
 A breach aborts at the silver boundary **before** silver is written (fail-fast
-and atomic — ADR-0005), so nothing partial lands. Raw stays schema-light: data
+and atomic), so nothing partial lands. Raw stays schema-light: data
 the schema would reject still lands faithfully in raw. The pipeline makes no
 write or load decisions — the Store mints the Writer, which owns location +
 strategy. Full walkthrough: [schema-enforcement.md](schema-enforcement.md).
@@ -484,12 +600,12 @@ single-input reshape, or a fan-in (e.g. an in-DAG join) over several branches:
 
 Unlike the structural validators it is **engine-confined** — a transform needs
 the engine's vectorised operations, so it reaches the frame via
-`to_pandas()`/`from_pandas()` exactly as a Reader/Writer does (ADR-0002). It is
+`to_pandas()`/`from_pandas()` exactly as a Reader/Writer does. It is
 attached with `.task(name, processor, ...)` and runs as a named task. The older
 `.transform(processor, ..., name=...)` spelling remains supported and uses the
 same execution path. A
 processor has **no severity**: a transform either applies or it can't, so a
-failure is always fail-fast (ADR-0005) — it raises and the run aborts.
+failure is always fail-fast — it raises and the run aborts.
 
 Two families of concrete processor ship now.
 
@@ -503,13 +619,13 @@ undeclared columns are left alone. A value it cannot cast (an unparseable date,
 an unknown boolean encoding) raises a **`CoercionError`** with one located
 message naming the column. The raw→silver hop composes it ahead of the
 `SchemaValidator`, so the per-run order is **read → coerce (transform) →
-post-validate (schema) → write** (ADR-0006).
+post-validate (schema) → write**.
 
 **Selection transforms** — the `filter/score/sort/join` of `CONTEXT.md`:
 
 - `Filter(predicate)` / `Score(column, scorer)` — carry the business rule as a
-  **plain-Python callable over a row mapping**, never SQL or a column DSL
-  (ADR-0002); applied row-wise behind the seam. For Selection business rules,
+  **plain-Python callable over a row mapping**, never SQL or a column DSL;
+  applied row-wise behind the seam. For Selection business rules,
   prefer named pure helper functions over inline lambdas, pass `name=` to gates
   that can exclude a Case, and test predicates/scorers directly with small row
   mappings before wiring them into a Pipeline.
@@ -535,7 +651,7 @@ post-validate (schema) → write** (ADR-0006).
 Full walkthrough + worked example: [processors.md](processors.md).
 
 ### `RunLog` — structured JSONL run observability
-A `RunLog` is the observability seam (ADR-0005). Composed onto the builder
+A `RunLog` is the observability seam. Composed onto the builder
 (`Pipeline(name, run_log=RunLog(path))`), it emits **one JSON object per
 line** to a `.log` file — and a human-readable line per record to the console —
 for each step of a run plus a final `run` summary:
@@ -562,8 +678,8 @@ per-step breakdown, and the fail-fast/warn examples live in
 [`run-log-format.md`](run-log-format.md).
 
 ### `RunRegistry` — the run history that ingests the JSONL
-A `RunRegistry` is the **consumer** for the `RunLog` JSONL — the seam ADR-0011
-names. It ingests the run records into its **own** queryable
+A `RunRegistry` is the **consumer** for the `RunLog` JSONL — the progressive
+enhancement behind that seam. It ingests the run records into its **own** queryable
 SQLite store so operators can answer "did last night's Ingest for Case Type B
 succeed, how many rows, did anything warn?" without grepping `.log` files:
 
@@ -575,7 +691,7 @@ registry.query_runs(pipeline="cases", status="error")  # narrow by pipeline/stat
 registry.latest_run_per_pipeline()                     # one row per pipeline
 registry.runs_that_warned()                            # tolerated warns (incl. drift)
 registry.records_for_run(pipeline_run_id)              # every step of one run
-registry.latest_success(RunAddress.pipeline("cases"), on=date(2026, 6, 23))
+registry.latest_success(RunAddress.for_pipeline("cases"), on=date(2026, 6, 23))
 registry.latest_success(
     RunAddress.task("pipeline_2", "step_4"),
     on_or_after=date(2026, 6, 16),
@@ -599,8 +715,8 @@ registry.recent_profiles("cases.profile", limit=10)    # per-column profiles, ne
 - It is a **query store, not a `Dataset` carrier**, so it stays stdlib-only
   (`json` + `sqlite3`) and never names pandas. It opens through the same
   `connect` factory and honours the single-writer / rollback-journal conventions
-  (ADR-0001) like any other medallion db; paths are `pathlib` (Windows/macOS).
-- **Schema-drift surfaces as a warn-hit** (ADR-0006), so `runs_that_warned()` is
+  like any other medallion db; paths are `pathlib` (Windows/macOS).
+- **Schema-drift surfaces as a warn-hit**, so `runs_that_warned()` is
   also the drift-surfacing query — it pairs with the raw-drift detector
   ([`SchemaDriftValidator`](#validator--a-fail-fast-check-at-a-layer-boundary)),
   whose warn-severity message rides `warn_hits` onto the run summary.
@@ -616,13 +732,13 @@ registry.recent_profiles("cases.profile", limit=10)    # per-column profiles, ne
   first — the statistical sibling of `recent_row_counts` and the history a
   `ProfileDriftCheck` builds its baseline over.
 
-Reading the JSONL needs no change to the emitter (ADR-0005); the one format
+Reading the JSONL needs no change to the emitter; the one format
 addition this slice made is the per-record `timestamp` (run-log-format.md), the
 time dimension the registry orders by.
 
 ### `Profile` — per-column data profiling, trended across runs
-A **profile** is the *statistical* sibling of the run log's operational metadata
-(#284 beside #89). Where the validators only *gate* a feed and
+A **profile** is the *statistical* sibling of the run log's operational metadata.
+Where the validators only *gate* a feed and
 `VolumeAnomalyValidator` watches a single run-over-run number (the row count), a
 profile captures a feed's *shape* — null rate, distinct count, min/max, and a
 bounded top-N value distribution **per column** — and records it on the run log so
@@ -689,7 +805,7 @@ p.profile(
 
 ### `PipelineRunner` — thin domain orchestration + requirement guard
 `PipelineRunner` (`framework.run.runner`) is the minimal orchestration layer above
-the builder. It registers domain Pipelines by `(case_type, pipeline)` and runs
+the builder. It registers domain Pipelines by `(subject, pipeline)` and runs
 one requested Pipeline by name, without changing the builder contract:
 
 ```python
@@ -702,7 +818,7 @@ runner.register(
     "selection",
     run_selection,
     freshness=(
-        Requirement.succeeded(RunAddress.pipeline("ingest", subject="cases"))
+        Requirement.succeeded(RunAddress.for_pipeline("ingest", subject="cases"))
         .same_day()
         .on_first_run("block"),
     ),
@@ -720,15 +836,18 @@ re-driven business run reuses for accumulated rows. A run's history label is
 `<case_type>/<pipeline>` when registered with a subject (the registry /
 `orchestrate` path) or the bare `<pipeline>` name when run by path (see below);
 metadata is stored under `<base_dir>/_runs/<label-stem>.log` and
-`<base_dir>/_registry/`.
+`<base_dir>/_registry/`. That layout has a single owner in code — `RunStore`
+(`tools.observability.run_store`), the run-metadata counterpart of
+`tools.store`'s `StoreRegistry` — so the runner, the orchestrator and the
+operator CLI all read the paths from one place rather than each restating them.
 
 `run_pipeline` (`framework.run`) is the execution core `PipelineRunner.run`
 delegates to, and the path-addressed `run` command calls directly: given a
 handler, a pipeline `name`, an optional `subject`, an `upstreams` tuple, and
 optional run `params`, it builds the `RunContext`, catches the shared
 `RunRegistry` up from every
-`_runs/*.log` (so an upstream's history is visible regardless of which log
-partitioned it), runs the requirement checks, dispatches the handler, and records
+`_runs/*.log` via `RunStore.catch_up()` (so an upstream's history is visible
+regardless of which log partitioned it), runs the requirement checks, dispatches the handler, and records
 the run summary. Run summary records include the parameters after default
 redaction of likely secret keys.
 
@@ -736,7 +855,12 @@ redaction of likely secret keys.
 `Requirement.succeeded(address).within_days(n)` requires the latest successful
 record for that `RunAddress` to be no older than `n` calendar days before the
 downstream `run_date`; `same_day()` requires a success on the downstream
-`run_date`. Failed upstream records do not count. First-run behavior is explicit:
+`run_date`. "The same day as" is judged in **local** time: the upstream's stored
+`timestamp` is a UTC instant and `run_date` is a local calendar date, so the
+instant is converted to its local date before the comparison (see
+[run-log-format.md](run-log-format.md#instants-are-utc-calendar-dates-are-local)).
+On a UTC+1 box an upstream that landed at 00:10 local counts as today's run, not
+yesterday's. Failed upstream records do not count. First-run behavior is explicit:
 `.on_first_run("allow")` proceeds silently, `"warn"` proceeds with a `freshness`
 warning, and `"block"` aborts before the handler executes.
 
@@ -750,12 +874,12 @@ Requirement.succeeded(
 
 # Pipeline 6 requires Pipeline 4 on the same day.
 Requirement.succeeded(
-    RunAddress.pipeline("pipeline_4"),
+    RunAddress.for_pipeline("pipeline_4"),
 ).same_day()
 ```
 
 `FreshnessRequirement(upstream_pipeline, max_age_days=n)` remains supported and
-adapts to `Requirement.succeeded(RunAddress.pipeline(...)).within_days(n)`,
+adapts to `Requirement.succeeded(RunAddress.for_pipeline(...)).within_days(n)`,
 using the downstream subject when no upstream subject is supplied. Its no-history
 behavior remains the historical default: allow the first run with a warning.
 Stale history aborts before the handler executes and writes both a `freshness`
@@ -834,6 +958,19 @@ daily schedule, using `WorkingDayCalendar` for weekends and holidays; other
 schedules are `SpecificWeekdays`, `DayOfMonth`, `NthWorkingDayOfMonth`,
 `LastWorkingDayOfMonth`, and `ManualOnly`.
 
+A `Schedule` is declared in **one place: its class**. The class body
+carries when it is due (`is_due`), how it names itself (`schedule_label`), how
+it explains a date it was not due (`not_due_reason` — so a monthly schedule
+answers in dates, not weekday names), and the `type:` value plus keys an
+overrides file names it by (`config_key`, optional `config_aliases`, and
+`from_config`). Defining the class registers it, via `__init_subclass__`, so a
+new schedule reaches YAML config with no second edit; a `config_key` two classes
+claim fails at import rather than resolving silently by definition order. The
+existing keys are unchanged — `weekdays` (alias `weekday`), `specific_weekdays`
+(`weekdays: [0, 2]`), `day_of_month` (`day: 21`), `nth_working_day_of_month`
+(`n: 2`), `last_working_day_of_month`, `manual_only` — so overrides files
+already written keep parsing.
+
 Each invocation writes decisions to `<base_dir>/_orchestration/runs.db` with a
 stable item key of `set_name/pipeline/run_date`. Each decision also
 records the `logical_run_id` the pass assigned the item (the stable business key)
@@ -850,9 +987,30 @@ set and every other `PipelineSet` continue. `run_until_complete(...)` performs a
 bounded Python polling loop over the same run date; it does not retry failed
 items from the same invocation.
 
+Whether an item counted as *due work* is data on the decision, not something read
+back out of its message: `OrchestrationDecision.was_due` is `False` for disabled
+and not-due items and `True` for everything else, and it is what the polling loop
+uses to decide the day's work has settled. `reason` is prose for an
+operator, and no control flow reads it — rewording one used to move skipped items
+into the due set and change when a `--loop` orchestration terminated.
+
+Freshness is decided by one rule for both the run and its preview:
+`framework.run.freshness.evaluate_requirement` returns a `FreshnessVerdict`, the
+runner's `FreshnessGuard` is the side-effecting wrapper that records it and
+raises `FreshnessError`, and `Orchestrator.plan()` is the read-only caller that
+renders it. The two used to hold separate copies that had already drifted apart
+in wording.
+
 Python definitions are canonical. YAML overrides may disable a scheduled item,
 replace its schedule timing, or override freshness windows for operations
-without changing the registered pipeline code.
+without changing the registered pipeline code. An override naming a set or
+pipeline that does not exist is a start-up error; one that resolves but cannot
+take effect — `freshness_days` on an item declaring no dependencies, which is
+applied by rewriting each dependency — warns rather than passing silently. It is
+a real `warnings.warn`, so an application that runs under `-W error` turns that
+no-op override into a start-up failure. That is usually what you want from a
+config mistake; if not, the fix is to remove the override rather than to silence
+the warning.
 
 ### `ForEach` — independent per-item builder runs
 `ForEach` (`tools.orchestration`) is the small runnable orchestration
@@ -881,8 +1039,14 @@ def pipeline_builder(path, context):
 ForEach(files, pipeline_builder, logical_run_id=item_run_id).run(context)
 ```
 
-For every item, the orchestrator creates a per-item `RunContext`, calls
-`pipeline_builder(item, context)`, and runs the returned builder. The factory
+For every item, the orchestrator **derives** a per-item `RunContext` from the
+parent (the same `for_nested_pipeline` derivation a bare `p.run()` hop uses,
+with the item's logical run id overriding the parent's), calls
+`pipeline_builder(item, context)`, and runs the returned builder. Deriving rather
+than rebuilding is what keeps the whole context along for the ride: the items
+share the attempt's `pipeline_run_id` (so every record a fan-out produces joins
+back to its run summary) and inherit `params` and the dry-run flag with its
+shared report — so previewing a fan-out previews instead of writing. The factory
 must return a **fresh** `Pipeline`; the orchestration object never mutates and
 reuses one builder across items. By default it derives logical ids as
 `<parent logical_run_id>:<index>`; pass `logical_run_id(item, index, context)`
@@ -989,9 +1153,9 @@ Construct addresses explicitly when code already has structured pieces:
 ```python
 from framework.run import RunAddress
 
-RunAddress.pipeline("claims", subject="case-review")
-RunAddress.step("claims", "validate_schema", subject="case-review")
-RunAddress.step("pipeline_2", "step_4")
+RunAddress.for_pipeline("claims", subject="case-review")
+RunAddress.for_step("claims", "validate_schema", subject="case-review")
+RunAddress.for_step("pipeline_2", "step_4")
 ```
 
 Parse labels when accepting configuration or registry input:
@@ -1000,6 +1164,17 @@ Parse labels when accepting configuration or registry input:
 address = RunAddress.parse("case-review/claims.validate_schema")
 assert address.label == "case-review/claims.validate_schema"
 ```
+
+`RunAddress` is a frozen, slotted dataclass (`pipeline`, plus keyword-only
+`subject` and `step`), so it is immutable and compared **by value**: two
+addresses built from the same parts are equal, hash the same, and are
+interchangeable as dict keys or set members. `RunAddress.task(...)` remains as
+an alias of `for_step(...)` for the builder's Task vocabulary. The
+constructors are named `for_pipeline(...)` / `for_step(...)` — previously
+`pipeline(...)` / `step(...)`, which collided with the attributes of the same
+name and needed a custom descriptor to disambiguate. The **rendered label is
+unchanged**: it is a stored `step_address` value in every existing registry, so
+it is a live on-disk format.
 
 `.label` and `str(address)` return the same stable string, suitable for logs,
 dependency declarations, and run-registry queries. Invalid labels raise
@@ -1019,8 +1194,7 @@ summary; task addresses read from successful non-`run` step records. Date
 filters are based on the record `timestamp` emitted by `RunLog`.
 
 ### `Pipeline` — the deferred DAG builder
-A `Pipeline` describes a feed's path and runs **nothing** until `.run()`
-(ADR-0003):
+A `Pipeline` describes a feed's path and runs **nothing** until `.run()`:
 
 ```python
 p = Pipeline("cases")
@@ -1070,7 +1244,7 @@ p.write(writer, t, name="write")
 print(p.describe())
 ```
 
-`.run()` is the terminus and is **fail-fast and atomic** (ADR-0005): it executes
+`.run()` is the terminus and is **fail-fast and atomic**: it executes
 that ordered internal plan — read, pre-validate, optional quarantine,
 stages in attach order, post-validate, optional explain write, and final write —
 then returns the bulk-tier `Dataset`.
@@ -1082,12 +1256,33 @@ then returns the bulk-tier `Dataset`.
   all-or-nothing even on a mid-write error.)
 - A **warn**-severity failure logs a warning naming the problem and the run
   continues — the explicit, deliberate escape hatch for known-tolerable
-  conditions.
+  conditions. It applies to the `ValidationError` a Validator raises, not to a
+  bug inside the Validator: any other exception propagates with its traceback
+  regardless of severity.
+- A graph where **every node is an input to another** never runs at all: the
+  leaf-first walk has no starting point, so `.run()` raises `PipelineGraphError`
+  (config category) before any node executes, under a dry run as much as a real
+  one.
 - Atomicity is **per writer**, not per run. A run's intermediate artifacts —
   quarantine rejects, an explain/trace, a checkpoint — each commit through their
   own writer as their node runs, so an abort *after* one of them leaves that
-  artifact on disk as **independently committed evidence** (ADR-0005).
+  artifact on disk as **independently committed evidence**.
   The run-log `committed` marker flags which steps durably wrote.
+
+**One node execution, one run-log record.** Recording is the wrapper's
+job and lives in exactly one place: the node wrapper times the node, drains its
+warn hits, categorises a failure, supplies the stable `step_address`, and writes
+*the* record. A node does the work and **returns** what it measured — its
+dataset, any counts only it could know (`rows_quarantined`, `rows_excluded`, a
+profile payload), and whether it durably committed an artifact. Those metrics are
+layered over the row counts the wrapper derives, which is how a step whose
+meaningful `rows_in`/`rows_out` are not simply its input and output sizes (an
+`explain` step reports Cases considered / selected) states its own. No node
+touches the run log itself. Before this, a side-effecting node recorded its own
+metrics *and* got wrapped, so `quarantine` and `explain` each emitted two records
+that disagreed — one with the counts, one with the duration — and a quarantine
+step lost its `step_address` under a dry run. Centralising it means the next node
+type gets correct recording without writing any, and cannot repeat either defect.
 
 The builder still makes **no** write decisions — no layer logic, no
 refresh-vs-accumulate branching; that all lives on the Writer. Because the
@@ -1100,9 +1295,10 @@ where applicable, and read-only/side-effect metadata for plan-validation and the
 **dry-run preview**, but pipeline scripts still use only the builder methods. A
 run carried out under `RunContext(dry_run=True)` (the `dry_run_pipeline` core
 behind `cli run --dry-run`) reads, transforms, and validates real data but
-skips every write, quarantine, and explain commit — and touches no run log —
-accumulating a `DryRunReport` of columns, dtypes, row counts, and a bounded row
-sample per step; it falls back to an ambient run context so an author's bare
+skips every side effect — write, quarantine and explain commits, and the
+`action` escape hatch, whose callable is not called at all — and touches no run
+log, accumulating a `DryRunReport` of columns, dtypes, row counts, and a bounded
+row sample per step; it falls back to an ambient run context so an author's bare
 `p.run()` inherits the dry-run flag without threading it by hand. The authoring
 vocabulary is the DAG builder's nodes: `.task()` / `.transform()` for
 dataset→dataset work, `.validate()` for a gate, `.write()` on an intermediate
@@ -1113,7 +1309,7 @@ A config-seeded `WorkingDayCalendar(holidays=…, weekend=…)` answers working-
 questions for availability criteria ("the last 20 working days" — `CONTEXT.md`).
 Unlike the primitives above it touches no `Dataset`, `Store`, or engine — it
 is pure stdlib `datetime`, hence deterministic and identical on Windows/macOS,
-and is **not** a Feed (ADR-0001). Two queries: `is_working_day(day)`
+and is **not** a Feed. Two queries: `is_working_day(day)`
 and `last_n_working_days(n, from_date)` (the `n` most recent working days on or
 before `from_date`, most-recent first, skipping weekends + holidays). Full
 config and boundary semantics in
@@ -1131,10 +1327,10 @@ case-review concepts belong there (or in pipeline support modules), not under
 ### `CaseType` / `Variation` — the declarative domain objects
 A `CaseType` (`case_review.case_type`) bundles a Case Type's `schema`, its
 identity contract, and its `variations`, imported directly — no global CaseType
-config registry (ADR-0011). The identity contract is the `natural_key` (the
+config registry. The identity contract is the `natural_key` (the
 column(s) that identify a Case) plus a `namespace` property derived from `name`;
-the gold builders read both off the Case Type to mint the deterministic `case_id`
-(ADR-0009). `CaseType.variation(id)` resolves a `Variation` (its `question_bank_id`
+the gold builders read both off the Case Type to mint the deterministic
+`case_id`. `CaseType.variation(id)` resolves a `Variation` (its `question_bank_id`
 + later overrides) and raises a located `KeyError` on an unknown id. Declarative
 data, not code (one Case Type has many Variations — `CONTEXT.md`).
 
@@ -1143,9 +1339,9 @@ data, not code (one Case Type has many Variations — `CONTEXT.md`).
 per-Case-Type population of Cases read from the **ingested silver**. Its headline
 retrieval is the *concept* of fetching **available cases** — e.g.
 `fetch_available_cases(as_of, activity_column=…, within_working_days=…)` narrows
-to a `WorkingDayCalendar` window in Python (ADR-0002), repairing silver's
+to a `WorkingDayCalendar` window in Python, repairing silver's
 text-stored dates first, and returns a bulk-tier `Dataset`. Fully typed `Case`
-objects are the typed-on-demand edge at the domain layer (ADR-0002).
+objects are the typed-on-demand edge at the domain layer.
 
 ### `DatasetReader` — bridge an in-memory Dataset into the builder
 `DatasetReader(dataset)` (`framework.io.readers`) adapts an already-in-memory

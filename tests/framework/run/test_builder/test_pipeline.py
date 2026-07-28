@@ -4,6 +4,7 @@ import pandas as pd
 import pytest
 
 from framework.core.dataset import Dataset
+from framework.core.errors import ErrorCategory
 from framework.core.validators import (
     ColumnValidator,
     RowCountValidator,
@@ -11,9 +12,10 @@ from framework.core.validators import (
 )
 from framework.io.readers import CsvReader
 from framework.io.strategy import AccumulateByRun
-from framework.run import RunAddress
+from framework.run import RunAddress, RunContext
 from framework.run.builder import (
     Pipeline,
+    PipelineGraphError,
 )
 from tests.framework_testing import RecordingRunLog
 from tools.store import Store
@@ -118,7 +120,7 @@ def test_pipeline_wires_run_addresses_onto_steps():
     step = p.task("step_4", adding_processor("clean"), read)
     p.write(writer, step, name="write_silver")
 
-    assert step.address == RunAddress.step("pipeline_2", "step_4")
+    assert step.address == RunAddress.for_step("pipeline_2", "step_4")
 
     p.run()
 
@@ -132,7 +134,7 @@ def test_pipeline_wires_subject_qualified_run_addresses_from_runner_labels():
     p = Pipeline("cases/selection", run_log=run_log)
     read = p.read(reader, name="read")
 
-    assert read.address == RunAddress.step("selection", "read", subject="cases")
+    assert read.address == RunAddress.for_step("selection", "read", subject="cases")
     assert read.address.label == "cases/selection.read"
 
 
@@ -257,3 +259,105 @@ def test_read_node_can_explicitly_depend_on_action_node():
 
     p.run()
     assert events == ["action", "read"]
+
+
+class BuggyValidator:
+    """A validator with a programming error in it, not a data breach."""
+
+    def validate(self, dataset: Dataset) -> None:
+        raise KeyError("typo_column")
+
+
+class RaisingValidator:
+    """A validator that reports a data breach the documented way."""
+
+    def __init__(self, message: str) -> None:
+        self._message = message
+
+    def validate(self, dataset: Dataset) -> None:
+        raise ValidationError(self._message)
+
+
+def _cyclic_pipeline() -> Pipeline:
+    reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
+    p = Pipeline("cases")
+    read = p.read(reader, name="read")
+    first = p.transform(adding_processor("a"), read, name="first")
+    second = p.transform(adding_processor("b"), first, name="second")
+    # Close the loop: every node is now some other node's input, so the walk has
+    # no node to start from.
+    read.inputs.append(second)
+    return p
+
+
+def test_a_cyclic_graph_fails_loudly_instead_of_executing_nothing():
+    # With no node to start the walk from, an unguarded run would execute zero
+    # nodes and report success — the worst outcome for a fail-fast framework.
+    p = _cyclic_pipeline()
+
+    with pytest.raises(PipelineGraphError) as caught:
+        p.run()
+
+    assert "cycle" in str(caught.value)
+    assert caught.value.category == ErrorCategory.CONFIG
+
+
+def test_a_cyclic_graph_fails_loudly_under_a_dry_run_too():
+    # A preview that reports success on a cyclic graph is the same defect.
+    p = _cyclic_pipeline()
+
+    with pytest.raises(PipelineGraphError):
+        p.run(RunContext(pipeline="cases", dry_run=True))
+
+
+def test_an_empty_pipeline_still_runs_as_a_no_op():
+    # No nodes at all is not a cycle — it is simply nothing to do.
+    assert Pipeline("cases").run() == []
+
+
+def test_a_bug_inside_a_warn_severity_validator_propagates():
+    # A KeyError is a bug, not a data breach: swallowing it would report success
+    # for a check that never ran.
+    reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
+    writer = CapturingWriter()
+
+    p = Pipeline("cases")
+    read = p.read(reader, name="read")
+    checked = p.validate(BuggyValidator(), read, name="check", severity="warn")
+    p.write(writer, checked, name="write")
+
+    with pytest.raises(KeyError):
+        p.run()
+
+    assert writer.write_count == 0
+
+
+def test_a_bug_inside_an_error_severity_validator_propagates_unwrapped():
+    reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
+
+    p = Pipeline("cases")
+    read = p.read(reader, name="read")
+    p.validate(BuggyValidator(), read, name="check")
+
+    with pytest.raises(KeyError):
+        p.run()
+
+
+def test_a_warn_severity_validation_breach_is_recorded_and_the_run_continues():
+    run_log = RecordingRunLog()
+    reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
+    writer = CapturingWriter()
+
+    p = Pipeline("cases", run_log=run_log)
+    read = p.read(reader, name="read")
+    checked = p.validate(
+        RaisingValidator("no case_ref column"), read, name="check", severity="warn"
+    )
+    p.write(writer, checked, name="write")
+
+    p.run()
+
+    assert writer.write_count == 1
+    [record] = run_log.records_for_step("check")
+    assert record["status"] == "ok"
+    assert record["warn_hits"] == ["check: no case_ref column"]

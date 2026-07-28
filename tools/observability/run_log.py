@@ -8,11 +8,15 @@ summary; every record of a single run carries the same correlating
 (the business run / idempotency key) it belongs to. Structured-but-file-only
 keeps local runs simple while giving the run registry machine-readable records
 to ingest.
+
+What a record *contains* is not decided here: the fields, their order, their
+empty-value defaults and their console form come from the single declaration in
+:mod:`tools.observability.record_schema`. This module owns the sink — where a
+record goes and when it is emitted.
 """
 
 from __future__ import annotations
 
-import datetime
 import json
 import logging
 import os
@@ -22,6 +26,8 @@ from pathlib import Path
 from typing import Iterator
 
 from framework._internal.describe import render
+from tools.observability.record_schema import build_run_record, console_parts
+from tools.observability.timestamps import utc_now_iso
 
 log = logging.getLogger(__name__)
 
@@ -74,7 +80,7 @@ class RunLog:
 
         ``committed`` marks a step that durably wrote an artifact (a write,
         quarantine, explain/trace, or checkpoint) — independently committed
-        evidence that survives a *later* step's failure (ADR-0005). It is
+        evidence that survives a *later* step's failure. It is
         recorded only on the success path: a step that raised committed nothing.
         """
         metrics = StepMetrics()
@@ -137,43 +143,35 @@ class RunLog:
         params: dict[str, str] | None = None,
         profile: dict | None = None,
     ) -> None:
-        """Append one JSONL record and echo a human-readable line to the console."""
-        record = {
-            # The registry orders by the event time the emitter writes.
-            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-            # The concrete pipeline attempt; the correlating key every record of
-            # one run shares, and what the registry groups a run's steps by.
-            "pipeline_run_id": pipeline_run_id,
-            # The business run / idempotency key this attempt belongs to. Stable
-            # across re-drives of the same run date, so it ties a re-driven
-            # attempt back to the run it replaces.
-            "logical_run_id": logical_run_id,
-            "pipeline": pipeline,
-            "step": step,
-            "step_address": step_address,
-            "status": status,
-            "rows_in": rows_in,
-            "rows_out": rows_out,
-            "rows_quarantined": rows_quarantined,
-            "rows_excluded": rows_excluded,
-            "duration": duration,
-            "errors": errors or [],
-            # The triage category of the failure (data/operational/config), or
-            # None for a non-PipelineError bug. See framework.core.ErrorCategory.
-            "error_category": error_category,
-            "warn_hits": warn_hits or [],
-            # True when this step durably wrote an artifact (write / quarantine /
-            # explain / checkpoint). Independently committed evidence — it stays
-            # on disk even if a *later* step aborts the run (ADR-0005).
-            "committed": committed,
-            # Run parameters are recorded only after caller-side redaction.
-            "params": params or {},
-            # Per-column statistical profile recorded at this step (#284), or
-            # None where the step is not a profile. A structured, queryable shape
-            # the registry trends across runs — the statistical sibling of the
-            # operational metadata above.
-            "profile": profile,
-        }
+        """Append one JSONL record and echo a human-readable line to the console.
+
+        The keyword parameters are the explicit contract callers write against;
+        the *record* they produce — its keys, their order, and the empty-value
+        defaults — comes from the single field declaration in
+        :mod:`tools.observability.record_schema`. Its instant comes from
+        :mod:`tools.observability.timestamps`, which is where the UTC-instant /
+        local-date rule lives.
+        """
+        record = build_run_record(
+            timestamp=utc_now_iso(),
+            pipeline_run_id=pipeline_run_id,
+            logical_run_id=logical_run_id,
+            pipeline=pipeline,
+            step=step,
+            step_address=step_address,
+            status=status,
+            rows_in=rows_in,
+            rows_out=rows_out,
+            rows_quarantined=rows_quarantined,
+            rows_excluded=rows_excluded,
+            duration=duration,
+            errors=errors,
+            error_category=error_category,
+            warn_hits=warn_hits,
+            committed=committed,
+            params=params,
+            profile=profile,
+        )
         self._path.parent.mkdir(parents=True, exist_ok=True)
         with self._path.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(record) + "\n")
@@ -181,28 +179,14 @@ class RunLog:
 
     @staticmethod
     def _console(record: dict) -> None:
-        """Echo a record to the console as a human-readable line, not raw JSON."""
+        """Echo a record to the console as a human-readable line, not raw JSON.
+
+        The identifying head and tail are this method's; everything between them
+        is rendered by the fields that declare a console form, so a new field
+        shows up here without a new branch.
+        """
         parts = [f"{record['pipeline']} {record['step']}: {record['status']}"]
-        if record["rows_in"] is not None:
-            parts.append(f"rows_in={record['rows_in']}")
-        if record["rows_out"] is not None:
-            parts.append(f"rows_out={record['rows_out']}")
-        if record.get("rows_quarantined"):
-            parts.append(f"quarantined={record['rows_quarantined']}")
-        if record.get("rows_excluded"):
-            parts.append(f"excluded={record['rows_excluded']}")
-        if record["duration"] is not None:
-            parts.append(f"{record['duration']:.3f}s")
-        if record["errors"]:
-            parts.append(f"errors={'; '.join(record['errors'])}")
-        if record.get("error_category"):
-            parts.append(f"category={record['error_category']}")
-        if record.get("committed"):
-            parts.append("committed")
-        if record.get("profile"):
-            parts.append(f"profiled {len(record['profile'].get('columns', []))} col(s)")
-        if record["warn_hits"]:
-            parts.append(f"warn={'; '.join(record['warn_hits'])}")
+        parts.extend(console_parts(record))
         parts.append(f"[run {record['pipeline_run_id'][:8]}]")
         log.info(" ".join(parts))
 

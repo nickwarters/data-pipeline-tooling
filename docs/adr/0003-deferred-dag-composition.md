@@ -8,8 +8,8 @@ A pipeline is described as an explicit **directed acyclic graph (DAG)** of nodes
 and executed lazily. Each operation — `read`, `transform`, `validate`, `write`,
 `explain`, `quarantine`, `action` — is a method on a `Pipeline` that **returns a
 node**, and downstream operations take prior nodes as their inputs. Nothing runs
-until `.run()`, which topologically sorts the graph from its leaves and executes
-each node after its inputs:
+until `.run()`, which walks the graph from its leaves, executing each node after
+its inputs:
 
 ```python
 p = Pipeline("orders/ingest")
@@ -41,13 +41,14 @@ the graph *is* the structure.
   rewrite.
 - **Cross-cutting concerns are centralised.** Because `.run()` owns execution, it
   wraps every node uniformly with timing, structured logging, lineage, dry-run
-  handling, and fail-fast error handling (ADR-0005). An author composes *what*
+  handling, and fail-fast error handling. An author composes *what*
   runs; the runner owns *how* it runs.
 - **Inspectable before it executes.** `.describe()` renders the planned graph from
   the same node list `.run()` walks, so the inspected plan and the executed plan
   cannot drift. A run under `RunContext(dry_run=True)` reads, transforms, and
-  validates real data but skips every side-effecting commit, accumulating a
-  `DryRunReport` of intended writes.
+  validates real data but skips every side effect — the write, quarantine and
+  explain commits and the `action` escape hatch alike — accumulating a
+  `DryRunReport` of what it would have done.
 
 ## Considered options
 
@@ -62,15 +63,24 @@ the graph *is* the structure.
 
 ## Consequences
 
+- **The "acyclic" in DAG is enforced, not assumed.** The walk starts from the
+  leaves — the nodes nothing else depends on — so a cyclic wiring has no starting
+  point at all. Rather than let that execute zero nodes and report success,
+  `.run()` raises a `PipelineGraphError` (an `ErrorCategory.CONFIG`
+  `PipelineError`, so a run boundary catches it with the rest of the fail-fast
+  family) naming the pipeline and the condition — that every node is an input to
+  another, so there is nowhere to start; it does not name the nodes forming the
+  cycle. The guard sits before any node runs, so a dry run refuses the same
+  graph for the same reason.
 - `.run()` returns the bulk `Dataset` from the graph's terminal node(s); the
-  domain edge (CasePool) returns typed `Case` objects (ADR-0002).
+  domain edge (CasePool) returns typed `Case` objects.
 - A **checkpoint is not a special primitive** — it is simply a `write` node placed
   mid-graph whose dataset other nodes still depend on. It snapshots the data at
   that point and the graph continues; its commit is independently-committed
-  evidence (ADR-0005), and it appears as an ordinary write step in the run log.
+  evidence, and it appears as an ordinary write step in the run log.
 - Multi-table fan-out from one feed (a Case table plus its Detail Tables) is
   expressed as separate single-table pipelines over the shared raw table, not a
-  multi-output node (ADR-0009).
+  multi-output node.
 - Every node carries a stable **run address** (`pipeline.step`, optionally
   `subject/pipeline.step`) so logs, declared dependencies, and registry queries
   name the same thing. Keeping every component parameter-constructed is the

@@ -1,15 +1,25 @@
-# Streaming a huge source: chunk filtering, the run log, and fail-fast
+# Streaming a huge source: `read_chunks`, chunk filtering, and the run log
 
 Some feeds are **far too big to read whole** — a SAS extract of 100M+ rows — yet
 only a small, known subset is wanted (the <100K ids we already track). This guide
-covers the seam built for that case (#287): how to filter a stream down to the
-rows of interest *before* anything accumulates, why it runs as a streaming
-pipeline module rather than a deferred DAG node, and how to keep the same
-**fail-fast + JSONL run-log** guarantees the deferred builder gives you.
+covers the seam built for that case: how to stream such a source **inside the
+deferred [`Pipeline`](core-primitives.md#pipeline) DAG** with
+`Pipeline.read_chunks(...)`, how to filter a stream down to the rows of interest
+*before* anything accumulates, and which pairings the builder refuses at wiring
+time because they cannot be made chunk-safe.
 
 If your source fits in memory, you don't need any of this — use an ordinary
-`Reader` and the deferred [`Pipeline`](core-primitives.md#pipeline) builder. Reach
-here only when a source can't be one `Dataset`.
+`Reader` and `Pipeline.read(...)`. Reach here only when a source can't be one
+`Dataset`.
+
+> **History.** Until wave 4 of the review remediation the `ChunkReader`
+> family had **no** consumer in the DAG: `Pipeline.read()` took a `Reader` and
+> called `.read()`, and the only chunk loop in the repository was the standalone
+> `tools.observability.stream_step`. A feed that outgrew memory therefore lost
+> validators, quarantine, dry run, profiling and per-step run addresses at
+> exactly the moment the data got hard. `read_chunks` closes that gap;
+> `stream_step` remains as the low-level primitive for a feed that wants no graph
+> at all.
 
 ## The problem
 
@@ -21,6 +31,134 @@ database every run, the vast majority of it rows you never needed. Filtering
 *after* a whole read is impossible: the 100M rows can never be materialised at
 once. The predicate has to be **pushed down into the per-chunk loop**, beside
 where column projection already happens.
+
+## `Pipeline.read_chunks` — the DAG seam
+
+```python
+def read_chunks(
+    self,
+    chunk_reader: ChunkReader,
+    *,
+    name: str,
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
+    depends_on: list[Node] | None = None,
+) -> Node
+```
+
+It wires a node exactly as `read()` does. What differs is the *drive*: at
+`.run()` the pipeline executes **the whole sub-graph below that node once per
+chunk**, so a source of any size flows through the same transforms, validators,
+quarantine partitioning, profiling and writes as a small one.
+
+```python
+from framework.core import StreamingUniqueValidator
+from framework.io import AccumulateByRun, KeyFilterChunkReader, SasFileReader
+from framework.run import Pipeline
+from tools.medallion import medallion
+from tools.store import StoreRegistry
+
+
+def run(context, *, describe=False):
+    med = medallion(StoreRegistry(context.base_dir), "big_feed")
+
+    source = SasFileReader(extract_path, columns=["case_id", "status", "amount"])
+    reader = KeyFilterChunkReader(source, "case_id", load_case_pool_ids(context))
+
+    p = Pipeline("big_feed/ingest", run_log=context.run_log)
+    rows = p.read_chunks(reader, name="read_source", chunk_size=50_000)
+    checked = p.validate(StreamingUniqueValidator("case_id"), rows, name="unique")
+    p.write(
+        med.raw.writer("raw_big_feed", AccumulateByRun.from_context(context)),
+        checked,
+        name="land_raw",
+    )
+    if describe:
+        return p.describe()
+    return p.run(context)
+```
+
+Three properties make the repetition invisible from the outside.
+
+**Only the sub-graph below the streamed source is re-driven.** A node normally
+executes once per run and remembers its result; the nodes below the streamed
+source forget that memo between chunks, and everything else keeps it. So a
+whole-dataset input joined into the stream (a small reference table) is read
+**once**, not once per chunk.
+
+**Each step still records exactly once.** The per-chunk records are *folded*
+into one record per step: row counts and duration are summed, warn hits and
+errors concatenate (a warn raised on every chunk reads once), `committed` is true
+if any chunk committed, and one failing chunk makes the step a failure. See
+[the run-log section](#what-a-streamed-run-logs) below.
+
+**Every Writer below the source spends the whole drive inside one
+chunk-write session,** so many writes land as one logical load rather than as
+fifty loads that overwrite each other. See
+[the accumulating-load section](#writers-the-load-happens-once-not-once-per-chunk).
+
+Memory stays bounded by one chunk: nothing in the driver holds a chunk once the
+next one arrives, and only the summed counts survive the iteration.
+
+## What the builder refuses, and when
+
+Every refusal happens **when the graph is wired** — before a byte is read — and
+raises `PipelineGraphError` naming the component and the reason. A multi-hour
+read that discovers its sink was unusable is the failure mode these exist to
+prevent.
+
+| Wiring | Refused because |
+| --- | --- |
+| `write` / `quarantine` with a Writer that replaces its target (`Refresh` → `SqliteTruncateReloadWriter`, and every file Writer) | It writes each dataset as if it were the whole load, so each chunk would replace the one before it and the target would hold only the last. |
+| `validate` with `UniqueValidator` or `VolumeAnomalyValidator` | The check needs the whole population. Handed one chunk it would answer about that chunk and report a pass the data never earned. |
+| `explain` under a streamed source | The row trace keeps a verdict for **every** row it considers, so it would hold the whole source in memory — the one thing chunked reading exists to avoid. |
+| A second `read_chunks` in one pipeline | The graph is driven once per chunk of *one* source; two streams have no defined interleaving. Land one and read it back. |
+
+A Validator says it needs the whole dataset by carrying `whole_dataset = True`
+(`framework.core.needs_whole_dataset` is the predicate). Absence means
+chunk-safe, which is the common case: a per-row or per-column check (required
+columns, value rules, a column-name diff) reaches the same verdict on a slice as
+on the whole.
+
+### Streaming forms of the whole-dataset checks
+
+`StreamingUniqueValidator(columns, *, max_keys=None)` is the uniqueness check
+that survives a chunk boundary: it carries the keys it has seen in a set, so a
+key repeated in a later chunk is caught even though the two rows were never in
+memory together. The set grows with the number of **distinct keys**, not with the
+size of the source, so it is affordable exactly when the key space is the bounded
+thing and the row space is not. `max_keys` makes that bound enforceable —
+exceeding it raises rather than letting the guard quietly become the memory
+problem it was meant to avoid.
+
+A volume check has no streaming form and does not want one: run it against the
+**landed** table in the following raw → silver pipeline, where the row count is a
+cheap `SELECT` rather than a thing to hold in memory.
+
+## Writers: the load happens once, not once per chunk
+
+A Writer that can take a streamed source implements `writing_chunks()` — a
+context manager yielding the Writer to use for the drive
+(`framework.core.ChunkWritable`; `framework.io.writing_chunks` /
+`supports_chunk_writes` are the helpers). Anything once-per-load happens when the
+session opens.
+
+| Writer / strategy | Under a chunked read |
+| --- | --- |
+| `AccumulateByRun` | The delete-by-`logical_run_id` that makes a re-drive idempotent runs **once, when the session opens**, and every chunk after it appends. A per-chunk delete would delete the chunks this same run had already landed. |
+| `InsertOrIgnore`, `UpsertStrategy`, `InsertIfAbsent` | Taken unchanged — each write is already independent, so nothing has to happen once per load. |
+| `QuarantineWriter` | The run's prior rejects are cleared with the **first** chunk that has any, then appended to. A run that rejects nothing writes and clears nothing, exactly as a whole-dataset quarantine of the same run does. |
+| `Refresh` (`SqliteTruncateReloadWriter`), `CsvWriter` / `ExcelWriter` / `JsonWriter` | **Refused at wiring time.** They replace their target wholesale, and a file Writer additionally reads the whole existing file back — the opposite of bounded memory. |
+
+Because the clear is committed when the session opens and each chunk commits as
+it lands, a stream that aborts part-way leaves that run **partially landed**.
+That is safe precisely because `AccumulateByRun` is keyed by `logical_run_id`:
+the next drive of the same logical run replaces it wholesale (see
+[resolving-a-failed-run.md](resolving-a-failed-run.md)).
+
+`RetryingWriter` composes with all of this: it forwards `writing_chunks()` to the
+Writer it wraps and retries each chunk. It deliberately does **not** advertise a
+session the wrapped Writer lacks, so wrapping a `Refresh` writer in retry does
+not turn the wiring-time refusal into a run-time surprise.
 
 ## The two filter seams
 
@@ -41,9 +179,6 @@ ids_of_interest = load_case_ids()        # bounded ~100K; a plain in-memory set
 
 source = SasFileReader("extract.sas7bdat.gz", columns=["case_id", "status", "amount"])
 reader = KeyFilterChunkReader(source, key_column="case_id", allowed_keys=ids_of_interest)
-
-for chunk in reader.chunks(size=50_000):
-    write_to_silver(chunk)               # ~100K rows land, not 100M
 
 print(reader.rows_scanned, reader.rows_kept)   # e.g. 104_000_000  87_431
 ```
@@ -81,108 +216,99 @@ A chunk the filter empties yields **nothing** (consistent with the underlying
 readers' zero-row-chunk skip), and both wrappers expose `rows_scanned` /
 `rows_kept` for the most recent `chunks()` pass.
 
-## Why this is a streaming module, not a deferred DAG node
+## Retrying a stream
 
-The deferred [`Pipeline`](core-primitives.md#pipeline) builder is **single-shot
-by construction**: a read node calls `Reader.read()` exactly once and gets one
-whole `Dataset`, and the builder only knows `Reader` / `Processor` / `Validator`
-/ `Writer` — *not* `ChunkReader`. There is no `chunks()` anywhere in it. A source
-too big to be one `Dataset` therefore can't be a `read()` node at all, filtered
-or not. That's not a limitation of the filter — *any* `ChunkReader` lives beside
-the deferred graph, by design.
+`RetryingChunkReader(inner, policy)` is the streaming counterpart of
+`RetryingReader`. The streaming readers are the ones most exposed to transient
+failure — they reach network shares and remote SAS extracts — and they were
+previously the only readers retry could not cover, since a `ChunkReader` has no
+`read()` to wrap.
 
-> Note the allow-list itself is **not** the reason. Passing `allowed_keys` at
-> construction is ordinary config injection — the same as handing a `CsvReader` a
-> path. The one genuine wrinkle is that the allow-list is *data sourced from
-> elsewhere* (the CasePool), so in a pure DAG you'd want it as an upstream side
-> input; today you resolve it eagerly in Python. The framework already has a
-> concept for that shape — [`JoinDependency`](processors.md), the lazy external
-> read-only side input — and sourcing the allow-list that way is a natural future
-> improvement.
+**The semantics, chosen explicitly:** a failure is retried **only while the stream
+has yielded nothing**, and the retry re-opens the source and iterates from the
+beginning. Once a chunk has been handed downstream that is no longer safe — the
+consumer has already written those rows, so restarting would land them twice —
+and a `ChunkReader` cannot be resumed from where it broke, because nothing in the
+contract says where that was. A mid-stream failure therefore propagates and the
+run aborts, exactly as it does without retry.
 
-So a streaming feed is a `pipelines/<feed>/` module with a `run(context)`
-callable (driven by `python -m cli run pipelines/<feed>`, see
-[operator-cli.md](operator-cli.md)) that loops the chunks itself. It is still a
-**first-class pipeline** — outside the node-graph *builder*, inside the
-pipeline-module + operator-CLI convention.
+That is not the weak half of the bargain it sounds like: opening the source is
+where the transient failures this exists for actually happen — the share
+unreachable, the extract not yet released, the handle refused. Resumability is a
+property of a *source*, and a source that has one can offer it as its own reader.
 
-And it **feeds an ordinary pipeline**: the streaming filter is just the
-`source → raw` (or `→ silver`) hop where the source is too big. Once the bounded
-~100K rows are landed, everything downstream (raw → silver → gold) is normal
-deferred-builder territory reading via `SqliteReader`.
+Both retry decorators now delegate `describe()` through the component they wrap,
+so `Pipeline.describe()` renders `Retrying(CsvReader(path='...'), attempts=3)`
+instead of the bare string `RetryingReader`. Applying retry no longer costs the
+plan the line saying where the data comes from.
 
-## Recording it: `stream_step` (fail-fast + JSONL)
+## What a streamed run logs
 
-The deferred builder's `.run()` wraps each node in `RunLog.step(...)` to get
-[fail-fast and JSONL observability](run-log-format.md). A streaming module drives
-the same `RunLog` itself — `tools.observability.stream_step` is the one place that
-loop lives, so every streaming feed gets identical behaviour without
-re-handwriting it. It opens **one** run-log step, drains the reader, writes each
-bounded chunk as it streams, and records one JSONL record carrying
-`rows_in` / `rows_out` / `rows_excluded` (the JSONL schema already has a
-`rows_excluded` field — the filter slots in with no schema change).
+The record schema is unchanged — a streamed read emits the **same fields in the
+same order** as any other step ([run-log-format.md](run-log-format.md)); no field
+was added for streaming. What differs is only what the numbers mean:
 
-```python
-# pipelines/big_sas_feed/pipeline.py
-from framework.io import SasFileReader, KeyFilterChunkReader, AccumulateByRun
-from tools.medallion import medallion
-from tools.store import StoreRegistry
-from tools.observability.stream import stream_step
+- **One record per step**, as for a one-shot read. The step name is whatever the
+  author passed to `read_chunks(..., name=...)`, and `step_address` is the usual
+  `<pipeline>.<step>` — freshness and dependency checks key on it unchanged.
+- `rows_in` / `rows_out` / `rows_quarantined` / `rows_excluded` / `duration` are
+  **summed across chunks**.
+- For a filtering reader, the read step's `rows_in` is the **whole source
+  scanned** and `rows_excluded` what the filter dropped — including a tail (or a
+  whole source) the filter emptied, which yields no chunk at all yet was still
+  read.
+- `warn_hits` and `errors` concatenate, dropping a repeat, so a warn raised on
+  every chunk appears once.
+- `profile` is the payload of the last chunk profiled; a profile step under a
+  stream describes a chunk, not the source.
+- The `run` summary's `rows_in` is the whole source scanned and `rows_out` what
+  the graph's leaves produced across the whole drive — not the size of whichever
+  chunk happened to be last.
 
-def run(context, *, describe=False):
-    med = medallion(StoreRegistry(context.base_dir), "big_feed")
+## Dry-running a stream
 
-    case_ids = load_case_pool_ids(context)            # the bounded allow-list
-    source = SasFileReader(extract_path, columns=["case_id", "status", "amount"])
-    reader = KeyFilterChunkReader(source, "case_id", case_ids)
-    writer = med.raw.writer("raw_big_feed", AccumulateByRun.from_context(context))
+A dry run must not read a source it exists to avoid reading, so the drive
+**stops after the first chunk**: one chunk shows the shape every later chunk has.
+The read step's preview note says so (`preview of the first chunk only; the full
+stream was not read`) rather than implying it saw the source. No chunk-write
+session is opened at all under a dry run — opening one commits the load's
+once-per-run work (clearing the run's prior rows), which is exactly the kind of
+commit a preview promises not to make.
 
-    result = stream_step(
-        context.run_log,                              # NULL_RUN_LOG if none composed
-        pipeline_run_id=context.pipeline_run_id,
-        logical_run_id=context.logical_run_id,
-        pipeline=context.label,
-        step="ingest_big_feed",
-        reader=reader,
-        writer=writer,
-        size=50_000,
-    )
-    return result                                     # StreamResult(rows_in/out/excluded, chunks)
-```
+## `stream_step` — the low-level primitive
 
-That emits one line like:
+`tools.observability.stream_step` predates the DAG seam and remains for a feed
+that wants no graph at all: it opens one `RunLog.step`, drains a `ChunkReader`
+into a `Writer`, and records one JSONL record with `rows_in` / `rows_out` /
+`rows_excluded`. It now opens the Writer's `writing_chunks()` session when the
+Writer has one, so an `AccumulateByRun` sink under it accumulates the run's
+chunks instead of each chunk deleting the last. A Writer with no session is
+written to directly, as before.
 
-```json
-{"pipeline_run_id":"a1b2…","pipeline":"big_feed/ingest","step":"ingest_big_feed",
- "status":"ok","rows_in":104000000,"rows_out":87431,"rows_excluded":103912569,
- "duration":812.4,"committed":true,"errors":[],"error_category":null}
-```
+**Prefer `read_chunks`.** `stream_step` fuses read → filter → write into one
+opaque step; the DAG seam gives you the validators, quarantine, dry run,
+profiling and per-step addresses that a feed at this size needs most.
 
-and the console echo:
+## Feeding the rest of the pipeline
 
-```
-big_feed/ingest ingest_big_feed: ok rows_in=104000000 rows_out=87431 excluded=103912569 812.4s committed [run a1b2…]
-```
-
-Because read → filter → write are fused in a streaming loop, it is honestly *one*
-step (you can't cleanly separate "read" from "write" without buffering the whole
-source — the very thing you can't do). The filter's effect stays visible *within*
-that record via `rows_excluded`.
+A streamed read is the `source → raw` (or `→ silver`) hop where the source is too
+big. Once the bounded ~100K rows are landed, everything downstream (raw → silver
+→ gold) is ordinary single-shot builder territory reading via `SqliteReader` —
+including the whole-dataset checks (`UniqueValidator`, `VolumeAnomalyValidator`)
+that the streamed hop had to refuse.
 
 ### Fail-fast comes for free
 
-`stream_step` doesn't catch anything — it lets `RunLog.step` do its job. If any
-chunk write raises, or the reader raises (a missing key column, a key-type
-error), the step records `status="error"` with the message and re-raises, so the
-run aborts. Nothing is swallowed. The error record also shows the **partial
-progress** (`rows_out` so far) before the abort.
+Nothing here catches anything. If a chunk write raises, or the reader raises (a
+missing key column, a key-type error), the step records `status="error"` with the
+message and the run aborts. The error record also shows the **partial progress**
+(the counts summed up to the abort) before it stopped.
 
-**Give expected failures a triage category.** On the error path the log records
-`error_category` from the exception's `.category` — and a *raw* `ValueError`
-(e.g. the reader's "key column not in chunk") has none, which the log reads as
-"a genuine bug". A misconfigured key column is really a config error, so raise a
-[`PipelineError`](core-primitives.md) subclass instead of letting a bare
-`ValueError` escape, and the record carries `"error_category":"config"`:
+**Give expected failures a triage category.** A *raw* `ValueError` (e.g. the
+reader's "key column not in chunk") has no `.category`, which the log reads as "a
+genuine bug". A misconfigured key column is really a config error, so raise a
+[`PipelineError`](core-primitives.md) subclass and the record carries
+`"error_category":"config"`:
 
 ```python
 from framework.core import PipelineError, ErrorCategory
@@ -194,24 +320,10 @@ if "case_id" not in expected_columns:
     raise FeedConfigError("source is missing the case_id key column")
 ```
 
-### `committed` and partial writes
-
-`stream_step` passes `committed=True`, recorded only on the **success** path: a
-streaming write commits incrementally, so a completed step durably landed its
-rows. A mid-stream failure records `committed=False` even though earlier chunks
-are already on disk — the per-step boolean can't express "partially committed".
-That partial write is safe because `AccumulateByRun` is keyed by
-`logical_run_id`: a re-drive **replaces** that run's rows (see
-[gold-accumulation.md](gold-accumulation.md) and
-[resolving-a-failed-run.md](resolving-a-failed-run.md)), overwriting the aborted
-run's partial landing cleanly. If a multi-hour stream needs progress visibility,
-emit lightweight per-N-chunks records via `RunLog.record(...)` directly under a
-`"<step>.progress"` name — but keep the `stream_step` record as the single source
-of truth; don't log every chunk.
-
 ## See also
 
 - [core-primitives.md](core-primitives.md#chunkreader--streaming-a-source-too-big-to-hold-whole) — the `ChunkReader` seam and the filter wrappers.
 - [run-log-format.md](run-log-format.md) — the JSONL record schema and the run registry.
 - [operator-cli.md](operator-cli.md) — running a `pipelines/<feed>/` module by location.
 - [public-api.md](public-api.md) — the `framework.io` filter surface.
+- [Python-only processing, dumb store, opaque Dataset carrier](adr/0002-python-processing-opaque-dataset-carrier.md) — the opaque carrier, and the amendment recording why streaming was needed after all.

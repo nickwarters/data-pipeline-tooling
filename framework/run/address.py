@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+
 from framework.core.errors import ErrorCategory, PipelineError
 
 
@@ -11,53 +13,40 @@ class RunAddressError(PipelineError):
     category = ErrorCategory.CONFIG
 
 
-class _ClassFactoryInstanceValue:
-    def __init__(self, name: str, factory):
-        self._storage_name = f"_{name}"
-        self._factory = factory
-
-    def __get__(self, instance: object | None, owner: type):
-        if instance is None:
-            return self._factory.__get__(owner, owner)
-        return getattr(instance, self._storage_name)
-
-
+@dataclass(frozen=True, slots=True)
 class RunAddress:
-    """A stable label for a whole pipeline or one step within it."""
+    """A stable label for a whole pipeline or one step within it.
 
-    __slots__ = ("_pipeline", "_subject", "_step")
+    The three parts are the address: the pipeline, an optional subject that
+    qualifies it, and an optional step inside it. Frozen because an address is
+    a value — two addresses with the same parts are the same address, and are
+    interchangeable as dict keys and set members.
+    """
 
-    def __init__(
-        self, pipeline: str, *, subject: str | None = None, step: str | None = None
-    ) -> None:
-        _validate_part("pipeline", pipeline)
-        if subject is not None:
-            _validate_part("subject", subject)
-        if step is not None:
-            _validate_part("step", step)
-        object.__setattr__(self, "_pipeline", pipeline)
-        object.__setattr__(self, "_subject", subject)
-        object.__setattr__(self, "_step", step)
+    pipeline: str
+    subject: str | None = field(default=None, kw_only=True)
+    step: str | None = field(default=None, kw_only=True)
 
-    def __setattr__(self, name: str, value: object) -> None:
-        raise AttributeError("RunAddress is immutable")
+    def __post_init__(self) -> None:
+        _validate_part("pipeline", self.pipeline)
+        if self.subject is not None:
+            _validate_part("subject", self.subject)
+        if self.step is not None:
+            _validate_part("step", self.step)
 
-    def _pipeline_factory(
-        cls, pipeline: str, *, subject: str | None = None
-    ) -> "RunAddress":
+    @classmethod
+    def for_pipeline(cls, pipeline: str, *, subject: str | None = None) -> "RunAddress":
         """Return an address for a whole Pipeline."""
 
         return cls(pipeline, subject=subject)
 
-    def _step_factory(
+    @classmethod
+    def for_step(
         cls, pipeline: str, step: str, *, subject: str | None = None
     ) -> "RunAddress":
         """Return an address for a named step inside a Pipeline."""
 
         return cls(pipeline, subject=subject, step=step)
-
-    pipeline = _ClassFactoryInstanceValue("pipeline", _pipeline_factory)
-    step = _ClassFactoryInstanceValue("step", _step_factory)
 
     @classmethod
     def task(
@@ -65,7 +54,7 @@ class RunAddress:
     ) -> "RunAddress":
         """Compatibility alias for the current builder's Task vocabulary."""
 
-        return cls.step(pipeline, task, subject=subject)
+        return cls.for_step(pipeline, task, subject=subject)
 
     @classmethod
     def parse(cls, label: str) -> "RunAddress":
@@ -98,30 +87,6 @@ class RunAddress:
 
     def __str__(self) -> str:
         return self.label
-
-    def __repr__(self) -> str:
-        args = [repr(self.pipeline)]
-        if self.subject is not None:
-            args.append(f"subject={self.subject!r}")
-        if self.step is not None:
-            args.append(f"step={self.step!r}")
-        return f"RunAddress({', '.join(args)})"
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, RunAddress):
-            return NotImplemented
-        return (
-            self.pipeline == other.pipeline
-            and self.subject == other.subject
-            and self.step == other.step
-        )
-
-    def __hash__(self) -> int:
-        return hash((self.pipeline, self.subject, self.step))
-
-    @property
-    def subject(self) -> str | None:
-        return self._subject
 
 
 def _split_subject(label: str) -> tuple[str | None, str]:

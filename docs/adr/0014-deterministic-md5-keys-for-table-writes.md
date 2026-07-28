@@ -28,7 +28,7 @@ This ADR governs **internal write-level surrogate keys** — the "id" column a
 `Writer` mints for its own table's primary key when the table has no
 externally-meaningful identity. It is **not** about `case_id`, which is a
 domain-level identity that propagates to consumers and is derived via
-`uuid5(namespace, natural_key)` (ADR-0009). The two coexist:
+`uuid5(namespace, natural_key)`. The two coexist:
 
 - `case_id` = `uuid5(CaseType namespace, natural key string)` — domain identity,
   UUID-formatted so it's consumable as a standard opaque handle by downstream
@@ -43,7 +43,7 @@ domain-level identity that propagates to consumers and is derived via
   the same key, so `INSERT OR IGNORE` / `InsertIfAbsent` semantics are trivially
   correct: the key already exists, the row is skipped, no duplicate. A
   random-uuid4 surrogate breaks this — each run mints a different id for the
-  same logical row, defeating idempotent writes (ADR-0006).
+  same logical row, defeating idempotent writes.
 
 - **No coordination or state needed.** Sequential auto-increment (`max_id + 1`)
   requires reading the current maximum before each batch — a serial, stateful
@@ -82,7 +82,7 @@ domain-level identity that propagates to consumers and is derived via
 - **`uuid5(namespace, key_string)`** — deterministic UUID, but requires a stable
   namespace UUID owned by the caller (a non-trivial contract for a generic write
   strategy), and the UUID format is heavier than needed for an internal key. Used
-  for domain-level `case_id` (ADR-0009) where the UUID format and namespace
+  for domain-level `case_id` where the UUID format and namespace
   contract are appropriate; **not** chosen for generic write-level surrogates.
 
 - **SHA-256 hex digest** — fully deterministic, but 64 chars doubles index size

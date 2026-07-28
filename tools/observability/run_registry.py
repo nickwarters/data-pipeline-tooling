@@ -7,6 +7,17 @@ answer
 "did last night's Ingest for Case Type B succeed, how many rows, did anything
 warn?" without grepping free text.
 
+The stored shape is not restated here: the table, the additive column migration,
+the ``INSERT`` and the row decode are all derived from the single field
+declaration in :mod:`tools.observability.record_schema`, so what is written and
+what is read can never drift from what the log emits.
+
+Opening the file and migrating it are separate jobs. Migration is write work,
+and a writer's lock is exclusive because WAL is unavailable on the share, so
+doing it per connection made every read-only operator query briefly lock the
+registry against every running pipeline. It is attempted once per instance now,
+and writes only when the file is actually behind.
+
 It is a *query* store, not a ``Dataset`` carrier, so it stays stdlib-only
 (``json`` + ``sqlite3``) and never touches pandas. It opens through the shared
 ``connect`` factory in ``framework._internal.connection`` so SQLite settings stay
@@ -15,7 +26,7 @@ centralized.
 Ingest is incremental: each ``.log`` file's last consumed byte position is
 persisted in the registry DB (``ingest_progress`` table).  On the next call,
 only the new tail bytes are read so cost does not grow with total history — an
-important property when the file lives on a network share (ADR-0001).  If the
+important property when the file lives on a network share.  If the
 file is shorter than the recorded offset (truncation / rotation), the offset is
 reset to 0 and the whole file is re-read from the top; idempotency via
 ``INSERT OR IGNORE`` guarantees no double-counting.
@@ -25,14 +36,67 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from framework._internal.connection import connect
+from tools.observability.record_schema import (
+    RUN_RECORD_COLUMNS,
+    RUN_RECORD_PRIMARY_KEY,
+    create_table_sql,
+    ensure_columns,
+    insert_sql,
+)
+from tools.observability.timestamps import start_of_local_day, utc_now_iso
 
 if TYPE_CHECKING:
     from framework.run.address import RunAddress
+
+_TABLE = "run_records"
+# Both statements are derived from the one field declaration, so the stored
+# shape and what is written into it cannot disagree.
+_CREATE_RUN_RECORDS = create_table_sql(
+    _TABLE, RUN_RECORD_COLUMNS, RUN_RECORD_PRIMARY_KEY
+)
+_INSERT_RUN_RECORD = insert_sql(_TABLE, RUN_RECORD_COLUMNS, or_ignore=True)
+
+_CREATE_INGEST_PROGRESS = """
+    CREATE TABLE IF NOT EXISTS ingest_progress (
+        log_path    TEXT PRIMARY KEY,
+        byte_offset INTEGER NOT NULL
+    )
+"""
+
+# The step address of a record that predates the column: derived from the
+# pipeline and step it already carries.
+_BACKFILL_STEP_ADDRESS = """
+    UPDATE run_records
+    SET step_address = CASE
+        WHEN step = 'run' THEN pipeline
+        ELSE pipeline || '.' || step
+    END
+    WHERE step_address IS NULL
+      AND pipeline IS NOT NULL
+      AND step IS NOT NULL
+"""
+
+_PENDING_BACKFILL = """
+    SELECT 1 FROM run_records
+    WHERE step_address IS NULL AND pipeline IS NOT NULL AND step IS NOT NULL
+    LIMIT 1
+"""
+
+# The ledger of one-off data migrations already applied to this file. A row is
+# written in the same transaction as the migration it names, so a crash part-way
+# leaves no row and the migration is simply retried on the next open.
+_CREATE_MIGRATIONS = """
+    CREATE TABLE IF NOT EXISTS registry_migrations (
+        name       TEXT PRIMARY KEY,
+        applied_at TEXT NOT NULL
+    )
+"""
+_STEP_ADDRESS_BACKFILL = "step_address_backfill"
 
 
 class RunRegistry:
@@ -43,74 +107,57 @@ class RunRegistry:
     ) -> None:
         self._db_path = Path(db_path)
         self._busy_timeout_ms = busy_timeout_ms
+        self._migrated = False
 
     def _connect(self):
-        self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        """Open a connection, migrating the file once per instance.
+
+        Opening and migrating are separate jobs. Migration is DDL plus a
+        one-off backfill — write work — and running it on every connection made
+        every read take a write lock: with the rollback journal (WAL is
+        unavailable on a network share) a writer's lock is exclusive, so a
+        read-only operator query briefly locked the registry against every
+        running pipeline. Now a connection is just a connection, and the
+        migration is attempted once per instance.
+        """
+        if not self._migrated:
+            self._db_path.parent.mkdir(parents=True, exist_ok=True)
         con = connect(self._db_path, self._busy_timeout_ms)
-        con.execute(
-            """
-            CREATE TABLE IF NOT EXISTS run_records (
-                timestamp        TEXT,
-                pipeline_run_id  TEXT NOT NULL,
-                logical_run_id   TEXT,
-                pipeline         TEXT,
-                step             TEXT NOT NULL,
-                step_address     TEXT,
-                step_ordinal     INTEGER NOT NULL,
-                status           TEXT,
-                rows_in          INTEGER,
-                rows_out         INTEGER,
-                rows_quarantined INTEGER,
-                rows_excluded    INTEGER,
-                duration         REAL,
-                errors           TEXT,
-                error_category   TEXT,
-                warn_hits        TEXT,
-                committed        INTEGER,
-                profile          TEXT,
-                PRIMARY KEY (pipeline_run_id, step, step_ordinal)
-            )
-            """
-        )
-        # Forward-compatible migration: a registry DB created before the
-        # `committed` artifact marker (ADR-0005) lacks the column, and the
-        # INSERT below names it. Add it in place rather than forcing a re-create —
-        # the store lives on a shared drive (ADR-0001) and is not disposable.
-        existing = {row[1] for row in con.execute("PRAGMA table_info(run_records)")}
-        if "committed" not in existing:
-            con.execute("ALTER TABLE run_records ADD COLUMN committed INTEGER")
-        if "step_address" not in existing:
-            con.execute("ALTER TABLE run_records ADD COLUMN step_address TEXT")
-        # Forward-compatible migration for the business-run key: a registry
-        # created before logical_run_id joined the record schema lacks the
-        # column the INSERT below names.
-        if "logical_run_id" not in existing:
-            con.execute("ALTER TABLE run_records ADD COLUMN logical_run_id TEXT")
-        # Same forward-compatible migration for the per-column profile (#284):
-        # a registry predating it lacks the column the INSERT below names.
-        if "profile" not in existing:
-            con.execute("ALTER TABLE run_records ADD COLUMN profile TEXT")
-        con.execute(
-            """
-            UPDATE run_records
-            SET step_address = CASE
-                WHEN step = 'run' THEN pipeline
-                ELSE pipeline || '.' || step
-            END
-            WHERE step_address IS NULL
-              AND pipeline IS NOT NULL
-              AND step IS NOT NULL
-            """
-        )
-        con.execute(
-            """
-            CREATE TABLE IF NOT EXISTS ingest_progress (
-                log_path    TEXT PRIMARY KEY,
-                byte_offset INTEGER NOT NULL
-            )
-            """
-        )
+        if not self._migrated:
+            self._migrate(con)
+            self._migrated = True
         return con
+
+    def _migrate(self, con) -> None:
+        """Bring the file up to the declared shape; write only if it is behind.
+
+        A registry DB created before a field joined the record schema lacks its
+        column, and the INSERT names every declared one. Whatever is missing is
+        added in place rather than the table re-created — the store lives on a
+        shared drive and is not disposable. Nothing here writes when the file is
+        already current, so the common path takes no write lock at all.
+
+        The ``step_address`` backfill is the one statement that touches existing
+        rows, so it is remembered rather than repeated. Gating it on "was the
+        column just added?" alone would be wrong: a process that added the
+        column and then died before the backfill committed would leave those
+        rows NULL forever and address-based freshness lookups silently blind. So
+        the backfill is instead gated on a ledger row written in the *same*
+        transaction — until that row exists the work is considered outstanding,
+        and a file that still has rows awaiting an address gets them.
+        """
+        con.execute(_CREATE_RUN_RECORDS)
+        con.execute(_CREATE_INGEST_PROGRESS)
+        con.execute(_CREATE_MIGRATIONS)
+        added = ensure_columns(con, _TABLE, RUN_RECORD_COLUMNS)
+        if not _migration_applied(con, _STEP_ADDRESS_BACKFILL):
+            # The probe is what catches a file whose column arrived in an
+            # earlier, interrupted attempt. It is skipped once the ledger row
+            # exists, so a current file never scans the table to open it.
+            if "step_address" in added or con.execute(_PENDING_BACKFILL).fetchone():
+                con.execute(_BACKFILL_STEP_ADDRESS)
+            _mark_migration_applied(con, _STEP_ADDRESS_BACKFILL)
+            con.commit()
 
     def ingest(self, log_path: str | os.PathLike[str]) -> int:
         """Load a RunLog JSONL file into the store; return the count of new records.
@@ -219,35 +266,16 @@ class RunRegistry:
                 key = (rec["pipeline_run_id"], rec["step"])
                 ordinal = seen.get(key, 0)
                 seen[key] = ordinal + 1
+                # The two columns the store owns rather than the log: the
+                # ordinal, and the address a legacy record predates.
+                values = {
+                    **rec,
+                    "step_address": _step_address(rec),
+                    "step_ordinal": ordinal,
+                }
                 cur = con.execute(
-                    """
-                    INSERT OR IGNORE INTO run_records (
-                        timestamp, pipeline_run_id, logical_run_id, pipeline,
-                        step, step_address, step_ordinal, status, rows_in,
-                        rows_out, rows_quarantined, rows_excluded, duration,
-                        errors, error_category, warn_hits, committed, profile
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        rec.get("timestamp"),
-                        rec["pipeline_run_id"],
-                        rec.get("logical_run_id"),
-                        rec.get("pipeline"),
-                        rec["step"],
-                        _step_address(rec),
-                        ordinal,
-                        rec.get("status"),
-                        rec.get("rows_in"),
-                        rec.get("rows_out"),
-                        rec.get("rows_quarantined"),
-                        rec.get("rows_excluded"),
-                        rec.get("duration"),
-                        json.dumps(rec.get("errors") or []),
-                        rec.get("error_category"),
-                        json.dumps(rec.get("warn_hits") or []),
-                        1 if rec.get("committed") else 0,
-                        json.dumps(rec["profile"]) if rec.get("profile") else None,
-                    ),
+                    _INSERT_RUN_RECORD,
+                    tuple(f.to_sql(values.get(f.name)) for f in RUN_RECORD_COLUMNS),
                 )
                 inserted += cur.rowcount
 
@@ -461,28 +489,44 @@ class RunRegistry:
 
 
 def _row_to_record(row: dict) -> dict:
-    """Decode the JSON-encoded list columns back to lists for the caller."""
-    row["errors"] = json.loads(row["errors"]) if row["errors"] else []
-    row["warn_hits"] = json.loads(row["warn_hits"]) if row["warn_hits"] else []
-    # The artifact marker stores as 0/1 (or null on pre-migration rows); the
-    # caller reads the same bool the RunLog wrote.
-    row["committed"] = bool(row.get("committed"))
-    # The per-column profile stores as a JSON blob (or null where the step is not
-    # a profile); decode it back to the dict the RunLog wrote. ``get`` tolerates a
-    # pre-migration row dict that never selected the column.
-    if row.get("profile"):
-        row["profile"] = json.loads(row["profile"])
-    else:
-        row["profile"] = None
-    return row
+    """Decode a stored row back to the record the RunLog wrote.
+
+    Each field decodes itself — the JSON-encoded lists back to lists, the 0/1
+    artifact marker back to a bool — so the read path cannot fall behind the
+    write path. Reading by name (rather than position) keeps a migrated store
+    correct: its added columns sit at the end of the physical table.
+    """
+    return {**row, **{f.name: f.from_sql(row.get(f.name)) for f in RUN_RECORD_COLUMNS}}
+
+
+def _migration_applied(con, name: str) -> bool:
+    row = con.execute(
+        "SELECT 1 FROM registry_migrations WHERE name = ?", (name,)
+    ).fetchone()
+    return row is not None
+
+
+def _mark_migration_applied(con, name: str) -> None:
+    con.execute(
+        "INSERT OR IGNORE INTO registry_migrations (name, applied_at) VALUES (?, ?)",
+        (name, utc_now_iso()),
+    )
 
 
 def _start_of_day(value: date) -> str:
-    return datetime.combine(value, datetime.min.time()).isoformat()
+    """The lower bound of a run date, in the shape the stored column carries.
+
+    A run date is a *local* calendar date and a stored timestamp is a UTC
+    instant, so the bound is local midnight expressed as UTC — and formatted
+    exactly as the emitter formats a record, so SQLite's text comparison is
+    comparing like with like rather than relying on a naive string happening to
+    sort next to an offset-bearing one.
+    """
+    return start_of_local_day(value)
 
 
 def _start_of_next_day(value: date) -> str:
-    return datetime.combine(value + timedelta(days=1), datetime.min.time()).isoformat()
+    return start_of_local_day(value + timedelta(days=1))
 
 
 def _step_address(rec: dict) -> str | None:

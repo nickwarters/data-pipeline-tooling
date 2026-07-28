@@ -26,10 +26,33 @@ swallowed.
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from dataclasses import dataclass
 
 from framework.core.protocols import DEFAULT_CHUNK_SIZE, ChunkReader, Writer
+from framework.io.writers import supports_chunk_writes, writing_chunks
 from tools.observability.run_log import RunLog
+
+
+def _chunk_writes(writer: Writer):
+    """Open ``writer``'s chunk-write session when it has one.
+
+    A Writer that replaces its target does that on every ``write``, so handed
+    one chunk at a time it would keep only the last — the accumulating Writer's
+    delete-by-run being the sharp case, since it would delete the chunks this
+    same run had already landed. A Writer that can express "these writes are one
+    load" says so with a session, and it is used here.
+
+    A Writer that offers none is written to directly, as it always has been:
+    this loop takes any Writer, and the ones without a session are the plain
+    appending sinks for which chunk-by-chunk is already what one load means.
+    The wiring-time refusal lives on the graph builder, which knows the pairing
+    before a byte is read; here there is nothing to refuse before the read has
+    already started.
+    """
+    if supports_chunk_writes(writer):
+        return writing_chunks(writer)
+    return nullcontext(writer)
 
 
 @dataclass(frozen=True)
@@ -75,16 +98,19 @@ def stream_step(
     """
     written = 0
     chunks = 0
-    with run_log.step(
-        pipeline_run_id,
-        pipeline,
-        step,
-        committed=committed,
-        logical_run_id=logical_run_id,
-    ) as metrics:
+    with (
+        run_log.step(
+            pipeline_run_id,
+            pipeline,
+            step,
+            committed=committed,
+            logical_run_id=logical_run_id,
+        ) as metrics,
+        _chunk_writes(writer) as chunk_writer,
+    ):
         metrics.rows_out = 0
         for chunk in reader.chunks(size):
-            writer.write(chunk)
+            chunk_writer.write(chunk)
             written += len(chunk)
             chunks += 1
             # Update per iteration so a mid-stream failure's error record still

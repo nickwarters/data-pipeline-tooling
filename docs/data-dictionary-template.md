@@ -38,7 +38,7 @@ framework already declares, so most of an entry can be lifted from the code:
 | **Nullable** | `Nullable()` → *Yes*, `NonNull()` → *No* (plain fields default to nullable) |
 | **Value rules** | the field's `Annotated[...]` rules — `Pattern` / `Length` / `Range` / `Unique` / `OneOf` |
 | **Row checks** | the `@row_checks(...)` decorator's cross-field `RowCheck`s |
-| **Identity** | whether the field is part of the Case Type's `natural_key` (and so feeds the deterministic `case_id`, ADR-0009) |
+| **Identity** | whether the field is part of the Case Type's `natural_key` (and so feeds the deterministic `case_id`) |
 
 What the framework **cannot** capture, and the dictionary therefore must, is the
 **meaning**: the *Description*, a representative *Example*, the data's
@@ -66,7 +66,7 @@ consumes it. Name the medallion layer and the subject it belongs to.*
 | **Medallion layer** | `<raw \| silver \| gold>` |
 | **Grain** | *one row per `<…>` (e.g. "one row per Case", "one product line per Case")* |
 | **Is this a Case Type?** | `<Yes — yields Cases \| No — Reference Data / Detail Table / staging>` |
-| **Natural key → `case_id`** | `<natural_key column(s), or "n/a">` *(ADR-0009)* |
+| **Natural key → `case_id`** | `<natural_key column(s), or "n/a">` |
 | **Source system** | `<e.g. Claims SAS export, Advisers SharePoint list, internal CSV>` |
 | **Reader** | `<CsvReader \| ExcelReader \| SqliteReader \| GlobCsvReader \| SasReader \| SharePointReader>` |
 | **Load strategy** | `<Refresh() \| AccumulateByRun(...)>` *(who owns history at this layer)* |

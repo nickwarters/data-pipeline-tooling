@@ -1,11 +1,12 @@
-"""Dry-run preview: a per-step record of what a pipeline *would* do (issue #102).
+"""Dry-run preview: a per-step record of what a pipeline *would* do.
 
 A ``Pipeline.run()`` carried out under ``RunContext(dry_run=True)`` reads,
-processes, and validates real data but commits nothing. As each node executes it
-contributes a :class:`StepPreview` to the run context's :class:`DryRunReport`,
-giving an author a local-development view of the pipeline's shape — columns,
-dtypes, row counts, a bounded row sample, and the intent of any skipped
-commit — without landing artifacts.
+processes, and validates real data but commits nothing: every node whose purpose
+is a side effect — write, quarantine, explain, and the ``action`` escape hatch —
+skips it. As each node executes it contributes a :class:`StepPreview` to the run
+context's :class:`DryRunReport`, giving an author a local-development view of the
+pipeline's shape — columns, dtypes, row counts, a bounded row sample, and the
+intent of any skipped side effect — without landing artifacts.
 """
 
 from __future__ import annotations

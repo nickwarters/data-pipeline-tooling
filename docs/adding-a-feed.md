@@ -40,13 +40,57 @@ pipelines/orders` imports `pipelines.orders.pipeline` and executes
 (not-yet-run) pipeline — the *one* definition of what that hop does:
 
 - **`raw_builder`** gates the source with a `ColumnValidator` and lands a
-  faithful copy.
+  faithful copy. It composes the shared `tools.recipes.source_to_raw` recipe.
 - **`silver_builder`** renames source columns to the schema's vocabulary
   (`RENAME`), coerces the dtypes storage loses (`SchemaCoercion`), partitions
   bad rows into a quarantine dataset (`SchemaValueRulePartitioner`), and validates
-  the declared schema (`SchemaValidator`).
+  the declared schema (`SchemaValidator`). It composes the shared
+  `tools.recipes.raw_to_silver` recipe.
 - **`gold_builder`** is a passthrough to start — reads silver, writes gold — with
   a `TODO` to build the assembly (it's per-feed and an open decision).
+
+### Recipe-first authoring, and how to diverge
+
+The first two hops are the same in every feed, so they have **one definition**:
+the hop recipes in [`tools/recipes.py`](../tools/recipes.py). A generated
+`raw_builder` is a call, not a copy:
+
+```python
+from tools.recipes import raw_to_silver, source_to_raw
+
+def raw_builder(reader, writer, run_log=None):
+    return source_to_raw(
+        reader,
+        writer,
+        expected_columns=[f.name for f in fields(OrdersRow)],
+        name=f"{FEED_NAME}:raw",
+        run_log=run_log,
+    )
+```
+
+A recipe is **composition, not inheritance**. It returns a plain, not-yet-run
+`Pipeline` that your builder owns and can go on wiring; there is no framework
+hook calling back into your feed and nothing to subclass. That keeps the whole
+point of scaffolding — a generated feed you can edit freely — while giving the
+standard hop somewhere to evolve: adding a step to the standard raw hop is a
+one-line change in `source_to_raw`, and every feed composed from it inherits the
+change without a `grep` for the feeds you'd otherwise have to hand-edit.
+
+**To diverge, inline the recipe's body into your builder and edit it.** The
+recipes are short and deliberately readable for exactly this: copy the six or so
+lines of `raw_to_silver` into `silver_builder`, add your step, and the feed stops
+tracking the standard (which is the honest outcome — it isn't the standard hop
+any more). Reach for that when the hop genuinely differs; take the recipe's
+options (`expected_columns`, `rename`, `reject_writer`) when it doesn't.
+
+The recipes take the hop's **ports** — a `Reader` and a `Writer` — rather than a
+medallion profile, for two reasons: the *source* end of a raw hop isn't a
+medallion layer at all, and injecting the ports is what lets the generated test
+drive the real hop in memory against a `RecordingWriter`. `run()` wires the real
+medallion layer Writers. They live in `tools.recipes` rather than the framework
+because raw and silver are application vocabulary — the framework is kept
+domain-free ([keep the framework domain-free](adr/0013-keep-the-framework-domain-free.md))
+and the medallion moved out of it.
 
 `run()` wires the real `CsvReader` and the subject's layer Writers (deriving the
 raw/silver `AccumulateByRun` strategy from the `RunContext`, so re-drives under
@@ -172,13 +216,14 @@ tests/pipelines/
 
 - **It declares the Case Type's identity contract** in `case_type.py`: a
   `CaseType` bundling the `schema` with its `natural_key`, from which the derived
-  `namespace` and deterministic `case_id` come for free (ADR-0009). This is the
+  `namespace` and deterministic `case_id` come for free. This is the
   part that's tedious to hand-assemble, and the generic scaffold deliberately
   omits it.
 - **It refines through the settled ingest spine** — source → raw (a faithful,
   accumulated copy, the system of record) → silver (schema coerced + validated,
-  composing `SchemaCoercion` + `SchemaValidator` onto the hop) — importing only
-  `case_review` + the public facades, never framework internals.
+  composing `SchemaCoercion` + `SchemaValidator` onto the hop) — through the same
+  `tools.recipes` hop recipes the generic scaffold uses, importing only
+  `case_review`, `tools.*` and the public facades, never framework internals.
 
 **It deliberately stops at silver.** How accumulated silver is reduced or
 assembled into **gold** — a single-feed current reduce, a multi-feed *join*
@@ -189,7 +234,7 @@ sketches it as a commented seam with pointers to `ingest_silver_to_gold` (the
 single-feed current-gold reduce) and, for repeated sections / child rows,
 `detail_ingest_silver_to_gold` + [`pipelines/demo_fan_out.py`](../pipelines/demo_fan_out.py).
 Add the gold step reading the **same** `CASE_TYPE` so any Detail Table's
-`case_id` derives consistently (ADR-0009).
+`case_id` derives consistently.
 
 Reach for the **generic** `scaffold <feed>` when the feed has no Case identity
 (Reference Data, an outbound staging table); reach for `--case-type` when the
@@ -224,10 +269,13 @@ shape-hardening (`schema-enforcement.md`). The step order is:
 2. **`SchemaCoercion`** — repair the dtypes storage round-trips lose.
 3. **`SchemaValidator`** (as a post-validator) — check at the silver boundary.
 
-The raw → silver hop is **composed explicitly** (there is no recipe builder), so
-slipping the canonicalisation in is just another step: a spaced feed adds a
-`Rename` *before* `SchemaCoercion` and the validator, so the renamed columns reach
-the schema check under their canonical names:
+The standard raw → silver recipe already takes this as its `rename` option —
+`raw_to_silver(reader, writer, schema=CasesRow, rename={"Case Number":
+"case_number"})` inserts the step in exactly this position. The hop is ordinary
+composition underneath, so the manual form below is what that option expands to,
+and what you'd write if the hop diverges further: a spaced feed adds a `Rename`
+*before* `SchemaCoercion` and the validator, so the renamed columns reach the
+schema check under their canonical names:
 
 ```python
 from framework.io import Refresh
@@ -296,7 +344,8 @@ levers, from most to least important:
 
 A genuinely wide feed that's *one Case table plus repeated Detail Tables* is a
 different shape again — fan it out into N single-table pipelines over the shared
-raw table rather than one mega-row ([ADR-0009](adr/0009-case-identity-and-gold-grain.md),
+raw table rather than one mega-row
+([case identity and the gold grain](adr/0009-case-identity-and-gold-grain.md),
 `pipelines/demo_fan_out.py`).
 
 > **Scaffolding caps at 40 columns.** `scaffold --from-feed-file` deliberately
@@ -307,8 +356,7 @@ raw table rather than one mega-row ([ADR-0009](adr/0009-case-identity-and-gold-g
 
 ## 1. Pick a `Reader`
 
-A `Reader` encapsulates *how one source type is read* behind a single method
-(ADR-0002, ADR-0011):
+A `Reader` encapsulates *how one source type is read* behind a single method:
 
 ```python
 class Reader(Protocol):
@@ -358,10 +406,10 @@ source that is, in fact, valid CSV.
 `ExcelReader` reads `.xlsx` via pandas + **openpyxl** (a pure-Python,
 cross-platform engine; in `requirements.txt`). `SqliteReader` is the read-side
 dual of the Sqlite Writers — it opens through the shared `connect` factory, so
-it inherits the share-tolerant settings (ADR-0001) and can read a subject's own
+it inherits the share-tolerant settings and can read a subject's own
 layer **or** another subject's read-only Reference Data medallion (joined in
-Python — ADR-0002). `SasReader` and `SharePointReader` follow the same `read()`
-shape but reach a remote source whose client is **stubbed for now** (ADR-0012);
+Python). `SasReader` and `SharePointReader` follow the same `read()`
+shape but reach a remote source whose client is **stubbed for now**;
 see [Remote feeds (SAS, SharePoint)](#remote-feeds-sas-sharepoint) below.
 
 ## 2. Compose the pipeline and land it
@@ -415,7 +463,7 @@ path) and SharePoint (**Subscription Edition on-prem**; the connection drops in
 from a separate repo). Their Readers keep the same `read() -> Dataset` shape,
 but the remote behaviour — shelling to `ssh`/`scp`, calling the SharePoint list
 API — sits behind a **swappable seam in `tools.integrations.remote` that is stubbed
-today** (ADR-0012, ADR-0011). The on-prem SE auth (NTLM/Kerberos/REST — **not**
+today**. The on-prem SE auth (NTLM/Kerberos/REST — **not**
 Azure AD/Graph) is a client-seam concern designed once for both directions, and
 keeping it behind the seam keeps the cross-platform constraint (Windows + macOS)
 the framework's, not the caller's. Because the remote step is a seam, the whole
@@ -462,7 +510,7 @@ Configured with the SharePoint `site` URL, `list_name`, and `auth` config; on
 the `(site, list_name, auth)` config verbatim. Two fetchers ship:
 
 - **`StubbedSharePointFetcher`** (the default): the real on-prem SE client is
-  deferred (NTLM/Kerberos/REST auth out of scope — ADR-0012), so `read()` raises
+  deferred (NTLM/Kerberos/REST auth out of scope), so `read()` raises
   `NotImplementedError` rather than pretending to reach the network.
 - **`LocalCsvFetcher(path)`**: an offline fetcher backed by a local CSV fixture;
   it ignores the SharePoint config and reads the file, so the read path is
@@ -496,7 +544,7 @@ fake pusher and never touch the network.
 
 The Deliverable is emitted by a **second pipeline** that reads the gold
 SelectionPool and writes here (`SqliteReader(gold, "selection_pool")` →
-`SharePointWriter`) — consistent with ADR-0009's single-Writer pipelines over a
+`SharePointWriter`) — consistent with single-Writer pipelines over a
 shared source, not a mid-run checkpoint (CONTEXT.md):
 
 ```python

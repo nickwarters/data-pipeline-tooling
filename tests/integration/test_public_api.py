@@ -1,11 +1,17 @@
 """The public framework API: subpackage facades.
 
 A pipeline author depends on ``framework.core`` / ``framework.io`` /
-``framework.transform`` / ``framework.run`` / ``framework.shared`` /
-``framework.recipes`` — the stable public surface — not
-on internal modules by accident. These tests exercise that surface the way an
-author would: by building and running a real pipeline through the facades, and
-by asserting the internal plumbing stays out of reach.
+``framework.transform`` / ``framework.run`` — the four facades that make up the
+stable public surface — not on internal modules by accident. These tests
+exercise that surface the way an author would: by building and running a real
+pipeline through the facades, and by asserting the internal plumbing stays out
+of reach.
+
+The boundary check below is deliberately strict about *both* halves of the rule:
+a non-facade top-level module (``framework._internal.schema``) is a violation,
+and so is reaching *behind* a facade for one of its implementation modules
+(``framework.core.value_rules``). The second half is the one the rule is really
+about — the facade name is the contract, the module path behind it is layout.
 """
 
 import ast
@@ -18,36 +24,59 @@ CASE_REVIEW_DIR = Path(__file__).parent.parent.parent / "case_review"
 PUBLIC_FACADES = {"core", "io", "transform", "run"}
 
 
-def _framework_submodules_imported(source: str) -> set[str]:
-    """Return the ``framework.<submodule>`` paths a pipeline module imports."""
+def _facade_violations(module_path: str) -> str | None:
+    """Return why ``module_path`` breaks the facade rule, or ``None`` if it doesn't.
+
+    Non-framework imports are none of this check's business. A framework import
+    is legal only when it names a facade *exactly*: ``framework.transform`` is
+    the contract, ``framework.transform.processors`` is layout and
+    ``framework._internal.schema`` is private.
+    """
+    parts = module_path.split(".")
+    if parts[0] != "framework":
+        return None
+    if len(parts) == 1:
+        # `import framework` / `from framework import core` — the package root
+        # only binds the facades, so it cannot reach past them.
+        return None
+    if parts[1] not in PUBLIC_FACADES:
+        return f"{module_path} is not a public facade"
+    if len(parts) > 2:
+        return f"{module_path} reaches behind the framework.{parts[1]} facade"
+    return None
+
+
+def _framework_import_violations(source: str) -> list[str]:
+    """Return one message per framework import in ``source`` that breaks the rule."""
     tree = ast.parse(source)
-    used: set[str] = set()
+    found: list[str] = []
     for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and (node.module or "").startswith(
-            "framework."
-        ):
-            used.add(node.module.split(".", 2)[1])
+        modules: list[str] = []
+        if isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+            modules = [node.module]
         elif isinstance(node, ast.Import):
-            for alias in node.names:
-                if alias.name.startswith("framework."):
-                    used.add(alias.name.split(".", 2)[1])
-    return used
+            modules = [alias.name for alias in node.names]
+        for module in modules:
+            reason = _facade_violations(module)
+            if reason is not None:
+                found.append(f"line {node.lineno}: {reason}")
+    return found
 
 
-def _facade_offenders(root: Path) -> dict[str, set[str]]:
-    """Map each production module under ``root`` to the framework internals it
-    imports — bypassing the public facades. Empty means the tree is clean.
+def _facade_offenders(root: Path) -> dict[str, list[str]]:
+    """Map each production module under ``root`` to the ways it bypasses the
+    public facades. Empty means the tree is clean.
 
     Test modules are excluded: their tests legitimately import framework
     internals (e.g. ``tests.framework_testing``).
     """
-    offenders: dict[str, set[str]] = {}
+    offenders: dict[str, list[str]] = {}
     for path in sorted(root.rglob("*.py")):
         if path.name.startswith("test_") or "__pycache__" in path.parts:
             continue
-        internal = _framework_submodules_imported(path.read_text()) - PUBLIC_FACADES
-        if internal:
-            offenders[str(path.relative_to(root))] = internal
+        found = _framework_import_violations(path.read_text(encoding="utf-8"))
+        if found:
+            offenders[str(path.relative_to(root))] = found
     return offenders
 
 
@@ -149,7 +178,7 @@ def test_streaming_readers_are_available_through_the_io_facade(tmp_path):
     assert sizes == [2, 1]
 
     # The chunk-level row filter composes over any ChunkReader and is itself one,
-    # narrowing the stream to an allow-list before anything accumulates (#287).
+    # narrowing the stream to an allow-list before anything accumulates.
     filtered = KeyFilterChunkReader(ChunkedCsvReader(src), "id", allowed_keys={1, 3})
     assert isinstance(filtered, ChunkReader)
     kept = [
@@ -224,7 +253,7 @@ def test_internal_plumbing_stays_out_of_the_public_facades():
         "RowTrace",  # framework.run.trace — generic trace mechanics
         "RemoteRunner",  # framework.io.remote — stubbed remote client seam
         "FreshnessGuard",  # framework.run.runner — internal guard
-        "StepMetrics",  # framework.run.run_log — internal timing record
+        "StepMetrics",  # tools.observability.run_log — internal timing record
         "pipeline_label",  # framework.run.runner — internal label helper
     }
     for facade in (core, io, transform, run):
@@ -238,7 +267,8 @@ def test_internal_plumbing_stays_out_of_the_public_facades():
 def test_demo_pipelines_import_framework_only_through_the_public_facades():
     # downstream scripts depend on the stable surface, not internal modules
     # by accident. Every framework import in pipelines/ must go through a facade —
-    # including feed subpackages (pipelines/<feed>/, scaffolded by ). Test
+    # including feed subpackages (pipelines/<feed>/, rendered by the scaffold
+    # command from its templates). Test
     # modules are excluded: their tests legitimately import tests.framework_testing.
     assert not _facade_offenders(PIPELINES_DIR), (
         f"pipelines bypassing the public facades: {_facade_offenders(PIPELINES_DIR)}"
@@ -252,3 +282,40 @@ def test_case_review_imports_framework_only_through_the_public_facades():
     # legitimately import framework internals and stay out of scope.
     offenders = _facade_offenders(CASE_REVIEW_DIR)
     assert not offenders, f"case_review bypassing the public facades: {offenders}"
+
+
+def test_the_boundary_check_itself_catches_both_kinds_of_violation():
+    # The check above is only worth its CI status if it would actually fail.
+    # A previous version compared only the *second* dotted segment, so reaching
+    # behind a facade — the thing the rule is about — passed silently. Pin both
+    # halves here so the check cannot go hollow again unnoticed.
+    behind_a_facade = _framework_import_violations(
+        "from framework.core.value_rules import Range\n"
+    )
+    assert behind_a_facade == [
+        "line 1: framework.core.value_rules reaches behind the framework.core facade"
+    ]
+
+    private_module = _framework_import_violations(
+        "from framework._internal.schema import ValueRule\n"
+    )
+    assert private_module == [
+        "line 1: framework._internal.schema is not a public facade"
+    ]
+
+    # `import framework.io.strategy` is the same violation in the other syntax.
+    assert _framework_import_violations("import framework.io.strategy\n") == [
+        "line 1: framework.io.strategy reaches behind the framework.io facade"
+    ]
+
+    # The four facades themselves, and anything outside framework, are fine.
+    for legal in (
+        "from framework.core import Dataset\n",
+        "from framework.io import CsvReader\n",
+        "from framework.transform import Filter\n",
+        "from framework.run import Pipeline\n",
+        "import framework\n",
+        "from tools.store import StoreRegistry\n",
+        "from case_review import CaseType\n",
+    ):
+        assert _framework_import_violations(legal) == [], legal

@@ -24,7 +24,7 @@ SelectionPool. For the domain language behind the terms, see
 with the Case Type's schema enforced (`SchemaCoercion` + `SchemaValidator`
 composed onto the hop — see [`schema-enforcement.md`](schema-enforcement.md)). That validated **silver is the
 CasePool**: the current-state population of Cases. Sources are current-state
-snapshots, so raw and silver are full-refreshed each run (ADR-0004); the
+snapshots, so raw and silver are full-refreshed each run; the
 accumulating layer is gold, where the **SelectionPool** lands stamped by run.
 
 ## `CaseType` / `Variation` — the declarative domain objects
@@ -34,7 +34,7 @@ fields, its Variations, and — over time — its ingest/selection/processing
 (CONTEXT.md). It is an **explicit declarative object imported directly**, not an
 entry in a global domain registry. The minimal `PipelineRunner` registry is only
 for dispatching named domain Pipelines such as `cases/ingest` and
-`cases/selection` (ADR-0011).
+`cases/selection`.
 
 ```python
 from dataclasses import dataclass
@@ -50,7 +50,7 @@ class ActivityCase:          # the Case Type's schema (its columns + types)
 
 CASES = CaseType(
     name="cases",            # the subject: medallion directory + table name;
-                             #   also seeds the case_id namespace (ADR-0009)
+                             #   also seeds the case_id namespace
     schema=ActivityCase,     # enforced at the silver/gold boundaries
     natural_key=("case_ref",),  # identifies a Case; hashed to the deterministic case_id
     variations=(
@@ -70,8 +70,7 @@ never the bank's content (owned by the review platform — CONTEXT.md); Selectio
 stamps that id onto the chosen Cases. `CaseType.variation(id)` resolves a Variation and
 raises `KeyError` with a located message on an unknown id, so a mis-config
 surfaces where it is asked for rather than as a silent miss downstream. Further
-overrides (ingest, selection criteria, divergent processing) are deferred
-(ADR-0011).
+overrides (ingest, selection criteria, divergent processing) are deferred.
 
 ## `CasePool` — the domain population, behind intention-revealing reads
 
@@ -105,11 +104,11 @@ The retrieval:
 2. repairs the round-trip-lossy date column toward the schema's types
    (`SchemaCoercion` — silver stores dates as text), so the window comparison is
    date-vs-date;
-3. narrows to the working-day window in **Python**, never SQL (ADR-0002).
+3. narrows to the working-day window in **Python**, never SQL.
 
 It returns the bulk-tier `Dataset` (the carrier), which flows straight into the
 Selection pipeline. Surfacing fully typed `Case` objects is the
-**typed-on-demand** edge at the domain layer (ADR-0002) — the *concept* of
+**typed-on-demand** edge at the domain layer — the *concept* of
 the retrieval is the deliverable here, not a mandated signature.
 `fetch_available_cases` is illustrative; a Case Type may name its own retrievals.
 
@@ -155,8 +154,8 @@ p.write(
 p.run()
 ```
 
-The **availability and selection criteria are specific Python processors**
-(ADR-0002) — `Filter`/`Score`/`Sort` carry plain-Python row rules, and `Stamp`
+The **availability and selection criteria are specific Python processors** —
+`Filter`/`Score`/`Sort` carry plain-Python row rules, and `Stamp`
 records the Variation's `question_bank_id` on every chosen Case. The result is
 the **SelectionPool**: the narrowed set of Cases actually chosen for review,
 accumulated into **gold** by the `AccumulateByRunWriter` (stamped `logical_run_id` /
@@ -191,11 +190,11 @@ SelectionPool write. A first run with no upstream history is allowed, but a
 Selecting *which advisers' Cases get reviewed* is itself a governed act that will
 be challenged after the fact ("why wasn't this adviser picked up last quarter?").
 But `Filter`/`Score`/`JoinWith`/`AntiJoinWith` **silently drop** the Cases they
-exclude (ADR-0002 plain-Python callables), leaving no trace.
+exclude (they are plain-Python callables), leaving no trace.
 `.explain(writer, id_column=…)` closes that gap: it is the
 eligibility-stage twin of `.quarantine()` — the same *route aside with a
 reason, never silently drop* shape, pointed at
-**eligibility** rather than **validity** (ADR-0008).
+**eligibility** rather than **validity**.
 
 ```python
 p = Pipeline("selection")
@@ -274,7 +273,7 @@ Each pipeline records its run summary under its name (`ingest`, `selection`) and
 run's logical run id (default `<pipeline>:run_date`) and `pipeline_run_id`.
 Re-driving a business run under the same id replaces its rows rather than
 duplicating them — over the CLI, `python -m cli run pipelines/selection
-/tmp/demo --logical-run-id <id>` (see [operator-cli.md](operator-cli.md)). The
+--base-dir /tmp/demo --logical-run-id <id>` (see [operator-cli.md](operator-cli.md)). The
 `as_of` date is fixed so the working-day window lines up with the sample feed and
 the run is deterministic. Each pipeline can also be run directly with a default
 run context (`python -m pipelines.ingest.pipeline /tmp/demo`).

@@ -91,9 +91,10 @@ Every Pipeline reuses the **same** three-layer medallion. A **subject**
 (a Case Type, or a shared Reference Data set) owns its own medallion — three
 SQLite databases `<subject>/{raw,silver,gold}.db` on a network share, isolated
 from every other subject's files for blast-radius containment and independent
-onboarding ([ADR-0001](adr/0001-sqlite-per-subject-medallion-store.md)).
+onboarding ([SQLite per-subject medallion store on a network share,
+single-writer](adr/0001-sqlite-per-subject-medallion-store.md)).
 The medallion is an **application-level profile** (`tools.medallion`), not
-framework vocabulary (#232): the framework stores an opaque `namespace` → file,
+framework vocabulary: the framework stores an opaque `namespace` → file,
 and `medallion(registry, subject)` exposes the `.raw` / `.silver` / `.gold`
 namespace Stores. Each layer Store mints `writer(table, strategy)` /
 `reader(table)` over its file.
@@ -109,12 +110,14 @@ gold the current CasePool, Selection may make gold an accumulating SelectionPool
 and Sync may make gold review-platform history. Those meanings are common
 case-review profiles, not framework guarantees. Common boundaries still apply by
 convention: silver is often the schema boundary
-([ADR-0006](adr/0006-graduated-schema-enforcement.md)) and gold is often the
-consumption/grain boundary
-([ADR-0009](adr/0009-case-identity-and-gold-grain.md)).
+([graduated schema enforcement](adr/0006-graduated-schema-enforcement.md)) and
+gold is often the consumption/grain boundary
+([case identity and the gold grain](adr/0009-case-identity-and-gold-grain.md)).
 
 > **Load strategy is per-feed, owned by the Writer** — the Store maps `layer →
-> location` only ([ADR-0004](adr/0004-per-feed-load-strategy-owned-by-writer.md)). "Refresh upstream / accumulate downstream" is a common profile,
+> location` only ([load strategy is per-feed and owned by the
+> Writer](adr/0004-per-feed-load-strategy-owned-by-writer.md)). "Refresh
+> upstream / accumulate downstream" is a common profile,
 > not a framework law. The **Ingest** profile is *history-upstream /
 > current-gold* (raw + silver accumulate the change-over-time record; gold
 > reduces to one current row per Case). See the deep docs below for the full load model.
@@ -159,35 +162,36 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 
 | Primitive | What it is / when to use it |
 |-----------|------------------------------|
-| **`Dataset`** | The opaque, bulk in-memory **tabular carrier** — pandas behind the seam, swappable later. Tiny public surface (`.columns`, `len()`); pandas never leaks past it. ([ADR-0002](adr/0002-python-processing-opaque-dataset-carrier.md)) |
+| **`Dataset`** | The opaque, bulk in-memory **tabular carrier** — pandas behind the seam, swappable later. Tiny public surface (`.columns`, `len()`); pandas never leaks past it. ([Python-only processing, dumb store, opaque Dataset carrier](adr/0002-python-processing-opaque-dataset-carrier.md)) |
 | **`Reader`** | `read() -> Dataset`. One per source shape: `CsvReader`, `GlobCsvReader`, `ExcelReader`, `SqliteReader`, and the stubbed-remote `SasReader` / `SharePointReader`. Swap the Reader to ingest the same feed from a different source. → [adding-a-feed.md](adding-a-feed.md) |
-| **`ChunkReader`** | `chunks(size) -> Iterator[Dataset]`. The **streaming dual** of `Reader` for a source too big to hold whole — yields *bounded* Datasets (default 10,000 rows), so the in-memory contract holds per chunk. `ChunkedCsvReader` (local CSV) and `SasFileReader` (an **already-landed** `.sas7bdat`/xport file, gzip read on the fly — distinct from the remote `SasReader`: no script, no remote run, no copy). Wrap any of them in `KeyFilterChunkReader(inner, key_column, allowed_keys)` to keep only rows whose key is in an id allow-list (semi-join, keys type-normalised) — or `PredicateChunkReader` for an arbitrary per-chunk filter — applied **before accumulation** so a 100M-row source lands just the ~100K rows wanted, with bounded memory; both expose `rows_scanned` / `rows_kept`. Drive the streaming loop (read→filter→write) under one fail-fast JSONL run-log step with `tools.observability.stream_step`. → [streaming-large-sources.md](streaming-large-sources.md) |
+| **`ChunkReader`** | `chunks(size) -> Iterator[Dataset]`. The **streaming dual** of `Reader` for a source too big to hold whole — yields *bounded* Datasets (default 10,000 rows), so the in-memory contract holds per chunk. `ChunkedCsvReader` (local CSV) and `SasFileReader` (an **already-landed** `.sas7bdat`/xport file, gzip read on the fly — distinct from the remote `SasReader`: no script, no remote run, no copy). Wrap any of them in `KeyFilterChunkReader(inner, key_column, allowed_keys)` to keep only rows whose key is in an id allow-list (semi-join, keys type-normalised) — or `PredicateChunkReader` for an arbitrary per-chunk filter — applied **before accumulation** so a 100M-row source lands just the ~100K rows wanted, with bounded memory; both expose `rows_scanned` / `rows_kept`. Wire one into a pipeline with `Pipeline.read_chunks(chunk_reader, chunk_size=...)`: the sub-graph below it is driven once per chunk, so a source too big to hold whole still gets the validators, quarantine, dry-run and stable step addresses, and each step still records exactly one run-log record with its counts summed. `tools.observability.stream_step` remains the low-level fallback for a bare read→filter→write loop that needs no DAG. → [streaming-large-sources.md](streaming-large-sources.md) |
 | **`Writer`** | `write(dataset) -> None`. The dual of Reader. Owns **both** target location and **load strategy**. File Deliverables use `CsvWriter`, `ExcelWriter`, or `JsonWriter`; SharePoint list Deliverables use the stubbed `SharePointWriter`; SQLite tables use `SqliteTruncateReloadWriter` or `AccumulateByRunWriter`; `StdoutWriter` is a console sink for *seeing* a result (e.g. an explainer trace) rather than persisting it. → [gold-accumulation.md](gold-accumulation.md) |
 | **`RetryPolicy` / `RetryingReader` / `RetryingWriter`** | Targeted retry for **transient I/O-edge failures** (remote access, SharePoint/SAS fetch, SQLite busy). An allowlist of exception types is retried; schema-validation and configuration errors abort immediately. Scoped to the `read()`/`write()` seam, never around validation. → [retry.md](retry.md) |
-| **`Store` / `StoreRegistry`** (`tools.store`) | A Store binds one **namespace** (a logical database → file) to `writer(table, strategy)` / `reader(table)` creation; `StoreRegistry(root).store(namespace)` mints those from shared root/configuration, and `StoreRegistry.register(name, reader\|writer)` → `reader(name)` / `writer(name)` keeps named components a pipeline refers to by name. The raw/silver/gold medallion is the `tools.medallion` profile over it (`<subject>/{raw,silver,gold}.db`). Holds no business logic and makes no load decision. **Application infrastructure in the sibling `tools` package, not `framework.io`** (#232). ([ADR-0001](adr/0001-sqlite-per-subject-medallion-store.md)) |
+| **`Store` / `StoreRegistry`** (`tools.store`) | A Store binds one **namespace** (a logical database → file) to `writer(table, strategy)` / `reader(table)` creation; `StoreRegistry(root).store(namespace)` mints those from shared root/configuration, and `StoreRegistry.register(name, reader\|writer)` → `reader(name)` / `writer(name)` keeps named components a pipeline refers to by name. The raw/silver/gold medallion is the `tools.medallion` profile over it (`<subject>/{raw,silver,gold}.db`). Holds no business logic and makes no load decision. **Application infrastructure in the sibling `tools` package, not `framework.io`**. ([SQLite per-subject medallion store on a network share, single-writer](adr/0001-sqlite-per-subject-medallion-store.md)) |
 | **`Validator`** | `validate(dataset) -> None`, **raises** on breach. `ColumnValidator`, `RowCountValidator` (engine-agnostic), `VolumeAnomalyValidator` (trips when a run's volume deviates from its recent-history baseline — catches truncated source exports), `SchemaDriftValidator` (warns at the raw boundary when a feed's columns drift from the prior run's landed set — catches owner-controlled source schema change). Severity (`error`/`warn`) is set where it's attached. |
-| **`Schema` / `SchemaValidator`** | A Case Type **dataclass** whose annotations *are* the column, dtype, nullability, and value-rule contract; the validator is the dataclass→validator adapter, enforced at silver (and optionally gold). Nullability/value rules extend the same dataclass via `Annotated`; cross-field **row checks** attach via the `@row_checks(...)` class decorator. → [schema-enforcement.md](schema-enforcement.md) ([ADR-0006](adr/0006-graduated-schema-enforcement.md)) |
+| **`Schema` / `SchemaValidator`** | A Case Type **dataclass** whose annotations *are* the column, dtype, nullability, and value-rule contract; the validator is the dataclass→validator adapter, enforced at silver (and optionally gold). Nullability/value rules extend the same dataclass via `Annotated`; cross-field **row checks** attach via the `@row_checks(...)` class decorator. → [schema-enforcement.md](schema-enforcement.md) ([graduated schema enforcement: raw light, silver & gold validated](adr/0006-graduated-schema-enforcement.md)) |
 | **`Processor`** | a callable `(dataset) -> Dataset`, run mid-pipeline via a named `.task(...)` (`.transform(...)` remains compatible). `SchemaCoercion` (repair storage-lossy types); the Selection transforms `Filter` / `Score` / `VectorizedFilter` / `VectorizedDerive` / `Sort` / `Rename` / `Stamp`, the explicit-dependency cross-feed `JoinWith` / `AntiJoinWith`; the column-shaping `JoinColumns`; and the Ingest / fan-out transforms `SelectColumns` / `DropColumns` / `Unpivot` / `DeriveKey` / `LatestPerKey`. → [processors.md](processors.md) |
 | **Pipeline tasks** | A `Pipeline` is wired from named **tasks**, each returning a node the next consumes: `.read(reader)`, `.task(name, processor)`, `.validate(validator)`, `.write(writer)`, `.profile(...)`, and `.explain(...)`. Order and any fan-in / fan-out are explicit in how nodes are wired — validation, processing, and explicit checkpoint writes land exactly where you place them. |
 | **`Profile`** (data profiling) | A read-only task `p.profile(profiler, node)` that records per-column **null rate / distinct count / min-max / bounded top-N** on the run log so a feed's *shape* is trended across runs (the statistical sibling of the row-count volume guardrail). The computation is an injected `tools.observability.profile.DataProfiler` (the framework's `DatasetProfiler` port — `tools` is never imported down into `framework`); it bounds cost via `top_n` / a column allow-list and, with a baseline, warns (or fails via `ProfileError`) when a column's null rate drifts from its recent-history baseline — catching a column that quietly slides 5% → 60% null. → [core-primitives.md](core-primitives.md) |
-| **`Pipeline`** (builder) | The deferred DAG builder: `p = Pipeline(name)`, then wire tasks — `r = p.read(reader, name=...)`, `v = p.task("normalise", processor, r)` or `p.validate(..., r, name=...)`, `p.write(writer, v, name=...)`. It builds one ordered plan; call `.describe()` to inspect it without executing, then `.run(context=…)` to execute fail-fast and atomic with RunLog observability. ([ADR-0003](adr/0003-deferred-dag-composition.md)) |
-| **`RunAddress`** | A stable dependency-target address for a whole Pipeline or a named run step inside one. Labels are `pipeline`, `subject/pipeline`, `pipeline.step`, or `subject/pipeline.step` (for example `pipeline_2.step_4`). The builder records this as `step_address`, and the run registry can query it with `records_for_address(...)`, `has_successful_address(...)`, and `latest_success(...)`. Construct with `RunAddress.pipeline(...)` / `RunAddress.step(...)`, parse with `RunAddress.parse(label)`. Invalid labels raise config-category `RunAddressError`. |
-| **`ForEach`** | Runnable orchestration for independent repeated runs: pass items plus `pipeline_builder(item, context)`, then call `.run(context)`. It creates a fresh builder and per-item `RunContext` for each item. Default behavior fails fast on the first failed item; `continue_on_error=True` returns per-item success/failure outcomes and continues. Use when files must remain separate logical runs. |
+| **`Pipeline`** (builder) | The deferred DAG builder: `p = Pipeline(name)`, then wire tasks — `r = p.read(reader, name=...)`, `v = p.task("normalise", processor, r)` or `p.validate(..., r, name=...)`, `p.write(writer, v, name=...)`. It builds one ordered plan; call `.describe()` to inspect it without executing, then `.run(context=…)` to execute fail-fast and atomic with RunLog observability. ([the deferred DAG composition model](adr/0003-deferred-dag-composition.md)) |
+| **`RunAddress`** | A stable dependency-target address for a whole Pipeline or a named run step inside one. Labels are `pipeline`, `subject/pipeline`, `pipeline.step`, or `subject/pipeline.step` (for example `pipeline_2.step_4`). The builder records this as `step_address`, and the run registry can query it with `records_for_address(...)`, `has_successful_address(...)`, and `latest_success(...)`. Construct with `RunAddress.for_pipeline(...)` / `RunAddress.for_step(...)`, parse with `RunAddress.parse(label)`. Invalid labels raise config-category `RunAddressError`. |
+| **`ForEach`** | Runnable orchestration for independent repeated runs: pass items plus `pipeline_builder(item, context)`, then call `.run(context)`. It creates a fresh builder for each item and derives a per-item `RunContext` from the parent (own logical run id; inherited attempt id, run params, and dry-run preview). Default behavior fails fast on the first failed item; `continue_on_error=True` returns per-item success/failure outcomes and continues. Use when files must remain separate logical runs. |
 | **`DatedFileDiscovery` / `SourceArtifact`** | Source-artifact discovery for dated-file catch-up (`tools.discovery`). `DatedFileDiscovery(directory, pattern)` finds files whose names encode a business date (e.g. `"claims_{date:%Y%m%d}_*.csv"`). `.available_between(start, end)` returns `SourceArtifact` value objects (each with `path`, `business_date`, `file_id`) where `start < business_date <= end`, sorted deterministically. Use with `ForEach` when each file needs its own run history and idempotency key. Use `GlobCsvReader` instead when all files together form one logical batch. → [core-primitives.md](core-primitives.md) |
 | **`Orchestrator` / `PipelineSet` / `ScheduledPipeline`** | Scheduled due-work orchestration over **path-addressed** pipelines: each `ScheduledPipeline` names a `pipelines/<name>` path, invoked at runtime by the same rule as the `run` command (no handler registry). Python definitions own sets, dependencies, and default schedules; YAML can override enablement, schedule timing, and freshness windows. A single pass or bounded loop runs due items for one run date, marks failed items terminal, blocks their downstream dependants, and lets independent items and other sets continue. |
 | **`PipelineError` / `format_failure`** | The base of the expected fail-fast failure family (`ValidationError`, `FreshnessError`, `UnknownPipelineError`, `RunAddressError`, `CoercionError`, `ForEachPipelineError` all subclass it) and the pure formatter that renders a caught one as a short, traceback-free block for `stderr`. At a run boundary — the operator CLI, a scaffolded `main()` — `except PipelineError` + `format_failure(exc)` turns a deliberate abort into a clear message; a genuine bug is not a `PipelineError` and keeps its trace. |
-| **`RunLog` / `RunRegistry`** | `RunLog` emits one JSON record per step (+ a run summary) to a `.log` file — the observability seam. `RunRegistry` ingests that JSONL into a queryable run-history store. → [run-log-format.md](run-log-format.md) ([ADR-0005](adr/0005-fail-fast-atomic-runs-and-observability.md)) |
-| **`RunContext` / `PipelineRunner` / `Requirement`** | The thin domain runner: register handlers by `(case_type, pipeline)`, receive a context carrying execution/logical identity, dates, explicit run params, RunLog, and RunRegistry, and block stale downstream runs with `Requirement.succeeded(RunAddress.pipeline(...)).same_day()` or task-level `within_days(...)` predicates. `FreshnessRequirement` remains compatible. → [core-primitives.md](core-primitives.md) |
-| **`CaseType` / `Variation`** | Case-review application/domain objects in `case_review.case_type`, not framework primitives: a Case Type bundles its `schema`, its identity contract (`natural_key` + a `namespace` derived from `name`, ADR-0009), and its `variations`, imported directly (no global CaseType config registry). A Variation overrides only what differs — most often the `question_bank_id`. → [selection.md](selection.md) |
+| **`RunLog` / `RunRegistry`** | `RunLog` emits one JSON record per step (+ a run summary) to a `.log` file — the observability seam. `RunRegistry` ingests that JSONL into a queryable run-history store. The record's field set is declared once, as data, in `tools.observability.record_schema` (`RUN_RECORD_FIELDS`): the log record, the registry DDL, its additive column migration, the `INSERT`, the decode and the console line are all derived from it, so adding a field is one entry. → [run-log-format.md](run-log-format.md) ([fail-fast atomic runs, independently-committed artifacts, structured JSONL observability](adr/0005-fail-fast-atomic-runs-and-observability.md)) |
+| **`RunContext` / `PipelineRunner` / `Requirement`** | The thin domain runner: register handlers by `(subject, pipeline)`, receive a context carrying execution/logical identity, dates, explicit run params, RunLog, and RunRegistry, and block stale downstream runs with `Requirement.succeeded(RunAddress.for_pipeline(...)).same_day()` or task-level `within_days(...)` predicates. `FreshnessRequirement` remains compatible. → [core-primitives.md](core-primitives.md) |
+| **`CaseType` / `Variation`** | Case-review application/domain objects in `case_review.case_type`, not framework primitives: a Case Type bundles its `schema`, its identity contract (`natural_key` + a `namespace` derived from `name`), and its `variations`, imported directly (no global CaseType config registry). A Variation overrides only what differs — most often the `question_bank_id`. → [selection.md](selection.md) |
 | **`CasePool`** | Case-review application/domain helper in `case_review.case_pool`: the per-Case-Type population read from ingested silver, surfaced through intention-revealing retrievals (e.g. `fetch_available_cases(...)`) instead of raw `read_*`. → [selection.md](selection.md) |
 | **`WorkingDayCalendar`** | A config-seeded **pure utility** for availability arithmetic ("the last 20 working days"). Touches no Dataset/Store/engine; not a Feed. → [working-day-calendar.md](working-day-calendar.md) |
 
 Two cross-cutting flows extend the pipeline: **quarantine** routes value-rule
-rejects aside (keeping good rows — [ADR-0007](adr/0007-row-level-quarantine.md))
+rejects aside (keeping good rows — [opt-in row-level quarantine for value-rule
+breaches](adr/0007-row-level-quarantine.md))
 and **`.explain()`** lands a per-row **RowTrace**. The framework owns the generic
 trace mechanics; the case-review pipeline gives them domain meaning by writing a
-selection trace table ([ADR-0008](adr/0008-selection-explainability.md);
-see the Selection how-to below).
+selection trace table ([per-Case Selection explainability via a row
+trace](adr/0008-selection-explainability.md); see the Selection how-to below).
 
 ---
 
@@ -227,7 +231,7 @@ from case_review.case_type import CaseType, Variation
 
 CASES = CaseType(
     name="cases",                 # the subject: medallion dir + table name;
-                                  #   also seeds the case_id namespace (ADR-0009)
+                                  #   also seeds the case_id namespace
     schema=ActivityCase,          # enforced at silver/gold boundaries
     natural_key=("case_ref",),    # identifies a Case → the deterministic case_id
     variations=(
@@ -318,8 +322,9 @@ p.run()   # coerce -> validate -> write silver
 
 Swapping the Reader is the only change needed to ingest the same feed from a
 different source type. A wide feed (one Case table + Detail Tables) is fanned out
-into N single-table pipelines over the shared raw table —
-[ADR-0009](adr/0009-case-identity-and-gold-grain.md), `pipelines/demo_fan_out.py`.
+into N single-table pipelines over the shared raw table — see [case identity and
+the gold grain](adr/0009-case-identity-and-gold-grain.md) and
+`pipelines/demo_fan_out.py`.
 
 For a fuller authoring example, run
 `python -m pipelines.comprehensive_examples /tmp/comprehensive-demo`. It lands
@@ -456,8 +461,9 @@ p.write(med.gold.writer("selection_pool", strategy), stamped, name="write")
 p.run(context=context)
 ```
 
-- **Business rules are plain Python** over a row mapping, never SQL —
-  [ADR-0002](adr/0002-python-processing-opaque-dataset-carrier.md).
+- **Business rules are plain Python** over a row mapping, never SQL — see
+  [Python-only processing, dumb
+  store](adr/0002-python-processing-opaque-dataset-carrier.md).
 - **Name explainable gates and joins** (`name="high-value"`,
   `name="adviser-hierarchy"`) so the Selection trace can report the business
   reason a Case was excluded.
@@ -521,7 +527,7 @@ python -m cli run pipelines/ingest --base-dir /data --dry-run   # preview each s
 python -m cli run pipelines/ingest --env dev         # or resolve base_dir from a named environment
 python -m cli status --base-dir /data --pipeline ingest
 python -m cli runs --base-dir /data --pipeline ingest --limit 5
-python -m cli log ingest --base-dir /data --run-id 5f8ff8c7
+python -m cli log ingest --base-dir /data --pipeline-run-id 5f8ff8c7
 ```
 
 `run` addresses a pipeline by **its location on disk**: `pipelines/ingest` maps
@@ -572,7 +578,7 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 
 | Doc | Covers |
 |-----|--------|
-| [`public-api.md`](public-api.md) | The public API: the facades (`framework.core` / `io` / `transform` / `validate` / `run` / `recipes` / `shared`), the internal-module boundary, and the packaging non-goal. |
+| [`public-api.md`](public-api.md) | The public API: the four facades (`framework.core` / `framework.io` / `framework.transform` / `framework.run`) and the `tools.*` siblings application code may also import, the internal-module boundary, and the packaging non-goal. |
 | [`core-primitives.md`](core-primitives.md) | The consolidated framework primitives reference with worked examples and build status per slice. |
 | [`adding-a-feed.md`](adding-a-feed.md) | Every Reader, and the stubbed remote (SAS / SharePoint) seams. |
 | [`schema-enforcement.md`](schema-enforcement.md) | `Schema` / `SchemaValidator` / `SchemaCoercion`, value-level rules, composing the schema boundary onto a pipeline. |
@@ -582,7 +588,7 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 | [`selection.md`](selection.md) | The full CaseType / Variation → CasePool → SelectionPool flow + explainability. |
 | [`working-day-calendar.md`](working-day-calendar.md) | Availability arithmetic. |
 | [`run-log-format.md`](run-log-format.md) | The JSONL record schema and the run registry. |
-| [`streaming-large-sources.md`](streaming-large-sources.md) | Streaming a source too big to hold whole: chunk-level row filtering (id allow-list / predicate), why it's a streaming module not a deferred DAG node, and driving the run log with `stream_step` (fail-fast + JSONL). |
+| [`streaming-large-sources.md`](streaming-large-sources.md) | Streaming a source too big to hold whole: `Pipeline.read_chunks` driving the DAG once per chunk, chunk-level row filtering (id allow-list / predicate), which pairings are refused at wiring time and why, and `stream_step` as the low-level fallback. |
 | [`retry.md`](retry.md) | Targeted retry at the reader/writer edges — `RetryPolicy`, where to use it and where not. |
 | [`operator-cli.md`](operator-cli.md) | The operator CLI (`run` / `status` / `runs` / `log`) with example commands and output. |
 | [`resolving-a-failed-run.md`](resolving-a-failed-run.md) | The operator loop from a failed run — investigate (`status`/`log`), diagnose, resolve, and re-drive idempotently. |

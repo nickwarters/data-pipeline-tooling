@@ -1,10 +1,11 @@
-"""Dry-run / preview mode for the deferred ``Pipeline`` builder (issue #102).
+"""Dry-run / preview mode for the deferred ``Pipeline`` builder.
 
 A run executed in dry-run mode reads, processes, and validates real data but
-**skips every commit**: no Write, Quarantine, or Explain node calls its writer.
-Instead each step contributes to a ``DryRunReport`` — columns, dtypes, row
-counts, and a bounded row sample — so an author can preview a pipeline during
-local development without landing artifacts.
+**skips every commit**: no Write, Quarantine, or Explain node calls its writer,
+and no Action node calls its callable. Instead each step contributes to a
+``DryRunReport`` — columns, dtypes, row counts, and a bounded row sample — so an
+author can preview a pipeline during local development without landing
+artifacts.
 """
 
 from __future__ import annotations
@@ -144,11 +145,45 @@ def test_dry_run_explain_reports_trace_without_writing_it():
     assert note is not None and "trace" in note.lower()
 
 
+def test_dry_run_reports_an_action_without_running_it():
+    # An action is the escape hatch for work that is *only* a side effect, so a
+    # preview that fired it would break the promise the other nodes keep.
+    fired: list[str] = []
+
+    def notify_downstream() -> None:
+        fired.append("notify_downstream")
+
+    reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1, 2]})))
+    pipeline = Pipeline("orders")
+    r = pipeline.read(reader, name="read")
+    pipeline.action(notify_downstream, r, name="notify")
+
+    context = RunContext(pipeline="orders", dry_run=True)
+    pipeline.run(context)
+
+    assert fired == []
+    note = context.dry_run_report.step("notify").note
+    assert note is not None and "would run action" in note
+    assert "notify_downstream" in note
+
+
+def test_a_real_run_still_fires_the_action():
+    fired: list[str] = []
+    reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1, 2]})))
+    pipeline = Pipeline("orders")
+    r = pipeline.read(reader, name="read")
+    pipeline.action(lambda: fired.append("fired"), r, name="notify")
+
+    pipeline.run(RunContext(pipeline="orders"))
+
+    assert fired == ["fired"]
+
+
 class AlwaysFails:
     """An error-severity validator that always reports a failure."""
 
-    def validate(self, dataset: Dataset) -> str:
-        return "row count below floor"
+    def validate(self, dataset: Dataset) -> None:
+        raise ValidationError("row count below floor")
 
 
 def test_dry_run_reports_a_validation_failure_clearly_then_fails_fast():

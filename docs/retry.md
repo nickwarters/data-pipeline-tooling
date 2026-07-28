@@ -42,7 +42,7 @@ policy = RetryPolicy(
   never retried.
 - `attempts` bounds the tries; after the last one the transient error is
   re-raised, so an edge that stays down still aborts the run (fail-fast,
-  [ADR-0005](adr/0005-fail-fast-atomic-runs-and-observability.md)).
+  [fail-fast atomic runs](adr/0005-fail-fast-atomic-runs-and-observability.md)).
 - `backoff_seconds` is slept between attempts through an injectable `sleep`,
   keeping the wait cross-platform and tests fast.
 
@@ -99,3 +99,13 @@ The rule of thumb: retry only an exception that a **second identical attempt
 could plausibly resolve on its own**. If the input or configuration must change
 for the next attempt to succeed, it is not transient — leave it off the
 allowlist so the run fails fast and loud.
+
+## Retrying a streamed source
+
+A `ChunkReader` wraps the same way: `RetryingChunkReader` retries per chunk, so
+a transient blip part-way through a long stream costs one chunk's attempt rather
+than restarting the read. The retry decorators delegate `describe()` to the
+component they wrap, so applying retry keeps the plan line that says where the
+data comes from instead of replacing it with the decorator's own name. See
+[streaming-large-sources.md](streaming-large-sources.md) for how a streamed read
+is wired into a pipeline.

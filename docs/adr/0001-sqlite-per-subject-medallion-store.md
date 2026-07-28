@@ -32,7 +32,7 @@ conventions, validated before a file path is resolved.
 
 Reference Data sets (the Adviser hierarchy, product codes, mappings) are subjects
 too — each gets its own medallion, refined by its own pipeline, and is read-only
-to Case Types' Selection. Cross-medallion joins happen in Python (ADR-0002), so
+to Case Types' Selection. Cross-medallion joins happen in Python, so
 splitting files costs nothing on the join path.
 
 ## Why SQLite on a share at all
@@ -49,16 +49,35 @@ the project exists to avoid.
 - **Rollback-journal mode, not WAL** — WAL is unavailable over a network share.
 - The connection factory sets a `busy_timeout` (and readers retry) so read-only
   clients ride out the writer's in-place commits instead of erroring.
+- **A lock timeout on the write path is a failure, never a skip.** The
+  writers' "has this table been created yet?" checks are *probes*
+  (`PRAGMA table_info`), not caught `OperationalError`s: on a share, catching
+  would absorb `database is locked` as well, and an absorbed lock timeout on the
+  delete-by-logical-run step would silently turn an idempotent replace into a
+  duplicate append. Only a genuinely absent table takes the first-run path.
+- **A read path must not write.** Because the journal is a rollback
+  journal, a writer's lock is *exclusive* — it locks readers out, not just other
+  writers. So any statement issued "just in case" on the way to a query is a
+  contention source: the run registry and the orchestration decision store used
+  to run their schema migration (DDL, and a full-table `UPDATE` backfill) on
+  every connection, which meant a read-only `cli status` briefly locked the file
+  against every running pipeline, and with several pipelines running was a
+  plausible source of intermittent, hard-to-attribute `database is locked`.
+  Opening and migrating are now separate steps: migration is attempted once per
+  store instance and writes only when the file is actually behind, so a query
+  takes no write lock. A one-off data backfill records itself in a ledger table
+  written in the same transaction, so it is neither repeated on every open nor
+  skipped when an earlier attempt was interrupted.
 - **The single-writer-per-file rule is load-bearing.** If a second host ever
   writes the same file, corruption risk returns. It is enforced operationally and
   is unaffected by splitting a subject into per-layer pipelines (distinct files).
 - Where a source is destructive and accumulated raw/silver become a system of
-  record (ADR-0004), those files need backup/retention — they are no longer a
+  record, those files need backup/retention — they are no longer a
   transient landing zone rebuildable from source.
 - If read contention or torn-read complaints emerge for a heavily-read gold,
   revisit a "build-local, atomically publish to the share" option for that layer.
 
-## Amendment (2026-06-23): generalise to namespace → file; demote the medallion to a profile (#232)
+## Amendment (2026-06-23): generalise to namespace → file; demote the medallion to a profile
 
 The medallion is **demoted from framework vocabulary**. The framework's storage
 contract is the `Reader`/`Writer` ports + load strategies + the `connect` seam;
@@ -77,7 +96,7 @@ contract is the `Reader`/`Writer` ports + load strategies + the `connect` seam;
   per-subject isolation and the single-writer-per-file rule above still hold.
 - This enables a **normalised schema across multiple logical databases** (one
   namespace per database, many related tables each); cross-database joins stay in
-  Python (ADR-0002), so splitting files still costs nothing on the join path.
+  Python, so splitting files still costs nothing on the join path.
 
 Breaking change to the public facade: `store.writer(layer, table, strategy)`
 becomes `store.writer(table, strategy)` on a namespace-scoped Store, and
