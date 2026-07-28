@@ -1,4 +1,4 @@
-# Migrations — the `migrations/` tree, topology profiles, and `migrate`
+# Migrations — the `migrations/` tree, the medallion layout, and `migrate`
 
 [`schema-declaration.md`](schema-declaration.md) declares what a table's shape
 *should* be and reports drift (`schema diff`, read-only). This document covers
@@ -13,16 +13,15 @@ migrations/
   README.md
   _shared/                                    # recognised scope, empty today
   layer/{raw,silver,gold}/                    # recognised scope, empty today
-  phase/{ingest,selection,sync,reporting}/    # recognised scope, empty today
   subject/complaints_a/raw/    0012_create_complaints_a.sql
   subject/complaints_a/silver/ 0013_create_complaints_a.sql
   platform/registry/           0005_create_run_records.sql
 ```
 
-The `_shared` / `layer` / `phase` scopes are recognised and composed, but hold
-no file yet: everything committed here **is applied** to every database the
-scope reaches, so an illustrative example would create a real table in
-production that nothing writes — see
+The `_shared` / `layer` scopes are recognised and composed, but hold no file
+yet: everything committed here **is applied** to every database the scope
+reaches, so an illustrative example would create a real table in production
+that nothing writes — see
 [`../migrations/README.md`](../migrations/README.md).
 
 There is no manifest — `tools.migrations.discovery.discover_migrations` walks
@@ -53,8 +52,8 @@ live shape is the right baseline for it — and diffing the tree instead makes
 `migrations make` reproducible from source control alone.
 
 That baseline is read by **applying** the migrations composing that table's
-database (`_shared` + `layer/<layer>` + `phase/<phase>` +
-`subject/<subject>/<layer>`, per `tools.migrations.topology.compose_for_subject_layer`)
+database (`_shared` + `layer/<layer>` + `subject/<subject>/<layer>`, per
+`tools.migrations.topology.compose_for_subject_layer`)
 to a throwaway **in-memory** SQLite database, then reading the result back with
 `PRAGMA table_info` — the same read `schema diff` performs against a real
 environment (`tools.schema.emit.replay_tracked_shapes`). SQLite itself is the
@@ -113,89 +112,50 @@ ALTER TABLE complaints_a ADD COLUMN case_status TEXT;
 Review it, hand-add any backfill DML before committing (a backfill is never
 generated), and commit.
 
-## Topology profiles: base dir → databases → scopes
+## Base dir → databases: the medallion layout
 
-The same tree supports several ways of bundling scopes into physical database
-files — `tools.migrations.topology`:
+`tools.migrations.topology` resolves one physical database per `(subject,
+layer)` actually present in the tree — `<subject>/<layer>.db` — composing
+`_shared` + `layer/<layer>` + `subject/<subject>/<layer>` for each, plus the
+fixed `platform/registry` scope at its own path: `_registry/runs.db` — the
+path `tools.observability.run_store.RunStore` already owns, independent of the
+medallion. There is no other layout to choose between and no `--profile` flag:
+a base directory resolves to its medallion database paths one way.
+`tests/integration/test_medallion_migrations.py` proves that end-to-end against
+the real tree: every declared table lands in its own subject/layer file, and
+the registry database lands beside them.
 
-| Profile | Databases | Notes |
-|---|---|---|
-| `medallion` (today's layout) | `<subject>/<layer>.db`, one per subject actually present in the tree | Composes `_shared` + `layer/<layer>` + `phase/<phase for that layer>` + `subject/<subject>/<layer>` |
-| `single` | `warehouse.db` | Composes every non-platform scope |
-| `by_layer` | `raw.db` / `silver.db` / `gold.db` | Each spans every subject's migrations for that layer |
-| `by_phase` | `ingest.db` / `selection.db` / `sync.db` / `reporting.db` | Each spans every layer mapped to that phase (`tools.migrations.topology.PHASE_BY_LAYER`) |
+### A known limitation
 
-Every profile additionally resolves the fixed `platform/registry` scope to the
-**same** physical path in every topology: `_registry/runs.db` — the path
-`tools.observability.run_store.RunStore` already owns, independent of the
-medallion. Topology governs where medallion *data* lands; where run
-*metadata* lands is a separate, fixed concern this step does not move.
+A coarser layout — one database per generic layer, one per subject, or one
+single warehouse spanning everything — was designed and prototyped, then
+removed rather than shipped broken. Collapsing several scopes into one
+physical file only works if every table name collapsed together is unique,
+and this repo's own declarations don't satisfy that in two distinct ways:
 
-`PHASE_BY_LAYER = {"raw": "ingest", "silver": "ingest", "gold": "selection"}`
-is this repo's convention for where a generic layer sits in the
-Ingest → Selection → Sync → Reporting loop (`CONTEXT.md`) — no layer maps to
-Sync/Reporting here because both are platform-wide and, in this repo's
-bundled feeds, own no per-subject medallion layer of their own.
+| Collapsing | Collides because |
+|---|---|
+| two **layers** into one file | a silver table is named after the raw table it refines — the medallion's own convention, not an accident (`complaints_a` raw refines into `complaints_a` silver, for every feed) |
+| two **subjects** into one file | different subjects reuse a table name (`cases` is declared by both `ref_lookup` silver and `cases` silver; `selection_pool` by both `case_selection` gold and `cases` gold) |
 
-An environment names its profile next to its `base_dir` root variable in
-`tools/environments.py`:
+Fixing this needs a table-naming rule (a layer- or subject-prefixed physical
+name) that this repo does not have and that would change every existing
+pipeline's declared tables — out of scope for an additive step, so the coarser
+layouts were not shipped. Only the medallion (one database per subject/layer)
+is available, and it is what this repo migrates under.
 
-```python
-_ENVIRONMENTS: dict[str, _Environment] = {
-    "dev": _Environment(path_var="PIPELINE_DATA_DIR_DEV", fallback=..., topology="medallion"),
-    "prod": _Environment(path_var="PIPELINE_DATA_DIR_PROD", topology="medallion"),
-}
-```
-
-so `--env prod` resolves both the base directory and the profile from one
-place (`tools.environments.resolve_topology`).
-
-### A known limitation — read this before choosing a coarser profile
-
-**Only `medallion` can migrate this repo's own declarations today.** The other
-three profiles work — the mechanism is real and tested — but they collapse
-several databases into one physical file, and a physical file can hold only one
-table of a given name. This repo's declared tables collide the moment they are
-collapsed, in two distinct ways:
-
-| Collapsing | Collides because | Colliding names today |
-|---|---|---|
-| two **layers** into one file (`single`, `by_phase`) | a silver table is named after the raw table it refines — the medallion's own convention, not an accident | `complaints_a`, `complaints_b`, `complaints_c`, `sales`, `case_reviews`, `advisers`, `cases` |
-| two **subjects** into one file (`single`, `by_layer`) | different subjects reuse a table name | `cases` (`cases`/`complex_cases`/`ref_lookup`), `selection_pool` and `selection_trace` (`cases`/`case_selection`) |
-
-The second is arguably a naming accident in the bundled demo feeds. The **first
-is not** — "raw `complaints_a` refines into silver `complaints_a`" is how every
-feed in this repo is written, so any profile that puts raw and silver in one
-file needs a naming rule (a layer prefix, or a table rename) before it can be
-used at all. Renaming declared tables is a change to existing pipelines and is
-out of scope for this additive step; **this is an open design question for
-`single` and `by_phase`, not a fixture problem.**
-
-What is guaranteed instead: `migrate` **fails loudly and completely** on a
-collision. The failing file is rolled back whole (no ledger row), and the error
-names the migration file, the target database, the statement, how many scopes
-that database composes, and the profile — see
+What is still guaranteed: a genuine name collision within one database (an
+authoring mistake, not a layout choice) fails `migrate` loudly and completely.
+The failing file is rolled back whole (no ledger row), and the error names the
+migration file, the target database, and the statement — see
 `tools.migrations.runner.MigrationApplyError`:
 
 ```
-migrations/subject/case_selection/silver/0007_create_sales.sql: failed to apply
-against /data/warehouse.db -- table sales already exists. The whole file was
-rolled back (no statement of it, and no ledger row, survives).
-Statement: 'CREATE TABLE sales (...)'
-
-This reads like two scopes composing into the same physical database and both
-defining the same object. warehouse.db composes 24 scopes, including _shared,
-layer/raw, layer/silver, phase/ingest. A topology profile that collapses
-several subjects -- or several layers -- into one file needs table names that
-are unique across everything it collapses ...
-(profile single)
+migrations/subject/cases/silver/0007_create_cases.sql: failed to apply
+against /data/cases/silver.db -- table cases already exists. The whole file
+was rolled back (no statement of it, and no ledger row, survives).
+Statement: 'CREATE TABLE cases (...)'
 ```
-
-So `tests/integration/test_topology_profiles.py` proves `single`/`by_layer`/
-`by_phase` end-to-end against a small synthetic, collision-free tree (the
-topology *mechanism*), proves `medallion` against the real tree, and separately
-asserts that the real tree under `single` fails with that message rather than a
-raw SQLite traceback.
 
 ## Applying: `python -m cli migrate`
 
@@ -205,24 +165,24 @@ python -m cli migrate --env prod --plan             # preview; touch nothing
 python -m cli migrate --env prod --status           # summarise applied/pending
 python -m cli migrate --env prod --subject complaints_a
 python -m cli migrate --env prod --layer silver
-python -m cli migrate --env prod --phase ingest
 python -m cli migrate --env prod --to 0031          # truncate to this version (inclusive)
 python -m cli migrate --database ./scratch/test.db --scope layer/silver --scope _shared
 ```
 
 `--env`/`--base-dir` resolve the base directory the same way every other
-operator command does (`cli.operator.add_base_dir_args`); `--env` additionally
-resolves the topology profile unless `--profile` overrides it. `--subject` /
-`--layer` / `--phase` are all optional and intersect, narrowing which of the
-profile's databases are touched (a database matches if any of its composed
-migrations names that scope). `--to VERSION` truncates every selected
+operator command does (`cli.operator.add_base_dir_args`). `--subject` /
+`--layer` are optional and intersect, narrowing which of the medallion's
+databases are touched (a database matches if any of its composed migrations
+names that scope; the registry database, which composes no subject scope, is
+reachable as `--subject _registry`). `--to VERSION` truncates every selected
 database's migrations to that version inclusive — migrations are
-**forward-only**; this covers staging a partial rollout and bisecting a bad
-file, not undoing one already applied beyond that version.
+**forward-only**; this
+covers staging a partial rollout and bisecting a bad file, not undoing one
+already applied beyond that version.
 
-`--database`/`--scope` bypasses a topology profile entirely for one ad hoc
-database: name the physical file directly and list the scopes (by label,
-e.g. `layer/silver`, `_shared`, `subject/complaints_a/raw`,
+`--database`/`--scope` bypasses the medallion's base-dir resolution entirely
+for one ad hoc database: name the physical file directly and list the scopes
+(by label, e.g. `layer/silver`, `_shared`, `subject/complaints_a/raw`,
 `platform/registry`) to compose into it.
 
 ### The ledger
@@ -259,9 +219,7 @@ Rules, all covered by `tests/tools/test_migrations/test_runner.py`:
   `apply_database` — a plan surfaces the problem the same way an apply would
   refuse it.
 - **A failing statement is `MigrationApplyError`**, naming the file, the
-  database and the statement — never a bare `sqlite3` traceback, because the
-  commonest cause ("table X already exists") says nothing on its own about
-  which profile composed which scopes.
+  database and the statement — never a bare `sqlite3` traceback.
 - **The runner owns the transaction, so a file must not.** A migration
   containing its own `BEGIN`/`COMMIT`/`ROLLBACK`/`SAVEPOINT` is **refused**,
   naming the keyword: a stray `COMMIT;` (SQLite's published 12-step rebuild
@@ -283,7 +241,7 @@ has already been applied. Only the first line of a database names it:
 
 ```
 $ python -m cli migrate --base-dir /data --subject complaints_a --plan
-plan · base-dir /data · profile medallion
+plan · base-dir /data
 
 complaints_a/raw.db         0012 create_complaints_a      applied 2026-07-28
 complaints_a/silver.db           0013 create_complaints_a      pending
@@ -295,16 +253,15 @@ complaints_a/silver.db           0013 create_complaints_a      pending
 
 ```
 $ python -m cli migrate --base-dir /data --subject complaints_a --status
-status · base-dir /data · profile medallion
+status · base-dir /data
 
 complaints_a/raw.db         1 applied · 0 pending · 0 out of order
 complaints_a/silver.db      0 applied · 1 pending · 0 out of order
 ```
 
-Both render for every topology profile
-(`tests/framework/_cli/test_migrate.py`), and both are strictly read-only: a
-database with no ledger yet reports everything pending rather than having a
-`schema_migrations` table created for it.
+Both are covered by `tests/framework/_cli/test_migrate.py`, and both are
+strictly read-only: a database with no ledger yet reports everything pending
+rather than having a `schema_migrations` table created for it.
 
 ## What's next: the run registry keeps its own self-heal
 

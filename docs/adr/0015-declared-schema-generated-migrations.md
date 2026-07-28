@@ -63,7 +63,8 @@ generator.
 
 A migration's directory path *is* its scope — `_shared`, `layer/<layer>`,
 `phase/<phase>`, `subject/<subject>/<layer>`, `platform/<name>`
-(`tools.migrations.scope`). A manifest file naming each migration's scope
+(`tools.migrations.scope`; `phase/<phase>` was later removed — see the
+amendment below). A manifest file naming each migration's scope
 separately would be a second source of truth for something the filesystem
 already states unambiguously, and would drift from it exactly the way
 `docs/schema-declaration.md` describes the physical `(namespace, table)` set
@@ -91,6 +92,29 @@ This mirrors the separation ADR 0001's amendment already drew between the
 namespace `Store` (where data lands) and the medallion (a profile over it):
 here, the migrations tree is the primitive, and a topology profile is the
 medallion's (or `single`'s, or ...) view over it.
+
+> **Amendment (2026-07-28): only the medallion ships.** The three coarser
+> profiles — `single`, `by_layer`, `by_phase` — and the `phase` scope kind
+> were removed. Only `medallion` could ever migrate this repo's own
+> declarations — a limitation this decision shipped with and stated in its own
+> consequences — because the other three collapse several databases into one
+> physical file, and 8 of this repo's 33 declared tables collide the moment
+> they are collapsed — a subject-layer collision (different subjects reusing a
+> table name) and, for every feed, a layer collision (a silver table is named
+> after the raw table it refines, this repo's universal convention). Fixing
+> that needs a table-naming rule this repo does not have and that would change
+> every existing pipeline's declared tables — out of scope for an additive
+> step, and not attempted. Rather than keep three profiles that ship broken
+> for this repo's own tree, they were deleted along with `known_profiles()`,
+> `--profile`, the composed-scope collision diagnosis in
+> `MigrationApplyError` (a generic "table X already exists" from SQLite is
+> still surfaced; only the profile-specific explanation is gone), and
+> `phase/*` (a `phase` was always exactly `layer/raw + layer/silver` or
+> `layer/gold` — `PHASE_BY_LAYER`'s whole three-entry map — so it named no
+> grouping `layer` didn't already express, and its only distinct consumer was
+> `by_phase`). A base directory now resolves to its medallion database paths
+> one way, with no registry and no indirection; see
+> [`../migrations.md`](../migrations.md).
 
 ## No PK/index generation — a deliberate omission, not a gap
 
@@ -144,22 +168,15 @@ design choice this step must not do.
   scope generates the same DDL for a *fresh* database `migrate` creates ahead
   of any pipeline run, but the self-heal remains the safety net for every
   database this step predates or that opens without `migrate` ever running.
-- **Only `medallion` can migrate this repo's own declarations today.** A
-  profile that collapses several databases into one file needs table names
-  unique across everything it collapses, and this repo's declarations collide
-  two ways: different subjects reuse a name (`cases`, `selection_pool` — a
-  naming accident in the demo feeds), and — the structural one — a silver table
-  is named after the raw table it refines, which is this repo's universal
-  convention, so `single` and `by_phase` (both of which put raw and silver in
-  one file) collide for *every* feed. Naming is therefore an **open design
-  question for those two profiles**, not a fixture problem: they ship with the
-  mechanism proven end-to-end against a synthetic collision-free tree, and
-  `medallion` proven against the real one. What is guaranteed unconditionally is
-  that a collision fails loudly and completely — the file rolls back whole, and
-  `MigrationApplyError` names the file, the database, the statement and the
-  profile rather than surfacing a raw `table X already exists`. Resolving it
-  means a naming rule (a layer prefix, or renaming declared tables), which is a
-  change to existing pipelines and out of scope for an additive step.
+- **Only `medallion` can migrate this repo's own declarations, and it is the
+  only layout shipped.** The coarser profiles this ADR originally shipped
+  alongside `medallion` were removed (see the amendment above) rather than
+  fixed, because fixing them means a table-naming rule that changes every
+  existing pipeline's declared tables — out of scope for an additive step.
+  What is guaranteed unconditionally is that a genuine name collision within
+  one database still fails loudly and completely — the file rolls back whole,
+  and `MigrationApplyError` names the file, the database and the statement
+  rather than surfacing a raw `table X already exists` with no context.
 - **The runner owns the transaction boundary, so a migration file may not.** A
   file containing `BEGIN`/`COMMIT`/`ROLLBACK`/`SAVEPOINT` is refused by name.
   SQLite's own published rebuild recipe is written with an explicit `COMMIT`,
@@ -168,8 +185,8 @@ design choice this step must not do.
   half-applied *and* unrecorded — reintroducing exactly the hazard that
   rejecting `executescript` avoids. Refusing the file is preferable to trusting
   every author to remember.
-- **`migrations/` holds no illustrative migration.** The `_shared`, `layer` and
-  `phase` scopes are recognised and composed but empty: everything committed
+- **`migrations/` holds no illustrative migration.** The `_shared` and `layer`
+  scopes are recognised and composed but empty: everything committed
   under `migrations/` *is applied* to every database its scope reaches, so a
   plausible-looking example would create a real table in production that
   nothing writes and nothing reads. An empty scope is the honest state until a

@@ -48,7 +48,6 @@ def test_every_directory_in_the_real_tree_is_a_recognised_scope():
     assert {m.scope.kind for m in migrations} <= {
         "shared",
         "layer",
-        "phase",
         "subject_layer",
         "platform",
     }
@@ -56,8 +55,8 @@ def test_every_directory_in_the_real_tree_is_a_recognised_scope():
 
 def test_the_real_tree_still_covers_the_two_scope_kinds_it_uses():
     # Today the committed tree holds per-feed generated migrations plus the
-    # platform registry's DDL; the _shared / layer / phase scope directories
-    # are empty on purpose (see migrations/README.md -- an illustrative
+    # platform registry's DDL; the _shared / layer scope directories are
+    # empty on purpose (see migrations/README.md -- an illustrative
     # migration would be applied to every real database).
     kinds = {m.scope.kind for m in discover_migrations(MIGRATIONS_ROOT)}
     assert kinds == {"subject_layer", "platform"}

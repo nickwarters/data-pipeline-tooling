@@ -8,12 +8,11 @@ read by *applying* that scope's committed migrations to a throwaway in-memory
 database -- see ``tools/schema/emit.py``.
 
 ``migrate`` applies (or, with ``--plan``/``--status``, previews) every pending
-migration a topology profile resolves for a base directory. ``--env`` resolves
-both the base directory and the profile from one place
-(``tools.environments``); ``--database``/``--scope`` bypasses a profile
-entirely for an ad hoc single database. ``--subject``/``--layer``/``--phase``
-narrow which of the profile's databases are touched, by inspecting each
-database's *composed* migrations for a matching scope; they intersect, and any
+migration the medallion resolves for a base directory. ``--env`` resolves the
+base directory (``tools.environments``); ``--database``/``--scope`` bypasses
+that resolution entirely for an ad hoc single database. ``--subject``/
+``--layer`` narrow which databases are touched, by inspecting each database's
+*composed* migrations for a matching scope; they intersect, and any
 combination narrows further. ``--to VERSION`` truncates every selected
 database's migrations to that version (inclusive) -- covers staging and
 bisecting, since migrations are forward-only.
@@ -36,10 +35,8 @@ from tools.migrations.runner import (
 )
 from tools.migrations.scope import MigrationTreeError, scope_from_label
 from tools.migrations.topology import (
-    PHASE_BY_LAYER,
     Database,
     compose_for_subject_layer,
-    known_profiles,
     resolve_databases,
 )
 from tools.schema import collect_declared_tables, generate_migration_sql, slug_for
@@ -118,6 +115,9 @@ def _make(args: argparse.Namespace) -> int:
 
 
 def _matches_subject(database: Database, subject: str) -> bool:
+    # Composed scope first, as ``docs/migrations.md`` states the rule; the path
+    # check then also reaches a database no subject scope composes into -- the
+    # fixed ``_registry/runs.db``, selectable as ``--subject _registry``.
     return (
         any(
             m.scope.kind == "subject_layer" and m.scope.subject == subject
@@ -128,40 +128,13 @@ def _matches_subject(database: Database, subject: str) -> bool:
 
 
 def _matches_layer(database: Database, layer: str) -> bool:
-    return (
-        any(
-            m.scope.layer == layer
-            for m in database.migrations
-            if m.scope.kind in ("layer", "subject_layer")
-        )
-        or database.relative_path.name == f"{layer}.db"
-    )
-
-
-def _matches_phase(database: Database, phase: str) -> bool:
-    """Whether ``database`` holds anything belonging to ``phase``.
-
-    Three ways it can: it composes a ``phase/<phase>`` migration; it *is* that
-    phase's database (``by_phase``); or -- the case that matters under every
-    other profile -- it holds a layer that maps to the phase. A subject's
-    ``silver.db`` carries no ``phase`` scope of its own, but silver is an Ingest
-    layer (``PHASE_BY_LAYER``), so ``--phase ingest`` must select it.
-    """
-    layers_in_phase = {
-        layer for layer, mapped in PHASE_BY_LAYER.items() if mapped == phase
-    }
-    return (
-        any(
-            m.scope.phase == phase
-            for m in database.migrations
-            if m.scope.kind == "phase"
-        )
-        or database.relative_path.name == f"{phase}.db"
-        or any(
-            m.scope.layer in layers_in_phase
-            for m in database.migrations
-            if m.scope.kind in ("layer", "subject_layer")
-        )
+    # Composed scope only: a ``<subject>/<layer>.db`` always composes at least
+    # one migration of that layer (it is resolved from one), so its filename
+    # says nothing its scopes do not, and no other database has a layer at all.
+    return any(
+        m.scope.layer == layer
+        for m in database.migrations
+        if m.scope.kind in ("layer", "subject_layer")
     )
 
 
@@ -170,7 +143,6 @@ def _filtered(
     *,
     subjects: list[str],
     layers: list[str],
-    phases: list[str],
 ) -> tuple[Database, ...]:
     result = databases
     if subjects:
@@ -181,16 +153,18 @@ def _filtered(
         result = tuple(
             d for d in result if any(_matches_layer(d, layer) for layer in layers)
         )
-    if phases:
-        result = tuple(
-            d for d in result if any(_matches_phase(d, phase) for phase in phases)
-        )
     return result
 
 
 def _resolve_databases(
     args: argparse.Namespace,
-) -> tuple[Path, str, tuple[Database, ...]] | None:
+) -> tuple[Path | None, tuple[Database, ...]] | None:
+    """The base directory and the databases to act on, or ``None`` if reported.
+
+    ``--database`` names one physical file outright, so that mode has no base
+    directory at all and resolves to ``None`` -- the database carries its own
+    whole path, and the caller joins nothing onto it.
+    """
     try:
         migrations = discover_migrations(DEFAULT_MIGRATIONS_ROOT)
     except MigrationTreeError as exc:
@@ -213,30 +187,42 @@ def _resolve_databases(
             )
         )
         database = Database(Path(args.database), selected)
-        return Path("."), "custom", (database,)
+        return None, (database,)
 
     base_dir = base_dir_or_report(args)
     if base_dir is None:
         return None
-    if args.profile is not None:
-        profile = args.profile
-    else:
-        from tools.environments import resolve_topology
-
-        profile = resolve_topology(getattr(args, "env", None))
-    try:
-        databases = resolve_databases(profile, migrations)
-    except ValueError as exc:
-        print(str(exc), file=sys.stderr)
-        return None
-    databases = _filtered(
-        databases, subjects=args.subject, layers=args.layer, phases=args.phase
-    )
-    return base_dir, profile, databases
+    databases = resolve_databases(migrations)
+    databases = _filtered(databases, subjects=args.subject, layers=args.layer)
+    return base_dir, databases
 
 
-def _render_plan(base_dir: Path, profile: str, plans: list[PlanResult]) -> str:
-    lines = [f"plan · base-dir {base_dir} · profile {profile}", ""]
+def _heading(command: str, base_dir: Path | None) -> str:
+    """The report's first line: the command, and the root it resolved against.
+
+    ``--database`` mode has no base directory to name (see
+    :func:`_resolve_databases`), and every line below already carries that one
+    database's whole path, so the heading says only which command ran.
+    """
+    return command if base_dir is None else f"{command} · base-dir {base_dir}"
+
+
+#: Width of the database-name column both reports start their lines with.
+_LABEL_WIDTH = 28
+
+
+def _label_column(label: str) -> str:
+    """``label`` padded to :data:`_LABEL_WIDTH`, never flush against the next column.
+
+    An explicit ``--database`` path is routinely longer than the column, and a
+    label that fills it exactly would otherwise run straight into the version
+    or the counts beside it.
+    """
+    return f"{label:<{_LABEL_WIDTH}}" if len(label) < _LABEL_WIDTH else f"{label} "
+
+
+def _render_plan(base_dir: Path | None, plans: list[PlanResult]) -> str:
+    lines = [_heading("plan", base_dir), ""]
     pending_total = 0
     out_of_order_total = 0
     for plan in plans:
@@ -257,7 +243,9 @@ def _render_plan(base_dir: Path, profile: str, plans: list[PlanResult]) -> str:
             else:
                 status = "out of order, pending" if line.out_of_order else "pending"
                 indent = "     "
-            lines.append(f"{db_label:<28}{indent}{m.version} {m.name:<24} {status}")
+            lines.append(
+                f"{_label_column(db_label)}{indent}{m.version} {m.name:<24} {status}"
+            )
             db_label = ""  # only the first line of a database names it
     lines.append("")
     lines.append(
@@ -267,13 +255,14 @@ def _render_plan(base_dir: Path, profile: str, plans: list[PlanResult]) -> str:
     return "\n".join(lines)
 
 
-def _render_status(base_dir: Path, profile: str, plans: list[PlanResult]) -> str:
-    lines = [f"status · base-dir {base_dir} · profile {profile}", ""]
+def _render_status(base_dir: Path | None, plans: list[PlanResult]) -> str:
+    lines = [_heading("status", base_dir), ""]
     for plan in plans:
         applied = len(plan.lines) - len(plan.pending)
         label = str(plan.database.relative_path)
         lines.append(
-            f"{label:<28}{applied} applied · {len(plan.pending)} pending · "
+            f"{_label_column(label)}{applied} applied · "
+            f"{len(plan.pending)} pending · "
             f"{plan.out_of_order_count} out of order"
         )
     return "\n".join(lines)
@@ -289,33 +278,35 @@ def _migrate(args: argparse.Namespace) -> int:
     resolved = _resolve_databases(args)
     if resolved is None:
         return 1
-    base_dir, profile, databases = resolved
+    base_dir, databases = resolved
+    # ``--database`` mode resolves no base directory: each database's own path
+    # is already the whole path, so there is nothing to join it onto.
+    root = Path() if base_dir is None else base_dir
 
     try:
         plans = [
-            plan_database(db, base_dir / db.relative_path, to=args.to)
-            for db in databases
+            plan_database(db, root / db.relative_path, to=args.to) for db in databases
         ]
     except ChecksumMismatchError as exc:
         print(str(exc), file=sys.stderr)
         return 1
 
     if args.plan:
-        print(_render_plan(base_dir, profile, plans))
+        print(_render_plan(base_dir, plans))
         return 0
     if args.status:
-        print(_render_status(base_dir, profile, plans))
+        print(_render_status(base_dir, plans))
         return 0
 
     failed = False
     for db in databases:
         try:
-            apply_database(db, base_dir / db.relative_path, to=args.to)
+            apply_database(db, root / db.relative_path, to=args.to)
         except (ChecksumMismatchError, MigrationApplyError) as exc:
             # One database's refusal is reported and the rest still attempted:
             # each database's ledger is independent, so stopping the whole
             # command would leave healthy databases needlessly behind.
-            print(f"{exc}\n(profile {profile})", file=sys.stderr)
+            print(str(exc), file=sys.stderr)
             failed = True
     return 1 if failed else 0
 
@@ -334,12 +325,6 @@ def register(sub) -> None:
 
     migrate = sub.add_parser("migrate", help="apply (or preview) schema migrations")
     add_base_dir_args(migrate)
-    migrate.add_argument(
-        "--profile",
-        choices=known_profiles(),
-        help="topology profile; defaults to the resolved --env's profile "
-        "(or 'medallion' when only --base-dir is given)",
-    )
     mode = migrate.add_mutually_exclusive_group()
     mode.add_argument(
         "--plan", action="store_true", help="show what would apply; touch nothing"
@@ -357,13 +342,10 @@ def register(sub) -> None:
         "--layer", action="append", default=[], help="narrow to one layer (repeatable)"
     )
     migrate.add_argument(
-        "--phase", action="append", default=[], help="narrow to one phase (repeatable)"
-    )
-    migrate.add_argument(
         "--to", help="truncate to this version (inclusive); forward-only"
     )
     migrate.add_argument(
-        "--database", help="an explicit database file, bypassing --env/--profile"
+        "--database", help="an explicit database file, bypassing --env/--base-dir"
     )
     migrate.add_argument(
         "--scope",

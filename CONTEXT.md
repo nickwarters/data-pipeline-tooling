@@ -131,10 +131,15 @@ migrations make`; a hand-added backfill (e.g. `UPDATE ... SET x = 'unknown'
 WHERE x IS NULL`) is added before commit, never generated. Lives under
 `migrations/`, where **directory path is scope and filename is a globally
 ordered version + slug** — there is no manifest naming a file's scope, the
-path already says it (`tools.migrations.scope`). Applied by `python -m cli
-migrate`, which records each one in the target database's own
+path already says it (`tools.migrations.scope`; the recognised scopes are
+`_shared`, `layer/<layer>`, `subject/<subject>/<layer>`, `platform/<name>`).
+Applied by `python -m cli migrate`, which resolves a base directory to its
+**medallion** databases — one `<subject>/<layer>.db` per subject/layer
+actually present in the tree, plus the fixed `platform/registry` database at
+`_registry/runs.db` (`tools.migrations.topology`; there is no other layout to
+choose between) — and records each migration in the target database's own
 `schema_migrations` ledger, in one transaction together with the migration's
-statements — an applied migration whose file has since changed is a hard
+statements; an applied migration whose file has since changed is a hard
 error, never a silent re-apply. `schema diff`'s drift report and a migration
 are deliberately separate: diffing tells you a database disagrees with the
 declaration; a migration is the reviewed fix, not an automatic one. A Migration
@@ -142,28 +147,12 @@ is also the *only* thing that brings a **Refresh**ed or merged table into
 existence: those Writers refuse (`MissingTableError`, naming the `migrate`
 command) rather than minting a table nothing declared, and `Refresh` truncates
 rather than dropping so an index a Migration created survives every later run.
+Coarser layouts that bundle several subjects or layers into one physical file
+were designed and prototyped but removed rather than shipped broken — this
+repo names a silver table after the raw table it refines, so collapsing raw
+and silver (or several subjects) into one file collides on every feed; see
+`docs/migrations.md`.
 _Avoid_: patch, script (informal — the declared vocabulary is Migration)
-
-**Topology Profile**:
-A named way of bundling migration **scope**s (`_shared`, `layer/<layer>`,
-`phase/<phase>`, `subject/<subject>/<layer>`, `platform/<name>`) into physical
-database files — `tools.migrations.topology`. The same `migrations/` tree
-supports several: **medallion** (today's layout, `<subject>/<layer>.db`),
-**single** (`warehouse.db`, everything), **by_layer** (`raw.db`/`silver.db`/
-`gold.db`, spanning every subject), and **by_phase**
-(`ingest.db`/`selection.db`/`sync.db`/`reporting.db`, one per phase of the
-Ingest → Selection → Sync → Reporting loop). An environment names its profile
-next to its `base_dir` root variable in `tools/environments.py`, so `--env`
-resolves both from one place. A profile that collapses several databases into
-one file needs table names unique across everything it collapses, so **only
-medallion can migrate this repo's own declarations today** (a silver table is
-named after the raw table it refines — see `docs/migrations.md`); a collision
-is a loud, complete refusal, never a partial apply. Where **run metadata**
-(`_runs/`,
-`_registry/runs.db`, `_orchestration/runs.db`) lands is unaffected by the
-topology profile — that stays `RunStore`'s fixed layout, independent of where
-medallion *data* lands.
-_Avoid_: layout, deployment shape (informal — the declared vocabulary is Topology Profile)
 
 **Value rule** / **Row check**:
 The two axes of a **Schema**'s content contract. A **value rule** is *vertical* — one column across many rows (format, length, range, membership, uniqueness), declared on the field via `Annotated`. A **row check** is *horizontal* — one row across many fields, validating the relationship *between* a row's fields (`opened <= closed`; "if status is closed then closed_date is present"). A row check is a plain function over a row returning a breach phrase or `None`, paired with the **footprint** of columns it spans (so a column already failing its dtype check suppresses the check rather than crashing it); declared as `RowCheck`s via the `@row_checks(...)` class decorator above the schema. Both feed the same two consumers — abort (collected into one `SchemaValidator` message) or quarantine (a `failed_rule` reason) — off **one shared traversal** of the declared rules, so a rule is consulted once per frame and its author satisfies one contract rather than two. The two consumers differ only in *presentation*: an abort message describes a **column**, so it samples up to five of that column's offending values; a quarantine reason describes **one row**, so it names the rule's expectation and samples nothing — the rejected row's own values sit beside the reason in the reject table, and that pairing is what makes the reason *located*. Unlike value rules, a row check runs over **every** row including nulls — presence may be the very thing it tests — so the author handles nulls explicitly. Both are **structural contracts**, not base classes: anything with the two methods is a value rule, though the built-in five share one `ValueRuleBase` that owns the single null guard and the breach mask. Both are also **engine-confined** to author — a rule is handed the column (or the row) as a pandas `Series` — which is why the opaque-carrier decision lists them alongside readers, writers and transforms; *declaring* a rule on a schema stays engine-agnostic.

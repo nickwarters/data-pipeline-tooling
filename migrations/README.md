@@ -10,15 +10,14 @@ migrations/
   README.md
   _shared/                                          # (empty today)
   layer/{raw,silver,gold}/                          # (empty today)
-  phase/{ingest,selection,sync,reporting}/          # (empty today)
   subject/complaints_a/raw/    0012_create_complaints_a.sql
   subject/complaints_a/silver/ 0013_create_complaints_a.sql
   platform/registry/           0005_create_run_records.sql
 ```
 
-**The `_shared` / `layer` / `phase` scope directories are deliberately empty.**
-They are recognised scopes (see the table below) and a real migration can land
-in any of them, but nothing in this repo needs one yet — and a *decorative*
+**The `_shared` / `layer` scope directories are deliberately empty.** They are
+recognised scopes (see the table below) and a real migration can land in
+either of them, but nothing in this repo needs one yet — and a *decorative*
 example there would not be decorative: everything committed under
 `migrations/` is applied to every database the scope reaches, in every
 environment, so an illustrative "audit columns" migration would create a real
@@ -26,26 +25,25 @@ table in production that nothing writes and nothing reads. An empty directory
 is the honest state; because git does not track empty directories, they exist
 in this README rather than on disk until a real migration needs one.
 
-## The five recognised scopes
+## The four recognised scopes
 
 | Directory | Scope | Composed into |
 |---|---|---|
-| `_shared/` | Shared | **every** database, in every topology profile |
+| `_shared/` | Shared | **every** database |
 | `layer/<raw\|silver\|gold>/` | Layer | every database of that generic medallion layer |
-| `phase/<ingest\|selection\|sync\|reporting>/` | Phase | every database of that phase of the Ingest → Selection → Sync → Reporting loop (`CONTEXT.md`) |
 | `subject/<subject>/<raw\|silver\|gold>/` | Subject-layer | one subject's one layer — the finest-grained scope; a declared `Table` resolves here (`tools.schema.resolved_namespace`) |
 | `platform/<name>/` | Platform | a fixed database outside the medallion (today: `platform/registry`, the run registry's own file) |
 
-Any other directory shape (a typo'd layer/phase name, a stray extra segment)
-fails discovery loudly — `MigrationTreeError`, naming the path — rather than
-being silently skipped or silently composed into the wrong database.
+Any other directory shape (a typo'd layer name, a stray extra segment) fails
+discovery loudly — `MigrationTreeError`, naming the path — rather than being
+silently skipped or silently composed into the wrong database.
 
-**Scopes compose.** A physical database is not "one scope" — a *topology
-profile* (`tools/migrations/topology.py`) decides which scopes bundle into
-which file, interleaved in **version order**. Because several scopes can land
-in one physical file, **versions are one sequence repo-wide, never reused** —
-`discover_migrations` fails the build on a duplicate version anywhere in the
-tree, and on a malformed filename.
+**Scopes compose.** A physical database is not "one scope" —
+`tools/migrations/topology.py` decides which scopes bundle into which
+`<subject>/<layer>.db` file, interleaved in **version order**. Because several
+scopes can land in one physical file, **versions are one sequence repo-wide,
+never reused** — `discover_migrations` fails the build on a duplicate version
+anywhere in the tree, and on a malformed filename.
 
 ## Filenames
 
@@ -78,8 +76,8 @@ applied to a database beyond that version.
 
 One consequence worth stating: a declaration change touching **silver and
 gold** emits **two** files, because scope maps to a target database and those
-are two different databases (`<subject>/silver.db` and `<subject>/gold.db`
-under the medallion profile). Within one database it stays one file.
+are two different databases (`<subject>/silver.db` and `<subject>/gold.db`).
+Within one database it stays one file.
 
 ## What `migrations make` does not emit
 
@@ -154,9 +152,9 @@ silent re-apply or skip. Re-running an already-applied file is a no-op.
 
 Two things a file must not contain: its own transaction control (see the box
 above) and a `CREATE TABLE IF NOT EXISTS` used to paper over a collision —
-`IF NOT EXISTS` on a table this migration owns hides the case where a *different*
-scope already created a table of that name, which is the one thing a coarse
-topology profile needs to fail loudly on.
+`IF NOT EXISTS` on a table this migration owns hides the case where a
+*different* scope composing into the same database already created a table
+of that name, which must fail loudly rather than be silently swallowed.
 
 See [`../docs/migrations.md`](../docs/migrations.md) for the full command
-reference, the topology profiles, and worked `--plan` output.
+reference and worked `--plan` output.

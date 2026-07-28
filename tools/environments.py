@@ -15,10 +15,6 @@ macOS -- never has to be committed to source. ``dev`` falls back to ``./data``
 (the historical default) so a fresh clone runs out of the box; ``prod`` has no
 fallback and raises a clear, actionable error until its variable is set.
 
-Each environment also names its ``tools.migrations.topology`` profile --
-which physical database files its ``base_dir`` lays out into -- so ``--env``
-resolves both the root and the layout ``migrate`` targets from one place.
-
 To add an environment, add a row to :data:`_ENVIRONMENTS` (and document it).
 """
 
@@ -37,29 +33,21 @@ DEFAULT_ENV = "dev"
 
 @dataclass(frozen=True)
 class _Environment:
-    """How one named environment resolves its ``base_dir`` and migration topology."""
+    """How one named environment resolves its ``base_dir``."""
 
     #: OS variable that, when set, supplies this environment's root verbatim.
     path_var: str
     #: Fallback root when ``path_var`` is unset; ``None`` makes the variable
     #: required (resolving without it raises rather than guessing a location).
     fallback: Callable[[], Path] | None = None
-    #: The ``tools.migrations.topology`` profile this environment's databases
-    #: are laid out under (``known_profiles()`` names the valid set). Every
-    #: environment here uses ``"medallion"`` -- the layout already in place --
-    #: so naming a profile is additive and changes no existing behaviour; a
-    #: deployment that wants ``single``/``by_layer``/``by_phase`` instead names
-    #: it here, next to the root variable it goes with.
-    topology: str = "medallion"
 
 
 _ENVIRONMENTS: dict[str, _Environment] = {
     "dev": _Environment(
         path_var="PIPELINE_DATA_DIR_DEV",
         fallback=lambda: Path.cwd() / "data",
-        topology="medallion",
     ),
-    "prod": _Environment(path_var="PIPELINE_DATA_DIR_PROD", topology="medallion"),
+    "prod": _Environment(path_var="PIPELINE_DATA_DIR_PROD"),
 }
 
 
@@ -91,19 +79,3 @@ def resolve_base_dir(env: str | None = None) -> Path:
         f"environment {name!r} has no base_dir configured; "
         f"set the {spec.path_var} environment variable to its medallion root"
     )
-
-
-def resolve_topology(env: str | None = None) -> str:
-    """Return the ``tools.migrations.topology`` profile name for ``env``.
-
-    Resolves the environment name the same way :func:`resolve_base_dir` does
-    (``env``, then ``$PIPELINE_ENV``, then :data:`DEFAULT_ENV``) so ``--env``
-    picks the base directory *and* the topology from the one place. An
-    unknown name raises the same way :func:`resolve_base_dir` does.
-    """
-    name = (env or os.environ.get(ENV_VAR) or DEFAULT_ENV).strip().lower()
-    spec = _ENVIRONMENTS.get(name)
-    if spec is None:
-        known = ", ".join(sorted(_ENVIRONMENTS))
-        raise ValueError(f"unknown environment {name!r}; known environments: {known}")
-    return spec.topology

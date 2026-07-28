@@ -5,7 +5,7 @@ be *run* as a tool. ``python -m cli`` dispatches to the subcommands the
 framework owns -- ``scaffold`` (generate a feed), the operator commands
 ``run`` / ``orchestrate`` / ``runs`` / ``status`` / ``log``, ``schema``
 (declared table-shape tools, e.g. ``schema diff``), and ``migrations`` /
-``migrate`` (author and apply schema migrations against a topology profile).
+``migrate`` (author and apply schema migrations against the medallion).
 This is an entry point, not part of the importable public surface (the four
 facades); the modules behind it live in this private ``cli`` package.
 """

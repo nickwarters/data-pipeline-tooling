@@ -6,6 +6,8 @@ throwaway ``--base-dir``/``--database``, exactly as an operator would.
 
 from __future__ import annotations
 
+import os
+import sqlite3
 import subprocess
 import sys
 from pathlib import Path
@@ -13,12 +15,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 
 
-def _cli(*args):
+def _cli(*args, cwd=ROOT):
+    # ``cwd`` matters: ``DEFAULT_MIGRATIONS_ROOT`` is relative, so running from
+    # elsewhere is how a test points the command at a tree of its own. ``ROOT``
+    # is on the path either way, so ``-m cli`` still resolves.
     return subprocess.run(
         [sys.executable, "-m", "cli", *args],
         capture_output=True,
         text=True,
-        cwd=ROOT,
+        cwd=cwd,
+        env={**os.environ, "PYTHONPATH": str(ROOT)},
     )
 
 
@@ -27,7 +33,6 @@ def test_migrate_plan_against_a_fresh_base_dir_shows_everything_pending(tmp_path
 
     assert result.returncode == 0, result.stderr
     assert "plan · base-dir" in result.stdout
-    assert "profile medallion" in result.stdout
     assert "pending" in result.stdout
 
 
@@ -66,26 +71,12 @@ def test_migrate_subject_filter_narrows_to_one_subjects_databases(tmp_path):
     assert "complaints_b" not in result.stdout
 
 
-def test_migrate_phase_filter_selects_the_layers_that_phase_owns(tmp_path):
-    # A subject's silver.db carries no phase/ scope of its own, but silver is an
-    # Ingest layer -- `--phase ingest` has to select it, or the filter only ever
-    # works under by_phase.
-    ingest = _cli("migrate", "--base-dir", str(tmp_path), "--phase", "ingest", "--plan")
-    assert ingest.returncode == 0, ingest.stderr
-    assert "complaints_a/silver.db" in ingest.stdout
-    assert "gold.db" not in ingest.stdout  # gold is Selection, not Ingest
-
-    sync = _cli("migrate", "--base-dir", str(tmp_path), "--phase", "sync", "--plan")
-    assert sync.returncode == 0, sync.stderr
-    assert "0 database(s)" in sync.stdout  # nothing here belongs to Sync yet
-
-
-def test_migrate_env_resolves_profile_from_environments(tmp_path, monkeypatch):
+def test_migrate_env_resolves_base_dir_from_environments(tmp_path, monkeypatch):
     monkeypatch.setenv("PIPELINE_DATA_DIR_DEV", str(tmp_path))
     result = _cli("migrate", "--env", "dev", "--plan")
 
     assert result.returncode == 0, result.stderr
-    assert "profile medallion" in result.stdout
+    assert f"plan · base-dir {tmp_path}" in result.stdout
 
 
 def test_migrate_explicit_database_and_scope(tmp_path):
@@ -102,6 +93,13 @@ def test_migrate_explicit_database_and_scope(tmp_path):
 
     assert result.returncode == 0, result.stderr
     assert db_path.exists()
+
+    # --database resolves no base directory, so the report names none: the one
+    # database's own full path is already on every line below the heading.
+    plan = _cli("migrate", "--database", str(db_path), "--scope", "_shared", "--plan")
+    assert plan.returncode == 0, plan.stderr
+    assert plan.stdout.startswith("plan\n")
+    assert "base-dir" not in plan.stdout
 
 
 def test_migrate_explicit_database_rejects_an_unrecognised_scope(tmp_path):
@@ -120,26 +118,42 @@ def test_migrate_to_rejects_a_non_version(tmp_path):
     assert "--to takes a migration version" in result.stderr
 
 
-def test_migrate_reports_a_topology_collision_without_a_traceback(tmp_path):
-    # The real declarations collide under `single` (see
-    # tests/integration/test_topology_profiles.py and docs/migrations.md); an
-    # operator must get an explanation and a non-zero exit, not a traceback.
-    result = _cli("migrate", "--base-dir", str(tmp_path), "--profile", "single")
+def test_migrate_reports_a_failing_migration_without_a_traceback(tmp_path):
+    # A migration SQLite refuses is an operator-facing failure, not a crash:
+    # non-zero exit, the file named, no traceback -- and the failing file rolls
+    # back whole, leaving the earlier file applied and no ledger row of its own.
+    # Planted in a tree of its own, since the repo's committed tree is healthy.
+    scope = tmp_path / "migrations" / "subject" / "widgets" / "raw"
+    scope.mkdir(parents=True)
+    (scope / "0001_create_widgets.sql").write_text(
+        "CREATE TABLE widgets (id TEXT);\n", encoding="utf-8"
+    )
+    (scope / "0002_broken.sql").write_text(
+        "CREATE TABLE gadgets (id TEXT);\nINSERT INTO absent VALUES (1);\n",
+        encoding="utf-8",
+    )
+
+    result = _cli("migrate", "--base-dir", "base", cwd=tmp_path)
 
     assert result.returncode == 1
     assert "Traceback" not in result.stderr
-    assert "already exists" in result.stderr
-    assert "profile single" in result.stderr
+    assert "0002_broken.sql" in result.stderr
+    assert "no such table: absent" in result.stderr
+    assert "rolled back" in result.stderr
 
-
-def test_migrate_by_layer_profile_plans_the_four_generic_layer_databases(tmp_path):
-    result = _cli(
-        "migrate", "--base-dir", str(tmp_path), "--profile", "by_layer", "--plan"
-    )
-
-    assert result.returncode == 0, result.stderr
-    for name in ("raw.db", "silver.db", "gold.db"):
-        assert name in result.stdout
+    con = sqlite3.connect(tmp_path / "base" / "widgets" / "raw.db")
+    try:
+        tables = {
+            row[0]
+            for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+        assert "widgets" in tables  # the first file's own transaction committed
+        assert "gadgets" not in tables  # the failing file left nothing behind
+        assert con.execute("SELECT version FROM schema_migrations").fetchall() == [
+            ("0001",)
+        ]
+    finally:
+        con.close()
 
 
 def test_migrations_make_reports_nothing_to_do_when_tree_is_current():

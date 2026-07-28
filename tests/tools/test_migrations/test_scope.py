@@ -26,12 +26,6 @@ def test_layer_scope():
     assert scope.label == "layer/silver"
 
 
-def test_phase_scope():
-    scope = parse_scope_dir(PurePosixPath("phase/ingest"))
-    assert scope.kind == "phase"
-    assert scope.phase == "ingest"
-
-
 def test_subject_layer_scope():
     scope = parse_scope_dir(PurePosixPath("subject/complaints_a/silver"))
     assert scope.kind == "subject_layer"
@@ -50,7 +44,6 @@ def test_platform_scope():
     "path",
     [
         "layer/bronze",  # unrecognised layer name
-        "phase/reconciliation",  # unrecognised phase name
         "subject/complaints_a/bronze",  # unrecognised layer under subject
         "subject/complaints_a",  # missing the layer segment
         "misc",  # not a recognised top-level scope at all
@@ -66,7 +59,6 @@ def test_scope_from_label_round_trips_with_label():
     for label in (
         "_shared",
         "layer/gold",
-        "phase/selection",
         "subject/x/raw",
         "platform/registry",
     ):

@@ -130,9 +130,9 @@ def test_merge_writers_refuse_a_table_no_migration_has_created(tmp_path):
 
 def test_missing_table_error_stays_useful_outside_the_subject_layer_layout(tmp_path):
     # Not every database a Writer is pointed at is a <subject>/<layer>.db: a
-    # bare --database path or a single-file topology has no subject to name. The
-    # derived label is then only a guess, so the message must also carry the
-    # real path and the profile-free command form that works anywhere.
+    # bare --database path has no subject to name. The derived label is then
+    # only a guess, so the message must also carry the real path and the
+    # --database/--scope command form that works anywhere.
     db = tmp_path / "warehouse.db"
 
     with pytest.raises(MissingTableError) as caught:

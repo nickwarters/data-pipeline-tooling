@@ -13,10 +13,7 @@ naming the file (:class:`ChecksumMismatchError`) -- never a silent re-apply or
 skip. Re-running an already-applied file is a no-op.
 
 A statement SQLite refuses is raised as :class:`MigrationApplyError` naming the
-file, the database and the statement -- never a bare ``sqlite3`` traceback,
-because the commonest cause is a topology profile composing two scopes that
-both define the same table, and "table sales already exists" on its own says
-nothing about which profile or which scopes.
+file, the database and the statement -- never a bare ``sqlite3`` traceback.
 """
 
 from __future__ import annotations
@@ -227,9 +224,7 @@ def apply_database(
                 try:
                     con.execute(statement)
                 except sqlite3.Error as exc:
-                    raise _apply_error(
-                        database, migration, db_path, statement, exc
-                    ) from exc
+                    raise _apply_error(migration, db_path, statement, exc) from exc
             record_applied(
                 con,
                 version=migration.version,
@@ -249,7 +244,6 @@ def apply_database(
 
 
 def _apply_error(
-    database: Database,
     migration: Migration,
     db_path: Path,
     statement: str,
@@ -261,21 +255,6 @@ def _apply_error(
         "The whole file was rolled back (no statement of it, and no ledger row, "
         f"survives). Statement: {_without_leading_comments(statement)!r}"
     )
-    if _looks_like_a_name_collision(cause):
-        scopes = sorted({m.scope.label for m in database.migrations})
-        message += (
-            "\n\nThis reads like two scopes composing into the same physical "
-            f"database and both defining the same object. {db_path.name} composes "
-            f"{len(scopes)} scopes, including {', '.join(scopes[:4])}. "
-            "A topology profile that collapses "
-            "several subjects -- or several layers -- into one file needs table "
-            "names that are unique across everything it collapses (this repo's "
-            "own declarations do not satisfy that: raw and silver share a table "
-            "name per subject by convention). Either migrate under a profile "
-            "that keeps them apart (medallion), or give the tables "
-            "profile-unique names. See docs/migrations.md, "
-            "'A known limitation'."
-        )
     return MigrationApplyError(message)
 
 
@@ -289,8 +268,3 @@ def _without_leading_comments(statement: str) -> str:
     while lines and (not lines[0].strip() or lines[0].strip().startswith("--")):
         lines.pop(0)
     return "\n".join(lines).strip() or statement.strip()
-
-
-def _looks_like_a_name_collision(cause: Exception) -> bool:
-    text = str(cause).lower()
-    return "already exists" in text or "duplicate column name" in text

@@ -143,10 +143,9 @@ def test_a_failing_statement_rolls_back_the_whole_file(tmp_path):
     assert tables == []  # neither the table, its row, nor the ledger row survived
 
 
-def test_a_colliding_create_explains_the_topology_collision(tmp_path):
-    # Two scopes composing into one file, both creating the same table: the
-    # error has to name the profile-level cause, not just "table t already
-    # exists" -- see docs/migrations.md, "A known limitation".
+def test_a_colliding_create_rolls_back_but_leaves_the_earlier_file_applied(tmp_path):
+    # Two files that both create the same table: the second fails and rolls
+    # back whole, but the first file's own transaction already committed.
     first = _write(tmp_path, "0001_first.sql", "CREATE TABLE t (a TEXT);\n")
     second = _write(tmp_path, "0002_second.sql", "CREATE TABLE t (b TEXT);\n")
     database = Database(
@@ -158,8 +157,7 @@ def test_a_colliding_create_explains_the_topology_collision(tmp_path):
 
     message = str(raised.value)
     assert "0002_second.sql" in message
-    assert "two scopes composing into the same physical database" in message
-    assert "docs/migrations.md" in message
+    assert "already exists" in message
     # ...and the first file stayed applied: each file is its own transaction.
     con = sqlite3.connect(database.relative_path)
     assert con.execute(f"SELECT version FROM {LEDGER_TABLE}").fetchall() == [("0001",)]

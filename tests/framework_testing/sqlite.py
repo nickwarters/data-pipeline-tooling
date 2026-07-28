@@ -60,22 +60,14 @@ def create_table(db_path: str | os.PathLike[str], table: str, dataset: Dataset) 
         con.close()
 
 
-#: The topology profile this repo's own declarations migrate under -- named
-#: here rather than taken as an argument so no test has to know that topology
-#: profiles exist, and so the single mention moves in one edit if they stop
-#: existing. Only ``medallion`` can migrate this repo's declarations today
-#: (``docs/migrations.md``), so a parameter would have exactly one legal value.
-_PROFILE = "medallion"
-
-
 def migrate_all(base_dir: str | os.PathLike[str]) -> None:
     """Apply every migration this repo's tree declares against ``base_dir``.
 
     In-process equivalent of ``python -m cli migrate --base-dir base_dir``
-    (no ``--subject``/``--layer``/``--phase`` narrowing): a test that runs a
-    real bundled feed end-to-end against a fresh ``tmp_path`` needs its tables
-    brought into existence exactly as an operator would, rather than relying on
-    a Writer to have minted them for itself.
+    (no ``--subject``/``--layer`` narrowing): a test that runs a real bundled
+    feed end-to-end against a fresh ``tmp_path`` needs its tables brought
+    into existence exactly as an operator would, rather than relying on a
+    Writer to have minted them for itself.
 
     The coupling this buys is deliberate but real: a test using this depends on
     the committed migrations being right, so a broken migration file fails it
@@ -94,5 +86,5 @@ def migrate_all(base_dir: str | os.PathLike[str]) -> None:
     # ``DEFAULT_MIGRATIONS_ROOT`` is relative to the repo root (the CLI is run
     # from there); anchor it so a test does not depend on pytest's cwd.
     migrations = discover_migrations(_REPO_ROOT / DEFAULT_MIGRATIONS_ROOT)
-    for database in resolve_databases(_PROFILE, migrations):
+    for database in resolve_databases(migrations):
         apply_database(database, base_dir / database.relative_path)

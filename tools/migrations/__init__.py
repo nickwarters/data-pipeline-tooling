@@ -1,4 +1,4 @@
-"""Migrating the medallion: the ``migrations/`` tree, topology profiles, and the runner.
+"""Migrating the medallion: the ``migrations/`` tree, its base-dir layout, the runner.
 
 ``tools.schema`` (see ``tools/schema/``) declares what a table's shape *should*
 be and reports drift; this package is what actually gets a live database to
@@ -8,11 +8,9 @@ that shape. Three pieces:
   ``migrations/`` tree's own rules: directory path is scope, filename is a
   globally-ordered version + slug, and the whole tree is discoverable with no
   manifest.
-- :mod:`tools.migrations.topology` -- **topology profiles**, each a different
-  way of bundling those scopes into physical database files
-  (``<subject>/<layer>.db`` today; ``warehouse.db``; ``<layer>.db``;
-  ``<phase>.db``). An environment names its profile in
-  ``tools/environments.py``.
+- :mod:`tools.migrations.topology` -- resolves a base directory's medallion
+  databases from that tree: one ``<subject>/<layer>.db`` per subject/layer
+  actually present, plus the fixed ``platform/registry`` database.
 - :mod:`tools.migrations.ledger` / :mod:`tools.migrations.runner` -- the
   per-database ``schema_migrations`` ledger and the transactional apply/plan
   logic (``migrate``'s engine).

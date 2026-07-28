@@ -269,11 +269,10 @@ def _require_table(con: sqlite3.Connection, db_path: Path, table: str) -> None:
     the subject and layer come straight off ``db_path`` itself rather than
     being guessed from the table name, and ``--subject`` narrows the fix to the
     one thing that needs migrating. A database *outside* that layout (a bare
-    ``--database`` path, ``quarantine.db``, a single-file topology) has no
-    subject to name, so the message also carries the full path and the
-    profile-free ``--database``/``--scope`` form, which is correct in every
-    layout. The environment stays a ``<env>`` placeholder: a Writer knows its
-    file, never which environment resolved it.
+    ``--database`` path, ``quarantine.db``) has no subject to name, so the
+    message also carries the full path and the ``--database``/``--scope``
+    form, which is correct either way. The environment stays a ``<env>``
+    placeholder: a Writer knows its file, never which environment resolved it.
     """
     if _table_exists(con, table):
         return

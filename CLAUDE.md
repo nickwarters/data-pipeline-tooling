@@ -55,22 +55,24 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   that declared shape is a separate, additive step: `migrations/` is a
   repo-wide tree of reviewed, forward-only `.sql` files where directory path
   is scope and filename is a globally ordered version + slug (no manifest);
-  `tools/migrations/` discovers/validates the tree, resolves a **topology
-  profile** (`medallion`/`single`/`by_layer`/`by_phase` — an environment names
-  its profile next to its `base_dir` root in `tools/environments.py`) into
-  physical databases, and applies each database's pending migrations with its
-  own `schema_migrations` ledger, one transaction the **runner** owns per file
-  (so a migration containing its own `BEGIN`/`COMMIT` is refused);
-  `tools/schema/emit.py`
+  `tools/migrations/` discovers/validates the tree and resolves a base
+  directory to its **medallion** databases, the one way this repo supports —
+  one `<subject>/<layer>.db` per subject/layer actually present, plus the
+  fixed `platform/registry` database — applying each database's pending
+  migrations with its own `schema_migrations` ledger, one transaction the
+  **runner** owns per file (so a migration containing its own `BEGIN`/`COMMIT`
+  is refused); `tools/schema/emit.py`
   turns a `Table`'s drift into the mechanical part of the next migration,
   diffing against the tree's own tracked shape rather than any live
   environment — read by *applying* that scope's committed files to a throwaway
   in-memory database, so SQLite (never a regex) is the parser and a
-  hand-edited file is reflected exactly. Only the **medallion** profile can
-  migrate this repo's own declarations today: a coarser profile collapses raw
-  and silver into one file, and this repo names a silver table after the raw
-  table it refines, so they collide — loudly and completely, never a partial
-  apply. See
+  hand-edited file is reflected exactly. A coarser layout (one database per
+  generic layer, or one single warehouse) was designed and prototyped, then
+  removed rather than shipped broken: it collapses raw and silver into one
+  file, and this repo names a silver table after the raw table it refines, so
+  they collide on every feed, and fixing that needs a table-naming rule this
+  repo doesn't have. A genuine collision within one database still fails
+  loudly and completely, never a partial apply. See
   [`docs/migrations.md`](docs/migrations.md) — the framework itself never
   learns what a migration is, same as a declaration. Then `case_review/` (the
   case-review *application* — domain types
@@ -166,7 +168,7 @@ python3 -m venv .venv
 .venv/bin/python -m cli run pipelines/ingest --base-dir /tmp/demo  # operator CLI: run/orchestrate/status/runs/log (see docs/operator-cli.md)
 .venv/bin/python -m cli schema diff --base-dir /tmp/demo         # diff every feed's declared TABLES against a live environment (see docs/schema-declaration.md)
 .venv/bin/python -m cli migrations make            # emit the next migration file for every drifted declared table
-.venv/bin/python -m cli migrate --env dev --plan   # preview pending migrations for an environment's topology (see docs/migrations.md)
+.venv/bin/python -m cli migrate --env dev --plan   # preview pending migrations for an environment's base dir (see docs/migrations.md)
 .venv/bin/pre-commit run --all-files             # lint + format the whole tree on demand
 ```
 
