@@ -132,11 +132,26 @@ def _landed_tables(base_dir: Path) -> set[tuple[str, str]]:
 
 
 def _declared_tables() -> set[tuple[str, str]]:
-    """Every ``(namespace, table)`` declared across every feed's ``TABLES``."""
+    """Every ``(namespace, table)`` declared across every feed's ``TABLES``.
+
+    A quarantine ``Table`` (``tools.schema.quarantine_table``) is skipped, to
+    match ``_landed_tables``'s own skip of ``quarantine.db``: this cross-check
+    is about the medallion shape a feed *always* writes, and a feed's sample
+    data landing zero rejects (as every bundled feed's does) is not drift --
+    "declared but never landed" would otherwise flag every quarantine table on
+    every run. The two checks that *do* cover it are
+    :func:`test_every_quarantining_bundled_feed_declares_its_quarantine_table`
+    below (the wiring and the declaration agree) and
+    ``tests/pipelines/test_complaints_a.py``'s rejected-row case (a real reject
+    lands in the migrated quarantine table).
+    """
     declared: set[tuple[str, str]] = set()
     for feed, tables in collect_declared_tables().items():
         for table in tables:
-            declared.add((resolved_namespace(table, feed), table.name))
+            namespace = resolved_namespace(table, feed)
+            if namespace.rsplit("/", 1)[-1] == "quarantine":
+                continue
+            declared.add((namespace, table.name))
     return declared
 
 
@@ -224,3 +239,22 @@ def test_the_drift_check_itself_would_catch_a_planted_violation():
     undeclared, unwritten = _drift(landed, declared | {("cases/gold", "cases")})
     assert undeclared == set()
     assert unwritten == {("cases/gold", "cases")}
+
+
+def test_every_quarantining_bundled_feed_declares_its_quarantine_table():
+    # A quarantine Table is one opt-in line in a feed's TABLES, so a feed that
+    # wires a reject_writer and forgets it would only fail in production, on
+    # the first run that actually rejected a row. This is the cross-check that
+    # would have caught that: the wiring and the declaration must agree.
+    import importlib
+    import inspect
+
+    declared = collect_declared_tables()
+    for feed, tables in declared.items():
+        module = importlib.import_module(f"pipelines.{feed}.pipeline")
+        wires_quarantine = "quarantine_writer(" in inspect.getsource(module)
+        declares_quarantine = any(t.namespace == "quarantine" for t in tables)
+        assert wires_quarantine == declares_quarantine, (
+            f"{feed}: pipeline wires a quarantine writer={wires_quarantine} but "
+            f"schema.py declares a quarantine table={declares_quarantine}"
+        )

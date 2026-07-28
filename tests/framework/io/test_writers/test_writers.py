@@ -26,7 +26,23 @@ from framework.io.writers import (
 from framework.run.builder import Pipeline
 from tests.framework_testing import create_table
 
-FIXTURE = Path(__file__).parent.parent.parent / "fixtures" / "cases.csv"
+FIXTURE = Path(__file__).parent.parent.parent.parent / "fixtures" / "cases.csv"
+
+
+def _create_accumulate_table(db_path, table: str, dataset: Dataset) -> None:
+    """Mint a migrated table shaped for ``AccumulateByRunWriter``/``QuarantineWriter``.
+
+    Their target carries the run-stamp columns (``logical_run_id`` /
+    ``load_date`` / ``pipeline_run_id``) the Writer itself adds at write time
+    (see ``AccumulateByRunWriter._stamp``) -- a bare ``create_table(dataset)``
+    would mint a table without them, and the guard-on ``DELETE ... WHERE
+    logical_run_id = ?`` in ``_replace_logical_run`` would then fail on a
+    genuinely missing column rather than a missing table.
+    """
+    frame = dataset.to_pandas().copy()
+    for column in ("logical_run_id", "load_date", "pipeline_run_id"):
+        frame[column] = None
+    create_table(db_path, table, Dataset.from_pandas(frame))
 
 
 def test_truncate_reload_writer_round_trips_a_dataset(tmp_path):
@@ -156,9 +172,11 @@ def test_truncate_reload_writer_leaves_prior_rows_intact_on_a_failed_reload(tmp_
     SqliteTruncateReloadWriter(db, "cases").write(good)
 
     # A frame with a surprise column the table lacks fails on insert, after the
-    # DELETE has already run within the same transaction.
+    # DELETE has already run within the same transaction. The insert is now a
+    # hand-rolled statement (#324), not pandas' to_sql, so SQLite's own error
+    # surfaces directly rather than pandas' wrapper around it.
     broken = Dataset.from_pandas(pd.DataFrame({"id": [1], "surprise": [9]}))
-    with pytest.raises(pd.errors.DatabaseError):
+    with pytest.raises(sqlite3.OperationalError):
         SqliteTruncateReloadWriter(db, "cases").write(broken)
 
     survivors = SqliteReader(db, "cases").read()
@@ -281,6 +299,7 @@ def test_accumulate_by_run_writer_keeps_each_run(tmp_path):
     # load_date. Two distinct runs land both sets.
     dataset = CsvReader(FIXTURE).read()
     db = tmp_path / "gold.db"
+    _create_accumulate_table(db, "selection_pool", dataset)
 
     AccumulateByRunWriter(db, "selection_pool", "r1", "2026-05-29").write(dataset)
     AccumulateByRunWriter(db, "selection_pool", "r2", "2026-05-30").write(dataset)
@@ -296,6 +315,7 @@ def test_accumulate_by_run_writer_is_idempotent_per_run(tmp_path):
     # insert — ), so a re-run does not duplicate.
     dataset = CsvReader(FIXTURE).read()
     db = tmp_path / "gold.db"
+    _create_accumulate_table(db, "selection_pool", dataset)
     writer = AccumulateByRunWriter(db, "selection_pool", "r1", "2026-05-29")
 
     writer.write(dataset)
@@ -358,6 +378,7 @@ def test_accumulate_by_run_writer_is_atomic_when_the_write_fails(tmp_path):
     # delete must roll back so a re-driven run never half-wipes prior rows.
     db = tmp_path / "gold.db"
     good = Dataset.from_pandas(pd.DataFrame({"id": [1, 2]}))
+    _create_accumulate_table(db, "selection_pool", good)
     AccumulateByRunWriter(db, "selection_pool", "r1", "2026-05-29").write(good)
 
     # A frame with a surprise column the table lacks fails on append, after the
@@ -398,6 +419,7 @@ def test_accumulate_by_run_writer_fails_when_its_delete_is_locked_out(
     # logical run's rows" into "append them again" — a silent duplicate.
     db = tmp_path / "gold.db"
     dataset = Dataset.from_pandas(pd.DataFrame({"id": [1, 2]}))
+    _create_accumulate_table(db, "selection_pool", dataset)
     writer = AccumulateByRunWriter(db, "selection_pool", "r1", "2026-05-29")
     writer.write(dataset)
 
@@ -412,6 +434,7 @@ def test_quarantine_writer_fails_when_its_delete_is_locked_out(tmp_path, monkeyp
     # The reject table's re-drive carries the same guarantee as gold's.
     db = tmp_path / "rejects.db"
     frame = pd.DataFrame({"case_ref": ["BAD"], "logical_run_id": ["r1"]})
+    _create_accumulate_table(db, "rejects", Dataset.from_pandas(frame))
     writer = QuarantineWriter(db, "rejects")
     writer.write(Dataset.from_pandas(frame))
 
@@ -426,6 +449,7 @@ def test_accumulate_by_run_writer_surfaces_a_locked_database(tmp_path):
     # The same guarantee against a really locked file rather than a stand-in.
     db = tmp_path / "gold.db"
     dataset = Dataset.from_pandas(pd.DataFrame({"id": [1, 2]}))
+    _create_accumulate_table(db, "selection_pool", dataset)
     writer = AccumulateByRunWriter(
         db, "selection_pool", "r1", "2026-05-29", busy_timeout_ms=50
     )
@@ -448,6 +472,7 @@ def test_insert_if_absent_writer_surfaces_a_locked_database(tmp_path):
     # locked database must not read as "no mapping yet" and remint surrogates.
     db = tmp_path / "ref.db"
     dataset = Dataset.from_pandas(pd.DataFrame({"value": ["A", "B"]}))
+    create_table(db, "ref", Dataset.from_pandas(pd.DataFrame({"id": [], "value": []})))
     writer = SqliteInsertIfAbsentWriter(db, "ref", ("value",), busy_timeout_ms=50)
     writer.write(dataset)
 
@@ -540,6 +565,7 @@ def test_the_accumulating_session_clears_the_run_once_then_appends(tmp_path):
     from framework.io.writers import writing_chunks
 
     db = tmp_path / "raw.db"
+    _create_accumulate_table(db, "feed", Dataset.from_pandas(pd.DataFrame({"id": []})))
     writer = AccumulateByRunWriter(db, "feed", "run-a", "2026-07-27")
     with writing_chunks(writer) as chunk_writer:
         for start in (0, 2, 4):

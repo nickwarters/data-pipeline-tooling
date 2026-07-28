@@ -143,11 +143,42 @@ def test_generate_migration_sql_for_a_never_created_table():
         table, "widgets_feed", diff, version="0001", namespace="raw"
     )
 
-    assert "CREATE TABLE widgets" in sql
-    assert "id TEXT" in sql
-    assert "amount INTEGER NOT NULL" in sql
+    assert 'CREATE TABLE "widgets"' in sql  # identifiers are always quoted (#324)
+    assert '"id" TEXT' in sql
+    assert '"amount" INTEGER NOT NULL' in sql
     assert "generated from pipelines/widgets_feed's declared TABLES" in sql
     assert "declaration rev 0001" in sql
+
+
+def test_generated_ddl_for_non_identifier_column_names_is_valid_sql():
+    # Not cosmetic: a raw Table seeded from a real feed file's header carries
+    # the source's own column names (spaces, punctuation, reserved words), and
+    # `scaffold --from-feed-file` now routinely generates migrations for
+    # exactly that. Unquoted, this DDL is a syntax error -- so the test runs it
+    # rather than pattern-matching the text.
+    import sqlite3
+
+    table = Table(
+        "raw",
+        "order lines",
+        columns=(
+            Column("Case Number", "TEXT"),
+            Column("select", "TEXT"),  # a SQL keyword
+            Column('odd"name', "TEXT"),  # an embedded quote
+        ),
+    )
+    sql = generate_migration_sql(
+        table, "orders", diff_tables(table, None), version="0001", namespace="raw"
+    )
+
+    con = sqlite3.connect(":memory:")
+    try:
+        con.executescript(sql)
+        landed = con.execute('PRAGMA table_info("order lines")').fetchall()
+    finally:
+        con.close()
+
+    assert [row[1] for row in landed] == ["Case Number", "select", 'odd"name']
 
 
 def test_generate_migration_sql_for_a_missing_column():
@@ -161,7 +192,7 @@ def test_generate_migration_sql_for_a_missing_column():
         table, "widgets_feed", diff, version="0002", namespace="silver"
     )
 
-    assert "ALTER TABLE widgets ADD COLUMN amount INTEGER" in sql
+    assert 'ALTER TABLE "widgets" ADD COLUMN "amount" INTEGER' in sql
 
 
 def test_generate_migration_sql_adds_a_default_for_a_not_null_column():

@@ -113,6 +113,13 @@ def test_truncate_reload_writer_round_trips_a_table_name_needing_quoting(tmp_pat
 def test_accumulate_writer_deletes_by_run_in_table_needing_quoting(tmp_path):
     db = tmp_path / "gold.db"
     frame = pd.DataFrame({"case id": [1, 2]})
+    create_table(
+        db,
+        "case pool",
+        Dataset.from_pandas(
+            frame.assign(logical_run_id="", load_date="", pipeline_run_id="")
+        ),
+    )
 
     AccumulateByRunWriter(
         db, "case pool", logical_run_id="r1", load_date="2026-06-10"
@@ -128,6 +135,11 @@ def test_accumulate_writer_deletes_by_run_in_table_needing_quoting(tmp_path):
 
 def test_quarantine_writer_deletes_by_run_in_table_needing_quoting(tmp_path):
     db = tmp_path / "raw.db"
+    create_table(
+        db,
+        "reject rows",
+        Dataset.from_pandas(pd.DataFrame({"logical_run_id": [""], "v": [0]})),
+    )
     writer = QuarantineWriter(db, "reject rows")
 
     writer.write(

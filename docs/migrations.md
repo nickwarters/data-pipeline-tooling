@@ -13,10 +13,22 @@ migrations/
   README.md
   _shared/                                    # recognised scope, empty today
   layer/{raw,silver,gold}/                    # recognised scope, empty today
-  subject/complaints_a/raw/    0012_create_complaints_a.sql
-  subject/complaints_a/silver/ 0013_create_complaints_a.sql
-  platform/registry/           0005_create_run_records.sql
+  subject/complaints_a/raw/        0012_create_complaints_a.sql
+  subject/complaints_a/silver/     0013_create_complaints_a.sql
+  subject/complaints_a/quarantine/ 0039_create_complaints_a.sql
+  platform/registry/               0005_create_run_records.sql
 ```
+
+`quarantine` is a fourth recognised value alongside `raw`/`silver`/`gold`
+(`tools.migrations.scope.VALID_LAYERS`) — not a medallion layer, but the one
+non-medallion landing site (a feed's reject table, `<subject>/quarantine.db`,
+declared via `tools.schema.quarantine_table`; see
+[ADR 0016](adr/0016-migrations-own-table-structure.md)) resolved per subject,
+so `subject/<subject>/quarantine/` fits the same directory shape unchanged.
+`layer/quarantine/` is accepted by the same rule as `layer/raw` (every value
+in `VALID_LAYERS` is valid under both `layer/` and `subject/<subject>/`) but,
+unlike raw's, has no real use yet — nothing today needs "every subject's
+quarantine table" as one migration scope.
 
 The `_shared` / `layer` scopes are recognised and composed, but hold no file
 yet: everything committed here **is applied** to every database the scope
@@ -31,7 +43,7 @@ in one place: every filename is `<version>_<slug>.sql` (digits, then
 lowercase `snake_case`), every version is unique **repo-wide** (never per
 scope — several scopes can land in one physical database, interleaved by
 version, so a repeated version anywhere would be ambiguous), and every
-directory is one of five recognised scope shapes. Any violation raises
+directory is one of four recognised scope shapes. Any violation raises
 `MigrationTreeError` naming the offending path; see
 [`../migrations/README.md`](../migrations/README.md) for the full convention,
 worked examples, and SQLite's 12-step table-rebuild recipe for the changes

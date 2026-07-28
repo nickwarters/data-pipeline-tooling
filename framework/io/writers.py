@@ -17,6 +17,7 @@ boundary is therefore stated once rather than re-derived per Writer.
 
 from __future__ import annotations
 
+import datetime
 import os
 import sqlite3
 import sys
@@ -68,6 +69,69 @@ class MissingTableError(LookupError):
     catch exactly this and nothing else. It stays a ``LookupError`` subclass so
     code already catching the broad builtin is unaffected.
     """
+
+
+# --- the require-declared-tables guard --------------------------------------
+#
+# #323 already made ``Refresh``/``UpsertStrategy``/``InsertOrIgnore`` require
+# their table unconditionally (see ``_require_table`` below) -- that rollout's
+# blast radius was three Writers, small enough to flip everywhere at once.
+# #324 extends the same refusal to the remaining append-style Writers
+# (``AccumulateByRun``, ``Quarantine``, the streaming append, ``InsertIfAbsent``),
+# whose blast radius is not small: ~46 test fixtures and every environment that
+# has never run ``migrate``. Those sites stay switchable per environment while
+# prod catches up (``schema diff`` first, then ``migrate``, only then the flag).
+#
+# A Writer is minted by a strategy from nothing but a database path
+# (``strategy.writer_for(db_path, table, ...)`` — see ``framework.io.strategy``)
+# and ``framework/`` must not import ``tools.environments``: that would teach
+# the framework what an "environment" is, the one direction of coupling this
+# repo has drawn a hard line against. So the flag cannot be threaded through
+# ``Store``/``strategy.writer_for``'s signatures (both stay exactly as they
+# are) or carried on the Writer itself. Instead it is a single process-wide
+# switch, flipped once by :func:`set_require_declared_tables` and read by
+# every guarded call site through :func:`require_declared_tables_enabled`.
+# ``tools.environments.base_dir_for`` -- the one call every entry point (a
+# pipeline ``main()``, the operator CLI) makes to settle which environment it
+# is running in -- flips it, *including* when an explicit ``--base-dir``
+# overrides that environment's root: a path says where a run lands, never how
+# strictly it may create what it finds missing. ``tools`` may depend on
+# ``framework``; the reverse never happens, so the dependency still points one
+# way.
+#
+# The cost of a process-wide switch, stated plainly: it is invisible at the
+# call site, so a caller that mints a Writer *without* activating an
+# environment silently gets the permissive default. That is deliberate for a
+# library caller or a bare unit test (which has no environment), and closed
+# for every real entry point by ``base_dir_for`` being unconditional. It also
+# means one process cannot run two environments at different strictnesses --
+# nothing here does, and the flag is a rollout device that deletes itself once
+# every environment sets it (see ``_append_rows``).
+#
+# Defaults to ``False`` (today's behaviour: an absent table is created
+# implicitly) so anything that mints a Writer without activating an
+# environment -- a bare unit test, a script -- is unaffected until it opts in.
+_require_declared_tables = False
+
+
+def set_require_declared_tables(value: bool) -> None:
+    """Flip the process-wide require-declared-tables guard.
+
+    Called once per process by :func:`tools.environments.base_dir_for` /
+    :func:`tools.environments.activate_environment`
+    with the active environment's ``require_declared_tables`` flag -- never by
+    a Writer itself, which knows only a database path. Exposed publicly (not
+    prefixed) because it is a legitimate cross-module call, made from
+    ``tools/`` inward; nothing about it is this module's private business once
+    called.
+    """
+    global _require_declared_tables
+    _require_declared_tables = bool(value)
+
+
+def require_declared_tables_enabled() -> bool:
+    """Whether the require-declared-tables guard is currently on."""
+    return _require_declared_tables
 
 
 def _frame_for_strategy(
@@ -150,7 +214,7 @@ class _AppendingChunkWriter:
         if self._prepare is not None:
             frame = self._prepare(frame)
         with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
-            frame.to_sql(self._table, con, if_exists="append", index=False)
+            _append_rows(con, self._db_path, self._table, frame)
 
 
 # Every merge Writer names its scratch table the same way. Earlier releases used
@@ -285,19 +349,180 @@ def _require_table(con: sqlite3.Connection, db_path: Path, table: str) -> None:
     )
 
 
-def _insert_rows(con: sqlite3.Connection, table: str, frame: pd.DataFrame) -> None:
-    """Append ``frame``'s rows into a table already confirmed to exist.
+#: SQLite's own cap on the number of ``?`` placeholders one statement may
+#: bind (``sqlite3_limit(SQLITE_LIMIT_VARIABLE_NUMBER, -1)``).
+_SQLITE_LIMIT_VARIABLE_NUMBER = 9
 
-    Kept separate from ``_require_table`` so a full-refresh write reads as two
-    named steps -- clear, then insert -- inside one transaction, rather than
-    one ``to_sql(if_exists="replace")`` call that silently recreated the table
-    underneath both.
+
+def _rows_per_statement(con: sqlite3.Connection, column_count: int) -> int:
+    """How many rows fit in one multi-row INSERT on *this* SQLite build.
+
+    A hand-rolled multi-row ``INSERT ... VALUES (?, ...), (?, ...), ...``
+    binds ``rows * column_count`` placeholders in one statement, and SQLite
+    refuses a statement that exceeds its own variable-number limit -- 250,000
+    on the build this repo runs today (3.45), but 32,766 on an older one and
+    999 pre-3.32. ``frame.to_sql`` hid this by chunking internally; asking the
+    *connection* for its own limit (rather than hardcoding a number) is what
+    keeps this correct on a different SQLite build, including, plausibly, the
+    Windows target.
+
+    A table wider than the limit itself has no valid batch size at all: even a
+    single row binds one placeholder per column, so *no* parameterised INSERT
+    can carry it (``to_sql`` could not either -- it binds a row at a time). That
+    is refused here, naming the build's limit and the column count, rather than
+    left to surface downstream as SQLite's context-free ``too many SQL
+    variables``.
     """
-    frame.to_sql(table, con, if_exists="append", index=False)
+    limit = con.getlimit(_SQLITE_LIMIT_VARIABLE_NUMBER)
+    if column_count > limit:
+        raise ValueError(
+            f"cannot insert a row of {column_count} columns: this SQLite build "
+            f"binds at most {limit} values per statement "
+            f"(SQLITE_LIMIT_VARIABLE_NUMBER). Narrow the table, or run against "
+            f"a SQLite built with a higher limit."
+        )
+    return max(1, limit // column_count)
+
+
+#: What ``pandas.api.types.infer_dtype`` calls a column that may hold a
+#: date/time object needing conversion before ``sqlite3`` will bind it.
+#: ``"mixed"`` and ``"unknown-array"`` are the catch-alls for an object column
+#: infer_dtype could not name, so they are converted rather than assumed safe.
+_TEMPORAL_INFERRED_DTYPES = frozenset(
+    {
+        "datetime",
+        "datetime64",
+        "date",
+        "time",
+        "timedelta",
+        "timedelta64",
+        "period",
+        "mixed",
+        "unknown-array",
+    }
+)
+
+
+def _temporal_columns(frame: pd.DataFrame) -> list[str]:
+    """The columns of ``frame`` whose values may need converting before binding.
+
+    ``infer_dtype`` is a cheap C-level scan, and skipping the per-value pass on
+    the columns it proves are plain strings/numbers/booleans matters: a raw
+    feed is hundreds of TEXT columns wide, and converting every cell of one
+    would cost more than the insert itself.
+    """
+    return [
+        column
+        for column in frame.columns
+        if pd.api.types.infer_dtype(frame[column], skipna=True)
+        in _TEMPORAL_INFERRED_DTYPES
+    ]
+
+
+def _as_bound_value(value: object) -> object:
+    """Render a date/time value the way ``to_sql`` used to, or pass it through.
+
+    ``sqlite3`` binds only ``str``/``bytes``/``int``/``float``/``None``
+    natively, and SQLite has no date/time type of its own (raw is TEXT
+    throughout, per ADR 0015) -- so a temporal value has to be stringified
+    before it is bound. The exact spelling matters, because a table may
+    already hold rows ``to_sql`` wrote: a datetime is space-separated
+    (``2026-01-01 03:04:05``, ``sqlite3``'s own default datetime adapter,
+    which is what ``to_sql`` reached for), a bare date or time plain
+    ``isoformat()``. ``datetime`` is checked before ``date`` because it is a
+    subclass of it (as ``pandas.Timestamp`` is of ``datetime``).
+    """
+    if isinstance(value, datetime.datetime):
+        return value.isoformat(sep=" ")
+    if isinstance(value, (datetime.date, datetime.time)):
+        return value.isoformat()
+    return value
+
+
+def _insert_rows(con: sqlite3.Connection, table: str, frame: pd.DataFrame) -> None:
+    """Insert ``frame``'s rows into a table already confirmed to exist.
+
+    Explicit, batched ``INSERT`` statements -- never ``to_sql`` -- so this
+    function is structurally incapable of creating the table it targets;
+    that precondition is the caller's job (:func:`_require_table` /
+    :func:`_ensure_table`). Batched per :func:`_rows_per_statement` so a wide
+    table (hundreds of columns) never trips SQLite's own placeholder limit,
+    the way one unbatched multi-row statement would.
+    """
+    if frame.empty:
+        return
+    # NaN/NaT have no SQL representation; to_sql translated them to NULL, and
+    # an explicit INSERT must do the same rather than bind a float NaN.
+    prepared = frame.astype(object).where(frame.notna(), None)
+    columns = list(prepared.columns)
+    column_list = ", ".join(quote_identifier(c) for c in columns)
+    row_placeholders = "(" + ", ".join("?" for _ in columns) + ")"
+    for column in _temporal_columns(prepared):
+        prepared[column] = prepared[column].map(_as_bound_value)
+    rows = list(prepared.itertuples(index=False, name=None))
+
+    batch_size = _rows_per_statement(con, len(columns))
+    for start in range(0, len(rows), batch_size):
+        batch = rows[start : start + batch_size]
+        values_sql = ", ".join(row_placeholders for _ in batch)
+        params = [value for row in batch for value in row]
+        con.execute(
+            f"INSERT INTO {quote_identifier(table)} ({column_list}) "
+            f"VALUES {values_sql}",
+            params,
+        )
+
+
+def _ensure_table(con: sqlite3.Connection, db_path: Path, table: str) -> bool:
+    """Confirm ``table``'s presence, subject to the require-declared guard.
+
+    Guard on: refuses with :class:`MissingTableError` when ``table`` has not
+    been migrated (delegates to :func:`_require_table`), so a caller can treat
+    its return as an unconditional "yes, go ahead".
+
+    Guard off (today's rollout default outside dev): returns whether the
+    table happens to exist already, without creating it or raising -- a
+    caller uses this to decide whether there is anything to clear before its
+    own insert falls back to ``to_sql``, exactly as every append site behaved
+    before this guard existed.
+    """
+    if require_declared_tables_enabled():
+        _require_table(con, db_path, table)
+        return True
+    return _table_exists(con, table)
+
+
+def _append_rows(
+    con: sqlite3.Connection, db_path: Path, table: str, frame: pd.DataFrame
+) -> None:
+    """Append ``frame`` to ``table``, honouring the require-declared guard.
+
+    Guard on: the table must already exist (:func:`_require_table`) and the
+    rows land through the batched, table-creation-incapable
+    :func:`_insert_rows`.
+
+    Guard off: falls back to ``to_sql(if_exists="append")``, which creates the
+    table when it is absent -- the behaviour every one of these Writers had
+    before this guard existed, kept for the environments not yet migrated.
+    """
+    if require_declared_tables_enabled():
+        _require_table(con, db_path, table)
+        _insert_rows(con, table, frame)
+    else:
+        # TEMPORARY, and the only remaining ``to_sql`` in this module that can
+        # create a table. It is step two of the three-step rollout ADR 0016
+        # records (dev -> prod -> delete this branch): delete it, and the
+        # ``require_declared_tables`` flag with it, once every environment in
+        # ``tools.environments._ENVIRONMENTS`` sets the flag True -- at which
+        # point ``_append_rows`` collapses into ``_require_table`` +
+        # ``_insert_rows`` and ``_ensure_table`` into ``_require_table``, with
+        # no behaviour change for anyone.
+        frame.to_sql(table, con, if_exists="append", index=False)
 
 
 def _replace_logical_run(
     con: sqlite3.Connection,
+    db_path: Path,
     table: str,
     logical_run_id: object,
     frame: pd.DataFrame,
@@ -308,14 +533,15 @@ def _replace_logical_run(
     replaces only its own rows and never another run's. Both statements run in
     the caller's single transaction, so a failing append rolls the delete back
     and a failed re-drive never half-wipes what it was replacing. The delete is
-    skipped only when the table does not exist yet — the first run for a feed.
+    skipped only when the table does not exist yet — the first run for a feed
+    (guard off) — or is otherwise required to exist first (guard on).
     """
-    if _table_exists(con, table):
+    if _ensure_table(con, db_path, table):
         con.execute(
             f"DELETE FROM {quote_identifier(table)} WHERE logical_run_id = ?",
             (logical_run_id,),
         )
-    frame.to_sql(table, con, if_exists="append", index=False)
+    _append_rows(con, db_path, table, frame)
 
 
 class _FileWriter:
@@ -509,12 +735,16 @@ class QuarantineWriter:
         with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
             if "logical_run_id" in frame.columns:
                 _replace_logical_run(
-                    con, self._table, frame["logical_run_id"].iloc[0], frame
+                    con,
+                    self._db_path,
+                    self._table,
+                    frame["logical_run_id"].iloc[0],
+                    frame,
                 )
             else:
                 # Nothing identifies the run to replace, so the rejects are
                 # appended as they arrive.
-                frame.to_sql(self._table, con, if_exists="append", index=False)
+                _append_rows(con, self._db_path, self._table, frame)
 
     @contextmanager
     def writing_chunks(self) -> Iterator[Writer]:
@@ -532,7 +762,7 @@ class QuarantineWriter:
 
     def _append(self, frame: pd.DataFrame) -> None:
         with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
-            frame.to_sql(self._table, con, if_exists="append", index=False)
+            _append_rows(con, self._db_path, self._table, frame)
 
     def describe(self) -> str:
         return render(self, db_path=str(self._db_path), table=self._table)
@@ -730,7 +960,7 @@ class SqliteInsertIfAbsentWriter:
             # surrogates that already exist.
             surr_q = quote_identifier(self._surrogate_column)
             key_cols_sql = ", ".join(quote_identifier(k) for k in self._key_columns)
-            if _table_exists(con, self._table):
+            if _ensure_table(con, self._db_path, self._table):
                 existing = pd.read_sql(
                     f"SELECT {surr_q}, {key_cols_sql} "
                     f"FROM {quote_identifier(self._table)}",
@@ -773,7 +1003,7 @@ class SqliteInsertIfAbsentWriter:
                 0, self._surrogate_column, range(max_id + 1, max_id + 1 + len(new_rows))
             )
 
-            new_rows.to_sql(self._table, con, if_exists="append", index=False)
+            _append_rows(con, self._db_path, self._table, new_rows)
 
     @contextmanager
     def writing_chunks(self) -> Iterator[Writer]:
@@ -826,7 +1056,9 @@ class AccumulateByRunWriter:
     def write(self, dataset: Dataset) -> None:
         frame = self._stamp(dataset.to_pandas())
         with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
-            _replace_logical_run(con, self._table, self._logical_run_id, frame)
+            _replace_logical_run(
+                con, self._db_path, self._table, self._logical_run_id, frame
+            )
 
     @contextmanager
     def writing_chunks(self) -> Iterator[Writer]:
@@ -845,9 +1077,16 @@ class AccumulateByRunWriter:
         once, so there is no single transaction to hold them. A stream that
         aborts part-way leaves this run partially landed, which the next drive
         of the same logical run replaces wholesale.
+
+        With the require-declared guard on, the table's presence is checked
+        here -- before a single chunk is read -- rather than lazily on the
+        first chunk's ``write``: a stream that turns out to write zero chunks
+        (every row already lived elsewhere) would otherwise never touch
+        ``_AppendingChunkWriter`` at all, and a missing table should fail this
+        session loudly rather than silently succeed at writing nothing.
         """
         with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
-            if _table_exists(con, self._table):
+            if _ensure_table(con, self._db_path, self._table):
                 con.execute(
                     f"DELETE FROM {quote_identifier(self._table)} "
                     "WHERE logical_run_id = ?",

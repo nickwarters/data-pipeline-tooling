@@ -276,9 +276,20 @@ benefit of a declaration it must not know about. And a physical
 table a pipeline lands *without* going through the wiring the plan describes.
 It is cheap (well under a second for all nine feeds) and hermetic (one
 `tmp_path`, no network, no shared state), so it is a guard rather than a
-liability. Reject/quarantine tables and the run-metadata stores (`_runs/`,
-`_registry/`, `_orchestration/`) are skipped: they are a different concept from
-the medallion table shapes `TABLES` declares.
+liability. The run-metadata stores (`_runs/`, `_registry/`, `_orchestration/`)
+are skipped outright: a different concept entirely from the medallion table
+shapes `TABLES` declares. A quarantine table (declared since #324 via
+`tools.schema.quarantine_table` — see [ADR 0016](adr/0016-migrations-own-table-structure.md))
+*is* one of `TABLES`' own entries now, migrated the same way as raw/silver/gold,
+but this specific cross-check still excludes it: whether a quarantine table
+receives a row depends on whether the run's data happened to breach a value
+rule, so "declared but never landed" would flag most quarantine tables most
+runs regardless of whether anything is actually wrong — a different kind of
+absence than the one this check exists to catch. Two other checks cover it
+instead: `test_every_quarantining_bundled_feed_declares_its_quarantine_table`
+(in the same module) holds a feed's wiring and its declaration to each other,
+and `tests/pipelines/test_complaints_a.py` asserts real rejected rows landing
+in the migrated quarantine table.
 
 The one hole that leaves is a feed the run list forgets: a feed nothing runs
 lands nothing, so it can't produce an undeclared write. The sibling test in the

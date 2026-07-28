@@ -10,13 +10,16 @@ from __future__ import annotations
 
 from dataclasses import fields
 
+import pandas as pd
 import pytest
 
 from framework.core import ValidationError
+from framework.core.dataset import Dataset
 from framework.run import RunContext
 from tests.framework_testing import (
     RecordingRunLog,
     RecordingWriter,
+    create_table,
     given_rows,
     read_rows,
 )
@@ -27,6 +30,17 @@ from .case_type import CASE_TYPE
 from .pipeline import FEED_NAME, raw_builder, run, silver_builder
 from .schema import MyfeedRow
 
+#: See the twin constant/helper in cli/scaffold_templates/feed/test_myfeed.py:
+#: an empty-list-seeded column always infers float64 regardless of the
+#: schema's declared type, so create_table needs a *typed* empty row instead.
+_TYPE_DEFAULTS = {"str": "", "int": 0, "float": 0.0, "bool": False}
+
+
+def _empty_migrated_frame() -> pd.DataFrame:
+    row = {f.name: _TYPE_DEFAULTS.get(f.type, "") for f in fields(MyfeedRow)}
+    row.update(logical_run_id="", load_date="", pipeline_run_id="")
+    return pd.DataFrame([row]).iloc[:0]
+
 
 def test_case_type_declares_its_identity_contract():
     assert CASE_TYPE.schema is MyfeedRow
@@ -36,6 +50,15 @@ def test_case_type_declares_its_identity_contract():
 
 
 def test_source_lands_in_raw_then_conforms_to_silver(tmp_path):
+    # Both raw and silver Writers require their table to already exist
+    # (#324): a real scaffolded Case Type gets this from `python -m cli
+    # scaffold --case-type`'s generated migrations plus `migrate`; this
+    # template test drives the bundled sample in isolation, so it mints each
+    # table directly, shaped for the run-stamp columns AccumulateByRun adds.
+    empty = Dataset.from_pandas(_empty_migrated_frame())
+    for layer in ("raw", "silver"):
+        create_table(tmp_path / FEED_NAME / f"{layer}.db", FEED_NAME, empty)
+
     silver = run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME))
     med = medallion(StoreRegistry(tmp_path), FEED_NAME)
 

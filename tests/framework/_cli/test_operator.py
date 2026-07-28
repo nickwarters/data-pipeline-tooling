@@ -16,8 +16,39 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pandas as pd
+
+from framework.core.dataset import Dataset
+from tests.framework_testing import create_table
+
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURES = ROOT / "tests" / "fixtures"
+
+
+def _seed_fixture_source_table(base_dir: Path) -> None:
+    """Mint the tables the ``clipipelines`` fixture pipelines write into.
+
+    ``--env dev`` runs with the require-declared-tables guard on (#324): a
+    real ``python -m cli run`` subprocess against ``dev`` now needs its target
+    already migrated, exactly as it would against a real dev base dir. This
+    fixture pipeline ships no migration of its own (it stands in for "some
+    pipeline", not a real feed), so the test mints the table itself.
+    """
+    stamped = Dataset.from_pandas(
+        pd.DataFrame(
+            {
+                "case_ref": [],
+                "logical_run_id": [],
+                "pipeline_run_id": [],
+                "load_date": [],
+            }
+        )
+    )
+    create_table(base_dir / "fixture" / "raw.db", "cases", stamped)
+    # ``clipipelines/_downstream`` accumulates into the sibling gold table and
+    # is run by several of the same tests; both fixture pipelines' targets are
+    # minted together so no test has to remember which of them it triggers.
+    create_table(base_dir / "fixture" / "gold.db", "pool", stamped)
 
 
 def _cli(*args):
@@ -39,6 +70,7 @@ def _cli(*args):
 
 
 def test_run_executes_a_pipeline_by_its_path(tmp_path):
+    _seed_fixture_source_table(tmp_path)
     result = _cli(
         "run",
         "clipipelines/_source",
@@ -54,6 +86,7 @@ def test_run_executes_a_pipeline_by_its_path(tmp_path):
 
 
 def test_run_passes_params_to_path_addressed_pipeline(tmp_path):
+    _seed_fixture_source_table(tmp_path)
     result = _cli(
         "run",
         "clipipelines/_source",
@@ -72,6 +105,7 @@ def test_run_passes_params_to_path_addressed_pipeline(tmp_path):
 
 
 def test_run_redrives_a_business_run_under_a_logical_run_id(tmp_path):
+    _seed_fixture_source_table(tmp_path)
     from tools.medallion import medallion
     from tools.store import StoreRegistry
 
@@ -115,6 +149,7 @@ def test_run_redrives_a_business_run_under_a_logical_run_id(tmp_path):
 
 
 def test_run_downstream_succeeds_after_fresh_source_history(tmp_path):
+    _seed_fixture_source_table(tmp_path)
     # With a current successful _source run on record, the freshness gate passes
     # and _downstream runs to completion.
     assert (
@@ -143,6 +178,7 @@ def test_run_downstream_succeeds_after_fresh_source_history(tmp_path):
 
 
 def test_orchestrate_runs_path_addressed_pipelines(tmp_path):
+    _seed_fixture_source_table(tmp_path)
     # orchestrate now addresses each scheduled pipeline by its pipelines/<name>
     # path (via --app's build_pipeline_sets()), with no build_runner() registry.
     # One due-work pass runs _source then its freshness-gated _downstream, both
@@ -231,6 +267,7 @@ def test_run_unknown_pipeline_reports_clear_error(tmp_path):
 
 
 def test_runs_lists_recent_runs_from_the_registry(tmp_path):
+    _seed_fixture_source_table(tmp_path)
     assert (
         _cli(
             "run",
@@ -251,6 +288,7 @@ def test_runs_lists_recent_runs_from_the_registry(tmp_path):
 
 
 def test_status_shows_latest_run_per_pipeline(tmp_path):
+    _seed_fixture_source_table(tmp_path)
     assert (
         _cli(
             "run",
@@ -271,6 +309,7 @@ def test_status_shows_latest_run_per_pipeline(tmp_path):
 
 
 def test_log_summarizes_a_run_log_file(tmp_path):
+    _seed_fixture_source_table(tmp_path)
     assert (
         _cli(
             "run",
@@ -401,6 +440,7 @@ def test_run_resolves_base_dir_from_env(tmp_path):
         ),
         "PIPELINE_DATA_DIR_DEV": str(tmp_path),
     }
+    _seed_fixture_source_table(tmp_path)
     result = subprocess.run(
         [
             sys.executable,
@@ -426,6 +466,7 @@ def test_run_resolves_base_dir_from_env(tmp_path):
 def test_explicit_base_dir_overrides_env(tmp_path):
     # An explicit --base-dir wins even when --env is also given.
     explicit = tmp_path / "explicit"
+    _seed_fixture_source_table(explicit)
     env = {
         **os.environ,
         "PYTHONPATH": os.pathsep.join(
@@ -488,6 +529,7 @@ def test_status_and_log_resolve_base_dir_from_env(tmp_path):
         ),
         "PIPELINE_DATA_DIR_DEV": str(tmp_path),
     }
+    _seed_fixture_source_table(tmp_path)
 
     def cli_env(*args):
         return subprocess.run(

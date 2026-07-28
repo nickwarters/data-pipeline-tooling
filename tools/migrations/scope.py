@@ -37,7 +37,14 @@ __all__ = [
 ]
 
 SHARED_DIR = "_shared"
-VALID_LAYERS: tuple[str, ...] = ("raw", "silver", "gold")
+#: The medallion's own three layers, plus ``quarantine`` -- the one non-medallion
+#: landing site the migrations tree still resolves per subject (a feed's
+#: ``QuarantineWriter`` target, ``<subject>/quarantine.db``; see
+#: ``tools.schema.quarantine_table``). It is declared here rather than kept
+#: separate because ``subject_layer_scope``'s directory shape
+#: (``subject/<subject>/<layer>/``) already fits it exactly -- one more
+#: recognised value, not a new scope kind.
+VALID_LAYERS: tuple[str, ...] = ("raw", "silver", "gold", "quarantine")
 
 
 class MigrationTreeError(Exception):

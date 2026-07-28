@@ -30,7 +30,7 @@ from framework.core import PipelineError, SchemaValidator, format_failure
 from framework.io import AccumulateByRun, CsvReader
 from framework.run import Pipeline, RunContext
 from framework.transform import Filter, SchemaCoercion
-from tools.environments import known_environments, resolve_base_dir
+from tools.environments import base_dir_for, known_environments
 from tools.medallion import medallion
 from tools.schema import (
     ACCUMULATE_BY_RUN_CONTEXT_COLUMNS,
@@ -161,9 +161,11 @@ def main(argv: list[str]) -> int:
         f"given ({', '.join(known_environments())}); defaults to $PIPELINE_ENV or dev",
     )
     args = parser.parse_args(argv[1:])
-    # An explicit --base-dir wins; otherwise resolve from the named environment.
+    # An explicit --base-dir wins over the environment's own root, but the
+    # environment is still activated either way -- a path says where a run
+    # lands, never how strictly it may create a table no migration declared.
     try:
-        base_dir = Path(args.base_dir) if args.base_dir else resolve_base_dir(args.env)
+        base_dir = base_dir_for(args.env, override=args.base_dir)
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 1

@@ -19,8 +19,40 @@ from framework.io.readers import DatasetReader
 from framework.io.strategy import AccumulateByRun
 from framework.run.builder import Pipeline
 from framework.transform.processors import AntiJoinWith, Filter, JoinWith, Score, Sort
+from tests.framework_testing import create_table
 from tools.observability.run_log import RunLog
 from tools.store import Store
+
+
+def _seed_selection_tables(
+    tmp_path, *, pool_columns: tuple[str, ...], has_score: bool = False
+) -> Store:
+    """Mint migrated ``selection_trace``/``selection_pool`` tables and the Store
+    over them.
+
+    Both land via a bare ``AccumulateByRun`` (no ``pipeline_run_id`` -- these
+    tests construct the strategy directly, not from a ``RunContext``), so each
+    table's shape is its own columns plus ``logical_run_id``/``load_date``.
+    ``selection_trace``'s own columns come from ``RowTrace.finalize`` (see
+    ``framework.run.trace``): the id column, ``verdict``, ``reason``, ``rank``,
+    and ``score`` when the pipeline under test passes ``score_column``.
+    """
+    db = tmp_path / "gold.db"
+    trace_columns = {"case_ref": [], "verdict": [], "reason": [], "rank": []}
+    if has_score:
+        trace_columns["score"] = []
+    for stamped_columns, table in (
+        (trace_columns, "selection_trace"),
+        ({c: [] for c in pool_columns}, "selection_pool"),
+    ):
+        create_table(
+            db,
+            table,
+            Dataset.from_pandas(
+                pd.DataFrame({**stamped_columns, "logical_run_id": [], "load_date": []})
+            ),
+        )
+    return Store(db)
 
 
 def _available() -> Dataset:
@@ -40,7 +72,7 @@ def _trace(store: Store) -> pd.DataFrame:
 
 
 def test_case_dropped_by_filter_is_excluded_with_a_located_reason(tmp_path):
-    store = Store(tmp_path / "gold.db")
+    store = _seed_selection_tables(tmp_path, pool_columns=("case_ref", "amount"))
     strategy = AccumulateByRun("run-1", "2026-05-29")
     p = Pipeline("selection")
     r = p.read(DatasetReader(_available()), name="read")
@@ -64,7 +96,7 @@ def test_case_dropped_by_filter_is_excluded_with_a_located_reason(tmp_path):
 
 
 def test_retained_case_is_selected_with_gates_passed_and_rank(tmp_path):
-    store = Store(tmp_path / "gold.db")
+    store = _seed_selection_tables(tmp_path, pool_columns=("case_ref", "amount"))
     strategy = AccumulateByRun("run-1", "2026-05-29")
     p = Pipeline("selection")
     r = p.read(DatasetReader(_available()), name="read")
@@ -97,7 +129,9 @@ def test_retained_case_is_selected_with_gates_passed_and_rank(tmp_path):
 
 
 def test_score_is_retained_for_every_considered_case_including_excluded(tmp_path):
-    store = Store(tmp_path / "gold.db")
+    store = _seed_selection_tables(
+        tmp_path, pool_columns=("case_ref", "amount", "priority"), has_score=True
+    )
     strategy = AccumulateByRun("run-1", "2026-05-29")
     p = Pipeline("selection")
     r = p.read(DatasetReader(_available()), name="read")
@@ -122,7 +156,7 @@ def test_score_is_retained_for_every_considered_case_including_excluded(tmp_path
 
 
 def test_trace_lands_in_a_sibling_table_stamped_with_run_id(tmp_path):
-    store = Store(tmp_path / "gold.db")
+    store = _seed_selection_tables(tmp_path, pool_columns=("case_ref", "amount"))
     strategy = AccumulateByRun("run-1", "2026-05-29")
     p = Pipeline("selection")
     r = p.read(DatasetReader(_available()), name="read")
@@ -160,7 +194,9 @@ class _StaticFeed:
 
 
 def test_case_dropped_by_an_inner_join_is_explained_not_silently_absent(tmp_path):
-    store = Store(tmp_path / "gold.db")
+    store = _seed_selection_tables(
+        tmp_path, pool_columns=("case_ref", "amount", "adviser")
+    )
     strategy = AccumulateByRun("run-1", "2026-05-29")
     # The adviser hierarchy reference covers only c1 and c2 — an inner join drops
     # c3, which says must be *explained*, not silently absent.
@@ -192,7 +228,7 @@ def test_case_dropped_by_an_inner_join_is_explained_not_silently_absent(tmp_path
 
 
 def test_case_dropped_by_an_anti_join_is_explained_not_silently_absent(tmp_path):
-    store = Store(tmp_path / "gold.db")
+    store = _seed_selection_tables(tmp_path, pool_columns=("case_ref", "amount"))
     strategy = AccumulateByRun("run-1", "2026-05-29")
     already_reviewed = Dataset.from_pandas(pd.DataFrame({"case_ref": ["c2"]}))
     p = Pipeline("selection")
@@ -218,7 +254,7 @@ def test_case_dropped_by_an_anti_join_is_explained_not_silently_absent(tmp_path)
 
 
 def test_run_log_records_an_explain_step_with_governance_counts(tmp_path):
-    store = Store(tmp_path / "gold.db")
+    store = _seed_selection_tables(tmp_path, pool_columns=("case_ref", "amount"))
     strategy = AccumulateByRun("run-1", "2026-05-29")
     log_path = tmp_path / "run.log"
     p = Pipeline("selection", run_log=RunLog(log_path))

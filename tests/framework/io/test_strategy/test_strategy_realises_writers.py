@@ -80,6 +80,19 @@ def test_busy_timeout_reaches_every_sqlite_writer_a_strategy_mints(
         # existence; mint it first so this stays a test of busy_timeout
         # plumbing, not of table creation.
         create_table(tmp_path / "cases.db", "cases", _dataset())
+    elif name == "accumulate":
+        # Since #324, the require-declared guard (on for this suite) makes
+        # AccumulateByRun require its table too -- and its own run-stamp
+        # columns, which the Writer adds at write time.
+        stamped = _dataset().to_pandas()
+        stamped["logical_run_id"] = "r0"
+        stamped["load_date"] = "2026-01-01"
+        create_table(tmp_path / "cases.db", "cases", Dataset.from_pandas(stamped))
+    elif name == "insert_if_absent":
+        # Likewise InsertIfAbsent: its surrogate column must already be there.
+        seeded = _dataset().to_pandas().iloc[:0].copy()
+        seeded.insert(0, "id", [])
+        create_table(tmp_path / "cases.db", "cases", Dataset.from_pandas(seeded))
     store = Store(tmp_path / "cases.db", busy_timeout_ms=7777)
     store.writer("cases", strategy).write(_dataset())
 

@@ -13,7 +13,12 @@ from dataclasses import dataclass
 from typing import Annotated
 
 from framework.core import Range
-from tools.schema import ACCUMULATE_BY_RUN_CONTEXT_COLUMNS, Table, columns_of
+from tools.schema import (
+    ACCUMULATE_BY_RUN_CONTEXT_COLUMNS,
+    Table,
+    columns_of,
+    quarantine_table,
+)
 
 # The columns the raw hop gates on, in the source's own vocabulary.
 SOURCE_COLUMNS = ["record_id", "department", "resolution_days"]
@@ -40,4 +45,8 @@ TABLES = (
         columns=columns_of(ComplaintsCRow) + ACCUMULATE_BY_RUN_CONTEXT_COLUMNS,
         primary_key=("record_id",),
     ),
+    # silver's reject_writer (pipeline.py) quarantines against this same
+    # schema, so its landing site's shape is ComplaintsCRow's columns plus the
+    # framework-owned quarantine columns (see quarantine_table).
+    quarantine_table("complaints_c", row=ComplaintsCRow),
 )

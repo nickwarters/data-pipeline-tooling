@@ -121,11 +121,27 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   `framework/io/strategy.py` branches on which strategy it was handed and a new
   strategy is one class plus one export line; a table's *existence* is a
   Migration's job, not a Writer's — `Refresh` truncates (`DELETE FROM` +
-  insert, in one transaction) rather than dropping and recreating, and it and
-  the merge strategies (`UpsertStrategy`, `InsertOrIgnore`) raise
-  `MissingTableError` naming the `python -m cli migrate` fix instead of minting
-  a target no migration declared; the append-only Writers still create theirs
-  on first write, for now), `Store` (namespace → file
+  insert, in one transaction) rather than dropping and recreating, and every
+  Writer (`Refresh`/the merge strategies unconditionally since #323;
+  `AccumulateByRun`, `QuarantineWriter`, `InsertIfAbsent`, and the streaming
+  append path behind a rollout guard since #324) raises `MissingTableError`
+  naming the `python -m cli migrate` fix instead of minting a target no
+  migration declared, landing rows through a shared batched-insert helper
+  (`_rows_per_statement`, sized off SQLite's own placeholder limit) that is
+  structurally incapable of creating one. The guard
+  (`framework.io.writers.set_require_declared_tables`/
+  `require_declared_tables_enabled`, a process-wide flag — never threaded
+  through `Store`/`strategy.writer_for`, since a Writer holds only a database
+  path and `framework/` must not import `tools.environments`) is flipped by
+  `tools.environments.base_dir_for` to match the active environment's own
+  `require_declared_tables` — including when an explicit `--base-dir` overrides
+  that environment's root — on in `dev`, off elsewhere until that
+  environment's `schema diff` is clean — see
+  [ADR 0016](docs/adr/0016-migrations-own-table-structure.md). A feed's
+  quarantine table (`tools.schema.quarantine_table`) is declared and migrated
+  the same way, under a `quarantine` scope alongside `raw`/`silver`/`gold`.
+  `scaffold` declares a feed's `TABLES` and generates its first migrations, so
+  `migrate` then `run` both work before a line is edited), `Store` (namespace → file
   factory minting `writer(table, strategy)` — a one-line delegation to
   `strategy.writer_for(...)` — / `reader(table)` over one logical database; **lives in the sibling
   `tools.store`, not `framework.io`** — where a feed lands is application

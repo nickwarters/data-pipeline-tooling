@@ -34,6 +34,18 @@ def test_subject_layer_scope():
     assert scope.label == "subject/complaints_a/silver"
 
 
+def test_a_subjects_quarantine_is_a_recognised_layer():
+    # `quarantine` joined raw/silver/gold in VALID_LAYERS (#324): a feed's
+    # reject table is a real landing site, migrated like any other, and
+    # `subject/<subject>/<layer>/` already fits it -- one more recognised
+    # value, not a new scope kind.
+    scope = parse_scope_dir(PurePosixPath("subject/complaints_a/quarantine"))
+    assert scope.kind == "subject_layer"
+    assert scope.subject == "complaints_a"
+    assert scope.layer == "quarantine"
+    assert scope.label == "subject/complaints_a/quarantine"
+
+
 def test_platform_scope():
     scope = parse_scope_dir(PurePosixPath("platform/registry"))
     assert scope.kind == "platform"

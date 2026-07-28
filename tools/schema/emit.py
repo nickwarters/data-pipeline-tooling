@@ -63,6 +63,7 @@ from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
 from framework._internal.connection import connect
+from framework.io.sql import quote_identifier
 
 # The one place a migration file's statement boundaries are decided, reused so
 # a replay splits a file exactly the way ``migrate`` will apply it.
@@ -223,15 +224,16 @@ def generate_migration_sql(
     human to resolve by hand rather than generating something wrong.
     """
     label = f"{namespace or table.namespace}/{table.name}"
+    quoted_table = quote_identifier(table.name)
     statements: list[str]
     description: str
     if not diff.landed:
         clauses = [
-            f"    {column.name} {column.sql_type}"
+            f"    {quote_identifier(column.name)} {column.sql_type}"
             + ("" if column.nullable else " NOT NULL")
             for column in table.columns
         ]
-        statements = [f"CREATE TABLE {table.name} (\n" + ",\n".join(clauses) + "\n);"]
+        statements = [f"CREATE TABLE {quoted_table} (\n" + ",\n".join(clauses) + "\n);"]
         description = f"create {label}"
     elif diff.missing_column_names:
         added_names = diff.missing_column_names
@@ -240,7 +242,8 @@ def generate_migration_sql(
         for name in added_names:
             column = by_name[name]
             clause = (
-                f"ALTER TABLE {table.name} ADD COLUMN {column.name} {column.sql_type}"
+                f"ALTER TABLE {quoted_table} ADD COLUMN "
+                f"{quote_identifier(column.name)} {column.sql_type}"
             )
             if not column.nullable:
                 # SQLite refuses a NOT NULL column added to a populated table

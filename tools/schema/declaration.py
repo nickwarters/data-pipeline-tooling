@@ -35,11 +35,13 @@ from framework.core import NonNull
 __all__ = [
     "ACCUMULATE_BY_RUN_COLUMNS",
     "ACCUMULATE_BY_RUN_CONTEXT_COLUMNS",
+    "QUARANTINE_COLUMNS",
     "Column",
     "Index",
     "Table",
     "collect_declared_tables",
     "columns_of",
+    "quarantine_table",
     "resolved_namespace",
     "retype",
     "text_columns",
@@ -222,6 +224,44 @@ ACCUMULATE_BY_RUN_COLUMNS: tuple[Column, ...] = (
 ACCUMULATE_BY_RUN_CONTEXT_COLUMNS: tuple[Column, ...] = ACCUMULATE_BY_RUN_COLUMNS + (
     Column("pipeline_run_id", "TEXT"),
 )
+
+
+#: The extra columns every ``QuarantineWriter`` target carries, regardless of
+#: which feed it belongs to (see ``framework.io.writers.QuarantineWriter`` and
+#: ``framework.run.builder.QuarantineNode``): ``failed_rule`` -- the
+#: partitioner's semicolon-joined reason, added before the writer ever sees
+#: the frame -- plus the same run-identity columns ``QuarantineNode`` stamps on
+#: every rejected row (``logical_run_id`` / ``pipeline_run_id`` / ``load_date``,
+#: unconditionally -- unlike a bare ``AccumulateByRun()`` this stamp is never
+#: optional, since ``pipeline_run_id`` comes straight off the ``RunContext``).
+#: Declared once here -- not repeated in every quarantining feed's ``TABLES`` --
+#: because the shape is framework-owned, not a feed's own choice; see
+#: :func:`quarantine_table`.
+QUARANTINE_COLUMNS: tuple[Column, ...] = (
+    Column("failed_rule", "TEXT", nullable=False),
+    *ACCUMULATE_BY_RUN_CONTEXT_COLUMNS,
+)
+
+
+def quarantine_table(name: str, *, row: type) -> Table:
+    """Declare a feed's quarantine landing site: ``row``'s columns + the
+    framework-owned :data:`QUARANTINE_COLUMNS`.
+
+    ``row`` is the same schema passed to ``SchemaValueRulePartitioner`` /
+    ``raw_to_silver``'s ``reject_writer`` -- a rejected row carries that
+    schema's columns verbatim plus ``failed_rule`` and the run-identity stamp,
+    so this is the one call a quarantining feed needs rather than hand-listing
+    those extra columns itself.
+
+    Namespace is always the bare ``"quarantine"`` layer: :func:`resolved_namespace`
+    resolves it against the feed like any other bare layer name, to
+    ``<feed>/quarantine`` -- the same ``<subject>/quarantine.db`` file
+    ``Store.quarantine_writer`` already targets (``db_path.parent /
+    "quarantine.db"``, where ``db_path`` is that feed's own ``silver.db``).
+    The migration generator's ``subject/<subject>/quarantine/`` scope
+    (``tools.migrations.scope``) composes into that same file.
+    """
+    return Table("quarantine", name, columns=columns_of(row) + QUARANTINE_COLUMNS)
 
 
 def retype(columns: tuple[Column, ...], **overrides: str) -> tuple[Column, ...]:

@@ -39,6 +39,7 @@ import sys
 from pathlib import Path
 
 from framework.core import PipelineError, format_failure
+from framework.io import MissingTableError
 from framework.run import (
     RunRegistry,
     UnknownPipelineError,
@@ -47,7 +48,7 @@ from framework.run import (
     run_pipeline,
 )
 from tools.calendar import WorkingDayCalendar
-from tools.environments import ENV_VAR, known_environments, resolve_base_dir
+from tools.environments import ENV_VAR, base_dir_for, known_environments
 from tools.observability.run_store import RunStore
 from tools.orchestration import Orchestrator
 
@@ -80,19 +81,22 @@ def _resolve_app(name: str):
 def base_dir_or_report(args: argparse.Namespace) -> Path | None:
     """Resolve ``base_dir`` from ``--base-dir`` or ``--env``.
 
-    An explicit ``--base-dir`` always wins; when omitted it is resolved from
-    ``--env`` (or ``$PIPELINE_ENV``) via
-    :func:`tools.environments.resolve_base_dir`. Returns ``None`` after printing
-    an actionable message when the environment can't be resolved.
+    An explicit ``--base-dir`` always wins over the environment's own root;
+    when omitted the root is resolved from ``--env`` (or ``$PIPELINE_ENV``).
+    Either way the named environment is *activated*
+    (:func:`tools.environments.base_dir_for`), so ``--base-dir`` overrides
+    where a run lands without also opting it out of that environment's
+    require-declared-tables guard. Returns ``None`` after printing an
+    actionable message when the environment can't be resolved.
 
     Public within the ``cli`` package (with :func:`add_base_dir_args`, which
     declares the matching options): every command that addresses a base
     directory resolves it the same way, including ``cli.schema``'s.
     """
-    if getattr(args, "base_dir", None):
-        return Path(args.base_dir)
     try:
-        return resolve_base_dir(getattr(args, "env", None))
+        return base_dir_for(
+            getattr(args, "env", None), override=getattr(args, "base_dir", None)
+        )
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return None
@@ -186,6 +190,14 @@ def _run(args: argparse.Namespace) -> int:
     except PipelineError as exc:
         print(format_failure(exc), file=sys.stderr)
         return 1
+    except MissingTableError as exc:
+        # An operator error with an operator's fix already in its message (the
+        # `migrate` command to run), so it is printed rather than raised: a
+        # stack trace through the Writer would bury the one line that says what
+        # to do. The run is still recorded as failed -- `run_pipeline` logs and
+        # re-raises before this sees it.
+        print(str(exc), file=sys.stderr)
+        return 1
     return 0
 
 
@@ -214,6 +226,10 @@ def _orchestrate(args: argparse.Namespace) -> int:
             decisions = [d for result in results for d in result.decisions]
     except PipelineError as exc:
         print(format_failure(exc), file=sys.stderr)
+        return 1
+    except MissingTableError as exc:
+        # Same reasoning as `_run`'s: the message already names the fix.
+        print(str(exc), file=sys.stderr)
         return 1
     for decision in decisions:
         line = (

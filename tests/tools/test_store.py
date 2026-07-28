@@ -51,6 +51,9 @@ def test_store_writer_with_accumulate_by_run_strategy_accumulates(tmp_path):
     # Writer stamps rows by run and accumulates across runs.
     dataset = CsvReader(FIXTURE).read()
     store = _namespace_store(tmp_path)
+    # AccumulateByRunWriter requires its target to already exist (#324).
+    frame = dataset.to_pandas().assign(logical_run_id="", load_date="").iloc[:0]
+    create_table(tmp_path / "cases.db", "casepool", Dataset.from_pandas(frame))
 
     store.writer("casepool", AccumulateByRun("r1", "2026-05-29")).write(dataset)
     store.writer("casepool", AccumulateByRun("r2", "2026-05-30")).write(dataset)

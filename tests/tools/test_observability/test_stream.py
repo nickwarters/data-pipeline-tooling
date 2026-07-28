@@ -14,6 +14,7 @@ import pytest
 from framework.core.dataset import Dataset
 from framework.core.errors import PipelineError
 from framework.io.readers import KeyFilterChunkReader
+from tests.framework_testing import create_table
 from tools.observability.run_log import RunLog
 from tools.observability.stream import stream_step
 
@@ -195,6 +196,16 @@ def _accumulating_writer(db_path):
 
 
 def _drive(run_log, db_path, rows):
+    # AccumulateByRunWriter's streaming session requires its target to
+    # already exist (#324), including when it is opening for the first time.
+    if not db_path.exists():
+        create_table(
+            db_path,
+            "feed",
+            Dataset.from_pandas(
+                pd.DataFrame({"id": [], "logical_run_id": [], "load_date": []})
+            ),
+        )
     return stream_step(
         run_log,
         pipeline_run_id="run-1",

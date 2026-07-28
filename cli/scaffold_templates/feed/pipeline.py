@@ -35,7 +35,7 @@ from pathlib import Path
 from framework.core import Dataset, PipelineError, format_failure
 from framework.io import AccumulateByRun, CsvReader, Reader, Refresh, Writer
 from framework.run import Pipeline, RunContext, RunLog
-from tools.environments import known_environments, resolve_base_dir
+from tools.environments import base_dir_for, known_environments
 from tools.medallion import medallion
 from tools.recipes import raw_to_silver, source_to_raw
 from tools.store import StoreRegistry
@@ -176,9 +176,11 @@ def main(argv: list[str]) -> int:
         help="print each pipeline's plan before running it",
     )
     args = parser.parse_args(argv[1:])
-    # An explicit path wins; otherwise resolve base_dir from the named environment.
+    # An explicit --base-dir wins over the environment's own root, but the
+    # environment is still activated either way -- a path says where a run
+    # lands, never how strictly it may create a table no migration declared.
     try:
-        base_dir = Path(args.base_dir) if args.base_dir else resolve_base_dir(args.env)
+        base_dir = base_dir_for(args.env, override=args.base_dir)
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 1

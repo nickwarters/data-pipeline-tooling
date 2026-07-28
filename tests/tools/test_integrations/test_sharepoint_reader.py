@@ -249,7 +249,22 @@ def test_selection_pool_is_delivered_to_a_per_case_type_list(tmp_path):
     )
     # Land the SelectionPool into gold exactly as the Selection pipeline does
     # (accumulate-by-run audit trail), so the Deliverable pipeline reads a real
-    # gold table rather than an in-memory hand-off.
+    # gold table rather than an in-memory hand-off. AccumulateByRunWriter
+    # requires its target to already exist (#324).
+    create_table(
+        gold_db,
+        "selection_pool",
+        Dataset.from_pandas(
+            pd.DataFrame(
+                {
+                    "case_ref": [],
+                    "question_bank_id": [],
+                    "logical_run_id": [],
+                    "load_date": [],
+                }
+            )
+        ),
+    )
     AccumulateByRunWriter(gold_db, "selection_pool", "2026-06-10", "2026-06-10").write(
         selection_pool
     )

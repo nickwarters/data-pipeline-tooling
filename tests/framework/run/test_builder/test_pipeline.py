@@ -17,7 +17,7 @@ from framework.run.builder import (
     Pipeline,
     PipelineGraphError,
 )
-from tests.framework_testing import RecordingRunLog
+from tests.framework_testing import RecordingRunLog, create_table
 from tools.store import Store
 
 FIXTURE = Path(__file__).parent.parent.parent.parent / "fixtures" / "cases.csv"
@@ -185,6 +185,13 @@ def test_error_severity_pre_validator_aborts_before_any_write():
 def test_failed_run_leaves_the_gold_layer_untouched(tmp_path):
     store = Store(tmp_path / "cases.db")
     seed = Dataset.from_pandas(pd.DataFrame({"id": [1, 2]}))
+    create_table(
+        tmp_path / "cases.db",
+        "casepool",
+        Dataset.from_pandas(
+            pd.DataFrame({"id": [], "logical_run_id": [], "load_date": []})
+        ),
+    )
     store.writer("casepool", AccumulateByRun("r1", "2026-05-29")).write(seed)
 
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [3]})))

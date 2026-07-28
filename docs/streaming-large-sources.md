@@ -149,6 +149,17 @@ session opens.
 | `QuarantineWriter` | The run's prior rejects are cleared with the **first** chunk that has any, then appended to. A run that rejects nothing writes and clears nothing, exactly as a whole-dataset quarantine of the same run does. |
 | `Refresh` (`SqliteTruncateReloadWriter`), `CsvWriter` / `ExcelWriter` / `JsonWriter` | **Refused at wiring time.** They replace their target wholesale, and a file Writer additionally reads the whole existing file back — the opposite of bounded memory. |
 
+Since #324 the session-open clear also **requires the target table to already
+exist**, subject to the same require-declared-tables guard every other Writer
+reads (`framework.io.writers.require_declared_tables_enabled`,
+[ADR 0016](adr/0016-migrations-own-table-structure.md)): a missing table
+raises `MissingTableError` before a single chunk is read, rather than lazily
+on the first chunk's `write` — a stream that turns out to write zero chunks
+would otherwise never touch the append Writer at all, and a missing table
+should fail the session loudly. This does not change *when* or *how many*
+transactions the session commits — only whether it may create the table it
+is about to clear.
+
 Because the clear is committed when the session opens and each chunk commits as
 it lands, a stream that aborts part-way leaves that run **partially landed**.
 That is safe precisely because `AccumulateByRun` is keyed by `logical_run_id`:

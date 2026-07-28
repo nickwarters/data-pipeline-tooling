@@ -79,6 +79,27 @@ def test_selection_narrows_the_casepool_into_a_stamped_selection_pool(tmp_path):
     st = p.transform(
         Stamp("question_bank_id", variation.question_bank_id), s, name="stamp"
     )
+    # AccumulateByRunWriter requires its target to already exist (#324); its
+    # shape is the stamped dataset's own columns plus the run-stamp ones the
+    # strategy adds (no pipeline_run_id -- this bare AccumulateByRun carries
+    # none).
+    create_table(
+        tmp_path / "cases" / "gold.db",
+        "selection_pool",
+        Dataset.from_pandas(
+            pd.DataFrame(
+                {
+                    "case_ref": [],
+                    "adviser": [],
+                    "activity_date": [],
+                    "amount": [],
+                    "question_bank_id": [],
+                    "logical_run_id": [],
+                    "load_date": [],
+                }
+            )
+        ),
+    )
     p.write(
         gold.writer("selection_pool", AccumulateByRun("2026-05-29", "2026-05-29")),
         st,

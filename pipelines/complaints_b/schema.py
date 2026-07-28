@@ -25,6 +25,7 @@ from tools.schema import (
     ACCUMULATE_BY_RUN_CONTEXT_COLUMNS,
     Table,
     columns_of,
+    quarantine_table,
     text_columns,
 )
 
@@ -53,4 +54,8 @@ TABLES = (
         columns=columns_of(ComplaintsBRow) + ACCUMULATE_BY_RUN_CONTEXT_COLUMNS,
         primary_key=("record_id",),
     ),
+    # silver's reject_writer (pipeline.py) quarantines against this same
+    # schema, so its landing site's shape is ComplaintsBRow's columns plus the
+    # framework-owned quarantine columns (see quarantine_table).
+    quarantine_table("complaints_b", row=ComplaintsBRow),
 )

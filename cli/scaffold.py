@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import importlib.util
 import keyword
 import re
 import sys
@@ -252,7 +253,22 @@ def _read_feed_file(path: str | Path) -> _FeedSpec:
 
 
 def _render_schema(text: str, feed: str, spec: _FeedSpec) -> str:
-    """Replace the template dataclass with one field per feed-file column."""
+    """Replace the template dataclass with one field per feed-file column.
+
+    The dataclass is followed by ``TABLES`` (since #324 every scaffolded feed
+    declares its own migrations from it) rather than being the last thing in
+    the file, so the replacement stops at the blank lines before ``TABLES``
+    -- a non-greedy match up to that lookahead -- instead of consuming to EOF.
+    ``TABLES``'s silver/gold/quarantine entries need no rewriting: they derive
+    their columns from the dataclass by name (``columns_of(MyfeedRow)``), so
+    they pick up the new fields automatically once the class above it is
+    replaced. Its *raw* entry is different when ``spec.needs_raw``: raw keeps
+    the source's own (non-identifier) column names faithfully, which are
+    never the schema's canonical fields, so that entry is repointed at a
+    ``RAW_FEED_COLUMNS`` constant here rather than at ``columns_of(MyfeedRow)``
+    -- the same distinction ``_render_pipeline`` draws for the raw hop's
+    ``ColumnValidator`` gate.
+    """
     cls = _pascal(feed) + "Row"
     lines = ["@dataclass", f"class {cls}:"]
     if spec.dropped:
@@ -264,9 +280,42 @@ def _render_schema(text: str, feed: str, spec: _FeedSpec) -> str:
         f"    {name}: {type_name}" for name, type_name in zip(spec.names, spec.inferred)
     ]
     body = "\n".join(lines) + "\n"
-    # The dataclass is the last thing in schema.py, so replace it to EOF; the
-    # module docstring and imports above it are left intact.
-    return re.sub(r"@dataclass\nclass .*", lambda _: body, text, flags=re.S)
+    if spec.needs_raw:
+        body += "\n\n" + _raw_columns_literal(spec)
+    text = re.sub(
+        r"@dataclass\nclass .*?(?=\n\n\nTABLES)",
+        lambda _: body,
+        text,
+        count=1,
+        flags=re.S,
+    )
+    if spec.needs_raw:
+        text = text.replace(
+            "from tools.schema import (\n"
+            "    ACCUMULATE_BY_RUN_CONTEXT_COLUMNS,\n"
+            "    Table,\n"
+            "    columns_of,\n"
+            "    quarantine_table,\n"
+            ")\n",
+            "from tools.schema import (\n"
+            "    ACCUMULATE_BY_RUN_CONTEXT_COLUMNS,\n"
+            "    Table,\n"
+            "    columns_of,\n"
+            "    quarantine_table,\n"
+            "    text_columns,\n"
+            ")\n",
+        )
+        old_raw = (
+            f'"raw",\n        "{feed}",\n        columns=columns_of({cls}) + '
+            "ACCUMULATE_BY_RUN_CONTEXT_COLUMNS,\n"
+        )
+        new_raw = (
+            f'"raw",\n        "{feed}",\n        '
+            "columns=text_columns(RAW_FEED_COLUMNS) + "
+            "ACCUMULATE_BY_RUN_CONTEXT_COLUMNS,\n"
+        )
+        text = text.replace(old_raw, new_raw)
+    return text
 
 
 def _raw_columns_literal(spec: _FeedSpec) -> str:
@@ -295,13 +344,18 @@ def _render_pipeline(text: str, feed: str, spec: _FeedSpec) -> str:
     """Gate the raw validator on the source columns when they aren't identifiers.
 
     Only needed when ``needs_raw``: the source names can't be schema fields, so
-    emit them as ``RAW_FEED_COLUMNS`` and gate the raw hop on those. The schema
-    fields stay the silver target, and ``RENAME`` maps the faithful source names
-    to them, so the schema import is kept (silver coerces/validates against it).
+    the raw hop gates on ``RAW_FEED_COLUMNS`` instead -- declared in
+    ``schema.py`` by :func:`_render_schema` (since #324 that is also where
+    raw's declared ``Table`` reads it from), so pipeline.py just imports it
+    rather than defining its own copy. The schema fields stay the silver
+    target, and ``RENAME`` maps the faithful source names to them, so the
+    schema import is kept (silver coerces/validates against it).
     """
     cls = _pascal(feed) + "Row"
-    anchor = f'SAMPLE_CSV = Path(__file__).parent / "sample_data" / "{feed}.csv"\n'
-    text = text.replace(anchor, anchor + "\n" + _raw_columns_literal(spec))
+    text = text.replace(
+        f"from .schema import {cls}\n",
+        f"from .schema import {cls}, RAW_FEED_COLUMNS\n",
+    )
     # Gate the raw hop's recipe on RAW_FEED_COLUMNS instead of the schema fields
     text = text.replace(
         f"[f.name for f in fields({cls})]",
@@ -367,6 +421,75 @@ def _render_test(text: str, feed: str, spec: _FeedSpec) -> str:
             "set(RAW_FEED_COLUMNS).issubset(landed[0].keys())",
         )
     return text
+
+
+def _load_declared_tables(schema_path: Path, feed: str) -> tuple:
+    """Import the just-rendered ``schema.py`` by file path and return its ``TABLES``.
+
+    Loaded by path (``importlib.util``), not ``importlib.import_module``:
+    ``root`` need not be on ``sys.path`` at all (a test renders into a
+    throwaway ``tmp_path``, never installed or added to the path), and the
+    scaffold has just written this exact file, so there is nothing package
+    machinery needs to resolve.
+    """
+    spec = importlib.util.spec_from_file_location(
+        f"_scaffold_schema_{feed}", schema_path
+    )
+    assert spec is not None and spec.loader is not None  # a file we just wrote
+    module = importlib.util.module_from_spec(spec)
+    # Registered in sys.modules before exec: schema.py's `from __future__ import
+    # annotations` makes every dataclass field annotation a string, and the
+    # dataclass decorator resolves those by looking the class's module up in
+    # sys.modules -- an unregistered module fails that lookup outright.
+    sys.modules[spec.name] = module
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        del sys.modules[spec.name]
+    return tuple(getattr(module, "TABLES", ()))
+
+
+def _emit_migrations(feed: str, tables: tuple, root: Path) -> list[Path]:
+    """Write the next migration file for each of ``feed``'s declared ``TABLES``.
+
+    Every table is brand new -- a freshly scaffolded feed has authored no
+    migration yet -- so this is always the ``CREATE TABLE`` branch of
+    :func:`tools.schema.generate_migration_sql`, called directly rather than
+    shelling out to ``python -m cli migrations make`` (the same generator; see
+    that command for the general drift-to-migration case). Continues the
+    migrations tree's own version sequence -- one repo-wide, never reused --
+    by reading whatever is already committed under ``root/migrations``, so a
+    real scaffold (into this repo) lands after the last committed migration
+    and a scaffold rendered into a throwaway ``tmp_path`` starts its own
+    sequence at 1.
+    """
+    from tools.migrations.discovery import discover_migrations
+    from tools.schema.declaration import resolved_namespace
+    from tools.schema.emit import generate_migration_sql, slug_for
+    from tools.schema.live import TableDiff
+
+    migrations_root = root / "migrations"
+    existing = discover_migrations(migrations_root)
+    next_version = max((int(m.version) for m in existing), default=0) + 1
+
+    written: list[Path] = []
+    for table in tables:
+        namespace = resolved_namespace(table, feed)
+        subject, layer = namespace.split("/", 1)
+        diff = TableDiff(table=table, live=None)  # never landed: a brand new feed
+        version = f"{next_version:04d}"
+        sql = generate_migration_sql(
+            table, feed, diff, version=version, namespace=namespace
+        )
+        if sql is None:
+            continue  # unreachable for a never-landed table, but stay defensive
+        slug = slug_for(table, diff)
+        path = migrations_root / "subject" / subject / layer / f"{version}_{slug}.sql"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(sql, encoding="utf-8")
+        written.append(path)
+        next_version += 1
+    return written
 
 
 def render(
@@ -446,6 +569,14 @@ def render(
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(text, encoding="utf-8")
         created.append(target)
+
+    # The feed declares its tables in the schema.py just written; emit its
+    # first migrations from them so `migrate` then `run` both work before a
+    # single line is edited (see _emit_migrations). Every scaffold template
+    # declares TABLES, so this always has something to do.
+    schema_path = feed_dir / "schema.py"
+    tables = _load_declared_tables(schema_path, feed)
+    created.extend(_emit_migrations(feed, tables, root))
     return created
 
 
@@ -513,7 +644,13 @@ def _command(args: argparse.Namespace) -> int:
     for path in created:
         print(f"created {path}")
     print(
+        # `migrate` comes first, and is named here rather than left to be
+        # discovered: since #324 a Writer never creates its own table, so a run
+        # before the generated migrations are applied fails with
+        # MissingTableError -- correctly, but only helpfully if the operator
+        # was told the step existed.
         f"\nRun it from the repo root:\n"
+        f"    python -m cli migrate --env dev --subject {args.feed}\n"
         f"    python -m pipelines.{args.feed}.pipeline /data\n"
         f"    python -m pytest tests/pipelines/test_{args.feed}.py"
     )

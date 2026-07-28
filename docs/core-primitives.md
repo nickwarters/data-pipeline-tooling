@@ -401,10 +401,30 @@ it is shared:
   environment stays a `<env>` placeholder — a Writer knows its file, never
   which environment resolved it. `framework/io/writers.py`
   still learns nothing about what a migration *is* — the message just names
-  the fix as text. The other Writers (`AccumulateByRunWriter`,
-  `QuarantineWriter`, `SqliteInsertIfAbsentWriter`, and the chunk-append path)
-  still create their target on first write — narrowing that too is future
-  work, not this change's.
+  the fix as text.
+- **Every remaining append site is now the same, behind a rollout guard**
+  (since #324, on top of [ADR 0016](adr/0016-migrations-own-table-structure.md)).
+  `AccumulateByRunWriter`, `QuarantineWriter`, `SqliteInsertIfAbsentWriter`, and
+  the streaming `_AppendingChunkWriter` no longer create their target via
+  `to_sql(if_exists="append")` when the **require-declared-tables guard** is
+  on: a shared `_ensure_table`/`_append_rows` pair requires the table
+  (`MissingTableError`, same as `Refresh`) and lands rows through a hand-rolled,
+  batched, table-creation-incapable `INSERT` (`_insert_rows`, batched per
+  `_rows_per_statement` against SQLite's own `SQLITE_LIMIT_VARIABLE_NUMBER`, so
+  a wide table never trips a placeholder limit that varies by SQLite build).
+  Guard **off** — the rollout default outside `dev` until an environment's own
+  `schema diff` is confirmed clean — these Writers still fall back to the old
+  `to_sql(if_exists="append")` creation, unchanged, so a not-yet-migrated
+  environment keeps working exactly as before. The flag itself is process-wide
+  (`framework.io.writers.set_require_declared_tables`/
+  `require_declared_tables_enabled`), flipped by
+  `tools.environments.base_dir_for` — the one call every entry point makes to
+  settle which environment it is in, which activates that environment even when
+  an explicit `--base-dir` overrides its root — rather than threaded
+  through `Store`/`strategy.writer_for`: a Writer still holds only a database
+  path, and `framework/` still never imports `tools.environments`. See ADR
+  0016 for the full rationale, the alternatives it rejected, and the stated
+  cost of a process-wide switch.
 - **One delete-then-append.** "Clear this logical run's prior rows, then append"
   exists once (`_replace_logical_run`) and is used by both `AccumulateByRunWriter`
   and `QuarantineWriter`; the whole-file equivalent stays in

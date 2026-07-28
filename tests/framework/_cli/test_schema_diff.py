@@ -39,7 +39,16 @@ def test_diff_against_an_empty_base_dir_is_pending_not_drifted(tmp_path):
 
 
 def _land_complaints_a(base_dir: Path) -> None:
-    """Run the real ``complaints_a`` feed under ``base_dir`` -- raw + silver."""
+    """Migrate and run the real ``complaints_a`` feed under ``base_dir``.
+
+    ``migrate`` first, because ``run`` alone no longer creates anything: with
+    the require-declared-tables guard on (dev's setting, #324) every one of the
+    feed's Writers refuses a target no migration has declared. Landing through
+    the committed migrations is also the shape ``schema diff`` is *supposed* to
+    find clean, rather than whatever ``to_sql`` would have inferred.
+    """
+    migrate = _cli("migrate", "--base-dir", str(base_dir), "--subject", "complaints_a")
+    assert migrate.returncode == 0, migrate.stderr
     landing = base_dir / "landing_zone"
     landing.mkdir(exist_ok=True)
     shutil.copy(

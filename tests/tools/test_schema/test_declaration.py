@@ -15,11 +15,13 @@ from tools.schema import declaration
 from tools.schema.declaration import (
     ACCUMULATE_BY_RUN_COLUMNS,
     ACCUMULATE_BY_RUN_CONTEXT_COLUMNS,
+    QUARANTINE_COLUMNS,
     Column,
     Index,
     Table,
     collect_declared_tables,
     columns_of,
+    quarantine_table,
     resolved_namespace,
     retype,
     text_columns,
@@ -157,3 +159,24 @@ def test_a_feed_module_that_fails_to_import_is_not_treated_as_undeclared(monkeyp
 
     with pytest.raises(ModuleNotFoundError, match="nowhere"):
         collect_declared_tables()
+
+
+def test_the_quarantine_shape_is_declared_once_centrally():
+    # The framework owns these columns, not the feed: `failed_rule` from the
+    # partitioner plus the run identity QuarantineNode always stamps. A feed
+    # that hand-listed them would be free to get them wrong.
+    assert QUARANTINE_COLUMNS == (
+        Column("failed_rule", "TEXT", nullable=False),
+        *ACCUMULATE_BY_RUN_CONTEXT_COLUMNS,
+    )
+
+
+def test_quarantine_table_is_the_feed_s_row_plus_the_central_shape():
+    table = quarantine_table("widgets", row=_Row)
+
+    assert table.columns == columns_of(_Row) + QUARANTINE_COLUMNS
+    assert table.name == "widgets"
+    # A bare layer name, so it resolves against the feed to the very file
+    # Store.quarantine_writer targets: <feed>/quarantine.db.
+    assert table.namespace == "quarantine"
+    assert resolved_namespace(table, "widgets_feed") == "widgets_feed/quarantine"

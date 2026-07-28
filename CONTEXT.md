@@ -143,11 +143,18 @@ statements; an applied migration whose file has since changed is a hard
 error, never a silent re-apply. `schema diff`'s drift report and a migration
 are deliberately separate: diffing tells you a database disagrees with the
 declaration; a migration is the reviewed fix, not an automatic one. A Migration
-is also the *only* thing that brings a **Refresh**ed or merged table into
-existence: those Writers refuse (`MissingTableError`, naming the `migrate`
-command) rather than minting a table nothing declared, and `Refresh` truncates
-rather than dropping so an index a Migration created survives every later run.
-Coarser layouts that bundle several subjects or layers into one physical file
+is also the *only* thing that brings a table into existence: every Writer
+refuses (`MissingTableError`, naming the `migrate` command) rather than
+minting one nothing declared, and `Refresh` truncates rather than dropping so
+an index a Migration created survives every later run. That refusal is rolled
+out per environment (`_Environment.require_declared_tables` in
+`tools/environments.py`) rather than everywhere at once — see
+[ADR 0016](docs/adr/0016-migrations-own-table-structure.md) — so a table an
+environment already relies on being auto-created keeps working until its own
+`schema diff` is confirmed clean. A feed's **quarantine** table (its reject
+sink, one per subject) is declared and migrated the same way as raw/silver/gold
+(`tools.schema.quarantine_table`), not a special case. Coarser layouts that
+bundle several subjects or layers into one physical file
 were designed and prototyped but removed rather than shipped broken — this
 repo names a silver table after the raw table it refines, so collapsing raw
 and silver (or several subjects) into one file collides on every feed; see
