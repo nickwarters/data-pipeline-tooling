@@ -4,6 +4,7 @@ import {
   withReviewerDisplayNames,
 } from '../evaluators/team-workload-model.js';
 import { h } from '../lib/html.js';
+import { LoadingState } from '../lib/empty-state.js';
 import { patchRoute } from '../core/route-state.js';
 import { withAbortSignal } from '../services/abortable-client.js';
 import { fetchTeamWorkloadCases } from '../services/team-cases-fetcher.js';
@@ -137,7 +138,7 @@ export function myTeamView(
     ),
     route.error ? h('p', { role: 'alert' }, route.error) : null,
     route.loading && route.rows === null
-      ? h('p', {}, 'Loading current workload…')
+      ? LoadingState('Loading current workload')
       : null,
     route.rows !== null
       ? h(

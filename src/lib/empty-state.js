@@ -17,3 +17,26 @@ import { h } from './html.js';
 export function EmptyState(message, { className = '', tag = 'p' } = {}) {
   return h(tag, { className: `cora-empty ${className}`.trim() }, message);
 }
+
+/**
+ * Standard in-flight placeholder: the sibling of `EmptyState` for the moment
+ * before a route's first read resolves.
+ *
+ * Five pages each wrote their own, and they had drifted into two spellings of
+ * the ellipsis (`Loading...` and `Loading…`) — so call sites pass the *subject*
+ * only and the trailing character is decided here, once.
+ *
+ * @param {string} [subject] what is loading, e.g. `'Loading roadmap'`
+ * @param {{ className?: string, tag?: string }} [options]
+ * @returns {HTMLElement}
+ */
+export function LoadingState(
+  subject = 'Loading',
+  { className = '', tag = 'p' } = {}
+) {
+  return h(
+    tag,
+    { className: `cora-loading ${className}`.trim() },
+    `${subject}…`
+  );
+}

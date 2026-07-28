@@ -13,10 +13,8 @@ import {
   completeCase,
   completionPatch,
 } from '../src/pages/cora-case-review/completion-actions.js';
-import {
-  raiseAppeal,
-  resolveAppeal,
-} from '../src/pages/cora-case-review/appeal-actions.js';
+import { openAppealOf } from '../src/pages/cora-case-review/appeal-actions.js';
+import { createAppealEffects } from '../src/pages/cora-case-review/appeal-effects.js';
 import {
   answerEdited,
   issueCaptured,
@@ -362,6 +360,29 @@ export function createInMemoryFlowRunner(state, opts = {}) {
     if (caseLoader) await saveQueue.flushCase(caseLoader.caseId);
   }
 
+  /**
+   * The route's own Appeal persistence, driven headlessly (#532). The runner
+   * used to carry a second copy of it — the same clock and id stamping, the
+   * same transactional/append fork onto the SaveQueue — which meant the flow
+   * suite could pass while the real page wrote something else.
+   *
+   * @param {CaseLoader} loader
+   * @param {string} actorId who the transition is attributed to
+   */
+  function appealEffectsFor(loader, actorId) {
+    return {
+      snapshot: { currentUser: { id: actorId } },
+      effects: createAppealEffects({
+        saveQueue,
+        caseId: () => loader.caseId,
+        dispatch: ({ snapshot }) => {
+          caseRow = snapshot.caseRow;
+        },
+        newId: (prefix) => `flow-${prefix}-${Date.now()}`,
+      }),
+    };
+  }
+
   /** @param {Extract<FlowAction, { type: 'raiseAppeal' }>} action */
   async function raiseCurrentAppeal(action) {
     const loader = requirePage(action);
@@ -369,16 +390,13 @@ export function createInMemoryFlowRunner(state, opts = {}) {
       throw new Error('Current actor cannot raise an Appeal.');
     }
     if (!caseRow) throw new Error('Cannot raise before the Case has loaded.');
-    const result = raiseAppeal({
+    const { effects, snapshot } = appealEffectsFor(loader, action.actorId);
+    effects.raise({
       caseRow,
-      appellant: action.actorId,
+      snapshot,
       rationale: action.rationale,
       citedAnswerKeys: action.citedAnswerKeys ?? [],
-      id: `flow-appeal-${Date.now()}`,
-      at: new Date().toISOString(),
     });
-    caseRow = result.caseRow;
-    saveQueue.enqueue(loader.caseId, 'appeals', result.appeals);
     await flushCurrentCase();
   }
 
@@ -388,30 +406,22 @@ export function createInMemoryFlowRunner(state, opts = {}) {
     if (loader.access.appealReview !== 'edit') {
       throw new Error('Current actor cannot resolve an Appeal.');
     }
-    const appeal = /** @type {import('../src/sharepoint-client.js').Appeal} */ (
-      (caseRow?.appeals ?? []).find(
-        (candidate) => candidate.state !== 'resolved'
-      )
-    );
+    const appeal = openAppealOf(caseRow);
     if (!caseRow || !appeal) {
       throw new Error('Cannot resolve without an open Appeal.');
     }
-    const result = resolveAppeal({
+    const { effects, snapshot } = appealEffectsFor(loader, action.actorId);
+    effects.resolve({
       caseRow,
-      appealId: appeal.id,
-      verdict: action.verdict,
-      rationale: action.rationale,
-      resolver: action.actorId,
-      at: new Date().toISOString(),
-      outcome: action.outcome,
-      justification: action.justification,
+      snapshot,
+      resolution: {
+        appealId: appeal.id,
+        verdict: action.verdict,
+        rationale: action.rationale,
+        outcome: action.outcome,
+        justification: action.justification,
+      },
     });
-    caseRow = result.caseRow;
-    if (result.transactional) {
-      saveQueue.enqueueFields(loader.caseId, result.fields);
-    } else {
-      saveQueue.enqueue(loader.caseId, 'appeals', result.fields.appeals);
-    }
     await flushCurrentCase();
   }
 

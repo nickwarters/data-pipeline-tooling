@@ -16,7 +16,7 @@
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('./permissions.js').Capabilities} Capabilities */
 
-import { hasTrackableRemediation as carriesRemediation } from '../evaluators/remediation-status.js';
+import { hasTrackableRemediation } from '../evaluators/remediation-status.js';
 import { CASE_STATUS } from '../lib/case-statuses.js';
 import {
   sectionIds,
@@ -91,14 +91,18 @@ function hasOpenAppeal(caseRow) {
  * tab open on a row the tab will not render. The gate and the rows are the same
  * question asked once.
  *
+ * Named for the tab, not the rows: the evaluator's `hasTrackableRemediation`
+ * answers only the second half, and this file imports it. Two names, because
+ * they are two questions.
+ *
  * @param {CaseRow} caseRow
  * @param {QuestionDefinition[]} catalogue
  * @returns {boolean}
  */
-function hasTrackableRemediation(caseRow, catalogue) {
+function remediationTabIsLive(caseRow, catalogue) {
   return (
     isReportable(caseRow.status) &&
-    carriesRemediation(catalogue, caseRow.answers)
+    hasTrackableRemediation(catalogue, caseRow.answers)
   );
 }
 
@@ -112,7 +116,7 @@ function hasTrackableRemediation(caseRow, catalogue) {
  * @returns {Mode}
  */
 const observesRemediation = (c, _config, catalogue) =>
-  hasTrackableRemediation(c, catalogue) ? 'read-only' : 'hidden';
+  remediationTabIsLive(c, catalogue) ? 'read-only' : 'hidden';
 
 /**
  * Which of the Remediation Section's two renderings a viewer gets (#499).
@@ -264,7 +268,7 @@ export const MATRIX = {
   // observes the same breakdown read-only.
   remediation: {
     assignedReviewer: (c, _config, catalogue) => {
-      if (!hasTrackableRemediation(c, catalogue)) return 'hidden';
+      if (!remediationTabIsLive(c, catalogue)) return 'hidden';
       return c.status === CASE_STATUS.ACTIONS_IN_PROGRESS
         ? 'edit'
         : 'read-only';

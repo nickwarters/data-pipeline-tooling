@@ -5,7 +5,7 @@ import { installDom } from './_dom-stub.js';
 
 installDom();
 
-const { EmptyState } = await import('../src/lib/empty-state.js');
+const { EmptyState, LoadingState } = await import('../src/lib/empty-state.js');
 
 test('EmptyState: defaults to a <p> carrying the shared cora-empty hook', () => {
   const el = EmptyState('No messages yet.');
@@ -41,4 +41,24 @@ test('EmptyState: tag option lets non-paragraph sites reuse the helper', () => {
 test('EmptyState: omitting className leaves no trailing whitespace', () => {
   const el = EmptyState('Nothing here');
   assert.equal(el.className, 'cora-empty');
+});
+
+test('LoadingState: one spelling of the in-flight placeholder, with the shared hook', () => {
+  const el = LoadingState('Loading roadmap');
+  assert.equal(el.tagName, 'P');
+  assert.equal(el.className, 'cora-loading');
+  // One ellipsis character across every site: call sites pass the subject,
+  // never their own trailing dots.
+  assert.equal(el.textContent, 'Loading roadmap…');
+});
+
+test('LoadingState: bare call renders the generic wording', () => {
+  assert.equal(LoadingState().textContent, 'Loading…');
+});
+
+test('LoadingState: accepts a component class after the shared hook', () => {
+  const el = LoadingState('Loading Question Banks', {
+    className: 'cora-bank-loading',
+  });
+  assert.equal(el.className, 'cora-loading cora-bank-loading');
 });

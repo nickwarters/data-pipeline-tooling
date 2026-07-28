@@ -1,6 +1,7 @@
 // @ts-check
 import { h } from '../../lib/html.js';
 import { EmptyState } from '../../lib/empty-state.js';
+import { openAppealOf } from './appeal-actions.js';
 
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../../sharepoint-client.js').Appeal} Appeal */
@@ -40,7 +41,7 @@ export function AppealReviewSection(props) {
     children.push(renderAppealSummary(appeal));
   }
 
-  const open = openAppealFrom(props);
+  const open = openAppealOf(props.caseRow);
 
   if (props.access === 'edit' && open) {
     children.push(renderResolveForm(props, open));
@@ -53,16 +54,6 @@ export function AppealReviewSection(props) {
   }
 
   return children;
-}
-
-/**
- * @param {AppealReviewProps} props
- * @returns {Appeal | null}
- */
-export function openAppealFrom(props) {
-  return (
-    (props.caseRow?.appeals ?? []).find((a) => a.state !== 'resolved') ?? null
-  );
 }
 
 /**

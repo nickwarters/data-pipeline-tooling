@@ -152,7 +152,8 @@ src/
     case-machine.js
     case-route-links.js
     case-statuses.js            # CASE_STATUS: the persisted Case lifecycle values — do not change them
-    empty-state.js              # shared muted "nothing here yet" placeholder element
+    empty-state.js              # EmptyState/LoadingState: the shared "nothing here yet" and
+                                #   in-flight placeholders, one spelling of each
     html.js                     # h() plain-function view primitive
     navigate.js                 # navigateTo/redirectTo: the only writers of location.hash (#519)
     question-order.js           # generic question/category ordering helpers (was question-bank/)

@@ -1,5 +1,6 @@
 // @ts-check
 import { h } from '../lib/html.js';
+import { LoadingState } from '../lib/empty-state.js';
 import { navigateTo } from '../lib/navigate.js';
 import { patchRoute } from '../core/route-state.js';
 import { CaseMachine } from '../lib/case-machine.js';
@@ -38,7 +39,7 @@ import {
 export function conversationPageView(state, tools, send) {
   const route = state.routes.conversation;
   if (route.error) return h('p', { role: 'alert' }, route.error);
-  if (!route.caseRow) return h('p', {}, 'Loading...');
+  if (!route.caseRow) return LoadingState();
 
   return h(
     'div',

@@ -1,6 +1,7 @@
 // @ts-check
 import { setRoute } from '../../core/route-state.js';
 import { h } from '../../lib/html.js';
+import { Toast } from '../../components/base/cora-toast.js';
 import {
   baselineBank,
   currentBank,
@@ -301,12 +302,7 @@ export function bankEditorView(state, tools) {
         diff
       )
     ),
-    h(
-      'div',
-      { className: 'toast' + (route.toastMsg ? ' show' : '') },
-      h('span', { className: 'dot' }),
-      h('span', {}, route.toastMsg)
-    )
+    Toast({ message: route.toastMsg })
   );
 }
 

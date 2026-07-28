@@ -1,5 +1,6 @@
 // @ts-check
 import { h } from '../lib/html.js';
+import { LoadingState } from '../lib/empty-state.js';
 import { patchRoute, patchSnapshot } from '../core/route-state.js';
 import { CaseLoader } from '../lib/case-loader.js';
 import { CASE_STATUS } from '../lib/case-statuses.js';
@@ -597,7 +598,7 @@ export function createRouteSlice(params, context) {
     tools.morph(parts.status, saveStatusView(route.saveStatus));
 
     if (!snapshot) {
-      tools.morph(parts.header, h('p', {}, 'Loading...'));
+      tools.morph(parts.header, LoadingState());
       return;
     }
     if (snapshot.error) {

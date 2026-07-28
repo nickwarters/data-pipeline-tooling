@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   amendOutcome,
+  openAppealOf,
   raiseAppeal,
   resolveAppeal,
 } from '../src/pages/cora-case-review/appeal-actions.js';
@@ -153,4 +154,45 @@ test('amendOutcome returns immutable ADR-0026 fields without changing the frozen
   assert.equal(result.caseRow.outcomeAtCompletion, 'fail');
   assert.equal(result.fields.amendedOutcome?.outcome, 'pass');
   assert.equal(result.fields.effectiveHadRemediation, true);
+});
+
+// `openAppealOf` is the single definition of "the Appeal that is still open".
+// It previously existed as three copies: one exported `openAppealFrom`
+// per Appeal view, and an inlined `find` in the in-memory flow runner.
+test('openAppealOf finds the one Appeal that is not resolved', () => {
+  const resolved = {
+    id: 'a0',
+    appellant: 'rp',
+    rationale: 'First',
+    citedAnswerKeys: [],
+    at: '2026-07-01T00:00:00Z',
+    state: /** @type {const} */ ('resolved'),
+  };
+  const open = /** @type {const} */ ({
+    ...resolved,
+    id: 'a1',
+    rationale: 'Second',
+    state: 'raised',
+  });
+
+  assert.equal(
+    openAppealOf({ ...CASE_ROW, appeals: [resolved, open] })?.id,
+    'a1'
+  );
+});
+
+test('openAppealOf returns null when every Appeal is resolved, or there are none', () => {
+  const resolved = {
+    id: 'a0',
+    appellant: 'rp',
+    rationale: 'First',
+    citedAnswerKeys: [],
+    at: '2026-07-01T00:00:00Z',
+    state: /** @type {const} */ ('resolved'),
+  };
+
+  assert.equal(openAppealOf({ ...CASE_ROW, appeals: [resolved] }), null);
+  assert.equal(openAppealOf({ ...CASE_ROW, appeals: [] }), null);
+  assert.equal(openAppealOf(CASE_ROW), null);
+  assert.equal(openAppealOf(null), null);
 });

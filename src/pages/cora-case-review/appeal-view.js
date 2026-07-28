@@ -4,6 +4,7 @@ import { EmptyState } from '../../lib/empty-state.js';
 import { DEFAULT_SECTION_HEADINGS } from '../../lib/section-labels.js';
 import { isFailure } from '../../evaluators/failure-evaluator.js';
 import { buildCaptureControl } from '../../lib/capture-engine.js';
+import { openAppealOf } from './appeal-actions.js';
 
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../../sharepoint-client.js').Appeal} Appeal */
@@ -54,7 +55,7 @@ export function AppealSection(props) {
     children.push(renderAppealItem(appeal));
   }
 
-  const openAppeal = openAppealFrom(props);
+  const openAppeal = openAppealOf(props.caseRow);
   if (props.access === 'edit' && !openAppeal) {
     children.push(renderAppealForm(props));
   } else if (props.access === 'edit' && openAppeal) {
@@ -75,11 +76,6 @@ export function AppealSection(props) {
 /** @param {AppealProps} props @returns {Appeal[]} */
 export function appealsFrom(props) {
   return props.caseRow?.appeals ?? [];
-}
-
-/** @param {AppealProps} props @returns {Appeal | null} */
-export function openAppealFrom(props) {
-  return appealsFrom(props).find((a) => a.state !== 'resolved') ?? null;
 }
 
 /** @returns {HTMLElement} */

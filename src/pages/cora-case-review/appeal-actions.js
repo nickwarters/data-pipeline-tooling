@@ -6,6 +6,22 @@ import { buildAmendmentFields } from '../../evaluators/amended-outcome.js';
 /** @typedef {import('../../sharepoint-client.js').AmendedOutcome} AmendedOutcome */
 
 /**
+ * The one Appeal still awaiting resolution, or `null`.
+ *
+ * ADR-0027 allows at most one open Appeal at a time, so "not resolved" is a
+ * membership question with a single answer. Both Appeal views and the
+ * in-memory flow runner ask it, and each used to carry its own copy of the
+ * predicate — which is how a rule acquires three definitions that can drift
+ * apart one at a time.
+ *
+ * @param {CaseRow | null | undefined} caseRow
+ * @returns {Appeal | null}
+ */
+export function openAppealOf(caseRow) {
+  return (caseRow?.appeals ?? []).find((a) => a.state !== 'resolved') ?? null;
+}
+
+/**
  * Build the next immutable Case row for an additive Appeal request.
  *
  * @param {{
