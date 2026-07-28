@@ -65,7 +65,7 @@ test('render: a reference-equal subtree is skipped in O(1) without traversal', (
 
 test('render: an identical tree passed twice changes nothing', () => {
   const root = container();
-  const tree = h('p', { class: 'x' }, 'same');
+  const tree = h('p', { className: 'x' }, 'same');
   render(root, tree);
   const stats = render(root, tree);
   assert.equal(stats.visited, 1);
@@ -103,10 +103,10 @@ test('render: className is added, changed, and removed', () => {
   render(root, h('div', {}, h('p', {}, 'x')));
   const p = root.childNodes[0].childNodes[0];
 
-  render(root, h('div', {}, h('p', { class: 'one' }, 'x')));
+  render(root, h('div', {}, h('p', { className: 'one' }, 'x')));
   assert.equal(p.className, 'one');
 
-  render(root, h('div', {}, h('p', { class: 'two' }, 'x')));
+  render(root, h('div', {}, h('p', { className: 'two' }, 'x')));
   assert.equal(p.className, 'two');
 
   render(root, h('div', {}, h('p', {}, 'x')));
@@ -567,7 +567,7 @@ test('render: tolerates reconciling over a foreign (non-h) node as the old node'
   // A pre-existing DOM node render() did not build (no recorded props).
   const raw = /** @type {any} */ (globalThis).document.createElement('p');
   root.appendChild(raw);
-  render(root, h('p', { class: 'x' }, 'hello'));
+  render(root, h('p', { className: 'x' }, 'hello'));
   assert.equal(root.childNodes[0], raw, 'the foreign node is patched in place');
   assert.equal(raw.className, 'x');
   assert.equal(raw.textContent, 'hello');
@@ -575,7 +575,7 @@ test('render: tolerates reconciling over a foreign (non-h) node as the old node'
 
 test('render: tolerates a foreign (non-h) node in the new tree', () => {
   const root = container();
-  render(root, h('p', { class: 'x' }, 'hello'));
+  render(root, h('p', { className: 'x' }, 'hello'));
   const old = root.childNodes[0];
   const raw = /** @type {any} */ (globalThis).document.createElement('p');
   render(root, raw);

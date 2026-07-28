@@ -52,8 +52,17 @@ export function setProps(el, props) {
  * camelCase `on[A-Z]` keys are the *component* callback convention (`onAnswer`,
  * `onSort`): a view function reads them off its own props object, so they never
  * reach an element. Handing one to `h()` is therefore always a mistake — it
- * would bind a listener for an event nothing dispatches — and `applyProp`
- * throws rather than letting it fail silently.
+ * would bind a listener for an event nothing dispatches.
+ *
+ * `class` is rejected for a different reason. It would work — it lands on the
+ * class attribute either way — and that is the problem: a synonym that behaves
+ * identically is a thing to look up rather than know, and nothing would ever
+ * force a choice between the two. One spelling, enforced.
+ *
+ * Both are enforced by `applyProp` throwing, so the mistake surfaces at the call
+ * site that made it. Neither check tests the *value*: `onAnswer: undefined` is
+ * the same authoring error as `onAnswer: fn`, and silently setting an
+ * `onAnswer=""` attribute would be a worse outcome than the throw.
  */
 
 /**
@@ -73,14 +82,17 @@ export function applyProp(el, key, value) {
       'h() does not accept innerHTML; use unsafeHTML() explicitly'
     );
   }
+  if (/^on[A-Z]/.test(key)) {
+    throw new Error(
+      `h() does not accept the component callback prop "${key}"; DOM events are lowercase (${key.toLowerCase()})`
+    );
+  }
+  if (key === 'class') {
+    throw new Error('h() does not accept "class"; the class prop is className');
+  }
   if (key.startsWith('on') && typeof value === 'function') {
-    if (/^on[A-Z]/.test(key)) {
-      throw new Error(
-        `h() does not accept the component callback prop "${key}"; DOM events are lowercase (${key.toLowerCase()})`
-      );
-    }
     el.addEventListener(key.slice(2).toLowerCase(), value);
-  } else if (key === 'class' || key === 'className') {
+  } else if (key === 'className') {
     el.className = value;
   } else if (key === 'value' && 'value' in el) {
     el.value = value;
@@ -106,7 +118,7 @@ export function removeProp(el, key, prevValue) {
   if (key === 'innerHTML') return;
   if (key.startsWith('on') && typeof prevValue === 'function') {
     el.removeEventListener(key.slice(2).toLowerCase(), prevValue);
-  } else if (key === 'class' || key === 'className') {
+  } else if (key === 'className') {
     el.className = '';
   } else if (key === 'value' && 'value' in el) {
     el.value = '';

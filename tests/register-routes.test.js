@@ -114,6 +114,41 @@ test('route table: a route failing to register does not stop the others', () => 
   assert.ok(registered.includes('#/my-team'), 'later routes still registered');
 });
 
+test('route table: a table that cannot be built is logged, not thrown', () => {
+  // Building the table is the one step no per-entry catch can contain, so it
+  // gets its own. Simulated with a context whose property read throws.
+  const originalError = console.error;
+  /** @type {any[][]} */
+  const logged = [];
+  console.error = (/** @type {any[]} */ ...args) => logged.push(args);
+  /** @type {string[]} */
+  const registered = [];
+  const hostile = makeContext();
+  Object.defineProperty(hostile, 'loadQuestionBankEditor', {
+    get() {
+      throw new Error('boom');
+    },
+  });
+  try {
+    registerRoutes(
+      /** @type {any} */ ({
+        register: (/** @type {string} */ p) => registered.push(p),
+      }),
+      hostile
+    );
+  } finally {
+    console.error = originalError;
+  }
+
+  assert.equal(logged.length, 1);
+  assert.match(String(logged[0][0]), /route table could not be built/);
+  assert.deepEqual(
+    registered,
+    [],
+    'no route is registered from a broken table'
+  );
+});
+
 test('route table: every page module resolves and exposes createRouteSlice', async () => {
   for (const [name, entry] of Object.entries(routeTable(makeContext()))) {
     const module = await entry.load();

@@ -134,8 +134,8 @@ export function createStoreRoute({ load, context }) {
  * Without a guard the adapter is registered directly, so nothing sits between
  * the router and `createStoreRoute`.
  *
- * `load` is the caller's: the dynamic `import()` of a page must stay inside
- * `src/routes/*`, which is what page independence and
+ * `load` is the caller's: the dynamic `import()` of a page must stay in the
+ * route table, which is what page independence and
  * `tests/component-layering-contract.test.js` rest on. This helper never names
  * a page.
  *

@@ -131,6 +131,22 @@ test('h: throws on a camelCase on[A-Z] prop, which is a component callback', () 
   );
 });
 
+test('h: throws on a camelCase on[A-Z] prop whatever its value', () => {
+  // The prop name is the error; a component callback that happens to be
+  // undefined would otherwise fall through to an `onAnswer=""` attribute.
+  assert.throws(
+    () => applyProp(/** @type {any} */ ({}), 'onAnswer', undefined),
+    /does not accept the component callback prop "onAnswer"/
+  );
+});
+
+test('h: throws on `class`, so className is the only spelling', () => {
+  assert.throws(
+    () => h('div', { class: 'c' }),
+    /does not accept "class"; the class prop is className/
+  );
+});
+
 test('h: lowercase on* props still become listeners', () => {
   let calls = 0;
   const el = /** @type {any} */ (h('button', { onclick: () => (calls += 1) }));
@@ -145,15 +161,15 @@ test('h: lowercase on* props still become listeners', () => {
 // one prop maps onto the DOM (used at build time and when a prop changes).
 
 test('getProps: returns the props h() built a node with', () => {
-  const el = h('div', { 'aria-label': 'x', class: 'c' });
-  assert.deepEqual(getProps(el), { 'aria-label': 'x', class: 'c' });
+  const el = h('div', { 'aria-label': 'x', className: 'c' });
+  assert.deepEqual(getProps(el), { 'aria-label': 'x', className: 'c' });
 });
 
 test('getProps: recorded props are insulated from later caller mutation', () => {
-  const props = { class: 'before' };
+  const props = { className: 'before' };
   const el = h('div', props);
-  props.class = 'after';
-  assert.deepEqual(getProps(el), { class: 'before' });
+  props.className = 'after';
+  assert.deepEqual(getProps(el), { className: 'before' });
 });
 
 test('getProps: is undefined for a node h() never built', () => {
@@ -162,9 +178,9 @@ test('getProps: is undefined for a node h() never built', () => {
 });
 
 test('setProps: overwrites the recorded props', () => {
-  const el = h('div', { class: 'a' });
-  setProps(el, { class: 'b' });
-  assert.deepEqual(getProps(el), { class: 'b' });
+  const el = h('div', { className: 'a' });
+  setProps(el, { className: 'b' });
+  assert.deepEqual(getProps(el), { className: 'b' });
 });
 
 test('applyProp: sets a value property directly on a form control', () => {
@@ -193,8 +209,8 @@ test('removeProp: unbinds an addEventListener-style handler', () => {
 });
 
 test('removeProp: clears className', () => {
-  const el = /** @type {any} */ (h('div', { class: 'c' }));
-  removeProp(el, 'class', 'c');
+  const el = /** @type {any} */ (h('div', { className: 'c' }));
+  removeProp(el, 'className', 'c');
   assert.equal(el.className, '');
 });
 

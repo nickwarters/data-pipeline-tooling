@@ -113,7 +113,18 @@ export function routeTable(context) {
  * @param {AppContext} context
  */
 export function registerRoutes(router, context) {
-  for (const [name, entry] of Object.entries(routeTable(context))) {
+  /** @type {Array<[string, RouteEntry]>} */
+  let entries;
+  try {
+    entries = Object.entries(routeTable(context));
+  } catch (err) {
+    // Building the table reads `context` and allocates object literals, so
+    // nothing in it can realistically throw — but if it ever does, that is the
+    // one failure that costs every route, which makes it the one worth naming.
+    console.error('[CORA] route table could not be built', err);
+    return;
+  }
+  for (const [name, entry] of entries) {
     try {
       registerStoreRoute(router, { ...entry, context });
     } catch (err) {

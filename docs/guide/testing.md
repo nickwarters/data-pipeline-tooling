@@ -106,19 +106,10 @@ while making each capability independently searchable and reviewable. Do not
 use an entry point merely to hide an oversized suite; the imported modules
 should each represent a named capability.
 
-## White-box Debt Guardrail
+## Prefer public seams to private structure
 
-`tests/white-box-debt-contract.test.js` records the remaining direct uses of DOM
-stub internals, underscore-prefixed methods, and Router internals in test files.
-It is a migration baseline, not an approved-pattern list:
-
-- New test files must not add these patterns.
-- Existing test files must not increase their recorded counts.
-- When a migration reduces a count, lower the baseline in the same change so
-  the debt cannot return later.
-- Increase a baseline only when the private structure is itself an intentional,
-  named contract. Explain that exception next to the baseline entry.
-
+Direct use of DOM stub internals, underscore-prefixed methods, and Router
+internals makes a test fail on a refactor that changed nothing a user can see.
 Prefer `getByRole()`, `queryByRole()`, and `fireEvent()` from
 `tests/helpers/semantic-dom.js`. A stable field key or narrowly scoped
 `data-testid` is acceptable when the UI has no user-facing semantic to query.

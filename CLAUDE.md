@@ -55,11 +55,13 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
   [`docs/guide/add-a-page.md`](./docs/guide/add-a-page.md); use
   [`docs/guide/store-actions-and-effects.md`](./docs/guide/store-actions-and-effects.md)
   and [`docs/guide/router.md`](./docs/guide/router.md) as reference.
-  **Prop naming is a contract, not a style:** DOM events are lowercase
-  (`onclick`, `oninput`, `onchange`, `onkeydown`) and the class prop is
-  `className`; camelCase `on[A-Z]` is reserved for component callback props
-  (`onAnswer`, `onSort`, `onCommit`), which `h()` assigns as properties and
-  never as listeners. Enforced by `tests/prop-naming-contract.test.js` (#509).
+  **Prop naming is a contract, not a style:** DOM events handed to `h()` are
+  lowercase (`onclick`, `oninput`, `onchange`, `onkeydown`) and the class prop is
+  `className`. camelCase `on[A-Z]` is reserved for component callback props
+  (`onAnswer`, `onSort`, `onCommit`) — a view function reads those off its own
+  props object, so they are never handed to `h()`. `h()` enforces both by
+  throwing on `on[A-Z]` and on `class`: the mistake is caught where it is made,
+  rather than by a repo-wide scan after the fact.
   **`view` produces, `render` commits (ADR-0039).** A _view_ is pure, returns an
   `h()` tree and touches nothing — `slice.view()`, `*View()`, `*-view.js`, the
   thunk passed to `memo()`. _Render_ means committing a tree into a live
@@ -140,12 +142,8 @@ branch.** When a branch falls behind, `git fetch origin && git rebase
 origin/main`, then `git push --force-with-lease`. A merge commit on a feature
 branch is a defect to fix, not a state to preserve.
 
-Two conflicts recur when rebasing, both of which look textual and are not:
+One conflict recurs when rebasing, and it looks textual when it is not:
 
-- **`tests/white-box-debt-contract.test.js`'s `BASELINE`.** The tuples are a
-  debt ledger, and `main` lowers them as tests are migrated. Taking your
-  branch's side wholesale silently resurrects a count `main` paid down. Resolve
-  per key: keep your branch's structural edits, keep `main`'s lowered values.
 - **`CLAUDE.md`'s ADR count and Directory layout block.** Both move on almost
   every branch. Take the higher ADR count and the union of the layout entries —
   `tests/claude-md-layout-contract.test.js` will catch a dropped module, but

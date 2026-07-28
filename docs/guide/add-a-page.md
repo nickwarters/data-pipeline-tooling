@@ -57,13 +57,13 @@ export function greetingView(state, { dispatch }) {
 Use `h()` for text and attributes; never put user data into `innerHTML`. Keep
 the `cora-` class prefix so SharePoint styles cannot leak across the boundary.
 
-**Prop naming.** DOM events are lowercase (`onclick`, `oninput`, `onchange`,
-`onkeydown`) and the class prop is `className` — never `class`. camelCase
-`on[A-Z]` names are reserved for component callback props (`onAnswer`,
-`onSort`, `onCommit`), which `h()` assigns as properties rather than listeners.
-Writing `onClick` on a component that declares an `onClick` property attaches
-nothing at all, silently, which is why the casing is a rule and not a taste.
-`tests/prop-naming-contract.test.js` enforces both halves.
+**Prop naming.** DOM events handed to `h()` are lowercase (`onclick`, `oninput`,
+`onchange`, `onkeydown`) and the class prop is `className` — never `class`.
+camelCase `on[A-Z]` names are reserved for component callback props (`onAnswer`,
+`onSort`, `onCommit`): a view function reads those off its own props object, so
+they never reach an element. Handing either spelling to `h()` throws
+immediately, naming the prop and the correct form — so a mistake surfaces at the
+call site that made it, not as a listener that never fires.
 
 ## 3. Add the reducer and route slice
 

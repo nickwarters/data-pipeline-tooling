@@ -1,6 +1,6 @@
 // @ts-check
 // The app shell wires shared services once. Every page loads on demand inside
-// its route's `mount()` (see src/routes/*), guarded by the router's error
+// its route's `mount()` (see setup/register-routes.js), guarded by the router's error
 // boundary (lib/router.js) — a broken page module renders an in-page
 // `cora-route-error` panel instead of taking down the app. The nav and command
 // palette are mounted here via `setup/app-chrome.js`: a broken nav is
