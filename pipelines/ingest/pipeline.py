@@ -25,13 +25,20 @@ from datetime import date
 from pathlib import Path
 
 from case_review.case_type import CaseType, Variation
-from case_review.gold import ingest_silver_to_gold
+from case_review.gold import CASE_ID_COLUMN, ingest_silver_to_gold
 from framework.core import PipelineError, SchemaValidator, format_failure
 from framework.io import AccumulateByRun, CsvReader
 from framework.run import Pipeline, RunContext
 from framework.transform import Filter, SchemaCoercion
 from tools.environments import known_environments, resolve_base_dir
 from tools.medallion import medallion
+from tools.schema import (
+    ACCUMULATE_BY_RUN_CONTEXT_COLUMNS,
+    Column,
+    Table,
+    columns_of,
+    retype,
+)
 from tools.store import StoreRegistry
 
 SAMPLE_CSV = Path(__file__).parent / "sample_data" / "activity_cases.csv"
@@ -68,6 +75,38 @@ CASES = CaseType(
 
 # This pipeline has no upstream — it is the source of the CasePool.
 UPSTREAMS = ()
+
+# This feed has no schema.py -- ActivityCase (its only row shape) is declared
+# above, so TABLES lives beside it here rather than in a schema.py that would
+# hold nothing else (see docs/schema-declaration.md for the placement note).
+# Raw and silver land via AccumulateByRun.from_context(context), so both carry
+# the stamped run columns; gold reduces silver with Refresh() but the rows
+# still carry those columns (nothing drops them) plus the derived case_id.
+#
+# Silver coerces activity_date to a real ``date`` (SchemaCoercion, right before
+# this write), which pandas' to_sql types TIMESTAMP; gold re-reads silver
+# through a plain SqliteReader with no re-parse, which reverts it to text.
+TABLES = (
+    Table(
+        "cases/raw",
+        "cases",
+        columns=columns_of(ActivityCase) + ACCUMULATE_BY_RUN_CONTEXT_COLUMNS,
+    ),
+    Table(
+        "cases/silver",
+        "cases",
+        columns=retype(columns_of(ActivityCase), activity_date="TIMESTAMP")
+        + ACCUMULATE_BY_RUN_CONTEXT_COLUMNS,
+    ),
+    Table(
+        "cases/gold",
+        "cases",
+        columns=columns_of(ActivityCase)
+        + ACCUMULATE_BY_RUN_CONTEXT_COLUMNS
+        + (Column(CASE_ID_COLUMN, "TEXT", nullable=False),),
+        primary_key=(CASE_ID_COLUMN,),
+    ),
+)
 
 
 def run(context: RunContext):

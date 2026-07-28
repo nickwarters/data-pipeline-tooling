@@ -23,6 +23,7 @@ import pandas as pd
 from framework.core import Dataset
 
 from .rules import assign_case_type, best_sale, exclusion_reason, is_recent_sale
+from .schema import TRACE_COLUMNS
 
 Row = Mapping[str, Any]
 
@@ -36,8 +37,8 @@ POOL_COLUMNS = [
     "case_type",
     "selected_date",
 ]
-# The sibling trace: one row per *considered* adviser, with the verdict + reason.
-TRACE_COLUMNS = ["adviser", "verdict", "reason", "sale_id", "risk_score", "case_type"]
+# TRACE_COLUMNS (one row per *considered* adviser, with the verdict + reason) is
+# declared in schema.py, the one source it and the sibling Table share.
 
 
 def select_cases(

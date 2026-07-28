@@ -152,8 +152,8 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 > `framework.transform` (the reshaping processors + `SchemaCoercion`), and
 > `framework.run` (the `Pipeline` builder, runner, observability)
 > — not from the modules behind them. The cross-cutting `retry` / `calendar` /
-> orchestration / observability utilities are a sibling top-level `tools` package,
-> not a facade. The facade names are the stable surface.
+> `schema` / orchestration / observability utilities are a sibling top-level
+> `tools` package, not a facade. The facade names are the stable surface.
 > `import framework` exposes only those facade modules for discovery; it is
 > not a shortcut for
 > `framework.CsvReader` / `framework.Filter` / `framework.Pipeline`. See
@@ -184,6 +184,7 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 | **`CaseType` / `Variation`** | Case-review application/domain objects in `case_review.case_type`, not framework primitives: a Case Type bundles its `schema`, its identity contract (`natural_key` + a `namespace` derived from `name`), and its `variations`, imported directly (no global CaseType config registry). A Variation overrides only what differs — most often the `question_bank_id`. → [selection.md](selection.md) |
 | **`CasePool`** | Case-review application/domain helper in `case_review.case_pool`: the per-Case-Type population read from ingested silver, surfaced through intention-revealing retrievals (e.g. `fetch_available_cases(...)`) instead of raw `read_*`. → [selection.md](selection.md) |
 | **`WorkingDayCalendar`** | A config-seeded **pure utility** for availability arithmetic ("the last 20 working days"). Touches no Dataset/Store/engine; not a Feed. → [working-day-calendar.md](working-day-calendar.md) |
+| **`Table` / `Column` / `Index`** (`tools.schema`) | The **storage** contract, a sibling of `Schema`'s **validation** contract: one landing site (a namespace + table) and its expected shape. A feed declares its `TABLES` once (normally in `schema.py`); `columns_of(Row)` derives columns from a row dataclass, `text_columns(names)` is the intended raw shape. Only the tables a feed *writes* belong in its `TABLES` — a read contract for a table it only reads stays a plain dataclass. `python -m cli schema diff` reads a live table's shape (`PRAGMA table_info`) and reports column-level drift against the declaration — read-only, safe against prod, non-zero exit on drift. → [schema-declaration.md](schema-declaration.md) |
 
 Two cross-cutting flows extend the pipeline: **quarantine** routes value-rule
 rejects aside (keeping good rows — [opt-in row-level quarantine for value-rule
@@ -591,6 +592,7 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 | [`streaming-large-sources.md`](streaming-large-sources.md) | Streaming a source too big to hold whole: `Pipeline.read_chunks` driving the DAG once per chunk, chunk-level row filtering (id allow-list / predicate), which pairings are refused at wiring time and why, and `stream_step` as the low-level fallback. |
 | [`retry.md`](retry.md) | Targeted retry at the reader/writer edges — `RetryPolicy`, where to use it and where not. |
 | [`operator-cli.md`](operator-cli.md) | The operator CLI (`run` / `status` / `runs` / `log`) with example commands and output. |
+| [`schema-declaration.md`](schema-declaration.md) | Declaring a feed's table shapes (`Table` / `Column` / `Index`) and reporting live drift with `python -m cli schema diff`. |
 | [`resolving-a-failed-run.md`](resolving-a-failed-run.md) | The operator loop from a failed run — investigate (`status`/`log`), diagnose, resolve, and re-drive idempotently. |
 | [`escape-hatch-store.md`](escape-hatch-store.md) | Iterating against a flat scratch db (and a pre-baked SQL query) outside the medallion / namespace Store, and migrating back. |
 | [`testing-helpers.md`](testing-helpers.md) | `tests.framework_testing` — the test-only helpers for testing concrete pipelines (`given_rows`, `RecordingWriter`, `read_rows`, `RecordingRunLog`, `read_run_log`). |

@@ -2,17 +2,18 @@
 
 The framework is import-only (on ``sys.path``, never installed), but it can also
 be *run* as a tool. ``python -m cli`` dispatches to the subcommands the
-framework owns -- ``scaffold`` (generate a feed) and the operator commands
-``run`` / ``orchestrate`` / ``runs`` / ``status`` / ``log``. This is an entry
-point, not part of the importable public surface (the six facades); the modules
-behind it live in this private ``cli`` package.
+framework owns -- ``scaffold`` (generate a feed), the operator commands
+``run`` / ``orchestrate`` / ``runs`` / ``status`` / ``log``, and ``schema``
+(declared table-shape tools, e.g. ``schema diff``). This is an entry point, not
+part of the importable public surface (the four facades); the modules behind it
+live in this private ``cli`` package.
 """
 
 from __future__ import annotations
 
 import argparse
 
-from cli import operator, scaffold
+from cli import operator, scaffold, schema
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -23,6 +24,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
     scaffold.register(sub)
     operator.register(sub)
+    schema.register(sub)
     return parser
 
 

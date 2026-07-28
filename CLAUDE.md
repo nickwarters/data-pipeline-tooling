@@ -27,9 +27,10 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   reads); plus the private
   `framework/_internal` (`connection`, `describe`, `schema`: cross-cutting
   helpers with no public name)). The `python -m cli` entry point (`scaffold`
-  plus the operator commands; see below) lives in the top-level `cli/` package,
+  plus the operator commands and `schema diff`; see below) lives in the
+  top-level `cli/` package,
   and the cross-cutting `retry` / `calendar` / `medallion` / `recipes` /
-  `environments` / orchestration /
+  `environments` / `schema` / orchestration /
   observability utilities in the top-level `tools/` package — both siblings of
   `framework/`,
   not facades. The run-record schema is declared **once, as data**, in
@@ -42,7 +43,14 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   `tools/observability/run_store.py` — the counterpart of `tools.store`'s
   `StoreRegistry`, which owns where the *data* lands — and the UTC-instant /
   local-calendar-date rule every freshness check reads is settled once in
-  `tools/observability/timestamps.py`. Then `case_review/` (the
+  `tools/observability/timestamps.py`. A feed's **declared table shapes** are
+  the storage-side sibling of that: `tools/schema/` holds the `Table` /
+  `Column` / `Index` vocabulary and the live-vs-declared diff, each feed lists
+  the tables it *writes* in a `TABLES` tuple in its `schema.py`, and
+  `tests/integration/test_declared_tables_match_pipelines.py` holds those
+  declarations to what the pipelines actually land (see
+  [`docs/schema-declaration.md`](docs/schema-declaration.md) — the framework
+  itself never learns what a declaration is). Then `case_review/` (the
   case-review *application* — domain types
   like `CaseType`/`CasePool` and its gold helpers, which live outside the
   framework), `pipelines/` (scripts), `tests/` (pytest, with author test helpers
@@ -127,6 +135,7 @@ python3 -m venv .venv
 .venv/bin/python -m cli scaffold orders --from-feed-file sample.csv  # seed schema/sample/test from a real CSV header
 .venv/bin/python -m cli scaffold --case-type claims # scaffold a Case Type ingest feed (source->raw->silver, identity declared)
 .venv/bin/python -m cli run pipelines/ingest --base-dir /tmp/demo  # operator CLI: run/orchestrate/status/runs/log (see docs/operator-cli.md)
+.venv/bin/python -m cli schema diff --base-dir /tmp/demo         # diff every feed's declared TABLES against a live environment (see docs/schema-declaration.md)
 .venv/bin/pre-commit run --all-files             # lint + format the whole tree on demand
 ```
 
@@ -143,8 +152,10 @@ venv before committing); a failing test blocks the commit.
 Run pipelines as **modules from the repo root** (`python -m pipelines.<name>`)
 so the import-only `framework` package resolves on `sys.path`. The framework
 itself is also runnable — `python -m cli <command>` (entry point in the
-top-level `cli/`) is the single surface for authoring (`scaffold`) and operating
-(`run`/`orchestrate`/`status`/`runs`/`log`) pipelines. `run` addresses a pipeline
+top-level `cli/`) is the single surface for authoring (`scaffold`), operating
+(`run`/`orchestrate`/`status`/`runs`/`log`), and declared-table drift
+(`schema diff`; see [`docs/schema-declaration.md`](docs/schema-declaration.md))
+over pipelines. `run` addresses a pipeline
 by **its location on disk** — `python -m cli run pipelines/<name>` imports
 `pipelines.<name>.pipeline` and executes its `run(context)` callable (reading an
 optional `UPSTREAMS` freshness tuple), so the dependency stays one-way and the

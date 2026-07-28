@@ -28,14 +28,63 @@ from framework.core import PipelineError, format_failure
 from framework.io import AccumulateByRun, DatasetReader
 from framework.run import FreshnessRequirement, Pipeline, RunContext
 from framework.transform import Filter, Score, Sort, Stamp
-from pipelines.ingest.pipeline import AS_OF, CASES
+from pipelines.ingest.pipeline import AS_OF, CASES, ActivityCase
 from tools.calendar import WorkingDayCalendar
 from tools.environments import known_environments, resolve_base_dir
 from tools.medallion import medallion
+from tools.schema import (
+    ACCUMULATE_BY_RUN_CONTEXT_COLUMNS,
+    Column,
+    Table,
+    columns_of,
+    retype,
+    text_columns,
+)
 from tools.store import StoreRegistry
 
 # Selection only runs once the CasePool is current.
 UPSTREAMS = (FreshnessRequirement(upstream_pipeline="ingest"),)
+
+# This feed has no schema.py -- its two gold tables have no row dataclass of
+# their own (they narrow/derive from ingest's CASES.schema), so TABLES lives
+# beside the wiring here rather than in a schema.py that would hold nothing
+# else (see docs/schema-declaration.md). Both land in the same "cases/gold"
+# namespace ingest's own gold table lives in (they share the CASES subject),
+# via AccumulateByRun.from_context(context), so both carry the stamped run
+# columns.
+#
+# CasePool.fetch_available_cases re-coerces activity_date to a real ``date``
+# right before this pipeline reads it, so (unlike ingest's own gold, which
+# reads the same silver table with no such re-parse) it lands TIMESTAMP here.
+TABLES = (
+    Table(
+        "cases/gold",
+        "selection_pool",
+        columns=retype(columns_of(ActivityCase), activity_date="TIMESTAMP")
+        + (
+            Column("case_id", "TEXT", nullable=False),
+            Column("priority_score", "INTEGER", nullable=False),
+            Column("question_bank_id", "TEXT", nullable=False),
+        )
+        + ACCUMULATE_BY_RUN_CONTEXT_COLUMNS,
+        primary_key=("case_id",),
+    ),
+    Table(
+        "cases/gold",
+        "selection_trace",
+        # The explain trace's own shape (framework.run.trace.RowTrace): the id
+        # column named at p.explain(..., id_column="case_ref"), verdict/reason,
+        # rank (float -- None for excluded rows), and score (int -- Score runs
+        # before Filter, so every considered row has one).
+        columns=retype(
+            text_columns(["case_ref", "verdict", "reason", "rank", "score"]),
+            rank="REAL",
+            score="INTEGER",
+        )
+        + ACCUMULATE_BY_RUN_CONTEXT_COLUMNS,
+        primary_key=("case_ref",),
+    ),
+)
 
 
 def high_value_case(row: Mapping[str, Any]) -> bool:

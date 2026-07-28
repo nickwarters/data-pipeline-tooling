@@ -77,13 +77,17 @@ def _resolve_app(name: str):
     return module
 
 
-def _base_dir_or_report(args: argparse.Namespace) -> Path | None:
+def base_dir_or_report(args: argparse.Namespace) -> Path | None:
     """Resolve ``base_dir`` from ``--base-dir`` or ``--env``.
 
     An explicit ``--base-dir`` always wins; when omitted it is resolved from
     ``--env`` (or ``$PIPELINE_ENV``) via
     :func:`tools.environments.resolve_base_dir`. Returns ``None`` after printing
     an actionable message when the environment can't be resolved.
+
+    Public within the ``cli`` package (with :func:`add_base_dir_args`, which
+    declares the matching options): every command that addresses a base
+    directory resolves it the same way, including ``cli.schema``'s.
     """
     if getattr(args, "base_dir", None):
         return Path(args.base_dir)
@@ -94,7 +98,7 @@ def _base_dir_or_report(args: argparse.Namespace) -> Path | None:
         return None
 
 
-def _add_base_dir_args(parser: argparse.ArgumentParser) -> None:
+def add_base_dir_args(parser: argparse.ArgumentParser) -> None:
     """Add the shared ``--base-dir`` and ``--env`` options to a command."""
     parser.add_argument(
         "--base-dir",
@@ -150,7 +154,7 @@ def _run(args: argparse.Namespace) -> int:
     except UnknownPipelineError as exc:
         print(str(exc), file=sys.stderr)
         return 1
-    base_dir = _base_dir_or_report(args)
+    base_dir = base_dir_or_report(args)
     if base_dir is None:
         return 1
     if args.dry_run:
@@ -186,7 +190,7 @@ def _run(args: argparse.Namespace) -> int:
 
 
 def _orchestrate(args: argparse.Namespace) -> int:
-    base_dir = _base_dir_or_report(args)
+    base_dir = base_dir_or_report(args)
     if base_dir is None:
         return 1
     try:
@@ -225,7 +229,7 @@ def _orchestrate(args: argparse.Namespace) -> int:
 
 
 def _runs(args: argparse.Namespace) -> int:
-    base_dir = _base_dir_or_report(args)
+    base_dir = base_dir_or_report(args)
     if base_dir is None:
         return 1
     registry = _load_registry_or_report(base_dir)
@@ -257,7 +261,7 @@ def _format_record(record: dict) -> str:
 
 
 def _log(args: argparse.Namespace) -> int:
-    base_dir = _base_dir_or_report(args)
+    base_dir = base_dir_or_report(args)
     if base_dir is None:
         return 1
     path = RunStore(base_dir).log_path_for(args.subject)
@@ -295,7 +299,7 @@ def _log(args: argparse.Namespace) -> int:
 
 
 def _status(args: argparse.Namespace) -> int:
-    base_dir = _base_dir_or_report(args)
+    base_dir = base_dir_or_report(args)
     if base_dir is None:
         return 1
     registry = _load_registry_or_report(base_dir)
@@ -325,7 +329,7 @@ def register(sub) -> None:
         "pipeline",
         help="the pipeline's location under pipelines/, e.g. pipelines/orders",
     )
-    _add_base_dir_args(run)
+    add_base_dir_args(run)
     run.add_argument("--run-date", type=_date, default=dt.date.today())
     run.add_argument(
         "--logical-run-id",
@@ -351,7 +355,7 @@ def register(sub) -> None:
     run.set_defaults(func=_run)
 
     orchestrate = sub.add_parser("orchestrate", help="run scheduled due work")
-    _add_base_dir_args(orchestrate)
+    add_base_dir_args(orchestrate)
     orchestrate.add_argument("--run-date", type=_date, default=dt.date.today())
     mode = orchestrate.add_mutually_exclusive_group()
     mode.add_argument("--once", action="store_true", help="run one due-work pass")
@@ -376,7 +380,7 @@ def register(sub) -> None:
     orchestrate.set_defaults(func=_orchestrate)
 
     runs = sub.add_parser("runs", help="list recent runs from the run registry")
-    _add_base_dir_args(runs)
+    add_base_dir_args(runs)
     runs.add_argument(
         "--pipeline", help="narrow to one pipeline label, e.g. cases/ingest"
     )
@@ -387,13 +391,13 @@ def register(sub) -> None:
     runs.set_defaults(func=_runs)
 
     status = sub.add_parser("status", help="show the latest run status per pipeline")
-    _add_base_dir_args(status)
+    add_base_dir_args(status)
     status.add_argument("--pipeline", help="one pipeline label, e.g. cases/ingest")
     status.add_argument("--subject", help="narrow to a subject's pipelines, e.g. cases")
     status.set_defaults(func=_status)
 
     log = sub.add_parser("log", help="inspect/summarize a run log file")
-    _add_base_dir_args(log)
+    add_base_dir_args(log)
     log.add_argument("subject", help="the subject whose _runs/<subject>.log to read")
     log.add_argument(
         "--pipeline-run-id",
