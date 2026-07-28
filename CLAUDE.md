@@ -37,8 +37,8 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
   holds the raw client and drops any `signal` handed to `loadCase`. **The
   binding is partial (#545 covered the Case-source fan-out pages only):**
   `cora-case-review.js`, `cora-conversation-view.js`, `roadmap.js` and
-  `question-bank/cora-bank-editor.js` still read unsignalled — follow-up, not
-  precedent.
+  `question-bank/cora-bank-editor.js` still read unsignalled — follow-up
+  (#567), not precedent.
 - **Case Review Sections are data plus a panel renderer.** `lib/section-registry.js`
   (ADR-0032) says which Sections exist and in what order; `pages/cora-case-review/section-panels.js`
   says how each one's panel is filled, keyed by Section id — the render loop in
