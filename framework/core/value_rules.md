@@ -9,6 +9,14 @@ by :class:`~framework.core.schema.SchemaValidator`, and the masks they
 produce drive the quarantine partitioner. Each satisfies the
 :class:`~framework._internal.schema.ValueRule` protocol structurally.
 
+Authoring a rule is an **engine-confined** act: a rule is handed the column's
+pandas Series directly, because judging thousands of values one at a time
+without the engine's vectorised operations would be unusably slow. The five
+rules here share :class:`ValueRuleBase`, which owns the one null guard and the
+one mask construction; a rule is then just "which present values breach" plus
+"how to phrase it". The protocol stays structural, so a rule that implements the
+two methods and inherits nothing is still a value rule.
+
 Re-exported from :mod:`framework.core`.
 """
 
@@ -37,6 +45,84 @@ def _sample(values: "pd.Series") -> str:
     return shown
 
 
+class ValueRuleBase:
+    """Shared scaffolding for a value rule: null handling, masking, ``check``.
+
+    A subclass says only two things: which of the **present** values breach
+    (:meth:`_violates`) and how to phrase the breach (:meth:`_phrase`). The null
+    guard — nulls are out of scope for every value rule, because nullability is
+    the separate ``Nullable``/``NonNull`` contract — and the mask construction
+    live here once, so the five rules cannot drift apart and a fix to either
+    lands in one place.
+
+    Two properties of the mask are load-bearing for the callers:
+
+    - It is built **positionally**, from a boolean array over the rows, never by
+      assigning at index labels. A frame whose index labels repeat (an ordinary
+      outcome of concatenating two frames behind the ``Dataset`` seam) would
+      otherwise either raise on the label assignment or silently mask the wrong
+      rows.
+    - Its dtype is plain (numpy) ``bool``, never pandas' *nullable* ``boolean``.
+      Comparisons over a nullable column produce nullable booleans, and a mask
+      carrying ``pd.NA`` breaks the row selection the validator and the
+      quarantine partitioner do with it. Any nullable result is narrowed here.
+
+    Inheriting is a convenience, not a requirement: the ``ValueRule`` contract is
+    a structural protocol, so a rule that implements ``check`` and
+    ``violating_mask`` itself is equally a value rule.
+    """
+
+    # How a breach message presents its offending sample. Rules that read as a
+    # statement about the column ("has duplicate value(s)") list the sample after
+    # a colon; rules that name an expectation ("violates pattern ...") introduce
+    # it as an example.
+    _EVIDENCE = " (e.g. {sample})"
+
+    def violating_mask(self, series: "pd.Series") -> "pd.Series":
+        """Return a plain-``bool`` mask: True where a present value breaches."""
+        present = series.notna().to_numpy()
+        mask = pd.Series(False, index=series.index)
+        if present.any():
+            breaches = self._violates(series[present])
+            mask[present] = breaches.fillna(False).to_numpy(dtype=bool)
+        return mask
+
+    def check(self, series: "pd.Series") -> str | None:
+        """Return a breach phrase if ``series`` breaks the rule, else ``None``."""
+        breaches = series[self.violating_mask(series).to_numpy()]
+        if breaches.empty:
+            return None
+        return self.describe_breach_with_sample(breaches)
+
+    def describe_breach(self) -> str:
+        """Return the rule's expectation, naming **no** offending values.
+
+        The phrasing for a caller that is describing *one row* — a quarantined
+        row's reason, where the row's own values already sit beside the reason.
+        Sampling there would stamp every rejected row with values belonging to
+        other rows, so the rule speaks only for itself.
+        """
+        return self._phrase()
+
+    def describe_breach_with_sample(self, breaches: "pd.Series") -> str:
+        """Return the rule's expectation plus a sample of ``breaches``.
+
+        The phrasing for a caller that is describing *a column* — an aborting
+        validator message, where a handful of the column's offending values is
+        exactly the diagnosis wanted. The caller passes the already-masked
+        offenders, so no second pass over the column is needed.
+        """
+        return self.describe_breach() + self._EVIDENCE.format(sample=_sample(breaches))
+
+    def _violates(self, present: "pd.Series") -> "pd.Series":
+        """Return a boolean Series over ``present`` — the non-null values only."""
+        raise NotImplementedError
+
+    def _phrase(self) -> str:
+        """Return the breach phrase, without the offending sample."""
+        raise NotImplementedError
+
+
 class Nullable:
     """Declare that a schema field may contain null values.
 
@@ -49,7 +135,7 @@ class NonNull:
     """Declare that a schema field must not contain null values."""
 
 
-class Pattern:
+class Pattern(ValueRuleBase):
     """Require every (non-null) value to fully match a regular expression.
 
     The regex compiles at construction so a malformed pattern fails where the
@@ -61,22 +147,14 @@ class Pattern:
         self._source = pattern
         self._regex = re.compile(pattern)  # fail-fast on a malformed pattern
 
-    def violating_mask(self, series: "pd.Series") -> "pd.Series":
-        mask = pd.Series(False, index=series.index)
-        present_idx = series.dropna().index
-        if len(present_idx):
-            matched = series[present_idx].astype("string").str.fullmatch(self._regex)
-            mask.loc[present_idx] = ~matched.fillna(False)
-        return mask
+    def _violates(self, present: "pd.Series") -> "pd.Series":
+        return ~present.astype("string").str.fullmatch(self._regex).fillna(False)
 
-    def check(self, series: "pd.Series") -> str | None:
-        breaches = series[self.violating_mask(series)]
-        if not breaches.empty:
-            return f"violates pattern {self._source!r} (e.g. {_sample(breaches)})"
-        return None
+    def _phrase(self) -> str:
+        return f"violates pattern {self._source!r}"
 
 
-class Length:
+class Length(ValueRuleBase):
     """Require every (non-null) value's string length to sit in ``[min, max]``.
 
     Either bound is optional — ``minimum`` guards against a truncated value,
@@ -94,34 +172,19 @@ class Length:
         self._minimum = minimum
         self._maximum = maximum
 
-    def violating_mask(self, series: "pd.Series") -> "pd.Series":
-        mask = pd.Series(False, index=series.index)
-        present_idx = series.dropna().index
-        if len(present_idx):
-            lengths = series[present_idx].astype("string").str.len()
-            too_short = (
-                lengths < self._minimum
-                if self._minimum is not None
-                else pd.Series(False, index=present_idx)
-            )
-            too_long = (
-                lengths > self._maximum
-                if self._maximum is not None
-                else pd.Series(False, index=present_idx)
-            )
-            mask.loc[present_idx] = too_short | too_long
-        return mask
+    def _violates(self, present: "pd.Series") -> "pd.Series":
+        lengths = present.astype("string").str.len()
+        too_short = lengths < self._minimum if self._minimum is not None else False
+        too_long = lengths > self._maximum if self._maximum is not None else False
+        return too_short | too_long
 
-    def check(self, series: "pd.Series") -> str | None:
-        breaches = series[self.violating_mask(series)]
-        if not breaches.empty:
-            lo = self._minimum if self._minimum is not None else ""
-            hi = self._maximum if self._maximum is not None else ""
-            return f"length not in [{lo}, {hi}] (e.g. {_sample(breaches)})"
-        return None
+    def _phrase(self) -> str:
+        lo = self._minimum if self._minimum is not None else ""
+        hi = self._maximum if self._maximum is not None else ""
+        return f"length not in [{lo}, {hi}]"
 
 
-class Range:
+class Range(ValueRuleBase):
     """Require every (non-null) value to sit in the closed interval ``[min, max]``.
 
     The numeric counterpart to :class:`Length`: where ``Length`` bounds a value's
@@ -149,34 +212,18 @@ class Range:
         self._minimum = minimum
         self._maximum = maximum
 
-    def violating_mask(self, series: "pd.Series") -> "pd.Series":
-        mask = pd.Series(False, index=series.index)
-        present_idx = series.dropna().index
-        if len(present_idx):
-            values = series[present_idx]
-            too_low = (
-                values < self._minimum
-                if self._minimum is not None
-                else pd.Series(False, index=present_idx)
-            )
-            too_high = (
-                values > self._maximum
-                if self._maximum is not None
-                else pd.Series(False, index=present_idx)
-            )
-            mask.loc[present_idx] = too_low | too_high
-        return mask
+    def _violates(self, present: "pd.Series") -> "pd.Series":
+        too_low = present < self._minimum if self._minimum is not None else False
+        too_high = present > self._maximum if self._maximum is not None else False
+        return too_low | too_high
 
-    def check(self, series: "pd.Series") -> str | None:
-        breaches = series[self.violating_mask(series)]
-        if not breaches.empty:
-            lo = self._minimum if self._minimum is not None else ""
-            hi = self._maximum if self._maximum is not None else ""
-            return f"value not in [{lo}, {hi}] (e.g. {_sample(breaches)})"
-        return None
+    def _phrase(self) -> str:
+        lo = self._minimum if self._minimum is not None else ""
+        hi = self._maximum if self._maximum is not None else ""
+        return f"value not in [{lo}, {hi}]"
 
 
-class Unique:
+class Unique(ValueRuleBase):
     """Require a field's (non-null) values to be distinct — no duplicate keys.
 
     The field-annotation form of uniqueness, sitting beside the columns+dtypes
@@ -187,21 +234,16 @@ class Unique:
     are not flagged as duplicates.
     """
 
-    def violating_mask(self, series: "pd.Series") -> "pd.Series":
-        mask = pd.Series(False, index=series.index)
-        present = series.dropna()
-        if not present.empty:
-            mask.loc[present.index] = present.duplicated(keep=False)
-        return mask
+    _EVIDENCE = ": {sample}"
 
-    def check(self, series: "pd.Series") -> str | None:
-        dupes = series[self.violating_mask(series)]
-        if not dupes.empty:
-            return f"has duplicate value(s): {_sample(dupes)}"
-        return None
+    def _violates(self, present: "pd.Series") -> "pd.Series":
+        return present.duplicated(keep=False)
+
+    def _phrase(self) -> str:
+        return "has duplicate value(s)"
 
 
-class OneOf:
+class OneOf(ValueRuleBase):
     """Require every (non-null) value to be a member of an allowed set.
 
     The value-set / encoding rule: a status restricted to ``"open"``/``"closed"``,
@@ -209,23 +251,18 @@ class OneOf:
     and is rejected at construction. Null values are out of scope.
     """
 
+    _EVIDENCE = ": {sample}"
+
     def __init__(self, *allowed: object) -> None:
         if not allowed:
             raise ValueError("OneOf requires at least one allowed value")
         self._allowed = set(allowed)
 
-    def violating_mask(self, series: "pd.Series") -> "pd.Series":
-        mask = pd.Series(False, index=series.index)
-        present = series.dropna()
-        if not present.empty:
-            mask.loc[present.index] = ~present.isin(self._allowed)
-        return mask
+    def _violates(self, present: "pd.Series") -> "pd.Series":
+        return ~present.isin(self._allowed)
 
-    def check(self, series: "pd.Series") -> str | None:
-        breaches = series[self.violating_mask(series)]
-        if not breaches.empty:
-            allowed = ", ".join(sorted(repr(v) for v in self._allowed))
-            return f"has value(s) outside {{{allowed}}}: {_sample(breaches)}"
-        return None
+    def _phrase(self) -> str:
+        allowed = ", ".join(sorted(repr(v) for v in self._allowed))
+        return f"has value(s) outside {{{allowed}}}"
 
 ```

@@ -12,15 +12,16 @@ Import from here rather than the underlying modules::
 
 The modules behind this facade (``framework.run.builder``,
 ``framework.run.address``,
-``framework.run.execution``,
-``framework.run.pipeline_steps``, ``framework.run.runner``,
-``framework.run.run_context``, ``framework.run.run_log``,
-``framework.run.run_registry``) are internal layout: re-exports here are the
-public contract, the submodule paths are not. See ``docs/public-api.md``.
+``framework.run.execution``, ``framework.run.runner``,
+``framework.run.run_context``, ``framework.run.trace``,
+``framework.run.dry_run``) are internal layout: re-exports here are the
+public contract, the submodule paths are not. The ``RunLog`` / ``RunRegistry``
+types re-exported here live in the sibling ``tools.observability`` package.
+See ``docs/public-api.md``.
 """
 
 from framework.run.address import RunAddress, RunAddressError
-from framework.run.builder import Pipeline
+from framework.run.builder import Pipeline, PipelineGraphError
 from framework.run.dry_run import DryRunReport
 from framework.run.run_context import RunContext
 from framework.run.runner import (
@@ -39,6 +40,7 @@ from tools.observability.run_registry import RunRegistry
 
 __all__ = [
     "Pipeline",
+    "PipelineGraphError",
     "RunAddress",
     "RunAddressError",
     "PipelineRunner",

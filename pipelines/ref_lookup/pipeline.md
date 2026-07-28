@@ -18,7 +18,7 @@ Pass ``describe=True`` to print each pipeline's execution plan before running.
 
 Run from the repo root::
 
-    python -m cli run pipelines/ref_lookup [BASE_DIR]
+    python -m cli run pipelines/ref_lookup --base-dir BASE_DIR
 
 or directly::
 

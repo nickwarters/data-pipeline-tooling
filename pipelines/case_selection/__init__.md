@@ -15,7 +15,7 @@ the framework supplies the IO, the schema enforcement, and the gold write.
 
 Run it from the repo root::
 
-    python -m cli run pipelines/case_selection /tmp/selection-demo
+    python -m cli run pipelines/case_selection --base-dir /tmp/selection-demo
     python -m pipelines.case_selection.pipeline /tmp/selection-demo
 
 See [`docs/example-case-selection.md`](../../docs/example-case-selection.md).

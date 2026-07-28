@@ -9,7 +9,7 @@ the key invariant.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, make_dataclass
 from typing import Annotated
 
 import pandas as pd
@@ -156,6 +156,171 @@ def test_unique_violating_mask_returns_true_for_duplicate_rows():
     series = pd.Series(["a", "dup", "b", "dup"], dtype="string")
     mask = rule.violating_mask(series)
     assert list(mask) == [False, True, False, True]
+
+
+class StartsWithBad:
+    """A value rule implementing the protocol and inheriting nothing.
+
+    The ``ValueRule`` contract is structural, so quarantine must keep working
+    for a rule an application wrote itself, with no framework base class in
+    sight.
+    """
+
+    def violating_mask(self, series: "pd.Series") -> "pd.Series":
+        return pd.Series(
+            [bool(v is not None and str(v).startswith("bad")) for v in series],
+            index=series.index,
+        )
+
+    def check(self, series: "pd.Series") -> str | None:
+        breaches = series[self.violating_mask(series).to_numpy()]
+        return None if breaches.empty else "is a bad value"
+
+
+@dataclass
+class HandRolledRuleCase:
+    code: Annotated[str, StartsWithBad()]
+
+
+def test_partitioner_routes_rows_failing_a_hand_rolled_rule():
+    ds = _dataset(code=["ok", "bad-one", "fine"])
+
+    good, rejected = SchemaValueRulePartitioner(HandRolledRuleCase).partition(ds)
+
+    assert list(good.to_pandas()["code"]) == ["ok", "fine"]
+    assert list(rejected.to_pandas()["code"]) == ["bad-one"]
+    assert list(rejected.to_pandas()["failed_rule"]) == ["column 'code' is a bad value"]
+
+
+@dataclass
+class CodeCase:
+    code: Annotated[str, OneOf("A", "B")]
+
+
+def test_reject_reason_names_only_the_rules_expectation_not_other_rows_values():
+    # The ticket's reproduction: three rows breach OneOf('A', 'B'). Each row's
+    # reason must describe the *rule*, never sample values that belong to the
+    # other rejected rows.
+    ds = _dataset(code=pd.Series(["A", "X", "B", "Y", "Z"], dtype="string"))
+
+    _, rejected = SchemaValueRulePartitioner(CodeCase).partition(ds)
+
+    frame = rejected.to_pandas()
+    assert list(frame["code"]) == ["X", "Y", "Z"]
+    for value, reason in zip(frame["code"], frame["failed_rule"]):
+        others = {"X", "Y", "Z"} - {value}
+        assert not any(f"'{other}'" in reason for other in others), reason
+        assert "outside {'A', 'B'}" in reason
+
+
+class CountingRule:
+    """A hand-rolled rule that records how often each method is called."""
+
+    def __init__(self) -> None:
+        self.mask_calls = 0
+        self.check_calls = 0
+
+    def violating_mask(self, series: "pd.Series") -> "pd.Series":
+        self.mask_calls += 1
+        return pd.Series([str(v).startswith("bad") for v in series], index=series.index)
+
+    def check(self, series: "pd.Series") -> str | None:
+        self.check_calls += 1
+        breaches = series[self.violating_mask(series).to_numpy()]
+        return None if breaches.empty else "is a bad value"
+
+
+def _counting_schema(rule: CountingRule) -> type:
+    # make_dataclass so the rule instance lands in the annotation as an object
+    # (a source-level annotation would be a postponed string naming a local).
+    return make_dataclass("CountedCase", [("code", Annotated[str, rule])])
+
+
+def test_rule_phrase_is_computed_once_per_rule_not_once_per_violating_row():
+    # The phrase belongs to the rule, so it must be derived once before the row
+    # loop. Cost stays O(rows x rules) rather than O(violating rows x rules x rows).
+    rule = CountingRule()
+    schema = _counting_schema(rule)
+    ds = _dataset(code=pd.Series(["bad-1", "bad-2", "bad-3", "ok"], dtype="string"))
+
+    partitioner = SchemaValueRulePartitioner(schema)
+    rule.mask_calls = rule.check_calls = 0
+    partitioner.partition(ds)
+
+    # One mask for the routing, at most one phrase derivation for the label.
+    assert rule.check_calls <= 1
+    assert rule.mask_calls <= 2
+
+
+def test_quarantine_cost_does_not_grow_with_the_number_of_violating_rows():
+    # A benchmark-style guard: doubling the violating rows must not increase the
+    # number of times the rule is consulted.
+    def consultations(bad_rows: int) -> int:
+        rule = CountingRule()
+        schema = _counting_schema(rule)
+        values = [f"bad-{i}" for i in range(bad_rows)] + ["ok"]
+        partitioner = SchemaValueRulePartitioner(schema)
+        rule.mask_calls = rule.check_calls = 0
+        partitioner.partition(_dataset(code=pd.Series(values, dtype="string")))
+        return rule.mask_calls + rule.check_calls
+
+    assert consultations(50) == consultations(100)
+
+
+def test_partitioner_routes_by_position_on_a_duplicated_index():
+    # Concatenating frames behind the Dataset seam repeats index labels. Routing
+    # by label would merge two distinct rows' reasons and select the wrong rows.
+    frame = pd.DataFrame({"code": pd.Series(["A", "X", "B", "Y"], dtype="string")})
+    frame.index = [0, 0, 1, 1]  # set after construction: no reindex-by-label
+    good, rejected = SchemaValueRulePartitioner(CodeCase).partition(
+        Dataset.from_pandas(frame)
+    )
+
+    assert list(good.to_pandas()["code"]) == ["A", "B"]
+    assert list(rejected.to_pandas()["code"]) == ["X", "Y"]
+    assert len(rejected.to_pandas()["failed_rule"]) == 2
+
+
+def test_partitioner_routes_by_position_on_a_string_index():
+    frame = pd.DataFrame({"code": pd.Series(["A", "X", "B"], dtype="string")})
+    frame.index = ["r1", "r2", "r3"]
+    good, rejected = SchemaValueRulePartitioner(CodeCase).partition(
+        Dataset.from_pandas(frame)
+    )
+
+    assert list(good.to_pandas()["code"]) == ["A", "B"]
+    assert list(rejected.to_pandas()["code"]) == ["X"]
+
+
+def test_partitioner_routes_by_position_on_a_non_monotonic_integer_index():
+    # Labels [5, 3, 7, 1] make positional and label indexing disagree.
+    frame = pd.DataFrame({"code": pd.Series(["A", "X", "B", "Y"], dtype="string")})
+    frame.index = [5, 3, 7, 1]
+    good, rejected = SchemaValueRulePartitioner(CodeCase).partition(
+        Dataset.from_pandas(frame)
+    )
+
+    assert list(good.to_pandas()["code"]) == ["A", "B"]
+    assert list(rejected.to_pandas()["code"]) == ["X", "Y"]
+
+
+def test_partitioner_row_check_reasons_follow_the_row_on_a_duplicated_index():
+    # The horizontal path must route positionally too: only the breaching row
+    # carries the check's phrase, even when it shares a label with a good row.
+    frame = pd.DataFrame(
+        {
+            "amount": pd.Series([10, 99, 30], dtype="int64"),
+            "limit": pd.Series([100, 50, 100], dtype="int64"),
+        }
+    )
+    frame.index = [7, 7, 7]
+    good, rejected = SchemaValueRulePartitioner(ExposureCase).partition(
+        Dataset.from_pandas(frame)
+    )
+
+    assert list(good.to_pandas()["amount"]) == [10, 30]
+    assert list(rejected.to_pandas()["amount"]) == [99]
+    assert list(rejected.to_pandas()["failed_rule"]) == ["amount exceeds limit"]
 
 
 def test_pipeline_quarantine_routes_rejected_rows_to_reject_writer(tmp_path):

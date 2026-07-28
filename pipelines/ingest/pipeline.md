@@ -10,7 +10,7 @@ the CasePool the downstream ``selection`` pipeline reads.
 
 Address it by its location on disk::
 
-    python -m cli run pipelines/ingest /tmp/demo --run-date 2026-05-29
+    python -m cli run pipelines/ingest --base-dir /tmp/demo --run-date 2026-05-29
 
 or run the module directly with a default run context::
 

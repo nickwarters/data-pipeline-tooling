@@ -7,7 +7,7 @@ The stable import surface for getting a feed *in* and a result *out*: every
 on ``framework.core``. Where a feed *lands* — the namespace ``Store`` /
 ``StoreRegistry`` (one logical database → file) and the raw/silver/gold medallion
 profile over it — is **application infrastructure** in the sibling ``tools``
-package (``tools.store``, ``tools.medallion``), not framework vocabulary (#232).
+package (``tools.store``, ``tools.medallion``), not framework vocabulary.
 
 Import from here rather than the underlying modules::
 
@@ -39,11 +39,13 @@ from framework.io.strategy import (
     AccumulateByRun,
     InsertIfAbsent,
     InsertOrIgnore,
+    LoadStrategy,
     Refresh,
     UpsertStrategy,
 )
 from framework.io.writers import (
     AccumulateByRunWriter,
+    ChunkWritable,
     CsvWriter,
     ExcelWriter,
     JsonWriter,
@@ -54,6 +56,8 @@ from framework.io.writers import (
     SqliteUpsertWriter,
     StdoutWriter,
     Writer,
+    supports_chunk_writes,
+    writing_chunks,
 )
 
 __all__ = [
@@ -73,6 +77,9 @@ __all__ = [
     "ExcelReader",
     "SqliteReader",
     "Writer",
+    "ChunkWritable",
+    "writing_chunks",
+    "supports_chunk_writes",
     "CsvWriter",
     "ExcelWriter",
     "JsonWriter",
@@ -80,6 +87,7 @@ __all__ = [
     "AccumulateByRunWriter",
     "QuarantineWriter",
     "StdoutWriter",
+    "LoadStrategy",
     "Refresh",
     "AccumulateByRun",
     "UpsertStrategy",

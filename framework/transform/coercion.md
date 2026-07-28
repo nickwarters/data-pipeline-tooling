@@ -24,14 +24,22 @@ from framework.core.dataset import Dataset
 from framework.transform.processors import CoercionError
 
 # Boolean encodings raw can leave behind once a source's booleans survive a
-# SQLite round-trip — as TRUE/FALSE text or as 1/0 (integer, or text after a
-# text-typed round-trip). Compared case-folded, so `true`/`True`/`TRUE` all map;
-# 1/0 integers are stringified to "1"/"0" before lookup.
+# SQLite round-trip — as TRUE/FALSE text, as 1/0 (integer, or text after a
+# text-typed round-trip), or as the float 1.0/0.0 a nulled numeric column comes
+# back as. Y/N/YES/NO are everyday spellings in the source systems this
+# framework reads. Compared case-folded and whitespace-stripped, so `true`,
+# `True`, `TRUE ` all map; numbers are stringified before lookup.
 _BOOL_ENCODINGS: dict[str, bool] = {
     "TRUE": True,
     "FALSE": False,
     "1": True,
     "0": False,
+    "1.0": True,
+    "0.0": False,
+    "Y": True,
+    "N": False,
+    "YES": True,
+    "NO": False,
 }
 
 
@@ -68,15 +76,23 @@ class SchemaCoercion:
             raise self._error(name, f"not a parseable date ({exc})") from exc
 
     def _to_bool(self, series: "pd.Series", name: str) -> "pd.Series":
-        normalized = series.astype("string").str.upper()
+        normalized = series.astype("string").str.strip().str.upper()
         mapped = normalized.map(_BOOL_ENCODINGS)
-        # Plain `str` (not pandas "string") keeps a null source value sortable as
-        # "<NA>" rather than letting pd.NA reach sorted() and raise.
-        unrecognized = sorted(set(series[mapped.isna()].astype(str)))
+        # A null is not an encoding, it is the absence of one, so it is excluded
+        # from the unrecognized report: whether a gap is allowed is the declared
+        # value rules' question, and every other declared type already leaves it
+        # to them. Plain `str` (not pandas "string") keeps any remaining source
+        # value sortable rather than letting pd.NA reach sorted() and raise.
+        missing = series.isna()
+        unrecognized = sorted(set(series[mapped.isna() & ~missing].astype(str)))
         if unrecognized:
             joined = ", ".join(repr(v) for v in unrecognized)
             raise self._error(name, f"unrecognized boolean encoding(s): {joined}")
-        return mapped.astype("bool")
+        # pandas' nullable "boolean", not numpy `bool`: the latter has no null,
+        # so a gap would have to be invented as False. The validator's bool
+        # dtype check accepts both, and a non-nullable declaration is then
+        # reported as the nullability breach it is rather than a bad encoding.
+        return mapped.astype("boolean")
 
     def _error(self, name: str, detail: str) -> CoercionError:
         # Name the schema, column, and reason so an aborted coerce step diagnoses

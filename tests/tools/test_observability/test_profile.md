@@ -1,5 +1,5 @@
 ```python
-"""Per-column data profiling (#284).
+"""Per-column data profiling.
 
 Two layers, mirroring how the volume guardrail is tested: the pure profile
 computation and the drift check are exercised in isolation against fixed inputs

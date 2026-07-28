@@ -1,5 +1,5 @@
 ```python
-"""Tests for the friendly ``Schedule`` constructors (issue #248).
+"""Tests for the friendly ``Schedule`` constructors.
 
 These exercise the ergonomic facade over the concrete schedule classes:
 operator-friendly names map to the same ``is_due`` semantics, and bad input

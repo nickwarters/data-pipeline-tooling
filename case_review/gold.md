@@ -1,26 +1,29 @@
 ```python
-"""Case-review gold helpers built on generic framework reducers.
+"""Case-review gold helpers composed from generic framework transforms.
 
 These read a Case Type's **identity contract** (its ``namespace`` and
 ``natural_key``) straight off the :class:`~case_review.case_type.CaseType` and
-hand it to the generic framework reducers, which know only ``entity_id`` /
-``namespace`` / ``natural_key`` and nothing about Cases. The Case builder and
-each Detail-Table builder take the *same* Case Type, so a Case and its Detail
-rows derive the same deterministic ``case_id`` independently — the parent/child
-link is structural, not two call sites that must be kept in step.
+feed it to :class:`~framework.transform.DeriveKey`, which knows only a
+namespace, a list of natural-key columns and the column to stamp the derived
+``uuid5`` into — nothing about Cases. Naming that column ``case_id`` is this
+layer's business, not the framework's. The Case builder and each Detail-Table
+builder take the *same* Case Type, so a Case and its Detail rows derive the same
+deterministic ``case_id`` independently — the parent/child link is structural,
+not two call sites that must be kept in step.
 """
 
 from __future__ import annotations
 
 from case_review.case_type import CaseType
 from framework.core import UniqueValidator
-from framework.io.strategy import Refresh
+from framework.io import Refresh
 from framework.run import Pipeline, RunLog
 from framework.transform import DeriveKey, LatestPerKey, Unpivot
 from tools.medallion import Medallion
 
-# A Case is identified by its ``case_id`` everywhere downstream. The generic
-# reducer calls this its ``entity_id_column``; the case-review layer fixes it.
+# A Case is identified by its ``case_id`` everywhere downstream, so the column
+# DeriveKey stamps, LatestPerKey reduces by and UniqueValidator gates on is fixed
+# once here rather than passed in at each call site.
 CASE_ID_COLUMN = "case_id"
 
 

@@ -15,7 +15,9 @@ import os
 from pathlib import Path
 from typing import Any
 
+from tools.observability.record_schema import build_run_record
 from tools.observability.run_log import RunLog
+from tools.observability.timestamps import utc_now_iso
 
 __all__ = [
     "RecordingRunLog",
@@ -24,7 +26,7 @@ __all__ = [
 
 
 class RecordingRunLog(RunLog):
-    """A :class:`~framework.run.run_log.RunLog` that captures records in memory.
+    """A :class:`~tools.observability.run_log.RunLog` that captures records in memory.
 
     Compose it with ``Pipeline(..., run_log=run_log)`` to assert a run's
     structured records without a file on disk. It inherits the base ``step``
@@ -45,24 +47,27 @@ class RecordingRunLog(RunLog):
         pipeline: str,
         step: str,
         status: str,
+        committed: bool = False,
         **fields: Any,
     ) -> None:
-        record = {
-            "pipeline_run_id": pipeline_run_id,
-            "logical_run_id": fields.get("logical_run_id"),
-            "pipeline": pipeline,
-            "step": step,
-            "step_address": fields.get("step_address"),
-            "status": status,
-            "rows_in": fields.get("rows_in"),
-            "rows_out": fields.get("rows_out"),
-            "rows_quarantined": fields.get("rows_quarantined"),
-            "rows_excluded": fields.get("rows_excluded"),
-            "duration": fields.get("duration"),
-            "errors": fields.get("errors") or [],
-            "warn_hits": fields.get("warn_hits") or [],
-        }
-        self.records.append(record)
+        # Built from the same field declaration the file sink uses, and stamped
+        # from the same clock, so a captured record really does have the on-disk
+        # shape — a field added to the schema is visible to a test without
+        # touching this helper. ``committed`` is named explicitly because it is
+        # the one field the sink defaults rather than leaving empty: forwarding
+        # it through ``**fields`` would capture ``None`` where a real run writes
+        # ``false``, so a test could not tell the two apart.
+        self.records.append(
+            build_run_record(
+                timestamp=utc_now_iso(),
+                pipeline_run_id=pipeline_run_id,
+                pipeline=pipeline,
+                step=step,
+                status=status,
+                committed=committed,
+                **fields,
+            )
+        )
 
     def records_for_step(self, step: str) -> list[dict[str, Any]]:
         """Every captured record for the named step, in execution order."""
@@ -87,7 +92,7 @@ def read_run_log(path: str | os.PathLike[str]) -> list[dict[str, Any]]:
     """Parse an on-disk JSONL run-log file into its record dicts, in order.
 
     The file dual of :class:`RecordingRunLog`: a pipeline that lands its
-    :class:`~framework.run.run_log.RunLog` to disk (like the demos) is asserted by
+    :class:`~tools.observability.run_log.RunLog` to disk (like the demos) is asserted by
     reading the file back. Tolerates blank lines (e.g. a trailing newline),
     matching the run registry's own ingest.
     """

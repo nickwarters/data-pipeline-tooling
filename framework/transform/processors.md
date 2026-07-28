@@ -19,11 +19,8 @@ This module holds reusable transforms: ``Filter`` and ``Score`` carry
 plain-Python row callables, ``VectorizedFilter`` and ``VectorizedDerive`` carry
 whole-frame callables for batch-friendly transforms, ``Sort`` and ``Rename``
 reshape the frame, ``Parse`` decodes a packed text column through a callable
-(``json.loads`` by default) and ``SplitColumn`` / ``JoinColumns`` are the
-inverse pair that fans one delimited column into several and recombines several
-into one, ``Zfill`` left-pads text columns with leading zeros to a fixed width,
-``IntegerText`` renders a whole-number column widened to float as clean integer
-text, ``JoinWith`` joins an explicit read-only dependency in Python, and
+(``json.loads`` by default), ``JoinColumns`` recombines several columns into one
+delimited column, ``JoinWith`` joins an explicit read-only dependency in Python, and
 ``AntiJoinWith`` excludes rows whose key is present in a read-only dependency.
 """
 
@@ -71,6 +68,11 @@ class Filter:
 
     An optional ``name`` labels the gate for row-level explainability. Unnamed
     filters still work; they trace under a generic ``"filter"`` label.
+
+    The kept rows' index is reset, matching :class:`VectorizedFilter` and the
+    other row-dropping processors: the two filters are presented as
+    interchangeable, so they must not differ in index semantics, and a surviving
+    gappy or repeated index would leave later label-based work to trip over.
     """
 
     trace_role = "filter"
@@ -81,7 +83,9 @@ class Filter:
 
     def __call__(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
-        kept = frame.loc[frame.apply(lambda row: self._predicate(row), axis=1)]
+        kept = frame.loc[
+            frame.apply(lambda row: self._predicate(row), axis=1)
+        ].reset_index(drop=True)
         return Dataset.from_pandas(kept)
 
     def describe(self) -> str:
@@ -121,6 +125,10 @@ class VectorizedFilter:
     ``predicate`` receives the backing pandas frame once and must return a
     boolean mask with the same length. Use this for common column expressions on
     large feeds where row-wise Python callbacks would dominate runtime.
+
+    Index semantics match :class:`Filter` exactly — the kept rows' index is
+    reset — so swapping one filter for the other changes only how the rule is
+    expressed, never the shape of what comes out.
     """
 
     trace_role = "filter"
@@ -278,8 +286,8 @@ class JoinColumns:
     (``drop=False``) — joining typically adds a composite alongside its parts;
     pass ``drop=True`` to consume them.
 
-    The inverse of :class:`SplitColumn`, and a plain-text sibling of
-    :class:`DeriveKey` (which hashes the joined key into a UUID). Raises
+    The plain-text sibling of :class:`DeriveKey` (which hashes the joined key
+    into a UUID) — this one leaves the composite readable. Raises
     ``ValueError`` if any source column is absent.
     """
 
@@ -675,16 +683,25 @@ def _cut_per_group(frame, key, select):
     The shared spine of the per-group processors: :class:`TopNPerGroup` and
     :class:`SamplePerGroup` differ only in *which* rows they keep from each group
     — ``select(group_key, group)`` returns that group's kept sub-frame. Groups
-    are iterated in canonical key order and the kept rows concatenated, so the
-    output is deterministic regardless of incoming row order. An empty feed in
-    yields an empty feed out (consistent with :class:`Filter`).
+    are iterated in canonical key order and the kept sub-frames concatenated, so
+    the output is deterministic regardless of incoming row order. An empty feed
+    in yields an empty feed out (consistent with :class:`Filter`).
+
+    Two details matter for not losing rows. Grouping keeps null keys
+    (``dropna=False``): a missing group key is still a group, and dropping it
+    would silently shrink a ranked or sampled feed with nothing downstream to
+    notice. And the kept sub-frames are concatenated rather than re-selected out
+    of the input by index label, so a frame whose index labels repeat — which an
+    upstream reshape can easily leave behind — cannot pull in every row sharing
+    a label and inflate the result.
     """
+    import pandas as pd
+
     if len(frame) == 0:
         return frame
-    keep_index: list[Any] = []
-    for group_key, group in frame.groupby(key, sort=True):
-        keep_index.extend(select(group_key, group).index)
-    return frame.loc[keep_index].reset_index(drop=True)
+    grouped = frame.groupby(key, sort=True, dropna=False)
+    cut = [select(group_key, group) for group_key, group in grouped]
+    return pd.concat(cut, ignore_index=True) if cut else frame.iloc[:0]
 
 
 class TopNPerGroup:

@@ -84,7 +84,9 @@ class RunContext:
             return f"{self.label}:{self.run_date.isoformat()}"
         return self.pipeline_run_id
 
-    def for_nested_pipeline(self, name: str) -> "RunContext":
+    def for_nested_pipeline(
+        self, name: str | None = None, *, logical_run_id: str | None = None
+    ) -> "RunContext":
         """Derive a child context for a nested ``Pipeline.run()`` of one attempt.
 
         A handler often runs several ``Pipeline`` hops (raw -> silver -> gold) in
@@ -98,19 +100,28 @@ class RunContext:
         The child keeps its **own** run-summary flag so recording a hop's summary
         never marks *this* context recorded — the runner still writes the
         pipeline-level summary its freshness history depends on. The dry-run
-        report is shared by reference so a preview accumulates every hop's steps.
+        flag and its report are carried over too — the report by reference — so a
+        preview stays a preview through every nesting level and accumulates every
+        hop's steps. The run parameters come along for the same reason: a nested
+        hop reads ``context.params`` exactly as the outer handler does.
+
+        ``name`` defaults to this context's pipeline, for a caller deriving a
+        child of the *same* pipeline. ``logical_run_id`` overrides the inherited
+        business key, for a fan-out that gives each item its own idempotency key
+        while keeping the one attempt-level ``pipeline_run_id``.
         """
         child = RunContext(
             run_date=self.run_date,
             pipeline_run_id=self.pipeline_run_id,
-            logical_run_id=self.logical_run_id,
+            logical_run_id=logical_run_id or self.logical_run_id,
             load_date=self.load_date,
             run_log=self.run_log,
             run_registry=self.run_registry,
             base_dir=self.base_dir,
             subject=self.subject,
-            pipeline=name,
+            pipeline=name if name is not None else self.pipeline,
             freshness_days=self.freshness_days,
+            params=self.params,
             dry_run=self.dry_run,
         )
         # Share the parent's report so a dry-run preview captures nested hops.

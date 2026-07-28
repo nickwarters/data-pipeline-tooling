@@ -4,17 +4,11 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from framework.core import (
-    ColumnValidator,
-    Dataset,
-    PipelineError,
-    SchemaValidator,
-    format_failure,
-)
+from framework.core import Dataset, PipelineError, format_failure
 from framework.io import AccumulateByRun, CsvReader, Reader, Writer
 from framework.run import Pipeline, RunContext, RunLog
-from framework.transform import SchemaCoercion, SchemaValueRulePartitioner
 from tools.medallion import medallion
+from tools.recipes import raw_to_silver, source_to_raw
 from tools.store import StoreRegistry
 
 from .case_type import CASE_TYPE
@@ -23,18 +17,28 @@ FEED_NAME = "complaints_a"
 UPSTREAMS = ()
 
 
+# The columns the raw hop gates on, in the source's own vocabulary.
+SOURCE_COLUMNS = ["record_id", "label", "amount"]
+
+
 def raw_builder(
     reader: Reader,
     writer: Writer,
     run_log: RunLog | None = None,
 ) -> Pipeline:
-    """Build the raw hop: faithful landing zone."""
-    p = Pipeline(f"{FEED_NAME}:raw", run_log=run_log)
-    r = p.read(reader, name="read")
-    # Gate the source's expected columns before landing
-    v = p.validate(ColumnValidator(["record_id", "label", "amount"]), r, name="columns")
-    p.write(writer, v, name="write")
-    return p
+    """Build the raw hop: faithful landing zone.
+
+    The standard raw hop, composed from the shared recipe. To diverge, inline
+    the recipe's body here and edit it: a recipe is composition, not
+    inheritance, so there is nothing to fight.
+    """
+    return source_to_raw(
+        reader,
+        writer,
+        expected_columns=SOURCE_COLUMNS,
+        name=f"{FEED_NAME}:raw",
+        run_log=run_log,
+    )
 
 
 def silver_builder(
@@ -43,28 +47,19 @@ def silver_builder(
     reject_writer: Writer | None = None,
     run_log: RunLog | None = None,
 ) -> Pipeline:
-    """Build the silver hop: schema coercion and enforcement + quarantine."""
-    p = Pipeline(f"{FEED_NAME}:silver", run_log=run_log)
-    r = p.read(reader, name="read")
+    """Build the silver hop: schema coercion and enforcement + quarantine.
 
-    coerced = p.transform(SchemaCoercion(CASE_TYPE.schema), r, name="coerce")
-
-    # Opt-in quarantine: value-rule rejects go to reject_writer, good rows proceed
-    if reject_writer:
-        quarantined = p.quarantine(
-            SchemaValueRulePartitioner(CASE_TYPE.schema),
-            reject_writer,
-            coerced,
-            name="quarantine",
-        )
-    else:
-        quarantined = coerced
-
-    validated = p.validate(
-        SchemaValidator(CASE_TYPE.schema), quarantined, name="post-validate"
+    The standard silver hop, composed from the shared recipe; inline it here to
+    diverge.
+    """
+    return raw_to_silver(
+        reader,
+        writer,
+        schema=CASE_TYPE.schema,
+        reject_writer=reject_writer,
+        name=f"{FEED_NAME}:silver",
+        run_log=run_log,
     )
-    p.write(writer, validated, name="write")
-    return p
 
 
 def run(context: RunContext) -> Dataset:

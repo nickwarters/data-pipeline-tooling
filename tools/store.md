@@ -13,7 +13,7 @@ framework vocabulary. The framework knows only the ``Reader`` / ``Writer`` ports
 (``framework.io``); where a feed lands (``namespace`` → file) and how named
 components are wired is an application concern. The raw/silver/gold medallion is a
 profile layered on top of this (``tools.medallion``), itself an application
-convention (#232).
+convention.
 """
 
 from __future__ import annotations
@@ -24,19 +24,10 @@ from typing import Protocol
 
 from framework._internal.connection import connect
 from framework.io import (
-    AccumulateByRun,
-    AccumulateByRunWriter,
-    InsertIfAbsent,
-    InsertOrIgnore,
+    LoadStrategy,
     QuarantineWriter,
     Reader,
-    Refresh,
-    SqliteInsertIfAbsentWriter,
-    SqliteInsertOrIgnoreWriter,
     SqliteReader,
-    SqliteTruncateReloadWriter,
-    SqliteUpsertWriter,
-    UpsertStrategy,
     Writer,
 )
 from framework.io.sql import quote_identifier
@@ -64,7 +55,7 @@ class DirectoryStoreBackend:
 
     A namespace may nest with ``/`` (e.g. ``cases/silver``), which maps to
     ``<root>/cases/silver.db`` — the layout the medallion profile uses to keep a
-    subject's layer files together and isolated (ADR-0001).
+    subject's layer files together and isolated.
     """
 
     def db_file(
@@ -78,7 +69,7 @@ class Store:
     """One namespace (a logical database): mints Writers/Readers over its tables.
 
     ``Store`` binds a single database file and mints components over named tables
-    in it. It makes no load decision (ADR-0003); the caller chooses the strategy
+    in it. It makes no load decision; the caller chooses the strategy
     when minting a Writer.
     """
 
@@ -95,50 +86,16 @@ class Store:
         )
         self._busy_timeout_ms = busy_timeout_ms
 
-    def writer(
-        self,
-        table: str,
-        strategy: Refresh
-        | AccumulateByRun
-        | UpsertStrategy
-        | InsertOrIgnore
-        | InsertIfAbsent,
-    ) -> Writer:
-        """Mint a Writer over a table in this namespace with the given strategy."""
-        db_path = self._db_path
-        if isinstance(strategy, Refresh):
-            return SqliteTruncateReloadWriter(
-                db_path, table, busy_timeout_ms=self._busy_timeout_ms
-            )
-        if isinstance(strategy, AccumulateByRun):
-            return AccumulateByRunWriter(
-                db_path,
-                table,
-                strategy.logical_run_id,
-                strategy.load_date,
-                pipeline_run_id=strategy.pipeline_run_id,
-                busy_timeout_ms=self._busy_timeout_ms,
-            )
-        if isinstance(strategy, UpsertStrategy):
-            return SqliteUpsertWriter(
-                db_path,
-                table,
-                strategy.key_columns,
-                busy_timeout_ms=self._busy_timeout_ms,
-            )
-        if isinstance(strategy, InsertOrIgnore):
-            return SqliteInsertOrIgnoreWriter(
-                db_path, table, busy_timeout_ms=self._busy_timeout_ms
-            )
-        if isinstance(strategy, InsertIfAbsent):
-            return SqliteInsertIfAbsentWriter(
-                db_path,
-                table,
-                strategy.key_columns,
-                surrogate_column=strategy.surrogate_column,
-                busy_timeout_ms=self._busy_timeout_ms,
-            )
-        raise TypeError(f"unknown strategy {strategy!r}")
+    def writer(self, table: str, strategy: LoadStrategy) -> Writer:
+        """Mint a Writer over a table in this namespace with the given strategy.
+
+        The store resolves only the *location* and the contention timeout; the
+        strategy realises the Writer that implements it, so a store never
+        learns the set of strategies and a new one needs no change here.
+        """
+        return strategy.writer_for(
+            self._db_path, table, busy_timeout_ms=self._busy_timeout_ms
+        )
 
     def reader(self, table: str) -> Reader:
         """Mint a Reader over a table in this namespace."""

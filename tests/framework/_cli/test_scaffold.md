@@ -244,7 +244,8 @@ def test_clean_identifier_columns_keep_the_schema_driven_validator(tmp_path):
 
     pipeline = (tmp_path / "pipelines" / "orders" / "pipeline.py").read_text("utf-8")
     assert "RAW_FEED_COLUMNS" not in pipeline
-    assert "ColumnValidator([f.name for f in fields(OrdersRow)])" in pipeline
+    # The raw hop composes the shared recipe, gated on the schema's own fields.
+    assert "expected_columns=[f.name for f in fields(OrdersRow)]" in pipeline
 
 
 def test_non_identifier_columns_gate_the_validator_on_raw_names(tmp_path):
@@ -266,7 +267,7 @@ def test_non_identifier_columns_gate_the_validator_on_raw_names(tmp_path):
     assert (
         'RAW_FEED_COLUMNS = [\n    "Case Number",\n    "Adviser Name",\n]' in pipeline
     )
-    assert "ColumnValidator(RAW_FEED_COLUMNS)" in pipeline
+    assert "expected_columns=RAW_FEED_COLUMNS" in pipeline
     assert "fields(" not in pipeline  # schema-driven validator dropped
     # The relocated test follows: validator columns, not schema fields.
     assert (

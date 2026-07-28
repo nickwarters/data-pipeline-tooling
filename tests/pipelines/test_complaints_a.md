@@ -53,6 +53,31 @@ def test_bundled_sample_feed_refines_through_to_silver(tmp_path):
     assert len(silver) == 2
 
 
+def test_both_hops_plan_exactly_the_steps_they_always_have():
+    """Pin the composed plan, node for node, address for address.
+
+    The two builders delegate to the shared hop recipes; this is the pin that
+    the delegation kept the run log's step names and addresses identical to the
+    hand-composed hops they replaced.
+    """
+    reader, writer, rejects = given_rows([]), RecordingWriter(), RecordingWriter()
+
+    assert raw_builder(reader, writer).describe().splitlines() == [
+        "Pipeline: complaints_a:raw",
+        "  [Read] read",
+        "  [Validate] columns (depends on: read)",
+        "  [Write] write (depends on: columns)",
+    ]
+    assert silver_builder(reader, writer, rejects).describe().splitlines() == [
+        "Pipeline: complaints_a:silver",
+        "  [Read] read",
+        "  [Transform] coerce (depends on: read)",
+        "  [Quarantine] quarantine (depends on: coerce)",
+        "  [Validate] post-validate (depends on: quarantine)",
+        "  [Write] write (depends on: post-validate)",
+    ]
+
+
 def test_raw_builder_gates_source_columns():
     writer = RecordingWriter()
     # Missing 'amount' column

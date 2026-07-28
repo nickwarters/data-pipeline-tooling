@@ -11,12 +11,14 @@ Type, Detail Tables — is unique per Case Type, so the gold step is left to you
 Its shape is sketched at the foot of ``run``.
 
 Each medallion hop is its own ``*_builder`` -- a single, editable definition of
-what that hop does.
+what that hop does, composed through the public facades (``framework.core`` /
+``framework.io`` / ``framework.transform`` / ``framework.run``) and the shared
+``tools.recipes`` hop recipes.
 
 Address it by its location on disk -- the framework imports
 ``pipelines.myfeed.pipeline`` and runs its ``run(context)`` callable::
 
-    python -m cli run pipelines/myfeed [BASE_DIR]
+    python -m cli run pipelines/myfeed --base-dir BASE_DIR
 
 or run the module directly with a default run context::
 
@@ -33,18 +35,12 @@ import sys
 from dataclasses import fields
 from pathlib import Path
 
-from framework.core import (
-    ColumnValidator,
-    Dataset,
-    PipelineError,
-    SchemaValidator,
-    format_failure,
-)
+from framework.core import Dataset, PipelineError, format_failure
 from framework.io import AccumulateByRun, CsvReader, Reader, Writer
 from framework.run import Pipeline, RunContext, RunLog
-from framework.transform import SchemaCoercion, SchemaValueRulePartitioner
 from tools.environments import known_environments, resolve_base_dir
 from tools.medallion import medallion
+from tools.recipes import raw_to_silver, source_to_raw
 from tools.store import StoreRegistry
 
 from .case_type import CASE_TYPE
@@ -62,15 +58,20 @@ def raw_builder(
     writer: Writer,
     run_log: RunLog | None = None,
 ) -> Pipeline:
-    """Build the raw hop: faithful landing zone."""
-    p = Pipeline(f"{FEED_NAME}:raw", run_log=run_log)
-    r = p.read(reader, name="read")
-    # Gate the source's expected columns before landing
-    v = p.validate(
-        ColumnValidator([f.name for f in fields(MyfeedRow)]), r, name="columns"
+    """Build the raw hop: faithful landing zone.
+
+    This is the standard raw hop, composed from the shared recipe: gate the
+    source's expected columns, then land the source unchanged. To customise,
+    inline the recipe's body here -- a recipe is composition, not inheritance,
+    so there is nothing to fight.
+    """
+    return source_to_raw(
+        reader,
+        writer,
+        expected_columns=[f.name for f in fields(MyfeedRow)],
+        name=f"{FEED_NAME}:raw",
+        run_log=run_log,
     )
-    p.write(writer, v, name="write")
-    return p
 
 
 def silver_builder(
@@ -79,28 +80,21 @@ def silver_builder(
     reject_writer: Writer | None = None,
     run_log: RunLog | None = None,
 ) -> Pipeline:
-    """Build the silver hop: schema coercion and enforcement + quarantine."""
-    p = Pipeline(f"{FEED_NAME}:silver", run_log=run_log)
-    r = p.read(reader, name="read")
+    """Build the silver hop: schema coercion and enforcement + quarantine.
 
-    coerced = p.transform(SchemaCoercion(CASE_TYPE.schema), r, name="coerce")
-
-    # Opt-in quarantine: value-rule rejects go to reject_writer, good rows proceed
-    if reject_writer:
-        quarantined = p.quarantine(
-            SchemaValueRulePartitioner(CASE_TYPE.schema),
-            reject_writer,
-            coerced,
-            name="quarantine",
-        )
-    else:
-        quarantined = coerced
-
-    validated = p.validate(
-        SchemaValidator(CASE_TYPE.schema), quarantined, name="post-validate"
+    The standard silver hop, composed from the shared recipe: coerce the dtypes
+    storage loses, route value-rule breaches to ``reject_writer`` (opt-in, so
+    the good rows still land), then validate the Case Type's declared schema.
+    Inline the recipe's body here to customise it.
+    """
+    return raw_to_silver(
+        reader,
+        writer,
+        schema=CASE_TYPE.schema,
+        reject_writer=reject_writer,
+        name=f"{FEED_NAME}:silver",
+        run_log=run_log,
     )
-    p.write(writer, validated, name="write")
-    return p
 
 
 def run(context: RunContext) -> Dataset:

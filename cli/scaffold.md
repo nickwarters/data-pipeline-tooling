@@ -303,10 +303,10 @@ def _render_pipeline(text: str, feed: str, spec: _FeedSpec) -> str:
     cls = _pascal(feed) + "Row"
     anchor = f'SAMPLE_CSV = Path(__file__).parent / "sample_data" / "{feed}.csv"\n'
     text = text.replace(anchor, anchor + "\n" + _raw_columns_literal(spec))
-    # Replace ColumnValidator initialization to use RAW_FEED_COLUMNS
+    # Gate the raw hop's recipe on RAW_FEED_COLUMNS instead of the schema fields
     text = text.replace(
-        f"ColumnValidator([f.name for f in fields({cls})])",
-        "ColumnValidator(RAW_FEED_COLUMNS)",
+        f"[f.name for f in fields({cls})]",
+        "RAW_FEED_COLUMNS",
     )
     text = text.replace("RENAME: dict[str, str] = {}\n", _rename_literal(spec))
     text = text.replace("from dataclasses import fields\n", "")
@@ -392,7 +392,7 @@ def render(
     ``feed_file`` seeds the scaffold from a real sample CSV (header -> schema
     fields, contents -> bundled sample, first rows -> the test's sample rows). It
     isn't supported with ``case_type`` (the Case Type variant also needs a
-    natural-key decision -- #155/#163).
+    natural-key decision).
 
     Raises ``ValueError`` for an invalid feed name or an unsupported flag
     combination, ``FileNotFoundError`` for a missing feed file, and

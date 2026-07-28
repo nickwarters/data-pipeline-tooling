@@ -173,4 +173,55 @@ def test_failure_mid_stream_is_recorded_as_error_with_category_and_reraised(tmp_
     # The partial progress before the abort is still visible (one chunk written).
     assert rec["rows_out"] == 10
 
+
+# --------------------------------------------------------------------------
+# The accumulating load under a streaming drive: the delete-by-logical-run
+# that makes a re-drive idempotent belongs to the run, not to each chunk.
+# --------------------------------------------------------------------------
+
+
+def _landed(db_path):
+    import sqlite3
+
+    with sqlite3.connect(db_path) as con:
+        return pd.read_sql("SELECT * FROM feed", con)
+
+
+def _accumulating_writer(db_path):
+    from framework.io.strategy import AccumulateByRun
+
+    return AccumulateByRun(
+        logical_run_id="2026-07-27", load_date="2026-07-27"
+    ).writer_for(db_path, "feed")
+
+
+def _drive(run_log, db_path, rows):
+    return stream_step(
+        run_log,
+        pipeline_run_id="run-1",
+        pipeline="big",
+        step="ingest",
+        reader=_ListChunkReader([{"id": i} for i in range(rows)]),
+        writer=_accumulating_writer(db_path),
+        size=10,
+    )
+
+
+def test_every_chunk_of_an_accumulating_stream_survives(tmp_path):
+    """A per-chunk delete would leave only the last chunk on disk."""
+    db = tmp_path / "raw.db"
+    result = _drive(RunLog(tmp_path / "runs.log"), db, 35)
+
+    assert result.rows_out == 35
+    assert len(_landed(db)) == 35
+
+
+def test_re_driving_the_same_logical_run_replaces_it_rather_than_doubling(tmp_path):
+    db = tmp_path / "raw.db"
+    run_log = RunLog(tmp_path / "runs.log")
+    _drive(run_log, db, 35)
+    _drive(run_log, db, 35)
+
+    assert len(_landed(db)) == 35
+
 ```

@@ -23,6 +23,7 @@ from framework.core.errors import ErrorCategory, PipelineError, format_failure
 from framework.core.protocols import (
     DEFAULT_CHUNK_SIZE,
     ChunkReader,
+    ChunkWritable,
     DatasetProfiler,
     Processor,
     Reader,
@@ -37,9 +38,11 @@ from framework.core.validators import (
     RowCountValidator,
     RunHistory,
     SchemaDriftValidator,
+    StreamingUniqueValidator,
     UniqueValidator,
     ValidationError,
     VolumeAnomalyValidator,
+    needs_whole_dataset,
 )
 from framework.core.value_rules import (
     Length,
@@ -57,6 +60,7 @@ __all__ = [
     "ChunkReader",
     "DEFAULT_CHUNK_SIZE",
     "Writer",
+    "ChunkWritable",
     "Processor",
     "Validator",
     "DatasetProfiler",
@@ -69,6 +73,8 @@ __all__ = [
     "RowCountValidator",
     "VolumeAnomalyValidator",
     "UniqueValidator",
+    "StreamingUniqueValidator",
+    "needs_whole_dataset",
     "RunHistory",
     "SchemaDriftValidator",
     "PriorColumns",

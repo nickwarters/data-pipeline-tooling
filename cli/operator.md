@@ -8,10 +8,13 @@ stays local SQLite + JSONL, with no external services.
 
 Run from the repository root so the import-only ``framework`` package resolves::
 
-    python -m cli run pipelines/orders /data --run-date 2026-05-29
-    python -m cli status /data --subject cases
-    python -m cli runs /data --pipeline cases/ingest --limit 5
-    python -m cli log /data cases --pipeline-run-id <pipeline-run-id>
+    python -m cli run pipelines/orders --base-dir /data --run-date 2026-05-29
+    python -m cli status --base-dir /data --subject cases
+    python -m cli runs --base-dir /data --pipeline cases/ingest --limit 5
+    python -m cli log cases --base-dir /data --pipeline-run-id <pipeline-run-id>
+
+The base directory is the option ``--base-dir`` (or ``--env <name>``, which
+resolves one), never a positional argument.
 
 ``run`` addresses a pipeline by *its location on disk*: ``pipelines/orders`` maps
 to the module ``pipelines.orders.pipeline``, imported at runtime, whose
@@ -46,12 +49,8 @@ from framework.run import (
 )
 from tools.calendar import WorkingDayCalendar
 from tools.environments import ENV_VAR, known_environments, resolve_base_dir
+from tools.observability.run_store import RunStore
 from tools.orchestration import Orchestrator
-
-# Mirrors the layout PipelineRunner writes: a per-base run registry and the
-# per-case-type JSONL run logs the runner emits alongside it.
-_REGISTRY_RELPATH = ("_registry", "runs.db")
-_RUNS_RELPATH = "_runs"
 
 
 def _resolve_app(name: str):
@@ -59,8 +58,24 @@ def _resolve_app(name: str):
 
     A thin seam so the framework imports the app by name at runtime (keeping the
     dependency one-way) and so tests can substitute a fake ``build_pipeline_sets``.
+
+    A mistyped or unimportable module is an operator-facing configuration error,
+    so it is raised as :class:`UnknownPipelineError` and rendered through the
+    same clean failure block every other CLI error path uses.
     """
-    return importlib.import_module(name)
+    try:
+        module = importlib.import_module(name)
+    except ImportError as exc:
+        raise UnknownPipelineError(
+            f"cannot import application module {name!r} for --app "
+            "(expected a module exposing build_pipeline_sets(), "
+            "importable from the repo root)"
+        ) from exc
+    if not callable(getattr(module, "build_pipeline_sets", None)):
+        raise UnknownPipelineError(
+            f"application module {name!r} defines no build_pipeline_sets() callable"
+        )
+    return module
 
 
 def _base_dir_or_report(args: argparse.Namespace) -> Path | None:
@@ -98,10 +113,10 @@ def _add_base_dir_args(parser: argparse.ArgumentParser) -> None:
 
 def _open_registry(base_dir: str | Path) -> RunRegistry | None:
     """Open the run registry under ``base_dir``, or ``None`` if none exists yet."""
-    path = Path(base_dir).joinpath(*_REGISTRY_RELPATH)
-    if not path.exists():
+    store = RunStore(base_dir)
+    if not store.registry_path.exists():
         return None
-    return RunRegistry(path)
+    return store.registry()
 
 
 def _load_registry_or_report(base_dir: str | Path) -> RunRegistry | None:
@@ -146,6 +161,7 @@ def _run(args: argparse.Namespace) -> int:
             base_dir,
             run_date=args.run_date,
             logical_run_id=args.logical_run_id,
+            params=dict(args.params),
             freshness_days=args.freshness_days,
         )
         print(report.render())
@@ -174,13 +190,18 @@ def _orchestrate(args: argparse.Namespace) -> int:
     base_dir = _base_dir_or_report(args)
     if base_dir is None:
         return 1
-    app = _resolve_app(args.app)
     try:
+        app = _resolve_app(args.app)
         orchestrator = Orchestrator(
             app.build_pipeline_sets(),
             WorkingDayCalendar(),
         )
-        if args.loop:
+        # The two modes are mutually exclusive at the parser, and a single pass
+        # is the default when neither is named.
+        if args.once or not args.loop:
+            result = orchestrator.run_due_once(base_dir, run_date=args.run_date)
+            decisions = list(result.decisions)
+        else:
             results = orchestrator.run_until_complete(
                 base_dir,
                 run_date=args.run_date,
@@ -188,9 +209,6 @@ def _orchestrate(args: argparse.Namespace) -> int:
                 max_idle_polls=args.max_idle_polls,
             )
             decisions = [d for result in results for d in result.decisions]
-        else:
-            result = orchestrator.run_due_once(base_dir, run_date=args.run_date)
-            decisions = list(result.decisions)
     except PipelineError as exc:
         print(format_failure(exc), file=sys.stderr)
         return 1
@@ -243,7 +261,7 @@ def _log(args: argparse.Namespace) -> int:
     base_dir = _base_dir_or_report(args)
     if base_dir is None:
         return 1
-    path = base_dir / _RUNS_RELPATH / f"{args.subject}.log"
+    path = RunStore(base_dir).log_path_for(args.subject)
     if not path.exists():
         print(f"no run log at {path}", file=sys.stderr)
         return 1

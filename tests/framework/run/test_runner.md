@@ -9,7 +9,7 @@ import pytest
 from framework.core.dataset import Dataset
 from framework.io.readers import DatasetReader, SqliteReader
 from framework.io.strategy import AccumulateByRun
-from framework.run import Requirement
+from framework.run import Requirement, RunAddress
 from framework.run.builder import Pipeline
 from framework.run.runner import (
     FreshnessError,
@@ -21,6 +21,7 @@ from framework.run.runner import (
     run_pipeline,
 )
 from tools.medallion import medallion
+from tools.observability import timestamps
 from tools.observability.run_log import RunLog
 from tools.observability.run_registry import RunRegistry
 from tools.store import StoreRegistry
@@ -449,5 +450,93 @@ def test_runner_stale_guard_prevents_handler_and_records_error_run(tmp_path):
         if r["step"] == "freshness"
     ]
     assert freshness[0]["status"] == "error"
+
+
+# --- run dates are local; stored instants are UTC ----------------------------
+#
+# The deployment target is a UK box, which runs at UTC+1 for half the year. An
+# upstream that succeeds at 00:10 local on the 28th is stamped 23:10 UTC on the
+# 27th, so a freshness check that took the *UTC* date of the stamp called it
+# yesterday's run and blocked a downstream twenty minutes after the upstream had
+# succeeded. The stamp is converted to the local calendar date first.
+
+_BST = dt.timezone(dt.timedelta(hours=1))
+
+
+@pytest.fixture
+def uk_summer(monkeypatch):
+    """Pretend the box's local zone is UTC+1, without touching its clock."""
+    monkeypatch.setattr(timestamps, "local_timezone", lambda: _BST)
+
+
+def test_same_day_freshness_accepts_an_upstream_that_landed_after_local_midnight(
+    tmp_path, uk_summer
+):
+    # 23:10 UTC on the 27th *is* 00:10 local on the 28th.
+    log_path = tmp_path / "runs.log"
+    _record_run(
+        log_path, pipeline="cases/ingest", timestamp="2026-07-27T23:10:00+00:00"
+    )
+    context = _context(tmp_path, run_date=dt.date(2026, 7, 28))
+
+    FreshnessGuard().check(
+        context,
+        Requirement.succeeded(
+            RunAddress.for_pipeline("ingest", subject="cases")
+        ).same_day(),
+    )
+
+    assert _records(log_path)[-1]["status"] == "ok"
+
+
+def test_same_day_freshness_still_rejects_a_genuinely_previous_local_day(
+    tmp_path, uk_summer
+):
+    log_path = tmp_path / "runs.log"
+    _record_run(
+        log_path, pipeline="cases/ingest", timestamp="2026-07-26T22:10:00+00:00"
+    )
+    context = _context(tmp_path, run_date=dt.date(2026, 7, 28))
+
+    with pytest.raises(FreshnessError) as excinfo:
+        FreshnessGuard().check(
+            context,
+            Requirement.succeeded(
+                RunAddress.for_pipeline("ingest", subject="cases")
+            ).same_day(),
+        )
+
+    assert "2026-07-26" in str(excinfo.value)
+
+
+def test_max_age_freshness_uses_the_local_date_too(tmp_path, uk_summer):
+    # Same instant, one day of allowance: local date 28th is within a day of the
+    # 29th, whereas the UTC date (27th) would have been at the very edge.
+    log_path = tmp_path / "runs.log"
+    _record_run(
+        log_path, pipeline="cases/ingest", timestamp="2026-07-27T23:10:00+00:00"
+    )
+    context = _context(tmp_path, run_date=dt.date(2026, 7, 29))
+
+    FreshnessGuard().check(
+        context,
+        Requirement.succeeded(
+            RunAddress.for_pipeline("ingest", subject="cases")
+        ).within_days(1),
+    )
+
+    assert _records(log_path)[-1]["status"] == "ok"
+
+
+def test_latest_success_on_a_run_date_uses_local_day_bounds(tmp_path, uk_summer):
+    log_path = tmp_path / "runs.log"
+    _record_run(
+        log_path, pipeline="cases/ingest", timestamp="2026-07-27T23:10:00+00:00"
+    )
+    registry = RunRegistry(tmp_path / "registry.db")
+    registry.ingest(log_path)
+
+    assert registry.latest_success("cases/ingest", on=dt.date(2026, 7, 28)) is not None
+    assert registry.latest_success("cases/ingest", on=dt.date(2026, 7, 27)) is None
 
 ```

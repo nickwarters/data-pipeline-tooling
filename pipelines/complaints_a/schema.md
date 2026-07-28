@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Annotated
 
-from framework.core.value_rules import Range
+from framework.core import Range
 
 
 @dataclass
