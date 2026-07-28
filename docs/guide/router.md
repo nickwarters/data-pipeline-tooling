@@ -1,27 +1,18 @@
 # Router integration
 
-A route exports `register(router, context, loadPage)`, lazy-loads one page
-module, and hands that loader to `registerStoreRoute()`. This keeps page code
-out of the boot graph and gives every page the same store, render, error, and
-cleanup contract.
+A route is one entry in the route table in `src/setup/register-routes.js`: the
+hash patterns it answers, and an `import()` thunk for its page. This keeps page
+code out of the boot graph and gives every page the same store, render, error,
+and cleanup contract.
 
 ## Quick reference
 
 ```js
-// src/routes/my-page.js
-import { registerStoreRoute } from '../core/store-route.js';
-
-export function register(
-  router,
-  context,
-  loadPage = () => import('../pages/my-page.js')
-) {
-  registerStoreRoute(router, {
-    paths: ['#/my-page/:id'],
-    load: loadPage,
-    context,
-  });
-}
+// src/setup/register-routes.js, inside routeTable(context)
+'my-page': {
+  paths: ['#/my-page/:id'],
+  load: () => import('../pages/my-page.js'),
+},
 ```
 
 `registerStoreRoute(router, { paths, load, context, guard })` creates the
@@ -29,22 +20,11 @@ export function register(
 — that is how `#/case/:caseType/:id` and `#/case/:id` share one handler. The
 optional `guard: () => boolean` runs on each mount, before the page is
 imported; returning `false` skips the mount, which is how `#/journey-cases`
-bounces an ineligible user without loading the page. The `loadPage` default
-parameter is the seam every `tests/routes-*.test.js` injects through, so keep
-it.
+bounces an ineligible user without loading the page.
 
-The dynamic `import()` stays in the route module; the helper never names a
-page. Every route in `src/routes/` now goes through `registerStoreRoute` — a
-route module no longer needs a `mount`/`unmount` literal to see the query
-string, because the router supplies it (see below).
-
-Then register the route in `src/setup/register-routes.js`:
-
-```js
-import { register as registerMyPage } from '../routes/my-page.js';
-
-safeRegister('my-page', registerMyPage, router, context);
-```
+`registerRoutes()` walks the table and registers each entry. Because an entry's
+`load` is a thunk, nothing in it runs at registration — a page's own code cannot
+break the boot, and it is imported on first navigation to it.
 
 ## How the router works
 
@@ -72,23 +52,24 @@ Every page import stays inside its route's `load` callback. The router contains
 load failures inside the route container, and a navigation sequence prevents a
 slow prior import from mounting after the user has moved elsewhere.
 
-`safeRegister(...)` independently contains registration failures. A broken
-route therefore cannot prevent sibling routes or persistent navigation from
-working.
+`registerRoutes()` catches per entry, so one route failing to register cannot
+prevent sibling routes or persistent navigation from working.
 
 ## Adding a route
 
 1. Add `src/pages/my-page.js` with `createRouteSlice(params, context)`. Follow
    [Add a store-driven page](add-a-page.md).
-2. Add `src/routes/my-page.js` using the quick-reference pattern above.
-3. Import and register the route through `safeRegister(...)` in
-   `src/setup/register-routes.js`.
-4. Add a navigation link only if the page belongs in persistent navigation.
-5. Test the page's public view/reducer behaviour, route registration, parameter
-   forwarding, and lazy-load failure boundary. See [Testing](testing.md).
+2. Add an entry to `routeTable()` in `src/setup/register-routes.js` using the
+   quick-reference pattern above.
+3. Add a navigation link only if the page belongs in persistent navigation.
+4. Test the page's public view/reducer behaviour. Registration, parameter
+   forwarding and the lazy-load failure boundary belong to `registerStoreRoute`
+   and the router, and are covered once in `tests/register-routes.test.js`,
+   `tests/store-route.test.js` and `tests/router.test.js` — not per page. See
+   [Testing](testing.md).
 
-Removing a page is the reverse: remove its page file, route file,
-`safeRegister(...)` call, and navigation link.
+Removing a page is the reverse: remove its page file, its table entry, and its
+navigation link.
 
 ## Mount and unmount ownership
 

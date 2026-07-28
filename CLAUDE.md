@@ -19,7 +19,7 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
 
 ## Architecture in one screen
 
-- **SPA shell, hash routing, page independence**. One `.aspx` host page, one Content Editor, one `app.js`. Every route lazy-loads its page inside its own `mount()` via dynamic `import()` (`src/routes/*.js`) — the boot graph does not statically depend on any page. If a page module fails to load (broken, missing), the router (`lib/router.js`) catches it inside an async `navigate()`, logs it, and renders a plain-DOM `cora-route-error` panel into the route container; the nav lives outside that container and stays usable, so one broken page cannot break another or the boot. A navigation sequence token discards a stale mount that resolves after the user has already navigated on. Registration is likewise isolated: `setup/register-routes.js` wraps each route's registration in `safeRegister`, so a route module that throws at registration costs only its own route. **Case Type modules are contained the same way (#493):** `loadCaseTypeSources()` in `setup/resolve-eligible-case-types.js` catches per slug, so a Case Type module that throws when it is evaluated is logged and DROPPED — it yields no `CaseTypeSource`, therefore appears in no `caseSources`/`journeyCaseSources`/allocation source in any partial form (containment can only narrow access, never widen it) — and every other Case Type still boots. Because a silently vanishing Case Type is indistinguishable from "no Cases assigned", boot names the dropped Case Types once in a non-blocking `cora-banner cora-banner-warning` notice (`setup/case-type-unavailable-banner.js`), mounted beside the UAT badge; nothing else in the app is hidden or gated by it. **Removal recipe — deleting a page is:** delete the page file (`src/pages/<page>.js`) + its route file (`src/routes/<route>.js`) + its `safeRegister(...)` line in `setup/register-routes.js` + its nav link. Nothing else breaks. `tests/component-layering-contract.test.js` enforces the layering: no static page import outside `src/pages/`, dynamic page `import()` only in `src/routes/*`, and route modules imported only by `setup/register-routes.js`.
+- **SPA shell, hash routing, page independence**. One `.aspx` host page, one Content Editor, one `app.js`. Every route lazy-loads its page inside its own `mount()` via dynamic `import()` from the route table in `setup/register-routes.js` — the boot graph does not statically depend on any page. If a page module fails to load (broken, missing), the router (`lib/router.js`) catches it inside an async `navigate()`, logs it, and renders a plain-DOM `cora-route-error` panel into the route container; the nav lives outside that container and stays usable, so one broken page cannot break another or the boot. A navigation sequence token discards a stale mount that resolves after the user has already navigated on. Registration is likewise isolated: `registerRoutes()` catches per entry, so one route failing to register costs only its own route. **Case Type modules are contained the same way (#493):** `loadCaseTypeSources()` in `setup/resolve-eligible-case-types.js` catches per slug, so a Case Type module that throws when it is evaluated is logged and DROPPED — it yields no `CaseTypeSource`, therefore appears in no `caseSources`/`journeyCaseSources`/allocation source in any partial form (containment can only narrow access, never widen it) — and every other Case Type still boots. Because a silently vanishing Case Type is indistinguishable from "no Cases assigned", boot names the dropped Case Types once in a non-blocking `cora-banner cora-banner-warning` notice (`setup/case-type-unavailable-banner.js`), mounted beside the UAT badge; nothing else in the app is hidden or gated by it. **Removal recipe — deleting a page is:** delete the page file (`src/pages/<page>.js`) + its entry in the `routeTable()` in `setup/register-routes.js` + its nav link. Nothing else breaks. `tests/component-layering-contract.test.js` enforces the layering: no static page import outside `src/pages/`, and dynamic page `import()` only in the route table.
 - **Store-driven pure views in light DOM.** Each application route owns state
   shaped as `{ chrome, routes }`. Pages export `createRouteSlice()` with initial
   state, a reducer, and a pure `state → h()` view. Event callbacks dispatch
@@ -284,18 +284,6 @@ src/
     case-columns.js             # shared Case-table column descriptors (#515): the Case-aware consumer of data-table.js
     data-table.js               # descriptor-driven table view (value, sort, format, links)
 
-  routes/                       # route handler modules, one per hash route
-    case.js
-    conversation.js
-    dashboard.js
-    journey-cases.js
-    my-cases.js
-    my-team.js
-    question-bank.js
-    roadmap.js
-    root.js
-    team-cases.js
-
   services/                     # non-UI modules: data, state, auth
     abortable-client.js           # binds a mount-lifetime AbortSignal to a client's Case reads; writes untouched (#545)
     account-name.js
@@ -333,7 +321,7 @@ src/
   setup/                        # app startup helpers
     app-chrome.js                 # guarded nav + command-palette mount (fatal nav / skipped palette)
     case-type-unavailable-banner.js # boot notice naming Case Types that failed to load (#493)
-    register-routes.js
+    register-routes.js            # routeTable(): THE list of hash routes + their lazy page import()s
     resolve-eligible-case-types.js  # per-slug Case Type containment + the app-wide eligibility rule
     uat-banner.js                 # ADR-0033 UAT-only environment badge; renders nothing on prod
 

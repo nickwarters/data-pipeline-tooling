@@ -89,11 +89,11 @@ test('layering: no component imports from the question-bank subsystem', () => {
  * route's `mount()` via dynamic `import()`, guarded by the router error
  * boundary, so a broken page file cannot break the boot graph.
  *
- * Rule (a): no file outside `src/pages/` statically imports a page module, and
- * only route modules may `import()` a page dynamically. `tests/*` is outside
- * this scan by construction.
+ * No file outside `src/pages/` statically imports a page module, and only the
+ * route table may `import()` a page dynamically. `tests/*` is outside this scan
+ * by construction.
  */
-test('layering: no static page import outside src/pages/; dynamic page import() only in src/routes/', () => {
+test('layering: no static page import outside src/pages/; dynamic page import() only in the route table', () => {
   // `from '…'` and side-effect `import '…'` are static; `import('…')` is dynamic.
   const staticPage = /(?:from\s+|import\s+)['"][^'"]*\bpages\//;
   const dynamicPage = /import\(\s*['"][^'"]*\bpages\//;
@@ -105,40 +105,21 @@ test('layering: no static page import outside src/pages/; dynamic page import() 
   assert.deepEqual(
     staticOffenders,
     [],
-    'these files statically import a page — move the import into a route module and `await import()` it inside mount() (see src/routes/*.js)'
+    'these files statically import a page — add it to the route table in setup/register-routes.js as an `import()` thunk instead'
   );
 
-  // Dynamic page import() belongs to routes (page loading) or a page composing
-  // its own subsystem — never to generic src/ modules, services, or components.
+  // Dynamic page import() belongs to the route table (page loading) or a page
+  // composing its own subsystem — never to generic src/ modules, services, or
+  // components.
   const dynamicOffenders = srcFiles.filter((rel) => {
-    if (rel.startsWith('src/routes/')) return false;
+    if (rel === 'src/setup/register-routes.js') return false;
     if (rel.startsWith('src/pages/')) return false;
     return dynamicPage.test(readCode(rel));
   });
   assert.deepEqual(
     dynamicOffenders,
     [],
-    'only src/routes/* may dynamically import a page module'
-  );
-});
-
-/**
- * Rule (b): route modules are `setup/register-routes.js`'s private detail —
- * nothing else imports them (statically or dynamically).
- */
-test('layering: src/routes/* is imported only by setup/register-routes.js', () => {
-  // Catches `from '…'`, side-effect `import '…'`, and dynamic `import('…')`.
-  const routeRef =
-    /(?:from\s+|import\s+|import\(\s*)['"][^'"]*\broutes\/[^'"]+\.js/;
-  const offenders = srcFiles.filter((rel) => {
-    if (rel === 'src/setup/register-routes.js') return false;
-    if (rel.startsWith('src/routes/')) return false;
-    return routeRef.test(readCode(rel));
-  });
-  assert.deepEqual(
-    offenders,
-    [],
-    'route modules must be registered only through setup/register-routes.js'
+    'only the route table in setup/register-routes.js may dynamically import a page module'
   );
 });
 

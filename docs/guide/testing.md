@@ -164,22 +164,16 @@ test('greeting: renders state and dispatches the clear action', () => {
 
 ## Route Tests
 
-Use `routeRegistrationSpy()` for registration-only coverage or a real Router
-for navigation. Page behaviour belongs in page tests; route tests own the URL,
-parameters, context plumbing, lazy loader, and failure boundary.
+There is no per-page route test. Registration, parameter forwarding, the lazy
+loader and the failure boundary belong to `registerStoreRoute` and the `Router`,
+and are covered once in `tests/store-route.test.js` and `tests/router.test.js`.
+Adding a page adds a row to the assertion in `tests/register-routes.test.js`,
+which checks the whole table at once — the paths every route claims, and that
+each `load` thunk resolves to a module exporting `createRouteSlice`.
 
-```js
-import { test } from 'node:test';
-import assert from 'node:assert/strict';
-import { register } from '../src/routes/root.js';
-import { routeRegistrationSpy } from './helpers/router.js';
-
-test('root route: registers the home hash', () => {
-  const { router, has } = routeRegistrationSpy();
-  register(router, { chrome: {} });
-  assert.equal(has('#/'), true);
-});
-```
+Write a route-level test only for behaviour genuinely specific to one route,
+such as an eligibility `guard`. Everything else about a page is page behaviour:
+test its view and reducer directly.
 
 ## Deterministic Async Tests
 
