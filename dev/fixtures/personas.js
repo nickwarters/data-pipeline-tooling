@@ -5,9 +5,9 @@
  * Available keys: reviewer, owner, journey-owner-complaints,
  * case-type-owner-complaints, admin,
  * responsible-party, responsible-party-manager, reviewer-manager,
- * controls (a standalone Controls user,
- * ADR-0022), action-centre (multi-role Reviewer+Controls+Owner, for seeing
- * every Action Centre reason group at once — issue #287), visitor (no groups —
+ * controls (a standalone Controls user),
+ * action-centre (multi-role Reviewer+Controls+Owner, for seeing
+ * every Action Centre reason group at once), visitor (no groups —
  * exercises the Visitor explainer-only branch).
  *
  * @type {Record<string, { userId: string, displayName: string, groups: string[] }>}
@@ -54,7 +54,7 @@ export const personas = {
   },
   // The line manager of `responsible-party`, named on complaints-case-5. The
   // Section role is resolved from that Case row field rather than the group, so
-  // this persona only holds it on Cases that name them (#499).
+  // this persona only holds it on Cases that name them.
   'responsible-party-manager': {
     userId: 'user-rp-manager',
     displayName: 'Priya RP Manager',

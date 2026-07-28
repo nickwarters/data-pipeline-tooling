@@ -1,7 +1,7 @@
 // @ts-check
 /**
  * Boot-time chrome mounting: the app nav and command palette, guarded so a
- * broken module for either cannot take down the whole app (#384 phase 3).
+ * broken module for either cannot take down the whole app.
  *
  * Nav failure is fatal-with-message: without nav the app is unusable, so a
  * plain-DOM error panel is rendered into `appEl` and boot stops. Palette

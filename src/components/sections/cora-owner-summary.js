@@ -66,9 +66,9 @@ export async function loadOwnerSummaries({
   return Promise.all(
     ownedWithSource.map(async ({ caseType, source }) => {
       const listName = /** @type {{ listName: string }} */ (source).listName;
-      // In-progress: bounded by open work and led by the indexed Status column
-      //, so the outstanding/assigned/overdue derivation never
-      // fetches the cumulative backlog.
+      // In-progress: bounded by open work and led by the indexed Status column,
+      // so the outstanding/assigned/overdue derivation never fetches the
+      // cumulative backlog.
       const inProgress = await client.listCases(
         { caseType, status: CASE_STATUS.IN_PROGRESS },
         { listName }

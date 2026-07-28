@@ -25,7 +25,7 @@ function sourceFiles(directory, prefix = '') {
   return found;
 }
 
-test('CASE-7 case review tree contains only store actions and pure views', () => {
+test('case review tree contains only store actions and pure views', () => {
   const directory = new URL('../src/pages/cora-case-review/', import.meta.url);
   const files = readdirSync(directory).sort();
   assert.deepEqual(
@@ -44,7 +44,7 @@ test('CASE-7 case review tree contains only store actions and pure views', () =>
   }
 });
 
-test('the Case Review page has exactly one Answer owner (#510)', () => {
+test('the Case Review page has exactly one Answer owner', () => {
   const page = readFileSync(
     new URL('../src/pages/cora-case-review.js', import.meta.url),
     'utf8'
@@ -73,13 +73,13 @@ test('the Case Review page has exactly one Answer owner (#510)', () => {
  */
 const CASE_ROW_HOLDERS = new Set(['lib/case-loader.js', 'lib/case-machine.js']);
 
-test('the Case Review page has exactly one Case Row owner (#530)', () => {
+test('the Case Review page has exactly one Case Row owner', () => {
   // The store owns the Case Row. The loader keeps a copy only long enough to
   // hand it over, so no other module may assign one: a second writer is the
-  // hand-rolled sync #510 removed for Answers, one level up.
+  // hand-rolled sync that was removed for Answers, one level up.
   //
   // Deliberately matches *any* `.caseRow =` rather than the `caseLoader|loader`
-  // spellings the #530 regression used, so a writer through a differently
+  // spellings the original regression used, so a writer through a differently
   // named binding still trips it. Limitation worth knowing: this is text
   // matching, so it cannot see `Object.assign(target, { caseRow })`, a
   // destructured alias, or a computed `target['caseRow'] =`. It holds the
@@ -91,7 +91,7 @@ test('the Case Review page has exactly one Case Row owner (#530)', () => {
     if (CASE_ROW_HOLDERS.has(path)) continue;
     assert.ok(
       !assignsCaseRow.test(source),
-      `${path} assigns a Case Row onto an object; the store is the owner (#530)`
+      `${path} assigns a Case Row onto an object; the store is the owner`
     );
   }
 });

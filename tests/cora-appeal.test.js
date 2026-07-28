@@ -438,7 +438,7 @@ test('CORAAppeal: raising without a saveQueue or caseRow does not throw', () => 
   });
 });
 
-// --- Case Type sectionLabels heading override (MAINT-11) ---
+// --- Case Type sectionLabels heading override ---
 
 test('CORAAppeal: heading prop overrides the default Appeal heading', () => {
   const { el } = renderAppeal({ heading: 'Challenge' });

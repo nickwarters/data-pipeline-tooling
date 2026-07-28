@@ -1,5 +1,5 @@
 // @ts-check
-// Environment scoping of HttpSharePointClient (ADR-0033): a `listPrefix`
+// Environment scoping of HttpSharePointClient: a `listPrefix`
 // applied centrally to every list URL, and an `exportBasePath` for the
 // versioned Question Bank export reads. Kept separate from
 // http-sharepoint-client.test.js so the environment surface is one file.

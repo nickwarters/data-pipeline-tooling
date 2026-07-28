@@ -111,7 +111,7 @@ export function makePeopleClient(people = PEOPLE) {
   });
 }
 
-// --- getVersionedExport (ADR-0021 Step 4) ---
+// --- getVersionedExport ---
 
 export const VERSIONED_EXPORT = {
   slug: 'example-review',

@@ -287,7 +287,7 @@ test('HttpSharePointClient: resolveUsers returns an empty map without any read f
   assert.equal(calls.length, 0);
 });
 
-// --- getExportHash (ADR-0021 Step 3) ---
+// --- getExportHash ---
 
 test('HttpSharePointClient: getCurrentUserGroups falls back from Title to LoginName to empty string', async () => {
   const { fetch } = makeFetch([

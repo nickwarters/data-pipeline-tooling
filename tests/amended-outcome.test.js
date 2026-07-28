@@ -27,7 +27,7 @@ function makeCase(overrides = {}) {
   });
 }
 
-// --- currentOutcome (ADR-0026) ---
+// --- currentOutcome ---
 
 test('currentOutcome: equals the frozen snapshot when there is no amendment', () => {
   const c = makeCase({ outcomeAtCompletion: 'fail' });
@@ -58,7 +58,7 @@ test('currentOutcome: a null amendedOutcome falls through to the snapshot', () =
   assert.equal(currentOutcome(c), 'pass');
 });
 
-// --- buildAmendmentFields (ADR-0026 / ADR-0019) ---
+// --- buildAmendmentFields ---
 
 test('buildAmendmentFields: re-stamps the effective columns from the hand-set verdict', () => {
   const c = makeCase({ outcomeAtCompletion: 'fail', hadRemediation: true });

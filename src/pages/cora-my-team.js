@@ -177,11 +177,11 @@ export function createRouteSlice(
   { fetchCases = fetchTeamWorkloadCases, now = () => new Date() } = {}
 ) {
   let loadSequence = 0;
-  // The mount lifetime comes from the adapter's tools, not a page-local latch (#517).
+  // The mount lifetime comes from the adapter's tools, not a page-local latch.
   /** @type {null | { dispatch: (action: MyTeamAction) => void, context: import('../setup/register-routes.js').AppContext, isActive: () => boolean, signal?: AbortSignal }} */
   let effectTools = null;
   // The same lifetime bound to the client's reads, so navigating away cancels
-  // the per-source workload fan-out rather than only discarding it (#545).
+  // the per-source workload fan-out rather than only discarding it.
   /** @type {null | import('../sharepoint-client.js').SharePointClient} */
   let readClient = null;
 
@@ -192,7 +192,7 @@ export function createRouteSlice(
     void fetchCases(
       // `readClient` and `effectTools` are set and cleared together, so this is
       // the single source; the cast covers the client-less mount, which reaches
-      // the rejection handler below exactly as it did before #545.
+      // the rejection handler below.
       /** @type {import('../sharepoint-client.js').SharePointClient} */ (
         readClient
       ),
@@ -223,7 +223,7 @@ export function createRouteSlice(
       },
       (error) => {
         // An abort reaches here with isActive() already false, so navigation
-        // never renders a load failure (#545).
+        // never renders a load failure.
         if (tools.isActive() && sequence === loadSequence) {
           tools.dispatch({
             type: 'workload/load-failed',
@@ -295,7 +295,7 @@ export function createRouteSlice(
       effectTools = tools;
       // Only wrap when there is something to wrap: a mount with no client must
       // still degrade to the `workload/load-failed` message rather than let
-      // binding the mount signal take out the whole route (#545).
+      // binding the mount signal take out the whole route.
       readClient = tools.context.client
         ? withAbortSignal(tools.context.client, tools.signal)
         : tools.context.client;

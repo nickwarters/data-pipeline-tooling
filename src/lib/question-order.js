@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * Generic ordering helpers for the two-level question grouping (#390 Part 1):
+ * Generic ordering helpers for the two-level question grouping:
  * `category` is the top, presentation-only level; `questionGroup` is the inner
  * level (what `category` meant before the rename). Question order in the
  * catalogue array is the single source of display order — these helpers

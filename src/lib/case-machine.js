@@ -24,7 +24,7 @@ import {
   REMEDIATION_SLA_WORKING_DAYS,
 } from '../config/working-days.js';
 import { CASE_STATUS } from './case-statuses.js';
-// The one definition of "this Case carries remediation" (#502): the Remediation
+// The one definition of "this Case carries remediation": the Remediation
 // tab has ≥1 row. Deliberately catalogue-aware — see `hasTrackableRemediation`.
 import { hasTrackableRemediation } from '../evaluators/remediation-status.js';
 
@@ -51,7 +51,7 @@ export class CaseMachine {
    *   both cases with `failureValues` derived (`CaseLoader` builds
    *   exactly this). It decides what remediation the Case carries — hence
    *   whether the Remediation Section exists and what `hadRemediation` is
-   *   stamped as (#502). Omitting it means *no Questions*, so the Remediation
+   *   stamped as. Omitting it means *no Questions*, so the Remediation
    *   Section resolves `hidden` and a transition stamps
    *   `hadRemediation: false`: build a CaseMachine without one only when you
    *   need neither, as `cora-conversation-view.js` does for the Conversation
@@ -111,10 +111,10 @@ export class CaseMachine {
 
   /**
    * Whether the viewer may pick which configured Remediation Actions apply to a
-   * failed Answer and, when the Question allows it, add a free-form action
-   *. Unlike `canAttribute`/`canCapture`, this is not gated on the
-   * Case Type opting into `attributeFailures`: any editor of the Issues tab
-   * (the Assigned Reviewer on a not-yet-reportable Case) may select actions.
+   * failed Answer and, when the Question allows it, add a free-form action.
+   * Unlike `canAttribute`/`canCapture`, this is not gated on the Case Type
+   * opting into `attributeFailures`: any editor of the Issues tab (the Assigned
+   * Reviewer on a not-yet-reportable Case) may select actions.
    */
   get canSelectRemediation() {
     return this.access.issues === 'edit' && !this.reportable;
@@ -131,7 +131,7 @@ export class CaseMachine {
    * details / justification) lives in `completionControl` / `completionPatch`,
    * which read the store's **live** Answers rather than the load-time snapshot
    * this machine holds — the Reviewer must be able to resolve the last row and
-   * see the button enable without a reload (#499).
+   * see the button enable without a reload.
    */
   get mayResolveRemediation() {
     return (

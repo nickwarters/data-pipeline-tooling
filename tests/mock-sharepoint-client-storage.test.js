@@ -27,7 +27,7 @@ test('MockSharePointClient: getCase returns null for an unknown id', async () =>
   assert.equal(c, null);
 });
 
-test('MockSharePointClient: getCase round-trips the details JSON blob (issue #213)', async () => {
+test('MockSharePointClient: getCase round-trips the details JSON blob', async () => {
   const client = new MockSharePointClient({
     lists: {
       [LIST]: [
@@ -56,7 +56,7 @@ test('MockSharePointClient: getCase round-trips the details JSON blob (issue #21
   });
 });
 
-test('MockSharePointClient: patchCase round-trips an updated details blob (issue #213)', async () => {
+test('MockSharePointClient: patchCase round-trips an updated details blob', async () => {
   const client = makeClient();
   const details = { customerName: 'Sam Rivera' };
   const result = await client.patchCase('case-1', { details }, 'etag-1', {
@@ -181,7 +181,7 @@ test('MockSharePointClient: patchCase succeeds normally after the injected 412 f
   assert.equal(result.data?.notes, 'y');
 });
 
-test('MockSharePointClient: patchCase with questionBankVersion round-trips the field (ADR-0021 Step 3)', async () => {
+test('MockSharePointClient: patchCase with questionBankVersion round-trips the field', async () => {
   const client = makeClient();
   const result = await client.patchCase(
     'case-1',

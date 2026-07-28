@@ -20,7 +20,7 @@ import { dataTableView } from '../../views/data-table.js';
  * What remediation is still outstanding on one Case, as the text of each thing
  * that has to be put right.
  *
- * Derived from the **one remediation model** (ADR-0037): the Remediation
+ * Derived from the **one remediation model**: the Remediation
  * Actions and free-form text on each Answer, minus every Answer the Assigned
  * Reviewer has resolved on the Remediation tab.
  *
@@ -28,7 +28,7 @@ import { dataTableView } from '../../views/data-table.js';
  * Actions the Reviewer is still capturing and nothing has been asked of the
  * Responsible Party; once the Case is `Completed` the work is over by
  * definition — the Reviewer cannot close an actions-path Case until every
- * remediation row is resolved (ADR-0037's completion gate).
+ * remediation row is resolved (the completion gate).
  *
  * That second half is load-bearing, not tidiness. This dashboard lists Cases
  * across every Case Type and holds no catalogue for any of them, so it reads the
@@ -186,11 +186,11 @@ function outcomeSummaryView(summary) {
  * The deadline this table is about: the **case-level Remediation Due Date**,
  * stamped at Send Actions as `reportableAt` + 10 working days, and the clock the
  * Responsible Party actually works to. `dueDate` is the *review* SLA — the
- * Assigned Reviewer's clock — and dating remediation work by it was #498.
+ * Assigned Reviewer's clock — and dating remediation work by it is wrong.
  *
  * The fallback is retained deliberately: every Case that passes Send Actions is
  * stamped, but a Case carried over from before that transition existed (or
- * closed before #502 taught the fork to see free-form remediation) can still
+ * closed before the fork learned to see free-form remediation) can still
  * reach this table with only a review `dueDate`, and showing the wrong date
  * beats showing none.
  *
@@ -202,13 +202,13 @@ function remediationDeadline(row) {
 }
 
 /**
- * Reference and Case Type sort here as on every other Case table (#542).
+ * Reference and Case Type sort here as on every other Case table.
  *
  * Reference is the shared `caseReferenceColumn()` *minus its `href`*, derived by
  * dropping that one field rather than re-spelled locally. The link is the only
  * intended divergence — this table's Reference cells render no link, unlike the
- * messages table below it — and answering whether it should link is out of
- * #542's scope. Deriving keeps that the only divergence: a later change to the
+ * messages table below it — and whether it should link is still open.
+ * Deriving keeps that the only divergence: a later change to the
  * shared descriptor's label, `value` or sort identity reaches here too, where a
  * local copy would have silently drifted on three fields to preserve one.
  *
@@ -240,8 +240,8 @@ function messageColumns(
   /** @type {((row: CaseRow) => void) | undefined} */ onOpenConversation
 ) {
   return [
-    // The shared Case descriptors, so Reference and Case Type sort here too
-    // (#542). The default sort is untouched: newest message first.
+    // The shared Case descriptors, so Reference and Case Type sort here too.
+    // The default sort is untouched: newest message first.
     caseReferenceColumn(),
     caseTypeColumn(),
     {
@@ -254,14 +254,14 @@ function messageColumns(
     },
     // This button opens the Conversation, not the Case, and the row's
     // Reference cell already links to the Case — so the name has to say which
-    // is which (#541).
+    // is which.
     //
     // No handler, no button. The standalone #/my-cases route deliberately
     // keeps the historic no-navigation behaviour and passes none, and a
     // button announcing "Open conversation for …" that does nothing when
     // clicked is worse than no button — it reads as broken rather than as
     // absent, and a screen-reader user is told about an action they cannot
-    // take. Found in the #551 browser pass.
+    // take.
     ...(onOpenConversation
       ? [
           caseActionsColumn((row) => onOpenConversation(row), {
@@ -325,7 +325,7 @@ export function responsiblePartyView(state, handlers, now = new Date()) {
         rowKey: (row) => `${row.caseType}:${row.id}`,
         // Overdue against the *remediation* clock, exactly as the Remediation
         // tab badges it — `isOverdue` reads `dueDate`, so the deadline this
-        // table is about is substituted in (#498).
+        // table is about is substituted in.
         rowClass: (row) => {
           const dueDate = remediationDeadline(row);
           return dueDate && isOverdue({ ...row, dueDate }, undefined, now)

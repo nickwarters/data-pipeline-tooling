@@ -1,14 +1,14 @@
 // @ts-check
-// Guards the storage/provisioning contract (issue #239, ADR-0007 amend): the
+// Guards the storage/provisioning contract: the
 // fixtures must exercise every lifecycle status and the fields stamped at the
 // reportable milestone, and a Remediation Action stored in the Answers blob must
-// coerce from both the new object shape and a legacy bare string (ADR-0024).
+// coerce from both the new object shape and a legacy bare string.
 //
 // These assertions run against the example-review test fixture, which carries
 // the full lifecycle set (including Actions In Progress) and the legacy-shaped
-// capture data. example-review was retired from the mock client in issue #383,
-// so the mock-served complaints fixtures are guarded separately below: issue
-// #495 adds the demoable "remediation sent to the adviser" Case.
+// capture data. example-review was retired from the mock client, so the
+// mock-served complaints fixtures are guarded separately below, including the
+// demoable "remediation sent to the adviser" Case.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -18,7 +18,7 @@ import { personas } from '../dev/fixtures/personas.js';
 import { isRemediationResolved } from '../src/evaluators/remediation-status.js';
 import { outstandingRemediation } from '../src/pages/responsible-party/view.js';
 
-test('fixtures exercise all three lifecycle statuses (ADR-0023)', () => {
+test('fixtures exercise all three lifecycle statuses', () => {
   const statuses = new Set(cases.map((c) => c.status));
   /** @type {Array<'In-progress' | 'Actions In Progress' | 'Completed'>} */
   const expectedStatuses = ['In-progress', 'Actions In Progress', 'Completed'];
@@ -36,12 +36,12 @@ test('the Actions In Progress fixture stamps reportableAt/remediationDueDate but
   assert.equal(typeof c.reportableAt, 'string');
   assert.equal(typeof c.remediationDueDate, 'string');
   assert.equal(c.completedAt, null);
-  // The Outcome snapshot is frozen at the reportable milestone (ADR-0012/0023).
+  // The Outcome snapshot is frozen at the reportable milestone.
   assert.equal(typeof c.outcomeAtCompletion, 'string');
   assert.equal(c.outcomeOverridden, false);
 });
 
-// --- mock-served complaints fixtures (issue #495) -------------------------
+// --- mock-served complaints fixtures -------------------------
 // The ?mock=1 demo set must carry a Case whose Remediation Actions have been
 // sent to the adviser and are still outstanding, so the handoff is demoable
 // from both sides (?asUser=reviewer and ?asUser=responsible-party).
@@ -63,7 +63,7 @@ function sentToAdviserCase() {
   return row;
 }
 
-test('a mock complaints Case has remediation sent and still in progress (#495)', () => {
+test('a mock complaints Case has remediation sent and still in progress', () => {
   const row = sentToAdviserCase();
   // Stamped by CaseMachine.transitionToActionsInProgress at Send Actions: the
   // reportable milestone freezes the Outcome but does not close the Case.
@@ -78,7 +78,7 @@ test('a mock complaints Case has remediation sent and still in progress (#495)',
 
   // Still outstanding: at least one Question's remediation is unresolved, and
   // at least one other is resolved — so the demo Case exercises both halves of
-  // the Responsible Party's outstanding count (#497).
+  // the Responsible Party's outstanding count.
   assert.ok(
     outstandingRemediation(row).length > 0,
     'at least one sent remediation is still outstanding'
@@ -91,7 +91,7 @@ test('a mock complaints Case has remediation sent and still in progress (#495)',
   );
 });
 
-test('the sent-to-adviser Case is addressed to a Responsible Party persona (#495)', () => {
+test('the sent-to-adviser Case is addressed to a Responsible Party persona', () => {
   const row = sentToAdviserCase();
   const personaIds = new Set(Object.values(personas).map((p) => p.userId));
   assert.ok(
@@ -105,7 +105,7 @@ test('the sent-to-adviser Case is addressed to a Responsible Party persona (#495
   );
 });
 
-test('the sent-to-adviser Case names a Responsible Party Manager persona (#499)', () => {
+test('the sent-to-adviser Case names a Responsible Party Manager persona', () => {
   // Both Remediation audiences must be switchable in mock mode. The Manager's
   // role is resolved from the Case row field, not group membership, so the
   // fixture has to name them for the responsible-party rendering — and the
@@ -119,7 +119,7 @@ test('the sent-to-adviser Case names a Responsible Party Manager persona (#499)'
   assert.notEqual(row.responsiblePartyManager, row.responsibleParty);
 });
 
-test('the sent-to-adviser Case names a Reviewer Manager persona (#499)', () => {
+test('the sent-to-adviser Case names a Reviewer Manager persona', () => {
   // The reviewer-side Remediation rendering is held by the Assigned Reviewer's
   // manager too, and that role is now resolved from the `assignedReviewerManager`
   // row field rather than group membership — so the fixture has to name them for

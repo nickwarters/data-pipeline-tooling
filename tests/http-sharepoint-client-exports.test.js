@@ -82,7 +82,7 @@ test('HttpSharePointClient: assignable to SharePointClient interface (includes g
   assert.equal(typeof c.getExportHash, 'function');
 });
 
-// --- getVersionedExport (ADR-0021 Step 4) ---
+// --- getVersionedExport ---
 
 test('HttpSharePointClient: getVersionedExport fetches {slug}.{hash}.json and returns parsed body', async () => {
   const hash = 'sha256:' + 'a'.repeat(64);

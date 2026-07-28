@@ -102,8 +102,8 @@ test('Controls appeal descriptors render through the generic table and keep navi
     ]
   );
 
-  // Reference and Case Type are interactive here as on every other Case table
-  // (#542); `Raised` keeps the table's default sort, unmoved.
+  // Reference and Case Type are interactive here as on every other Case table;
+  // `Raised` keeps the table's default sort, unmoved.
   assert.deepEqual(tableHeaders(view), [
     ['Reference', 'cora-col-reference', 'none', true],
     ['Case Type', 'cora-col-caseType', 'none', true],
@@ -117,7 +117,7 @@ test('Controls appeal descriptors render through the generic table and keep navi
   fireEvent(getByRole(view, 'button', { name: 'Raised' }), 'click');
   assert.deepEqual(sorts, ['raised']);
   // This table opens the Case, so `Open ${reference}` is the right name and
-  // stays the default (#541).
+  // stays the default.
   const open = getByRole(view, 'button', { name: 'Open Case c1' });
   assert.equal(open.className, 'cora-case-open-btn');
   open.dispatchEvent(/** @type {any} */ ({ type: 'click' }));

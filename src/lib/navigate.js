@@ -1,7 +1,7 @@
 // @ts-check
 
 /**
- * The single seam through which the app changes route (ADR-0002). Views take it
+ * The single seam through which the app changes route. Views take it
  * as a callback instead of reaching for a browser global.
  *
  * The writing half only: `lib/router.js` listens to `hashchange` and knows

@@ -5,12 +5,12 @@ import { caseRouteFor } from '../lib/case-route-links.js';
 /**
  * The Case-shaped column descriptors every Case table is built from.
  *
- * `views/data-table.js` is the generic renderer and stays domain-free
- * (ADR-0035); this module is its Case-aware *consumer*, which is why it lives
- * beside the renderer rather than inside it. These are framework descriptors and
- * may hold functions — unlike `CaseTableColumnDescriptor` in
- * `sharepoint-client.js`, the data-only shape a Case Type may contribute.
- * Merging the two would let a Case Type ship behaviour.
+ * `views/data-table.js` is the generic renderer and stays domain-free; this
+ * module is its Case-aware *consumer*, which is why it lives beside the
+ * renderer rather than inside it. These are framework descriptors and may hold
+ * functions — unlike `CaseTableColumnDescriptor` in `sharepoint-client.js`, the
+ * data-only shape a Case Type may contribute. Merging the two would let a Case
+ * Type ship behaviour.
  *
  * Column `key`s are sort identity *and* CSS hooks (`cora-col-${key}`), so they
  * are part of the contract and never change.

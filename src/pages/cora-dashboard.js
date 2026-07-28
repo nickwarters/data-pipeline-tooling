@@ -274,8 +274,8 @@ export function createRouteSlice(
 
   /** @type {any} */
   let effectTools = null;
-  // The mount lifetime bound to the client's reads (#545). Every dashboard
-  // panel fans out one request per Case source (ADR-0022), so navigating away
+  // The mount lifetime bound to the client's reads. Every dashboard
+  // panel fans out one request per Case source, so navigating away
   // mid-load is exactly where cancellation pays. Null until `start()` binds it
   // — and it stays null when the mount has no client at all. Deliberately not
   // used by the allocation claim's own read/write/read cycle below: that
@@ -287,7 +287,7 @@ export function createRouteSlice(
   /**
    * The mount lifetime, read from the tools the route effect captured. The
    * module-scope effects below cannot see `start`'s locals, so they ask the
-   * adapter instead of a second hand-rolled latch (#517).
+   * adapter instead of a second hand-rolled latch.
    */
   function effectsActive() {
     return effectTools?.isActive() === true;
@@ -321,7 +321,7 @@ export function createRouteSlice(
       });
     } catch (error) {
       // Navigation cancelled the fan-out. That is not a dashboard failure:
-      // nothing is dispatched, nothing is rendered, nothing is toasted (#545).
+      // nothing is dispatched, nothing is rendered, nothing is toasted.
       ignoreAbortError(error);
       return;
     }
@@ -422,7 +422,7 @@ export function createRouteSlice(
       const tools = effectTools;
       // Deliberately the raw client: this flow writes, and neither the claim
       // PATCH nor the availability reads that bracket it may be cancelled
-      // half-way by navigation (#545). Only that bracketed read/write/read
+      // half-way by navigation. Only that bracketed read/write/read
       // cycle is protected — the `refreshReviewerCases()` below is an ordinary
       // cancellable read and uses the signalled client like any other.
       const client = tools?.context.client;
@@ -608,7 +608,7 @@ export function createRouteSlice(
 
       // The wrap happens inside the guard, never before it: a mount with no
       // client renders an empty dashboard, and binding the mount signal must
-      // not be what turns that into a `cora-route-error` (#545).
+      // not be what turns that into a `cora-route-error`.
       if (tools.context.client) {
         const client = withAbortSignal(tools.context.client, tools.signal);
         readClient = client;

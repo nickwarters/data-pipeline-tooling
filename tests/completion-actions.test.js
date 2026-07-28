@@ -51,10 +51,10 @@ const CONFIG = {
 };
 
 /**
- * The Case's resolved catalogue: `q1` is in it and fails on "No". Whether a Case
- * carries remediation is a question about the Remediation tab's *rows*, so the
- * fork can only be exercised against a catalogue that has the Question in it
- * (#502).
+ * The Case's resolved catalogue: `q1` is in it and fails on "No". Whether a
+ * Case carries remediation is a question about the Remediation tab's *rows*, so
+ * the fork can only be exercised against a catalogue that has the Question in
+ * it.
  *
  * @type {import('../src/sharepoint-client.js').QuestionDefinition[]}
  */
@@ -75,7 +75,7 @@ function machine(catalogue = CATALOGUE) {
   });
 }
 
-test('completionPatch freezes outcome and ADR-0019 effective columns in the lifecycle PATCH', () => {
+test('completionPatch freezes outcome and effective columns in the lifecycle PATCH', () => {
   const answers = {
     q1: {
       value: 'No',
@@ -343,7 +343,7 @@ test('completeCase returns false when dependencies or patch fields are absent', 
   );
 });
 
-// --- The question-level Remediation gate (#499) ---
+// --- The question-level Remediation gate ---
 
 /** @type {Record<string, import('../src/sharepoint-client.js').Answer>} */
 const UNRESOLVED = {
@@ -508,10 +508,10 @@ test('completionPatch: refuses the final close while a remediation row is unreso
   );
 });
 
-test('free-form remediation alone sends the Case down the actions path (#502)', () => {
+test('free-form remediation alone sends the Case down the actions path', () => {
   // One definition of "carries remediation", and it is the Remediation tab's own
   // rows: an applicable, failed Question in the catalogue with ≥1 selected
-  // Remediation Action *or* non-empty free-form text (ADR-0037). `q1` is all of
+  // Remediation Action *or* non-empty free-form text. `q1` is all of
   // those, so the free-form text alone forks the Case to the actions path — the
   // row it forks for is the row the Reviewer will resolve.
   const answers = {
@@ -541,7 +541,7 @@ test('free-form remediation alone sends the Case down the actions path (#502)', 
   assert.equal(control.label, 'Send Actions');
 });
 
-test('whitespace-only free-form remediation is not remediation (#502)', () => {
+test('whitespace-only free-form remediation is not remediation', () => {
   const answers = { q1: { value: 'No', freeFormRemediation: '   ' } };
   const patch = completionPatch({
     machine: machine(),
@@ -555,7 +555,7 @@ test('whitespace-only free-form remediation is not remediation (#502)', () => {
   assert.equal(patch?.status, 'Completed');
 });
 
-test('remediation on a Question that has left the catalogue does not fork the Case (#502)', () => {
+test('remediation on a Question that has left the catalogue does not fork the Case', () => {
   // The Reviewer failed `q1` and typed remediation; a Maintainer has since
   // marked `q1` deprecated — the operation CLAUDE.md mandates instead of
   // deletion — so it is filtered out of the loaded catalogue. The Answer keeps

@@ -31,7 +31,7 @@ import {
 
 /**
  * The **Remediation** tab: what still has to be put right on this Case — one row
- * per *Question* that carries remediation — and how each was resolved (#499).
+ * per *Question* that carries remediation — and how each was resolved.
  * Questions that failed without any remediation attached do not appear:
  * attaching Remediation Actions is optional.
  *

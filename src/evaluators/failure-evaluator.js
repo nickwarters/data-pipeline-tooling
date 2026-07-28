@@ -129,7 +129,7 @@ export function materializeRemediationActions(question, answer) {
     result = rest;
   }
 
-  // The Remediation tab's resolution (#499) shares the lifecycle of the
+  // The Remediation tab's resolution shares the lifecycle of the
   // remediation it resolves: left behind, a re-failed Answer would render
   // pre-resolved and the completion gate would count it as done.
   if (!failing && result.remediationStatus) {

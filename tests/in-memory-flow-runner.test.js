@@ -211,8 +211,8 @@ test('in-memory flow runner completes the remediation loop through Send Actions 
   assert.equal(row.hadRemediation, true);
   assert.ok(row.remediationDueDate, 'Send Actions stores the working-day SLA');
   assert.ok(row.completedAt, 'the second lifecycle transition closes the Case');
-  // The persisted Answer shape is the contract (ADR-0007 / ADR-0013): moving
-  // the write path to the store must be invisible to a stored Case (#510).
+  // The persisted Answer shape is the contract: moving
+  // the write path to the store must be invisible to a stored Case.
   assert.deepEqual(row.answers['q-needs'], {
     value: 'No',
     capture: {
@@ -357,11 +357,11 @@ test('in-memory flow runner completes allocate, review, remediate, appeal, and a
   assert.equal(row.outcomeOverridden, true);
 });
 
-test('an Actions In Progress Case cannot close while a sent Remediation Action is unresolved (#497)', async () => {
-  // #497's safety claim, at the seam that actually writes the lifecycle. The
+test('an Actions In Progress Case cannot close while a sent Remediation Action is unresolved', async () => {
+  // The safety claim, at the seam that actually writes the lifecycle. The
   // Case Type declares **no** `actions`-typed Issue Capture Field — the
-  // production shape — so the gate can only come from the Answer-level store
-  // ADR-0037 made canonical (`remediationActions` + `remediationStatus`).
+  // production shape — so the gate can only come from the canonical
+  // Answer-level store (`remediationActions` + `remediationStatus`).
   /** @type {import('../src/sharepoint-client.js').CaseRow} */
   const sent = {
     ...CASE_ROW,
@@ -555,7 +555,7 @@ test('in-memory flow runner can reject an Appeal without amending the Outcome', 
   assert.equal(saved.amendedOutcome, undefined);
 });
 
-test('in-memory flow runner owns the Case Row; the loader hands it over once (#530)', async () => {
+test('in-memory flow runner owns the Case Row; the loader hands it over once', async () => {
   /** @type {import('../src/sharepoint-client.js').CaseRow} */
   const completed = {
     ...CASE_ROW,
@@ -661,7 +661,7 @@ test('completing a Case updates the runner-owned Case Row, so later actions see 
   );
   // The navigation the browser would have performed, asserted rather than
   // tolerated: the runner has no `location`, so it passes a recorder in place of
-  // the seam (#547).
+  // the seam.
   assert.deepEqual(runner.navigations, ['#/dashboard']);
   // The getter copies, so a caller reading the record cannot rewrite it.
   runner.navigations.push('#/junk');

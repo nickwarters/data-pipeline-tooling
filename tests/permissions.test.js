@@ -190,7 +190,7 @@ test('permissions: exported config exposes the functional group names and Case T
   );
 });
 
-test('permissions.caseTypes: derived from the CASE_TYPES manifest registry, not hand-listed (#508)', () => {
+test('permissions.caseTypes: derived from the CASE_TYPES manifest registry, not hand-listed', () => {
   assert.deepEqual(
     permissions.caseTypes,
     CASE_TYPES.map(({ slug, displayName }) => ({ slug, displayName })),

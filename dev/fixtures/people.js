@@ -1,8 +1,8 @@
 // @ts-check
 /**
  * Directory people for mock mode, backing `searchPeople` (?mock=1).
- * Bare account names only (claims prefix + domain already stripped, per
- * ADR-0013). Deliberately includes people who are NOT site members / personas
+ * Bare account names only (claims prefix + domain already stripped).
+ * Deliberately includes people who are NOT site members / personas
  * to mirror the directory-search-finds-non-members scenario.
  *
  * @type {Array<{ loginName: string, displayName: string, email?: string }>}
@@ -63,7 +63,7 @@ export const people = [
     displayName: 'Tunde Okafor',
     email: 'tunde.okafor@contoso.com',
   },
-  // Directory user not yet added to this site (ADR-0013 scenario).
+  // Directory user not yet added to this site.
   {
     loginName: 'contractor1',
     displayName: 'Wei Chen',

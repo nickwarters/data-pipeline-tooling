@@ -132,7 +132,7 @@ test('abortable client: a class-based client keeps working through the wrapper',
   assert.deepEqual(await bound.listCases({}, { listName: 'L' }), []);
 });
 
-test('abortable client: a falsy client is returned unchanged rather than proxied (#545)', () => {
+test('abortable client: a falsy client is returned unchanged rather than proxied', () => {
   const controller = new AbortController();
   // `new Proxy(null, …)` throws synchronously; inside a route effect's start()
   // that would turn a client-less mount into a route failure.

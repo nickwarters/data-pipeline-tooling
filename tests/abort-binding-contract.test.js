@@ -1,16 +1,15 @@
 // @ts-check
 
 /**
- * Mount-lifetime read-binding contract (#545, completed by #567).
+ * Mount-lifetime read-binding contract.
  *
  * `createStoreRoute` owns an `AbortController` per mount and exposes it as
  * `tools.signal`. A route that reads Cases binds it to its client once in
  * `start()` via `withAbortSignal`, so navigating away cancels the reads the
  * abandoned page still has in flight.
  *
- * #545 applied that to the Case-source fan-out pages only, and the four pages
- * it left behind sat unbound for long enough to become a second working
- * example. This is the ratchet that stops the next page joining them: a page
+ * That binding reached the Case-source fan-out pages first, and the four pages
+ * left behind sat unbound for long enough to become a second working example. This is the ratchet that stops the next page joining them: a page
  * that reads through `context.client` must bind the lifetime, and a new one
  * cannot be added unbound without failing here.
  */

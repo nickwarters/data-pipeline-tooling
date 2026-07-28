@@ -5,7 +5,7 @@
 // and returns the next Answers or `null`. `null` means "write nothing" — the
 // guard refused, the Answer does not exist, or the edit changes nothing. The
 // route sends every non-null result through the single Answer effect, so the
-// store and the SaveQueue cannot fall out of step (#510).
+// store and the SaveQueue cannot fall out of step.
 
 import { evaluate } from '../../evaluators/applicability-evaluator.js';
 import { materializeRemediationActions } from '../../evaluators/failure-evaluator.js';
@@ -70,7 +70,7 @@ export function answerEdited({
  *
  * No scroll workaround here (unlike the remediation-action edits): the Issues
  * list patches changed items in place on a capture change, so the control being
- * edited is never detached and focus/scroll survive natively (#308).
+ * edited is never detached and focus/scroll survive natively.
  *
  * @param {{
  *   answers: Answers,
@@ -174,7 +174,7 @@ export function remediationActionToggled({
 }
 
 /**
- * Capture a reviewer's free-form Remediation text on a failed Answer (#250),
+ * Capture a reviewer's free-form Remediation text on a failed Answer,
  * stored as `answer.freeFormRemediation`. An empty value clears the field.
  *
  * @param {{
@@ -206,10 +206,10 @@ export function remediationFreeFormEdited({
 }
 
 /**
- * Record how one Question's remediation was resolved, from the Remediation tab
- * (#499): `complete`, or `partial` / `cancelled` with the details or
- * justification that resolution requires. An unknown Question, or one carrying
- * no remediation, is ignored.
+ * Record how one Question's remediation was resolved, from the Remediation tab:
+ * `complete`, or `partial` / `cancelled` with the details or justification that
+ * resolution requires. An unknown Question, or one carrying no remediation, is
+ * ignored.
  *
  * Incomplete text is stored rather than rejected — the Reviewer picks the
  * status first and types afterwards — and the *completion gate*

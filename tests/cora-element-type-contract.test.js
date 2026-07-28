@@ -1,18 +1,18 @@
 // @ts-check
 
 /**
- * `cora-*` element-type contract (#536).
+ * `cora-*` element-type contract.
  *
- * The `cora-` prefix is the SharePoint isolation boundary (ADR-0001, ADR-0029)
- * — but since ADR-0034 it is a *CSS namespace*, not an element registry. No
- * `cora-*` custom element is registered any more (#514 removed the last
- * unregistered hosts), so an element-type selector like `cora-app-nav { … }`
+ * The `cora-` prefix is the SharePoint isolation boundary
+ * — but it is a *CSS namespace*, not an element registry. No `cora-*` custom
+ * element is registered any more, so an element-type selector like
+ * `cora-app-nav { … }`
  * matches nothing and silently drops every declaration in it. That is exactly
  * how the nav bar lost its sticky positioning, surface background and bottom
  * border, and how the People Picker's absolutely positioned dropdown lost its
  * containing block: rules that read as live styling but matched nothing. Run
  * against the pre-fix stylesheet, the detector below finds seven such selectors
- * — the three #536 names, plus four `cora-notes > …` rules nobody had noticed.
+ * — three nav/picker names, plus four `cora-notes > …` rules nobody had noticed.
  * That is the argument for a ratchet rather than three edits.
  *
  * Two halves, one rule — style `cora-*` by class, never by element type:
@@ -99,7 +99,7 @@ export function coraElementConstructions(rel, source) {
  * { … } }`) is read as the selector list it is, and a nested at-rule prelude is
  * excluded by the same `^\s*@` test as a top-level one. That is what lets the
  * ratchet outlive the "no CSS nesting in this repo" assumption — Edge Chromium,
- * the ADR-0001 baseline, supports nesting today.
+ * the browser baseline, supports nesting today.
  *
  * Within a selector list, quoted strings and attribute selectors are blanked
  * first (`[data-cora-root]`, `[href^='#/cora-thing']`); *parenthesised*
@@ -181,7 +181,7 @@ test('no cora-* element is constructed under src/', () => {
   assert.deepEqual(
     offenders,
     [],
-    'the `cora-` prefix is a CSS namespace, not an element registry (ADR-0034) — render a plain element with a `cora-…` className instead'
+    'the `cora-` prefix is a CSS namespace, not an element registry — render a plain element with a `cora-…` className instead'
   );
 });
 
@@ -192,12 +192,12 @@ test('no element-type cora-* selector in src/styles/', () => {
   assert.deepEqual(
     offenders,
     [],
-    'nothing creates `cora-*` elements, so an element-type selector matches nothing and silently drops its declarations — select the class instead (#536)'
+    'nothing creates `cora-*` elements, so an element-type selector matches nothing and silently drops its declarations — select the class instead'
   );
 });
 
 test('the CSS detector flags element-type selectors and only those', () => {
-  // The first three are verbatim the rules #536 removed; everything after is
+  // The first three are verbatim the rules that were removed; everything after is
   // the spelling that must keep passing.
   const fixture = `
     [data-cora-root] cora-app-nav { display: block; z-index: 100; }

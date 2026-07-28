@@ -289,7 +289,7 @@ test('summaryView ignores sections without a summary block and works without a r
   assert.equal(findByClass(rootOf(withoutRow), 'cora-summary-key-dates'), null);
 });
 
-// --- General Questions on the Summary (#490) -------------------------------
+// --- General Questions on the Summary -------------------------------
 // A read-only roll-up of what the Reviewer wrote in the Review tab's General
 // Questions. Display only: nothing here reaches summary-model, computeOutcome
 // or completion gating — the assertions below pin that.
@@ -353,7 +353,7 @@ test('summaryView omits unanswered General Questions, and the block when none is
   assert.equal(findByClass(blank, 'cora-summary-general-questions'), null);
 });
 
-test('a non-string General Question value is not rolled up (#494)', () => {
+test('a non-string General Question value is not rolled up', () => {
   // Every General Question type — text, textarea, select, radio — writes a
   // string, so the roll-up states that contract rather than second-guessing it:
   // an array-valued `general:` answer (only reachable by hand-editing the blob)
@@ -457,7 +457,7 @@ test('a General Question answer does not reach the Summary counts or the Outcome
   );
 });
 
-test('the Summary remediation block reads the same model as the Remediation tab (#497)', () => {
+test('the Summary remediation block reads the same model as the Remediation tab', () => {
   const root = rootOf(
     render({
       caseRow: makeCase({
@@ -511,25 +511,25 @@ function cancelledRemediation(overrides = {}) {
   );
 }
 
-test('the Summary remediation block never leaks the Reviewer-only details text to the responsible-party audience (#497)', () => {
+test('the Summary remediation block never leaks the Reviewer-only details text to the responsible-party audience', () => {
   const root = cancelledRemediation({ audience: 'responsibleParty' });
   assert.match(root.textContent, /Status: Cancelled/);
   assert.doesNotMatch(root.textContent, /Customer declined contact/);
 });
 
-test('the Summary withholds the resolution details when the caller names no audience (#497)', () => {
+test('the Summary withholds the resolution details when the caller names no audience', () => {
   // Fail closed: a caller that does not say who is reading gets the narrower of
   // the two renderings.
   const root = cancelledRemediation();
   assert.doesNotMatch(root.textContent, /Customer declined contact/);
 });
 
-test('the Summary shows the resolution details to reviewer-side audiences, as the tab does (ADR-0037)', () => {
-  // ADR-0037 withholds the Reviewer's details/justification from the
+test('the Summary shows the resolution details to reviewer-side audiences, as the tab does', () => {
+  // The resolution model withholds the Reviewer's details/justification from the
   // `responsibleParty` audience *only*; the Remediation tab's own `!canResolve`
   // branch shows them to every reviewer-side observer. Withholding them from
   // Controls and the Case Type Owner as well cost them the `cancelReason` the
-  // Summary used to carry, which is a narrowing ADR-0037 does not ask for.
+  // Summary used to carry, which is a narrowing nothing asks for.
   const root = cancelledRemediation({ audience: 'reviewer' });
   assert.match(root.textContent, /Status: Cancelled/);
   assert.match(root.textContent, /Justification: Customer declined contact/);

@@ -178,7 +178,7 @@ function captureListeners(listeners) {
  * Render through the same route-slice path production mounts, in the same
  * order: a first render, then `start()`. The store state is supplied directly,
  * so the load hangs deliberately and never overwrites it — but the route's
- * effects are built, which is where every write path now lives (#511).
+ * effects are built, which is where every write path now lives.
  *
  * @param {any} initialState
  * @param {Record<string, any>} [contextOverrides]
@@ -239,7 +239,7 @@ function renderShippedState(
     dispose,
     // Stand in for `createStoreRoute` disposing the mount: after this,
     // `tools.isActive()` reports false exactly as it would after the reviewer
-    // navigated away mid-effect (#517).
+    // navigated away mid-effect.
     deactivate() {
       active = false;
       dispose?.();
@@ -300,7 +300,7 @@ function renderAttributionSearchRoute(searchPeople) {
   );
   const container = document.createElement('main');
   // The adapter's mount lifetime, mirrored here so disposal exercises the
-  // route's `isActive()` guard rather than only its timer/queue clearing (#517).
+  // route's `isActive()` guard rather than only its timer/queue clearing.
   let active = true;
   /** @type {any} */
   let tools;
@@ -327,7 +327,7 @@ function renderAttributionSearchRoute(searchPeople) {
   };
 }
 
-test('CASE-1 state: route state owns loading, save status, and selected tab under routes.caseReview', () => {
+test('state: route state owns loading, save status, and selected tab under routes.caseReview', () => {
   const initial = createInitialCaseReviewState(chrome, 'popover');
   assert.equal(initial.chrome, chrome);
   assert.deepEqual(initial.routes.caseReview, {
@@ -369,7 +369,7 @@ test('CASE-1 state: route state owns loading, save status, and selected tab unde
   );
 });
 
-test('CASE-1 state: the Conversation panel starts collapsed on every load (#537)', () => {
+test('state: the Conversation panel starts collapsed on every load', () => {
   // The loader's snapshot carries no conversation-visibility field: the
   // reducer owns "collapsed on load", not the handover.
   const loadSnapshot = () => ({
@@ -424,7 +424,7 @@ test('On hold reducer: updates both hold fields in the loaded Case snapshot', ()
   );
 });
 
-test('CASE-1 state: expanding a capture group preserves an override of a collapsed case-type default', () => {
+test('state: expanding a capture group preserves an override of a collapsed case-type default', () => {
   const initial = createInitialCaseReviewState(chrome, 'popover');
 
   const expanded = caseReviewReducer(initial, {
@@ -440,7 +440,7 @@ test('CASE-1 state: expanding a capture group preserves an override of a collaps
   );
 });
 
-test('CASE-5 state: attribution search query and results stay independent per failed Question', () => {
+test('state: attribution search query and results stay independent per failed Question', () => {
   let state = createInitialCaseReviewState(chrome, 'popover');
   state = caseReviewReducer(state, {
     type: 'case/attribution-search-input',
@@ -500,7 +500,7 @@ test('CASE-5 state: attribution search query and results stay independent per fa
   );
 });
 
-test('CASE-5 route: attribution search is debounced and renders route-owned results', async (t) => {
+test('route: attribution search is debounced and renders route-owned results', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   /** @type {string[]} */
   const searches = [];
@@ -544,7 +544,7 @@ test('CASE-5 route: attribution search is debounced and renders route-owned resu
   route.dispose();
 });
 
-test('CASE-5 route: a stale attribution result cannot replace the latest query', async (t) => {
+test('route: a stale attribution result cannot replace the latest query', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   /** @type {Record<string, (people: any[]) => void>} */
   const resolveSearch = {};
@@ -584,7 +584,7 @@ test('CASE-5 route: a stale attribution result cannot replace the latest query',
   route.dispose();
 });
 
-test('CASE-5 route: disposal clears attribution debounce and suppresses an in-flight result', async (t) => {
+test('route: disposal clears attribution debounce and suppresses an in-flight result', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   /** @type {string[]} */
   const searches = [];
@@ -626,7 +626,7 @@ test('CASE-5 route: disposal clears attribution debounce and suppresses an in-fl
   );
 });
 
-test('CASE-5 route: selecting the Responsible Party cancels that Question search', (t) => {
+test('route: selecting the Responsible Party cancels that Question search', (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   /** @type {string[]} */
   const searches = [];
@@ -652,7 +652,7 @@ test('CASE-5 route: selecting the Responsible Party cancels that Question search
   route.dispose();
 });
 
-test('CASE-1 state: tab selection is store-owned and rejects hidden Sections', () => {
+test('state: tab selection is store-owned and rejects hidden Sections', () => {
   let state = caseReviewReducer(
     createInitialCaseReviewState(chrome, 'popover'),
     { type: 'case/load-finished', snapshot: snapshot() }
@@ -670,7 +670,7 @@ test('CASE-1 state: tab selection is store-owned and rejects hidden Sections', (
   assert.equal(unchanged, state, 'hidden Section cannot become active');
 });
 
-test('CASE-1 route: the conversation host is a direct child the scoped popover CSS can target', () => {
+test('route: the conversation host is a direct child the scoped popover CSS can target', () => {
   const state = caseReviewReducer(
     createInitialCaseReviewState(chrome, 'popover'),
     { type: 'case/load-finished', snapshot: snapshot() }
@@ -694,7 +694,7 @@ test('CASE-1 route: the conversation host is a direct child the scoped popover C
   );
 });
 
-test('CASE-1 route: mounting over a previous route’s leftover DOM keeps the conversation host live', () => {
+test('route: mounting over a previous route’s leftover DOM keeps the conversation host live', () => {
   const toggleSnapshot = snapshot();
   toggleSnapshot.machine = {
     ...toggleSnapshot.machine,
@@ -738,7 +738,7 @@ test('CASE-1 route: mounting over a previous route’s leftover DOM keeps the co
   );
 });
 
-test('CASE-6 route: Appeal renders directly from store state without legacy controller wiring', () => {
+test('route: Appeal renders directly from store state without legacy controller wiring', () => {
   const appealSnapshot = snapshot();
   appealSnapshot.access = {
     ...appealSnapshot.access,
@@ -765,7 +765,7 @@ test('CASE-6 route: Appeal renders directly from store state without legacy cont
   );
 });
 
-test('CASE-6 route: configured Journey Owner and alternative Manager raisers reach the converted Appeal surface', () => {
+test('route: configured Journey Owner and alternative Manager raisers reach the converted Appeal surface', () => {
   const configurations = [
     {
       label: 'Complaints Journey Owner',
@@ -828,7 +828,7 @@ test('CASE-6 route: configured Journey Owner and alternative Manager raisers rea
   }
 });
 
-test('CASE-6 route: raising an Appeal persists through the store-owned panel', () => {
+test('route: raising an Appeal persists through the store-owned panel', () => {
   const appealSnapshot = snapshot();
   appealSnapshot.access = {
     ...appealSnapshot.access,
@@ -868,7 +868,7 @@ test('CASE-6 route: raising an Appeal persists through the store-owned panel', (
   assert.equal(writes[0].value[0].state, 'raised');
 });
 
-test('CASE-6 route: a raised Appeal is resolvable in the same mount from the store-owned Case Row (#530)', () => {
+test('route: a raised Appeal is resolvable in the same mount from the store-owned Case Row', () => {
   const appealSnapshot = snapshot();
   appealSnapshot.caseRow = {
     ...appealSnapshot.caseRow,
@@ -943,7 +943,7 @@ test('CASE-6 route: a raised Appeal is resolvable in the same mount from the sto
   );
 });
 
-test('CASE-6 route: Appeal action remains live after switching from another tab', () => {
+test('route: Appeal action remains live after switching from another tab', () => {
   const appealSnapshot = snapshot();
   appealSnapshot.caseRow = { ...appealSnapshot.caseRow, appeals: [] };
   appealSnapshot.access = {
@@ -981,7 +981,7 @@ test('CASE-6 route: Appeal action remains live after switching from another tab'
   assert.equal(writes.length, 1);
 });
 
-test('CASE-6 route: Controls resolves an Appeal and amends an Outcome through state-derived edit access', () => {
+test('route: Controls resolves an Appeal and amends an Outcome through state-derived edit access', () => {
   const controlsSnapshot = snapshot();
   controlsSnapshot.caseRow = {
     ...controlsSnapshot.caseRow,
@@ -1067,7 +1067,7 @@ test('CASE-6 route: Controls resolves an Appeal and amends an Outcome through st
   assert.equal(fieldWrites[1].fields.amendedOutcome.outcome, 'fail');
 });
 
-test('CASE-6 route: Appeal Review action remains live after switching from another tab', () => {
+test('route: Appeal Review action remains live after switching from another tab', () => {
   const controlsSnapshot = snapshot();
   controlsSnapshot.caseRow = {
     ...controlsSnapshot.caseRow,
@@ -1123,7 +1123,7 @@ test('CASE-6 route: Appeal Review action remains live after switching from anoth
   assert.equal(writes[0].fields.amendedOutcome.fromAppealId, 'appeal-1');
 });
 
-test('CASE-6 route: Amend Outcome action remains live after switching from another tab', () => {
+test('route: Amend Outcome action remains live after switching from another tab', () => {
   const controlsSnapshot = snapshot();
   controlsSnapshot.caseRow = {
     ...controlsSnapshot.caseRow,
@@ -1166,7 +1166,7 @@ test('CASE-6 route: Amend Outcome action remains live after switching from anoth
   assert.equal(writes[0].fields.amendedOutcome.outcome, 'pass');
 });
 
-test('CASE-6 route: appeal views keep empty Case Type configuration defaults', () => {
+test('route: appeal views keep empty Case Type configuration defaults', () => {
   const minimal = snapshot();
   minimal.caseRow = { ...minimal.caseRow, responsibleParty: '' };
   delete minimal.config.detailFields;
@@ -1299,7 +1299,7 @@ test('case page reducer: a patch preserves chrome and unrelated route fields', (
   );
 });
 
-test('CASE-1 state: model refreshes and Answer edits preserve valid selection and fall back when access changes', () => {
+test('state: model refreshes and Answer edits preserve valid selection and fall back when access changes', () => {
   const initial = createInitialCaseReviewState(chrome, 'popover');
   assert.equal(
     caseReviewReducer(initial, {
@@ -1450,7 +1450,7 @@ test('case page reducer keeps conversation and field state behind loaded access'
   );
 });
 
-test('CASE-1 Details view mirrors today: config-driven values are read-only with empty fallback', () => {
+test('Details view mirrors today: config-driven values are read-only with empty fallback', () => {
   const view = caseDetailsView(caseRow, snapshot().config.detailFields);
   assert.equal(getByTag(view, 'h2').textContent, 'Case Details');
   assert.match(view.textContent, /Customer nameAda Lovelace/);
@@ -1459,7 +1459,7 @@ test('CASE-1 Details view mirrors today: config-driven values are read-only with
   assert.equal(view.getAttribute('data-access'), 'read-only');
 });
 
-test('CASE-1 view: shipped tab shell renders only permitted tabs and dispatches selection', async () => {
+test('view: shipped tab shell renders only permitted tabs and dispatches selection', async () => {
   const state = caseReviewReducer(
     createInitialCaseReviewState(chrome, 'popover'),
     { type: 'case/load-finished', snapshot: snapshot() }
@@ -1556,7 +1556,7 @@ test('On hold view: only Reviewers with an In-progress Case see the current hold
   }
 });
 
-test('CASE-4 view: Summary is rendered from store state and configured sections', () => {
+test('view: Summary is rendered from store state and configured sections', () => {
   let state = caseReviewReducer(
     createInitialCaseReviewState(chrome, 'popover'),
     { type: 'case/load-finished', snapshot: snapshot() }
@@ -1590,7 +1590,7 @@ test('CASE-4 view: Summary is rendered from store state and configured sections'
   );
 });
 
-test('CASE-4 view: Summary shows the live Outcome after every Outcome question is answered', () => {
+test('view: Summary shows the live Outcome after every Outcome question is answered', () => {
   const outcomeSnapshot = snapshot();
   outcomeSnapshot.catalogue = [
     {
@@ -1644,7 +1644,7 @@ test('CASE-4 view: Summary shows the live Outcome after every Outcome question i
   assert.doesNotMatch(panel?.textContent ?? '', /Awaiting answers/);
 });
 
-test('CASE-4 view: Summary applies empty config defaults and incomplete snapshots stay inert', () => {
+test('view: Summary applies empty config defaults and incomplete snapshots stay inert', () => {
   const baseSnapshot = snapshot();
   const minimalSummarySnapshot = {
     ...baseSnapshot,
@@ -1674,7 +1674,7 @@ test('CASE-4 view: Summary applies empty config defaults and incomplete snapshot
   assert.doesNotThrow(() => renderShippedState(incompleteState));
 });
 
-test('CASE-5 view: Issues renders failed Answers directly from route state', () => {
+test('view: Issues renders failed Answers directly from route state', () => {
   const answers = {
     q1: {
       value: 'No',
@@ -1725,7 +1725,7 @@ test('CASE-5 view: Issues renders failed Answers directly from route state', () 
   assert.equal(panel.querySelector('cora-remediation-section'), null);
 });
 
-test('CASE-4 action: completion flushes saves and persists only the CaseMachine transition', async () => {
+test('action: completion flushes saves and persists only the CaseMachine transition', async () => {
   const transitionPatch = {
     status: 'Completed',
     completedAt: '2026-07-19T12:00:00Z',
@@ -1792,7 +1792,7 @@ test('CASE-4 action: completion flushes saves and persists only the CaseMachine 
   assert.equal(location.hash, '#/dashboard');
 });
 
-test('CASE-4 action: completion folds the persisted transition into the store Case Row (#557)', async () => {
+test('action: completion folds the persisted transition into the store Case Row', async () => {
   // The transition the Case Row must carry afterwards. Correctness here must not
   // rest on the navigation: the route reads its Case Row from the store, and
   // completing is the one transition whose fields never reached it — invisible
@@ -1862,7 +1862,7 @@ test('CASE-4 action: completion folds the persisted transition into the store Ca
   );
 });
 
-test('CASE-4 action: the Send Actions transition folds into the store Case Row too (#557)', async () => {
+test('action: the Send Actions transition folds into the store Case Row too', async () => {
   // The non-terminal half of the same path: sending Remediation Actions is not
   // the end of the Case, yet it goes through `completeCase` and navigates away.
   // A Case Type that kept the Reviewer in the Remediation loop would read a
@@ -1946,7 +1946,7 @@ test('CASE-4 action: the Send Actions transition folds into the store Case Row t
   );
 });
 
-test('CASE-4 action: a failed completion PATCH leaves the store Case Row as it was (#557)', async () => {
+test('action: a failed completion PATCH leaves the store Case Row as it was', async () => {
   const loadedSnapshot = {
     ...snapshot(),
     machine: /** @type {any} */ ({
@@ -1994,7 +1994,7 @@ test('CASE-4 action: a failed completion PATCH leaves the store Case Row as it w
   );
 });
 
-test('CASE-4 action: an Answer edited while the completion PATCH is in flight survives (#557)', async () => {
+test('action: an Answer edited while the completion PATCH is in flight survives', async () => {
   // The whole reason the transition is folded in as a *field patch* rather than
   // as a replayed snapshot. The click handler's `snapshot`/`caseRow` are as of
   // the last render — two network round-trips (`flushCase`, then `patchCase`)
@@ -2065,7 +2065,7 @@ test('CASE-4 action: an Answer edited while the completion PATCH is in flight su
   );
 });
 
-test('CASE-4 action: a completion resolving after the mount is disposed dispatches nothing (#517)', async () => {
+test('action: a completion resolving after the mount is disposed dispatches nothing', async () => {
   const loadedSnapshot = {
     ...snapshot(),
     machine: /** @type {any} */ ({
@@ -2122,7 +2122,7 @@ test('CASE-4 action: a completion resolving after the mount is disposed dispatch
   );
 });
 
-test('CASE-4 action: a missing CaseMachine transition cannot dispatch completion', async () => {
+test('action: a missing CaseMachine transition cannot dispatch completion', async () => {
   const loadedSnapshot = {
     ...snapshot(),
     machine: /** @type {any} */ ({
@@ -2163,7 +2163,7 @@ test('CASE-4 action: a missing CaseMachine transition cannot dispatch completion
   );
 });
 
-test('CASE-4 view: the completion button is disabled with its reason while remediation is unresolved (#499)', () => {
+test('view: the completion button is disabled with its reason while remediation is unresolved', () => {
   const catalogue = [
     {
       id: 'q1',
@@ -2207,7 +2207,7 @@ test('CASE-4 view: the completion button is disabled with its reason while remed
   );
 });
 
-test('CASE-1 view: conflict state is surfaced with the existing reload warning', () => {
+test('view: conflict state is surfaced with the existing reload warning', () => {
   let state = caseReviewReducer(
     createInitialCaseReviewState(chrome, 'popover'),
     { type: 'case/load-finished', snapshot: snapshot() }
@@ -2222,7 +2222,7 @@ test('CASE-1 view: conflict state is surfaced with the existing reload warning',
     getByRole(view, 'button', { name: 'Reload' }).textContent,
     'Reload'
   );
-  // The banner's placement is a stylesheet concern (#514); what the page owes it
+  // The banner's placement is a stylesheet concern; what the page owes it
   // is the hook the stylesheet pins, and the banner rendered inside it.
   const status = view.querySelector('.cora-case-review__save-status');
   assert.ok(status, 'the save-status host carries its styling class');
@@ -2230,7 +2230,7 @@ test('CASE-1 view: conflict state is surfaced with the existing reload warning',
   assert.equal(status.getAttribute('style'), null, 'no inline positioning');
 });
 
-test('CASE-1 view: loading, error, denied, saving, and reconnecting states are explicit', () => {
+test('view: loading, error, denied, saving, and reconnecting states are explicit', () => {
   const initial = createInitialCaseReviewState(chrome, 'popover');
   assert.match(renderShippedState(initial).container.textContent, /Loading/);
 
@@ -2271,7 +2271,7 @@ test('CASE-1 view: loading, error, denied, saving, and reconnecting states are e
   }
 });
 
-test('CASE-7 route: Notes and Conversation write through store-owned callbacks', async () => {
+test('route: Notes and Conversation write through store-owned callbacks', async () => {
   const interactive = snapshot();
   interactive.machine = { canToggleConversation: true };
   let state = caseReviewReducer(
@@ -2332,7 +2332,7 @@ test('CASE-7 route: Notes and Conversation write through store-owned callbacks',
   ]);
 });
 
-test('Notes effect: a Case field edit dispatches then enqueues against the loaded Case id (#511)', () => {
+test('Notes effect: a Case field edit dispatches then enqueues against the loaded Case id', () => {
   /** @type {any[]} */
   const queued = [];
   /** @type {any[]} */
@@ -2371,7 +2371,7 @@ test('Notes effect: a Case field edit dispatches then enqueues against the loade
   ]);
 });
 
-test('Notes effect: `fieldEdited` takes only the plain-text Case fields — a type, not a convention (#554)', () => {
+test('Notes effect: `fieldEdited` takes only the plain-text Case fields — a type, not a convention', () => {
   /**
    * `fieldEdited` is the one *generic* Case Row writer: its reducer branch
    * assigns `[action.field]` onto `snapshot.caseRow`. `snapshot.machine` holds
@@ -2401,7 +2401,7 @@ test('Notes effect: `fieldEdited` takes only the plain-text Case fields — a ty
   assert.equal(typeof typeContract, 'function');
 });
 
-test('the reducer ignores a case/field-edited for a field outside the plain-text pair (#554)', () => {
+test('the reducer ignores a case/field-edited for a field outside the plain-text pair', () => {
   // The type closes the effect seam, but `caseReviewReducer` takes `any`, so a
   // raw `tools.dispatch` from anywhere in the page still compiles. This is the
   // one branch that writes a computed key, so it is the last entrance: a
@@ -2442,7 +2442,7 @@ test('the reducer ignores a case/field-edited for a field outside the plain-text
   );
 });
 
-test('the route writes to the loaded Case row id, not the route param that found it (#511)', () => {
+test('the route writes to the loaded Case row id, not the route param that found it', () => {
   const loaded = snapshot();
   loaded.caseRow = { ...loaded.caseRow, id: 'c1' };
   let state = caseReviewReducer(
@@ -2479,14 +2479,14 @@ test('the route writes to the loaded Case row id, not the route param that found
   ]);
 });
 
-test('#556: every persistence path addresses the loaded Case id, not the route param that found it', async () => {
-  // The assertion #511 could not make while the spellings disagreed: one mount
-  // where the loaded row's id differs from `params.id`, driving every path that
-  // names a Case id. The Conversation post was the live defect — it is inline in
-  // the render function rather than in an effect, so #511's move onto the
+test('every persistence path addresses the loaded Case id, not the route param that found it', async () => {
+  // The assertion that could not be made while the spellings disagreed: one
+  // mount where the loaded row's id differs from `params.id`, driving every path
+  // that names a Case id. The Conversation post was the live defect — it is
+  // inline in the render function rather than in an effect, so the move onto the
   // accessor passed it by, and it posted a Message against the unresolved route
   // param. The Notes write is deliberately absent: it is already locked by the
-  // #511 test above, which owns that path.
+  // test above, which owns that path.
   //
   // The mount uses `pending-config-review`, so the Case load parks before
   // `client.getCase` and never contributes a call of its own — the loader is
@@ -2602,7 +2602,7 @@ test('#556: every persistence path addresses the loaded Case id, not the route p
   view.dispose();
 });
 
-test('CASE-1 save effect: rapid Answer dispatches coalesce through unchanged SaveQueue', async () => {
+test('save effect: rapid Answer dispatches coalesce through unchanged SaveQueue', async () => {
   /** @type {any[]} */
   const patches = [];
   const client = {
@@ -2692,7 +2692,7 @@ test('On hold effect: queues the paired fields as one PATCH and clears the times
   ]);
 });
 
-test('CASE-1 save effect: conflict status re-enters route state through dispatch', async () => {
+test('save effect: conflict status re-enters route state through dispatch', async () => {
   const queue = new SaveQueue(
     /** @type {any} */ ({
       async patchCase() {
@@ -2723,7 +2723,7 @@ test('CASE-1 save effect: conflict status re-enters route state through dispatch
   assert.deepEqual(statuses, ['saved', 'saving', 'conflict']);
 });
 
-test('CASE-7 route: mock-mode store shell keeps Review working at the existing URL', async () => {
+test('route: mock-mode store shell keeps Review working at the existing URL', async () => {
   const qNeeds = exampleReviewConfig.questions.find(
     (question) => question.id === 'q-needs'
   );
@@ -2986,7 +2986,7 @@ test('CASE-7 route: mock-mode store shell keeps Review working at the existing U
   location.hash = previousHash;
 });
 
-test('CASE-5 route: the Remediation tab resolves a Question through the store seam', async () => {
+test('route: the Remediation tab resolves a Question through the store seam', async () => {
   let storedRow = {
     ...caseRow,
     status: 'Actions In Progress',
@@ -3088,7 +3088,7 @@ test('CASE-5 route: the Remediation tab resolves a Question through the store se
   }
 });
 
-test('CASE-7 route: a read-only Reviewer on a reportable Case writes no Answer (#510)', async () => {
+test('route: a read-only Reviewer on a reportable Case writes no Answer', async () => {
   // The single Answer writer is only as safe as the guards it is handed. A
   // Completed Case is read-only for its Reviewer, so the Review tab still
   // renders its controls — disabled — and firing one must reach neither the
@@ -3183,7 +3183,7 @@ test('CASE-7 route: a read-only Reviewer on a reportable Case writes no Answer (
   }
 });
 
-test('CASE-7 route: sequential Answer edits accumulate (#510)', async () => {
+test('route: sequential Answer edits accumulate', async () => {
   // The main reviewer flow: answer one Question, then another, then another.
   // Question cards are memoised on `[answer, access]`, so an edit rebuilds only
   // its own card; every other card keeps the `onchange` closure from the
@@ -3295,7 +3295,7 @@ test('CASE-7 route: sequential Answer edits accumulate (#510)', async () => {
   }
 });
 
-test('CASE-4 view: the Summary rolls up the Reviewer’s General Question answers', () => {
+test('view: the Summary rolls up the Reviewer’s General Question answers', () => {
   const generalSnapshot = snapshot();
   generalSnapshot.config.generalQuestions = [
     { key: 'reviewChannel', label: 'How was this reviewed?', type: 'select' },
@@ -3323,7 +3323,7 @@ test('CASE-4 view: the Summary rolls up the Reviewer’s General Question answer
   assert.doesNotMatch(panel?.textContent ?? '', /How was this reviewed\?/);
 });
 
-test('#522: the Review tab and the Summary put General Questions on the same side, for every placement value', () => {
+test('the Review tab and the Summary put General Questions on the same side, for every placement value', () => {
   // One resolver, two consumers. The interesting inputs are the two legal
   // values, an absent one (the default), and an out-of-vocabulary one — which
   // used to be the case where the two views could disagree, because the Review
@@ -3410,7 +3410,7 @@ test('#522: the Review tab and the Summary put General Questions on the same sid
   assert.deepEqual(sidesFor('beneath'), { review: 'after', summary: 'after' });
 });
 
-test('#512 panel map: a tab switch keeps every panel mounted and its nodes identical', () => {
+test('panel map: a tab switch keeps every panel mounted and its nodes identical', () => {
   const view = renderShippedState(
     caseReviewReducer(createInitialCaseReviewState(chrome, 'popover'), {
       type: 'case/load-finished',
@@ -3452,7 +3452,7 @@ test('#512 panel map: a tab switch keeps every panel mounted and its nodes ident
 // the DOM before its contents change. They are kept because they cost nothing and
 // correctly describe the node's role; what this test checks is the banner's
 // presence, copy and attributes, not an announcement.
-test('#513: a Case whose as-reviewed Question Bank is unavailable renders a status-role warning banner', () => {
+test('a Case whose as-reviewed Question Bank is unavailable renders a status-role warning banner', () => {
   const warned = snapshot();
   warned.caseRow = { ...warned.caseRow, status: 'Reported' };
   warned.versionWarning = 'as-reviewed version unavailable';
@@ -3470,7 +3470,7 @@ test('#513: a Case whose as-reviewed Question Bank is unavailable renders a stat
   view.dispose();
 });
 
-test('#513: a Case with a resolved as-reviewed snapshot renders no warning', () => {
+test('a Case with a resolved as-reviewed snapshot renders no warning', () => {
   const resolved = snapshot();
   resolved.caseRow = { ...resolved.caseRow, status: 'Reported' };
   resolved.versionWarning = null;
@@ -3484,7 +3484,7 @@ test('#513: a Case with a resolved as-reviewed snapshot renders no warning', () 
   view.dispose();
 });
 
-test('#513: an In-progress Case renders no version warning', () => {
+test('an In-progress Case renders no version warning', () => {
   const state = caseReviewReducer(
     createInitialCaseReviewState(chrome, 'popover'),
     { type: 'case/load-finished', snapshot: snapshot() }
@@ -3496,7 +3496,7 @@ test('#513: an In-progress Case renders no version warning', () => {
 
 /**
  * Start the real route slice against a Case load the test releases by hand, so
- * the mount lifetime can be ended while the load is still in flight (#517).
+ * the mount lifetime can be ended while the load is still in flight.
  * @param {{ getCase: (...args: any[]) => Promise<any> }} clientOverrides
  */
 function startPendingLoadRoute(clientOverrides) {
@@ -3577,7 +3577,7 @@ test('Alt+C toggles the Conversation panel from the document keydown shortcut', 
   route.dispose();
 });
 
-test('#517: a Case load resolving after unmount dispatches nothing', async () => {
+test('a Case load resolving after unmount dispatches nothing', async () => {
   const pendingMounted = deferred();
   const mounted = startPendingLoadRoute({
     getCase: () => pendingMounted.promise,
@@ -3604,7 +3604,7 @@ test('#517: a Case load resolving after unmount dispatches nothing', async () =>
   mounted.dispose();
 });
 
-test('#517: a conversation refresh resolving after unmount dispatches nothing', async () => {
+test('a conversation refresh resolving after unmount dispatches nothing', async () => {
   // The visibilitychange handler is invoked synchronously below, before the
   // Case load has finished awaiting its Case Type config — so the refresh is
   // the first `getCase` and the load, which stays pending, is the second.
@@ -3660,7 +3660,7 @@ test('conversationPanelMode reads the query string it is given', () => {
 
 test('conversationPanelMode defaults to the current page query string', () => {
   // The `globalThis.location?.` default is what replaced the
-  // `typeof location === 'undefined'` sniff (#547), so the no-location case is
+  // `typeof location === 'undefined'` sniff, so the no-location case is
   // the branch that has to be exercised — a Node harness driving Case Review
   // has no `location` at all. Same shape as tests/question-bank-flags.test.js,
   // the precedent this default follows.
@@ -3683,7 +3683,7 @@ test('conversationPanelMode defaults to the current page query string', () => {
   }
 });
 
-test('#544 route: the header Conversation button toggles the Conversation panel', () => {
+test('route: the header Conversation button toggles the Conversation panel', () => {
   const toggleSnapshot = snapshot();
   toggleSnapshot.machine = { canToggleConversation: true };
   let state = caseReviewReducer(
@@ -3695,7 +3695,7 @@ test('#544 route: the header Conversation button toggles the Conversation panel'
   const host = /** @type {any} */ (
     container.querySelector('.cora-case-review__conversation')
   );
-  // The Conversation starts collapsed on every load (#537), so the button is
+  // The Conversation starts collapsed on every load, so the button is
   // the only way in.
   assert.equal(host.hidden, true);
 
@@ -3739,7 +3739,7 @@ function remediationSnapshot() {
   };
 }
 
-test('#544 route: the Remediation tab’s Open conversation button opens the Conversation panel', () => {
+test('route: the Remediation tab’s Open conversation button opens the Conversation panel', () => {
   let state = caseReviewReducer(
     createInitialCaseReviewState(chrome, 'popover'),
     { type: 'case/load-finished', snapshot: remediationSnapshot() }
@@ -3764,7 +3764,7 @@ test('#544 route: the Remediation tab’s Open conversation button opens the Con
   assert.equal(host.hidden, false);
 });
 
-test('#544 route: collapsing an Issue Capture Group dispatches the route’s toggle action', () => {
+test('route: collapsing an Issue Capture Group dispatches the route’s toggle action', () => {
   const base = remediationSnapshot();
   const captureSnapshot = {
     ...base,
@@ -3812,7 +3812,7 @@ test('#544 route: collapsing an Issue Capture Group dispatches the route’s tog
   );
 });
 
-test('case review slice: navigating away aborts the in-flight Case read with no error UI (#567)', async () => {
+test('case review slice: navigating away aborts the in-flight Case read with no error UI', async () => {
   const controller = new AbortController();
   let aborted = false;
   /** @type {any[]} */
@@ -3859,7 +3859,7 @@ test('case review slice: navigating away aborts the in-flight Case read with no 
   );
 });
 
-test('case review slice: the read carries the signal while the write path keeps the raw client (#567)', async () => {
+test('case review slice: the read carries the signal while the write path keeps the raw client', async () => {
   /** @type {any} */
   let readOptions = null;
   /** @type {any[]} */
@@ -3885,7 +3885,7 @@ test('case review slice: the read carries the signal while the write path keeps 
       getCurrentUser: async () => ({ id: 'reviewer', groups: [] }),
       getExportHash: async () => null,
     },
-    // Writes are never cancelled (ADR-0008): the queue is handed the Case Row
+    // Writes are never cancelled: the queue is handed the Case Row
     // by the loader and holds the boot-built client, not the read wrapper.
     saveQueue: {
       subscribeStatus: () => () => {},

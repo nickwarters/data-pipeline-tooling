@@ -53,7 +53,7 @@ export const SHARED_GENERAL_QUESTIONS = {
  * registers, so a bad declaration costs the app its boot rather than one Case
  * Type. The intended catch is therefore CI, not the browser: the manifest sweep
  * in `tests/case-type-manifest.test.js` evaluates every registered Case Type and
- * runs these gates. See #459 for shifting validation further left still.
+ * runs these gates.
  *
  * @param {GeneralQuestionDeclaration[]} [declarations]
  * @returns {GeneralQuestionField[]}

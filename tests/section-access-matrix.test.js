@@ -12,7 +12,7 @@ import {
 
 // Capability: the complete role-by-section access matrix.
 
-// --- The Section set (ADR-0011 amend) ---
+// --- The Section set ---
 
 test('SECTIONS is the amended ten-Section set (appeal split into request/review + amendOutcome)', () => {
   assert.deepEqual(
@@ -171,7 +171,7 @@ test('matrix — Actions In Progress Case with sent actions (reportable freeze)'
       },
       // Remediation tracking is now visible: the Assigned Reviewer resolves it,
       // everyone else — including the Responsible Party side, who get the
-      // Conversation call-to-action instead of the fields (#499) — observes.
+      // Conversation call-to-action instead of the fields — observes.
       remediation: {
         assignedReviewer: 'edit',
         otherReviewer: 'read-only',
@@ -236,8 +236,8 @@ test('matrix — Completed Case, journeyOwner raiser, no open Appeal', () => {
         controls: 'read-only',
       },
       // Amend Outcome is Controls-only: edit on a Completed Case, hidden for
-      // every other role (ADR-0026, refined — observers read the Current Outcome
-      // in the Summary, not this tab).
+      // every other role (observers read the Current Outcome in the Summary,
+      // not this tab).
       amendOutcome: {
         assignedReviewer: 'hidden',
         otherReviewer: 'hidden',

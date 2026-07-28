@@ -421,7 +421,7 @@ test('normaliseConfiguredActions: coerces strings and strips any legacy outcome'
 
 test('computeConfiguredOutcome: an N/A Answer scores no Outcome and falls back to the default', () => {
   // N/A is absent from every optionOutcomes mapping (the editor never offers
-  // one), so it must contribute nothing to the Outcome (#390 Part 2).
+  // one), so it must contribute nothing to the Outcome.
   const questions = [
     {
       id: 'q-na',

@@ -11,7 +11,7 @@ const { SECTION_PANELS } =
   await import('../src/pages/cora-case-review/section-panels.js');
 
 /**
- * The point of the panel map (#512): the Case Review render loop no longer
+ * The point of the panel map: the Case Review render loop no longer
  * branches on Section id, so a Section added to the registry with no panel used
  * to be invisible — it got a tab and an empty panel. These two assertions are
  * the replacement for that branch chain's implicit exhaustiveness.

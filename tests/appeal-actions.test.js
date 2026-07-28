@@ -140,7 +140,7 @@ test('resolveAppeal defensively normalises absent agreement details', () => {
   assert.equal(result.fields.amendedOutcome?.justification, '');
 });
 
-test('amendOutcome returns immutable ADR-0026 fields without changing the frozen snapshot', () => {
+test('amendOutcome returns immutable fields without changing the frozen snapshot', () => {
   const result = amendOutcome({
     caseRow: CASE_ROW,
     outcome: 'pass',

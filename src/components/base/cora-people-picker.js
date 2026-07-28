@@ -48,7 +48,7 @@ export function peoplePickerOptions(people, query, onSelect) {
  * `.cora-people-picker` is `position: relative` and is therefore the containing
  * block the absolutely positioned results list resolves against. Returning a
  * loose pair let that containing block go missing whenever the caller spread
- * them into a statically positioned parent (#536).
+ * them into a statically positioned parent.
  *
  * @param {PeoplePickerProps} props
  * @returns {HTMLElement}

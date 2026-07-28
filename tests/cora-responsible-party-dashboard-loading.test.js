@@ -153,7 +153,7 @@ function panelState() {
   };
 }
 
-test('#516 Responsible Party panel: clicking the Remediation due header dispatches its table sort action', () => {
+test('Responsible Party panel: clicking the Remediation due header dispatches its table sort action', () => {
   /** @type {any[]} */
   const actions = [];
   const view = responsiblePartyPanelView(panelState(), {
@@ -166,7 +166,7 @@ test('#516 Responsible Party panel: clicking the Remediation due header dispatch
   ]);
 });
 
-test('#516 Responsible Party panel: clicking the unread Last message header dispatches its table sort action', () => {
+test('Responsible Party panel: clicking the unread Last message header dispatches its table sort action', () => {
   /** @type {any[]} */
   const actions = [];
   const view = responsiblePartyPanelView(panelState(), {
@@ -217,7 +217,7 @@ function referencesIn(sectionClass, view) {
   ].map((/** @type {any} */ row) => row.querySelectorAll('td')[0].textContent);
 }
 
-test('#542 Responsible Party tables: Reference and Case Type sort for real on both tables', () => {
+test('Responsible Party tables: Reference and Case Type sort for real on both tables', () => {
   const base = {
     ...initialResponsiblePartyState('rp-1'),
     cases: [
@@ -226,7 +226,7 @@ test('#542 Responsible Party tables: Reference and Case Type sort for real on bo
     ],
   };
   // Neither table's deliberate default sort moves by gaining two sortable
-  // columns (#516).
+  // columns.
   assert.deepEqual(base.remediationSort, {
     key: 'remediationDueDate',
     dir: 'asc',
@@ -269,7 +269,7 @@ test('#542 Responsible Party tables: Reference and Case Type sort for real on bo
   }
 });
 
-test('#544 Responsible Party panel: choosing a Case Type filter dispatches the filter action', () => {
+test('Responsible Party panel: choosing a Case Type filter dispatches the filter action', () => {
   const base = panelState();
   /** @type {any[]} */
   const actions = [];

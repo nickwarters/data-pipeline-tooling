@@ -18,7 +18,7 @@ const PERSON = { loginName: 'jsmith', displayName: 'Jane Smith' };
 test('PeoplePicker wraps input and results in one positioned control', () => {
   // The results list is `position: absolute`; the wrapper is its containing
   // block. Returning a loose [input, results] array left that containing block
-  // to whatever the caller happened to spread the pair into (#536).
+  // to whatever the caller happened to spread the pair into.
   const host = /** @type {any} */ (
     PeoplePicker({
       placeholder: '',

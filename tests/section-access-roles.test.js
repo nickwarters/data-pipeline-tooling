@@ -39,7 +39,7 @@ test('resolveRoles: case type owner', () => {
   assert.deepEqual(roles, ['caseTypeOwner']);
 });
 
-test('resolveRoles: journey owner (from ownedJourneyCaseTypes, ADR-0027)', () => {
+test('resolveRoles: journey owner (from ownedJourneyCaseTypes)', () => {
   const roles = resolveRoles(
     makeCase(),
     'user-jo',
@@ -133,7 +133,7 @@ test('resolveRoles: assigned reviewer who is also Controls gets both roles', () 
   assert.deepEqual(roles.sort(), ['assignedReviewer', 'controls']);
 });
 
-// --- Reviewer Manager (#499) ---
+// --- Reviewer Manager ---
 // Scoped to the Case, exactly like the Responsible Party Manager: the role comes
 // from the `assignedReviewerManager` row field, not from the platform-wide
 // `Reviewer Managers` group. A manager reads the Cases of the Reviewers they

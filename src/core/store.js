@@ -10,7 +10,7 @@
  * notify once.
  *
  * The store owns state and scheduling and knows nothing about the DOM, which is
- * why its callback is `onStateChange` rather than `render` (ADR-0039): "render"
+ * why its callback is `onStateChange` rather than `render`: "render"
  * is reserved for committing a view into a container, and this callback is free
  * to do something else entirely.
  *

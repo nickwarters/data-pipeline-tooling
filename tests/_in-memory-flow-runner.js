@@ -155,13 +155,13 @@ export function createInMemoryFlowRunner(state, opts = {}) {
   let caseLoader = null;
   /**
    * The runner stands in for the store: it is the single Answer owner, exactly
-   * as the route is in the browser (#510). The loader hands its Answers over
+   * as the route is in the browser. The loader hands its Answers over
    * once, and every later edit goes through one writer.
    * @type {Record<string, import('../src/sharepoint-client.js').Answer>}
    */
   let answers = {};
   /**
-   * The Case Row, owned here for the same reason (#530): the loader hands it
+   * The Case Row, owned here for the same reason: the loader hands it
    * over once and the Appeal/amend transitions read and replace this copy, so
    * `CaseLoader.caseRow` is written only by `load()`.
    * @type {CaseRow | null}
@@ -169,7 +169,7 @@ export function createInMemoryFlowRunner(state, opts = {}) {
   let caseRow = null;
   /**
    * Where the app would have navigated. The runner has no `location`, and the
-   * action it drives no longer sniffs for one (#547): `completeCase` takes the
+   * action it drives no longer sniffs for one: `completeCase` takes the
    * navigation as a callback, so the harness records it and a flow can assert
    * that completing a Case leaves the Case page rather than merely tolerating
    * that it tried.
@@ -361,7 +361,7 @@ export function createInMemoryFlowRunner(state, opts = {}) {
   }
 
   /**
-   * The route's own Appeal persistence, driven headlessly (#532). The runner
+   * The route's own Appeal persistence, driven headlessly. The runner
    * used to carry a second copy of it — the same clock and id stamping, the
    * same transactional/append fork onto the SaveQueue — which meant the flow
    * suite could pass while the real page wrote something else.
@@ -443,7 +443,7 @@ export function createInMemoryFlowRunner(state, opts = {}) {
 
 /**
  * Completing a Case persists lifecycle fields that the route now folds back into
- * its store as a Case Row patch (#557) — it no longer relies on `completeCase`
+ * its store as a Case Row patch — it no longer relies on `completeCase`
  * navigating to the dashboard to make the stale row unobservable. The runner has
  * no browser to navigate: it records the navigation rather than performing it,
  * so a flow may keep acting on the Case afterwards. It returns the persisted
@@ -451,10 +451,10 @@ export function createInMemoryFlowRunner(state, opts = {}) {
  * row as stored.
  *
  * @param {CaseLoader} loader
- * @param {CaseRow | null} caseRow The runner-owned Case Row (#530).
+ * @param {CaseRow | null} caseRow The runner-owned Case Row.
  * @param {Record<string, import('../src/sharepoint-client.js').Answer>} answers
  * @param {(hash: string) => void} navigate Recorder standing in for the browser
- *   seam (#547).
+ *   seam.
  * @returns {Promise<Partial<CaseRow> | null>} The applied fields, or `null` if
  *   the transition was not permitted or the write failed.
  */

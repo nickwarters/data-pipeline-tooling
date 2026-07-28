@@ -117,7 +117,7 @@ test('amendOutcome: Controls edits on Completed, hidden otherwise', () => {
   );
 });
 
-test('summary: RP reportable-gated, RP Manager Completed-gated (ADR-0011 amend / ADR-0023)', () => {
+test('summary: RP reportable-gated, RP Manager Completed-gated', () => {
   const cfg = makeConfig();
   // Actions In Progress: Adviser reads it; their Manager does not yet.
   const actions = makeCase({ status: 'Actions In Progress' });
@@ -196,7 +196,7 @@ test('notes: reviewer edits until Completed, then read-only', () => {
   );
 });
 
-// --- Remediation tracking visibility (ADR-0024) ---
+// --- Remediation tracking visibility ---
 
 test('remediation: hidden for every viewer until actions are sent', () => {
   const cfg = makeConfig();
@@ -220,7 +220,7 @@ test('remediation: hidden for every viewer until actions are sent', () => {
   }
 });
 
-// --- Acceptance statements (issue #234) ---
+// --- Acceptance statements ---
 
 test('acceptance: the Adviser (Responsible Party) sees only Summary + Conversation', () => {
   const cfg = makeConfig();
@@ -293,7 +293,7 @@ test('most-permissive: Controls user who is also the Assigned Reviewer still edi
   );
 });
 
-// --- Remediation: question-level rows and the two audiences (#499) ---
+// --- Remediation: question-level rows and the two audiences ---
 
 test('remediation: hidden while In-progress even though the Reviewer has attached actions', () => {
   const cfg = makeConfig();
@@ -312,7 +312,7 @@ test('remediation: hidden while In-progress even though the Reviewer has attache
 
 test('remediation: visible from question-level remediation, with no actions-typed capture field declared', () => {
   // The store is `answer.remediationActions` (what the Issues tab writes), not
-  // an `actions`-typed Issue Capture Field — no Case Type declares one (#499).
+  // an `actions`-typed Issue Capture Field — no Case Type declares one.
   const cfg = makeConfig();
   assert.equal(cfg.captureGroups, undefined);
   assert.equal(
@@ -350,7 +350,7 @@ test('remediation: a failed Answer with no remediation keeps the Section hidden'
   );
 });
 
-test('remediation: hidden when the remediation is on a Question that has left the catalogue (#502)', () => {
+test('remediation: hidden when the remediation is on a Question that has left the catalogue', () => {
   // The gate and the tab's rows are the same question asked once. Reading the
   // Answers blob alone gave a strict superset, so a Case whose only remediation
   // was stranded on a deprecated (or newly inapplicable, or no-longer-failing)
@@ -455,7 +455,7 @@ test('remediation: never visible to the none role', () => {
   );
 });
 
-// --- remediationAudience (#499) ---
+// --- remediationAudience ---
 
 test('remediationAudience: reviewer-side roles get the status controls', () => {
   for (const role of /** @type {const} */ ([
@@ -517,7 +517,7 @@ test('remediationAudience: every Role in the matrix is classified deliberately',
   }
 });
 
-// --- Conversation: the Responsible Party Manager participates (#499) ---
+// --- Conversation: the Responsible Party Manager participates ---
 
 test('conversation: the Responsible Party Manager posts, like the Responsible Party', () => {
   const cfg = makeConfig();
@@ -537,7 +537,7 @@ test('conversation: the Responsible Party Manager posts, like the Responsible Pa
 
 test('conversation: the Manager reaching the Remediation tab has a Conversation to open', () => {
   // The responsible-party rendering points at the Conversation, so the roles it
-  // covers must be able to see one (#499).
+  // covers must be able to see one.
   const cfg = makeConfig();
   const c = makeCaseWithRemediation({ status: 'Actions In Progress' });
   for (const role of /** @type {const} */ ([

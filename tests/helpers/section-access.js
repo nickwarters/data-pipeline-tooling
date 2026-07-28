@@ -22,7 +22,7 @@ import {
  * The Case's resolved Question catalogue, holding the one Question the fixture
  * Cases below answer. The Remediation cells ask whether the tab would render a
  * row, which is a question about the catalogue and not only the Answers blob
- * (#502) — so a Case that carries remediation needs its Question to exist.
+ * — so a Case that carries remediation needs its Question to exist.
  *
  * @type {import('../../src/sharepoint-client.js').QuestionDefinition[]}
  */
@@ -103,7 +103,7 @@ export function makeConfig(overrides = {}) {
 /**
  * A Case whose failed Answer carries a Reviewer-selected Remediation Action —
  * the store the Issues tab actually writes (`answer.remediationActions`), and so
- * the one the Remediation Section's visibility gate reads (#499).
+ * the one the Remediation Section's visibility gate reads.
  * @param {Partial<CaseRow>} [overrides]
  * @returns {CaseRow}
  */

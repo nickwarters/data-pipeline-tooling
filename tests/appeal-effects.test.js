@@ -33,7 +33,7 @@ function harness() {
   /**
    * The Case Rows the effects produced, read back where the single owner keeps
    * them: the store. There is no second channel — the loader's copy is not
-   * updated, and nothing re-reads it (#530).
+   * updated, and nothing re-reads it.
    * @returns {any[]}
    */
   const storeRows = () => dispatched.map((action) => action.snapshot.caseRow);
@@ -87,7 +87,7 @@ test('raising an Appeal stamps the injected clock and id, and enqueues only appe
   assert.deepEqual(storeRows()[0].appeals, writes[0].value);
 });
 
-test('rejecting an Appeal writes appeals alone; agreeing writes the corrected columns atomically (ADR-0019)', () => {
+test('rejecting an Appeal writes appeals alone; agreeing writes the corrected columns atomically', () => {
   const raised = harness();
   raised.effects.raise({
     caseRow: CASE_ROW,
@@ -243,7 +243,7 @@ test('round trip: raise, resolve and amend land on the persisted row through the
     saveQueue,
     caseId: () => 'c1',
     // The store is the owner, so the row each transition produces comes back
-    // through the dispatch — the way the route's reducer receives it (#530).
+    // through the dispatch — the way the route's reducer receives it.
     dispatch: (action) => {
       row = /** @type {any} */ (action.snapshot).caseRow;
     },
@@ -277,7 +277,7 @@ test('round trip: raise, resolve and amend land on the persisted row through the
   await saveQueue.whenIdle();
   assert.equal(persisted().appeals?.[0].state, 'resolved');
   // The resolution and the corrected-reporting columns are on the row together
-  // — the agreed branch's single atomic PATCH (ADR-0019).
+  // — the agreed branch's single atomic PATCH.
   assert.equal(persisted().effectiveOutcome, 'pass');
   assert.equal(persisted().effectiveHadRemediation, true);
   assert.equal(persisted().outcomeOverridden, true);

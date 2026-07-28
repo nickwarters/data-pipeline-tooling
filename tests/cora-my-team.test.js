@@ -282,7 +282,7 @@ test('my team slice: resolves reviewer display names and falls back to account i
   assert.equal(Object.hasOwn(slice.initialState, 'myTeamCaseSources'), false);
 });
 
-test('#517 my team slice: the adapter mount lifetime, not a page latch, suppresses a late load', async () => {
+test('my team slice: the adapter mount lifetime, not a page latch, suppresses a late load', async () => {
   /** @type {(rows: any[]) => void} */
   let releaseCases = () => {};
   const pending = new Promise((resolve) => {
@@ -330,7 +330,7 @@ test('my team reducer: an unhandled action returns the same state and chrome sur
   assert.strictEqual(failed.routes.myTeam.rows, initial.routes.myTeam.rows);
 });
 
-test('#516 my team view: clicking a column header dispatches the workload table sort action', () => {
+test('my team view: clicking a column header dispatches the workload table sort action', () => {
   const slice = createRouteSlice({}, context(), {
     fetchCases: async () => [],
     now: () => new Date('2026-07-24T00:00:00.000Z'),
@@ -365,7 +365,7 @@ test('#516 my team view: clicking a column header dispatches the workload table 
   ]);
 });
 
-test('my team slice: a client-less mount with a mount signal still degrades to the load-failed message (#545)', async () => {
+test('my team slice: a client-less mount with a mount signal still degrades to the load-failed message', async () => {
   const ctx = context(null);
   const controller = new AbortController();
   /** @type {any[]} */

@@ -26,7 +26,7 @@ const bank = await loadBank('./banks/complaints.txt');
 const config = {
   listName: 'Cases-Complaints',
   // No `eligibleGroups`: `Reviewers - Complaints` is DERIVED from the registry
-  // display name (#527), and restating it here made it a second, independent
+  // display name, and restating it here made it a second, independent
   // grant. Renaming the registry entry moved the three derived names but left
   // this copy still granting, so anyone left in the decommissioned SharePoint
   // group kept the access the rename was supposed to move. `eligibleGroups` is
@@ -41,8 +41,8 @@ const config = {
     { key: 'customerName', label: 'Customer name' },
     { key: 'complaintDate', label: 'Complaint date' },
   ],
-  // Config-only GRID-5 demonstration: a single-Case-Type table gains this
-  // visible column without a page or renderer edit.
+  // Config-only: a single-Case-Type table gains this visible column without a
+  // page or renderer edit.
   caseTableColumns: [
     {
       key: 'responsibleParty',

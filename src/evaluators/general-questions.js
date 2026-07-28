@@ -38,7 +38,7 @@ export function generalAnswerKey(fieldKey) {
  * Resolve where a Case Type's General Questions sit relative to its Question
  * Groups. The single interpreter of `config.generalQuestionsPlacement` — the
  * Review tab and the Summary roll-up must not read the raw config value, which
- * is how the two used to normalise it differently (#522).
+ * is how the two used to normalise it differently.
  *
  * Anything other than `'before'` resolves to `'after'`, including `undefined`:
  * the default is after, and an invalid value must not produce a third layout.

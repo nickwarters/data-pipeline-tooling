@@ -315,7 +315,7 @@ test('remediationComplete: vacuously true when the Case carries no remediation',
 test('the gate treats an absent Answers map as no remediation, never as resolved', () => {
   // The gate runs on every render, including one where the store has not
   // handed its Answers over yet: an absent map must read as "nothing to
-  // resolve", the same as an empty one — and must not throw (#497).
+  // resolve", the same as an empty one — and must not throw.
   assert.deepEqual(
     remediationRows(CATALOGUE, /** @type {any} */ (undefined)),
     []

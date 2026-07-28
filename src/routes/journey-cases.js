@@ -19,7 +19,7 @@ export function register(
     // List-scope Journey Owner capability: only a user who
     // owns at least one Case Type as a Journey Owner may see this view.
     // The bounce replaces rather than pushes: a pushed entry would leave
-    // Back returning the user to the route that just bounced them (#519).
+    // Back returning the user to the route that just bounced them.
     guard: () => {
       if (context.journeyCaseSources.length > 0) return true;
       redirectTo('#/');

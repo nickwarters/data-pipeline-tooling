@@ -115,7 +115,7 @@ test('complaints: its General Questions are shared ones, resolved to the catalog
 
 test('complaints: every capture field is a supported type with options for choices', () => {
   // The closed `CaptureField.type` set. `'actions'` was removed with the
-  // per-action Remediation record (#497): nothing renders it, nothing validates
+  // per-action Remediation record: nothing renders it, nothing validates
   // it, and declaring one silently produced a text box writing a string into a
   // slot typed `RemediationAction[]`.
   const allowed = new Set(['text', 'textarea', 'select', 'radio', 'person']);
@@ -168,14 +168,14 @@ test('complaints: sections enable the appeal/amend Section set', () => {
   ]);
 });
 
-test('complaints: routes appeal-raising to the Journey Owner, resolved by Controls (ADR-0027)', () => {
+test('complaints: routes appeal-raising to the Journey Owner, resolved by Controls', () => {
   assert.deepEqual(config.appeal, {
     raisedBy: 'journeyOwner',
     resolvedBy: 'controls',
   });
 });
 
-test('complaints: declares the Outcome vocabulary for the hand-set Amend Outcome verdict (ADR-0026)', () => {
+test('complaints: declares the Outcome vocabulary for the hand-set Amend Outcome verdict', () => {
   const ids = (config.outcomeOptions ?? []).map((o) => o.id);
   assert.deepEqual(ids, ['pass', 'refer', 'fail']);
   for (const option of config.outcomeOptions ?? []) {

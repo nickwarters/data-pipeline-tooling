@@ -117,7 +117,7 @@ export function createRouteSlice(
       const currentUserId = tools.context.chrome.currentUser.id;
       if (!client || !currentUserId) return;
       // The signal cancels the per-source fan-out on navigation; the
-      // isActive() guard still stops a late dispatch (#545 / #517).
+      // isActive() guard still stops a late dispatch.
       void listAcrossSources(
         withAbortSignal(client, tools.signal),
         tools.context.caseSources,

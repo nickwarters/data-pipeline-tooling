@@ -12,7 +12,7 @@ import {
 
 // Capability: bank hashes and versioned exports.
 
-// --- getExportHash (ADR-0021 Step 3) ---
+// --- getExportHash ---
 
 test('MockSharePointClient: getExportHash returns the configured hash for a known slug', async () => {
   const client = new MockSharePointClient({
@@ -30,7 +30,7 @@ test('MockSharePointClient: getExportHash returns null when slug has no configur
   assert.equal(hash, null);
 });
 
-test('MockSharePointClient: getVersionedExport returns the matching export for a known hash (ADR-0021 Step 4)', async () => {
+test('MockSharePointClient: getVersionedExport returns the matching export for a known hash', async () => {
   const client = new MockSharePointClient({
     lists: { [LIST]: CASES },
     personas: PERSONAS,
@@ -43,7 +43,7 @@ test('MockSharePointClient: getVersionedExport returns the matching export for a
   assert.deepEqual(result, VERSIONED_EXPORT);
 });
 
-test('MockSharePointClient: getVersionedExport returns null for an unknown hash (ADR-0021 Step 4)', async () => {
+test('MockSharePointClient: getVersionedExport returns null for an unknown hash', async () => {
   const client = makeClient();
   const result = await client.getVersionedExport(
     'example-review',
@@ -52,7 +52,7 @@ test('MockSharePointClient: getVersionedExport returns null for an unknown hash 
   assert.equal(result, null);
 });
 
-test('MockSharePointClient: getVersionedExport returns null when no versionedExports configured (ADR-0021 Step 4)', async () => {
+test('MockSharePointClient: getVersionedExport returns null when no versionedExports configured', async () => {
   const client = makeClient();
   const result = await client.getVersionedExport(
     'example-review',

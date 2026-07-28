@@ -15,7 +15,7 @@ import { h } from '../../lib/html.js';
 /**
  * Per-Question-Group answered/total progress strip. (Renamed from
  * `cora-section-progress` — "section" is reserved for the role-gated tab
- * areas, see #390.)
+ * areas.)
  *
  * @param {GroupProgressProps} props
  * @returns {Node[]}

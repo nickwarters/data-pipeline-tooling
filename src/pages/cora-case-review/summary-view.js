@@ -35,7 +35,7 @@ import { GENERAL_QUESTIONS_TITLE } from './general-questions-view.js';
  * @property {import('../../sharepoint-client.js').OutcomeOption[]} outcomeOptions
  * @property {Required<import('../../sharepoint-client.js').SectionLabels>} [sectionHeadings] Resolved section headings; defaults to the standard copy so the component stays usable standalone.
  * @property {import('../../sharepoint-client.js').GeneralQuestionField[]} [generalQuestions] The Case Type's General Questions, rolled up read-only. Display only — they reach no evaluator here either.
- * @property {import('../../evaluators/general-questions.js').GeneralQuestionsPlacement} [generalQuestionsPlacement] Which side of the configured Summary blocks the roll-up sits on. Already resolved by the caller via `resolveGeneralQuestionsPlacement()` (#522) — this view never sees the raw config value, so it cannot disagree with the Review tab. 'after' when absent, so the view stays usable standalone.
+ * @property {import('../../evaluators/general-questions.js').GeneralQuestionsPlacement} [generalQuestionsPlacement] Which side of the configured Summary blocks the roll-up sits on. Already resolved by the caller via `resolveGeneralQuestionsPlacement()` — this view never sees the raw config value, so it cannot disagree with the Review tab. 'after' when absent, so the view stays usable standalone.
  * @property {'reviewer' | 'responsibleParty'} [audience] Which side is reading, from `remediationAudience()` — the same value the Remediation tab gets. It selects one thing only: whether the remediation roll-up shows each resolution's details / justification. Absent means `responsibleParty`, the narrower rendering, so a caller that does not say fails closed.
  */
 
@@ -68,8 +68,8 @@ export function summaryView(props) {
         outcomeOptions: props.outcomeOptions,
       });
   // A CSS hook for the `.cora-summary > .cora-outcome` contract, nothing more.
-  // Was an unregistered `cora-outcome` element via raw `createElement` until
-  // #514 retired that pattern — see the note at the top of section-panels.js.
+  // See the note at the top of section-panels.js for why it is a class rather
+  // than a `cora-outcome` element.
   const outcome = h('div', { className: 'cora-outcome' }, outcomeNodes);
 
   /** @type {Node[]} */
@@ -170,7 +170,7 @@ function renderIssues(props) {
  *
  * The resolution's *details / justification* follows the **audience**, exactly
  * as the Remediation tab does: withheld from the `responsibleParty` side, whose
- * rendering ADR-0037 strips of the Reviewer's record-of-truth fields, and shown
+ * rendering strips the Reviewer's record-of-truth fields, and shown
  * to reviewer-side observers, whose `!canResolve` branch on the tab renders it.
  *
  * @param {SummaryProps} props
@@ -339,7 +339,7 @@ function renderGeneralQuestions(props) {
  *
  * Every General Question type — `text`, `textarea`, `select`, `radio` (see
  * `GENERAL_QUESTION_TYPES`) — writes a string through `buildCaptureControl`, so
- * a non-string value reads as unanswered rather than being coerced (#494).
+ * a non-string value reads as unanswered rather than being coerced.
  * @param {Answer | undefined} answer
  * @returns {string}
  */

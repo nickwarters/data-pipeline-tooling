@@ -103,7 +103,7 @@ test('an absent placement resolves to the documented default, after', () => {
 });
 
 test('an out-of-vocabulary placement coerces to after rather than a third layout', () => {
-  // Deliberate (#522): a typo'd Case Type value renders beneath the Question
+  // Deliberate: a typo'd Case Type value renders beneath the Question
   // Groups instead of failing to load. `validateGeneralQuestions()` is where a
   // loud rejection would go if a third legal placement is ever added.
   assert.equal(

@@ -95,7 +95,7 @@ test('journey cases route: redirects a non-Journey-Owner without loading the pag
   await registration
     .handlerFor('#/journey-cases')
     .mount(document.createElement('main'), {});
-  // Deliberate behaviour change (#519): the bounce replaces the history entry
+  // Deliberate behaviour change: the bounce replaces the history entry
   // instead of pushing one, so Back does not return the ineligible user to the
   // route that just bounced them. Where it bounces to is unchanged.
   assert.deepEqual(replacedUrls, ['/SitePages/app.aspx#/']);

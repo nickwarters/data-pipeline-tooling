@@ -140,7 +140,7 @@ test('team cases view renders the standard Case columns, the Case Type additions
     { dispatch: () => {} }
   );
 
-  // #542 centralised this table's `rowClass` on the shared
+  // This table's `rowClass` is centralised on the shared
   // `overdueCaseRowClass`, so pin what it renders here too — otherwise only the
   // Journey Cases test fails when the shared helper is broken, and Team Cases
   // loses its overdue styling silently. Sorted Reference-descending, so `c2`
@@ -165,7 +165,7 @@ test('team cases view renders the standard Case columns, the Case Type additions
 
   location.hash = '';
   // This table opens the Case, so `Open ${reference}` is the right name and
-  // stays the default (#541).
+  // stays the default.
   const open = getByRole(view, 'button', { name: 'Open Case c1' });
   assert.equal(open.className, 'cora-case-open-btn');
   open.dispatchEvent(/** @type {any} */ ({ type: 'click' }));

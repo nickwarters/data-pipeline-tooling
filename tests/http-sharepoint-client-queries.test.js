@@ -270,7 +270,7 @@ test('HttpSharePointClient: listCases without overdue filter omits DueDate condi
   );
 });
 
-test('HttpSharePointClient: listCases with effectiveOutcome filters server-side on EffectiveOutcome (ADR-0019)', async () => {
+test('HttpSharePointClient: listCases with effectiveOutcome filters server-side on EffectiveOutcome', async () => {
   const { fetch, calls } = makeFetch([
     {
       when: (c) => c.method === 'GET',
@@ -295,7 +295,7 @@ test('HttpSharePointClient: listCases with effectiveOutcome filters server-side 
   );
 });
 
-test('HttpSharePointClient: listCases with outcomeOverridden filters on the OutcomeOverridden flag (ADR-0019)', async () => {
+test('HttpSharePointClient: listCases with outcomeOverridden filters on the OutcomeOverridden flag', async () => {
   const { fetch, calls } = makeFetch([
     {
       when: (c) => c.method === 'GET',
@@ -370,7 +370,7 @@ test('HttpSharePointClient: listCases with assignedReviewerManager filters serve
   );
 });
 
-// --- CompletedAt window filter (ADR-0031 §2) ---
+// --- CompletedAt window filter ---
 
 test('HttpSharePointClient: listCases with a CompletedAt window leads with the indexed date column', async () => {
   const { fetch, calls } = makeFetch([
@@ -406,7 +406,7 @@ test('HttpSharePointClient: listCases with a CompletedAt window leads with the i
   const filterExpr = url.slice(url.indexOf('$filter='));
   assert.ok(
     filterExpr.indexOf('CompletedAt') < filterExpr.indexOf('Status eq'),
-    'the selective CompletedAt predicate leads Status (ADR-0031 §2)'
+    'the selective CompletedAt predicate leads Status'
   );
 });
 
@@ -434,10 +434,7 @@ test('HttpSharePointClient: countCases sums a bounded CompletedAt day-slice', as
 
   assert.equal(n, 42);
   const url = decodeURIComponent(calls[0].url);
-  assert.ok(
-    !url.includes('$count'),
-    'SharePoint SE has no $count segment (issue #486)'
-  );
+  assert.ok(!url.includes('$count'), 'SharePoint SE has no $count segment');
   assert.ok(url.includes('$select=Id'), 'a count reads the Id column only');
   assert.ok(url.includes("CompletedAt ge '2026-07-02T00:00:00.000Z'"));
   assert.ok(url.includes("CompletedAt lt '2026-07-03T00:00:00.000Z'"));
@@ -465,7 +462,7 @@ test('HttpSharePointClient: listCases without a CompletedAt window omits the Com
   assert.ok(!url.includes('CompletedAt'), 'no CompletedAt when unbounded');
 });
 
-// --- Action Centre: countCases, paging, reason flags (issue #287) ---
+// --- Action Centre: countCases, paging, reason flags ---
 
 test('HttpSharePointClient: countCases counts an Id-only read, never the unroutable $count segment', async () => {
   const { fetch, calls } = makeFetch([
@@ -488,7 +485,7 @@ test('HttpSharePointClient: countCases counts an Id-only read, never the unrouta
   const url = decodeURIComponent(calls[0].url);
   assert.ok(
     !url.includes('$count'),
-    'SharePoint SE answers /items/$count with "Cannot find a resource" (#486)'
+    'SharePoint SE answers /items/$count with "Cannot find a resource"'
   );
   assert.ok(url.includes('$select=Id'), 'only the Id column crosses the wire');
   assert.ok(url.includes('$top=5000'), 'pages at the List View Threshold');

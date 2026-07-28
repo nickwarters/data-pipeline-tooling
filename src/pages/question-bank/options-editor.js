@@ -18,7 +18,7 @@ export const MAX_OPTION_LENGTH = 250;
  * - single/multi → the question's own `options`; both list and mapping editable.
  *
  * The universal N/A never appears here: it is offered to the Reviewer on every
- * question but is not authorable and never maps to an Outcome (#390 Part 2).
+ * question but is not authorable and never maps to an Outcome.
  *
  * @param {any} question
  * @param {import('../../sharepoint-client.js').OutcomeOption[]} outcomeOptions

@@ -8,7 +8,7 @@ import { isolateBrowserGlobals } from './helpers/browser-globals.js';
 
 isolateBrowserGlobals();
 
-test('the loader holds its loading state as plain fields, not signals (#529)', () => {
+test('the loader holds its loading state as plain fields, not signals', () => {
   const loader = new CaseLoader({
     client: /** @type {any} */ ({}),
     saveQueue: /** @type {any} */ ({ enqueue() {} }),
@@ -88,7 +88,7 @@ test('toStoreSnapshot: the loader hands over Answers and the derived applicable 
   );
 });
 
-test('CaseLoader exposes no Answer mutation surface (#510)', () => {
+test('CaseLoader exposes no Answer mutation surface', () => {
   // The store is the single Answer owner: the loader loads, and the route's
   // answer-actions are the only writers.
   const loader = new CaseLoader({
@@ -116,7 +116,7 @@ test('CaseLoader exposes no Answer mutation surface (#510)', () => {
   assert.equal('answersSignal' in loader, false);
 });
 
-// --- exportHash loading (ADR-0021 Step 3) ---
+// --- exportHash loading ---
 
 test('CaseLoader.load() calls getExportHash with the case type slug and stores it as exportHash', async () => {
   const loader = new CaseLoader({
@@ -242,7 +242,7 @@ test('CaseLoader.load() stores null exportHash when getExportHash returns null',
   assert.equal(loader.exportHash, null);
 });
 
-// --- versioned catalogue loading (ADR-0021 Step 4) ---
+// --- versioned catalogue loading ---
 
 /** Minimal stub client for Step 4 tests. */
 function makeStep4Client({
@@ -296,7 +296,7 @@ const versionedCatalogue = [
   },
 ];
 
-test('CaseLoader.load() uses versioned catalogue for Completed Case with questionBankVersion (ADR-0021 Step 4)', async () => {
+test('CaseLoader.load() uses versioned catalogue for Completed Case with questionBankVersion', async () => {
   const loader = new CaseLoader({
     client: makeStep4Client({
       status: 'Completed',
@@ -327,7 +327,7 @@ test('CaseLoader.load() uses versioned catalogue for Completed Case with questio
   );
 });
 
-test('CaseLoader.load(): Actions In Progress Case freezes on the versioned catalogue — no reopen once reportable (ADR-0023)', async () => {
+test('CaseLoader.load(): Actions In Progress Case freezes on the versioned catalogue — no reopen once reportable', async () => {
   const loader = new CaseLoader({
     client: makeStep4Client({
       status: 'Actions In Progress',
@@ -345,7 +345,7 @@ test('CaseLoader.load(): Actions In Progress Case freezes on the versioned catal
 
   await loader.load();
 
-  // The reportable milestone (ADR-0023) freezes the bank as-reviewed: an
+  // The reportable milestone freezes the bank as-reviewed: an
   // 'Actions In Progress' Case loads the versioned snapshot exactly like a
   // Completed one, so a Question added to the live bank cannot reopen it.
   const ids = new Set(loader.catalogue.map((q) => q.id));
@@ -482,7 +482,7 @@ test('CaseLoader.load(): versioned catalogue carries labelIds when present', asy
   assert.deepEqual(loader.catalogue[0].labelIds, ['lbl-a']);
 });
 
-test('CaseLoader.load(): missing versioned file falls back to live catalogue + versionWarning (ADR-0021 Step 4)', async () => {
+test('CaseLoader.load(): missing versioned file falls back to live catalogue + versionWarning', async () => {
   const loader = new CaseLoader({
     client: makeStep4Client({
       status: 'Completed',
@@ -496,7 +496,7 @@ test('CaseLoader.load(): missing versioned file falls back to live catalogue + v
   });
 
   // A stamped-but-unpublished version is a broken publish, and the banner only
-  // reaches whoever opens the Case. The log is the operator's copy (#513).
+  // reaches whoever opens the Case. The log is the operator's copy.
   const originalError = console.error;
   /** @type {unknown[]} */
   const logged = [];
@@ -520,7 +520,7 @@ test('CaseLoader.load(): missing versioned file falls back to live catalogue + v
   assert.match(String(logged[0]), /^\[CORA\] /);
 });
 
-test('CaseLoader.load(): In-progress Case loads live catalogue; versionWarning stays null (ADR-0021 Step 4)', async () => {
+test('CaseLoader.load(): In-progress Case loads live catalogue; versionWarning stays null', async () => {
   const loader = new CaseLoader({
     client: makeStep4Client({ status: 'In-progress' }),
     saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
@@ -540,7 +540,7 @@ test('CaseLoader.load(): In-progress Case loads live catalogue; versionWarning s
   );
 });
 
-test('CaseLoader.load(): Completed Case without questionBankVersion falls back to live (backward compat, ADR-0021 Step 4)', async () => {
+test('CaseLoader.load(): Completed Case without questionBankVersion falls back to live (backward compat)', async () => {
   const loader = new CaseLoader({
     client: makeStep4Client({
       status: 'Completed',
@@ -563,7 +563,7 @@ test('CaseLoader.load(): Completed Case without questionBankVersion falls back t
   );
 });
 
-// --- Case Type sectionLabels resolution (MAINT-11) ---
+// --- Case Type sectionLabels resolution ---
 
 /** @param {string} caseType */
 function makeLabelsLoader(caseType) {
@@ -610,7 +610,7 @@ test('CaseLoader.load(): a Case Type without sectionLabels keeps the defaults', 
 
 test('CaseLoader.load(): resolves a Case Type sectionLabels override into labels and headings', async () => {
   // No live Case Type declares a sectionLabels override (stress-review, which
-  // did, was retired in #383). Register a fixture importer that carries the
+  // did, has been retired). Register a fixture importer that carries the
   // demonstrative { questions: 'Assessment' } override for this test.
   const slug = 'section-labels-fixture';
   CASE_TYPE_IMPORTERS[slug] = async () => ({
@@ -638,7 +638,7 @@ test('CaseLoader.load(): resolves a Case Type sectionLabels override into labels
   }
 });
 
-test('CaseLoader.load(): a pre-#390 versioned export maps its category to questionGroup', async () => {
+test('CaseLoader.load(): a pre-rename versioned export maps its category to questionGroup', async () => {
   // Exports published before the two-level grouping rename carry no
   // `questionGroup` key, and their `category` meant the inner grouping.
   const loader = new CaseLoader({
@@ -672,7 +672,7 @@ test('CaseLoader.load(): a pre-#390 versioned export maps its category to questi
   assert.equal(loader.catalogue[0].category, undefined);
 });
 
-test('CaseLoader.load(): a #390 versioned export keeps category and questionGroup distinct', async () => {
+test('CaseLoader.load(): a post-rename versioned export keeps category and questionGroup distinct', async () => {
   const loader = new CaseLoader({
     client: makeStep4Client({
       status: 'Completed',

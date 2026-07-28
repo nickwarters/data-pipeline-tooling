@@ -91,9 +91,9 @@ test('permissions.caseTypes: names every manifest slug so its display name and d
   );
 });
 
-test('case types: no config module restates its display name — the registry is the one copy (#527)', async () => {
-  // #508 hoisted the permissions copy into the registry; #527 deleted the
-  // config copy, so there is nothing left to drift. A config that restated the
+test('case types: no config module restates its display name — the registry is the one copy', async () => {
+  // The permissions copy was hoisted into the registry and the config copy
+  // deleted, so there is nothing left to drift. A config that restated the
   // name would let the capability side and the eligibility side derive
   // DIFFERENT SharePoint group names again.
   for (const [slug, importer] of Object.entries(CASE_TYPE_IMPORTERS)) {
@@ -107,7 +107,7 @@ test('case types: no config module restates its display name — the registry is
   }
 });
 
-test('case types: the registry names every manifest slug, so displayNameFor never comes back short (#527)', () => {
+test('case types: the registry names every manifest slug, so displayNameFor never comes back short', () => {
   for (const slug of Object.keys(CASE_TYPE_IMPORTERS)) {
     const name = displayNameFor(slug);
     assert.ok(

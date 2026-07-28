@@ -72,7 +72,7 @@ export class HttpSharePointClient {
     // There is no default Case list: every Case read/write must name its list
     // explicitly via `opts.listName` (a Case Type's declared `listName`), so a
     // caller that forgets fails loudly rather than silently hitting one list.
-    // Environment scoping (ADR-0033): the prefix is applied centrally in
+    // Environment scoping: the prefix is applied centrally in
     // _listItemUrl/_listItemsUrl so every list access — including per-Case-Type
     // `opts.listName` overrides — lands in the environment's lists. Empty for prod.
     this._listPrefix = opts.listPrefix ?? '';
@@ -136,7 +136,7 @@ export class HttpSharePointClient {
       if (data === null) {
         // The confirmation re-read belongs to the write, not to whoever asked
         // for it: it is deliberately re-scoped to the list name alone so no
-        // caller-supplied signal can cancel half of a PATCH (#545).
+        // caller-supplied signal can cancel half of a PATCH.
         const row = await this.getCase(id, {
           listName: this._requireListName(opts),
         });
@@ -196,14 +196,14 @@ export class HttpSharePointClient {
    *
    * SharePoint Subscription Edition's REST service is OData **v3** and has no
    * `$count` segment — `…/items/$count` answers "Cannot find a resource for the
-   * request $count" (issue #486). The supported way to count a *filtered* set is
+   * request $count". The supported way to count a *filtered* set is
    * to read the matching rows and count them, so this reads `$select=Id` only:
    * the same indexed `$filter` as before, one 4-byte column per row, and no
    * Answers/Conversation/Details blob crosses the wire.
    *
    * The read pages at the List View Threshold and follows `odata.nextLink`, so
    * the cost scales with the size of the *matched* set, not the list. Every
-   * caller counts an ADR-0031-bounded slice (an Action Centre reason group, a
+   * caller counts an already-bounded slice (an Action Centre reason group, a
    * completed day-window, one Reviewer's in-progress Cases) for exactly that
    * reason — an unbounded count over a large list would walk every page.
    *
@@ -224,8 +224,8 @@ export class HttpSharePointClient {
   }
 
   /**
-   * Read the shared Roadmap list. `_listItemsUrl` applies ADR-0033's
-   * environment prefix, so UAT reads `uat_Roadmap` without branching here.
+   * Read the shared Roadmap list. `_listItemsUrl` applies the environment
+   * prefix, so UAT reads `uat_Roadmap` without branching here.
    *
    * @returns {Promise<RoadmapItem[]>}
    */
@@ -340,9 +340,9 @@ export class HttpSharePointClient {
   }
 
   /**
-   * Reads the content-hash from the current `{slug}.json` export envelope
-   *. Returns null when the file is absent or carries no `hash` field
-   * — never hard-fails so a missing export does not block completion.
+   * Reads the content-hash from the current `{slug}.json` export envelope.
+   * Returns null when the file is absent or carries no `hash` field — never
+   * hard-fails so a missing export does not block completion.
    *
    * @param {string} slug
    * @returns {Promise<string | null>}
@@ -412,7 +412,7 @@ export class HttpSharePointClient {
   }
 
   /**
-   * A GET. `signal` is the caller's mount lifetime (#545) and is omitted
+   * A GET. `signal` is the caller's mount lifetime and is omitted
    * entirely when absent, so a read issued without one produces byte-identical
    * `RequestInit` to before.
    *
@@ -525,7 +525,7 @@ export class HttpSharePointClient {
   /**
    * Wraps fetch with 429 throttle handling. Honors `Retry-After` (seconds or HTTP-date).
    *
-   * A read carries the caller's mount lifetime on `init.signal` (#545), so the
+   * A read carries the caller's mount lifetime on `init.signal`, so the
    * retry loop rechecks it: without this, an abort during a long `Retry-After`
    * wait is only noticed by the next `fetch`. The sleep timer itself is still
    * not cancelled — `_sleep` is an injectable `(ms) => Promise<void>` that

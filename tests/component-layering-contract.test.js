@@ -1,7 +1,7 @@
 // @ts-check
 
 /**
- * Layering contract (MAINT-16, completed by the store inversion in #382): the
+ * Layering contract, completed by the store inversion: the
  * question bank editor subsystem must stay an optional bolt-on, not a
  * dependency anything under `src/components/` reaches into.
  *
@@ -85,7 +85,7 @@ test('layering: no component imports from the question-bank subsystem', () => {
 });
 
 /**
- * Page-independence layering (issue #384). Pages load on demand inside their
+ * Page-independence layering. Pages load on demand inside their
  * route's `mount()` via dynamic `import()`, guarded by the router error
  * boundary, so a broken page file cannot break the boot graph.
  *

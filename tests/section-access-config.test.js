@@ -27,7 +27,7 @@ test('none role → hidden everywhere', () => {
   }
 });
 
-// --- Case Type opt-out (per-Section config object, ADR-0016) ---
+// --- Case Type opt-out (per-Section config object) ---
 
 test('evaluateAccess: section omitted from the sections config object → hidden regardless of role', () => {
   const cfg = makeConfig({
@@ -123,7 +123,7 @@ test('evaluateAccess: conversation without allowMessagesWhen defaults to edit', 
   );
 });
 
-// --- showInSummary (ADR-0016) ---
+// --- showInSummary ---
 
 test('SUMMARY_SECTIONS lists the Sections that can appear as Summary blocks', () => {
   assert.deepEqual(

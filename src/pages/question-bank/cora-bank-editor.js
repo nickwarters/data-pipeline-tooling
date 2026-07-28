@@ -128,7 +128,7 @@ function masthead() {
 
 /**
  * The shell the editor shows before any bank has arrived, and when none can be
- * loaded at all (#521).
+ * loaded at all.
  * @param {string} heading
  * @param {string} detail
  * @param {HTMLElement|null} [action]
@@ -171,7 +171,7 @@ function describeFailures(failures) {
 }
 
 /**
- * The control that makes a named failure recoverable in place (#549). Before
+ * The control that makes a named failure recoverable in place. Before
  * this, the only way out of a transient blip on one artifact was reloading the
  * page, which re-fetches every bank — including the ones the curator may be
  * part-way through editing.
@@ -316,7 +316,7 @@ export function bankEditorView(state, tools) {
 export function createRouteSlice(_params, context, deps = {}) {
   const loadBanks = deps.loadBanks ?? loadQuestionBanks;
   let latestRoute = initialQuestionBankState();
-  // The mount lifetime comes from the adapter's tools, not a page-local latch (#517).
+  // The mount lifetime comes from the adapter's tools, not a page-local latch.
   /** @type {any|null} */
   let effectTools = null;
   const publish = async () => {
@@ -351,7 +351,7 @@ export function createRouteSlice(_params, context, deps = {}) {
   };
   let retryInFlight = false;
   /**
-   * Re-run the load for the failed slugs only (#549), and seat the result
+   * Re-run the load for the failed slugs only, and seat the result
    * through `bank/recovered`, which never overwrites a draft the curator holds.
    *
    * What to retry is read back out of the store — `dispatch()` returns the next
@@ -433,7 +433,7 @@ export function createRouteSlice(_params, context, deps = {}) {
       effectTools = tools;
       context.appEl.classList.add('cora-fullbleed');
       // The bank artifacts are fetched here, not at module evaluation, so
-      // importing this page performs no I/O (#521).
+      // importing this page performs no I/O.
       void loadBanks().then(
         ({ banks, failures }) => {
           if (!tools.isActive()) return;
@@ -461,7 +461,7 @@ export function createRouteSlice(_params, context, deps = {}) {
       tools.listen(document, 'keydown', key);
       if (simulatorEnabled()) {
         // The sample fan-out is a read across every Case source, so it carries
-        // the mount lifetime (#567). `loadSampleCases` already tolerates a
+        // the mount lifetime. `loadSampleCases` already tolerates a
         // per-source failure, which an abort now arrives as: navigating away
         // leaves the drawer's empty state rather than the editor failing.
         const readClient = withAbortSignal(context.client, tools.signal);

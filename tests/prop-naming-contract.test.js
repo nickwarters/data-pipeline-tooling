@@ -1,13 +1,13 @@
 // @ts-check
 
 /**
- * Prop-naming contract (#509).
+ * Prop-naming contract.
  *
  * `h()`'s `applyProp`/`removeProp` treat `on…` keys two different ways by
  * design (see `src/lib/html.js`): a camelCase `on[A-Z]` key that matches a
  * property the element declares is assigned as a *property*, and never becomes
  * a listener. That branch is the props-down/callbacks-up component contract
- * from #382 — but it means `onClick` and `onclick` are not interchangeable on a
+ * — but it means `onClick` and `onclick` are not interchangeable on a
  * `cora-*` host that happens to declare `onClick`.
  *
  * So the casing carries meaning, and these tests keep it honest:
@@ -26,7 +26,7 @@
  * nobody has written yet (`onpointerdown`, `onpaste`, `onscroll`) is covered
  * the day it is written. An earlier draft of this file matched eight
  * hard-coded event names, which let `onMouseEnter:` inside an `h()` call pass
- * clean — precisely the footgun #509 exists to close.
+ * clean — precisely the footgun this file exists to close.
  */
 
 import { readdirSync, readFileSync } from 'node:fs';
@@ -247,7 +247,7 @@ test('camelCase on[A-Z] props are component callbacks, never element props', () 
   assert.deepEqual(
     offenders,
     [],
-    'camelCase on[A-Z] is reserved for the props-down/callbacks-up component API (#382)'
+    'camelCase on[A-Z] is reserved for the props-down/callbacks-up component API'
   );
 });
 

@@ -37,7 +37,7 @@ function props(overrides = {}) {
   };
 }
 
-test('CASE-2 Questions view mounts every applicable Question Group in one grouped list', () => {
+test('Questions view mounts every applicable Question Group in one grouped list', () => {
   const questionsView = createQuestionPanelView();
   const node = questionsView.view(
     props({ answers: { q1: { value: 'Yes' }, q2: { value: 'No' } } })
@@ -62,7 +62,7 @@ test('CASE-2 Questions view mounts every applicable Question Group in one groupe
   );
 });
 
-test('CASE-2 Questions view renders a Question Group progress side panel that tracks answered/total', () => {
+test('Questions view renders a Question Group progress side panel that tracks answered/total', () => {
   const questionsView = createQuestionPanelView();
   const node = questionsView.view(props({ answers: { q1: { value: 'Yes' } } }));
 
@@ -87,7 +87,7 @@ test('CASE-2 Questions view renders a Question Group progress side panel that tr
   assert.ok(advancedRows[1].className.includes('complete'));
 });
 
-test('CASE-2 progress side panel jumps to a group and to the next unanswered question', () => {
+test('progress side panel jumps to a group and to the next unanswered question', () => {
   const questionsView = createQuestionPanelView();
   const node = questionsView.view(props({ answers: { q1: { value: 'Yes' } } }));
 
@@ -121,7 +121,7 @@ test('CASE-2 progress side panel jumps to a group and to the next unanswered que
   );
 });
 
-test('CASE-2 jump-to-next-unanswered is inert when every question is answered', () => {
+test('jump-to-next-unanswered is inert when every question is answered', () => {
   const questionsView = createQuestionPanelView();
   const node = questionsView.view(
     props({ answers: { q1: { value: 'Yes' }, q2: { value: 'No' } } })
@@ -132,7 +132,7 @@ test('CASE-2 jump-to-next-unanswered is inert when every question is answered', 
   );
 });
 
-test('CASE-2 Questions view renders category headings above their Question Groups when declared', () => {
+test('Questions view renders category headings above their Question Groups when declared', () => {
   const catalogue = [
     { ...question('q1', 'Identity'), category: 'Onboarding' },
     { ...question('q2', 'Conduct'), category: 'Onboarding' },
@@ -150,7 +150,7 @@ test('CASE-2 Questions view renders category headings above their Question Group
   );
 });
 
-test('CASE-2 Questions view stacks only sentence-length single-choice and Outcome options', () => {
+test('Questions view stacks only sentence-length single-choice and Outcome options', () => {
   for (const responseType of ['single-choice', 'outcome']) {
     const longChoice = {
       ...question(`long-${responseType}`, 'Identity'),
@@ -184,7 +184,7 @@ test('CASE-2 Questions view stacks only sentence-length single-choice and Outcom
   assert.equal(shortNode.querySelector('fieldset')?.className, 'cora-question');
 });
 
-test('CASE-2 Questions view memoises unchanged cards by rendered inputs', () => {
+test('Questions view memoises unchanged cards by rendered inputs', () => {
   const questionsView = createQuestionPanelView();
   const answer = { value: 'Yes' };
   const first = questionsView.view(props({ answers: { q1: answer } }));
@@ -203,7 +203,7 @@ test('CASE-2 Questions view memoises unchanged cards by rendered inputs', () => 
   assert.equal(questionsView.cacheSize, 0);
 });
 
-test('CASE-2 Questions view evicts cached cards for questions that become inapplicable', () => {
+test('Questions view evicts cached cards for questions that become inapplicable', () => {
   const questionsView = createQuestionPanelView();
   const catalogue = [question('q1', 'Identity'), question('q2', 'Conduct')];
   questionsView.view(props({ catalogue, questions: catalogue }));
@@ -214,7 +214,7 @@ test('CASE-2 Questions view evicts cached cards for questions that become inappl
   assert.equal(questionsView.cacheSize, 1);
 });
 
-test('CASE-2 answer re-renders preserve the focused native control without snapshots', () => {
+test('answer re-renders preserve the focused native control without snapshots', () => {
   const questionsView = createQuestionPanelView();
   const container = document.createElement('div');
   render(
@@ -237,7 +237,7 @@ test('CASE-2 answer re-renders preserve the focused native control without snaps
   assert.equal(document.activeElement, input);
 });
 
-test('CASE-2 question cards dispatch single and exclusive multi-choice Answers', () => {
+test('question cards dispatch single and exclusive multi-choice Answers', () => {
   /** @type {{questionId: string, value: string|string[]}[]} */
   const calls = [];
   const single = createQuestionPanelView().view(
@@ -298,7 +298,7 @@ test('CASE-2 question cards dispatch single and exclusive multi-choice Answers',
   );
 });
 
-test('CASE-2 question cards preserve remediation display and enforce read-only access', () => {
+test('question cards preserve remediation display and enforce read-only access', () => {
   /** @type {{questionId: string, value: string|string[]}[]} */
   const calls = [];
   const failing = {
@@ -343,7 +343,7 @@ test('CASE-2 question cards preserve remediation display and enforce read-only a
   );
 });
 
-test('CASE-2 real Questions view answers one of 500 Questions by rebuilding one card, not the list', (t) => {
+test('real Questions view answers one of 500 Questions by rebuilding one card, not the list', (t) => {
   const catalogue = Array.from({ length: 500 }, (_, index) =>
     question(
       `q-${String(index + 1).padStart(3, '0')}`,
@@ -371,7 +371,7 @@ test('CASE-2 real Questions view answers one of 500 Questions by rebuilding one 
   // the honest regression signal is "an answer costs a fraction of a cold
   // render" — and a fraction is the same number on a fast laptop and a loaded
   // CI box. The absolute 5 ms budget this replaced measured the hardware as
-  // much as the code (#534, #540): the same failure mode already fixed in
+  // much as the code: the same failure mode already fixed in
   // tests/question-bank-slice.test.js.
   //
   // A cold render — fresh view, fresh memo, every card built — is the cost of

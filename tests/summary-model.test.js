@@ -93,7 +93,7 @@ test('buildSummaryModel: excludes deprecated questions and unanswered scorable q
   assert.deepEqual(model.groupCounts, [{ group: 'A', pass: 1, fail: 0 }]);
 });
 
-test('buildSummaryModel: remediationActionCount sums selected actions + free-form across failed answers (issue #250)', () => {
+test('buildSummaryModel: remediationActionCount sums selected actions + free-form across failed answers', () => {
   const answers = /** @type {Record<string, Answer>} */ ({
     // failed, nothing selected but a free-form action → 1
     'q-open': { value: 'No', freeFormRemediation: 'Apologise to customer' },
@@ -107,7 +107,7 @@ test('buildSummaryModel: remediationActionCount sums selected actions + free-for
   assert.equal(model.remediationActionCount, 2);
 });
 
-test('buildSummaryModel: whitespace-only free-form remediation is not an action (#497)', () => {
+test('buildSummaryModel: whitespace-only free-form remediation is not an action', () => {
   // The Summary was the fourth reading of "carries remediation" and the only
   // untrimmed one: `answerRemediation` trims, so a single space in the box gave
   // the Reviewer "Remediation Actions: 1" and a blank bullet on the Summary
@@ -130,7 +130,7 @@ test('buildSummaryModel: remediationActionCount is 0 when there are no failures'
   assert.equal(buildSummaryModel(catalogue, answers).remediationActionCount, 0);
 });
 
-test('buildSummaryModel: failures list each failed Answer with its selected actions + free-form (issue #250)', () => {
+test('buildSummaryModel: failures list each failed Answer with its selected actions + free-form', () => {
   const answers = /** @type {Record<string, Answer>} */ ({
     'q-open': { value: 'No' }, // failed, nothing selected → no actions
     'q-needs': { value: 'Yes' },

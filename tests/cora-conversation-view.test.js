@@ -29,7 +29,7 @@ const CASE_ROW = {
   etag: 'v1',
 };
 
-test('CASE-3 conversation view renders messages and gates composition by access', () => {
+test('conversation view renders messages and gates composition by access', () => {
   /** @type {string[]} */
   const sent = [];
   const message = {
@@ -64,7 +64,7 @@ test('CASE-3 conversation view renders messages and gates composition by access'
   assert.equal(readOnly.querySelector('textarea'), null);
 });
 
-test('CASE-3 posting preserves JSON-blob PATCH, ETag, list routing, and queue refresh', async () => {
+test('posting preserves JSON-blob PATCH, ETag, list routing, and queue refresh', async () => {
   /** @type {any[]} */
   const calls = [];
   const saved = { ...CASE_ROW, etag: 'v2' };
@@ -118,7 +118,7 @@ test('CASE-3 posting preserves JSON-blob PATCH, ETag, list routing, and queue re
   ]);
 });
 
-test('CASE-7 posting leaves queue state untouched when the PATCH is rejected', async () => {
+test('posting leaves queue state untouched when the PATCH is rejected', async () => {
   let loads = 0;
   const result = await postConversationMessage({
     client: /** @type {any} */ ({
@@ -145,7 +145,7 @@ test('CASE-7 posting leaves queue state untouched when the PATCH is rejected', a
   assert.equal(loads, 0);
 });
 
-test('CASE-3 standalone page and reducer render store state without a custom element', () => {
+test('standalone page and reducer render store state without a custom element', () => {
   const state = {
     chrome: /** @type {any} */ ({}),
     routes: {
@@ -196,7 +196,7 @@ test('CASE-3 standalone page and reducer render store state without a custom ele
   );
 });
 
-test('CASE-3 refresh fetches the routed case', async () => {
+test('refresh fetches the routed case', async () => {
   /** @type {any[]} */
   const calls = [];
   const row = await refreshConversation({
@@ -213,7 +213,7 @@ test('CASE-3 refresh fetches the routed case', async () => {
   assert.deepEqual(calls, [['case-1', { listName: 'Example Cases' }]]);
 });
 
-test('#544 conversation page: Send posts the typed Message through the route’s own effect', async () => {
+test('conversation page: Send posts the typed Message through the route’s own effect', async () => {
   /** @type {any[]} */
   const patches = [];
   const saveQueue = {
@@ -284,9 +284,9 @@ test('#544 conversation page: Send posts the typed Message through the route’s
   );
 });
 
-test('#544 conversation page: the back button returns to My Reviews', () => {
+test('conversation page: the back button returns to My Reviews', () => {
   // Derive the state through the reducer rather than hand-writing the route
-  // slice: a literal drifts silently when the slice shape changes (#544).
+  // slice: a literal drifts silently when the slice shape changes.
   const slice = createRouteSlice(
     { id: 'case-1', caseType: 'example-review' },
     /** @type {any} */ ({
@@ -310,7 +310,7 @@ test('#544 conversation page: the back button returns to My Reviews', () => {
   assert.equal(location.hash, '#/my-reviews');
 });
 
-test('conversation slice: navigating away aborts the in-flight Case read with no error UI (#567)', async () => {
+test('conversation slice: navigating away aborts the in-flight Case read with no error UI', async () => {
   const controller = new AbortController();
   let aborted = false;
   /** @type {any[]} */

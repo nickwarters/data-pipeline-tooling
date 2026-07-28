@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * The **question-level Remediation resolution** model (#499).
+ * The **question-level Remediation resolution** model.
  *
  * A Reviewer attaches Remediation Actions to a *failed* Answer on the Issues
  * tab — either by ticking the Question Definition's configured actions
@@ -154,7 +154,7 @@ export function remediationRows(catalogue, answers) {
 }
 
 /**
- * **The** definition of "this Case carries remediation" (#502, #497): it has at
+ * **The** definition of "this Case carries remediation": it has at
  * least one row on the Remediation tab. Everything that turns on the question —
  * the **Send Actions** fork and its `hadRemediation` stamp, the Remediation
  * Section's visibility gate, the completion gate — reads it here, so a Case

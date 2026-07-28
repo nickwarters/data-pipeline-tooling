@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * UAT environment indicator (ADR-0033). Mounted once at boot: a fixed badge
+ * UAT environment indicator. Mounted once at boot: a fixed badge
  * that makes it unmistakable which environment is being edited, so UAT
  * testing is never mistaken for production (or vice versa). Prod renders
  * nothing — the production UI is unchanged.

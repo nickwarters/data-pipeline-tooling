@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * Question Bank impact simulator (issue #202).
+ * Question Bank impact simulator.
  *
  * Pure, read-only preview of what publishing a draft bank would do to a set
  * of sample Cases (fixture answers or sampled historical Cases). Nothing here
@@ -218,7 +218,7 @@ function makeCausesResolver(baseQuestions, draftQuestions, diff) {
  * fixed point so the simulation reflects where a Case would settle. Answers
  * to ids outside the catalogue are kept, mirroring `answerEdited` in
  * `pages/cora-case-review/answer-actions.js` — the Answer write path that
- * replaced the `handleAnswer` this used to name (ADR-0034, #555).
+ * replaced the `handleAnswer` this used to name.
  *
  * @param {QuestionDefinition[]} questions
  * @param {Record<string, Answer>} answers

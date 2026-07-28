@@ -13,7 +13,7 @@ import { navigateTo } from '../../lib/navigate.js';
  * The final-complete gate on the actions path: the Assigned Reviewer may close
  * an `Actions In Progress` Case only when every Question carrying remediation
  * has been resolved on the Remediation tab — `complete`, or `partial`/`cancelled`
- * with the details / justification each requires (#499). The permission half
+ * with the details / justification each requires. The permission half
  * comes from CaseMachine; the content half is computed here, from the store's
  * live catalogue and Answers, so resolving the last row enables the button
  * immediately.
@@ -32,7 +32,7 @@ export function readyToClose(input) {
   );
 }
 
-/** The gate's wording, shown wherever the completion control appears (#499). */
+/** The gate's wording, shown wherever the completion control appears. */
 export const REMEDIATION_GATE_REASON =
   'Record an outcome for every remediation on the Remediation tab — with the details or justification required — before this Case can be completed.';
 
@@ -44,7 +44,7 @@ export const REMEDIATION_GATE_REASON =
  * While remediation is outstanding the Assigned Reviewer sees the button
  * **disabled with its reason** rather than not at all: hiding it left the gate
  * legible only to a Reviewer who happened to open the Remediation tab, and from
- * every other tab the feature simply looked absent (#499). A viewer without the
+ * every other tab the feature simply looked absent. A viewer without the
  * permission half still sees nothing — the disabled button is the Reviewer's
  * gate, not a notice board.
  *
@@ -73,7 +73,7 @@ export function completionControl(input) {
     // the close either way; before that, remediation makes it the send.
     // "Carries remediation" is `hasTrackableRemediation` — literally "the
     // Remediation tab has ≥1 row" — so free-form text the Reviewer typed counts
-    // exactly as a ticked action does (#502), and remediation stranded on a
+    // exactly as a ticked action does, and remediation stranded on a
     // Question that has left the catalogue counts as neither, because there
     // would be no row on which to resolve it.
     label:
@@ -141,7 +141,7 @@ export function completionPatch(input) {
 /**
  * Flush autosaves, then persist the CaseMachine-owned transition using the
  * queue's current ETag. The transition already contains the frozen Outcome and
- * bank version fields required by ADR-0012/0021.
+ * bank version fields a reportable Case must carry.
  *
  * @param {{
  *   caseId: string,
@@ -155,7 +155,7 @@ export function completionPatch(input) {
  *   the `lib/navigate.js` seam so no page call site has to pass it; injectable
  *   so a non-browser caller — `tests/_in-memory-flow-runner.js` drives real
  *   completions in Node — can record the navigation instead of this action
- *   sniffing for a `location` global (#547).
+ *   sniffing for a `location` global.
  */
 export async function completeCase({
   caseId,

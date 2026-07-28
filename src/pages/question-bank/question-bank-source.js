@@ -2,8 +2,8 @@
 /**
  * Question Bank source for the curator workbench.
  *
- * ADR-0021 treats the Question Bank as versionable content separate from the
- * operational Case Type config. The editor therefore reads the standalone bank
+ * The Question Bank is versionable content, separate from the operational Case
+ * Type config. The editor therefore reads the standalone bank
  * JSON text artifacts under case-types/banks/. Those files are hosted in
  * SharePoint and loaded asynchronously through the Case Type manifest; runtime
  * config fields stay in case-types/{slug}.js.
@@ -80,7 +80,7 @@ export function normaliseQuestionBank(bank) {
 /**
  * Load every Question Bank artifact, per bank. One unreachable or malformed
  * artifact costs the editor that bank alone: the rest still load and the
- * failure is reported by slug so the editor can name it (#521).
+ * failure is reported by slug so the editor can name it.
  *
  * This function performs I/O and is therefore never called at module scope —
  * the bank editor route slice calls it from `start()`.

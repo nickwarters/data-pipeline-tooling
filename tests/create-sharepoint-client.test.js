@@ -59,7 +59,7 @@ test('createSharePointClient: mock client defaults to reviewer persona when asUs
   assert.ok(user.id, 'should return a user from the default reviewer persona');
 });
 
-test('createSharePointClient: mock client serves list-backed Case Types (issue #249)', async () => {
+test('createSharePointClient: mock client serves list-backed Case Types', async () => {
   const client = await createSharePointClient(new URLSearchParams('mock=1'));
 
   // complaints declares its own list (Cases-Complaints). Its Cases must be
@@ -140,8 +140,8 @@ test('partitionCasesByList: contains a Case Type whose config declares no listNa
   );
 });
 
-test('partitionCasesByList: a Case Type module that throws costs only its own Cases (#493)', async () => {
-  // ?mock=1 boot ran this 33 lines BEFORE #493's containment, inside
+test('partitionCasesByList: a Case Type module that throws costs only its own Cases', async () => {
+  // ?mock=1 boot ran this 33 lines BEFORE the per-Case-Type containment, inside
   // `createSharePointClient`, so a Case Type module that throws still took the
   // whole app down in the dev loop — in the feature whose entire point is that
   // boot survives one.
@@ -172,7 +172,7 @@ test('partitionCasesByList: a Case Type module that throws costs only its own Ca
 
 test('partitionCasesByList: a Case Type contained here yields no list at all', async () => {
   // Dropping never widens access: with no listName there is no store, and there
-  // is no default bucket to pool the Cases into (#249).
+  // is no default bucket to pool the Cases into.
   /** @type {any} */
   const cases = [{ id: 'a', caseType: 'boom', answers: {} }];
 
@@ -185,7 +185,7 @@ test('partitionCasesByList: a Case Type contained here yields no list at all', a
   assert.deepEqual(lists, {}, 'no Cases, and no throw');
 });
 
-test('createSharePointClient: passes the environment listPrefix and exportBasePath to the HTTP client (#366)', async () => {
+test('createSharePointClient: passes the environment listPrefix and exportBasePath to the HTTP client', async () => {
   const { resolveEnvironment } = await import('../src/config/environment.js');
   const client = /** @type {any} */ (
     await createSharePointClient(
@@ -200,7 +200,7 @@ test('createSharePointClient: passes the environment listPrefix and exportBasePa
   );
 });
 
-test('createSharePointClient: defaults to the prod environment (#366)', async () => {
+test('createSharePointClient: defaults to the prod environment', async () => {
   const client = /** @type {any} */ (
     await createSharePointClient(new URLSearchParams(''))
   );
@@ -211,7 +211,7 @@ test('createSharePointClient: defaults to the prod environment (#366)', async ()
   );
 });
 
-test('createSharePointClient: environment does not affect the mock client (#366)', async () => {
+test('createSharePointClient: environment does not affect the mock client', async () => {
   const { MockSharePointClient } =
     await import('../src/services/mock-sharepoint-client.js');
   const { resolveEnvironment } = await import('../src/config/environment.js');
@@ -222,7 +222,7 @@ test('createSharePointClient: environment does not affect the mock client (#366)
   assert.ok(client instanceof MockSharePointClient);
 });
 
-test('createSharePointClient: HTTP client scopes API calls to the host web via _spPageContextInfo (#464)', async () => {
+test('createSharePointClient: HTTP client scopes API calls to the host web via _spPageContextInfo', async () => {
   // On a site-path deployment (e.g. /sites/cora) a root-relative
   // `/_api/web/currentUser` hits the web application root, where the user has
   // no access — an NTLM 401 credential-prompt loop at boot. The client must
@@ -239,7 +239,7 @@ test('createSharePointClient: HTTP client scopes API calls to the host web via _
   }
 });
 
-test('createSharePointClient: falls back to webAbsoluteUrl when webServerRelativeUrl is absent (#464)', async () => {
+test('createSharePointClient: falls back to webAbsoluteUrl when webServerRelativeUrl is absent', async () => {
   const g = /** @type {Record<string, unknown>} */ (globalThis);
   g._spPageContextInfo = {
     webAbsoluteUrl: 'https://sp.example.com/sites/cora',
@@ -254,7 +254,7 @@ test('createSharePointClient: falls back to webAbsoluteUrl when webServerRelativ
   }
 });
 
-test('createSharePointClient: webUrl is empty when no SharePoint page context exists (#464)', async () => {
+test('createSharePointClient: webUrl is empty when no SharePoint page context exists', async () => {
   // Dev loop / non-SharePoint host: root-relative URLs are the best available
   // guess and preserve the pre-fix behaviour.
   const client = /** @type {any} */ (
@@ -263,7 +263,7 @@ test('createSharePointClient: webUrl is empty when no SharePoint page context ex
   assert.equal(client._webUrl, '');
 });
 
-test('createSharePointClient: a root-web page context yields an empty webUrl, not a bare slash (#464)', async () => {
+test('createSharePointClient: a root-web page context yields an empty webUrl, not a bare slash', async () => {
   // _spPageContextInfo.webServerRelativeUrl is '/' at a root site; the client
   // constructor strips trailing slashes so URLs never double up.
   const g = /** @type {Record<string, unknown>} */ (globalThis);

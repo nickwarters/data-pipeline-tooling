@@ -136,7 +136,7 @@ test('MockSharePointClient: listCases filters by both caseType and responsiblePa
   assert.equal(cases[0].id, 'case-2');
 });
 
-test('MockSharePointClient: listCases filters by effectiveOutcome server-side (ADR-0019)', async () => {
+test('MockSharePointClient: listCases filters by effectiveOutcome server-side', async () => {
   const client = new MockSharePointClient({
     lists: {
       [LIST]: [
@@ -160,7 +160,7 @@ test('MockSharePointClient: listCases filters by effectiveOutcome server-side (A
   );
 });
 
-test('MockSharePointClient: listCases filters by outcomeOverridden server-side (ADR-0019)', async () => {
+test('MockSharePointClient: listCases filters by outcomeOverridden server-side', async () => {
   const client = new MockSharePointClient({
     lists: {
       [LIST]: [

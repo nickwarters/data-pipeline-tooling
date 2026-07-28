@@ -149,8 +149,8 @@ export function createRouteSlice(params, context) {
       /** @type {CaseListOptions} */
       let caseListOptions = {};
       // The mount lifetime bound to this route's reads, so navigating away
-      // cancels the Case read rather than only discarding it (#567). Writes go
-      // through `context.saveQueue`, which keeps the raw client (ADR-0008).
+      // cancels the Case read rather than only discarding it. Writes go
+      // through `context.saveQueue`, which keeps the raw client.
       const readClient = withAbortSignal(context.client, tools.signal);
 
       async function load() {
@@ -181,7 +181,7 @@ export function createRouteSlice(params, context) {
             caseListOptions,
           });
         } catch (error) {
-          // An abort is navigation, never a load failure (#545) — and it is
+          // An abort is navigation, never a load failure — and it is
           // stated rather than left to the isActive() latch below, so the
           // intent survives a future change to when the latch flips.
           if (isAbortError(error)) return;

@@ -248,7 +248,7 @@ test('resolveCaseSourcesFromCaseTypes: excludes a Case Type when the user holds 
 });
 
 // There is no "Case Type without a display name" case left to test: every
-// `CaseTypeSource` carries the registry's required `displayName` (#527), so a
+// `CaseTypeSource` carries the registry's required `displayName`, so a
 // nameless Case Type is a type error rather than a silently short source list.
 // Its three derived group names are therefore ALWAYS contributed — the case
 // below holds neither `eligibleGroups` nor `reviewerGroup`.
@@ -403,7 +403,7 @@ test('resolveCaseSources: the org-wide Reviewers group alone grants no Case sour
   // a Case Type's list is axis 2 (which list you can open), and only a
   // per-Case-Type group crosses it. This used to resolve `example-review`,
   // because the fixture declared the org-wide `Reviewers` in its
-  // `eligibleGroups` — the pattern #525 removed from the scaffold as an
+  // `eligibleGroups` — a pattern since removed from the scaffold as an
   // accident. Asserting the grant was therefore pinning the accident in place;
   // what is worth pinning is that no Case Type opens itself to every Reviewer.
   const sources = await resolveCaseSources(['Reviewers']);
@@ -495,7 +495,7 @@ test('resolveAppCaseSources: threads only a Case Type Owner eligible source to a
   assert.deepEqual(context.unavailableCaseTypes, []);
 });
 
-// ===== per-Case-Type containment at boot (#493) =====
+// ===== per-Case-Type containment at boot =====
 //
 // A Case Type module that throws when it is evaluated — a syntax error, an
 // invalid outcome config, an unknown shared General Question key — must cost
@@ -617,17 +617,14 @@ test('containment: falls back to the slug when the failure has no registered dis
 });
 
 test('containment: an unregistered slug is dropped, never resolved namelessly', async () => {
-  const { caseSources, unavailableCaseTypes } = await quietlyResolveAppCaseSources(
-    ['Reviewer Managers'],
-    [],
-    {
+  const { caseSources, unavailableCaseTypes } =
+    await quietlyResolveAppCaseSources(['Reviewer Managers'], [], {
       importers: /** @type {any} */ ({
         'not-registered': async () => ({
           default: minimalConfig({ listName: 'Cases-NotRegistered' }),
         }),
       }),
-    }
-  );
+    });
 
   assert.deepEqual(caseSources, [], 'no source without a registry displayName');
   assert.deepEqual(
@@ -636,7 +633,7 @@ test('containment: an unregistered slug is dropped, never resolved namelessly', 
   );
 });
 
-test('containment: a config that loads but declares no listName is contained and named (#493)', async () => {
+test('containment: a config that loads but declares no listName is contained and named', async () => {
   // The gap this closes: the try guarded only the IMPORT, and `config.listName`
   // was a type CAST rather than a check. A module that evaluated fine but
   // returned a partial config produced a source with `listName: undefined`,
@@ -644,17 +641,14 @@ test('containment: a config that loads but declares no listName is contained and
   // problem, and it resurfaced later as an opaque route error when a fetch
   // built a request against `undefined`.
   for (const listName of [undefined, '', '   ']) {
-    const { caseSources, unavailableCaseTypes } = await quietlyResolveAppCaseSources(
-      ['Reviewer Managers'],
-      [],
-      {
+    const { caseSources, unavailableCaseTypes } =
+      await quietlyResolveAppCaseSources(['Reviewer Managers'], [], {
         importers: /** @type {any} */ ({
           'example-review': async () => ({
             default: minimalConfig({ listName }),
           }),
         }),
-      }
-    );
+      });
 
     assert.deepEqual(
       caseSources,
@@ -676,16 +670,14 @@ test('containment: a config that loads but declares no listName is contained and
   }
 });
 
-test('containment: an invalid outcome config is contained and named (#493)', async () => {
+test('containment: an invalid outcome config is contained and named', async () => {
   // The JSDoc listed "an invalid outcome config" as a contained failure mode,
   // but the loader called the RAW importer and never ran
   // `validateConfiguredOutcomeConfig`, so this resolved cleanly into
   // `caseSources` and detonated later on the Case Review page. Routing through
   // `loadCaseTypeConfig` makes the documented claim true.
-  const { caseSources, unavailableCaseTypes } = await quietlyResolveAppCaseSources(
-    ['Reviewer Managers'],
-    [],
-    {
+  const { caseSources, unavailableCaseTypes } =
+    await quietlyResolveAppCaseSources(['Reviewer Managers'], [], {
       importers: /** @type {any} */ ({
         'example-review': async () => ({
           default: minimalConfig({
@@ -694,8 +686,7 @@ test('containment: an invalid outcome config is contained and named (#493)', asy
           }),
         }),
       }),
-    }
-  );
+    });
 
   assert.deepEqual(caseSources, []);
   assert.deepEqual(
@@ -708,7 +699,7 @@ test('containment: an invalid outcome config is contained and named (#493)', asy
   );
 });
 
-test('resolveCaseSourcesFromCaseTypes: a nameless Case Type contributes no derived group names (#527)', () => {
+test('resolveCaseSourcesFromCaseTypes: a nameless Case Type contributes no derived group names', () => {
   // Defence in depth. No production caller can reach this — `displayNameFor()`
   // throws before a nameless source is built — but the function is exported and
   // its typedef now REQUIRES `displayName`, so an undefined name must not
@@ -730,7 +721,7 @@ test('resolveCaseSourcesFromCaseTypes: a nameless Case Type contributes no deriv
   }
 });
 
-test('loadCaseTypeSources is not exported: options.importers is the one seam (#493)', async () => {
+test('loadCaseTypeSources is not exported: options.importers is the one seam', async () => {
   const module = await import('../src/setup/resolve-eligible-case-types.js');
   assert.equal(
     'loadCaseTypeSources' in module,
@@ -781,9 +772,12 @@ test('resolveAppCaseSources: a broken Case Type cannot leak into any resolved so
 });
 
 test('resolveCaseSources: a user whose only Case Type is broken gets an empty list, not a crash', async () => {
-  const sources = await quietlyResolveCaseSources(['Reviewers - Example Review'], {
-    importers: importersWithBrokenExampleReview(),
-  });
+  const sources = await quietlyResolveCaseSources(
+    ['Reviewers - Example Review'],
+    {
+      importers: importersWithBrokenExampleReview(),
+    }
+  );
 
   assert.deepEqual(sources, []);
 });

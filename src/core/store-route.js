@@ -43,13 +43,13 @@ export function createStoreRoute({ load, context }) {
       let store;
       // Set once the initial synchronous render has succeeded. Before that, a
       // render failure propagates to mount()'s catch, which disposes and
-      // rethrows so the router's ADR-0002 containment handles it. After it,
+      // rethrows so the router's containment handles it. After it,
       // renders run coalesced on a microtask with no other try/catch on the
       // path, so this callback must contain failures itself.
       let mounted = false;
       // The mount lifetime, owned here and exposed to the slice. A route effect
       // guards a late `.then()` with isActive() instead of hand-rolling its own
-      // latch; the signal is the same lifetime in AbortSignal form (#517).
+      // latch; the signal is the same lifetime in AbortSignal form.
       const controller = new AbortController();
       const tools = {
         dispatch: (/** @type {any} */ action) => store.dispatch(action),
@@ -135,7 +135,7 @@ export function createStoreRoute({ load, context }) {
  * the router and `createStoreRoute`.
  *
  * `load` is the caller's: the dynamic `import()` of a page must stay inside
- * `src/routes/*`, which is what ADR-0002's page independence and
+ * `src/routes/*`, which is what page independence and
  * `tests/component-layering-contract.test.js` rest on. This helper never names
  * a page.
  *

@@ -260,7 +260,7 @@ test('store route: a broken lazy module renders the existing router error panel'
   }
 });
 
-test('store route: a view that throws on a scheduled render after mount shows the error panel and stops further renders (#437)', async () => {
+test('store route: a view that throws on a scheduled render after mount shows the error panel and stops further renders', async () => {
   const container = document.createElement('div');
   let dispatch = /** @type {any} */ (null);
   let renders = 0;
@@ -378,7 +378,7 @@ test('store route: stale lazy mount is discarded when a legacy route wins naviga
 });
 
 /**
- * registerStoreRoute (#520): the shared registration shell the route modules
+ * registerStoreRoute: the shared registration shell the route modules
  * collapse onto. The dynamic import() stays in the caller — a route module —
  * so `load` is always injected here, never resolved by this helper.
  */
@@ -505,7 +505,7 @@ test('registerStoreRoute: the guard runs on every mount, not once at registratio
   assert.equal(guardCalls, 2);
 });
 
-test('store route: unmounting mid-read aborts the request and produces no error UI (#545)', async () => {
+test('store route: unmounting mid-read aborts the request and produces no error UI', async () => {
   const { withAbortSignal } =
     await import('../src/services/abortable-client.js');
   const { ignoreAbortError } = await import('../src/lib/abort.js');

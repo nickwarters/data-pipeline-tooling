@@ -78,7 +78,7 @@ test('Responsible Party remediation uses the generic table, filtering, and overd
   assert.equal(table._listeners.keydown.length, 1);
 });
 
-test('the Outstanding Remediation Actions table renders the columns it renders today (#543)', () => {
+test('the Outstanding Remediation Actions table renders the columns it renders today', () => {
   const view = responsiblePartyView(
     {
       cases: [row('c1', 'complaints', '2099-01-01T00:00:00Z')],
@@ -96,12 +96,12 @@ test('the Outstanding Remediation Actions table renders the columns it renders t
   );
   const section = view.querySelector('.cora-rp-remediation');
 
-  // #542 converged the sorting half of this contract: Reference and Case Type
-  // are now interactive here as on all six Case tables, because the same
+  // The sorting half of this contract has converged: Reference and Case Type
+  // are interactive here as on all six Case tables, because the same
   // Case-shaped column should not be inert on one of them. What remains pinned
-  // is the divergence #542 deliberately did *not* touch:
+  // is the divergence that convergence deliberately did *not* touch:
   //
-  //   - Remediation due is #498's column, left exactly as it was. Its
+  //   - Remediation due is this table's own column, left exactly as it was. Its
   //     'ascending' is the active sort; the other headings read 'none' because
   //     they are not the sort key, not because they are unsortable —
   //     data-table.js derives `aria-sort` and interactivity independently.
@@ -115,7 +115,8 @@ test('the Outstanding Remediation Actions table renders the columns it renders t
 
   // No column renders a link: the Reference column carries no `href`, unlike
   // the Cases with Unread Messages table below it, whose Reference cells link
-  // to the Case. Still pinned, not fixed: #542 decided sorting, not linking, so
+  // to the Case. Still pinned, not fixed: the convergence decided sorting, not
+  // linking, so
   // this table keeps its own Reference descriptor rather than adopting
   // caseReferenceColumn() and gaining a link as a side effect.
   //
@@ -208,7 +209,7 @@ function rpView(patch) {
   ).querySelector('.cora-rp-remediation');
 }
 
-test('the Responsible Party works to the remediation clock, not the review SLA (#498)', () => {
+test('the Responsible Party works to the remediation clock, not the review SLA', () => {
   const section = rpView({
     dueDate: '2099-01-01T00:00:00Z',
     remediationDueDate: '2026-06-01T00:00:00Z',
@@ -228,7 +229,7 @@ test('the Responsible Party works to the remediation clock, not the review SLA (
   );
 });
 
-test('a Case inside its remediation SLA is not overdue on the review clock (#498)', () => {
+test('a Case inside its remediation SLA is not overdue on the review clock', () => {
   const section = rpView({
     dueDate: '2020-01-01T00:00:00Z',
     remediationDueDate: '2099-01-01T00:00:00Z',
@@ -239,12 +240,12 @@ test('a Case inside its remediation SLA is not overdue on the review clock (#498
   );
 });
 
-test('resolved remediation stops being outstanding on the Responsible Party surface (#497)', () => {
+test('resolved remediation stops being outstanding on the Responsible Party surface', () => {
   const sent = /** @type {any} */ (row('c1', 'complaints', ''));
   sent.status = 'Actions In Progress';
   sent.remediationDueDate = '2026-08-01T00:00:00Z';
   // The Reviewer recorded the resolution on the Remediation tab — the one store
-  // ADR-0037 made the record. Nothing ever writes `completed: true`.
+  // that is the record. Nothing ever writes `completed: true`.
   sent.answers.q1.remediationStatus = { status: 'complete' };
   assert.deepEqual(outstandingRemediation(sent), []);
 
@@ -260,7 +261,7 @@ test('resolved remediation stops being outstanding on the Responsible Party surf
   assert.deepEqual(outstandingRemediation(sent), []);
 });
 
-test('free-form remediation is outstanding work too, and only once sent (#497)', () => {
+test('free-form remediation is outstanding work too, and only once sent', () => {
   const sent = /** @type {any} */ (row('c2', 'complaints', ''));
   sent.status = 'Actions In Progress';
   sent.answers = { q1: { value: 'No', freeFormRemediation: 'Call back' } };
@@ -274,7 +275,7 @@ test('free-form remediation is outstanding work too, and only once sent (#497)',
   );
 });
 
-test('a Completed Case has no outstanding remediation, by construction (#502)', () => {
+test('a Completed Case has no outstanding remediation, by construction', () => {
   // This dashboard lists Cases across every Case Type and holds no catalogue for
   // any of them, so it reads the Answers blob — a strict superset of the
   // Remediation tab's rows. Scoped to `Actions In Progress`, the one status in

@@ -7,7 +7,7 @@ import {
 
 /**
  * `displayName` is required and comes from THE Case Type registry
- * (`CASE_TYPES`), never from the Case Type config module (#527) — one string
+ * (`CASE_TYPES`), never from the Case Type config module — one string
  * composes this type's three SharePoint group names, and the capability side
  * (`permissions.caseTypes`) reads the same copy.
  *
@@ -88,7 +88,7 @@ export function allocationSourcesFromCaseSources(caseSources) {
 
 /**
  * A Case Type that could not be loaded, and is therefore absent from every
- * resolved source set (#493). `displayName` is for humans only — it falls back
+ * resolved source set. `displayName` is for humans only — it falls back
  * to the slug when even the registry lookup failed.
  *
  * @typedef {{ slug: string, displayName: string, error: unknown }} UnavailableCaseType
@@ -115,7 +115,7 @@ function labelFor(slug) {
  * Loads and shapes the `CaseTypeSource` for each given slug via its manifest
  * importer, resolving each `listName` in exactly one place.
  *
- * Per-slug containment (#493), the Case Type analogue of `safeRegister` for
+ * Per-slug containment, the Case Type analogue of `safeRegister` for
  * routes: a Case Type that cannot produce a USABLE source — a module that
  * throws when it is evaluated (a syntax error, an unknown shared General
  * Question key), an invalid outcome config, a config that loads but declares no
@@ -160,14 +160,14 @@ async function loadCaseTypeSources(slugs, importers) {
           throw new TypeError(
             `Case Type "${slug}" declares no listName. Every Case Type must ` +
               'name the SharePoint list its Cases live on; there is no ' +
-              'default store to fall back to (#249).'
+              'default store to fall back to.'
           );
         return {
           source: /** @type {CaseTypeSource} */ ({
             slug,
             listName,
             // From THE registry, not from the config module: the capability
-            // side derives its group names from the same string (#527).
+            // side derives its group names from the same string.
             displayName: displayNameFor(slug),
             reviewerGroup: config.reviewerGroup,
             config,
@@ -200,8 +200,8 @@ async function loadCaseTypeSources(slugs, importers) {
 
 /**
  * Pure core of `resolveCaseSources`: which of the given Case Types the user
- * may read from or write to. This is THE app-wide eligibility rule (#370 item
- * 7 / grilling D2). Type-scoped roles grant only their matching source:
+ * may read from or write to. This is THE app-wide eligibility rule.
+ * Type-scoped roles grant only their matching source:
  *
  * - `config.reviewerGroup`, if declared
  * - any of `config.eligibleGroups`, if declared
@@ -210,7 +210,7 @@ async function loadCaseTypeSources(slugs, importers) {
  * - `JourneyOwner - <displayName>`
  *
  * where `displayName` is the registry's, and a registered Case Type always has
- * one — so the three derived group names are always contributed (#527).
+ * one — so the three derived group names are always contributed.
  *
  * Controls, Reviewer Managers, Advisers, ResponsibleParty-Managers and
  * Maintainers span
@@ -280,7 +280,7 @@ export function resolveCaseSourcesFromCaseTypes(userGroups, caseTypes) {
 
 /**
  * Load every Case Type, then apply the app-wide eligibility rule. Case Types
- * that failed to load never reach the rule (#493).
+ * that failed to load never reach the rule.
  *
  * @param {string[]} userGroups
  * @param {ResolveOptions} options
@@ -309,7 +309,7 @@ async function resolveAvailableCaseSources(userGroups, options) {
  * never gated by a slug allow-list. Each returned source carries an explicit
  * `listName`: there is no hidden default list to fall back to.
  *
- * A Case Type whose module fails to load is dropped (#493): a user whose only
+ * A Case Type whose module fails to load is dropped: a user whose only
  * eligible Case Type is broken gets an empty list, never a broken app.
  *
  * @param {string[]} userGroups

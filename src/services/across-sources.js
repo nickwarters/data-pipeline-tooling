@@ -2,7 +2,7 @@
 /**
  * Multi-list fan-out helpers.
  *
- * There is no default Case list (ADR-0022 amendment): every Case read carries
+ * There is no default Case list: every Case read carries
  * an explicit `listName`, and a Case lives in exactly one list, so a read that
  * spans Case Types fans out one scoped request per source and merges. These
  * helpers own that pattern so call sites don't hand-roll it.

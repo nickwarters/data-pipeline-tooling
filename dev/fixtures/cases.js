@@ -21,7 +21,7 @@ const _twentyDaysAgo = new Date(
   _todayStart.getTime() - 20 * 24 * 60 * 60 * 1000
 );
 
-// Action Centre demo clocks (issue #287): reason ages for the ?asUser=action-centre persona.
+// Action Centre demo clocks: reason ages for the ?asUser=action-centre persona.
 const _twoDaysAgo = new Date(_todayStart.getTime() - 2 * 24 * 60 * 60 * 1000);
 const _fourDaysAgo = new Date(_todayStart.getTime() - 4 * 24 * 60 * 60 * 1000);
 const _sixDaysAgo = new Date(_todayStart.getTime() - 6 * 24 * 60 * 60 * 1000);
@@ -29,10 +29,10 @@ const _nineDaysAgo = new Date(_todayStart.getTime() - 9 * 24 * 60 * 60 * 1000);
 
 /**
  * The mock-served fixture Cases (`?mock=1`). complaints is the only live Case
- * Type (issue #383); the example-review demo Cases moved to
+ * Type; the example-review demo Cases moved to
  * tests/_example-review-cases.js as a test-only fixture.
  *
- * Complaints (Journey Owner raises appeals, Controls resolves — ADR-0027):
+ * Complaints (Journey Owner raises appeals, Controls resolves):
  *   complaints-case-1 — In-progress, outstanding (assigned to user-reviewer)
  *   complaints-case-2 — Completed, one failure → outcomeAtCompletion=refer
  *   complaints-case-3 — Completed, every applicable question failed, no appeal
@@ -46,7 +46,7 @@ const _nineDaysAgo = new Date(_todayStart.getTime() - 9 * 24 * 60 * 60 * 1000);
  */
 export const cases = [
   // --- complaints fixture cases (Complaints journey; appeals raised by the
-  // Journey Owner, resolved by Controls — ADR-0027) ---
+  // Journey Owner, resolved by Controls) ---
   {
     // My Team live-workload fixture: a held Case allocated to Morgan Manager's
     // first staff member.
@@ -114,8 +114,8 @@ export const cases = [
   },
   {
     // Completed with exactly one failure (redress not offered) → outcome `refer`.
-    // Left un-amended so the Controls Amend Outcome flow (ADR-0026) and the
-    // Journey Owner → Controls appeal flow (ADR-0027) can both be exercised on it.
+    // Left un-amended so the Controls Amend Outcome flow and the
+    // Journey Owner → Controls appeal flow can both be exercised on it.
     id: 'complaints-case-2',
     caseType: 'complaints',
     title: 'Complaint #2',
@@ -252,16 +252,16 @@ export const cases = [
     etag: 'etag-cm4-v1',
   },
   {
-    // The demo Case for **remediation sent to the adviser, work in progress**
-    // (issue #495). The Assigned Reviewer answered every applicable Question,
-    // selected Remediation Actions against the two failures and pressed
-    // "Send Actions", so the Case sits at the reportable milestone: the Outcome
-    // is frozen, `reportableAt`/`remediationDueDate` are stamped, and
-    // `completedAt` is still null. One action has been worked and one is still
-    // outstanding, so the adviser (`?asUser=responsible-party`) sees open work
-    // on #/my-cases and the Conversation carries an unread reviewer message.
-    // Field values mirror exactly what CaseMachine.transitionToActionsInProgress
-    // writes — see src/lib/case-machine.js.
+    // The demo Case for **remediation sent to the adviser, work in progress**.
+    // The Assigned Reviewer answered every applicable Question, selected
+    // Remediation Actions against the two failures and pressed "Send Actions",
+    // so the Case sits at the reportable milestone: the Outcome is frozen,
+    // `reportableAt`/`remediationDueDate` are stamped, and `completedAt` is
+    // still null. One action has been worked and one is still outstanding, so
+    // the adviser (`?asUser=responsible-party`) sees open work on #/my-cases
+    // and the Conversation carries an unread reviewer message. Field values
+    // mirror exactly what CaseMachine.transitionToActionsInProgress writes —
+    // see src/lib/case-machine.js.
     id: 'complaints-case-5',
     caseType: 'complaints',
     title: 'Complaint #5',
@@ -269,11 +269,11 @@ export const cases = [
     assignedReviewer: 'user-reviewer',
     // The Reviewer's line manager. Both manager roles are resolved from the Case
     // row rather than group membership, so naming them here is what makes the
-    // Remediation tab's two renderings demoable from every angle (#499).
+    // Remediation tab's two renderings demoable from every angle.
     assignedReviewerManager: 'user-rm',
     responsibleParty: 'user-rp',
     // Their line manager, so the Remediation tab's responsible-party rendering
-    // and the Conversation it points at are demoable from both sides (#499).
+    // and the Conversation it points at are demoable from both sides.
     responsiblePartyManager: 'user-rp-manager',
     answers: {
       'q-cm-ack': {
@@ -285,7 +285,7 @@ export const cases = [
             text: 'Acknowledge the complaint in writing within the regulatory timeframe.',
           },
         ],
-        // Resolved on the Remediation tab (#499). The redress Question below is
+        // Resolved on the Remediation tab. The redress Question below is
         // deliberately left unresolved, so the demo Case shows one row of each
         // and the Reviewer's "Complete Case" button stays disabled — with the
         // reason under it — until they record the second.
@@ -371,7 +371,7 @@ export const cases = [
     created: '2026-06-02T08:00:00Z',
     etag: 'etag-cm5-v1',
   },
-  // ── Action Centre demo cases (issue #287) ────────────────────────────────
+  // ── Action Centre demo cases ────────────────────────────────
   // Carry the hoisted reason flags/clocks the real backend would compute, so
   // the ?asUser=action-centre persona sees every reason group populated. The
   // reviewer reasons are assigned to user-reviewer (the persona's id); Appeals

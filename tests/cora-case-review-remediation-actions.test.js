@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { editRemediationDetail } from '../src/pages/cora-case-review/remediation-actions.js';
 
-test('CASE-5 action: Remediation Detail edits preserve Answers and reuse evaluator clearing semantics', () => {
+test('action: Remediation Detail edits preserve Answers and reuse evaluator clearing semantics', () => {
   const answers = {
     q1: {
       value: 'No',
@@ -39,7 +39,7 @@ test('CASE-5 action: Remediation Detail edits preserve Answers and reuse evaluat
   );
 });
 
-test('CASE-5 action: an unknown Question or unconfigured field writes nothing', () => {
+test('action: an unknown Question or unconfigured field writes nothing', () => {
   const answers = { q1: { value: 'No' } };
   const fields =
     /** @type {import('../src/sharepoint-client.js').RemediationField[]} */ ([

@@ -9,7 +9,7 @@ installDom();
 const { notesView } =
   await import('../src/pages/cora-case-review/notes-view.js');
 
-test('CASE-3 Notes view dispatches notes and justification edits at the public input seam', () => {
+test('Notes view dispatches notes and justification edits at the public input seam', () => {
   /** @type {Array<[string, string]>} */
   const edits = [];
   const node = notesView({
@@ -37,7 +37,7 @@ test('CASE-3 Notes view dispatches notes and justification edits at the public i
   ]);
 });
 
-test('CASE-3 Notes view preserves configured placeholders and read-only access', () => {
+test('Notes view preserves configured placeholders and read-only access', () => {
   /** @type {Array<[string, string]>} */
   const edits = [];
   const node = notesView({

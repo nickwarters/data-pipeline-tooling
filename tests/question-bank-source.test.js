@@ -118,7 +118,7 @@ test('loadQuestionBanks: builds the bank map from standalone bank importer entri
   assert.deepEqual(failures, []);
 });
 
-test('#521 loadQuestionBanks: a broken artifact costs its own bank, not the others', async () => {
+test('loadQuestionBanks: a broken artifact costs its own bank, not the others', async () => {
   const { banks, failures } = await loadQuestionBanks({
     alpha: async () => ({
       default:
@@ -143,7 +143,7 @@ test('#521 loadQuestionBanks: a broken artifact costs its own bank, not the othe
   ]);
 });
 
-test('#549 loadQuestionBanks: a retry loads only the slugs it is given', async () => {
+test('loadQuestionBanks: a retry loads only the slugs it is given', async () => {
   /** @type {string[]} */
   const ran = [];
   /** @param {string} slug */
@@ -169,7 +169,7 @@ test('#549 loadQuestionBanks: a retry loads only the slugs it is given', async (
   assert.deepEqual(failures, []);
 });
 
-test('#549 loadQuestionBanks: a named slug with no importer is reported, not dropped', async () => {
+test('loadQuestionBanks: a named slug with no importer is reported, not dropped', async () => {
   // A retry that silently ignored the slug it was asked about would clear the
   // failure banner while nothing had been recovered.
   const { banks, failures } = await loadQuestionBanks({}, ['ghost']);
@@ -186,7 +186,7 @@ test('#549 loadQuestionBanks: a named slug with no importer is reported, not dro
   ]);
 });
 
-// #521's "importing this module performs no I/O" contract is enforced by
+// The "importing this module performs no I/O" contract is enforced by
 // tests/question-bank-import-io-contract.test.js, which imports the module in a
 // child process with the real bank-reading primitives counted. A source-text
 // assertion cannot do it: a rename, a parenthesised `await`, or a split

@@ -1,5 +1,5 @@
 // @ts-check
-// One display name, two consumers (#527).
+// One display name, two consumers.
 //
 // A Case Type's display name composes the three provisioned SharePoint group
 // names (`Reviewers - X`, `CaseTypeOwner - X`, `JourneyOwner - X`). Two
@@ -8,7 +8,7 @@
 //   1. `permissions.caseTypes` / `resolveCapabilities()` — the capability side
 //   2. `resolveCaseSources()` — the Case-source eligibility side
 //
-// Before #527 each read a DIFFERENT copy of the name (the registry entry vs the
+// Each used to read a DIFFERENT copy of the name (the registry entry vs the
 // Case Type config module), so drift made a user resolve the capability but not
 // the source, or the reverse. This test proves there is now exactly ONE copy:
 // it renames the registry entry and asserts BOTH consumers move with it.
@@ -118,7 +118,7 @@ test('registry rename: the resolved Case source reports the registry display nam
   );
 });
 
-test('a Case Type registered AFTER permissions.js was evaluated reaches BOTH consumers (#527)', async () => {
+test('a Case Type registered AFTER permissions.js was evaluated reaches BOTH consumers', async () => {
   // The regression this file exists to prevent, in its sharpest form.
   // `permissions.caseTypes` used to be a module-scope snapshot of `CASE_TYPES`,
   // so anything registered later was invisible to the capability side while

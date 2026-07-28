@@ -1,6 +1,6 @@
 // @ts-check
 // Test-only fixture Case Type. `example-review` was retired from the production
-// manifest and the mock client in issue #383 (complaints is the only live Case
+// manifest and the mock client (complaints is the only live Case
 // Type), but its rich showWhen graph, capture groups and Outcome vocabulary
 // remain the de-facto canonical fixture across the test suite. It lives under
 // tests/ (not deployed, absent from case-types/manifest.js, not served by
@@ -20,10 +20,10 @@ const bank = await loadBank(
 /** @type {CaseTypeConfig} */
 const config = {
   // No `eligibleGroups`. This fixture used to declare the org-wide `Reviewers`,
-  // granting itself to every Reviewer in the organisation — the pattern #525
+  // granting itself to every Reviewer in the organisation — a pattern since
   // removed from the scaffold as a scaffolding accident. The canonical fixture
   // must not model what the scaffold refuses to generate: access comes from the
-  // derived `Reviewers - Example Review` and its two siblings (#527).
+  // derived `Reviewers - Example Review` and its two siblings.
   listName: 'Cases-ExampleReview',
   slaHours: 48,
   attributeFailures: true,

@@ -37,7 +37,7 @@ test('CASE_STATUS has exactly the three case-lifecycle statuses (no accidental e
 // src/ must go through CASE_STATUS from src/lib/case-statuses.js — a typo in
 // a raw literal is a silent logic failure, this test makes it a loud one.
 //
-// Scope decisions (per MAINT-03):
+// Scope decisions:
 // - Only Case row lifecycle status is covered. Remediation-action statuses
 //   ('pending'/'complete'/'cancelled'), team-cases filter statuses
 //   ('overdue'/'outstanding'/'completed') and SaveQueue's 'conflict' are

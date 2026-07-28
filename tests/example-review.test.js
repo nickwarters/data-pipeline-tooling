@@ -72,7 +72,7 @@ test('example-review: no cycles in showWhen graph', () => {
   assert.strictEqual(detectCycles(config.questions), false);
 });
 
-// --- Remediation Details (ADR-0017) ---
+// --- Remediation Details ---
 
 test('example-review: declares a remediationFields set with at least one text and one select', () => {
   const fields = config.remediationFields ?? [];
@@ -97,7 +97,7 @@ test('example-review: every select remediationField carries a non-empty options[
   }
 });
 
-// --- Issue Capture groups (ADR-0020) ---
+// --- Issue Capture groups ---
 
 test('example-review: declares captureGroups exercising the text field types', () => {
   const types = new Set(
@@ -145,7 +145,7 @@ test('example-review: every select/radio capture field carries a non-empty optio
   }
 });
 
-// --- Section config (ADR-0016) ---
+// --- Section config ---
 
 test('example-review: sections is a per-Section config object enabling the amended Section set', () => {
   const sections = config.sections ?? {};
@@ -163,7 +163,7 @@ test('example-review: sections is a per-Section config object enabling the amend
   ]);
 });
 
-test('example-review: declares the Outcome vocabulary for the hand-set Amend Outcome verdict (ADR-0026)', () => {
+test('example-review: declares the Outcome vocabulary for the hand-set Amend Outcome verdict', () => {
   const ids = (config.outcomeOptions ?? []).map((o) => o.id);
   // computeOutcome only yields pass/fail, but Controls may amend to refer too.
   assert.deepEqual(ids, ['pass', 'refer', 'fail']);
@@ -172,7 +172,7 @@ test('example-review: declares the Outcome vocabulary for the hand-set Amend Out
   }
 });
 
-test('example-review: routes appeal-raising to the Journey Owner, resolved by Controls (ADR-0027)', () => {
+test('example-review: routes appeal-raising to the Journey Owner, resolved by Controls', () => {
   assert.deepEqual(config.appeal, {
     raisedBy: 'journeyOwner',
     resolvedBy: 'controls',

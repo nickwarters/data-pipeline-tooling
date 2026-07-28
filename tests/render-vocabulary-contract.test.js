@@ -1,10 +1,9 @@
 // @ts-check
 
 /**
- * Render-vocabulary contract (ADR-0039).
+ * Render-vocabulary contract.
  *
- * The runtime does two different things and ADR-0039 gives each exactly one
- * word:
+ * The runtime does two different things and each has exactly one word:
  *
  *  - **`view`** produces a tree of nodes. Pure, returns `Node`s, touches
  *    nothing.
@@ -13,7 +12,7 @@
  *
  * That distinction is easy to state and easy to lose: the codebase carried
  * three producers named `render` and a DOM-agnostic store whose callback was
- * also called `render` before ADR-0039, which is how a three-`render` call
+ * also called `render`, which is how a three-`render` call
  * stack appeared in `store-route.js`. These tests are the ratchet.
  *
  * They are deliberately *structural* rather than a list of banned filenames:
@@ -105,7 +104,7 @@ test('render vocabulary: the module is core/render.js, and core/morph.js is gone
   );
   assert.ok(
     !existsSync(new URL('src/core/morph.js', ROOT)),
-    'src/core/morph.js was renamed to render.js by ADR-0039'
+    'src/core/morph.js was renamed to render.js'
   );
 });
 
@@ -123,7 +122,7 @@ test('render vocabulary: nothing imports core/morph.js or calls tools.morph()', 
   assert.deepEqual(
     offenders,
     [],
-    'ADR-0039: commit a tree with render(container, tree) / tools.render(…), ' +
+    'commit a tree with render(container, tree) / tools.render(…), ' +
       'not morph(). Found:\n' +
       offenders.join('\n')
   );
@@ -151,7 +150,7 @@ test('render vocabulary: createStore is given onStateChange, never render', () =
   assert.deepEqual(
     offenders,
     [],
-    'ADR-0039: the store is DOM-agnostic — its callback is onStateChange. ' +
+    'the store is DOM-agnostic — its callback is onStateChange. ' +
       'Found:\n' +
       offenders.join('\n')
   );
@@ -174,7 +173,7 @@ test('render vocabulary: the store exposes onStateChange and flush, not render',
   assert.equal(
     typeof (/** @type {any} */ (store).render),
     'undefined',
-    'store.render() was renamed to store.flush() by ADR-0039'
+    'store.render() was renamed to store.flush()'
   );
   store.flush();
   store.dispatch({ type: 'inc' });

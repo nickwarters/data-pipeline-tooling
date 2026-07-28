@@ -2,7 +2,7 @@
 // Registers the `example-review` test fixture into the Case Type manifest for
 // the importing test.
 //
-// `example-review` was retired from the production manifest in issue #383, but
+// `example-review` was retired from the production manifest, but
 // it remains the canonical end-to-end fixture: its five-question catalogue,
 // showWhen rule and Outcome vocabulary exercise the full case-review flow.
 // Node's test runner isolates each test file in its own process, so mutating
@@ -13,7 +13,7 @@
 // `loadCaseTypeConfig('example-review')` / the question-bank importer to
 // resolve.
 
-// Registration goes through `CASE_TYPES` (#527), never straight into the
+// Registration goes through `CASE_TYPES`, never straight into the
 // derived importer maps: the registry is where a Case Type's `displayName`
 // lives, and eligibility composes `Reviewers - Example Review` and its two
 // siblings from it. Writing only to the derived maps would leave the fixture

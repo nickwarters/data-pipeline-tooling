@@ -54,7 +54,7 @@ function moveButtons(label, canUp, canDown, onMove) {
 /**
  * The filter rail: groups the bank's questions by `category` (top level,
  * shown only when any question declares one), then by `questionGroup` within
- * it (#390 Part 1). Selecting a chip filters the list; move buttons reorder
+ * it. Selecting a chip filters the list; move buttons reorder
  * categories among themselves and Question Groups within their category.
  *
  * @param {{ bank: any, filters: any, railOpen: boolean, setFilters: (patch: any) => void, moveCategory: (name: string, direction: -1 | 1) => void, moveGroup: (category: string, name: string, direction: -1 | 1) => void, onToggleRail: () => void, onCloseRail: () => void }} props

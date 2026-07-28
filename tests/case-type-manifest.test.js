@@ -51,7 +51,7 @@ test('case type manifest: known Case Type slugs resolve to their static import f
   }
 });
 
-test('case type manifest: CASE_TYPES is the single registry every derived map comes from (#508)', () => {
+test('case type manifest: CASE_TYPES is the single registry every derived map comes from', () => {
   assert.ok(Array.isArray(CASE_TYPES) && CASE_TYPES.length > 0);
 
   for (const entry of CASE_TYPES) {
@@ -88,7 +88,7 @@ test('case type manifest: CASE_TYPES is the single registry every derived map co
   );
 });
 
-test('case type manifest: registry entries are frozen, so the one copy of a display name stays one copy (#527)', () => {
+test('case type manifest: registry entries are frozen, so the one copy of a display name stays one copy', () => {
   for (const entry of CASE_TYPES) {
     assert.ok(
       Object.isFrozen(entry),
@@ -107,9 +107,9 @@ test('case type manifest: registry entries are frozen, so the one copy of a disp
 });
 
 test('case type manifest: importing the manifest evaluates no Case Type module (importers stay thunks)', () => {
-  // ADR-0004's lazy-load property, and the constraint that lets the
+  // The lazy-load property, and the constraint that lets the
   // boot-critical, synchronous permissions config read display names from this
-  // registry without eagerly loading a single Case Type config (#508, #493).
+  // registry without eagerly loading a single Case Type config.
   for (const entry of CASE_TYPES) {
     assert.equal(
       typeof entry.importer,
@@ -188,16 +188,16 @@ test('case type manifest: unknown Case Type slugs reject with a developer-useful
   );
 });
 
-test('case type manifest: displayNameFor returns the registry display name, synchronously and lazily (#527)', () => {
+test('case type manifest: displayNameFor returns the registry display name, synchronously and lazily', () => {
   assert.equal(displayNameFor('complaints'), 'Complaints');
 
   // Reading a name must not evaluate a Case Type module — permissions and
-  // eligibility both read it on the boot path (ADR-0004).
+  // eligibility both read it on the boot path.
   for (const entry of CASE_TYPES)
     assert.equal(typeof entry.importer, 'function');
 });
 
-test('case type manifest: displayNameFor fails loudly for an unregistered slug (#527)', () => {
+test('case type manifest: displayNameFor fails loudly for an unregistered slug', () => {
   assert.throws(
     () => displayNameFor('../unexpected'),
     (error) =>
@@ -209,7 +209,7 @@ test('case type manifest: displayNameFor fails loudly for an unregistered slug (
   );
 });
 
-test('case type manifest: registerCaseType keeps the derived maps in step with the registry (#527)', () => {
+test('case type manifest: registerCaseType keeps the derived maps in step with the registry', () => {
   const importer = async () => ({ default: /** @type {any} */ ({}) });
   const bank = async () => ({ default: /** @type {any} */ ({}) });
   registerCaseType({
@@ -237,8 +237,9 @@ test('case type manifest: registerCaseType keeps the derived maps in step with t
   }
 });
 
-test('case type manifest: registerCaseType rejects a duplicate slug (#527)', () => {
-  // A second entry for a live slug is the divergence #527 exists to prevent,
+test('case type manifest: registerCaseType rejects a duplicate slug', () => {
+  // A second entry for a live slug is the divergence the one-registry rule
+  // exists to prevent,
   // in its most dangerous form: `displayNameFor` reads the FIRST row,
   // `CASE_TYPE_IMPORTERS` takes the LAST, and `permissions.caseTypes` carries
   // BOTH. A never-provisioned `Reviewers - <second display name>` group then
@@ -269,7 +270,7 @@ test('case type manifest: registerCaseType rejects a duplicate slug (#527)', () 
   );
 });
 
-test('case type manifest: registerCaseType rejects an entry that cannot compose group names (#527)', () => {
+test('case type manifest: registerCaseType rejects an entry that cannot compose group names', () => {
   // An unvalidated entry reaches `caseTypeGroupNames(undefined)` and provisions
   // `Reviewers - undefined` — a group name that grants a real Case source and
   // that somebody could actually be put in.

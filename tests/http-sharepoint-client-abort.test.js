@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { HttpSharePointClient } from '../src/services/http-sharepoint-client.js';
 
-// Capability: the mount-lifetime AbortSignal reaches fetch on Case reads (#545).
+// Capability: the mount-lifetime AbortSignal reaches fetch on Case reads.
 
 const WEB_URL = 'https://sp.example.com/sites/cora';
 
@@ -144,7 +144,7 @@ test('HttpSharePointClient: patchCase never sends a signal', async () => {
   );
 });
 
-test('HttpSharePointClient: a 429 retry rechecks the signal instead of re-fetching a dead route (#545)', async () => {
+test('HttpSharePointClient: a 429 retry rechecks the signal instead of re-fetching a dead route', async () => {
   const controller = new AbortController();
   let fetches = 0;
   let slept = 0;
@@ -180,7 +180,7 @@ test('HttpSharePointClient: a 429 retry rechecks the signal instead of re-fetchi
   assert.equal(slept, 1);
 });
 
-test('HttpSharePointClient: a 429 retry with no signal still retries (#545)', async () => {
+test('HttpSharePointClient: a 429 retry with no signal still retries', async () => {
   let fetches = 0;
   const client = new HttpSharePointClient({
     webUrl: WEB_URL,

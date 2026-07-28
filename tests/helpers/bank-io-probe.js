@@ -1,7 +1,6 @@
 // @ts-check
 /**
- * Child-process probe for #521: does importing a module perform Question Bank
- * I/O?
+ * Child-process probe: does importing a module perform Question Bank I/O?
  *
  * Run as `node --import ./tests/helpers/bank-io-register.js
  * tests/helpers/bank-io-probe.js <module-path-relative-to-repo-root>`. Prints a

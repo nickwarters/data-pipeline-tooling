@@ -1,10 +1,10 @@
 // @ts-check
 
 /**
- * Build the plain-DOM panel shown when a route fails to render (ADR-0002's
- * failure-isolation contract). Shared by the router's mount-failure handler
- * and by `createStoreRoute()`'s post-mount containment (CORE-6, #437) so both
- * paths render identical markup from one place.
+ * Build the plain-DOM panel shown when a route fails to render, keeping one
+ * broken route from taking down the app. Shared by the router's mount-failure
+ * handler and by `createStoreRoute()`'s post-mount containment, so both paths
+ * render identical markup from one place.
  *
  * @returns {HTMLDivElement}
  */

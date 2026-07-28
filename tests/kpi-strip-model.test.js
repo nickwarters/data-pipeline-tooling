@@ -52,8 +52,8 @@ function defaultCapabilities(overrides = {}) {
 
 /**
  * Apply the server-side `ListCasesFilter` fields this suite exercises, so the
- * fake client filters like the real mock/http clients do (issue #295: the KPI
- * lanes now lead with indexed columns rather than fetch-and-filter in JS).
+ * fake client filters like the real mock/http clients do — the KPI lanes lead
+ * with indexed columns rather than fetch-and-filter in JS.
  * @param {CaseRow[]} rows @param {any} filter
  */
 function applyFilter(rows, filter) {
@@ -370,7 +370,7 @@ test('loadKpiModel: controls lane derives its count via countCases({ hasOpenAppe
   /** @type {any[]} */
   const countCalls = [];
   // No `listCases` on the client: a full-Completed fetch would throw here, so
-  // this proves the lane leads with `countCases` alone (issue #295).
+  // this proves the lane leads with `countCases` alone.
   const client = {
     /** @param {any} f @param {any} opts */
     async countCases(f, opts) {
@@ -507,7 +507,7 @@ test('loadKpiModel: owner lane fetches only In-progress cases per owned Case Typ
 
 test('loadKpiModel: owner lane ignores a server that leaks a non-In-progress row', async () => {
   // Faithful clients never return it, but the pool must not rely on a JS
-  // re-filter — the server-side status predicate is the boundary (issue #295).
+  // re-filter — the server-side status predicate is the boundary.
   const rows = [
     caseRow({ id: 'ip', caseType: 'lending', dueDate: PAST }),
     caseRow({

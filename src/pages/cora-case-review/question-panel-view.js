@@ -37,7 +37,7 @@ function isAnswered(answer) {
 }
 
 /**
- * The CASE-2 Questions view owns its memo cache. Every applicable Question Group
+ * The Questions view owns its memo cache. Every applicable Question Group
  * is composed into one scrolling list (grouped by category/Question Group), and
  * a sticky **Question Group progress** side panel tracks answered/total per
  * group as the review is completed — clicking a group jumps to it. Each card is

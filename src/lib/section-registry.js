@@ -1,7 +1,7 @@
 // @ts-check
 /**
  * Data-driven registry of the built-in Case Review Sections — the single source
- * of truth for which Sections exist and how they are ordered (ADR-0032). Its two
+ * of truth for which Sections exist and how they are ordered. Its two
  * consumers derive their structures from it: `services/section-access.js`
  * (`SECTIONS`, `SUMMARY_SECTIONS`, `showInSummaryDefault`) and
  * `pages/cora-case-review.js` (`tabEntries()` for the tab strip and render

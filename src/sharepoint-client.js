@@ -19,11 +19,11 @@
 /**
  * A **Remediation Action** as it lives on a Case: `text` is the action wording,
  * `status` tracks its resolution, and `cancelReason` is required iff
- * `status === 'cancelled'`. Stored in ADR-0024's `actions`-typed Issue Capture
- * Field value (`Answer.capture[key]`), an array of these.
+ * `status === 'cancelled'`. Stored in the `actions`-typed Issue Capture Field
+ * value (`Answer.capture[key]`), an array of these.
  *
  * A retired store, kept only as a shape: nothing writes or reads one, and
- * resolution is question-level in `remediationStatus` (ADR-0037). The typedef
+ * resolution is question-level in `remediationStatus`. The typedef
  * stays because a persisted Answers blob may still carry such an array under
  * `capture`.
  *
@@ -31,7 +31,7 @@
  */
 
 /**
- * The **question-level Remediation resolution** (#499): how the whole of one
+ * The **question-level Remediation resolution**: how the whole of one
  * Answer's remediation ended up, recorded by the Assigned Reviewer on the
  * Remediation tab once the actions have been sent. `details` carries the free
  * text a non-`complete` resolution requires — *details* for `partial`, a
@@ -44,7 +44,7 @@
 
 /**
  * One Answer to an Applicable Question. Resolution is question-level, in
- * `remediationStatus` (ADR-0037), not per selected Remediation Action. An
+ * `remediationStatus`, not per selected Remediation Action. An
  * unknown key round-trips harmlessly through the JSON blob, so a blob written
  * under an older shape needs no migration.
  *
@@ -68,9 +68,8 @@
  * same Answer (not yet built). `placeholder` is hint text for `text`/`textarea`,
  * ignored for choice types.
  *
- * `'actions'` is **not** declarable: ADR-0037 moved per-action Remediation
- * tracking to `answer.remediationStatus`, and nothing renders or validates such
- * a field.
+ * `'actions'` is **not** declarable: per-action Remediation tracking moved to
+ * `answer.remediationStatus`, and nothing renders or validates such a field.
  *
  * @typedef {{ key: string, label: string, type: 'text' | 'textarea' | 'select' | 'radio' | 'person', options?: string[], required?: boolean, role?: string, showWhen?: Record<string, unknown>, placeholder?: string }} CaptureField
  */
@@ -139,10 +138,10 @@
  */
 
 /**
- * A Case row. The lifecycle is `In-progress → Actions In Progress → Completed`
- *; `reportableAt` is stamped at the **reportable** milestone (Send
- * Actions, or Complete Case on the no-actions path), where the Answers freeze and
- * the Outcome snapshot is taken. `completedAt` is stamped only at the final
+ * A Case row. The lifecycle is `In-progress → Actions In Progress → Completed`;
+ * `reportableAt` is stamped at the **reportable** milestone (Send Actions, or
+ * Complete Case on the no-actions path), where the Answers freeze and the
+ * Outcome snapshot is taken. `completedAt` is stamped only at the final
  * `Completed` transition, so on the actions path `reportableAt` precedes it.
  *
  * `effectiveOutcome` / `effectiveHadRemediation` / `outcomeOverridden`
@@ -152,7 +151,7 @@
  * **Amended Outcome**, not from per-Answer overrides.
  *
  * `assignedReviewerManager` and `responsiblePartyManager` denormalise two
- * org-chart edges onto the row and are not equivalent (**ADR-0038**):
+ * org-chart edges onto the row and are **not** equivalent:
  * `assignedReviewerManager` is a reporting snapshot — the query key behind
  * `#/team-cases` and `#/my-team`, frozen at Reportable — while
  * `responsiblePartyManager` is a written record whose Section access Role is to
@@ -214,8 +213,8 @@
  */
 
 /**
- * A reporting **Label** assigned to Question Definitions from the question bank
- *. Bank-side only — never recorded against a Case. `color` drives the
+ * A reporting **Label** assigned to Question Definitions from the question
+ * bank. Bank-side only — never recorded against a Case. `color` drives the
  * editor's colour pill and is carried into the data-only reporting export.
  *
  * @typedef {{ id: string, name: string, color: string }} Label
@@ -297,13 +296,13 @@
 
 /**
  * A Case **read**'s options: the list options plus the caller's mount-lifetime
- * `AbortSignal` (#545). A route effect binds it once via
+ * `AbortSignal`. A route effect binds it once via
  * `services/abortable-client.js`, so navigating away cancels the reads the
  * abandoned page had in flight — which for a page that fans out across Case
- * sources (ADR-0022) is one request per Case Type list.
+ * sources is one request per Case Type list.
  *
- * Reads only. A queued write must survive navigation (ADR-0008's debounce +
- * ETag concurrency); cancelling one would silently drop a Reviewer's edit.
+ * Reads only. A queued write must survive navigation (the debounce + ETag
+ * concurrency); cancelling one would silently drop a Reviewer's edit.
  * `patchCase` is typed with plain `CaseListOptions` to say so, but the type is
  * not the guarantee — structural typing lets a `CaseReadOptions` value through.
  * The real protections are runtime: `withAbortSignal` wraps reads only,
@@ -423,7 +422,7 @@
 
 /**
  * Per-Question-Group configuration declared by a Case Type, keyed by the
- * `questionGroup` name (#390 Part 3). `allowBulkOutcome` opts the group into
+ * `questionGroup` name. `allowBulkOutcome` opts the group into
  * the Reviewer-facing bulk-verdict control: one selection writes the chosen
  * Outcome wording (or the universal N/A) to every applicable, non-deprecated
  * `outcome`-type question in the group, through the normal answer path.
@@ -447,7 +446,6 @@
  * scoped to one Case Type; mixed-Case-Type tables do not apply one Case Type's
  * variation. `sections` remains the Section layout descriptor. Dashboard
  * composition is owned by dashboard code and is not Case Type configuration.
- * See ADR-0035 and ADR-0036.
  *
  * `generalQuestions` declares the **General Questions** rendered above or beneath the
  * Question Groups on the Review tab — `generalQuestionsPlacement` selects which

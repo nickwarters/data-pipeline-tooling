@@ -26,9 +26,9 @@ export function validateCaptureGroups(groups) {
 }
 
 /**
- * Finds a `CaptureField` by key across all of a Case Type's capture groups
- *. Field keys are unique (see `validateCaptureGroups`), so the first
- * match is authoritative.
+ * Finds a `CaptureField` by key across all of a Case Type's capture groups.
+ * Field keys are unique (see `validateCaptureGroups`), so the first match is
+ * authoritative.
  *
  * @param {CaptureGroup[]} groups
  * @param {string} key

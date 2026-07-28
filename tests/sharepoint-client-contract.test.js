@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * MAINT-14: a shared behavioural contract test for every SharePointClient
+ * A shared behavioural contract test for every SharePointClient
  * implementation. MockSharePointClient and HttpSharePointClient are
  * unrelated classes that each satisfy the `SharePointClient` typedef
  * (src/sharepoint-client.js:279-292) independently; this suite asserts they
@@ -220,7 +220,7 @@ function makeSpBackend(seed) {
 
     // SharePoint Subscription Edition's OData v3 service has **no** `$count`
     // segment: `…/items/$count` comes back as "Cannot find a resource for the
-    // request $count" (issue #486). The fake reproduces that by not routing it,
+    // request $count". The fake reproduces that by not routing it,
     // so a client that reaches for `$count` fails here rather than in prod.
     if (/\/items\/\$count(\?.*)?$/.test(url)) {
       return new Response(

@@ -4,8 +4,8 @@
 // resolved Section access. It hands the result over once, as a plain
 // snapshot, and owns no Answer mutation — the
 // store is the single Answer owner and the route's answer-actions are the only
-// writers (#510). It holds no signals: every field it loads is plain, handed
-// over once through `toStoreSnapshot()` (#529).
+// writers. It holds no signals: every field it loads is plain, handed
+// over once through `toStoreSnapshot()`.
 
 import {
   allApplicableAnswered,
@@ -91,7 +91,7 @@ export class CaseLoader {
 
     // Loading state, written by `load()` and read once by
     // `toStoreSnapshot()`. Plain fields: nothing subscribes, the store owns
-    // the page's reactive state (#529).
+    // the page's reactive state.
     this.loaded = false;
     /** @type {string | null} */
     this.error = null;
@@ -100,7 +100,7 @@ export class CaseLoader {
     /**
      * The loaded Case Row, handed to the store in `toStoreSnapshot()`. As with
      * `answers`, the loader stops touching it at that point: the store is the
-     * owner, and the Appeal/amend transitions replace only its copy (#530).
+     * owner, and the Appeal/amend transitions replace only its copy.
      * @type {CaseRow | null}
      */
     this.caseRow = null;
@@ -110,7 +110,7 @@ export class CaseLoader {
     this.config = null;
     /**
      * Resolved Case Review tab labels / section headings for this Case Type —
-     * `DEFAULT_SECTION_LABELS` overridden by `config.sectionLabels` (MAINT-11).
+     * `DEFAULT_SECTION_LABELS` overridden by `config.sectionLabels`.
      * Populated once `config` loads; defaults until then so components have
      * something to render before `load()` resolves.
      * @type {Required<import('../sharepoint-client.js').SectionLabels>}
@@ -135,9 +135,9 @@ export class CaseLoader {
     this.exportHash = null;
 
     /**
-     * Set only on the ADR-0021 Step 4 fallback path — a Case stamped with an
-     * as-reviewed Question Bank version whose export could not be loaded.
-     * Plain field: nothing subscribes, the store owns the banner (#529).
+     * Set only on the fallback path — a Case stamped with an as-reviewed
+     * Question Bank version whose export could not be loaded.
+     * Plain field: nothing subscribes, the store owns the banner.
      * @type {string | null}
      */
     this.versionWarning = null;
@@ -151,10 +151,10 @@ export class CaseLoader {
   }
 
   /**
-   * Plain snapshot consumed by the CASE-1 route store — the loader's single
-   * handover to the state owner. `applicableQuestions` and `allAnswered` are
-   * derived here and re-derived by the reducer on every Answer edit; #467
-   * replaces both with a selector.
+   * Plain snapshot consumed by the route store — the loader's single handover
+   * to the state owner. `applicableQuestions` and `allAnswered` are derived
+   * here and re-derived by the reducer on every Answer edit; a selector is
+   * meant to replace both.
    */
   toStoreSnapshot() {
     const applicableIds = evaluate(this.catalogue, this.answers);
@@ -259,7 +259,7 @@ export class CaseLoader {
         .map((q) => ({
           id: q.id,
           text: q.text,
-          // Exports published before #390 carry no `questionGroup` key and
+          // Older exports carry no `questionGroup` key and
           // their `category` meant the inner grouping level — remap it so a
           // frozen Case keeps its as-reviewed grouping.
           ...(!('questionGroup' in q)
@@ -289,9 +289,9 @@ export class CaseLoader {
         // Versioned file was stamped but not published — fall back with a warning.
         this.versionWarning = 'as-reviewed version unavailable';
         // A stamped-but-unpublished version means a publish went wrong. The
-        // banner tells the reader; this is the only trace an operator gets (#513).
+        // banner tells the reader; this is the only trace an operator gets.
         console.error(
-          `[CORA] Case ${caseId}: as-reviewed Question Bank version ${versionHash} is stamped on the row but its versioned export could not be loaded. Falling back to the live Question Bank (ADR-0021 Step 4).`
+          `[CORA] Case ${caseId}: as-reviewed Question Bank version ${versionHash} is stamped on the row but its versioned export could not be loaded. Falling back to the live Question Bank.`
         );
       }
       this.catalogue = config.questions.filter((q) => !q.deprecated);
@@ -331,7 +331,7 @@ export class CaseLoader {
     // The resolved catalogue — live bank while In-progress, the stamped
     // versioned export once reportable, `failureValues` derived either way — is
     // what decides whether this Case carries remediation, so the lifecycle model
-    // gets the same one the tabs render from (#502).
+    // gets the same one the tabs render from.
     this.machine = new CaseMachine(
       caseRow,
       { id: actualUserId },

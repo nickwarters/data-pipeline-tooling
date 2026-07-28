@@ -1,17 +1,17 @@
 // @ts-check
 /**
- * Shared writer for the Action Centre **state** reason flags (the architecture decision §2,
- * the Action Centre worklist.
+ * Shared writer for the Action Centre **state** reason flags behind the Action
+ * Centre worklist.
  *
- * the architecture decision splits the Action Centre reasons into time-derived facts (computed on
- * read — `overdue`, day counts) and genuine **states** that only change on an
- * explicit lifecycle transition. The state reasons are stored as plain indexed
- * `Yes/No` columns paired with a `DateTime` clock, and **the app is the sole
- * writer**: each must be set/cleared when its transition happens, in the same
+ * The Action Centre reasons split into time-derived facts (computed on read —
+ * `overdue`, day counts) and genuine **states** that only change on an explicit
+ * lifecycle transition. The state reasons are stored as plain indexed `Yes/No`
+ * columns paired with a `DateTime` clock, and **the app is the sole writer**:
+ * each must be set/cleared when its transition happens, in the same
  * field-level `SaveQueue` PATCH as the transition.
  *
- * The ADR calls out the risk that a missed write leaves a stale flag. This module
- * is the single mitigation: every transition handler routes its flag+clock write
+ * A missed write would leave a stale flag. This module is the single
+ * mitigation: every transition handler routes its flag+clock write
  * through {@link reasonFlagFields} (merged into its own patch) or
  * {@link writeReasonFlag} (the flag alone), so the flag pair can never be
  * forgotten or spelled two different ways.

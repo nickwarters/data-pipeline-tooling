@@ -10,7 +10,7 @@ import {
 
 test('NA_VALUE is the single canonical stored literal', () => {
   // 'NA' is what existing Answers already store; changing it would need a
-  // migration story (#391).
+  // migration story.
   assert.equal(NA_VALUE, 'NA');
 });
 

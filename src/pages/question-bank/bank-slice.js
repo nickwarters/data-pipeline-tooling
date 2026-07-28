@@ -35,7 +35,7 @@ import { normaliseConfiguredActions } from '../../evaluators/configured-outcome.
 
 /**
  * The banks are absent until `start()`'s load resolves — importing this module
- * performs no I/O (#521).
+ * performs no I/O.
  * @returns {QuestionBankRouteState}
  */
 export function initialQuestionBankState() {
@@ -110,7 +110,7 @@ function isEdited(state, slug) {
  * Seat the banks from the **initial** load: both the curator's draft (`cases`)
  * and what it is diffed against (`baseline`) come from the loaded artifacts.
  * A later load must use {@link banksRefreshed} instead — this one overwrites
- * the draft (#550).
+ * the draft.
  *
  * `cases` and `baseline` are separately cloned on purpose: the editor diffs
  * draft against baseline, and sharing one reference would make every diff —
@@ -134,12 +134,12 @@ export function banksLoaded(state, banks, failures = []) {
 }
 
 /**
- * Seat the banks from a **later** load — a retry of a failed artifact (#549),
+ * Seat the banks from a **later** load — a retry of a failed artifact,
  * or a refresh after publishing. The freshly loaded artifacts always become the
  * new `baseline`; they replace a bank's draft only where the curator has no
  * local edit for that slug.
  *
- * **Conflict behaviour (#550): when a bank has both a curator edit and a
+ * **Conflict behaviour: when a bank has both a curator edit and a
  * changed baseline, the draft wins and the upstream change is not applied.**
  * This is deliberate, and the reason is asymmetry of harm: a draft is unsaved,
  * curator-authored work that exists nowhere else, so discarding it is
@@ -155,7 +155,7 @@ export function banksLoaded(state, banks, failures = []) {
  * overwrites the draft anyway. We do NOT raise a conflict prompt here, and
  * there is still no per-bank "baseline moved" signal.
  *
- * **#549 assessed that follow-on and did not build it, because neither of this
+ * **That follow-on was assessed and not built, because neither of this
  * action's two callers can reach the conflict.** A retry (`bank/recovered`)
  * re-fetches only the slugs that FAILED to load, which therefore hold no draft
  * — the curator has never seen them — and it carries the already-loaded
@@ -181,7 +181,7 @@ export function banksLoaded(state, banks, failures = []) {
  * unrecoverable data loss this action exists to prevent. An omitted slug with
  * no local edit is dropped.
  *
- * Because that drop is real, the #549 retry does not hand this action its
+ * Because that drop is real, the retry does not hand this action its
  * fetched subset: `bank/recovered` unions it with the banks already loaded,
  * since both are current. Passing the subset alone would drop every unedited
  * bank from `cases` and every bank from `baseline` — a curator retrying one
@@ -222,7 +222,7 @@ export function banksRefreshed(state, banks, failures = []) {
 }
 
 /**
- * Seat the result of a #549 retry: the artifacts it recovered, unioned with the
+ * Seat the result of a retry: the artifacts it recovered, unioned with the
  * ones that were already loaded.
  *
  * The union is built **here**, from `state.baseline` at dispatch time, and that
@@ -232,7 +232,7 @@ export function banksRefreshed(state, banks, failures = []) {
  * too. A publish landing during an in-flight retry would then be silently
  * rolled back — `cases` and `baseline` both reverting to the pre-publish
  * artifact while `publishStatus` still read `'succeeded'` and `isDirty` read
- * false, which is exactly the invisible data loss #550 exists to prevent.
+ * false, which is exactly the invisible data loss this guards against.
  * Reading the union in the reducer makes that unreachable by construction
  * instead of by an undocumented render-ordering invariant.
  *

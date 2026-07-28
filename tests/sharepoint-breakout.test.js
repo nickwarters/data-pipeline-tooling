@@ -1,6 +1,6 @@
 // @ts-check
 //
-// Issue #268 — the framework, embedded via a Content Editor Web Part, must
+// The framework, embedded via a Content Editor Web Part, must
 // break out of SharePoint's content well to cover the full viewport, and must
 // reset SharePoint SE's inherited styling within our light-DOM subtree. These
 // are pure CSS concerns, so (like framework-contract.test.js) we assert against

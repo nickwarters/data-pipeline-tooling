@@ -22,10 +22,10 @@
 import { CASE_TYPES } from '../../case-types/manifest.js';
 
 /**
- * Resolved capabilities for the current user, derived from group membership
- *. `isReviewer` is implied by any `Reviewers - <type>` list-access
- * group as well as the standalone `Reviewers` functional group. `isVisitor` is
- * DERIVED (not config-driven): true iff the user holds no role at all.
+ * Resolved capabilities for the current user, derived from group membership.
+ * `isReviewer` is implied by any `Reviewers - <type>` list-access group as well
+ * as the standalone `Reviewers` functional group. `isVisitor` is DERIVED (not
+ * config-driven): true iff the user holds no role at all.
  *
  * @typedef {{
  * isReviewer: boolean,
@@ -70,12 +70,11 @@ export const permissions = {
   // Per-Case-Type group names derive from `displayName`: each entry
   // yields `Reviewers - X`, `CaseTypeOwner - X`, and `JourneyOwner - X`.
   // Projected from THE Case Type registry (case-types/manifest.js) so adding a
-  // Case Type is one registry edit (#508). That registry holds importer
+  // Case Type is one registry edit. That registry holds importer
   // *thunks* only, so reading it here stays synchronous and evaluates no Case
-  // Type module — capability resolution remains boot-critical and lazy
-  // (ADR-0004).
+  // Type module — capability resolution remains boot-critical and lazy.
   //
-  // Derived ON READ, not snapshotted at module scope (#527). A snapshot was
+  // Derived ON READ, not snapshotted at module scope. A snapshot was
   // taken the moment this module was first evaluated, so any Case Type
   // registered afterwards was invisible here while `resolveCaseSources()` —
   // which reads the registry live through `displayNameFor()` — already granted

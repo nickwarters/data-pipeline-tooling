@@ -19,7 +19,7 @@ const { loadQuestionBanks } =
 const { banks: liveBanks } = await loadQuestionBanks();
 
 /**
- * The banks now arrive through `start()` rather than at import (#521). Tests
+ * The banks now arrive through `start()` rather than at import. Tests
  * that assert on a populated editor seat them up front, and inject the loader
  * so `start()` does no real I/O.
  * @param {any} [ctx]
@@ -603,7 +603,7 @@ test('bank editor and route effects preserve rejected and disabled branches', as
   /** @type {any} */ (globalThis).location.search = search;
 });
 
-test('#517 bank editor slice: the adapter mount lifetime, not a page latch, suppresses a late publish', async () => {
+test('bank editor slice: the adapter mount lifetime, not a page latch, suppresses a late publish', async () => {
   /**
    * Start a publish that the test releases by hand, keeping the page's own
    * `start()` teardown out of it so only the adapter's lifetime is under test.
@@ -672,7 +672,7 @@ test('#517 bank editor slice: the adapter mount lifetime, not a page latch, supp
 
 /**
  * A store harness over the real slice: `start()` drives it exactly as the
- * adapter would, so the load effect is exercised end to end (#521).
+ * adapter would, so the load effect is exercised end to end.
  * @param {any} deps
  * @param {any} [ctx]
  */
@@ -705,13 +705,13 @@ function mountSlice(deps, ctx = context()) {
   };
 }
 
-// The "no I/O at import" half of #521 cannot be proved from inside this
+// The "no I/O at import" half of the contract cannot be proved from inside this
 // process: a module-scope load would run the real QUESTION_BANK_IMPORTERS,
 // which the fake importer below never sees, so its counter would stay 0 either
 // way. tests/question-bank-import-io-contract.test.js proves it in a child
 // process with the real primitives counted; this test owns the other half —
 // start() performs exactly one load, through the injected seam.
-test('#521 start() performs the single bank load, through the injected importers', async () => {
+test('start() performs the single bank load, through the injected importers', async () => {
   let calls = 0;
   const importers = {
     alpha: async () => {
@@ -748,7 +748,7 @@ test('#521 start() performs the single bank load, through the injected importers
   mounted.unmount();
 });
 
-test('#521 the bank editor renders a loading state before its banks arrive', async () => {
+test('the bank editor renders a loading state before its banks arrive', async () => {
   let release = /** @type {(value?: any) => void} */ (() => {});
   const pending = new Promise((resolve) => {
     release = resolve;
@@ -768,7 +768,7 @@ test('#521 the bank editor renders a loading state before its banks arrive', asy
   mounted.unmount();
 });
 
-test('#521 a bank load that resolves after unmount is discarded', async () => {
+test('a bank load that resolves after unmount is discarded', async () => {
   let release = /** @type {(value?: any) => void} */ (() => {});
   const pending = new Promise((resolve) => {
     release = resolve;
@@ -782,7 +782,7 @@ test('#521 a bank load that resolves after unmount is discarded', async () => {
   assert.deepEqual(mounted.route.cases, {});
 });
 
-test('#521 a failed bank load leaves the editor with an error state, not a blank page', async () => {
+test('a failed bank load leaves the editor with an error state, not a blank page', async () => {
   const errors = [];
   const originalError = console.error;
   console.error = (/** @type {any[]} */ ...args) => errors.push(args);
@@ -807,7 +807,7 @@ test('#521 a failed bank load leaves the editor with an error state, not a blank
   mounted.unmount();
 });
 
-test('#521 a load that reports no banks at all still renders the error shell', async () => {
+test('a load that reports no banks at all still renders the error shell', async () => {
   const mounted = mountSlice({
     loadBanks: async () => ({ banks: {}, failures: [] }),
   });
@@ -820,7 +820,7 @@ test('#521 a load that reports no banks at all still renders the error shell', a
   mounted.unmount();
 });
 
-test('#521 one unloadable bank still names itself while the others stay editable', async () => {
+test('one unloadable bank still names itself while the others stay editable', async () => {
   const mounted = mountSlice({
     loadBanks: async () => ({
       banks: liveBanks,
@@ -835,7 +835,7 @@ test('#521 one unloadable bank still names itself while the others stay editable
   mounted.unmount();
 });
 
-test('#521 the loaded draft and baseline are separate clones, so diffing still sees edits', async () => {
+test('the loaded draft and baseline are separate clones, so diffing still sees edits', async () => {
   const mounted = mountSlice({
     loadBanks: async () => ({ banks: liveBanks, failures: [] }),
   });
@@ -864,7 +864,7 @@ test('#521 the loaded draft and baseline are separate clones, so diffing still s
   mounted.unmount();
 });
 
-test('#521 a sample load that resolves after unmount is discarded', async () => {
+test('a sample load that resolves after unmount is discarded', async () => {
   let release = /** @type {(value?: any) => void} */ (() => {});
   const pending = new Promise((resolve) => {
     release = resolve;
@@ -892,8 +892,8 @@ test('#521 a sample load that resolves after unmount is discarded', async () => 
 });
 
 /**
- * #550 — a minimal two-question bank, so a refresh can change the baseline
- * text without dragging the live artifacts in.
+ * A minimal two-question bank, so a refresh can change the baseline text
+ * without dragging the live artifacts in.
  * @param {string} slug
  * @param {string} text
  * @returns {any}
@@ -913,7 +913,7 @@ function emptyRoute() {
   return createRouteSlice({}, context()).initialState.routes.questionBank;
 }
 
-test('#550 the initial load seats both halves and selects the first bank', () => {
+test('the initial load seats both halves and selects the first bank', () => {
   const banks = {
     alpha: syntheticBank('alpha', 'A?'),
     beta: syntheticBank('beta', 'B?'),
@@ -934,7 +934,7 @@ test('#550 the initial load seats both halves and selects the first bank', () =>
   assert.equal(isDirty(loaded), false);
 });
 
-test('#550 a refresh keeps the curator draft and lets the diff show the divergence', () => {
+test('a refresh keeps the curator draft and lets the diff show the divergence', () => {
   const loaded = questionBankReducer(emptyRoute(), {
     type: 'bank/loaded',
     banks: {
@@ -1015,7 +1015,7 @@ test('#550 a refresh keeps the curator draft and lets the diff show the divergen
   );
 });
 
-test('#550 a partial refresh keeps an edited draft for a slug it omits', () => {
+test('a partial refresh keeps an edited draft for a slug it omits', () => {
   const loaded = questionBankReducer(emptyRoute(), {
     type: 'bank/loaded',
     banks: {
@@ -1035,7 +1035,7 @@ test('#550 a partial refresh keeps an edited draft for a slug it omits', () => {
   );
   assert.equal(edited.cases.beta.questions[0].text, 'PRECIOUS UNSAVED WORK');
 
-  // A #549 retry resolves with only the artifact that had failed.
+  // A retry resolves with only the artifact that had failed.
   const refreshed = questionBankReducer(edited, {
     type: 'bank/refreshed',
     banks: { alpha: syntheticBank('alpha', 'A? (retried)') },
@@ -1094,7 +1094,7 @@ test('#550 a partial refresh keeps an edited draft for a slug it omits', () => {
   assert.deepEqual(Object.keys(unedited.cases), ['alpha']);
 });
 
-test('#550 an inherited key is not a bank, so the selection does not survive', () => {
+test('an inherited key is not a bank, so the selection does not survive', () => {
   const loaded = questionBankReducer(emptyRoute(), {
     type: 'bank/loaded',
     banks: { alpha: syntheticBank('alpha', 'A?') },
@@ -1118,7 +1118,7 @@ test('#550 an inherited key is not a bank, so the selection does not survive', (
   assert.equal(reloaded.activeSlug, 'gamma');
 });
 
-test('#550 an inherited name is not a draft, so a refresh seats the loaded bank', () => {
+test('an inherited name is not a draft, so a refresh seats the loaded bank', () => {
   // Hand-built and deliberately desynchronised: `cases` has no own `toString`,
   // while `baseline` does. A prototype-chain read of `state.cases.toString`
   // finds `Object.prototype.toString` and, differing from that baseline, would
@@ -1155,7 +1155,7 @@ test('#550 an inherited name is not a draft, so a refresh seats the loaded bank'
   );
 });
 
-test('#550 a refresh that drops the active slug reselects an available bank', () => {
+test('a refresh that drops the active slug reselects an available bank', () => {
   const loaded = questionBankReducer(emptyRoute(), {
     type: 'bank/loaded',
     banks: { alpha: syntheticBank('alpha', 'A?') },
@@ -1183,7 +1183,7 @@ test('#550 a refresh that drops the active slug reselects an available bank', ()
   assert.equal(emptied.activeSlug, '');
 });
 
-test('#550 a second bank/loaded also reselects rather than dangling', () => {
+test('a second bank/loaded also reselects rather than dangling', () => {
   const loaded = questionBankReducer(emptyRoute(), {
     type: 'bank/loaded',
     banks: { alpha: syntheticBank('alpha', 'A?') },
@@ -1202,7 +1202,7 @@ test('#550 a second bank/loaded also reselects rather than dangling', () => {
 });
 
 /**
- * #549 — a two-bank workbench where `beta` fails its initial load, so the
+ * A two-bank workbench where `beta` fails its initial load, so the
  * failure banner (and its Retry) is on screen. The fake loader records the
  * `only` argument of every call, which is what "re-fetches only the failed
  * slugs" is actually about.
@@ -1221,7 +1221,7 @@ function recordingLoader(respond) {
   };
 }
 
-/** One failed bank out of two, the shape every #549 test starts from. */
+/** One failed bank out of two, the shape every retry test starts from. */
 function partiallyLoaded() {
   return {
     banks: { alpha: syntheticBank('alpha', 'A?') },
@@ -1234,7 +1234,7 @@ function clickRetry(mounted) {
   fireEvent(getByRole(mounted.view(), 'button', { name: /Retry/ }), 'click');
 }
 
-test('#549 a retry re-fetches only the failed slugs and seats the recovered bank', async () => {
+test('a retry re-fetches only the failed slugs and seats the recovered bank', async () => {
   const loader = recordingLoader((call) =>
     call === 1
       ? partiallyLoaded()
@@ -1271,7 +1271,7 @@ test('#549 a retry re-fetches only the failed slugs and seats the recovered bank
   mounted.unmount();
 });
 
-test('#549 a retry cannot discard an in-progress draft', async () => {
+test('a retry cannot discard an in-progress draft', async () => {
   const loader = recordingLoader((call) =>
     call === 1
       ? partiallyLoaded()
@@ -1310,7 +1310,7 @@ test('#549 a retry cannot discard an in-progress draft', async () => {
   mounted.unmount();
 });
 
-test('#549 a retry that fails again leaves the curator no worse off', async () => {
+test('a retry that fails again leaves the curator no worse off', async () => {
   const loader = recordingLoader((call) =>
     call === 1
       ? partiallyLoaded()
@@ -1360,7 +1360,7 @@ test('#549 a retry that fails again leaves the curator no worse off', async () =
   mounted.unmount();
 });
 
-test('#549 a loader that rejects wholesale still names the failed slugs', async () => {
+test('a loader that rejects wholesale still names the failed slugs', async () => {
   const loader = recordingLoader((call) => {
     if (call === 1) return partiallyLoaded();
     throw new Error('bank artifacts unreachable');
@@ -1380,7 +1380,7 @@ test('#549 a loader that rejects wholesale still names the failed slugs', async 
   mounted.unmount();
 });
 
-test('#549 a second press while a retry is in flight does not fetch twice', async () => {
+test('a second press while a retry is in flight does not fetch twice', async () => {
   let release = /** @type {(value?: any) => void} */ (() => {});
   const loader = recordingLoader((call) =>
     call === 1
@@ -1410,7 +1410,7 @@ test('#549 a second press while a retry is in flight does not fetch twice', asyn
   mounted.unmount();
 });
 
-test('#549 a retry that resolves after unmount is discarded', async () => {
+test('a retry that resolves after unmount is discarded', async () => {
   let release = /** @type {(value?: any) => void} */ (() => {});
   const loader = recordingLoader((call) =>
     call === 1
@@ -1434,7 +1434,7 @@ test('#549 a retry that resolves after unmount is discarded', async () => {
   ]);
 });
 
-test('#549 nothing loaded at all is still recoverable in place', async () => {
+test('nothing loaded at all is still recoverable in place', async () => {
   const loader = recordingLoader((call) =>
     call === 1
       ? { banks: {}, failures: [{ slug: 'alpha', message: '404' }] }
@@ -1460,7 +1460,7 @@ test('#549 nothing loaded at all is still recoverable in place', async () => {
   mounted.unmount();
 });
 
-test('#549 a retry is offered only where a bank actually failed', async () => {
+test('a retry is offered only where a bank actually failed', async () => {
   const clean = mountSlice({
     loadBanks: async () => ({ banks: liveBanks, failures: [] }),
   });
@@ -1480,7 +1480,7 @@ test('#549 a retry is offered only where a bank actually failed', async () => {
   empty.unmount();
 });
 
-test('#549 bank/retry-requested marks the retry without clearing the failures', () => {
+test('bank/retry-requested marks the retry without clearing the failures', () => {
   const loaded = questionBankReducer(emptyRoute(), {
     type: 'bank/loaded',
     banks: { alpha: syntheticBank('alpha', 'A?') },
@@ -1506,7 +1506,7 @@ test('#549 bank/retry-requested marks the retry without clearing the failures', 
   );
 });
 
-test('#549 a publish landing during an in-flight retry is not rolled back', async () => {
+test('a publish landing during an in-flight retry is not rolled back', async () => {
   // The retry's union of "already loaded" and "just recovered" is built inside
   // the reducer, from the state at dispatch time. Built instead from anything
   // the effect captured before it awaited, the publish below is silently undone
@@ -1560,7 +1560,7 @@ test('#549 a publish landing during an in-flight retry is not rolled back', asyn
   mounted.unmount();
 });
 
-test('#549 a wholesale initial load failure is recoverable in place too', async () => {
+test('a wholesale initial load failure is recoverable in place too', async () => {
   let attempt = 0;
   /** @type {any[]} */
   const calls = [];
@@ -1599,7 +1599,7 @@ test('#549 a wholesale initial load failure is recoverable in place too', async 
   mounted.unmount();
 });
 
-test('#549 bank/load-failed clears an in-flight retry', () => {
+test('bank/load-failed clears an in-flight retry', () => {
   const failed = questionBankReducer(
     { ...emptyRoute(), retrying: true },
     { type: 'bank/load-failed', message: 'unreachable' }
@@ -1609,7 +1609,7 @@ test('#549 bank/load-failed clears an in-flight retry', () => {
   assert.equal(failed.loading, false);
 });
 
-test('#549 bank/retry-requested refuses when there is nothing to re-fetch', () => {
+test('bank/retry-requested refuses when there is nothing to re-fetch', () => {
   // Latching `retrying` with no effect behind it is the dead end this guard
   // exists to prevent: nothing else clears it.
   const loaded = questionBankReducer(emptyRoute(), {
@@ -1623,7 +1623,7 @@ test('#549 bank/retry-requested refuses when there is nothing to re-fetch', () =
   );
 });
 
-test('#549 the Retry control is rendered only when a retry tool backs it', () => {
+test('the Retry control is rendered only when a retry tool backs it', () => {
   // Without one there is nothing to run: the control would set `retrying` and
   // strand itself at "Retrying…" forever.
   const state = {
@@ -1649,7 +1649,7 @@ test('#549 the Retry control is rendered only when a retry tool backs it', () =>
   assert.notEqual(queryByRole(wired, 'button', { name: /Retry/ }), null);
 });
 
-test('#549 the Retry control sits outside the live region and keeps focus', async () => {
+test('the Retry control sits outside the live region and keeps focus', async () => {
   const loader = recordingLoader((call) =>
     call === 1
       ? partiallyLoaded()
@@ -1729,7 +1729,7 @@ function editorFixtureBank(slug, label) {
  * The bank editor's own wiring, end to end: render the page's view, fire a real
  * event, assert the exact action, then re-render the reduced state and assert
  * the user-visible consequence. A view test with stub handlers cannot see the
- * page passing the wrong one (#544).
+ * page passing the wrong one.
  *
  * One harness, one `test()` per control: eleven seams inside a single case
  * meant the first failing assertion masked the other ten, and the failure named
@@ -1786,7 +1786,7 @@ function editorHarness() {
   return { slice, loaded, onBeta, render, dispatched };
 }
 
-test('#544 bank editor: the Case Type tab dispatches bank/selected', () => {
+test('bank editor: the Case Type tab dispatches bank/selected', () => {
   const { loaded, render, dispatched } = editorHarness();
   assert.equal(selectQuestionBankState(loaded).activeSlug, 'alpha');
 
@@ -1803,7 +1803,7 @@ test('#544 bank editor: the Case Type tab dispatches bank/selected', () => {
   );
 });
 
-test('#544 bank editor: the Case Type bar opens and closes the compile drawer', () => {
+test('bank editor: the Case Type bar opens and closes the compile drawer', () => {
   const { onBeta, render, dispatched } = editorHarness();
   const opened = dispatched(
     onBeta,
@@ -1826,7 +1826,7 @@ test('#544 bank editor: the Case Type bar opens and closes the compile drawer', 
   assert.equal(selectQuestionBankState(closed).drawerOpen, false);
 });
 
-test('#544 bank editor: the dock opens and closes the compile drawer', () => {
+test('bank editor: the dock opens and closes the compile drawer', () => {
   const { onBeta, render, dispatched } = editorHarness();
   const opened = dispatched(
     onBeta,
@@ -1852,7 +1852,7 @@ test('#544 bank editor: the dock opens and closes the compile drawer', () => {
   assert.equal(selectQuestionBankState(closed).drawerOpen, false);
 });
 
-test('#544 bank editor: a Category chip filters the Question Definition list', () => {
+test('bank editor: a Category chip filters the Question Definition list', () => {
   const { onBeta, render, dispatched } = editorHarness();
   const filtered = dispatched(
     onBeta,
@@ -1879,7 +1879,7 @@ test('#544 bank editor: a Category chip filters the Question Definition list', (
   );
 });
 
-test('#544 bank editor: the Category reorder control dispatches category/moved', () => {
+test('bank editor: the Category reorder control dispatches category/moved', () => {
   const { onBeta, dispatched } = editorHarness();
   dispatched(
     onBeta,
@@ -1893,7 +1893,7 @@ test('#544 bank editor: the Category reorder control dispatches category/moved',
   );
 });
 
-test('#544 bank editor: the Question Group reorder control dispatches group/moved', () => {
+test('bank editor: the Question Group reorder control dispatches group/moved', () => {
   const { onBeta, dispatched } = editorHarness();
   dispatched(
     onBeta,
@@ -1910,7 +1910,7 @@ test('#544 bank editor: the Question Group reorder control dispatches group/move
   );
 });
 
-test('#544 bank editor: the rail toggle opens the rail', () => {
+test('bank editor: the rail toggle opens the rail', () => {
   const { onBeta, render, dispatched } = editorHarness();
   const railOpen = dispatched(
     onBeta,
@@ -1925,7 +1925,7 @@ test('#544 bank editor: the rail toggle opens the rail', () => {
   );
 });
 
-test('#544 bank editor: the add card drafts a Question Definition', () => {
+test('bank editor: the add card drafts a Question Definition', () => {
   const { onBeta, dispatched } = editorHarness();
   const added = dispatched(
     onBeta,
@@ -1939,7 +1939,7 @@ test('#544 bank editor: the add card drafts a Question Definition', () => {
   );
 });
 
-test('#544 bank editor: the BankList dispatch carries a card edit', () => {
+test('bank editor: the BankList dispatch carries a card edit', () => {
   const { slice, onBeta, render } = editorHarness();
   /** @type {any[]} */
   const edits = [];
@@ -1963,7 +1963,7 @@ test('#544 bank editor: the BankList dispatch carries a card edit', () => {
   );
 });
 
-test('#567 the simulator sample load reads through the mount-lifetime signal', async () => {
+test('the simulator sample load reads through the mount-lifetime signal', async () => {
   /** @type {any} */
   let readOptions = null;
   const controller = new AbortController();

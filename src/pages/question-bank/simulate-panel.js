@@ -4,15 +4,14 @@ import { EmptyState } from '../../lib/empty-state.js';
 import { simulateBankImpact } from './question-bank-simulate.js';
 
 /**
- * Read-only impact simulation of the draft bank against sample Cases (issue
- * #202): applicability changes, newly required Answers, Issue changes, and
+ * Read-only impact simulation of the draft bank against sample Cases:
+ * applicability changes, newly required Answers, Issue changes, and
  * Outcome changes, each attributed to the Question Definitions that caused
  * them. Simulation never mutates Cases or publishes the bank.
  *
  * Lives with the bank editor subsystem (not the generic compile drawer
  * component) because it assembles the simulate module against the editor's
- * banks; the drawer receives the rendered panel via its `simulatePanel` prop
- * (issue #382).
+ * banks; the drawer receives the rendered panel via its `simulatePanel` prop.
  *
  * @param {import('./question-bank-source.js').QuestionBank} publishedBank
  * @param {import('./question-bank-source.js').QuestionBank} draftBank

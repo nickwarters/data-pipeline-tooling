@@ -8,7 +8,7 @@ import { buildAmendmentFields } from '../../evaluators/amended-outcome.js';
 /**
  * The one Appeal still awaiting resolution, or `null`.
  *
- * ADR-0027 allows at most one open Appeal at a time, so "not resolved" is a
+ * A Case allows at most one open Appeal at a time, so "not resolved" is a
  * membership question with a single answer. Both Appeal views and the
  * in-memory flow runner ask it, and each used to carry its own copy of the
  * predicate — which is how a rule acquires three definitions that can drift

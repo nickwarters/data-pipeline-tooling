@@ -82,7 +82,7 @@ test('tabEntries derives tab order and ids from the registry', () => {
   assert.ok(!tabs.some((t) => /** @type {string} */ (t.id) === 'conversation'));
 });
 
-// --- Consistency contracts (ADR-0032 acceptance criteria) ---
+// --- Consistency contracts ---
 
 test('the access MATRIX keys equal the registry Section ids (no drift)', () => {
   assert.deepEqual([...Object.keys(MATRIX)].sort(), [...sectionIds()].sort());
@@ -134,7 +134,7 @@ test('adding a Section to a fixture registry flows into every derived structure'
 });
 
 test('the Section id union is stated in exactly one place', () => {
-  // ADR-0032: the registry is the single source of truth for which Sections
+  // The registry is the single source of truth for which Sections
   // exist. The `Section` *type* is projected from it, so no other module may
   // spell the id list out as a hand-written union — a typo in a restated union
   // is self-consistent, so `tsc --checkJs` cannot catch it.

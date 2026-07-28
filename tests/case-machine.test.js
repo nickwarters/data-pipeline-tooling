@@ -49,8 +49,8 @@ const EMPTY_CONFIG = {
 const ATTRIBUTE_CONFIG = { ...EMPTY_CONFIG, attributeFailures: true };
 
 // The Remediation Section used to be gated on a Case Type declaring an
-// `actions`-typed Issue Capture Field. ADR-0037 moved tracking to
-// `answer.remediationStatus` and #497 made `'actions'` undeclarable, so the
+// `actions`-typed Issue Capture Field. Tracking moved to
+// `answer.remediationStatus` and `'actions'` is no longer declarable, so the
 // remediation gate is exercised against a Case Type with no capture groups at
 // all — which is every real Case Type.
 const ACTIONS_CONFIG = EMPTY_CONFIG;
@@ -58,7 +58,7 @@ const ACTIONS_CONFIG = EMPTY_CONFIG;
 /**
  * The Case's resolved catalogue. Whether a Case carries remediation is a
  * question about the tab's *rows*, so every Question these tests answer has to
- * be in it and able to fail (#502).
+ * be in it and able to fail.
  *
  * @type {import('../src/sharepoint-client.js').QuestionDefinition[]}
  */
@@ -141,7 +141,7 @@ test('CaseMachine attribution freezes at reportable while remediation selection 
   assert.equal(machineFor('Completed').canSelectRemediation, false);
 });
 
-test('CaseMachine permits the final close only for the Assigned Reviewer of an Actions In Progress Case (#499)', () => {
+test('CaseMachine permits the final close only for the Assigned Reviewer of an Actions In Progress Case', () => {
   // The *content* half of the gate — every Question's remediation resolved —
   // lives in completionControl/completionPatch, which see the live Answers.
   /** @type {Record<string, import('../src/sharepoint-client.js').Answer>} */
@@ -177,7 +177,7 @@ test('CaseMachine permits the final close only for the Assigned Reviewer of an A
   );
 });
 
-test('CaseMachine Send Actions stamps the reportable snapshot without completedAt (ADR-0023)', () => {
+test('CaseMachine Send Actions stamps the reportable snapshot without completedAt', () => {
   const answers = {
     'q-needs': {
       value: 'No',
@@ -224,7 +224,7 @@ test('CaseMachine no-actions completion stamps reportable and completed together
   assert.equal(Object.hasOwn(fields, 'remediationDueDate'), false);
 });
 
-test('CaseMachine snapshots hadRemediation from free-form remediation too (#502)', () => {
+test('CaseMachine snapshots hadRemediation from free-form remediation too', () => {
   const fields = machineFor('In-progress').transitionToActionsInProgress(
     () => ({ outcome: 'fail' }),
     { 'q-welcome': { value: 'No', freeFormRemediation: 'Call back' } },
@@ -234,7 +234,7 @@ test('CaseMachine snapshots hadRemediation from free-form remediation too (#502)
   assert.equal(fields.effectiveHadRemediation, true);
 });
 
-test('CaseMachine does not stamp hadRemediation for a Question that has left the catalogue (#502)', () => {
+test('CaseMachine does not stamp hadRemediation for a Question that has left the catalogue', () => {
   // A Maintainer deprecated the Question after the Reviewer typed the
   // remediation — the operation CLAUDE.md mandates instead of deletion. The
   // Answer keeps the text, but the Remediation tab has no row for it, so the
@@ -268,7 +268,7 @@ test('CaseMachine does not stamp hadRemediation for a Question that has left the
   );
 });
 
-test('CaseMachine stamps every lifecycle timestamp from the injected clock (#511)', () => {
+test('CaseMachine stamps every lifecycle timestamp from the injected clock', () => {
   const now = () => new Date('2026-07-23T09:30:00.000Z');
   /** @param {'In-progress'|'Actions In Progress'} status */
   const machine = (status) =>
@@ -287,7 +287,7 @@ test('CaseMachine stamps every lifecycle timestamp from the injected clock (#511
   );
   assert.equal(sendActions.reportableAt, '2026-07-23T09:30:00.000Z');
   // The SLA start moves with the clock; the working-day arithmetic behind it
-  // does not (ADR-0025 — the holiday list stays frozen).
+  // does not (the holiday list stays frozen).
   assert.equal(sendActions.remediationDueDate, '2026-08-06');
 
   const completed = machine('In-progress').transitionToCompleted(

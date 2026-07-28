@@ -177,7 +177,7 @@ test('journey cases descriptors and pure view preserve links, empty state, and s
   assert.ok(/** @type {any} */ (loaded)._children.length > 0);
 });
 
-test('#542 journey cases: an overdue Case carries the overdue row class, like every other Case table', () => {
+test('journey cases: an overdue Case carries the overdue row class, like every other Case table', () => {
   const slice = createRouteSlice({}, context());
   /** @param {CaseRow[]} cases */
   const rowClasses = (cases) =>

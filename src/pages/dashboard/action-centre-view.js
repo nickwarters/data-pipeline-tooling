@@ -1,5 +1,5 @@
 // @ts-check
-// Store-driven Action Centre view/effects for GRID-4.
+// Store-driven Action Centre view and effects.
 import { h } from '../../lib/html.js';
 import { EmptyState } from '../../lib/empty-state.js';
 import { caseRouteFor } from '../../lib/case-route-links.js';
@@ -248,7 +248,7 @@ function groupView(reason, state, handlers) {
 
 /**
  * Pure descriptor-driven reason-list view. Reason definitions and flag
- * behaviour stay owned by `action-centre-model.js` / ADR-0030.
+ * behaviour stay owned by `action-centre-model.js`.
  *
  * @param {ReturnType<typeof initialActionCentreState>} state
  * @param {ActionCentreHandlers} handlers

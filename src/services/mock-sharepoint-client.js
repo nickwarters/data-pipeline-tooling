@@ -131,8 +131,8 @@ export class MockSharePointClient {
 
   /**
    * A predicate for one `ListCasesFilter`. Scalar fields are ANDed equalities;
-   * `overdue` is the In-progress + past-due derivation; `anyOf` ORs sub-filters
-   *. Shared by `listCases` and `countCases` so a filtered count and
+   * `overdue` is the In-progress + past-due derivation; `anyOf` ORs
+   * sub-filters. Shared by `listCases` and `countCases` so a filtered count and
    * its paged rows can never drift apart within a single point-in-time read.
    *
    * @param {ListCasesFilter} filter
@@ -342,7 +342,7 @@ export class MockSharePointClient {
 }
 
 /**
- * Honour a read's `AbortSignal` (#545). A mock that ignored cancellation
+ * Honour a read's `AbortSignal`. A mock that ignored cancellation
  * entirely would make every test of the new behaviour a lie, so a signalled
  * read yields a turn and re-checks, and a caller that aborts within that window
  * gets the rejection a real `fetch` would give it.

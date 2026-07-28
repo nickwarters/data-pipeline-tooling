@@ -50,7 +50,7 @@ import {
  * @property {import('../services/section-access.js').Section[]} summarySections
  * @property {string | null} exportHash
  * @property {string | null} versionWarning
- *   Set when ADR-0021's as-reviewed Question Bank was stamped on the row but its
+ *   Set when the as-reviewed Question Bank was stamped on the row but its
  *   versioned export could not be fetched, so the *live* catalogue is what the
  *   page is showing. Rendered as a page-level banner — see `versionWarningView`.
  * @property {Record<import('../services/section-access.js').Section, import('../services/section-access.js').Mode>} access
@@ -155,7 +155,7 @@ export function caseReviewReducer(state, action) {
     return patchRoute(state, 'caseReview', {
       snapshot: action.snapshot,
       activeTab: tabs[0]?.id ?? '',
-      // The Conversation panel starts collapsed on every load (#537).
+      // The Conversation panel starts collapsed on every load.
       conversationHidden: true,
     });
   }
@@ -183,9 +183,9 @@ export function caseReviewReducer(state, action) {
   // the row, so `machine.mayResolveRemediation` can read false against a row
   // reading `Actions In Progress`. That is harmless only *because* completion
   // navigates away; whoever keeps the Reviewer on the Case after Send Actions
-  // owns deriving the machine there. Deriving it here would convert ADR-0011's
-  // access matrix from a load-time evaluation to a live one — a
-  // permission-surface decision, not a staleness fix.
+  // owns deriving the machine there. Deriving it here would convert the access
+  // matrix from a load-time evaluation to a live one — a permission-surface
+  // decision, not a staleness fix.
   if (action.type === 'case/case-row-patched' && route.snapshot?.caseRow) {
     return patchSnapshot(state, {
       caseRow: { ...route.snapshot.caseRow, ...action.fields },
@@ -349,7 +349,7 @@ function saveStatusView(status) {
 }
 
 /**
- * ADR-0021 Step 4's fallback, made visible. When the as-reviewed export is
+ * The Question Bank fallback, made visible. When the as-reviewed export is
  * missing the page falls back to the live Question Bank — a degraded read beats
  * a blocked audit — and the Cases affected are exactly the ones under audit.
  * Page-level rather than tab-scoped, because it qualifies every Section; not a
@@ -394,7 +394,7 @@ export function conversationPanelMode(
 }
 
 /**
- * CASE-1 route slice. The loader adapts existing loading/domain behaviour
+ * Case Review route slice. The loader adapts existing loading/domain behaviour
  * into store snapshots; the interim adapter owns only the unconverted Section
  * components.
  *
@@ -404,7 +404,7 @@ export function conversationPanelMode(
 export function createRouteSlice(params, context) {
   const panelMode = conversationPanelMode();
   let dispatch = (/** @type {any} */ _action) => {};
-  // The adapter's mount lifetime, captured in start() (#517).
+  // The adapter's mount lifetime, captured in start().
   let isSliceActive = () => false;
   /** @type {Map<string, ReturnType<typeof setTimeout>>} */
   const attributionTimers = new Map();
@@ -412,12 +412,12 @@ export function createRouteSlice(params, context) {
   const pendingAttributionQueries = new Map();
   /**
    * The client this route **reads** through. Swapped in `start()` for the same
-   * client with the mount lifetime bound to its reads (#567), so navigating
+   * client with the mount lifetime bound to its reads, so navigating
    * away cancels what this page still has in flight.
    *
    * Reads only. `context.saveQueue` was built at boot around the raw client and
-   * is never rebound here: a queued Answer save must survive navigation
-   * (ADR-0008), and cancelling one would be data loss.
+   * is never rebound here: a queued Answer save must survive navigation, and
+   * cancelling one would be data loss.
    *
    * @type {import('../sharepoint-client.js').SharePointClient}
    */
@@ -442,7 +442,7 @@ export function createRouteSlice(params, context) {
   // Built here rather than in `start()`: a persistence path is not a place for a
   // window where the write silently does nothing. The store's `dispatch` is the
   // only part that does not exist yet, so the effects close over the mutable
-  // local above — a no-op until `start()` swaps the real one in (#511).
+  // local above — a no-op until `start()` swaps the real one in.
   const save = createCaseReviewSaveEffect({
     saveQueue: context.saveQueue,
     caseId,
@@ -761,7 +761,7 @@ export function createRouteSlice(params, context) {
 
     // Every Section renders the same three ways: resolve visibility, toggle
     // `hidden` (panels stay mounted so render() keeps focus/caret/scroll across
-    // tab switches — ADR-0034/CORE-2), then render the panel its view returns.
+    // tab switches), then render the panel its view returns.
     // What differs per Section lives in SECTION_PANELS, not here.
     const panelContext = {
       snapshot,
@@ -864,9 +864,9 @@ export function createRouteSlice(params, context) {
                       });
                     }
                   } finally {
-                    // Both dispatches are post-`await`, so both take the #517
-                    // guard — dispatching into a disposed mount still runs the
-                    // reducer, and only the render is suppressed.
+                    // Both dispatches are post-`await`, so both take the
+                    // mount-lifetime guard — dispatching into a disposed mount
+                    // still runs the reducer, and only the render is suppressed.
                     if (tools.isActive()) {
                       tools.dispatch({
                         type: 'case/completion-pending',
@@ -880,7 +880,7 @@ export function createRouteSlice(params, context) {
             ),
             // The gate's reason travels with the button rather than living only
             // on the Remediation tab, so it is legible from wherever the Reviewer
-            // is standing (#499).
+            // is standing.
             ...(completion.reason
               ? [
                   h(
@@ -909,7 +909,7 @@ export function createRouteSlice(params, context) {
       dispatch = tools.dispatch;
       isSliceActive = tools.isActive;
       // Bind the mount lifetime to this route's reads, then build the loader
-      // around the bound client (#567). `withAbortSignal` is total, so a
+      // around the bound client. `withAbortSignal` is total, so a
       // client-less mount degrades exactly as it did before rather than
       // failing the route here.
       readClient = withAbortSignal(context.client, tools.signal);

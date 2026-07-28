@@ -12,7 +12,7 @@ import { evaluate } from './applicability-evaluator.js';
  * Computes per-Question-Group answered/total counts for applicable,
  * non-deprecated questions. (This was `computeSectionProgress`, which
  * overloaded "section" — a reserved word for the role-gated tab areas — to
- * mean the question grouping; #390 renamed the grouping to Question Group.)
+ * mean the question grouping; the grouping is now the Question Group.)
  * Questions without a Question Group are grouped under 'General'. Group order
  * follows first-seen order in the catalogue. An N/A Answer counts as answered.
  *

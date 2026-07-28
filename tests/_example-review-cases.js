@@ -1,6 +1,6 @@
 // @ts-check
 // Test-only fixture: the example-review demo Cases. `example-review` was retired
-// from the production manifest and the mock client in issue #383 (complaints is
+// from the production manifest and the mock client (complaints is
 // the only live Case Type), but its Cases remain the canonical exercise of the
 // case-review flow across the test suite. They live here — not in
 // dev/fixtures/cases.js — so `?mock=1` serves complaints alone and nothing
@@ -96,7 +96,7 @@ export const exampleReviewCases = [
           loginName: 'agent.c',
           displayName: 'Agent C (Casey Doyle)',
         },
-        // Unified Issue Capture (ADR-0020): values captured against this failed
+        // Unified Issue Capture: values captured against this failed
         // Answer, keyed by CaptureField.key, demonstrating the four string types.
         capture: {
           rootCause: 'Skipped the needs-identification step',
@@ -330,11 +330,11 @@ export const exampleReviewCases = [
   },
   {
     // A Completed example-review Case that FAILED at completion (q-needs = No)
-    // and was later corrected by Controls via a case-level Amended Outcome
-    // (ADR-0026): the hand-set verdict is `pass`, with the audit stamp and the
-    // re-derived ADR-0019 reporting columns. Demonstrates the observer's
-    // amendment-record view and the Current Outcome (`pass`) overriding the
-    // frozen `outcomeAtCompletion` (`fail`). Completed two months ago so it sits
+    // and was later corrected by Controls via a case-level Amended Outcome: the
+    // hand-set verdict is `pass`, with the audit stamp and the re-derived
+    // reporting columns. Demonstrates the observer's amendment-record
+    // view and the Current Outcome (`pass`) overriding the frozen
+    // `outcomeAtCompletion` (`fail`). Completed two months ago so it sits
     // outside the owner roll-up's 7-day window.
     id: 'case-15',
     caseType: 'example-review',
@@ -369,12 +369,12 @@ export const exampleReviewCases = [
     etag: 'etag-c15-v1',
   },
   {
-    // The third lifecycle status (ADR-0023): a Case past **Send Actions** but not
+    // The third lifecycle status: a Case past **Send Actions** but not
     // yet closed. Exercises the storage fields stamped at the reportable milestone
-    // — `reportableAt`, the +10-working-day `remediationDueDate` (ADR-0025), the
+    // — `reportableAt`, the +10-working-day `remediationDueDate`, the
     // frozen Outcome snapshot — while `completedAt` is still null. The failed
-    // Answer carries its sent Remediation Actions in the ADR-0024 object shape
-    // (`{ id, text, status }`) inside the ADR-0020 `actions` capture value, with a
+    // Answer carries its sent Remediation Actions in the object shape
+    // (`{ id, text, status }`) inside the `actions` capture value, with a
     // legacy bare string alongside to exercise read-time coercion.
     id: 'case-16',
     caseType: 'example-review',

@@ -41,7 +41,7 @@ export class Router {
    * Match a hash against the registered patterns. The router already has to
    * split the query string off in order to match the path, so it hands that
    * query string back to the handler as `params.queryString` rather than
-   * making a route reach for `location.hash` itself (#548). It is the raw
+   * making a route reach for `location.hash` itself. It is the raw
    * string, leading `?` included (or `''` when there is no query), because the
    * vocabulary of what a page's parameters mean belongs to that page — see
    * `services/team-cases-params.js`.

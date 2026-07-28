@@ -229,7 +229,7 @@ test('materializeRemediationActions: strips remediationActions when answer becom
   assert.equal('remediationActions' in out, false);
 });
 
-test('materializeRemediationActions: retains remediationStatus on a still-failing answer (#499)', () => {
+test('materializeRemediationActions: retains remediationStatus on a still-failing answer', () => {
   const out = materializeRemediationActions(Q_FAIL_NO, {
     value: 'No',
     remediationActions: [{ id: 'q-needs-ra-0', text: 'Retrain agent.' }],
@@ -238,7 +238,7 @@ test('materializeRemediationActions: retains remediationStatus on a still-failin
   assert.deepEqual(out.remediationStatus, { status: 'complete' });
 });
 
-test('materializeRemediationActions: strips remediationStatus when answer becomes passing (#499)', () => {
+test('materializeRemediationActions: strips remediationStatus when answer becomes passing', () => {
   // The resolution shares the failure lifecycle with the remediation it resolves.
   // Left behind, a re-failed Answer would render pre-resolved and the completion
   // gate would count it as done.
@@ -249,7 +249,7 @@ test('materializeRemediationActions: strips remediationStatus when answer become
   assert.equal('remediationStatus' in out, false);
 });
 
-test('materializeRemediationActions: retains freeFormRemediation on a still-failing answer (issue #250)', () => {
+test('materializeRemediationActions: retains freeFormRemediation on a still-failing answer', () => {
   const out = materializeRemediationActions(Q_FAIL_NO, {
     value: 'No',
     freeFormRemediation: 'Call the customer back.',
@@ -257,7 +257,7 @@ test('materializeRemediationActions: retains freeFormRemediation on a still-fail
   assert.equal(out.freeFormRemediation, 'Call the customer back.');
 });
 
-test('materializeRemediationActions: strips freeFormRemediation when answer becomes passing (issue #250)', () => {
+test('materializeRemediationActions: strips freeFormRemediation when answer becomes passing', () => {
   const out = materializeRemediationActions(Q_FAIL_NO, {
     value: 'Yes',
     freeFormRemediation: 'Call the customer back.',

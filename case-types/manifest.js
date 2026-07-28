@@ -15,7 +15,7 @@ import {
  * artifacts. `slug` and `displayName` are the only parts readable without
  * evaluating a Case Type module, which is what lets the boot-critical,
  * synchronous permissions config derive its per-Case-Type group names from this
- * one registry (#508) while keeping ADR-0004's lazy loading intact.
+ * one registry while keeping the lazy loading intact.
  *
  * `bank` is optional: a Case Type may be registered before its Question Bank
  * artifact exists (the scaffold path), in which case it simply does not appear
@@ -42,7 +42,7 @@ const registry = [
 /**
  * THE Case Type registry. Adding a Case Type is one entry here, plus its config
  * module under `case-types/` and (optionally) its bank artifact under
- * `case-types/banks/`. `displayName` is load-bearing and lives ONLY here (#527):
+ * `case-types/banks/`. `displayName` is load-bearing and lives ONLY here:
  * it composes the three provisioned SharePoint group names — see
  * `caseTypeGroupNames()` in `src/services/permissions.js` — and both the
  * capability side (`permissions.caseTypes`) and the Case-source eligibility side
@@ -91,7 +91,7 @@ for (const entry of registry) deriveImporters(entry);
 
 /**
  * Register a Case Type after module evaluation, through the registry, so the
- * derived importer maps cannot diverge from `CASE_TYPES` (#527). Test fixtures
+ * derived importer maps cannot diverge from `CASE_TYPES`. Test fixtures
  * (`tests/_register-example-review.js`) use this; production Case Types belong
  * in the `registry` literal above.
  *
@@ -134,7 +134,7 @@ export function registerCaseType(entry) {
 /**
  * The registered display name for a slug — the ONE copy that composes a Case
  * Type's SharePoint group names. Synchronous and lazy: the registry holds
- * importer thunks only, so this evaluates no Case Type module (ADR-0004).
+ * importer thunks only, so this evaluates no Case Type module.
  *
  * @param {string} slug
  * @returns {string}

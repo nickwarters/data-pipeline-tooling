@@ -5,12 +5,12 @@
  * `createStoreRoute` owns an `AbortController` per mount and exposes it as
  * `tools.signal`. A route effect binds it here once, in `start()`, so every read
  * it issues — including the per-Case-source fan-out in
- * `services/across-sources.js` (ADR-0022) — is cancelled on navigation. Binding
+ * `services/across-sources.js` — is cancelled on navigation. Binding
  * at the client rather than threading a `signal` through every fetcher leaves
  * the fan-out and page-level fetchers unchanged.
  *
  * **Reads only, deliberately.** `patchCase` is forwarded untouched: a write must
- * survive navigation (ADR-0008), and cancelling a queued Answer save would be
+ * survive navigation, and cancelling a queued Answer save would be
  * data loss. `SaveQueue` holds the raw client and never sees this wrapper.
  *
  * The wrapper is a `Proxy` so a method the underlying client does not implement

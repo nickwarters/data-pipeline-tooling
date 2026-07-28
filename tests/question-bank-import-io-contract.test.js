@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * #521: importing the Question Bank source or slice must perform no I/O.
+ * Importing the Question Bank source or slice must perform no I/O.
  *
  * A same-process test cannot prove this — a module-scope load runs the real
  * `QUESTION_BANK_IMPORTERS`, which an in-test fake importer never sees, and a
@@ -47,7 +47,7 @@ for (const modulePath of [
   // ticket named.
   'src/pages/question-bank/cora-bank-editor.js',
 ]) {
-  test(`#521 importing ${modulePath} reads no Question Bank artifact`, () => {
+  test(`importing ${modulePath} reads no Question Bank artifact`, () => {
     const probe = probeImport(modulePath);
 
     assert.ok(

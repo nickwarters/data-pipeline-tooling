@@ -184,7 +184,7 @@ test('reviewer worklist preserves the legacy columns, filters, and Open action',
       relatedDate: '2026-01-01',
       dueDate: '2026-01-10',
       created: 'reviewer-a',
-      // Overdue, so the row class this table renders is pinned below (#542).
+      // Overdue, so the row class this table renders is pinned below.
       overdue: true,
     },
     {
@@ -219,7 +219,7 @@ test('reviewer worklist preserves the legacy columns, filters, and Open action',
   assert.match(unfiltered.textContent, /Alpha case/);
   assert.match(unfiltered.textContent, /Beta case/);
   assert.match(unfiltered.textContent, /fallback-reference/);
-  // #542 centralised this table's `rowClass` on the shared
+  // This table's `rowClass` is centralised on the shared
   // `overdueCaseRowClass`, so pin what it renders here too — otherwise only the
   // Journey Cases test fails when the shared helper is broken, and the
   // reviewer worklist loses its overdue styling silently. The Dashboard is the
@@ -311,7 +311,7 @@ test('reviewer worklist preserves the legacy columns, filters, and Open action',
   statusFilter.value = 'In-progress';
   statusFilter.dispatchEvent({ type: 'change', target: statusFilter });
   // This table opens the Case, so `Open ${reference}` is the right name and
-  // stays the default (#541).
+  // stays the default.
   const open = getByRole(view, 'button', { name: 'Open Beta case' });
   assert.equal(open.className, 'cora-case-open-btn');
   open.dispatchEvent(/** @type {any} */ ({ type: 'click' }));
@@ -1170,7 +1170,7 @@ test('dashboard pure view composes every real panel for a multi-role user', () =
     fireEvent(button, 'click', { bubbles: false })
   );
   // Not `actions.length > 0`: that aggregate stayed true while individual
-  // Action Centre seams were no-ops (#544). Name every controller callback the
+  // Action Centre seams were no-ops. Name every controller callback the
   // panel is supposed to reach, in document order.
   const reasonIds =
     slice.initialState.routes.dashboard.actionCentre.reasons.map(
@@ -1324,7 +1324,7 @@ test('dashboard Action Centre controller reloads scope, groups, and pages throug
   dispose?.();
 });
 
-test('#516 dashboard view: clicking a reviewer column header dispatches the reviewer table sort action', () => {
+test('dashboard view: clicking a reviewer column header dispatches the reviewer table sort action', () => {
   const ctx = context(capabilities({ isReviewer: true }));
   const slice = createRouteSlice({}, ctx);
   const loaded = slice.reducer(slice.initialState, {
@@ -1354,7 +1354,7 @@ test('#516 dashboard view: clicking a reviewer column header dispatches the revi
   ]);
 });
 
-test('#516 dashboard view: clicking an appeals column header dispatches the appeals table sort action', () => {
+test('dashboard view: clicking an appeals column header dispatches the appeals table sort action', () => {
   const ctx = context(capabilities({ isControls: true }));
   const slice = createRouteSlice({}, ctx);
   const loaded = slice.reducer(slice.initialState, {
@@ -1382,11 +1382,11 @@ test('#516 dashboard view: clicking an appeals column header dispatches the appe
   ]);
 });
 
-test('#542 dashboard appeals: Reference and Case Type sort for real — click, dispatch, sorted render', () => {
+test('dashboard appeals: Reference and Case Type sort for real — click, dispatch, sorted render', () => {
   const ctx = context(capabilities({ isControls: true }));
   const slice = createRouteSlice({}, ctx);
   // The Appeals table's deliberate default, unmoved by gaining two sortable
-  // columns (#516).
+  // columns.
   assert.deepEqual(slice.initialState.routes.dashboard.appealSort, {
     key: 'raised',
     dir: 'asc',
@@ -1452,7 +1452,7 @@ test('#542 dashboard appeals: Reference and Case Type sort for real — click, d
   }
 });
 
-test('dashboard slice: navigating away aborts the fan-out reads with no error UI (#545)', async () => {
+test('dashboard slice: navigating away aborts the fan-out reads with no error UI', async () => {
   const ctx = context(capabilities({ isReviewer: true }));
   const controller = new AbortController();
   let aborted = false;
@@ -1497,7 +1497,7 @@ test('dashboard slice: navigating away aborts the fan-out reads with no error UI
   assert.deepEqual(ctx.chrome.toasts, [], 'an abort raises no toast');
 });
 
-test('dashboard Action Centre: an aborted count or page load dispatches nothing (#545)', async () => {
+test('dashboard Action Centre: an aborted count or page load dispatches nothing', async () => {
   const ctx = context(capabilities({ isReviewer: true, isAdviser: true }));
   ctx.client = { countCases() {} };
   const controller = new AbortController();
@@ -1548,7 +1548,7 @@ test('dashboard Action Centre: an aborted count or page load dispatches nothing 
   assert.deepEqual(ctx.chrome.toasts, [], 'an abort raises no toast');
 });
 
-test('dashboard Action Centre: an aborted reason-page read renders no rows and no error (#545)', async () => {
+test('dashboard Action Centre: an aborted reason-page read renders no rows and no error', async () => {
   const ctx = context(capabilities({ isReviewer: true, isAdviser: true }));
   ctx.client = { countCases() {} };
   const abortError = Object.assign(new Error('aborted'), {
@@ -1602,7 +1602,7 @@ test('dashboard Action Centre: an aborted reason-page read renders no rows and n
   assert.deepEqual(ctx.chrome.toasts, [], 'an abort raises no toast');
 });
 
-test('dashboard slice: a client-less mount with a mount signal renders an empty dashboard rather than failing the route (#545)', async () => {
+test('dashboard slice: a client-less mount with a mount signal renders an empty dashboard rather than failing the route', async () => {
   const ctx = context(capabilities({ isReviewer: true, isControls: true }));
   ctx.client = null;
   const controller = new AbortController();
@@ -1630,17 +1630,17 @@ test('dashboard slice: a client-less mount with a mount signal renders an empty 
 });
 
 /*
- * #544 audit — seams deliberately left uncovered here, and why. (The audit's
+ * Page-wiring audit — seams deliberately left uncovered here, and why. (The audit's
  * page-wiring assertions live in this file, cora-case-review-slice.test.js,
  * cora-conversation-view.test.js, cora-responsible-party-dashboard-loading.test.js
  * and question-bank-slice.test.js.)
  *
  * - Table sort headers on the Dashboard reviewer + appeals tables, My Team, and
  *   the Responsible Party remediation + unread tables: already asserted
- *   click→dispatch by #516 and #542. Covered elsewhere, not gaps.
+ *   click→dispatch by the table sort tests. Covered elsewhere, not gaps.
  * - The question-bank sub-editors (options-editor, wording-editor, showwhen-*,
  *   question-labels): every card edit reaches the store through the one
- *   `BankList` dispatch prop, which the `#544 bank editor: the BankList dispatch
+ *   `BankList` dispatch prop, which the `bank editor: the BankList dispatch
  *   carries a card edit` test asserts. Covering each sub-editor separately would
  *   re-assert the same seam.
  * - Case Review Section panels (summary/outcome/notes/appeal views): asserted
@@ -1651,7 +1651,7 @@ test('dashboard slice: a client-less mount with a mount signal renders an empty 
  *   no wiring seam to mis-wire.
  */
 
-test('#544 dashboard KPI strip: a lane header and a tile dispatch the disclosure actions the reducer owns', () => {
+test('dashboard KPI strip: a lane header and a tile dispatch the disclosure actions the reducer owns', () => {
   const ctx = context(capabilities({ isReviewer: true }));
   const slice = createRouteSlice({}, ctx);
   const loaded = slice.reducer(slice.initialState, {
@@ -1723,7 +1723,7 @@ test('#544 dashboard KPI strip: a lane header and a tile dispatch the disclosure
   assert.equal(inStrip(expandedView, '.cora-kpi-row__count')?.textContent, '2');
 });
 
-test('#544 dashboard Action Centre: its own Open button navigates to the Case', () => {
+test('dashboard Action Centre: its own Open button navigates to the Case', () => {
   // Deliberately not a Reviewer: the reviewer worklist has an Open button too,
   // and this assertion must fail when *this* panel stops navigating.
   const ctx = context(capabilities({ isControls: true }));
@@ -1770,7 +1770,7 @@ test('#544 dashboard Action Centre: its own Open button navigates to the Case', 
   assert.equal(location.hash, '#/case/complaints/c7');
 });
 
-test('#544 dashboard Action Centre: the group header and Show more reach the panel’s own controller', () => {
+test('dashboard Action Centre: the group header and Show more reach the panel’s own controller', () => {
   // `onToggleGroup` and `onShowMore` are the last two Action Centre seams the
   // page owns. Stubbing either to a no-op used to leave the suite green while
   // the header stopped expanding and pagination died silently.
@@ -1829,7 +1829,7 @@ test('#544 dashboard Action Centre: the group header and Show more reach the pan
   ]);
 });
 
-test('#544 dashboard Responsible Party panel: Open conversation navigates to the Conversation route', () => {
+test('dashboard Responsible Party panel: Open conversation navigates to the Conversation route', () => {
   // The embedded panel is the only one that opts into navigation; #/my-cases
   // deliberately keeps the historic no-navigation Open (see the slice).
   const ctx = context(capabilities({ isAdviser: true }));

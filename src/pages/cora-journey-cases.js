@@ -94,7 +94,7 @@ export function createRouteSlice(
     start(/** @type {any} */ tools) {
       if (!tools.context.client) return;
       // The signal cancels the per-source fan-out on navigation; the
-      // isActive() guard still stops a late dispatch (#545 / #517).
+      // isActive() guard still stops a late dispatch.
       const client = withAbortSignal(tools.context.client, tools.signal);
       void fetchCases(client, tools.context.journeyCaseSources)
         .then((cases) => {

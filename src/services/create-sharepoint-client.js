@@ -6,7 +6,7 @@ import { resolveEnvironment } from '../config/environment.js';
  * Pass `?mock=1` to get a MockSharePointClient backed by dev fixtures.
  * Pass `?asUser=<persona>` to select a fixture persona (default: 'reviewer').
  *
- * `env` (ADR-0033) scopes the real HTTP client to the deployment
+ * `env` scopes the real HTTP client to the deployment
  * environment's lists and export path; it never affects the mock client.
  *
  * @param {URLSearchParams} params
@@ -39,7 +39,7 @@ export async function createSharePointClient(
     // Cases are read/written list-scoped. Partition the flat fixture array by
     // each Case Type's `listName` into the mock client's per-list stores.
     // There is no default store — the partition is total. The fixture Cases are
-    // complaints-only (issue #383); example-review is a test-only fixture and is
+    // complaints-only; example-review is a test-only fixture and is
     // not served by the mock client.
     const lists = await partitionCasesByList(cases, (slug) =>
       loadCaseTypeConfig(slug)
@@ -67,7 +67,7 @@ export async function createSharePointClient(
  * Without this, every `/_api/...` path resolves root-relative against the web
  * application root — on a site-path deployment (`/sites/cora`) that is a web
  * the user has no access to, so boot dies in an NTLM 401 credential-prompt
- * loop (#464). Server-relative is preferred over absolute so Alternate Access
+ * loop. Server-relative is preferred over absolute so Alternate Access
  * Mapping / proxy hosts never disagree with the page's own origin. Empty when
  * there is no SharePoint page context (dev loop), preserving root-relative
  * behaviour there.

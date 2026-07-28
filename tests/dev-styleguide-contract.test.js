@@ -9,8 +9,8 @@
  * happened at once in the People Picker demo:
  *
  *  1. It hosted a `<cora-people-picker>` element. Nothing registers `cora-*`
- *     elements since ADR-0034, so the tag was inert — the sibling `<cora-tabs>`
- *     demo was deleted for this reason in #494 and this one was missed.
+ *     elements, so the tag was inert — the sibling `<cora-tabs>` demo was
+ *     deleted for this reason and this one was missed.
  *  2. Its module script imported a name (`CORAPeoplePicker`) the module does
  *     not export, so the *whole* `<script type="module">` block threw at parse
  *     and the demo silently rendered nothing.
@@ -78,7 +78,7 @@ test('no dev page hosts an inert cora-* element', () => {
   assert.deepEqual(
     offenders,
     [],
-    'nothing registers `cora-*` elements since ADR-0034, so the tag renders as an inert unknown element — mount a plain host and render the pure view into it (#494, #536)'
+    'nothing registers `cora-*` elements, so the tag renders as an inert unknown element — mount a plain host and render the pure view into it'
   );
 });
 

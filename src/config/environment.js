@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * Environment resolution for the two-environment hosting model (ADR-0033).
+ * Environment resolution for the two-environment hosting model.
  *
  * The deployed host page declares its environment by setting
  * `window.CORA_ENV` from the `{{CORA_ENV}}` deploy-time token (see

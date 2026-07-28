@@ -235,7 +235,7 @@ test('team cases route: a real hash reaches the real page with the real filters'
   // the test rather than in the page: two half-tests meeting in the middle.
   // This one drives the actual page module, so nothing between the hash and
   // the fetch is simulated — it is the only test that fails if the router, the
-  // route, or the page's reading of `params.queryString` breaks (#548).
+  // route, or the page's reading of `params.queryString` breaks.
   /** @type {any} */
   let received = null;
   const page = await import('../src/pages/cora-team-cases.js');

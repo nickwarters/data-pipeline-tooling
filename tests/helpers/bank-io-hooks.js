@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * Module customization hooks that make Question Bank I/O observable (#521).
+ * Module customization hooks that make Question Bank I/O observable.
  *
  * `case-types/load-bank.js` reads a bank artifact with `fetch()` over http and
  * with `node:fs/promises`' `readFile` for `file:` URLs. The probe process can

@@ -6,13 +6,13 @@
  *
  * It lives in this leaf module because the Responsible Party dashboard
  * (`pages/responsible-party/view.js`) reads it per Answer across Cases of every
- * Case Type, holding no catalogue for any of them (#499).
+ * Case Type, holding no catalogue for any of them.
  * `evaluators/remediation-status.js` re-exports it, so that module remains the
  * one seam callers name.
  *
- * The dashboard is now the *only* reason. #499 also split this out to keep the
+ * The dashboard is now the *only* reason. The split once also kept the
  * applicability and failure evaluators off `services/section-access.js`'s import
- * graph; that constraint lapsed in #502, when the Remediation cells became
+ * graph; that constraint lapsed when the Remediation cells became
  * catalogue-aware and `section-access.js` moved to `remediation-status.js`,
  * which pulls both. The cost was measured and accepted: `failure-evaluator.js`
  * imports nothing and `applicability-evaluator.js` imports only
@@ -26,7 +26,7 @@
  * that has left the catalogue is orphaned, not outstanding — and answering it
  * from the blob gave a strict superset of the Remediation tab's rows, which is
  * how a Case could be sent down the actions path carrying work nobody could ever
- * resolve. See `hasTrackableRemediation` (#502).
+ * resolve. See `hasTrackableRemediation`.
  */
 
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */

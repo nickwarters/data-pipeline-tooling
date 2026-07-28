@@ -620,12 +620,12 @@ test('SaveQueue: flushCase waits for an already in-flight flush', async () => {
   assert.equal(q.getEtag('c1'), 'etag-after-inflight');
 });
 
-test('SaveQueue: enqueueFields writes all fields in a single ETag-guarded PATCH (ADR-0008/0019)', async () => {
+test('SaveQueue: enqueueFields writes all fields in a single ETag-guarded PATCH', async () => {
   const client = makeClient();
   const q = new SaveQueue(client, { debounceMs: 0 });
   q.loadCase(BASE_ROW);
 
-  // The reporting columns an Amended Outcome re-stamps together (ADR-0019/0026).
+  // The reporting columns an Amended Outcome re-stamps together.
   q.enqueueFields('c1', {
     effectiveOutcome: 'pass',
     effectiveHadRemediation: false,
@@ -724,7 +724,7 @@ test('SaveQueue: writes and conflict refreshes use the Case list options capture
   assert.deepEqual(client.patchCalls[1].opts, { listName: 'complaints' });
 });
 
-test('SaveQueue: a queued write survives navigation — the mount signal never reaches a write (#545)', async () => {
+test('SaveQueue: a queued write survives navigation — the mount signal never reaches a write', async () => {
   const client = makeClient();
   const controller = new AbortController();
   const q = new SaveQueue(client, { debounceMs: 0 });

@@ -1,8 +1,8 @@
 // @ts-check
 /**
- * One panel renderer per tab Section, keyed by Section id (#512).
+ * One panel renderer per tab Section, keyed by Section id.
  *
- * ADR-0032 made Section *existence* and *order* data. What a Section's panel
+ * The Section registry makes Section *existence* and *order* data. What a Section's panel
  * renders stayed a `if (entry.id === …)` chain in `pages/cora-case-review.js`:
  * nine near-identical blocks, so the render loop iterated the registry and then
  * ignored it. This map is the missing half — the registry says which Sections
@@ -24,13 +24,12 @@
  * Four Sections wrap their view in a `div` carrying a `cora-…` *class*
  * (`cora-summary`, `cora-appeal`, `cora-appeal-review`, `cora-amend-outcome`).
  * Those wrappers exist only as CSS hooks for the Section's scoped styles. They
- * were unregistered `cora-*` *elements* built with raw `createElement` until
- * #514 — the shape `h()`'s `warnIfUnregisteredCoraElement` guard exists to warn
- * about, sidestepped by not going through `h()`. Registering them as real custom
- * elements would be the wrong direction (ADR-0034 moved away from
- * component-owned state); they are wrapper divs. The `cora-` prefix stays either
- * way — it is the SharePoint style-isolation boundary (ADR-0001), and only the
- * selector type changed.
+ * were once unregistered `cora-*` *elements* built with raw `createElement` —
+ * the shape `h()`'s `warnIfUnregisteredCoraElement` guard exists to warn about,
+ * sidestepped by not going through `h()`. Registering them as real custom
+ * elements would be the wrong direction, away from store-driven views; they are
+ * wrapper divs. The `cora-` prefix stays either way — it is the SharePoint
+ * style-isolation boundary, and only the selector type changed.
  */
 
 import { h } from '../../lib/html.js';
@@ -75,7 +74,7 @@ import { resolveGeneralQuestionsPlacement } from '../../evaluators/general-quest
 /**
  * The callbacks a panel wires into its Section view. These close over the route
  * slice's mutable locals — notably the live Answers, which `currentAnswers()`
- * reads at call time rather than at render time (#510).
+ * reads at call time rather than at render time.
  *
  * @typedef {Object} PanelActions
  * @property {ReturnType<typeof import('./question-panel-view.js').createQuestionPanelView>} questionsView
@@ -88,12 +87,11 @@ import { resolveGeneralQuestionsPlacement } from '../../evaluators/general-quest
  *   Narrowed on purpose, twice over: panels may report a field edit and nothing
  *   else on the SaveQueue bridge, and the field itself may only be one of the
  *   plain-text Case fields. Restating `field` as a bare `string` here would widen
- *   the effect's own union straight back open at the seam panels actually call
- *   (#554).
+ *   the effect's own union straight back open at the seam panels actually call.
  * @property {ReturnType<typeof import('./appeal-effects.js').createAppealEffects>} appeals
  *   The whole effect object, not a hand-written shape — these three are the
- *   persisted ADR-0026/0027 state transitions, so their argument shapes are
- *   worth keeping under `tsc`.
+ *   persisted Appeal and Amended Outcome state transitions, so their argument
+ *   shapes are worth keeping under `tsc`.
  */
 
 /**

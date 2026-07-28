@@ -13,8 +13,7 @@ import { amendOutcome, raiseAppeal, resolveAppeal } from './appeal-actions.js';
  */
 
 /**
- * Route effects for the ADR-0027 Appeal and ADR-0026 Amended Outcome
- * transitions. `appeal-actions.js` holds the pure half — it takes `at` /
+ * Route effects for the Appeal and Amended Outcome transitions. `appeal-actions.js` holds the pure half — it takes `at` /
  * `amendedAt` as arguments and never reaches a clock or the SaveQueue; this is
  * the persistence half.
  *
@@ -51,7 +50,7 @@ export function createAppealEffects({
    * Every transition ends the same way: the store is told about the new Case
    * Row, so the page re-renders from it without a reload. The store is the only
    * owner — the loader keeps its copy only until `toStoreSnapshot()` hands it
-   * over, and nothing reads it again within the mount (#530).
+   * over, and nothing reads it again within the mount.
    *
    * @param {{ caseRow: CaseRow }} result
    * @param {Snapshot} snapshot
@@ -106,7 +105,7 @@ export function createAppealEffects({
         ...resolution,
       });
       // Load-bearing fork, moved verbatim: agreeing writes the appeal *and*
-      // the linked ADR-0019 corrected-reporting columns, which must land as one
+      // the linked corrected-reporting columns, which must land as one
       // atomic PATCH or `effectiveOutcome` / `effectiveHadRemediation` /
       // `outcomeOverridden` can desync (save-queue.js documents why).
       if (result.transactional) {

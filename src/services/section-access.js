@@ -3,7 +3,7 @@
  * Section-level role-based access on the case page. UX-only per the architecture decision;
  * SharePoint list ACLs remain the real boundary. See the architecture decision for design.
  *
- * The Section id union is projected from `SECTION_REGISTRY` (ADR-0032) rather
+ * The Section id union is projected from `SECTION_REGISTRY` rather
  * than restated here; `MATRIX` below is contract-tested to have exactly its keys.
  *
  * @typedef {import('../lib/section-registry.js').Section} Section
@@ -46,7 +46,7 @@ export function isReportable(status) {
 
 /**
  * The Sections that exist on the Case Review page, in canonical order, derived
- * from the Section registry (ADR-0032).
+ * from the Section registry.
  * @type {Section[]}
  */
 export const SECTIONS = sectionIds();
@@ -119,7 +119,7 @@ const observesRemediation = (c, _config, catalogue) =>
   remediationTabIsLive(c, catalogue) ? 'read-only' : 'hidden';
 
 /**
- * Which of the Remediation Section's two renderings a viewer gets (#499).
+ * Which of the Remediation Section's two renderings a viewer gets.
  *
  * - `reviewer` — the Assigned Reviewer, other Reviewers, a Reviewer Manager, the
  *   Case Type Owner and Controls: the breakdown plus (when the mode is `edit`)
@@ -164,10 +164,10 @@ const postsWhenAllowed = (c, config) => {
 };
 
 /**
- * The Sections that can contribute a block to the read-only Summary Section
- *, in render order. Conversation (a floating overlay, never a tab)
- * and Summary itself never appear as Summary blocks. Derived from the Section
- * registry (ADR-0032) rather than restated here.
+ * The Sections that can contribute a block to the read-only Summary Section, in
+ * render order. Conversation (a floating overlay, never a tab) and Summary
+ * itself never appear as Summary blocks. Derived from the Section registry
+ * rather than restated here.
  * @type {Section[]}
  */
 export const SUMMARY_SECTIONS = summaryBlockIds();
@@ -194,9 +194,9 @@ export function showInSummary(section, caseTypeConfig) {
 
 /**
  * Default access matrix. Function-valued cells receive the CaseRow and
- * CaseTypeConfig and return a Mode. Keyed by the registry's Section ids
- * (ADR-0032); a contract test asserts the two key sets never drift. The RBAC
- * policy itself stays here, not in the registry.
+ * CaseTypeConfig and return a Mode. Keyed by the registry's Section ids; a
+ * contract test asserts the two key sets never drift. The RBAC policy itself
+ * stays here, not in the registry.
  * @type {Record<Section, Record<Role, Mode | ((c: CaseRow, config: CaseTypeConfig, catalogue: QuestionDefinition[]) => Mode)>>}
  */
 export const MATRIX = {
@@ -400,10 +400,10 @@ export function resolveRoles(caseRow, userId, capabilities) {
   // platform-wide group: a manager reads the Cases of the Reviewers they manage,
   // not every Case of every Case Type.
   //
-  // Per ADR-0038 the field is a reporting snapshot, frozen at Reportable, and
-  // resolving a read-only Role from it is deliberate — unlike the Responsible
-  // Party Manager below, which ADR-0038 moves to live directory resolution
-  // because that Role carries `edit` on the Conversation.
+  // The field is a reporting snapshot, frozen at Reportable, and resolving a
+  // read-only Role from it is deliberate — unlike the Responsible Party Manager
+  // below, which is to resolve live from the directory because that Role
+  // carries `edit` on the Conversation.
   if (caseRow.assignedReviewerManager === userId) {
     roles.push('reviewerManager');
   }
@@ -413,10 +413,10 @@ export function resolveRoles(caseRow, userId, capabilities) {
   // Denormalised onto the Case row (CONTEXT.md), mirroring how the Responsible
   // Party role is matched.
   //
-  // ADR-0038 decides this is the wrong authority for this Role: it carries
-  // `edit` on the Conversation, so a stale row leaves a former manager posting
-  // on a live thread. It is to resolve live from the Responsible Party's current
-  // manager, failing closed. Not yet implemented — see ADR-0038 Consequences.
+  // The row is the wrong authority for this Role: it carries `edit` on the
+  // Conversation, so a stale row leaves a former manager posting on a live
+  // thread. It is to resolve live from the Responsible Party's current manager,
+  // failing closed. Not yet implemented.
   if (caseRow.responsiblePartyManager === userId) {
     roles.push('responsiblePartyManager');
   }

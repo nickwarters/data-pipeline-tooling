@@ -144,7 +144,7 @@ test('MockSharePointClient: anyOf combines with a base filter (AND of base, OR o
   assert.equal(completedAppealsOrReopened, 1);
 });
 
-// --- Action Centre state flag writes (issue #291) ---
+// --- Action Centre state flag writes ---
 
 test('MockSharePointClient: a reasonFlagFields write persists and is queryable', async () => {
   const client = makeClient();

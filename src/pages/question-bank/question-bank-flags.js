@@ -5,7 +5,7 @@
  */
 
 /**
- * The impact simulator (issue #202) is gated behind `?simulate=1`: when off,
+ * The impact simulator is gated behind `?simulate=1`: when off,
  * no sample Cases are fetched and the compile drawer hides its simulation
  * panel.
  *

@@ -2,15 +2,15 @@
 // The app shell wires shared services once. Every page loads on demand inside
 // its route's `mount()` (see src/routes/*), guarded by the router's error
 // boundary (lib/router.js) — a broken page module renders an in-page
-// `cora-route-error` panel instead of taking down the app. The nav and
-// command palette are mounted here via `setup/app-chrome.js`: a broken nav is
+// `cora-route-error` panel instead of taking down the app. The nav and command
+// palette are mounted here via `setup/app-chrome.js`: a broken nav is
 // fatal-with-message (the app is unusable without it), a broken palette is
-// logged and skipped. Case Type modules are contained per slug the same way
-// (#493): a Case Type that fails to evaluate is dropped from every resolved
-// source set and named in a non-blocking banner, and boot continues. That holds
-// in BOTH environments — `createSharePointClient` below is awaited first, and
-// under `?mock=1` it partitions the fixture Cases by Case Type, so it contains
-// per Case Type too rather than throwing ahead of the containment.
+// logged and skipped. Case Type modules are contained per slug the same way: a
+// Case Type that fails to evaluate is dropped from every resolved source set
+// and named in a non-blocking banner, and boot continues. That holds in BOTH
+// environments — `createSharePointClient` below is awaited first, and under
+// `?mock=1` it partitions the fixture Cases by Case Type, so it contains per
+// Case Type too rather than throwing ahead of the containment.
 
 /** @returns {Promise<void>} */
 async function boot() {
@@ -51,7 +51,7 @@ async function boot() {
   // Reviewer Managers, Advisers, ResponsibleParty-Managers and Maintainers) get the full
   // manifest. RP surfaces retain their assigned-party query filters.
   // A Case Type module that throws is contained the same way a broken page is:
-  // that Case Type is dropped and named in a banner (#493); the app boots.
+  // that Case Type is dropped and named in a banner; the app boots.
   const { caseSources, journeyCaseSources, unavailableCaseTypes } =
     await resolveAppCaseSources(userGroups, capabilities.ownedJourneyCaseTypes);
   const allocationSources = allocationSourcesFromCaseSources(caseSources);

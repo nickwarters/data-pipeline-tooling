@@ -30,7 +30,7 @@
  *
  * `caseId` is a getter, not a value: the effect is built with the route, before
  * the Case has loaded, and every write must address the row that was actually
- * loaded (#511).
+ * loaded.
  *
  * @param {{
  *   saveQueue: SaveQueue,

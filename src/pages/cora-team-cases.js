@@ -142,10 +142,10 @@ export function createRouteSlice(
       if (!client || !currentUser) return;
 
       // The router supplies params.queryString for every route — '' when the
-      // hash has no query (#548), so there is nothing to fall back to.
+      // hash has no query, so there is nothing to fall back to.
       const parsed = parseTeamCasesParams(tools.params.queryString);
       // The signal cancels the per-source fan-out on navigation; the
-      // isActive() guard still stops a late dispatch (#545 / #517).
+      // isActive() guard still stops a late dispatch.
       const readClient = withAbortSignal(client, tools.signal);
       void Promise.all([
         fetchCases(

@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * Boot-time notice for Case Types that could not be loaded (#493).
+ * Boot-time notice for Case Types that could not be loaded.
  *
  * Containment drops a broken Case Type from every resolved source set, which
  * on its own is a SILENT removal: a Reviewer whose Case list is suddenly empty

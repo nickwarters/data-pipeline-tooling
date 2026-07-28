@@ -302,7 +302,7 @@ export function buildPublishArtifacts(exportEnvelope, existingManifest) {
 
 /**
  * Store-effect wiring for publishing a bank. Compilation and artifact
- * construction remain the existing pure ADR-0021 functions; the injected
+ * construction remain the existing pure functions; the injected
  * writer is the only side effect.
  *
  * @param {import('./question-bank-source.js').QuestionBank} bank

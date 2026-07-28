@@ -1,12 +1,12 @@
 // @ts-check
 // render() — the keyed DOM reconciler at the heart of the store-driven view
-// architecture (ADR-0034 / Project Palimpsest CORE-2).
+// architecture.
 //
-// Vocabulary (ADR-0039): a **view** produces a tree of nodes and touches
+// Vocabulary: a **view** produces a tree of nodes and touches
 // nothing; **render** commits a tree into a live container. This file is the
-// one primitive that does the committing. It was called `morph()` until
-// ADR-0039 — the technique is the one morphdom and Idiomorph implement, and
-// searching "DOM morphing" is still the way to read up on it.
+// one primitive that does the committing. It was called `morph()` once — the
+// technique is the one morphdom and Idiomorph implement, and searching
+// "DOM morphing" is still the way to read up on it.
 //
 // A view is a pure function `state -> h() tree` (see src/lib/html.js). Because
 // h() builds *real* DOM nodes, a re-render produces a fresh detached tree.
@@ -26,7 +26,7 @@
 //     which is the only portable way to know which listener to remove or which
 //     attribute to drop (the live DOM does not expose either).
 //   - O(1) reference skip. If the new vnode is the *same object* as the live
-//     node (what CORE-4 memo() returns for an unchanged card), render() returns
+//     node (what memo() returns for an unchanged card), render() returns
 //     immediately without touching its subtree.
 //   - Minimal moves. A longest-increasing-subsequence pass leaves nodes that
 //     are already in relative order untouched, so reordering the siblings
@@ -183,7 +183,7 @@ function patch(oldNode, newNode, stats) {
   bump(stats, 'visited');
   // Reference-equal skip: the new vnode is literally the live node (what
   // memo() returns for an unchanged subtree). Nothing to do, and crucially we
-  // do not descend — this is the O(1) fast path CORE-4 relies on.
+  // do not descend — this is the O(1) fast path memo() relies on.
   if (oldNode === newNode) return oldNode;
   if (isText(oldNode)) {
     if (oldNode.textContent !== newNode.textContent) {

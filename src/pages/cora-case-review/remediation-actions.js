@@ -9,7 +9,7 @@ import { captureRemediationDetail } from '../../evaluators/remediation-details.j
  * retaining detail fields; the caller sends the returned Answers through the
  * Case Review auto-save effect.
  *
- * Shares the Answer-action contract (#510): `null` means "write nothing" — the
+ * Shares the Answer-action contract: `null` means "write nothing" — the
  * viewer cannot edit, or there is no such Answer or configured field.
  *
  * @param {{

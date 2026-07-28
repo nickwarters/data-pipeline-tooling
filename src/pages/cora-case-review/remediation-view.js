@@ -128,14 +128,15 @@ function buildItemContent(props, q) {
 }
 
 /**
- * Renders the reviewer-selectable **Remediation Actions** for a failed item
- *. Each configured action is an independent checkbox, unticked
- * unless the reviewer has already selected it (i.e. its id is present on
+ * Renders the reviewer-selectable **Remediation Actions** for a failed item.
+ * Each configured action is an independent checkbox, unticked unless the
+ * reviewer has already selected it (i.e. its id is present on
  * `answer.remediationActions`); ticking/unticking calls the
  * `dispatchRemediationAction` callback so the page persists the selected subset
- * onto the Answer. When the Question opts into free-form remediation, an extra text
- * input lets the reviewer add their own action. Read-only viewers see only the
- * selected canned actions and any captured free-form text, both as plain text.
+ * onto the Answer. When the Question opts into free-form remediation, an extra
+ * text input lets the reviewer add their own action. Read-only viewers see only
+ * the selected canned actions and any captured free-form text, both as plain
+ * text.
  *
  * @param {RemediationSectionProps} props
  * @param {HTMLElement} li

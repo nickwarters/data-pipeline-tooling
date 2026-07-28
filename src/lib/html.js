@@ -54,7 +54,7 @@ function warnIfUnregisteredCoraElement(tag) {
  * and next trees rather than trying to read them back out of the live DOM
  * (attribute enumeration and attached listeners are not portably
  * introspectable). This is bookkeeping only — it does not change how `h()` is
- * called. See ADR-0034 (store-driven views) / CORE-2.
+ * called.
  * @type {WeakMap<object, Record<string, any>>}
  */
 const NODE_PROPS = new WeakMap();
@@ -80,7 +80,7 @@ export function setProps(el, props) {
 }
 
 /**
- * Prop-naming contract (#509):
+ * Prop-naming contract:
  *
  *   onclick / oninput / onchange / onkeydown …  → DOM events (addEventListener)
  *   onCommit / onAnswer / onSort …              → component callback properties
@@ -90,7 +90,7 @@ export function setProps(el, props) {
  * the element declares is assigned as a property and NEVER becomes a listener —
  * so `onClick` on a cora-* host that declares `onClick` silently attaches
  * nothing. Use lowercase for anything the browser dispatches, and reserve
- * camelCase for the props-down/callbacks-up component API (issue #382).
+ * camelCase for the props-down/callbacks-up component API.
  *
  * `tests/prop-naming-contract.test.js` enforces both halves.
  */
@@ -113,7 +113,7 @@ export function applyProp(el, key, value) {
     );
   }
   if (key.startsWith('on') && typeof value === 'function') {
-    // Component callback props (props-down / callbacks-up, issue #382):
+    // Component callback props (props-down / callbacks-up):
     // a camelCase `on[A-Z]…` key that matches a property the element declares
     // (e.g. a custom-element shell's `onCommit` field) is a plain callback,
     // assigned as a property. Native handler IDL attributes are all-lowercase

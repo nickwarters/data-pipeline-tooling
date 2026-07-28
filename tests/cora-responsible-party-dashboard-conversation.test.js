@@ -86,7 +86,7 @@ test('Responsible Party unread messages render through descriptors and invoke co
   );
   assert.match(section?.textContent ?? '', /—/);
   // Reference and Case Type are the shared descriptors, so they sort here as
-  // on every other Case table (#542); `Last message` keeps the default sort.
+  // on every other Case table; `Last message` keeps the default sort.
   assert.deepEqual(tableHeaders(section), [
     ['Reference', 'cora-col-reference', 'none', true],
     ['Case Type', 'cora-col-caseType', 'none', true],
@@ -94,7 +94,7 @@ test('Responsible Party unread messages render through descriptors and invoke co
     ['Actions', 'cora-col-actions', 'none', false],
   ]);
   // The Open button opens the Conversation while the row's Reference link
-  // opens the Case, so its accessible name must not be the Case's (#541).
+  // opens the Case, so its accessible name must not be the Case's.
   const open = /** @type {any} */ (
     getByRole(section, 'button', {
       name: 'Open conversation for missing-timestamp',
@@ -117,12 +117,12 @@ test('Responsible Party unread messages render through descriptors and invoke co
   assert.equal(open._listeners.click.length, 1);
 });
 
-test('#551: without a Conversation handler the Unread Messages table renders no Open button', () => {
+test('without a Conversation handler the Unread Messages table renders no Open button', () => {
   // The standalone #/my-cases route deliberately keeps the historic
   // no-navigation behaviour and passes no onOpenConversation. The button was
   // rendered anyway, so it announced "Open conversation for …" and did
-  // nothing when clicked — found in the #551 browser pass. An affordance that
-  // does nothing reads as broken rather than absent, and tells a
+  // nothing when clicked. An affordance that does nothing reads as broken
+  // rather than absent, and tells a
   // screen-reader user about an action they cannot take.
   const view = responsiblePartyView(
     {
