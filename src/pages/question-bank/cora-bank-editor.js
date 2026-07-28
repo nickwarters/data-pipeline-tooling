@@ -201,7 +201,7 @@ function retryButton(route, retry) {
 
 /**
  * @param {QuestionBankState} state
- * @param {{ dispatch: (action: any) => any, memo?: (key: PropertyKey, deps: readonly unknown[], render: () => HTMLElement) => HTMLElement, publish?: () => void, retry?: () => void }} tools
+ * @param {{ dispatch: (action: any) => any, memo?: (key: PropertyKey, deps: readonly unknown[], viewFn: () => HTMLElement) => HTMLElement, publish?: () => void, retry?: () => void }} tools
  * @returns {HTMLElement}
  */
 export function bankEditorView(state, tools) {
@@ -411,7 +411,7 @@ export function createRouteSlice(_params, context, deps = {}) {
     }
   };
   // Hoisted, not rebuilt per render: an inline arrow changes the button's
-  // `onclick` identity every pass, so morph() detaches and reattaches the
+  // `onclick` identity every pass, so render() detaches and reattaches the
   // listener on every render.
   const retryHandler = () => void retry();
   return {

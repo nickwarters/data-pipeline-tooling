@@ -9,8 +9,8 @@ Before doing any non-trivial work in this repo, read:
 1. **[CONTEXT.md](./CONTEXT.md)** — domain language. Use these terms exactly when discussing or coding (`Case Type`, `Question Definition`, `Applicable Question`, `Answer`, `Remediation Action`, `Reviewer`, `Responsible Party`, `Case Type Owner`, `Conversation`, `Outcome`).
 2. **[docs/guide/add-a-page.md](./docs/guide/add-a-page.md)** — the one-page
    authoring path: state → `h()`, actions, effects, lazy route, and tests.
-3. **[docs/adr/](./docs/adr/)** — 38 architecture decisions, numbered
-   (`0001`–`0038`). Read the status before relying on an older decision, and do
+3. **[docs/adr/](./docs/adr/)** — 39 architecture decisions, numbered
+   (`0001`–`0039`). Read the status before relying on an older decision, and do
    not deviate from an accepted ADR without surfacing the deviation explicitly.
 
 ## Project overview
@@ -24,8 +24,8 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
   shaped as `{ chrome, routes }`. Pages export `createRouteSlice()` with initial
   state, a reducer, and a pure `state → h()` view. Event callbacks dispatch
   `domain/event` actions; async work and persistence live in effects. The
-  `createStoreRoute()` adapter creates the store and memo cache, renders through
-  keyed `morph()`, contains route failures, and cleans up on navigation. It also
+  `createStoreRoute()` adapter creates the store and memo cache, commits through
+  keyed `render()`, contains route failures, and cleans up on navigation. It also
   owns the mount lifetime: guard any post-`await` dispatch with `tools.isActive()`
   — never hand-roll a `let active = true` latch (#517). The same lifetime is also
   an `AbortSignal`: bind it to the client's **reads** once in `start()` with
@@ -60,7 +60,13 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
   `className`; camelCase `on[A-Z]` is reserved for component callback props
   (`onAnswer`, `onSort`, `onCommit`), which `h()` assigns as properties and
   never as listeners. Enforced by `tests/prop-naming-contract.test.js` (#509).
-- **Light DOM and CSS isolation.** `h()` creates safe DOM nodes, keyed `morph()`
+  **`view` produces, `render` commits (ADR-0039).** A _view_ is pure, returns an
+  `h()` tree and touches nothing — `slice.view()`, `*View()`, `*-view.js`, the
+  thunk passed to `memo()`. _Render_ means committing a tree into a live
+  container, and `core/render.js` (`tools.render(container, tree)`) is the only
+  thing that does it. Never name a producer `render`; the store's callback is
+  `onStateChange` precisely because the store does not touch the DOM.
+- **Light DOM and CSS isolation.** `h()` creates safe DOM nodes, keyed `render()`
   preserves focus/caret/scroll across renders, and the `cora-` CSS prefix remains
   the SharePoint-isolation boundary. See the current
   [state/action/render explainer](./docs/component-anatomy-explainer.html).
@@ -170,9 +176,11 @@ src/
   core/                         # store-driven view runtime (ADR-0034)
                                 #   see docs/guide/store-actions-and-effects.md for the contract
     chrome-state.js             # shared toasts/nav/current-user/permissions store slice
-    morph.js                    # keyed DOM-morphing reconciler: patches live DOM to an h() tree
-                                #   in place (focus/caret/scroll survive) — CORE-2 (#404)
-    store.js                    # single route-local store: dispatch/reducer, coalesced render — CORE-3 (#405)
+    render.js                   # keyed DOM reconciler: commits an h() tree into a live container,
+                                #   patching in place (focus/caret/scroll survive) — CORE-2 (#404),
+                                #   named morph() until ADR-0039
+    store.js                    # single route-local store: dispatch/reducer, coalesced
+                                #   onStateChange — CORE-3 (#405)
     memo.js                     # per-view memo cache, keyed by position, cleared on unmount — CORE-4 (#406)
     store-route.js               # adapts a store-driven route module to the Router handler shape — CORE-6 (#407)
     route-state.js              # patchRoute/setRoute/patchSnapshot: the immutable route-slice

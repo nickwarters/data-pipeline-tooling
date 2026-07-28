@@ -11,7 +11,7 @@
  * (including their event handlers) as soon as that view goes away.
  *
  * @template VNode
- * @returns {((key: PropertyKey, deps: readonly unknown[], renderFn: () => VNode) => VNode) & {
+ * @returns {((key: PropertyKey, deps: readonly unknown[], viewFn: () => VNode) => VNode) & {
  *   clear: () => void,
  *   delete: (key: PropertyKey) => boolean,
  *   readonly size: number,
@@ -26,9 +26,9 @@ export function createMemo() {
     /**
      * @param {PropertyKey} key
      * @param {readonly unknown[]} deps
-     * @param {() => VNode} renderFn
+     * @param {() => VNode} viewFn
      */
-    (key, deps, renderFn) => {
+    (key, deps, viewFn) => {
       const entry = cache.get(key);
       if (
         entry &&
@@ -38,7 +38,7 @@ export function createMemo() {
         return entry.value;
       }
 
-      const value = renderFn();
+      const value = viewFn();
       cache.set(key, { deps: Array.from(deps), value });
       return value;
     }

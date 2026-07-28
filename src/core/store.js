@@ -5,33 +5,39 @@
  */
 
 /**
- * Create the single state owner for a route. Updates are synchronous; rendering
- * is deferred and coalesced so any number of dispatches in a turn render once.
+ * Create the single state owner for a route. Updates are synchronous;
+ * notification is deferred and coalesced so any number of dispatches in a turn
+ * notify once.
+ *
+ * The store owns state and scheduling and knows nothing about the DOM, which is
+ * why its callback is `onStateChange` rather than `render` (ADR-0039): "render"
+ * is reserved for committing a view into a container, and this callback is free
+ * to do something else entirely.
  *
  * @template State @template Action
  * @param {{
  *   initialState: State,
  *   reducer: Reducer<State, Action>,
- *   render: (state: State) => void,
+ *   onStateChange: (state: State) => void,
  *   schedule?: (callback: () => void) => void,
  * }} options
  */
 export function createStore({
   initialState,
   reducer,
-  render,
+  onStateChange,
   schedule = queueMicrotask,
 }) {
   let state = initialState;
-  let renderScheduled = false;
+  let notifyScheduled = false;
   let disposed = false;
 
-  function scheduleRender() {
-    if (renderScheduled || disposed) return;
-    renderScheduled = true;
+  function scheduleNotify() {
+    if (notifyScheduled || disposed) return;
+    notifyScheduled = true;
     schedule(() => {
-      renderScheduled = false;
-      if (!disposed) render(state);
+      notifyScheduled = false;
+      if (!disposed) onStateChange(state);
     });
   }
 
@@ -44,12 +50,17 @@ export function createStore({
     /** @param {Action} action @returns {State} */
     dispatch(action) {
       state = reducer(state, action);
-      scheduleRender();
+      scheduleNotify();
       return state;
     },
 
-    render() {
-      render(state);
+    /**
+     * Notify synchronously, now, bypassing the coalescing schedule — the shape
+     * the initial mount needs, where the first paint must land before `start()`
+     * runs its effects.
+     */
+    flush() {
+      onStateChange(state);
     },
 
     dispose() {

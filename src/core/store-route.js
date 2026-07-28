@@ -1,5 +1,5 @@
 // @ts-check
-import { morph } from './morph.js';
+import { render } from './render.js';
 import { createMemo } from './memo.js';
 import { createStore } from './store.js';
 import { createRouteErrorPanel } from '../lib/route-error-panel.js';
@@ -14,7 +14,7 @@ import { createRouteErrorPanel } from '../lib/route-error-panel.js';
  *     initialState: any,
  *     reducer: (state: any, action: any) => any,
  *     view?: (state: any, tools: { dispatch: (action: any) => any, memo: any, params: Record<string, string>, context: Context }) => any,
- *     render?: (container: Element, state: any, tools: { dispatch: (action: any) => any, memo: any, morph: typeof morph, params: Record<string, string>, context: Context }) => void,
+ *     render?: (container: Element, state: any, tools: { dispatch: (action: any) => any, memo: any, render: typeof render, params: Record<string, string>, context: Context }) => void,
  *     start?: (tools: { dispatch: (action: any) => any, memo: any, params: Record<string, string>, context: Context, isActive: () => boolean, signal: AbortSignal, listen: (target: EventTarget, type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions) => void }) => void | (() => void),
  *   } }>,
  *   context: Context,
@@ -54,7 +54,7 @@ export function createStoreRoute({ load, context }) {
       const tools = {
         dispatch: (/** @type {any} */ action) => store.dispatch(action),
         memo,
-        morph,
+        render,
         params,
         context,
         /** True until this slice is unmounted. */
@@ -76,7 +76,7 @@ export function createStoreRoute({ load, context }) {
       store = createStore({
         initialState: slice.initialState,
         reducer: slice.reducer,
-        render: (state) => {
+        onStateChange: (state) => {
           try {
             if (slice.render) {
               slice.render(container, state, tools);
@@ -87,7 +87,7 @@ export function createStoreRoute({ load, context }) {
                 'Store route slice must define view() or render()'
               );
             }
-            morph(container, slice.view(state, tools));
+            render(container, slice.view(state, tools));
           } catch (error) {
             if (!mounted) throw error;
             console.error('[CORA] route render failed after mount', error);
@@ -110,7 +110,7 @@ export function createStoreRoute({ load, context }) {
         memo.clear();
       };
       try {
-        store.render();
+        store.flush();
         mounted = true;
         disposeListeners = slice.start?.(tools);
       } catch (error) {

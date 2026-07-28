@@ -96,7 +96,7 @@ Removing a page is the reverse: remove its page file, route file,
 
 - calls the page's `createRouteSlice(params, context)`;
 - creates the route-local store and memo cache;
-- renders a `view(state, tools)` through `morph()`, or calls the slice's custom
+- commits a `view(state, tools)` through `render()`, or calls the slice's custom
   `render(...)` only where a bounded render surface requires it;
 - supplies `dispatch`, `memo`, `params`, `context`, and `listen` tools;
 - contains render failures after mount inside the route;

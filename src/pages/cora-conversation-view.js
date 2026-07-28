@@ -138,7 +138,7 @@ export function createRouteSlice(params, context) {
     },
     /** @param {Element} container @param {ConversationState} state @param {any} tools */
     render(container, state, tools) {
-      tools.morph(
+      tools.render(
         container,
         conversationPageView(state, tools, (body, currentState) =>
           send(body, currentState, tools.dispatch)

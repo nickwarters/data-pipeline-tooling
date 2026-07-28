@@ -1,6 +1,6 @@
 // @ts-check
 import { h } from '../../lib/html.js';
-import { morph } from '../../core/morph.js';
+import { render } from '../../core/render.js';
 import { filterActions } from '../../services/command-palette-store.js';
 
 /** @typedef {import('../../services/command-palette-store.js').PaletteAction} PaletteAction */
@@ -165,16 +165,16 @@ export function CommandPalette(state, dispatch) {
  * @returns {() => void}
  */
 export function mountCommandPalette(container, { store, target = document }) {
-  const render = (/** @type {CommandPaletteState} */ state) =>
-    morph(
+  const renderPalette = (/** @type {CommandPaletteState} */ state) =>
+    render(
       container,
       CommandPalette(state, (action) => store.dispatch(action))
     );
-  const unsubscribe = store.subscribe(render);
+  const unsubscribe = store.subscribe(renderPalette);
   const unbindShortcut = bindCommandPaletteShortcut(target, () =>
     store.dispatch({ type: 'palette/open' })
   );
-  render(store.getState());
+  renderPalette(store.getState());
   return () => {
     unbindShortcut();
     unsubscribe();

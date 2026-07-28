@@ -17,7 +17,7 @@ test('dispatch updates state synchronously and returns it', () => {
   const store = createStore({
     initialState: { count: 0 },
     reducer,
-    render() {},
+    onStateChange() {},
     schedule: (callback) => callbacks.push(callback),
   });
   const state = store.dispatch({ type: 'increment', by: 2 });
@@ -34,7 +34,7 @@ test('multiple dispatches in one tick schedule exactly one render', () => {
   const store = createStore({
     initialState: { count: 0 },
     reducer,
-    render: (state) => rendered.push(state.count),
+    onStateChange: (state) => rendered.push(state.count),
     schedule: (callback) => callbacks.push(callback),
   });
   store.dispatch({ type: 'increment', by: 1 });
@@ -48,17 +48,17 @@ test('multiple dispatches in one tick schedule exactly one render', () => {
   assert.equal(callbacks.length, 1);
 });
 
-test('render is immediate and dispose suppresses queued and future renders', () => {
+test('flush is immediate and dispose suppresses queued and future notifications', () => {
   /** @type {Array<() => void>} */
   const callbacks = [];
   let renders = 0;
   const store = createStore({
     initialState: { count: 0 },
     reducer,
-    render: () => renders++,
+    onStateChange: () => renders++,
     schedule: (callback) => callbacks.push(callback),
   });
-  store.render();
+  store.flush();
   store.dispatch({ type: 'increment', by: 1 });
   store.dispose();
   callbacks[0]();
@@ -73,7 +73,7 @@ test('default scheduler renders on a microtask', async () => {
   const store = createStore({
     initialState: { count: 0 },
     reducer,
-    render: (state) => rendered.push(state.count),
+    onStateChange: (state) => rendered.push(state.count),
   });
   store.dispatch({ type: 'increment', by: 1 });
   assert.deepEqual(rendered, []);

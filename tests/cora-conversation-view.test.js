@@ -9,7 +9,7 @@ installDom();
 
 const { conversationPageView, createRouteSlice } =
   await import('../src/pages/cora-conversation-view.js');
-const { morph } = await import('../src/core/morph.js');
+const { render } = await import('../src/core/render.js');
 const { conversationView, postConversationMessage, refreshConversation } =
   await import('../src/pages/cora-case-review/conversation-view.js');
 
@@ -250,7 +250,7 @@ test('#544 conversation page: Send posts the typed Message through the route’s
   /** @type {any} */
   let tools;
   tools = {
-    morph,
+    render,
     dispatch(/** @type {any} */ action) {
       state = slice.reducer(state, action);
       slice.render(container, state, tools);

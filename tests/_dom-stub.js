@@ -60,7 +60,7 @@ export class StubEl {
   // own string; on an element, assigning it replaces the children with a single
   // `#text` child, and reading it concatenates descendant text. Elements built
   // by h() with a single string child therefore expose that text as a real
-  // child node, which is what morph() diffs.
+  // child node, which is what render() diffs.
   /** @returns {string} */
   get textContent() {
     if (this._tagName === '#text') return this._text;
@@ -171,7 +171,7 @@ export class StubEl {
   insertBefore(/** @type {StubEl} */ c, /** @type {StubEl|null} */ ref) {
     // Mirror the real DOM: inserting a node that already has a parent moves it
     // (detaches from its current position first) rather than duplicating it.
-    // morph() relies on this for keyed reorders.
+    // render() relies on this for keyed reorders.
     if (c.parentNode) {
       const cur = c.parentNode._children.indexOf(c);
       if (cur >= 0) c.parentNode._children.splice(cur, 1);

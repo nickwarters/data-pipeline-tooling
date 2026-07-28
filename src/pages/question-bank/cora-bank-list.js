@@ -6,7 +6,7 @@ import { OutcomeOptionsEditor } from './cora-outcome-options-editor.js';
 /**
  * Pure Question Bank list. Each card is memoised on only the values that can
  * change its rendered subtree.
- * @param {{ bank: any, baselineQuestions: any[], filters: any, dirty: boolean, conditionalQuestionIds?: string[], dispatch: (action: any) => void, addQuestion: () => void, memo?: (key: PropertyKey, deps: readonly unknown[], render: () => HTMLElement) => HTMLElement }} props
+ * @param {{ bank: any, baselineQuestions: any[], filters: any, dirty: boolean, conditionalQuestionIds?: string[], dispatch: (action: any) => void, addQuestion: () => void, memo?: (key: PropertyKey, deps: readonly unknown[], viewFn: () => HTMLElement) => HTMLElement }} props
  */
 export function BankList(props) {
   const { bank, dirty } = props;
@@ -79,7 +79,7 @@ export function BankList(props) {
     const conditional =
       Boolean(question.showWhen) ||
       Boolean(props.conditionalQuestionIds?.includes(question.id));
-    const render = () =>
+    const view = () =>
       /** @type {HTMLElement} */ (
         QuestionCard({
           question,
@@ -105,9 +105,9 @@ export function BankList(props) {
             conditional,
             questionTopology,
           ],
-          render
+          view
         )
-      : render();
+      : view();
   });
 
   return h(

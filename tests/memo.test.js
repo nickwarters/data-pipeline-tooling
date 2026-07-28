@@ -7,13 +7,13 @@ installDom();
 
 const { h } = await import('../src/lib/html.js');
 const { createMemo } = await import('../src/core/memo.js');
-const { morph } = await import('../src/core/morph.js');
+const { render } = await import('../src/core/render.js');
 
 function container() {
   return /** @type {any} */ (globalThis).document.createElement('div');
 }
 
-test('memo: unchanged deps return the same subtree and morph patches nothing', () => {
+test('memo: unchanged deps return the same subtree and render patches nothing', () => {
   const memo = createMemo();
   const root = container();
   let renders = 0;
@@ -23,9 +23,9 @@ test('memo: unchanged deps return the same subtree and morph patches nothing', (
   };
 
   const first = memo('q1', ['Yes', true], card);
-  morph(root, first);
+  render(root, first);
   const second = memo('q1', ['Yes', true], card);
-  const stats = morph(root, second);
+  const stats = render(root, second);
 
   assert.equal(second, first);
   assert.equal(renders, 1);

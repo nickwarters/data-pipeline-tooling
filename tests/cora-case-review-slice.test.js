@@ -38,7 +38,7 @@ const { caseDetailsView } =
 const { createCaseReviewSaveEffect, observeSaveStatus } =
   await import('../src/pages/cora-case-review/case-actions.js');
 const { SaveQueue } = await import('../src/services/save-queue.js');
-const { morph } = await import('../src/core/morph.js');
+const { render } = await import('../src/core/render.js');
 const { default: exampleReviewConfig } =
   await import('./_example-review-case-type.js');
 const { default: complaintsConfig } =
@@ -224,7 +224,7 @@ function renderShippedState(
   /** @type {any} */
   let tools;
   tools = {
-    morph,
+    render,
     listen: captureListeners(listeners),
     dispatch(/** @type {any} */ action) {
       actions.push(action);
@@ -305,7 +305,7 @@ function renderAttributionSearchRoute(searchPeople) {
   /** @type {any} */
   let tools;
   tools = {
-    morph,
+    render,
     dispatch(/** @type {any} */ action) {
       state = slice.reducer(state, action);
       slice.render(container, state, tools);
@@ -706,7 +706,7 @@ test('CASE-1 route: mounting over a previous route’s leftover DOM keeps the co
   );
   // The router does not clear the container between routes; the incoming
   // route's first render replaces whatever the previous page left behind.
-  // Seed a tree morph() would happily patch in place (a div of divs, the
+  // Seed a tree render() would happily patch in place (a div of divs, the
   // same shape as the case shell) so node reuse is exercised.
   const rendered = renderShippedState(state, {}, (container) => {
     const leftover = document.createElement('div');
@@ -2779,7 +2779,7 @@ test('CASE-7 route: mock-mode store shell keeps Review working at the existing U
   /** @type {any} */
   let tools;
   tools = {
-    morph,
+    render,
     dispatch(/** @type {any} */ action) {
       state = slice.reducer(state, action);
       slice.render(container, state, tools);
@@ -3042,7 +3042,7 @@ test('CASE-5 route: the Remediation tab resolves a Question through the store se
   /** @type {any} */
   let tools;
   tools = {
-    morph,
+    render,
     dispatch(/** @type {any} */ action) {
       state = slice.reducer(state, action);
       slice.render(container, state, tools);
@@ -3141,7 +3141,7 @@ test('CASE-7 route: a read-only Reviewer on a reportable Case writes no Answer (
   /** @type {any} */
   let tools;
   tools = {
-    morph,
+    render,
     dispatch(/** @type {any} */ action) {
       state = slice.reducer(state, action);
       slice.render(container, state, tools);
@@ -3243,7 +3243,7 @@ test('CASE-7 route: sequential Answer edits accumulate (#510)', async () => {
   /** @type {any} */
   let tools;
   tools = {
-    morph,
+    render,
     dispatch(/** @type {any} */ action) {
       state = slice.reducer(state, action);
       slice.render(container, state, tools);
@@ -3428,7 +3428,7 @@ test('#512 panel map: a tab switch keeps every panel mounted and its nodes ident
   assert.ok(notesField, 'the Notes panel renders an editable field');
 
   // Caret and focus survive a tab switch only because panels stay in the DOM
-  // and morph() patches them in place. Node identity is the mechanism: a
+  // and render() patches them in place. Node identity is the mechanism: a
   // re-created field would render identically and lose the caret silently.
   view.dispatch({ type: 'case/tab-selected', id: 'summary' });
   assert.equal(notesPanel?.hidden, true, 'the Notes panel is hidden, not gone');
@@ -3520,7 +3520,7 @@ function startPendingLoadRoute(clientOverrides) {
   let active = true;
   const teardown = slice.start(
     /** @type {any} */ ({
-      morph,
+      render,
       dispatch: (/** @type {any} */ action) => actions.push(action),
       listen: captureListeners(listeners),
       isActive: () => active,

@@ -1,10 +1,16 @@
 // @ts-check
-// morph() — the keyed DOM-morphing reconciler at the heart of the store-driven
-// view architecture (ADR-0034 / Project Palimpsest CORE-2).
+// render() — the keyed DOM reconciler at the heart of the store-driven view
+// architecture (ADR-0034 / Project Palimpsest CORE-2).
+//
+// Vocabulary (ADR-0039): a **view** produces a tree of nodes and touches
+// nothing; **render** commits a tree into a live container. This file is the
+// one primitive that does the committing. It was called `morph()` until
+// ADR-0039 — the technique is the one morphdom and Idiomorph implement, and
+// searching "DOM morphing" is still the way to read up on it.
 //
 // A view is a pure function `state -> h() tree` (see src/lib/html.js). Because
 // h() builds *real* DOM nodes, a re-render produces a fresh detached tree.
-// morph() patches the live subtree to match that fresh tree, mutating existing
+// render() patches the live subtree to match that fresh tree, mutating existing
 // nodes in place instead of replacing them — so input focus, caret/selection,
 // and scroll position survive a render with **no** snapshot/restore machinery.
 //
@@ -16,11 +22,11 @@
 //     only when the *authored* value actually changed — an unrelated re-render
 //     never clobbers what a user is mid-way through typing.
 //   - Prop diffing off recorded props. h() records the props it built each node
-//     with (html.js getProps); morph() diffs previous vs next authored props,
+//     with (html.js getProps); render() diffs previous vs next authored props,
 //     which is the only portable way to know which listener to remove or which
 //     attribute to drop (the live DOM does not expose either).
 //   - O(1) reference skip. If the new vnode is the *same object* as the live
-//     node (what CORE-4 memo() returns for an unchanged card), morph() returns
+//     node (what CORE-4 memo() returns for an unchanged card), render() returns
 //     immediately without touching its subtree.
 //   - Minimal moves. A longest-increasing-subsequence pass leaves nodes that
 //     are already in relative order untouched, so reordering the siblings
@@ -33,9 +39,9 @@ import { applyProp, removeProp, getProps, setProps } from '../lib/html.js';
 
 /**
  * Instrumentation counters, mutated in place when a stats object is passed to
- * {@link morph}. Used by tests to assert, e.g., that a reference-equal subtree
+ * {@link render}. Used by tests to assert, e.g., that a reference-equal subtree
  * is skipped without traversal.
- * @typedef {Object} MorphStats
+ * @typedef {Object} RenderStats
  * @property {number} [visited]         - node pairs examined by patch()
  * @property {number} [patchedElements] - elements patched in place (props/children)
  * @property {number} [createdNodes]    - fresh nodes inserted
@@ -44,8 +50,8 @@ import { applyProp, removeProp, getProps, setProps } from '../lib/html.js';
  */
 
 /**
- * @param {MorphStats} stats
- * @param {keyof MorphStats} key
+ * @param {RenderStats} stats
+ * @param {keyof RenderStats} key
  */
 function bump(stats, key) {
   stats[key] = (stats[key] || 0) + 1;
@@ -170,7 +176,7 @@ function patchFormProp(oldEl, oldProps, newProps, name) {
  * the kept `oldNode`).
  * @param {any} oldNode
  * @param {any} newNode
- * @param {MorphStats} stats
+ * @param {RenderStats} stats
  * @returns {any}
  */
 function patch(oldNode, newNode, stats) {
@@ -198,7 +204,7 @@ function patch(oldNode, newNode, stats) {
  * with the fewest possible moves.
  * @param {any} parent
  * @param {any[]} newChildren - real DOM nodes (elements/text) from the new tree
- * @param {MorphStats} stats
+ * @param {RenderStats} stats
  */
 function patchChildren(parent, newChildren, stats) {
   const oldNodes = Array.from(parent.childNodes);
@@ -263,7 +269,7 @@ function patchChildren(parent, newChildren, stats) {
  * @param {any} parent
  * @param {any[]} result
  * @param {number[]} source
- * @param {MorphStats} stats
+ * @param {RenderStats} stats
  */
 function placeChildren(parent, result, source, stats) {
   const stable = longestIncreasingSubsequence(source);
@@ -344,7 +350,7 @@ function normalizeRoot(tree) {
   if (tree == null || tree === false) return [];
   if (typeof tree === 'string') {
     throw new TypeError(
-      'morph(): view returned a string; wrap it in an element'
+      'render(): view returned a string; wrap it in an element'
     );
   }
   if (Array.isArray(tree)) {
@@ -368,10 +374,10 @@ function normalizeRoot(tree) {
  * survive the render.
  * @param {any} parent - the live container whose children are reconciled
  * @param {any} tree - a node, array of nodes, fragment, or null/false
- * @param {MorphStats} [stats] - optional instrumentation, mutated in place
- * @returns {MorphStats} the stats object (a fresh one if none was passed)
+ * @param {RenderStats} [stats] - optional instrumentation, mutated in place
+ * @returns {RenderStats} the stats object (a fresh one if none was passed)
  */
-export function morph(parent, tree, stats) {
+export function render(parent, tree, stats) {
   const s = stats || {};
   patchChildren(parent, normalizeRoot(tree), s);
   return s;

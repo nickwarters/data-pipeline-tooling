@@ -191,7 +191,7 @@ function renderStatusLine(row) {
 /**
  * The Assigned Reviewer's controls: the resolution select plus, for the two
  * resolutions that require it, the details / justification box. The box is
- * always rendered (hidden when not needed) so `morph()` keeps the same node —
+ * always rendered (hidden when not needed) so `render()` keeps the same node —
  * and with it focus and caret — while the Reviewer types.
  *
  * @param {RemediationTrackingProps} props

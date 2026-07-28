@@ -118,7 +118,7 @@ test('store route: the mount lifetime is exposed so a late promise dispatches no
   );
 });
 
-test('store route: a slice renderer can morph only the containers selected by state', async () => {
+test('store route: a slice renderer can render only the containers selected by state', async () => {
   const container = document.createElement('div');
   /** @type {string[][]} */
   const renderedGroups = [];

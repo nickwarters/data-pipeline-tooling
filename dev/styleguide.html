@@ -2623,7 +2623,7 @@ Agent did not check the fraud alert flag before discussing account balance.</tex
                 account name. With no matches, a free-text fallback offers the
                 typed text as a raw account. The picker is a pure view
                 function — state lives outside it and every keystroke re-renders
-                through <code>morph()</code>, which is what keeps the caret in
+                through <code>render()</code>, which is what keeps the caret in
                 place.
               </p>
               <div class="sg-demo" style="overflow: visible">
@@ -2738,20 +2738,20 @@ Agent did not check the fraud alert flag before discussing account balance.</tex
         PeoplePicker,
         searchPeople,
       } from '../src/components/base/cora-people-picker.js';
-      import { morph } from '../src/core/morph.js';
+      import { render } from '../src/core/render.js';
 
       const client = new MockSharePointClient({ personas: {}, people });
       const host = document.getElementById('sg-people-picker');
       const out = document.getElementById('sg-people-selected');
 
       // PeoplePicker is a pure view (#536), so the demo owns the state the way
-      // a route store would and re-renders through morph() — which is what
+      // a route store would and re-renders through render() — which is what
       // keeps the caret in place across a keystroke.
       const state = { inputValue: '', query: '', results: [] };
       let timer = null;
 
-      function render() {
-        morph(
+      function renderPicker() {
+        render(
           host,
           PeoplePicker({
             placeholder: 'Search people…',
@@ -2766,7 +2766,7 @@ Agent did not check the fraud alert flag before discussing account balance.</tex
 
       function onQueryInput(value) {
         state.inputValue = value;
-        render();
+        renderPicker();
         clearTimeout(timer);
         // Snappier than the production default for an interactive demo.
         timer = setTimeout(() => {
@@ -2776,7 +2776,7 @@ Agent did not check the fraud alert flag before discussing account balance.</tex
               renderResults(results, query) {
                 state.results = results;
                 state.query = query;
-                render();
+                renderPicker();
               },
             },
             value
@@ -2789,11 +2789,11 @@ Agent did not check the fraud alert flag before discussing account balance.</tex
         state.inputValue = person.displayName;
         state.results = [];
         state.query = '';
-        render();
+        renderPicker();
         out.textContent = `selected → { loginName: "${person.loginName}", displayName: "${person.displayName}" }`;
       }
 
-      render();
+      renderPicker();
     </script>
   </body>
 </html>

@@ -584,10 +584,10 @@ export function createRouteSlice(params, context) {
       conversation,
       completion
     );
-    // The router leaves the previous route's DOM in the container; morphing
+    // The router leaves the previous route's DOM in the container; rendering
     // over it would patch those foreign nodes in place and leave this shell's
     // cached part references detached. A fresh mount replaces the content
-    // outright so every later per-part morph targets in-document nodes.
+    // outright so every later per-part render targets in-document nodes.
     container.replaceChildren(root);
     shell = {
       root,
@@ -607,18 +607,18 @@ export function createRouteSlice(params, context) {
     const parts = ensureShell(container, tools);
     const route = state.routes.caseReview;
     const snapshot = route.snapshot;
-    tools.morph(parts.status, saveStatusView(route.saveStatus));
+    tools.render(parts.status, saveStatusView(route.saveStatus));
 
     if (!snapshot) {
-      tools.morph(parts.header, LoadingState());
+      tools.render(parts.header, LoadingState());
       return;
     }
     if (snapshot.error) {
-      tools.morph(parts.header, h('p', {}, snapshot.error));
+      tools.render(parts.header, h('p', {}, snapshot.error));
       return;
     }
     if (snapshot.accessDenied) {
-      tools.morph(
+      tools.render(
         parts.header,
         h(
           'section',
@@ -688,7 +688,7 @@ export function createRouteSlice(params, context) {
       appeals,
     };
 
-    tools.morph(parts.header, [
+    tools.render(parts.header, [
       versionWarningView(snapshot.versionWarning),
       h('h1', { key: 'title' }, snapshot.caseRow.title),
       h(
@@ -716,7 +716,7 @@ export function createRouteSlice(params, context) {
     // Store renders are microtask-coalesced, so rapid clicks can outpace the
     // rendered snapshot; re-sync this latch on every render.
     requestedOnHold = caseRow.onHold === true;
-    tools.morph(
+    tools.render(
       parts.holdControl,
       state.chrome.permissions.isReviewer &&
         caseRow.status === CASE_STATUS.IN_PROGRESS
@@ -735,7 +735,7 @@ export function createRouteSlice(params, context) {
           )
         : null
     );
-    tools.morph(
+    tools.render(
       parts.tablist,
       tabs.map((entry) => {
         const selected = route.activeTab === entry.id;
@@ -760,9 +760,9 @@ export function createRouteSlice(params, context) {
     );
 
     // Every Section renders the same three ways: resolve visibility, toggle
-    // `hidden` (panels stay mounted so morph() keeps focus/caret/scroll across
-    // tab switches — ADR-0034/CORE-2), then morph in the panel its renderer
-    // returns. What differs per Section lives in SECTION_PANELS, not here.
+    // `hidden` (panels stay mounted so render() keeps focus/caret/scroll across
+    // tab switches — ADR-0034/CORE-2), then render the panel its view returns.
+    // What differs per Section lives in SECTION_PANELS, not here.
     const panelContext = {
       snapshot,
       caseRow,
@@ -775,13 +775,16 @@ export function createRouteSlice(params, context) {
       const panel = parts.panels[entry.id];
       const visible = snapshot.access[entry.id] !== 'hidden';
       panel.hidden = !visible || route.activeTab !== entry.id;
-      const render = SECTION_PANELS[entry.id];
-      tools.morph(panel, visible && render ? render(panelContext) : null);
+      const panelView = SECTION_PANELS[entry.id];
+      tools.render(
+        panel,
+        visible && panelView ? panelView(panelContext) : null
+      );
     }
 
     parts.conversation.hidden =
       snapshot.access.conversation === 'hidden' || route.conversationHidden;
-    tools.morph(
+    tools.render(
       parts.conversation,
       snapshot.access.conversation === 'hidden'
         ? null
@@ -814,7 +817,7 @@ export function createRouteSlice(params, context) {
       answers: snapshot.answers,
       allAnswered: snapshot.allAnswered,
     });
-    tools.morph(
+    tools.render(
       parts.completion,
       completion.visible
         ? h(

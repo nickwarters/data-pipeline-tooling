@@ -9,7 +9,7 @@ installDom();
 
 const { createQuestionPanelView, questionGroupsOf } =
   await import('../src/pages/cora-case-review/question-panel-view.js');
-const { morph } = await import('../src/core/morph.js');
+const { render } = await import('../src/core/render.js');
 
 /** @typedef {import('../src/sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 
@@ -38,8 +38,8 @@ function props(overrides = {}) {
 }
 
 test('CASE-2 Questions view mounts every applicable Question Group in one grouped list', () => {
-  const view = createQuestionPanelView();
-  const node = view.render(
+  const questionsView = createQuestionPanelView();
+  const node = questionsView.view(
     props({ answers: { q1: { value: 'Yes' }, q2: { value: 'No' } } })
   );
 
@@ -63,8 +63,8 @@ test('CASE-2 Questions view mounts every applicable Question Group in one groupe
 });
 
 test('CASE-2 Questions view renders a Question Group progress side panel that tracks answered/total', () => {
-  const view = createQuestionPanelView();
-  const node = view.render(props({ answers: { q1: { value: 'Yes' } } }));
+  const questionsView = createQuestionPanelView();
+  const node = questionsView.view(props({ answers: { q1: { value: 'Yes' } } }));
 
   const panel = node.querySelector('.cora-group-progress');
   assert.ok(panel, 'the sticky progress side panel is present');
@@ -79,7 +79,7 @@ test('CASE-2 Questions view renders a Question Group progress side panel that tr
   assert.ok(!rows[1].className.includes('complete'));
 
   // The panel updates as the review progresses.
-  const advanced = view.render(
+  const advanced = questionsView.view(
     props({ answers: { q1: { value: 'Yes' }, q2: { value: 'No' } } })
   );
   const advancedRows = advanced.querySelectorAll('.cora-group-progress-row');
@@ -88,8 +88,8 @@ test('CASE-2 Questions view renders a Question Group progress side panel that tr
 });
 
 test('CASE-2 progress side panel jumps to a group and to the next unanswered question', () => {
-  const view = createQuestionPanelView();
-  const node = view.render(props({ answers: { q1: { value: 'Yes' } } }));
+  const questionsView = createQuestionPanelView();
+  const node = questionsView.view(props({ answers: { q1: { value: 'Yes' } } }));
 
   // Clicking a group row scrolls its anchor into view; clicking "Jump to next
   // unanswered" scrolls the first unanswered card into view.
@@ -122,8 +122,8 @@ test('CASE-2 progress side panel jumps to a group and to the next unanswered que
 });
 
 test('CASE-2 jump-to-next-unanswered is inert when every question is answered', () => {
-  const view = createQuestionPanelView();
-  const node = view.render(
+  const questionsView = createQuestionPanelView();
+  const node = questionsView.view(
     props({ answers: { q1: { value: 'Yes' }, q2: { value: 'No' } } })
   );
   // No unanswered card exists; the handler must no-op without throwing.
@@ -138,7 +138,7 @@ test('CASE-2 Questions view renders category headings above their Question Group
     { ...question('q2', 'Conduct'), category: 'Onboarding' },
     { ...question('q3', 'Closure'), category: 'Exit' },
   ];
-  const node = createQuestionPanelView().render(
+  const node = createQuestionPanelView().view(
     props({ catalogue, questions: catalogue })
   );
   const categories = Array.from(
@@ -160,7 +160,7 @@ test('CASE-2 Questions view stacks only sentence-length single-choice and Outcom
         'This option is deliberately longer than forty characters for layout',
       ],
     };
-    const node = createQuestionPanelView().render(
+    const node = createQuestionPanelView().view(
       props({ catalogue: [longChoice], questions: [longChoice] })
     );
 
@@ -178,49 +178,57 @@ test('CASE-2 Questions view stacks only sentence-length single-choice and Outcom
     ...baseChoice,
     options: ['A', 'B'],
   };
-  const shortNode = createQuestionPanelView().render(
+  const shortNode = createQuestionPanelView().view(
     props({ catalogue: [shortChoice], questions: [shortChoice] })
   );
   assert.equal(shortNode.querySelector('fieldset')?.className, 'cora-question');
 });
 
 test('CASE-2 Questions view memoises unchanged cards by rendered inputs', () => {
-  const view = createQuestionPanelView();
+  const questionsView = createQuestionPanelView();
   const answer = { value: 'Yes' };
-  const first = view.render(props({ answers: { q1: answer } }));
+  const first = questionsView.view(props({ answers: { q1: answer } }));
   const firstCard = findAllByClass(first, 'cora-question-card')[0];
-  const second = view.render(props({ answers: { q1: answer } }));
+  const second = questionsView.view(props({ answers: { q1: answer } }));
   const secondCard = findAllByClass(second, 'cora-question-card')[0];
 
   assert.equal(secondCard, firstCard);
-  assert.equal(view.cacheSize, 2);
+  assert.equal(questionsView.cacheSize, 2);
 
-  const changed = view.render(props({ answers: { q1: { value: 'No' } } }));
+  const changed = questionsView.view(
+    props({ answers: { q1: { value: 'No' } } })
+  );
   assert.notEqual(findAllByClass(changed, 'cora-question-card')[0], firstCard);
-  view.clear();
-  assert.equal(view.cacheSize, 0);
+  questionsView.clear();
+  assert.equal(questionsView.cacheSize, 0);
 });
 
 test('CASE-2 Questions view evicts cached cards for questions that become inapplicable', () => {
-  const view = createQuestionPanelView();
+  const questionsView = createQuestionPanelView();
   const catalogue = [question('q1', 'Identity'), question('q2', 'Conduct')];
-  view.render(props({ catalogue, questions: catalogue }));
-  assert.equal(view.cacheSize, 2);
+  questionsView.view(props({ catalogue, questions: catalogue }));
+  assert.equal(questionsView.cacheSize, 2);
 
   // q2 no longer applicable → its card is dropped from the memo cache.
-  view.render(props({ catalogue, questions: [catalogue[0]] }));
-  assert.equal(view.cacheSize, 1);
+  questionsView.view(props({ catalogue, questions: [catalogue[0]] }));
+  assert.equal(questionsView.cacheSize, 1);
 });
 
 test('CASE-2 answer re-renders preserve the focused native control without snapshots', () => {
-  const view = createQuestionPanelView();
+  const questionsView = createQuestionPanelView();
   const container = document.createElement('div');
-  morph(container, view.render(props({ answers: { q1: { value: 'No' } } })));
+  render(
+    container,
+    questionsView.view(props({ answers: { q1: { value: 'No' } } }))
+  );
   const input = container.querySelector('[data-focus-key="answer:q1:0"]');
   assert.ok(input);
   /** @type {HTMLElement} */ (input).focus();
 
-  morph(container, view.render(props({ answers: { q1: { value: 'Yes' } } })));
+  render(
+    container,
+    questionsView.view(props({ answers: { q1: { value: 'Yes' } } }))
+  );
 
   assert.equal(
     container.querySelector('[data-focus-key="answer:q1:0"]'),
@@ -232,7 +240,7 @@ test('CASE-2 answer re-renders preserve the focused native control without snaps
 test('CASE-2 question cards dispatch single and exclusive multi-choice Answers', () => {
   /** @type {{questionId: string, value: string|string[]}[]} */
   const calls = [];
-  const single = createQuestionPanelView().render(
+  const single = createQuestionPanelView().view(
     props({
       onAnswer: (
         /** @type {string} */ questionId,
@@ -247,7 +255,7 @@ test('CASE-2 question cards dispatch single and exclusive multi-choice Answers',
     responseType: /** @type {const} */ ('multi-choice'),
     options: ['Email', 'Phone'],
   };
-  const multi = createQuestionPanelView().render(
+  const multi = createQuestionPanelView().view(
     props({
       catalogue: [multiQuestion],
       questions: [multiQuestion],
@@ -275,7 +283,7 @@ test('CASE-2 question cards dispatch single and exclusive multi-choice Answers',
     { questionId: 'multi', value: ['NA'] },
   ]);
 
-  const unansweredMulti = createQuestionPanelView().render(
+  const unansweredMulti = createQuestionPanelView().view(
     props({
       catalogue: [multiQuestion],
       questions: [multiQuestion],
@@ -297,7 +305,7 @@ test('CASE-2 question cards preserve remediation display and enforce read-only a
     ...question('failed', 'Identity'),
     failureValues: ['No'],
   };
-  const node = createQuestionPanelView().render(
+  const node = createQuestionPanelView().view(
     props({
       catalogue: [failing],
       questions: [failing],
@@ -322,7 +330,7 @@ test('CASE-2 question cards preserve remediation display and enforce read-only a
   assert.match(node.textContent, /Call the customer/);
   assert.match(node.textContent, /Refund the fee/);
 
-  const noRemediation = createQuestionPanelView().render(
+  const noRemediation = createQuestionPanelView().view(
     props({
       catalogue: [failing],
       questions: [failing],
@@ -346,10 +354,10 @@ test('CASE-2 real Questions view answers one of 500 Questions by rebuilding one 
 
   // The deterministic half of the contract: answering `q-001` rebuilds that one
   // card and reuses the node of every other Question in the bank.
-  const view = createQuestionPanelView();
-  const before = findAllByClass(view.render(base), 'cora-question-card');
+  const questionsView = createQuestionPanelView();
+  const before = findAllByClass(questionsView.view(base), 'cora-question-card');
   const after = findAllByClass(
-    view.render({ ...base, answers: { 'q-001': { value: 'Yes' } } }),
+    questionsView.view({ ...base, answers: { 'q-001': { value: 'Yes' } } }),
     'cora-question-card'
   );
   assert.equal(before.length, 500);
@@ -372,7 +380,7 @@ test('CASE-2 real Questions view answers one of 500 Questions by rebuilding one 
   for (let index = 0; index < 20; index += 1) {
     const coldView = createQuestionPanelView();
     const started = performance.now();
-    coldView.render(base);
+    coldView.view(base);
     if (index >= 5) coldSamples.push(performance.now() - started);
   }
 
@@ -383,7 +391,7 @@ test('CASE-2 real Questions view answers one of 500 Questions by rebuilding one 
       answers: { 'q-001': { value: index % 2 ? 'Yes' : 'No' } },
     };
     const started = performance.now();
-    view.render(next);
+    questionsView.view(next);
     if (index >= 10) answerSamples.push(performance.now() - started);
   }
 

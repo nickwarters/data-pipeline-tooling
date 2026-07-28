@@ -100,7 +100,7 @@ an action module; lifecycle work does not belong in the view.
 The route stays responsible for its lazy dynamic import and passes that loader
 to `registerStoreRoute(router, { paths, load, context })`, which builds the
 standard `createStoreRoute({ load, context })` adapter. That adapter creates the
-route-local store and memo cache, renders the view through `morph()`, and
+route-local store and memo cache, commits the view through `render()`, and
 returns the existing Router `{ mount, unmount }` handler shape.
 
 Use the adapter's `listen(target, type, listener)` tool inside the route effect

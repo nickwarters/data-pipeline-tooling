@@ -253,7 +253,7 @@ test('h: a camelCase on* prop with no matching property still becomes a listener
 
 // ===== RECONCILER SUPPORT: getProps / setProps / applyProp / removeProp =====
 //
-// These back morph() (src/core/morph.js): h() records the props it built an
+// These back render() (src/core/render.js): h() records the props it built an
 // element with, and applyProp/removeProp are the single source of truth for how
 // one prop maps onto the DOM (used at build time and when a prop changes).
 

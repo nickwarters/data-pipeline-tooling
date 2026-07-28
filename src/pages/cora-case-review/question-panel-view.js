@@ -57,7 +57,7 @@ export function createQuestionPanelView() {
    *   onAnswer: (questionId: string, value: string|string[]) => void,
    * }} props
    */
-  function render(props) {
+  function view(props) {
     const { catalogue, questions, answers, access, heading, onAnswer } = props;
 
     const applicableIds = new Set(questions.map((question) => question.id));
@@ -142,7 +142,7 @@ export function createQuestionPanelView() {
   }
 
   return {
-    render,
+    view,
     clear: memo.clear,
     get cacheSize() {
       return memo.size;

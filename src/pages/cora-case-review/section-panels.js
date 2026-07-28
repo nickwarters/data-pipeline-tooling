@@ -97,7 +97,7 @@ import { resolveGeneralQuestionsPlacement } from '../../evaluators/general-quest
  */
 
 /**
- * @typedef {(ctx: PanelContext) => Node | Node[] | null} PanelRenderer
+ * @typedef {(ctx: PanelContext) => Node | Node[] | null} PanelView
  */
 
 /**
@@ -113,7 +113,7 @@ import { resolveGeneralQuestionsPlacement } from '../../evaluators/general-quest
  */
 function questionsPanel(snapshot, questionsView, onAnswer) {
   return withGeneralQuestions(
-    questionsView.render({
+    questionsView.view({
       catalogue: snapshot.catalogue,
       questions: snapshot.applicableQuestions,
       answers: snapshot.answers,
@@ -140,7 +140,7 @@ function questionsPanel(snapshot, questionsView, onAnswer) {
  * `tests/section-panels.test.js` still has to assert the key set *equals*
  * `tabEntries()`' ids: the type stops wrong keys, the test stops missing ones.
  *
- * @type {Partial<Record<import('../../lib/section-registry.js').Section, PanelRenderer>>}
+ * @type {Partial<Record<import('../../lib/section-registry.js').Section, PanelView>>}
  */
 export const SECTION_PANELS = {
   details: ({ caseRow, config }) =>

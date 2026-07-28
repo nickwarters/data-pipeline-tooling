@@ -50,7 +50,7 @@ function warnIfUnregisteredCoraElement(tag) {
 
 /**
  * Records the raw props object each `h()`-built element was created with, so
- * `morph()` (src/core/morph.js) can diff the *authored* props of the previous
+ * `render()` (src/core/render.js) can diff the *authored* props of the previous
  * and next trees rather than trying to read them back out of the live DOM
  * (attribute enumeration and attached listeners are not portably
  * introspectable). This is bookkeeping only — it does not change how `h()` is
@@ -70,7 +70,7 @@ export function getProps(el) {
 }
 
 /**
- * Overwrite the recorded props for an element. `morph()` calls this after it
+ * Overwrite the recorded props for an element. `render()` calls this after it
  * patches a kept node so the *next* diff compares against what is now live.
  * @param {object} el
  * @param {Record<string, any>} props
@@ -99,7 +99,7 @@ export function setProps(el, props) {
  * Apply one authored prop to an element, mapping it to the right DOM channel
  * (event listener, callback property, className, value/other property, or a
  * plain attribute). This is the single source of truth for that mapping: `h()`
- * uses it at build time and `morph()` reuses it when a prop changes, so the two
+ * uses it at build time and `render()` reuses it when a prop changes, so the two
  * can never drift. `value` is applied directly here; `h()` defers *when* it
  * calls this (see below), not *how*.
  * @param {any} el
@@ -142,7 +142,7 @@ export function applyProp(el, key, value) {
  * Undo an authored prop — the exact inverse of {@link applyProp}, for when a
  * prop present on the previous tree is gone (or is a listener being replaced)
  * on the next one. Removing a listener needs the *previous* handler reference,
- * which is why `morph()` diffs recorded props rather than the live node.
+ * which is why `render()` diffs recorded props rather than the live node.
  * @param {any} el
  * @param {string} key
  * @param {any} prevValue - the value {@link applyProp} last set for this key
@@ -246,7 +246,7 @@ export function h(tag, props = {}, ...children) {
     applyProp(el, 'value', deferredValue);
   }
 
-  // Record the authored props so morph() can diff them on the next render.
+  // Record the authored props so render() can diff them on the next render.
   NODE_PROPS.set(el, { ...props });
 
   return el;

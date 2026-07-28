@@ -6,7 +6,7 @@ import { installDom, StubEl } from './_dom-stub.js';
 installDom();
 
 const { h } = await import('../src/lib/html.js');
-const { morph } = await import('../src/core/morph.js');
+const { render } = await import('../src/core/render.js');
 
 /** A fresh detached container to reconcile into. */
 function container() {
@@ -20,25 +20,25 @@ function texts(/** @type {any} */ el) {
 
 // ===== MOUNT + REFERENCE-EQUAL SKIP =====
 
-test('morph: first render mounts the tree into an empty container', () => {
+test('render: first render mounts the tree into an empty container', () => {
   const root = container();
-  morph(root, h('p', {}, 'hello'));
+  render(root, h('p', {}, 'hello'));
   assert.equal(root.childNodes.length, 1);
   assert.equal(root.childNodes[0].tagName, 'P');
   assert.equal(root.childNodes[0].textContent, 'hello');
 });
 
-test('morph: null/false clears the container', () => {
+test('render: null/false clears the container', () => {
   const root = container();
-  morph(root, h('p', {}, 'hi'));
-  morph(root, null);
+  render(root, h('p', {}, 'hi'));
+  render(root, null);
   assert.equal(root.childNodes.length, 0);
-  morph(root, h('p', {}, 'hi'));
-  morph(root, false);
+  render(root, h('p', {}, 'hi'));
+  render(root, false);
   assert.equal(root.childNodes.length, 0);
 });
 
-test('morph: a reference-equal subtree is skipped in O(1) without traversal', () => {
+test('render: a reference-equal subtree is skipped in O(1) without traversal', () => {
   const root = container();
   // A deep, unchanging subtree we will hand back by reference (as memo() would).
   const stableChild = h(
@@ -48,9 +48,9 @@ test('morph: a reference-equal subtree is skipped in O(1) without traversal', ()
     h('li', { key: 'b' }, 'b'),
     h('li', { key: 'c' }, 'c')
   );
-  morph(root, h('div', {}, stableChild, h('span', { key: 's' }, 'v1')));
+  render(root, h('div', {}, stableChild, h('span', { key: 's' }, 'v1')));
 
-  const stats = morph(
+  const stats = render(
     root,
     // The ul is the *same object* — its 4 descendants must not be visited.
     h('div', {}, stableChild, h('span', { key: 's' }, 'v2'))
@@ -63,11 +63,11 @@ test('morph: a reference-equal subtree is skipped in O(1) without traversal', ()
   assert.equal(stats.patchedElements, 2);
 });
 
-test('morph: an identical tree passed twice changes nothing', () => {
+test('render: an identical tree passed twice changes nothing', () => {
   const root = container();
   const tree = h('p', { class: 'x' }, 'same');
-  morph(root, tree);
-  const stats = morph(root, tree);
+  render(root, tree);
+  const stats = render(root, tree);
   assert.equal(stats.visited, 1);
   assert.ok(
     !stats.patchedElements,
@@ -77,93 +77,93 @@ test('morph: an identical tree passed twice changes nothing', () => {
 
 // ===== TEXT / ATTRIBUTE / CLASS PATCHING (node identity preserved) =====
 
-test('morph: text content is patched on the same node', () => {
+test('render: text content is patched on the same node', () => {
   const root = container();
-  morph(root, h('p', {}, 'before'));
+  render(root, h('p', {}, 'before'));
   const p = root.childNodes[0];
   const textNode = p.childNodes[0];
-  morph(root, h('p', {}, 'after'));
+  render(root, h('p', {}, 'after'));
   assert.equal(root.childNodes[0], p, 'element identity preserved');
   assert.equal(p.childNodes[0], textNode, 'text node identity preserved');
   assert.equal(p.textContent, 'after');
 });
 
-test('morph: unchanged text is left untouched', () => {
+test('render: unchanged text is left untouched', () => {
   const root = container();
-  morph(root, h('p', {}, 'same'));
+  render(root, h('p', {}, 'same'));
   const p = root.childNodes[0];
-  const stats = morph(root, h('p', {}, 'same'));
+  const stats = render(root, h('p', {}, 'same'));
   // p is patched (not ref-equal) but its text node needs no write.
   assert.equal(p.textContent, 'same');
   assert.equal(stats.patchedElements, 1);
 });
 
-test('morph: className is added, changed, and removed', () => {
+test('render: className is added, changed, and removed', () => {
   const root = container();
-  morph(root, h('div', {}, h('p', {}, 'x')));
+  render(root, h('div', {}, h('p', {}, 'x')));
   const p = root.childNodes[0].childNodes[0];
 
-  morph(root, h('div', {}, h('p', { class: 'one' }, 'x')));
+  render(root, h('div', {}, h('p', { class: 'one' }, 'x')));
   assert.equal(p.className, 'one');
 
-  morph(root, h('div', {}, h('p', { class: 'two' }, 'x')));
+  render(root, h('div', {}, h('p', { class: 'two' }, 'x')));
   assert.equal(p.className, 'two');
 
-  morph(root, h('div', {}, h('p', {}, 'x')));
+  render(root, h('div', {}, h('p', {}, 'x')));
   assert.equal(p.className, '');
 });
 
-test('morph: attributes are added, changed, and removed', () => {
+test('render: attributes are added, changed, and removed', () => {
   const root = container();
-  morph(root, h('div', {}, h('p', {}, 'x')));
+  render(root, h('div', {}, h('p', {}, 'x')));
   const p = root.childNodes[0].childNodes[0];
 
-  morph(root, h('div', {}, h('p', { 'aria-label': 'first' }, 'x')));
+  render(root, h('div', {}, h('p', { 'aria-label': 'first' }, 'x')));
   assert.equal(p.getAttribute('aria-label'), 'first');
 
-  morph(root, h('div', {}, h('p', { 'aria-label': 'second' }, 'x')));
+  render(root, h('div', {}, h('p', { 'aria-label': 'second' }, 'x')));
   assert.equal(p.getAttribute('aria-label'), 'second');
 
-  morph(root, h('div', {}, h('p', {}, 'x')));
+  render(root, h('div', {}, h('p', {}, 'x')));
   assert.equal(p.getAttribute('aria-label'), null);
 });
 
-test('morph: a boolean property is patched and cleared', () => {
+test('render: a boolean property is patched and cleared', () => {
   const root = container();
-  morph(root, h('div', {}, h('input', { disabled: true })));
+  render(root, h('div', {}, h('input', { disabled: true })));
   const input = root.childNodes[0].childNodes[0];
   assert.equal(input.disabled, true);
 
-  morph(root, h('div', {}, h('input', {})));
+  render(root, h('div', {}, h('input', {})));
   assert.equal(input.disabled, false);
 });
 
 // ===== CONTROLLED FORM PROPERTIES =====
 
-test('morph: input value is a property, and an in-flight edit is never clobbered', () => {
+test('render: input value is a property, and an in-flight edit is never clobbered', () => {
   const root = container();
-  morph(root, h('div', {}, h('input', { key: 'q', value: '' })));
+  render(root, h('div', {}, h('input', { key: 'q', value: '' })));
   const input = root.childNodes[0].childNodes[0];
 
   // User types — the live value diverges from the last rendered (intended) value.
   input.value = 'hel';
 
   // An unrelated re-render (same intended value '') must NOT overwrite the edit.
-  morph(root, h('div', {}, h('input', { key: 'q', value: '' })));
+  render(root, h('div', {}, h('input', { key: 'q', value: '' })));
   assert.equal(input.value, 'hel', 'uncommitted value preserved');
 });
 
-test('morph: a genuine value change is reflected to the input', () => {
+test('render: a genuine value change is reflected to the input', () => {
   const root = container();
-  morph(root, h('div', {}, h('input', { key: 'q', value: 'a' })));
+  render(root, h('div', {}, h('input', { key: 'q', value: 'a' })));
   const input = root.childNodes[0].childNodes[0];
-  morph(root, h('div', {}, h('input', { key: 'q', value: 'b' })));
+  render(root, h('div', {}, h('input', { key: 'q', value: 'b' })));
   assert.equal(input.value, 'b');
 });
 
-test('morph: an intended value change already matching the live value writes nothing extra', () => {
+test('render: an intended value change already matching the live value writes nothing extra', () => {
   const root = container();
-  morph(root, h('div', {}, h('input', { key: 'q', value: 'a' })));
+  render(root, h('div', {}, h('input', { key: 'q', value: 'a' })));
   const input = root.childNodes[0].childNodes[0];
   // Simulate the live value already being 'b' (e.g. user typed exactly it).
   input.value = 'b';
@@ -177,7 +177,7 @@ test('morph: an intended value change already matching the live value writes not
       this._value = v;
     },
   });
-  morph(root, h('div', {}, h('input', { key: 'q', value: 'b' })));
+  render(root, h('div', {}, h('input', { key: 'q', value: 'b' })));
   assert.equal(
     writes,
     0,
@@ -185,26 +185,26 @@ test('morph: an intended value change already matching the live value writes not
   );
 });
 
-test('morph: value control removed resets the field', () => {
+test('render: value control removed resets the field', () => {
   const root = container();
-  morph(root, h('div', {}, h('input', { key: 'q', value: 'x' })));
+  render(root, h('div', {}, h('input', { key: 'q', value: 'x' })));
   const input = root.childNodes[0].childNodes[0];
-  morph(root, h('div', {}, h('input', { key: 'q' })));
+  render(root, h('div', {}, h('input', { key: 'q' })));
   assert.equal(input.value, '');
 });
 
-test('morph: checkbox checked is a controlled property, added/changed/removed', () => {
+test('render: checkbox checked is a controlled property, added/changed/removed', () => {
   const root = container();
-  morph(root, h('div', {}, h('input', { key: 'c', type: 'checkbox' })));
+  render(root, h('div', {}, h('input', { key: 'c', type: 'checkbox' })));
   const box = root.childNodes[0].childNodes[0];
 
-  morph(
+  render(
     root,
     h('div', {}, h('input', { key: 'c', type: 'checkbox', checked: true }))
   );
   assert.equal(box.checked, true);
 
-  morph(
+  render(
     root,
     h('div', {}, h('input', { key: 'c', type: 'checkbox', checked: false }))
   );
@@ -212,20 +212,20 @@ test('morph: checkbox checked is a controlled property, added/changed/removed', 
 
   // Live toggled true, intended stays false → unchanged intended, left alone.
   box.checked = true;
-  morph(
+  render(
     root,
     h('div', {}, h('input', { key: 'c', type: 'checkbox', checked: false }))
   );
   assert.equal(box.checked, true, 'unchanged intended does not fight the user');
 
   // Control removed → reset to false.
-  morph(root, h('div', {}, h('input', { key: 'c', type: 'checkbox' })));
+  render(root, h('div', {}, h('input', { key: 'c', type: 'checkbox' })));
   assert.equal(box.checked, false);
 });
 
-test('morph: checked change already matching the live state writes nothing extra', () => {
+test('render: checked change already matching the live state writes nothing extra', () => {
   const root = container();
-  morph(
+  render(
     root,
     h('div', {}, h('input', { key: 'c', type: 'checkbox', checked: false }))
   );
@@ -242,7 +242,7 @@ test('morph: checked change already matching the live state writes nothing extra
       backing = v;
     },
   });
-  morph(
+  render(
     root,
     h('div', {}, h('input', { key: 'c', type: 'checkbox', checked: true }))
   );
@@ -262,66 +262,66 @@ function click(/** @type {any} */ el) {
   el.dispatchEvent(new G.CustomEvent('click', { bubbles: true }));
 }
 
-test('morph: replacing a listener removes the old one (no leak)', () => {
+test('render: replacing a listener removes the old one (no leak)', () => {
   const root = container();
   let a = 0;
   let b = 0;
   const fn1 = () => (a += 1);
   const fn2 = () => (b += 1);
-  morph(root, h('div', {}, h('button', { onClick: fn1 }, 'go')));
+  render(root, h('div', {}, h('button', { onClick: fn1 }, 'go')));
   const btn = root.childNodes[0].childNodes[0];
 
-  morph(root, h('div', {}, h('button', { onClick: fn2 }, 'go')));
+  render(root, h('div', {}, h('button', { onClick: fn2 }, 'go')));
   click(btn);
   assert.equal(a, 0, 'old handler no longer bound');
   assert.equal(b, 1, 'exactly the new handler fires');
 });
 
-test('morph: a referentially-stable listener fires exactly once (no accumulation)', () => {
+test('render: a referentially-stable listener fires exactly once (no accumulation)', () => {
   const root = container();
   let calls = 0;
   const fn = () => (calls += 1);
-  morph(root, h('div', {}, h('button', { onClick: fn }, 'go')));
+  render(root, h('div', {}, h('button', { onClick: fn }, 'go')));
   const btn = root.childNodes[0].childNodes[0];
   // Re-render several times with the same handler; it must not stack up.
-  morph(root, h('div', {}, h('button', { onClick: fn }, 'go')));
-  morph(root, h('div', {}, h('button', { onClick: fn }, 'go')));
+  render(root, h('div', {}, h('button', { onClick: fn }, 'go')));
+  render(root, h('div', {}, h('button', { onClick: fn }, 'go')));
   click(btn);
   assert.equal(calls, 1, 'one handler, fired once');
 });
 
-test('morph: a removed listener is unbound', () => {
+test('render: a removed listener is unbound', () => {
   const root = container();
   let calls = 0;
   const fn = () => (calls += 1);
-  morph(root, h('div', {}, h('button', { onClick: fn }, 'go')));
+  render(root, h('div', {}, h('button', { onClick: fn }, 'go')));
   const btn = root.childNodes[0].childNodes[0];
-  morph(root, h('div', {}, h('button', {}, 'go')));
+  render(root, h('div', {}, h('button', {}, 'go')));
   click(btn);
   assert.equal(calls, 0, 'handler gone after removal');
 });
 
-test('morph: a component-callback property handler is reassigned then cleared', () => {
+test('render: a component-callback property handler is reassigned then cleared', () => {
   class Host extends StubEl {
     constructor() {
-      super('cora-morph-host');
+      super('cora-render-host');
       /** @type {any} */
       this.onCommit = null;
     }
   }
   /** @type {any} */ (globalThis).customElements.define(
-    'cora-morph-host',
+    'cora-render-host',
     Host
   );
   const root = container();
   const a = () => {};
   const b = () => {};
-  morph(root, h('div', {}, h('cora-morph-host', { onCommit: a })));
+  render(root, h('div', {}, h('cora-render-host', { onCommit: a })));
   const host = root.childNodes[0].childNodes[0];
   assert.equal(host.onCommit, a);
-  morph(root, h('div', {}, h('cora-morph-host', { onCommit: b })));
+  render(root, h('div', {}, h('cora-render-host', { onCommit: b })));
   assert.equal(host.onCommit, b);
-  morph(root, h('div', {}, h('cora-morph-host', {})));
+  render(root, h('div', {}, h('cora-render-host', {})));
   assert.equal(host.onCommit, null);
 });
 
@@ -336,61 +336,61 @@ function list(/** @type {string[]} */ keys) {
   );
 }
 
-test('morph: keyed insert keeps existing nodes and inserts the new one in place', () => {
+test('render: keyed insert keeps existing nodes and inserts the new one in place', () => {
   const root = container();
-  morph(root, list(['a', 'c']));
+  render(root, list(['a', 'c']));
   const ul = root.childNodes[0];
   const a = ul.childNodes[0];
   const c = ul.childNodes[1];
 
-  morph(root, list(['a', 'b', 'c']));
+  render(root, list(['a', 'b', 'c']));
   assert.deepEqual(texts(ul), ['a', 'b', 'c']);
   assert.equal(ul.childNodes[0], a, 'a reused');
   assert.equal(ul.childNodes[2], c, 'c reused');
 });
 
-test('morph: keyed remove drops the right node and keeps the rest', () => {
+test('render: keyed remove drops the right node and keeps the rest', () => {
   const root = container();
-  morph(root, list(['a', 'b', 'c']));
+  render(root, list(['a', 'b', 'c']));
   const ul = root.childNodes[0];
   const a = ul.childNodes[0];
   const c = ul.childNodes[2];
 
-  morph(root, list(['a', 'c']));
+  render(root, list(['a', 'c']));
   assert.deepEqual(texts(ul), ['a', 'c']);
   assert.equal(ul.childNodes[0], a);
   assert.equal(ul.childNodes[1], c);
 });
 
-test('morph: keyed reorder moves the same DOM nodes rather than rebuilding', () => {
+test('render: keyed reorder moves the same DOM nodes rather than rebuilding', () => {
   const root = container();
-  morph(root, list(['a', 'b', 'c']));
+  render(root, list(['a', 'b', 'c']));
   const ul = root.childNodes[0];
   const [a, b, c] = ul.childNodes;
 
-  morph(root, list(['c', 'a', 'b']));
+  render(root, list(['c', 'a', 'b']));
   assert.deepEqual(texts(ul), ['c', 'a', 'b']);
   assert.equal(ul.childNodes[0], c, 'c is the same node, moved');
   assert.equal(ul.childNodes[1], a);
   assert.equal(ul.childNodes[2], b);
 });
 
-test('morph: a partial reorder moves only the out-of-place nodes (minimal moves)', () => {
+test('render: a partial reorder moves only the out-of-place nodes (minimal moves)', () => {
   const root = container();
-  morph(root, list(['a', 'b', 'c', 'd']));
+  render(root, list(['a', 'b', 'c', 'd']));
   const ul = root.childNodes[0];
   const a = ul.childNodes[0];
   const d = ul.childNodes[3];
 
   // a, c, d stay in relative order; only b moves.
-  const stats = morph(root, list(['a', 'c', 'b', 'd']));
+  const stats = render(root, list(['a', 'c', 'b', 'd']));
   assert.deepEqual(texts(ul), ['a', 'c', 'b', 'd']);
   assert.equal(ul.childNodes[0], a);
   assert.equal(ul.childNodes[3], d);
   assert.equal(stats.movedNodes, 1, 'only one node moved');
 });
 
-test('morph: reorder-while-editing preserves focus, caret, and the uncommitted value', () => {
+test('render: reorder-while-editing preserves focus, caret, and the uncommitted value', () => {
   const root = container();
   // A row with a keyed, focusable input, surrounded by sibling rows.
   const view = (/** @type {string[]} */ order, /** @type {string} */ draft) =>
@@ -408,7 +408,7 @@ test('morph: reorder-while-editing preserves focus, caret, and the uncommitted v
       )
     );
 
-  morph(root, view(['a', 'edit', 'b', 'c'], ''));
+  render(root, view(['a', 'edit', 'b', 'c'], ''));
   const ul = root.childNodes[0];
   const editLi = ul.childNodes[1];
   const input = editLi.childNodes[0];
@@ -419,7 +419,7 @@ test('morph: reorder-while-editing preserves focus, caret, and the uncommitted v
   input.setSelectionRange(4, 4);
 
   // The *surrounding* rows reorder around the (still-empty-in-state) edit row.
-  morph(root, view(['b', 'a', 'edit', 'c'], ''));
+  render(root, view(['b', 'a', 'edit', 'c'], ''));
 
   const G = /** @type {any} */ (globalThis);
   const movedEditLi = ul.childNodes.find(
@@ -435,34 +435,34 @@ test('morph: reorder-while-editing preserves focus, caret, and the uncommitted v
 
 // ===== SUBTREE REPLACEMENT =====
 
-test('morph: a tag change replaces the subtree', () => {
+test('render: a tag change replaces the subtree', () => {
   const root = container();
-  morph(root, h('div', {}, h('p', {}, 'x')));
+  render(root, h('div', {}, h('p', {}, 'x')));
   const p = root.childNodes[0].childNodes[0];
-  morph(root, h('div', {}, h('section', {}, 'x')));
+  render(root, h('div', {}, h('section', {}, 'x')));
   const replaced = root.childNodes[0].childNodes[0];
   assert.notEqual(replaced, p, 'a new node, not the old one');
   assert.equal(replaced.tagName, 'SECTION');
 });
 
-test('morph: a key change replaces the node even when the tag matches', () => {
+test('render: a key change replaces the node even when the tag matches', () => {
   const root = container();
-  morph(root, h('ul', {}, h('li', { key: 'a' }, 'x')));
+  render(root, h('ul', {}, h('li', { key: 'a' }, 'x')));
   const ul = root.childNodes[0];
   const first = ul.childNodes[0];
-  morph(root, h('ul', {}, h('li', { key: 'z' }, 'x')));
+  render(root, h('ul', {}, h('li', { key: 'z' }, 'x')));
   assert.notEqual(ul.childNodes[0], first, 'different key → different node');
   assert.equal(ul.childNodes[0].getAttribute('key'), 'z');
 });
 
-test('morph: unkeyed children patch by position, replacing on type mismatch', () => {
+test('render: unkeyed children patch by position, replacing on type mismatch', () => {
   const root = container();
-  morph(root, h('div', {}, h('span', {}, 'one'), h('span', {}, 'two')));
+  render(root, h('div', {}, h('span', {}, 'one'), h('span', {}, 'two')));
   const div = root.childNodes[0];
   const firstSpan = div.childNodes[0];
 
   // Position 0 stays a span (patched); position 1 becomes a <b> (replaced).
-  morph(root, h('div', {}, h('span', {}, 'ONE'), h('b', {}, 'two')));
+  render(root, h('div', {}, h('span', {}, 'ONE'), h('b', {}, 'two')));
   assert.equal(
     div.childNodes[0],
     firstSpan,
@@ -472,9 +472,9 @@ test('morph: unkeyed children patch by position, replacing on type mismatch', ()
   assert.equal(div.childNodes[1].tagName, 'B', 'mismatched position replaced');
 });
 
-test('morph: data-key is honoured as the key attribute', () => {
+test('render: data-key is honoured as the key attribute', () => {
   const root = container();
-  morph(
+  render(
     root,
     h(
       'ul',
@@ -485,7 +485,7 @@ test('morph: data-key is honoured as the key attribute', () => {
   );
   const ul = root.childNodes[0];
   const [one, two] = ul.childNodes;
-  morph(
+  render(
     root,
     h(
       'ul',
@@ -500,15 +500,15 @@ test('morph: data-key is honoured as the key attribute', () => {
 
 // ===== ROOT SHAPES =====
 
-test('morph: an array of root nodes is reconciled', () => {
+test('render: an array of root nodes is reconciled', () => {
   const root = container();
-  morph(root, [h('p', { key: 'p' }, 'one'), h('p', { key: 'q' }, 'two')]);
+  render(root, [h('p', { key: 'p' }, 'one'), h('p', { key: 'q' }, 'two')]);
   assert.deepEqual(
     root.childNodes.map((/** @type {any} */ c) => c.textContent),
     ['one', 'two']
   );
   // Nested arrays and falsy entries flatten away.
-  morph(root, [
+  render(root, [
     [h('p', { key: 'p' }, 'ONE')],
     null,
     h('p', { key: 'q' }, 'two'),
@@ -519,45 +519,45 @@ test('morph: an array of root nodes is reconciled', () => {
   );
 });
 
-test('morph: a fragment-like root spreads its childNodes', () => {
+test('render: a fragment-like root spreads its childNodes', () => {
   const root = container();
   const frag = {
     tagName: undefined,
     nodeName: '#document-fragment',
     childNodes: [h('p', { key: 'a' }, 'a'), h('p', { key: 'b' }, 'b')],
   };
-  morph(root, frag);
+  render(root, frag);
   assert.deepEqual(texts(root), ['a', 'b']);
 });
 
-test('morph: rejects a string root with an actionable error', () => {
+test('render: rejects a string root with an actionable error', () => {
   const root = container();
   assert.throws(
-    () => morph(root, 'text'),
-    /morph\(\): view returned a string; wrap it in an element/
+    () => render(root, 'text'),
+    /render\(\): view returned a string; wrap it in an element/
   );
 });
 
-test('morph: rejects a string nested in a root array', () => {
+test('render: rejects a string nested in a root array', () => {
   const root = container();
   assert.throws(
-    () => morph(root, [h('p', {}, 'valid'), ['text']]),
-    /morph\(\): view returned a string; wrap it in an element/
+    () => render(root, [h('p', {}, 'valid'), ['text']]),
+    /render\(\): view returned a string; wrap it in an element/
   );
 });
 
 // ===== LIS COVERAGE: a reorder exercising multi-length increasing runs =====
 
-test('morph: a complex reorder lands in the right order with minimal disruption', () => {
+test('render: a complex reorder lands in the right order with minimal disruption', () => {
   const root = container();
-  morph(root, list(['a', 'b', 'c', 'd', 'e']));
+  render(root, list(['a', 'b', 'c', 'd', 'e']));
   const ul = root.childNodes[0];
   const nodes = Object.fromEntries(
     ul.childNodes.map((/** @type {any} */ c) => [c.getAttribute('key'), c])
   );
 
   // e to the front, rest shift back: a,b,c,d keep relative order (the LIS).
-  const stats = morph(root, list(['e', 'a', 'b', 'c', 'd']));
+  const stats = render(root, list(['e', 'a', 'b', 'c', 'd']));
   assert.deepEqual(texts(ul), ['e', 'a', 'b', 'c', 'd']);
   for (const k of ['a', 'b', 'c', 'd', 'e']) {
     assert.equal(
@@ -571,64 +571,64 @@ test('morph: a complex reorder lands in the right order with minimal disruption'
 
 // ===== EDGE CASES =====
 
-test('morph: a keyed node whose tag changed is replaced, not patched', () => {
+test('render: a keyed node whose tag changed is replaced, not patched', () => {
   const root = container();
-  morph(root, h('ul', {}, h('li', { key: 'a' }, 'x')));
+  render(root, h('ul', {}, h('li', { key: 'a' }, 'x')));
   const ul = root.childNodes[0];
   const first = ul.childNodes[0];
   // Same key 'a', different tag — cannot patch a <li> into a <span>.
-  morph(root, h('ul', {}, h('span', { key: 'a' }, 'x')));
+  render(root, h('ul', {}, h('span', { key: 'a' }, 'x')));
   assert.notEqual(ul.childNodes[0], first);
   assert.equal(ul.childNodes[0].tagName, 'SPAN');
 });
 
-test('morph: a duplicate key in the new list makes the second a fresh node', () => {
+test('render: a duplicate key in the new list makes the second a fresh node', () => {
   const root = container();
-  morph(root, list(['a', 'b']));
+  render(root, list(['a', 'b']));
   const ul = root.childNodes[0];
   const a = ul.childNodes[0];
   // Two children claim key 'a': the first reuses the node, the second is new.
-  morph(root, list(['a', 'a']));
+  render(root, list(['a', 'a']));
   assert.equal(ul.childNodes.length, 2);
   assert.equal(ul.childNodes[0], a, 'first keeps the original node');
   assert.notEqual(ul.childNodes[1], a, 'second is a fresh node');
 });
 
-test('morph: unkeyed children beyond the old count are inserted', () => {
+test('render: unkeyed children beyond the old count are inserted', () => {
   const root = container();
-  morph(root, h('div', {}, h('span', {}, 'one')));
+  render(root, h('div', {}, h('span', {}, 'one')));
   const div = root.childNodes[0];
   const first = div.childNodes[0];
-  morph(root, h('div', {}, h('span', {}, 'one'), h('span', {}, 'two')));
+  render(root, h('div', {}, h('span', {}, 'one'), h('span', {}, 'two')));
   assert.equal(div.childNodes[0], first, 'existing position patched');
   assert.deepEqual(texts(div), ['one', 'two']);
 });
 
-test('morph: a form control that gains a value control on a later render reflects it', () => {
+test('render: a form control that gains a value control on a later render reflects it', () => {
   const root = container();
-  morph(root, h('div', {}, h('input', { key: 'q' })));
+  render(root, h('div', {}, h('input', { key: 'q' })));
   const input = root.childNodes[0].childNodes[0];
-  morph(root, h('div', {}, h('input', { key: 'q', value: 'now-controlled' })));
+  render(root, h('div', {}, h('input', { key: 'q', value: 'now-controlled' })));
   assert.equal(input.value, 'now-controlled');
 });
 
-test('morph: tolerates reconciling over a foreign (non-h) node as the old node', () => {
+test('render: tolerates reconciling over a foreign (non-h) node as the old node', () => {
   const root = container();
-  // A pre-existing DOM node morph did not build (no recorded props).
+  // A pre-existing DOM node render() did not build (no recorded props).
   const raw = /** @type {any} */ (globalThis).document.createElement('p');
   root.appendChild(raw);
-  morph(root, h('p', { class: 'x' }, 'hello'));
+  render(root, h('p', { class: 'x' }, 'hello'));
   assert.equal(root.childNodes[0], raw, 'the foreign node is patched in place');
   assert.equal(raw.className, 'x');
   assert.equal(raw.textContent, 'hello');
 });
 
-test('morph: tolerates a foreign (non-h) node in the new tree', () => {
+test('render: tolerates a foreign (non-h) node in the new tree', () => {
   const root = container();
-  morph(root, h('p', { class: 'x' }, 'hello'));
+  render(root, h('p', { class: 'x' }, 'hello'));
   const old = root.childNodes[0];
   const raw = /** @type {any} */ (globalThis).document.createElement('p');
-  morph(root, raw);
+  render(root, raw);
   assert.equal(root.childNodes[0], old, 'same-type node patched in place');
   assert.equal(
     old.className,
@@ -637,19 +637,19 @@ test('morph: tolerates a foreign (non-h) node in the new tree', () => {
   );
 });
 
-test('morph: a caller-supplied stats object is populated and returned', () => {
+test('render: a caller-supplied stats object is populated and returned', () => {
   const root = container();
   const stats = /** @type {any} */ ({});
-  const returned = morph(root, h('p', {}, 'x'), stats);
+  const returned = render(root, h('p', {}, 'x'), stats);
   assert.equal(returned, stats, 'the same object is returned');
   assert.equal(stats.createdNodes, 1);
 });
 
-test('morph: a checkbox that gains a checked control on a later render reflects it', () => {
+test('render: a checkbox that gains a checked control on a later render reflects it', () => {
   const root = container();
-  morph(root, h('div', {}, h('input', { key: 'c', type: 'checkbox' })));
+  render(root, h('div', {}, h('input', { key: 'c', type: 'checkbox' })));
   const box = root.childNodes[0].childNodes[0];
-  morph(
+  render(
     root,
     h('div', {}, h('input', { key: 'c', type: 'checkbox', checked: true }))
   );

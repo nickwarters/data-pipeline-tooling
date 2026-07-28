@@ -13,6 +13,10 @@ measurements were removed after the Palimpsest migration completed. This report
 is retained as the historical evidence behind ADR-0034, not as a live benchmark
 runbook.
 
+Terminology: this report predates ADR-0039, which renamed `morph()` to
+`render()`. The `morph()`/"morphed" wording below is left as it was measured;
+read it as today's `src/core/render.js`.
+
 ## Fixture and workload
 
 The synthetic fixture contained 500 Question Definitions in 20 Question Groups
