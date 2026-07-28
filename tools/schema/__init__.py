@@ -13,9 +13,13 @@ it?" — and this package never extends or replaces the validation dataclasses.
 ``columns_of`` / ``text_columns`` are the two ways a feed builds a ``Table``'s
 column list (from a row dataclass, or as a flat list of ``TEXT`` columns for a
 schema-light raw landing zone); ``diff_tables`` compares one declared ``Table``
-against what a live database actually contains. Application infrastructure — a
-sibling ``tools`` package, not framework vocabulary; see
-[`docs/schema-declaration.md`](../../docs/schema-declaration.md).
+against what a live database actually contains. ``tools.schema.emit`` is the
+sibling that turns a declaration's drift into migration SQL text for
+``migrations make`` (``tools.migrations``) to write -- authoring stays here,
+next to the declaration it reads; applying lives in ``tools.migrations``.
+Application infrastructure — a sibling ``tools`` package, not framework
+vocabulary; see [`docs/schema-declaration.md`](../../docs/schema-declaration.md)
+and [`docs/migrations.md`](../../docs/migrations.md).
 """
 
 from __future__ import annotations
@@ -31,6 +35,13 @@ from tools.schema.declaration import (
     resolved_namespace,
     retype,
     text_columns,
+)
+from tools.schema.emit import (
+    MigrationReplayError,
+    generate_migration_sql,
+    replay_tracked_shapes,
+    slug_for,
+    tracked_columns_for,
 )
 from tools.schema.live import LiveTable, TableDiff, diff_tables, read_live_table
 
@@ -49,4 +60,9 @@ __all__ = [
     "TableDiff",
     "diff_tables",
     "read_live_table",
+    "generate_migration_sql",
+    "slug_for",
+    "tracked_columns_for",
+    "replay_tracked_shapes",
+    "MigrationReplayError",
 ]

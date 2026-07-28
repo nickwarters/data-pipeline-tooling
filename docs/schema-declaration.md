@@ -131,6 +131,15 @@ is its own decision, not a side effect of declaring shapes. Until it happens,
 read every `columns_of(...)` in a **raw** `TABLES` entry as "this is what the
 current reader produces", never as "this is what raw should be".
 
+`migrations make` generates from the declaration, so a generated migration for
+such a table does create a non-`TEXT` raw column — and says so, loudly, in a
+`NOTE` comment on the file, pointing here. That is the honest option: emitting
+`TEXT` instead would create a table the feed's own Writer immediately
+contradicts, and leave `schema diff` reporting permanent drift. Once the reader
+is fixed, correcting those columns is a *new* forward migration (a 12-step
+rebuild — `migrations/README.md`), never an edit to an applied file. See
+[`migrations.md`](migrations.md).
+
 ### What the diff does not yet cover
 
 `primary_key` and `indexes` are declared, but `tools.schema.live` diffs
@@ -142,6 +151,13 @@ the migration generator in #322 is what will read them — and because writing
 them down is how the intended shape stops living only in someone's head.
 Column *nullability* is read back from the live table but likewise not diffed,
 for the same reason.
+
+`migrations make` (#322) consequently does **not** emit them either — a
+constraint `schema diff` never re-verifies, on a table whose `Refresh`-strategy
+Writer would erase it on the next run, would be worse than merely missing. The
+generated file names what was declared and left out, in a comment, for a human
+to add where a Writer genuinely depends on it. Reasoning in full:
+[`adr/0015-declared-schema-generated-migrations.md`](adr/0015-declared-schema-generated-migrations.md).
 
 ## Wide raw feeds: `raw_columns.txt`
 

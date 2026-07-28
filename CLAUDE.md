@@ -27,10 +27,11 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   reads); plus the private
   `framework/_internal` (`connection`, `describe`, `schema`: cross-cutting
   helpers with no public name)). The `python -m cli` entry point (`scaffold`
-  plus the operator commands and `schema diff`; see below) lives in the
+  plus the operator commands, `schema diff`, and `migrations make` / `migrate`;
+  see below) lives in the
   top-level `cli/` package,
   and the cross-cutting `retry` / `calendar` / `medallion` / `recipes` /
-  `environments` / `schema` / orchestration /
+  `environments` / `schema` / `migrations` / orchestration /
   observability utilities in the top-level `tools/` package — both siblings of
   `framework/`,
   not facades. The run-record schema is declared **once, as data**, in
@@ -50,7 +51,28 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   `tests/integration/test_declared_tables_match_pipelines.py` holds those
   declarations to what the pipelines actually land (see
   [`docs/schema-declaration.md`](docs/schema-declaration.md) — the framework
-  itself never learns what a declaration is). Then `case_review/` (the
+  itself never learns what a declaration is). Getting a real database *to*
+  that declared shape is a separate, additive step: `migrations/` is a
+  repo-wide tree of reviewed, forward-only `.sql` files where directory path
+  is scope and filename is a globally ordered version + slug (no manifest);
+  `tools/migrations/` discovers/validates the tree, resolves a **topology
+  profile** (`medallion`/`single`/`by_layer`/`by_phase` — an environment names
+  its profile next to its `base_dir` root in `tools/environments.py`) into
+  physical databases, and applies each database's pending migrations with its
+  own `schema_migrations` ledger, one transaction the **runner** owns per file
+  (so a migration containing its own `BEGIN`/`COMMIT` is refused);
+  `tools/schema/emit.py`
+  turns a `Table`'s drift into the mechanical part of the next migration,
+  diffing against the tree's own tracked shape rather than any live
+  environment — read by *applying* that scope's committed files to a throwaway
+  in-memory database, so SQLite (never a regex) is the parser and a
+  hand-edited file is reflected exactly. Only the **medallion** profile can
+  migrate this repo's own declarations today: a coarser profile collapses raw
+  and silver into one file, and this repo names a silver table after the raw
+  table it refines, so they collide — loudly and completely, never a partial
+  apply. See
+  [`docs/migrations.md`](docs/migrations.md) — the framework itself never
+  learns what a migration is, same as a declaration. Then `case_review/` (the
   case-review *application* — domain types
   like `CaseType`/`CasePool` and its gold helpers, which live outside the
   framework), `pipelines/` (scripts), `tests/` (pytest, with author test helpers
@@ -78,7 +100,8 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   `framework.io` / `framework.transform` / `framework.run`, not the modules
   behind them (those are internal layout); the cross-cutting `tools.*` helpers
   (`tools.retry` / `tools.calendar` / `tools.orchestration` /
-  `tools.observability` / `tools.environments` / `tools.recipes`) are a sibling
+  `tools.observability` / `tools.environments` / `tools.recipes` /
+  `tools.schema` / `tools.migrations`) are a sibling
   utility package, not a facade.
   The facades are the stable contract;
   [`docs/public-api.md`](docs/public-api.md) lists the surface, the internal
@@ -136,6 +159,8 @@ python3 -m venv .venv
 .venv/bin/python -m cli scaffold --case-type claims # scaffold a Case Type ingest feed (source->raw->silver, identity declared)
 .venv/bin/python -m cli run pipelines/ingest --base-dir /tmp/demo  # operator CLI: run/orchestrate/status/runs/log (see docs/operator-cli.md)
 .venv/bin/python -m cli schema diff --base-dir /tmp/demo         # diff every feed's declared TABLES against a live environment (see docs/schema-declaration.md)
+.venv/bin/python -m cli migrations make            # emit the next migration file for every drifted declared table
+.venv/bin/python -m cli migrate --env dev --plan   # preview pending migrations for an environment's topology (see docs/migrations.md)
 .venv/bin/pre-commit run --all-files             # lint + format the whole tree on demand
 ```
 

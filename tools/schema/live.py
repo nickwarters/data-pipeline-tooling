@@ -89,6 +89,24 @@ class TableDiff:
         """Whether a *landed* table's shape disagrees with its declaration."""
         return self.landed and bool(self.changed or self.added or self.removed)
 
+    @property
+    def missing_column_names(self) -> tuple[str, ...]:
+        """Declared columns the live table lacks, in declared order.
+
+        The structured form of what :attr:`removed` renders for a human --
+        ``tools.schema.emit`` needs the names themselves to emit an
+        ``ADD COLUMN``, and reading them back out of a display string would
+        make the rendering format load-bearing for generated SQL.
+        """
+        if self.live is None:
+            return ()
+        live_names = {column.name for column in self.live.columns}
+        return tuple(
+            column.name
+            for column in self.table.columns
+            if column.name not in live_names
+        )
+
     def render(self) -> list[str]:
         """One line per difference, in the ``schema diff`` command's format."""
         if not self.landed:
