@@ -11,13 +11,10 @@ from tools.recipes import raw_to_silver, source_to_raw
 from tools.store import StoreRegistry
 
 from .case_type import CASE_TYPE
+from .schema import SOURCE_COLUMNS
 
 FEED_NAME = "complaints_a"
 UPSTREAMS = ()
-
-
-# The columns the raw hop gates on, in the source's own vocabulary.
-SOURCE_COLUMNS = ["record_id", "label", "amount"]
 
 
 def raw_builder(

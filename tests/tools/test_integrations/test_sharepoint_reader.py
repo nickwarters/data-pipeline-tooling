@@ -11,6 +11,7 @@ from framework.io.writers import (
     SqliteTruncateReloadWriter,
 )
 from framework.run.builder import Pipeline
+from tests.framework_testing import create_table
 from tools.integrations.remote import (
     LocalCsvFetcher,
     SharePointReader,
@@ -111,6 +112,7 @@ def test_sharepoint_reader_composes_in_the_pipeline_builder(fixture_csv, tmp_pat
     # A SharePointReader is a Reader: it drops into the deferred builder and
     # feeds a raw landing exactly like any other source (Reader-Protocol
     # conformance, observed end-to-end rather than via isinstance).
+    create_table(tmp_path / "raw.db", "advisers", CsvReader(fixture_csv).read())
     p = Pipeline("advisers")
     r = p.read(
         SharePointReader(
@@ -247,7 +249,22 @@ def test_selection_pool_is_delivered_to_a_per_case_type_list(tmp_path):
     )
     # Land the SelectionPool into gold exactly as the Selection pipeline does
     # (accumulate-by-run audit trail), so the Deliverable pipeline reads a real
-    # gold table rather than an in-memory hand-off.
+    # gold table rather than an in-memory hand-off. AccumulateByRunWriter
+    # requires its target to already exist (#324).
+    create_table(
+        gold_db,
+        "selection_pool",
+        Dataset.from_pandas(
+            pd.DataFrame(
+                {
+                    "case_ref": [],
+                    "question_bank_id": [],
+                    "logical_run_id": [],
+                    "load_date": [],
+                }
+            )
+        ),
+    )
     AccumulateByRunWriter(gold_db, "selection_pool", "2026-06-10", "2026-06-10").write(
         selection_pool
     )

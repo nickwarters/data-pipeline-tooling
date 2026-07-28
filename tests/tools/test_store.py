@@ -6,6 +6,7 @@ import pytest
 from framework.core.dataset import Dataset
 from framework.io.readers import CsvReader
 from framework.io.strategy import AccumulateByRun, Refresh
+from tests.framework_testing import create_table
 from tools.store import DirectoryStoreBackend, Store, StoreRegistry
 
 FIXTURE = Path(__file__).parent.parent / "fixtures" / "cases.csv"
@@ -22,6 +23,7 @@ def test_store_writer_with_refresh_strategy_round_trips_a_dataset(tmp_path):
     # caller's declaration, not an implicit rule.
     dataset = CsvReader(FIXTURE).read()
     store = _namespace_store(tmp_path)
+    create_table(tmp_path / "cases.db", "cases", dataset)
 
     store.writer("cases", Refresh()).write(dataset)
     landed = store.reader("cases").read()
@@ -35,6 +37,7 @@ def test_refresh_strategy_full_refreshes_rather_than_accumulates(tmp_path):
     # first rather than appending.
     dataset = CsvReader(FIXTURE).read()
     store = _namespace_store(tmp_path)
+    create_table(tmp_path / "cases.db", "cases", dataset)
 
     store.writer("cases", Refresh()).write(dataset)
     store.writer("cases", Refresh()).write(dataset)
@@ -48,6 +51,9 @@ def test_store_writer_with_accumulate_by_run_strategy_accumulates(tmp_path):
     # Writer stamps rows by run and accumulates across runs.
     dataset = CsvReader(FIXTURE).read()
     store = _namespace_store(tmp_path)
+    # AccumulateByRunWriter requires its target to already exist (#324).
+    frame = dataset.to_pandas().assign(logical_run_id="", load_date="").iloc[:0]
+    create_table(tmp_path / "cases.db", "casepool", Dataset.from_pandas(frame))
 
     store.writer("casepool", AccumulateByRun("r1", "2026-05-29")).write(dataset)
     store.writer("casepool", AccumulateByRun("r2", "2026-05-30")).write(dataset)
@@ -64,6 +70,7 @@ def test_store_columns_of_reads_the_prior_landing_and_labels_the_table(tmp_path)
     # names the namespace + table for the warning message.
     dataset = CsvReader(FIXTURE).read()
     store = _namespace_store(tmp_path)
+    create_table(tmp_path / "cases.db", "cases", dataset)
     store.writer("cases", Refresh()).write(dataset)
 
     prior = store.columns_of("cases")
@@ -86,6 +93,8 @@ def test_store_registry_mints_namespace_stores_over_distinct_files(tmp_path):
 
     cases = registry.store("cases")
     advisers = registry.store("advisers")
+    create_table(tmp_path / "cases.db", "shared_table", dataset)
+    create_table(tmp_path / "advisers.db", "shared_table", dataset)
 
     cases.writer("shared_table", Refresh()).write(dataset)
     advisers.writer("shared_table", Refresh()).write(dataset)
@@ -116,28 +125,28 @@ def test_normalised_schema_across_logical_databases(tmp_path):
     reference = registry.store("reference")  # …a second, read-only to the first
 
     # The "customers" database carries several related tables.
-    customers.writer("customer", Refresh()).write(
-        Dataset.from_pandas(
-            pd.DataFrame({"customer_id": [1, 2], "region_code": ["N", "S"]})
-        )
+    customer_rows = Dataset.from_pandas(
+        pd.DataFrame({"customer_id": [1, 2], "region_code": ["N", "S"]})
     )
-    customers.writer("account", Refresh()).write(
-        Dataset.from_pandas(
-            pd.DataFrame({"account_id": [10, 11], "customer_id": [1, 2]})
-        )
+    account_rows = Dataset.from_pandas(
+        pd.DataFrame({"account_id": [10, 11], "customer_id": [1, 2]})
     )
+    create_table(tmp_path / "customers.db", "customer", customer_rows)
+    create_table(tmp_path / "customers.db", "account", account_rows)
+    customers.writer("customer", Refresh()).write(customer_rows)
+    customers.writer("account", Refresh()).write(account_rows)
 
     # The "reference" database carries its own related tables.
-    reference.writer("region", Refresh()).write(
-        Dataset.from_pandas(
-            pd.DataFrame({"region_code": ["N", "S"], "region_name": ["North", "South"]})
-        )
+    region_rows = Dataset.from_pandas(
+        pd.DataFrame({"region_code": ["N", "S"], "region_name": ["North", "South"]})
     )
-    reference.writer("product", Refresh()).write(
-        Dataset.from_pandas(
-            pd.DataFrame({"product_id": [100], "product_name": ["Widget"]})
-        )
+    product_rows = Dataset.from_pandas(
+        pd.DataFrame({"product_id": [100], "product_name": ["Widget"]})
     )
+    create_table(tmp_path / "reference.db", "region", region_rows)
+    create_table(tmp_path / "reference.db", "product", product_rows)
+    reference.writer("region", Refresh()).write(region_rows)
+    reference.writer("product", Refresh()).write(product_rows)
 
     # One file per logical database, several tables each.
     assert (tmp_path / "customers.db").exists()
@@ -158,6 +167,7 @@ def test_store_can_be_constructed_directly_over_one_file(tmp_path):
     # tables in it (the escape-hatch / direct construction path).
     dataset = CsvReader(FIXTURE).read()
     store = Store(tmp_path / "scratch.db", namespace="scratch")
+    create_table(tmp_path / "scratch.db", "cases", dataset)
 
     store.writer("cases", Refresh()).write(dataset)
 
@@ -196,6 +206,7 @@ def test_registry_lookup_round_trips_through_the_named_components(tmp_path):
     dataset = CsvReader(FIXTURE).read()
     registry = StoreRegistry(tmp_path)
     store = registry.store("cases")
+    create_table(tmp_path / "cases.db", "cases", dataset)
     registry.register("cases_out", store.writer("cases", Refresh()))
     registry.register("cases_in", store.reader("cases"))
 
@@ -213,6 +224,7 @@ def test_registered_components_wire_into_a_framework_pipeline(tmp_path):
 
     registry = StoreRegistry(tmp_path)
     store = registry.store("cases")
+    create_table(tmp_path / "cases.db", "cases", CsvReader(FIXTURE).read())
     registry.register("source", CsvReader(FIXTURE))
     registry.register("sink", store.writer("cases", Refresh()))
 

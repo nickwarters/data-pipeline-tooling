@@ -123,9 +123,11 @@ def test_an_author_can_ingest_a_feed_through_the_io_and_run_facades(tmp_path):
     # framework.run. Composing and running them lands the feed and reads back.
     from framework.io import CsvReader, Refresh
     from framework.run import Pipeline
+    from tests.framework_testing import create_table
     from tools.store import Store
 
     store = Store(tmp_path / "cases.db")
+    create_table(tmp_path / "cases.db", "cases", CsvReader(FIXTURE).read())
     p = Pipeline("cases")
     r = p.read(CsvReader(FIXTURE), name="read")
     p.write(store.writer("cases", Refresh()), r, name="write")
@@ -191,12 +193,18 @@ def test_an_author_can_shape_and_check_a_feed_through_the_transform_facade(tmp_p
     # Selection-style narrowing: processors come from framework.transform and
     # the checks from framework.core, composed onto the framework.run Pipeline.
     from framework.core import ColumnValidator
+    from framework.core.dataset import Dataset
     from framework.io import CsvReader, Refresh
     from framework.run import Pipeline
     from framework.transform import Filter, Score, VectorizedDerive, VectorizedFilter
+    from tests.framework_testing import create_table
     from tools.store import Store
 
     store = Store(tmp_path / "cases.db")
+    seed = CsvReader(FIXTURE).read().to_pandas()
+    seed["priority"] = 0
+    seed["priority_x2"] = 0
+    create_table(tmp_path / "cases.db", "cases", Dataset.from_pandas(seed))
     p = Pipeline("cases")
     r = p.read(CsvReader(FIXTURE), name="read")
     v = p.validate(ColumnValidator(["amount"]), r, name="validate")
@@ -223,12 +231,17 @@ def test_an_author_can_shape_and_check_a_feed_through_the_transform_facade(tmp_p
 
 def test_an_author_can_compose_ordered_stages_through_the_run_facade(tmp_path):
     from framework.core import ColumnValidator
+    from framework.core.dataset import Dataset
     from framework.io import CsvReader, Refresh
     from framework.run import Pipeline
     from framework.transform import Score
+    from tests.framework_testing import create_table
     from tools.store import Store
 
     store = Store(tmp_path / "cases.db")
+    seed = CsvReader(FIXTURE).read().to_pandas()
+    seed["priority"] = 0
+    create_table(tmp_path / "cases.db", "cases", Dataset.from_pandas(seed))
     p = Pipeline("cases")
     r = p.read(CsvReader(FIXTURE), name="read")
     v1 = p.validate(ColumnValidator(["amount"]), r, name="validate-source")

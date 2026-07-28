@@ -14,6 +14,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from tests.framework_testing import migrate_all
+
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -27,6 +29,10 @@ def _cli(*args):
 
 
 def test_dry_run_previews_without_touching_any_artifact(tmp_path):
+    # A migration-gated table (gold's Refresh) needs migrating first, exactly
+    # as an operator would.
+    migrate_all(tmp_path)
+
     # Land real data first so there is something to preview.
     first = _cli(
         "run",
@@ -61,6 +67,8 @@ def test_dry_run_previews_without_touching_any_artifact(tmp_path):
 
 
 def test_cli_runs_real_ingest_then_selection_end_to_end(tmp_path):
+    migrate_all(tmp_path)
+
     ingest = _cli(
         "run",
         "pipelines/ingest",

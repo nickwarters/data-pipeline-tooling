@@ -10,6 +10,7 @@ from framework.io.strategy import AccumulateByRun, Refresh
 from framework.run.builder import Pipeline
 from framework.transform.processors import Filter, Sort, Stamp
 from tests._schema_fixtures import ActivityCase
+from tests.framework_testing import create_table
 from tools.calendar import WorkingDayCalendar
 from tools.medallion import medallion
 from tools.store import StoreRegistry
@@ -27,10 +28,13 @@ def _case_type() -> CaseType:
     )
 
 
-def _land_gold_cases(gold, frame: pd.DataFrame) -> None:
+def _land_gold_cases(tmp_path, gold, frame: pd.DataFrame) -> None:
     # Land Cases into ingest gold (current-only, one row per Case) as an
-    # ingest_silver_to_gold run would — CasePool reads gold.
-    gold.writer("cases", Refresh()).write(Dataset.from_pandas(frame))
+    # ingest_silver_to_gold run would — CasePool reads gold. The table must
+    # already exist (#323); this stand-in mints one shaped by the frame.
+    dataset = Dataset.from_pandas(frame)
+    create_table(tmp_path / "cases" / "gold.db", "cases", dataset)
+    gold.writer("cases", Refresh()).write(dataset)
 
 
 def test_selection_narrows_the_casepool_into_a_stamped_selection_pool(tmp_path):
@@ -41,6 +45,7 @@ def test_selection_narrows_the_casepool_into_a_stamped_selection_pool(tmp_path):
     # the SelectionPool into gold stamped logical_run_id / load_date (CONTEXT.md; ).
     gold = medallion(StoreRegistry(tmp_path), "cases").gold
     _land_gold_cases(
+        tmp_path,
         gold,
         pd.DataFrame(
             {
@@ -73,6 +78,27 @@ def test_selection_narrows_the_casepool_into_a_stamped_selection_pool(tmp_path):
     s = p.transform(Sort("amount", ascending=False), f, name="sort")
     st = p.transform(
         Stamp("question_bank_id", variation.question_bank_id), s, name="stamp"
+    )
+    # AccumulateByRunWriter requires its target to already exist (#324); its
+    # shape is the stamped dataset's own columns plus the run-stamp ones the
+    # strategy adds (no pipeline_run_id -- this bare AccumulateByRun carries
+    # none).
+    create_table(
+        tmp_path / "cases" / "gold.db",
+        "selection_pool",
+        Dataset.from_pandas(
+            pd.DataFrame(
+                {
+                    "case_ref": [],
+                    "adviser": [],
+                    "activity_date": [],
+                    "amount": [],
+                    "question_bank_id": [],
+                    "logical_run_id": [],
+                    "load_date": [],
+                }
+            )
+        ),
     )
     p.write(
         gold.writer("selection_pool", AccumulateByRun("2026-05-29", "2026-05-29")),

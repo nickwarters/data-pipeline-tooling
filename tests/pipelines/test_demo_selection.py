@@ -2,7 +2,7 @@ from pathlib import Path
 
 from cli import operator
 from pipelines.selection.pipeline import high_value_case, priority_score
-from tests.framework_testing import read_rows
+from tests.framework_testing import migrate_all, read_rows
 from tools.medallion import medallion
 from tools.store import StoreRegistry
 
@@ -29,6 +29,7 @@ def test_demo_runs_the_full_source_to_selection_path(tmp_path, capsys):
     # -> silver -> the gold CasePool) then selection (the available cases ->
     # the gold SelectionPool). Running them in order through the framework's
     # `run` exercises the whole flow, freshness gate included.
+    migrate_all(tmp_path)
     assert _run("pipelines/ingest", tmp_path) == 0
     assert _run("pipelines/selection", tmp_path) == 0
 
@@ -74,6 +75,7 @@ def test_demo_pipelines_are_runnable_as_modules(tmp_path):
     import subprocess
     import sys
 
+    migrate_all(tmp_path)
     for module in ("pipelines.ingest.pipeline", "pipelines.selection.pipeline"):
         result = subprocess.run(
             [sys.executable, "-m", module, "--base-dir", str(tmp_path)],

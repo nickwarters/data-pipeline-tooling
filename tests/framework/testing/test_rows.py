@@ -12,8 +12,10 @@ from framework.run import Pipeline
 from tests.framework_testing import (
     RecordingWriter,
     assert_rows_equal,
+    create_table,
     given_csv,
     given_rows,
+    make_dataset,
     read_rows,
     rows_of,
     without_columns,
@@ -57,6 +59,11 @@ def test_read_rows_reads_a_landed_table_back(tmp_path):
     from tools.store import Store
 
     store = Store(tmp_path / "cases.db")
+    create_table(
+        tmp_path / "cases.db",
+        "cases",
+        make_dataset([{"case_id": "c1", "amount": 100}]),
+    )
     p = Pipeline("cases")
     read = p.read(given_rows([{"case_id": "c1", "amount": 100}]), name="read")
     p.write(store.writer("cases", Refresh()), read, name="write")

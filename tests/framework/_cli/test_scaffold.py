@@ -13,14 +13,36 @@ from __future__ import annotations
 
 import importlib
 import sys
+from pathlib import Path
 
 import pytest
 
 from cli import scaffold
+from framework.io import MissingTableError
 from framework.run import RunContext
 from tests.framework_testing import read_rows, rows_of
 from tools.medallion import medallion
+from tools.migrations.discovery import discover_migrations
+from tools.migrations.runner import apply_database
+from tools.migrations.topology import resolve_databases
 from tools.store import StoreRegistry
+
+
+def _migrate_rendered_repo(repo: Path, base_dir: Path) -> None:
+    """Apply a freshly scaffolded ``repo``'s own generated migrations tree.
+
+    Since #324 scaffold emits real migrations from the feed's declared
+    ``TABLES`` (see ``cli.scaffold._emit_migrations``), so every scaffolded
+    table -- including gold's passthrough ``Refresh()`` target, the wart
+    #323 previously left here as a hand-minted table -- comes from applying
+    them, exactly as ``python -m cli migrate`` would. Anchored on ``repo``,
+    not this actual repository's own ``migrations/`` tree: a rendered feed's
+    migrations live under ``repo/migrations``, a throwaway tree distinct from
+    the one ``tests.framework_testing.migrate_all`` applies.
+    """
+    migrations = discover_migrations(repo / "migrations")
+    for database in resolve_databases(migrations):
+        apply_database(database, base_dir / database.relative_path)
 
 
 def test_render_lays_down_the_feed_code_and_its_test(tmp_path):
@@ -92,6 +114,7 @@ def test_rendered_pipeline_runs_and_lands_its_sample_feed(tmp_path):
     try:
         pipeline = importlib.import_module("widgets.pipeline")
         importlib.reload(pipeline)  # in case a prior test imported "widgets"
+        _migrate_rendered_repo(repo, tmp_path / "data")
         dataset = pipeline.run(
             RunContext(base_dir=tmp_path / "data", pipeline="widgets")
         )
@@ -111,6 +134,58 @@ def test_rendered_pipeline_runs_and_lands_its_sample_feed(tmp_path):
     assert [{c: row[c] for c in source_columns} for row in landed] == rows_of(dataset)
 
 
+def test_a_scaffolded_feed_emits_a_migration_per_declared_table(tmp_path):
+    # `scaffold` is one command: the feed's schema.py declares TABLES and the
+    # matching first migration is generated from each, so `migrate` then `run`
+    # both work before a line is edited (#324's done-when).
+    repo = tmp_path / "repo"
+    created = scaffold.render("widgets", repo)
+
+    emitted = sorted(
+        path.relative_to(repo).as_posix() for path in created if path.suffix == ".sql"
+    )
+    assert emitted == [
+        "migrations/subject/widgets/gold/0003_create_widgets.sql",
+        "migrations/subject/widgets/quarantine/0004_create_widgets.sql",
+        "migrations/subject/widgets/raw/0001_create_widgets.sql",
+        "migrations/subject/widgets/silver/0002_create_widgets.sql",
+    ]
+    # Real, reviewable DDL, not a placeholder -- and the quarantine table
+    # carries the centrally declared framework columns, not a per-feed copy.
+    quarantine_sql = (
+        repo / "migrations/subject/widgets/quarantine/0004_create_widgets.sql"
+    ).read_text(encoding="utf-8")
+    assert 'CREATE TABLE "widgets"' in quarantine_sql
+    assert '"failed_rule" TEXT NOT NULL' in quarantine_sql
+
+    # The whole tree discovers and applies cleanly, exactly as `migrate` would.
+    _migrate_rendered_repo(repo, tmp_path / "data")
+    for layer in ("raw", "silver", "gold", "quarantine"):
+        assert (tmp_path / "data" / "widgets" / f"{layer}.db").exists()
+
+
+def test_a_scaffolded_feed_fails_with_the_named_error_before_migrate(tmp_path):
+    # The other half of the same done-when: before `migrate`, the run must fail
+    # with the error naming the fix -- not create the table for itself.
+    repo = tmp_path / "repo"
+    scaffold.render("widgets", repo)
+
+    sys.path.insert(0, str(repo / "pipelines"))
+    try:
+        pipeline = importlib.import_module("widgets.pipeline")
+        importlib.reload(pipeline)
+        with pytest.raises(MissingTableError) as caught:
+            pipeline.run(RunContext(base_dir=tmp_path / "data", pipeline="widgets"))
+    finally:
+        sys.path.remove(str(repo / "pipelines"))
+        for name in list(sys.modules):
+            if name == "widgets" or name.startswith("widgets."):
+                del sys.modules[name]
+
+    assert "python -m cli migrate" in str(caught.value)
+    assert "widgets" in str(caught.value)
+
+
 def test_rendered_pipeline_main_runs_and_records_a_run(tmp_path, capsys):
     # Drive the rendered feed's CLI entry point (main) end to end, the way
     # `python -m pipelines.widgets.pipeline <base_dir>` does. This exercises the
@@ -123,6 +198,7 @@ def test_rendered_pipeline_main_runs_and_records_a_run(tmp_path, capsys):
     try:
         pipeline = importlib.import_module("widgets.pipeline")
         importlib.reload(pipeline)
+        _migrate_rendered_repo(repo, base_dir)
         exit_code = pipeline.main(["prog", "--base-dir", str(base_dir)])
     finally:
         sys.path.remove(str(repo / "pipelines"))
@@ -262,10 +338,11 @@ def test_non_identifier_columns_gate_the_validator_on_raw_names(tmp_path):
     # Schema canonicalises the source names to identifiers...
     assert "case_number: str" in schema
     assert "adviser_name: str" in schema
-    # ...while the validator gates on the verbatim source names.
-    assert (
-        'RAW_FEED_COLUMNS = [\n    "Case Number",\n    "Adviser Name",\n]' in pipeline
-    )
+    # ...while RAW_FEED_COLUMNS (declared in schema.py, alongside raw's Table,
+    # since #324) keeps the verbatim source names, and the validator gates on
+    # those via pipeline.py's import rather than a copy of its own.
+    assert 'RAW_FEED_COLUMNS = [\n    "Case Number",\n    "Adviser Name",\n]' in schema
+    assert "from .schema import CasesRow, RAW_FEED_COLUMNS" in pipeline
     assert "expected_columns=RAW_FEED_COLUMNS" in pipeline
     assert "fields(" not in pipeline  # schema-driven validator dropped
     # The relocated test follows: validator columns, not schema fields.
@@ -316,6 +393,7 @@ def test_rendered_feed_from_a_spaced_file_runs_and_its_test_passes(tmp_path):
     try:
         pipeline = importlib.import_module("widgets.pipeline")
         importlib.reload(pipeline)
+        _migrate_rendered_repo(repo, tmp_path / "data")
         dataset = pipeline.run(
             RunContext(base_dir=tmp_path / "data", pipeline="widgets")
         )

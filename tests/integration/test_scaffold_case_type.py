@@ -18,12 +18,25 @@ from __future__ import annotations
 
 import importlib
 import sys
+from pathlib import Path
 
 from cli import scaffold
 from framework.run import RunContext
 from tests.framework_testing import read_rows
 from tools.medallion import medallion
+from tools.migrations.discovery import discover_migrations
+from tools.migrations.runner import apply_database
+from tools.migrations.topology import resolve_databases
 from tools.store import StoreRegistry
+
+
+def _migrate_rendered_repo(repo: Path, base_dir: Path) -> None:
+    """Apply a freshly scaffolded ``repo``'s own generated migrations tree --
+    see ``tests/framework/_cli/test_scaffold.py``'s twin for the full
+    rationale. Every scaffolded feed needs this before it can run (#324)."""
+    migrations = discover_migrations(repo / "migrations")
+    for database in resolve_databases(migrations):
+        apply_database(database, base_dir / database.relative_path)
 
 
 def test_case_type_variant_lays_down_the_feed_with_its_case_type(tmp_path):
@@ -95,6 +108,7 @@ def test_rendered_case_type_pipeline_runs_and_refines_to_silver(tmp_path):
     try:
         pipeline = importlib.import_module("widgets.pipeline")
         importlib.reload(pipeline)
+        _migrate_rendered_repo(repo, tmp_path / "data")
         silver = pipeline.run(
             RunContext(base_dir=tmp_path / "data", pipeline="widgets")
         )

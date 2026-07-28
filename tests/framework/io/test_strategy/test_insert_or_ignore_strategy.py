@@ -6,6 +6,7 @@ import pandas as pd
 
 from framework.core.dataset import Dataset
 from framework.io.strategy import InsertOrIgnore
+from tests.framework_testing import create_table
 from tools.store import Store
 
 
@@ -15,6 +16,7 @@ def _ds(*rows: dict) -> Dataset:
 
 def test_insert_or_ignore_inserts_into_empty_table(tmp_path):
     store = Store(tmp_path / "store.db")
+    create_table(tmp_path / "store.db", "things", _ds({"id": 1, "name": "Alice"}))
     writer = store.writer("things", InsertOrIgnore())
     writer.write(_ds({"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}))
 
@@ -25,6 +27,7 @@ def test_insert_or_ignore_inserts_into_empty_table(tmp_path):
 
 def test_insert_or_ignore_appends_when_no_constraints(tmp_path):
     store = Store(tmp_path / "store.db")
+    create_table(tmp_path / "store.db", "things", _ds({"id": 1, "name": "Alice"}))
     writer = store.writer("things", InsertOrIgnore())
     writer.write(_ds({"id": 1, "name": "Alice"}))
     writer.write(_ds({"id": 2, "name": "Bob"}))

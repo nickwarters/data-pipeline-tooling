@@ -15,6 +15,7 @@ from framework.io.writers import (
     CsvWriter,
     ExcelWriter,
     JsonWriter,
+    MissingTableError,
     QuarantineWriter,
     SqliteInsertIfAbsentWriter,
     SqliteInsertOrIgnoreWriter,
@@ -23,16 +24,35 @@ from framework.io.writers import (
     StdoutWriter,
 )
 from framework.run.builder import Pipeline
+from tests.framework_testing import create_table
 
-FIXTURE = Path(__file__).parent.parent.parent / "fixtures" / "cases.csv"
+FIXTURE = Path(__file__).parent.parent.parent.parent / "fixtures" / "cases.csv"
+
+
+def _create_accumulate_table(db_path, table: str, dataset: Dataset) -> None:
+    """Mint a migrated table shaped for ``AccumulateByRunWriter``/``QuarantineWriter``.
+
+    Their target carries the run-stamp columns (``logical_run_id`` /
+    ``load_date`` / ``pipeline_run_id``) the Writer itself adds at write time
+    (see ``AccumulateByRunWriter._stamp``) -- a bare ``create_table(dataset)``
+    would mint a table without them, and the guard-on ``DELETE ... WHERE
+    logical_run_id = ?`` in ``_replace_logical_run`` would then fail on a
+    genuinely missing column rather than a missing table.
+    """
+    frame = dataset.to_pandas().copy()
+    for column in ("logical_run_id", "load_date", "pipeline_run_id"):
+        frame[column] = None
+    create_table(db_path, table, Dataset.from_pandas(frame))
 
 
 def test_truncate_reload_writer_round_trips_a_dataset(tmp_path):
     # The Writer owns its target location (a layer db file + table); writing a
     # dataset and reading it back through the read-side dual returns the same
-    # shape.
+    # shape. The table must already exist -- a migration's job since #323 --
+    # so the fixture creates it as `migrate` would.
     dataset = CsvReader(FIXTURE).read()
     db = tmp_path / "raw.db"
+    create_table(db, "cases", dataset)
     SqliteTruncateReloadWriter(db, "cases").write(dataset)
 
     landed = SqliteReader(db, "cases").read()
@@ -45,12 +65,123 @@ def test_truncate_reload_writer_replaces_rather_than_accumulates(tmp_path):
     # write replaces the first rather than appending.
     dataset = CsvReader(FIXTURE).read()
     db = tmp_path / "raw.db"
+    create_table(db, "cases", dataset)
     writer = SqliteTruncateReloadWriter(db, "cases")
 
     writer.write(dataset)
     writer.write(dataset)
 
     assert len(SqliteReader(db, "cases").read()) == len(dataset)
+
+
+def test_truncate_reload_writer_preserves_an_index_across_runs(tmp_path):
+    # The regression #323 exists for: `if_exists="replace"` used to DROP +
+    # CREATE the table on every run, silently erasing any index a migration had
+    # put there. Truncate + reload must leave it standing.
+    db = tmp_path / "raw.db"
+    dataset = CsvReader(FIXTURE).read()
+    create_table(db, "cases", dataset)
+    con = connect(db, busy_timeout_ms=5000)
+    try:
+        con.execute("CREATE UNIQUE INDEX ix_cases_case_id ON cases (case_id)")
+        con.commit()
+    finally:
+        con.close()
+
+    writer = SqliteTruncateReloadWriter(db, "cases")
+    writer.write(dataset)
+    writer.write(dataset)
+
+    con = connect(db, busy_timeout_ms=5000)
+    try:
+        names = {row[1] for row in con.execute("PRAGMA index_list(cases)").fetchall()}
+    finally:
+        con.close()
+    assert "ix_cases_case_id" in names
+
+
+def test_truncate_reload_writer_refuses_a_table_no_migration_has_created(tmp_path):
+    # A missing table is a missing migration, not something this Writer should
+    # paper over by minting one for itself -- see `_require_table`. The error is
+    # named (a LookupError subclass) so a caller gating on this condition can
+    # tell it from an unrelated lookup failure.
+    dataset = CsvReader(FIXTURE).read()
+    db = tmp_path / "complaints_a" / "silver.db"
+
+    with pytest.raises(MissingTableError) as caught:
+        SqliteTruncateReloadWriter(db, "cases").write(dataset)
+
+    assert issubclass(MissingTableError, LookupError)
+    message = str(caught.value)
+    assert "complaints_a/silver.cases" in message
+    assert "python -m cli migrate" in message
+    assert "--subject complaints_a" in message
+
+
+def test_merge_writers_refuse_a_table_no_migration_has_created(tmp_path):
+    # The merge strategies' target-create went the same way as Refresh's
+    # replace, so they refuse with the same named error rather than minting a
+    # target for their statement to merge into.
+    dataset = Dataset.from_pandas(pd.DataFrame({"id": [1], "name": ["Alice"]}))
+    db = tmp_path / "complaints_a" / "silver.db"
+
+    with pytest.raises(MissingTableError):
+        SqliteUpsertWriter(db, "entities", ("id",)).write(dataset)
+    with pytest.raises(MissingTableError):
+        SqliteInsertOrIgnoreWriter(db, "entities").write(dataset)
+
+    # The refusal comes before staging is written, so it strands nothing.
+    con = connect(db, 5000)
+    try:
+        tables = {
+            name
+            for (name,) in con.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
+    finally:
+        con.close()
+    assert tables == set()
+
+
+def test_missing_table_error_stays_useful_outside_the_subject_layer_layout(tmp_path):
+    # Not every database a Writer is pointed at is a <subject>/<layer>.db: a
+    # bare --database path has no subject to name. The derived label is then
+    # only a guess, so the message must also carry the real path and the
+    # --database/--scope command form that works anywhere.
+    db = tmp_path / "warehouse.db"
+
+    with pytest.raises(MissingTableError) as caught:
+        SqliteTruncateReloadWriter(db, "cases").write(
+            Dataset.from_pandas(pd.DataFrame({"id": [1]}))
+        )
+
+    message = str(caught.value)
+    assert str(db) in message
+    assert "--database" in message and "--scope" in message
+
+
+def test_truncate_reload_writer_leaves_prior_rows_intact_on_a_failed_reload(tmp_path):
+    # Both statements run inside `_writing_connection`'s one transaction: a
+    # reload that fails partway must leave the table exactly as it was, not
+    # half-truncated -- strictly better than the old `if_exists="replace"`,
+    # where a failure mid-`to_sql` could leave the table dropped outright.
+    db = tmp_path / "raw.db"
+    good = Dataset.from_pandas(pd.DataFrame({"id": [1, 2]}))
+    create_table(db, "cases", good)
+    SqliteTruncateReloadWriter(db, "cases").write(good)
+
+    # A frame with a surprise column the table lacks fails on insert, after the
+    # DELETE has already run within the same transaction. The insert is now a
+    # hand-rolled statement (#324), not pandas' to_sql, so SQLite's own error
+    # surfaces directly rather than pandas' wrapper around it.
+    broken = Dataset.from_pandas(pd.DataFrame({"id": [1], "surprise": [9]}))
+    with pytest.raises(sqlite3.OperationalError):
+        SqliteTruncateReloadWriter(db, "cases").write(broken)
+
+    survivors = SqliteReader(db, "cases").read()
+    assert len(survivors) == 2
+    assert "surprise" not in survivors.columns
 
 
 def test_connection_factory_sets_busy_timeout(tmp_path):
@@ -168,6 +299,7 @@ def test_accumulate_by_run_writer_keeps_each_run(tmp_path):
     # load_date. Two distinct runs land both sets.
     dataset = CsvReader(FIXTURE).read()
     db = tmp_path / "gold.db"
+    _create_accumulate_table(db, "selection_pool", dataset)
 
     AccumulateByRunWriter(db, "selection_pool", "r1", "2026-05-29").write(dataset)
     AccumulateByRunWriter(db, "selection_pool", "r2", "2026-05-30").write(dataset)
@@ -183,6 +315,7 @@ def test_accumulate_by_run_writer_is_idempotent_per_run(tmp_path):
     # insert — ), so a re-run does not duplicate.
     dataset = CsvReader(FIXTURE).read()
     db = tmp_path / "gold.db"
+    _create_accumulate_table(db, "selection_pool", dataset)
     writer = AccumulateByRunWriter(db, "selection_pool", "r1", "2026-05-29")
 
     writer.write(dataset)
@@ -245,6 +378,7 @@ def test_accumulate_by_run_writer_is_atomic_when_the_write_fails(tmp_path):
     # delete must roll back so a re-driven run never half-wipes prior rows.
     db = tmp_path / "gold.db"
     good = Dataset.from_pandas(pd.DataFrame({"id": [1, 2]}))
+    _create_accumulate_table(db, "selection_pool", good)
     AccumulateByRunWriter(db, "selection_pool", "r1", "2026-05-29").write(good)
 
     # A frame with a surprise column the table lacks fails on append, after the
@@ -285,6 +419,7 @@ def test_accumulate_by_run_writer_fails_when_its_delete_is_locked_out(
     # logical run's rows" into "append them again" — a silent duplicate.
     db = tmp_path / "gold.db"
     dataset = Dataset.from_pandas(pd.DataFrame({"id": [1, 2]}))
+    _create_accumulate_table(db, "selection_pool", dataset)
     writer = AccumulateByRunWriter(db, "selection_pool", "r1", "2026-05-29")
     writer.write(dataset)
 
@@ -299,6 +434,7 @@ def test_quarantine_writer_fails_when_its_delete_is_locked_out(tmp_path, monkeyp
     # The reject table's re-drive carries the same guarantee as gold's.
     db = tmp_path / "rejects.db"
     frame = pd.DataFrame({"case_ref": ["BAD"], "logical_run_id": ["r1"]})
+    _create_accumulate_table(db, "rejects", Dataset.from_pandas(frame))
     writer = QuarantineWriter(db, "rejects")
     writer.write(Dataset.from_pandas(frame))
 
@@ -313,6 +449,7 @@ def test_accumulate_by_run_writer_surfaces_a_locked_database(tmp_path):
     # The same guarantee against a really locked file rather than a stand-in.
     db = tmp_path / "gold.db"
     dataset = Dataset.from_pandas(pd.DataFrame({"id": [1, 2]}))
+    _create_accumulate_table(db, "selection_pool", dataset)
     writer = AccumulateByRunWriter(
         db, "selection_pool", "r1", "2026-05-29", busy_timeout_ms=50
     )
@@ -335,6 +472,7 @@ def test_insert_if_absent_writer_surfaces_a_locked_database(tmp_path):
     # locked database must not read as "no mapping yet" and remint surrogates.
     db = tmp_path / "ref.db"
     dataset = Dataset.from_pandas(pd.DataFrame({"value": ["A", "B"]}))
+    create_table(db, "ref", Dataset.from_pandas(pd.DataFrame({"id": [], "value": []})))
     writer = SqliteInsertIfAbsentWriter(db, "ref", ("value",), busy_timeout_ms=50)
     writer.write(dataset)
 
@@ -365,6 +503,7 @@ def test_merge_writers_leave_no_staging_table_behind(tmp_path):
     # merge commits, whichever writer targeted the table.
     db = tmp_path / "silver.db"
     dataset = Dataset.from_pandas(pd.DataFrame({"id": [1], "name": ["Alice"]}))
+    create_table(db, "entities", dataset)
 
     SqliteUpsertWriter(db, "entities", ("id",)).write(dataset)
     SqliteInsertOrIgnoreWriter(db, "entities").write(dataset)
@@ -379,6 +518,7 @@ def test_merge_sweeps_up_a_staging_table_stranded_by_an_older_build(tmp_path):
     db = tmp_path / "silver.db"
     con = connect(db, 5000)
     try:
+        con.execute("CREATE TABLE entities (id INTEGER)")
         con.execute('CREATE TABLE "_upsert_stage_entities" (id INTEGER)')
         con.execute('CREATE TABLE "_insert_or_ignore_stage_entities" (id INTEGER)')
         con.commit()
@@ -425,6 +565,7 @@ def test_the_accumulating_session_clears_the_run_once_then_appends(tmp_path):
     from framework.io.writers import writing_chunks
 
     db = tmp_path / "raw.db"
+    _create_accumulate_table(db, "feed", Dataset.from_pandas(pd.DataFrame({"id": []})))
     writer = AccumulateByRunWriter(db, "feed", "run-a", "2026-07-27")
     with writing_chunks(writer) as chunk_writer:
         for start in (0, 2, 4):

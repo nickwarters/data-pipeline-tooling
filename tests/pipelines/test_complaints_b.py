@@ -21,6 +21,7 @@ from tests.framework_testing import (
     RecordingWriter,
     assert_rows_equal,
     given_rows,
+    migrate_all,
     read_rows,
 )
 from tools.medallion import medallion
@@ -39,6 +40,10 @@ def test_bundled_sample_feed_refines_through_to_silver(tmp_path):
     )
     shutil.copy(sample_dir / f"{FEED_NAME}.csv", landing / f"{FEED_NAME}.csv")
 
+    # Every Writer here requires its table to already exist (#324); complaints_a/b/c
+    # have committed migrations (raw/silver/quarantine), so bring them into
+    # existence exactly as `python -m cli migrate` would.
+    migrate_all(tmp_path)
     run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME))
 
     med = medallion(StoreRegistry(tmp_path), FEED_NAME)

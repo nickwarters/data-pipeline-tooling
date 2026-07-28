@@ -12,6 +12,7 @@ from framework.io.writers import (
     SqliteTruncateReloadWriter,
     SqliteUpsertWriter,
 )
+from tests.framework_testing import create_table
 
 
 def test_plain_name_is_wrapped_in_double_quotes():
@@ -71,6 +72,11 @@ def test_reader_projects_a_column_whose_name_needs_quoting(tmp_path):
 def test_upsert_writer_merges_into_table_and_columns_needing_quoting(tmp_path):
     db = tmp_path / "gold.db"
     writer = SqliteUpsertWriter(db, "case pool", key_columns=("case id",))
+    create_table(
+        db,
+        "case pool",
+        Dataset.from_pandas(pd.DataFrame({"case id": [], "full name": []})),
+    )
 
     writer.write(
         Dataset.from_pandas(
@@ -94,6 +100,7 @@ def test_truncate_reload_writer_round_trips_a_table_name_needing_quoting(tmp_pat
     # quotes the table name. The round-trip proves an awkward name still works.
     db = tmp_path / "raw.db"
     frame = pd.DataFrame({"id": [1, 2]})
+    create_table(db, "order detail", Dataset.from_pandas(frame))
 
     SqliteTruncateReloadWriter(db, "order detail").write(Dataset.from_pandas(frame))
     # Full refresh: a second write replaces, not appends.
@@ -106,6 +113,13 @@ def test_truncate_reload_writer_round_trips_a_table_name_needing_quoting(tmp_pat
 def test_accumulate_writer_deletes_by_run_in_table_needing_quoting(tmp_path):
     db = tmp_path / "gold.db"
     frame = pd.DataFrame({"case id": [1, 2]})
+    create_table(
+        db,
+        "case pool",
+        Dataset.from_pandas(
+            frame.assign(logical_run_id="", load_date="", pipeline_run_id="")
+        ),
+    )
 
     AccumulateByRunWriter(
         db, "case pool", logical_run_id="r1", load_date="2026-06-10"
@@ -121,6 +135,11 @@ def test_accumulate_writer_deletes_by_run_in_table_needing_quoting(tmp_path):
 
 def test_quarantine_writer_deletes_by_run_in_table_needing_quoting(tmp_path):
     db = tmp_path / "raw.db"
+    create_table(
+        db,
+        "reject rows",
+        Dataset.from_pandas(pd.DataFrame({"logical_run_id": [""], "v": [0]})),
+    )
     writer = QuarantineWriter(db, "reject rows")
 
     writer.write(

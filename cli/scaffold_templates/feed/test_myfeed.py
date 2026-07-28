@@ -10,13 +10,16 @@ from __future__ import annotations
 
 from dataclasses import fields
 
+import pandas as pd
 import pytest
 
 from framework.core import ValidationError
+from framework.core.dataset import Dataset
 from framework.run import RunContext
 from tests.framework_testing import (
     RecordingRunLog,
     RecordingWriter,
+    create_table,
     given_rows,
     read_rows,
 )
@@ -26,8 +29,36 @@ from tools.store import StoreRegistry
 from .pipeline import FEED_NAME, raw_builder, run, silver_builder
 from .schema import MyfeedRow
 
+#: A field-type default good enough to seed a *typed* empty row -- an empty
+#: list per column (``{"amount": []}``) infers every column as float64
+#: regardless of the schema's declared type, and a hand-minted table with the
+#: wrong storage type would then silently downcast an inserted int to a float
+#: (SQLite's column-affinity coercion), failing silver's dtype check on
+#: read-back for a reason that has nothing to do with the test.
+_TYPE_DEFAULTS = {"str": "", "int": 0, "float": 0.0, "bool": False}
+
+
+def _empty_migrated_frame() -> pd.DataFrame:
+    """One dtype-correct row, dropped immediately (``.iloc[:0]`` keeps pandas'
+    per-column dtype from the row itself, unlike an empty list)."""
+    row = {f.name: _TYPE_DEFAULTS.get(f.type, "") for f in fields(MyfeedRow)}
+    row.update(logical_run_id="", load_date="", pipeline_run_id="")
+    return pd.DataFrame([row]).iloc[:0]
+
 
 def test_bundled_sample_feed_refines_through_to_gold(tmp_path):
+    # Every hop's Writer requires its table to already exist (#324): a real
+    # scaffolded feed gets this from `python -m cli scaffold`'s generated
+    # migrations (see cli/scaffold.py's _emit_migrations) plus `migrate` --
+    # this template test drives the bundled sample in isolation instead, so it
+    # mints each table directly, shaped for the run-stamp columns
+    # AccumulateByRun adds. (silver's quarantine table is not needed here: the
+    # bundled MyfeedRow declares no value rules yet, so nothing is ever
+    # rejected and QuarantineWriter.write is never called.)
+    empty = Dataset.from_pandas(_empty_migrated_frame())
+    for layer in ("raw", "silver", "gold"):
+        create_table(tmp_path / FEED_NAME / f"{layer}.db", FEED_NAME, empty)
+
     run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME))
 
     med = medallion(StoreRegistry(tmp_path), FEED_NAME)

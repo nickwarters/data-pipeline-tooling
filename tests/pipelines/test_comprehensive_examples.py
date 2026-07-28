@@ -3,12 +3,13 @@ from pipelines.comprehensive_examples import (
     high_risk_or_vulnerable,
     silver_to_gold,
 )
-from tests.framework_testing import read_rows
+from tests.framework_testing import migrate_all, read_rows
 from tools.medallion import medallion
 from tools.store import StoreRegistry
 
 
 def test_complex_bronze_to_silver_example_combines_sources_and_validates(tmp_path):
+    migrate_all(tmp_path)
     bronze_to_silver(tmp_path, logical_run_id="2026-05-29")
 
     catalog = StoreRegistry(tmp_path)
@@ -46,6 +47,7 @@ def test_complex_bronze_to_silver_example_combines_sources_and_validates(tmp_pat
 
 
 def test_complex_silver_to_gold_example_assembles_reporting_outputs(tmp_path):
+    migrate_all(tmp_path)
     bronze_to_silver(tmp_path, logical_run_id="2026-05-29")
     silver_to_gold(tmp_path, logical_run_id="2026-05-29")
 

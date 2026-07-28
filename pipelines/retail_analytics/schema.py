@@ -1,8 +1,17 @@
-"""Schemas for the retail_analytics DAG: source types and each write terminus."""
+"""Schemas for the retail_analytics DAG: source types and each write terminus.
+
+``OrderRow`` / ``CatalogRow`` are the two source shapes -- read contracts for the
+bundled sample CSVs, not landed to any medallion layer by this DAG (it reads
+them straight off disk and writes only its three silver terminuses; see
+``pipeline.py``), so they are declared here for typing but left out of
+``TABLES``.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+from tools.schema import Table
 
 
 @dataclass
@@ -69,3 +78,12 @@ class OpsRow:
     status: str
     ops_flag: str  # "pending" | "completed" | "high_value"
     period: str  # "recent" | "historical" | "n/a"
+
+
+# The three silver terminuses this DAG actually writes -- no raw or gold tables
+# (the two sources are read straight off disk, and the DAG stops at silver).
+TABLES = (
+    Table("silver", "revenue", row=RevenueRow, primary_key=("order_id",)),
+    Table("silver", "risk_signals", row=RiskRow),
+    Table("silver", "ops_queue", row=OpsRow),
+)

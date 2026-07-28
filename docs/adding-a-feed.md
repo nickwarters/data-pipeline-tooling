@@ -23,12 +23,21 @@ of the suite, mirroring the source layout) — wired together and ready to run:
 ```
 pipelines/orders/
   __init__.py
-  schema.py            # @dataclass OrdersRow — the column/dtype contract
+  schema.py            # @dataclass OrdersRow + TABLES — the column/dtype contract and every table it lands
   pipeline.py          # raw_/silver_/gold_builder compose each hop; run()/main wire the real ones
   sample_data/orders.csv
 tests/pipelines/
   test_orders.py       # drives raw_builder() with sample rows + a recording writer
+migrations/subject/orders/
+  raw/    NNNN_create_orders.sql
+  silver/ NNNN_create_orders.sql
+  gold/   NNNN_create_orders.sql
+  quarantine/ NNNN_create_orders.sql
 ```
+
+The migrations are generated from `schema.py`'s `TABLES` at scaffold time
+(the same generator `python -m cli migrations make` drives), so `migrate`
+then `run` both work before you change a line — see the note below.
 
 `pipeline.py` follows the framework's canonical pipeline contract: it exposes a
 `run(context: RunContext, *, describe: bool = False) -> Dataset` callable (and an
@@ -48,6 +57,19 @@ pipelines/orders` imports `pipelines.orders.pipeline` and executes
   `tools.recipes.raw_to_silver` recipe.
 - **`gold_builder`** is a passthrough to start — reads silver, writes gold — with
   a `TODO` to build the assembly (it's per-feed and an open decision).
+
+> **Before the first run: migrate.** Every Writer's target must already
+> exist — creating one is a Migration's job, not a Writer's (ADR 0015,
+> [ADR 0016](adr/0016-migrations-own-table-structure.md)) — so a fresh feed's
+> first run raises `MissingTableError` until you run `migrate`. `scaffold`
+> already declares the feed's `TABLES` in `schema.py` (raw/silver/gold, plus
+> its quarantine table) and generates the matching first migration for each
+> one, so the only step left is applying them:
+> ```sh
+> python -m cli migrate --env dev --subject orders
+> ```
+> A later schema change is a `python -m cli migrations make --feed orders`
+> followed by the same `migrate` ([migrations.md](migrations.md)).
 
 ### Recipe-first authoring, and how to diverge
 

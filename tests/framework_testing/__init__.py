@@ -9,7 +9,7 @@ runtime, but a pipeline author's **tests** do.
 
     from tests.framework_testing import given_rows, rows_of, assert_rows_equal
 
-The surface splits into two implementation modules, both re-exported here:
+The surface splits into three implementation modules, all re-exported here:
 
 - :mod:`tests.framework_testing.rows` — in-memory **row** helpers. Build a source
   (:func:`given_rows`, :func:`given_csv`), capture a sink
@@ -20,9 +20,14 @@ The surface splits into two implementation modules, both re-exported here:
   :class:`RecordingRunLog` captures a run's structured records in memory;
   :func:`read_run_log` parses an on-disk JSONL run-log into the same record
   dicts.
+- :mod:`tests.framework_testing.sqlite` — **table-existence** helpers, needed
+  since #323: :func:`create_table` mints a bare table for a unit-level Writer
+  test, and :func:`migrate_all` applies this repo's real ``migrations/`` tree
+  for a test that drives a bundled feed end-to-end.
 
 Everything stays behind the :class:`~framework.core.dataset.Dataset` seam:
-helpers take and return plain Python row dicts, never a pandas frame.
+helpers take and return plain Python row dicts, never a pandas frame — except
+the sqlite helpers, which exist precisely to set up the table underneath it.
 """
 
 from __future__ import annotations
@@ -38,6 +43,7 @@ from tests.framework_testing.rows import (
     without_columns,
 )
 from tests.framework_testing.run_log import RecordingRunLog, read_run_log
+from tests.framework_testing.sqlite import create_table, migrate_all
 
 __all__ = [
     # rows
@@ -52,4 +58,7 @@ __all__ = [
     # run-log
     "RecordingRunLog",
     "read_run_log",
+    # sqlite
+    "create_table",
+    "migrate_all",
 ]

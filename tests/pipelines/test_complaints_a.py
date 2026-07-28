@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from framework.core import ValidationError
+from framework.io import SqliteReader
 from framework.run import RunContext
 from pipelines.complaints_a.pipeline import FEED_NAME, raw_builder, run, silver_builder
 from tests.framework_testing import (
@@ -21,6 +22,7 @@ from tests.framework_testing import (
     RecordingWriter,
     assert_rows_equal,
     given_rows,
+    migrate_all,
     read_rows,
 )
 from tools.medallion import medallion
@@ -39,6 +41,10 @@ def test_bundled_sample_feed_refines_through_to_silver(tmp_path):
     )
     shutil.copy(sample_dir / f"{FEED_NAME}.csv", landing / f"{FEED_NAME}.csv")
 
+    # Every Writer here requires its table to already exist (#324); complaints_a/b/c
+    # have committed migrations (raw/silver/quarantine), so bring them into
+    # existence exactly as `python -m cli migrate` would.
+    migrate_all(tmp_path)
     run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME))
 
     med = medallion(StoreRegistry(tmp_path), FEED_NAME)
@@ -50,6 +56,20 @@ def test_bundled_sample_feed_refines_through_to_silver(tmp_path):
     # 2 rows breach value rules and are quarantined, 2 rows pass
     silver = read_rows(med.silver, FEED_NAME)
     assert len(silver) == 2
+
+    # The two rejects land in the *migrated* quarantine table (#324): its shape
+    # comes from `quarantine_table` in schema.py, so this is the one bundled
+    # feed test that proves declaration -> migration -> QuarantineWriter joins
+    # up rather than the writer having quietly created a table of its own.
+    reader = SqliteReader(tmp_path / FEED_NAME / "quarantine.db", FEED_NAME)
+    quarantine = reader.read().to_pandas()
+    assert list(quarantine["record_id"]) == ["R002", "R004"]
+    assert (
+        list(quarantine["failed_rule"]) == ["column 'amount' value not in [0, 100]"] * 2
+    )
+    # ...including the run-identity stamp the central shape declares, which the
+    # silver hop supplies (hence the ":silver" leaf in the logical run id).
+    assert set(quarantine["logical_run_id"]) == {f"{FEED_NAME}:silver:2026-07-28"}
 
 
 def test_both_hops_plan_exactly_the_steps_they_always_have():

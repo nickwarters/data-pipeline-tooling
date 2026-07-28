@@ -5,6 +5,7 @@ import pytest
 
 from framework.core.dataset import Dataset
 from framework.io.strategy import InsertIfAbsent
+from tests.framework_testing import create_table
 from tools.store import Store
 
 
@@ -12,8 +13,20 @@ def _ds(*rows: dict) -> Dataset:
     return Dataset.from_pandas(pd.DataFrame(list(rows)))
 
 
+def _seed_ref_table(tmp_path, **columns) -> None:
+    """Mint a migrated ``ref`` table shaped for the writer under test.
+
+    ``InsertIfAbsent`` now requires its target to already exist (#324) even
+    on a feed's very first run -- reading the existing key->surrogate mapping
+    and inserting new rows are both gated the same way, so the table must
+    carry the surrogate column plus every key column before the first write.
+    """
+    create_table(tmp_path / "store.db", "ref", _ds(columns))
+
+
 def test_insert_if_absent_first_run_assigns_surrogates_from_one(tmp_path):
     store = Store(tmp_path / "store.db")
+    _seed_ref_table(tmp_path, id=0, value="")
     writer = store.writer("ref", InsertIfAbsent("value"))
     writer.write(_ds({"value": "A"}, {"value": "B"}, {"value": "C"}))
 
@@ -25,6 +38,7 @@ def test_insert_if_absent_first_run_assigns_surrogates_from_one(tmp_path):
 
 def test_insert_if_absent_rerun_is_idempotent(tmp_path):
     store = Store(tmp_path / "store.db")
+    _seed_ref_table(tmp_path, id=0, value="")
     writer = store.writer("ref", InsertIfAbsent("value"))
     batch = _ds({"value": "A"}, {"value": "B"})
     writer.write(batch)
@@ -39,6 +53,7 @@ def test_insert_if_absent_rerun_is_idempotent(tmp_path):
 
 def test_insert_if_absent_new_key_gets_next_id_existing_ids_stable(tmp_path):
     store = Store(tmp_path / "store.db")
+    _seed_ref_table(tmp_path, id=0, value="")
     writer = store.writer("ref", InsertIfAbsent("value"))
     writer.write(_ds({"value": "A"}, {"value": "B"}))
     writer.write(_ds({"value": "A"}, {"value": "C"}))  # A exists, C is new
@@ -53,6 +68,7 @@ def test_insert_if_absent_new_key_gets_next_id_existing_ids_stable(tmp_path):
 
 def test_insert_if_absent_deduplicates_keys_within_batch(tmp_path):
     store = Store(tmp_path / "store.db")
+    _seed_ref_table(tmp_path, id=0, value="")
     writer = store.writer("ref", InsertIfAbsent("value"))
     # Batch contains "A" twice — only one row should be inserted.
     writer.write(_ds({"value": "A"}, {"value": "A"}, {"value": "B"}))
@@ -64,6 +80,7 @@ def test_insert_if_absent_deduplicates_keys_within_batch(tmp_path):
 
 def test_insert_if_absent_composite_key(tmp_path):
     store = Store(tmp_path / "store.db")
+    _seed_ref_table(tmp_path, id=0, group="", value="")
     writer = store.writer("ref", InsertIfAbsent(("group", "value")))
     writer.write(
         _ds(
@@ -90,6 +107,7 @@ def test_insert_if_absent_composite_key(tmp_path):
 
 def test_insert_if_absent_custom_surrogate_column(tmp_path):
     store = Store(tmp_path / "store.db")
+    _seed_ref_table(tmp_path, ref_id=0, value="")
     writer = store.writer("ref", InsertIfAbsent("value", surrogate_column="ref_id"))
     writer.write(_ds({"value": "X"}, {"value": "Y"}))
 
@@ -107,6 +125,7 @@ def test_insert_if_absent_raises_on_missing_key_column(tmp_path):
 
 def test_insert_if_absent_empty_batch_is_a_noop(tmp_path):
     store = Store(tmp_path / "store.db")
+    _seed_ref_table(tmp_path, id=0, value="")
     writer = store.writer("ref", InsertIfAbsent("value"))
     writer.write(_ds({"value": "A"}))
     writer.write(Dataset.from_pandas(pd.DataFrame(columns=["value"])))

@@ -121,6 +121,14 @@ gold is often the consumption/grain boundary
 > not a framework law. The **Ingest** profile is *history-upstream /
 > current-gold* (raw + silver accumulate the change-over-time record; gold
 > reduces to one current row per Case). See the deep docs below for the full load model.
+>
+> A SQLite table any Writer targets must **already exist** — creating it is a
+> Migration's job ([migrations.md](migrations.md)), so run `python -m cli
+> migrate` before the first run of a new feed. A missing table raises
+> `MissingTableError` naming the exact command; it is not created for you.
+> This is rolled out per environment (on in `dev`, off elsewhere until that
+> environment's own `schema diff` is clean) — see
+> [ADR 0016](adr/0016-migrations-own-table-structure.md).
 
 ### How the pieces fit
 
@@ -152,8 +160,8 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 > `framework.transform` (the reshaping processors + `SchemaCoercion`), and
 > `framework.run` (the `Pipeline` builder, runner, observability)
 > — not from the modules behind them. The cross-cutting `retry` / `calendar` /
-> orchestration / observability utilities are a sibling top-level `tools` package,
-> not a facade. The facade names are the stable surface.
+> `schema` / orchestration / observability utilities are a sibling top-level
+> `tools` package, not a facade. The facade names are the stable surface.
 > `import framework` exposes only those facade modules for discovery; it is
 > not a shortcut for
 > `framework.CsvReader` / `framework.Filter` / `framework.Pipeline`. See
@@ -184,6 +192,8 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 | **`CaseType` / `Variation`** | Case-review application/domain objects in `case_review.case_type`, not framework primitives: a Case Type bundles its `schema`, its identity contract (`natural_key` + a `namespace` derived from `name`), and its `variations`, imported directly (no global CaseType config registry). A Variation overrides only what differs — most often the `question_bank_id`. → [selection.md](selection.md) |
 | **`CasePool`** | Case-review application/domain helper in `case_review.case_pool`: the per-Case-Type population read from ingested silver, surfaced through intention-revealing retrievals (e.g. `fetch_available_cases(...)`) instead of raw `read_*`. → [selection.md](selection.md) |
 | **`WorkingDayCalendar`** | A config-seeded **pure utility** for availability arithmetic ("the last 20 working days"). Touches no Dataset/Store/engine; not a Feed. → [working-day-calendar.md](working-day-calendar.md) |
+| **`Table` / `Column` / `Index`** (`tools.schema`) | The **storage** contract, a sibling of `Schema`'s **validation** contract: one landing site (a namespace + table) and its expected shape. A feed declares its `TABLES` once (normally in `schema.py`); `columns_of(Row)` derives columns from a row dataclass, `text_columns(names)` is the intended raw shape. Only the tables a feed *writes* belong in its `TABLES` — a read contract for a table it only reads stays a plain dataclass. `python -m cli schema diff` reads a live table's shape (`PRAGMA table_info`) and reports column-level drift against the declaration — read-only, safe against prod, non-zero exit on drift. → [schema-declaration.md](schema-declaration.md) |
+| **Migration** (`tools.migrations`) | Getting a real database to a declared `Table`'s shape. `python -m cli migrations make` turns a `Table`'s drift (against the migrations tree's own tracked shape, not any live environment) into the next reviewed `.sql` file under `migrations/`, where directory path is scope and filename is a globally ordered version + slug. `python -m cli migrate` applies (or, with `--plan`/`--status`, previews) every pending migration the medallion resolves for a base directory — one `<subject>/<layer>.db` per subject/layer actually present, plus the fixed `platform/registry` database — recording each one in the target database's own `schema_migrations` ledger, one transaction per file. → [migrations.md](migrations.md) |
 
 Two cross-cutting flows extend the pipeline: **quarantine** routes value-rule
 rejects aside (keeping good rows — [opt-in row-level quarantine for value-rule
@@ -546,6 +556,24 @@ than a traceback. Only `orchestrate` takes a required `--app` naming an
 application's schedules module (`build_pipeline_sets()`); it runs those schedules
 over path-addressed pipelines, so no handler registry is wired up front.
 
+### Get a database to its declared shape — migrations
+
+Declaring a `Table` (above) doesn't change any database on its own —
+`schema diff` only *reports* drift. To actually fix it: `python -m cli
+migrations make` turns a drifted `Table`'s declaration into the next reviewed
+migration file under `migrations/`, and `python -m cli migrate --env <name>`
+applies (or, with `--plan`/`--status`, previews) every pending file against
+that environment's medallion databases:
+
+```sh
+python -m cli migrations make                 # every declared table that has drifted
+python -m cli migrate --env dev --plan         # preview; touches nothing
+python -m cli migrate --env dev                # apply
+python -m cli migrate --env dev --status
+```
+
+Full reference and the ledger/rollback guarantees: [`migrations.md`](migrations.md).
+
 ### Test a pipeline — given source rows, expect output rows
 
 To test a concrete pipeline script, reach for `tests.framework_testing` rather than
@@ -591,6 +619,8 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 | [`streaming-large-sources.md`](streaming-large-sources.md) | Streaming a source too big to hold whole: `Pipeline.read_chunks` driving the DAG once per chunk, chunk-level row filtering (id allow-list / predicate), which pairings are refused at wiring time and why, and `stream_step` as the low-level fallback. |
 | [`retry.md`](retry.md) | Targeted retry at the reader/writer edges — `RetryPolicy`, where to use it and where not. |
 | [`operator-cli.md`](operator-cli.md) | The operator CLI (`run` / `status` / `runs` / `log`) with example commands and output. |
+| [`schema-declaration.md`](schema-declaration.md) | Declaring a feed's table shapes (`Table` / `Column` / `Index`) and reporting live drift with `python -m cli schema diff`. |
+| [`migrations.md`](migrations.md) | The `migrations/` tree, the medallion layout, and `python -m cli migrations make` / `migrate` (plan/status/apply, filters, `--to`). |
 | [`resolving-a-failed-run.md`](resolving-a-failed-run.md) | The operator loop from a failed run — investigate (`status`/`log`), diagnose, resolve, and re-drive idempotently. |
 | [`escape-hatch-store.md`](escape-hatch-store.md) | Iterating against a flat scratch db (and a pre-baked SQL query) outside the medallion / namespace Store, and migrating back. |
 | [`testing-helpers.md`](testing-helpers.md) | `tests.framework_testing` — the test-only helpers for testing concrete pipelines (`given_rows`, `RecordingWriter`, `read_rows`, `RecordingRunLog`, `read_run_log`). |

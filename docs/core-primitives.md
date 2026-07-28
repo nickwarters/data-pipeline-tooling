@@ -300,7 +300,8 @@ Deliverables and SQLite tables:
   the default pusher raises until the on-prem SE client (NTLM/Kerberos/REST)
   lands. Emits the Selection Deliverable — one list per Case Type.
 - `SqliteTruncateReloadWriter(db_path, table)` — **full refresh** (truncate +
-  reload). Used for raw/silver, which mirror a current-state source snapshot.
+  reload, *not* drop + recreate — see below). Used for raw/silver, which
+  mirror a current-state source snapshot.
 - `AccumulateByRunWriter(db_path, table, logical_run_id, load_date, pipeline_run_id=None)` —
   **accumulate by logical run** for gold: stamps each row `logical_run_id`,
   `load_date`, and optional `pipeline_run_id`. `logical_run_id` is the
@@ -361,14 +362,69 @@ it is shared:
   atomicity the framework promises now has a single implementation rather than
   five hand-maintained copies.
 - **One staging convention.** The merge Writers (`SqliteUpsertWriter`,
-  `SqliteInsertOrIgnoreWriter`) share a `_staged_merge` helper that lands the
-  incoming rows in `_stage_<table>`, ensures the target exists, yields the
-  connection plus the quoted operands, commits, and only then drops the scratch
-  table. Each Writer's body is its merge statement and nothing else. The former
-  per-strategy names (`_upsert_stage_<table>`, `_insert_or_ignore_stage_<table>`)
-  are dropped alongside the current one during that cleanup, so a scratch table
-  stranded by a process killed mid-write under an older build is swept up on the
-  next write to the same table rather than left on the share forever.
+  `SqliteInsertOrIgnoreWriter`) share a `_staged_merge` helper that requires the
+  target to already exist (see below — it no longer creates one), lands the
+  incoming rows in `_stage_<table>`, yields the connection plus the quoted
+  operands, commits, and only then drops the scratch table. The check comes
+  first so a refusal strands no scratch table. Each Writer's body
+  is its merge statement and nothing else. The former per-strategy names
+  (`_upsert_stage_<table>`, `_insert_or_ignore_stage_<table>`) are dropped
+  alongside the current one during that cleanup, so a scratch table stranded
+  by a process killed mid-write under an older build is swept up on the next
+  write to the same table rather than left on the share forever.
+- **A table's existence is a migration's job, not a Writer's** (since #323, on
+  top of [ADR 0015](adr/0015-declared-schema-generated-migrations.md)'s
+  generated migrations). `SqliteTruncateReloadWriter` used to reload via
+  `to_sql(if_exists="replace")`, which is a DROP + CREATE — it quietly erased
+  any index or constraint a migration had put on the table, while
+  `schema_migrations` kept claiming that migration still applied. It now
+  truncates (`DELETE FROM` + insert) inside the one transaction
+  `_writing_connection` already opens, so an index survives repeated runs and a
+  failed reload leaves the table's prior contents intact. `_staged_merge`'s
+  target-create (a zero-row `to_sql(if_exists="append")`, the same DROP-free
+  but still implicit trick) is gone the same way — so `UpsertStrategy` and
+  `InsertOrIgnore` now require a pre-existing target too, not just `Refresh`.
+  All three go through a shared `_require_table` first, and a missing table
+  raises `MissingTableError` (a named `LookupError`, on the `framework.io`
+  facade so a caller gating on this condition can catch exactly it) naming the
+  database, the table, and the exact fix —
+  ```
+  no migration has created 'complaints_a/silver.cases' (/data/complaints_a/silver.db);
+  run: python -m cli migrate --env <env> --subject complaints_a
+  (a database outside the <subject>/<layer>.db layout instead takes: python -m cli migrate --database /data/complaints_a/silver.db --scope <scope>)
+  ```
+  — rather than silently minting a table no migration ever declared. The
+  subject/layer come straight off `db_path`'s own `<subject>/<layer>.db` shape
+  (`tools.store.DirectoryStoreBackend`'s convention), not a guess from the
+  table name; the full path and the `--database`/`--scope` form are there
+  because a database *outside* that layout has no subject to name. The
+  environment stays a `<env>` placeholder — a Writer knows its file, never
+  which environment resolved it. `framework/io/writers.py`
+  still learns nothing about what a migration *is* — the message just names
+  the fix as text.
+- **Every remaining append site is now the same, behind a rollout guard**
+  (since #324, on top of [ADR 0016](adr/0016-migrations-own-table-structure.md)).
+  `AccumulateByRunWriter`, `QuarantineWriter`, `SqliteInsertIfAbsentWriter`, and
+  the streaming `_AppendingChunkWriter` no longer create their target via
+  `to_sql(if_exists="append")` when the **require-declared-tables guard** is
+  on: a shared `_ensure_table`/`_append_rows` pair requires the table
+  (`MissingTableError`, same as `Refresh`) and lands rows through a hand-rolled,
+  batched, table-creation-incapable `INSERT` (`_insert_rows`, batched per
+  `_rows_per_statement` against SQLite's own `SQLITE_LIMIT_VARIABLE_NUMBER`, so
+  a wide table never trips a placeholder limit that varies by SQLite build).
+  Guard **off** — the rollout default outside `dev` until an environment's own
+  `schema diff` is confirmed clean — these Writers still fall back to the old
+  `to_sql(if_exists="append")` creation, unchanged, so a not-yet-migrated
+  environment keeps working exactly as before. The flag itself is process-wide
+  (`framework.io.writers.set_require_declared_tables`/
+  `require_declared_tables_enabled`), flipped by
+  `tools.environments.base_dir_for` — the one call every entry point makes to
+  settle which environment it is in, which activates that environment even when
+  an explicit `--base-dir` overrides its root — rather than threaded
+  through `Store`/`strategy.writer_for`: a Writer still holds only a database
+  path, and `framework/` still never imports `tools.environments`. See ADR
+  0016 for the full rationale, the alternatives it rejected, and the stated
+  cost of a process-wide switch.
 - **One delete-then-append.** "Clear this logical run's prior rows, then append"
   exists once (`_replace_logical_run`) and is used by both `AccumulateByRunWriter`
   and `QuarantineWriter`; the whole-file equivalent stays in

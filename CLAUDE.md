@@ -27,9 +27,11 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   reads); plus the private
   `framework/_internal` (`connection`, `describe`, `schema`: cross-cutting
   helpers with no public name)). The `python -m cli` entry point (`scaffold`
-  plus the operator commands; see below) lives in the top-level `cli/` package,
+  plus the operator commands, `schema diff`, and `migrations make` / `migrate`;
+  see below) lives in the
+  top-level `cli/` package,
   and the cross-cutting `retry` / `calendar` / `medallion` / `recipes` /
-  `environments` / orchestration /
+  `environments` / `schema` / `migrations` / orchestration /
   observability utilities in the top-level `tools/` package — both siblings of
   `framework/`,
   not facades. The run-record schema is declared **once, as data**, in
@@ -42,7 +44,37 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   `tools/observability/run_store.py` — the counterpart of `tools.store`'s
   `StoreRegistry`, which owns where the *data* lands — and the UTC-instant /
   local-calendar-date rule every freshness check reads is settled once in
-  `tools/observability/timestamps.py`. Then `case_review/` (the
+  `tools/observability/timestamps.py`. A feed's **declared table shapes** are
+  the storage-side sibling of that: `tools/schema/` holds the `Table` /
+  `Column` / `Index` vocabulary and the live-vs-declared diff, each feed lists
+  the tables it *writes* in a `TABLES` tuple in its `schema.py`, and
+  `tests/integration/test_declared_tables_match_pipelines.py` holds those
+  declarations to what the pipelines actually land (see
+  [`docs/schema-declaration.md`](docs/schema-declaration.md) — the framework
+  itself never learns what a declaration is). Getting a real database *to*
+  that declared shape is a separate, additive step: `migrations/` is a
+  repo-wide tree of reviewed, forward-only `.sql` files where directory path
+  is scope and filename is a globally ordered version + slug (no manifest);
+  `tools/migrations/` discovers/validates the tree and resolves a base
+  directory to its **medallion** databases, the one way this repo supports —
+  one `<subject>/<layer>.db` per subject/layer actually present, plus the
+  fixed `platform/registry` database — applying each database's pending
+  migrations with its own `schema_migrations` ledger, one transaction the
+  **runner** owns per file (so a migration containing its own `BEGIN`/`COMMIT`
+  is refused); `tools/schema/emit.py`
+  turns a `Table`'s drift into the mechanical part of the next migration,
+  diffing against the tree's own tracked shape rather than any live
+  environment — read by *applying* that scope's committed files to a throwaway
+  in-memory database, so SQLite (never a regex) is the parser and a
+  hand-edited file is reflected exactly. A coarser layout (one database per
+  generic layer, or one single warehouse) was designed and prototyped, then
+  removed rather than shipped broken: it collapses raw and silver into one
+  file, and this repo names a silver table after the raw table it refines, so
+  they collide on every feed, and fixing that needs a table-naming rule this
+  repo doesn't have. A genuine collision within one database still fails
+  loudly and completely, never a partial apply. See
+  [`docs/migrations.md`](docs/migrations.md) — the framework itself never
+  learns what a migration is, same as a declaration. Then `case_review/` (the
   case-review *application* — domain types
   like `CaseType`/`CasePool` and its gold helpers, which live outside the
   framework), `pipelines/` (scripts), `tests/` (pytest, with author test helpers
@@ -70,7 +102,8 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   `framework.io` / `framework.transform` / `framework.run`, not the modules
   behind them (those are internal layout); the cross-cutting `tools.*` helpers
   (`tools.retry` / `tools.calendar` / `tools.orchestration` /
-  `tools.observability` / `tools.environments` / `tools.recipes`) are a sibling
+  `tools.observability` / `tools.environments` / `tools.recipes` /
+  `tools.schema` / `tools.migrations`) are a sibling
   utility package, not a facade.
   The facades are the stable contract;
   [`docs/public-api.md`](docs/public-api.md) lists the surface, the internal
@@ -86,7 +119,29 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   `writer_for(db_path, table, busy_timeout_ms=...)` plus the optional file-side
   `apply_to_frame(frame, read_existing)`, so nothing outside
   `framework/io/strategy.py` branches on which strategy it was handed and a new
-  strategy is one class plus one export line), `Store` (namespace → file
+  strategy is one class plus one export line; a table's *existence* is a
+  Migration's job, not a Writer's — `Refresh` truncates (`DELETE FROM` +
+  insert, in one transaction) rather than dropping and recreating, and every
+  Writer (`Refresh`/the merge strategies unconditionally since #323;
+  `AccumulateByRun`, `QuarantineWriter`, `InsertIfAbsent`, and the streaming
+  append path behind a rollout guard since #324) raises `MissingTableError`
+  naming the `python -m cli migrate` fix instead of minting a target no
+  migration declared, landing rows through a shared batched-insert helper
+  (`_rows_per_statement`, sized off SQLite's own placeholder limit) that is
+  structurally incapable of creating one. The guard
+  (`framework.io.writers.set_require_declared_tables`/
+  `require_declared_tables_enabled`, a process-wide flag — never threaded
+  through `Store`/`strategy.writer_for`, since a Writer holds only a database
+  path and `framework/` must not import `tools.environments`) is flipped by
+  `tools.environments.base_dir_for` to match the active environment's own
+  `require_declared_tables` — including when an explicit `--base-dir` overrides
+  that environment's root — on in `dev`, off elsewhere until that
+  environment's `schema diff` is clean — see
+  [ADR 0016](docs/adr/0016-migrations-own-table-structure.md). A feed's
+  quarantine table (`tools.schema.quarantine_table`) is declared and migrated
+  the same way, under a `quarantine` scope alongside `raw`/`silver`/`gold`.
+  `scaffold` declares a feed's `TABLES` and generates its first migrations, so
+  `migrate` then `run` both work before a line is edited), `Store` (namespace → file
   factory minting `writer(table, strategy)` — a one-line delegation to
   `strategy.writer_for(...)` — / `reader(table)` over one logical database; **lives in the sibling
   `tools.store`, not `framework.io`** — where a feed lands is application
@@ -127,6 +182,9 @@ python3 -m venv .venv
 .venv/bin/python -m cli scaffold orders --from-feed-file sample.csv  # seed schema/sample/test from a real CSV header
 .venv/bin/python -m cli scaffold --case-type claims # scaffold a Case Type ingest feed (source->raw->silver, identity declared)
 .venv/bin/python -m cli run pipelines/ingest --base-dir /tmp/demo  # operator CLI: run/orchestrate/status/runs/log (see docs/operator-cli.md)
+.venv/bin/python -m cli schema diff --base-dir /tmp/demo         # diff every feed's declared TABLES against a live environment (see docs/schema-declaration.md)
+.venv/bin/python -m cli migrations make            # emit the next migration file for every drifted declared table
+.venv/bin/python -m cli migrate --env dev --plan   # preview pending migrations for an environment's base dir (see docs/migrations.md)
 .venv/bin/pre-commit run --all-files             # lint + format the whole tree on demand
 ```
 
@@ -143,8 +201,10 @@ venv before committing); a failing test blocks the commit.
 Run pipelines as **modules from the repo root** (`python -m pipelines.<name>`)
 so the import-only `framework` package resolves on `sys.path`. The framework
 itself is also runnable — `python -m cli <command>` (entry point in the
-top-level `cli/`) is the single surface for authoring (`scaffold`) and operating
-(`run`/`orchestrate`/`status`/`runs`/`log`) pipelines. `run` addresses a pipeline
+top-level `cli/`) is the single surface for authoring (`scaffold`), operating
+(`run`/`orchestrate`/`status`/`runs`/`log`), and declared-table drift
+(`schema diff`; see [`docs/schema-declaration.md`](docs/schema-declaration.md))
+over pipelines. `run` addresses a pipeline
 by **its location on disk** — `python -m cli run pipelines/<name>` imports
 `pipelines.<name>.pipeline` and executes its `run(context)` callable (reading an
 optional `UPSTREAMS` freshness tuple), so the dependency stays one-way and the

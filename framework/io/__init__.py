@@ -48,6 +48,7 @@ from framework.io.writers import (
     CsvWriter,
     ExcelWriter,
     JsonWriter,
+    MissingTableError,
     QuarantineWriter,
     SqliteInsertIfAbsentWriter,
     SqliteInsertOrIgnoreWriter,
@@ -95,4 +96,5 @@ __all__ = [
     "SqliteInsertOrIgnoreWriter",
     "InsertIfAbsent",
     "SqliteInsertIfAbsentWriter",
+    "MissingTableError",
 ]

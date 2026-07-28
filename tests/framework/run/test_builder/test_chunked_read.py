@@ -20,6 +20,7 @@ from __future__ import annotations
 import gc
 import weakref
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Annotated
 
 import pandas as pd
@@ -44,7 +45,7 @@ from framework.io.writers import (
 from framework.run.builder import Pipeline, PipelineGraphError
 from framework.run.run_context import RunContext
 from framework.transform.quarantine import SchemaValueRulePartitioner
-from tests.framework_testing import RecordingRunLog
+from tests.framework_testing import RecordingRunLog, create_table
 
 
 @dataclass
@@ -459,6 +460,26 @@ def _landed(db_path, table="feed") -> pd.DataFrame:
 
 
 def _accumulating_pipeline(db_path, rows, context, *, chunk_size=10):
+    # AccumulateByRunWriter now requires its target to already exist (#324),
+    # including inside its own streaming session -- mint it once, shaped for
+    # the run-stamp columns the writer adds, so every caller below stays a
+    # test of the streaming/accumulation behaviour, not of table creation.
+    if not Path(db_path).exists():
+        create_table(
+            db_path,
+            "feed",
+            Dataset.from_pandas(
+                pd.DataFrame(
+                    {
+                        "id": [],
+                        "val": [],
+                        "logical_run_id": [],
+                        "pipeline_run_id": [],
+                        "load_date": [],
+                    }
+                )
+            ),
+        )
     p = Pipeline("big", run_log=RecordingRunLog())
     source = p.read_chunks(ListChunkReader(rows), name="read", chunk_size=chunk_size)
     strategy = AccumulateByRun.from_context(context)
@@ -541,6 +562,7 @@ def test_a_dry_run_of_a_streamed_load_clears_nothing(tmp_path):
 
 def test_an_appending_load_takes_the_chunks_as_they_come(tmp_path):
     db = tmp_path / "raw.db"
+    create_table(db, "feed", Dataset.from_pandas(pd.DataFrame(_rows(1))))
     writer = SqliteInsertOrIgnoreWriter(db, "feed")
     p = Pipeline("big", run_log=RecordingRunLog())
     source = p.read_chunks(ListChunkReader(_rows(30)), name="read", chunk_size=10)
@@ -563,6 +585,22 @@ def test_the_run_s_prior_rejects_are_cleared_once_across_a_streamed_quarantine(
     db = tmp_path / "quarantine.db"
     context = RunContext(
         pipeline="big", logical_run_id="2026-07-27", load_date="2026-07-27"
+    )
+    create_table(
+        db,
+        "rejects",
+        Dataset.from_pandas(
+            pd.DataFrame(
+                {
+                    "id": [],
+                    "val": [],
+                    "failed_rule": [],
+                    "logical_run_id": [],
+                    "pipeline_run_id": [],
+                    "load_date": [],
+                }
+            )
+        ),
     )
 
     def build():

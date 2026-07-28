@@ -14,6 +14,7 @@ from framework.io.strategy import AccumulateByRun, Refresh
 from framework.run.builder import Pipeline
 from framework.transform.processors import Filter, Rename, SelectColumns, Unpivot
 from tests._schema_fixtures import LandedCase
+from tests.framework_testing import create_table
 from tools.medallion import medallion
 from tools.store import StoreRegistry
 
@@ -24,8 +25,61 @@ _WIDE_CASES = CaseType(name="wide_cases", schema=LandedCase, natural_key=("case_
 PRODUCT_COLS = [f"product_{i}" for i in range(1, 4)]  # keep small for tests
 
 
-def _write_wide_raw(med, run_id: str) -> None:
+#: A representative value per column name, so a hand-minted table's storage
+#: type matches what a real migration (derived from the schema's declared
+#: types) would give it. An empty list per column would default every one of
+#: them to float64 regardless -- for "amount" specifically, a REAL-affinity
+#: column then silently downcasts an inserted int to a float on the SQLite
+#: round-trip, failing SchemaValidator's dtype check on read-back for a
+#: reason that has nothing to do with the fan-out behaviour under test.
+_COLUMN_DEFAULTS: dict[str, object] = {"amount": 0}
+
+
+def _prepare_table(tmp_path, subject: str, layer: str, table: str, columns) -> None:
+    """Mint a table shaped for ``columns`` -- a migration's job since #323/#324."""
+    row = {column: _COLUMN_DEFAULTS.get(column, "") for column in columns}
+    empty = pd.DataFrame([row]).iloc[:0]
+    create_table(tmp_path / subject / f"{layer}.db", table, Dataset.from_pandas(empty))
+
+
+def _prepare_gold_cases_table(
+    tmp_path, med, subject: str, table: str = "cases"
+) -> None:
+    # ingest_silver_to_gold's Refresh() write needs the table to already exist;
+    # its shape is silver's own columns plus the derived `case_id`.
+    silver_columns = list(med.silver.reader(table).read().columns)
+    _prepare_table(tmp_path, subject, "gold", table, (*silver_columns, "case_id"))
+
+
+def _prepare_gold_detail_table(tmp_path, subject: str, table: str) -> None:
+    # detail_ingest_silver_to_gold's Refresh() write needs the table to already
+    # exist; its shape is exactly the Unpivot's own output columns, fixed across
+    # every call in this module.
+    _prepare_table(
+        tmp_path, subject, "gold", table, ["case_id", "product_slot", "product_name"]
+    )
+
+
+def _write_wide_raw(tmp_path, subject: str, med, run_id: str) -> None:
     """Seed a shared raw table with a wide feed (case + product columns)."""
+    # AccumulateByRunWriter requires its target to already exist (#324).
+    _prepare_table(
+        tmp_path,
+        subject,
+        "raw",
+        "wide_cases",
+        [
+            "run_id",
+            "load_date",
+            "case_ref_no",
+            "adviser",
+            "amount",
+            "product_1",
+            "product_2",
+            "product_3",
+            "logical_run_id",
+        ],
+    )
     med.raw.writer("wide_cases", AccumulateByRun(run_id, run_id)).write(
         Dataset.from_pandas(
             pd.DataFrame(
@@ -49,6 +103,13 @@ def test_detail_silver_to_gold_produces_one_row_per_product(tmp_path):
     # case_id, unpivots wide to long, writes Refresh to gold.
     med = medallion(StoreRegistry(tmp_path), "wide_cases")
     # Seed the silver table (already-projected product columns + natural key)
+    _prepare_table(
+        tmp_path,
+        "wide_cases",
+        "silver",
+        "products",
+        ["case_ref", "product_1", "product_2", "product_3"],
+    )
     med.silver.writer("products", Refresh()).write(
         Dataset.from_pandas(
             pd.DataFrame(
@@ -62,6 +123,7 @@ def test_detail_silver_to_gold_produces_one_row_per_product(tmp_path):
         )
     )
 
+    _prepare_gold_detail_table(tmp_path, "wide_cases", "products")
     detail_ingest_silver_to_gold(
         med,
         _WIDE_CASES,
@@ -86,6 +148,9 @@ def test_detail_case_id_matches_case_id_derived_independently(tmp_path):
     # same namespace as the Case table; no cross-pipeline join is needed.
     med = medallion(StoreRegistry(tmp_path), "wide_cases")
     # Seed case silver (needs load_date for LatestPerKey in ingest_silver_to_gold)
+    _prepare_table(
+        tmp_path, "wide_cases", "silver", "cases", ["case_ref", "amount", "load_date"]
+    )
     med.silver.writer("cases", Refresh()).write(
         Dataset.from_pandas(
             pd.DataFrame(
@@ -94,6 +159,13 @@ def test_detail_case_id_matches_case_id_derived_independently(tmp_path):
         )
     )
     # Seed product silver
+    _prepare_table(
+        tmp_path,
+        "wide_cases",
+        "silver",
+        "products",
+        ["case_ref", "product_1", "product_2", "product_3"],
+    )
     med.silver.writer("products", Refresh()).write(
         Dataset.from_pandas(
             pd.DataFrame(
@@ -107,8 +179,10 @@ def test_detail_case_id_matches_case_id_derived_independently(tmp_path):
         )
     )
 
+    _prepare_gold_cases_table(tmp_path, med, "wide_cases")
     ingest_silver_to_gold(med, _WIDE_CASES, "cases").run()
 
+    _prepare_gold_detail_table(tmp_path, "wide_cases", "products")
     detail_ingest_silver_to_gold(
         med,
         _WIDE_CASES,
@@ -133,7 +207,7 @@ def test_fan_out_two_pipelines_over_shared_raw_produce_cases_and_detail(tmp_path
     med = medallion(StoreRegistry(tmp_path), "subject")
     run_id = "2026-06-01"
 
-    _write_wide_raw(med, run_id)
+    _write_wide_raw(tmp_path, "subject", med, run_id)
 
     normalise = Rename({"case_ref_no": "case_ref"})
 
@@ -146,6 +220,13 @@ def test_fan_out_two_pipelines_over_shared_raw_produce_cases_and_detail(tmp_path
     s_cases = p_cases.transform(
         SelectColumns(["case_ref", "amount"]), n_cases, name="select"
     )
+    _prepare_table(
+        tmp_path,
+        "subject",
+        "silver",
+        "cases",
+        ["case_ref", "amount", "logical_run_id", "load_date"],
+    )
     p_cases.write(
         med.silver.writer("cases", AccumulateByRun(run_id, run_id)),
         s_cases,
@@ -153,6 +234,7 @@ def test_fan_out_two_pipelines_over_shared_raw_produce_cases_and_detail(tmp_path
     )
     p_cases.run()
 
+    _prepare_gold_cases_table(tmp_path, med, "subject")
     ingest_silver_to_gold(med, _WIDE_CASES, "cases").run()
 
     p_products = Pipeline("products")
@@ -164,6 +246,13 @@ def test_fan_out_two_pipelines_over_shared_raw_produce_cases_and_detail(tmp_path
     s_products = p_products.transform(
         SelectColumns(["case_ref"] + PRODUCT_COLS), n_products, name="select"
     )
+    _prepare_table(
+        tmp_path,
+        "subject",
+        "silver",
+        "products",
+        ["case_ref", *PRODUCT_COLS, "logical_run_id", "load_date"],
+    )
     p_products.write(
         med.silver.writer("products", AccumulateByRun(run_id, run_id)),
         s_products,
@@ -171,6 +260,7 @@ def test_fan_out_two_pipelines_over_shared_raw_produce_cases_and_detail(tmp_path
     )
     p_products.run()
 
+    _prepare_gold_detail_table(tmp_path, "subject", "products")
     detail_ingest_silver_to_gold(
         med,
         _WIDE_CASES,
@@ -196,11 +286,74 @@ def test_fan_out_two_pipelines_over_shared_raw_produce_cases_and_detail(tmp_path
     assert set(products_gold["case_id"]).issubset(known_case_ids)
 
 
+def _prepare_demo_fan_out_gold_tables(tmp_path) -> None:
+    # pipelines.demo_fan_out.main's raw/silver AccumulateByRun writes and its
+    # two gold Refresh() writes all need their tables to already exist
+    # (#323/#324); shapes lifted straight off the demo's own CSV header,
+    # CaseSchema, AccumulateByRun's stamps, and Unpivot's output columns. The
+    # demo's product columns run product_1..product_10 -- distinct from this
+    # module's own smaller PRODUCT_COLS fixture constant.
+    demo_product_cols = [f"product_{i}" for i in range(1, 11)]
+    _prepare_table(
+        tmp_path,
+        "wide_cases",
+        "raw",
+        "wide_cases",
+        [
+            "case_ref_no",
+            "adviser",
+            "activity_date",
+            "amount",
+            *demo_product_cols,
+            "logical_run_id",
+            "load_date",
+        ],
+    )
+    _prepare_table(
+        tmp_path,
+        "wide_cases",
+        "silver",
+        "cases",
+        [
+            "case_ref",
+            "adviser",
+            "activity_date",
+            "amount",
+            "logical_run_id",
+            "load_date",
+        ],
+    )
+    _prepare_table(
+        tmp_path,
+        "wide_cases",
+        "silver",
+        "case_products",
+        ["case_ref", *demo_product_cols, "logical_run_id", "load_date"],
+    )
+    _prepare_table(
+        tmp_path,
+        "wide_cases",
+        "gold",
+        "cases",
+        [
+            "case_ref",
+            "adviser",
+            "activity_date",
+            "amount",
+            "logical_run_id",
+            "load_date",
+            "case_id",
+        ],
+    )
+    _prepare_gold_detail_table(tmp_path, "wide_cases", "case_products")
+
+
 def test_demo_fan_out_runs_end_to_end(tmp_path):
     # Smoke test: the demo pipeline runs without error and produces both
     # cases and case_products gold tables from the bundled wide CSV.
     from pipelines.demo_fan_out import main
 
+    _prepare_demo_fan_out_gold_tables(tmp_path)
     main(str(tmp_path))
 
     med = medallion(StoreRegistry(tmp_path), "wide_cases")
@@ -222,6 +375,7 @@ def test_demo_fan_out_is_runnable_as_a_module(tmp_path):
     import sys
     from pathlib import Path as P
 
+    _prepare_demo_fan_out_gold_tables(tmp_path)
     result = subprocess.run(
         [sys.executable, "-m", "pipelines.demo_fan_out", str(tmp_path)],
         capture_output=True,

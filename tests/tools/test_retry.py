@@ -359,7 +359,11 @@ def test_retry_passes_a_chunked_load_through_to_a_writer_that_takes_one(tmp_path
     import sqlite3
 
     from framework.io.writers import SqliteInsertOrIgnoreWriter, supports_chunk_writes
+    from tests.framework_testing import create_table
 
+    create_table(
+        tmp_path / "raw.db", "feed", Dataset.from_pandas(pd.DataFrame({"id": [0]}))
+    )
     inner = SqliteInsertOrIgnoreWriter(tmp_path / "raw.db", "feed")
     writer = RetryingWriter(inner, RetryPolicy(attempts=2, retry_on=(OSError,)))
     assert supports_chunk_writes(writer) is True

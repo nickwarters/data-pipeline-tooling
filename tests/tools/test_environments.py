@@ -10,9 +10,13 @@ from pathlib import Path
 
 import pytest
 
+from framework.io.writers import require_declared_tables_enabled
 from tools.environments import (
     DEFAULT_ENV,
+    activate_environment,
+    base_dir_for,
     known_environments,
+    require_declared_tables,
     resolve_base_dir,
 )
 
@@ -76,3 +80,71 @@ def test_known_environments_lists_the_registered_names():
 def test_returns_a_path_object(tmp_path, monkeypatch):
     monkeypatch.setenv("PIPELINE_DATA_DIR_PROD", str(tmp_path))
     assert isinstance(resolve_base_dir("prod"), Path)
+
+
+def test_resolving_dev_activates_its_require_declared_tables_guard(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("PIPELINE_DATA_DIR_DEV", str(tmp_path))
+    from framework.io.writers import set_require_declared_tables
+
+    set_require_declared_tables(False)
+    resolve_base_dir("dev")
+    assert require_declared_tables_enabled() is True
+
+
+def test_resolving_prod_leaves_the_guard_off_during_the_rollout(tmp_path, monkeypatch):
+    # prod flips only once an operator has run `schema diff --env prod` clean;
+    # until then resolving it must actively turn the guard *off*, not merely
+    # leave whatever the last resolved environment set.
+    monkeypatch.setenv("PIPELINE_DATA_DIR_PROD", str(tmp_path))
+    from framework.io.writers import set_require_declared_tables
+
+    set_require_declared_tables(True)
+    resolve_base_dir("prod")
+    assert require_declared_tables_enabled() is False
+
+
+def test_an_explicit_base_dir_override_still_activates_the_environment(tmp_path):
+    # The hole a resolve-time-only side effect leaves: `--base-dir` supplies
+    # the root directly, but the run is still *in* an environment, and whether
+    # a Writer may create an undeclared table is that environment's decision.
+    from framework.io.writers import set_require_declared_tables
+
+    set_require_declared_tables(False)
+    assert base_dir_for("dev", override=tmp_path / "elsewhere") == (
+        tmp_path / "elsewhere"
+    )
+    assert require_declared_tables_enabled() is True
+
+
+def test_an_override_resolves_no_root_so_an_unconfigured_env_still_works(monkeypatch):
+    # prod has no fallback, so resolving its root would raise -- but an
+    # explicit base_dir needs no root resolved, and must keep working.
+    monkeypatch.delenv("PIPELINE_DATA_DIR_PROD", raising=False)
+    assert base_dir_for("prod", override="/share/prod") == Path("/share/prod")
+    assert require_declared_tables_enabled() is False
+
+
+def test_activate_environment_applies_the_policy_without_resolving_a_root(monkeypatch):
+    monkeypatch.delenv("PIPELINE_DATA_DIR_DEV", raising=False)
+    from framework.io.writers import set_require_declared_tables
+
+    set_require_declared_tables(False)
+    activate_environment("dev")  # no chdir, no configured root: still fine
+    assert require_declared_tables_enabled() is True
+
+
+def test_require_declared_tables_is_a_pure_query_with_no_side_effect():
+    from framework.io.writers import set_require_declared_tables
+
+    set_require_declared_tables(False)
+    assert require_declared_tables("dev") is True
+    assert require_declared_tables("prod") is False
+    assert require_declared_tables_enabled() is False  # reading changed nothing
+
+
+def test_an_unknown_environment_is_refused_even_with_an_explicit_base_dir():
+    with pytest.raises(ValueError) as excinfo:
+        base_dir_for("staging", override="/tmp/anywhere")
+    assert "staging" in str(excinfo.value)

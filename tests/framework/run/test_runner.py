@@ -19,6 +19,7 @@ from framework.run.runner import (
     UnknownPipelineError,
     run_pipeline,
 )
+from tests.framework_testing import create_table
 from tools.medallion import medallion
 from tools.observability import timestamps
 from tools.observability.run_log import RunLog
@@ -276,7 +277,23 @@ def test_run_pipeline_passes_params_to_handler_and_records_safe_diagnostics(tmp_
     }
 
 
+def _seed_accumulate_table(tmp_path, table: str, columns: tuple[str, ...]) -> None:
+    """Mint a migrated table for a ``gold.writer(table,
+    AccumulateByRun.from_context(...))`` write, shaped for its stamped
+    run-identity columns."""
+    frame = pd.DataFrame(
+        {
+            **{c: [] for c in columns},
+            "logical_run_id": [],
+            "pipeline_run_id": [],
+            "load_date": [],
+        }
+    )
+    create_table(tmp_path / "cases" / "gold.db", table, Dataset.from_pandas(frame))
+
+
 def test_runner_context_correlates_logs_registry_and_accumulated_rows(tmp_path):
+    _seed_accumulate_table(tmp_path, "selection_pool", ("case_ref",))
     runner = PipelineRunner()
 
     def handler(context):
@@ -313,6 +330,8 @@ def test_bare_nested_run_hops_share_one_pipeline_run_id(tmp_path):
     # threaded) must still correlate: every hop's run-log records and the rows it
     # writes carry the one attempt-level pipeline_run_id, not a fresh id per hop
     # that would orphan the step records from the run summary and the data.
+    _seed_accumulate_table(tmp_path, "raw_pool", ("case_ref",))
+    _seed_accumulate_table(tmp_path, "silver_pool", ("case_ref",))
     runner = PipelineRunner()
 
     def handler(context):
@@ -356,6 +375,7 @@ def test_runner_redrives_a_business_run_under_an_explicit_logical_run_id(tmp_pat
     # Re-driving a business run: two distinct executions sharing one
     # logical_run_id must replace the same rows (idempotent), each traceable by
     # its own pipeline_run_id.
+    _seed_accumulate_table(tmp_path, "selection_pool", ("case_ref",))
     runner = PipelineRunner()
 
     def handler(context):

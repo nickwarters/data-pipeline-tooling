@@ -7,6 +7,7 @@ from framework.core.dataset import Dataset
 from framework.io.strategy import AccumulateByRun
 from framework.run.builder import Pipeline
 from framework.run.run_context import RunContext
+from tests.framework_testing import create_table
 from tools.orchestration import ForEach, ForEachPipelineError
 from tools.store import Store
 
@@ -212,6 +213,22 @@ def test_for_each_passes_per_item_context_with_derived_logical_run_id():
 
 def test_for_each_context_supports_per_item_accumulate_by_run_writes(tmp_path):
     store = Store(tmp_path / "cases.db")
+    # AccumulateByRunWriter requires its target to already exist (#324); each
+    # item's own AccumulateByRun.from_context also stamps pipeline_run_id.
+    create_table(
+        tmp_path / "cases.db",
+        "selection_pool",
+        Dataset.from_pandas(
+            pd.DataFrame(
+                {
+                    "value": [],
+                    "logical_run_id": [],
+                    "pipeline_run_id": [],
+                    "load_date": [],
+                }
+            )
+        ),
+    )
     parent = RunContext(logical_run_id="selection:2026-06-09", load_date="2026-06-09")
 
     def logical_run_id(item: str, index: int, context: RunContext) -> str:

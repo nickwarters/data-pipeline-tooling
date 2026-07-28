@@ -17,6 +17,7 @@ import pytest
 from framework.core import Length, OneOf, Pattern, RowCheck, Unique, row_checks
 from framework.core.dataset import Dataset
 from framework.transform.quarantine import SchemaValueRulePartitioner
+from tests.framework_testing import create_table
 
 
 @dataclass
@@ -41,6 +42,24 @@ class ExposureCase:
 
 def _dataset(**cols) -> Dataset:
     return Dataset.from_pandas(pd.DataFrame(cols))
+
+
+def _seed_rejects_table(db_path, **row_columns) -> None:
+    """Mint a migrated ``rejects`` table for a ``QuarantineWriter`` under test.
+
+    Its shape is ``row_columns`` (the schema under test's own fields) plus the
+    framework-owned quarantine columns every ``QuarantineWriter`` target
+    carries (``tools.schema.QUARANTINE_COLUMNS``) -- since #324 the table must
+    already exist, even on a pipeline's very first run.
+    """
+    row_columns = {
+        **row_columns,
+        "failed_rule": [],
+        "logical_run_id": [],
+        "pipeline_run_id": [],
+        "load_date": [],
+    }
+    create_table(db_path, "rejects", Dataset.from_pandas(pd.DataFrame(row_columns)))
 
 
 def test_partitioner_routes_violating_rows_to_rejected():
@@ -337,6 +356,12 @@ def test_pipeline_quarantine_routes_rejected_rows_to_reject_writer(tmp_path):
 
     main_db = tmp_path / "main.db"
     reject_db = tmp_path / "rejects.db"
+    create_table(
+        main_db,
+        "feed",
+        Dataset.from_pandas(pd.DataFrame({"case_ref": [], "status": []})),
+    )
+    _seed_rejects_table(reject_db, case_ref=[], status=[])
 
     p = Pipeline("test-feed")
     r = p.read(CsvReader(csv_file), name="read")
@@ -378,6 +403,12 @@ def test_pipeline_quarantine_uses_run_context_identity(tmp_path):
 
     csv_file = tmp_path / "feed.csv"
     csv_file.write_text("case_ref,status\nBAD,open\n")
+    create_table(
+        tmp_path / "main.db",
+        "feed",
+        Dataset.from_pandas(pd.DataFrame({"case_ref": [], "status": []})),
+    )
+    _seed_rejects_table(tmp_path / "rejects.db", case_ref=[], status=[])
 
     context = RunContext(
         subject="cases",
@@ -426,6 +457,12 @@ def test_pipeline_quarantine_is_idempotent_on_rerun(tmp_path):
     csv_file.write_text("case_ref,status\nBAD,open\n")
 
     reject_db = tmp_path / "rejects.db"
+    create_table(
+        tmp_path / "main.db",
+        "feed",
+        Dataset.from_pandas(pd.DataFrame({"case_ref": [], "status": []})),
+    )
+    _seed_rejects_table(reject_db, case_ref=[], status=[])
 
     def run(logical_run_id: str):
         p = Pipeline("feed")
@@ -496,6 +533,12 @@ def test_run_log_quarantine_step_records_rows_quarantined(tmp_path):
     csv_file.write_text("case_ref,status\nBAD,open\n123456789,closed\n")
 
     log_file = tmp_path / "run.log"
+    create_table(
+        tmp_path / "main.db",
+        "feed",
+        Dataset.from_pandas(pd.DataFrame({"case_ref": [], "status": []})),
+    )
+    _seed_rejects_table(tmp_path / "rejects.db", case_ref=[], status=[])
     p = Pipeline("feed", run_log=RunLog(log_file))
     r = p.read(CsvReader(csv_file), name="read")
     q = p.quarantine(
