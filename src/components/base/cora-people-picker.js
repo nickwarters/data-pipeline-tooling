@@ -87,7 +87,7 @@ export function PeoplePicker(props) {
  * @param {(person: { loginName: string, displayName: string }) => void} onSelect
  * @returns {HTMLElement}
  */
-export function peoplePickerOption(person, label, onSelect) {
+function peoplePickerOption(person, label, onSelect) {
   return h(
     'li',
     {

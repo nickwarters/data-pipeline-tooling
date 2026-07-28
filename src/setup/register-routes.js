@@ -14,8 +14,6 @@ import { register as registerMyTeam } from '../routes/my-team.js';
  * @typedef {Object} AppContext
  * @property {import('../sharepoint-client.js').SharePointClient} client
  * @property {import('../services/save-queue.js').SaveQueue} saveQueue
- * @property {import('../sharepoint-client.js').CurrentUser} currentUser Legacy-route bridge; store-driven routes read `chrome.currentUser`.
- * @property {import('../services/permissions.js').Capabilities} capabilities Legacy-route bridge; store-driven routes read `chrome.permissions`.
  * @property {import('../core/chrome-state.js').ChromeState} chrome
  * @property {import('./resolve-eligible-case-types.js').CaseSource[]} caseSources
  * @property {import('./resolve-eligible-case-types.js').CaseSource[]} journeyCaseSources

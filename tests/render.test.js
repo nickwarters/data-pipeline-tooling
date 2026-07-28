@@ -1,7 +1,7 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { installDom, StubEl } from './_dom-stub.js';
+import { installDom } from './_dom-stub.js';
 
 installDom();
 
@@ -268,10 +268,10 @@ test('render: replacing a listener removes the old one (no leak)', () => {
   let b = 0;
   const fn1 = () => (a += 1);
   const fn2 = () => (b += 1);
-  render(root, h('div', {}, h('button', { onClick: fn1 }, 'go')));
+  render(root, h('div', {}, h('button', { onclick: fn1 }, 'go')));
   const btn = root.childNodes[0].childNodes[0];
 
-  render(root, h('div', {}, h('button', { onClick: fn2 }, 'go')));
+  render(root, h('div', {}, h('button', { onclick: fn2 }, 'go')));
   click(btn);
   assert.equal(a, 0, 'old handler no longer bound');
   assert.equal(b, 1, 'exactly the new handler fires');
@@ -281,11 +281,11 @@ test('render: a referentially-stable listener fires exactly once (no accumulatio
   const root = container();
   let calls = 0;
   const fn = () => (calls += 1);
-  render(root, h('div', {}, h('button', { onClick: fn }, 'go')));
+  render(root, h('div', {}, h('button', { onclick: fn }, 'go')));
   const btn = root.childNodes[0].childNodes[0];
   // Re-render several times with the same handler; it must not stack up.
-  render(root, h('div', {}, h('button', { onClick: fn }, 'go')));
-  render(root, h('div', {}, h('button', { onClick: fn }, 'go')));
+  render(root, h('div', {}, h('button', { onclick: fn }, 'go')));
+  render(root, h('div', {}, h('button', { onclick: fn }, 'go')));
   click(btn);
   assert.equal(calls, 1, 'one handler, fired once');
 });
@@ -294,35 +294,11 @@ test('render: a removed listener is unbound', () => {
   const root = container();
   let calls = 0;
   const fn = () => (calls += 1);
-  render(root, h('div', {}, h('button', { onClick: fn }, 'go')));
+  render(root, h('div', {}, h('button', { onclick: fn }, 'go')));
   const btn = root.childNodes[0].childNodes[0];
   render(root, h('div', {}, h('button', {}, 'go')));
   click(btn);
   assert.equal(calls, 0, 'handler gone after removal');
-});
-
-test('render: a component-callback property handler is reassigned then cleared', () => {
-  class Host extends StubEl {
-    constructor() {
-      super('cora-render-host');
-      /** @type {any} */
-      this.onCommit = null;
-    }
-  }
-  /** @type {any} */ (globalThis).customElements.define(
-    'cora-render-host',
-    Host
-  );
-  const root = container();
-  const a = () => {};
-  const b = () => {};
-  render(root, h('div', {}, h('cora-render-host', { onCommit: a })));
-  const host = root.childNodes[0].childNodes[0];
-  assert.equal(host.onCommit, a);
-  render(root, h('div', {}, h('cora-render-host', { onCommit: b })));
-  assert.equal(host.onCommit, b);
-  render(root, h('div', {}, h('cora-render-host', {})));
-  assert.equal(host.onCommit, null);
 });
 
 // ===== KEYED LIST: INSERT / REMOVE / REORDER =====

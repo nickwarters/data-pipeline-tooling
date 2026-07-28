@@ -11,7 +11,7 @@ import { filterActions } from '../../services/command-palette-store.js';
  * @param {() => void} open
  * @returns {() => void}
  */
-export function bindCommandPaletteShortcut(target, open) {
+function bindCommandPaletteShortcut(target, open) {
   /** @param {any} event */
   const onKeydown = (event) => {
     if (event.key === 'k' && (event.ctrlKey || event.metaKey)) {
@@ -29,7 +29,7 @@ export function bindCommandPaletteShortcut(target, open) {
  * @param {(action: {type: string, [key: string]: any}) => void} dispatch
  * @returns {HTMLElement | HTMLElement[]}
  */
-export function CommandPalette(state, dispatch) {
+function CommandPalette(state, dispatch) {
   if (!state.isOpen) return [];
   const filtered = filterActions(state.query, state.actions);
 

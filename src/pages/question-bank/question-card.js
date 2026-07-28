@@ -222,14 +222,14 @@ function addOption(questionId, dispatch) {
 }
 
 /** @param {string} label @param {HTMLElement} control */
-export function questionCardField(label, control) {
+function questionCardField(label, control) {
   if (!control.getAttribute?.('aria-label'))
     control.setAttribute?.('aria-label', label);
   return h('div', { className: 'field' }, h('label', {}, label), control);
 }
 
 /** @param {string} value @param {(value: string) => void} onChange */
-export function questionCardText(value, onChange) {
+function questionCardText(value, onChange) {
   return h('input', {
     className: 'field-input',
     value,
@@ -238,7 +238,7 @@ export function questionCardText(value, onChange) {
 }
 
 /** @param {string[]} options @param {string} value @param {(value: string) => void} onChange */
-export function questionCardSelect(options, value, onChange) {
+function questionCardSelect(options, value, onChange) {
   return h(
     'select',
     {

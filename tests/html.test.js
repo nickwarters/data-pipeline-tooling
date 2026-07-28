@@ -46,26 +46,6 @@ _doc.createElement = (/** @type {string} */ tag) =>
 const { h, unsafeHTML, applyProp, removeProp, getProps, setProps } =
   await import('../src/lib/html.js');
 
-/**
- * Run the exact microtasks scheduled by h() without guessing how many event-loop
- * turns are needed. The queue is restored before the assertion runs.
- * @param {() => void} action
- */
-function runDeferredElementChecks(action) {
-  const originalQueueMicrotask = globalThis.queueMicrotask;
-  /** @type {Function[]} */
-  const queued = [];
-  globalThis.queueMicrotask = (callback) => {
-    queued.push(callback);
-  };
-  try {
-    action();
-    while (queued.length > 0) queued.shift()?.();
-  } finally {
-    globalThis.queueMicrotask = originalQueueMicrotask;
-  }
-}
-
 // ===== TESTS =====
 
 test('h: a <select> reflects a value that matches an option appended after it', () => {
@@ -139,116 +119,23 @@ test('h: non-button tags are not given a type', () => {
   assert.equal(/** @type {any} */ (div).getAttribute('type'), null);
 });
 
-// ===== DEV-MODE WARNING FOR UNREGISTERED cora-* ELEMENTS =====
+// ===== PROP NAMING =====
 
-test('h: warns once when a cora-* tag has no registered custom element', () => {
-  /** @type {any[][]} */
-  const calls = [];
-  const originalWarn = console.warn;
-  console.warn = (/** @type {any[]} */ ...args) => calls.push(args);
-  try {
-    runDeferredElementChecks(() => h('cora-nonexistent-element', {}));
-  } finally {
-    console.warn = originalWarn;
-  }
-  assert.equal(calls.length, 1);
-  assert.match(calls[0][0], /<cora-nonexistent-element>/);
-  assert.match(calls[0][0], /is not defined/);
-});
-
-test('h: warns exactly once per unknown tag even when rendered repeatedly', () => {
-  /** @type {any[][]} */
-  const calls = [];
-  const originalWarn = console.warn;
-  console.warn = (/** @type {any[]} */ ...args) => calls.push(args);
-  try {
-    runDeferredElementChecks(() => {
-      h('cora-repeatedly-missing', {});
-      h('cora-repeatedly-missing', {});
-      h('cora-repeatedly-missing', {});
-    });
-  } finally {
-    console.warn = originalWarn;
-  }
-  assert.equal(calls.length, 1);
-});
-
-test('h: does not warn for a registered cora-* custom element', () => {
-  /** @type {any} */ (globalThis).customElements.define(
-    'cora-registered-fixture',
-    class extends /** @type {any} */ (globalThis).HTMLElement {}
+test('h: throws on a camelCase on[A-Z] prop, which is a component callback', () => {
+  // Reaching an element, `onAnswer` would bind a listener for an "answer" event
+  // nothing dispatches — silent no-op. Component callbacks are read off a view's
+  // own props object and never handed to h().
+  assert.throws(
+    () => h('div', { onAnswer: () => {} }),
+    /does not accept the component callback prop "onAnswer"/
   );
-  /** @type {any[][]} */
-  const calls = [];
-  const originalWarn = console.warn;
-  console.warn = (/** @type {any[]} */ ...args) => calls.push(args);
-  try {
-    runDeferredElementChecks(() => h('cora-registered-fixture', {}));
-  } finally {
-    console.warn = originalWarn;
-  }
-  assert.equal(calls.length, 0);
 });
 
-test('h: does not warn for non cora-* tags, even if unregistered', () => {
-  /** @type {any[][]} */
-  const calls = [];
-  const originalWarn = console.warn;
-  console.warn = (/** @type {any[]} */ ...args) => calls.push(args);
-  try {
-    runDeferredElementChecks(() => {
-      h('div', {});
-      h('some-other-widget', {});
-    });
-  } finally {
-    console.warn = originalWarn;
-  }
-  assert.equal(calls.length, 0);
-});
-
-test('h: a cora-* element registered before the microtask check runs is not warned about', () => {
-  /** @type {any[][]} */
-  const calls = [];
-  const originalWarn = console.warn;
-  console.warn = (/** @type {any[]} */ ...args) => calls.push(args);
-  try {
-    runDeferredElementChecks(() => {
-      h('cora-registers-late', {});
-      // Simulate the defining module finishing registration in the same tick,
-      // before the deferred check fires.
-      /** @type {any} */ (globalThis).customElements.define(
-        'cora-registers-late',
-        class extends /** @type {any} */ (globalThis).HTMLElement {}
-      );
-    });
-  } finally {
-    console.warn = originalWarn;
-  }
-  assert.equal(calls.length, 0);
-});
-
-test('h: a camelCase on* prop matching a declared element property is set as a callback, not a listener', () => {
-  class WithCallback extends StubEl {
-    constructor() {
-      super('cora-cb-host');
-      /** @type {(fn: () => void) => void} */
-      this.onCommit = (fn) => fn();
-    }
-  }
-  /** @type {any} */ (globalThis).customElements.define(
-    'cora-cb-host',
-    WithCallback
-  );
-  const sink = () => {};
-  const el = /** @type {any} */ (h('cora-cb-host', { onCommit: sink }));
-  assert.equal(el.onCommit, sink);
-  assert.equal(el._listeners.commit, undefined);
-});
-
-test('h: a camelCase on* prop with no matching property still becomes a listener', () => {
-  const fn = () => {};
-  const el = /** @type {any} */ (h('div', { onClick: fn }));
-  assert.deepEqual(el._listeners.click, [fn]);
+test('h: lowercase on* props still become listeners', () => {
+  let calls = 0;
+  const el = /** @type {any} */ (h('button', { onclick: () => (calls += 1) }));
+  el.dispatchEvent(new /** @type {any} */ (globalThis).CustomEvent('click'));
+  assert.equal(calls, 1);
 });
 
 // ===== RECONCILER SUPPORT: getProps / setProps / applyProp / removeProp =====
@@ -299,29 +186,10 @@ test('removeProp: innerHTML is a no-op', () => {
 test('removeProp: unbinds an addEventListener-style handler', () => {
   let calls = 0;
   const fn = () => (calls += 1);
-  const el = /** @type {any} */ (h('button', { onClick: fn }));
-  removeProp(el, 'onClick', fn);
+  const el = /** @type {any} */ (h('button', { onclick: fn }));
+  removeProp(el, 'onclick', fn);
   el.dispatchEvent(new /** @type {any} */ (globalThis).CustomEvent('click'));
   assert.equal(calls, 0, 'handler no longer fires after removal');
-});
-
-test('removeProp: clears an on[A-Z] callback property', () => {
-  class Host extends StubEl {
-    constructor() {
-      super('cora-remove-prop-host');
-      /** @type {any} */
-      this.onCommit = () => {};
-    }
-  }
-  /** @type {any} */ (globalThis).customElements.define(
-    'cora-remove-prop-host',
-    Host
-  );
-  const el = /** @type {any} */ (
-    h('cora-remove-prop-host', { onCommit: () => {} })
-  );
-  removeProp(el, 'onCommit', el.onCommit);
-  assert.equal(el.onCommit, null);
 });
 
 test('removeProp: clears className', () => {

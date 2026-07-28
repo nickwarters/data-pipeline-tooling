@@ -17,9 +17,9 @@
  *
  * Two halves, one rule — style `cora-*` by class, never by element type:
  *
- *  1. No `createElement('cora-…')` / `h('cora-…')` under `src/`. `h()` warns at
- *     runtime for an unregistered `cora-*` tag (see `warnIfUnregisteredCoraElement`
- *     in `src/lib/html.js`); this makes it a build-time failure instead.
+ *  1. No `createElement('cora-…')` / `h('cora-…')` under `src/`. Such a tag
+ *     builds an inert unknown element that no stylesheet reaches, and nothing at
+ *     runtime says so; this test is the only thing that catches it.
  *  2. No element-type `cora-*` selector in `src/styles/**.css`.
  *
  * Rule 2 is deliberately narrow, because a sloppy regex here would be worse

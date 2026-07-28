@@ -74,12 +74,12 @@ export function AppealSection(props) {
 }
 
 /** @param {AppealProps} props @returns {Appeal[]} */
-export function appealsFrom(props) {
+function appealsFrom(props) {
   return props.caseRow?.appeals ?? [];
 }
 
 /** @returns {HTMLElement} */
-export function renderAppealEmpty() {
+function renderAppealEmpty() {
   return EmptyState('No Appeal has been raised.', {
     className: 'cora-appeal-empty',
   });
@@ -89,7 +89,7 @@ export function renderAppealEmpty() {
  * @param {Appeal} appeal
  * @returns {HTMLElement}
  */
-export function renderAppealItem(appeal) {
+function renderAppealItem(appeal) {
   const children = [];
   children.push(
     h('p', { className: 'cora-appeal-state' }, `State: ${appeal.state}`)
@@ -124,7 +124,7 @@ export function renderAppealItem(appeal) {
  * @param {AppealProps} props
  * @returns {HTMLElement}
  */
-export function renderAppealForm(props) {
+function renderAppealForm(props) {
   const rationale = /** @type {HTMLTextAreaElement} */ (
     buildCaptureControl(
       { key: 'rationale', type: 'textarea', label: 'Appeal rationale' },
@@ -228,7 +228,7 @@ export function renderAppealForm(props) {
  * @param {Array<{ checked?: boolean, value?: string }>} checkboxes
  * @param {HTMLElement} errorEl
  */
-export function submitAppeal(props, rationaleEl, checkboxes, errorEl) {
+function submitAppeal(props, rationaleEl, checkboxes, errorEl) {
   const rationale = (rationaleEl.value ?? '').trim();
   if (!rationale) {
     errorEl.hidden = false;

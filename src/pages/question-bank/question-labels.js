@@ -2,7 +2,7 @@
 import { h } from '../../lib/html.js';
 import { EmptyState } from '../../lib/empty-state.js';
 
-export const DEFAULT_LABEL_COLOR = '#2563eb';
+const DEFAULT_LABEL_COLOR = '#2563eb';
 
 /** @param {string} name @param {string[]} existingIds */
 export function makeLabelId(name, existingIds) {

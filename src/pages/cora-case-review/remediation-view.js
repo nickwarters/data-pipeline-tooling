@@ -142,7 +142,7 @@ function buildItemContent(props, q) {
  * @param {HTMLElement} li
  * @param {QuestionDefinition} q
  */
-export function renderRemediationActions(props, li, q) {
+function renderRemediationActions(props, li, q) {
   const answer = props.answers[q.id];
   const selectedIds = new Set(
     (answer?.remediationActions ?? []).map((action) => action.id)

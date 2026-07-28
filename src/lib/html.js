@@ -13,42 +13,6 @@ export function unsafeHTML(html) {
 }
 
 /**
- * Tags for which an undefined-custom-element check has already been
- * scheduled, so a given `cora-*` tag only ever warns once no matter how many
- * times `h()` is called for it.
- * @type {Set<string>}
- */
-const scheduledUndefinedElementChecks = new Set();
-
-/**
- * Dev-mode guard against the most junior-hostile failure mode in the repo:
- * rendering `h('cora-x', ...)` without a side-effect import of `cora-x.js`
- * creates an inert, unregistered element that fails silently. Warn once per
- * tag when that happens.
- *
- * The check is deferred to a microtask rather than run synchronously,
- * because `h()` can legitimately run before the module that defines the
- * element finishes `customElements.define()` in some import orders (e.g. a
- * component building its own children during its own module evaluation). By
- * the time the microtask runs, registration from the current synchronous
- * work has had a chance to complete, so only elements that are still
- * unregistered at that point are flagged.
- * @param {string} tag
- */
-function warnIfUnregisteredCoraElement(tag) {
-  if (!tag.startsWith('cora-')) return;
-  if (scheduledUndefinedElementChecks.has(tag)) return;
-  scheduledUndefinedElementChecks.add(tag);
-  queueMicrotask(() => {
-    if (customElements.get(tag) === undefined) {
-      console.warn(
-        `<${tag}> is not defined — missing a side-effect import of its module?`
-      );
-    }
-  });
-}
-
-/**
  * Records the raw props object each `h()`-built element was created with, so
  * `render()` (src/core/render.js) can diff the *authored* props of the previous
  * and next trees rather than trying to read them back out of the live DOM
@@ -80,28 +44,25 @@ export function setProps(el, props) {
 }
 
 /**
- * Prop-naming contract:
+ * Prop naming, in two rules:
  *
- *   onclick / oninput / onchange / onkeydown …  → DOM events (addEventListener)
- *   onCommit / onAnswer / onSort …              → component callback properties
- *   className (never `class`)                   → the class attribute
+ *   onclick / oninput / onchange …  → DOM events, via addEventListener
+ *   className (never `class`)       → the class attribute
  *
- * The casing is the signal. A camelCase `on[A-Z]` key that matches a property
- * the element declares is assigned as a property and NEVER becomes a listener —
- * so `onClick` on a cora-* host that declares `onClick` silently attaches
- * nothing. Use lowercase for anything the browser dispatches, and reserve
- * camelCase for the props-down/callbacks-up component API.
- *
- * `tests/prop-naming-contract.test.js` enforces both halves.
+ * camelCase `on[A-Z]` keys are the *component* callback convention (`onAnswer`,
+ * `onSort`): a view function reads them off its own props object, so they never
+ * reach an element. Handing one to `h()` is therefore always a mistake — it
+ * would bind a listener for an event nothing dispatches — and `applyProp`
+ * throws rather than letting it fail silently.
  */
 
 /**
  * Apply one authored prop to an element, mapping it to the right DOM channel
- * (event listener, callback property, className, value/other property, or a
- * plain attribute). This is the single source of truth for that mapping: `h()`
- * uses it at build time and `render()` reuses it when a prop changes, so the two
- * can never drift. `value` is applied directly here; `h()` defers *when* it
- * calls this (see below), not *how*.
+ * (event listener, className, value/other property, or a plain attribute).
+ * This is the single source of truth for that mapping: `h()` uses it at build
+ * time and `render()` reuses it when a prop changes, so the two can never drift.
+ * `value` is applied directly here; `h()` defers *when* it calls this (see
+ * below), not *how*.
  * @param {any} el
  * @param {string} key
  * @param {any} value
@@ -113,18 +74,12 @@ export function applyProp(el, key, value) {
     );
   }
   if (key.startsWith('on') && typeof value === 'function') {
-    // Component callback props (props-down / callbacks-up):
-    // a camelCase `on[A-Z]…` key that matches a property the element declares
-    // (e.g. a custom-element shell's `onCommit` field) is a plain callback,
-    // assigned as a property. Native handler IDL attributes are all-lowercase
-    // (`onclick`), so they never match `/^on[A-Z]/` + `in el` and keep flowing
-    // to addEventListener, as do camelCase keys on plain elements (`onClick` on
-    // a <button>).
-    if (/^on[A-Z]/.test(key) && key in el) {
-      el[key] = value;
-    } else {
-      el.addEventListener(key.slice(2).toLowerCase(), value);
+    if (/^on[A-Z]/.test(key)) {
+      throw new Error(
+        `h() does not accept the component callback prop "${key}"; DOM events are lowercase (${key.toLowerCase()})`
+      );
     }
+    el.addEventListener(key.slice(2).toLowerCase(), value);
   } else if (key === 'class' || key === 'className') {
     el.className = value;
   } else if (key === 'value' && 'value' in el) {
@@ -150,11 +105,7 @@ export function applyProp(el, key, value) {
 export function removeProp(el, key, prevValue) {
   if (key === 'innerHTML') return;
   if (key.startsWith('on') && typeof prevValue === 'function') {
-    if (/^on[A-Z]/.test(key) && key in el) {
-      el[key] = null;
-    } else {
-      el.removeEventListener(key.slice(2).toLowerCase(), prevValue);
-    }
+    el.removeEventListener(key.slice(2).toLowerCase(), prevValue);
   } else if (key === 'class' || key === 'className') {
     el.className = '';
   } else if (key === 'value' && 'value' in el) {
@@ -182,7 +133,6 @@ export function removeProp(el, key, prevValue) {
  * @returns {HTMLElement}
  */
 export function h(tag, props = {}, ...children) {
-  warnIfUnregisteredCoraElement(tag);
   const el = document.createElement(tag);
 
   // SharePoint hosts the whole app inside a page-wide <form>, so a <button>

@@ -63,7 +63,7 @@ function resetInteraction(state) {
  * @param {{ type: string, [key: string]: any }} action
  * @returns {CommandPaletteState}
  */
-export function commandPaletteReducer(state, action) {
+function commandPaletteReducer(state, action) {
   if (action.type === 'palette/register') {
     const index = state.actions.findIndex(
       (item) => item.id === action.action.id
@@ -136,10 +136,4 @@ export function register(action) {
 /** @param {string} id */
 export function deregister(id) {
   commandPaletteStore.dispatch({ type: 'palette/deregister', id });
-}
-export function openPalette() {
-  commandPaletteStore.dispatch({ type: 'palette/open' });
-}
-export function closePalette() {
-  commandPaletteStore.dispatch({ type: 'palette/close' });
 }

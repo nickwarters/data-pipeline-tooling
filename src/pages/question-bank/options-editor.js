@@ -61,7 +61,7 @@ export function effectiveOptions(question, outcomeOptions) {
  * @param {boolean} disabled
  * @param {(id: string) => void} onChange
  */
-export function optionOutcomeSelect(value, outcomeOptions, disabled, onChange) {
+function optionOutcomeSelect(value, outcomeOptions, disabled, onChange) {
   return h(
     'select',
     {

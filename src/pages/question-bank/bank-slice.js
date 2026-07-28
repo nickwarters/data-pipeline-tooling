@@ -121,7 +121,7 @@ function isEdited(state, slug) {
  * @param {BankLoadFailure[]} [failures]
  * @returns {QuestionBankRouteState}
  */
-export function banksLoaded(state, banks, failures = []) {
+function banksLoaded(state, banks, failures = []) {
   return {
     ...state,
     cases: structuredClone(banks),
@@ -196,7 +196,7 @@ export function banksLoaded(state, banks, failures = []) {
  * @param {BankLoadFailure[]} [failures]
  * @returns {QuestionBankRouteState}
  */
-export function banksRefreshed(state, banks, failures = []) {
+function banksRefreshed(state, banks, failures = []) {
   /** @type {Record<string, QuestionBank>} */
   const cases = {};
   for (const slug of Object.keys(banks)) {
@@ -245,7 +245,7 @@ export function banksRefreshed(state, banks, failures = []) {
  * @param {BankLoadFailure[]} [failures]
  * @returns {QuestionBankRouteState}
  */
-export function banksRecovered(state, banks, failures = []) {
+function banksRecovered(state, banks, failures = []) {
   return banksRefreshed(state, { ...state.baseline, ...banks }, failures);
 }
 

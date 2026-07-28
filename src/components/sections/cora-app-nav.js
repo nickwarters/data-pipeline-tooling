@@ -13,7 +13,7 @@ import { h } from '../../lib/html.js';
  * @param {NavItemRef[]} navItems
  * @returns {HTMLElement}
  */
-export function AppNavItem(label, href, navItems) {
+function AppNavItem(label, href, navItems) {
   const a = h(
     'a',
     { href, className: 'cora-app-nav-item', role: 'listitem' },

@@ -78,7 +78,7 @@ const APPEALS_TABLE = 'appeals';
  */
 
 /** @param {DashboardRouteState} route @param {(action: any) => any} dispatch */
-export function reviewerCasesView(route, dispatch) {
+function reviewerCasesView(route, dispatch) {
   const text = route.reviewerFilterText.toLowerCase();
   const rows = route.reviewerCases.filter((row) => {
     if (
@@ -146,7 +146,7 @@ export function reviewerCasesView(route, dispatch) {
 }
 
 /** @param {ReturnType<typeof initialActionCentreState>} state @param {boolean} value */
-export function actionCentreScopeState(state, value) {
+function actionCentreScopeState(state, value) {
   return {
     ...state,
     needsActionNow: value,

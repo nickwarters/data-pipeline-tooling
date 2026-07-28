@@ -95,7 +95,7 @@ export function moveQuestion(questions, question, direction) {
  * @param {-1 | 1} direction
  * @returns {number}
  */
-export function adjacentGroupQuestionIndex(questions, question, direction) {
+function adjacentGroupQuestionIndex(questions, question, direction) {
   const from = questions.indexOf(/** @type {Groupable} */ (question));
   if (from < 0) return -1;
 

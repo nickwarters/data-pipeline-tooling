@@ -21,7 +21,7 @@ import {
 const LONG_OPTION_THRESHOLD = 40;
 
 /** @param {QuestionDefinition} question */
-export function questionGroupOf(question) {
+function questionGroupOf(question) {
   return question.questionGroup || 'General';
 }
 

@@ -94,7 +94,7 @@ export function OutcomeOptionsEditor(props) {
  * @param {string} label
  * @param {HTMLElement} control
  */
-export function outcomeField(label, control) {
+function outcomeField(label, control) {
   return h(
     'label',
     { className: 'outcome-option-field' },
@@ -108,7 +108,7 @@ export function outcomeField(label, control) {
  * @param {import('../../sharepoint-client.js').OutcomeOption[]} outcomeOptions
  * @param {(id: string) => void} onChange
  */
-export function outcomeOptionsSelect(value, outcomeOptions, onChange) {
+function outcomeOptionsSelect(value, outcomeOptions, onChange) {
   return h(
     'select',
     {

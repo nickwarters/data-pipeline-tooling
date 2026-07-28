@@ -76,7 +76,7 @@ function renderCurrentOutcome(props) {
  * @param {AmendedOutcome} amendment
  * @returns {HTMLElement}
  */
-export function renderAmendmentRecord(amendment) {
+function renderAmendmentRecord(amendment) {
   return h(
     'section',
     { className: 'cora-amend-outcome-record' },
@@ -99,7 +99,7 @@ export function renderAmendmentRecord(amendment) {
  * @param {AmendOutcomeProps} props
  * @returns {HTMLElement}
  */
-export function renderAmendForm(props) {
+function renderAmendForm(props) {
   const existing = props.caseRow?.amendedOutcome ?? null;
 
   const select = /** @type {HTMLSelectElement} */ (

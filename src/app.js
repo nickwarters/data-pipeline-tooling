@@ -88,8 +88,6 @@ async function boot() {
   registerRoutes(router, {
     client,
     saveQueue,
-    currentUser,
-    capabilities,
     chrome,
     caseSources,
     journeyCaseSources,

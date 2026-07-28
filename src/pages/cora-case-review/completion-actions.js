@@ -33,7 +33,7 @@ export function readyToClose(input) {
 }
 
 /** The gate's wording, shown wherever the completion control appears. */
-export const REMEDIATION_GATE_REASON =
+const REMEDIATION_GATE_REASON =
   'Record an outcome for every remediation on the Remediation tab — with the details or justification required — before this Case can be completed.';
 
 /**

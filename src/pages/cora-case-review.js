@@ -918,9 +918,8 @@ export function createRouteSlice(params, context) {
         saveQueue: context.saveQueue,
         caseId: params.id,
         caseType: params.caseType ?? null,
-        currentUserId:
-          context.chrome.currentUser?.id ?? context.currentUser?.id ?? '',
-        capabilities: context.chrome.permissions ?? context.capabilities,
+        currentUserId: context.chrome.currentUser?.id ?? '',
+        capabilities: context.chrome.permissions,
       });
       const loader = caseLoader;
       const disposeSaveStatus = observeSaveStatus(

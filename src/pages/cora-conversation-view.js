@@ -74,7 +74,7 @@ export function conversationPageView(state, tools, send) {
  * @param {import('../setup/register-routes.js').AppContext} context
  */
 export function createRouteSlice(params, context) {
-  const currentUser = context.chrome.currentUser ?? context.currentUser;
+  const currentUser = context.chrome.currentUser;
 
   /** @param {string} body @param {ConversationState} state */
   async function send(

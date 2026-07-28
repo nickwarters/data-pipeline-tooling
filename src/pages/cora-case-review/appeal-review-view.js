@@ -61,7 +61,7 @@ export function AppealReviewSection(props) {
  * @param {Appeal} appeal
  * @returns {HTMLElement}
  */
-export function renderAppealSummary(appeal) {
+function renderAppealSummary(appeal) {
   const children = [
     h('p', { className: 'cora-appeal-review-state' }, `State: ${appeal.state}`),
     h(
@@ -89,7 +89,7 @@ export function renderAppealSummary(appeal) {
  * @param {Appeal} appeal
  * @returns {HTMLElement}
  */
-export function renderResolveForm(props, appeal) {
+function renderResolveForm(props, appeal) {
   const agreeRadio = /** @type {HTMLInputElement} */ (
     /** @type {unknown} */ (
       h('input', {
@@ -215,7 +215,7 @@ export function renderResolveForm(props, appeal) {
  * @param {{ value?: string }} justificationEl
  * @param {HTMLElement} errorEl
  */
-export function submitAppealResolution(
+function submitAppealResolution(
   props,
   appeal,
   agreeRadio,
