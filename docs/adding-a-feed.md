@@ -49,6 +49,14 @@ pipelines/orders` imports `pipelines.orders.pipeline` and executes
 - **`gold_builder`** is a passthrough to start — reads silver, writes gold — with
   a `TODO` to build the assembly (it's per-feed and an open decision).
 
+> **Before the first run: declare and migrate.** `gold_builder`'s `Refresh()`
+> write (and any merge strategy you choose) needs its table to already exist —
+> creating one is a Migration's job, not a Writer's, so a fresh feed's first run
+> raises `MissingTableError` until you declare the feed's `TABLES` in
+> `schema.py` and run `python -m cli migrations make --feed orders` then
+> `python -m cli migrate --env dev` ([migrations.md](migrations.md)). `scaffold`
+> does not emit migrations yet.
+
 ### Recipe-first authoring, and how to diverge
 
 The first two hops are the same in every feed, so they have **one definition**:

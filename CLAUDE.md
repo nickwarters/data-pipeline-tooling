@@ -117,7 +117,13 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   `writer_for(db_path, table, busy_timeout_ms=...)` plus the optional file-side
   `apply_to_frame(frame, read_existing)`, so nothing outside
   `framework/io/strategy.py` branches on which strategy it was handed and a new
-  strategy is one class plus one export line), `Store` (namespace → file
+  strategy is one class plus one export line; a table's *existence* is a
+  Migration's job, not a Writer's — `Refresh` truncates (`DELETE FROM` +
+  insert, in one transaction) rather than dropping and recreating, and it and
+  the merge strategies (`UpsertStrategy`, `InsertOrIgnore`) raise
+  `MissingTableError` naming the `python -m cli migrate` fix instead of minting
+  a target no migration declared; the append-only Writers still create theirs
+  on first write, for now), `Store` (namespace → file
   factory minting `writer(table, strategy)` — a one-line delegation to
   `strategy.writer_for(...)` — / `reader(table)` over one logical database; **lives in the sibling
   `tools.store`, not `framework.io`** — where a feed lands is application

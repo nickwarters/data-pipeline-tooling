@@ -53,7 +53,21 @@ __all__ = [
     "AccumulateByRunWriter",
     "SqliteInsertOrIgnoreWriter",
     "SqliteInsertIfAbsentWriter",
+    "MissingTableError",
 ]
+
+
+class MissingTableError(LookupError):
+    """A Writer was pointed at a table nothing has created yet.
+
+    An infrastructure precondition, not a data fault: the rows were fine, the
+    landing site was never built (see :func:`_require_table`). Named — rather
+    than a bare ``LookupError`` — because callers have to tell it apart from an
+    unrelated lookup failure: it is the one condition an operator fixes by
+    running a command, and a rollout that gates on it (per-environment) must
+    catch exactly this and nothing else. It stays a ``LookupError`` subclass so
+    code already catching the broad builtin is unaffected.
+    """
 
 
 def _frame_for_strategy(
@@ -188,10 +202,12 @@ def _staged_merge(
     """Own a merge's whole shape: staging, target, commit boundary, teardown.
 
     The incoming rows are landed in a scratch staging table so the merge is one
-    set-based statement rather than a row-by-row loop, and the target is created
-    if it does not exist yet so the statement always has something to merge into.
-    The caller supplies only its merge statement — the commit boundary and the
-    cleanup are not theirs to get wrong.
+    set-based statement rather than a row-by-row loop; the target must already
+    exist (a migration's job now, not this call's -- see ``_require_table``),
+    so the statement always has something real to merge into rather than a
+    bare table this write minted for itself. The caller supplies only its
+    merge statement — the commit boundary and the cleanup are not theirs to
+    get wrong.
 
     Staging is dropped *after* the commit, as it was when each Writer did this
     for itself: a failed merge leaves the scratch table behind rather than
@@ -201,14 +217,13 @@ def _staged_merge(
     with _writing_connection(db_path, busy_timeout_ms) as con:
         staging = _STAGING_PREFIX + table
 
+        # Checked before staging is written, not after: a refusal should leave
+        # no scratch table behind, and pandas commits the staging write.
+        _require_table(con, db_path, table)
+
         # Land the incoming rows in the scratch table. This is pandas' own
         # transaction, committed by the time the merge statement runs.
         frame.to_sql(staging, con, if_exists="replace", index=False)
-
-        # Ensure the target exists before the merge references it: appending an
-        # empty frame creates the table when it is absent and is a no-op when it
-        # is already there.
-        frame.iloc[:0].to_sql(table, con, if_exists="append", index=False)
 
         yield _StagedMerge(
             con=con,
@@ -232,6 +247,54 @@ def _table_exists(con: sqlite3.Connection, table: str) -> bool:
     """
     rows = con.execute(f"PRAGMA table_info({quote_identifier(table)})").fetchall()
     return bool(rows)
+
+
+def _require_table(con: sqlite3.Connection, db_path: Path, table: str) -> None:
+    """Refuse to write into a table nothing has migrated into existence yet.
+
+    Since ADR 0015 a table's shape is a migration's job, not a Writer's: a
+    Writer that created one implicitly -- as ``if_exists="replace"`` /
+    ``"append"`` used to, for ``Refresh`` and the merge strategies
+    respectively -- would let a run silently paper over a missing migration,
+    and for ``Refresh`` specifically would let the very next
+    ``if_exists="replace"`` recreate a bare table, dropping whatever
+    index/constraint a migration had put there while the migration's ledger
+    row survives claiming it still applies. This module knows nothing of what
+    a migration *is* -- it only learns "this table must already exist" -- so
+    the error names the fix as text, not by importing the migrations machinery.
+
+    The message names the table two ways, because only one of them is always
+    right. ``<subject>/<layer>.db`` is the layout
+    ``tools.store.DirectoryStoreBackend`` lays namespaces out in, so under it
+    the subject and layer come straight off ``db_path`` itself rather than
+    being guessed from the table name, and ``--subject`` narrows the fix to the
+    one thing that needs migrating. A database *outside* that layout (a bare
+    ``--database`` path, ``quarantine.db``, a single-file topology) has no
+    subject to name, so the message also carries the full path and the
+    profile-free ``--database``/``--scope`` form, which is correct in every
+    layout. The environment stays a ``<env>`` placeholder: a Writer knows its
+    file, never which environment resolved it.
+    """
+    if _table_exists(con, table):
+        return
+    subject, layer = db_path.parent.name, db_path.stem
+    raise MissingTableError(
+        f"no migration has created '{subject}/{layer}.{table}' ({db_path});\n"
+        f"run: python -m cli migrate --env <env> --subject {subject}\n"
+        f"(a database outside the <subject>/<layer>.db layout instead takes: "
+        f"python -m cli migrate --database {db_path} --scope <scope>)"
+    )
+
+
+def _insert_rows(con: sqlite3.Connection, table: str, frame: pd.DataFrame) -> None:
+    """Append ``frame``'s rows into a table already confirmed to exist.
+
+    Kept separate from ``_require_table`` so a full-refresh write reads as two
+    named steps -- clear, then insert -- inside one transaction, rather than
+    one ``to_sql(if_exists="replace")`` call that silently recreated the table
+    underneath both.
+    """
+    frame.to_sql(table, con, if_exists="append", index=False)
 
 
 def _replace_logical_run(
@@ -386,7 +449,16 @@ class StdoutWriter:
 
 
 class SqliteTruncateReloadWriter:
-    """A Writer that full-refreshes one table: truncate + reload."""
+    """A Writer that full-refreshes one table: truncate + reload.
+
+    Truncates rather than recreates: the table must already exist (a
+    migration's job now — see ``_require_table``), and the delete + insert both
+    run inside the one transaction ``_writing_connection`` opens, so a failed
+    reload leaves the table's prior contents intact rather than dropped. Before
+    #323, ``if_exists="replace"`` dropped and recreated the table on every run,
+    which quietly erased any index or constraint a migration had put there
+    while its ledger row still claimed it applied.
+    """
 
     def __init__(
         self,
@@ -400,9 +472,9 @@ class SqliteTruncateReloadWriter:
 
     def write(self, dataset: Dataset) -> None:
         with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
-            dataset.to_pandas().to_sql(
-                self._table, con, if_exists="replace", index=False
-            )
+            _require_table(con, self._db_path, self._table)
+            con.execute(f"DELETE FROM {quote_identifier(self._table)}")
+            _insert_rows(con, self._table, dataset.to_pandas())
 
     def describe(self) -> str:
         return render(self, db_path=str(self._db_path), table=self._table)

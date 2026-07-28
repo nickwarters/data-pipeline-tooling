@@ -4,6 +4,7 @@ import pytest
 
 from framework.io.writers import SqliteTruncateReloadWriter
 from framework.run.builder import Pipeline
+from tests.framework_testing import create_table
 from tools.integrations.remote import SasReader
 
 
@@ -82,6 +83,11 @@ def test_sas_reader_composes_in_the_pipeline_builder(landing, tmp_path):
     # A SasReader is a Reader: it drops into the deferred builder and feeds a
     # raw landing exactly like any other source (Reader-Protocol conformance,
     # observed end-to-end rather than via isinstance).
+    create_table(
+        tmp_path / "raw.db",
+        "cases",
+        SasReader("run_cases.sas", "*.csv", landing).read(),
+    )
     p = Pipeline("cases")
     r = p.read(SasReader("run_cases.sas", "*.csv", landing), name="read")
     p.write(SqliteTruncateReloadWriter(tmp_path / "raw.db", "cases"), r, name="write")

@@ -10,13 +10,16 @@ from __future__ import annotations
 
 from dataclasses import fields
 
+import pandas as pd
 import pytest
 
 from framework.core import ValidationError
+from framework.core.dataset import Dataset
 from framework.run import RunContext
 from tests.framework_testing import (
     RecordingRunLog,
     RecordingWriter,
+    create_table,
     given_rows,
     read_rows,
 )
@@ -28,6 +31,15 @@ from .schema import MyfeedRow
 
 
 def test_bundled_sample_feed_refines_through_to_gold(tmp_path):
+    # gold_builder's write is a passthrough Refresh() -- #323 means that table
+    # must already exist. This feed has authored no migration yet, so mint one
+    # shaped like the schema's own fields plus the AccumulateByRun run-stamp
+    # columns silver will carry through unchanged.
+    columns = [f.name for f in fields(MyfeedRow)]
+    columns += ["logical_run_id", "load_date", "pipeline_run_id"]
+    empty = Dataset.from_pandas(pd.DataFrame({column: [] for column in columns}))
+    create_table(tmp_path / FEED_NAME / "gold.db", FEED_NAME, empty)
+
     run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME))
 
     med = medallion(StoreRegistry(tmp_path), FEED_NAME)

@@ -7,6 +7,7 @@ from case_review.case_type import CaseType, Variation
 from framework.core.dataset import Dataset
 from framework.io.strategy import Refresh
 from tests._schema_fixtures import ActivityCase
+from tests.framework_testing import create_table
 from tools.calendar import WorkingDayCalendar
 from tools.medallion import medallion
 from tools.store import StoreRegistry
@@ -21,11 +22,14 @@ def _case_type() -> CaseType:
     )
 
 
-def _land_gold_cases(gold, frame: pd.DataFrame) -> None:
+def _land_gold_cases(tmp_path, gold, frame: pd.DataFrame) -> None:
     # Land Cases into the ingest gold exactly as an ingest_silver_to_gold run
     # would — one row per Case, dates as text (SQLite has no date type), which
-    # is what the CasePool re-reads.
-    gold.writer("cases", Refresh()).write(Dataset.from_pandas(frame))
+    # is what the CasePool re-reads. The table must already exist (#323); this
+    # stand-in mints one shaped by the frame itself rather than restating it.
+    dataset = Dataset.from_pandas(frame)
+    create_table(tmp_path / "cases" / "gold.db", "cases", dataset)
+    gold.writer("cases", Refresh()).write(dataset)
 
 
 def test_fetch_available_cases_keeps_only_cases_inside_the_working_day_window(
@@ -37,6 +41,7 @@ def test_fetch_available_cases_keeps_only_cases_inside_the_working_day_window(
     # retrieval Selection calls instead of a raw read.
     gold = medallion(StoreRegistry(tmp_path), "cases").gold
     _land_gold_cases(
+        tmp_path,
         gold,
         pd.DataFrame(
             {
@@ -71,6 +76,7 @@ def test_fetch_available_cases_returns_an_empty_pool_when_none_are_eligible(
     # empty SelectionPool is a legitimate outcome a downstream run must tolerate.
     gold = medallion(StoreRegistry(tmp_path), "cases").gold
     _land_gold_cases(
+        tmp_path,
         gold,
         pd.DataFrame(
             {

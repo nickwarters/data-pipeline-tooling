@@ -81,18 +81,18 @@ one database it stays one file.
 - **An undeclared extra column.** Never auto-dropped; surfaced by `schema diff`
   instead.
 - **`primary_key` / `indexes`.** `tools.schema.live` diffs columns only (see
-  [`schema-declaration.md`](schema-declaration.md)), and several tables in
-  this repo land via a Writer that replaces the whole table on every run
-  (`Refresh`/`AccumulateByRun` — `frame.to_sql(if_exists="replace")` recreates
-  a bare table with no constraints), which would **silently erase** a
-  migration-created `PRIMARY KEY`/index the very next time that pipeline
-  writes. Emitting a constraint `schema diff` never re-verifies, that the
-  table's own Writer may then immediately erase, would be actively
-  misleading rather than merely incomplete — so the generator never emits
-  them. It leaves a comment naming what is declared and why, for a human to
-  add only where a table's Writer strategy genuinely depends on the
-  constraint (e.g. `InsertOrIgnore`'s conflict resolution reads the target's
-  own constraints).
+  [`schema-declaration.md`](schema-declaration.md)), so a constraint `schema
+  diff` never re-verifies is never emitted either — that would be actively
+  misleading rather than merely incomplete. Before #323 this was doubly true
+  for `Refresh`: its Writer's `frame.to_sql(if_exists="replace")` dropped and
+  recreated the table on every run, silently erasing any migration-created
+  `PRIMARY KEY`/index the very next write. `Refresh` now truncates
+  (`DELETE FROM` + insert) inside one transaction instead, so an index
+  survives it — but the columns-only diff is still the only thing verified on
+  every run, so the generator still leaves a comment naming what is declared
+  and why, for a human to add only where a table's Writer strategy genuinely
+  depends on the constraint (e.g. `InsertOrIgnore`'s conflict resolution reads
+  the target's own constraints).
 - **The raw-is-not-yet-TEXT accident, presented as intended.** Raw is meant to
   be TEXT throughout; several bundled feeds' raw `Table`s aren't, because they
   read through a dtype-inferring `CsvReader` (see

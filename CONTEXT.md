@@ -137,7 +137,11 @@ migrate`, which records each one in the target database's own
 statements — an applied migration whose file has since changed is a hard
 error, never a silent re-apply. `schema diff`'s drift report and a migration
 are deliberately separate: diffing tells you a database disagrees with the
-declaration; a migration is the reviewed fix, not an automatic one.
+declaration; a migration is the reviewed fix, not an automatic one. A Migration
+is also the *only* thing that brings a **Refresh**ed or merged table into
+existence: those Writers refuse (`MissingTableError`, naming the `migrate`
+command) rather than minting a table nothing declared, and `Refresh` truncates
+rather than dropping so an index a Migration created survives every later run.
 _Avoid_: patch, script (informal — the declared vocabulary is Migration)
 
 **Topology Profile**:

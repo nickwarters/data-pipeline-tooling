@@ -105,6 +105,21 @@ no longer the only one.
 - **The volume envelope grows.** Accumulating raw + silver scales `records ×
   snapshots`, beyond the original ≤~1M assumption; revisit retention/compaction
   per feed when one warrants it.
+- **Since #323, `Refresh` (and the merge strategies) require the target table to
+  already exist.** "Truncate + reload" above was implemented as
+  `to_sql(if_exists="replace")` — a DROP + CREATE, which erased any index or
+  constraint a migration had put on the table while `schema_migrations` kept
+  claiming that migration applied. `Refresh` now literally truncates
+  (`DELETE FROM` + insert, both inside the Writer's one transaction, so a
+  failed reload leaves the prior contents intact), and `UpsertStrategy` /
+  `InsertOrIgnore` no longer create their merge target either. A table no
+  migration has created raises `MissingTableError` (a named `LookupError`)
+  telling the operator which `migrate` command to run, rather than minting the
+  table itself — the strategy vocabulary above is unchanged; only what the
+  Writer does inside it is. See
+  [ADR 0015](0015-declared-schema-generated-migrations.md),
+  [`docs/core-primitives.md`](../core-primitives.md) and
+  [`docs/migrations.md`](../migrations.md).
 - Re-running a logical run must scope its delete by `logical_run_id`,
   never by a business key or `pipeline_run_id`, so gold never updates a record in
   place: a record that changes between logical runs yields one stamped row per run

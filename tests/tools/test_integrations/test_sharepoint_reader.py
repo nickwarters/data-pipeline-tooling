@@ -11,6 +11,7 @@ from framework.io.writers import (
     SqliteTruncateReloadWriter,
 )
 from framework.run.builder import Pipeline
+from tests.framework_testing import create_table
 from tools.integrations.remote import (
     LocalCsvFetcher,
     SharePointReader,
@@ -111,6 +112,7 @@ def test_sharepoint_reader_composes_in_the_pipeline_builder(fixture_csv, tmp_pat
     # A SharePointReader is a Reader: it drops into the deferred builder and
     # feeds a raw landing exactly like any other source (Reader-Protocol
     # conformance, observed end-to-end rather than via isinstance).
+    create_table(tmp_path / "raw.db", "advisers", CsvReader(fixture_csv).read())
     p = Pipeline("advisers")
     r = p.read(
         SharePointReader(

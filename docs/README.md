@@ -121,6 +121,12 @@ gold is often the consumption/grain boundary
 > not a framework law. The **Ingest** profile is *history-upstream /
 > current-gold* (raw + silver accumulate the change-over-time record; gold
 > reduces to one current row per Case). See the deep docs below for the full load model.
+>
+> A SQLite table a `Refresh`, `UpsertStrategy` or `InsertOrIgnore` Writer
+> targets must **already exist** — creating it is a Migration's job
+> ([migrations.md](migrations.md)), so run `python -m cli migrate` before the
+> first run of a new feed. A missing table raises `MissingTableError` naming
+> the exact command; it is not created for you.
 
 ### How the pieces fit
 

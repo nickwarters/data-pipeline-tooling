@@ -10,6 +10,7 @@ from framework.io.strategy import AccumulateByRun, Refresh
 from framework.run.builder import Pipeline
 from framework.transform.processors import Filter, Sort, Stamp
 from tests._schema_fixtures import ActivityCase
+from tests.framework_testing import create_table
 from tools.calendar import WorkingDayCalendar
 from tools.medallion import medallion
 from tools.store import StoreRegistry
@@ -27,10 +28,13 @@ def _case_type() -> CaseType:
     )
 
 
-def _land_gold_cases(gold, frame: pd.DataFrame) -> None:
+def _land_gold_cases(tmp_path, gold, frame: pd.DataFrame) -> None:
     # Land Cases into ingest gold (current-only, one row per Case) as an
-    # ingest_silver_to_gold run would — CasePool reads gold.
-    gold.writer("cases", Refresh()).write(Dataset.from_pandas(frame))
+    # ingest_silver_to_gold run would — CasePool reads gold. The table must
+    # already exist (#323); this stand-in mints one shaped by the frame.
+    dataset = Dataset.from_pandas(frame)
+    create_table(tmp_path / "cases" / "gold.db", "cases", dataset)
+    gold.writer("cases", Refresh()).write(dataset)
 
 
 def test_selection_narrows_the_casepool_into_a_stamped_selection_pool(tmp_path):
@@ -41,6 +45,7 @@ def test_selection_narrows_the_casepool_into_a_stamped_selection_pool(tmp_path):
     # the SelectionPool into gold stamped logical_run_id / load_date (CONTEXT.md; ).
     gold = medallion(StoreRegistry(tmp_path), "cases").gold
     _land_gold_cases(
+        tmp_path,
         gold,
         pd.DataFrame(
             {

@@ -108,6 +108,13 @@ decisive:
    pipeline write — worse than merely unverified, actively misleading to
    whoever reviewed and approved the migration believing it would persist.
 
+> **Update (#323):** reason 2 no longer holds. `Refresh` now truncates
+> (`DELETE FROM` + insert) rather than dropping and recreating its table, so a
+> hand-added constraint survives every later write — see
+> [ADR 0004's consequences](0004-per-feed-load-strategy-owned-by-writer.md).
+> The decision stands on reason 1 alone: a constraint `schema diff` never
+> re-verifies is still not something a mechanical generator should emit.
+
 Where a constraint is load-bearing for correctness (e.g. `InsertOrIgnore`'s
 conflict resolution reads the target's own constraints), that dependency
 belongs to the Writer's strategy choice, not to a mechanical column-diff

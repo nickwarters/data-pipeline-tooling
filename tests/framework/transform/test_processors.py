@@ -40,6 +40,7 @@ from framework.transform.processors import (
     VectorizedDerive,
     VectorizedFilter,
 )
+from tests.framework_testing import create_table
 from tools.observability.run_log import RunLog
 from tools.store import Store
 
@@ -315,22 +316,22 @@ def test_anti_join_with_exposes_trace_metadata_for_selection_explainability():
 def test_pipeline_filters_one_feed_and_joins_another_feeds_silver(tmp_path):
     cases = Store(tmp_path / "cases.db")
     advisers = Store(tmp_path / "advisers.db")
-    cases.writer("cases", Refresh()).write(
-        Dataset.from_pandas(
-            pd.DataFrame(
-                {
-                    "adviser": ["a1", "a2", "a3"],
-                    "case_ref": ["c1", "c2", "c3"],
-                    "amount": [100, 5, 50],
-                }
-            )
+    cases_dataset = Dataset.from_pandas(
+        pd.DataFrame(
+            {
+                "adviser": ["a1", "a2", "a3"],
+                "case_ref": ["c1", "c2", "c3"],
+                "amount": [100, 5, 50],
+            }
         )
     )
-    advisers.writer("advisers", Refresh()).write(
-        Dataset.from_pandas(
-            pd.DataFrame({"adviser": ["a1", "a3"], "region": ["north", "south"]})
-        )
+    advisers_dataset = Dataset.from_pandas(
+        pd.DataFrame({"adviser": ["a1", "a3"], "region": ["north", "south"]})
     )
+    create_table(tmp_path / "cases.db", "cases", cases_dataset)
+    create_table(tmp_path / "advisers.db", "advisers", advisers_dataset)
+    cases.writer("cases", Refresh()).write(cases_dataset)
+    advisers.writer("advisers", Refresh()).write(advisers_dataset)
     reference = JoinDependency("advisers", advisers.reader("advisers"))
     p = Pipeline("cases")
     r = p.read(cases.reader("cases"), name="read")

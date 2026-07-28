@@ -26,6 +26,7 @@ from framework.io import (
     SqliteUpsertWriter,
     UpsertStrategy,
 )
+from tests.framework_testing import create_table
 from tools.store import Store
 
 IO_DIR = Path(__file__).parents[4] / "framework" / "io"
@@ -74,6 +75,11 @@ def test_busy_timeout_reaches_every_sqlite_writer_a_strategy_mints(
     monkeypatch.setattr(writers_module, "connect", recording_connect)
 
     strategy, _ = STRATEGIES[name]
+    if name in ("refresh", "upsert", "insert_or_ignore"):
+        # These three refuse to write into a table nothing has migrated into
+        # existence; mint it first so this stays a test of busy_timeout
+        # plumbing, not of table creation.
+        create_table(tmp_path / "cases.db", "cases", _dataset())
     store = Store(tmp_path / "cases.db", busy_timeout_ms=7777)
     store.writer("cases", strategy).write(_dataset())
 

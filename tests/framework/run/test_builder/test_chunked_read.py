@@ -44,7 +44,7 @@ from framework.io.writers import (
 from framework.run.builder import Pipeline, PipelineGraphError
 from framework.run.run_context import RunContext
 from framework.transform.quarantine import SchemaValueRulePartitioner
-from tests.framework_testing import RecordingRunLog
+from tests.framework_testing import RecordingRunLog, create_table
 
 
 @dataclass
@@ -541,6 +541,7 @@ def test_a_dry_run_of_a_streamed_load_clears_nothing(tmp_path):
 
 def test_an_appending_load_takes_the_chunks_as_they_come(tmp_path):
     db = tmp_path / "raw.db"
+    create_table(db, "feed", Dataset.from_pandas(pd.DataFrame(_rows(1))))
     writer = SqliteInsertOrIgnoreWriter(db, "feed")
     p = Pipeline("big", run_log=RecordingRunLog())
     source = p.read_chunks(ListChunkReader(_rows(30)), name="read", chunk_size=10)

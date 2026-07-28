@@ -6,6 +6,7 @@ import pytest
 from framework.io.readers import ExcelReader
 from framework.io.writers import SqliteTruncateReloadWriter
 from framework.run.builder import Pipeline
+from tests.framework_testing import create_table
 
 
 @pytest.fixture
@@ -45,6 +46,7 @@ def test_excel_reader_composes_in_the_pipeline_builder(workbook, tmp_path):
     # An ExcelReader is a Reader: it drops into the deferred builder and feeds a
     # raw landing exactly like any other source (Reader-Protocol conformance,
     # observed end-to-end rather than via isinstance).
+    create_table(tmp_path / "raw.db", "cases", ExcelReader(workbook).read())
     p = Pipeline("cases")
     r = p.read(ExcelReader(workbook), name="read")
     p.write(SqliteTruncateReloadWriter(tmp_path / "raw.db", "cases"), r, name="write")

@@ -11,6 +11,7 @@ the rendered pipeline actually runs.
 
 from __future__ import annotations
 
+import dataclasses
 import importlib
 import sys
 
@@ -18,9 +19,28 @@ import pytest
 
 from cli import scaffold
 from framework.run import RunContext
-from tests.framework_testing import read_rows, rows_of
+from tests.framework_testing import create_table, read_rows, rows_of
 from tools.medallion import medallion
 from tools.store import StoreRegistry
+
+
+def _prepare_gold_table(base_dir, pipeline_module, feed_name: str) -> None:
+    # A scaffolded feed's gold hop is a passthrough Refresh() write, and #323
+    # means that table must already exist -- a fresh scaffold has authored no
+    # migration yet, so mint one shaped exactly like the stamped silver rows
+    # the passthrough will hand it (the schema's own fields plus the
+    # AccumulateByRun run-stamp columns).
+    import pandas as pd
+
+    from framework.core.dataset import Dataset
+
+    row_class = getattr(pipeline_module, f"{scaffold._pascal(feed_name)}Row")
+    columns = [f.name for f in dataclasses.fields(row_class)]
+    columns += ["logical_run_id", "load_date", "pipeline_run_id"]
+    empty = pd.DataFrame({column: [] for column in columns})
+    create_table(
+        base_dir / feed_name / "gold.db", feed_name, Dataset.from_pandas(empty)
+    )
 
 
 def test_render_lays_down_the_feed_code_and_its_test(tmp_path):
@@ -92,6 +112,7 @@ def test_rendered_pipeline_runs_and_lands_its_sample_feed(tmp_path):
     try:
         pipeline = importlib.import_module("widgets.pipeline")
         importlib.reload(pipeline)  # in case a prior test imported "widgets"
+        _prepare_gold_table(tmp_path / "data", pipeline, "widgets")
         dataset = pipeline.run(
             RunContext(base_dir=tmp_path / "data", pipeline="widgets")
         )
@@ -123,6 +144,7 @@ def test_rendered_pipeline_main_runs_and_records_a_run(tmp_path, capsys):
     try:
         pipeline = importlib.import_module("widgets.pipeline")
         importlib.reload(pipeline)
+        _prepare_gold_table(base_dir, pipeline, "widgets")
         exit_code = pipeline.main(["prog", "--base-dir", str(base_dir)])
     finally:
         sys.path.remove(str(repo / "pipelines"))
@@ -316,6 +338,7 @@ def test_rendered_feed_from_a_spaced_file_runs_and_its_test_passes(tmp_path):
     try:
         pipeline = importlib.import_module("widgets.pipeline")
         importlib.reload(pipeline)
+        _prepare_gold_table(tmp_path / "data", pipeline, "widgets")
         dataset = pipeline.run(
             RunContext(base_dir=tmp_path / "data", pipeline="widgets")
         )

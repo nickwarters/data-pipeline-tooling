@@ -5,6 +5,7 @@ import pytest
 
 from framework.core.dataset import Dataset
 from framework.io.strategy import UpsertStrategy
+from tests.framework_testing import create_table
 from tools.store import Store
 
 
@@ -12,8 +13,14 @@ def _ds(*rows: dict) -> Dataset:
     return Dataset.from_pandas(pd.DataFrame(list(rows)))
 
 
+def _entities_table(tmp_path) -> None:
+    """Every test here merges into ``entities``; a migration's job now."""
+    create_table(tmp_path / "store.db", "entities", _ds({"id": 1, "name": "Alice"}))
+
+
 def test_upsert_insert_only_into_empty_target(tmp_path):
     store = Store(tmp_path / "store.db")
+    _entities_table(tmp_path)
     writer = store.writer("entities", UpsertStrategy("id"))
     writer.write(_ds({"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}))
 
@@ -24,6 +31,7 @@ def test_upsert_insert_only_into_empty_target(tmp_path):
 
 def test_upsert_update_only_all_keys_already_present(tmp_path):
     store = Store(tmp_path / "store.db")
+    _entities_table(tmp_path)
     writer = store.writer("entities", UpsertStrategy("id"))
     writer.write(_ds({"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}))
     writer.write(_ds({"id": 1, "name": "Alicia"}, {"id": 2, "name": "Bobby"}))
@@ -37,6 +45,7 @@ def test_upsert_update_only_all_keys_already_present(tmp_path):
 
 def test_upsert_mixed_insert_and_update(tmp_path):
     store = Store(tmp_path / "store.db")
+    _entities_table(tmp_path)
     writer = store.writer("entities", UpsertStrategy("id"))
     writer.write(_ds({"id": 1, "name": "Alice"}))
     writer.write(_ds({"id": 1, "name": "Alicia"}, {"id": 2, "name": "Bob"}))
@@ -50,6 +59,7 @@ def test_upsert_mixed_insert_and_update(tmp_path):
 
 def test_upsert_is_idempotent(tmp_path):
     store = Store(tmp_path / "store.db")
+    _entities_table(tmp_path)
     writer = store.writer("entities", UpsertStrategy("id"))
     batch = _ds({"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"})
     writer.write(batch)
@@ -61,6 +71,7 @@ def test_upsert_is_idempotent(tmp_path):
 
 def test_upsert_preserves_rows_not_in_incoming_batch(tmp_path):
     store = Store(tmp_path / "store.db")
+    _entities_table(tmp_path)
     writer = store.writer("entities", UpsertStrategy("id"))
     writer.write(_ds({"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}))
     writer.write(_ds({"id": 2, "name": "Bobby"}))

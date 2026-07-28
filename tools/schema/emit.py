@@ -43,17 +43,17 @@ Two things this module is careful never to do silently (see
   the design intent (raw is meant to be TEXT throughout) -- the generated file
   says so loudly rather than presenting the type as intended.
 - **Auto-emit ``primary_key``/``indexes``.** ``tools.schema.live`` diffs
-  columns only (see its docstring), and several bundled tables land via a
-  Writer that replaces the whole table on every run (``Refresh`` /
-  ``AccumulateByRun`` -- ``frame.to_sql(if_exists="replace")`` recreates a bare
-  table with no constraints), which would silently erase a migration-created
-  ``PRIMARY KEY``/index on the very next pipeline run. Emitting a constraint
-  ``schema diff`` never re-verifies, that the table's own Writer may then
-  immediately erase, would be actively misleading rather than merely
-  incomplete -- so the generator never emits them; it leaves a comment naming
-  what is declared and why it was left out, for a human to add only where the
-  table's Writer strategy genuinely depends on it (e.g. an ``InsertOrIgnore``
-  target's conflict resolution).
+  columns only (see its docstring), so a constraint this generator emitted
+  would never be re-verified against a live database again -- actively
+  misleading rather than merely incomplete. (Until #323 it was worse still: a
+  ``Refresh`` Writer's ``frame.to_sql(if_exists="replace")`` recreated a bare
+  table on every run, erasing a migration-created ``PRIMARY KEY``/index while
+  the ledger row survived. That Writer now truncates instead, so a constraint
+  added by hand does survive -- but it is still never re-verified.) So the
+  generator never emits them; it leaves a comment naming what is declared and
+  why it was left out, for a human to add only where the table's Writer
+  strategy genuinely depends on it (e.g. an ``InsertOrIgnore`` target's
+  conflict resolution).
 """
 
 from __future__ import annotations
@@ -198,11 +198,11 @@ def _pk_index_caveat(table: Table) -> str:
         bits.append(f"indexes={table.indexes!r}")
     return (
         f"-- NOTE: this table declares {' and '.join(bits)}, which this generator\n"
-        "-- does not emit -- tools.schema.live diffs columns only, and this\n"
-        "-- table's Writer may replace the whole table on every run (Refresh /\n"
-        "-- AccumulateByRun), which would silently erase a migration-created\n"
-        "-- constraint on the very next pipeline write. Add it by hand only if\n"
-        "-- this table's Writer genuinely depends on it (see docs/migrations.md).\n"
+        "-- does not emit -- tools.schema.live diffs columns only, so a constraint\n"
+        "-- added here is never re-verified against the live database afterwards.\n"
+        "-- (Writers no longer erase one: since #323 Refresh truncates rather than\n"
+        "-- recreating the table.) Add it by hand only if this table's Writer\n"
+        "-- genuinely depends on it (see docs/migrations.md).\n"
     )
 
 

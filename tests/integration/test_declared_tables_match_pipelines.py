@@ -32,6 +32,7 @@ import sqlite3
 from pathlib import Path
 
 from framework.run import RunContext
+from tests.framework_testing import migrate_all
 from tools.schema import collect_declared_tables
 from tools.schema.declaration import resolved_namespace
 
@@ -63,6 +64,11 @@ def _run_every_bundled_feed(base_dir: Path) -> None:
     from pipelines.ref_lookup.pipeline import run as run_ref_lookup
     from pipelines.retail_analytics.pipeline import run as run_retail_analytics
     from pipelines.selection.pipeline import run as run_selection
+
+    # Every migration-gated table (Refresh's SqliteTruncateReloadWriter,
+    # #323) must already exist -- bring the real tree into existence exactly
+    # as an operator's `migrate` would, rather than let a Writer mint one.
+    migrate_all(base_dir)
 
     landing = base_dir / "landing_zone"
     landing.mkdir(parents=True, exist_ok=True)
@@ -99,7 +105,10 @@ def _landed_tables(base_dir: Path) -> set[tuple[str, str]]:
     path from one, in reverse: a file's path relative to ``base_dir``, minus
     its ``.db`` suffix, with ``/`` joints. Reject tables (``quarantine.db``)
     and run-metadata stores (any ``_``-prefixed top-level directory) are out of
-    this issue's scope, so they are skipped rather than asserted on.
+    this issue's scope, so they are skipped rather than asserted on. Since
+    #323, each database also carries its own ``schema_migrations`` ledger
+    (``migrate_all`` brings the tables into existence first) -- that is
+    migration bookkeeping, not a medallion table, so it is skipped too.
     """
     landed: set[tuple[str, str]] = set()
     for db_path in base_dir.rglob("*.db"):
@@ -116,6 +125,8 @@ def _landed_tables(base_dir: Path) -> set[tuple[str, str]]:
         finally:
             con.close()
         for (table_name,) in rows:
+            if table_name == "schema_migrations":
+                continue
             landed.add((namespace, table_name))
     return landed
 
