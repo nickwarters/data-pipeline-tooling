@@ -243,6 +243,7 @@ test('reviewer worklist preserves the legacy columns, filters, and Open action',
     ['Due Date', 'cora-col-dueDate', 'none', true],
     ['Status', 'cora-col-status', 'none', true],
     ['Assigned', 'cora-col-assigned', 'none', true],
+    ['Responsible Party', 'cora-col-responsibleParty', 'none', true],
     ['Actions', 'cora-col-actions', 'none', false],
   ]);
   const sortedByReference = dashboardView(
@@ -256,7 +257,7 @@ test('reviewer worklist preserves the legacy columns, filters, and Open action',
   );
   assert.deepEqual(
     tableHeaders(sortedByReference).map((header) => header[2]),
-    ['ascending', 'none', 'none', 'none', 'none', 'none', 'none']
+    ['ascending', 'none', 'none', 'none', 'none', 'none', 'none', 'none']
   );
 
   const byCaseType = slice.reducer(loaded, {
@@ -299,7 +300,7 @@ test('reviewer worklist preserves the legacy columns, filters, and Open action',
 
   assert.match(view.textContent, /Beta case/);
   assert.doesNotMatch(view.textContent, /Alpha case/);
-  assert.equal(view.querySelectorAll('th').length, 7);
+  assert.equal(view.querySelectorAll('th').length, 8);
   const textFilter = /** @type {any} */ (
     view.querySelector('[aria-label="Filter cases"]')
   );

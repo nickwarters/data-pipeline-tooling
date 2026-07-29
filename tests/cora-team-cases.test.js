@@ -147,6 +147,7 @@ test('team cases view renders the standard Case columns and the Open action', ()
     ['Due Date', 'cora-col-dueDate', 'none', true],
     ['Status', 'cora-col-status', 'none', true],
     ['Assigned', 'cora-col-assigned', 'none', true],
+    ['Responsible Party', 'cora-col-responsibleParty', 'none', true],
     ['Actions', 'cora-col-actions', 'none', false],
   ]);
 

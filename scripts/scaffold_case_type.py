@@ -632,7 +632,7 @@ def scaffold(opts: ScaffoldOptions) -> None:
         )
         cases = insert_before(
             cases,
-            "  // ── Action Centre demo cases ────────────────────────────────",
+            "  // ── Action Centre demo cases (issue #287) ────────────────────────────────",
             fixture_cases(opts),
             cases_path,
         )

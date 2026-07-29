@@ -76,6 +76,14 @@ const caseAssignedColumn = () => ({
   sortable: true,
 });
 
+/** @returns {CaseColumn} */
+const caseResponsiblePartyColumn = () => ({
+  key: 'responsibleParty',
+  label: 'Responsible Party',
+  value: 'responsibleParty',
+  sortable: true,
+});
+
 /**
  * The Open button. `onOpen` is injected rather than baked as a navigation call
  * so the cell has no opinion about what opening a Case means: the Case tables
@@ -132,9 +140,13 @@ export const overdueCaseRowClass = (row) =>
   row.overdue ? 'cora-case-row cora-case-row--overdue' : 'cora-case-row';
 
 /**
- * The seven-column Case table shared by the Dashboard and Team Cases. The set
- * is fixed: a Case table describes Cases the same way for every Case Type, so
- * scoping a table to one Case Type narrows the rows and never the columns.
+ * The Case table shared by the Dashboard and Team Cases. The set is fixed: every
+ * Case row carries these fields whichever list it came from, so a Case table
+ * describes Cases the same way for every Case Type and scoping a table narrows
+ * its rows, never its columns.
+ *
+ * A page that needs a column decides that here, in framework code, for every
+ * Case Type at once. Nothing a Case Type declares reaches this list.
  *
  * @param {{ onOpen: (row: CaseRow) => void }} options
  * @returns {CaseColumn[]}
@@ -147,6 +159,7 @@ export function standardCaseColumns({ onOpen }) {
     caseDueDateColumn(),
     caseStatusColumn(),
     caseAssignedColumn(),
+    caseResponsiblePartyColumn(),
     caseActionsColumn(onOpen),
   ];
 }

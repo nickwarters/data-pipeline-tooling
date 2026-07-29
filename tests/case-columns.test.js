@@ -107,7 +107,7 @@ test('the Actions column takes an accessible name for openers that are not the C
   assert.equal(button.textContent, 'Open');
 });
 
-test('the standard Case table is the seven columns in their established order', () => {
+test('the standard Case table is the eight columns in their established order', () => {
   const columns = standardCaseColumns({ onOpen: () => {} });
   assert.deepEqual(
     columns.map((column) => column.key),
@@ -118,6 +118,7 @@ test('the standard Case table is the seven columns in their established order', 
       'dueDate',
       'status',
       'assigned',
+      'responsibleParty',
       'actions',
     ]
   );
@@ -130,10 +131,11 @@ test('the standard Case table is the seven columns in their established order', 
       'Due Date',
       'Status',
       'Assigned',
+      'Responsible Party',
       'Actions',
     ]
   );
-  assert.equal(columns.filter((column) => column.sortable).length, 6);
+  assert.equal(columns.filter((column) => column.sortable).length, 7);
 });
 
 test('the standard date and assigned columns keep their empty-string sort value', () => {
@@ -161,18 +163,29 @@ test('the standard date and assigned columns keep their empty-string sort value'
   );
 });
 
-test('the standard seven are the whole set, with no extension seam', () => {
-  const columns = standardCaseColumns({ onOpen: () => {} });
-  assert.deepEqual(
-    columns.map((column) => column.key),
-    [
-      'reference',
-      'caseType',
-      'relatedDate',
-      'dueDate',
-      'status',
-      'assigned',
-      'actions',
-    ]
+test('Responsible Party is a framework column, read off the Case row', () => {
+  const column = standardCaseColumns({ onOpen: () => {} }).find(
+    (candidate) => candidate.key === 'responsibleParty'
   );
+  assert.ok(column, 'no Responsible Party column');
+  assert.equal(column.label, 'Responsible Party');
+  assert.equal(column.value, 'responsibleParty');
+  assert.equal(column.sortable, true);
+});
+
+test('callers cannot extend the standard set', () => {
+  // The column set used to take an `extra` array that a Case Type's config fed.
+  // Nothing may append to it now, so a caller still passing one is ignored
+  // rather than quietly widening one page's table.
+  const columns = standardCaseColumns(
+    /** @type {any} */ ({
+      onOpen: () => {},
+      extra: [{ key: 'owner', label: 'Owner', value: 'responsibleParty' }],
+    })
+  );
+  assert.equal(
+    columns.some((column) => column.key === 'owner'),
+    false
+  );
+  assert.equal(columns.at(-1)?.key, 'actions');
 });

@@ -19,10 +19,11 @@ were genuine Case Type variation, distinct from dashboard layout.
 
 That distinction has not held up in practice:
 
-- **Only one seam of the three was ever exercised, and only as a demonstration.**
-  Complaints — the single live Case Type — declared exactly one extra column,
-  Responsible Party, whose value was already a plain `CaseRow` property the
-  framework could have shown for every Case Type had it wanted to.
+- **The variation it expressed was not real.** Complaints — the single live Case
+  Type — declared exactly one extra column, Responsible Party, whose value was
+  already a plain `CaseRow` property present on every Case list. No Case list has
+  fields another lacks, so there was nothing for a per-Case-Type column seam to
+  vary.
 - **It made Case tables inconsistent for the reader.** The Team Cases table grew
   a column when a Reviewer filtered to one Case Type and lost it when they
   cleared the filter. Comparing a scoped list against the whole team's list
@@ -51,6 +52,12 @@ Cases are listed, never which columns describe them.
 `extra` parameter on `standardCaseColumns()`. The Case Type scaffold no longer
 generates the field.
 
+**This moves where a column is declared; it removes no column.** Responsible
+Party — the only column the seam ever contributed — becomes a framework column
+in `standardCaseColumns()`, shown and sortable for every Case Type on every Case
+table. A page's table requirements are the page's to state, in code, derived from
+Case data that every Case Type already carries.
+
 ADR-0035's general rule is unchanged and still governs the descriptors that
 remain — `sections`, `detailFields`, `remediationFields`, `captureGroups`,
 `generalQuestions`, and the rest: data-only variation in configuration,
@@ -65,13 +72,29 @@ meaningless elsewhere, that is a new decision to take deliberately, with a
 renderer that handles an absent value — not a config key reintroduced by
 default.
 
+## Direction
+
+The general rule this decision applies beyond Case tables: **pages derive their
+requirements from Case Type configuration; Case Type configuration does not
+declare pages.** A Case Type describes what a Case _is_ — its Questions, its
+Sections, its capture and remediation shape — and each page decides for itself
+what to do with that. A descriptor named for a page or a panel is the smell this
+and ADR-0036 both removed.
+
+The Case Review page is currently the only page reading explicitly page-shaped
+configuration (`sections`, `captureGroups`), and even there the coupling is
+incidental rather than essential: those describe a Case's review journey, and
+nothing stops that journey being rendered somewhere other than the Case Review
+page. Nothing new should follow `dashboardPanels` and `caseTableColumns` into
+`CaseTypeConfig`.
+
 ## Consequences
 
 - Every Case table shows the same columns for every Case Type. The Team Cases
   table no longer changes shape when the Case Type filter changes.
-- Complaints loses its Responsible Party column from the Team Cases table. The
-  value remains on the Case Row and on the Responsible Party pages; no data is
-  lost, only a table column that appeared under one filter.
+- No column is lost. Responsible Party moves from Complaints' config into
+  `standardCaseColumns()`, so it now appears on every Case table for every Case
+  Type rather than only on a Case-Type-scoped Team Cases table.
 - The Team Cases route no longer loads a Case Type module. Its `start()` is a
   single Case fetch rather than a two-way `Promise.all`.
 - Adding, removing, or reordering a Case table column is confined to
