@@ -434,8 +434,8 @@ test('CaseLoader.load(): frozen catalogue derives failureValues against the snap
           { id: 'good', wording: 'Good', severity: 0 },
           { id: 'bad', wording: 'Bad', severity: 100 },
         ],
-        // Differs from the live config's default ('pass') — the snapshot's
-        // vocabulary governs the as-reviewed failure semantics.
+        // The snapshot carries its own vocabulary, and that vocabulary — not
+        // the live Case Type's — governs the as-reviewed failure semantics.
         defaultOutcomeId: 'good',
       },
     }),

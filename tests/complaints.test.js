@@ -183,7 +183,12 @@ test('complaints: routes appeal-raising to the Journey Owner, resolved by Contro
 
 test('complaints: declares the Outcome vocabulary for the hand-set Amend Outcome verdict', () => {
   const ids = (config.outcomeOptions ?? []).map((o) => o.id);
-  assert.deepEqual(ids, ['pass', 'refer', 'fail']);
+  assert.deepEqual(ids, [
+    'good',
+    'good-with-process-enhancement',
+    'poor',
+    'poor-with-harm',
+  ]);
   for (const option of config.outcomeOptions ?? []) {
     assert.ok(option.wording.length > 0, `${option.id} has wording`);
   }
@@ -214,39 +219,42 @@ test('complaints: Case Type descriptors exclude dashboard composition and add a 
 
 // --- computeOutcome (response-driven: highest-scoring applicable outcome) ---
 
-test('complaints computeOutcome: empty answers → pass', () => {
-  assert.deepStrictEqual(config.computeOutcome({}).outcome, 'pass');
+test('complaints computeOutcome: empty answers → good', () => {
+  assert.deepStrictEqual(config.computeOutcome({}).outcome, 'good');
 });
 
-test('complaints computeOutcome: no mapped responses → pass', () => {
+test('complaints computeOutcome: no mapped responses → good', () => {
   const answers = Object.fromEntries(
     config.questions.map((q) => [q.id, ans('Yes')])
   );
-  assert.deepStrictEqual(config.computeOutcome(answers).outcome, 'pass');
+  assert.deepStrictEqual(config.computeOutcome(answers).outcome, 'good');
 });
 
-test('complaints computeOutcome: a response mapped to refer yields refer', () => {
-  // A "No" on redress is configured to score `refer`.
+test('complaints computeOutcome: a response mapped to poor yields poor', () => {
+  // A "No" on redress is configured to score `poor`.
   assert.deepStrictEqual(
     config.computeOutcome({ 'q-cm-redress': ans('No') }).outcome,
-    'refer'
+    'poor'
   );
 });
 
-test('complaints computeOutcome: a response mapped to fail yields fail', () => {
-  // A "No" on acknowledgement is configured to score `fail`.
+test('complaints computeOutcome: a response mapped to poor-with-harm yields poor-with-harm', () => {
+  // A "No" on acknowledgement is configured to score `poor-with-harm`.
   assert.deepStrictEqual(
     config.computeOutcome({ 'q-cm-ack': ans('No') }).outcome,
-    'fail'
+    'poor-with-harm'
   );
 });
 
 test('complaints computeOutcome: the highest-scoring applicable outcome wins', () => {
   const answers = {
-    'q-cm-redress': ans('No'), // refer
-    'q-cm-ack': ans('No'), // fail
+    'q-cm-redress': ans('No'), // poor
+    'q-cm-ack': ans('No'), // poor-with-harm
   };
-  assert.deepStrictEqual(config.computeOutcome(answers).outcome, 'fail');
+  assert.deepStrictEqual(
+    config.computeOutcome(answers).outcome,
+    'poor-with-harm'
+  );
 });
 
 // --- q-cm-letter-structure (sentence-length single-choice options) ---
@@ -273,25 +281,25 @@ test('complaints: letter-structure question offers three graded sentence-length 
   );
 });
 
-test('complaints computeOutcome: letter-structure grades map to pass, refer and fail', () => {
+test('complaints computeOutcome: letter-structure grades map to good, poor and poor-with-harm', () => {
   const q = config.questions.find((x) => x.id === 'q-cm-letter-structure');
   assert.ok(q && q.options);
   const [noImpact, couldImpact, harm] = q.options;
   assert.equal(
     config.computeOutcome({ 'q-cm-letter-structure': ans(noImpact) }).outcome,
-    'pass'
+    'good'
   );
   assert.equal(
     config.computeOutcome({ 'q-cm-letter-structure': ans(couldImpact) })
       .outcome,
-    'refer'
+    'poor'
   );
   assert.equal(
     config.computeOutcome({ 'q-cm-letter-structure': ans(harm) }).outcome,
-    'fail'
+    'poor-with-harm'
   );
   // Every grade mapping to a non-default Outcome flags a failed Answer for
-  // the Issues/Remediation flow — the refer grade included.
+  // the Issues/Remediation flow — the `poor` grade included.
   assert.deepEqual(deriveFailureValues(q, config.defaultOutcomeId), [
     couldImpact,
     harm,
@@ -362,17 +370,29 @@ test('complaints: the outcome-type Question Definitions are exactly q-cmp-0001..
 test('complaints: an outcome-type question offers the Case Type Outcomes plus N/A', () => {
   const q = config.questions.find((x) => x.id === 'q-cmp-0001');
   assert.ok(q, 'expected q-cmp-0001 in the catalogue');
-  assert.deepEqual(reviewerResponseOptions(q), ['Pass', 'Refer', 'Fail', 'NA']);
+  assert.deepEqual(reviewerResponseOptions(q), [
+    'Good',
+    'Good with process enhancement',
+    'Poor',
+    'Poor with harm',
+    'NA',
+  ]);
 });
 
 test('complaints: every outcome-type question carries the compiled Outcome options and mapping', () => {
   const first = config.questions.find((x) => x.id === 'q-cmp-0001');
   assert.ok(first);
-  assert.deepEqual(first.options, ['Pass', 'Refer', 'Fail']);
+  assert.deepEqual(first.options, [
+    'Good',
+    'Good with process enhancement',
+    'Poor',
+    'Poor with harm',
+  ]);
   assert.deepEqual(first.optionOutcomes, {
-    Pass: 'pass',
-    Refer: 'refer',
-    Fail: 'fail',
+    Good: 'good',
+    'Good with process enhancement': 'good-with-process-enhancement',
+    Poor: 'poor',
+    'Poor with harm': 'poor-with-harm',
   });
   // The runtime does not derive options for an outcome-type question: it reads
   // whatever the artifact stored. Round-tripping every one of them through the
@@ -388,27 +408,34 @@ test('complaints: every outcome-type question carries the compiled Outcome optio
   }
 });
 
-test('complaints: an outcome-type question fails on both non-default Outcomes', () => {
+test('complaints: an outcome-type question fails on every non-default Outcome', () => {
   const q = config.questions.find((x) => x.id === 'q-cmp-0001');
   assert.ok(q);
   assert.deepEqual(deriveFailureValues(q, config.defaultOutcomeId), [
-    'Refer',
-    'Fail',
+    'Good with process enhancement',
+    'Poor',
+    'Poor with harm',
   ]);
 });
 
 test('complaints computeOutcome: an outcome-type answer scores itself', () => {
   assert.equal(
-    config.computeOutcome({ 'q-cmp-0001': ans('Pass') }).outcome,
-    'pass'
+    config.computeOutcome({ 'q-cmp-0001': ans('Good') }).outcome,
+    'good'
   );
   assert.equal(
-    config.computeOutcome({ 'q-cmp-0001': ans('Refer') }).outcome,
-    'refer'
+    config.computeOutcome({
+      'q-cmp-0001': ans('Good with process enhancement'),
+    }).outcome,
+    'good-with-process-enhancement'
   );
   assert.equal(
-    config.computeOutcome({ 'q-cmp-0001': ans('Fail') }).outcome,
-    'fail'
+    config.computeOutcome({ 'q-cmp-0001': ans('Poor') }).outcome,
+    'poor'
+  );
+  assert.equal(
+    config.computeOutcome({ 'q-cmp-0001': ans('Poor with harm') }).outcome,
+    'poor-with-harm'
   );
 });
 

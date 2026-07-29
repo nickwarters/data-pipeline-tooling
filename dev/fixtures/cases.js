@@ -73,7 +73,7 @@ const LETTER_STRUCTURE_HARM =
  *
  * Complaints (Journey Owner raises appeals, Controls resolves):
  *   complaints-case-1 — In-progress, outstanding (assigned to user-reviewer)
- *   complaints-case-2 — Completed, one failure → outcomeAtCompletion=refer
+ *   complaints-case-2 — Completed, one failure → outcomeAtCompletion=poor
  *   complaints-case-3 — Completed, every applicable question failed, no appeal
  *                       (Journey Owner can still raise one; Controls sees none)
  *   complaints-case-4 — Completed, two failures with Remediation Actions and an
@@ -140,13 +140,13 @@ export const cases = [
       'q-cm-investigated': { value: 'Yes' },
       // Only the first Acknowledgement group of outcome-scored Questions is
       // answered, so the Case stays visibly part-way through the Review tab.
-      'q-cmp-0001': { value: 'Pass' },
-      'q-cmp-0002': { value: 'Pass' },
-      'q-cmp-0003': { value: 'Pass' },
-      'q-cmp-0004': { value: 'Pass' },
-      'q-cmp-0005': { value: 'Pass' },
-      'q-cmp-0006': { value: 'Pass' },
-      'q-cmp-0007': { value: 'Pass' },
+      'q-cmp-0001': { value: 'Good' },
+      'q-cmp-0002': { value: 'Good' },
+      'q-cmp-0003': { value: 'Good' },
+      'q-cmp-0004': { value: 'Good' },
+      'q-cmp-0005': { value: 'Good' },
+      'q-cmp-0006': { value: 'Good' },
+      'q-cmp-0007': { value: 'Good' },
     },
     conversation: [],
     details: {
@@ -163,7 +163,7 @@ export const cases = [
     etag: 'etag-cm1-v1',
   },
   {
-    // Completed with exactly one failure (redress not offered) → outcome `refer`.
+    // Completed with exactly one failure (redress not offered) → outcome `poor`.
     // Left un-amended so the Controls Amend Outcome flow and the
     // Journey Owner → Controls appeal flow can both be exercised on it.
     id: 'complaints-case-2',
@@ -173,7 +173,7 @@ export const cases = [
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-agent-b',
     answers: {
-      ...outcomeAnswers('Pass'),
+      ...outcomeAnswers('Good'),
       'q-cm-ack': { value: 'Yes' },
       'q-cm-letter-structure': { value: LETTER_STRUCTURE_NO_IMPACT },
       'q-cm-investigated': { value: 'Yes' },
@@ -193,13 +193,14 @@ export const cases = [
     },
     notes: '',
     completedAt: _threeDaysAgo.toISOString(),
-    outcomeAtCompletion: 'refer',
+    outcomeAtCompletion: 'poor',
     created: '2026-05-02T08:00:00Z',
     etag: 'etag-cm2-v1',
   },
   {
-    // Every applicable failable question failed → outcome `fail`, and no appeal
-    // has been raised. Exercises the "no appeal" state on both appeal Sections:
+    // Every applicable failable question failed → outcome `poor-with-harm`, and
+    // no appeal has been raised. Exercises the "no appeal" state on both appeal
+    // Sections:
     // the Journey Owner sees the empty Appeal Section with the Raise Appeal form,
     // and Controls sees the Appeal Review empty state (nothing to resolve).
     // (q-cm-root-cause is hidden because q-cm-investigated failed; q-cm-channel
@@ -212,7 +213,7 @@ export const cases = [
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-agent-a',
     answers: {
-      ...outcomeAnswers('Fail'),
+      ...outcomeAnswers('Poor with harm'),
       'q-cm-ack': {
         value: 'No',
         justification: 'No acknowledgement was sent to the customer.',
@@ -240,7 +241,7 @@ export const cases = [
     },
     notes: '',
     completedAt: _threeDaysAgo.toISOString(),
-    outcomeAtCompletion: 'fail',
+    outcomeAtCompletion: 'poor-with-harm',
     created: '2026-05-06T08:00:00Z',
     etag: 'etag-cm3-v1',
   },
@@ -257,10 +258,10 @@ export const cases = [
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-agent-b',
     answers: {
-      // All-Pass across the outcome-scored block, so the Case keeps exactly the
+      // All-Good across the outcome-scored block, so the Case keeps exactly the
       // two remediated failures the appeal's citedAnswerKeys point at and the
       // Controls resolve demo stays legible.
-      ...outcomeAnswers('Pass'),
+      ...outcomeAnswers('Good'),
       'q-cm-letter-structure': { value: LETTER_STRUCTURE_NO_IMPACT },
       'q-cm-ack': {
         value: 'No',
@@ -296,14 +297,14 @@ export const cases = [
     },
     notes: '',
     completedAt: _fiveDaysAgo.toISOString(),
-    outcomeAtCompletion: 'fail',
+    outcomeAtCompletion: 'poor-with-harm',
     appeals: [
       {
         id: 'appeal-cm4-1',
         appellant: 'user-journey-owner-complaints',
         at: _threeDaysAgo.toISOString(),
         rationale:
-          'The acknowledgement was delayed only by a same-day system outage on our side, and redress had already been paid to the customer directly outside this review. Please reconsider the Fail outcome.',
+          'The acknowledgement was delayed only by a same-day system outage on our side, and redress had already been paid to the customer directly outside this review. Please reconsider the Poor with harm outcome.',
         citedAnswerKeys: ['q-cm-ack', 'q-cm-redress'],
         state: 'raised',
       },
@@ -336,9 +337,9 @@ export const cases = [
     // and the Conversation it points at are demoable from both sides.
     responsiblePartyManager: 'user-rp-manager',
     answers: {
-      // All-Pass across the outcome-scored block adds no failures, so the
+      // All-Good across the outcome-scored block adds no failures, so the
       // one-resolved/one-unresolved Remediation demo below is unchanged.
-      ...outcomeAnswers('Pass'),
+      ...outcomeAnswers('Good'),
       'q-cm-ack': {
         value: 'No',
         justification: 'Acknowledgement was sent six working days late.',
@@ -426,9 +427,9 @@ export const cases = [
       ENGLAND_WALES_HOLIDAYS
     ),
     completedAt: null,
-    outcomeAtCompletion: 'fail',
+    outcomeAtCompletion: 'poor-with-harm',
     hadRemediation: true,
-    effectiveOutcome: 'fail',
+    effectiveOutcome: 'poor-with-harm',
     effectiveHadRemediation: true,
     outcomeOverridden: false,
     created: '2026-06-02T08:00:00Z',
@@ -558,7 +559,7 @@ export const cases = [
     conversation: [],
     notes: '',
     completedAt: _twentyDaysAgo.toISOString(),
-    outcomeAtCompletion: 'refer',
+    outcomeAtCompletion: 'poor',
     hasOpenAppeal: true,
     appealRaisedAt: _sixDaysAgo.toISOString(),
     created: _twentyDaysAgo.toISOString(),
