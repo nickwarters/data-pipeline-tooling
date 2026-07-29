@@ -5,6 +5,7 @@ import config from '../case-types/complaints.js';
 import {
   detectCycles,
   allApplicableAnswered,
+  evaluate,
 } from '../src/evaluators/applicability-evaluator.js';
 import { deriveFailureValues } from '../src/evaluators/failure-evaluator.js';
 import { validateCaptureGroups } from '../src/evaluators/issue-capture.js';
@@ -348,14 +349,9 @@ function outcomeQuestions() {
   return config.questions.filter((q) => q.responseType === 'outcome');
 }
 
-test('complaints: the outcome-type Question Definitions are exactly q-cmp-0001..q-cmp-0049', () => {
-  const outcomeIds = outcomeQuestions().map((q) => q.id);
-  assert.equal(outcomeIds.length, 49);
-  const expected = Array.from(
-    { length: 49 },
-    (_, index) => `q-cmp-${String(index + 1).padStart(4, '0')}`
-  );
-  assert.deepEqual(outcomeIds, expected);
+test('complaints: every Question Definition is outcome-scored', () => {
+  // The ids themselves are pinned where the catalogue is asserted whole.
+  assert.equal(outcomeQuestions().length, config.questions.length);
 });
 
 test('complaints: an outcome-type question offers the Case Type Outcomes plus N/A', () => {
@@ -437,6 +433,23 @@ test('complaints fixtures: every Answer key names a Question the catalogue still
       assert.ok(
         ids.has(key),
         `${row.id} answers ${key}, which is not in the catalogue`
+      );
+    }
+  }
+});
+
+test('complaints fixtures: no Answer is stored against a Question the Case hides', () => {
+  // Outcome scoring does not consult applicability, so an Answer left behind on
+  // a hidden Question keeps scoring one the Reviewer was never shown. The
+  // fixtures decide applicability for themselves, and this is what keeps that
+  // decision honest as the conditional Question's rule changes.
+  for (const row of cases.filter((c) => c.caseType === 'complaints')) {
+    const applicable = evaluate(config.questions, row.answers);
+    for (const key of Object.keys(row.answers)) {
+      if (key.startsWith(GENERAL_ANSWER_PREFIX)) continue;
+      assert.ok(
+        applicable.has(key),
+        `${row.id} answers ${key}, which its own Answers hide`
       );
     }
   }

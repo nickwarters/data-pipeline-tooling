@@ -85,6 +85,7 @@
       "id": "q-cmp-0005",
       "text": "Was the customer told how long the investigation is expected to take?",
       "questionGroup": "Acknowledgement",
+      "labelIds": ["lbl-sla"],
       "responseType": "outcome",
       "options": [
         "Good",
@@ -256,6 +257,7 @@
       "id": "q-cmp-0014",
       "text": "Was the investigation completed without avoidable delay?",
       "questionGroup": "Investigation",
+      "labelIds": ["lbl-sla"],
       "responseType": "outcome",
       "options": [
         "Good",
@@ -471,6 +473,7 @@
       "id": "q-cmp-0025",
       "text": "Were the customer's referral rights and the time limit set out correctly?",
       "questionGroup": "Communication",
+      "labelIds": ["lbl-regulatory"],
       "responseType": "outcome",
       "options": [
         "Good",
@@ -509,6 +512,7 @@
       "id": "q-cmp-0027",
       "text": "Were holding responses issued where the investigation ran beyond the expected time?",
       "questionGroup": "Communication",
+      "labelIds": ["lbl-sla"],
       "responseType": "outcome",
       "options": [
         "Good",
@@ -759,6 +763,7 @@
       "id": "q-cmp-0040",
       "text": "Was personal data handled in line with the retention and access rules?",
       "questionGroup": "Records & Evidence",
+      "labelIds": ["lbl-regulatory"],
       "responseType": "outcome",
       "options": [
         "Good",
@@ -816,6 +821,7 @@
       "id": "q-cmp-0043",
       "text": "Was the complaint reportable, and flagged as such correctly?",
       "questionGroup": "Regulatory & Reporting",
+      "labelIds": ["lbl-regulatory"],
       "responseType": "outcome",
       "options": [
         "Good",
@@ -854,6 +860,7 @@
       "id": "q-cmp-0045",
       "text": "Was the complaint closed within the regulatory deadline?",
       "questionGroup": "Regulatory & Reporting",
+      "labelIds": ["lbl-sla", "lbl-regulatory"],
       "responseType": "outcome",
       "options": [
         "Good",
@@ -873,6 +880,7 @@
       "id": "q-cmp-0046",
       "text": "Where the deadline was missed, was the customer told of their referral rights?",
       "questionGroup": "Regulatory & Reporting",
+      "labelIds": ["lbl-regulatory"],
       "responseType": "outcome",
       "options": [
         "Good",
@@ -916,6 +924,7 @@
       "id": "q-cmp-0048",
       "text": "Was any breach or near miss raised through the incident process?",
       "questionGroup": "Regulatory & Reporting",
+      "labelIds": ["lbl-regulatory"],
       "responseType": "outcome",
       "options": [
         "Good",

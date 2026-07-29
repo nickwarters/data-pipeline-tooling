@@ -32,21 +32,20 @@ const COMPLAINTS_QUESTIONS = 49;
 
 // The one conditional Question in the Complaints catalogue: referral rights are
 // only asked about where the closure deadline was missed. An Answer stored
-// against a hidden Question still scores, so a uniform-response fixture must
-// leave it out whenever the Question it depends on is answered `Good`.
+// against a hidden Question still scores, so answering it where the deadline
+// was met would move the Outcome from a Question the Reviewer never saw.
 const REFERRAL_RIGHTS = 'q-cmp-0046';
-const CLOSURE_DEADLINE_MISSED = [
-  'Good with process enhancement',
-  'Poor',
-  'Poor with harm',
-];
+const CLOSURE_DEADLINE_MET = 'Good';
 
 /**
+ * Answers the whole catalogue with one response, skipping any Question that
+ * response leaves inapplicable.
+ *
  * The ids are derived from the count rather than read from the Question Bank:
  * a fixture built from the bank would make any test comparing the two assert
  * the bank against itself.
  *
- * @param {string} value the response given to every Question
+ * @param {string} value the response given to every applicable Question
  * @returns {Record<string, Answer>}
  */
 function outcomeAnswers(value) {
@@ -54,9 +53,7 @@ function outcomeAnswers(value) {
   const answers = {};
   for (let n = 1; n <= COMPLAINTS_QUESTIONS; n += 1) {
     const id = `q-cmp-${String(n).padStart(4, '0')}`;
-    if (id === REFERRAL_RIGHTS && !CLOSURE_DEADLINE_MISSED.includes(value)) {
-      continue;
-    }
+    if (id === REFERRAL_RIGHTS && value === CLOSURE_DEADLINE_MET) continue;
     answers[id] = { value };
   }
   return answers;
@@ -219,11 +216,12 @@ export const cases = [
     etag: 'etag-cm3-v1',
   },
   {
-    // Two failures (complaint logging + the redress check), each with a selected Remediation
-    // Action, and an appeal the Journey Owner has already raised. The appeal is
-    // still open (`state: 'raised'`), so Controls lands straight on the Appeal
-    // Review resolve form (agree → linked Amended Outcome, or reject). The Journey
-    // Owner sees their raised appeal plus the "already open" note.
+    // Two failures (complaint logging + the redress check), each with a
+    // selected Remediation Action, and an appeal the Journey Owner has already
+    // raised. The appeal is still open (`state: 'raised'`), so Controls lands
+    // straight on the Appeal Review resolve form (agree → linked Amended
+    // Outcome, or reject). The Journey Owner sees their raised appeal plus the
+    // "already open" note.
     id: 'complaints-case-4',
     caseType: 'complaints',
     title: 'Complaint #4',
