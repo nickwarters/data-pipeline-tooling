@@ -43,6 +43,7 @@ Closes #<!-- issue number, or remove this line if there's no issue -->
 - [ ] `node --test` — all passing (state the count)
 - [ ] `node --test --experimental-test-coverage` — new/changed lines covered
 - [ ] `tsc --noEmit --checkJs --allowJs` (`npm run check`) — clean
+- [ ] `npm run verify` — every module parses and every import specifier resolves
 - [ ] Exercised the change (mock loop `?mock=1`, in-memory flow runner, or a real deploy) where it has runtime behaviour
 
 ## Checklist

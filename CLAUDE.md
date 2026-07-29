@@ -73,7 +73,7 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
   the SharePoint-isolation boundary. See the current
   [state/action/render explainer](./docs/component-anatomy-explainer.html).
 - **Case Type config as JS modules; Question Bank content as SharePoint-hosted text artifacts.** One module per Case Type under `case-types/{slug}.js`, lazy-loaded via `case-types/manifest.js`. Question Bank content (Question Definitions, labels, and Outcome vocabulary) lives in `case-types/banks/{slug}.txt`, stored in the SharePoint Style Library and loaded through `case-types/load-bank.js` as part of the Case Type config. There is no shared Question Definitions list and no planned runtime join to one. `HttpSharePointClient`/`MockSharePointClient` expose `getExportHash`/`getVersionedExport` for ADR-0021's immutable, point-in-time exports on reportable Cases.
-- **JSDoc + `tsc --checkJs` for types**. No `.ts` files; the deployed JS is the source JS. CI runs `tsc --noEmit --checkJs --allowJs`.
+- **JSDoc + `tsc --checkJs` for types**. No `.ts` files; the deployed JS is the source JS. `npm run check` runs `tsc --noEmit --checkJs --allowJs`.
 - **Per-Case-Type `showWhen` graph + `outcome` function**. Applicability is data (declarative `showWhen`); outcome is code (exported function). Same module, one place to look.
 - **Case storage: everything on the Case row**. `Answers` and `Conversation` as JSON blobs on a per-Case-Type SharePoint list row. Notes as plain text. Field-level PATCH only.
 - **Auto-save: 1500ms debounce + ETag concurrency**. A single `SaveQueue`
@@ -127,6 +127,15 @@ Never merge a production behaviour change without a corresponding test. Run
 `npm run test:coverage` before committing. The command explicitly includes all
 JavaScript under `src/` and `case-types/` and enforces a consistent global floor
 of 95% for line, branch, and function coverage.
+
+Run `npm run verify` alongside it. `npm run check` (tsc) already catches a
+dangling specifier and a case-mismatched one, so what the gate adds is: the
+dependency-graph artifact at `.verify/import-graph.json` (gitignored, and
+written only when the run is clean); rejection of bare package specifiers, which
+tsc resolves through `node_modules` while the browser cannot; and Node's own
+parser over every `.js` under `src/` and `case-types/`. Run `check`, then
+`verify`, then `test:coverage` before a deploy — there is no automated pipeline,
+so a deploy is only as verified as the commands someone ran first.
 
 The global floor is a backstop, not a quota. Keep security, SharePoint protocol,
 concurrency, permissions, and outcome/applicability code at 100% line and branch
@@ -344,6 +353,10 @@ scripts/
   deploy_to_sharepoint.py
   deploy_to_sharepoint.md       # NOT a runbook: a stale verbatim copy of an older deploy_to_sharepoint.py;
                                 #   regenerate or delete it rather than hand-editing it (ADR-0041)
+  module-graph.js               # shared import-specifier scanner: the one answer to "what does
+                                #   this file import?", used by the verify gate and the layering test
+  verify_build.js               # npm run verify: parses every src/ + case-types/ module and
+                                #   resolves every specifier case-sensitively; emits .verify/import-graph.json
   run_in_memory_flow.js
   uat_acl_smoke.js              # UAT list-ACL smoke check (npm run test:security:uat)
   uat-acl-smoke.example.json    # sample config for the ACL smoke check

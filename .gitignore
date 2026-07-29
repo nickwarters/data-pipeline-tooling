@@ -2,6 +2,7 @@ node_modules/
 .claude
 .worktrees/
 coverage/
+.verify/
 
 # Python (deploy/scaffold tooling)
 __pycache__/

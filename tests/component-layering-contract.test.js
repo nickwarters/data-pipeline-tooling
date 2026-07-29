@@ -17,49 +17,32 @@
  *     views. Shared components do not know about bank state or actions.
  */
 
-import { readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+
+import {
+  jsFilesUnder,
+  readCode,
+  importSpecifiers,
+  resolveRelative,
+} from '../scripts/module-graph.js';
 
 const ROOT = new URL('../', import.meta.url);
 const COMPONENTS = new URL('src/components/', ROOT);
 const SRC = new URL('src/', ROOT);
 
-/** @param {URL} dir @returns {string[]} repo-relative paths of every .js file */
-function jsFilesUnder(dir) {
-  /** @type {string[]} */
-  const out = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const child = new URL(entry.name + (entry.isDirectory() ? '/' : ''), dir);
-    if (entry.isDirectory()) out.push(...jsFilesUnder(child));
-    else if (entry.name.endsWith('.js'))
-      out.push(child.pathname.slice(ROOT.pathname.length));
-  }
-  return out;
-}
-
 /** @param {string} rel @returns {boolean} whether the file imports from src/pages/question-bank/ */
 function importsQuestionBank(rel) {
+  // Reads the raw bytes rather than the shared scanner on purpose: this is a
+  // name check, and a commented-out reference to the subsystem is still a
+  // coupling worth failing on.
   const src = readFileSync(new URL(rel, ROOT), 'utf8');
   return /from\s+['"][^'"]*question-bank\//.test(src);
 }
 
-/**
- * Read a source file with whole-line comments removed, so JSDoc type references
- * like `@param {() => Promise<typeof import('../pages/home.js')>}` and
- * `// import('../pages/…')` do not trip the page/route import rules below. Only
- * real (non-comment) import statements remain.
- * @param {string} rel @returns {string}
- */
-function readCode(rel) {
-  return readFileSync(new URL(rel, ROOT), 'utf8')
-    .split('\n')
-    .filter((line) => !/^\s*(\*|\/\/|\/\*)/.test(line))
-    .join('\n');
-}
-
-const componentFiles = jsFilesUnder(COMPONENTS);
-const srcFiles = jsFilesUnder(SRC);
+const componentFiles = jsFilesUnder(COMPONENTS, ROOT);
+const srcFiles = jsFilesUnder(SRC, ROOT);
 
 test('layering: no component imports the relocated generic helpers from question-bank/', () => {
   const offenders = componentFiles.filter((rel) => {
@@ -94,16 +77,31 @@ test('layering: no component imports from the question-bank subsystem', () => {
  * by construction.
  */
 test('layering: no static page import outside src/pages/; dynamic page import() only in the route table', () => {
-  // `from '…'` and side-effect `import '…'` are static; `import('…')` is dynamic.
-  const staticPage = /(?:from\s+|import\s+)['"][^'"]*\bpages\//;
-  const dynamicPage = /import\(\s*['"][^'"]*\bpages\//;
+  const isPageSpecifier = /\bpages\//;
 
-  const staticOffenders = srcFiles.filter((rel) => {
-    if (rel.startsWith('src/pages/')) return false;
-    return staticPage.test(readCode(rel));
-  });
+  /**
+   * Offending `file:line -> specifier` strings, for every edge of one kind
+   * whose specifier names a page module.
+   * @param {import('../scripts/module-graph.js').ImportKind} kind
+   * @param {(rel: string) => boolean} [exempt]
+   * @returns {string[]}
+   */
+  const pageEdges = (kind, exempt = () => false) => {
+    /** @type {string[]} */
+    const out = [];
+    for (const rel of srcFiles) {
+      if (rel.startsWith('src/pages/') || exempt(rel)) continue;
+      for (const edge of importSpecifiers(rel, ROOT)) {
+        if (edge.kind === kind && isPageSpecifier.test(edge.specifier)) {
+          out.push(`${rel}:${edge.line} -> ${edge.specifier}`);
+        }
+      }
+    }
+    return out;
+  };
+
   assert.deepEqual(
-    staticOffenders,
+    pageEdges('static'),
     [],
     'these files statically import a page — add it to the route table in setup/register-routes.js as an `import()` thunk instead'
   );
@@ -111,13 +109,8 @@ test('layering: no static page import outside src/pages/; dynamic page import() 
   // Dynamic page import() belongs to the route table (page loading) or a page
   // composing its own subsystem — never to generic src/ modules, services, or
   // components.
-  const dynamicOffenders = srcFiles.filter((rel) => {
-    if (rel === 'src/setup/register-routes.js') return false;
-    if (rel.startsWith('src/pages/')) return false;
-    return dynamicPage.test(readCode(rel));
-  });
   assert.deepEqual(
-    dynamicOffenders,
+    pageEdges('dynamic', (rel) => rel === 'src/setup/register-routes.js'),
     [],
     'only the route table in setup/register-routes.js may dynamically import a page module'
   );
@@ -132,7 +125,7 @@ test('layering: no static page import outside src/pages/; dynamic page import() 
  * Scanned as source rather than imported: importing `app.js` runs `boot()`.
  */
 test('boot: src/app.js is a static graph that renders a panel when boot fails', () => {
-  const code = readCode('src/app.js');
+  const code = readCode('src/app.js', ROOT);
   assert.doesNotMatch(code, /import\(/, 'src/app.js must import statically');
   assert.match(
     code,
@@ -140,25 +133,6 @@ test('boot: src/app.js is a static graph that renders a panel when boot fails', 
     'src/app.js must hand a failed boot to renderBootError'
   );
 });
-
-/** Repo-relative path a relative import specifier resolves to, or null. */
-function resolveRelative(
-  /** @type {string} */ fromRel,
-  /** @type {string} */ spec
-) {
-  if (!spec.startsWith('.')) return null;
-  const resolved = new URL(spec, new URL(fromRel, ROOT));
-  return resolved.pathname.slice(ROOT.pathname.length);
-}
-
-/** Every import/dynamic-import specifier in a file (comment lines stripped). */
-function importSpecifiers(/** @type {string} */ rel) {
-  const re = /(?:from\s+|import\s+|import\(\s*)['"]([^'"]+)['"]/g;
-  /** @type {string[]} */
-  const specs = [];
-  for (const [, spec] of readCode(rel).matchAll(re)) specs.push(spec);
-  return specs;
-}
 
 /**
  * Rule (c): the only accepted cross-import between top-level page modules is
@@ -182,8 +156,8 @@ test('layering: no file under src/pages/ imports another top-level page (one doc
   for (const rel of srcFiles) {
     if (!rel.startsWith('src/pages/')) continue;
     const allowed = CROSS_PAGE_ALLOWLIST[rel] ?? [];
-    for (const spec of importSpecifiers(rel)) {
-      const target = resolveRelative(rel, spec);
+    for (const { specifier } of importSpecifiers(rel, ROOT)) {
+      const target = resolveRelative(rel, specifier, ROOT);
       if (!target || target === rel) continue;
       if (topLevelPage.test(target) && !allowed.includes(target)) {
         offenders.push(`${rel} -> ${target}`);
