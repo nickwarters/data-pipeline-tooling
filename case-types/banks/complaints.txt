@@ -97,6 +97,643 @@
         "No": "refer"
       },
       "deprecated": false
+    },
+    {
+      "id": "q-cmp-0001",
+      "text": "Was the complaint logged on the complaints register on the day it was received?",
+      "questionGroup": "Acknowledgement",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0002",
+      "text": "Was the complaint categorised correctly at the point of logging?",
+      "questionGroup": "Acknowledgement",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0003",
+      "text": "Was the acknowledgement issued to the correct customer contact address?",
+      "questionGroup": "Acknowledgement",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0004",
+      "text": "Did the acknowledgement name the handler and give their direct contact details?",
+      "questionGroup": "Acknowledgement",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0005",
+      "text": "Was the customer told how long the investigation is expected to take?",
+      "questionGroup": "Acknowledgement",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0006",
+      "text": "Was the complaint routed to a handler independent of the original decision?",
+      "questionGroup": "Acknowledgement",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0007",
+      "text": "Were the customer's preferred contact method and times recorded?",
+      "questionGroup": "Acknowledgement",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0008",
+      "text": "Were all the points the customer raised identified and listed?",
+      "questionGroup": "Investigation",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0009",
+      "text": "Was every relevant system record and call recording reviewed?",
+      "questionGroup": "Investigation",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0010",
+      "text": "Was contact made with the customer where the complaint points were unclear?",
+      "questionGroup": "Investigation",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0011",
+      "text": "Were the policy and procedure versions in force at the time applied?",
+      "questionGroup": "Investigation",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0012",
+      "text": "Was the evidence gathered sufficient to support the decision reached?",
+      "questionGroup": "Investigation",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0013",
+      "text": "Were any linked or repeat complaints from the same customer considered?",
+      "questionGroup": "Investigation",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0014",
+      "text": "Was the investigation completed without avoidable delay?",
+      "questionGroup": "Investigation",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0015",
+      "text": "Was the uphold decision consistent with the evidence gathered?",
+      "questionGroup": "Resolution",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0016",
+      "text": "Was the redress calculation checked against the redress methodology?",
+      "questionGroup": "Resolution",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0017",
+      "text": "Was any distress and inconvenience payment consistent with the published scale?",
+      "questionGroup": "Resolution",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0018",
+      "text": "Was interest applied to the redress at the correct rate and for the correct period?",
+      "questionGroup": "Resolution",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0019",
+      "text": "Were the customer's own costs considered in the settlement?",
+      "questionGroup": "Resolution",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0020",
+      "text": "Was the resolution offered within the handler's delegated authority?",
+      "questionGroup": "Resolution",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0021",
+      "text": "Was the resolution recorded on the customer's account and systems?",
+      "questionGroup": "Resolution",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0022",
+      "text": "Was the final response written in plain language the customer can follow?",
+      "questionGroup": "Communication",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0023",
+      "text": "Did the final response address every point the customer raised?",
+      "questionGroup": "Communication",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0024",
+      "text": "Did the final response explain the reasons for the decision?",
+      "questionGroup": "Communication",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0025",
+      "text": "Were the customer's referral rights and the time limit set out correctly?",
+      "questionGroup": "Communication",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0026",
+      "text": "Was the tone of the response appropriate to the customer's circumstances?",
+      "questionGroup": "Communication",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0027",
+      "text": "Were holding responses issued where the investigation ran beyond the expected time?",
+      "questionGroup": "Communication",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0028",
+      "text": "Was the response issued in the format the customer asked for?",
+      "questionGroup": "Communication",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0029",
+      "text": "Were indicators of customer vulnerability identified during the complaint?",
+      "questionGroup": "Customer Treatment",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0030",
+      "text": "Where vulnerability was identified, was it recorded on the customer record?",
+      "questionGroup": "Customer Treatment",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0031",
+      "text": "Were reasonable adjustments offered where the customer needed them?",
+      "questionGroup": "Customer Treatment",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0032",
+      "text": "Was the pace and channel of contact adapted to the customer's needs?",
+      "questionGroup": "Customer Treatment",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0033",
+      "text": "Was the customer treated fairly compared with others in the same circumstances?",
+      "questionGroup": "Customer Treatment",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0034",
+      "text": "Were affordability or hardship concerns raised by the customer acted on?",
+      "questionGroup": "Customer Treatment",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0035",
+      "text": "Was consent obtained before discussing the complaint with a third party?",
+      "questionGroup": "Customer Treatment",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0036",
+      "text": "Are the case notes a complete and accurate record of the investigation?",
+      "questionGroup": "Records & Evidence",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0037",
+      "text": "Is the evidence relied on saved to the complaint file?",
+      "questionGroup": "Records & Evidence",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0038",
+      "text": "Were the decision and its rationale recorded at the time it was made?",
+      "questionGroup": "Records & Evidence",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0039",
+      "text": "Are all customer contacts logged with date, channel and outcome?",
+      "questionGroup": "Records & Evidence",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0040",
+      "text": "Was personal data handled in line with the retention and access rules?",
+      "questionGroup": "Records & Evidence",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0041",
+      "text": "Is the complaint file free of information belonging to another customer?",
+      "questionGroup": "Records & Evidence",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0042",
+      "text": "Were any manual adjustments to the record authorised and evidenced?",
+      "questionGroup": "Records & Evidence",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0043",
+      "text": "Was the complaint reportable, and flagged as such correctly?",
+      "questionGroup": "Regulatory & Reporting",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0044",
+      "text": "Was the root cause coded against the correct product and cause category?",
+      "questionGroup": "Regulatory & Reporting",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0045",
+      "text": "Was the complaint closed within the regulatory deadline?",
+      "questionGroup": "Regulatory & Reporting",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0046",
+      "text": "Where the deadline was missed, was the customer told of their referral rights?",
+      "questionGroup": "Regulatory & Reporting",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0047",
+      "text": "Were any potential systemic issues escalated to the relevant forum?",
+      "questionGroup": "Regulatory & Reporting",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0048",
+      "text": "Was any breach or near miss raised through the incident process?",
+      "questionGroup": "Regulatory & Reporting",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0049",
+      "text": "Was the complaint outcome fed back to the originating team?",
+      "questionGroup": "Regulatory & Reporting",
+      "responseType": "outcome",
+      "options": ["Pass", "Refer", "Fail"],
+      "optionOutcomes": {
+        "Pass": "pass",
+        "Refer": "refer",
+        "Fail": "fail"
+      },
+      "deprecated": false
     }
   ],
   "labels": [

@@ -2,7 +2,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import config from '../case-types/complaints.js';
-import { detectCycles } from '../src/evaluators/applicability-evaluator.js';
+import {
+  detectCycles,
+  allApplicableAnswered,
+} from '../src/evaluators/applicability-evaluator.js';
 import { deriveFailureValues } from '../src/evaluators/failure-evaluator.js';
 import { validateCaptureGroups } from '../src/evaluators/issue-capture.js';
 import {
@@ -10,6 +13,8 @@ import {
   validateAnswerKeyNamespace,
 } from '../src/evaluators/general-questions.js';
 import { resolveGeneralQuestions } from '../case-types/general-questions.js';
+import { reviewerResponseOptions } from '../src/lib/response-options.js';
+import { resolveCompiledOptions } from '../src/pages/question-bank/question-bank-compile.js';
 import { cases } from '../dev/fixtures/cases.js';
 
 /** @typedef {import('../src/sharepoint-client.js').Answer} Answer */
@@ -39,7 +44,8 @@ test('complaints: every choice question carries a non-empty options[]', () => {
   for (const q of config.questions) {
     if (
       q.responseType === 'single-choice' ||
-      q.responseType === 'multi-choice'
+      q.responseType === 'multi-choice' ||
+      q.responseType === 'outcome'
     ) {
       assert.ok(
         Array.isArray(q.options) && q.options.length > 0,
@@ -316,13 +322,126 @@ test('complaints config: limits each Reviewer to three active Cases', () => {
   assert.equal(config.maxInProgressCases, 3);
 });
 
-test('complaints fixtures: the Completed Case reference answers compute to its frozen outcomeAtCompletion', () => {
-  const completed = cases.find(
-    (c) => c.caseType === 'complaints' && c.status === 'Completed'
+test('complaints fixtures: every reference Case with answers computes to its frozen outcomeAtCompletion', () => {
+  // The Action Centre demo rows carry a frozen Outcome but no Answers by
+  // design — they exist to populate the reason groups, not to be reviewed — so
+  // the non-empty-answers condition excludes them.
+  const frozen = cases.filter(
+    (c) =>
+      c.caseType === 'complaints' &&
+      c.outcomeAtCompletion &&
+      Object.keys(c.answers).length > 0
   );
-  assert.ok(completed, 'expected a Completed Complaints Case');
+  assert.ok(frozen.length >= 1, 'expected a frozen-Outcome Complaints Case');
+  for (const row of frozen) {
+    assert.equal(
+      config.computeOutcome(row.answers).outcome,
+      row.outcomeAtCompletion,
+      `${row.id} recomputes to its frozen Outcome`
+    );
+  }
+});
+
+// --- outcome-type Question Definitions ---
+
+/** The outcome-type questions, in catalogue order. */
+function outcomeQuestions() {
+  return config.questions.filter((q) => q.responseType === 'outcome');
+}
+
+test('complaints: the outcome-type Question Definitions are exactly q-cmp-0001..q-cmp-0049', () => {
+  const outcomeIds = outcomeQuestions().map((q) => q.id);
+  assert.equal(outcomeIds.length, 49);
+  const expected = Array.from(
+    { length: 49 },
+    (_, index) => `q-cmp-${String(index + 1).padStart(4, '0')}`
+  );
+  assert.deepEqual(outcomeIds, expected);
+});
+
+test('complaints: an outcome-type question offers the Case Type Outcomes plus N/A', () => {
+  const q = config.questions.find((x) => x.id === 'q-cmp-0001');
+  assert.ok(q, 'expected q-cmp-0001 in the catalogue');
+  assert.deepEqual(reviewerResponseOptions(q), ['Pass', 'Refer', 'Fail', 'NA']);
+});
+
+test('complaints: every outcome-type question carries the compiled Outcome options and mapping', () => {
+  const first = config.questions.find((x) => x.id === 'q-cmp-0001');
+  assert.ok(first);
+  assert.deepEqual(first.options, ['Pass', 'Refer', 'Fail']);
+  assert.deepEqual(first.optionOutcomes, {
+    Pass: 'pass',
+    Refer: 'refer',
+    Fail: 'fail',
+  });
+  // The runtime does not derive options for an outcome-type question: it reads
+  // whatever the artifact stored. Round-tripping every one of them through the
+  // compiler catches the artifact drifting from what a republish would emit.
+  for (const q of outcomeQuestions()) {
+    const resolved = resolveCompiledOptions(q, config.outcomeOptions ?? []);
+    assert.deepEqual(q.options, resolved.options, `${q.id} options`);
+    assert.deepEqual(
+      q.optionOutcomes,
+      resolved.optionOutcomes,
+      `${q.id} optionOutcomes`
+    );
+  }
+});
+
+test('complaints: an outcome-type question fails on both non-default Outcomes', () => {
+  const q = config.questions.find((x) => x.id === 'q-cmp-0001');
+  assert.ok(q);
+  assert.deepEqual(deriveFailureValues(q, config.defaultOutcomeId), [
+    'Refer',
+    'Fail',
+  ]);
+});
+
+test('complaints computeOutcome: an outcome-type answer scores itself', () => {
   assert.equal(
-    config.computeOutcome(completed.answers).outcome,
-    completed.outcomeAtCompletion
+    config.computeOutcome({ 'q-cmp-0001': ans('Pass') }).outcome,
+    'pass'
   );
+  assert.equal(
+    config.computeOutcome({ 'q-cmp-0001': ans('Refer') }).outcome,
+    'refer'
+  );
+  assert.equal(
+    config.computeOutcome({ 'q-cmp-0001': ans('Fail') }).outcome,
+    'fail'
+  );
+});
+
+test('complaints: every outcome-type question declares a non-empty questionGroup', () => {
+  // A question with no group silently falls into a group named `General`,
+  // which collides with the General Questions section below the groups.
+  for (const q of outcomeQuestions()) {
+    assert.equal(typeof q.questionGroup, 'string', `${q.id} has a group`);
+    assert.ok((q.questionGroup ?? '').length > 0, `${q.id} group is non-empty`);
+  }
+});
+
+test('complaints fixtures: the Cases past the reportable milestone answer every applicable Question', () => {
+  const catalogue = config.questions.filter((q) => !q.deprecated);
+  for (const id of [
+    'complaints-case-2',
+    'complaints-case-3',
+    'complaints-case-4',
+    'complaints-case-5',
+  ]) {
+    const row = cases.find((c) => c.id === id);
+    assert.ok(row, `expected ${id} in the fixtures`);
+    assert.equal(
+      allApplicableAnswered(catalogue, row.answers),
+      true,
+      `${id} answers every applicable Question`
+    );
+  }
+});
+
+test('complaints fixtures: the outstanding Case is deliberately not completable', () => {
+  const catalogue = config.questions.filter((q) => !q.deprecated);
+  const row = cases.find((c) => c.id === 'complaints-case-1');
+  assert.ok(row, 'expected complaints-case-1 in the fixtures');
+  assert.equal(allApplicableAnswered(catalogue, row.answers), false);
 });

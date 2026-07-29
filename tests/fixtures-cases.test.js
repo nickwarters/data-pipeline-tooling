@@ -119,6 +119,19 @@ test('the sent-to-adviser Case names a Responsible Party Manager persona', () =>
   assert.notEqual(row.responsiblePartyManager, row.responsibleParty);
 });
 
+test('a mock complaints Case is unallocated, so the allocation flow has a candidate', () => {
+  // "Take a Case" reads the unallocated pool: with every fixture Case already
+  // assigned, the allocation panel demos as permanently empty.
+  const row = mockCases.find(
+    (c) =>
+      c.caseType === 'complaints' &&
+      c.assignedReviewer === '' &&
+      c.status === 'In-progress' &&
+      Object.keys(c.answers).length === 0
+  );
+  assert.ok(row, 'an unallocated, unanswered In-progress Complaints Case');
+});
+
 test('the sent-to-adviser Case names a Reviewer Manager persona', () => {
   // The reviewer-side Remediation rendering is held by the Assigned Reviewer's
   // manager too, and that role is now resolved from the `assignedReviewerManager`

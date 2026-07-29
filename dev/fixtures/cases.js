@@ -1,5 +1,6 @@
 // @ts-check
 /** @typedef {import('../../src/sharepoint-client.js').CaseRow} CaseRow */
+/** @typedef {import('../../src/sharepoint-client.js').Answer} Answer */
 
 import { addWorkingDays } from '../../src/lib/add-working-days.js';
 import {
@@ -27,10 +28,48 @@ const _fourDaysAgo = new Date(_todayStart.getTime() - 4 * 24 * 60 * 60 * 1000);
 const _sixDaysAgo = new Date(_todayStart.getTime() - 6 * 24 * 60 * 60 * 1000);
 const _nineDaysAgo = new Date(_todayStart.getTime() - 9 * 24 * 60 * 60 * 1000);
 
+/** How many outcome-scored Question Definitions the Complaints bank carries. */
+const COMPLAINTS_OUTCOME_QUESTIONS = 49;
+
+/**
+ * Answers every outcome-scored Complaints Question with the same response,
+ * bar the named exceptions. Written out in full, forty-nine literal keys per
+ * Case would bury the handful of Answers that actually carry each demo — the
+ * failures, the justifications and the Remediation Actions.
+ *
+ * The ids are derived from the count rather than read from the Question Bank:
+ * a fixture built from the bank would make any test comparing the two assert
+ * the bank against itself.
+ *
+ * @param {string} value the response given to every outcome-scored Question
+ * @param {Record<string, string>} [overrides] per-Question responses, by id
+ * @returns {Record<string, Answer>}
+ */
+function outcomeAnswers(value, overrides = {}) {
+  /** @type {Record<string, Answer>} */
+  const answers = {};
+  for (let n = 1; n <= COMPLAINTS_OUTCOME_QUESTIONS; n += 1) {
+    const id = `q-cmp-${String(n).padStart(4, '0')}`;
+    answers[id] = { value: overrides[id] ?? value };
+  }
+  return answers;
+}
+
+// The graded letter-structure responses, quoted from the Question Bank so the
+// fixture Answers match an authorable option exactly.
+const LETTER_STRUCTURE_NO_IMPACT =
+  "Correct letter structure has not been used, however this has no impact on the customer's understanding";
+const LETTER_STRUCTURE_HARM =
+  "Acknowledgement letter includes inaccurate information or incorrect structure used, which could impact the customer's understanding/actions and/or is a regulatory requirement, and this led to harm";
+
 /**
  * The mock-served fixture Cases (`?mock=1`). complaints is the only live Case
  * Type; the example-review demo Cases moved to
  * tests/_example-review-cases.js as a test-only fixture.
+ *
+ * The Complaints catalogue is dominated by outcome-scored Questions, so the
+ * Cases past the reportable milestone answer them through `outcomeAnswers()`
+ * and spell out only the Answers their demo turns on.
  *
  * Complaints (Journey Owner raises appeals, Controls resolves):
  *   complaints-case-1 — In-progress, outstanding (assigned to user-reviewer)
@@ -41,6 +80,8 @@ const _nineDaysAgo = new Date(_todayStart.getTime() - 9 * 24 * 60 * 60 * 1000);
  *                       open (raised) appeal → ready for Controls to resolve
  *   complaints-case-5 — Actions In Progress: Remediation Actions sent to the
  *                       adviser (Responsible Party) and still outstanding
+ *   complaints-case-6 — In-progress and unallocated: the candidate the
+ *                       "Take a Case" allocation flow reads
  *
  * @type {CaseRow[]}
  */
@@ -97,6 +138,15 @@ export const cases = [
     answers: {
       'q-cm-ack': { value: 'Yes' },
       'q-cm-investigated': { value: 'Yes' },
+      // Only the first Acknowledgement group of outcome-scored Questions is
+      // answered, so the Case stays visibly part-way through the Review tab.
+      'q-cmp-0001': { value: 'Pass' },
+      'q-cmp-0002': { value: 'Pass' },
+      'q-cmp-0003': { value: 'Pass' },
+      'q-cmp-0004': { value: 'Pass' },
+      'q-cmp-0005': { value: 'Pass' },
+      'q-cmp-0006': { value: 'Pass' },
+      'q-cmp-0007': { value: 'Pass' },
     },
     conversation: [],
     details: {
@@ -123,7 +173,9 @@ export const cases = [
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-agent-b',
     answers: {
+      ...outcomeAnswers('Pass'),
       'q-cm-ack': { value: 'Yes' },
+      'q-cm-letter-structure': { value: LETTER_STRUCTURE_NO_IMPACT },
       'q-cm-investigated': { value: 'Yes' },
       'q-cm-root-cause': { value: 'Yes' },
       'q-cm-channel': { value: 'Letter' },
@@ -150,8 +202,9 @@ export const cases = [
     // has been raised. Exercises the "no appeal" state on both appeal Sections:
     // the Journey Owner sees the empty Appeal Section with the Raise Appeal form,
     // and Controls sees the Appeal Review empty state (nothing to resolve).
-    // (q-cm-root-cause is hidden because q-cm-investigated failed, so the four
-    // remaining failable questions are all failed; q-cm-channel is informational.)
+    // (q-cm-root-cause is hidden because q-cm-investigated failed; q-cm-channel
+    // is informational. Everything else, the outcome-scored block included, is
+    // answered at its worst grade.)
     id: 'complaints-case-3',
     caseType: 'complaints',
     title: 'Complaint #3',
@@ -159,10 +212,12 @@ export const cases = [
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-agent-a',
     answers: {
+      ...outcomeAnswers('Fail'),
       'q-cm-ack': {
         value: 'No',
         justification: 'No acknowledgement was sent to the customer.',
       },
+      'q-cm-letter-structure': { value: LETTER_STRUCTURE_HARM },
       'q-cm-investigated': {
         value: 'No',
         justification: 'The complaint was closed without any investigation.',
@@ -202,6 +257,11 @@ export const cases = [
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-agent-b',
     answers: {
+      // All-Pass across the outcome-scored block, so the Case keeps exactly the
+      // two remediated failures the appeal's citedAnswerKeys point at and the
+      // Controls resolve demo stays legible.
+      ...outcomeAnswers('Pass'),
+      'q-cm-letter-structure': { value: LETTER_STRUCTURE_NO_IMPACT },
       'q-cm-ack': {
         value: 'No',
         justification: 'Acknowledgement was sent four working days late.',
@@ -276,6 +336,9 @@ export const cases = [
     // and the Conversation it points at are demoable from both sides.
     responsiblePartyManager: 'user-rp-manager',
     answers: {
+      // All-Pass across the outcome-scored block adds no failures, so the
+      // one-resolved/one-unresolved Remediation demo below is unchanged.
+      ...outcomeAnswers('Pass'),
       'q-cm-ack': {
         value: 'No',
         justification: 'Acknowledgement was sent six working days late.',
@@ -370,6 +433,32 @@ export const cases = [
     outcomeOverridden: false,
     created: '2026-06-02T08:00:00Z',
     etag: 'etag-cm5-v1',
+  },
+  {
+    // The allocation candidate: unallocated (no Assigned Reviewer, no
+    // Responsible Party) and unanswered, so the "Take a Case" flow has
+    // something to offer. Caveat for the demo: `user-reviewer` — the default
+    // persona — already holds more non-held In-progress Cases than
+    // `maxInProgressCases: 3`, so they read as at capacity; switch persona to
+    // see the Case actually taken.
+    id: 'complaints-case-6',
+    caseType: 'complaints',
+    title: 'Complaint #6',
+    status: 'In-progress',
+    assignedReviewer: '',
+    responsibleParty: '',
+    answers: {},
+    conversation: [],
+    details: {
+      complaintRef: 'CMP-2026-0006',
+      customerName: 'Ruth Adeyemi',
+      complaintDate: '2026-07-20',
+    },
+    notes: '',
+    completedAt: null,
+    dueDate: _nextWeek.toISOString(),
+    created: _fiveDaysAgo.toISOString(),
+    etag: 'etag-cm6-v1',
   },
   // ── Action Centre demo cases ────────────────────────────────
   // Carry the hoisted reason flags/clocks the real backend would compute, so
