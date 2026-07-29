@@ -9,13 +9,13 @@ Before doing any non-trivial work in this repo, read:
 1. **[CONTEXT.md](./CONTEXT.md)** — domain language. Use these terms exactly when discussing or coding (`Case Type`, `Question Definition`, `Applicable Question`, `Answer`, `Remediation Action`, `Reviewer`, `Responsible Party`, `Case Type Owner`, `Conversation`, `Outcome`).
 2. **[docs/guide/add-a-page.md](./docs/guide/add-a-page.md)** — the one-page
    authoring path: state → `h()`, actions, effects, lazy route, and tests.
-3. **[docs/adr/](./docs/adr/)** — 40 architecture decisions, numbered
-   (`0001`–`0040`). Read the status before relying on an older decision, and do
+3. **[docs/adr/](./docs/adr/)** — 41 architecture decisions, numbered
+   (`0001`–`0041`). Read the status before relying on an older decision, and do
    not deviate from an accepted ADR without surfacing the deviation explicitly.
 
 ## Project overview
 
-Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend hosted on **SharePoint Subscription Edition**. **Edge Chromium only** as the browser baseline; no IE11. There is no runtime build toolchain — no bundlers, no transpilers, no third-party runtime dependencies. Modern browsers load the source `.js` natively.
+Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend hosted on **SharePoint Subscription Edition**. **Edge Chromium only** as the browser baseline; no IE11. There is no transform step — no bundlers, no transpilers, no third-party runtime dependencies. Every byte of every deployed file is byte-identical to the byte in the repository. Modern browsers load the source `.js` natively.
 
 ## Architecture in one screen
 
@@ -85,7 +85,7 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
 ## Hard rules
 
 - **No third-party runtime dependencies, ever.** Dev/CI tools (tsc, prettier, node test runner) are fine.
-- **No build step at runtime.** Source JS is deployed JS.
+- **No transform step (ADR-0041).** Every byte of every deployed file — `.js`, `.css`, `.html`, `.aspx` and the `case-types/banks/*.txt` artifacts alike — is byte-identical to the byte in the repository; no tool produces code, and committing generated output does not satisfy this (the repository byte must be the authored byte). The only carve-out is literal `{{CORA_BASE}}`/`{{CORA_ENV}}` token substitution in `.html`/`.aspx` template files. Bundling, minification, transpilation and import rewriting are banned outright. Verification, hashing, graph analysis and upload ordering are fine — they are read-only over the bytes, the same category as tsc/prettier/eslint/husky.
 - **Views never call `fetch()` directly** — effects use the `SharePointClient`
   interface. This is what makes the mock-first development loop work.
 - **No `innerHTML` for user data.** XSS prevention; also preserves input state.
@@ -342,7 +342,8 @@ case-types/                     # one module per Case Type, lazy-loaded via mani
 scripts/
   scaffold_case_type.py         # scaffolds a new Case Type module + bank artifact (ADR-0028)
   deploy_to_sharepoint.py
-  deploy_to_sharepoint.md       # deploy runbook: prod and uat targets (ADR-0033)
+  deploy_to_sharepoint.md       # NOT a runbook: a stale verbatim copy of an older deploy_to_sharepoint.py;
+                                #   regenerate or delete it rather than hand-editing it (ADR-0041)
   run_in_memory_flow.js
   uat_acl_smoke.js              # UAT list-ACL smoke check (npm run test:security:uat)
   uat-acl-smoke.example.json    # sample config for the ACL smoke check
