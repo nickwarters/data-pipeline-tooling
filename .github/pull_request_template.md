@@ -50,7 +50,7 @@ Closes #<!-- issue number, or remove this line if there's no issue -->
 <!-- Confirm the repo's hard rules still hold (see CLAUDE.md). -->
 
 - [ ] No third-party **runtime** dependencies added (dev/CI tooling is fine)
-- [ ] No transform step introduced — every deployed byte is byte-identical to the source byte (ADR-0041)
+- [ ] No transform step introduced — every deployed byte is byte-identical to the source byte
 - [ ] Components reach the network only through the `SharePointClient` interface — no direct `fetch()`
 - [ ] No `innerHTML` for user data (`unsafeHTML()` only for narrowly reviewed markup)
 - [ ] Custom elements keep the `cora-` prefix (element + CSS namespace)
