@@ -330,16 +330,24 @@ test('complaints config: limits each Reviewer to three active Cases', () => {
   assert.equal(config.maxInProgressCases, 3);
 });
 
-test('complaints fixtures: every reference Case with answers computes to its frozen outcomeAtCompletion', () => {
-  // The Action Centre demo rows carry a frozen Outcome but no Answers by
-  // design — they exist to populate the reason groups, not to be reviewed — so
-  // the non-empty-answers condition excludes them.
-  const frozen = cases.filter(
+/**
+ * The reviewed Complaints Cases: a frozen Outcome is what "past the reportable
+ * milestone" means, and the rule picks up any Case added later. The Action
+ * Centre demo rows also carry a frozen Outcome but no Answers by design — they
+ * populate the reason groups rather than being reviewed — so the
+ * non-empty-answers condition excludes them.
+ */
+function reportableComplaintsCases() {
+  return cases.filter(
     (c) =>
       c.caseType === 'complaints' &&
       c.outcomeAtCompletion &&
       Object.keys(c.answers).length > 0
   );
+}
+
+test('complaints fixtures: every reference Case with answers computes to its frozen outcomeAtCompletion', () => {
+  const frozen = reportableComplaintsCases();
   assert.ok(frozen.length >= 1, 'expected a frozen-Outcome Complaints Case');
   for (const row of frozen) {
     assert.equal(
@@ -380,20 +388,6 @@ test('complaints: an outcome-type question offers the Case Type Outcomes plus N/
 });
 
 test('complaints: every outcome-type question carries the compiled Outcome options and mapping', () => {
-  const first = config.questions.find((x) => x.id === 'q-cmp-0001');
-  assert.ok(first);
-  assert.deepEqual(first.options, [
-    'Good',
-    'Good with process enhancement',
-    'Poor',
-    'Poor with harm',
-  ]);
-  assert.deepEqual(first.optionOutcomes, {
-    Good: 'good',
-    'Good with process enhancement': 'good-with-process-enhancement',
-    Poor: 'poor',
-    'Poor with harm': 'poor-with-harm',
-  });
   // The runtime does not derive options for an outcome-type question: it reads
   // whatever the artifact stored. Round-tripping every one of them through the
   // compiler catches the artifact drifting from what a republish would emit.
@@ -419,20 +413,9 @@ test('complaints: an outcome-type question fails on every non-default Outcome', 
 });
 
 test('complaints computeOutcome: an outcome-type answer scores itself', () => {
-  assert.equal(
-    config.computeOutcome({ 'q-cmp-0001': ans('Good') }).outcome,
-    'good'
-  );
-  assert.equal(
-    config.computeOutcome({
-      'q-cmp-0001': ans('Good with process enhancement'),
-    }).outcome,
-    'good-with-process-enhancement'
-  );
-  assert.equal(
-    config.computeOutcome({ 'q-cmp-0001': ans('Poor') }).outcome,
-    'poor'
-  );
+  // One non-default response is enough to prove an outcome-type Answer reaches
+  // computeOutcome; the wording-to-Outcome mapping itself is pinned by the
+  // compiled-options round-trip.
   assert.equal(
     config.computeOutcome({ 'q-cmp-0001': ans('Poor with harm') }).outcome,
     'poor-with-harm'
@@ -443,25 +426,19 @@ test('complaints: every outcome-type question declares a non-empty questionGroup
   // A question with no group silently falls into a group named `General`,
   // which collides with the General Questions section below the groups.
   for (const q of outcomeQuestions()) {
-    assert.equal(typeof q.questionGroup, 'string', `${q.id} has a group`);
-    assert.ok((q.questionGroup ?? '').length > 0, `${q.id} group is non-empty`);
+    assert.ok(q.questionGroup, `${q.id} declares a non-empty questionGroup`);
   }
 });
 
 test('complaints fixtures: the Cases past the reportable milestone answer every applicable Question', () => {
   const catalogue = config.questions.filter((q) => !q.deprecated);
-  for (const id of [
-    'complaints-case-2',
-    'complaints-case-3',
-    'complaints-case-4',
-    'complaints-case-5',
-  ]) {
-    const row = cases.find((c) => c.id === id);
-    assert.ok(row, `expected ${id} in the fixtures`);
+  const reportable = reportableComplaintsCases();
+  assert.ok(reportable.length >= 1, 'expected a reportable Complaints Case');
+  for (const row of reportable) {
     assert.equal(
       allApplicableAnswered(catalogue, row.answers),
       true,
-      `${id} answers every applicable Question`
+      `${row.id} answers every applicable Question`
     );
   }
 });

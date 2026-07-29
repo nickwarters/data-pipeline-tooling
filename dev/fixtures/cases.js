@@ -28,39 +28,30 @@ const _fourDaysAgo = new Date(_todayStart.getTime() - 4 * 24 * 60 * 60 * 1000);
 const _sixDaysAgo = new Date(_todayStart.getTime() - 6 * 24 * 60 * 60 * 1000);
 const _nineDaysAgo = new Date(_todayStart.getTime() - 9 * 24 * 60 * 60 * 1000);
 
-/** How many outcome-scored Question Definitions the Complaints bank carries. */
 const COMPLAINTS_OUTCOME_QUESTIONS = 49;
 
 /**
- * Answers every outcome-scored Complaints Question with the same response,
- * bar the named exceptions. Written out in full, forty-nine literal keys per
- * Case would bury the handful of Answers that actually carry each demo — the
- * failures, the justifications and the Remediation Actions.
- *
  * The ids are derived from the count rather than read from the Question Bank:
  * a fixture built from the bank would make any test comparing the two assert
  * the bank against itself.
  *
  * @param {string} value the response given to every outcome-scored Question
- * @param {Record<string, string>} [overrides] per-Question responses, by id
  * @returns {Record<string, Answer>}
  */
-function outcomeAnswers(value, overrides = {}) {
+function outcomeAnswers(value) {
   /** @type {Record<string, Answer>} */
   const answers = {};
   for (let n = 1; n <= COMPLAINTS_OUTCOME_QUESTIONS; n += 1) {
     const id = `q-cmp-${String(n).padStart(4, '0')}`;
-    answers[id] = { value: overrides[id] ?? value };
+    answers[id] = { value };
   }
   return answers;
 }
 
-// The graded letter-structure responses, quoted from the Question Bank so the
-// fixture Answers match an authorable option exactly.
+// Quoted from the Question Bank so the fixture Answers match an authorable
+// option exactly.
 const LETTER_STRUCTURE_NO_IMPACT =
   "Correct letter structure has not been used, however this has no impact on the customer's understanding";
-const LETTER_STRUCTURE_HARM =
-  "Acknowledgement letter includes inaccurate information or incorrect structure used, which could impact the customer's understanding/actions and/or is a regulatory requirement, and this led to harm";
 
 /**
  * The mock-served fixture Cases (`?mock=1`). complaints is the only live Case
@@ -218,7 +209,10 @@ export const cases = [
         value: 'No',
         justification: 'No acknowledgement was sent to the customer.',
       },
-      'q-cm-letter-structure': { value: LETTER_STRUCTURE_HARM },
+      'q-cm-letter-structure': {
+        value:
+          "Acknowledgement letter includes inaccurate information or incorrect structure used, which could impact the customer's understanding/actions and/or is a regulatory requirement, and this led to harm",
+      },
       'q-cm-investigated': {
         value: 'No',
         justification: 'The complaint was closed without any investigation.',
@@ -363,10 +357,7 @@ export const cases = [
           redressRequired: 'No',
         },
       },
-      'q-cm-letter-structure': {
-        value:
-          "Correct letter structure has not been used, however this has no impact on the customer's understanding",
-      },
+      'q-cm-letter-structure': { value: LETTER_STRUCTURE_NO_IMPACT },
       'q-cm-investigated': { value: 'Yes' },
       'q-cm-root-cause': { value: 'Yes' },
       'q-cm-channel': { value: 'Email' },
