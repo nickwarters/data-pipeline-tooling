@@ -1,5 +1,6 @@
 // @ts-check
 import { resolveEnvironment } from '../config/environment.js';
+import { HttpSharePointClient } from './http-sharepoint-client.js';
 
 /**
  * Instantiates the correct SharePointClient for the current environment.
@@ -17,6 +18,9 @@ export async function createSharePointClient(
   params,
   env = resolveEnvironment()
 ) {
+  // The mock branch stays lazy on purpose: it and its fixtures live under
+  // `dev/`, which is never deployed, so a deployed build must be able to reach
+  // this function without the fixture modules existing at all.
   if (params.get('mock') === '1') {
     const persona = params.get('asUser') ?? 'reviewer';
     const [
@@ -54,7 +58,6 @@ export async function createSharePointClient(
     });
   }
 
-  const { HttpSharePointClient } = await import('./http-sharepoint-client.js');
   return new HttpSharePointClient({
     webUrl: resolveHostWebUrl(),
     listPrefix: env.listPrefix,

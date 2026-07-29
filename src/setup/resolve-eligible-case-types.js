@@ -1,6 +1,7 @@
 // @ts-check
 import { caseTypeGroupNames, permissions } from '../services/permissions.js';
 import {
+  CASE_TYPE_IMPORTERS,
   displayNameFor,
   loadCaseTypeConfig,
 } from '../../case-types/manifest.js';
@@ -287,9 +288,7 @@ export function resolveCaseSourcesFromCaseTypes(userGroups, caseTypes) {
  * @returns {Promise<{ caseSources: CaseSource[], unavailableCaseTypes: UnavailableCaseType[] }>}
  */
 async function resolveAvailableCaseSources(userGroups, options) {
-  const importers =
-    options.importers ??
-    (await import('../../case-types/manifest.js')).CASE_TYPE_IMPORTERS;
+  const importers = options.importers ?? CASE_TYPE_IMPORTERS;
 
   const { sources, unavailable } = await loadCaseTypeSources(
     Object.keys(importers),

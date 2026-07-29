@@ -135,7 +135,9 @@ test('mountAppChrome: nav failure renders a fatal text-only boot error', async (
       body: /** @type {any} */ (new StubEl('body')),
     });
     assert.equal(ok, false);
-    assert.ok(app.querySelector('.cora-boot-error'));
+    const panel = app.querySelector('.cora-boot-error');
+    assert.ok(panel);
+    assert.equal(panel.getAttribute('role'), 'alert');
     assert.match(app.textContent, /failed to start/);
   } finally {
     console.error = original;

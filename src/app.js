@@ -1,32 +1,44 @@
 // @ts-check
-// The app shell wires shared services once. Every page loads on demand inside
-// its route's `mount()` (see setup/register-routes.js), guarded by the router's error
-// boundary (lib/router.js) — a broken page module renders an in-page
-// `cora-route-error` panel instead of taking down the app. The nav and command
-// palette are mounted here via `setup/app-chrome.js`: a broken nav is
-// fatal-with-message (the app is unusable without it), a broken palette is
-// logged and skipped. Case Type modules are contained per slug the same way: a
-// Case Type that fails to evaluate is dropped from every resolved source set
-// and named in a non-blocking banner, and boot continues. That holds in BOTH
-// environments — `createSharePointClient` below is awaited first, and under
-// `?mock=1` it partitions the fixture Cases by Case Type, so it contains per
-// Case Type too rather than throwing ahead of the containment.
+// The app shell wires shared services once, then hands over to the router.
+//
+// Every import below is static: a failure in any of them is fatal to boot
+// anyway, so deferring them contained nothing and only made boot a serial
+// chain of round trips. The deferrals that DO contain a failure live
+// elsewhere and are unchanged.
+//
+// The honest limit of the boot-error panel: a module in this static graph that
+// throws while being evaluated does so BEFORE `boot().catch` exists, so the
+// panel cannot cover it. Nothing visible is lost — the old catch only wrote to
+// the console — but the panel covers boot's body, not boot's module graph.
+// Covering that would take a fallback element in the host page markup that a
+// successful boot clears, which is not done here.
+
+import { resolveEnvironment } from './config/environment.js';
+import { createSharePointClient } from './services/create-sharepoint-client.js';
+import { SaveQueue } from './services/save-queue.js';
+import { resolveCapabilities } from './services/permissions.js';
+import {
+  bindChromeNavigation,
+  createChromeState,
+} from './core/chrome-state.js';
+import { Router } from './lib/router.js';
+import { renderBootError } from './lib/boot-error-panel.js';
+import {
+  allocationSourcesFromCaseSources,
+  resolveAppCaseSources,
+} from './setup/resolve-eligible-case-types.js';
+import { mountUatBanner } from './setup/uat-banner.js';
+import { mountAppChrome } from './setup/app-chrome.js';
+import { mountCaseTypeUnavailableBanner } from './setup/case-type-unavailable-banner.js';
+import { registerRoutes } from './setup/register-routes.js';
 
 /** @returns {Promise<void>} */
 async function boot() {
-  const { resolveEnvironment } = await import('./config/environment.js');
   const env = resolveEnvironment();
-
-  const { createSharePointClient } =
-    await import('./services/create-sharepoint-client.js');
   const client = await createSharePointClient(
     new URLSearchParams(location.search),
     env
   );
-
-  const { Router } = await import('./lib/router.js');
-  const { SaveQueue } = await import('./services/save-queue.js');
-  const { resolveCapabilities } = await import('./services/permissions.js');
 
   const saveQueue = new SaveQueue(client);
   const router = new Router();
@@ -35,8 +47,6 @@ async function boot() {
     client.getCurrentUserGroups(),
   ]);
   const capabilities = resolveCapabilities(userGroups);
-  const { bindChromeNavigation, createChromeState } =
-    await import('./core/chrome-state.js');
   const chrome = createChromeState({
     currentUser,
     permissions: capabilities,
@@ -44,8 +54,6 @@ async function boot() {
   });
   bindChromeNavigation(chrome);
 
-  const { allocationSourcesFromCaseSources, resolveAppCaseSources } =
-    await import('./setup/resolve-eligible-case-types.js');
   // Every route receives only sources the current user's roles may span.
   // Type-scoped owners get their own types; broad roles (Controls,
   // Reviewer Managers, Advisers, ResponsibleParty-Managers and Maintainers) get the full
@@ -59,32 +67,17 @@ async function boot() {
   const appEl = /** @type {Element} */ (document.getElementById('app'));
   appEl.setAttribute('data-cora-root', '');
 
-  const { mountUatBanner } = await import('./setup/uat-banner.js');
   mountUatBanner(env, appEl);
 
-  const { mountAppChrome } = await import('./setup/app-chrome.js');
   const ok = await mountAppChrome(appEl, capabilities);
   if (!ok) return;
 
-  // Loaded only when there is something to say, and guarded: in the 100% case
-  // there is nothing to mount, and a module that fails to fetch must not kill
-  // boot inside the feature whose whole purpose is that boot survives a broken
-  // Case Type. The console already carries each underlying error.
-  if (unavailableCaseTypes.length) {
-    try {
-      const { mountCaseTypeUnavailableBanner } =
-        await import('./setup/case-type-unavailable-banner.js');
-      mountCaseTypeUnavailableBanner(unavailableCaseTypes, appEl);
-    } catch (error) {
-      console.error('[CORA] Case Type unavailable banner failed:', error);
-    }
-  }
+  mountCaseTypeUnavailableBanner(unavailableCaseTypes, appEl);
 
   const routerContainer = document.createElement('div');
   routerContainer.className = 'cora-page-content';
   appEl.appendChild(routerContainer);
 
-  const { registerRoutes } = await import('./setup/register-routes.js');
   registerRoutes(router, {
     client,
     saveQueue,
@@ -98,4 +91,4 @@ async function boot() {
   router.init(routerContainer);
 }
 
-boot().catch((err) => console.error('[RALPH] Boot error:', err));
+boot().catch(renderBootError);

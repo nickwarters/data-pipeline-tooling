@@ -123,6 +123,24 @@ test('layering: no static page import outside src/pages/; dynamic page import() 
   );
 });
 
+/**
+ * Boot is one static graph, and a failed boot must be visible rather than
+ * console-only. Everything `src/app.js` needs is fatal to boot anyway, so
+ * deferring it contained nothing and only made boot serial; the boundaries
+ * that DO contain a failure are reached from other modules.
+ *
+ * Scanned as source rather than imported: importing `app.js` runs `boot()`.
+ */
+test('boot: src/app.js is a static graph that renders a panel when boot fails', () => {
+  const code = readCode('src/app.js');
+  assert.doesNotMatch(code, /import\(/, 'src/app.js must import statically');
+  assert.match(
+    code,
+    /boot\(\)\.catch\(\s*renderBootError\s*\)/,
+    'src/app.js must hand a failed boot to renderBootError'
+  );
+});
+
 /** Repo-relative path a relative import specifier resolves to, or null. */
 function resolveRelative(
   /** @type {string} */ fromRel,
