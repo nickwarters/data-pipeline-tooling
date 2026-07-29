@@ -95,8 +95,9 @@ class ScaffoldCaseTypeTest(unittest.TestCase):
         self.assertNotIn("eligibleGroups:", module_source)
         # #527: the display name lives only on the CASE_TYPES registry entry.
         self.assertNotIn("displayName:", module_source)
-        self.assertIn("caseTableColumns: [", module_source)
-        self.assertIn("value: 'details.customerName'", module_source)
+        # Case tables are framework-owned: every Case Type is listed under the
+        # same columns, so a scaffolded Case Type declares none of its own.
+        self.assertNotIn("caseTableColumns", module_source)
 
         # One registry edit (#508): the CASE_TYPES entry carries the slug, the
         # display name the SharePoint group names derive from, and the lazy

@@ -73,6 +73,15 @@ not the extension seam for Palimpsest generic tables.
 > `components/base/cora-data-table.js` module its type referred to; no Case Type
 > ever read it. `caseTableColumns` is the only Case Type table descriptor.
 
+> **Superseded in part by [ADR-0040](./0040-case-tables-are-framework-owned.md):**
+> all three presentation seams named above are now gone or narrowed.
+> `dashboardPanels` was removed by
+> [ADR-0036](./0036-dashboard-composition-is-dashboard-owned.md), and
+> `caseTableColumns` was removed by ADR-0040 — Case table columns are framework
+> code, identical for every Case Type. `sections` remains. The general rule this
+> decision states — data-only variation in configuration, branching behaviour in
+> code — is unchanged and still governs the remaining descriptors.
+
 ## Demonstration
 
 Complaints declares the complete current `dashboardPanels` set and retains its

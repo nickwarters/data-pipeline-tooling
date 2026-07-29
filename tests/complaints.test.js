@@ -240,16 +240,9 @@ test('complaints: declares Case Details fields, each with a stable key and label
   }
 });
 
-test('complaints: Case Type descriptors exclude dashboard composition and add a config-only table column', () => {
+test('complaints: Case Type descriptors declare no table or dashboard composition', () => {
   assert.equal('dashboardPanels' in config, false);
-  assert.deepEqual(config.caseTableColumns, [
-    {
-      key: 'responsibleParty',
-      label: 'Responsible Party',
-      value: 'responsibleParty',
-      sortable: true,
-    },
-  ]);
+  assert.equal('caseTableColumns' in config, false);
 });
 
 // --- computeOutcome (response-driven: highest-scoring applicable outcome) ---

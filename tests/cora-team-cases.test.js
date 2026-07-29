@@ -7,7 +7,7 @@ import { getByRole, tableHeaders } from './helpers/semantic-dom.js';
 installDom();
 /** @type {any} */ (globalThis).location = { hash: '' };
 
-const { createRouteSlice, resolveDashboardColumns, teamCasesView } =
+const { createRouteSlice, teamCasesView } =
   await import('../src/pages/cora-team-cases.js');
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
@@ -60,9 +60,6 @@ test('team cases slice: fetches with parsed route params and dispatches loaded d
     markLoaded = resolve;
   });
   const cases = [row('c1')];
-  const caseTableColumns = [
-    { key: 'owner', label: 'Owner', value: 'responsibleParty' },
-  ];
   const slice = createRouteSlice(
     {
       queryString: '?manager=me&role=reviewer-manager&caseType=complaints',
@@ -73,7 +70,6 @@ test('team cases slice: fetches with parsed route params and dispatches loaded d
         fetchCalls.push(args);
         return cases;
       },
-      resolveColumns: async () => caseTableColumns,
     }
   );
 
@@ -93,11 +89,7 @@ test('team cases slice: fetches with parsed route params and dispatches loaded d
   assert.equal(fetchCalls.length, 1);
   assert.equal(fetchCalls[0][1].caseType, 'complaints');
   assert.equal(fetchCalls[0][2], 'manager-1');
-  assert.deepEqual(actions[0], {
-    type: 'cases/loaded',
-    cases,
-    caseTableColumns,
-  });
+  assert.deepEqual(actions[0], { type: 'cases/loaded', cases });
 });
 
 test('team cases slice: reducer owns loaded rows and generic table sort state', () => {
@@ -105,7 +97,6 @@ test('team cases slice: reducer owns loaded rows and generic table sort state', 
   const loaded = slice.reducer(slice.initialState, {
     type: 'cases/loaded',
     cases: [row('c1')],
-    caseTableColumns: [],
   });
   const sorted = slice.reducer(loaded, {
     type: 'team-table/sort-requested',
@@ -120,7 +111,7 @@ test('team cases slice: reducer owns loaded rows and generic table sort state', 
   assert.equal(slice.reducer(sorted, { type: 'ignored' }), sorted);
 });
 
-test('team cases view renders the standard Case columns, the Case Type additions, and the Open action', () => {
+test('team cases view renders the standard Case columns and the Open action', () => {
   const view = teamCasesView(
     {
       ...createRouteSlice({}, context()).initialState,
@@ -129,9 +120,6 @@ test('team cases view renders the standard Case columns, the Case Type additions
           cases: [
             /** @type {any} */ ({ ...row('c1'), overdue: true }),
             /** @type {any} */ ({ ...row('c2'), overdue: false }),
-          ],
-          caseTableColumns: [
-            { key: 'owner', label: 'Owner', value: 'responsibleParty' },
           ],
           sort: { key: 'reference', dir: 'desc' },
         },
@@ -160,7 +148,6 @@ test('team cases view renders the standard Case columns, the Case Type additions
     ['Status', 'cora-col-status', 'none', true],
     ['Assigned', 'cora-col-assigned', 'none', true],
     ['Actions', 'cora-col-actions', 'none', false],
-    ['Owner', 'cora-col-owner', 'none', false],
   ]);
 
   location.hash = '';
@@ -172,73 +159,43 @@ test('team cases view renders the standard Case columns, the Case Type additions
   assert.equal(location.hash, '#/case/complaints/c1');
 });
 
-test('team cases columns: mixed and unknown Case Types have no extension columns', async () => {
-  let mixedLoadCalled = false;
-  assert.deepEqual(
-    await resolveDashboardColumns(null, async () => {
-      mixedLoadCalled = true;
-      throw new Error('mixed view must not load one Case Type');
-    }),
-    []
-  );
-  assert.equal(mixedLoadCalled, false);
-  assert.deepEqual(
-    await resolveDashboardColumns('unknown-case-type-for-test'),
-    []
-  );
-});
-
-test('team cases columns: a scoped Case Type contributes generic descriptors without an adapter', async () => {
-  const columns = [
-    {
-      key: 'responsibleParty',
-      label: 'Responsible Party',
-      value: 'responsibleParty',
-      sortable: true,
-    },
-  ];
-  assert.deepEqual(
-    await resolveDashboardColumns(
-      'complaints',
-      async () => /** @type {any} */ ({ caseTableColumns: columns })
-    ),
-    columns
-  );
-});
-
-test('team cases page: Complaints config alone adds the visible Responsible Party column', async () => {
-  const caseTableColumns = await resolveDashboardColumns('complaints');
-  const loaded = teamCasesView(
-    {
-      ...createRouteSlice({}, context()).initialState,
-      routes: {
-        teamCases: {
-          cases: [row('c1')],
-          caseTableColumns,
-          sort: null,
-        },
+test('team cases columns: scoping to one Case Type does not vary the columns', async () => {
+  /** @param {string} queryString */
+  const headingsFor = async (queryString) => {
+    /** @type {any[]} */
+    const actions = [];
+    /** @type {() => void} */
+    let markLoaded = () => {};
+    /** @type {Promise<void>} */
+    const loadedAction = new Promise((resolve) => {
+      markLoaded = () => resolve();
+    });
+    const slice = createRouteSlice({ queryString }, context(), {
+      fetchCases: async () => [row('c1')],
+    });
+    slice.start?.({
+      dispatch: (action) => {
+        actions.push(action);
+        markLoaded();
       },
-    },
-    { dispatch: () => {} }
-  );
+      params: { queryString },
+      context: context(),
+      isActive: () => true,
+    });
+    await loadedAction;
 
-  assert.ok(
-    [...loaded.querySelectorAll('th')].some(
-      (heading) => heading.textContent === 'Responsible Party'
-    )
-  );
-  assert.ok(
-    [...loaded.querySelectorAll('td')].some((cell) => cell.textContent === 'rp')
-  );
-});
+    const loaded = slice.reducer(slice.initialState, actions[0]);
+    return [
+      ...teamCasesView(loaded, { dispatch: () => {} }).querySelectorAll('th'),
+    ].map((heading) => heading.textContent);
+  };
 
-test('team cases columns: unexpected Case Type loading failures rethrow', async () => {
-  const failure = new Error('config unavailable');
-  await assert.rejects(
-    resolveDashboardColumns('complaints', async () => {
-      throw failure;
-    }),
-    failure
+  // The Case Type filter narrows which Cases are listed, never which columns
+  // describe them, so a Reviewer comparing a scoped list against the whole
+  // team's list reads the same table both times.
+  assert.deepEqual(
+    await headingsFor('?caseType=complaints'),
+    await headingsFor('')
   );
 });
 
@@ -250,7 +207,6 @@ test('team cases view: keeps heading, empty state, and row links without retired
       routes: {
         teamCases: {
           cases: [],
-          caseTableColumns: [],
           sort: null,
         },
       },
@@ -269,7 +225,6 @@ test('team cases view: keeps heading, empty state, and row links without retired
       routes: {
         teamCases: {
           cases: [row('c1')],
-          caseTableColumns: [],
           sort: null,
         },
       },
@@ -300,7 +255,6 @@ test('team cases slice: cleanup suppresses a late fetch result', async () => {
       new Promise((resolve) => {
         resolveFetch = resolve;
       }),
-    resolveColumns: async () => [],
   });
   let active = true;
   slice.start?.({
@@ -369,9 +323,7 @@ test('team cases slice: navigating away aborts the per-source fan-out and shows 
       }),
   };
 
-  const slice = createRouteSlice({ queryString: '' }, ctx, {
-    resolveColumns: async () => [],
-  });
+  const slice = createRouteSlice({ queryString: '' }, ctx, {});
 
   slice.start?.(
     /** @type {any} */ ({
@@ -414,9 +366,7 @@ test('team cases slice: a read that completes before navigation is unaffected', 
     },
   });
 
-  const slice = createRouteSlice({ queryString: '' }, ctx, {
-    resolveColumns: async () => [],
-  });
+  const slice = createRouteSlice({ queryString: '' }, ctx, {});
   slice.start?.(
     /** @type {any} */ ({
       dispatch: (/** @type {any} */ action) => actions.push(action),

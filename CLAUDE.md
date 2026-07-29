@@ -9,8 +9,8 @@ Before doing any non-trivial work in this repo, read:
 1. **[CONTEXT.md](./CONTEXT.md)** — domain language. Use these terms exactly when discussing or coding (`Case Type`, `Question Definition`, `Applicable Question`, `Answer`, `Remediation Action`, `Reviewer`, `Responsible Party`, `Case Type Owner`, `Conversation`, `Outcome`).
 2. **[docs/guide/add-a-page.md](./docs/guide/add-a-page.md)** — the one-page
    authoring path: state → `h()`, actions, effects, lazy route, and tests.
-3. **[docs/adr/](./docs/adr/)** — 39 architecture decisions, numbered
-   (`0001`–`0039`). Read the status before relying on an older decision, and do
+3. **[docs/adr/](./docs/adr/)** — 40 architecture decisions, numbered
+   (`0001`–`0040`). Read the status before relying on an older decision, and do
    not deviate from an accepted ADR without surfacing the deviation explicitly.
 
 ## Project overview
@@ -107,7 +107,7 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
   markdown, commit messages and PR bodies. JSDoc types are untouched by this
   rule.
 - **Question Definitions are never deleted** — use a `deprecated` flag (avoids dangling references from Case Type modules).
-- **Case Type descriptors express genuine Case Type variation; branching behaviour stays in code** (ADR-0035). Descriptors may select stable keys, labels, property paths, ordering, membership, and simple flags. Permission/lifecycle decisions, navigation, conditional formatting, event handling, and effects belong in code. Dashboard composition is dashboard-owned and must not be declared by Case Type configuration (ADR-0036); the dashboard consumes resolved `caseSources` only for Case data access.
+- **Case Type descriptors express genuine Case Type variation; branching behaviour stays in code** (ADR-0035). Descriptors may select stable keys, labels, property paths, ordering, membership, and simple flags. Permission/lifecycle decisions, navigation, conditional formatting, event handling, and effects belong in code. Dashboard composition is dashboard-owned and must not be declared by Case Type configuration (ADR-0036); the dashboard consumes resolved `caseSources` only for Case data access. Case table columns are framework-owned the same way (ADR-0040): `standardCaseColumns()` is the fixed set for every Case Type, so scoping a Case table narrows its rows and never its columns. `sections` is the only Case Type presentation descriptor left.
 
 ## Gotchas
 
@@ -279,7 +279,8 @@ src/
       simulate-panel.js         # pure golden-tested impact-simulation view
 
   views/                        # generic store-driven pure renderers
-    case-columns.js             # shared Case-table column descriptors (#515): the Case-aware consumer of data-table.js
+    case-columns.js             # shared Case-table column descriptors (#515): the Case-aware consumer of
+                                #   data-table.js, and the fixed column set for every Case Type (ADR-0040)
     data-table.js               # descriptor-driven table view (value, sort, format, links)
 
   services/                     # non-UI modules: data, state, auth

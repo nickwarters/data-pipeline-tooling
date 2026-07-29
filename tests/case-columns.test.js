@@ -161,15 +161,18 @@ test('the standard date and assigned columns keep their empty-string sort value'
   );
 });
 
-test('extra columns append after the standard seven', () => {
-  const columns = standardCaseColumns({
-    onOpen: () => {},
-    extra: [{ key: 'owner', label: 'Owner', value: 'responsibleParty' }],
-  });
-  assert.deepEqual(columns.at(-1), {
-    key: 'owner',
-    label: 'Owner',
-    value: 'responsibleParty',
-  });
-  assert.equal(columns.length, 8);
+test('the standard seven are the whole set, with no extension seam', () => {
+  const columns = standardCaseColumns({ onOpen: () => {} });
+  assert.deepEqual(
+    columns.map((column) => column.key),
+    [
+      'reference',
+      'caseType',
+      'relatedDate',
+      'dueDate',
+      'status',
+      'assigned',
+      'actions',
+    ]
+  );
 });

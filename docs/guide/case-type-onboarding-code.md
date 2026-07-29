@@ -293,9 +293,10 @@ Optional fields to know about (all in the `CaseTypeConfig` typedef):
 `sectionLabels` renames tab labels/headings per type (e.g.
 `{ questions: 'Assessment' }`); `questionGroups` opts a named group into the
 bulk-verdict control (`{ Build: { allowBulkOutcome: true } }`);
-`remediationFields` and `captureGroups` extend per-failure capture;
-`caseTableColumns` contributes extra data-only columns when a generic Case table
-is scoped to this single type.
+`remediationFields` and `captureGroups` extend per-failure capture. Case table
+columns are not among them: every Case Type is listed under the same
+framework-owned columns (see
+[ADR-0040](../adr/0040-case-tables-are-framework-owned.md)).
 
 ## Step 3 — Register the slug in the manifest
 

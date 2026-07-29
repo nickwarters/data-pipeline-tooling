@@ -16,10 +16,6 @@ import {
   reduceTableSort,
   sortRequested,
 } from '../views/data-table.js';
-import {
-  loadCaseTypeConfig,
-  UnknownCaseTypeError,
-} from '../../case-types/manifest.js';
 
 /** The one table name this page sorts by: used by both the view and the reducer. */
 const TABLE = 'team';
@@ -31,7 +27,6 @@ const TABLE = 'team';
 /**
  * @typedef {Object} TeamCasesRouteState
  * @property {CaseRow[] | null} cases
- * @property {CaseColumnDescriptor[]} caseTableColumns
  * @property {TableSort | null} sort
  */
 
@@ -40,28 +35,6 @@ const TABLE = 'team';
  * @property {import('../core/chrome-state.js').ChromeState} chrome
  * @property {{ teamCases: TeamCasesRouteState }} routes
  */
-
-/**
- * Resolve the extension columns for a table scoped to one Case Type. Mixed
- * tables and unknown Case Types keep the framework defaults.
- *
- * @param {string | null} caseType
- * @param {(slug: string) => Promise<import('../sharepoint-client.js').CaseTypeConfig>} [load]
- * @returns {Promise<CaseColumnDescriptor[]>}
- */
-export async function resolveDashboardColumns(
-  caseType,
-  load = loadCaseTypeConfig
-) {
-  if (!caseType) return [];
-  try {
-    const config = await load(caseType);
-    return config.caseTableColumns ?? [];
-  } catch (error) {
-    if (error instanceof UnknownCaseTypeError) return [];
-    throw error;
-  }
-}
 
 /**
  * @param {TeamCasesState} state
@@ -81,7 +54,6 @@ export function teamCasesView(state, tools) {
       rows: route.cases,
       columns: standardCaseColumns({
         onOpen: (row) => navigateTo(caseRouteFor(row)),
-        extra: route.caseTableColumns,
       }),
       sort: route.sort,
       onSort: (key) => tools.dispatch(sortRequested(TABLE, key)),
@@ -96,10 +68,7 @@ export function teamCasesView(state, tools) {
 /**
  * @param {Record<string, string>} _params
  * @param {import('../setup/register-routes.js').AppContext} context
- * @param {{
- *   fetchCases?: typeof fetchTeamCases,
- *   resolveColumns?: typeof resolveDashboardColumns,
- * }} [dependencies]
+ * @param {{ fetchCases?: typeof fetchTeamCases }} [dependencies]
  * @returns {{
  *   initialState: TeamCasesState,
  *   reducer: (state: TeamCasesState, action: any) => TeamCasesState,
@@ -110,7 +79,7 @@ export function teamCasesView(state, tools) {
 export function createRouteSlice(
   _params,
   context,
-  { fetchCases = fetchTeamCases, resolveColumns = resolveDashboardColumns } = {}
+  { fetchCases = fetchTeamCases } = {}
 ) {
   return {
     initialState: {
@@ -118,7 +87,6 @@ export function createRouteSlice(
       routes: {
         teamCases: {
           cases: null,
-          caseTableColumns: [],
           sort: null,
         },
       },
@@ -126,10 +94,7 @@ export function createRouteSlice(
     reducer(state, action) {
       const route = state.routes.teamCases;
       if (action.type === 'cases/loaded') {
-        return patchRoute(state, 'teamCases', {
-          cases: action.cases,
-          caseTableColumns: action.caseTableColumns,
-        });
+        return patchRoute(state, 'teamCases', { cases: action.cases });
       }
       const sort = reduceTableSort(route.sort, action, TABLE);
       if (sort) return patchRoute(state, 'teamCases', { sort });
@@ -147,18 +112,15 @@ export function createRouteSlice(
       // The signal cancels the per-source fan-out on navigation; the
       // isActive() guard still stops a late dispatch.
       const readClient = withAbortSignal(client, tools.signal);
-      void Promise.all([
-        fetchCases(
-          readClient,
-          parsed,
-          currentUser.id,
-          tools.context.caseSources
-        ),
-        resolveColumns(parsed.caseType),
-      ])
-        .then(([cases, caseTableColumns]) => {
+      void fetchCases(
+        readClient,
+        parsed,
+        currentUser.id,
+        tools.context.caseSources
+      )
+        .then((cases) => {
           if (tools.isActive()) {
-            tools.dispatch({ type: 'cases/loaded', cases, caseTableColumns });
+            tools.dispatch({ type: 'cases/loaded', cases });
           }
         })
         .catch(ignoreAbortError);

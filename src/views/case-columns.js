@@ -8,9 +8,8 @@ import { caseRouteFor } from '../lib/case-route-links.js';
  * `views/data-table.js` is the generic renderer and stays domain-free; this
  * module is its Case-aware *consumer*, which is why it lives beside the
  * renderer rather than inside it. These are framework descriptors and may hold
- * functions — unlike `CaseTableColumnDescriptor` in `sharepoint-client.js`, the
- * data-only shape a Case Type may contribute. Merging the two would let a Case
- * Type ship behaviour.
+ * functions, because nothing outside framework code writes them: Case Types
+ * contribute no columns, so a Case table cannot ship Case Type behaviour.
  *
  * Column `key`s are sort identity *and* CSS hooks (`cora-col-${key}`), so they
  * are part of the contract and never change.
@@ -133,13 +132,14 @@ export const overdueCaseRowClass = (row) =>
   row.overdue ? 'cora-case-row cora-case-row--overdue' : 'cora-case-row';
 
 /**
- * The seven-column Case table shared by the Dashboard and Team Cases. `extra`
- * is where a Case Type's own `caseTableColumns` append.
+ * The seven-column Case table shared by the Dashboard and Team Cases. The set
+ * is fixed: a Case table describes Cases the same way for every Case Type, so
+ * scoping a table to one Case Type narrows the rows and never the columns.
  *
- * @param {{ onOpen: (row: CaseRow) => void, extra?: CaseColumn[] }} options
+ * @param {{ onOpen: (row: CaseRow) => void }} options
  * @returns {CaseColumn[]}
  */
-export function standardCaseColumns({ onOpen, extra = [] }) {
+export function standardCaseColumns({ onOpen }) {
   return [
     caseReferenceColumn(),
     caseTypeColumn(),
@@ -148,6 +148,5 @@ export function standardCaseColumns({ onOpen, extra = [] }) {
     caseStatusColumn(),
     caseAssignedColumn(),
     caseActionsColumn(onOpen),
-    ...extra,
   ];
 }

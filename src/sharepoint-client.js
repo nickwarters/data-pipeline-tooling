@@ -431,21 +431,12 @@
  */
 
 /**
- * A data-only column a Case Type contributes when a generic Case table is
- * scoped to that one Case Type. `value` is a dot-separated `CaseRow` property
- * path interpreted by `views/data-table.js`. Links, formatting, and any
- * branching behaviour remain framework code.
- *
- * @typedef {{ key: string, label: string, value: string, sortable?: boolean }} CaseTableColumnDescriptor
- */
-
-/**
  * Shape every Case Type module must satisfy.
  *
- * `caseTableColumns` contribute data-only columns when a generic Case table is
- * scoped to one Case Type; mixed-Case-Type tables do not apply one Case Type's
- * variation. `sections` remains the Section layout descriptor. Dashboard
- * composition is owned by dashboard code and is not Case Type configuration.
+ * `sections` remains the Section layout descriptor. Case tables are owned by
+ * framework code and are not Case Type configuration: every Case Type is listed
+ * under the same columns, so a table stays readable whether it is scoped to one
+ * Case Type or spans them all.
  *
  * `generalQuestions` declares the **General Questions** rendered above or beneath the
  * Question Groups on the Review tab — `generalQuestionsPlacement` selects which
@@ -477,8 +468,7 @@
  * captureGroups?: CaptureGroup[],
  * generalQuestions?: GeneralQuestionField[],
  * generalQuestionsPlacement?: 'before' | 'after',
- * detailFields?: CaseDetailField[],
- * caseTableColumns?: CaseTableColumnDescriptor[]
+ * detailFields?: CaseDetailField[]
  * }} CaseTypeConfig
  */
 

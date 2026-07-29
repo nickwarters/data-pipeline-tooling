@@ -205,16 +205,6 @@ const config = {{
     {{ key: 'customerName', label: 'Customer name' }},
     {{ key: 'reviewDate', label: 'Review date' }},
   ],
-  // Case table descriptors express Case Type variation only. Permission checks,
-  // navigation, formatting, and other branching behaviour stay in framework code.
-  caseTableColumns: [
-    {{
-      key: 'customerName',
-      label: 'Customer name',
-      value: 'details.customerName',
-      sortable: true,
-    }},
-  ],
   sections: {{
     details: {{ showInSummary: true }},
     questions: {{ showInSummary: true }},
@@ -354,12 +344,6 @@ test('{opts.slug}: declares Case Details fields with stable keys and labels', ()
   for (const field of config.detailFields ?? []) {{
     assert.ok(field.key.length > 0);
     assert.ok(field.label.length > 0);
-  }}
-}});
-
-test('{opts.slug}: declares data-only Case Type descriptors', () => {{
-  for (const column of config.caseTableColumns ?? []) {{
-    assert.equal(typeof column.value, 'string');
   }}
 }});
 
@@ -648,7 +632,7 @@ def scaffold(opts: ScaffoldOptions) -> None:
         )
         cases = insert_before(
             cases,
-            "  // ── Action Centre demo cases (issue #287) ────────────────────────────────",
+            "  // ── Action Centre demo cases ────────────────────────────────",
             fixture_cases(opts),
             cases_path,
         )

@@ -47,6 +47,12 @@ genuine variation in a Case Type's tables and Case-review journey. ADR-0035's
 general rule still applies to those seams: descriptors contain data-only variation
 and branching behaviour remains in code.
 
+> **Update — [ADR-0040](./0040-case-tables-are-framework-owned.md):** the
+> carve-out for `caseTableColumns` did not hold. Case tables are now
+> framework-owned too, on the same reasoning this decision applies to dashboard
+> panels; only `sections` survives as a Case Type presentation descriptor. The
+> decision below is otherwise unchanged.
+
 ## Consequences
 
 - Changing dashboard composition no longer requires editing Case Type modules or
