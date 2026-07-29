@@ -28,39 +28,48 @@ const _fourDaysAgo = new Date(_todayStart.getTime() - 4 * 24 * 60 * 60 * 1000);
 const _sixDaysAgo = new Date(_todayStart.getTime() - 6 * 24 * 60 * 60 * 1000);
 const _nineDaysAgo = new Date(_todayStart.getTime() - 9 * 24 * 60 * 60 * 1000);
 
-const COMPLAINTS_OUTCOME_QUESTIONS = 49;
+const COMPLAINTS_QUESTIONS = 49;
+
+// The one conditional Question in the Complaints catalogue: referral rights are
+// only asked about where the closure deadline was missed. An Answer stored
+// against a hidden Question still scores, so a uniform-response fixture must
+// leave it out whenever the Question it depends on is answered `Good`.
+const REFERRAL_RIGHTS = 'q-cmp-0046';
+const CLOSURE_DEADLINE_MISSED = [
+  'Good with process enhancement',
+  'Poor',
+  'Poor with harm',
+];
 
 /**
  * The ids are derived from the count rather than read from the Question Bank:
  * a fixture built from the bank would make any test comparing the two assert
  * the bank against itself.
  *
- * @param {string} value the response given to every outcome-scored Question
+ * @param {string} value the response given to every Question
  * @returns {Record<string, Answer>}
  */
 function outcomeAnswers(value) {
   /** @type {Record<string, Answer>} */
   const answers = {};
-  for (let n = 1; n <= COMPLAINTS_OUTCOME_QUESTIONS; n += 1) {
+  for (let n = 1; n <= COMPLAINTS_QUESTIONS; n += 1) {
     const id = `q-cmp-${String(n).padStart(4, '0')}`;
+    if (id === REFERRAL_RIGHTS && !CLOSURE_DEADLINE_MISSED.includes(value)) {
+      continue;
+    }
     answers[id] = { value };
   }
   return answers;
 }
-
-// Quoted from the Question Bank so the fixture Answers match an authorable
-// option exactly.
-const LETTER_STRUCTURE_NO_IMPACT =
-  "Correct letter structure has not been used, however this has no impact on the customer's understanding";
 
 /**
  * The mock-served fixture Cases (`?mock=1`). complaints is the only live Case
  * Type; the example-review demo Cases moved to
  * tests/_example-review-cases.js as a test-only fixture.
  *
- * The Complaints catalogue is dominated by outcome-scored Questions, so the
- * Cases past the reportable milestone answer them through `outcomeAnswers()`
- * and spell out only the Answers their demo turns on.
+ * Every Complaints Question is outcome-scored, so the Cases past the reportable
+ * milestone answer the catalogue through `outcomeAnswers()` and spell out only
+ * the Answers their demo turns on.
  *
  * Complaints (Journey Owner raises appeals, Controls resolves):
  *   complaints-case-1 — In-progress, outstanding (assigned to user-reviewer)
@@ -118,8 +127,8 @@ export const cases = [
   },
   {
     // Outstanding: In-progress, assigned to the reviewer so it surfaces on the
-    // reviewer dashboard's "Outstanding Cases". Partially answered (root-cause is
-    // applicable via showWhen but unanswered), so it is not yet completable.
+    // reviewer dashboard's "Outstanding Cases". Only the first Question Group is
+    // answered, so it is not yet completable.
     id: 'complaints-case-1',
     caseType: 'complaints',
     title: 'Complaint #1',
@@ -127,10 +136,8 @@ export const cases = [
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-agent-a',
     answers: {
-      'q-cm-ack': { value: 'Yes' },
-      'q-cm-investigated': { value: 'Yes' },
-      // Only the first Acknowledgement group of outcome-scored Questions is
-      // answered, so the Case stays visibly part-way through the Review tab.
+      // Only the first Acknowledgement group of Questions is answered, so the
+      // Case stays visibly part-way through the Review tab.
       'q-cmp-0001': { value: 'Good' },
       'q-cmp-0002': { value: 'Good' },
       'q-cmp-0003': { value: 'Good' },
@@ -154,7 +161,7 @@ export const cases = [
     etag: 'etag-cm1-v1',
   },
   {
-    // Completed with exactly one failure (redress not offered) → outcome `poor`.
+    // Completed with exactly one failure (the redress check) → outcome `poor`.
     // Left un-amended so the Controls Amend Outcome flow and the
     // Journey Owner → Controls appeal flow can both be exercised on it.
     id: 'complaints-case-2',
@@ -165,16 +172,10 @@ export const cases = [
     responsibleParty: 'user-agent-b',
     answers: {
       ...outcomeAnswers('Good'),
-      'q-cm-ack': { value: 'Yes' },
-      'q-cm-letter-structure': { value: LETTER_STRUCTURE_NO_IMPACT },
-      'q-cm-investigated': { value: 'Yes' },
-      'q-cm-root-cause': { value: 'Yes' },
-      'q-cm-channel': { value: 'Letter' },
-      'q-cm-redress': {
-        value: 'No',
+      'q-cmp-0016': {
+        value: 'Poor',
         justification: 'Upheld complaint closed without offering redress.',
       },
-      'q-cm-final-response': { value: 'Yes' },
     },
     conversation: [],
     details: {
@@ -194,9 +195,8 @@ export const cases = [
     // Sections:
     // the Journey Owner sees the empty Appeal Section with the Raise Appeal form,
     // and Controls sees the Appeal Review empty state (nothing to resolve).
-    // (q-cm-root-cause is hidden because q-cm-investigated failed; q-cm-channel
-    // is informational. Everything else, the outcome-scored block included, is
-    // answered at its worst grade.)
+    // (The closure deadline is graded as missed here, so the conditional
+    // referral-rights Question is applicable and answered too.)
     id: 'complaints-case-3',
     caseType: 'complaints',
     title: 'Complaint #3',
@@ -205,27 +205,6 @@ export const cases = [
     responsibleParty: 'user-agent-a',
     answers: {
       ...outcomeAnswers('Poor with harm'),
-      'q-cm-ack': {
-        value: 'No',
-        justification: 'No acknowledgement was sent to the customer.',
-      },
-      'q-cm-letter-structure': {
-        value:
-          "Acknowledgement letter includes inaccurate information or incorrect structure used, which could impact the customer's understanding/actions and/or is a regulatory requirement, and this led to harm",
-      },
-      'q-cm-investigated': {
-        value: 'No',
-        justification: 'The complaint was closed without any investigation.',
-      },
-      'q-cm-channel': { value: 'Letter' },
-      'q-cm-redress': {
-        value: 'No',
-        justification: 'Upheld complaint closed without offering redress.',
-      },
-      'q-cm-final-response': {
-        value: 'No',
-        justification: 'No final response was issued to the customer.',
-      },
     },
     conversation: [],
     details: {
@@ -240,7 +219,7 @@ export const cases = [
     etag: 'etag-cm3-v1',
   },
   {
-    // Two failures (acknowledgement + redress), each with a selected Remediation
+    // Two failures (complaint logging + the redress check), each with a selected Remediation
     // Action, and an appeal the Journey Owner has already raised. The appeal is
     // still open (`state: 'raised'`), so Controls lands straight on the Appeal
     // Review resolve form (agree → linked Amended Outcome, or reject). The Journey
@@ -252,36 +231,32 @@ export const cases = [
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-agent-b',
     answers: {
-      // All-Good across the outcome-scored block, so the Case keeps exactly the
+      // All-Good across the rest of the catalogue, so the Case keeps exactly the
       // two remediated failures the appeal's citedAnswerKeys point at and the
       // Controls resolve demo stays legible.
       ...outcomeAnswers('Good'),
-      'q-cm-letter-structure': { value: LETTER_STRUCTURE_NO_IMPACT },
-      'q-cm-ack': {
-        value: 'No',
-        justification: 'Acknowledgement was sent four working days late.',
-        remediationActions: [
-          {
-            id: 'q-cm-ack-ra-0',
-            text: 'Acknowledge the complaint in writing within the regulatory timeframe.',
-          },
-        ],
-      },
-      'q-cm-investigated': { value: 'Yes' },
-      'q-cm-root-cause': { value: 'Yes' },
-      'q-cm-channel': { value: 'Email' },
-      'q-cm-redress': {
-        value: 'No',
+      'q-cmp-0001': {
+        value: 'Poor with harm',
         justification:
-          'Redress was not recalculated after the upheld decision.',
+          'The complaint was logged four working days after it was received.',
         remediationActions: [
           {
-            id: 'q-cm-redress-ra-0',
-            text: 'Recalculate and offer appropriate redress to the customer.',
+            id: 'q-cmp-0001-ra-0',
+            text: 'Log the complaint on the complaints register and correct the recorded receipt date.',
           },
         ],
       },
-      'q-cm-final-response': { value: 'Yes' },
+      'q-cmp-0016': {
+        value: 'Poor with harm',
+        justification:
+          'Redress was not checked against the methodology after the upheld decision.',
+        remediationActions: [
+          {
+            id: 'q-cmp-0016-ra-0',
+            text: 'Recalculate the redress against the current methodology and offer it to the customer.',
+          },
+        ],
+      },
     },
     conversation: [],
     details: {
@@ -298,8 +273,8 @@ export const cases = [
         appellant: 'user-journey-owner-complaints',
         at: _threeDaysAgo.toISOString(),
         rationale:
-          'The acknowledgement was delayed only by a same-day system outage on our side, and redress had already been paid to the customer directly outside this review. Please reconsider the Poor with harm outcome.',
-        citedAnswerKeys: ['q-cm-ack', 'q-cm-redress'],
+          'The logging delay was caused only by a same-day system outage on our side, and the redress figure had already been checked and paid to the customer directly outside this review. Please reconsider the Poor with harm outcome.',
+        citedAnswerKeys: ['q-cmp-0001', 'q-cmp-0016'],
         state: 'raised',
       },
     ],
@@ -331,16 +306,17 @@ export const cases = [
     // and the Conversation it points at are demoable from both sides.
     responsiblePartyManager: 'user-rp-manager',
     answers: {
-      // All-Good across the outcome-scored block adds no failures, so the
+      // All-Good across the rest of the catalogue adds no failures, so the
       // one-resolved/one-unresolved Remediation demo below is unchanged.
       ...outcomeAnswers('Good'),
-      'q-cm-ack': {
-        value: 'No',
-        justification: 'Acknowledgement was sent six working days late.',
+      'q-cmp-0001': {
+        value: 'Poor with harm',
+        justification:
+          'The complaint was logged six working days after it was received.',
         remediationActions: [
           {
-            id: 'q-cm-ack-ra-0',
-            text: 'Acknowledge the complaint in writing within the regulatory timeframe.',
+            id: 'q-cmp-0001-ra-0',
+            text: 'Log the complaint on the complaints register and correct the recorded receipt date.',
           },
         ],
         // Resolved on the Remediation tab. The redress Question below is
@@ -357,18 +333,14 @@ export const cases = [
           redressRequired: 'No',
         },
       },
-      'q-cm-letter-structure': { value: LETTER_STRUCTURE_NO_IMPACT },
-      'q-cm-investigated': { value: 'Yes' },
-      'q-cm-root-cause': { value: 'Yes' },
-      'q-cm-channel': { value: 'Email' },
-      'q-cm-redress': {
-        value: 'No',
+      'q-cmp-0016': {
+        value: 'Poor with harm',
         justification:
-          'The upheld complaint was closed before redress was calculated.',
+          'The upheld complaint was closed before the redress calculation was checked.',
         remediationActions: [
           {
-            id: 'q-cm-redress-ra-0',
-            text: 'Recalculate and offer appropriate redress to the customer.',
+            id: 'q-cmp-0016-ra-0',
+            text: 'Recalculate the redress against the current methodology and offer it to the customer.',
           },
         ],
         capture: {
@@ -381,18 +353,17 @@ export const cases = [
           impactNotes: 'Customer is still out of pocket pending recalculation.',
         },
       },
-      'q-cm-final-response': { value: 'Yes' },
     },
     conversation: [
       {
         author: 'user-reviewer',
         timestamp: _threeDaysAgo.toISOString(),
-        body: 'Two actions are with you on this complaint: the late acknowledgement and the outstanding redress calculation.',
+        body: 'Two actions are with you on this complaint: the late logging and the outstanding redress calculation.',
       },
       {
         author: 'user-rp',
         timestamp: _twoDaysAgo.toISOString(),
-        body: 'Acknowledgement has been reissued to the customer. Redress is with the calculations team.',
+        body: 'The register entry has been corrected. Redress is with the calculations team.',
       },
       {
         author: 'user-reviewer',

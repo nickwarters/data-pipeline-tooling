@@ -11,6 +11,7 @@ import { validateCaptureGroups } from '../src/evaluators/issue-capture.js';
 import {
   validateGeneralQuestions,
   validateAnswerKeyNamespace,
+  GENERAL_ANSWER_PREFIX,
 } from '../src/evaluators/general-questions.js';
 import { resolveGeneralQuestions } from '../case-types/general-questions.js';
 import { reviewerResponseOptions } from '../src/lib/response-options.js';
@@ -31,6 +32,20 @@ function ans(value) {
 
 test('complaints: catalogue has at least 5 questions', () => {
   assert.ok(config.questions.length >= 5, `got ${config.questions.length}`);
+});
+
+test('complaints: the catalogue is exactly the q-cmp Question Definitions', () => {
+  // The q-cmp catalogue REPLACED the original seven Complaints Questions
+  // rather than joining them, so a stray survivor would keep scoring Outcomes
+  // and blocking completion from a Question Group nobody expects to see.
+  const expected = Array.from(
+    { length: 49 },
+    (_, index) => `q-cmp-${String(index + 1).padStart(4, '0')}`
+  );
+  assert.deepEqual(
+    config.questions.map((q) => q.id),
+    expected
+  );
 });
 
 test('complaints: catalogue spans at least 2 distinct Question Groups', () => {
@@ -60,13 +75,32 @@ test('complaints: at least one question has a showWhen rule referencing the cata
   const withShowWhen = config.questions.filter((q) => q.showWhen != null);
   assert.ok(withShowWhen.length >= 1, 'expected at least one showWhen');
   for (const q of withShowWhen) {
-    for (const refId of Object.keys(
+    const refIds = Object.keys(
       /** @type {Record<string,unknown>} */ (q.showWhen)
-    )) {
+    );
+    assert.ok(refIds.length >= 1, `${q.id}.showWhen names no question`);
+    for (const refId of refIds) {
       assert.ok(
         ids.has(refId),
         `${q.id}.showWhen references ${refId} which is not in the catalogue`
       );
+      // A rule whose responses are not authorable options of the question it
+      // depends on can never fire, which reads as "the question is broken"
+      // rather than "the question is hidden".
+      const referenced = config.questions.find((x) => x.id === refId);
+      const rule = /** @type {Record<string, Record<string, unknown>>} */ (
+        q.showWhen
+      )[refId];
+      const values =
+        'in' in rule
+          ? /** @type {string[]} */ (rule['in'])
+          : [/** @type {string} */ (rule['equals'])];
+      for (const value of values) {
+        assert.ok(
+          (referenced?.options ?? []).includes(value),
+          `${q.id}.showWhen expects ${refId} = "${value}", which is not an option of ${refId}`
+        );
+      }
     }
   }
 });
@@ -231,79 +265,28 @@ test('complaints computeOutcome: no mapped responses → good', () => {
 });
 
 test('complaints computeOutcome: a response mapped to poor yields poor', () => {
-  // A "No" on redress is configured to score `poor`.
   assert.deepStrictEqual(
-    config.computeOutcome({ 'q-cm-redress': ans('No') }).outcome,
+    config.computeOutcome({ 'q-cmp-0016': ans('Poor') }).outcome,
     'poor'
   );
 });
 
 test('complaints computeOutcome: a response mapped to poor-with-harm yields poor-with-harm', () => {
-  // A "No" on acknowledgement is configured to score `poor-with-harm`.
   assert.deepStrictEqual(
-    config.computeOutcome({ 'q-cm-ack': ans('No') }).outcome,
+    config.computeOutcome({ 'q-cmp-0001': ans('Poor with harm') }).outcome,
     'poor-with-harm'
   );
 });
 
 test('complaints computeOutcome: the highest-scoring applicable outcome wins', () => {
   const answers = {
-    'q-cm-redress': ans('No'), // poor
-    'q-cm-ack': ans('No'), // poor-with-harm
+    'q-cmp-0016': ans('Poor'),
+    'q-cmp-0001': ans('Poor with harm'),
   };
   assert.deepStrictEqual(
     config.computeOutcome(answers).outcome,
     'poor-with-harm'
   );
-});
-
-// --- q-cm-letter-structure (sentence-length single-choice options) ---
-
-test('complaints: letter-structure question offers three graded sentence-length options within the option cap', () => {
-  const q = config.questions.find((x) => x.id === 'q-cm-letter-structure');
-  assert.ok(q, 'expected q-cm-letter-structure in the catalogue');
-  assert.equal(q.text, 'Is the complaint letter structure used?');
-  assert.equal(q.responseType, 'single-choice');
-  const options = q.options ?? [];
-  assert.equal(options.length, 3);
-  for (const option of options) {
-    // MAX_OPTION_LENGTH (cora-options-editor): options are capped at 250 chars.
-    assert.ok(
-      option.length <= 250,
-      `option exceeds the 250-char cap (${option.length}): ${option}`
-    );
-  }
-  // Sentence-length wordings are the point of this question: it exercises the
-  // stacked-card layout, which triggers above the 40-char threshold.
-  assert.ok(
-    options.some((option) => option.length > 40),
-    'expected at least one sentence-length option'
-  );
-});
-
-test('complaints computeOutcome: letter-structure grades map to good, poor and poor-with-harm', () => {
-  const q = config.questions.find((x) => x.id === 'q-cm-letter-structure');
-  assert.ok(q && q.options);
-  const [noImpact, couldImpact, harm] = q.options;
-  assert.equal(
-    config.computeOutcome({ 'q-cm-letter-structure': ans(noImpact) }).outcome,
-    'good'
-  );
-  assert.equal(
-    config.computeOutcome({ 'q-cm-letter-structure': ans(couldImpact) })
-      .outcome,
-    'poor'
-  );
-  assert.equal(
-    config.computeOutcome({ 'q-cm-letter-structure': ans(harm) }).outcome,
-    'poor-with-harm'
-  );
-  // Every grade mapping to a non-default Outcome flags a failed Answer for
-  // the Issues/Remediation flow — the `poor` grade included.
-  assert.deepEqual(deriveFailureValues(q, config.defaultOutcomeId), [
-    couldImpact,
-    harm,
-  ]);
 });
 
 // --- fixtures ---
@@ -440,6 +423,22 @@ test('complaints fixtures: the Cases past the reportable milestone answer every 
       true,
       `${row.id} answers every applicable Question`
     );
+  }
+});
+
+test('complaints fixtures: every Answer key names a Question the catalogue still has', () => {
+  // An Answer stored against a Question that no longer exists is invisible in
+  // the app but still scores the Outcome, so a half-finished rename reads as a
+  // Case whose Outcome nothing on screen explains.
+  const ids = new Set(config.questions.map((q) => q.id));
+  for (const row of cases.filter((c) => c.caseType === 'complaints')) {
+    for (const key of Object.keys(row.answers)) {
+      if (key.startsWith(GENERAL_ANSWER_PREFIX)) continue;
+      assert.ok(
+        ids.has(key),
+        `${row.id} answers ${key}, which is not in the catalogue`
+      );
+    }
   }
 });
 

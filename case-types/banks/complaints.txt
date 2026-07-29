@@ -3,102 +3,6 @@
   "label": "Complaints",
   "questions": [
     {
-      "id": "q-cm-ack",
-      "text": "Was the complaint acknowledged within the required timeframe?",
-      "questionGroup": "Acknowledgement",
-      "labelIds": ["lbl-sla", "lbl-regulatory"],
-      "responseType": "yes-no-na",
-      "optionOutcomes": {
-        "No": "poor-with-harm"
-      },
-      "remediationActions": [
-        "Acknowledge the complaint in writing within the regulatory timeframe."
-      ],
-      "deprecated": false
-    },
-    {
-      "id": "q-cm-letter-structure",
-      "text": "Is the complaint letter structure used?",
-      "questionGroup": "Acknowledgement",
-      "labelIds": ["lbl-regulatory"],
-      "responseType": "single-choice",
-      "options": [
-        "Correct letter structure has not been used, however this has no impact on the customer's understanding",
-        "Acknowledgement letter includes inaccurate information or incorrect structure used, which could impact the customer's understanding/actions and/or is a regulatory requirement",
-        "Acknowledgement letter includes inaccurate information or incorrect structure used, which could impact the customer's understanding/actions and/or is a regulatory requirement, and this led to harm"
-      ],
-      "optionOutcomes": {
-        "Acknowledgement letter includes inaccurate information or incorrect structure used, which could impact the customer's understanding/actions and/or is a regulatory requirement": "poor",
-        "Acknowledgement letter includes inaccurate information or incorrect structure used, which could impact the customer's understanding/actions and/or is a regulatory requirement, and this led to harm": "poor-with-harm"
-      },
-      "remediationActions": [
-        "Reissue the acknowledgement letter using the correct complaint letter structure."
-      ],
-      "deprecated": false
-    },
-    {
-      "id": "q-cm-investigated",
-      "text": "Was the complaint fully investigated?",
-      "questionGroup": "Investigation",
-      "labelIds": ["lbl-regulatory"],
-      "responseType": "yes-no-na",
-      "optionOutcomes": {
-        "No": "poor-with-harm"
-      },
-      "remediationActions": [
-        "Complete a full investigation covering every point the customer raised."
-      ],
-      "deprecated": false
-    },
-    {
-      "id": "q-cm-root-cause",
-      "text": "Was the root cause of the complaint identified?",
-      "questionGroup": "Investigation",
-      "labelIds": ["lbl-regulatory"],
-      "responseType": "yes-no-na",
-      "showWhen": {
-        "q-cm-investigated": {
-          "equals": "Yes"
-        }
-      },
-      "optionOutcomes": {
-        "No": "poor"
-      },
-      "deprecated": false
-    },
-    {
-      "id": "q-cm-channel",
-      "text": "How was the complaint received?",
-      "questionGroup": "Resolution",
-      "responseType": "single-choice",
-      "options": ["Phone", "Email", "Letter", "In branch"],
-      "deprecated": false
-    },
-    {
-      "id": "q-cm-redress",
-      "text": "Where the complaint was upheld, was appropriate redress offered?",
-      "questionGroup": "Resolution",
-      "responseType": "yes-no-na",
-      "optionOutcomes": {
-        "No": "poor"
-      },
-      "remediationActions": [
-        "Recalculate and offer appropriate redress to the customer."
-      ],
-      "deprecated": false
-    },
-    {
-      "id": "q-cm-final-response",
-      "text": "Was a final response issued to the customer?",
-      "questionGroup": "Communication",
-      "labelIds": ["lbl-sla"],
-      "responseType": "yes-no-na",
-      "optionOutcomes": {
-        "No": "poor"
-      },
-      "deprecated": false
-    },
-    {
       "id": "q-cmp-0001",
       "text": "Was the complaint logged on the complaints register on the day it was received?",
       "questionGroup": "Acknowledgement",
@@ -115,6 +19,9 @@
         "Poor": "poor",
         "Poor with harm": "poor-with-harm"
       },
+      "remediationActions": [
+        "Log the complaint on the complaints register and correct the recorded receipt date."
+      ],
       "deprecated": false
     },
     {
@@ -400,6 +307,9 @@
         "Poor": "poor",
         "Poor with harm": "poor-with-harm"
       },
+      "remediationActions": [
+        "Recalculate the redress against the current methodology and offer it to the customer."
+      ],
       "deprecated": false
     },
     {
@@ -533,6 +443,9 @@
         "Poor": "poor",
         "Poor with harm": "poor-with-harm"
       },
+      "remediationActions": [
+        "Issue a supplementary response covering the points the final response did not address."
+      ],
       "deprecated": false
     },
     {
@@ -685,6 +598,9 @@
         "Poor": "poor",
         "Poor with harm": "poor-with-harm"
       },
+      "remediationActions": [
+        "Record the adjustments the customer needs and re-contact them using those adjustments."
+      ],
       "deprecated": false
     },
     {
@@ -969,6 +885,11 @@
         "Good with process enhancement": "good-with-process-enhancement",
         "Poor": "poor",
         "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": {
+        "q-cmp-0045": {
+          "in": ["Good with process enhancement", "Poor", "Poor with harm"]
+        }
       },
       "deprecated": false
     },
