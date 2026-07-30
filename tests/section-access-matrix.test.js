@@ -187,13 +187,24 @@ test('matrix — Actions In Progress Case with sent actions (reportable freeze)'
       notes: {
         assignedReviewer: 'edit',
       },
-      // Appeal/amend Sections remain Completed-only.
+      // Appeal Sections remain Completed-only; Amend Outcome opens to Controls
+      // at the reportable milestone, once the Outcome snapshot exists.
       appealRequest: {
         responsiblePartyManager: 'hidden',
         journeyOwner: 'read-only',
       },
       appealReview: { controls: 'read-only' },
-      amendOutcome: { controls: 'hidden' },
+      amendOutcome: {
+        assignedReviewer: 'hidden',
+        otherReviewer: 'hidden',
+        reviewerManager: 'hidden',
+        responsibleParty: 'hidden',
+        responsiblePartyManager: 'hidden',
+        caseTypeOwner: 'hidden',
+        journeyOwner: 'hidden',
+        controls: 'edit',
+        none: 'hidden',
+      },
     },
     c,
     cfg

@@ -95,8 +95,17 @@ test('appealReview: Controls edits only while an Appeal is open on a Completed C
   );
 });
 
-test('amendOutcome: Controls edits on Completed, hidden otherwise', () => {
+test('amendOutcome: Controls edits once the Case is reportable, hidden before', () => {
   const cfg = makeConfig();
+  assert.equal(
+    evaluateAccess(
+      'amendOutcome',
+      ['controls'],
+      makeCase({ status: 'Actions In Progress' }),
+      cfg
+    ),
+    'edit'
+  );
   assert.equal(
     evaluateAccess(
       'amendOutcome',

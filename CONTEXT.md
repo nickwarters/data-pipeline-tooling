@@ -220,7 +220,7 @@ _Avoid_: Case Type Owner (the reviewing-side elevated role), Frontline Manager
 A SharePoint user in the `Controls` group. **Resolves Appeals** (agree/reject with
 rationale) on the **Appeal Review** Section and authors the case-level **Amended Outcome**
 on the **Amend Outcome** Section. **Replaces the QA Reviewer** for
-post-completion outcome changes; the QA Check / **Answer Override** machinery is retired.
+outcome changes once the Case is **Reportable**; the QA Check / **Answer Override** machinery is retired.
 _Avoid_: QA Reviewer (retired), Auditor, Checker
 
 **Attributed Party**:
@@ -288,10 +288,10 @@ One entry in a **Conversation** — author, timestamp, body.
 ### Outcome
 
 **Outcome**:
-The computed verdict for a **Case**, derived by the **Case Type**'s algorithm from the Case's **Answers**. No longer has its own Section or tab — it is rendered as one block _within_ the **Summary** Section (the `computeOutcome` function and `cora-outcome` rendering survive; the standalone Outcome tab and its the architecture decision matrix row do not). The _live_ Outcome is always re-derivable from Answers — it is not a stored entity. However, a **snapshot** (`outcomeAtCompletion`) is stamped onto the Case row at the moment the Case becomes a **Completed Case**, to support historical reporting. The snapshot is frozen: it is not updated if Question Definitions or the outcome function change afterwards. A pass Outcome implies no **Remediation Actions** were attached (Remediation Actions only attach to failed Answers, and a failing Answer cannot yield a pass Outcome). After completion, the Outcome may be displaced (not mutated) by a case-level **Amended Outcome** authored by **Controls** — see **Amended Outcome** and **Current Outcome**.
+The computed verdict for a **Case**, derived by the **Case Type**'s algorithm from the Case's **Answers**. No longer has its own Section or tab — it is rendered as one block _within_ the **Summary** Section (the `computeOutcome` function and `cora-outcome` rendering survive; the standalone Outcome tab and its the architecture decision matrix row do not). The _live_ Outcome is always re-derivable from Answers — it is not a stored entity. However, a **snapshot** (`outcomeAtCompletion`) is stamped onto the Case row at the moment the Case becomes **Reportable**, to support historical reporting. The snapshot is frozen: it is not updated if Question Definitions or the outcome function change afterwards. A pass Outcome implies no **Remediation Actions** were attached (Remediation Actions only attach to failed Answers, and a failing Answer cannot yield a pass Outcome). Once the Case is **Reportable**, the Outcome may be displaced (not mutated) by a case-level **Amended Outcome** authored by **Controls** — see **Amended Outcome** and **Current Outcome**.
 
 **Amended Outcome**:
-A post-completion, **case-level** correction of a **Completed Case**'s **Outcome**,
+A **case-level** correction of a **Reportable** Case's **Outcome**,
 authored by **Controls** on the **Amend Outcome** Section.
 Unlike the retired **Answer Override**, this is an **explicit, hand-set verdict**: Controls
 chooses the new **Outcome** value directly, with a mandatory **justification**. Stored as

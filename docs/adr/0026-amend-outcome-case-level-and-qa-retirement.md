@@ -79,6 +79,14 @@ A post-completion outcome change is a **single case-level record** on the Case r
 > happened; this was narrowed to **Controls-only**. Those roles read the amended
 > Current Outcome through the Summary instead of a dedicated tab.
 
+> _Refined post-acceptance:_ the Controls gate widened from `Completed` to the
+> **reportable** milestone (`Actions In Progress` or `Completed`) — `hidden` before.
+> The "nothing to amend before completion" rationale above is retracted: the Outcome
+> snapshot and the Answers behind it freeze at the reportable milestone, not at
+> completion, so there _is_ something to amend while remediation is in flight and a
+> wrong verdict need not wait for the Case to complete. Controls remains the only
+> role that sees the tab, at every status.
+
 ### What is removed
 
 - The **`qaReviewer`** capability and `QA-Reviewers` group ([the architecture decision] already omits it).

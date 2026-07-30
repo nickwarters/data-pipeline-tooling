@@ -359,8 +359,10 @@ export const MATRIX = {
     none: 'hidden',
   },
   // Amend Outcome — the case-level corrective Outcome. Controls is the only
-  // role that sees this tab: `edit` on a `Completed` Case, `hidden` otherwise.
-  // Everyone else reads the resulting Current Outcome in the Summary.
+  // role that sees this tab: `edit` once the Case is reportable, `hidden`
+  // before — the Outcome snapshot this Section corrects does not exist until
+  // the freeze. Everyone else reads the resulting Current Outcome in the
+  // Summary.
   amendOutcome: {
     assignedReviewer: 'hidden',
     otherReviewer: 'hidden',
@@ -369,7 +371,7 @@ export const MATRIX = {
     responsiblePartyManager: 'hidden',
     caseTypeOwner: 'hidden',
     journeyOwner: 'hidden',
-    controls: (c) => (c.status === CASE_STATUS.COMPLETED ? 'edit' : 'hidden'),
+    controls: (c) => (isReportable(c.status) ? 'edit' : 'hidden'),
     none: 'hidden',
   },
 };
