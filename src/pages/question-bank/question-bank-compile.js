@@ -167,7 +167,7 @@ function canonicalise(value) {
  * a questions array that carries id/text/category/questionGroup/responseType/options/
  * optionOutcomes/showWhen/remediationActions/labelIds/deprecated,
  * case-type outcomeOptions/defaultOutcomeId, and a labels table. Excluded: computeOutcome,
- * allowFreeFormRemediation, eligibleGroups.
+ * disallowFreeFormRemediation, eligibleGroups.
  *
  * @param {QuestionBank} bank
  * @returns {Promise<{

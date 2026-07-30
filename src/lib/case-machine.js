@@ -111,7 +111,8 @@ export class CaseMachine {
 
   /**
    * Whether the viewer may pick which configured Remediation Actions apply to a
-   * failed Answer and, when the Question allows it, add a free-form action.
+   * failed Answer and add a free-form action — free-form is the default, though
+   * the Question Definition can withhold it.
    * Unlike `canAttribute`/`canCapture`, this is not gated on the Case Type
    * opting into `attributeFailures`: any editor of the Issues tab (the Assigned
    * Reviewer on a not-yet-reportable Case) may select actions.

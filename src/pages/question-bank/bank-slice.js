@@ -490,7 +490,11 @@ export function questionBankReducer(state, action) {
   }
   if (action.type === 'question/free-form-remediation-toggled') {
     return updateQuestion(state, action.questionId, (question) => {
-      question.allowFreeFormRemediation = !question.allowFreeFormRemediation;
+      // Free-form is the default, so only the opt-out is ever written; an
+      // explicit `false` would be stamped into every compiled artifact.
+      if (question.disallowFreeFormRemediation)
+        delete question.disallowFreeFormRemediation;
+      else question.disallowFreeFormRemediation = true;
     });
   }
   if (action.type === 'question/remediation-action-added') {

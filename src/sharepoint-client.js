@@ -247,6 +247,9 @@
  * `labelIds` references the owning Case Type's `labels` by id. It is
  * reporting metadata only and does not affect how a question is presented.
  *
+ * Free-form remediation is offered on every failed Answer unless the Question
+ * Definition sets `disallowFreeFormRemediation`.
+ *
  * Grouping is two-level, both optional: `category` is the top,
  * presentation-only level and never touches applicability or Outcome;
  * `questionGroup` is the inner level — progress, Summary counts and
@@ -264,7 +267,7 @@
  * showWhen?: Record<string, unknown>,
  * failureValues?: string[],
  * remediationActions?: Array<string | RemediationActionDefinition>,
- * allowFreeFormRemediation?: boolean,
+ * disallowFreeFormRemediation?: boolean,
  * deprecated: boolean
  * }} QuestionDefinition
  */

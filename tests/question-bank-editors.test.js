@@ -234,6 +234,34 @@ test('question editor actions preserve reorder, option, label, remediation, and 
   assert.equal('showWhen' in always.cases.example.questions[1], false);
 });
 
+test('toggling free-form remediation sets or deletes the opt-out, never writes false', () => {
+  /** @param {any} next */
+  const question = (next) =>
+    next.cases.example.questions.find(
+      (/** @type {any} */ candidate) => candidate.id === 'q-1'
+    );
+  /** @type {any} */
+  const toggle = {
+    type: 'question/free-form-remediation-toggled',
+    questionId: 'q-1',
+  };
+
+  const off = questionBankReducer(state(), toggle);
+  assert.equal(question(off).disallowFreeFormRemediation, true);
+
+  const backOn = questionBankReducer(off, toggle);
+  assert.equal('disallowFreeFormRemediation' in question(backOn), false);
+
+  const authoredAllowed = state();
+  question(authoredAllowed).disallowFreeFormRemediation = false;
+  const fromAuthoredFalse = questionBankReducer(authoredAllowed, toggle);
+  assert.equal(
+    question(fromAuthoredFalse).disallowFreeFormRemediation,
+    true,
+    'an authored `false` reads as allowed and toggles to disallowed'
+  );
+});
+
 test('renaming and removing outcomes updates every Question Definition reference', () => {
   const renamed = questionBankReducer(state(), {
     type: 'outcome/renamed',
@@ -258,7 +286,7 @@ test('pure bank views expose every editor operation as a serialisable action', (
     { id: 'lbl-ops', name: 'Operations', color: '#00ff00' },
   ];
   current.questions[0].labelIds = ['lbl-risk'];
-  current.questions[0].allowFreeFormRemediation = true;
+  current.questions[0].disallowFreeFormRemediation = true;
   current.questions[0].remediationActions = [
     { id: 'q-1-ra-0', text: 'Contact owner' },
   ];
@@ -645,11 +673,29 @@ test('pure editor variants preserve empty, fixed, outcome, and conditional state
 
   const emptyRemediation = /** @type {HTMLElement} */ (
     RemediationActionsEditor({
-      question: current.questions[1],
+      question: {
+        ...current.questions[1],
+        disallowFreeFormRemediation: true,
+      },
       dispatch,
     })
   );
   assert.ok(emptyRemediation.querySelector('.rem-empty'));
+  assert.equal(
+    queryAllByRole(
+      /** @type {HTMLElement} */ (
+        RemediationActionsEditor({ question: current.questions[1], dispatch })
+      ),
+      'switch'
+    )[0].getAttribute('aria-checked'),
+    'true',
+    'a Question with no free-form key renders the switch on'
+  );
+  assert.equal(
+    queryAllByRole(emptyRemediation, 'switch')[0].getAttribute('aria-checked'),
+    'false',
+    'a Question that disallows free-form renders the switch off'
+  );
   assert.equal(
     nextRemediationActionId({
       id: 'q-1',

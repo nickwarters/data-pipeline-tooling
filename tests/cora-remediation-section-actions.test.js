@@ -6,6 +6,7 @@ import {
   CORARemediationSection,
   CATALOGUE,
   FREEFORM_CAT,
+  NO_FREEFORM_CAT,
   findByClass,
   findAllByClass,
 } from './helpers/cora-remediation-section.js';
@@ -163,11 +164,21 @@ test('CORARemediationSection: unticking a selected action dispatches selected:fa
   });
 });
 
-test('CORARemediationSection: no free-form input unless allowFreeFormRemediation is set', () => {
+test('CORARemediationSection: every failed Question gets a free-form input by default', () => {
   const el = new CORARemediationSection();
   el.catalogue = CATALOGUE;
   el.canSelectRemediation = true;
   el.answers = { 'q-needs': { value: 'No' } };
+  el.connectedCallback();
+
+  assert.ok(findByClass(el, 'cora-remediation-freeform-input'));
+});
+
+test('CORARemediationSection: no free-form input when the Question Definition disallows it', () => {
+  const el = new CORARemediationSection();
+  el.catalogue = NO_FREEFORM_CAT;
+  el.canSelectRemediation = true;
+  el.answers = { 'q-free': { value: 'No' } };
   el.connectedCallback();
 
   assert.equal(findByClass(el, 'cora-remediation-freeform-input'), null);

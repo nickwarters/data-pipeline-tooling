@@ -133,10 +133,10 @@ function buildItemContent(props, q) {
  * reviewer has already selected it (i.e. its id is present on
  * `answer.remediationActions`); ticking/unticking calls the
  * `dispatchRemediationAction` callback so the page persists the selected subset
- * onto the Answer. When the Question opts into free-form remediation, an extra
- * text input lets the reviewer add their own action. Read-only viewers see only
- * the selected canned actions and any captured free-form text, both as plain
- * text.
+ * onto the Answer. Every failed Question also gets a free-form text input for
+ * the reviewer's own action, unless its Question Definition withholds one.
+ * Read-only viewers see only the selected canned actions and any captured
+ * free-form text, both as plain text.
  *
  * @param {RemediationSectionProps} props
  * @param {HTMLElement} li
@@ -180,7 +180,7 @@ function renderRemediationActions(props, li, q) {
     li.appendChild(actions);
   }
 
-  if (q.allowFreeFormRemediation) {
+  if (!q.disallowFreeFormRemediation) {
     renderRemediationFreeForm(props, li, q, answer?.freeFormRemediation ?? '');
   }
 }

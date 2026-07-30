@@ -115,6 +115,19 @@ The "how to process it" guide lives in
   exists in both the `.js` module and the `.json` export. Resolved by treating the
   `.json` as a generated projection, never hand-edited.
 
+## Amendment 1 (2026-07, #603) — the excluded free-form flag was renamed and its default inverted
+
+The exclusion list above names `allowFreeFormRemediation`. That key no longer
+exists: free-form remediation is now offered on every failed Question, and a
+Question Definition opts _out_ with `disallowFreeFormRemediation`.
+
+Read the exclusion as naming the new key. Nothing about this decision changes —
+the flag is an authoring/UI template either way, per-Case remediation _taken_
+still lives on the Answer, and `compileExport()` builds its output from an
+explicit key allowlist, so the renamed flag remains structurally incapable of
+reaching the export or its `hash`. Frozen `{slug}.{hash}.json` artifacts
+published before the rename are unaffected: they never carried the key.
+
 [the architecture decision]: ./0004-case-type-config-as-js-modules.md
 [the architecture decision]: ./0006-applicability-graph-and-outcome-function.md
 [the architecture decision]: ./0010-auth-and-permissions.md

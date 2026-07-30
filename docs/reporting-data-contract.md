@@ -119,7 +119,7 @@ therefore derive failures from the `optionOutcomes` mapping, not from raw
 answer values across every question.
 
 Intentionally **absent**: `computeOutcome` (code), `remediationActions` /
-`allowFreeFormRemediation` (authoring templates — the remediation actually _taken_
+`disallowFreeFormRemediation` (authoring templates — the remediation actually _taken_
 lives on the Answer, below), and Case-Type config (`eligibleGroups`, `slaHours`,
 `attributeFailures`).
 

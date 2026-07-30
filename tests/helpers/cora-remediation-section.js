@@ -175,9 +175,12 @@ export const FREEFORM_CAT = [
     responseType: 'yes-no-na',
     failureValues: ['No'],
     remediationActions: ['Retrain agent.'],
-    allowFreeFormRemediation: true,
     deprecated: false,
   },
+];
+
+export const NO_FREEFORM_CAT = [
+  { ...FREEFORM_CAT[0], disallowFreeFormRemediation: true },
 ];
 
 /** @type {QuestionDefinition[]} */

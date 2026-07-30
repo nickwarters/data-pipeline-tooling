@@ -69,7 +69,7 @@ test('compileBank: includes bank metadata and question content only', () => {
         optionOutcomes: { No: 'fail' },
         labelIds: ['lbl-a'],
         remediationActions: ['Customer impact identified'],
-        allowFreeFormRemediation: true,
+        disallowFreeFormRemediation: true,
         deprecated: false,
       },
     ],
@@ -91,9 +91,14 @@ test('compileBank: includes bank metadata and question content only', () => {
     optionOutcomes: { No: 'fail' },
     labelIds: ['lbl-a'],
     remediationActions: ['Customer impact identified'],
-    allowFreeFormRemediation: true,
+    disallowFreeFormRemediation: true,
     deprecated: false,
   });
+  assert.equal(
+    'disallowFreeFormRemediation' in parsed.questions[0],
+    false,
+    'a question with no opt-out stamps no free-form key into the artifact'
+  );
   assert.equal('eligibleGroups' in parsed, false);
   assert.equal('computeOutcome' in parsed, false);
 });
@@ -380,7 +385,7 @@ test('compileExport: key order in question objects does not affect hash', async 
   assert.equal(a.hash, b.hash);
 });
 
-test('compileExport: excludes computeOutcome, allowFreeFormRemediation, eligibleGroups', async () => {
+test('compileExport: excludes computeOutcome, disallowFreeFormRemediation, eligibleGroups', async () => {
   const bankWithExtras = {
     ...exportBank,
     questions: [
@@ -393,7 +398,7 @@ test('compileExport: excludes computeOutcome, allowFreeFormRemediation, eligible
             text: 'Fix it',
           },
         ],
-        allowFreeFormRemediation: true,
+        disallowFreeFormRemediation: true,
       },
       exportBank.questions[1],
     ],
@@ -420,7 +425,7 @@ test('compileExport: excludes computeOutcome, allowFreeFormRemediation, eligible
   assert.ok(!('computeOutcome' in result));
   assert.ok(!('eligibleGroups' in result));
   for (const q of result.questions) {
-    assert.ok(!('allowFreeFormRemediation' in q));
+    assert.ok(!('disallowFreeFormRemediation' in q));
   }
   assert.deepEqual(result.questions[0].optionOutcomes, { No: 'fail' });
   // Actions carry only id/text — the response drives the outcome, not actions.

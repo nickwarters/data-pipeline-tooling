@@ -2728,8 +2728,6 @@ test('route: mock-mode store shell keeps Review working at the existing URL', as
     (question) => question.id === 'q-needs'
   );
   assert.ok(qNeeds);
-  const originalFreeForm = qNeeds.allowFreeFormRemediation;
-  qNeeds.allowFreeFormRemediation = true;
   let storedRow = {
     ...caseRow,
     caseType: 'example-review',
@@ -2981,7 +2979,6 @@ test('route: mock-mode store shell keeps Review working at the existing URL', as
   );
 
   if (typeof dispose === 'function') dispose();
-  qNeeds.allowFreeFormRemediation = originalFreeForm;
   location.search = previousSearch;
   location.hash = previousHash;
 });

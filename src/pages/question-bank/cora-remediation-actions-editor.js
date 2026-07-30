@@ -27,7 +27,7 @@ export function RemediationActionsEditor({ question, dispatch }) {
     question.remediationActions ?? [],
     question.id
   );
-  const freeForm = Boolean(question.allowFreeFormRemediation);
+  const freeForm = !question.disallowFreeFormRemediation;
   const wrap = h(
     'div',
     { className: 'rem-block' },
@@ -55,7 +55,7 @@ export function RemediationActionsEditor({ question, dispatch }) {
         h(
           'div',
           { className: 'rem-free-help' },
-          'Reviewers can write their own remediation alongside any canned actions.'
+          'Reviewers can describe a remediation in their own words alongside any canned actions. Turn it off where the configured actions are the whole story.'
         )
       ),
       h('button', {

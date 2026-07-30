@@ -37,7 +37,7 @@ import { QUESTION_BANK_IMPORTERS } from '../../../case-types/manifest.js';
  *   optionOutcomes?: Record<string, string>,
  *   showWhen?: Record<string, unknown>,
  *   remediationActions?: Array<string | RemediationActionDefinition>,
- *   allowFreeFormRemediation?: boolean,
+ *   disallowFreeFormRemediation?: boolean,
  *   deprecated: boolean,
  * }} DraftQuestion
  */
