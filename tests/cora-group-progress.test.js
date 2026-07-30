@@ -27,6 +27,7 @@ test('GroupProgress renders counts, completion state, and reports navigation act
     getByText(root, 'Opening').parentNode.className.includes('complete')
   );
   assert.match(root.textContent, /Opening1\/1Discovery0\/2/);
+  assert.match(root.textContent, /^Jump to next unanswered/);
   fireEvent(getByText(root, 'Discovery').parentNode, 'click');
   fireEvent(
     getByRole(root, 'button', { name: 'Jump to next unanswered' }),

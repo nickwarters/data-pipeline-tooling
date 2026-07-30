@@ -51,5 +51,5 @@ export function GroupProgress({ groups, onGroupJump, onJumpUnanswered }) {
     'Jump to next unanswered'
   );
 
-  return [...rows, jumpBtn];
+  return [jumpBtn, ...rows];
 }
