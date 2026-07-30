@@ -4,7 +4,9 @@ Date: 2026-07-01
 
 ## Status
 
-Accepted
+Accepted, as amended 2026-07 (#599) — see **Amendment (2026-07, #599)** below,
+which makes the `appealReview` access row Controls-only and hides it until the
+Case carries an Appeal.
 
 ## Context
 
@@ -92,6 +94,30 @@ links into each Case's (read-only) Summary. The per-Case `summary` matrix cell g
 - Journey Owner's "all cases of type" Summary reach needs a cross-case surface beyond the
   per-Case matrix (a new view + a bounded list query), which is more than a matrix edit.
 - CONTEXT.md's **Appeal** entry (QA resolver, Answer Override on agree) is rewritten.
+
+## Amendment (2026-07, #599) — Appeal Review is Controls-only, and there is no tab before the first Appeal
+
+The `appealReview` row above granted `read-only` to the Assigned Reviewer, the raiser's
+Manager, the Case Type Owner and the Journey Owner, and gave Controls the tab on every
+Case. The row is now **Controls-only**:
+
+| Case state (Controls)             | Mode        |
+| --------------------------------- | ----------- |
+| No Appeal on the Case             | `hidden`    |
+| `Completed` with an open Appeal   | `edit`      |
+| Otherwise (every Appeal resolved) | `read-only` |
+
+Two reasons. **No tab before the first Appeal**: with nothing to resolve the Section
+renders an empty resolution history, so five roles got a dead tab on every un-appealed
+Case. **Read-only after**, rather than hidden, so Controls can read back the resolution
+they authored. The `Completed` conjunct on `edit` stays: an Appeal on a non-`Completed`
+Case cannot arise from the flow, so it means inconsistent data, where showing the history
+without the resolve form is the fail-closed answer.
+
+The Assigned Reviewer, Case Type Owner and Journey Owner keep their view of the Appeal on
+the **Appeal Request** tab, which renders `appeal.resolution`. The raiser's Manager does
+not, unless they are the configured raiser — on a `journeyOwner` type they lose Appeal
+visibility entirely, which is intended: they are not a party to the flow there.
 
 [the architecture decision]: ./0004-case-type-config-as-js-modules.md
 [the architecture decision]: ./0007-case-storage-shape.md

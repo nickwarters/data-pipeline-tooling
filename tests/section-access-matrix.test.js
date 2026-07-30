@@ -121,14 +121,16 @@ test('matrix — In-progress Case (no actions, default appeal config → respons
         controls: 'read-only',
         none: 'hidden',
       },
+      // Nobody sees Appeal Review until an Appeal exists, and Controls is the
+      // only role that ever does.
       appealReview: {
-        assignedReviewer: 'read-only',
+        assignedReviewer: 'hidden',
         otherReviewer: 'hidden',
         responsibleParty: 'hidden',
-        responsiblePartyManager: 'read-only',
-        caseTypeOwner: 'read-only',
-        journeyOwner: 'read-only',
-        controls: 'read-only',
+        responsiblePartyManager: 'hidden',
+        caseTypeOwner: 'hidden',
+        journeyOwner: 'hidden',
+        controls: 'hidden',
         none: 'hidden',
       },
       amendOutcome: {
@@ -187,13 +189,14 @@ test('matrix — Actions In Progress Case with sent actions (reportable freeze)'
       notes: {
         assignedReviewer: 'edit',
       },
-      // Appeal Sections remain Completed-only; Amend Outcome opens to Controls
+      // Appeal Sections remain Completed-only, and Appeal Review stays hidden
+      // while this Case carries no Appeal; Amend Outcome opens to Controls
       // at the reportable milestone, once the Outcome snapshot exists.
       appealRequest: {
         responsiblePartyManager: 'hidden',
         journeyOwner: 'read-only',
       },
-      appealReview: { controls: 'read-only' },
+      appealReview: { controls: 'hidden' },
       amendOutcome: {
         assignedReviewer: 'hidden',
         otherReviewer: 'hidden',
@@ -211,7 +214,7 @@ test('matrix — Actions In Progress Case with sent actions (reportable freeze)'
   );
 });
 
-test('matrix — Completed Case, journeyOwner raiser, no open Appeal', () => {
+test('matrix — Completed Case, journeyOwner raiser, no Appeal raised', () => {
   const cfg = makeConfig({
     appeal: { raisedBy: 'journeyOwner', resolvedBy: 'controls' },
   });
@@ -242,9 +245,10 @@ test('matrix — Completed Case, journeyOwner raiser, no open Appeal', () => {
         controls: 'read-only',
         none: 'hidden',
       },
-      // No open Appeal → Controls observes Appeal Review read-only.
+      // No Appeal raised → Appeal Review has nothing to show, not even to
+      // Controls.
       appealReview: {
-        controls: 'read-only',
+        controls: 'hidden',
       },
       // Amend Outcome is Controls-only: edit on a Completed Case, hidden for
       // every other role (observers read the Current Outcome in the Summary,
@@ -278,14 +282,17 @@ test('matrix — Completed Case, responsiblePartyManager raiser, open Appeal', (
         responsiblePartyManager: 'edit',
         journeyOwner: 'read-only',
       },
-      // Open Appeal + Completed → Controls resolves (edit).
+      // Open Appeal + Completed → Controls resolves (edit); every other role is
+      // hidden, and those who can see the Appeal follow it on the Appeal
+      // Request tab.
       appealReview: {
-        assignedReviewer: 'read-only',
+        assignedReviewer: 'hidden',
         otherReviewer: 'hidden',
+        reviewerManager: 'hidden',
         responsibleParty: 'hidden',
-        responsiblePartyManager: 'read-only',
-        caseTypeOwner: 'read-only',
-        journeyOwner: 'read-only',
+        responsiblePartyManager: 'hidden',
+        caseTypeOwner: 'hidden',
+        journeyOwner: 'hidden',
         controls: 'edit',
         none: 'hidden',
       },

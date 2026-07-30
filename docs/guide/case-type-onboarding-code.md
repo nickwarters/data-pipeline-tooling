@@ -659,7 +659,7 @@ modules from cache.
 | Question Bank editor | `/dev/?mock=1#/question-bank`                                | The Widget Review bank is listed and editable; the impact simulation runs against your fixtures                     |
 | Owner view           | `?asUser=case-type-owner-widget-review`                      | The Case Type Owner surfaces scope to Widget Review                                                                 |
 | Journey cases        | `?asUser=journey-owner-widget-review` → `#/journey-cases`    | The Journey Owner sees the type's Cases (and can raise appeals if `appeal.raisedBy` is `journeyOwner`)              |
-| Controls             | `?asUser=controls` → the Completed Case                      | Amend Outcome and Appeal Review sections are available                                                              |
+| Controls             | `?asUser=controls` → the Completed Case                      | Amend Outcome is available; Appeal Review appears only once that Case carries an Appeal                             |
 | Team reports         | `?asUser=reviewer-manager` → `#/team-cases`, `#/reports`     | The functional-role personas see the new type without any new group                                                 |
 | Isolation check      | `?asUser=reviewer` (plain `Reviewers` group)                 | The new type's Cases are **not** visible — per-type access is doing its job                                         |
 

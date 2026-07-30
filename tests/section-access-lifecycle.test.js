@@ -61,9 +61,21 @@ test('appealRequest: raiser gets edit only once Completed, hidden/read-only befo
   );
 });
 
-test('appealReview: Controls edits only while an Appeal is open on a Completed Case', () => {
+test('appealReview: Controls gets no tab before the first Appeal, then edit while open, then read-only', () => {
   const cfg = makeConfig();
-  // Completed, appeals all resolved → read-only (no open appeal).
+  // No Appeal has ever been raised → no tab at all: the Section would render an
+  // empty resolution history.
+  assert.equal(
+    evaluateAccess(
+      'appealReview',
+      ['controls'],
+      makeCase({ status: 'Completed' }),
+      cfg
+    ),
+    'hidden',
+    'Completed with no Appeal'
+  );
+  // Resolved Appeal → read-only, so Controls can read back their own resolution.
   assert.equal(
     evaluateAccess(
       'appealReview',
@@ -71,9 +83,10 @@ test('appealReview: Controls edits only while an Appeal is open on a Completed C
       makeCase({ status: 'Completed', appeals: [resolvedAppeal()] }),
       cfg
     ),
-    'read-only'
+    'read-only',
+    'Completed with a resolved Appeal'
   );
-  // Completed, open appeal → edit.
+  // Open Appeal on a Completed Case → the resolution form.
   assert.equal(
     evaluateAccess(
       'appealReview',
@@ -81,9 +94,11 @@ test('appealReview: Controls edits only while an Appeal is open on a Completed C
       makeCase({ status: 'Completed', appeals: [openAppeal()] }),
       cfg
     ),
-    'edit'
+    'edit',
+    'Completed with an open Appeal'
   );
-  // Not Completed → read-only even with an open appeal.
+  // An open Appeal on a Case that is not Completed cannot arise from the flow,
+  // so it means inconsistent data: show the history, withhold the form.
   assert.equal(
     evaluateAccess(
       'appealReview',
@@ -91,7 +106,8 @@ test('appealReview: Controls edits only while an Appeal is open on a Completed C
       makeCase({ status: 'Actions In Progress', appeals: [openAppeal()] }),
       cfg
     ),
-    'read-only'
+    'read-only',
+    'open Appeal on a non-Completed Case fails closed to read-only'
   );
 });
 

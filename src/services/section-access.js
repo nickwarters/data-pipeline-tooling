@@ -67,9 +67,7 @@ function appealRaiser(config) {
 }
 
 /**
- * Whether the Case currently has an unresolved Appeal. Controls may
- * only `edit` the Appeal Review Section while an Appeal is open; otherwise the
- * Section is observed read-only.
+ * Whether the Case currently has an unresolved Appeal.
  *
  * @param {CaseRow} caseRow
  * @returns {boolean}
@@ -341,21 +339,24 @@ export const MATRIX = {
     none: 'hidden',
   },
   // Appeal Review — where Controls resolves an open Appeal on a `Completed`
-  // Case, then (on agree) authors the case-level Amended Outcome. Controls gets
-  // `edit` only while an Appeal is open; the Assigned Reviewer, Case Type Owner,
-  // Journey Owner and the raiser's Manager observe read-only.
+  // Case, then (on agree) authors the case-level Amended Outcome. Controls-only.
+  // Hidden before the first Appeal, which would otherwise render an empty
+  // resolution history on every un-appealed Case, and read-only once every
+  // Appeal is resolved, so Controls can read back their own resolution.
   appealReview: {
-    assignedReviewer: 'read-only',
+    assignedReviewer: 'hidden',
     otherReviewer: 'hidden',
     reviewerManager: 'hidden',
     responsibleParty: 'hidden',
-    responsiblePartyManager: 'read-only',
-    caseTypeOwner: 'read-only',
-    journeyOwner: 'read-only',
-    controls: (c) =>
-      c.status === CASE_STATUS.COMPLETED && hasOpenAppeal(c)
+    responsiblePartyManager: 'hidden',
+    caseTypeOwner: 'hidden',
+    journeyOwner: 'hidden',
+    controls: (c) => {
+      if (!c.appeals?.length) return 'hidden';
+      return c.status === CASE_STATUS.COMPLETED && hasOpenAppeal(c)
         ? 'edit'
-        : 'read-only',
+        : 'read-only';
+    },
     none: 'hidden',
   },
   // Amend Outcome — the case-level corrective Outcome. Controls is the only

@@ -2801,7 +2801,9 @@ test('route: mock-mode store shell keeps Review working at the existing URL', as
   );
 
   assert.equal(state.routes.caseReview.snapshot?.loaded, true);
-  assert.equal(queryAllByRole(container, 'tab').length, 7);
+  // Appeal Review is not among them: this persona is a Reviewer, and the
+  // Section is Controls-only.
+  assert.equal(queryAllByRole(container, 'tab').length, 6);
   assert.match(container.textContent, /Ada Lovelace/);
   fireEvent(getByRole(container, 'tab', { name: 'Notes' }), 'click');
   assert.equal(state.routes.caseReview.activeTab, 'notes');
