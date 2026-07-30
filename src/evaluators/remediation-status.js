@@ -9,11 +9,15 @@
  * Answers carry any.
  *
  * Once the actions have been sent, the Remediation tab tracks each *Question*
- * (not each individual action) to one of three resolutions —
- * `complete` · `partial` · `cancelled` — stored on the Answer as
- * `remediationStatus`. `partial` and `cancelled` each require the Reviewer's
- * free text (details / justification respectively); a row missing it is
- * *unresolved* and blocks completion of the Case.
+ * (not each individual action) to a resolution — `complete` · `partial` ·
+ * `cancelled` — stored on the Answer as `remediationStatus`. `partial` and
+ * `cancelled` each require the Reviewer's free text (details / justification
+ * respectively); a row missing it is *unresolved* and blocks completion of the
+ * Case.
+ *
+ * What is stored is validated against that full vocabulary whatever subset of it
+ * a Case Type offers its Reviewers, so narrowing the offer can never strand an
+ * already-resolved row.
  *
  * This module is the single place that reads that store, normalises it, and
  * derives both the tab's rows and the completion gate. It is pure: no DOM, no

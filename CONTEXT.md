@@ -165,6 +165,10 @@ stored in the same `details` field); `complete` carries neither. Stored on the A
 _and_ any text that status requires, and the Case cannot reach **Completed** while any row
 is unresolved. Only the **Assigned Reviewer** writes it; everyone who can see the Section
 reads the same breakdown.
+A **Case Type may offer a subset** of the three via `remediationStatuses` (Complaints
+offers `complete` and `cancelled` only). The narrowing is display-only: what is **stored**
+is always validated against the full framework vocabulary, so a row resolved before its
+Case Type narrowed its offer keeps that resolution.
 _Avoid_: Action status (that is the separate `actions`-capture-field record), Sign-off
 
 **Remediation Due Date**:

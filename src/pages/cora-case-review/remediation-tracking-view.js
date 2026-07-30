@@ -27,6 +27,7 @@ import {
  * @property {() => void} [dispatchOpenConversation] Opens the Conversation overlay for the responsible-party audience.
  * @property {boolean} [conversationAvailable] Whether this viewer can see the Conversation at all.
  * @property {string} [heading] Section heading; defaults to the standard copy so the component stays usable standalone.
+ * @property {RemediationStatusValue[]} [statuses] The resolutions this Case Type offers; defaults to the framework vocabulary so the component stays usable standalone.
  */
 
 /**
@@ -205,6 +206,15 @@ function renderStatusControls(props, row) {
   const detailsLabel = needsDetails
     ? REMEDIATION_DETAIL_LABELS[needsDetails]
     : 'Details';
+  // A row may already store a resolution this Case Type has stopped offering; a
+  // browser drops a `<select>` value with no matching `<option>`, so keep the
+  // stored one on offer or the row reads as unresolved with no way back.
+  const offered = props.statuses?.length
+    ? props.statuses
+    : REMEDIATION_STATUSES;
+  const statuses = REMEDIATION_STATUSES.filter(
+    (status) => offered.includes(status) || status === row.status
+  );
 
   const details = /** @type {HTMLTextAreaElement} */ (
     h('textarea', {
@@ -239,7 +249,7 @@ function renderStatusControls(props, row) {
           ),
       },
       h('option', { value: '' }, 'Not yet resolved'),
-      ...REMEDIATION_STATUSES.map((status) =>
+      ...statuses.map((status) =>
         h('option', { value: status }, REMEDIATION_STATUS_LABELS[status])
       )
     )

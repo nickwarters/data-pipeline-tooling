@@ -293,7 +293,10 @@ Optional fields to know about (all in the `CaseTypeConfig` typedef):
 `sectionLabels` renames tab labels/headings per type (e.g.
 `{ questions: 'Assessment' }`); `questionGroups` opts a named group into the
 bulk-verdict control (`{ Build: { allowBulkOutcome: true } }`);
-`remediationFields` and `captureGroups` extend per-failure capture. Case table
+`remediationFields` and `captureGroups` extend per-failure capture;
+`remediationStatuses` narrows which Remediation Resolutions a Reviewer is
+offered (`['complete', 'cancelled']`), see
+[ADR-0037](../adr/0037-question-level-remediation-resolution.md). Case table
 columns are not among them: every Case Type is listed under the same
 framework-owned columns (see
 [ADR-0040](../adr/0040-case-tables-are-framework-owned.md)).

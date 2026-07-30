@@ -57,6 +57,10 @@ const config = {
     appealReview: {},
     amendOutcome: {},
   },
+  // A remediation on a Complaint is either done or stood down. There is no
+  // half-way state a Reviewer is asked to record here, so offering "Partially
+  // complete" would only invite a resolution nobody reports on.
+  remediationStatuses: ['complete', 'cancelled'],
   // Appeal flow: a Complaints journey routes appeal-raising to the
   // Journey Owner, resolved by Controls.
   appeal: { raisedBy: 'journeyOwner', resolvedBy: 'controls' },

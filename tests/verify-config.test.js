@@ -598,3 +598,36 @@ test('literalPathOf reads both thunk shapes and gives up on a computed one', () 
     null
   );
 });
+
+test('checkCaseTypes fails an empty remediationStatuses list', async () => {
+  const failures = await checkCaseTypes({
+    caseTypes: [demoEntry(demoConfig({ remediationStatuses: [] }))],
+  });
+
+  assert.equal(failures.length, 1);
+  assert.match(failures[0].message, /remediationStatuses/);
+  assert.match(failures[0].message, /omit/i);
+});
+
+test('checkCaseTypes fails remediationStatuses that cannot resolve a row', async () => {
+  const failures = await checkCaseTypes({
+    caseTypes: [
+      demoEntry(demoConfig({ remediationStatuses: ['partial', 'cancelled'] })),
+    ],
+  });
+
+  assert.equal(failures.length, 1);
+  assert.match(failures[0].message, /complete/);
+});
+
+test('checkCaseTypes accepts a narrowed remediationStatuses and an absent one', async () => {
+  const narrowed = await checkCaseTypes({
+    caseTypes: [
+      demoEntry(demoConfig({ remediationStatuses: ['complete', 'cancelled'] })),
+    ],
+  });
+  assert.deepEqual(narrowed, []);
+
+  const absent = await checkCaseTypes({ caseTypes: [demoEntry(demoConfig())] });
+  assert.deepEqual(absent, []);
+});

@@ -27,6 +27,8 @@ class CORARemediationTracking extends HTMLElement {
     this.heading = 'Remediation';
     /** @type {any} */
     this.caseRow = null;
+    /** @type {any} */
+    this.statuses = undefined;
   }
 
   /** @param {QuestionDefinition[]} catalogue @param {Record<string, Answer>} answers */
@@ -44,6 +46,7 @@ class CORARemediationTracking extends HTMLElement {
       canResolve: this.canResolve,
       conversationAvailable: this.conversationAvailable,
       heading: this.heading,
+      statuses: this.statuses,
       caseRow: this.caseRow,
       dispatchStatus: (questionId, status, details) =>
         this.dispatchEvent(
@@ -440,4 +443,57 @@ test('RemediationTracking: render() returns nodes', () => {
   const el = new CORARemediationTracking();
   el.update(CATALOGUE, {});
   assert.ok(Array.isArray(el.render()));
+});
+
+test('RemediationTracking: the select offers only the resolutions the Case Type declares', () => {
+  const el = new CORARemediationTracking();
+  el.canResolve = true;
+  el.statuses = ['complete', 'cancelled'];
+  el.update(CATALOGUE, REMEDIATED);
+
+  const select = findByClass(el, 'cora-tracking-status-select');
+  assert.deepEqual(
+    select._children.map((/** @type {any} */ option) => [
+      option.value,
+      option.textContent,
+    ]),
+    [
+      ['', 'Not yet resolved'],
+      ['complete', 'Complete'],
+      ['cancelled', 'Cancelled'],
+    ]
+  );
+});
+
+test('RemediationTracking: a stored resolution the Case Type no longer offers is still shown and selected', () => {
+  const el = new CORARemediationTracking();
+  el.canResolve = true;
+  el.statuses = ['complete', 'cancelled'];
+  el.update(CATALOGUE, {
+    ...REMEDIATED,
+    q1: {
+      .../** @type {any} */ (REMEDIATED.q1),
+      remediationStatus: { status: 'partial', details: 'Letter drafted' },
+    },
+  });
+
+  const select = findByClass(el, 'cora-tracking-status-select');
+  assert.deepEqual(
+    select._children.map((/** @type {any} */ option) => option.value),
+    ['', 'complete', 'partial', 'cancelled']
+  );
+  assert.equal(select.value, 'partial');
+});
+
+test('RemediationTracking: an empty declared list still offers the whole vocabulary', () => {
+  const el = new CORARemediationTracking();
+  el.canResolve = true;
+  el.statuses = [];
+  el.update(CATALOGUE, REMEDIATED);
+
+  const select = findByClass(el, 'cora-tracking-status-select');
+  assert.deepEqual(
+    select._children.map((/** @type {any} */ option) => option.value),
+    ['', 'complete', 'partial', 'cancelled']
+  );
 });

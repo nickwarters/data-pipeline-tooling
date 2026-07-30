@@ -2,7 +2,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { installDom } from './_dom-stub.js';
+import { installDom, findByClass } from './_dom-stub.js';
 import { SECTION_REGISTRY, tabEntries } from '../src/lib/section-registry.js';
 
 installDom();
@@ -50,4 +50,43 @@ test('adding a tab Section without a panel breaks the correspondence', () => {
 
 test('conversation is not a panel — it is a floating overlay', () => {
   assert.equal('conversation' in SECTION_PANELS, false);
+});
+
+test('the remediation panel offers only the resolutions the Case Type declares', () => {
+  /** @type {any} */
+  const ctx = {
+    snapshot: {
+      catalogue: [
+        {
+          id: 'q1',
+          text: 'Greeted the customer?',
+          responseType: 'yes-no-na',
+          failureValues: ['No'],
+          deprecated: false,
+        },
+      ],
+      answers: {
+        q1: { value: 'No', freeFormRemediation: 'Write to the customer' },
+      },
+      access: { remediation: 'edit', conversation: 'edit' },
+      sectionHeadings: { remediation: 'Remediation' },
+      machine: { roles: ['assignedReviewer'] },
+    },
+    caseRow: { id: 1, status: 'Actions In Progress' },
+    config: { remediationStatuses: ['complete', 'cancelled'] },
+    route: { conversationHidden: true },
+    dispatch: () => {},
+    actions: { currentAnswers: () => ({}), editAnswers: () => {} },
+  };
+
+  const panel = /** @type {any} */ (SECTION_PANELS.remediation);
+  const nodes = panel(ctx);
+  const select = findByClass(
+    { _children: nodes },
+    'cora-tracking-status-select'
+  );
+  assert.deepEqual(
+    select._children.map((/** @type {any} */ option) => option.value),
+    ['', 'complete', 'cancelled']
+  );
 });

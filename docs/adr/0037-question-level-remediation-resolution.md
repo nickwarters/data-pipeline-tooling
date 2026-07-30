@@ -365,3 +365,27 @@ cannot rewrite history.
   Responsible Party Manager may now carry messages from someone ADR-0011's
   participant list did not anticipate; nothing reads that list programmatically,
   but reporting or export work that assumes a two-party thread should not.
+
+## Amendment 1 (2026-07, #597) — the resolution _offer_ is per Case Type
+
+The three resolutions above are the framework's, and they remain so. What is now
+per Case Type is which of them a Reviewer is **offered**: a Case Type may declare
+`remediationStatuses` (e.g. Complaints' `['complete', 'cancelled']`) to narrow
+the select. It _selects_ from the vocabulary and never invents a value, and
+`complete` may not be dropped — without it no row could ever be resolved and no
+Case could ever complete. `scripts/verify-config.js` fails both an empty list
+and one omitting `complete`; `tsc` already rejects an unknown value at the
+declaration site.
+
+This is a legitimate descriptor under
+[ADR-0035](./0035-case-type-descriptors-express-variation-only.md): it selects
+from a fixed set of stable keys and changes no behaviour. Everything decided
+here is unchanged — the store (`remediationStatus: { status, details? }`), the
+free-text requirement on `partial` / `cancelled`, and the completion gate all
+still validate against the **full** framework vocabulary. The narrowing is
+display-only, deliberately: gating the write on the Case Type's set would strand
+a row resolved before the Case Type narrowed its offer. For the same reason the
+Remediation tab keeps a stored-but-no-longer-offered value as an option on that
+row's select, because a browser drops a `<select>` value with no matching
+`<option>` and the row would otherwise read as unresolved with no way to restore
+it.

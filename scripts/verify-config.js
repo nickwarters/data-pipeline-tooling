@@ -189,6 +189,7 @@ export async function checkCaseTypes(options = {}) {
 
     failures.push(...checkQuestions(entry.slug, file, config));
     failures.push(...checkSections(entry.slug, file, config));
+    failures.push(...checkRemediationStatuses(entry.slug, file, config));
   }
   return failures;
 }
@@ -382,6 +383,40 @@ function checkSections(slug, file, config) {
       file,
       message: `Case Type "${slug}": unknown \`sections\` key "${key}" — no such Case Review Section`,
     }));
+}
+
+/**
+ * tsc catches the shape; these two are runtime-only: an empty list reads as
+ * "offer none" and behaves as "offer all", and a list without `complete` leaves
+ * every remediation row permanently unresolvable.
+ *
+ * @param {string} slug
+ * @param {string} file
+ * @param {any} config
+ * @returns {Failure[]}
+ */
+function checkRemediationStatuses(slug, file, config) {
+  const declared = config?.remediationStatuses;
+  if (!Array.isArray(declared)) return [];
+  if (declared.length === 0) {
+    return [
+      {
+        kind: /** @type {const} */ ('case-type'),
+        file,
+        message: `Case Type "${slug}": declares an empty \`remediationStatuses\` — omit the key to offer every resolution`,
+      },
+    ];
+  }
+  if (!declared.includes('complete')) {
+    return [
+      {
+        kind: /** @type {const} */ ('case-type'),
+        file,
+        message: `Case Type "${slug}": \`remediationStatuses\` omits "complete", so no remediation row could ever be resolved and no Case could ever complete`,
+      },
+    ];
+  }
+  return [];
 }
 
 /**

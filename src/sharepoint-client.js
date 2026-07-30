@@ -474,6 +474,7 @@
  * maxInProgressCases?: number,
  * attributeFailures?: boolean,
  * remediationFields?: RemediationField[],
+ * remediationStatuses?: RemediationStatusValue[],
  * captureGroups?: CaptureGroup[],
  * generalQuestions?: GeneralQuestionField[],
  * generalQuestionsPlacement?: 'before' | 'after',

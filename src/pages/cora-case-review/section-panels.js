@@ -241,7 +241,7 @@ export const SECTION_PANELS = {
         ),
     }),
 
-  remediation: ({ snapshot, caseRow, route, dispatch, actions }) =>
+  remediation: ({ snapshot, caseRow, config, route, dispatch, actions }) =>
     RemediationTracking({
       catalogue: snapshot.catalogue,
       answers: snapshot.answers,
@@ -250,6 +250,7 @@ export const SECTION_PANELS = {
       conversationAvailable: snapshot.access.conversation !== 'hidden',
       caseRow,
       heading: snapshot.sectionHeadings.remediation,
+      statuses: config.remediationStatuses,
       dispatchStatus: (questionId, status, details) =>
         actions.editAnswers(
           remediationResolved({

@@ -454,3 +454,7 @@ test('complaints fixtures: the outstanding Case is deliberately not completable'
   assert.ok(row, 'expected complaints-case-1 in the fixtures');
   assert.equal(allApplicableAnswered(catalogue, row.answers), false);
 });
+
+test('complaints offers only a complete or cancelled remediation resolution', () => {
+  assert.deepEqual(config.remediationStatuses, ['complete', 'cancelled']);
+});
