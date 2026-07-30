@@ -83,67 +83,48 @@ export function countConfiguredFailures(questions, answers) {
 }
 
 /**
+ * Every Answer field that exists only because the Answer is a failure, and so
+ * shares the failure's lifecycle: attribution, captured detail, the Reviewer's
+ * remediation decision and whatever that decision produced, and the resolution
+ * of it. Left behind on an Answer that has stopped failing, each of them would
+ * be read as current the moment the Answer failed again — a re-failed Answer
+ * would render pre-attributed and pre-resolved, and the completion gate would
+ * count a decision nobody made this time round.
+ *
+ * @type {Array<keyof Answer>}
+ */
+const FAILURE_LIFETIME_KEYS = [
+  'attributedParty',
+  'remediationDetails',
+  'capture',
+  'remediationRequired',
+  'freeFormRemediation',
+  'remediationStatus',
+  'remediationActions',
+];
+
+/**
  * Reconciles an Answer's failure-derived metadata with whether it is still a
  * failure. Configured remediation actions are available choices, not
  * selected choices, so a still-failing Answer keeps only the actions the
- * reviewer has selected onto the Answer. When the Answer is no
- * longer a failure, any stale `remediationActions`, `freeFormRemediation`,
- * `remediationStatus`, `attributedParty`, `remediationDetails`, and `capture` are
- * stripped, so passing answers never carry leftover failure metadata. The
- * `attributedParty`, `remediationDetails`, and `capture` are kept on a
- * still-failing Answer even when the question defines no remediationActions.
+ * reviewer has selected onto the Answer. When the Answer is no longer a
+ * failure, every field in `FAILURE_LIFETIME_KEYS` is stripped, so passing
+ * answers never carry leftover failure metadata. A still-failing Answer keeps
+ * all of them, even when the question defines no remediationActions.
  *
  * @param {QuestionDefinition} question
  * @param {Answer} answer
  * @returns {Answer}
  */
 export function materializeRemediationActions(question, answer) {
-  const failing = isFailure(question, answer);
+  if (isFailure(question, answer)) return answer;
 
-  // The Attributed Party only survives while the Answer is a failure; a re-failed
-  // Answer starts with none so the reviewer re-attributes.
+  /** @type {Answer} */
   let result = answer;
-  if (!failing && result.attributedParty) {
-    const { attributedParty: _dropParty, ...rest } = result;
-    result = rest;
+  for (const key of FAILURE_LIFETIME_KEYS) {
+    if (result[key] === undefined) continue;
+    const { [key]: _drop, ...rest } = result;
+    result = /** @type {Answer} */ (rest);
   }
-
-  // Remediation Details share the Attributed Party lifecycle: they
-  // only survive while the Answer is a failure.
-  if (!failing && result.remediationDetails) {
-    const { remediationDetails: _dropDetails, ...rest } = result;
-    result = rest;
-  }
-
-  // Issue Capture shares the same lifecycle: the unified capture map
-  // only survives while the Answer is a failure.
-  if (!failing && result.capture) {
-    const { capture: _dropCapture, ...rest } = result;
-    result = rest;
-  }
-
-  // A reviewer's free-form remediation shares the failure
-  // lifecycle: it only survives while the Answer is a failure.
-  if (!failing && result.freeFormRemediation !== undefined) {
-    const { freeFormRemediation: _dropFree, ...rest } = result;
-    result = rest;
-  }
-
-  // The Remediation tab's resolution shares the lifecycle of the
-  // remediation it resolves: left behind, a re-failed Answer would render
-  // pre-resolved and the completion gate would count it as done.
-  if (!failing && result.remediationStatus) {
-    const { remediationStatus: _dropStatus, ...rest } = result;
-    result = rest;
-  }
-
-  if (!failing) {
-    if (result.remediationActions) {
-      const { remediationActions: _drop, ...rest } = result;
-      return rest;
-    }
-    return result;
-  }
-
   return result;
 }

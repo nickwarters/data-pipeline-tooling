@@ -184,6 +184,52 @@ export function hasTrackableRemediation(catalogue, answers) {
 }
 
 /**
+ * Whether every failed Question has an explicit Remediation Required decision,
+ * and every `yes` carries remediation to send.
+ *
+ * This is the *content* half of the pre-send gate, the mirror of what
+ * `remediationComplete` is to the close: a Reviewer must say, per failure,
+ * whether remediation is needed, so that "decided none is needed" stops reading
+ * the same as "has not looked yet". An absent decision is undecided and blocks;
+ * nothing is inferred from remediation an Answer happens to carry.
+ *
+ * Only *active*, *applicable*, *failed* Questions are gated — the same three
+ * filters the Remediation tab's rows use, so the gate can never demand a
+ * decision on a Question no Reviewer can see.
+ *
+ * "Carries remediation" is `answerRemediation`, not raw field truthiness, so
+ * whitespace-only free-form text does not satisfy the gate.
+ *
+ * @param {QuestionDefinition[] | null | undefined} catalogue
+ * @param {Record<string, Answer>} answers
+ * @returns {boolean}
+ */
+export function remediationDecided(catalogue, answers) {
+  const list = catalogue ?? NO_CATALOGUE;
+  const map = answers ?? {};
+  const active = list.filter((question) => !question.deprecated);
+  const applicable = evaluate(active, map);
+  for (const question of active) {
+    if (!applicable.has(question.id)) continue;
+    const answer = map[question.id];
+    if (!isFailure(question, answer)) continue;
+    const required = answer.remediationRequired;
+    if (required === 'no') continue;
+    if (required !== 'yes') return false;
+    // A Question offering neither configured Remediation Actions nor a
+    // free-form box has nowhere to record one, so demanding remediation here
+    // would disable the button for ever, with a reason pointing at controls
+    // that never render. The decision is the only thing such a Question can
+    // carry, so the decision is what satisfies it.
+    const canRecord =
+      (question.remediationActions ?? []).length > 0 ||
+      !question.disallowFreeFormRemediation;
+    if (canRecord && answerRemediation(answer) === null) return false;
+  }
+  return true;
+}
+
+/**
  * Record a resolution on one Answer, returning a fresh Answer. `complete`
  * carries no text, so any stale details are dropped; `partial` / `cancelled`
  * keep whatever text the Reviewer has typed *so far* — including none, which

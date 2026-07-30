@@ -45,6 +45,7 @@ import {
   issueCaptured,
   remediationActionToggled,
   remediationFreeFormEdited,
+  remediationRequiredSet,
   remediationResolved,
 } from './answer-actions.js';
 import { RemediationSection } from './remediation-view.js';
@@ -224,6 +225,16 @@ export const SECTION_PANELS = {
             answers: actions.currentAnswers(),
             questionId,
             value,
+            canSelectRemediation:
+              snapshot.machine?.canSelectRemediation ?? false,
+          })
+        ),
+      dispatchRemediationRequired: (questionId, required) =>
+        actions.editAnswers(
+          remediationRequiredSet({
+            answers: actions.currentAnswers(),
+            questionId,
+            required,
             canSelectRemediation:
               snapshot.machine?.canSelectRemediation ?? false,
           })

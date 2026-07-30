@@ -1369,6 +1369,35 @@
   outline: none;
 }
 
+/* The per-failure "Is remediation required?" decision, which gates whether the
+   Remediation Actions below it render at all. A fieldset for the grouping its
+   two radios need, stripped of the UA border/padding so it reads as the same
+   label-over-control idiom as the free-form box; the options sit on one row
+   because there are only ever two. */
+.cora-remediation-required {
+  border: 0;
+  padding: 0;
+  margin: var(--cora-space-3) 0 0;
+}
+
+.cora-remediation-required-label {
+  padding: 0;
+  margin-bottom: var(--cora-space-1);
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+}
+
+.cora-remediation-required-option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cora-space-1);
+  margin-right: var(--cora-space-4);
+}
+
+.cora-remediation-required-value {
+  margin: var(--cora-space-2) 0 0;
+}
+
 /* The "Remediation Actions" caption that heads the reviewer-selectable
    options on a failed item, separating them from the answer/detail rows above. */
 .cora-remediation-actions-heading {

@@ -15,7 +15,10 @@ Conversation, the Role is no longer resolved from the denormalised
 is unaffected and keeps resolving from `assignedReviewerManager`, which ADR-0038
 redefines as a snapshot frozen at Reportable. The two-Section split,
 the single case-level `remediationDueDate` and the reportable-freeze lifecycle
-that ADR-0024 established are unchanged.
+that ADR-0024 established are unchanged. Extended by
+[ADR-0043](./0043-explicit-remediation-required-decision.md), which applies the
+same permission/content split to the _pre-send_ transition: the Reviewer must
+decide, per failure, whether remediation is required at all.
 
 > **Update (#555):** the module this ADR was recorded against,
 > `lib/case-review-view-model.js`, has since been renamed to

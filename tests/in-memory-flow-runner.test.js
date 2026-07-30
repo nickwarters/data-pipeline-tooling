@@ -160,6 +160,11 @@ test('in-memory flow runner completes the remediation loop through Send Actions 
           value: 'Reviewer missed the evidence.',
         },
         {
+          type: 'setRemediationRequired',
+          questionId: 'q-needs',
+          required: 'yes',
+        },
+        {
           type: 'freeFormRemediation',
           questionId: 'q-needs',
           value: 'Coach the reviewer.',
@@ -215,6 +220,7 @@ test('in-memory flow runner completes the remediation loop through Send Actions 
   // the write path to the store must be invisible to a stored Case.
   assert.deepEqual(row.answers['q-needs'], {
     value: 'No',
+    remediationRequired: 'yes',
     capture: {
       sentActions: [{ id: 'sent-1', text: 'Coach agent', status: 'pending' }],
       rootCause: 'Reviewer missed the evidence.',
@@ -227,6 +233,115 @@ test('in-memory flow runner completes the remediation loop through Send Actions 
       },
     ],
     remediationStatus: { status: 'complete' },
+  });
+});
+
+test('a failed Question with no Remediation Required decision cannot leave In-progress', async () => {
+  const runner = createInMemoryFlowRunner(
+    { lists: { 'Cases-ExampleReview': [CASE_ROW] } },
+    { persona: 'reviewer' }
+  );
+  const stored = () =>
+    /** @type {import('../src/sharepoint-client.js').CaseRow} */ (
+      runner
+        .snapshot()
+        .lists['Cases-ExampleReview'].find((c) => c.id === 'case-flow-1')
+    );
+
+  await runner.run([
+    { type: 'loadCasePage', caseId: 'case-flow-1', caseType: 'example-review' },
+    { type: 'answer', questionId: 'q-welcome', value: 'Yes' },
+    { type: 'answer', questionId: 'q-needs', value: 'No' },
+    { type: 'answer', questionId: 'q-channel', value: 'Phone' },
+    { type: 'answer', questionId: 'q-products', value: ['Account'] },
+    { type: 'clickCompleteCase' },
+  ]);
+  assert.equal(stored().status, 'In-progress');
+  assert.deepEqual(runner.navigations, []);
+
+  await runner.run([
+    {
+      type: 'setRemediationRequired',
+      questionId: 'q-needs',
+      required: 'yes',
+    },
+    { type: 'clickCompleteCase' },
+  ]);
+  assert.equal(
+    stored().status,
+    'In-progress',
+    'Yes with nothing recorded is not a decision the Case can be sent on'
+  );
+});
+
+test('a failure the Reviewer marks as needing no remediation completes the Case directly', async () => {
+  const runner = createInMemoryFlowRunner(
+    { lists: { 'Cases-ExampleReview': [CASE_ROW] } },
+    { persona: 'reviewer' }
+  );
+  await runner.run([
+    { type: 'loadCasePage', caseId: 'case-flow-1', caseType: 'example-review' },
+    { type: 'answer', questionId: 'q-welcome', value: 'Yes' },
+    { type: 'answer', questionId: 'q-needs', value: 'No' },
+    { type: 'answer', questionId: 'q-channel', value: 'Phone' },
+    { type: 'answer', questionId: 'q-products', value: ['Account'] },
+    { type: 'setRemediationRequired', questionId: 'q-needs', required: 'no' },
+    { type: 'clickCompleteCase' },
+  ]);
+
+  const row = /** @type {import('../src/sharepoint-client.js').CaseRow} */ (
+    runner
+      .snapshot()
+      .lists['Cases-ExampleReview'].find((c) => c.id === 'case-flow-1')
+  );
+  assert.equal(row.status, 'Completed');
+  assert.equal(row.outcomeAtCompletion, 'fail');
+  assert.equal(row.hadRemediation, false);
+  assert.equal('remediationDueDate' in row, false);
+  assert.deepEqual(row.answers['q-needs'], {
+    value: 'No',
+    remediationRequired: 'no',
+  });
+});
+
+test('switching a failure from Yes to No drops the actions from the stored Answer', async () => {
+  const runner = createInMemoryFlowRunner(
+    { lists: { 'Cases-ExampleReview': [CASE_ROW] } },
+    { persona: 'reviewer' }
+  );
+  const storedAnswer = () =>
+    /** @type {any} */ (
+      runner
+        .snapshot()
+        .lists['Cases-ExampleReview'].find((c) => c.id === 'case-flow-1')
+    ).answers['q-needs'];
+
+  await runner.run([
+    { type: 'loadCasePage', caseId: 'case-flow-1', caseType: 'example-review' },
+    { type: 'answer', questionId: 'q-needs', value: 'No' },
+    { type: 'setRemediationRequired', questionId: 'q-needs', required: 'yes' },
+    {
+      type: 'selectRemediationAction',
+      questionId: 'q-needs',
+      action: {
+        id: 'q-needs-ra-0',
+        text: 'Retrain agent on needs-identification protocol.',
+      },
+    },
+    {
+      type: 'freeFormRemediation',
+      questionId: 'q-needs',
+      value: 'Coach the reviewer.',
+    },
+  ]);
+  assert.equal(storedAnswer().remediationActions.length, 1);
+
+  await runner.run([
+    { type: 'setRemediationRequired', questionId: 'q-needs', required: 'no' },
+  ]);
+  assert.deepEqual(storedAnswer(), {
+    value: 'No',
+    remediationRequired: 'no',
   });
 });
 
@@ -281,6 +396,11 @@ test('in-memory flow runner completes allocate, review, remediate, appeal, and a
         { type: 'answer', questionId: 'q-welcome', value: 'Yes' },
         { type: 'answer', questionId: 'q-channel', value: 'Phone' },
         { type: 'answer', questionId: 'q-products', value: ['Account'] },
+        {
+          type: 'setRemediationRequired',
+          questionId: 'q-needs',
+          required: 'yes',
+        },
         {
           type: 'selectRemediationAction',
           questionId: 'q-needs',
@@ -376,6 +496,7 @@ test('an Actions In Progress Case cannot close while a sent Remediation Action i
       'q-products': { value: ['Account'] },
       'q-needs': {
         value: 'No',
+        remediationRequired: 'yes',
         remediationActions: [
           {
             id: 'q-needs-ra-0',

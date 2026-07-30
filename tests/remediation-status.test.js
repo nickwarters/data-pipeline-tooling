@@ -11,6 +11,7 @@ import {
   remediationRows,
   isRemediationResolved,
   remediationComplete,
+  remediationDecided,
   setRemediationStatus,
 } from '../src/evaluators/remediation-status.js';
 
@@ -345,4 +346,170 @@ test('the status vocabulary is complete/partial/cancelled with viewer-facing lab
     partial: 'Details',
     cancelled: 'Justification',
   });
+});
+
+test('remediationDecided: an undecided failed Question blocks; "no" satisfies', () => {
+  assert.equal(
+    remediationDecided(CATALOGUE, {
+      q1: { value: 'No' },
+      q2: { value: 'Yes' },
+    }),
+    false,
+    'a failed Answer with no decision blocks'
+  );
+  assert.equal(
+    remediationDecided(CATALOGUE, {
+      q1: { value: 'No', remediationRequired: 'no' },
+      q2: { value: 'Yes' },
+      q3: { value: 'Yes' },
+    }),
+    true
+  );
+});
+
+test('remediationDecided: "yes" needs remediation recorded against it', () => {
+  /** @param {Answer} q1 */
+  const decide = (q1) =>
+    remediationDecided(CATALOGUE, {
+      q1,
+      q2: { value: 'Yes' },
+      q3: { value: 'Yes' },
+    });
+
+  assert.equal(
+    decide({ value: 'No', remediationRequired: 'yes' }),
+    false,
+    'yes with nothing chosen blocks'
+  );
+  assert.equal(
+    decide({
+      value: 'No',
+      remediationRequired: 'yes',
+      remediationActions: [{ id: 'a1', text: 'Call back' }],
+    }),
+    true
+  );
+  assert.equal(
+    decide({
+      value: 'No',
+      remediationRequired: 'yes',
+      freeFormRemediation: 'Apologise in writing',
+    }),
+    true
+  );
+  assert.equal(
+    decide({
+      value: 'No',
+      remediationRequired: 'yes',
+      freeFormRemediation: '   ',
+    }),
+    false,
+    'whitespace-only free-form text is not remediation'
+  );
+});
+
+test('remediationDecided: only failed, applicable, active Questions are gated', () => {
+  assert.equal(
+    remediationDecided(CATALOGUE, {
+      q1: { value: 'Yes' },
+      q2: { value: 'Yes' },
+    }),
+    true,
+    'passing Answers are vacuously decided'
+  );
+  assert.equal(
+    remediationDecided(CATALOGUE, {
+      q1: { value: 'Yes' },
+      q2: { value: 'Yes' },
+      q3: { value: 'No' },
+    }),
+    true,
+    'an inapplicable Question is not gated even when its stale Answer fails'
+  );
+
+  const deprecated = [
+    ...CATALOGUE,
+    {
+      id: 'q4',
+      text: 'Retired',
+      responseType: /** @type {const} */ ('yes-no-na'),
+      failureValues: ['No'],
+      deprecated: true,
+    },
+  ];
+  assert.equal(
+    remediationDecided(deprecated, {
+      q1: { value: 'Yes' },
+      q2: { value: 'Yes' },
+      q4: { value: 'No' },
+    }),
+    true,
+    'a deprecated Question is out of the catalogue, so out of the gate'
+  );
+});
+
+test('remediationDecided: an absent catalogue or absent Answers is vacuously decided', () => {
+  assert.equal(remediationDecided(null, { q1: { value: 'No' } }), true);
+  assert.equal(remediationDecided(undefined, { q1: { value: 'No' } }), true);
+  assert.equal(
+    remediationDecided(CATALOGUE, /** @type {any} */ (undefined)),
+    true
+  );
+});
+
+test('remediationDecided: "yes" alone decides a Question that can record no remediation', () => {
+  /** @type {QuestionDefinition[]} */
+  const unsatisfiable = [
+    {
+      id: 'q1',
+      text: 'Greeted the customer?',
+      responseType: 'yes-no-na',
+      failureValues: ['No'],
+      deprecated: false,
+      disallowFreeFormRemediation: true,
+    },
+    {
+      id: 'q2',
+      text: 'Explained the outcome?',
+      responseType: 'yes-no-na',
+      failureValues: ['No'],
+      deprecated: false,
+      disallowFreeFormRemediation: true,
+      remediationActions: ['Retrain the agent.'],
+    },
+  ];
+  assert.equal(
+    remediationDecided(unsatisfiable, {
+      q1: { value: 'No', remediationRequired: 'yes' },
+      q2: { value: 'Yes' },
+    }),
+    true
+  );
+  assert.equal(
+    remediationDecided(unsatisfiable, {
+      q1: { value: 'No' },
+      q2: { value: 'Yes' },
+    }),
+    false,
+    'the decision itself is still required'
+  );
+  assert.equal(
+    remediationDecided(unsatisfiable, {
+      q1: { value: 'Yes' },
+      q2: { value: 'No', remediationRequired: 'yes' },
+    }),
+    false,
+    'a Question with configured actions must still record one'
+  );
+  assert.equal(
+    remediationDecided(unsatisfiable, {
+      q1: { value: 'Yes' },
+      q2: {
+        value: 'No',
+        remediationRequired: 'yes',
+        remediationActions: [{ id: 'a1', text: 'Retrain the agent.' }],
+      },
+    }),
+    true
+  );
 });

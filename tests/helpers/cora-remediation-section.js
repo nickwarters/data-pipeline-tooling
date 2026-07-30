@@ -118,6 +118,8 @@ export class CORARemediationSection extends HTMLElement {
         }),
       dispatchRemediationFreeForm: (questionId, value) =>
         this._emit('cora-remediation-freeform', { questionId, value }),
+      dispatchRemediationRequired: (questionId, required) =>
+        this._emit('cora-remediation-required', { questionId, required }),
     };
   }
 }

@@ -206,6 +206,53 @@ export function remediationFreeFormEdited({
 }
 
 /**
+ * Record the Reviewer's **Remediation Required** decision on a failed Answer.
+ *
+ * The decision comes first and the remediation follows, so `'no'` drops both
+ * the ticked actions and the free-form text the Reviewer may have entered
+ * before changing their mind. There is one definition of "this Case carries
+ * remediation" and it reads the Answer: an action persisted under a control the
+ * Reviewer can no longer see would show up in reporting as remediation nobody
+ * intends to do, and would send the Case down the actions path to resolve it.
+ *
+ * There is no path back to *undecided*: a radio pair cannot be un-selected, so
+ * `required` is `'yes'` or `'no'` and absence only ever means "not yet
+ * answered". Re-selecting the current decision writes nothing.
+ *
+ * @param {{
+ *   answers: Answers,
+ *   questionId: string,
+ *   required: 'yes' | 'no',
+ *   canSelectRemediation: boolean,
+ * }} input
+ * @returns {Answers | null}
+ */
+export function remediationRequiredSet({
+  answers,
+  questionId,
+  required,
+  canSelectRemediation,
+}) {
+  if (!canSelectRemediation) return null;
+  const existing = answers[questionId];
+  if (!existing) return null;
+  if (existing.remediationRequired === required) return null;
+
+  let next;
+  if (required === 'no') {
+    const {
+      remediationActions: _dropActions,
+      freeFormRemediation: _dropFree,
+      ...rest
+    } = existing;
+    next = { ...rest, remediationRequired: required };
+  } else {
+    next = { ...existing, remediationRequired: required };
+  }
+  return { ...answers, [questionId]: next };
+}
+
+/**
  * Record how one Question's remediation was resolved, from the Remediation tab:
  * `complete`, or `partial` / `cancelled` with the details or justification that
  * resolution requires. An unknown Question, or one carrying no remediation, is

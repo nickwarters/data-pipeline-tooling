@@ -34,6 +34,7 @@ import { normaliseConfiguredActions } from '../../evaluators/configured-outcome.
  * @property {(questionId: string, query: string) => void} dispatchAttributeSearch
  * @property {(questionId: string, action: { id: string, text: string }, selected: boolean) => void} dispatchRemediationAction
  * @property {(questionId: string, value: string) => void} dispatchRemediationFreeForm
+ * @property {(questionId: string, required: 'yes' | 'no') => void} dispatchRemediationRequired
  */
 
 /**
@@ -122,9 +123,80 @@ function buildItemContent(props, q) {
   }
 
   const after = h('div', {});
-  renderRemediationActions(props, after, q);
+  const remediationRequired = props.answers[q.id]?.remediationRequired;
+  renderRemediationRequired(props, after, q, remediationRequired);
+  // The decision comes before the remediation: nothing to record against a
+  // failure the Reviewer has said needs none, and nothing to record yet on one
+  // they have not decided.
+  if (remediationRequired === 'yes') {
+    renderRemediationActions(props, after, q);
+  }
 
   return { before: [...before.childNodes], after: [...after.childNodes] };
+}
+
+/**
+ * Renders the **Remediation Required** decision for a failed item: the Reviewer
+ * says, per failure, whether remediation is needed, so that "none is needed" is
+ * a recorded answer rather than an empty action list nobody has looked at. The
+ * radios are per-Question — a shared `name` would collapse every failure on the
+ * tab into one group — and cannot be returned to unanswered once chosen.
+ *
+ * A read-only viewer sees a line only for **No**: that is the one decision with
+ * no other visible trace, since a **Yes** is already evidenced by the actions
+ * rendered beneath it, and an undecided failure has nothing to show.
+ *
+ * @param {RemediationSectionProps} props
+ * @param {HTMLElement} li
+ * @param {QuestionDefinition} q
+ * @param {'yes' | 'no' | undefined} current The decision on this Answer, if any.
+ */
+function renderRemediationRequired(props, li, q, current) {
+  if (!props.canSelectRemediation) {
+    if (current === 'no') {
+      li.appendChild(
+        h(
+          'p',
+          { className: 'cora-remediation-required-value' },
+          'Remediation required: No'
+        )
+      );
+    }
+    return;
+  }
+
+  // A fieldset with a legend, the same shape the Question cards use: the two
+  // radios are announced as one named group rather than as two unlabelled
+  // options.
+  const wrap = h(
+    'fieldset',
+    { className: 'cora-remediation-required', role: 'radiogroup' },
+    h(
+      'legend',
+      { className: 'cora-remediation-required-label' },
+      'Is remediation required?'
+    )
+  );
+
+  for (const required of /** @type {Array<'yes' | 'no'>} */ (['yes', 'no'])) {
+    wrap.appendChild(
+      h(
+        'label',
+        { className: 'cora-remediation-required-option' },
+        h('input', {
+          type: 'radio',
+          className: 'cora-remediation-required-radio',
+          name: `${q.id}-remediation-required`,
+          value: required,
+          checked: current === required,
+          onchange: () => props.dispatchRemediationRequired(q.id, required),
+        }),
+        h('span', {}, required === 'yes' ? 'Yes' : 'No')
+      )
+    );
+  }
+
+  li.appendChild(wrap);
 }
 
 /**

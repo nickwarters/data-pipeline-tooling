@@ -7,6 +7,7 @@ import {
   issueCaptured,
   remediationActionToggled,
   remediationFreeFormEdited,
+  remediationRequiredSet,
   remediationResolved,
 } from '../src/pages/cora-case-review/answer-actions.js';
 
@@ -323,6 +324,64 @@ test('remediationFreeFormEdited: writes nothing without the guard or the Answer'
       canSelectRemediation: true,
     }),
     null
+  );
+});
+
+// --- remediationRequiredSet -------------------------------------------------
+
+test('remediationRequiredSet: records the decision', () => {
+  const next = remediationRequiredSet({
+    answers: selectionAnswers(),
+    questionId: 'q1',
+    required: 'yes',
+    canSelectRemediation: true,
+  });
+  assert.deepEqual(next?.q1, { value: 'No', remediationRequired: 'yes' });
+});
+
+test('remediationRequiredSet: "no" clears any remediation already recorded', () => {
+  const next = remediationRequiredSet({
+    answers: selectionAnswers({
+      value: 'No',
+      remediationRequired: 'yes',
+      remediationActions: [{ id: 'a1', text: 'Do it' }],
+      freeFormRemediation: 'And apologise',
+    }),
+    questionId: 'q1',
+    required: 'no',
+    canSelectRemediation: true,
+  });
+  assert.deepEqual(next?.q1, { value: 'No', remediationRequired: 'no' });
+});
+
+test('remediationRequiredSet: writes nothing without the guard, the Answer, or a change', () => {
+  assert.equal(
+    remediationRequiredSet({
+      answers: selectionAnswers(),
+      questionId: 'q1',
+      required: 'yes',
+      canSelectRemediation: false,
+    }),
+    null
+  );
+  assert.equal(
+    remediationRequiredSet({
+      answers: selectionAnswers(),
+      questionId: 'missing',
+      required: 'yes',
+      canSelectRemediation: true,
+    }),
+    null
+  );
+  assert.equal(
+    remediationRequiredSet({
+      answers: selectionAnswers({ value: 'No', remediationRequired: 'no' }),
+      questionId: 'q1',
+      required: 'no',
+      canSelectRemediation: true,
+    }),
+    null,
+    're-selecting the same decision is a no-op'
   );
 });
 

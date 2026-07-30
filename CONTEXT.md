@@ -20,8 +20,9 @@ A **Case** with one or more applicable unanswered **Question Definitions**. Cann
 **Completed Case**:
 A **Case** in the terminal `Completed` **status** with a `completedAt` timestamp. Reaching
 it requires every applicable **Question Definition** to have an **Answer** _and_ either no
-**Remediation Actions** exist (the Reviewer clicks **Complete Case** directly) or every
-sent action has been resolved on the **Remediation** Section (the actions path — see
+**Remediation Actions** exist (the Reviewer clicks **Complete Case** directly, which
+requires every _failed_ Answer to carry an explicit **Remediation Required** decision) or
+every sent action has been resolved on the **Remediation** Section (the actions path — see
 **Case Status** and **Reportable**, the architecture decision). Not the same as **Reportable**: on the
 actions path a Case is Reportable (its Answers frozen, Outcome snapshotted) at **Send
 Actions**, then only later Completed.
@@ -124,7 +125,9 @@ _Avoid_: Justification (bare — ambiguous with Answer Justification)
 
 **Remediation Action**:
 A corrective action attached to a _failed_ **Answer**. A failed Answer can have many
-Remediation Actions. Actions are _captured_ on the **Issues** Section — the **Reviewer**
+Remediation Actions. Attaching any of them is preceded by the **Remediation Required**
+decision: the controls below only render once the **Reviewer** has answered _Yes_. Actions
+are _captured_ on the **Issues** Section — the **Reviewer**
 ticks the ones the **Question Definition** configures (`answer.remediationActions`) and may
 add free-form text (`answer.freeFormRemediation`) — and the resulting remediation is
 _tracked_ to resolution on the separate **Remediation** Section, **per Question rather
@@ -134,6 +137,21 @@ actions acquire the case-level **Remediation Due Date**. A Case Type may also de
 `{ id, text, status, cancelReason? }` records still feed the **Summary**'s remediation
 block; no live Case Type does, and the Remediation Section does not read them.
 _Avoid_: Remediation (ambiguous — refers to a Section, not the item)
+
+**Remediation Required**:
+The **Reviewer**'s explicit decision, per _failed_ **Answer**, on whether the failure needs
+**Remediation Actions** at all. Three states — `yes`, `no`, and **absent** (undecided) —
+stored on the Answer as `remediationRequired`, deliberately not a boolean so that "not yet
+decided" survives serialisation. Recorded on the **Issues** Section ("Is remediation
+required?"); `yes` reveals the Remediation Action controls, `no` hides them and clears
+anything already recorded, so an Answer marked `no` never carries remediation. `No` needs
+no justification. A Case cannot leave **`In-progress`** while any applicable failed
+Question is undecided, or while a `yes` records no action and no free-form text on a
+Question that offers either — the
+pre-send counterpart of **Remediation Resolution**'s hold on the close. Shares the failed-
+Answer lifecycle: stripped when the Answer stops failing.
+_Avoid_: Remediation flag, Needs remediation (bare — it is a recorded decision, not a
+derived property)
 
 **Remediation Resolution**:
 How the **Reviewer** records that a _failed_ **Answer**'s remediation ended up, on the

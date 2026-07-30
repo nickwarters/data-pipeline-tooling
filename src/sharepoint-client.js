@@ -48,7 +48,13 @@
  * unknown key round-trips harmlessly through the JSON blob, so a blob written
  * under an older shape needs no migration.
  *
- * @typedef {{ value: string | string[], justification?: string, remediationActions?: Array<{id: string, text: string}>, freeFormRemediation?: string, remediationStatus?: RemediationStatus, attributedParty?: { loginName: string, displayName: string }, remediationDetails?: Record<string, string>, capture?: Record<string, string | { loginName: string, displayName: string } | Array<string | RemediationAction>> }} Answer
+ * `remediationRequired` is the Reviewer's explicit decision on a *failed*
+ * Answer. It is deliberately `'yes' | 'no'` rather than a boolean because
+ * absence has to stay distinguishable from "no" once the Answers map is
+ * serialised — undecided blocks completion, decided-no does not, and a `false`
+ * written into the JSON blob reads the same as a field that was never there.
+ *
+ * @typedef {{ value: string | string[], justification?: string, remediationRequired?: 'yes' | 'no', remediationActions?: Array<{id: string, text: string}>, freeFormRemediation?: string, remediationStatus?: RemediationStatus, attributedParty?: { loginName: string, displayName: string }, remediationDetails?: Record<string, string>, capture?: Record<string, string | { loginName: string, displayName: string } | Array<string | RemediationAction>> }} Answer
  */
 
 /**

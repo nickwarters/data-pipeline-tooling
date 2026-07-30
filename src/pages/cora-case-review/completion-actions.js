@@ -3,6 +3,7 @@
 import {
   hasTrackableRemediation,
   remediationComplete,
+  remediationDecided,
 } from '../../evaluators/remediation-status.js';
 import { navigateTo } from '../../lib/navigate.js';
 
@@ -36,6 +37,10 @@ export function readyToClose(input) {
 const REMEDIATION_GATE_REASON =
   'Record an outcome for every remediation on the Remediation tab — with the details or justification required — before this Case can be completed.';
 
+/** The pre-send gate's wording: the decision, before anything can be sent. */
+const REMEDIATION_DECISION_REASON =
+  'Answer "Is remediation required?" on every failed Question on the Issues tab, and record at least one action or free-form remediation wherever the answer is Yes.';
+
 /**
  * Derive the one completion control from store state. The same CaseMachine
  * capability that permits the transition also controls whether the UI can
@@ -66,9 +71,14 @@ export function completionControl(input) {
   // Permission to close without the content half: the actions have been sent and
   // this viewer resolves them, but at least one row is still outstanding.
   const gated = input.machine?.mayResolveRemediation === true && !canClose;
+  // The pre-send half of the same idea: the Reviewer may complete, but has not
+  // yet said whether each failure needs remediation. Only that path can be held
+  // this way, so the walk is skipped entirely once the actions are sent.
+  const undecided =
+    readyToSend && !remediationDecided(input.catalogue, input.answers);
   return {
     visible: readyToSend || canClose || gated,
-    disabled: gated,
+    disabled: gated || undecided,
     // Once the actions are sent there is nothing left to send, so the label is
     // the close either way; before that, remediation makes it the send.
     // "Carries remediation" is `hasTrackableRemediation` — literally "the
@@ -81,7 +91,11 @@ export function completionControl(input) {
       hasTrackableRemediation(input.catalogue, input.answers)
         ? 'Send Actions'
         : 'Complete Case',
-    reason: gated ? REMEDIATION_GATE_REASON : null,
+    reason: gated
+      ? REMEDIATION_GATE_REASON
+      : undecided
+        ? REMEDIATION_DECISION_REASON
+        : null,
   };
 }
 
@@ -112,7 +126,8 @@ export function completionPatch(input) {
   if (
     !input.allAnswered ||
     !input.caseRow.responsibleParty ||
-    !machine.canComplete
+    !machine.canComplete ||
+    !remediationDecided(input.catalogue, input.answers)
   ) {
     return null;
   }

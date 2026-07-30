@@ -69,7 +69,9 @@ function outcomeAnswers(value) {
  * the Answers their demo turns on.
  *
  * Complaints (Journey Owner raises appeals, Controls resolves):
- *   complaints-case-1 — In-progress, outstanding (assigned to user-reviewer)
+ *   complaints-case-1 — In-progress, outstanding (assigned to user-reviewer);
+ *                       two failures, one decided "no remediation required" and
+ *                       one still undecided
  *   complaints-case-2 — Completed, one failure → outcomeAtCompletion=poor
  *   complaints-case-3 — Completed, every applicable question failed, no appeal
  *                       (Journey Owner can still raise one; Controls sees none)
@@ -135,9 +137,15 @@ export const cases = [
     answers: {
       // Only the first Acknowledgement group of Questions is answered, so the
       // Case stays visibly part-way through the Review tab.
+      //
+      // Two of them fail, and they carry the two halves of the Remediation
+      // Required demo: `q-cmp-0002` is decided **No**, so the Issues tab hides
+      // its Remediation Actions entirely, while `q-cmp-0003` is left undecided,
+      // which is what keeps the completion button disabled with its reason once
+      // the rest of the Case is answered.
       'q-cmp-0001': { value: 'Good' },
-      'q-cmp-0002': { value: 'Good' },
-      'q-cmp-0003': { value: 'Good' },
+      'q-cmp-0002': { value: 'Poor', remediationRequired: 'no' },
+      'q-cmp-0003': { value: 'Poor' },
       'q-cmp-0004': { value: 'Good' },
       'q-cmp-0005': { value: 'Good' },
       'q-cmp-0006': { value: 'Good' },
@@ -235,6 +243,7 @@ export const cases = [
       ...outcomeAnswers('Good'),
       'q-cmp-0001': {
         value: 'Poor with harm',
+        remediationRequired: 'yes',
         justification:
           'The complaint was logged four working days after it was received.',
         remediationActions: [
@@ -246,6 +255,7 @@ export const cases = [
       },
       'q-cmp-0016': {
         value: 'Poor with harm',
+        remediationRequired: 'yes',
         justification:
           'Redress was not checked against the methodology after the upheld decision.',
         remediationActions: [
@@ -309,6 +319,7 @@ export const cases = [
       ...outcomeAnswers('Good'),
       'q-cmp-0001': {
         value: 'Poor with harm',
+        remediationRequired: 'yes',
         justification:
           'The complaint was logged six working days after it was received.',
         remediationActions: [
@@ -333,6 +344,7 @@ export const cases = [
       },
       'q-cmp-0016': {
         value: 'Poor with harm',
+        remediationRequired: 'yes',
         justification:
           'The upheld complaint was closed before the redress calculation was checked.',
         remediationActions: [

@@ -1678,6 +1678,7 @@ test('view: Issues renders failed Answers directly from route state', () => {
   const answers = {
     q1: {
       value: 'No',
+      remediationRequired: 'yes',
       remediationActions: [{ id: 'q1-ra-0', text: 'Fix it' }],
     },
   };
@@ -1880,6 +1881,7 @@ test('action: the Send Actions transition folds into the store Case Row too', as
   const answers = {
     q1: {
       value: 'No',
+      remediationRequired: 'yes',
       remediationActions: [{ id: 'q1-ra-0', text: 'Fix it' }],
     },
   };
@@ -2899,6 +2901,19 @@ test('route: mock-mode store shell keeps Review working at the existing URL', as
   await saveQueue.whenIdle();
   await flush();
 
+  assert.equal(
+    issuesPanel?.querySelector('.cora-remediation-freeform-input'),
+    null,
+    'nothing to record until the Reviewer says remediation is required'
+  );
+  const requiredYes = /** @type {any} */ (
+    issuesPanel?.querySelector('.cora-remediation-required-radio')
+  );
+  assert.ok(requiredYes, 'the Remediation Required decision is rendered');
+  fireEvent(requiredYes, 'change');
+  await saveQueue.whenIdle();
+  await flush();
+
   const freeForm = /** @type {any} */ (
     issuesPanel?.querySelector('.cora-remediation-freeform-input')
   );
@@ -2936,6 +2951,7 @@ test('route: mock-mode store shell keeps Review working at the existing URL', as
     displayName: 'u2',
   });
   assert.equal(savedAnswer.freeFormRemediation, 'Coach the agent');
+  assert.equal(savedAnswer.remediationRequired, 'yes');
 
   const onHold = getByRole(container, 'button', { name: 'On hold' });
   assert.equal(onHold.getAttribute('aria-pressed'), 'false');
@@ -3287,6 +3303,118 @@ test('route: sequential Answer edits accumulate', async () => {
       'each edit is written on top of the last, not instead of it'
     );
     assert.deepEqual(state.routes.caseReview.snapshot?.answers, accumulated);
+  } finally {
+    if (typeof dispose === 'function') dispose();
+  }
+});
+
+test('route: the Remediation Required decision writes through the single Answer effect', async () => {
+  // The decision is an Answer edit like any other, and "No" is the one edit
+  // that takes something away: the actions the Reviewer had already ticked go
+  // with it, so the stored Answer never claims remediation the Reviewer has
+  // said is not needed.
+  let storedRow = {
+    ...caseRow,
+    caseType: 'example-review',
+    answers: { 'q-needs': { value: 'No' } },
+  };
+  /** @type {any[]} */
+  const patches = [];
+  const client = {
+    async getCase() {
+      return storedRow;
+    },
+    async getCurrentUser() {
+      return chrome.currentUser;
+    },
+    async getExportHash() {
+      return null;
+    },
+    async resolveUsers() {
+      return {};
+    },
+    async patchCase(/** @type {string} */ _id, /** @type {any} */ fields) {
+      patches.push(fields);
+      storedRow = { ...storedRow, ...fields, etag: 'e2' };
+      return { ok: true, status: 200, data: storedRow };
+    },
+  };
+  const saveQueue = new SaveQueue(/** @type {any} */ (client), {
+    debounceMs: 0,
+  });
+  const slice = createRouteSlice(
+    { caseType: 'example-review', id: 'c1' },
+    /** @type {any} */ ({
+      client,
+      saveQueue,
+      currentUser: chrome.currentUser,
+      capabilities: chrome.permissions,
+      chrome,
+    })
+  );
+  let state = slice.initialState;
+  const container = document.createElement('main');
+  /** @type {any} */
+  let tools;
+  tools = {
+    render,
+    dispatch(/** @type {any} */ action) {
+      state = slice.reducer(state, action);
+      slice.render(container, state, tools);
+    },
+    listen() {},
+    isActive: () => true,
+  };
+
+  let dispose;
+  try {
+    slice.render(container, state, tools);
+    dispose = slice.start?.(tools);
+    await waitFor(
+      () => state.routes.caseReview.snapshot?.loaded === true,
+      'store-driven Case Review load'
+    );
+    tools.dispatch({ type: 'case/tab-selected', id: 'issues' });
+
+    const radio = (/** @type {number} */ index) => {
+      const radios = container
+        .querySelector('#case-panel-issues')
+        ?.querySelectorAll('.cora-remediation-required-radio');
+      assert.ok(radios);
+      assert.equal(radios.length, 2, 'the decision renders for the failure');
+      return /** @type {any} */ (radios[index]);
+    };
+
+    fireEvent(radio(0), 'change');
+    await saveQueue.whenIdle();
+    await flush();
+    assert.equal(
+      state.routes.caseReview.snapshot?.answers['q-needs']?.remediationRequired,
+      'yes'
+    );
+
+    const action = /** @type {any} */ (
+      container
+        .querySelector('#case-panel-issues')
+        ?.querySelector('.cora-remediation-action-checkbox')
+    );
+    assert.ok(action, 'Yes reveals the configured Remediation Actions');
+    action.checked = true;
+    fireEvent(action, 'change');
+    await saveQueue.whenIdle();
+    await flush();
+    assert.equal(
+      patches.at(-1)?.answers?.['q-needs']?.remediationActions?.length,
+      1
+    );
+
+    fireEvent(radio(1), 'change');
+    await saveQueue.whenIdle();
+    await flush();
+    assert.deepEqual(patches.at(-1)?.answers?.['q-needs'], {
+      value: 'No',
+      remediationRequired: 'no',
+    });
   } finally {
     if (typeof dispose === 'function') dispose();
   }
@@ -3711,6 +3839,7 @@ function remediationSnapshot() {
   const answers = {
     q1: {
       value: 'No',
+      remediationRequired: 'yes',
       remediationActions: [{ id: 'q1-ra-0', text: 'Fix it' }],
     },
   };

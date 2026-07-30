@@ -215,6 +215,7 @@ export const exampleReviewCases = [
       'q-needs': {
         value: 'No',
         justification: 'Needs improvement',
+        remediationRequired: 'yes',
         remediationActions: [
           {
             id: 'ra-10-1',
@@ -240,6 +241,7 @@ export const exampleReviewCases = [
     answers: {
       'q-welcome': {
         value: 'No',
+        remediationRequired: 'yes',
         remediationActions: [
           {
             id: 'ra-11-1',

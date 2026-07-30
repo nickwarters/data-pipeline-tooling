@@ -265,6 +265,25 @@ test('materializeRemediationActions: strips freeFormRemediation when answer beco
   assert.equal('freeFormRemediation' in out, false);
 });
 
+test('materializeRemediationActions: retains remediationRequired on a still-failing answer', () => {
+  const out = materializeRemediationActions(Q_FAIL_NO, {
+    value: 'No',
+    remediationRequired: 'no',
+  });
+  assert.equal(out.remediationRequired, 'no');
+});
+
+test('materializeRemediationActions: strips remediationRequired when answer becomes passing', () => {
+  // A decision left behind would silently satisfy the completion gate the
+  // moment the Answer failed again, with nobody having looked at it — the same
+  // argument that strips a stale remediationStatus.
+  const out = materializeRemediationActions(Q_FAIL_NO, {
+    value: 'Yes',
+    remediationRequired: 'no',
+  });
+  assert.equal('remediationRequired' in out, false);
+});
+
 test('materializeRemediationActions: returns answer unchanged when question has no remediationActions defined', () => {
   /** @type {QuestionDefinition} */
   const q = {

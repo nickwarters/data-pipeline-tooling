@@ -215,9 +215,11 @@ Each entry in `answers`, keyed by question `id`:
 {
   "value": "No",
   "justification": "No RCA was recorded in the case file.",
+  "remediationRequired": "yes",
   "remediationActions": [
     { "id": "q-rootcause-ra-0", "text": "Open RCA ticket.", "completed": false }
   ],
+  "freeFormRemediation": "Re-brief the team at the next huddle.",
   "attributedParty": { "loginName": "jsmith", "displayName": "J. Smith" }
 }
 ```
@@ -225,9 +227,15 @@ Each entry in `answers`, keyed by question `id`:
 - **`value` is the only field needed to derive failure.** It is a **string** for
   `yes-no-na` and `single-choice`, and a **`string[]`** for `multi-choice`. An
   empty string or empty array means **unanswered**.
-- `justification`, `remediationActions`, `attributedParty` are optional and not
-  needed for failure counting (use them for richer reports if you want — e.g.
-  "failures with no justification," or remediation-completion rates).
+- `justification`, `remediationRequired`, `remediationActions`,
+  `freeFormRemediation`, `attributedParty` are optional and not needed for
+  failure counting (use them for richer reports if you want — e.g. "failures
+  with no justification," or remediation-completion rates).
+- `remediationRequired` is the Reviewer's explicit `"yes"` / `"no"` decision on
+  a failed Answer. It is absent on Answers that never failed, and on Cases
+  completed before the decision existed; treat absent as "not recorded" rather
+  than as `"no"`. When it is `"no"` the Answer carries no `remediationActions`
+  and no `freeFormRemediation`.
 
 ## The join + failure algorithm
 

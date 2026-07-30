@@ -79,6 +79,7 @@ test('completionPatch freezes outcome and effective columns in the lifecycle PAT
   const answers = {
     q1: {
       value: 'No',
+      remediationRequired: /** @type {const} */ ('yes'),
       remediationActions: [{ id: 'a1', text: 'Fix' }],
     },
   };
@@ -111,7 +112,11 @@ test('completionPatch chooses the transition from the catalogue CaseMachine stam
   // prove which copy is authoritative, and that the patch cannot say
   // "Actions In Progress" while stamping `hadRemediation: false`.
   const answers = {
-    q1: { value: 'No', remediationActions: [{ id: 'a1', text: 'Fix' }] },
+    q1: {
+      value: 'No',
+      remediationRequired: /** @type {const} */ ('yes'),
+      remediationActions: [{ id: 'a1', text: 'Fix' }],
+    },
   };
   const patch = completionPatch({
     machine: machine([]),
@@ -155,6 +160,7 @@ test('completionPatch atomically clears hold fields when either transition leave
     answers: {
       q1: {
         value: 'No',
+        remediationRequired: /** @type {const} */ ('yes'),
         remediationActions: [{ id: 'a1', text: 'Fix' }],
       },
     },
@@ -349,6 +355,7 @@ test('completeCase returns false when dependencies or patch fields are absent', 
 const UNRESOLVED = {
   q1: {
     value: 'No',
+    remediationRequired: 'yes',
     remediationActions: [{ id: 'a1', text: 'Call back' }],
   },
 };
@@ -515,7 +522,11 @@ test('free-form remediation alone sends the Case down the actions path', () => {
   // those, so the free-form text alone forks the Case to the actions path — the
   // row it forks for is the row the Reviewer will resolve.
   const answers = {
-    q1: { value: 'No', freeFormRemediation: 'Call the customer back' },
+    q1: {
+      value: 'No',
+      remediationRequired: /** @type {const} */ ('yes'),
+      freeFormRemediation: 'Call the customer back',
+    },
   };
   const patch = completionPatch({
     machine: machine(),
@@ -542,17 +553,43 @@ test('free-form remediation alone sends the Case down the actions path', () => {
 });
 
 test('whitespace-only free-form remediation is not remediation', () => {
-  const answers = { q1: { value: 'No', freeFormRemediation: '   ' } };
-  const patch = completionPatch({
+  const answers = {
+    q1: {
+      value: 'No',
+      remediationRequired: /** @type {const} */ ('yes'),
+      freeFormRemediation: '   ',
+    },
+  };
+  const control = completionControl({
     machine: machine(),
     caseRow: CASE_ROW,
     catalogue: CATALOGUE,
     answers,
     allAnswered: true,
-    computeOutcome: () => ({ outcome: 'fail' }),
-    exportHash: null,
   });
-  assert.equal(patch?.status, 'Completed');
+  assert.equal(
+    control.label,
+    'Complete Case',
+    'whitespace is no row on the Remediation tab, so there is nothing to send'
+  );
+  assert.equal(
+    control.disabled,
+    true,
+    'and it does not satisfy the decision either'
+  );
+
+  assert.equal(
+    completionPatch({
+      machine: machine(),
+      caseRow: CASE_ROW,
+      catalogue: CATALOGUE,
+      answers,
+      allAnswered: true,
+      computeOutcome: () => ({ outcome: 'fail' }),
+      exportHash: null,
+    }),
+    null
+  );
 });
 
 test('remediation on a Question that has left the catalogue does not fork the Case', () => {
@@ -592,4 +629,94 @@ test('remediation on a Question that has left the catalogue does not fork the Ca
     assert.equal(patch?.hadRemediation, false);
     assert.equal('remediationDueDate' in (patch ?? {}), false);
   }
+});
+
+// --- The pre-send Remediation Required gate ---
+
+/** @param {Record<string, import('../src/sharepoint-client.js').Answer>} answers */
+function preSend(answers) {
+  return {
+    machine: machine(),
+    caseRow: CASE_ROW,
+    catalogue: CATALOGUE,
+    answers,
+    allAnswered: true,
+  };
+}
+
+test('completionControl: an undecided failed Question disables the button with its reason', () => {
+  const control = completionControl(preSend({ q1: { value: 'No' } }));
+  assert.equal(control.visible, true);
+  assert.equal(control.disabled, true);
+  assert.match(String(control.reason), /Is remediation required\?/);
+});
+
+test('completionControl: Yes with nothing recorded still blocks', () => {
+  const control = completionControl(
+    preSend({ q1: { value: 'No', remediationRequired: 'yes' } })
+  );
+  assert.equal(control.disabled, true);
+  assert.match(String(control.reason), /Is remediation required\?/);
+});
+
+test('completionControl: every failure decided No completes the Case directly', () => {
+  const control = completionControl(
+    preSend({ q1: { value: 'No', remediationRequired: 'no' } })
+  );
+  assert.equal(control.visible, true);
+  assert.equal(control.disabled, false);
+  assert.equal(control.reason, null);
+  assert.equal(control.label, 'Complete Case');
+});
+
+test('completionPatch: writes nothing while a failed Question is undecided', () => {
+  assert.equal(
+    completionPatch({
+      ...preSend({ q1: { value: 'No' } }),
+      computeOutcome: () => ({ outcome: 'fail' }),
+      exportHash: null,
+    }),
+    null
+  );
+
+  const decided = completionPatch({
+    ...preSend({ q1: { value: 'No', remediationRequired: 'no' } }),
+    computeOutcome: () => ({ outcome: 'fail' }),
+    exportHash: null,
+  });
+  assert.equal(decided?.status, 'Completed');
+  assert.equal(decided?.hadRemediation, false);
+});
+
+test('the close path is untouched by the pre-send decision gate', () => {
+  // Once the actions are sent, the decision is history: the close turns on the
+  // Remediation tab's resolutions alone.
+  const sent = {
+    q1: {
+      value: /** @type {string} */ ('No'),
+      remediationActions: [{ id: 'a1', text: 'Call back' }],
+      remediationStatus: /** @type {any} */ ({ status: 'complete' }),
+    },
+  };
+  const control = completionControl({
+    machine: closingMachine(true),
+    caseRow: CASE_ROW,
+    catalogue: CATALOGUE,
+    answers: sent,
+    allAnswered: true,
+  });
+  assert.equal(control.disabled, false);
+  assert.equal(control.reason, null);
+  assert.deepEqual(
+    completionPatch({
+      machine: closingMachine(true),
+      caseRow: CASE_ROW,
+      catalogue: CATALOGUE,
+      answers: sent,
+      allAnswered: true,
+      computeOutcome: () => ({ outcome: 'pass' }),
+      exportHash: null,
+    }),
+    { status: 'Completed' }
+  );
 });

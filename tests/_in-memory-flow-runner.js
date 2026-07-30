@@ -20,6 +20,7 @@ import {
   issueCaptured,
   remediationActionToggled,
   remediationFreeFormEdited,
+  remediationRequiredSet,
   remediationResolved,
 } from '../src/pages/cora-case-review/answer-actions.js';
 import { allApplicableAnswered } from '../src/evaluators/applicability-evaluator.js';
@@ -54,6 +55,10 @@ import { loadCaseTypeConfig } from '../case-types/manifest.js';
  * questionId: string,
  * fieldKey: string,
  * value: string
+ * } | {
+ * type: 'setRemediationRequired',
+ * questionId: string,
+ * required: 'yes' | 'no'
  * } | {
  * type: 'selectRemediationAction',
  * questionId: string,
@@ -245,6 +250,19 @@ export function createInMemoryFlowRunner(state, opts = {}) {
             fieldKey: action.fieldKey,
             value: action.value,
             canCapture: loader.machine?.canCapture ?? false,
+          })
+        );
+        await flushCurrentCase();
+        return;
+      }
+      case 'setRemediationRequired': {
+        const loader = requirePage(action);
+        editAnswers(
+          remediationRequiredSet({
+            answers,
+            questionId: action.questionId,
+            required: action.required,
+            canSelectRemediation: loader.machine?.canSelectRemediation ?? false,
           })
         );
         await flushCurrentCase();
