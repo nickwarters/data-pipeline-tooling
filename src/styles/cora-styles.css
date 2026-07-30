@@ -1435,7 +1435,8 @@
 }
 
 [data-cora-root] textarea.cora-capture-input,
-[data-cora-root] textarea.cora-remediation-detail-input {
+[data-cora-root] textarea.cora-remediation-detail-input,
+[data-cora-root] textarea.cora-remediation-freeform-input {
   min-height: 4rem;
   resize: vertical;
 }

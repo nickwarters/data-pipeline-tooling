@@ -241,8 +241,7 @@ function renderRemediationFreeForm(props, li, q, value) {
         { className: 'cora-remediation-freeform-label' },
         'Free-form action'
       ),
-      h('input', {
-        type: 'text',
+      h('textarea', {
         className: 'cora-remediation-freeform-input',
         value,
         placeholder: 'Describe a remediation in your own words…',

@@ -185,6 +185,16 @@ test('CORARemediationSection: editable viewer renders a free-form input when the
   const input = findByClass(el, 'cora-remediation-freeform-input');
   assert.ok(input, 'free-form input rendered');
   assert.equal(
+    input.tagName,
+    'TEXTAREA',
+    'free-form remediation is prose, so it renders as a textarea'
+  );
+  assert.equal(
+    input.getAttribute('type'),
+    null,
+    'a textarea has no type; setting one throws in a real browser'
+  );
+  assert.equal(
     input.value,
     'Escalate to legal',
     'pre-filled with the stored value'
