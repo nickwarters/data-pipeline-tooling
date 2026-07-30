@@ -155,12 +155,13 @@ test('greeting: renders state and dispatches the clear action', () => {
 
 ## Route Tests
 
-There is no per-page route test. Registration, parameter forwarding, the lazy
-loader and the failure boundary belong to `registerStoreRoute` and the `Router`,
-and are covered once in `tests/store-route.test.js` and `tests/router.test.js`.
-Adding a page adds a row to the assertion in `tests/register-routes.test.js`,
-which checks the whole table at once — the paths every route claims, and that
-each `load` thunk resolves to a module exporting `createRouteSlice`.
+There is no per-page route test. Registration, parameter forwarding, page
+resolution and the failure boundary belong to `registerStoreRoute` and the
+`Router`, and are covered once in `tests/store-route.test.js` and
+`tests/router.test.js`. Adding a page adds a row to the assertion in
+`tests/register-routes.test.js`, which checks the whole table at once — the paths
+every route claims, and that each entry's page, imported or thunked, exports
+`createRouteSlice`.
 
 Write a route-level test only for behaviour genuinely specific to one route,
 such as an eligibility `guard`. Everything else about a page is page behaviour:

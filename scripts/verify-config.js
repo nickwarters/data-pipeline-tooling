@@ -23,7 +23,6 @@ import {
 } from '../src/evaluators/applicability-evaluator.js';
 import { sectionIds } from '../src/lib/section-registry.js';
 import { CASE_TYPES, loadCaseTypeConfig } from '../case-types/manifest.js';
-import { routeTable } from '../src/setup/register-routes.js';
 import { resolveRelative } from './module-graph.js';
 
 /** @typedef {import('./verify_build.js').Failure} Failure */
@@ -61,11 +60,31 @@ const RESPONSE_TYPES = [
  */
 export async function checkConfiguration() {
   const artifacts = bankArtifacts();
-  const table = routeTable(/** @type {any} */ ({ journeyCaseSources: [] }));
+
+  /** @type {Record<string, import('../src/setup/register-routes.js').RouteEntry> | null} */
+  let table = null;
+  /** @type {Failure[]} */
+  let routeFailures = [];
+  // Reached through an import() inside a try/catch because the table imports
+  // every page module it holds: a page that will not evaluate must be a
+  // reported failure, not the thing that stops the gate reporting.
+  try {
+    const { routeTable } = await import('../src/setup/register-routes.js');
+    table = routeTable(/** @type {any} */ ({ journeyCaseSources: [] }));
+  } catch (error) {
+    routeFailures = [
+      {
+        kind: 'route',
+        file: ROUTES,
+        message: `the route table could not be built — ${messageOf(error)}`,
+      },
+    ];
+  }
+
   const failures = [
     ...(await checkCaseTypes()),
     ...checkBankArtifacts({ artifacts }),
-    ...checkRouteTable({ table }),
+    ...(table ? checkRouteTable({ table }) : routeFailures),
   ];
   return {
     failures,
@@ -73,7 +92,7 @@ export async function checkConfiguration() {
     counts: {
       caseTypes: CASE_TYPES.length,
       banks: artifacts.length,
-      routes: Object.keys(table).length,
+      routes: Object.keys(table ?? {}).length,
     },
   };
 }
@@ -559,26 +578,23 @@ function checkOneBank(file, readText) {
 }
 
 /**
- * Check the route table: the shape of every hash pattern, and that no two
- * entries claim the same one. Building the table in Node is safe — it allocates
- * object literals, invokes no page thunk and touches no DOM global.
+ * Check the route table: that every entry names exactly one page, the shape of
+ * every hash pattern, and that no two entries claim the same one.
  *
- * A page thunk pointing at a module that is not there needs no check here: the
- * module graph already resolves every `import()` literal in this file
- * case-exactly, and these checks only run once it is clean.
+ * A page reference pointing at a module that is not there needs no check here:
+ * the module graph already resolves every specifier in that file case-exactly,
+ * and these checks only run once it is clean.
  *
  * Not checked: pattern shadowing, where two distinct patterns both match one
  * hash and registration order silently decides the winner.
  *
  * @param {{
- *   table?: Record<string, import('../src/setup/register-routes.js').RouteEntry>
- * }} [options]
+ *   table: Record<string, import('../src/setup/register-routes.js').RouteEntry>
+ * }} options
  * @returns {Failure[]}
  */
-export function checkRouteTable({ table } = {}) {
-  const entries = Object.entries(
-    table ?? routeTable(/** @type {any} */ ({ journeyCaseSources: [] }))
-  );
+export function checkRouteTable({ table }) {
+  const entries = Object.entries(table);
 
   /** @type {Failure[]} */
   const failures = [];
@@ -590,6 +606,17 @@ export function checkRouteTable({ table } = {}) {
   const claimants = new Map();
 
   for (const [name, entry] of entries) {
+    // The adapter takes exactly one page source and throws on anything else, so
+    // a mis-shaped entry is a route that cannot mount. Caught here it is one
+    // named line in the gate rather than a console error the first time
+    // somebody navigates there.
+    if (Boolean(entry.page) === Boolean(entry.load)) {
+      fail(
+        entry.page
+          ? `route "${name}" declares both a \`page\` and a \`load\` thunk — one entry, one page`
+          : `route "${name}" declares neither a \`page\` nor a \`load\` thunk, so it has no page to mount`
+      );
+    }
     if (!Array.isArray(entry.paths) || entry.paths.length === 0) {
       fail(`route "${name}" declares no \`paths\``);
     } else {

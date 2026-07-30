@@ -7,9 +7,9 @@ you are changing.
 
 | Guide                                                       | What it covers                                                         |
 | ----------------------------------------------------------- | ---------------------------------------------------------------------- |
-| [Add a store-driven page](add-a-page.md)                    | One-page path: state → `h()`, actions, effects, lazy route, tests      |
+| [Add a store-driven page](add-a-page.md)                    | One-page path: state → `h()`, actions, effects, route entry, tests     |
 | [Store, actions, and effects](store-actions-and-effects.md) | Permanent contracts and ownership boundaries                           |
-| [Router integration](router.md)                             | Route independence, lazy loading, registration, and cleanup            |
+| [Router integration](router.md)                             | Route independence, page resolution, registration, and cleanup         |
 | [SaveQueue](save-queue.md)                                  | Debounced, ETag-guarded persistence                                    |
 | [SharePointClient](sharepoint-client.md)                    | Interface contract, new methods, and mock substitution (`?mock=1`)     |
 | [Case Type onboarding (code)](case-type-onboarding-code.md) | Manual path from nothing to a running mock Case Type                   |

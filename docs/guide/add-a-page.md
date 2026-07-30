@@ -124,24 +124,29 @@ removes them on navigation. Return a cleanup function from `start` for any
 other edge resource. Persistence belongs in an action module and goes through
 `SharePointClient` and `SaveQueue`, never directly through `fetch()`.
 
-## 5. Register the lazy route
+## 5. Register the route
 
-Add one entry to the route table. The page is reached only through an
-`import()` thunk, so one broken page cannot break startup or a sibling route.
+Import the page at the top of the route table and add one entry for it.
 
 ```js
-// src/setup/register-routes.js, inside routeTable(context)
+// src/setup/register-routes.js, at the top
+import * as greeting from '../pages/greeting.js';
+
+// inside routeTable(context)
 greeting: {
   paths: ['#/greeting'],
-  load: () => import('../pages/greeting.js'),
+  page: greeting,
 },
 ```
 
 `registerRoutes()` builds the `createStoreRoute()` adapter for each entry and
 registers it on every path in `paths`; add a `guard: () => boolean` if the route
-needs an eligibility check before mounting. The `import()` thunk is what
-ADR-0002's page independence rests on — nothing outside `src/pages/` may import
-a page any other way.
+needs an eligibility check before mounting.
+
+The route table is the one place that may name a page module — nothing outside
+`src/pages/` may reach a page any other way, and the contract test enforces it.
+`#/question-bank` is the single entry that still fetches its page on demand with
+a `load` thunk; ADR-0042 records why, and a new page does not need one.
 
 Add navigation only when the page is meant to be discoverable there.
 
@@ -153,7 +158,7 @@ Test one behaviour at a time through exported seams:
 2. Fire a user event and assert the dispatched action.
 3. Pass that action through the reducer and assert the next visible state.
 4. Test effects through their client/queue boundary and resulting dispatch.
-5. Test route registration and lazy-load failure containment separately.
+5. Test route registration and mount-failure containment separately.
 
 Then run:
 

@@ -5,23 +5,49 @@ import { createStore } from './store.js';
 import { createRouteErrorPanel } from '../lib/route-error-panel.js';
 
 /**
- * Adapt a lazy store-driven view module to the existing Router handler shape.
- * The adapter owns the route-local store, memo cache, and listener cleanup.
+ * What a page module's `createRouteSlice` hands back.
+ *
+ * @template Context
+ * @typedef {{
+ *   initialState: any,
+ *   reducer: (state: any, action: any) => any,
+ *   view?: (state: any, tools: { dispatch: (action: any) => any, memo: any, params: Record<string, string>, context: Context }) => any,
+ *   render?: (container: Element, state: any, tools: { dispatch: (action: any) => any, memo: any, render: typeof render, params: Record<string, string>, context: Context }) => void,
+ *   start?: (tools: { dispatch: (action: any) => any, memo: any, params: Record<string, string>, context: Context, isActive: () => boolean, signal: AbortSignal, listen: (target: EventTarget, type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions) => void }) => void | (() => void),
+ * }} RouteSlice
+ */
+
+/**
+ * A store-driven page module, however the route table got hold of it.
+ *
+ * @template Context
+ * @typedef {{
+ *   createRouteSlice: (params: Record<string, string>, context: Context) => RouteSlice<Context>
+ * }} PageModule
+ */
+
+/**
+ * Adapt a store-driven page module to the existing Router handler shape. The
+ * adapter owns the route-local store, memo cache, and listener cleanup.
+ *
+ * The page arrives either already resolved (`page`) or behind a thunk that
+ * fetches it on first navigation (`load`). Exactly one of the two, because a
+ * route with neither has no page to mount and a route with both leaves it
+ * ambiguous which one is the page.
  *
  * @template Context
  * @param {{
- *   load: () => Promise<{ createRouteSlice: (params: Record<string, string>, context: Context) => {
- *     initialState: any,
- *     reducer: (state: any, action: any) => any,
- *     view?: (state: any, tools: { dispatch: (action: any) => any, memo: any, params: Record<string, string>, context: Context }) => any,
- *     render?: (container: Element, state: any, tools: { dispatch: (action: any) => any, memo: any, render: typeof render, params: Record<string, string>, context: Context }) => void,
- *     start?: (tools: { dispatch: (action: any) => any, memo: any, params: Record<string, string>, context: Context, isActive: () => boolean, signal: AbortSignal, listen: (target: EventTarget, type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions) => void }) => void | (() => void),
- *   } }>,
+ *   page?: PageModule<Context>,
+ *   load?: () => Promise<PageModule<Context>>,
  *   context: Context,
  * }} options
  * @returns {import('../lib/router.js').RouteHandler}
  */
-export function createStoreRoute({ load, context }) {
+export function createStoreRoute({ page, load, context }) {
+  if (Boolean(page) === Boolean(load)) {
+    throw new TypeError('createStoreRoute needs exactly one of { page, load }');
+  }
+
   let mountSequence = 0;
   /** @type {null | (() => void)} */
   let disposeMountedSlice = null;
@@ -29,10 +55,14 @@ export function createStoreRoute({ load, context }) {
   return {
     async mount(container, params) {
       const token = ++mountSequence;
-      const module = await load();
+      // The cast only tells the type checker what the check above guarantees.
+      const module =
+        page ??
+        (await /** @type {() => Promise<PageModule<Context>>} */ (load)());
 
-      // Router.unmount() may run while the lazy import is pending. Do not let a
-      // stale module create a store or attach listeners after navigation.
+      // Router.unmount() may run while a lazy import is pending. Do not let a
+      // stale module create a store or attach listeners after navigation. A
+      // resolved page never waits, so it never lands in that window.
       if (token !== mountSequence) return;
 
       const slice = module.createRouteSlice(params, context);
@@ -129,32 +159,37 @@ export function createStoreRoute({ load, context }) {
 }
 
 /**
- * Register one lazily-loaded store-driven page on one or more hash patterns.
+ * Register one store-driven page on one or more hash patterns.
  *
  * Without a guard the adapter is registered directly, so nothing sits between
  * the router and `createStoreRoute`.
  *
- * `load` is the caller's: the dynamic `import()` of a page must stay in the
- * route table, which is what page independence and
- * `tests/component-layering-contract.test.js` rest on. This helper never names
- * a page.
+ * The page reference is the caller's, whether it is a module the route table
+ * imported or a thunk that fetches one. Naming a page is the route table's job
+ * and this helper never does it.
  *
- * `guard` runs on every mount, before the page is loaded. Returning false skips
- * the mount entirely — the shape an eligibility bounce needs, so the ineligible
- * user never pays for the page module.
+ * `guard` runs on every mount, before anything else. Returning false skips the
+ * mount entirely — the shape an eligibility bounce needs. It buys the
+ * short-circuit, not the download: for a page the route table imports, the
+ * module is already in memory, but no slice, store or effect runs for an
+ * ineligible user.
  *
  * @template Context
  * @param {import('../lib/router.js').Router} router
  * @param {{
  *   paths: string[],
- *   load: Parameters<typeof createStoreRoute<Context>>[0]['load'],
+ *   page?: Parameters<typeof createStoreRoute<Context>>[0]['page'],
+ *   load?: Parameters<typeof createStoreRoute<Context>>[0]['load'],
  *   context: Context,
  *   guard?: () => boolean,
  * }} options
  * @returns {void}
  */
-export function registerStoreRoute(router, { paths, load, context, guard }) {
-  const handler = createStoreRoute({ load, context });
+export function registerStoreRoute(
+  router,
+  { paths, page, load, context, guard }
+) {
+  const handler = createStoreRoute({ page, load, context });
   const registered = guard
     ? {
         /** @type {import('../lib/router.js').RouteHandler['mount']} */

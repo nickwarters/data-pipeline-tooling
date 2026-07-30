@@ -97,9 +97,10 @@ returns the route's initial state, reducer, and pure view. It may also return a
 `start(tools)` route effect for edge wiring such as browser events or starting
 an action module; lifecycle work does not belong in the view.
 
-The route stays responsible for its lazy dynamic import and passes that loader
-to `registerStoreRoute(router, { paths, load, context })`, which builds the
-standard `createStoreRoute({ load, context })` adapter. That adapter creates the
+The route table holds the page module and hands it to
+`registerStoreRoute(router, { paths, page, context })`, which builds the standard
+`createStoreRoute({ page, context })` adapter. (`#/question-bank` passes a `load`
+thunk instead; the adapter takes exactly one of the two.) That adapter creates the
 route-local store and memo cache, commits the view through `render()`, and
 returns the existing Router `{ mount, unmount }` handler shape.
 

@@ -378,9 +378,58 @@ test('store route: stale lazy mount is discarded when a legacy route wins naviga
 });
 
 /**
+ * A page the route table already holds as a module object, rather than as a
+ * thunk that fetches one. Everything after the module is in hand is the same
+ * code either way; what differs is that there is no fetch to wait on.
+ */
+
+test('store route: a resolved page has no stale-mount window to unmount into', async () => {
+  const container = document.createElement('div');
+  let cleanupCalls = 0;
+  const handler = createStoreRoute({
+    page: {
+      createRouteSlice: () => ({
+        initialState: {},
+        reducer: (/** @type {any} */ state) => state,
+        view: () => document.createElement('p'),
+        start: () => () => {
+          cleanupCalls += 1;
+        },
+      }),
+    },
+    context: /** @type {any} */ ({}),
+  });
+
+  // No fetch sits between mount() and its slice, so an unmount issued before
+  // the mount promise settles still has a live slice to tear down.
+  const mounting = handler.mount(container, {});
+  handler.unmount();
+  await mounting;
+
+  assert.equal(cleanupCalls, 1, 'the slice created by mount() was disposed');
+});
+
+test('store route: a page source is required, and only one of them', () => {
+  const page = { createRouteSlice: () => ({}) };
+  assert.throws(
+    () => createStoreRoute(/** @type {any} */ ({ context: {} })),
+    TypeError,
+    'neither a resolved page nor a loader is not a route'
+  );
+  assert.throws(
+    () =>
+      createStoreRoute(
+        /** @type {any} */ ({ page, load: async () => page, context: {} })
+      ),
+    TypeError,
+    'two page sources leave it ambiguous which one mounts'
+  );
+});
+
+/**
  * registerStoreRoute: the shared registration shell the route modules
- * collapse onto. The dynamic import() stays in the caller — a route module —
- * so `load` is always injected here, never resolved by this helper.
+ * collapse onto. The page reference stays in the caller — the route table —
+ * so `page` or `load` is always injected here, never resolved by this helper.
  */
 
 /** @returns {any} a slice module whose view renders a marked element */

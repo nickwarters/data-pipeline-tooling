@@ -7,6 +7,11 @@ Date: 2026-07-18
 Accepted, as amended 2026-07 (#536) — see **Amendment (2026-07, #536)** below,
 which closes decision 7's conditional custom-element seam.
 
+The reaffirmation of ADR-0002 recorded under "What is deliberately preserved,
+unchanged" is itself amended by
+[ADR-0042](./0042-static-page-imports.md): route-level page independence at
+runtime is preserved, the lazy `import()` that used to implement it is not.
+
 Implemented through SUNSET-1 on 2026-07-20. The legacy view shell and scroll-
 snapshot helper are deleted, and contract tests now prevent class components,
 legacy view APIs, app-layer signal imports, and view-to-client imports from
@@ -174,6 +179,11 @@ reworded to match.
   dynamic `import()`; a broken route still cannot break its siblings or the
   boot. Old-style routes and new store-driven routes coexist behind exactly this
   contract (see migration sequencing).
+  **Amended by [ADR-0042](./0042-static-page-imports.md):** route-level page
+  independence _at runtime_ is preserved — a page that fails once mounted still
+  costs only its own route — but the lazy `import()` mechanism is not. The route
+  table imports its pages statically, except `#/question-bank`, and a page that
+  throws while its module is evaluated is now fatal to boot.
 - **ADR-0009 — mock-first dev loop.** `?mock=1`, `MockSharePointClient`,
   fixtures, `node --test`, and `tsc --checkJs` are untouched. The new store is
   developed and tested against the same mock client.

@@ -68,15 +68,15 @@ test('layering: no component imports from the question-bank subsystem', () => {
 });
 
 /**
- * Page-independence layering. Pages load on demand inside their
- * route's `mount()` via dynamic `import()`, guarded by the router error
- * boundary, so a broken page file cannot break the boot graph.
+ * Page-independence layering. The route table is the one place that names a
+ * page module — statically for eight of them, behind a thunk for the ninth —
+ * so "what pages exist?" still has exactly one answer, and deleting a page is
+ * still deleting its file, its table entry and its nav link.
  *
- * No file outside `src/pages/` statically imports a page module, and only the
- * route table may `import()` a page dynamically. `tests/*` is outside this scan
- * by construction.
+ * No file outside `src/pages/` may reach a page any other way, static or
+ * dynamic. `tests/*` is outside this scan by construction.
  */
-test('layering: no static page import outside src/pages/; dynamic page import() only in the route table', () => {
+test('layering: only the route table names a page module', () => {
   const isPageSpecifier = /\bpages\//;
 
   /**
@@ -100,19 +100,34 @@ test('layering: no static page import outside src/pages/; dynamic page import() 
     return out;
   };
 
+  const isRouteTable = (/** @type {string} */ rel) =>
+    rel === 'src/setup/register-routes.js';
+
   assert.deepEqual(
-    pageEdges('static'),
+    pageEdges('static', isRouteTable),
     [],
-    'these files statically import a page — add it to the route table in setup/register-routes.js as an `import()` thunk instead'
+    'only the route table in setup/register-routes.js may import a page module — add an entry there instead'
   );
 
   // Dynamic page import() belongs to the route table (page loading) or a page
   // composing its own subsystem — never to generic src/ modules, services, or
   // components.
   assert.deepEqual(
-    pageEdges('dynamic', (rel) => rel === 'src/setup/register-routes.js'),
+    pageEdges('dynamic', isRouteTable),
     [],
     'only the route table in setup/register-routes.js may dynamically import a page module'
+  );
+
+  const tableDynamic = importSpecifiers('src/setup/register-routes.js', ROOT)
+    .filter(
+      (edge) => edge.kind === 'dynamic' && isPageSpecifier.test(edge.specifier)
+    )
+    .map((edge) => edge.specifier);
+
+  assert.deepEqual(
+    tableDynamic,
+    ['../pages/question-bank/cora-bank-editor.js'],
+    'the Question Bank editor is the one page still fetched on demand: it is the largest subsystem, only a Maintainer ever opens it, and the dev harness swaps its loader through AppContext'
   );
 });
 

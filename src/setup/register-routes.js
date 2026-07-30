@@ -2,6 +2,16 @@
 import { registerStoreRoute } from '../core/store-route.js';
 import { redirectTo } from '../lib/navigate.js';
 
+import * as homePage from '../pages/home.js';
+import * as dashboardPage from '../pages/cora-dashboard.js';
+import * as conversationPage from '../pages/cora-conversation-view.js';
+import * as caseReviewPage from '../pages/cora-case-review.js';
+import * as teamCasesPage from '../pages/cora-team-cases.js';
+import * as responsiblePartyPage from '../pages/cora-responsible-party-dashboard.js';
+import * as journeyCasesPage from '../pages/cora-journey-cases.js';
+import * as roadmapPage from '../pages/roadmap.js';
+import * as myTeamPage from '../pages/cora-my-team.js';
+
 /**
  * @typedef {Object} AppContext
  * @property {import('../sharepoint-client.js').SharePointClient} client
@@ -22,28 +32,34 @@ import { redirectTo } from '../lib/navigate.js';
  * @typedef {Object} RouteEntry
  * @property {string[]} paths
  *   The hash patterns this route answers, e.g. `['#/case/:caseType/:id']`.
- * @property {() => Promise<any>} load
- *   Dynamic `import()` of the page module. A thunk, so the page is fetched on
- *   first navigation and the boot graph never statically depends on it — a
- *   broken page file cannot then break startup or a sibling route.
+ * @property {any} [page]
+ *   The imported page module. Set on every route but the Question Bank editor.
+ * @property {() => Promise<any>} [load]
+ *   A thunk that fetches the page module on first navigation, for the one page
+ *   worth the extra round trip.
  * @property {() => boolean} [guard]
- *   Runs before `load` on every mount. Returning false skips the mount, so an
- *   ineligible user never pays for the page module.
+ *   Runs before the mount on every navigation. Returning false skips the mount,
+ *   so no slice, store or effect runs for an ineligible user.
  */
 
 /**
  * THE route table: every hash the app answers, and the page behind it.
  *
  * This is deliberately one list rather than a module per route. A route is a
- * path and a lazy page import — there is nothing per-route to hold a file, and
- * ten files holding one line each meant ten hops to answer "what pages exist?".
+ * path and a page — there is nothing per-route to hold a file, and ten files
+ * holding one line each meant ten hops to answer "what pages exist?".
  * Uniformity used to be a contract test policing `src/routes/*`; here it is
  * structural, because a table entry has only one possible shape.
  *
- * Page modules are still reached only through `import()` thunks, so
- * `tests/component-layering-contract.test.js` and page independence are
- * unchanged: deleting a page is still deleting its file, its entry here, and its
- * nav link.
+ * This file is still the only place that names a page module, so
+ * `tests/component-layering-contract.test.js` and page independence hold:
+ * deleting a page is deleting its file, its entry here, and its nav link. What
+ * changed is that most entries hold the module itself rather than a thunk that
+ * fetches it. A page is now part of the boot graph, so a page that throws while
+ * being evaluated is fatal to boot — which is why the verify gate evaluates
+ * every one of them in Node before a browser ever does. Everything that
+ * contains a failure at runtime is untouched: the router's error boundary, the
+ * navigation sequence token, and the per-entry catch below.
  *
  * @param {AppContext} context
  * @returns {Record<string, RouteEntry>} keyed by route name, for the log message
@@ -51,18 +67,21 @@ import { redirectTo } from '../lib/navigate.js';
  */
 export function routeTable(context) {
   return {
-    root: { paths: ['#/'], load: () => import('../pages/home.js') },
+    root: { paths: ['#/'], page: homePage },
     dashboard: {
       paths: ['#/dashboard'],
-      load: () => import('../pages/cora-dashboard.js'),
+      page: dashboardPage,
     },
     conversation: {
       paths: ['#/conversation/:caseType/:id', '#/conversation/:id'],
-      load: () => import('../pages/cora-conversation-view.js'),
+      page: conversationPage,
     },
     'question-bank': {
       paths: ['#/question-bank'],
-      // The one page the dev/mock harness swaps out, via AppContext.
+      // The one page still fetched on demand. It is the largest subsystem in
+      // the app, only a Maintainer ever opens it, so most sessions never pay
+      // for it — and the thunk is the seam the dev/mock harness swaps out via
+      // AppContext, which a static import could not offer.
       load: /** @type {any} */ (
         context.loadQuestionBankEditor ??
           (() => import('../pages/question-bank/cora-bank-editor.js'))
@@ -70,19 +89,19 @@ export function routeTable(context) {
     },
     case: {
       paths: ['#/case/:caseType/:id', '#/case/:id'],
-      load: () => import('../pages/cora-case-review.js'),
+      page: caseReviewPage,
     },
     'team-cases': {
       paths: ['#/team-cases'],
-      load: () => import('../pages/cora-team-cases.js'),
+      page: teamCasesPage,
     },
     'my-cases': {
       paths: ['#/my-cases'],
-      load: () => import('../pages/cora-responsible-party-dashboard.js'),
+      page: responsiblePartyPage,
     },
     'journey-cases': {
       paths: ['#/journey-cases'],
-      load: () => import('../pages/cora-journey-cases.js'),
+      page: journeyCasesPage,
       // List-scope Journey Owner capability: only a user who owns at least one
       // Case Type as a Journey Owner may see this view. The bounce replaces
       // rather than pushes, so Back does not return the user to the route that
@@ -95,19 +114,19 @@ export function routeTable(context) {
     },
     roadmap: {
       paths: ['#/roadmap'],
-      load: () => import('../pages/roadmap.js'),
+      page: roadmapPage,
     },
     'my-team': {
       paths: ['#/my-team'],
-      load: () => import('../pages/cora-my-team.js'),
+      page: myTeamPage,
     },
   };
 }
 
 /**
  * Register every route. One route failing to register costs only its own route,
- * not the whole app — though with `load` a thunk there is nothing left in an
- * entry that can throw here.
+ * not the whole app — though an entry is a paths array and a module reference,
+ * so there is little left in one that can throw at this point.
  *
  * @param {import('../lib/router.js').Router} router
  * @param {AppContext} context

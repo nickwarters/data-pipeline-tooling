@@ -499,12 +499,14 @@
 }</code></pre>
           <div class="code-head">
             <span>src/setup/register-routes.js</span>
-            <span>lazy route boundary</span>
+            <span>route boundary</span>
           </div>
-          <pre><code><span class="cm">// one entry in routeTable(context)</span>
+          <pre><code><span class="kw">import</span> * <span class="kw">as</span> greeting <span class="kw">from</span> <span class="str">'../pages/greeting.js'</span>;
+
+<span class="cm">// one entry in routeTable(context)</span>
   greeting: {
     paths: [<span class="str">'#/greeting'</span>],
-    load: () =&gt; <span class="kw">import</span>(<span class="str">'../pages/greeting.js'</span>),
+    page: greeting,
   },</code></pre>
         </div>
       </section>
@@ -539,7 +541,7 @@
       <section class="checklist">
         <h2>Before the route ships</h2>
         <ul>
-          <li>Page import is lazy and route-local</li>
+          <li>Page import lives in the route table, nowhere else</li>
           <li>State is under <code>{ chrome, routes }</code></li>
           <li>View is pure and synchronous</li>
           <li>Events dispatch named actions</li>

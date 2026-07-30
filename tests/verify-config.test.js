@@ -10,6 +10,7 @@ import {
   literalPathOf,
 } from '../scripts/verify-config.js';
 import { CASE_TYPES } from '../case-types/manifest.js';
+import { routeTable } from '../src/setup/register-routes.js';
 
 /**
  * A config the real `loadCaseTypeConfig` accepts, so every fixture goes through
@@ -520,11 +521,28 @@ test('checkBankArtifacts passes over the real bank artifacts and registry', () =
   assert.deepEqual(checkBankArtifacts({}), []);
 });
 
+test('checkRouteTable fails an entry with no page and one with two', () => {
+  const failures = checkRouteTable({
+    table: /** @type {any} */ ({
+      pageless: { paths: ['#/pageless'] },
+      both: { paths: ['#/both'], page: {}, load: async () => ({}) },
+    }),
+  });
+
+  assert.equal(failures.length, 2, joined(failures));
+  for (const failure of failures) {
+    assert.equal(failure.kind, 'route');
+    assert.equal(failure.file, 'src/setup/register-routes.js');
+  }
+  assert.match(joined(failures), /pageless/);
+  assert.match(joined(failures), /both/);
+});
+
 test('checkRouteTable fails two entries sharing a pattern, naming both routes', () => {
   const failures = checkRouteTable({
     table: /** @type {any} */ ({
-      first: { paths: ['#/twin'] },
-      second: { paths: ['#/twin'] },
+      first: { paths: ['#/twin'], page: {} },
+      second: { paths: ['#/twin'], page: {} },
     }),
   });
 
@@ -538,14 +556,14 @@ test('checkRouteTable fails two entries sharing a pattern, naming both routes', 
 test('checkRouteTable fails malformed hash patterns', () => {
   const failures = checkRouteTable({
     table: /** @type {any} */ ({
-      unhashed: { paths: ['/dashboard'] },
-      metachar: { paths: ['#/rep(ort)'] },
-      repeated: { paths: ['#/case/:id/:id'] },
-      reserved: { paths: ['#/case/:queryString'] },
-      numeric: { paths: ['#/case/:1st'] },
-      trailing: { paths: ['#/case/'] },
-      empty: { paths: [] },
-      root: { paths: ['#/'] },
+      unhashed: { paths: ['/dashboard'], page: {} },
+      metachar: { paths: ['#/rep(ort)'], page: {} },
+      repeated: { paths: ['#/case/:id/:id'], page: {} },
+      reserved: { paths: ['#/case/:queryString'], page: {} },
+      numeric: { paths: ['#/case/:1st'], page: {} },
+      trailing: { paths: ['#/case/'], page: {} },
+      empty: { paths: [], page: {} },
+      root: { paths: ['#/'], page: {} },
     }),
   });
 
@@ -561,7 +579,8 @@ test('checkRouteTable fails malformed hash patterns', () => {
 });
 
 test('checkRouteTable passes over the real route table', () => {
-  assert.deepEqual(checkRouteTable(), []);
+  const table = routeTable(/** @type {any} */ ({ journeyCaseSources: [] }));
+  assert.deepEqual(checkRouteTable({ table }), []);
 });
 
 test('literalPathOf reads both thunk shapes and gives up on a computed one', () => {

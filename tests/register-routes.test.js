@@ -13,8 +13,9 @@
  * What is genuinely per-route is here: the paths each route claims, the two
  * multi-path routes, the Journey Owner guard, and the one page the dev harness
  * overrides. Plus one thing the per-route tests could not check, because they all
- * injected fakes — that every `load` thunk in the table resolves to a real page
- * module exposing `createRouteSlice`.
+ * injected fakes — that every entry in the table, whether it holds an imported
+ * page module or a thunk that fetches one, yields something exposing
+ * `createRouteSlice`.
  */
 
 import { test } from 'node:test';
@@ -151,12 +152,30 @@ test('route table: a table that cannot be built is logged, not thrown', () => {
 
 test('route table: every page module resolves and exposes createRouteSlice', async () => {
   for (const [name, entry] of Object.entries(routeTable(makeContext()))) {
-    const module = await entry.load();
+    const module =
+      entry.page ?? (await /** @type {() => Promise<any>} */ (entry.load)());
     assert.equal(
       typeof module.createRouteSlice,
       'function',
       `${name} must export createRouteSlice`
     );
+  }
+});
+
+test('route table: the Question Bank editor is the only page still fetched on demand', () => {
+  const entries = Object.entries(routeTable(makeContext()));
+  const deferred = entries
+    .filter(([, entry]) => entry.load)
+    .map(([name]) => name);
+
+  assert.deepEqual(
+    deferred,
+    ['question-bank'],
+    'the largest, Maintainer-only, host-swappable page is the one exception'
+  );
+  for (const [name, entry] of entries) {
+    if (name === 'question-bank') continue;
+    assert.ok(entry.page, `${name} must hold its imported page module`);
   }
 });
 
@@ -169,7 +188,8 @@ test('route table: the question bank page loader is overridable by the host', as
     })
   );
 
-  assert.equal(await table['question-bank'].load(), swapped);
+  const load = /** @type {() => Promise<any>} */ (table['question-bank'].load);
+  assert.equal(await load(), swapped);
 });
 
 test('journey cases guard: admits a user who owns a Journey Case Type', () => {
@@ -180,11 +200,15 @@ test('journey cases guard: admits a user who owns a Journey Case Type', () => {
   assert.deepEqual(replacedUrls, [], 'an eligible user is not bounced');
 });
 
-test('journey cases guard: bounces a non-Journey-Owner without loading the page', () => {
+test('journey cases guard: bounces a non-Journey-Owner without mounting the page', () => {
   replacedUrls.length = 0;
   const { guard } = routeTable(makeContext([]))['journey-cases'];
 
-  assert.equal(guard?.(), false, 'a false guard skips the mount, so no import');
+  assert.equal(
+    guard?.(),
+    false,
+    'a false guard skips the mount, so no slice, store or effect runs'
+  );
   // The bounce replaces the history entry rather than pushing one, so Back does
   // not return the ineligible user to the route that just bounced them.
   assert.deepEqual(replacedUrls, ['/SitePages/app.aspx#/']);
