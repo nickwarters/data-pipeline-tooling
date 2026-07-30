@@ -4,9 +4,10 @@ Date: 2026-07-01
 
 ## Status
 
-Accepted, as amended 2026-07 (#599) — see **Amendment (2026-07, #599)** below,
-which makes the `appealReview` access row Controls-only and hides it until the
-Case carries an Appeal.
+Accepted, as amended 2026-07 (#599, #600) — see **Amendment (2026-07, #599)**
+below, which makes the `appealReview` access row Controls-only and hides it
+until the Case carries an Appeal, and **Amendment (2026-07, #600)**, which makes
+the `appealRequest` row the configured raiser's alone.
 
 ## Context
 
@@ -118,6 +119,56 @@ The Assigned Reviewer, Case Type Owner and Journey Owner keep their view of the 
 the **Appeal Request** tab, which renders `appeal.resolution`. The raiser's Manager does
 not, unless they are the configured raiser — on a `journeyOwner` type they lose Appeal
 visibility entirely, which is intended: they are not a party to the flow there.
+
+## Amendment (2026-07, #600) — the Appeal Request tab is the raiser's alone
+
+This amendment supersedes two pieces of text above.
+
+**(a) The Decision's `appealRequest` bullet** (under "Two tabs, two Sections"),
+which read:
+
+> **`appealRequest`** — where the appeal is raised/triaged. `edit` for the configured
+> `raisedBy` role on a `Completed` Case; `read-only` for Controls, Assigned Reviewer,
+> Case Type Owner, Journey Owner (when not the raiser); `hidden` otherwise. […]
+
+**(b) The first sentence of the final paragraph of the #599 amendment**, which
+read:
+
+> The Assigned Reviewer, Case Type Owner and Journey Owner keep their view of the Appeal on
+> the **Appeal Request** tab, which renders `appeal.resolution`.
+
+The `appealRequest` row is now **the configured raiser's alone**: `edit` for the
+role named by `appeal.raisedBy` on a `Completed` Case, and `hidden` for every
+other role and every other status. The cell stays function-valued, reading
+`caseTypeConfig.appeal.raisedBy`.
+
+The Section is a form for raising an Appeal, not a record for observers to
+follow. Read-only observers got a tab whose only content was somebody else's
+form, on every Completed Case, whether or not an Appeal existed.
+
+Who sees what, per `raisedBy` value, on a `Completed` Case:
+
+| Role                      | `raisedBy: 'journeyOwner'` | `raisedBy: 'responsiblePartyManager'` |
+| ------------------------- | -------------------------- | ------------------------------------- |
+| Journey Owner             | `edit`                     | `hidden`                              |
+| Responsible Party Manager | `hidden`                   | `edit`                                |
+| Controls                  | `hidden`                   | `hidden`                              |
+| Assigned Reviewer         | `hidden`                   | `hidden`                              |
+| Case Type Owner           | `hidden`                   | `hidden`                              |
+| Other Reviewer            | `hidden`                   | `hidden`                              |
+| Reviewer Manager          | `hidden`                   | `hidden`                              |
+| Responsible Party         | `hidden`                   | `hidden`                              |
+| none                      | `hidden`                   | `hidden`                              |
+
+The substantive narrowing is not that Controls loses the tab. Controls is
+unaffected in substance: they read the Appeal's rationale, cited Answers and
+resolution on **Appeal Review**, which is where they resolve it. The narrowing
+is that, taken together with #599, **no Section shows the Appeal or its
+resolution to the Assigned Reviewer or the Case Type Owner at all** — neither
+role appears on `appealRequest` or `appealReview` any more. That consequence is
+**accepted**: an Appeal is a dispute between the raiser and Controls, and a
+Reviewer whose Case is appealed learns of the outcome through the Amended
+Outcome in the Summary, which is the durable record.
 
 [the architecture decision]: ./0004-case-type-config-as-js-modules.md
 [the architecture decision]: ./0007-case-storage-shape.md

@@ -111,14 +111,16 @@ test('matrix — In-progress Case (no actions, default appeal config → respons
         controls: 'read-only',
         none: 'hidden',
       },
+      // Appeal Request belongs to the configured raiser and nobody else; on a
+      // Case that is not Completed even they cannot see it.
       appealRequest: {
-        assignedReviewer: 'read-only',
+        assignedReviewer: 'hidden',
         otherReviewer: 'hidden',
         responsibleParty: 'hidden',
         responsiblePartyManager: 'hidden',
-        caseTypeOwner: 'read-only',
-        journeyOwner: 'read-only',
-        controls: 'read-only',
+        caseTypeOwner: 'hidden',
+        journeyOwner: 'hidden',
+        controls: 'hidden',
         none: 'hidden',
       },
       // Nobody sees Appeal Review until an Appeal exists, and Controls is the
@@ -194,7 +196,7 @@ test('matrix — Actions In Progress Case with sent actions (reportable freeze)'
       // at the reportable milestone, once the Outcome snapshot exists.
       appealRequest: {
         responsiblePartyManager: 'hidden',
-        journeyOwner: 'read-only',
+        journeyOwner: 'hidden',
       },
       appealReview: { controls: 'hidden' },
       amendOutcome: {
@@ -236,13 +238,13 @@ test('matrix — Completed Case, journeyOwner raiser, no Appeal raised', () => {
       },
       // The Journey Owner is the configured raiser → edit on Appeal Request.
       appealRequest: {
-        assignedReviewer: 'read-only',
+        assignedReviewer: 'hidden',
         otherReviewer: 'hidden',
         responsibleParty: 'hidden',
         responsiblePartyManager: 'hidden',
-        caseTypeOwner: 'read-only',
+        caseTypeOwner: 'hidden',
         journeyOwner: 'edit',
-        controls: 'read-only',
+        controls: 'hidden',
         none: 'hidden',
       },
       // No Appeal raised → Appeal Review has nothing to show, not even to
@@ -276,15 +278,14 @@ test('matrix — Completed Case, responsiblePartyManager raiser, open Appeal', (
   const c = makeCase({ status: 'Completed', appeals: [openAppeal()] });
   assertGrid(
     {
-      // The RP Manager is the configured raiser → edit on Appeal Request; a
-      // non-raiser Journey Owner observes read-only.
+      // The RP Manager is the configured raiser → edit on Appeal Request.
       appealRequest: {
         responsiblePartyManager: 'edit',
-        journeyOwner: 'read-only',
+        journeyOwner: 'hidden',
       },
       // Open Appeal + Completed → Controls resolves (edit); every other role is
-      // hidden, and those who can see the Appeal follow it on the Appeal
-      // Request tab.
+      // hidden, and Controls reads the Appeal's contents here rather than on
+      // the Appeal Request tab.
       appealReview: {
         assignedReviewer: 'hidden',
         otherReviewer: 'hidden',

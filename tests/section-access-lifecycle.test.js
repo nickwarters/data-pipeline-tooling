@@ -30,35 +30,27 @@ test('appealRequest: default config (no appeal block) routes raising to the RP M
   );
   assert.equal(
     evaluateAccess('appealRequest', ['journeyOwner'], c, cfg),
-    'read-only'
+    'hidden'
   );
 });
 
-test('appealRequest: raiser gets edit only once Completed, hidden/read-only before', () => {
-  const rpmCfg = makeConfig({
-    appeal: { raisedBy: 'responsiblePartyManager', resolvedBy: 'controls' },
-  });
-  assert.equal(
-    evaluateAccess(
-      'appealRequest',
-      ['responsiblePartyManager'],
-      makeCase({ status: 'Actions In Progress' }),
-      rpmCfg
-    ),
-    'hidden'
-  );
-  const joCfg = makeConfig({
-    appeal: { raisedBy: 'journeyOwner', resolvedBy: 'controls' },
-  });
-  assert.equal(
-    evaluateAccess(
-      'appealRequest',
-      ['journeyOwner'],
-      makeCase({ status: 'Actions In Progress' }),
-      joCfg
-    ),
-    'read-only'
-  );
+test('appealRequest: the raiser is hidden until the Case is Completed', () => {
+  for (const raisedBy of /** @type {const} */ ([
+    'responsiblePartyManager',
+    'journeyOwner',
+  ])) {
+    const cfg = makeConfig({ appeal: { raisedBy, resolvedBy: 'controls' } });
+    assert.equal(
+      evaluateAccess(
+        'appealRequest',
+        [raisedBy],
+        makeCase({ status: 'Actions In Progress' }),
+        cfg
+      ),
+      'hidden',
+      raisedBy
+    );
+  }
 });
 
 test('appealReview: Controls gets no tab before the first Appeal, then edit while open, then read-only', () => {
@@ -254,6 +246,24 @@ test('acceptance: the Adviser (Responsible Party) sees only Summary + Conversati
     (s) => evaluateAccess(s, ['responsibleParty'], c, cfg) !== 'hidden'
   );
   assert.deepEqual(visible.sort(), ['conversation', 'summary']);
+});
+
+test('acceptance: Appeal Request belongs to the configured raiser alone', () => {
+  const roles = /** @type {Role[]} */ (Object.keys(MATRIX.appealRequest));
+  for (const raisedBy of /** @type {const} */ ([
+    'journeyOwner',
+    'responsiblePartyManager',
+  ])) {
+    const cfg = makeConfig({ appeal: { raisedBy, resolvedBy: 'controls' } });
+    const c = makeCase({ status: 'Completed' });
+    for (const role of roles) {
+      assert.equal(
+        evaluateAccess('appealRequest', [role], c, cfg),
+        role === raisedBy ? 'edit' : 'hidden',
+        `${role} with ${raisedBy} raising`
+      );
+    }
+  }
 });
 
 test('acceptance: Controls is the role that gets Appeal Review + Amend Outcome (edit)', () => {

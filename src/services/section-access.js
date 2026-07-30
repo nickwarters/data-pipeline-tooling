@@ -315,12 +315,13 @@ export const MATRIX = {
     controls: 'read-only',
     none: 'hidden',
   },
-  // Appeal Request — where a Completed Case's Outcome is appealed. Only the
-  // Case Type's configured `appeal.raisedBy` role gets `edit`, and only on a
-  // `Completed` Case. The Assigned Reviewer, Case Type Owner, Controls and a
-  // non-raiser Journey Owner observe read-only; everyone else sees nothing.
+  // Appeal Request — where a Completed Case's Outcome is appealed. The tab
+  // belongs to the Case Type's configured `appeal.raisedBy` role and to nobody
+  // else: `edit` on a `Completed` Case, hidden otherwise. It is a form for
+  // raising an Appeal, not a record for observers to follow — Controls, who
+  // resolves the Appeal, reads its contents on the Appeal Review tab.
   appealRequest: {
-    assignedReviewer: 'read-only',
+    assignedReviewer: 'hidden',
     otherReviewer: 'hidden',
     reviewerManager: 'hidden',
     responsibleParty: 'hidden',
@@ -329,13 +330,13 @@ export const MATRIX = {
       c.status === CASE_STATUS.COMPLETED
         ? 'edit'
         : 'hidden',
-    caseTypeOwner: 'read-only',
+    caseTypeOwner: 'hidden',
     journeyOwner: (c, config) =>
       appealRaiser(config) === 'journeyOwner' &&
       c.status === CASE_STATUS.COMPLETED
         ? 'edit'
-        : 'read-only',
-    controls: 'read-only',
+        : 'hidden',
+    controls: 'hidden',
     none: 'hidden',
   },
   // Appeal Review — where Controls resolves an open Appeal on a `Completed`

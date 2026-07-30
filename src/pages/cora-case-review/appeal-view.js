@@ -13,18 +13,19 @@ import { openAppealOf } from './appeal-actions.js';
 /** @typedef {import('../../sharepoint-client.js').CurrentUser} CurrentUser */
 
 /**
- * The Appeal Section. Lets the Responsible Party or their Manager
+ * The Appeal Section. Lets the Case Type's configured appeal raiser — the
+ * Journey Owner or the Responsible Party Manager, never the Responsible Party —
  * raise a case-level **Appeal** objecting to a Completed Case's Current Outcome
  * (CONTEXT.md). The Appeal is additive: it appends to the Case row's `appeals[]`
  * JSON blob through a route-owned action and never touches the frozen Answers —
  * citing a disputed Answer aims the reviewer but sets no value. This view owns
  * form validation only; the route slice owns immutable state and persistence.
  *
- * Access is resolved upstream (section-access, the architecture decision): `edit` only for the
- * appellant roles on a Completed Case, otherwise `read-only` (reviewers/owner/
- * Controls) or the Section is not rendered at all. At most one Appeal may be open
- * at a time; once every Appeal is resolved a fresh one can be raised, with full
- * history kept.
+ * Access is resolved upstream (section-access, the architecture decision):
+ * `edit` for the configured raiser on a Completed Case, `hidden` for every other
+ * role and every other status — so in the app this Section renders only as the
+ * raiser's form. At most one Appeal may be open at a time; once every Appeal is
+ * resolved a fresh one can be raised, with full history kept.
  *
  * Appeal *resolution* is handled by the separate **Appeal Review** Section
  * (`cora-appeal-review`, the architecture decision), where **Controls** agrees or rejects with a
