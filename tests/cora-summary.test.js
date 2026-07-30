@@ -101,6 +101,7 @@ test('summaryView uses frozen and amended outcomes after the reportable mileston
     })
   );
   assert.match(frozen.textContent, /Fail/);
+  assert.doesNotMatch(frozen.textContent, /previously/);
 
   const amended = rootOf(
     render({
@@ -116,7 +117,27 @@ test('summaryView uses frozen and amended outcomes after the reportable mileston
       }),
     })
   );
-  assert.match(amended.textContent, /Pass/);
+  assert.match(amended.textContent, /Pass \(previously Fail\)/);
+});
+
+test('summaryView shows no marker for an amendment with no frozen snapshot to displace', () => {
+  // A Case Type with no outcome evaluator becomes reportable without a snapshot
+  // being stamped, so an amendment there displaced nothing to name.
+  const root = rootOf(
+    render({
+      caseRow: makeCase({
+        status: 'Completed',
+        amendedOutcome: {
+          outcome: 'pass',
+          justification: 'Correction',
+          amendedBy: 'controls@example.com',
+          amendedAt: '2026-07-01T00:00:00Z',
+        },
+      }),
+    })
+  );
+  assert.match(root.textContent, /Pass/);
+  assert.doesNotMatch(root.textContent, /previously/);
 });
 
 test('summaryView falls back to live outcome when no snapshot exists', () => {

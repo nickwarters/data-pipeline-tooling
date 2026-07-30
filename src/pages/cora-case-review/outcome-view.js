@@ -11,6 +11,7 @@ import { h } from '../../lib/html.js';
  * @property {Record<string, Answer>} answers
  * @property {boolean} allAnswered
  * @property {OutcomeOption[]} outcomeOptions
+ * @property {string} [displacedOutcome] The verdict this one displaced, when an amendment put a different verdict in force. Display only.
  */
 
 /**
@@ -20,6 +21,10 @@ import { h } from '../../lib/html.js';
  * "not configured" state so the misconfiguration is visible rather than silently
  * papered over.
  *
+ * The verdict an amendment displaced arrives as a prop rather than being read
+ * from the Case row: this view stays pure, and the caller already knows which
+ * value was displaced.
+ *
  * @param {OutcomeProps} props
  * @returns {Node[]}
  */
@@ -28,8 +33,11 @@ export function Outcome({
   answers,
   allAnswered,
   outcomeOptions,
+  displacedOutcome,
 }) {
   let className, textContent;
+  /** @type {Node | null} */
+  let marker = null;
   if (!allAnswered || !computeOutcome) {
     className = 'cora-outcome-indeterminate';
     textContent = 'Awaiting answers…';
@@ -39,13 +47,25 @@ export function Outcome({
     if (option) {
       className = `cora-outcome-${classSuffixFor(result.outcome)}`;
       textContent = option.wording;
+      if (displacedOutcome && displacedOutcome !== result.outcome) {
+        // Outcome options are Case-Type-editable, so a displaced id can outlive
+        // its option; the raw id beats "previously undefined".
+        const displacedWording =
+          outcomeOptions.find((o) => o.id === displacedOutcome)?.wording ??
+          displacedOutcome;
+        marker = h(
+          'span',
+          { className: 'cora-outcome-amended-from' },
+          ` (previously ${displacedWording})`
+        );
+      }
     } else {
       className = 'cora-outcome-indeterminate';
       textContent = 'Outcome not configured';
     }
   }
 
-  return [h('h2', {}, 'Outcome'), h('p', { className }, textContent)];
+  return [h('h2', {}, 'Outcome'), h('p', { className }, textContent, marker)];
 }
 
 /** @param {string} value */

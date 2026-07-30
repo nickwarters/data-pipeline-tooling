@@ -1,7 +1,7 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { installDom } from './_dom-stub.js';
+import { findByClass, installDom } from './_dom-stub.js';
 
 installDom();
 
@@ -79,4 +79,52 @@ test('Outcome exposes an unconfigured result instead of inventing wording', () =
     /** @type {HTMLElement} */ (nodes[1]).className,
     'cora-outcome-indeterminate'
   );
+});
+
+test('Outcome names the value an amendment displaced', () => {
+  const nodes = Outcome({
+    computeOutcome: () => ({ outcome: 'pass' }),
+    answers: {},
+    allAnswered: true,
+    outcomeOptions: OPTIONS,
+    displacedOutcome: 'fail',
+  });
+
+  assert.equal(nodes[1].textContent, 'Compliant (previously Non-compliant)');
+  // The verdict styling follows the value in force, not the one it displaced.
+  assert.equal(
+    /** @type {HTMLElement} */ (nodes[1]).className,
+    'cora-outcome-pass'
+  );
+  assert.ok(
+    findByClass(
+      /** @type {HTMLElement} */ (nodes[1]),
+      'cora-outcome-amended-from'
+    ),
+    'the marker is its own element, so it can be styled apart from the verdict'
+  );
+});
+
+test('Outcome falls back to the raw displaced id when it is no longer a configured option', () => {
+  const nodes = Outcome({
+    computeOutcome: () => ({ outcome: 'pass' }),
+    answers: {},
+    allAnswered: true,
+    outcomeOptions: OPTIONS,
+    displacedOutcome: 'retired-verdict',
+  });
+
+  assert.equal(nodes[1].textContent, 'Compliant (previously retired-verdict)');
+});
+
+test('Outcome omits the marker when the amendment did not change the verdict', () => {
+  const nodes = Outcome({
+    computeOutcome: () => ({ outcome: 'pass' }),
+    answers: {},
+    allAnswered: true,
+    outcomeOptions: OPTIONS,
+    displacedOutcome: 'pass',
+  });
+
+  assert.equal(nodes[1].textContent, 'Compliant');
 });

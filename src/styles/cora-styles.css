@@ -1775,6 +1775,16 @@
   font-style: italic;
 }
 
+/* The displaced verdict, inline after the one in force. All three declarations
+   are overrides: the Summary enlarges the verdict line and the verdict classes
+   set a colour and semibold weight, every one of which would otherwise inherit
+   into this span and make the displaced value read as loudly as the live one. */
+.cora-outcome-amended-from {
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-regular);
+  color: var(--cora-color-text-muted);
+}
+
 /* ── Amend Outcome ───────────────────────────────────────────────────────── */
 
 /* The Current Outcome line: quiet label, emphasised value carried by the text. */

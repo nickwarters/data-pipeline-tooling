@@ -54,12 +54,20 @@ export function summaryView(props) {
   const reportable = isReportable(props.caseRow?.status ?? '');
   const current =
     reportable && props.caseRow ? currentOutcome(props.caseRow) : undefined;
+  // The Amended Outcome record is the fact that an amendment happened; the
+  // reporting columns are only a projection of it. When one exists, the frozen
+  // snapshot is the value it displaced, and the Outcome block is told explicitly
+  // so it stays a pure view with no Case-row dependency of its own.
+  const displacedOutcome = props.caseRow?.amendedOutcome
+    ? props.caseRow.outcomeAtCompletion
+    : undefined;
   const outcomeNodes = current
     ? Outcome({
         computeOutcome: () => ({ outcome: current }),
         answers: {},
         allAnswered: true,
         outcomeOptions: props.outcomeOptions,
+        displacedOutcome,
       })
     : Outcome({
         computeOutcome: props.computeOutcome,
@@ -385,14 +393,3 @@ function renderFieldBlock(className, title, rows) {
     )
   );
 }
-
-/**
- * The read-only Summary Section. It rolls the whole Case up onto one
- * page; this tracer-bullet shell renders only the Outcome block. Outcome
- * derivation is hybrid: while the Case is In-progress the outcome is computed
- * live from the current Answers, but once the Case is reportable (Actions In
- * Progress or Completed) it reads the frozen `outcomeAtCompletion` snapshot
- * rather than recomputing.
- *
- * Summary is never editable — only `read-only` or `hidden` (see section-access).
- */
