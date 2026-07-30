@@ -49,8 +49,13 @@ const RESPONSE_TYPES = [
  * Every configuration check, over the real repository, plus what each one
  * covered — so the gate's success line can say how much it actually looked at.
  *
+ * Also hands back the Case Type to Question Bank artifact edges, because
+ * resolving a registry `bank` thunk to a file on disk already happens here and
+ * one resolution is better than a second pattern match somewhere else.
+ *
  * @returns {Promise<{
  *   failures: Failure[],
+ *   bankEdges: BankEdge[],
  *   counts: { caseTypes: number, banks: number, routes: number }
  * }>}
  */
@@ -64,6 +69,7 @@ export async function checkConfiguration() {
   ];
   return {
     failures,
+    bankEdges: bankArtifactEdges(),
     counts: {
       caseTypes: CASE_TYPES.length,
       banks: artifacts.length,
@@ -390,27 +396,93 @@ export function checkBankArtifacts(options = {}) {
   }
 
   const present = new Set(artifacts);
-  for (const entry of caseTypes) {
-    if (!entry.bank) continue;
-    const specifier = literalPathOf(entry.bank);
+  for (const { slug, specifier, resolved } of registryBanks(caseTypes)) {
     if (specifier === null) {
       failures.push({
         kind: 'bank',
         file: MANIFEST,
-        message: `Case Type "${entry.slug}" declares a bank thunk with no literal artifact path, so the gate cannot check it`,
+        message: `Case Type "${slug}" declares a bank thunk with no literal artifact path, so the gate cannot check it`,
       });
       continue;
     }
-    const resolved = resolveRelative(MANIFEST, specifier, REPO_ROOT);
     if (resolved === null || !present.has(resolved)) {
       failures.push({
         kind: 'bank',
         file: MANIFEST,
-        message: `Case Type "${entry.slug}" declares the Question Bank artifact '${resolved ?? specifier}', which is not on disk`,
+        message: `Case Type "${slug}" declares the Question Bank artifact '${resolved ?? specifier}', which is not on disk`,
       });
     }
   }
   return failures;
+}
+
+/**
+ * @typedef {{
+ *   from: string,
+ *   specifier: string,
+ *   resolved: string,
+ *   kind: 'bank'
+ * }} BankEdge
+ */
+
+/**
+ * Where each registered Case Type's Question Bank artifact lives: the thunk's
+ * literal specifier and what it resolves to, read once so the cross-check below
+ * and the graph edge above it cannot disagree.
+ *
+ * @param {readonly CaseTypeEntry[]} caseTypes
+ * @returns {{
+ *   slug: string,
+ *   module: string | null,
+ *   specifier: string | null,
+ *   resolved: string | null
+ * }[]}
+ */
+function registryBanks(caseTypes) {
+  return caseTypes
+    .filter((entry) => entry.bank)
+    .map((entry) => {
+      const specifier = literalPathOf(entry.bank);
+      const moduleSpecifier = literalPathOf(entry.importer);
+      return {
+        slug: entry.slug,
+        module: moduleSpecifier
+          ? resolveRelative(MANIFEST, moduleSpecifier, REPO_ROOT)
+          : null,
+        specifier,
+        resolved: specifier
+          ? resolveRelative(MANIFEST, specifier, REPO_ROOT)
+          : null,
+      };
+    });
+}
+
+/**
+ * The runtime data edge from a Case Type module to its Question Bank artifact.
+ *
+ * The edge starts at the Case Type module rather than the manifest because the
+ * module awaits the artifact while it is being evaluated: a Case Type whose bank
+ * is not uploaded yet throws, and boot contains that by dropping the Case Type,
+ * which looks to a Reviewer like having no Cases. So the artifact has to be
+ * uploaded first.
+ *
+ * A thunk the gate cannot read a literal path out of yields no edge; the
+ * cross-check above already reports that, and reporting it twice would say
+ * nothing new.
+ *
+ * @param {{ caseTypes?: readonly CaseTypeEntry[] }} [options]
+ * @returns {BankEdge[]}
+ */
+export function bankArtifactEdges(options = {}) {
+  /** @type {BankEdge[]} */
+  const edges = [];
+  for (const { module, specifier, resolved } of registryBanks(
+    options.caseTypes ?? CASE_TYPES
+  )) {
+    if (module === null || specifier === null || resolved === null) continue;
+    edges.push({ from: module, specifier, resolved, kind: 'bank' });
+  }
+  return edges;
 }
 
 /**

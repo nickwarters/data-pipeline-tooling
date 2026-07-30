@@ -133,7 +133,12 @@ dangling specifier and a case-mismatched one, so what the gate adds is: the
 dependency-graph artifact at `.verify/import-graph.json` (gitignored, and
 written only when the run is clean); rejection of bare package specifiers, which
 tsc resolves through `node_modules` while the browser cannot; and Node's own
-parser over every `.js` under `src/` and `case-types/`. On top of the graph it
+parser over every `.js` under `src/` and `case-types/`. The graph covers **every
+file the deploy uploads**, not only the modules — `.css` `@import`s, the host
+page's `{{CORA_BASE}}`-based `<link>`/`<script>` references (any other href is a
+SharePoint-owned asset and is ignored), and the Case-Type-to-`banks/*.txt` edge —
+so an unresolved asset reference is a gate failure too, and the artifact records
+the include roots and suffixes it scanned for the deploy to assert against. On top of the graph it
 then **evaluates the configuration in Node** (`scripts/verify-config.js`): every
 Case Type module is imported and its config checked (a `computeOutcome`
 function, an explicit `listName`, no duplicate Question Definition ids, no
@@ -144,9 +149,13 @@ evaluator would silently ignore, no unknown `sections` key); every
 malformed or duplicated hash patterns. These checks are skipped when the graph is
 not clean, and the graph artifact is written only when everything passes.
 Per-slug containment and the unavailable-Case-Type boot banner stay the
-serving-time backstop regardless. Run `check`, then
-`verify`, then `test:coverage` before a deploy — there is no automated pipeline,
-so a deploy is only as verified as the commands someone ran first.
+serving-time backstop regardless. Run `check`, then `verify`, then
+`test:coverage`, then `test:deploy` (the Python suite for the deploy script)
+before a deploy — there is no automated pipeline, so a deploy is only as verified
+as the commands someone ran first. The one exception is `verify`: the deploy runs
+it itself as a pre-flight gate and aborts on failure, orders its uploads from the
+graph it writes, and re-fetches every deployed file afterwards to compare hashes
+— see [`scripts/deploy_to_sharepoint.md`](./scripts/deploy_to_sharepoint.md).
 
 The global floor is a backstop, not a quota. Keep security, SharePoint protocol,
 concurrency, permissions, and outcome/applicability code at 100% line and branch
@@ -361,16 +370,18 @@ case-types/                     # one module per Case Type, lazy-loaded via mani
 
 scripts/
   scaffold_case_type.py         # scaffolds a new Case Type module + bank artifact (ADR-0028)
-  deploy_to_sharepoint.py
-  deploy_to_sharepoint.md       # NOT a runbook: a stale verbatim copy of an older deploy_to_sharepoint.py;
-                                #   regenerate or delete it rather than hand-editing it (ADR-0041)
+  deploy_to_sharepoint.py       # the diff sync, plus its pre-flight verify gate, graph-derived
+                                #   leaf-first upload order and post-upload hash verification
+  deploy_to_sharepoint.md       # THE deploy runbook: pre-conditions, prod/UAT steps, the failure
+                                #   playbook, and the hand-upload/drive-by-edit caveats
   module-graph.js               # shared import-specifier scanner: the one answer to "what does
                                 #   this file import?", used by the verify gate and the layering test
   verify-config.js              # the verify gate's configuration half: evaluates Case Type modules,
                                 #   bank artifacts and the route table in Node, so a broken Case Type
                                 #   is found before a browser loads it
-  verify_build.js               # npm run verify: parses every src/ + case-types/ module and
-                                #   resolves every specifier case-sensitively; emits .verify/import-graph.json
+  verify_build.js               # npm run verify: parses every src/ + case-types/ module, resolves every
+                                #   specifier and asset reference case-sensitively over the whole deployed
+                                #   file set; emits .verify/import-graph.json
   run_in_memory_flow.js
   uat_acl_smoke.js              # UAT list-ACL smoke check (npm run test:security:uat)
   uat-acl-smoke.example.json    # sample config for the ACL smoke check

@@ -19,7 +19,13 @@ the page look like a normal web page.
 `scripts/deploy_to_sharepoint.py` syncs the runtime tree (`src/`, `case-types/`, and the production
 host page `host/index.html`) to `Style Library/CODE/CORA` — the Style Library is minimally cached and
 serves fresh files most consistently. Run `python3 scripts/deploy_to_sharepoint.py --site-url <url> --dry-run`
-to preview the add/update/delete plan.
+to preview the add/update/delete plan and the order the uploads would run in.
+
+Before it touches SharePoint the script runs `npm run verify` as a pre-flight gate and aborts on any
+failure; it then uploads dependencies before dependents (host page last) and re-fetches every deployed
+file afterwards to compare hashes. [`scripts/deploy_to_sharepoint.md`](./scripts/deploy_to_sharepoint.md)
+is the runbook — read it before deploying, especially the caveats about hand-uploads and edits made
+directly in the library.
 
 The Content Editor's "Content Link" should point at the deployed
 `host/index.html` (`…/Style Library/CODE/CORA/host/index.html`). That page references the CSS/JS with

@@ -49,10 +49,13 @@ function relativeTo(url, root) {
 }
 
 /**
- * Every `.js` file under a directory, as repo-relative paths.
+ * Every file under a directory, whatever its suffix, as repo-relative paths.
+ * A missing directory throws: every caller here names a directory it expects to
+ * exist, and a silent empty list would let a rename turn a contract check into a
+ * vacuous pass.
  * @param {URL} dir @param {URL} root @returns {string[]}
  */
-export function jsFilesUnder(dir, root) {
+export function filesUnder(dir, root) {
   /** @type {string[]} */
   const out = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -60,10 +63,18 @@ export function jsFilesUnder(dir, root) {
       encodeURIComponent(entry.name) + (entry.isDirectory() ? '/' : ''),
       dir
     );
-    if (entry.isDirectory()) out.push(...jsFilesUnder(child, root));
-    else if (entry.name.endsWith('.js')) out.push(relativeTo(child, root));
+    if (entry.isDirectory()) out.push(...filesUnder(child, root));
+    else out.push(relativeTo(child, root));
   }
   return out;
+}
+
+/**
+ * Every `.js` file under a directory, as repo-relative paths.
+ * @param {URL} dir @param {URL} root @returns {string[]}
+ */
+export function jsFilesUnder(dir, root) {
+  return filesUnder(dir, root).filter((rel) => rel.endsWith('.js'));
 }
 
 /**

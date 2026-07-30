@@ -25,21 +25,35 @@
  * there is no path to resolve. Every other bare specifier is a failure: a bare
  * package name means a runtime dependency, which this project does not have.
  *
- * Scope for the graph is `src/` and `case-types/` `.js` files. Once it is clean,
- * `verify-config.js` evaluates the configuration on top of it — Case Type
- * modules, Question Bank artifacts and the route table — for the reasons its own
- * header gives. Checking asset references from the host page and CSS is still a
- * separate concern and is not done here.
+ * Scope for the graph is every file the deploy uploads, not only the modules:
+ * the include roots and suffixes here mirror the deploy script's, so each
+ * uploaded file has a node and the deploy can order `.css`, `.html` and the
+ * Question Bank `.txt` artifacts as well as the modules. The artifact records
+ * the rules it scanned under, and the deploy asserts they match its own
+ * constants — drift between the two lists then fails loudly instead of
+ * producing an order with holes in it.
+ *
+ * Non-module references come in three shapes, each a rule rather than an
+ * inventory: a stylesheet's `@import` (resolved against the stylesheet, as a
+ * browser does), a host page's `<link href>`/`<script src>` (only the ones
+ * written against the deploy's own `{{CORA_BASE}}` token — anything else is a
+ * SharePoint-owned asset the deploy neither ships nor can check), and the
+ * runtime edge from a Case Type module to the Question Bank artifact it awaits,
+ * which `verify-config.js` hands over because it already resolves that path.
+ *
+ * Once the graph is clean, `verify-config.js` evaluates the configuration on top
+ * of it — Case Type modules, Question Bank artifacts and the route table — for
+ * the reasons its own header gives.
  */
 
 import { execFile } from 'node:child_process';
-import { mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 import {
+  filesUnder,
   importSpecifiers,
-  jsFilesUnder,
   resolveRelative,
 } from './module-graph.js';
 import { checkConfiguration } from './verify-config.js';
@@ -48,6 +62,39 @@ const execFileAsync = promisify(execFile);
 
 /** Where the dependency-graph artifact is written. */
 const GRAPH_PATH = '.verify/import-graph.json';
+
+/**
+ * Artifact schema version. Bump it when a consumer would misread the old shape;
+ * the deploy refuses a version it was not written against.
+ */
+const GRAPH_VERSION = 2;
+
+/**
+ * Which files the deploy uploads, mirroring the deploy script's own constants.
+ * Recorded in the artifact so the deploy can assert the two agree.
+ */
+const DEPLOYABLE = Object.freeze({
+  includeRoots: ['src', 'case-types', 'host'],
+  includeSuffixes: ['.js', '.css', '.html', '.aspx'],
+  // Question Bank artifacts are JSON in .txt files, and only in this one
+  // directory — a stray .txt elsewhere is a tool artefact, not runtime content.
+  bankDir: 'case-types/banks',
+  bankSuffix: '.txt',
+});
+
+/** Host-page references the deploy owns start with this token. */
+const HOST_BASE_TOKEN = '{{CORA_BASE}}/';
+
+/** A URL a stylesheet or host page reaches that this repository does not host. */
+const NOT_OURS = /^(?:[a-z][a-z0-9+.-]*:|\/)/i;
+
+const CSS_COMMENT = /\/\*[\s\S]*?\*\//g;
+const HTML_COMMENT = /<!--[\s\S]*?-->/g;
+const CSS_IMPORT_URL = /@import\s+url\(\s*(['"]?)([^'")\n]+?)\1\s*\)/g;
+const CSS_IMPORT_PLAIN = /@import\s+(['"])([^'"\n]+)\1/g;
+// `[^>]*?` spans newlines, because the host page wraps a tag's attributes.
+const HTML_LINK_HREF = /<link\b[^>]*?\shref\s*=\s*(['"])([^'"\n]+)\1/g;
+const HTML_SCRIPT_SRC = /<script\b[^>]*?\ssrc\s*=\s*(['"])([^'"\n]+)\1/g;
 
 /**
  * @typedef {{
@@ -59,15 +106,34 @@ const GRAPH_PATH = '.verify/import-graph.json';
  * }} Failure
  */
 /**
- * @typedef {{
- *   specifier: string,
- *   resolved: string | null,
- *   kind: import('./module-graph.js').ImportKind,
- *   line: number
- * }} GraphEdge
+ * How a file reaches another file. The import kinds come from the module
+ * scanner; the rest are the non-module reference shapes, which are edges for
+ * upload-ordering purposes but are not imports.
+ * @typedef {import('./module-graph.js').ImportKind
+ *   | 'css-import' | 'html-ref' | 'bank'} EdgeKind
  */
 /**
  * @typedef {{
+ *   specifier: string,
+ *   resolved: string | null,
+ *   kind: EdgeKind,
+ *   line?: number
+ * }} GraphEdge
+ */
+/**
+ * A reference that is neither an import nor written in a module: already
+ * resolved, because each shape resolves by its own rule.
+ * @typedef {{
+ *   specifier: string,
+ *   resolved: string,
+ *   kind: 'css-import' | 'html-ref' | 'bank',
+ *   line?: number
+ * }} AssetReference
+ */
+/**
+ * @typedef {{
+ *   version: number,
+ *   deployable: typeof DEPLOYABLE,
  *   nodes: Record<string, { imports: GraphEdge[] }>,
  *   external: string[]
  * }} Graph
@@ -114,8 +180,173 @@ function firstErrorLine(error) {
 }
 
 /**
- * Resolve every import in every file, collecting the dependency graph and the
- * specifiers that do not resolve.
+ * Every file the deploy uploads, as repo-relative paths.
+ *
+ * @param {URL} root
+ * @returns {string[]}
+ */
+export function deployableFiles(root) {
+  return DEPLOYABLE.includeRoots
+    .flatMap((includeRoot) => {
+      // An include root a checkout does not have contributes nothing rather
+      // than failing the gate: the deploy tolerates the same absence.
+      try {
+        return filesUnder(new URL(includeRoot + '/', root), root).filter(
+          isDeployable
+        );
+      } catch {
+        return [];
+      }
+    })
+    .sort();
+}
+
+/**
+ * @param {string} rel @returns {boolean}
+ */
+function isDeployable(rel) {
+  const slash = rel.lastIndexOf('/');
+  const dot = rel.lastIndexOf('.');
+  const suffix = dot > slash ? rel.slice(dot) : '';
+  if (DEPLOYABLE.includeSuffixes.includes(suffix)) return true;
+  return (
+    suffix === DEPLOYABLE.bankSuffix &&
+    rel.slice(0, slash) === DEPLOYABLE.bankDir
+  );
+}
+
+/**
+ * Every reference a non-module deployed file makes to another deployed file.
+ * Each shape carries its own resolution rule, so the target is resolved here
+ * rather than by the caller.
+ *
+ * @param {string} rel repo-relative path
+ * @param {URL} root
+ * @returns {AssetReference[]}
+ */
+export function assetReferences(rel, root) {
+  if (rel.endsWith('.css')) return stylesheetImports(rel, root);
+  if (rel.endsWith('.html') || rel.endsWith('.aspx')) {
+    return hostPageReferences(rel, root);
+  }
+  return [];
+}
+
+/**
+ * `@import` targets, resolved against the stylesheet's own URL the way a
+ * browser resolves them — which is also why a specifier with no leading `./`
+ * still resolves, unlike a module specifier.
+ * @param {string} rel @param {URL} root @returns {AssetReference[]}
+ */
+function stylesheetImports(rel, root) {
+  const code = withoutComments(rel, root, CSS_COMMENT);
+  /** @type {AssetReference[]} */
+  const references = [];
+  for (const re of [CSS_IMPORT_URL, CSS_IMPORT_PLAIN]) {
+    for (const match of code.matchAll(re)) {
+      const specifier = match[2];
+      if (NOT_OURS.test(specifier)) continue;
+      const resolved = resolveRelative(
+        rel,
+        specifier.startsWith('.') ? specifier : './' + specifier,
+        root
+      );
+      if (resolved === null) continue;
+      references.push({
+        specifier,
+        resolved,
+        kind: 'css-import',
+        line: lineOf(code, match.index),
+      });
+    }
+  }
+  return references.sort((a, b) => (a.line ?? 0) - (b.line ?? 0));
+}
+
+/**
+ * Stylesheet and script references a host page makes, which are edges only when
+ * they are written against the deploy's own base token: the page legitimately
+ * also references SharePoint-owned assets, which this repository neither ships
+ * nor can resolve. The token's remainder is repo-root-relative, because the
+ * token expands to the root of the uploaded tree.
+ * @param {string} rel @param {URL} root @returns {AssetReference[]}
+ */
+function hostPageReferences(rel, root) {
+  const code = withoutComments(rel, root, HTML_COMMENT);
+  /** @type {AssetReference[]} */
+  const references = [];
+  for (const re of [HTML_LINK_HREF, HTML_SCRIPT_SRC]) {
+    for (const match of code.matchAll(re)) {
+      const specifier = match[2];
+      if (!specifier.startsWith(HOST_BASE_TOKEN)) continue;
+      references.push({
+        specifier,
+        resolved: specifier.slice(HOST_BASE_TOKEN.length).replace(/^\/+/, ''),
+        kind: 'html-ref',
+        line: lineOf(code, match.index),
+      });
+    }
+  }
+  return references.sort((a, b) => (a.line ?? 0) - (b.line ?? 0));
+}
+
+/**
+ * A file's text with its comments blanked out — a commented-out reference is not
+ * a reference. Every newline survives, so a match index still maps to the line a
+ * reader will look at.
+ * @param {string} rel @param {URL} root @param {RegExp} comment
+ * @returns {string}
+ */
+function withoutComments(rel, root, comment) {
+  return readFileSync(new URL(rel, root), 'utf8').replace(comment, (text) =>
+    text.replace(/[^\n]/g, ' ')
+  );
+}
+
+/**
+ * 1-based line number of a match index.
+ * @param {string} text @param {number} index @returns {number}
+ */
+function lineOf(text, index) {
+  return text.slice(0, index).split('\n').length;
+}
+
+/**
+ * Attach edges another checker resolved — today the Case Type to Question Bank
+ * artifact edges — to the graph, checking each target exists under the exact
+ * spelling given. An edge whose source file is not deployed is dropped: nothing
+ * uploads it, so it constrains no upload order.
+ *
+ * @param {Graph} graph mutated in place
+ * @param {(AssetReference & { from: string })[]} edges
+ * @param {URL} root
+ * @returns {Failure[]}
+ */
+export function attachDerivedEdges(graph, edges, root) {
+  const entriesOf = directoryReader(root);
+  /** @type {Failure[]} */
+  const failures = [];
+  for (const { from, specifier, resolved, kind } of edges) {
+    const node = graph.nodes[from];
+    if (!node) continue;
+    const problem = describeMissing(resolved, entriesOf);
+    if (problem) {
+      failures.push({
+        kind: 'unresolved',
+        file: from,
+        specifier,
+        message: problem,
+      });
+      continue;
+    }
+    node.imports.push({ specifier, resolved, kind });
+  }
+  return failures;
+}
+
+/**
+ * Resolve every reference in every file, collecting the dependency graph and
+ * the references that do not resolve.
  *
  * @param {string[]} files repo-relative paths
  * @param {URL} root
@@ -133,6 +364,24 @@ export function buildGraph(files, root) {
   for (const file of [...files].sort()) {
     /** @type {GraphEdge[]} */
     const imports = [];
+    if (!file.endsWith('.js')) {
+      for (const reference of assetReferences(file, root)) {
+        const problem = describeMissing(reference.resolved, entriesOf);
+        if (problem) {
+          failures.push({
+            kind: 'unresolved',
+            file,
+            specifier: reference.specifier,
+            line: reference.line,
+            message: problem,
+          });
+          continue;
+        }
+        imports.push(reference);
+      }
+      nodes[file] = { imports };
+      continue;
+    }
     for (const { specifier, kind, line } of importSpecifiers(file, root)) {
       if (specifier.startsWith('node:')) {
         external.add(specifier);
@@ -168,7 +417,12 @@ export function buildGraph(files, root) {
   }
 
   return {
-    graph: { nodes, external: [...external].sort() },
+    graph: {
+      version: GRAPH_VERSION,
+      deployable: DEPLOYABLE,
+      nodes,
+      external: [...external].sort(),
+    },
     failures,
   };
 }
@@ -249,12 +503,12 @@ function formatFailure(failure) {
 
 async function main() {
   const root = new URL('../', import.meta.url);
-  const files = [
-    ...jsFilesUnder(new URL('src/', root), root),
-    ...jsFilesUnder(new URL('case-types/', root), root),
-  ].sort();
+  const files = deployableFiles(root);
 
-  const syntaxFailures = await checkSyntax(files, root);
+  const syntaxFailures = await checkSyntax(
+    files.filter((file) => file.endsWith('.js')),
+    root
+  );
   const { graph, failures: graphFailures } = buildGraph(files, root);
   const failures = [...syntaxFailures, ...graphFailures];
 
@@ -273,11 +527,19 @@ async function main() {
     return;
   }
 
-  const { failures: configFailures, counts } = await checkConfiguration();
-  if (configFailures.length) {
-    for (const failure of configFailures) console.error(formatFailure(failure));
+  const {
+    failures: configFailures,
+    counts,
+    bankEdges,
+  } = await checkConfiguration();
+  const remaining = [
+    ...configFailures,
+    ...attachDerivedEdges(graph, bankEdges, root),
+  ];
+  if (remaining.length) {
+    for (const failure of remaining) console.error(formatFailure(failure));
     console.error(
-      `verify: ${configFailures.length} configuration failure(s) — graph not written`
+      `verify: ${remaining.length} configuration failure(s) — graph not written`
     );
     process.exitCode = 1;
     return;
@@ -295,7 +557,7 @@ async function main() {
     0
   );
   console.log(
-    `verify: ${files.length} modules, ${edges} import edges, ${graph.external.length} external — graph written to ${GRAPH_PATH}`
+    `verify: ${files.length} deployable files, ${edges} edges, ${graph.external.length} external — graph written to ${GRAPH_PATH}`
   );
   console.log(
     `verify: config clean — ${counts.caseTypes} Case Type(s), ${counts.banks} bank artifact(s), ${counts.routes} route(s) checked`

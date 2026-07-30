@@ -167,3 +167,19 @@ exists to make possible.
   the file lives at `src/pages/question-bank/cora-question-bank-editor.css`, so
   that stylesheet would 404 in prod — a class of defect nothing but the browser
   currently checks.
+
+## Amendments
+
+**2026-07-30 — the deploy consequences above are discharged.** The verify gate now
+scans the whole deployed file set (`.css` `@import`s, the host page's
+`{{CORA_BASE}}` references, and the Case-Type-to-bank-artifact edge) and records
+the include rules it scanned; `scripts/deploy_to_sharepoint.py` runs that gate as
+a pre-flight and aborts on failure, orders `adds` and `updates` as one
+graph-derived leaf-first stream with templated host pages forced last, and
+re-fetches every deployed file afterwards to compare SHA-256 against the uploaded
+bytes. Two consequence bullets are therefore closed: the broken
+`cora-question-bank-editor.css` reference is fixed and that class of defect is now
+gated, and `scripts/deploy_to_sharepoint.md` has been replaced wholesale with a
+genuine runbook. Decision 2's stated limits are unchanged — the ordering removes
+dangling references, not mixed-version graphs, and the sync still has no
+atomicity.

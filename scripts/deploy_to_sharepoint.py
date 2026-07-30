@@ -11,6 +11,11 @@ The deploy is a **sync**, not a blind copy:
 - **update** files whose content has changed,
 - **delete** target files with no local counterpart.
 
+A pre-flight gate, a dependency-ordered upload and a post-upload hash comparison
+bracket that sync, and each of the three is a refusal rather than a repair.
+
+See ``scripts/deploy_to_sharepoint.md`` for the runbook.
+
 Only the sync *policy* lives here. Every actual REST call — folder creation,
 listing, upload, delete — goes through the :class:`SharePointDeployClient`
 protocol, which is implemented separately (auth handshake, ``X-RequestDigest``,
@@ -25,6 +30,8 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
+import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
@@ -77,6 +84,21 @@ HOST_BASE_TOKEN = "{{CORA_BASE}}"
 # deployed host page is what declares its environment (ADR-0033): the app reads
 # it back as `window.CORA_ENV` and derives the list prefix and export path.
 ENV_TOKEN = "{{CORA_ENV}}"
+
+# The repository's own gate, spelled exactly as the runbook spells it so the two
+# cannot drift. It parses every module, resolves every reference case-sensitively,
+# evaluates the Case Type configuration, and writes the dependency graph this
+# script orders uploads from.
+VERIFY_COMMAND = "npm run verify"
+
+# Where that command leaves the graph, on a clean run only.
+GRAPH_ARTIFACT = ".verify/import-graph.json"
+
+# The artifact schema this script knows how to read.
+GRAPH_VERSION = 2
+
+# What the upload order guarantees, said once for both places that print it.
+ORDER_DESCRIPTION = "dependencies first, host page last"
 
 
 # --------------------------------------------------------------------------- #
@@ -132,8 +154,8 @@ class SharePointDeployClient(Protocol):
     def download_file(self, path: str) -> bytes:
         """Return the raw bytes of the target-relative file at ``path``.
 
-        Only called for files whose :attr:`RemoteFile.sha256` was ``None``, to
-        decide add-vs-update by content.
+        Called to decide add-vs-update when :attr:`RemoteFile.sha256` is
+        ``None``, and for every file during post-upload verification.
         """
         ...
 
@@ -295,6 +317,162 @@ def compute_plan(
 
 
 # --------------------------------------------------------------------------- #
+# Pre-flight gate and graph-derived upload order.
+# --------------------------------------------------------------------------- #
+
+
+class PreflightFailed(Exception):
+    """The gate did not pass, or could not be run at all."""
+
+
+class DeployAborted(Exception):
+    """The graph cannot be turned into an upload order that is safe to run."""
+
+
+def run_preflight(
+    root: Path = SCRIPT_ROOT,
+    runner=subprocess.run,
+    log=print,
+) -> Path:
+    """Run the verify gate and return the graph artifact it wrote.
+
+    Every way this can go wrong raises, including the gate being unrunnable:
+    "gate unavailable, proceeding anyway" is the one outcome a deploy must never
+    have. Stdio is inherited so the maintainer reads the gate's own failure lines.
+    """
+    log(f"Pre-flight: {VERIFY_COMMAND} (in {root})")
+    try:
+        result = runner(VERIFY_COMMAND.split(), cwd=root, check=False)
+    except FileNotFoundError as error:
+        raise PreflightFailed(
+            f"could not run '{VERIFY_COMMAND}' in {root}: {error}. "
+            "Install the dev dependencies (npm install) and try again."
+        ) from error
+    if result.returncode != 0:
+        raise PreflightFailed(
+            f"'{VERIFY_COMMAND}' exited {result.returncode} — see its output above"
+        )
+
+    artifact = root / GRAPH_ARTIFACT
+    if not artifact.is_file():
+        raise PreflightFailed(
+            f"'{VERIFY_COMMAND}' reported success but wrote no {GRAPH_ARTIFACT}"
+        )
+    return artifact
+
+
+def load_import_graph(artifact: Path) -> dict[str, list[str]]:
+    """Read the gate's artifact as ``path -> the paths it references``.
+
+    Also checks that the gate scanned the same files this script uploads. The
+    two lists are maintained in different languages; asserting they match turns
+    a silent hole in the upload order into an abort.
+    """
+    graph = json.loads(artifact.read_text(encoding="utf-8"))
+    version = graph.get("version")
+    if version != GRAPH_VERSION:
+        raise DeployAborted(
+            f"{artifact} is schema version {version!r}, not {GRAPH_VERSION} — "
+            "regenerate it with a matching checkout"
+        )
+
+    scanned = graph.get("deployable") or {}
+    expected = {
+        "includeRoots": list(DEFAULT_INCLUDE_ROOTS),
+        "includeSuffixes": list(DEFAULT_INCLUDE_SUFFIXES),
+        "bankDir": BANKS_DIR,
+        "bankSuffix": BANK_ARTIFACT_SUFFIX,
+    }
+    if scanned != expected:
+        raise DeployAborted(
+            "the verify gate and this script disagree about which files are "
+            f"deployed: gate {scanned!r} vs deploy {expected!r}"
+        )
+
+    return {
+        rel: [
+            edge["resolved"]
+            for edge in node.get("imports", [])
+            if edge.get("resolved")
+        ]
+        for rel, node in graph["nodes"].items()
+    }
+
+
+def assert_graph_covers(
+    local: dict[str, LocalFile], graph: dict[str, list[str]]
+) -> None:
+    """Refuse to upload a file the gate never saw.
+
+    The include-rule check in :func:`load_import_graph` says the two scanners
+    agree in principle; this says they agree about this checkout. A file with no
+    node has no known dependents, so its place in the order would be a guess.
+    """
+    unknown = sorted(rel for rel in local if rel not in graph)
+    if unknown:
+        raise DeployAborted(
+            "the verify gate produced no graph node for "
+            + ", ".join(unknown)
+            + " — the deploy and the gate are scanning different files"
+        )
+
+
+def upload_order(
+    changed: Iterable[str],
+    graph: dict[str, list[str]],
+    deployed: set[str],
+) -> list[str]:
+    """Order ``changed`` so a file's dependencies upload before it does.
+
+    Unchanged files are traversed but not emitted, so a transitive dependency
+    still orders its dependent correctly. Sorted throughout, so the result is a
+    function of the input alone.
+    """
+    changed_set = set(changed)
+    order: list[str] = []
+    finished: set[str] = set()
+    on_path: set[str] = set()
+
+    def visit(node: str) -> None:
+        # A back edge means a cycle, which ES modules permit: there is no order
+        # that puts every member of a cycle after its dependencies, so members
+        # take whatever order the walk reaches them in.
+        if node in finished or node in on_path:
+            return
+        on_path.add(node)
+        for dep in sorted(dep for dep in graph.get(node, []) if dep in deployed):
+            visit(dep)
+        on_path.discard(node)
+        finished.add(node)
+        if node in changed_set:
+            order.append(node)
+
+    for start in sorted(changed_set):
+        visit(start)
+    return order
+
+
+def deploy_order(
+    plan: DeployPlan,
+    local: dict[str, LocalFile],
+    graph: dict[str, list[str]],
+) -> list[str]:
+    """The order to upload a plan's adds and updates in.
+
+    Adds and updates are ordered as one stream: a renamed leaf sits in ``adds``
+    while the importer that names it sits in ``updates``, and uploading every add
+    before every update gets that pair right only by luck.
+
+    A templated host page then sinks to the very end however few assets it names:
+    it is the switch that puts a new tree in front of users.
+    """
+    return sorted(
+        upload_order(plan.adds + plan.updates, graph, set(local)),
+        key=lambda rel: PurePosixPath(rel).suffix in TEMPLATED_SUFFIXES,
+    )
+
+
+# --------------------------------------------------------------------------- #
 # Execution — drives the client from a computed plan.
 # --------------------------------------------------------------------------- #
 
@@ -313,17 +491,19 @@ def execute_plan(
     plan: DeployPlan,
     local: dict[str, LocalFile],
     client: SharePointDeployClient,
+    order: list[str],
     log=print,
 ) -> None:
-    """Apply ``plan`` through ``client``. Assumes ``plan`` is non-empty.
+    """Apply ``plan`` through ``client``, uploading in ``order``.
 
-    Folders are created before their uploads; a failure propagates (fail loudly
-    on partial upload) rather than being swallowed.
+    Assumes ``plan`` is non-empty. Deletes run after every upload. Folders are
+    created before their uploads; a failure propagates (fail loudly on partial
+    upload) rather than being swallowed.
     """
     client.ensure_folder("")
     ensured: set[str] = {""}
 
-    for rel in plan.adds + plan.updates:
+    for rel in order:
         for folder in parent_folders(rel):
             if folder not in ensured:
                 client.ensure_folder(folder)
@@ -344,6 +524,88 @@ def print_plan(plan: DeployPlan, log=print) -> None:
     for rel in plan.deletes:
         log(f"  delete  {rel}")
     log(plan.summary())
+
+
+def print_order(order: list[str], log=print) -> None:
+    for position, rel in enumerate(order, start=1):
+        log(f"  {position:>3}. {rel}")
+
+
+# --------------------------------------------------------------------------- #
+# Post-upload verification — what the library now serves, byte for byte.
+# --------------------------------------------------------------------------- #
+
+
+@dataclass
+class Verification:
+    """What the target folder serves that the repository does not account for.
+
+    Deliberately not a :class:`DeployPlan`: these are residuals after the work
+    was supposed to be done, and printing them as "N to add, N to update" would
+    read as progress rather than as failure.
+    """
+
+    missing: list[str] = field(default_factory=list)
+    mismatched: list[str] = field(default_factory=list)
+    unexpected: list[str] = field(default_factory=list)
+    unreadable: list[str] = field(default_factory=list)
+
+    @property
+    def clean(self) -> bool:
+        return not (
+            self.missing or self.mismatched or self.unexpected or self.unreadable
+        )
+
+
+def verify_deployment(
+    local: dict[str, LocalFile],
+    client: SharePointDeployClient,
+) -> Verification:
+    """Re-fetch every deployed file and compare it byte for byte with ``local``.
+
+    A hash the client volunteers is not evidence about what the library serves,
+    so every file is downloaded — including the ones this run did not touch,
+    since a "nothing changed" run is exactly when a hand-edited file hides.
+    ``local`` must be the rendered tree, or every deploy reports a mismatch.
+    """
+    remote = {remote_file.path for remote_file in client.list_files()}
+    result = Verification()
+
+    for rel in sorted(local):
+        if rel not in remote:
+            result.missing.append(rel)
+            continue
+        try:
+            served = client.download_file(rel)
+        except Exception as error:
+            # A checked-out file, a permission, a 500: report the path rather
+            # than ending the deploy in a traceback with nothing named.
+            result.unreadable.append(f"{rel}: {error}")
+            continue
+        if hashlib.sha256(served).hexdigest() != local[rel].sha256:
+            result.mismatched.append(rel)
+
+    result.unexpected.extend(sorted(remote - set(local)))
+    return result
+
+
+def print_verification(
+    result: Verification, deployed: int, log=print
+) -> None:
+    if result.clean:
+        log(f"Verified: {deployed} files re-fetched, all sha256 match.")
+        return
+    for label, paths in (
+        ("missing (not served at all)", result.missing),
+        ("mismatched (served bytes differ)", result.mismatched),
+        ("unreadable (could not be re-fetched)", result.unreadable),
+        ("unexpected (served with no local counterpart)", result.unexpected),
+    ):
+        if not paths:
+            continue
+        log(f"Verification failed — {len(paths)} {label}:")
+        for path in paths:
+            log(f"  {path}")
 
 
 # --------------------------------------------------------------------------- #
@@ -433,7 +695,36 @@ def build_client(opts: DeployOptions) -> SharePointDeployClient:
     )
 
 
-def run(opts: DeployOptions, client_factory=build_client, log=print) -> int:
+def run(
+    opts: DeployOptions,
+    client_factory=build_client,
+    preflight=run_preflight,
+    log=print,
+) -> int:
+    """Deploy, or refuse to.
+
+    Every refusal is reported and returns a non-zero exit rather than raising:
+    the gate failing, the graph not yielding an order, and the post-upload
+    comparison finding residuals are all expected outcomes of a deploy, not
+    programming errors.
+    """
+    try:
+        return _deploy(opts, client_factory, preflight, log)
+    except (PreflightFailed, DeployAborted) as error:
+        log(f"Deploy aborted: {error}")
+        return 1
+
+
+def _deploy(opts: DeployOptions, client_factory, preflight, log) -> int:
+    if SCRIPT_ROOT != opts.root:
+        # The gate can only run where the dev dependencies are installed, so an
+        # order derived from it would describe a tree this deploy is not reading.
+        raise DeployAborted(
+            f"--root is {opts.root} but the verify gate runs in {SCRIPT_ROOT}; "
+            "deploy from the checkout you verified"
+        )
+    graph = load_import_graph(preflight(log=log))
+
     target = f"{opts.library}/{opts.target_folder}"
     cora_base = server_relative_base(opts.site_url, opts.library, opts.target_folder)
     log(f"Deploy target: {opts.site_url} -> {target} (env: {opts.env})")
@@ -446,6 +737,7 @@ def run(opts: DeployOptions, client_factory=build_client, log=print) -> int:
     if not local:
         log("No deployable files found. Nothing to do.")
         return 1
+    assert_graph_covers(local, graph)
     log(f"Local deployable files: {len(local)}")
 
     if opts.dry_run:
@@ -464,17 +756,30 @@ def run(opts: DeployOptions, client_factory=build_client, log=print) -> int:
         plan = compute_plan(local, remote, download)
         log("Planned changes (dry run, nothing written):")
         print_plan(plan, log=log)
+        log(f"Upload order ({ORDER_DESCRIPTION}):")
+        print_order(deploy_order(plan, local, graph), log=log)
         return 0
 
     client = client_factory(opts)
     remote = {rf.path: rf for rf in client.list_files()}
     plan = compute_plan(local, remote, client.download_file)
     print_plan(plan, log=log)
+    order = deploy_order(plan, local, graph)
     if plan.is_noop:
-        log("Already in sync. Nothing to do.")
-        return 0
-    log("Applying changes...")
-    execute_plan(plan, local, client, log=log)
+        log("No changes to apply.")
+    else:
+        log(f"Applying changes ({ORDER_DESCRIPTION}):")
+        print_order(order, log=log)
+        execute_plan(plan, local, client, order, log=log)
+
+    log(
+        f"Re-fetching all {len(local)} deployed files (one GET each) to "
+        "compare hashes..."
+    )
+    result = verify_deployment(local, client)
+    print_verification(result, len(local), log=log)
+    if not result.clean:
+        return 1
     log("Done.")
     return 0
 

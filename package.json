@@ -10,6 +10,7 @@
     "check": "tsc --noEmit --checkJs --allowJs",
     "flow:run": "node scripts/run_in_memory_flow.js",
     "test": "node --test",
+    "test:deploy": "python3 -m unittest discover -s tests -p 'test_deploy*.py'",
     "test:coverage": "node --test --experimental-test-coverage --test-coverage-include='src/**/*.js' --test-coverage-include='case-types/**/*.js' --test-coverage-lines=95 --test-coverage-branches=95 --test-coverage-functions=95",
     "verify": "node scripts/verify_build.js",
     "test:security": "node --test tests/html.test.js tests/permissions.test.js tests/section-access-roles.test.js tests/section-access-matrix.test.js tests/section-access-lifecycle.test.js tests/section-access-config.test.js tests/failure-evaluator.test.js tests/configured-outcome.test.js tests/uat-acl-smoke.test.js",

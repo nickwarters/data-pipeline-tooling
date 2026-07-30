@@ -4,7 +4,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { fixtureTree as fixture } from './_fixture-tree.js';
-import { buildGraph, checkSyntax } from '../scripts/verify_build.js';
+import {
+  assetReferences,
+  attachDerivedEdges,
+  buildGraph,
+  checkSyntax,
+  deployableFiles,
+} from '../scripts/verify_build.js';
 
 test('checkSyntax names the file that will not parse', async () => {
   const root = fixture({
@@ -151,4 +157,203 @@ test('buildGraph resolves a clean tree with sorted, deterministic output', () =>
     JSON.stringify(first.graph),
     JSON.stringify(buildGraph(files, root).graph)
   );
+});
+
+test('assetReferences reads a stylesheet @import in both spellings', () => {
+  const root = fixture({
+    'src/styles/a.css':
+      "@import url('./tokens.css');\n@import './extra.css';\n",
+    'src/styles/tokens.css': ':root { --x: 1px; }\n',
+    'src/styles/extra.css': '',
+  });
+
+  assert.deepEqual(assetReferences('src/styles/a.css', root), [
+    {
+      specifier: './tokens.css',
+      resolved: 'src/styles/tokens.css',
+      kind: 'css-import',
+      line: 1,
+    },
+    {
+      specifier: './extra.css',
+      resolved: 'src/styles/extra.css',
+      kind: 'css-import',
+      line: 2,
+    },
+  ]);
+});
+
+test('assetReferences ignores an @import inside a stylesheet comment', () => {
+  const root = fixture({
+    'src/styles/a.css':
+      '/*\n  Historical note:\n  @import "./removed.css";\n*/\n@import "./real.css";\n',
+    'src/styles/real.css': '',
+  });
+
+  assert.deepEqual(
+    assetReferences('src/styles/a.css', root).map(
+      (reference) => reference.specifier
+    ),
+    ['./real.css']
+  );
+});
+
+test('assetReferences resolves host-page link and script refs from the repo root', () => {
+  const root = fixture({
+    'host/index.html':
+      '<link rel="stylesheet" href="{{CORA_BASE}}/src/styles/a.css" />\n' +
+      '<script type="module" src="{{CORA_BASE}}/src/app.js"></script>\n',
+    'src/styles/a.css': '',
+    'src/app.js': '',
+  });
+
+  assert.deepEqual(assetReferences('host/index.html', root), [
+    {
+      specifier: '{{CORA_BASE}}/src/styles/a.css',
+      resolved: 'src/styles/a.css',
+      kind: 'html-ref',
+      line: 1,
+    },
+    {
+      specifier: '{{CORA_BASE}}/src/app.js',
+      resolved: 'src/app.js',
+      kind: 'html-ref',
+      line: 2,
+    },
+  ]);
+});
+
+test('assetReferences ignores host-page refs the deploy does not own', () => {
+  const root = fixture({
+    'host/index.html':
+      '<link rel="stylesheet" href="https://sp.example.com/x.css" />\n' +
+      '<link rel="stylesheet" href="//cdn.example.com/y.css" />\n' +
+      '<link rel="stylesheet" href="/_layouts/15/z.css" />\n' +
+      '<script src="/_layouts/15/init.js"></script>\n' +
+      '<!-- <script src="{{CORA_BASE}}/src/commented-out.js"></script> -->\n',
+  });
+
+  assert.deepEqual(assetReferences('host/index.html', root), []);
+});
+
+test('buildGraph fails a dangling asset reference, naming the file and specifier', () => {
+  const root = fixture({
+    'src/styles/a.css': "@import './gone.css';\n",
+    'host/index.html': '<script src="{{CORA_BASE}}/src/missing.js"></script>\n',
+  });
+
+  const { failures } = buildGraph(
+    ['host/index.html', 'src/styles/a.css'],
+    root
+  );
+
+  assert.deepEqual(
+    failures.map((failure) => [failure.file, failure.specifier, failure.kind]),
+    [
+      ['host/index.html', '{{CORA_BASE}}/src/missing.js', 'unresolved'],
+      ['src/styles/a.css', './gone.css', 'unresolved'],
+    ]
+  );
+});
+
+test('attachDerivedEdges reports a case-mismatched bank artifact as a case mismatch', () => {
+  const root = fixture({
+    'case-types/complaints.js': '',
+    'case-types/banks/complaints.txt': '{}',
+  });
+  const { graph } = buildGraph(
+    ['case-types/complaints.js', 'case-types/banks/complaints.txt'],
+    root
+  );
+
+  const failures = attachDerivedEdges(
+    graph,
+    [
+      {
+        from: 'case-types/complaints.js',
+        specifier: './banks/Complaints.txt',
+        resolved: 'case-types/banks/Complaints.txt',
+        kind: 'bank',
+      },
+    ],
+    root
+  );
+
+  assert.equal(failures.length, 1);
+  assert.equal(failures[0].file, 'case-types/complaints.js');
+  assert.match(failures[0].message, /case mismatch/);
+  assert.deepEqual(graph.nodes['case-types/complaints.js'].imports, []);
+});
+
+test('attachDerivedEdges adds the bank artifact edge to its Case Type module', () => {
+  const root = fixture({
+    'case-types/complaints.js': '',
+    'case-types/banks/complaints.txt': '{}',
+  });
+  const { graph } = buildGraph(
+    ['case-types/complaints.js', 'case-types/banks/complaints.txt'],
+    root
+  );
+
+  const failures = attachDerivedEdges(
+    graph,
+    [
+      {
+        from: 'case-types/complaints.js',
+        specifier: './banks/complaints.txt',
+        resolved: 'case-types/banks/complaints.txt',
+        kind: 'bank',
+      },
+    ],
+    root
+  );
+
+  assert.deepEqual(failures, []);
+  assert.deepEqual(graph.nodes['case-types/complaints.js'].imports, [
+    {
+      specifier: './banks/complaints.txt',
+      resolved: 'case-types/banks/complaints.txt',
+      kind: 'bank',
+    },
+  ]);
+});
+
+test('deployableFiles mirrors the deploy include rules, so every uploaded file has a node', () => {
+  const root = fixture({
+    'src/app.js': '',
+    'src/styles/a.css': '',
+    'src/notes.txt': 'stray tool artefact',
+    'case-types/manifest.js': '',
+    'case-types/banks/complaints.txt': '{}',
+    'host/index.html': '',
+    'host/legacy.aspx': '',
+    'dev/index.html': '',
+    'tests/x.test.js': '',
+  });
+
+  const files = deployableFiles(root);
+
+  assert.deepEqual(files, [
+    'case-types/banks/complaints.txt',
+    'case-types/manifest.js',
+    'host/index.html',
+    'host/legacy.aspx',
+    'src/app.js',
+    'src/styles/a.css',
+  ]);
+  assert.deepEqual(Object.keys(buildGraph(files, root).graph.nodes), files);
+});
+
+test('buildGraph records the version and the include rules it scanned', () => {
+  const root = fixture({ 'src/app.js': '' });
+
+  const { graph } = buildGraph(['src/app.js'], root);
+
+  assert.equal(graph.version, 2);
+  assert.deepEqual(graph.deployable, {
+    includeRoots: ['src', 'case-types', 'host'],
+    includeSuffixes: ['.js', '.css', '.html', '.aspx'],
+    bankDir: 'case-types/banks',
+    bankSuffix: '.txt',
+  });
 });
