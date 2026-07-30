@@ -21,7 +21,10 @@
 /** @typedef {import('../../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('./question-bank-source.js').QuestionBank} QuestionBank */
 
-import { evaluate } from '../../evaluators/applicability-evaluator.js';
+import {
+  evaluate,
+  showWhenReferences,
+} from '../../evaluators/applicability-evaluator.js';
 import {
   isFailure,
   withDerivedFailureValues,
@@ -149,26 +152,6 @@ export function diffBanks(baselineBank, draftBank) {
 }
 
 /**
- * Extracts the question ids referenced by a showWhen condition (leaf keys of
- * `$and`/`$or` groups and plain condition objects).
- *
- * @param {Record<string, unknown> | undefined} cond
- * @param {Set<string>} into
- */
-function collectShowWhenRefs(cond, into) {
-  if (!cond) return;
-  for (const [key, value] of Object.entries(cond)) {
-    if (key === '$and' || key === '$or') {
-      for (const child of /** @type {Record<string, unknown>[]} */ (value)) {
-        collectShowWhenRefs(child, into);
-      }
-    } else {
-      into.add(key);
-    }
-  }
-}
-
-/**
  * Builds the `causedBy` resolver for a simulation: given a question id, walk
  * the union of both banks' showWhen references upstream and return the
  * impacted (added/removed/changed) Question Definitions that explain a change
@@ -186,11 +169,13 @@ function makeCausesResolver(baseQuestions, draftQuestions, diff) {
     ...diff.changed.map((c) => c.id),
   ]);
 
+  // Unioned per id, not replaced: the same question appears in both banks and
+  // an upstream edge in either version can explain a change.
   /** @type {Map<string, Set<string>>} */
   const refsById = new Map();
   for (const q of [...baseQuestions, ...draftQuestions]) {
     const refs = refsById.get(q.id) ?? new Set();
-    collectShowWhenRefs(q.showWhen, refs);
+    for (const ref of showWhenReferences(q.showWhen)) refs.add(ref);
     refsById.set(q.id, refs);
   }
 

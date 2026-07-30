@@ -133,7 +133,18 @@ dangling specifier and a case-mismatched one, so what the gate adds is: the
 dependency-graph artifact at `.verify/import-graph.json` (gitignored, and
 written only when the run is clean); rejection of bare package specifiers, which
 tsc resolves through `node_modules` while the browser cannot; and Node's own
-parser over every `.js` under `src/` and `case-types/`. Run `check`, then
+parser over every `.js` under `src/` and `case-types/`. On top of the graph it
+then **evaluates the configuration in Node** (`scripts/verify-config.js`): every
+Case Type module is imported and its config checked (a `computeOutcome`
+function, an explicit `listName`, no duplicate Question Definition ids, no
+dangling or cyclic `showWhen` reference, no `showWhen` node whose siblings the
+evaluator would silently ignore, no unknown `sections` key); every
+`case-types/banks/*.txt` artifact is parsed and shape-checked, and every registry
+`bank` thunk must name one that exists; and the route table is checked for
+malformed or duplicated hash patterns. These checks are skipped when the graph is
+not clean, and the graph artifact is written only when everything passes.
+Per-slug containment and the unavailable-Case-Type boot banner stay the
+serving-time backstop regardless. Run `check`, then
 `verify`, then `test:coverage` before a deploy — there is no automated pipeline,
 so a deploy is only as verified as the commands someone ran first.
 
@@ -355,6 +366,9 @@ scripts/
                                 #   regenerate or delete it rather than hand-editing it (ADR-0041)
   module-graph.js               # shared import-specifier scanner: the one answer to "what does
                                 #   this file import?", used by the verify gate and the layering test
+  verify-config.js              # the verify gate's configuration half: evaluates Case Type modules,
+                                #   bank artifacts and the route table in Node, so a broken Case Type
+                                #   is found before a browser loads it
   verify_build.js               # npm run verify: parses every src/ + case-types/ module and
                                 #   resolves every specifier case-sensitively; emits .verify/import-graph.json
   run_in_memory_flow.js

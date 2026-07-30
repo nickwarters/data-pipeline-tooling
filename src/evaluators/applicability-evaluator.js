@@ -47,7 +47,7 @@ export function detectCycles(catalogue) {
   /** @type {Map<string, Set<string>>} */
   const deps = new Map();
   for (const q of catalogue) {
-    deps.set(q.id, extractRefs(q.showWhen));
+    deps.set(q.id, showWhenReferences(q.showWhen));
   }
 
   const WHITE = 0,
@@ -120,26 +120,40 @@ function evalOp(op, answer) {
 }
 
 /**
- * Extracts all question IDs referenced in a showWhen condition.
+ * Every Question Definition id a showWhen condition references.
+ *
+ * Walks every key of every node rather than stopping at the first `$and`/`$or`
+ * it finds, so no reference is missed whatever shape a condition is authored in
+ * — which is what asking "does every reference resolve?" needs.
+ *
+ * `evalCondition` above does stop at the first combinator, so a node holding a
+ * combinator alongside any sibling key is not evaluated the way it reads. That
+ * shape is invalid configuration rather than something this function makes work:
+ * it is rejected before it ships, not evaluated differently here.
  *
  * @param {Record<string, unknown>|undefined} cond
  * @returns {Set<string>}
  */
-function extractRefs(cond) {
+export function showWhenReferences(cond) {
+  /** @type {Set<string>} */
   const refs = new Set();
-  if (!cond) return refs;
-  if ('$and' in cond) {
-    for (const c of /** @type {Record<string, unknown>[]} */ (cond['$and'])) {
-      for (const ref of extractRefs(c)) refs.add(ref);
-    }
-  } else if ('$or' in cond) {
-    for (const c of /** @type {Record<string, unknown>[]} */ (cond['$or'])) {
-      for (const ref of extractRefs(c)) refs.add(ref);
-    }
-  } else {
-    for (const key of Object.keys(cond)) {
-      refs.add(key);
+  collect(cond, refs);
+  return refs;
+}
+
+/**
+ * @param {Record<string, unknown>|undefined} cond
+ * @param {Set<string>} into
+ */
+function collect(cond, into) {
+  if (!cond) return;
+  for (const [key, value] of Object.entries(cond)) {
+    if (key === '$and' || key === '$or') {
+      for (const child of /** @type {Record<string, unknown>[]} */ (value)) {
+        collect(child, into);
+      }
+    } else {
+      into.add(key);
     }
   }
-  return refs;
 }

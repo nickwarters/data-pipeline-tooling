@@ -25,9 +25,11 @@
  * there is no path to resolve. Every other bare specifier is a failure: a bare
  * package name means a runtime dependency, which this project does not have.
  *
- * Scope is `src/` and `case-types/` `.js` files. Evaluating configuration (Case
- * Type modules, bank artifacts, the route table) and checking asset references
- * from the host page and CSS are separate concerns and are not done here.
+ * Scope for the graph is `src/` and `case-types/` `.js` files. Once it is clean,
+ * `verify-config.js` evaluates the configuration on top of it — Case Type
+ * modules, Question Bank artifacts and the route table — for the reasons its own
+ * header gives. Checking asset references from the host page and CSS is still a
+ * separate concern and is not done here.
  */
 
 import { execFile } from 'node:child_process';
@@ -40,6 +42,7 @@ import {
   jsFilesUnder,
   resolveRelative,
 } from './module-graph.js';
+import { checkConfiguration } from './verify-config.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -48,7 +51,7 @@ const GRAPH_PATH = '.verify/import-graph.json';
 
 /**
  * @typedef {{
- *   kind: 'syntax' | 'unresolved',
+ *   kind: 'syntax' | 'unresolved' | 'case-type' | 'bank' | 'route',
  *   file: string,
  *   specifier?: string,
  *   line?: number,
@@ -260,6 +263,22 @@ async function main() {
     console.error(
       `verify: ${failures.length} failure(s) — graph not written, since a graph missing its broken edges is worse than no graph`
     );
+    // Importing Case Type modules or the route table out of a tree that does
+    // not parse or does not resolve produces derivative errors, not new
+    // information. Fix the graph, then run again.
+    console.error(
+      'verify: configuration checks skipped until the module graph is clean'
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  const { failures: configFailures, counts } = await checkConfiguration();
+  if (configFailures.length) {
+    for (const failure of configFailures) console.error(formatFailure(failure));
+    console.error(
+      `verify: ${configFailures.length} configuration failure(s) — graph not written`
+    );
     process.exitCode = 1;
     return;
   }
@@ -277,6 +296,9 @@ async function main() {
   );
   console.log(
     `verify: ${files.length} modules, ${edges} import edges, ${graph.external.length} external — graph written to ${GRAPH_PATH}`
+  );
+  console.log(
+    `verify: config clean — ${counts.caseTypes} Case Type(s), ${counts.banks} bank artifact(s), ${counts.routes} route(s) checked`
   );
 }
 

@@ -5,6 +5,7 @@ import {
   evaluate,
   allApplicableAnswered,
   detectCycles,
+  showWhenReferences,
 } from '../src/evaluators/applicability-evaluator.js';
 
 /** @typedef {import('../src/sharepoint-client.js').QuestionDefinition} QuestionDefinition */
@@ -335,7 +336,7 @@ test('evaluate: showWhen with mixed $and and direct keys', () => {
   assert.ok(!evaluate(catalogue, { q1: ans('Yes'), q2: ans('No') }).has('q3'));
 });
 
-// --- detectCycles / extractRefs edge cases ---
+// --- detectCycles / showWhenReferences edge cases ---
 
 test('detectCycles: empty $and or $or branches', () => {
   const catalogue = [q('q1', { $and: [] }), q('q2', { $or: [] })];
@@ -385,7 +386,7 @@ test('evaluate: showWhen with $or false but another key true', () => {
   assert.ok(evaluate(catalogue, { q1: ans('Yes'), q2: ans('No') }).has('q3'));
 });
 
-test('detectCycles: extractRefs with undefined', () => {
+test('detectCycles: showWhenReferences with undefined', () => {
   const catalogue = /** @type {any[]} */ ([{ id: 'q1', showWhen: undefined }]);
   assert.strictEqual(detectCycles(catalogue), false);
 });
@@ -412,7 +413,7 @@ test('evaluate: showWhen in with string answer', () => {
   assert.ok(!evaluate(catalogue, { q2: ans('No') }).has('q1'));
 });
 
-test('detectCycles: extractRefs with empty object', () => {
+test('detectCycles: showWhenReferences with empty object', () => {
   const catalogue = [q('q1', {})];
   assert.strictEqual(detectCycles(catalogue), false);
 });
@@ -421,4 +422,33 @@ test('allApplicableAnswered: returns true when applicable multi-choice question 
   const catalogue = [q('q1')];
   const answers = { q1: { value: ['Option A', 'Option B'] } };
   assert.strictEqual(allApplicableAnswered(catalogue, answers), true);
+});
+
+test('showWhenReferences: collects a leaf key sitting beside $or', () => {
+  const refs = showWhenReferences({
+    q1: { equals: 'Yes' },
+    $or: [{ q2: { equals: 'Yes' } }, { q3: { equals: 'Yes' } }],
+  });
+  assert.deepEqual([...refs].sort(), ['q1', 'q2', 'q3']);
+});
+
+test('showWhenReferences: collects both sides when $and and $or are siblings', () => {
+  const refs = showWhenReferences({
+    $and: [{ q1: { equals: 'Yes' } }],
+    $or: [{ q2: { equals: 'Yes' } }],
+  });
+  assert.deepEqual([...refs].sort(), ['q1', 'q2']);
+});
+
+test('showWhenReferences: no condition means no references', () => {
+  assert.equal(showWhenReferences(undefined).size, 0);
+});
+
+test('detectCycles: finds a cycle hiding beside a combinator', () => {
+  const catalogue = [
+    q('q1', { q2: { equals: 'Yes' }, $or: [{ q3: { equals: 'Yes' } }] }),
+    q('q2', { $and: [{ q3: { equals: 'Yes' } }], q1: { equals: 'Yes' } }),
+    q('q3'),
+  ];
+  assert.strictEqual(detectCycles(catalogue), true);
 });
