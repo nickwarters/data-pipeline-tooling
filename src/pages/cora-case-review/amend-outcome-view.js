@@ -10,17 +10,18 @@ import { currentOutcome } from '../../evaluators/amended-outcome.js';
 
 /**
  * The **Amend Outcome** Section. Lets **Controls** author a case-level
- * **Amended Outcome** on a Completed Case: an explicit, hand-set verdict with a
+ * **Amended Outcome** on a reportable Case: an explicit, hand-set verdict with a
  * mandatory justification. The write is additive — the frozen `outcomeAtCompletion`
  * is never touched. It emits one intent that the route slice persists as a
  * single ETag-guarded PATCH carrying the record and re-stamping the reporting columns
  * (`effectiveOutcome` / `outcomeOverridden` / `effectiveHadRemediation`) together
  * so a partial write cannot desync them.
  *
- * Access is resolved upstream (section-access, the architecture decision): `edit` only for Controls
- * on a Completed Case; `read-only` for the Assigned Reviewer, Case Type Owner and
- * Journey Owner (they can see an amendment happened); otherwise the Section is not
- * rendered at all. A re-amendment overwrites the single record.
+ * Access is resolved upstream in section-access: `edit` for Controls once the Case
+ * is reportable, `hidden` for every other role at every status. Other roles read
+ * the resulting **Current Outcome** in the **Summary** Section instead — the
+ * amended verdict is visible to them, the tab that produced it is not.
+ * A re-amendment overwrites the single record.
  */
 /**
  * @typedef {object} AmendOutcomeProps
