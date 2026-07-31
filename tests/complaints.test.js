@@ -18,6 +18,7 @@ import { resolveGeneralQuestions } from '../case-types/general-questions.js';
 import { reviewerResponseOptions } from '../src/lib/response-options.js';
 import { resolveCompiledOptions } from '../src/pages/question-bank/question-bank-compile.js';
 import { cases } from '../dev/fixtures/cases.js';
+import { isReportable } from '../src/lib/case-machine.js';
 
 /** @typedef {import('../src/sharepoint-client.js').Answer} Answer */
 
@@ -308,18 +309,15 @@ test('complaints config: limits each Reviewer to three active Cases', () => {
 });
 
 /**
- * The reviewed Complaints Cases: a frozen Outcome is what "past the reportable
- * milestone" means, and the rule picks up any Case added later. The Action
- * Centre demo rows also carry a frozen Outcome but no Answers by design — they
- * populate the reason groups rather than being reviewed — so the
- * non-empty-answers condition excludes them.
+ * The Complaints Cases past the reportable milestone, selected on status alone
+ * so the rule picks up any Case added later.
+ *
+ * A Case only reaches this milestone by being reviewed, so an empty Answers
+ * blob on one of these rows is a fixture defect, not a demo shortcut.
  */
 function reportableComplaintsCases() {
   return cases.filter(
-    (c) =>
-      c.caseType === 'complaints' &&
-      c.outcomeAtCompletion &&
-      Object.keys(c.answers).length > 0
+    (c) => c.caseType === 'complaints' && isReportable(c.status)
   );
 }
 
@@ -411,6 +409,15 @@ test('complaints fixtures: the Cases past the reportable milestone answer every 
       allApplicableAnswered(catalogue, row.answers),
       true,
       `${row.id} answers every applicable Question`
+    );
+  }
+});
+
+test('complaints fixtures: no Case past the reportable milestone has empty Answers', () => {
+  for (const row of reportableComplaintsCases()) {
+    assert.ok(
+      Object.keys(row.answers).length > 0,
+      `${row.id} is past the reportable milestone with no Answers`
     );
   }
 });

@@ -64,9 +64,12 @@ function outcomeAnswers(value) {
  * Type; the example-review demo Cases moved to
  * tests/_example-review-cases.js as a test-only fixture.
  *
- * Every Complaints Question is outcome-scored, so the Cases past the reportable
- * milestone answer the catalogue through `outcomeAnswers()` and spell out only
- * the Answers their demo turns on.
+ * Every Complaints Question is outcome-scored, so the rule for every group
+ * below is the same: a Case past the reportable milestone has been reviewed,
+ * and its Answers and Outcome were frozen together. Those Cases answer the
+ * catalogue through `outcomeAnswers()` and spell out only the Answers their
+ * demo turns on. A row that just needs to populate a dashboard group is left
+ * In-progress instead.
  *
  * Complaints (Journey Owner raises appeals, Controls resolves):
  *   complaints-case-1 — In-progress, outstanding (assigned to user-reviewer);
@@ -81,6 +84,14 @@ function outcomeAnswers(value) {
  *                       adviser (Responsible Party) and still outstanding
  *   complaints-case-6 — In-progress and unallocated: the candidate the
  *                       "Take a Case" allocation flow reads
+ *
+ * My Team workload (read by ?asUser=reviewer-manager):
+ *   complaints-team-1 — In-progress and on hold, under the first staff member
+ *   complaints-team-2 — Actions In Progress under the second: one failure with
+ *                       free-form remediation still outstanding
+ *
+ * Action Centre (read by ?asUser=action-centre): one row per reason group,
+ * carrying the hoisted flags and clocks the real backend would compute.
  *
  * @type {CaseRow[]}
  */
@@ -110,6 +121,10 @@ export const cases = [
   {
     // A second staff member and lifecycle status exercise the multi-reviewer
     // totals shown by ?mock=1&asUser=reviewer-manager.
+    //
+    // Its one failure carries free-form remediation rather than a selected
+    // Remediation Action, so complaints-case-5 below stays the sole "sent to
+    // the adviser" demo Case.
     id: 'complaints-team-2',
     caseType: 'complaints',
     title: 'Complaint team workload #2',
@@ -118,11 +133,32 @@ export const cases = [
     assignedReviewerManager: 'user-rm',
     responsibleParty: 'user-agent-b',
     responsiblePartyDisplayName: 'Rowan Agent',
-    answers: {},
+    answers: {
+      ...outcomeAnswers('Good'),
+      'q-cmp-0016': {
+        value: 'Poor',
+        remediationRequired: 'yes',
+        justification:
+          'The upheld complaint was closed without the redress offer being checked.',
+        freeFormRemediation:
+          'Check the redress calculation and write to the customer with the corrected offer.',
+      },
+    },
     conversation: [],
     notes: '',
     onHold: false,
+    reportableAt: _threeDaysAgo.toISOString(),
+    remediationDueDate: addWorkingDays(
+      _threeDaysAgo.toISOString(),
+      REMEDIATION_SLA_WORKING_DAYS,
+      ENGLAND_WALES_HOLIDAYS
+    ),
     completedAt: null,
+    outcomeAtCompletion: 'poor',
+    hadRemediation: true,
+    effectiveOutcome: 'poor',
+    effectiveHadRemediation: true,
+    outcomeOverridden: false,
     created: _threeDaysAgo.toISOString(),
     etag: 'etag-cm-team2-v1',
   },
@@ -540,7 +576,13 @@ export const cases = [
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-agent-c',
     responsiblePartyDisplayName: 'Noor Agent',
-    answers: {},
+    answers: {
+      ...outcomeAnswers('Good'),
+      'q-cmp-0016': {
+        value: 'Poor',
+        justification: 'Upheld complaint closed without offering redress.',
+      },
+    },
     conversation: [],
     notes: '',
     completedAt: _twentyDaysAgo.toISOString(),
