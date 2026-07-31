@@ -796,10 +796,16 @@ test('state: setting the Responsible Party advances the Case Row and leaves the 
   const set = caseReviewReducer(state, {
     type: 'case/responsible-party-changed',
     loginName: 'jsmith',
+    displayName: 'John Smith',
   });
   assert.equal(
     set.routes.caseReview.snapshot?.caseRow?.responsibleParty,
     'jsmith'
+  );
+  assert.equal(
+    set.routes.caseReview.snapshot?.caseRow?.responsiblePartyDisplayName,
+    'John Smith',
+    'the person just chosen is named on the spot, not on the next read'
   );
   assert.equal(
     set.routes.caseReview.snapshot?.machine,
@@ -810,6 +816,7 @@ test('state: setting the Responsible Party advances the Case Row and leaves the 
     caseReviewReducer(set, {
       type: 'case/responsible-party-changed',
       loginName: 'jsmith',
+      displayName: 'John Smith',
     }),
     set,
     're-selecting the same person must not re-render'
@@ -2643,13 +2650,19 @@ test('Responsible Party effect: its own action and its own field write', () => {
     dispatch: (action) => dispatched.push(action),
   });
 
-  save.responsiblePartyChanged('jsmith');
+  save.responsiblePartyChanged('jsmith', 'John Smith');
 
-  assert.deepEqual(queued, [
-    { id: 'c1', field: 'responsibleParty', value: 'jsmith' },
-  ]);
+  assert.deepEqual(
+    queued,
+    [{ id: 'c1', field: 'responsibleParty', value: 'jsmith' }],
+    'only the account is persisted — the name comes back with the next read'
+  );
   assert.deepEqual(dispatched, [
-    { type: 'case/responsible-party-changed', loginName: 'jsmith' },
+    {
+      type: 'case/responsible-party-changed',
+      loginName: 'jsmith',
+      displayName: 'John Smith',
+    },
   ]);
 });
 

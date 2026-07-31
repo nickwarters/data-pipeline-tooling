@@ -2,6 +2,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { makeCase, caps, resolveRoles } from './helpers/section-access.js';
+import { HttpSharePointClient } from '../src/services/http-sharepoint-client.js';
+import { WEB_URL, makeFetch } from './helpers/http-sharepoint-client.js';
 
 // Capability: viewer role resolution.
 
@@ -28,6 +30,57 @@ test('resolveRoles: other reviewer (in group but not assigned)', () => {
 test('resolveRoles: responsible party (the Adviser named on the Case)', () => {
   const roles = resolveRoles(makeCase(), 'user-rp', caps({ isAdviser: true }));
   assert.deepEqual(roles, ['responsibleParty']);
+});
+
+test('resolveRoles: the Responsible Party a real read produces is one this matcher recognises', () => {
+  // Both halves of the match come from SharePoint by different routes: the Case
+  // Row through a list read, the viewer through `/_api/web/currentUser`. The
+  // Role only ever resolves if those two routes yield the same kind of value —
+  // and a Person column answers with a numeric site-local id unless the read
+  // expands it, which no amount of testing either side alone would catch.
+  const claims = 'i:0#.w|CONTOSO\\jrp';
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.url.endsWith('/_api/web/currentUser'),
+      respond: () =>
+        new Response(
+          JSON.stringify({ LoginName: claims, Title: 'Jordan RP' }),
+          { status: 200 }
+        ),
+    },
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            Id: 'case-1',
+            Title: 'T',
+            Status: 'In-progress',
+            CaseType: 'example-review',
+            ResponsibleParty: { Name: claims, Title: 'Jordan RP' },
+            Answers: '{}',
+            Conversation: '[]',
+            Notes: '',
+            CompletedAt: null,
+          }),
+          { status: 200 }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  return Promise.all([
+    client.getCase('case-1', { listName: 'Cases-ExampleReview' }),
+    client.getCurrentUser(),
+  ]).then(([row, user]) => {
+    assert.ok(row);
+    assert.deepEqual(resolveRoles(row, user.id, caps({ isAdviser: true })), [
+      'responsibleParty',
+    ]);
+  });
 });
 
 test('resolveRoles: case type owner', () => {

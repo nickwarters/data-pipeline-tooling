@@ -65,6 +65,23 @@ const ORDER_BY_COLUMNS = {
   placedOnHoldAt: 'PlacedOnHoldAt',
 };
 
+/**
+ * The projection every Case row read carries.
+ *
+ * `ResponsibleParty` is a Person column, and SharePoint answers one with the
+ * numeric User Information List id (`ResponsiblePartyId`) unless the lookup is
+ * expanded. That number is a transport detail of a single site collection — it
+ * is allocated on first use, re-allocated if the entry or the AD account is
+ * removed, and means nothing anywhere else — while the whole application keys
+ * identity on the bare account name, right down to which Sections a viewer may
+ * open. So the read expands the person and takes the claims login off it.
+ *
+ * The `*` is load-bearing: naming the person's sub-fields turns the read into a
+ * projection, and without it every other column would silently stop coming back.
+ */
+const CASE_SELECT = '$select=*,ResponsibleParty/Name,ResponsibleParty/Title';
+const CASE_EXPAND = '$expand=ResponsibleParty';
+
 export class HttpSharePointClient {
   /** @param {HttpSharePointClientOptions} [opts] */
   constructor(opts = {}) {
@@ -84,6 +101,15 @@ export class HttpSharePointClient {
     this._sleep = opts.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
     /** @type {string | null} */
     this._formDigest = null;
+    /**
+     * Bare account name to the numeric id a Person column is written by, for
+     * this client's lifetime. The id is stable per user within a site
+     * collection, so the lookup is worth doing once rather than on every
+     * debounced save.
+     *
+     * @type {Map<string, number>}
+     */
+    this._userIds = new Map();
   }
 
   // --- SharePointClient interface ------------------------------------------
@@ -111,7 +137,9 @@ export class HttpSharePointClient {
    * @returns {Promise<CaseRow|null>}
    */
   async getCase(id, opts = {}) {
-    const url = this._listItemUrl(this._requireListName(opts), id);
+    const url =
+      this._listItemUrl(this._requireListName(opts), id) +
+      `?${CASE_SELECT}&${CASE_EXPAND}`;
     try {
       const body = await this._read(url, opts.signal);
       return rowFromItem(body, readEtag(body));
@@ -130,8 +158,19 @@ export class HttpSharePointClient {
    */
   async patchCase(id, fields, etag, opts = {}) {
     const url = this._listItemUrl(this._requireListName(opts), id);
-    const body = JSON.stringify(itemFromRow(fields));
     try {
+      const item = itemFromRow(fields);
+      // The Person column is the one field whose value cannot be derived from
+      // the row alone: SharePoint writes it by id, so the account name has to be
+      // resolved first. Inside the try on purpose — a directory lookup that
+      // fails is a failed save, reported like any other, never a Case quietly
+      // left with nobody responsible.
+      if (fields.responsibleParty !== undefined) {
+        item.ResponsiblePartyId = await this._ensureUserId(
+          fields.responsibleParty
+        );
+      }
+      const body = JSON.stringify(item);
       const data = await this._write(url, 'PATCH', { 'If-Match': etag }, body);
       if (data === null) {
         // The confirmation re-read belongs to the write, not to whoever asked
@@ -144,6 +183,11 @@ export class HttpSharePointClient {
         return { ok: true, status: 204, data: row };
       }
       const newEtag = readEtag(data);
+      // The only Case row built from something other than a Case read, and a
+      // PATCH response carries no expanded person — so `responsibleParty` comes
+      // back empty here however full the row looks. Consume it for the ETag and
+      // the Answers baseline only; anything else about the Case must come from
+      // the re-read above.
       const row = rowFromItem(data, newEtag);
       return {
         ok: true,
@@ -164,7 +208,7 @@ export class HttpSharePointClient {
   async listCases(filter, opts = {}) {
     const listName = this._requireListName(opts);
     /** @type {string[]} */
-    const query = [];
+    const query = [CASE_SELECT, CASE_EXPAND];
     const expr = buildFilterExpr(filter);
     if (expr) query.push(`$filter=${encodeURIComponent(expr)}`);
     if (opts.orderBy) {
@@ -175,8 +219,7 @@ export class HttpSharePointClient {
     if (opts.top !== undefined) query.push(`$top=${opts.top}`);
     if (opts.skip !== undefined) query.push(`$skip=${opts.skip}`);
 
-    let url = this._listItemsUrl(listName);
-    if (query.length) url += `?${query.join('&')}`;
+    const url = `${this._listItemsUrl(listName)}?${query.join('&')}`;
 
     // A paged read (`$top`) fetches exactly the requested window — following
     // `odata.nextLink` would defeat paging and pull the whole backlog. An
@@ -498,6 +541,40 @@ export class HttpSharePointClient {
     }
   }
 
+  /**
+   * The numeric id SharePoint needs to write a Person column, from the bare
+   * account name the application keys identity on. `EnsureUser` is the endpoint
+   * that answers it, and it also adds a directory user to this site's User
+   * Information List if they are not in it yet — which is what makes naming
+   * someone who has never opened the site work at all.
+   *
+   * An empty account means nobody is responsible, and SharePoint clears a Person
+   * column with `null`; an empty string is not a person and would be rejected.
+   *
+   * A response carrying no usable id throws rather than writing `NaN` — the
+   * caller turns that into a failed save.
+   *
+   * @param {string} account bare account login name
+   * @returns {Promise<number | null>}
+   */
+  async _ensureUserId(account) {
+    if (account === '') return null;
+    const cached = this._userIds.get(account);
+    if (cached !== undefined) return cached;
+    const body = await this._write(
+      this._absolute('/_api/web/ensureuser'),
+      'POST',
+      {},
+      JSON.stringify({ logonName: toClaimsLogin(account) })
+    );
+    const id = Number(body?.Id ?? /** @type {any} */ (body?.d)?.Id);
+    if (!Number.isFinite(id)) {
+      throw new Error(`EnsureUser returned no id for account "${account}"`);
+    }
+    this._userIds.set(account, id);
+    return id;
+  }
+
   /** @returns {Promise<string>} */
   async _ensureDigest() {
     if (this._formDigest) return this._formDigest;
@@ -733,6 +810,9 @@ function readEtag(item) {
  * @returns {CaseRow}
  */
 function rowFromItem(item, etag) {
+  // The expanded Person column: `Name` is the claims login, `Title` the
+  // directory display name. Absent or null when nobody is responsible.
+  const person = /** @type {any} */ (item?.ResponsibleParty ?? null);
   return {
     id: String(item?.Id ?? ''),
     caseType: String(item?.CaseType ?? ''),
@@ -741,7 +821,9 @@ function rowFromItem(item, etag) {
       item?.Status ?? CASE_STATUS.IN_PROGRESS
     ),
     assignedReviewer: String(item?.AssignedReviewerId ?? ''),
-    responsibleParty: String(item?.ResponsiblePartyId ?? ''),
+    responsibleParty: toBareAccount(String(person?.Name ?? '')),
+    responsiblePartyDisplayName:
+      person?.Title != null ? String(person.Title) : undefined,
     assignedReviewerManager:
       item?.AssignedReviewerManager != null
         ? String(item.AssignedReviewerManager)
@@ -902,8 +984,10 @@ function itemFromRow(fields) {
   if (fields.relatedDate !== undefined) out.RelatedDate = fields.relatedDate;
   if (fields.assignedReviewer !== undefined)
     out.AssignedReviewerId = fields.assignedReviewer;
-  if (fields.responsibleParty !== undefined)
-    out.ResponsiblePartyId = fields.responsibleParty;
+  // `responsibleParty` is deliberately absent: it is a Person column, written by
+  // a numeric id that only a round trip to the directory can supply, and this
+  // function is pure. `patchCase` resolves it and sets the column there, so
+  // there is one writer rather than a plausible-looking wrong one here.
   if (fields.assignedReviewerManager !== undefined)
     out.AssignedReviewerManager = fields.assignedReviewerManager;
   if (fields.responsiblePartyManager !== undefined)

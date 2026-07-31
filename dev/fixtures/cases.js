@@ -97,6 +97,7 @@ export const cases = [
     assignedReviewer: 'user-reviewer',
     assignedReviewerManager: 'user-rm',
     responsibleParty: 'user-agent-a',
+    responsiblePartyDisplayName: 'Frankie Agent',
     answers: {},
     conversation: [],
     notes: '',
@@ -116,6 +117,7 @@ export const cases = [
     assignedReviewer: 'user-reviewer-2',
     assignedReviewerManager: 'user-rm',
     responsibleParty: 'user-agent-b',
+    responsiblePartyDisplayName: 'Rowan Agent',
     answers: {},
     conversation: [],
     notes: '',
@@ -134,6 +136,7 @@ export const cases = [
     status: 'In-progress',
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-agent-a',
+    responsiblePartyDisplayName: 'Frankie Agent',
     answers: {
       // Only the first Acknowledgement group of Questions is answered, so the
       // Case stays visibly part-way through the Review tab.
@@ -175,6 +178,7 @@ export const cases = [
     status: 'Completed',
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-agent-b',
+    responsiblePartyDisplayName: 'Rowan Agent',
     answers: {
       ...outcomeAnswers('Good'),
       'q-cmp-0016': {
@@ -208,6 +212,7 @@ export const cases = [
     status: 'Completed',
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-agent-a',
+    responsiblePartyDisplayName: 'Frankie Agent',
     answers: {
       ...outcomeAnswers('Poor with harm'),
     },
@@ -236,6 +241,7 @@ export const cases = [
     status: 'Completed',
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-agent-b',
+    responsiblePartyDisplayName: 'Rowan Agent',
     answers: {
       // All-Good across the rest of the catalogue, so the Case keeps exactly the
       // two remediated failures the appeal's citedAnswerKeys point at and the
@@ -310,6 +316,7 @@ export const cases = [
     // Remediation tab's two renderings demoable from every angle.
     assignedReviewerManager: 'user-rm',
     responsibleParty: 'user-rp',
+    responsiblePartyDisplayName: 'Jordan RP',
     // Their line manager, so the Remediation tab's responsible-party rendering
     // and the Conversation it points at are demoable from both sides.
     responsiblePartyManager: 'user-rp-manager',
@@ -445,6 +452,7 @@ export const cases = [
     status: 'In-progress',
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-agent-a',
+    responsiblePartyDisplayName: 'Frankie Agent',
     answers: {},
     conversation: [],
     notes: '',
@@ -461,6 +469,7 @@ export const cases = [
     status: 'In-progress',
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-agent-b',
+    responsiblePartyDisplayName: 'Rowan Agent',
     answers: {},
     conversation: [],
     notes: '',
@@ -478,6 +487,7 @@ export const cases = [
     status: 'In-progress',
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-agent-c',
+    responsiblePartyDisplayName: 'Noor Agent',
     answers: {},
     conversation: [],
     notes: '',
@@ -495,6 +505,7 @@ export const cases = [
     status: 'In-progress',
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-agent-a',
+    responsiblePartyDisplayName: 'Frankie Agent',
     answers: {},
     conversation: [],
     notes: '',
@@ -511,6 +522,7 @@ export const cases = [
     status: 'In-progress',
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-agent-b',
+    responsiblePartyDisplayName: 'Rowan Agent',
     answers: {},
     conversation: [],
     notes: '',
@@ -527,6 +539,7 @@ export const cases = [
     status: 'Completed',
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-agent-c',
+    responsiblePartyDisplayName: 'Noor Agent',
     answers: {},
     conversation: [],
     notes: '',
@@ -544,6 +557,7 @@ export const cases = [
     status: 'In-progress',
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-agent-a',
+    responsiblePartyDisplayName: 'Frankie Agent',
     answers: {},
     conversation: [],
     notes: '',

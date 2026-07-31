@@ -46,7 +46,7 @@
  *     | {type: 'case/answers-edited', answers: Record<string, Answer>}
  *     | {type: 'case/field-edited', field: PlainTextCaseField, value: string}
  *     | {type: 'case/on-hold-changed', onHold: boolean, placedOnHoldAt: string | null}
- *     | {type: 'case/responsible-party-changed', loginName: string}
+ *     | {type: 'case/responsible-party-changed', loginName: string, displayName: string}
  *   ) => unknown,
  *   now?: () => Date,
  * }} input
@@ -79,10 +79,19 @@ export function createCaseReviewSaveEffect({
      * to. Its own writer rather than a `fieldEdited` call: see
      * `PlainTextCaseField` for why that union stays shut.
      *
-     * @param {string} loginName
+     * Only the account is persisted; it is the identity the Case is stored and
+     * matched against. The display name travels with the action so the page can
+     * name the person the moment they are chosen, and is re-read from the
+     * directory with the Case rather than saved onto it.
+     *
+     * @param {string} loginName @param {string} displayName
      */
-    responsiblePartyChanged(loginName) {
-      dispatch({ type: 'case/responsible-party-changed', loginName });
+    responsiblePartyChanged(loginName, displayName) {
+      dispatch({
+        type: 'case/responsible-party-changed',
+        loginName,
+        displayName,
+      });
       saveQueue.enqueue(caseId(), 'responsibleParty', loginName);
     },
     /** @param {boolean} onHold */

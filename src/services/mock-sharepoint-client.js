@@ -104,11 +104,21 @@ export class MockSharePointClient {
     if (cases[idx].etag !== etag) return { ok: false, status: 412 };
 
     const newEtag = String(++this._etagCounter);
-    cases[idx] = /** @type {CaseRow} */ ({
+    const next = /** @type {CaseRow} */ ({
       ...cases[idx],
       ...fields,
       etag: newEtag,
     });
+    // The Responsible Party is a person, and the real client learns their name
+    // by expanding the person column on the next read. Resolve it from the
+    // fixture directory for the same reason: otherwise the row would keep the
+    // previous person's name beside the new account.
+    if (fields.responsibleParty !== undefined) {
+      next.responsiblePartyDisplayName = this._people.find(
+        (person) => person.loginName === fields.responsibleParty
+      )?.displayName;
+    }
+    cases[idx] = next;
     return { ok: true, status: 200, data: { ...cases[idx] } };
   }
 

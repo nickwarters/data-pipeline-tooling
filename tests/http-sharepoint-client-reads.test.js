@@ -343,6 +343,134 @@ test('HttpSharePointClient: getCase maps AssignedReviewerManager and Responsible
   assert.equal(row?.responsiblePartyManager, 'mgr-rp');
 });
 
+test('HttpSharePointClient: getCase reads the Responsible Party as an account name, not a lookup id', async () => {
+  // The column is a Person column, so SharePoint answers with the numeric User
+  // Information List id unless the lookup is expanded. That number is local to
+  // one site collection; the app keys identity on the bare account name, and
+  // Section access matches the Responsible Party Role on it.
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            Id: 'case-rp',
+            Title: 'T',
+            Status: 'In-progress',
+            CaseType: 'example-review',
+            AssignedReviewerId: 'user-r',
+            ResponsiblePartyId: 27,
+            ResponsibleParty: {
+              Name: 'i:0#.w|CONTOSO\\jrp',
+              Title: 'Jordan RP',
+            },
+            Answers: '{}',
+            Conversation: '[]',
+            Notes: '',
+            CompletedAt: null,
+          }),
+          { status: 200 }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const row = await client.getCase('case-rp', {
+    listName: 'Cases-ExampleReview',
+  });
+
+  assert.equal(row?.responsibleParty, 'jrp');
+  assert.equal(row?.responsiblePartyDisplayName, 'Jordan RP');
+  const url = decodeURIComponent(calls[0].url);
+  assert.ok(
+    url.includes('$expand=ResponsibleParty'),
+    'the read must expand the person for the account name to be there at all'
+  );
+  assert.ok(
+    url.includes('$select=*'),
+    'and keep every other column the read returned before'
+  );
+});
+
+test('HttpSharePointClient: a Case with nobody responsible reads as an empty account', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            Id: 'case-none',
+            Title: 'T',
+            Status: 'In-progress',
+            CaseType: 'example-review',
+            ResponsibleParty: null,
+            Answers: '{}',
+            Conversation: '[]',
+            Notes: '',
+            CompletedAt: null,
+          }),
+          { status: 200 }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const row = await client.getCase('case-none', {
+    listName: 'Cases-ExampleReview',
+  });
+
+  assert.equal(row?.responsibleParty, '');
+  assert.equal(row?.responsiblePartyDisplayName, undefined);
+});
+
+test('HttpSharePointClient: listCases expands the Responsible Party on every row', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            value: [
+              {
+                Id: 'case-1',
+                Title: 'One',
+                Status: 'In-progress',
+                CaseType: 'example-review',
+                ResponsibleParty: {
+                  Name: 'i:0#.w|CONTOSO\\jrp',
+                  Title: 'Jordan RP',
+                },
+                Answers: '{}',
+                Conversation: '[]',
+                Notes: '',
+                CompletedAt: null,
+              },
+            ],
+          }),
+          { status: 200 }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const rows = await client.listCases({}, { listName: 'Cases-ExampleReview' });
+
+  assert.equal(rows[0].responsibleParty, 'jrp');
+  assert.equal(rows[0].responsiblePartyDisplayName, 'Jordan RP');
+  assert.ok(
+    decodeURIComponent(calls[0].url).includes('$expand=ResponsibleParty')
+  );
+});
+
 test('HttpSharePointClient: getCase throws when called without a listName', async () => {
   const { fetch, calls } = makeFetch([]);
   const client = new HttpSharePointClient({

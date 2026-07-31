@@ -302,6 +302,9 @@ export function caseReviewReducer(state, action) {
       caseRow: {
         ...route.snapshot.caseRow,
         responsibleParty: action.loginName,
+        // Optimistic, exactly like the account beside it. Nothing persists this
+        // — the next read of the Case brings the directory's own answer.
+        responsiblePartyDisplayName: action.displayName,
       },
     });
   }
@@ -764,7 +767,7 @@ export function createRouteSlice(params, context) {
     /** @param {{ loginName: string, displayName: string }} party */
     const selectResponsibleParty = (party) => {
       if (!snapshot.machine?.canSelectRemediation) return;
-      save.responsiblePartyChanged(party.loginName);
+      save.responsiblePartyChanged(party.loginName, party.displayName);
       clearResponsiblePartySearch();
     };
 

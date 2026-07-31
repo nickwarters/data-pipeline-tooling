@@ -545,7 +545,7 @@ test('HttpSharePointClient: patchCase surfaces a network error without a status 
   assert.equal(result.status, 500);
 });
 
-test('HttpSharePointClient: patchCase writes status, assignedReviewer, responsibleParty, answers and conversation to SP columns', async () => {
+test('HttpSharePointClient: patchCase writes status, assignedReviewer, answers and conversation to SP columns', async () => {
   const { fetch, calls } = makeFetch([
     {
       when: (c) => c.url.endsWith('/_api/contextinfo'),
@@ -586,7 +586,6 @@ test('HttpSharePointClient: patchCase writes status, assignedReviewer, responsib
     {
       status: 'Completed',
       assignedReviewer: 'user-9',
-      responsibleParty: 'user-10',
       answers,
       conversation,
     },
@@ -599,7 +598,211 @@ test('HttpSharePointClient: patchCase writes status, assignedReviewer, responsib
   const body = JSON.parse(String(patch.body));
   assert.equal(body.Status, 'Completed');
   assert.equal(body.AssignedReviewerId, 'user-9');
-  assert.equal(body.ResponsiblePartyId, 'user-10');
   assert.equal(body.Answers, JSON.stringify(answers));
   assert.equal(body.Conversation, JSON.stringify(conversation));
+});
+
+// --- The Responsible Party person column ---
+
+/**
+ * A fake backing a Responsible Party write: the digest, an EnsureUser that
+ * answers with `ensured`, the PATCH itself, and the confirmation re-read.
+ *
+ * @param {Response | null} ensured the EnsureUser response, or null to fail it
+ */
+function personWriteFetch(ensured) {
+  return makeFetch([
+    {
+      when: (c) => c.url.endsWith('/_api/contextinfo'),
+      respond: () => digestResponse('d'),
+    },
+    {
+      when: (c) => c.url.endsWith('/_api/web/ensureuser'),
+      respond: () => ensured ?? new Response('no such user', { status: 500 }),
+    },
+    {
+      when: (c) => c.method === 'PATCH',
+      respond: () =>
+        new Response(null, { status: 204, headers: { ETag: '"v2"' } }),
+    },
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            Id: 'case-1',
+            Title: 'T',
+            Status: 'In-progress',
+            CaseType: 'example-review',
+            ResponsibleParty: {
+              Name: 'i:0#.w|CONTOSO\\jsmith',
+              Title: 'John Smith',
+            },
+            Answers: '{}',
+            Conversation: '[]',
+            Notes: '',
+            CompletedAt: null,
+          }),
+          { status: 200, headers: { ETag: '"v2"' } }
+        ),
+    },
+  ]);
+}
+
+/** @param {number} id */
+function ensureUserResponse(id) {
+  return new Response(JSON.stringify({ Id: id, Title: 'John Smith' }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+test('HttpSharePointClient: writing the Responsible Party resolves the account to its numeric id', async () => {
+  // A Person column is written by id, not by name, so the account the app holds
+  // has to be turned into one first. EnsureUser is also what adds a directory
+  // user to this site's User Information List if they are not in it yet.
+  const { fetch, calls } = personWriteFetch(ensureUserResponse(14));
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const result = await client.patchCase(
+    'case-1',
+    { responsibleParty: 'jsmith' },
+    '"v1"',
+    { listName: 'Cases-ExampleReview' }
+  );
+
+  assert.equal(result.ok, true);
+  const ensure = calls.find((c) => c.url.endsWith('/_api/web/ensureuser'));
+  assert.ok(ensure, 'EnsureUser was called');
+  assert.equal(ensure.method, 'POST');
+  assert.deepEqual(JSON.parse(String(ensure.body)), {
+    logonName: 'i:0#.w|CONTOSO\\jsmith',
+  });
+
+  const patch = calls.find((c) => c.method === 'PATCH');
+  const body = JSON.parse(String(patch?.body));
+  assert.equal(body.ResponsiblePartyId, 14);
+  assert.equal(
+    typeof body.ResponsiblePartyId,
+    'number',
+    'a quoted id is rejected by SharePoint as an invalid person value'
+  );
+});
+
+test('HttpSharePointClient: an account is resolved once and reused for later saves', async () => {
+  const { fetch, calls } = personWriteFetch(ensureUserResponse(14));
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  await client.patchCase('case-1', { responsibleParty: 'jsmith' }, '"v1"', {
+    listName: 'Cases-ExampleReview',
+  });
+  await client.patchCase('case-1', { responsibleParty: 'jsmith' }, '"v2"', {
+    listName: 'Cases-ExampleReview',
+  });
+
+  assert.equal(
+    calls.filter((c) => c.url.endsWith('/_api/web/ensureuser')).length,
+    1,
+    'a debounced save must not pay a directory round trip every time'
+  );
+});
+
+test('HttpSharePointClient: clearing the Responsible Party writes null, not an empty account', async () => {
+  const { fetch, calls } = personWriteFetch(ensureUserResponse(14));
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  await client.patchCase('case-1', { responsibleParty: '' }, '"v1"', {
+    listName: 'Cases-ExampleReview',
+  });
+
+  assert.equal(
+    calls.find((c) => c.url.endsWith('/_api/web/ensureuser')),
+    undefined,
+    'there is no account to resolve'
+  );
+  const body = JSON.parse(
+    String(calls.find((c) => c.method === 'PATCH')?.body)
+  );
+  assert.equal(body.ResponsiblePartyId, null);
+});
+
+test('HttpSharePointClient: an unresolvable account fails the save instead of writing a wrong one', async () => {
+  const { fetch, calls } = personWriteFetch(null);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const result = await client.patchCase(
+    'case-1',
+    { responsibleParty: 'nobody' },
+    '"v1"',
+    { listName: 'Cases-ExampleReview' }
+  );
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 500);
+  assert.equal(
+    calls.find((c) => c.method === 'PATCH'),
+    undefined,
+    'nothing is written when the account cannot be resolved'
+  );
+});
+
+test('HttpSharePointClient: an EnsureUser answer with no id is a failed save, not a NaN write', async () => {
+  const { fetch, calls } = personWriteFetch(
+    new Response(JSON.stringify({ Title: 'John Smith' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  );
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const result = await client.patchCase(
+    'case-1',
+    { responsibleParty: 'jsmith' },
+    '"v1"',
+    { listName: 'Cases-ExampleReview' }
+  );
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 500);
+  assert.equal(
+    calls.find((c) => c.method === 'PATCH'),
+    undefined
+  );
+});
+
+test('HttpSharePointClient: a legacy verbose EnsureUser envelope still yields the id', async () => {
+  const { fetch, calls } = personWriteFetch(
+    new Response(JSON.stringify({ d: { Id: 21 } }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  );
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  await client.patchCase('case-1', { responsibleParty: 'jsmith' }, '"v1"', {
+    listName: 'Cases-ExampleReview',
+  });
+
+  const body = JSON.parse(
+    String(calls.find((c) => c.method === 'PATCH')?.body)
+  );
+  assert.equal(body.ResponsiblePartyId, 21);
 });

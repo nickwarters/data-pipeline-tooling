@@ -87,6 +87,56 @@ test('MockSharePointClient: patchCase merges only the specified fields', async (
   assert.equal(result.data?.assignedReviewer, 'user-1');
 });
 
+test('MockSharePointClient: a written Responsible Party comes back named, as a real read would', async () => {
+  // The real client gets the display name by expanding the person column on the
+  // next read. The mock has a directory of its own, so it resolves the same
+  // name from it rather than leaving the previous person's name on the row.
+  const client = new MockSharePointClient({
+    lists: {
+      [LIST]: [
+        {
+          id: 'case-rp',
+          caseType: 'example-review',
+          title: 'RP',
+          status: 'In-progress',
+          assignedReviewer: 'user-1',
+          responsibleParty: 'bjones',
+          responsiblePartyDisplayName: 'Bola Jones',
+          answers: {},
+          conversation: [],
+          notes: '',
+          completedAt: null,
+          etag: 'etag-rp',
+        },
+      ],
+    },
+    personas: PERSONAS,
+    people: [{ loginName: 'jsmith', displayName: 'John Smith' }],
+  });
+
+  const result = await client.patchCase(
+    'case-rp',
+    { responsibleParty: 'jsmith' },
+    'etag-rp',
+    { listName: LIST }
+  );
+
+  assert.equal(result.data?.responsibleParty, 'jsmith');
+  assert.equal(result.data?.responsiblePartyDisplayName, 'John Smith');
+
+  const cleared = await client.patchCase(
+    'case-rp',
+    { responsibleParty: '' },
+    String(result.data?.etag),
+    { listName: LIST }
+  );
+  assert.equal(
+    cleared.data?.responsiblePartyDisplayName,
+    undefined,
+    'nobody responsible is nobody to name'
+  );
+});
+
 test('MockSharePointClient: On hold fields round-trip together under mock mode', async () => {
   const client = makeClient();
   const result = await client.patchCase(

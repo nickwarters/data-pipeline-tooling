@@ -52,6 +52,45 @@ test('conversation is not a panel — it is a floating overlay', () => {
   assert.equal('conversation' in SECTION_PANELS, false);
 });
 
+test('the issues panel names the Responsible Party rather than showing their account', () => {
+  /** @param {any} caseRow */
+  const issuesPanel = (caseRow) => {
+    /** @type {any} */
+    const ctx = {
+      snapshot: {
+        catalogue: [],
+        answers: {},
+        access: {},
+        machine: { canSelectRemediation: false },
+      },
+      caseRow,
+      config: {},
+      route: {
+        captureCollapsed: {},
+        attributionSearch: {},
+        responsiblePartySearch: { query: '', people: [] },
+      },
+      dispatch: () => {},
+      actions: { currentAnswers: () => ({}), editAnswers: () => {} },
+    };
+    const nodes = /** @type {any} */ (SECTION_PANELS.issues)(ctx);
+    return findByClass({ _children: nodes }, 'cora-responsible-party-value');
+  };
+
+  assert.equal(
+    issuesPanel({
+      responsibleParty: 'jsmith',
+      responsiblePartyDisplayName: 'John Smith',
+    }).textContent,
+    'Responsible Party: John Smith'
+  );
+  assert.equal(
+    issuesPanel({ responsibleParty: 'jsmith' }).textContent,
+    'Responsible Party: jsmith',
+    'a row read before the person column was expanded still names someone'
+  );
+});
+
 test('the remediation panel offers only the resolutions the Case Type declares', () => {
   /** @type {any} */
   const ctx = {

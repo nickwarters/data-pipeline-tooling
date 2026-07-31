@@ -168,7 +168,11 @@ export const SECTION_PANELS = {
       responsibleParty: caseRow.responsibleParty
         ? {
             loginName: caseRow.responsibleParty,
-            displayName: caseRow.responsibleParty,
+            // The name comes off the row, which carries it from the expanded
+            // person column. The fallback covers a row whose person could not be
+            // named: showing the account beats showing nobody.
+            displayName:
+              caseRow.responsiblePartyDisplayName || caseRow.responsibleParty,
           }
         : null,
       canAttribute: snapshot.machine?.canAttribute ?? false,

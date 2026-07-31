@@ -156,6 +156,14 @@
  * at reportable, despite the `Completion` name) and are re-fed from a case-level
  * **Amended Outcome**, not from per-Answer overrides.
  *
+ * `responsibleParty` is the Responsible Party's **bare account login name** — the
+ * same identity key `assignedReviewer` and `CurrentUser.id` carry — because
+ * Section access resolves the Responsible Party Role by matching it against the
+ * signed-in user. `responsiblePartyDisplayName` is the directory name that goes
+ * with it, carried on the row so a view can name a person without a second round
+ * trip. Read-side only: nothing writes it, and it is absent on a Case with no
+ * Responsible Party.
+ *
  * `assignedReviewerManager` and `responsiblePartyManager` denormalise two
  * org-chart edges onto the row and are **not** equivalent:
  * `assignedReviewerManager` is a reporting snapshot — the query key behind
@@ -171,6 +179,7 @@
  * status: import('./lib/case-statuses.js').CaseStatus,
  * assignedReviewer: string,
  * responsibleParty: string,
+ * responsiblePartyDisplayName?: string,
  * answers: Record<string, Answer>,
  * conversation: Message[],
  * details?: Record<string, string>,
