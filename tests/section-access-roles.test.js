@@ -1,7 +1,12 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { makeCase, caps, resolveRoles } from './helpers/section-access.js';
+import {
+  makeCase,
+  caps,
+  resolveRoles,
+  ROLES,
+} from './helpers/section-access.js';
 import { HttpSharePointClient } from '../src/services/http-sharepoint-client.js';
 import { WEB_URL, makeFetch } from './helpers/http-sharepoint-client.js';
 
@@ -227,4 +232,53 @@ test('resolveRoles: a reviewer manager who is also the assigned reviewer holds b
     caps({ isReviewer: true, isReviewerManager: true })
   );
   assert.deepEqual(roles.sort(), ['assignedReviewer', 'reviewerManager']);
+});
+
+// --- role vocabulary reachability ---
+
+test('every role in the vocabulary is one resolveRoles can actually produce', () => {
+  // The matrix contract test compares keys against this same list, so it agrees
+  // with a dead name rather than catching it; only resolution tells them apart.
+  //
+  // Three viewings are the minimum: assignedReviewer and otherReviewer are
+  // exclusive branches of the same check, and `none` only appears when nothing
+  // else does.
+  const everyRoleAtOnce = resolveRoles(
+    makeCase({
+      assignedReviewer: 'u1',
+      assignedReviewerManager: 'u1',
+      responsibleParty: 'u1',
+      responsiblePartyManager: 'u1',
+    }),
+    'u1',
+    caps({
+      isControls: true,
+      ownedCaseTypes: ['example-review'],
+      ownedJourneyCaseTypes: ['example-review'],
+    })
+  );
+  assert.deepEqual(everyRoleAtOnce.sort(), [
+    'assignedReviewer',
+    'caseTypeOwner',
+    'controls',
+    'journeyOwner',
+    'responsibleParty',
+    'responsiblePartyManager',
+    'reviewerManager',
+  ]);
+
+  const unassignedReviewer = resolveRoles(
+    makeCase({ assignedReviewer: 'someone-else' }),
+    'u1',
+    caps({ isReviewer: true })
+  );
+
+  const stranger = resolveRoles(makeCase({}), 'nobody', caps({}));
+
+  const produced = new Set([
+    ...everyRoleAtOnce,
+    ...unassignedReviewer,
+    ...stranger,
+  ]);
+  assert.deepEqual([...produced].sort(), [...ROLES].sort());
 });

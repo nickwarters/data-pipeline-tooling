@@ -14,6 +14,7 @@ import {
   remediationAudience,
   resolveRoles,
   showInSummary,
+  ROLES,
   SECTIONS,
   SUMMARY_SECTIONS,
 } from '../../src/services/section-access.js';
@@ -180,6 +181,7 @@ export {
   remediationAudience,
   resolveRoles,
   showInSummary,
+  ROLES,
   SECTIONS,
   SUMMARY_SECTIONS,
 };

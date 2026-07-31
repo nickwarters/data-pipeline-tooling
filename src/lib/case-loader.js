@@ -66,7 +66,8 @@ function caseTypeLoadErrorMessage(error, caseType, isRouteCaseType) {
  * @property {SaveQueue} saveQueue
  * @property {string} caseId
  * @property {string} currentUserId
- * @property {Capabilities | null} capabilities
+ * @property {Capabilities} capabilities Resolved once at boot, before any route
+ *   mounts, so there is no default here — a defaulted capability is a granted one.
  * @property {string | null} [caseType]
  */
 
@@ -315,18 +316,6 @@ export class CaseLoader {
     this.answers = { ...caseRow.answers };
 
     const actualUserId = this.currentUserId || currentUser.id;
-    const caps = this.capabilities || {
-      isReviewer: true,
-      listAccessCaseTypes: [],
-      isAdviser: false,
-      ownedCaseTypes: [],
-      ownedJourneyCaseTypes: [],
-      isControls: false,
-      isReviewerManager: false,
-      isResponsiblePartyManager: false,
-      isMaintainer: false,
-      isVisitor: false,
-    };
 
     // The resolved catalogue — live bank while In-progress, the stamped
     // versioned export once reportable, `failureValues` derived either way — is
@@ -335,7 +324,7 @@ export class CaseLoader {
     this.machine = new CaseMachine(
       caseRow,
       { id: actualUserId },
-      caps,
+      this.capabilities,
       config,
       {
         catalogue: this.catalogue,

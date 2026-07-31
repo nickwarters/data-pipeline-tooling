@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { CaseLoader } from '../src/lib/case-loader.js';
 import { CASE_TYPE_IMPORTERS } from '../case-types/manifest.js';
 import { isolateBrowserGlobals } from './helpers/browser-globals.js';
+import { caps } from './helpers/section-access.js';
 
 isolateBrowserGlobals();
 
@@ -14,7 +15,7 @@ test('the loader holds its loading state as plain fields, not signals', () => {
     saveQueue: /** @type {any} */ ({ enqueue() {} }),
     caseId: 'c1',
     currentUserId: 'u1',
-    capabilities: null,
+    capabilities: caps(),
   });
 
   const snapshot = loader.toStoreSnapshot();
@@ -44,7 +45,7 @@ test('toStoreSnapshot: an empty multi-choice Answer is unanswered on load', () =
     saveQueue: /** @type {any} */ ({ enqueue() {} }),
     caseId: 'c1',
     currentUserId: 'u1',
-    capabilities: null,
+    capabilities: caps(),
   });
   loader.catalogue = [
     {
@@ -66,7 +67,7 @@ test('toStoreSnapshot: the loader hands over Answers and the derived applicable 
     saveQueue: /** @type {any} */ ({ enqueue() {} }),
     caseId: 'c1',
     currentUserId: 'u1',
-    capabilities: null,
+    capabilities: caps(),
   });
   loader.catalogue = [
     { id: 'q1', text: 'One', responseType: 'yes-no-na', deprecated: false },
@@ -96,7 +97,7 @@ test('CaseLoader exposes no Answer mutation surface', () => {
     saveQueue: /** @type {any} */ ({ enqueue() {} }),
     caseId: 'c1',
     currentUserId: 'u1',
-    capabilities: null,
+    capabilities: caps(),
   });
   for (const name of [
     'handleAnswer',
@@ -142,7 +143,7 @@ test('CaseLoader.load() calls getExportHash with the case type slug and stores i
     saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
     caseId: 'c1',
     currentUserId: 'u1',
-    capabilities: null,
+    capabilities: caps(),
   });
 
   await loader.load();
@@ -194,7 +195,7 @@ test('CaseLoader.load() resolves route caseType to listName for getCase and Save
     }),
     caseId: 'c1',
     currentUserId: 'u1',
-    capabilities: null,
+    capabilities: caps(),
     caseType: 'example-review',
   });
 
@@ -234,7 +235,7 @@ test('CaseLoader.load() stores null exportHash when getExportHash returns null',
     saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
     caseId: 'c1',
     currentUserId: 'u1',
-    capabilities: null,
+    capabilities: caps(),
   });
 
   await loader.load();
@@ -309,7 +310,7 @@ test('CaseLoader.load() uses versioned catalogue for Completed Case with questio
     saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
     caseId: 'c1',
     currentUserId: 'u1',
-    capabilities: null,
+    capabilities: caps(),
   });
 
   await loader.load();
@@ -340,7 +341,7 @@ test('CaseLoader.load(): Actions In Progress Case freezes on the versioned catal
     saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
     caseId: 'c1',
     currentUserId: 'u1',
-    capabilities: null,
+    capabilities: caps(),
   });
 
   await loader.load();
@@ -384,7 +385,7 @@ test('CaseLoader.load(): versioned catalogue mapping normalises null optional fi
     saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
     caseId: 'c1',
     currentUserId: 'u1',
-    capabilities: null,
+    capabilities: caps(),
   });
 
   await loader.load();
@@ -402,7 +403,7 @@ test('CaseLoader.load(): live catalogue derives failureValues from the config ou
     saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
     caseId: 'c1',
     currentUserId: 'u1',
-    capabilities: null,
+    capabilities: caps(),
   });
 
   await loader.load();
@@ -442,7 +443,7 @@ test('CaseLoader.load(): frozen catalogue derives failureValues against the snap
     saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
     caseId: 'c1',
     currentUserId: 'u1',
-    capabilities: null,
+    capabilities: caps(),
   });
 
   await loader.load();
@@ -474,7 +475,7 @@ test('CaseLoader.load(): versioned catalogue carries labelIds when present', asy
     saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
     caseId: 'c1',
     currentUserId: 'u1',
-    capabilities: null,
+    capabilities: caps(),
   });
 
   await loader.load();
@@ -492,7 +493,7 @@ test('CaseLoader.load(): missing versioned file falls back to live catalogue + v
     saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
     caseId: 'c1',
     currentUserId: 'u1',
-    capabilities: null,
+    capabilities: caps(),
   });
 
   // A stamped-but-unpublished version is a broken publish, and the banner only
@@ -526,7 +527,7 @@ test('CaseLoader.load(): In-progress Case loads live catalogue; versionWarning s
     saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
     caseId: 'c1',
     currentUserId: 'u1',
-    capabilities: null,
+    capabilities: caps(),
   });
 
   await loader.load();
@@ -549,7 +550,7 @@ test('CaseLoader.load(): Completed Case without questionBankVersion falls back t
     saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
     caseId: 'c1',
     currentUserId: 'u1',
-    capabilities: null,
+    capabilities: caps(),
   });
 
   await loader.load();
@@ -589,7 +590,7 @@ function makeLabelsLoader(caseType) {
     saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
     caseId: 'c1',
     currentUserId: 'u1',
-    capabilities: null,
+    capabilities: caps(),
   });
 }
 
@@ -673,23 +674,9 @@ test('CaseLoader.load(): a Summary role list narrows the blocks, and access stil
     }),
   });
 
-  /** @type {any} */
-  const noRoles = {
-    isReviewer: false,
-    listAccessCaseTypes: [],
-    isAdviser: false,
-    ownedCaseTypes: [],
-    ownedJourneyCaseTypes: [],
-    isControls: false,
-    isReviewerManager: false,
-    isResponsiblePartyManager: false,
-    isMaintainer: false,
-    isVisitor: false,
-  };
-
   /**
    * @param {string} userId
-   * @param {any} capabilities
+   * @param {import('../src/services/permissions.js').Capabilities} capabilities
    */
   const loadAs = async (userId, capabilities) => {
     const loader = makeLabelsLoader(slug);
@@ -702,12 +689,12 @@ test('CaseLoader.load(): a Summary role list narrows the blocks, and access stil
   try {
     // Controls holds a role the Issues list names, so that block is composed;
     // Questions, which names only the Responsible Party, is not.
-    const controls = await loadAs('u9', { ...noRoles, isControls: true });
+    const controls = await loadAs('u9', caps({ isControls: true }));
     assert.deepEqual(controls.summarySections, ['details', 'issues']);
 
     // The Responsible Party is named on the Questions list, but the matrix
     // hides Questions from them — the list narrows and never widens.
-    const responsibleParty = await loadAs('u2', noRoles);
+    const responsibleParty = await loadAs('u2', caps());
     assert.equal(responsibleParty.accessDenied, false);
     assert.deepEqual(responsibleParty.summarySections, []);
   } finally {
@@ -740,7 +727,7 @@ test('CaseLoader.load(): a pre-rename versioned export maps its category to ques
     saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
     caseId: 'c1',
     currentUserId: 'u1',
-    capabilities: null,
+    capabilities: caps(),
   });
 
   await loader.load();
@@ -783,7 +770,7 @@ test('CaseLoader.load(): a post-rename versioned export keeps category and quest
     saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
     caseId: 'c1',
     currentUserId: 'u1',
-    capabilities: null,
+    capabilities: caps(),
   });
 
   await loader.load();

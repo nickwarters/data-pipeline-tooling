@@ -14,6 +14,7 @@ import {
 } from '../case-types/manifest.js';
 import { CaseLoader } from '../src/lib/case-loader.js';
 import { validateCaptureGroups } from '../src/evaluators/issue-capture.js';
+import { caps } from './helpers/section-access.js';
 import {
   validateGeneralQuestions,
   validateAnswerKeyNamespace,
@@ -387,7 +388,7 @@ test('CaseLoader.load(): unknown primary Case Type slug sets a clear user-facing
       saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
       caseId: 'c1',
       currentUserId: 'u1',
-      capabilities: null,
+      capabilities: caps(),
     });
 
     await loader.load();
@@ -429,7 +430,7 @@ test('CaseLoader.load(): invalid Case Type outcome configuration sets a clear us
       saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
       caseId: 'c1',
       currentUserId: 'u1',
-      capabilities: null,
+      capabilities: caps(),
       caseType: slug,
     });
 

@@ -40,7 +40,7 @@ import { loadCaseTypeConfig } from '../case-types/manifest.js';
  * caseId: string,
  * caseType?: string,
  * currentUserId?: string,
- * capabilities?: Capabilities | null
+ * capabilities?: Capabilities
  * } | {
  * type: 'allocateCase',
  * caseId: string,
