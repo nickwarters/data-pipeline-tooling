@@ -219,6 +219,39 @@ test('checkCaseTypes fails an unknown key in sections', async () => {
   assert.match(failures[0].message, /sections/);
 });
 
+test('checkCaseTypes fails an unknown role in a showInSummary list', async () => {
+  const failures = await checkCaseTypes({
+    caseTypes: [
+      demoEntry(
+        demoConfig({
+          sections: { issues: { showInSummary: ['controls', 'auditor'] } },
+        })
+      ),
+    ],
+  });
+
+  assert.equal(failures.length, 1);
+  assert.match(failures[0].message, /auditor/);
+  assert.match(failures[0].message, /sections\.issues\.showInSummary/);
+});
+
+test('checkCaseTypes accepts the boolean form of showInSummary', async () => {
+  const failures = await checkCaseTypes({
+    caseTypes: [
+      demoEntry(
+        demoConfig({
+          sections: {
+            issues: { showInSummary: true },
+            notes: { showInSummary: false },
+          },
+        })
+      ),
+    ],
+  });
+
+  assert.deepEqual(failures, [], joined(failures));
+});
+
 test('checkCaseTypes fails a showWhen node whose siblings the evaluator ignores', async () => {
   const failures = await checkCaseTypes({
     caseTypes: [

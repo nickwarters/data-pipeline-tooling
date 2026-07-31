@@ -277,6 +277,22 @@ What each field does, and how to choose its value:
   into the read-only Summary tab; `allowMessagesWhen` gates when Conversation
   messages may be posted. The set above is the current standard full set —
   start from it and remove what the type genuinely doesn't need.
+
+  `showInSummary` also takes a **list of roles** instead of a boolean, naming who
+  the block is composed for rather than switching it on for everyone:
+
+  ```js
+  issues: { showInSummary: ['assignedReviewer', 'reviewerManager', 'controls'] },
+  ```
+
+  Any one of the viewer's roles matching is enough. The list can only **narrow**:
+  the Section's access mode is resolved first, so naming a role never shows it a
+  Section it is otherwise denied — this composes the Summary, it does not grant
+  access. The valid names are the `ROLES` list in
+  `src/services/section-access.js`; `npm run verify` rejects anything else.
+  Reach for it only when a block genuinely reads differently for different
+  audiences — the boolean form stays the default.
+
 - **`appeal`** — who may raise an Appeal (`journeyOwner` for
   Complaints-style journeys, otherwise `responsiblePartyManager`) and who
   resolves it (always `controls` today, kept explicit).

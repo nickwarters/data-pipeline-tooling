@@ -82,6 +82,18 @@ not the extension seam for Palimpsest generic tables.
 > decision states — data-only variation in configuration, branching behaviour in
 > code — is unchanged and still governs the remaining descriptors.
 
+> **Update (#596):** `SectionConfig.showInSummary` widens from `boolean` to
+> `boolean | Role[]`, so a Case Type can declare which roles a Summary block is
+> composed for. The role vocabulary is closed and code-owned (`ROLES` in
+> `src/services/section-access.js`) — a Case Type selects from that list and
+> cannot extend it, which is the "stable keys and membership" variation this
+> decision already permits. The list is narrowing-only: `CaseLoader` resolves each
+> block as `access[section] !== 'hidden' && showInSummary(section, config, roles)`,
+> so configuration can subtract from what a viewer already sees and never add to
+> it. This is Summary composition, not a permission model — SharePoint list ACLs
+> remain the real boundary. The boolean form and the registry defaults are
+> unchanged, so no existing Case Type's Summary moves.
+
 ## Demonstration
 
 Complaints declares the complete current `dashboardPanels` set and retains its

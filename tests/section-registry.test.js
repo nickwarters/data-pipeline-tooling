@@ -14,6 +14,7 @@ import {
   SECTIONS,
   SUMMARY_SECTIONS,
   MATRIX,
+  ROLES,
 } from '../src/services/section-access.js';
 import { DEFAULT_SECTION_LABELS } from '../src/lib/section-labels.js';
 import { CASE_TYPE_IMPORTERS } from '../case-types/manifest.js';
@@ -86,6 +87,12 @@ test('tabEntries derives tab order and ids from the registry', () => {
 
 test('the access MATRIX keys equal the registry Section ids (no drift)', () => {
   assert.deepEqual([...Object.keys(MATRIX)].sort(), [...sectionIds()].sort());
+});
+
+test('every access MATRIX row is keyed by exactly ROLES', () => {
+  for (const [section, row] of Object.entries(MATRIX)) {
+    assert.deepEqual([...Object.keys(row)].sort(), [...ROLES].sort(), section);
+  }
 });
 
 test('DEFAULT_SECTION_LABELS keys equal the registry Section ids', () => {

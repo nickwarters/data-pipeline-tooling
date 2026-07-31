@@ -22,6 +22,7 @@ import {
   showWhenReferences,
 } from '../src/evaluators/applicability-evaluator.js';
 import { sectionIds } from '../src/lib/section-registry.js';
+import { ROLES } from '../src/services/section-access.js';
 import { CASE_TYPES, loadCaseTypeConfig } from '../case-types/manifest.js';
 import { resolveRelative } from './module-graph.js';
 
@@ -376,13 +377,35 @@ function ignoredSiblingKeys(cond) {
  */
 function checkSections(slug, file, config) {
   const known = new Set(sectionIds());
-  return Object.keys(config?.sections ?? {})
-    .filter((key) => !known.has(/** @type {any} */ (key)))
-    .map((key) => ({
-      kind: /** @type {const} */ ('case-type'),
-      file,
-      message: `Case Type "${slug}": unknown \`sections\` key "${key}" — no such Case Review Section`,
-    }));
+  const knownRoles = new Set(ROLES);
+  /** @type {Failure[]} */
+  const failures = [];
+  for (const [key, value] of Object.entries(
+    /** @type {Record<string, any>} */ (config?.sections ?? {})
+  )) {
+    if (!known.has(/** @type {any} */ (key))) {
+      failures.push({
+        kind: /** @type {const} */ ('case-type'),
+        file,
+        message: `Case Type "${slug}": unknown \`sections\` key "${key}" — no such Case Review Section`,
+      });
+      continue;
+    }
+    // The role vocabulary is closed and code-owned, so a typo in a Summary role
+    // list would otherwise be silent: the block would simply be composed for
+    // nobody holding that name, which is exactly what an unnamed role looks like.
+    const showIn = value?.showInSummary;
+    if (!Array.isArray(showIn)) continue;
+    for (const role of showIn) {
+      if (knownRoles.has(role)) continue;
+      failures.push({
+        kind: /** @type {const} */ ('case-type'),
+        file,
+        message: `Case Type "${slug}": unknown role "${role}" in \`sections.${key}.showInSummary\``,
+      });
+    }
+  }
+  return failures;
 }
 
 /**

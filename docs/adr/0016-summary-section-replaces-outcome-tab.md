@@ -18,6 +18,8 @@ A first-class **Section** that is **never `edit`** — only `read-only` or `hidd
 
 The `sections` config is a per-Section config object carrying both membership and a **`showInSummary`** boolean. Summary renders one block per included Section; **Notes** defaults `showInSummary: false` (Case Justification and the general note are deliberately excluded). Config lives in the Case Type module; there is no per-individual-Case configuration.
 
+> **Update (#596):** see [ADR-0035](./0035-case-type-descriptors-express-variation-behaviour-stays-in-code.md) — the flag is now `boolean | Role[]`.
+
 ## Derivation is hybrid
 
 - **In-progress:** every block is computed from the current **Answers** and the current per-Case-Type Question Bank artifact.

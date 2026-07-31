@@ -60,7 +60,8 @@ _Avoid_: Metadata, header, summary (the latter is now a distinct Section — see
 **Section**:
 One of the role-gated areas of a Case. Each Section has an access mode (`edit` /
 `read-only` / `hidden`) resolved per viewer-role, and a **Case Type** declares
-per-Section config (membership + a `showInSummary` flag). As of the Jul 2026 workflow
+per-Section config (membership + `showInSummary`, which is either a flag or a list of
+the roles the Summary block is composed for). As of the Jul 2026 workflow
 changes the Section set is: `details` · `questions` · `issues` · `summary` ·
 `remediation` · `notes` · `conversation` · `appealRequest` · `appealReview` ·
 `amendOutcome`. The **Reviewer**'s tab row is **Case Details · Review · Issues · Summary ·
@@ -79,7 +80,7 @@ renders no tab, so the visible tab set differs by role (e.g. the **Adviser** see
 Summary + Conversation).
 
 **Summary**:
-A read-only Section that rolls up the whole Case onto one page: the **Case Details** fields, pass/fail counts per **Question Group**, **Remediation Action** counts, each _failed_ **Answer** with its actions, key dates, and the computed **Outcome**. Composed from the other Sections by their per-Section `showInSummary` flag (**Notes** is excluded by default; **Case Details** is folded in, so the **Adviser**/Responsible Party needs no separate Details tab — the architecture decision). Never editable — only `read-only` or `hidden`. **Responsible Party gating widened**: hidden while **`In-progress`**, visible `read-only` once the Case is **Reportable** (`Actions In Progress` _or_ `Completed`), so the Adviser can see the Summary while remediation is underway. Derivation is _hybrid_ and freezes at **Reportable**: live from current **Answers** while In-progress; once Reportable, the Outcome block reads the **Current Outcome** (`amendedOutcome?.outcome ?? outcomeAtCompletion`, the architecture decision/0026) while counts and the failed-Answer list recompute from the Case's frozen Answers, showing each action's `status`/`cancelReason` and the **Remediation Due Date**. **Outcome** is a block _within_ Summary, not its own Section or tab.
+A read-only Section that rolls up the whole Case onto one page: the **Case Details** fields, pass/fail counts per **Question Group**, **Remediation Action** counts, each _failed_ **Answer** with its actions, key dates, and the computed **Outcome**. Composed from the other Sections by their per-Section `showInSummary`, either a flag or a list of the roles that block is composed for — a role list can only narrow, since the Section's access mode is checked first (**Notes** is excluded by default; **Case Details** is folded in, so the **Adviser**/Responsible Party needs no separate Details tab — the architecture decision). Never editable — only `read-only` or `hidden`. **Responsible Party gating widened**: hidden while **`In-progress`**, visible `read-only` once the Case is **Reportable** (`Actions In Progress` _or_ `Completed`), so the Adviser can see the Summary while remediation is underway. Derivation is _hybrid_ and freezes at **Reportable**: live from current **Answers** while In-progress; once Reportable, the Outcome block reads the **Current Outcome** (`amendedOutcome?.outcome ?? outcomeAtCompletion`, the architecture decision/0026) while counts and the failed-Answer list recompute from the Case's frozen Answers, showing each action's `status`/`cancelReason` and the **Remediation Due Date**. **Outcome** is a block _within_ Summary, not its own Section or tab.
 _Avoid_: Outcome (now a block inside Summary, not a standalone Section), Overview, Report
 
 ### Questions & answers

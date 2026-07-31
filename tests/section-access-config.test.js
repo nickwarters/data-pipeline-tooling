@@ -158,3 +158,50 @@ test('showInSummary: a Section absent from the config object is never in Summary
   assert.equal(showInSummary('notes', cfg), false);
   assert.equal(showInSummary('questions', cfg), true);
 });
+
+// --- showInSummary as a role list ---
+
+test('showInSummary: a role list shows the block to a viewer holding one of them', () => {
+  const cfg = makeConfig({
+    sections: { issues: { showInSummary: ['controls', 'caseTypeOwner'] } },
+  });
+  assert.equal(showInSummary('issues', cfg, ['controls']), true);
+  // Any one of the viewer's roles matching is enough.
+  assert.equal(
+    showInSummary('issues', cfg, ['assignedReviewer', 'caseTypeOwner']),
+    true
+  );
+});
+
+test('showInSummary: a role list hides the block from a viewer holding none of them', () => {
+  const cfg = makeConfig({
+    sections: { issues: { showInSummary: ['controls'] } },
+  });
+  assert.equal(showInSummary('issues', cfg, ['assignedReviewer']), false);
+});
+
+test('showInSummary: a role list resolves false when no roles are supplied', () => {
+  // Fail closed: a viewer whose roles were not passed is composed no
+  // role-scoped block.
+  const cfg = makeConfig({
+    sections: { issues: { showInSummary: ['controls'] } },
+  });
+  assert.equal(showInSummary('issues', cfg), false);
+});
+
+test('showInSummary: an empty role list shows the block to nobody', () => {
+  const cfg = makeConfig({ sections: { issues: { showInSummary: [] } } });
+  assert.equal(showInSummary('issues', cfg, ['assignedReviewer']), false);
+  assert.equal(showInSummary('issues', cfg, ['controls']), false);
+});
+
+test('showInSummary: the boolean form ignores the viewer roles entirely', () => {
+  const cfg = makeConfig({
+    sections: {
+      issues: { showInSummary: true },
+      questions: { showInSummary: false },
+    },
+  });
+  assert.equal(showInSummary('issues', cfg, ['none']), true);
+  assert.equal(showInSummary('questions', cfg, ['assignedReviewer']), false);
+});

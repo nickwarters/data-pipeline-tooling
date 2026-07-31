@@ -638,6 +638,83 @@ test('CaseLoader.load(): resolves a Case Type sectionLabels override into labels
   }
 });
 
+test('CaseLoader.load(): a Summary role list narrows the blocks, and access still bounds it', async () => {
+  // No live Case Type scopes a Summary block to fewer roles than can see the
+  // Section, so register a fixture that does: Issues is composed for the
+  // reviewer side plus Controls, and Questions names the Responsible Party —
+  // who the access matrix hides Questions from entirely.
+  const slug = 'summary-roles-fixture';
+  CASE_TYPE_IMPORTERS[slug] = async () => ({
+    default: /** @type {any} */ ({
+      displayName: 'Summary Roles Fixture',
+      listName: 'Cases-SummaryRolesFixture',
+      sections: {
+        details: {},
+        questions: { showInSummary: ['responsibleParty'] },
+        issues: {
+          showInSummary: [
+            'assignedReviewer',
+            'otherReviewer',
+            'reviewerManager',
+            'caseTypeOwner',
+            'journeyOwner',
+            'controls',
+          ],
+        },
+        summary: {},
+        // Keeps the Responsible Party out of the whole-page access-denied path,
+        // so their empty Summary is a resolved answer and not an early return.
+        conversation: {},
+      },
+      questions: [],
+      computeOutcome: () => ({ outcome: 'pass' }),
+      outcomeOptions: [{ id: 'pass', wording: 'Pass', severity: 0 }],
+      defaultOutcomeId: 'pass',
+    }),
+  });
+
+  /** @type {any} */
+  const noRoles = {
+    isReviewer: false,
+    listAccessCaseTypes: [],
+    isAdviser: false,
+    ownedCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
+    isReviewerManager: false,
+    isResponsiblePartyManager: false,
+    isMaintainer: false,
+    isVisitor: false,
+  };
+
+  /**
+   * @param {string} userId
+   * @param {any} capabilities
+   */
+  const loadAs = async (userId, capabilities) => {
+    const loader = makeLabelsLoader(slug);
+    loader.currentUserId = userId;
+    loader.capabilities = capabilities;
+    await loader.load();
+    return loader;
+  };
+
+  try {
+    // Controls holds a role the Issues list names, so that block is composed;
+    // Questions, which names only the Responsible Party, is not.
+    const controls = await loadAs('u9', { ...noRoles, isControls: true });
+    assert.deepEqual(controls.summarySections, ['details', 'issues']);
+
+    // The Responsible Party is named on the Questions list, but the matrix
+    // hides Questions from them — the list narrows and never widens.
+    const responsibleParty = await loadAs('u2', noRoles);
+    assert.equal(responsibleParty.accessDenied, false);
+    assert.deepEqual(responsibleParty.summarySections, []);
+  } finally {
+    delete CASE_TYPE_IMPORTERS[slug];
+  }
+});
+
 test('CaseLoader.load(): a pre-rename versioned export maps its category to questionGroup', async () => {
   // Exports published before the two-level grouping rename carry no
   // `questionGroup` key, and their `category` meant the inner grouping.

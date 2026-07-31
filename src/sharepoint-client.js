@@ -405,9 +405,12 @@
 /**
  * Per-Section configuration declared by a Case Type. Membership in the
  * `sections` object is the allow-list; `showInSummary` controls whether the
- * Section contributes a block to the read-only Summary Section.
+ * Section contributes a block to the read-only Summary Section — `true`/`false`
+ * for every viewer, or a list of the roles the block is composed for. The list
+ * can only narrow: the Section's access mode is checked first, so naming a role
+ * never shows it a Section it is otherwise denied.
  *
- * @typedef {{ showInSummary?: boolean, allowMessagesWhen?: import('./lib/case-statuses.js').CaseStatus[] }} SectionConfig
+ * @typedef {{ showInSummary?: boolean | import('./services/section-access.js').Role[], allowMessagesWhen?: import('./lib/case-statuses.js').CaseStatus[] }} SectionConfig
  */
 
 /**

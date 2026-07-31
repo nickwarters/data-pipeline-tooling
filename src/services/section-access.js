@@ -7,7 +7,6 @@
  * than restated here; `MATRIX` below is contract-tested to have exactly its keys.
  *
  * @typedef {import('../lib/section-registry.js').Section} Section
- * @typedef {'assignedReviewer'|'otherReviewer'|'reviewerManager'|'responsibleParty'|'responsiblePartyManager'|'caseTypeOwner'|'journeyOwner'|'controls'|'none'} Role
  * @typedef {'edit'|'read-only'|'hidden'} Mode
  */
 
@@ -23,6 +22,29 @@ import {
   summaryBlockIds,
   sectionById,
 } from '../lib/section-registry.js';
+
+/**
+ * The closed set of roles a viewer can hold on a Case, in the order every
+ * `MATRIX` row is keyed. The vocabulary is code-owned: a Case Type may select
+ * from it (a Summary block can name the roles it is composed for) but may not
+ * add to it, because each name only means something to the matrix below and to
+ * `resolveRoles`. A contract test holds the matrix rows and this list together.
+ */
+export const ROLES = Object.freeze(
+  /** @type {const} */ ([
+    'assignedReviewer',
+    'otherReviewer',
+    'reviewerManager',
+    'responsibleParty',
+    'responsiblePartyManager',
+    'caseTypeOwner',
+    'journeyOwner',
+    'controls',
+    'none',
+  ])
+);
+
+/** @typedef {(typeof ROLES)[number]} Role */
 
 /**
  * A Case is **reportable** once it has passed the freeze milestone: the Reviewer
@@ -174,18 +196,32 @@ export const SUMMARY_SECTIONS = summaryBlockIds();
  * Whether a Section contributes a block to the Summary Section.
  * Membership in the Case Type's `sections` config object is the allow-list; a
  * Section absent from a defined `sections` is never in Summary. For a member (or
- * when `sections` is undefined, i.e. all enabled) the explicit `showInSummary`
- * flag wins, otherwise the default applies: Notes is off, every other block
- * Section is on.
+ * when `sections` is undefined, i.e. all enabled) `showInSummary` resolves three
+ * ways:
+ *
+ * - a **role list** — the block is composed for those roles, and any one of the
+ *   viewer's roles matching is enough, mirroring the most-permissive rule in
+ *   `evaluateAccess`;
+ * - a **boolean** — on or off for everyone who can see the Section at all;
+ * - **absent** — the registry default applies: Notes is off, every other block
+ *   Section is on.
+ *
+ * This composes the Summary; it does not grant sight of anything. Callers AND
+ * the answer with the access matrix, so a role list can only ever subtract from
+ * what a viewer already sees — a Case Type cannot name a role into a Section
+ * the matrix hides from it. An omitted `roles` therefore resolves a role list to
+ * false rather than true.
  *
  * @param {Section} section
  * @param {CaseTypeConfig} caseTypeConfig
+ * @param {Role[]} [roles] The viewer's resolved roles for this Case.
  * @returns {boolean}
  */
-export function showInSummary(section, caseTypeConfig) {
+export function showInSummary(section, caseTypeConfig, roles = []) {
   const sections = caseTypeConfig.sections;
   if (sections && !(section in sections)) return false;
   const explicit = sections?.[section]?.showInSummary;
+  if (Array.isArray(explicit)) return roles.some((r) => explicit.includes(r));
   if (explicit !== undefined) return explicit;
   return sectionById(section)?.showInSummaryDefault ?? true;
 }

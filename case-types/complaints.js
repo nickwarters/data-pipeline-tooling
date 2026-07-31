@@ -45,12 +45,27 @@ const config = {
   // block Sections opt in/out of the Summary, and the appeal/amend Sections are
   // enabled so the Complaints appeal flow and Amend Outcome
   // are available.
+  //
+  // `showInSummary` also takes a list of roles, naming who the block is composed
+  // for rather than switching it on for everyone. Issues uses that form below.
+  // The list can only subtract — a role still has to be able to see the Section
+  // at all — so the list here spells out every role the Issues Section is
+  // already visible to, and nobody's Summary changes.
   sections: {
     details: { showInSummary: true },
     questions: { showInSummary: true },
     conversation: { allowMessagesWhen: ['Actions In Progress'] },
     notes: { showInSummary: false },
-    issues: { showInSummary: true },
+    issues: {
+      showInSummary: [
+        'assignedReviewer',
+        'otherReviewer',
+        'reviewerManager',
+        'caseTypeOwner',
+        'journeyOwner',
+        'controls',
+      ],
+    },
     remediation: { showInSummary: true },
     summary: {},
     appealRequest: {},

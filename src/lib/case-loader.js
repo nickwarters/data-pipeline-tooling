@@ -342,6 +342,7 @@ export class CaseLoader {
       }
     );
     this.access = this.machine.access;
+    const roles = this.machine.roles;
 
     if (SECTIONS.every((s) => this.access[s] === 'hidden')) {
       this.accessDenied = true;
@@ -349,8 +350,11 @@ export class CaseLoader {
       return;
     }
 
+    // Access first, config second: the access half is what keeps a Case Type's
+    // role list narrowing-only, because a role it names must already be able to
+    // see the Section before its block can be composed into the Summary.
     this.summarySections = SUMMARY_SECTIONS.filter(
-      (s) => this.access[s] !== 'hidden' && showInSummary(s, config)
+      (s) => this.access[s] !== 'hidden' && showInSummary(s, config, roles)
     );
 
     this.loaded = true;
