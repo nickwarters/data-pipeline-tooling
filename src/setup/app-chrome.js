@@ -3,14 +3,10 @@ import * as appNavModule from '../components/sections/cora-app-nav.js';
 import { createBootErrorPanel } from '../lib/boot-error-panel.js';
 
 /**
- * Boot-time chrome mounting: the app nav and command palette, guarded so a
- * broken module for either cannot take down the whole app.
+ * Boot-time chrome mounting: the app nav, guarded so a broken nav module
+ * renders a message rather than a blank app.
  *
- * Palette failure is contained for real: it is logged and skipped, and boot
- * continues into a usable app. That is why the palette alone is still loaded
- * on demand.
- *
- * The nav is a static import, so the fatal-nav branch below is now a
+ * The nav is a static import, so the fatal branch below is now a
  * test-injection path rather than a production failure mode: a nav module that
  * fails to fetch breaks module evaluation before boot runs at all, which the
  * boot-error panel cannot catch (see `app.js`). Deferring the nav did buy a
@@ -24,8 +20,6 @@ import { createBootErrorPanel } from '../lib/boot-error-panel.js';
  * @param {import('../services/permissions.js').Capabilities} capabilities
  * @param {{
  *   loadNav?: () => Promise<typeof appNavModule>,
- *   loadPalette?: () => Promise<any>,
- *   body?: Element,
  *   navigationTarget?: any,
  *   readHash?: () => string,
  * }} [options]
@@ -38,14 +32,6 @@ export async function mountAppChrome(
     // A thunk, not the module itself, purely so a test can inject one that
     // rejects; the default can never reject.
     loadNav = async () => appNavModule,
-    loadPalette = async () => {
-      const [view, state] = await Promise.all([
-        import('../components/sections/cora-command-palette.js'),
-        import('../services/command-palette-store.js'),
-      ]);
-      return { ...view, commandPaletteStore: state.commandPaletteStore };
-    },
-    body = document.body,
     navigationTarget = window,
     readHash = () => location.hash || '#/',
   } = {}
@@ -71,21 +57,6 @@ export async function mountAppChrome(
   navigationTarget.addEventListener('hashchange', () =>
     navModule.updateActiveNavItems(navItems, readHash())
   );
-
-  /** @type {Element | null} */
-  let paletteRoot = null;
-  try {
-    const paletteModule = await loadPalette();
-    paletteRoot = document.createElement('div');
-    paletteRoot.className = 'cora-command-palette';
-    body.appendChild(paletteRoot);
-    paletteModule.mountCommandPalette(paletteRoot, {
-      store: paletteModule.commandPaletteStore,
-    });
-  } catch (err) {
-    if (paletteRoot?.parentNode === body) body.removeChild(paletteRoot);
-    console.error('[CORA] command palette failed to load', err);
-  }
 
   return true;
 }

@@ -2493,8 +2493,7 @@
 /* The nav bar's own element is the classed div `AppNav()` returns — there is no
    `cora-app-nav` host, so the surface/border/sticky declarations live here with
    the layout ones (#536). z-index 100 is the existing stack position: below the
-   save-status banner (110) and the command palette/toast host, above route
-   content. */
+   save-status banner (110) and the toast host, above route content. */
 [data-cora-root] .cora-app-nav-bar {
   display: flex;
   align-items: stretch;
@@ -2775,9 +2774,9 @@
 }
 
 /* The save-status banner pins bottom-right, above the conversation panel and
-   below the command palette and toast host — 110 is that existing stack, not a
-   fresh number (#514). These declarations were inline on the element until the
-   retired `cora-status-banner` host's rule could be replaced by its class. */
+   below the toast host — 110 is that existing stack, not a fresh number
+   (#514). These declarations were inline on the element until the retired
+   `cora-status-banner` host's rule could be replaced by its class. */
 .cora-case-review__save-status {
   position: fixed;
   bottom: var(--cora-space-4);
