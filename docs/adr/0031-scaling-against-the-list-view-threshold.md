@@ -29,8 +29,10 @@ Three constraints shaped the decision:
   (CONTEXT.md), and the Responsible Party Manager report is a rolling **12-calendar-month**
   view — so the retention floor is ≥12 months for reporting, plus audit. Deleting Completed
   Cases to keep lists small is therefore not on the table.
-- **A daily Python "Sync" already exists**, pulling the previous day's modified data into
-  **SQLite** databases. This is the reporting system of record.
+- **A daily Python "Sync" is planned but not built.** As designed it pulls the previous
+  day's modified data into **SQLite** databases and is intended to become the reporting
+  system of record. Nothing runs today, so every claim below about what the Sync does is a
+  statement about a component that has yet to be written, and its scope is still open.
 
 The key reframe: the ~330k/year figures are **storage** numbers, not
 **query** numbers. Every operational read is bounded by _open work_ (In-progress Cases,
@@ -77,7 +79,7 @@ calculated columns) and degrade SQL for everyone.
 ### 3. Cumulative reports read a daily snapshot, not the list
 
 `#/reports/*` pages (Reviewer Manager team, Responsible Party Manager team) **never query
-the Case lists**. The existing Python **Sync** computes each report from its **SQLite**
+the Case lists**. The planned Python **Sync** computes each report from its **SQLite**
 store and writes a **JSON snapshot** into SharePoint; the report pages read that snapshot as
 fixed data (reusing the pre-computed-JSON read path already established for versioned
 exports, [ADR-0015]) and render an explicit **"as of &lt;timestamp&gt;"**. This removes
