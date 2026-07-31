@@ -378,34 +378,36 @@ function ignoredSiblingKeys(cond) {
 function checkSections(slug, file, config) {
   const known = new Set(sectionIds());
   const knownRoles = new Set(ROLES);
-  /** @type {Failure[]} */
-  const failures = [];
-  for (const [key, value] of Object.entries(
+  /** @param {string} message @returns {Failure} */
+  const fail = (message) => ({
+    kind: /** @type {const} */ ('case-type'),
+    file,
+    message,
+  });
+  return Object.entries(
     /** @type {Record<string, any>} */ (config?.sections ?? {})
-  )) {
+  ).flatMap(([key, value]) => {
     if (!known.has(/** @type {any} */ (key))) {
-      failures.push({
-        kind: /** @type {const} */ ('case-type'),
-        file,
-        message: `Case Type "${slug}": unknown \`sections\` key "${key}" — no such Case Review Section`,
-      });
-      continue;
+      return [
+        fail(
+          `Case Type "${slug}": unknown \`sections\` key "${key}" — no such Case Review Section`
+        ),
+      ];
     }
     // The role vocabulary is closed and code-owned, so a typo in a Summary role
     // list would otherwise be silent: the block would simply be composed for
     // nobody holding that name, which is exactly what an unnamed role looks like.
     const showIn = value?.showInSummary;
-    if (!Array.isArray(showIn)) continue;
-    for (const role of showIn) {
-      if (knownRoles.has(role)) continue;
-      failures.push({
-        kind: /** @type {const} */ ('case-type'),
-        file,
-        message: `Case Type "${slug}": unknown role "${role}" in \`sections.${key}.showInSummary\``,
-      });
-    }
-  }
-  return failures;
+    return Array.isArray(showIn)
+      ? showIn
+          .filter((r) => !knownRoles.has(r))
+          .map((r) =>
+            fail(
+              `Case Type "${slug}": unknown role "${r}" in \`sections.${key}.showInSummary\``
+            )
+          )
+      : [];
+  });
 }
 
 /**

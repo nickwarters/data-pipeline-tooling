@@ -46,11 +46,8 @@ const config = {
   // enabled so the Complaints appeal flow and Amend Outcome
   // are available.
   //
-  // `showInSummary` also takes a list of roles, naming who the block is composed
-  // for rather than switching it on for everyone. Issues uses that form below.
-  // The list can only subtract — a role still has to be able to see the Section
-  // at all — so the list here spells out every role the Issues Section is
-  // already visible to, and nobody's Summary changes.
+  // The Issues list can only subtract, so naming every role the Section is
+  // already visible to changes nobody's Summary.
   sections: {
     details: { showInSummary: true },
     questions: { showInSummary: true },

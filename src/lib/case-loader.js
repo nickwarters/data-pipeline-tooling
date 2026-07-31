@@ -350,9 +350,8 @@ export class CaseLoader {
       return;
     }
 
-    // Access first, config second: the access half is what keeps a Case Type's
-    // role list narrowing-only, because a role it names must already be able to
-    // see the Section before its block can be composed into the Summary.
+    // Access first: that AND is what keeps a Case Type's role list
+    // narrowing-only.
     this.summarySections = SUMMARY_SECTIONS.filter(
       (s) => this.access[s] !== 'hidden' && showInSummary(s, config, roles)
     );

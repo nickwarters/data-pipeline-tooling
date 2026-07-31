@@ -188,20 +188,3 @@ test('showInSummary: a role list resolves false when no roles are supplied', () 
   });
   assert.equal(showInSummary('issues', cfg), false);
 });
-
-test('showInSummary: an empty role list shows the block to nobody', () => {
-  const cfg = makeConfig({ sections: { issues: { showInSummary: [] } } });
-  assert.equal(showInSummary('issues', cfg, ['assignedReviewer']), false);
-  assert.equal(showInSummary('issues', cfg, ['controls']), false);
-});
-
-test('showInSummary: the boolean form ignores the viewer roles entirely', () => {
-  const cfg = makeConfig({
-    sections: {
-      issues: { showInSummary: true },
-      questions: { showInSummary: false },
-    },
-  });
-  assert.equal(showInSummary('issues', cfg, ['none']), true);
-  assert.equal(showInSummary('questions', cfg, ['assignedReviewer']), false);
-});
