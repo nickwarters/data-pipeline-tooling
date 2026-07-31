@@ -4,7 +4,7 @@ Date: 2026-07-01
 
 ## Status
 
-Accepted
+Accepted (amends [ADR-0012], [ADR-0016], [ADR-0021]; storage in [ADR-0007])
 
 ## Context
 
@@ -50,12 +50,12 @@ In-progress ──(Issues complete, no actions → "Complete Case")────�
 - **≥1 action ⇒ "Send Actions"** → transition to `Actions In Progress`.
 - **0 actions ⇒ "Complete Case"** → transition straight to `Completed`.
 - The button is shown only when the **Issues Section is complete**: every failed
-  Answer's _visible required_ Issue Capture Fields are filled ([the architecture decision]/[the architecture decision]
-  gate, unchanged) **and** the Responsible Party has been set ([the architecture decision], set at the
+  Answer's _visible required_ Issue Capture Fields are filled ([ADR-0017]/[ADR-0020]
+  gate, unchanged) **and** the Responsible Party has been set ([ADR-0024], set at the
   bottom of the Issues tab).
 - On the actions path, the Case cannot reach `Completed` until the **Remediation tab is
   complete** — every sent action is `complete` or `cancelled` (with a cancellation
-  reason) ([the architecture decision]). This gate is **inert on the no-actions path**.
+  reason) ([ADR-0024]). This gate is **inert on the no-actions path**.
 
 ### The "reportable" milestone (the freeze point)
 
@@ -66,7 +66,7 @@ A Case becomes **reportable** at the first of these to occur:
 
 Equivalently, `reportable ⟺ status ∈ { 'Actions In Progress', 'Completed' }`.
 
-At the reportable moment, **in one ETag-guarded PATCH** ([the architecture decision]):
+At the reportable moment, **in one ETag-guarded PATCH** ([ADR-0008]):
 
 1. Stamp **`reportableAt`** (ISO timestamp) on the Case row.
 2. **Freeze the Answers** — from here a newly-applicable Question Definition **no longer
@@ -75,10 +75,10 @@ At the reportable moment, **in one ETag-guarded PATCH** ([the architecture decis
 3. Stamp the **Outcome snapshot**: `outcomeAtCompletion` + `hadRemediation` are computed
    here (D15), not deferred to final completion. (Answers are frozen, so the value is
    final.) `effectiveOutcome` / `effectiveHadRemediation` initialise equal to it
-   ([the architecture decision]).
+   ([ADR-0019]).
 4. Stamp **`questionBankVersion`** (the as-reviewed bank hash) here rather than at
-   `Completed` ([the architecture decision] amended — the freeze it protects now happens at reportable).
-5. On the actions path only, stamp the **remediation due date** ([the architecture decision]).
+   `Completed` ([ADR-0021] amended — the freeze it protects now happens at reportable).
+5. On the actions path only, stamp the **remediation due date** ([ADR-0024]).
 
 `completedAt` is stamped **only at the final `Completed` transition**. On the no-actions
 path `reportableAt === completedAt`; on the actions path `reportableAt` (Send Actions)
@@ -87,7 +87,7 @@ precedes `completedAt` (Complete Case) by the remediation period.
 ### Naming note
 
 The snapshot field keeps its name `outcomeAtCompletion` for storage compatibility, but
-"completion" now means **the reportable moment**. CONTEXT.md and [the architecture decision] are annotated
+"completion" now means **the reportable moment**. CONTEXT.md and [ADR-0012] are annotated
 accordingly rather than renaming a provisioned column.
 
 ### `CaseMachine`
@@ -115,25 +115,25 @@ no re-snapshot). `canComplete` / `canAttribute` stop hard-coding `status ===
 
 - A clean remediation loop with a well-defined freeze point shared by the UI and
   reporting; "reportable" gives a single, queryable milestone distinct from "closed."
-- Reporting ([the architecture decision]/[the architecture decision]) can count a Case the moment it is reportable, which
+- Reporting ([ADR-0012]/[ADR-0019]) can count a Case the moment it is reportable, which
   matches how the business thinks about throughput (work handed off = done reviewing).
 
 **Negative**
 
 - New provisioned columns per Case Type list: `reportableAt` (and `remediationDueDate`,
-  [the architecture decision]). Maintainers must add them.
+  [ADR-0024]). Maintainers must add them.
 - Every place that assumed `status === 'Completed'` as the freeze/gate (section access,
   Summary derivation, question-bank snapshot resolution) must switch to the `reportable`
   predicate. Blast radius is real but mechanical.
 - The `outcomeAtCompletion` name now slightly misleads (it is "at reportable"); mitigated
   by documentation rather than a risky column rename.
 
-[the architecture decision]: ./0007-case-storage-shape.md
-[the architecture decision]: ./0008-autosave-and-concurrency.md
-[the architecture decision]: ./0012-outcome-snapshot-at-completion-for-reporting.md
-[the architecture decision]: ./0016-summary-section-replaces-outcome-tab.md
-[the architecture decision]: ./0017-configurable-remediation-details.md
-[the architecture decision]: ./0019-effective-outcome-column-for-corrected-reporting.md
-[the architecture decision]: ./0020-unified-issue-capture-engine.md
-[the architecture decision]: ./0021-versioned-question-bank-snapshots-for-completed-cases.md
-[the architecture decision]: ./0024-remediation-tracking-tab.md
+[ADR-0007]: ./0007-case-storage-shape.md
+[ADR-0008]: ./0008-autosave-and-concurrency.md
+[ADR-0012]: ./0012-outcome-snapshot-at-completion-for-reporting.md
+[ADR-0016]: ./0016-summary-section-replaces-outcome-tab.md
+[ADR-0017]: ./0017-configurable-remediation-details.md
+[ADR-0019]: ./0019-effective-outcome-column-for-corrected-reporting.md
+[ADR-0020]: ./0020-unified-issue-capture-engine.md
+[ADR-0021]: ./0021-versioned-question-bank-snapshots-for-completed-cases.md
+[ADR-0024]: ./0024-remediation-tracking-tab.md

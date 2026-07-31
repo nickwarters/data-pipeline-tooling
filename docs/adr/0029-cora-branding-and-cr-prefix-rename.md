@@ -1,4 +1,4 @@
-# the architecture decision: CORA branding and the `cr-` → `cora-` prefix rename
+# ADR-0029: CORA branding and the `cr-` → `cora-` prefix rename
 
 ## Status
 
@@ -16,7 +16,7 @@ rule now says so.
 
 ## Context
 
-The platform is now named **CORA**. Since the architecture decision, every custom element tag,
+The platform is now named **CORA**. Since ADR-0003, every custom element tag,
 CSS class, CSS custom property, `data-*` scoping attribute, internal custom
 event, and the backing JS class names carried a `cr-` (or `CR`) prefix. That
 prefix existed for one reason: CSS isolation from SharePoint chrome
@@ -57,7 +57,7 @@ neither diff simultaneously renames and moves 100+ files.
 ### Explicitly not renamed
 
 - **`CR-Maintainers`** (`src/services/permissions.js`) is a **SharePoint
-  security group name**, not a framework token. Per the architecture decision the real
+  security group name**, not a framework token. Per ADR-0010 the real
   authorization boundary is SharePoint's group/ACL configuration; renaming this
   string would rebind the app to a differently-named group that does not exist
   in the SharePoint environment. Changing it is an operations decision (rename
@@ -69,7 +69,7 @@ neither diff simultaneously renames and moves 100+ files.
 
 ## Consequences
 
-- the architecture decision is amended to describe the prefix as `cora-`, with a pointer here for
+- ADR-0003 is amended to describe the prefix as `cora-`, with a pointer here for
   the history.
 - The CLAUDE.md hard rule ("Custom elements use the `cora-` prefix") and the
   documented directory tree use `cora-*`.

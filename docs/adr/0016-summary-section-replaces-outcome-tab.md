@@ -31,12 +31,12 @@ This keeps the Summary faithful to the bank version used for the review without 
 
 - **Keep Outcome as its own tab alongside Summary.** Rejected: two places showing the same verdict invites divergence and confusion.
 - **Summary as a fixed always-on view (not a Section).** Rejected: loses per-role gating, so the Responsible Party would see failed-question detail mid-review unless special-cased anyway.
-- **Snapshot the entire Summary at completion** (counts, failed-Answers, dates, outcome stamped onto the row). Rejected for now: perfectly faithful but a sizeable frozen blob extending the architecture decision/0012 with freezing logic to test; the hybrid approach is faithful enough given Answers are frozen.
-- **Always-current derivation** (ignore `outcomeAtCompletion` and `questionBankVersion`). Rejected: a reportable Case's summary could change retroactively when the current bank artifact or outcome function is edited — exactly what the architecture decision exists to prevent.
+- **Snapshot the entire Summary at completion** (counts, failed-Answers, dates, outcome stamped onto the row). Rejected for now: perfectly faithful but a sizeable frozen blob extending ADR-0007/0012 with freezing logic to test; the hybrid approach is faithful enough given Answers are frozen.
+- **Always-current derivation** (ignore `outcomeAtCompletion` and `questionBankVersion`). Rejected: a reportable Case's summary could change retroactively when the current bank artifact or outcome function is edited — exactly what ADR-0012 exists to prevent.
 
 ## Consequences
 
 - The **Complete Case** button stays in persistent chrome; Summary carries no action.
 - **Conversation** remains a Section but not a tab — still a floating overlay.
 - `cora-outcome` survives as a component rendered _inside_ Summary; the Outcome Section/tab and its dedicated matrix row are removed.
-- the architecture decision and the architecture decision are amended (see their "superseded in part" notes).
+- ADR-0011 and ADR-0014 are amended (see their "superseded in part" notes).

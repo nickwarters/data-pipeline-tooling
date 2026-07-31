@@ -1,4 +1,4 @@
-# the architecture decision: Case Type scaffolding contract
+# ADR-0028: Case Type scaffolding contract
 
 ## Status
 
@@ -59,7 +59,7 @@ app-writes-it provenance).
 - The generated module includes TODO markers for the Question Bank, Outcome
   vocabulary, appeal raiser, Case Details fields, and SLA hours.
 - The generated mock personas exercise the derived `Reviewers - X`,
-  `CaseTypeOwner - X`, and `JourneyOwner - X` groups from the architecture decision.
+  `CaseTypeOwner - X`, and `JourneyOwner - X` groups from ADR-0022.
 - Re-running with an existing slug is a hard error to avoid overwriting operator
   edits.
 

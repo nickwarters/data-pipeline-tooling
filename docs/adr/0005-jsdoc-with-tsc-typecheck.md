@@ -10,4 +10,4 @@ Shared types live in `/types/*.d.ts` (declaration-only files are valid in a JSDo
 
 `tsc` is a dev/CI dependency only. It does not run in the browser, does not transform code, and is not required to _run_ the framework — only to verify it. Editors (VS Code, JetBrains) get the same checks live via the bundled TypeScript service.
 
-Chosen over plain JS (no checking) because the question engine's conditional logic and the Case Type config schema are exactly the kind of structural code where silent type drift causes bad bugs. Chosen over `.ts` files because TypeScript-as-source would require either a build step (violates the architecture decision) or browser-loaded transpilation (slow, fragile).
+Chosen over plain JS (no checking) because the question engine's conditional logic and the Case Type config schema are exactly the kind of structural code where silent type drift causes bad bugs. Chosen over `.ts` files because TypeScript-as-source would require either a build step (violates ADR-0001) or browser-loaded transpilation (slow, fragile).

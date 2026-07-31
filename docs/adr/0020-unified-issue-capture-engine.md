@@ -12,7 +12,7 @@ A **Case Type** declares everything captured against a _failed_ **Answer** (an *
 
 Groups and fields are **per Case Type** (Case Type A's "Issue Originator" need not exist in Case Type B; B may have a different person field, or none). With everything configurable, there is no stable "the Attributed Party" or "the actions" to special-case. So attribution and actions become **field types** in the same engine rather than bespoke concepts with their own storage and lifecycle. One capture system, not two running in parallel — which is exactly the divergence the consolidation set out to kill.
 
-## Declaration (per Case Type, the architecture decision)
+## Declaration (per Case Type, ADR-0004)
 
 ```js
 captureGroups: [
@@ -39,22 +39,22 @@ capture: Record<
 >;
 ```
 
-This widens the architecture decision's `Record<string,string>` (forced by `person` and `actions`). It is a JSON-shape change inside the existing Answers blob — **no new SharePoint column**, the architecture decision's "everything on the row" is untouched. The dedicated `attributedParty` / `remediationDetails` Answer properties are removed; their data lives in `capture`.
+This widens ADR-0017's `Record<string,string>` (forced by `person` and `actions`). It is a JSON-shape change inside the existing Answers blob — **no new SharePoint column**, ADR-0007's "everything on the row" is untouched. The dedicated `attributedParty` / `remediationDetails` Answer properties are removed; their data lives in `capture`.
 
-## Lifecycle (inherits the architecture decision)
+## Lifecycle (inherits ADR-0013)
 
 - **Failed Answers only.** Capture exists only while the Answer is an Issue.
 - **Stripped** when the Answer is no longer a failure; **frozen** once the Case is **Completed**.
 - A field hidden by `showWhen` has its value **stripped** and starts **empty** if it becomes visible again.
 - Collapse/expand is **ephemeral UI state** — not persisted per Answer or Reviewer; resets to the configured `collapsed` default on reload.
 
-## Required & the completion gate (extends the architecture decision `canCompleteCase`)
+## Required & the completion gate (extends ADR-0011 `canCompleteCase`)
 
 A field is **effectively required** when `required: true` **and** its `showWhen` currently resolves true. The Case cannot be **Completed** until every effectively-required field on every failed Answer is filled — i.e. `required` gates completion **only while the field is visible**. Hidden fields never block completion.
 
 ## Surfacing
 
-- **Issues tab:** the failed-Answer list; selecting one shows its Issue Capture Groups (collapsible drawer, one Issue at a time — the the architecture decision master–detail pattern, now group-aware).
+- **Issues tab:** the failed-Answer list; selecting one shows its Issue Capture Groups (collapsible drawer, one Issue at a time — the ADR-0017 master–detail pattern, now group-aware).
 - **Summary tab:** the failed-question detail block renders the captured groups **expanded, read-only**, showing only visible + populated fields.
 
 ## Considered alternatives
@@ -67,6 +67,6 @@ A field is **effectively required** when `required: true` **and** its `showWhen`
 ## Consequences
 
 - `CaseTypeConfig` gains `captureGroups`; loses `remediationFields`. The `Answer` typedef gains `capture`; loses `attributedParty` and `remediationDetails`.
-- the architecture decision is superseded; the architecture decision's storage/declaration site is amended (lifecycle and identity-resolution rules survive).
+- ADR-0017 is superseded; ADR-0013's storage/declaration site is amended (lifecycle and identity-resolution rules survive).
 - The completeness computation accounts for effectively-required (visible) capture fields on failed Answers.
 - The **Remediation** tab is the tracking surface for sent actions, and **Amend Outcome** is a case-level Controls surface.

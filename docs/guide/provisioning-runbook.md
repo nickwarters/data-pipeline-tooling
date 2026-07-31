@@ -1,16 +1,12 @@
 # Maintainer provisioning runbook
 
 What a Maintainer must provision in SharePoint to stand up a Case Type, and the
-recurring maintenance the framework depends on. This is the operational
-counterpart to the storage ADRs —
-(what a Case row carries), (the
-group model),
-(the lifecycle and `reportableAt`),
-(the working-day holiday list), and
-(the Amended Outcome).
+recurring maintenance the framework depends on: what a Case row carries, the
+group model, the lifecycle and `reportableAt`, the working-day holiday list, and
+the Amended Outcome.
 
-Provisioning a new Case Type is **config + wiring only**: one module,
-one Question Bank, and the lists and groups below. No framework change per type.
+Provisioning a new Case Type is **config + wiring only**: one module, one
+Question Bank, and the lists and groups below. No framework change per type.
 ~8 Case Types are live for September (Example Review, Complaints, and ~6 more
 structurally like Complaints).
 
@@ -138,24 +134,24 @@ display name is `X` (e.g. `Example Review`, **not** the slug), provision:
 | `JourneyOwner - X`  | Elevated **frontline** role — sees every Case's Summary and raises Appeals where the type configures it. Not a Case Type Owner. |
 
 Group **display names** use the Case Type display name; code composes them from
-`slug → displayName` (declared on the Case Type module, the architecture decision), so a new type
-needs one name, not three hand-written strings.
+`slug → displayName` (declared on the Case Type module), so a new type needs one
+name, not three hand-written strings.
 
 ### Site-wide functional groups (provision once, not per type)
 
 `Reviewers` (base reviewing), `Advisers` (base frontline — eligible Responsible
 Party), `Controls` (resolves Appeals, authors Amended Outcomes — replaces the
-retired QA Reviewer). See the architecture decision for the full capability matrix.
+retired QA Reviewer).
 
 ---
 
 ## 5. Recurring maintenance — the working-day holiday list
 
-The remediation SLA is **10 working days** after Send Actions, which
-excludes weekends **and** public holidays. The holiday source is an **in-code
-array**, `ENGLAND_WALES_HOLIDAYS` in
-[`src/config/working-days.js`](../../src/config/working-days.js) —
-England & Wales public holidays as ISO `YYYY-MM-DD` dates.
+The remediation SLA is **10 working days** after Send Actions, which excludes
+weekends **and** public holidays. The holiday source is an **in-code array**,
+`ENGLAND_WALES_HOLIDAYS` in
+[`src/config/working-days.js`](../../src/config/working-days.js) — England &
+Wales public holidays as ISO `YYYY-MM-DD` dates.
 
 **This list is a maintenance burden the Maintainer owns.** Refresh it **annually**
 (or whenever holidays change): a stale list silently produces **early** due

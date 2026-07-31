@@ -10,7 +10,7 @@ behaviour remains in JavaScript.
 
 Each **Case Type** is a JS module under `/Style Library/case-review/case-types/{slug}.js`, exporting a `default` POJO that conforms to a `CaseTypeConfig` JSDoc typedef. Loaded lazily via dynamic `import()` when a Case of that type is opened.
 
-Chosen over JSON files because JS modules: (a) carry **JSDoc types** for IDE intellisense and CI type-checking, (b) can `import` shared helpers and constants (e.g., common field validators), (c) let the **outcome algorithm be an exported function** rather than something encoded in a data DSL, (d) cache identically to JSON in the browser. No build step is added — modern browsers load ES modules natively, consistent with the architecture decision.
+Chosen over JSON files because JS modules: (a) carry **JSDoc types** for IDE intellisense and CI type-checking, (b) can `import` shared helpers and constants (e.g., common field validators), (c) let the **outcome algorithm be an exported function** rather than something encoded in a data DSL, (d) cache identically to JSON in the browser. No build step is added — modern browsers load ES modules natively, consistent with ADR-0001.
 
 **Question Bank content is a per-Case-Type text artifact in SharePoint**, not rows in a shared Question Definitions list. Each `case-types/{slug}.js` module loads `case-types/banks/{slug}.txt` as JSON text and exposes its questions, labels, and Outcome vocabulary through the `CaseTypeConfig` contract. The `.txt` extension avoids SharePoint SE's unreliable `.json` handling; it does not change the JSON content model. The Question Bank editor reads and compiles that same artifact (see ADR-0021).
 

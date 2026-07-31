@@ -21,14 +21,14 @@ import { openAppealOf } from './appeal-actions.js';
  * citing a disputed Answer aims the reviewer but sets no value. This view owns
  * form validation only; the route slice owns immutable state and persistence.
  *
- * Access is resolved upstream (section-access, the architecture decision):
+ * Access is resolved upstream (section-access):
  * `edit` for the configured raiser on a Completed Case, `hidden` for every other
  * role and every other status — so in the app this Section renders only as the
  * raiser's form. At most one Appeal may be open at a time; once every Appeal is
  * resolved a fresh one can be raised, with full history kept.
  *
  * Appeal *resolution* is handled by the separate **Appeal Review** Section
- * (`cora-appeal-review`, the architecture decision), where **Controls** agrees or rejects with a
+ * (`cora-appeal-review`), where **Controls** agrees or rejects with a
  * rationale. Agreeing also authors a linked Amended Outcome.
  */
 /**

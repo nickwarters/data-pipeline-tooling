@@ -6,8 +6,6 @@ modified yesterday," and similar.
 
 This is a _consumer_ guide. The reporting code itself is out of scope; this
 document specifies the **format** it reads and the **algorithm** it must apply.
-The decisions behind it are
-and.
 
 ## TL;DR
 
@@ -183,9 +181,9 @@ reporting-relevant fields:
 > `outcomeOverridden` stays server-side and bounded — no full-row fetch, no
 > client-side re-derivation. Never recompute either verdict.
 
-> **Provisioning (Maintainers).** On top of the architecture decision's two columns, every
-> per-Case-Type list now needs three more, added when the Case Type
-> list is provisioned:
+> **Provisioning (Maintainers).** On top of the two frozen-snapshot columns
+> (`OutcomeAtCompletion`, `HadRemediation`), every per-Case-Type list now needs
+> three more, added when the Case Type list is provisioned:
 >
 > - `EffectiveOutcome` — Single line of text, **indexed**.
 > - `EffectiveHadRemediation` — Yes/No.
@@ -193,11 +191,11 @@ reporting-relevant fields:
 >
 > The framework filters on `EffectiveOutcome` and `OutcomeOverridden`
 > server-side (`http-sharepoint-client.js`, `listCases`), so both must be indexed
-> for the bounded report query. Rows completed before the architecture decision landed may have
-> these absent/null; treat them as un-corrected (`effectiveOutcome` ⇒ fall back to
-> `outcomeAtCompletion`, `outcomeOverridden` ⇒ `false`).
+> for the bounded report query. Rows completed before these three columns existed
+> may have them absent/null; treat those as un-corrected (`effectiveOutcome` ⇒
+> fall back to `outcomeAtCompletion`, `outcomeOverridden` ⇒ `false`).
 
-> **Case-verdict snapshot.** the architecture decision is implemented: the completion write
+> **Case-verdict snapshot.** The completion write
 > (`cora-case-review.js`, `_completeCase`) runs the outcome function over the
 > answers at completion time and stamps `outcomeAtCompletion` + `hadRemediation`
 > in the same ETag-guarded PATCH as `status` / `completedAt`. The snapshot is
@@ -245,23 +243,23 @@ export, find the Answer by `id` → apply the failure test. This replicates
 
 ```python
 def failure_values(question, default_outcome_id):
- mapping = question.get("optionOutcomes") or {}
- return {
- value
- for value, outcome_id in mapping.items()
- if value != "NA" and outcome_id != default_outcome_id
- }
+    mapping = question.get("optionOutcomes") or {}
+    return {
+        value
+        for value, outcome_id in mapping.items()
+        if value != "NA" and outcome_id != default_outcome_id
+    }
 
 def is_failure(question, answer, default_outcome_id):
- failing = failure_values(question, default_outcome_id)
- if not failing: # question can never fail
- return False
- if answer is None: # unanswered
- return False
- value = answer["value"]
- if isinstance(value, list): # multi-choice
- return any(v in failing for v in value if v != "NA")
- return value != "NA" and value in failing # scalar
+    failing = failure_values(question, default_outcome_id)
+    if not failing:           # question can never fail
+        return False
+    if answer is None:        # unanswered
+        return False
+    value = answer["value"]
+    if isinstance(value, list):                 # multi-choice
+        return any(v in failing for v in value if v != "NA")
+    return value != "NA" and value in failing   # scalar
 ```
 
 > **The branch on `responseType` is implicit in `value`'s type**, but keep
@@ -272,36 +270,36 @@ def is_failure(question, answer, default_outcome_id):
 ### Worked example — "top failed questions"
 
 ```python
-for case in cases_modified_yesterday: # filter on completedAt
- version = case.get("questionBankVersion")
- if version: # the architecture decision: use the versioned file
- export = load_json(f"case-types/{slug}.{version}.json")
- else:
- export = load_json(f"case-types/{case['caseType']}.json")
- by_id = {q["id"]: q for q in export["questions"]}
- for qid, answer in case["answers"].items():
- q = by_id.get(qid)
- if q and is_failure(q, answer, export.get("defaultOutcomeId")):
- tally[(case["caseType"], qid, q["text"], q.get("category"))] += 1
+for case in cases_modified_yesterday:           # filter on completedAt
+    version = case.get("questionBankVersion")
+    if version:                                 # the bank as it was at review time
+        export = load_json(f"case-types/{slug}.{version}.json")
+    else:
+        export = load_json(f"case-types/{case['caseType']}.json")
+    by_id  = {q["id"]: q for q in export["questions"]}
+    for qid, answer in case["answers"].items():
+        q = by_id.get(qid)
+        if q and is_failure(q, answer, export.get("defaultOutcomeId")):
+            tally[(case["caseType"], qid, q["text"], q.get("category"))] += 1
 
 # tally, sorted descending, is your "top failed questions" report
 ```
 
 ## Caveats — read these
 
-1. **Use versioned exports for Completed Cases.** When a Case row
-   carries a `questionBankVersion`, fetch `{slug}.{hash}.json` for that hash
-   instead of `{slug}.json`. This gives you the exact questions, wording, and
-   `optionOutcomes` / `defaultOutcomeId` that were in force at review time. Cases completed before
-   the architecture decision was deployed have no `questionBankVersion`; fall back to the current
-   `{slug}.json` for those (same behaviour as before).
+1. **Use versioned exports for Completed Cases.** When a Case row carries a
+   `questionBankVersion`, fetch `{slug}.{hash}.json` for that hash instead of
+   `{slug}.json`. This gives you the exact questions, wording, and
+   `optionOutcomes` / `defaultOutcomeId` that were in force at review time. Cases
+   completed before versioned exports existed have no `questionBankVersion`; fall
+   back to the current `{slug}.json` for those (same behaviour as before).
 
 2. **Case verdicts are different — and stable.** The _case-level_ pass/refer/fail
    is **not** re-derived from answers. Read `outcomeAtCompletion` straight off the
-   row; it is frozen at completion and immune to later bank edits.
-   Never recompute it. The completion path stamps it in the same PATCH as
-   `status` + `completedAt`, so it is present on every Case completed after
-   the architecture decision landed (older rows may carry a null — treat those as un-snapshotted).
+   row; it is frozen at completion and immune to later bank edits. Never
+   recompute it. The completion path stamps it in the same PATCH as `status` +
+   `completedAt`, so it is present on every Case completed since the snapshot was
+   introduced (older rows may carry a null — treat those as un-snapshotted).
 
 3. **Applicability (`showWhen`).** Counting _failures_ needs no `showWhen` — a
    failed answer was, by definition, shown and answered. You only need `showWhen`

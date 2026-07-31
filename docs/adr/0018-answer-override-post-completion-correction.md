@@ -10,7 +10,7 @@ Override, the QA Check, and the QA Reviewer role are retired. Post-completion
 corrections are now a **case-level Amended Outcome** authored by **Controls**,
 not a per-Answer re-derivation. This record is kept for history.
 
-> [the architecture decision]: ./0026-amend-outcome-case-level-and-qa-retirement.md
+> [ADR-0026]: ./0026-amend-outcome-case-level-and-qa-retirement.md
 
 ## Context
 
@@ -20,12 +20,12 @@ Reviewer** finds the original **Assigned Reviewer** answered a question wrong
 The strong domain consensus is that _the original result must remain_: we record
 **why** it changed, not silently rewrite history.
 
-This collides with several existing decisions. Per [the architecture decision], Outcome is _code,
-not data_ — derived by `computeOutcome` over the Case's Answers. Per [the architecture decision],
+This collides with several existing decisions. Per [ADR-0006], Outcome is _code,
+not data_ — derived by `computeOutcome` over the Case's Answers. Per [ADR-0012],
 `outcomeAtCompletion` is a _frozen snapshot_ and the Answers themselves are frozen
-at completion. Per [the architecture decision], a Case stores `answers` as one JSON blob on the row
-with field-level PATCH. Per [the architecture decision], a _failed_ Answer's **Attributed Party**
-(and per [the architecture decision] its required **Remediation Details**) participate in the
+at completion. Per [ADR-0007], a Case stores `answers` as one JSON blob on the row
+with field-level PATCH. Per [ADR-0013], a _failed_ Answer's **Attributed Party**
+(and per [ADR-0017] its required **Remediation Details**) participate in the
 completion gate and are stripped when the Answer is no longer a failure.
 
 We needed a correction mechanism that honours all of these: it must not mutate the
@@ -39,10 +39,10 @@ Corrections are modelled as **Answer Overrides**: a post-completion, per-Answer
 layer that _displaces_ the original without mutating it.
 
 - **Additive storage.** Overrides live in a new `overrides[]` JSON-blob field on
-  the **original Case row**, written by field-level PATCH ([the architecture decision] SaveQueue,
+  the **original Case row**, written by field-level PATCH ([ADR-0008] SaveQueue,
   ETag-guarded). The frozen fields (`answers`, `outcomeAtCompletion`,
   `completedAt`, `hadRemediation`) are never touched — "immutable" means _those
-  fields_; adding a new field is additive. "Read-only original" ([the architecture decision],
+  fields_; adding a new field is additive. "Read-only original" ([ADR-0006],
   CONTEXT QA Check) is narrowed to "the original _Answers_ are read-only."
 
 - **Answer-level only; Outcome stays derived.** There is no verdict-level
@@ -51,34 +51,34 @@ layer that _displaces_ the original without mutating it.
   Remediation Actions / Attributed Party / Remediation Details (**replace, never
   merge**). The **Current Outcome** is re-derived by running `computeOutcome` over
   the **Effective Answers** (original with overrides applied). This keeps
-  [the architecture decision] intact and avoids reintroducing "Outcome as a stored, editable
+  [ADR-0006] intact and avoids reintroducing "Outcome as a stored, editable
   entity" (a CONTEXT.md flagged-and-rejected modelling).
 
 - **The three transitions.** fail→pass: the original's actions/attribution stay in
   the frozen record but vanish from the effective view. fail→still-fail-different:
   the action set is swapped. pass→fail: a new action set is added, and the Override
-  must satisfy the same completion gate the Case did ([the architecture decision] required details,
-  [the architecture decision] attribution when `attributeFailures`) for the Answers it touches.
+  must satisfy the same completion gate the Case did ([ADR-0017] required details,
+  [ADR-0013] attribution when `attributeFailures`) for the Answers it touches.
 
 - **Provenance and authority.** Each Override carries `{ source: 'qa' | 'appeal',
 sourceCaseId? / sourceAppealId?, author, at, answerKey, value,
 remediationActions?, attributedParty?, remediationDetails?, reasoning }`.
   Reasoning is mandatory. Authoring is restricted to the **QA Reviewers** group
-  (UX-gated per [the architecture decision]; the real boundary is list ACLs). Overrides work **with
+  (UX-gated per [ADR-0010]; the real boundary is list ACLs). Overrides work **with
   or without** a QA Check — an Appeal-sourced or direct QA override needs no
   `qa-{slug}` Case. `sourceCaseId` present ⇒ authored during a formal QA Check;
   absent ⇒ ad-hoc QA correction. Both stay `source: 'qa'` (no third source).
 
 - **One record, one authority, two surfaces.** The Override is a single record in
   `overrides[]` on the original row, governed by the original's `override` Mode
-  cell ([the architecture decision], a function-valued cell returning `override` for `qaReviewer`
+  cell ([ADR-0011], a function-valued cell returning `override` for `qaReviewer`
   when `status === 'Completed'`). The _authoring editor_ is one reusable element
   mounted in two hosts: the **original Case page**, and — as a convenience — a
   **QA Check** (`qa-{slug}`) that targets it, so a QA Reviewer need not navigate
   away mid-QA. Storage location and authority do **not** move with the surface:
   the QA Check embeds the editor but the write still targets the original row.
   Two consequences follow: (1) from the QA Check the write is **cross-row** —
-  it carries the _original's_ ETag and reload-retries on conflict ([the architecture decision]),
+  it carries the _original's_ ETag and reload-retries on conflict ([ADR-0008]),
   even though the QA Check row is the page's primary; (2) the QA Check page
   resolves the `override` capability against the **linked original** row, not its
   own. Authoring on the original page remains fully independent, so Appeal-sourced
@@ -88,9 +88,9 @@ remediationActions?, attributedParty?, remediationDetails?, reasoning }`.
 
 - **Mutate the Answer / re-stamp `outcomeAtCompletion`** — rejected: destroys the
   original result (the reviewer-error signal QA exists to measure) and breaks
-  [the architecture decision]'s freeze.
+  [ADR-0012]'s freeze.
 - **Verdict-level override** (hand-edit pass/fail with a reason) — rejected:
-  reintroduces stored-Outcome-as-truth ([the architecture decision]) and lets a pass be asserted
+  reintroduces stored-Outcome-as-truth ([ADR-0006]) and lets a pass be asserted
   while a failed Answer still carries actions. Answer-level keeps actions and
   outcome consistent by construction.
 - **Merge override actions onto the original set** — rejected: produces ambiguous
@@ -99,7 +99,7 @@ remediationActions?, attributedParty?, remediationDetails?, reasoning }`.
 - **Store overrides on the QA Check Case or a separate list** — rejected: an
   Appeal-sourced override has no QA Check, and every reader of the original would
   have to fan out to find related records. Additive blob on the original row keeps
-  "the whole current state of this Case" on one row ([the architecture decision]).
+  "the whole current state of this Case" on one row ([ADR-0007]).
 
 ## Consequences
 
@@ -107,25 +107,25 @@ remediationActions?, attributedParty?, remediationDetails?, reasoning }`.
 
 - Original result is preserved verbatim; corrections are auditable (who, when,
   why, from QA or Appeal).
-- Outcome remains derived ([the architecture decision]); no new "edit the verdict" surface.
+- Outcome remains derived ([ADR-0006]); no new "edit the verdict" surface.
 - One row still answers "what is true about this Case now," including corrections.
 
 **Negative**
 
 - A second outcome now exists at runtime (frozen original vs **Current Outcome**);
   every Summary/QA view must show original-vs-override per Answer to avoid
-  confusion. Reporting consequences are handled in [the architecture decision].
+  confusion. Reporting consequences are handled in [ADR-0019].
 - The `overrides[]` stored format is hard to change after data exists (a migration
-  across every Case Type list), same lock-in noted in [the architecture decision].
+  across every Case Type list), same lock-in noted in [ADR-0013].
 - QA Check is no longer a pure read-only observer of the original — it can append
   overrides. CONTEXT.md QA Check updated accordingly.
 
-[the architecture decision]: ./0006-applicability-graph-and-outcome-function.md
-[the architecture decision]: ./0007-case-storage-shape.md
-[the architecture decision]: ./0008-autosave-and-concurrency.md
-[the architecture decision]: ./0010-auth-and-permissions.md
-[the architecture decision]: ./0011-section-level-role-based-access.md
-[the architecture decision]: ./0012-outcome-snapshot-at-completion-for-reporting.md
-[the architecture decision]: ./0013-attributed-party-identity-in-answer-json.md
-[the architecture decision]: ./0017-configurable-remediation-details.md
-[the architecture decision]: ./0019-effective-outcome-column-for-corrected-reporting.md
+[ADR-0006]: ./0006-applicability-graph-and-outcome-function.md
+[ADR-0007]: ./0007-case-storage-shape.md
+[ADR-0008]: ./0008-autosave-and-concurrency.md
+[ADR-0010]: ./0010-auth-and-permissions.md
+[ADR-0011]: ./0011-section-level-role-based-access.md
+[ADR-0012]: ./0012-outcome-snapshot-at-completion-for-reporting.md
+[ADR-0013]: ./0013-attributed-party-identity-in-answer-json.md
+[ADR-0017]: ./0017-configurable-remediation-details.md
+[ADR-0019]: ./0019-effective-outcome-column-for-corrected-reporting.md

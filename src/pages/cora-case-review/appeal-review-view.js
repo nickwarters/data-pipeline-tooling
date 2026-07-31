@@ -12,7 +12,7 @@ import { openAppealOf } from './appeal-actions.js';
  * The **Appeal Review** Section. Lets **Controls** resolve an open
  * Appeal on a Completed Case: either agree (outcome was wrong, author an Amended
  * Outcome linked to the Appeal id) or reject (record rationale only). Access is
- * resolved upstream (`section-access`, the architecture decision): Controls gets
+ * resolved upstream (`section-access`): Controls gets
  * `edit` on a Completed Case with an open Appeal and `read-only` once every
  * Appeal is resolved; for every other role the Section is not rendered at all.
  * At most one Appeal may be open at a time.

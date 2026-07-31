@@ -24,7 +24,7 @@ a Case Type's bank today is the compiled `case-types/{slug}.js` module produced 
 the question bank editor (`question-bank-compile.js`). That module is the wrong
 input for Python for two reasons:
 
-1. **It contains a function.** Per [the architecture decision], applicability is data (`showWhen`)
+1. **It contains a function.** Per [ADR-0006], applicability is data (`showWhen`)
    but **outcome is code** — the module exports `computeOutcome(answers)`. Python
    cannot parse or execute JS, so the module is not consumable as data.
 2. **It is UI-shaped, not report-shaped.** It is an ES module meant to be
@@ -37,7 +37,7 @@ Two framings were rejected:
   languages and rots on the first divergence. It is also unnecessary: per-question
   failure is pure data (`failureCriteria`), and _case-level_ verdicts are already
   persisted as the frozen `outcomeAtCompletion` snapshot on the Case row
-  ([the architecture decision]) precisely so reporting never re-runs the outcome function. Python
+  ([ADR-0012]) precisely so reporting never re-runs the outcome function. Python
   never needs the function.
 - **Point Python at a Question Definitions SharePoint list.** There is no such
   runtime list: each Case Type's complete Question Bank is stored as JSON text in
@@ -52,7 +52,7 @@ a **function-free JSON sibling** `case-types/{slug}.json` — a data-only projec
 of that Case Type's **Question Bank**, intended as the contract for external
 (Python) reporting.
 
-- **One file per Case Type**, co-located with the module (mirrors [the architecture decision]'s
+- **One file per Case Type**, co-located with the module (mirrors [ADR-0004]'s
   one-module-per-type model). Published through the _same_ review/PR flow as the
   `.js` — two outputs from one compile, never generated at runtime from the
   deployed module (which would reintroduce the function-parsing problem).
@@ -76,14 +76,14 @@ of that Case Type's **Question Bank**, intended as the contract for external
   Reportable Cases stamp `questionBankVersion`, so Python reads
   `{slug}.{hash}.json` and derives per-question results against the as-reviewed
   bank (ADR-0021). Case-level verdicts still come from the frozen
-  `outcomeAtCompletion` snapshot ([the architecture decision]) rather than being
+  `outcomeAtCompletion` snapshot ([ADR-0012]) rather than being
   re-derived.
 
-> **Dependency note.** [the architecture decision] is Accepted but **not yet implemented**: the
+> **Dependency note.** [ADR-0012] is Accepted but **not yet implemented**: the
 > completion write (`cora-case-review.js`, `_completeCase`) currently stamps only
 > `status` + `completedAt`, not `outcomeAtCompletion` / `hadRemediation`. The
 > per-question failure reporting this ADR enables works today; _case-level_ verdict
-> reporting is blocked until the architecture decision lands. This export deliberately carries no
+> reporting is blocked until ADR-0012 lands. This export deliberately carries no
 > verdict of its own — recomputing it in Python is out of scope (above).
 
 The "how to process it" guide lives in
@@ -96,9 +96,9 @@ The "how to process it" guide lives in
 - Python gets a stable, function-free contract without parsing JS or forking
   business logic.
 - No new SharePoint list and no sync job: the JSON ships in the Style Library
-  beside the module, through the existing deploy flow ([the architecture decision], and consistent
-  with [the architecture decision]'s "no new list" preference). Python fetches it by URL over the
-  existing NTLM/Kerberos boundary ([the architecture decision]).
+  beside the module, through the existing deploy flow ([ADR-0004], and consistent
+  with [ADR-0012]'s "no new list" preference). Python fetches it by URL over the
+  existing NTLM/Kerberos boundary ([ADR-0010]).
 - The `hash` / `generatedAt` fields exist from day one, so the deferred
   snapshot-stability story below can be built later without a format break.
 
@@ -109,9 +109,9 @@ The "how to process it" guide lives in
   bypassed.
 - Latest-export semantics mean long-range retrospective per-question reports are
   not point-in-time stable. If that is ever required, the path is a per-question
-  failure snapshot at completion (mirroring [the architecture decision]) plus stamping the export
+  failure snapshot at completion (mirroring [ADR-0012]) plus stamping the export
   `hash` onto the completed Case row — deliberately out of scope here.
-- A mild duplication of intent with [the architecture decision]: applicability/failure data now
+- A mild duplication of intent with [ADR-0006]: applicability/failure data now
   exists in both the `.js` module and the `.json` export. Resolved by treating the
   `.json` as a generated projection, never hand-edited.
 
@@ -128,7 +128,7 @@ explicit key allowlist, so the renamed flag remains structurally incapable of
 reaching the export or its `hash`. Frozen `{slug}.{hash}.json` artifacts
 published before the rename are unaffected: they never carried the key.
 
-[the architecture decision]: ./0004-case-type-config-as-js-modules.md
-[the architecture decision]: ./0006-applicability-graph-and-outcome-function.md
-[the architecture decision]: ./0010-auth-and-permissions.md
-[the architecture decision]: ./0012-outcome-snapshot-at-completion-for-reporting.md
+[ADR-0004]: ./0004-case-type-config-as-js-modules.md
+[ADR-0006]: ./0006-applicability-graph-and-outcome-function.md
+[ADR-0010]: ./0010-auth-and-permissions.md
+[ADR-0012]: ./0012-outcome-snapshot-at-completion-for-reporting.md

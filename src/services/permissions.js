@@ -49,9 +49,10 @@ import { CASE_TYPES } from '../../case-types/manifest.js';
 
 /**
  * The three per-Case-Type SharePoint group names, all composed from the Case
- * Type's display name (the architecture decision grill D3 keeps the `CaseTypeOwner - Example
- * Review` naming). Deriving them here means provisioning a new type needs one
- * display name, not three hand-written strings.
+ * Type's display name rather than its slug — a Case Type displayed as `Example
+ * Review` owns the group `CaseTypeOwner - Example Review`. Deriving them here
+ * means provisioning a new type needs one display name, not three hand-written
+ * strings.
  *
  * @param {string} displayName
  * @returns {{ listAccess: string, caseTypeOwner: string, journeyOwner: string }}

@@ -1,9 +1,8 @@
 # Case Type onboarding checklist
 
 Maintainer-facing runbook for provisioning a new Case Type end to end. It
-extends the scaffolding contract ()
-with the SharePoint list-provisioning steps and the **index-at-creation**
-requirement from.
+extends the scaffolding contract with the SharePoint list-provisioning steps and
+the **index-at-creation** requirement the List View Threshold imposes.
 
 The point of this doc is that provisioning a list is a **doc-driven task, not a
 code-reading exercise**: the required columns and which of them are indexed live
@@ -60,15 +59,14 @@ edit does, and a full dev-harness verification tour — see
       Cases, backfill every unset `OnHold` value to **No**. The allocation count
       filters on `OnHold = No`, so legacy null values would otherwise be omitted.
 - [ ] Set the Case Type module's `listName` to the new list once list-backed
-      reads are wired in (until then the scaffold runs mock-only via `?mock=1`,
-      the architecture decision).
+      reads are wired in (until then the scaffold runs mock-only via `?mock=1`).
 
 ### 3. Provision groups and permissions
 
 - [ ] Create the per-Case-Type SharePoint groups derived from the permissions
       entry (`Reviewers - {display}`, `CaseTypeOwner - {display}`,
-      `JourneyOwner - {display}`, the architecture decision) and set the list ACLs (the architecture decision —
-      list permissions are the real security boundary).
+      `JourneyOwner - {display}`) and set the list ACLs — list permissions are
+      the real security boundary.
 
 ## `Cases-{slug}` column schema
 
@@ -78,7 +76,8 @@ names** (what OData `$filter`/`$select` use); People columns expose an
 `…Id` field, which is the name to index and filter on.
 
 **Provenance** notes which columns the **app writes** as part of a lifecycle
-transition — in particular the the architecture decision flag/clock pairs, hoisted onto queryable
+transition — in particular the Action Centre reason flag/clock pairs, hoisted
+onto queryable
 columns rather than mined from the JSON blobs so live reads can lead with an
 indexed predicate.
 
@@ -133,8 +132,8 @@ have to scan a blob.
 
 A Case Type declares its Case Details fields via `detailFields` in
 `case-types/{slug}.js` (`CaseDetailField` = `{ key, label }`). Their **values**
-live in the shared `Details` JSON blob keyed by `key` and are
-read-only everywhere, so **by default a Case Type adds no new physical columns**
+live in the shared `Details` JSON blob keyed by `key` and are read-only
+everywhere, so **by default a Case Type adds no new physical columns**
 for its details.
 
 If a future Case Type ever needs to **query or report on a detail field**
@@ -147,7 +146,8 @@ list is past the threshold.
 ## Indexed columns
 
 The 12 columns to index on the empty `Cases-{slug}` list — the
-lifecycle/date columns and the the architecture decision reason flags that live reads lead with:
+lifecycle/date columns and the Action Centre reason flags that live reads lead
+with:
 
 `Status`, `DueDate`, `CompletedAt`, `AssignedReviewer`, `ResponsibleParty`,
 `AssignedReviewerManager`, `ResponsiblePartyManager`, `HasOpenAppeal`,

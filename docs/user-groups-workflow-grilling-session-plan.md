@@ -49,11 +49,11 @@ Recorded as we go; the numbered sections below carry the detail.
   **amended-outcome record** on the Case row capturing **who** (`amendedBy`) and **when**
   (`amendedAt`) for audit — do **not** rely on SharePoint item version history. This
   overturns the old "Outcome is always derived, never overridden" principle
-  (CONTEXT.md / the architecture decision) for the amended case. **Current Outcome** = amended record if
+  (CONTEXT.md) for the amended case. **Current Outcome** = amended record if
   present, else `outcomeAtCompletion`.
 - **D8. Rip QA out now** (not leave dormant): remove `qaReviewer` role, `qa-*` Case
-  Types (`qa-example-review.js`), `cora-override-editor.js`, and mark the architecture decision/0021
-  **superseded**. QA is redesigned later, closer to when its requirements are known.
+  Types (`qa-example-review.js`), `cora-override-editor.js`, and mark the Answer
+  Override and QA-snapshot decisions **superseded**. QA is redesigned later, closer to when its requirements are known.
 - **D9. Remediation Action becomes an object** — elevate from plain string to
   `{ id, text, status: 'pending'|'complete'|'cancelled', cancelReason? }`. The **due
   date is a single case-level field** on the Case row (not per action), **stamped when
@@ -173,7 +173,7 @@ justification; if the appeal changes the outcome they use the **Amend Outcome** 
 - [ ] New capability (`isControls`) + new Role in the matrix. Confirm.
 - [ ] **Controls vs QA Reviewer.** Today the **QA Reviewer** resolves Appeals and is
       the _only_ role that may author **Answer Overrides** / use Amend Outcome
-      (CONTEXT.md, the architecture decision). The request hands appeal-resolution **and** Amend Outcome
+      (CONTEXT.md). The request hands appeal-resolution **and** Amend Outcome
       to **Controls**. So: **does Controls replace QA Reviewer for appeals + overrides,
       or coexist?** (This is the single biggest role contradiction — see §3.)
 
@@ -202,13 +202,13 @@ full state diagram in the grill; straw-man:
 
 ```
 In-progress ──(Issues done, no actions)────────────────► Complete
- │
- └──(Issues done, actions exist → "Send Actions")──► Actions in progress
- │
- (Remediation tab: every sent action │
- marked complete / cancelled+reason) │
- ▼
- ("Complete Case") Complete
+     │
+     └──(Issues done, actions exist → "Send Actions")──► Actions in progress
+                                                              │
+                     (Remediation tab: every sent action     │
+                      marked complete / cancelled+reason)    │
+                                                              ▼
+                                              ("Complete Case") Complete
 ```
 
 - [ ] **Lock the exact status strings** — they become SharePoint list column values
@@ -227,7 +227,7 @@ In-progress ──(Issues done, no actions)────────────�
       Answer? only non-cancelled? — but nothing is cancelled yet at this point).
 - [ ] **"Send Actions"** → status `Actions in progress`, stamps a send timestamp,
       computes remediation due dates (§4), grants RP access (§5). Confirm all four
-      side-effects fire atomically on that one PATCH (ETag/SaveQueue — the architecture decision).
+      side-effects fire atomically on that one PATCH (ETag/SaveQueue).
 - [ ] **"Complete Case" (no-actions path)** → status `Complete`. Confirm the
       `outcomeAtCompletion` snapshot is stamped **here**.
 - [ ] **When is the outcome snapshotted** on the actions path — at **Send Actions**
@@ -250,7 +250,7 @@ In-progress ──(Issues done, no actions)────────────�
 
 This is the deepest contradiction. **Two appeal models now exist:**
 
-|                    | CONTEXT.md / the architecture decision (today)                 | New request                                 |
+|                    | CONTEXT.md (today)                                             | New request                                 |
 | ------------------ | -------------------------------------------------------------- | ------------------------------------------- |
 | Raised by          | Responsible Party or their Manager                             | ? (JourneyOwner sees "Appeal Request")      |
 | Resolved by        | **QA Reviewer**                                                | **Controls** ("Appeal Review")              |
@@ -269,19 +269,19 @@ Resolve, in order:
       "Appeal Request" tab. Do JourneyOwners **raise** appeals, or is "Appeal Request"
       where they **triage/see** appeals raised by Advisers/RPs? Name the initiator
       explicitly.
-- [ ] **Is this the same `appeals[]` entity** (the architecture decision, additive blob on the Case row,
+- [ ] **Is this the same `appeals[]` entity** (an additive blob on the Case row,
       lifecycle `raised → underReview → resolved{agreed|rejected}`) with different
       _actors_, or a genuinely new entity? Strong preference: **same storage, new role
       wiring** — but confirm.
 - [ ] **Does `Controls` replace `QA Reviewer` for resolution?** And does the
-      **QA Reviewer / QA Check / Answer Override** machinery (the architecture decision, the architecture decision,
-      `qa-example-review.js`, `cora-override-editor.js`) **survive at all** for
+      **QA Reviewer / QA Check / Answer Override** machinery
+      (`qa-example-review.js`, `cora-override-editor.js`) **survive at all** for
       September, or is it out of scope / superseded? (Big blast radius — decide
       before touching the matrix.)
 - [ ] **"Amend Outcome" ownership.** Today Amend Outcome is the canonical **Answer
       Override** authoring surface (QA). The request gives it to **Controls**, used
       "if the appeal results in a case outcome changing". This overlaps the **parked
-      #145** (case-level override vs per-Answer override, which contradicts the architecture decision).
+      #145** (case-level override vs per-Answer override).
       Decide: does Amend Outcome stay **per-Answer override re-derived** (`computeOutcome`
       over Effective Answers, CONTEXT.md), or does Controls **hand-set a verdict**?
       (CONTEXT.md avoid-lists "Outcome Override" — a hand-set verdict breaks that.)
@@ -301,7 +301,7 @@ each Remediation Action **complete** or **cancelled** (cancelled ⇒ justificati
 required). Plus each action carries a **due date = 10 working days after Send Actions**.
 
 This forces a storage-shape change: today a Remediation Action is a **plain string**
-(`remediationActions: string[]` on the Answer; and the the architecture decision `actions` Issue Capture
+(`remediationActions: string[]` on the Answer; and the `actions` Issue Capture
 Field is `Action[]`). It now needs per-action **state**.
 
 - [ ] **Two distinct Sections now exist** — reconcile with CONTEXT.md, which says
@@ -315,7 +315,7 @@ Field is `Action[]`). It now needs per-action **state**.
       the Remediation Section" claim.
 - [ ] **Per-action data shape.** Straw-man: promote each action to
       `{ id, text, status: 'pending'|'complete'|'cancelled', cancelReason?, dueDate }`.
-      Where does it live — widen the the architecture decision `Action` type? A parallel
+      Where does it live — widen the Issue Capture `Action` type? A parallel
       `remediationStatus` map on the Answer?
 - [ ] **Cancelled ⇒ justification required** — a completion gate: can't reach
       `Complete` with a cancelled-but-unjustified action. Confirm.
@@ -347,11 +347,9 @@ Field is `Action[]`). It now needs per-action **state**.
       `conversation.allowMessagesWhen: ['Actions In Progress']` in the example config,
       which lines up: RP can post during remediation. Confirm this is intended and the
       RP's conversation mode is `edit` during `Actions in progress`.
-- [ ] **Exact RP tab set.** Straw-man: \*\*Case Details (read-only) + Summary (read-only)
-
-* Conversation (edit, during actions)\*\* — and _nothing_ of Review / Issues /
-  Remediation / Notes. Confirm.
-
+- [ ] **Exact RP tab set.** Straw-man: **Case Details (read-only) + Summary
+      (read-only) + Conversation (edit, during actions)** — and _nothing_ of
+      Review / Issues / Remediation / Notes. Confirm.
 - [ ] **RP identity plumbing.** Is the RP a plain user field, or does it (like the
       Managers) get denormalised for reporting? Any manager-of-RP relationship needed
       here, or out of scope?
@@ -407,8 +405,9 @@ on sand:
       set (§2).
 - [ ] Group-name mismatch: `'CaseTypeOwner - Example Review'` (code) vs
       `'CaseTypeOwner - Example Case Type'` (request) (§1d).
-- [ ] `responsibleParty: 'CR-ResponsibleParty'` and `frontlineComplaints:
-'Frontline - Complaints'` vs the new `Advisers` group — reconcile/retire (§1a).
+- [ ] `responsibleParty: 'CR-ResponsibleParty'` and
+      `frontlineComplaints: 'Frontline - Complaints'` vs the new `Advisers`
+      group — reconcile/retire (§1a).
 - [ ] `case-machine.js` only knows `transitionToCompleted`; `canComplete`/`canAttribute`
       hard-code `status === 'In-progress'` — needs the new intermediate state (§2, §4).
 
@@ -426,12 +425,12 @@ on sand:
 - [ ] **New ADR — working-day due dates** (10 working days: which calendar? England &
       Wales bank holidays, or plain Mon–Fri? No third-party deps — a small internal
       calculator + holiday list; where does the holiday list live?).
-- [ ] **the architecture decision** — add Sections (appealRequest, appealReview, amendOutcome; split
-      issues/remediation) and Roles (journeyOwner, controls); Summary RP gate change.
-- [ ] **the architecture decision / #145** — settle Amend Outcome ownership (Controls) and whether
+- [ ] **Amend the section-access ADR** — add Sections (appealRequest,
+      appealReview, amendOutcome; split issues/remediation) and Roles (journeyOwner, controls); Summary RP gate change.
+- [ ] **Amend the answer-override ADR / #145** — settle Amend Outcome ownership (Controls) and whether
       outcome change stays per-Answer-derived or becomes case-level/hand-set.
-- [ ] **the architecture decision** — storage deltas: per-action status/reason/dueDate, `responsibleParty`
-      now Reviewer-set, new status column, send timestamp.
+- [ ] **Amend the case-storage ADR** — storage deltas: per-action
+      status/reason/dueDate, `responsibleParty` now Reviewer-set, new status column, send timestamp.
 - [ ] **Resolve #144** (Remediation tab) with §4; touch **#145** (Amend Outcome).
 - [ ] **docs/PLAN.md** — sequence this as its own slice(s); flag what's September-must
       vs fast-follow (§0).
@@ -476,9 +475,9 @@ All confirmed. Answers folded into the docs where they change scope:
    reporting regardless.)
 8. **Live Case Types for September** — ✅ **at least ~8** (Example Review + Complaints + ~6
    more), where the ~6 are **structurally like Complaints**, so onboarding each is
-   **config + Question Bank + group/list wiring only** — no framework changes (the architecture decision's
-   "one module" promise). Provisioning and the appeal-raiser config (
-   `appeal.raisedBy` — the Complaints-like types will typically set `'journeyOwner'`) must
+   **config + Question Bank + group/list wiring only** — no framework changes (the
+   "one module per Case Type" promise). Provisioning and the appeal-raiser config
+   (`appeal.raisedBy` — the Complaints-like types will typically set `'journeyOwner'`) must
    cover all live types, not just two.
 
 ## 10. Parking lot (raise if time allows)
@@ -490,7 +489,7 @@ All confirmed. Answers folded into the docs where they change scope:
       list alerts vs framework-driven — likely out of scope for a no-backend frontend.
 - [ ] JourneyOwner "see all cases in type" — new route/dashboard vs extending an
       existing owner dashboard.
-- [ ] Multiple open appeals / re-appeal after Controls rejects (the architecture decision allows one
-      open appeal at a time — does that hold under the Controls flow?).
+- [ ] Multiple open appeals / re-appeal after Controls rejects (today's model
+      allows one open appeal at a time — does that hold under the Controls flow?).
       </content>
       </invoke>

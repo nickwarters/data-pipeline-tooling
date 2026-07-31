@@ -6,11 +6,29 @@ Accepted as amended by [ADR-0023](./0023-case-lifecycle-and-reportable-milestone
 and [ADR-0026](./0026-amend-outcome-case-level-and-qa-retirement.md). The
 single-row storage and field-level PATCH decisions remain current.
 
+> **Amended by the Jul 2026 workflow changes.** The Case row gains fields:
+> `status` widens to `'In-progress' | 'Actions In Progress' | 'Completed'` ([ADR-0023]);
+> `reportableAt` (freeze/snapshot timestamp) and `remediationDueDate` (case-level SLA,
+> [ADR-0023]/[ADR-0024]/[ADR-0025]); `amendedOutcome` (`{ outcome, justification,
+amendedBy, amendedAt } | null`, [ADR-0026]); `responsibleParty` is now Reviewer-set
+> in-app before Send Actions ([ADR-0024]). A **Remediation Action** in the `Answers`
+> blob is no longer a bare string but `{ id, text, status, cancelReason? }` ([ADR-0024]).
+> **Removed:** the `overrides[]` blob ([ADR-0018] retired by [ADR-0026]). `effectiveOutcome`
+> / `effectiveHadRemediation` / `outcomeOverridden` ([ADR-0019]) are retained but now fed
+> by `amendedOutcome`.
+>
+> [ADR-0018]: ./0018-answer-override-post-completion-correction.md
+> [ADR-0019]: ./0019-effective-outcome-column-for-corrected-reporting.md
+> [ADR-0023]: ./0023-case-lifecycle-and-reportable-milestone.md
+> [ADR-0024]: ./0024-remediation-tracking-tab.md
+> [ADR-0025]: ./0025-working-day-sla-due-dates.md
+> [ADR-0026]: ./0026-amend-outcome-case-level-and-qa-retirement.md
+
 A **Case** is one row in a per-Case-Type SharePoint list (`Cases-{CaseTypeSlug}`). The row carries:
 
 - **Typed columns** for case-detail fields (vary per Case Type)
 - **`Answers` (Note field, JSON)** — `{ "Q1": {value, justification?, remediationActions?[]}, "Q17": {...} }`
-- **`Conversation` (Note field, JSON array)** — `[{author, timestamp, body},...]`
+- **`Conversation` (Note field, JSON array)** — `[{author, timestamp, body}, ...]`
 - **`Notes` (multi-line text)** — free-form reviewer notes
 - **`AssignedReviewer` (User field)** — current Reviewer; reassignment history obtained from SharePoint list version history
 - **`ResponsibleParty` (User field)**

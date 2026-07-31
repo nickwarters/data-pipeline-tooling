@@ -332,7 +332,7 @@
 
 /**
  * A directory person returned by `searchPeople`, already reduced to a bare
- * account `loginName` (claims prefix + domain stripped, see the architecture decision).
+ * account `loginName` (claims prefix + domain stripped).
  *
  * @typedef {{ loginName: string, displayName: string, email?: string }} PersonResult
  */

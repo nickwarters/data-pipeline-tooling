@@ -19,7 +19,7 @@ export function currentOutcome(caseRow) {
 /**
  * Build the transactional field set for a case-level Outcome amendment.
  * The amendment is additive — the frozen `outcomeAtCompletion` is never touched —
- * and the **same ETag-guarded write** re-stamps the the architecture decision reporting columns
+ * and the **same ETag-guarded write** re-stamps the corrected-outcome reporting columns
  * from the hand-set verdict: `effectiveOutcome` carries the amended value and
  * `outcomeOverridden` flips true so the responsible-party-team report reads the
  * corrected result. `effectiveHadRemediation` carries the frozen `hadRemediation`:

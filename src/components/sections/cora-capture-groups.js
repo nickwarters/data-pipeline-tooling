@@ -23,8 +23,8 @@ function currentString(capture, key) {
 }
 
 /**
- * A group's collapse state: an ephemeral per-group override (never persisted,
- * the architecture decision) falling back to the group's declared default.
+ * A group's collapse state: an ephemeral per-group override (never persisted)
+ * falling back to the group's declared default.
  *
  * @param {Map<string, boolean>} collapsed
  * @param {CaptureGroup} group
@@ -44,7 +44,7 @@ function isCollapsed(collapsed, group) {
  *
  * In editable mode (`canCapture`) each group is a collapsible section — its
  * default collapse comes from `group.collapsed`, and the Reviewer can toggle it
- * via `onToggle`; the override is ephemeral (never persisted, the architecture decision). Each
+ * via `onToggle`; the override is ephemeral (never persisted). Each
  * field renders its typed control (this slice: `text`/`textarea`/`select`/
  * `radio`) carrying a stable `data-focus-key` so the framework restores the
  * Reviewer's focus and scroll across an autosave-driven re-render, and reports

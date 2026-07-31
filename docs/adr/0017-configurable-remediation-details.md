@@ -10,7 +10,7 @@ storage and declaration shape does not.
 Record<string,string>` model is replaced by the unified **Issue Capture** engine
 > (grouped, typed `Issue Capture Field`s incl. first-class `person`/`actions`, intra-group
 > `showWhen`, `Answer.capture`). The completion-gate and master–detail-drawer ideas below
-> carry forward into the architecture decision; the storage and declaration shapes do not.
+> carry forward into ADR-0020; the storage and declaration shapes do not.
 
 A **Case Type** can declare extra capture fields recorded against each _failed_ **Answer**, beyond its **Attributed Party** and **Remediation Actions** — e.g. a free-text "root cause" or a "severity" select. Some Case Types need only attribution; others need more. These **Remediation Details** are declared once per Case Type and captured in the **Issues** Section.
 

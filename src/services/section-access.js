@@ -1,7 +1,7 @@
 // @ts-check
 /**
- * Section-level role-based access on the case page. UX-only per the architecture decision;
- * SharePoint list ACLs remain the real boundary. See the architecture decision for design.
+ * Section-level role-based access on the case page. UX-only; SharePoint list
+ * ACLs remain the real boundary.
  *
  * The Section id union is projected from `SECTION_REGISTRY` rather
  * than restated here; `MATRIX` below is contract-tested to have exactly its keys.

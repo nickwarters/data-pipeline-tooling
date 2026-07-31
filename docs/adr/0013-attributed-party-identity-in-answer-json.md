@@ -26,10 +26,10 @@ attributed person is in the directory (AD) but has **not** yet been added to thi
 site's SharePoint user groups — so the design must not depend on the person
 already being a site member.
 
-Two persistence constraints apply. Per [the architecture decision], a Case stores its `answers` as
+Two persistence constraints apply. Per [ADR-0007], a Case stores its `answers` as
 a single JSON blob on the Case row — so an Attributed Party cannot be a native
 SharePoint **Person/User** column; it has to be a value inside that JSON. Per
-[the architecture decision] and [the architecture decision], components never call `fetch` directly and identity is
+[ADR-0009] and [ADR-0010], components never call `fetch` directly and identity is
 claims-based on a single on-prem AD-backed SharePoint SE farm.
 
 ## Decision
@@ -63,7 +63,7 @@ The Attributed Party is pure metadata: it never feeds `computeOutcome`.
 ## Considered options
 
 - **Native SharePoint Person/User column** — rejected: incompatible with
-  [the architecture decision]'s answers-as-JSON-blob model, and would require provisioning a
+  [ADR-0007]'s answers-as-JSON-blob model, and would require provisioning a
   column per Case Type list plus `EnsureUser` (a write side-effect that would
   silently add directory users to the site).
 - **Store the full claims login string** (`i:0#.w|domain\jsmith`) — rejected as
@@ -86,7 +86,7 @@ The Attributed Party is pure metadata: it never feeds `computeOutcome`.
   side-effect at attribution time. Bulk-provisioning those users is deferred and
   decoupled.
 - Claims/domain encoding is confined to the service layer; components and the
-  `cora-people-picker` only ever see bare accounts. Consistent with [the architecture decision].
+  `cora-people-picker` only ever see bare accounts. Consistent with [ADR-0009].
 
 **Negative**
 
@@ -102,6 +102,6 @@ The Attributed Party is pure metadata: it never feeds `computeOutcome`.
 - Two new methods on the `SharePointClient` interface that both real and mock
   clients must implement.
 
-[the architecture decision]: ./0007-case-storage-shape.md
-[the architecture decision]: ./0009-mock-first-dev-loop.md
-[the architecture decision]: ./0010-auth-and-permissions.md
+[ADR-0007]: ./0007-case-storage-shape.md
+[ADR-0009]: ./0009-mock-first-dev-loop.md
+[ADR-0010]: ./0010-auth-and-permissions.md

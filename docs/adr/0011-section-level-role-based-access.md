@@ -23,7 +23,7 @@ The case page renders five sections — **Questions**, **Conversation**, **Notes
 
 ## Constraints
 
-Per **the architecture decision**, client-side access checks are **UX-only** — SharePoint list ACLs remain the real security boundary. This ADR defines what UI to render _before_ the server's 403, and does not authorize anything. The framework assumes a misbehaving client cannot use these rules to access data the server would deny.
+Per **ADR-0010**, client-side access checks are **UX-only** — SharePoint list ACLs remain the real security boundary. This ADR defines what UI to render _before_ the server's 403, and does not authorize anything. The framework assumes a misbehaving client cannot use these rules to access data the server would deny.
 
 ## Consequences
 

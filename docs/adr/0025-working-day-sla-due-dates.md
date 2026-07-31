@@ -4,14 +4,14 @@ Date: 2026-07-01
 
 ## Status
 
-Accepted
+Accepted (supports [ADR-0024])
 
 ## Context
 
-The remediation SLA is **10 working days after Send Actions** ([the architecture decision]). "Working
+The remediation SLA is **10 working days after Send Actions** ([ADR-0024]). "Working
 days" excludes weekends **and** public holidays, so a correct due date needs a holiday
 calendar. The framework has a hard rule: **no third-party runtime dependencies**
-([the architecture decision], CLAUDE.md), so no date/holiday library. We need a tiny, self-contained
+([ADR-0001], CLAUDE.md), so no date/holiday library. We need a tiny, self-contained
 working-day calculator and a maintainable source of holiday dates.
 
 ## Decision
@@ -26,7 +26,7 @@ working-day calculator and a maintainable source of holiday dates.
 - an **in-code array** (e.g. `src/config/working-days.js`) — simplest, versioned with
   the code, requires a deploy to update; or
 - a **small SharePoint list** read once at boot and cached for the session (like group
-  membership, [the architecture decision]) — editable by a Maintainer without a deploy.
+  membership, [ADR-0010]) — editable by a Maintainer without a deploy.
 
 Default to the **in-code array** for September (fewer moving parts, no new list to
 provision); the helper takes `holidays` as a parameter, so switching the _source_ to a
@@ -36,7 +36,7 @@ SharePoint list later is a boot-time wiring change, not a logic change.
   otherwise (flagged as a confirmation item — see the grill doc). The list must be kept
   current; a stale list silently produces early due dates.
 - **The due date is computed once, at Send Actions**, and stored as `remediationDueDate`
-  on the Case row ([the architecture decision]/[the architecture decision]) — it is **not** recomputed on read, so a later
+  on the Case row ([ADR-0023]/[ADR-0024]) — it is **not** recomputed on read, so a later
   holiday-list edit never moves an already-set due date.
 
 ## Considered options
@@ -64,7 +64,7 @@ SharePoint list later is a boot-time wiring change, not a logic change.
 - If the business operates across multiple jurisdictions later, a single global list is
   insufficient; per-region calendars would need a follow-up.
 
-[the architecture decision]: ./0001-target-sharepoint-se-and-edge-chromium.md
-[the architecture decision]: ./0010-auth-and-permissions.md
-[the architecture decision]: ./0023-case-lifecycle-and-reportable-milestone.md
-[the architecture decision]: ./0024-remediation-tracking-tab.md
+[ADR-0001]: ./0001-target-sharepoint-se-and-edge-chromium.md
+[ADR-0010]: ./0010-auth-and-permissions.md
+[ADR-0023]: ./0023-case-lifecycle-and-reportable-milestone.md
+[ADR-0024]: ./0024-remediation-tracking-tab.md

@@ -5,6 +5,16 @@
 Accepted. Still current; [ADR-0022](./0022-two-axis-role-model.md) extends the
 capability model without changing SharePoint ACLs as the security boundary.
 
+> **Amended by [ADR-0022] (Jul 2026).** The group→capability model is reworked onto two
+> axes — **functional** groups (`Reviewers`, `Advisers`, `CaseTypeOwner - <type>`,
+> `JourneyOwner - <type>`, `Controls`) and **list-access** groups (`Reviewers - <type>`,
+> the ACL boundary). `Reviewers - <type>` implies the Reviewer capability. The
+> `QA-Reviewers` group is retired ([ADR-0026]). The "UX-only checks, list ACLs are the
+> real boundary" principle below is unchanged.
+>
+> [ADR-0022]: ./0022-two-axis-role-model.md
+> [ADR-0026]: ./0026-amend-outcome-case-level-and-qa-retirement.md
+
 The framework assumes **standard SharePoint SE browser authentication** — NTLM/Kerberos handled transparently by the browser, requests sent with `credentials: 'include'`. No custom login flow, no token management. SharePoint's `X-RequestDigest` is fetched lazily from `_api/contextinfo` on first write and refreshed on 403.
 
 ### Security boundary

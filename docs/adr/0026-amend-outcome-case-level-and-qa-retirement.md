@@ -4,16 +4,17 @@ Date: 2026-07-01
 
 ## Status
 
-Accepted
+Accepted (**supersedes [ADR-0018]**; resolves the parked #145; amends [ADR-0011],
+[ADR-0016], [ADR-0019], [ADR-0021]; retires the QA Reviewer role from [ADR-0022])
 
 ## Context
 
-[the architecture decision] modelled post-completion corrections as **Answer Overrides**: per-Answer,
+[ADR-0018] modelled post-completion corrections as **Answer Overrides**: per-Answer,
 additive records authored by a **QA Reviewer**, with the **Current Outcome** _re-derived_
 by `computeOutcome` over the **Effective Answers** — deliberately never a hand-set
 verdict (CONTEXT.md avoid-lists "Outcome Override"). That machinery (QA Check `qa-{slug}`
-Case Types, the embedded cross-row override editor, the architecture decision's effective-outcome columns,
-the architecture decision's per-Case freeze) is heavy, and pre-go-live the business has **not** settled how
+Case Types, the embedded cross-row override editor, ADR-0019's effective-outcome columns,
+ADR-0021's per-Case freeze) is heavy, and pre-go-live the business has **not** settled how
 QA should actually work.
 
 Two grill decisions change direction:
@@ -24,7 +25,7 @@ Two grill decisions change direction:
 - **D7** — the correction surface is the **Amend Outcome** tab, and it operates at the
   **Case level**: Controls picks the new Outcome **explicitly** with a justification —
   a _hand-set verdict_, not a re-derivation. This is exactly what #145 asked for and what
-  [the architecture decision] deliberately refused; with QA/Override shelved, that refusal no longer binds.
+  [ADR-0018] deliberately refused; with QA/Override shelved, that refusal no longer binds.
 
 ## Decision
 
@@ -43,35 +44,35 @@ A post-completion outcome change is a **single case-level record** on the Case r
 ```
 
 - **Explicit, hand-set verdict.** Controls selects the Outcome value directly. This
-  overturns [the architecture decision]/[the architecture decision]'s "Outcome is always derived, never hand-edited" — for
+  overturns [ADR-0006]/[ADR-0018]'s "Outcome is always derived, never hand-edited" — for
   an _amended_ Case only. The frozen `outcomeAtCompletion` is never mutated; the amendment
-  is a separate, additive field ([the architecture decision] field-level PATCH, ETag-guarded).
+  is a separate, additive field ([ADR-0007] field-level PATCH, ETag-guarded).
 - **Audit is captured on the record, not mined from history.** `amendedBy` + `amendedAt`
   are stored explicitly (D7) — we do **not** rely on SharePoint item version history
-  (consistent with [the architecture decision]'s "no version-history mining").
+  (consistent with [ADR-0016]'s "no version-history mining").
 - **Current Outcome** = `amendedOutcome?.outcome ?? outcomeAtCompletion`. Where no
   amendment exists it equals the snapshot; where one exists it takes precedence.
 
 ### Reporting bridge
 
-[the architecture decision]'s columns survive, now driven by the amendment instead of overrides:
+[ADR-0019]'s columns survive, now driven by the amendment instead of overrides:
 
 - `effectiveOutcome` / `effectiveHadRemediation` initialise equal to
-  `outcomeAtCompletion` / `hadRemediation` at the reportable milestone ([the architecture decision]).
+  `outcomeAtCompletion` / `hadRemediation` at the reportable milestone ([ADR-0023]).
 - The **same ETag-guarded write** that sets `amendedOutcome` re-stamps `effectiveOutcome`
   = `amendedOutcome.outcome`, sets `outcomeOverridden = true`, and updates
   `effectiveHadRemediation`. `outcomeAtCompletion` stays frozen (the reviewer's record);
   `effectiveOutcome` carries the corrected result. The reviewer-team report reads the
-  frozen column; the responsible-party-team report reads the effective column — [the architecture decision]'s
+  frozen column; the responsible-party-team report reads the effective column — [ADR-0019]'s
   dual-audience contract is preserved with a simpler source.
 
-### Access ([the architecture decision])
+### Access ([ADR-0011])
 
 - **`amendOutcome` Section** — `edit` for **Controls** on a `Completed` Case; `hidden`
   otherwise (nothing to amend before completion). **Controls is the only role that sees
   this tab** — every other role is `hidden`. Observers do not need it: the result of an
   amendment surfaces as the **Current Outcome** in the read-only Summary. Typically
-  reached after an Appeal is agreed ([the architecture decision]), but an amendment does **not** require
+  reached after an Appeal is agreed ([ADR-0027]), but an amendment does **not** require
   an Appeal.
 
 > _Refined post-acceptance:_ the Section was initially `read-only` for the Assigned
@@ -89,8 +90,8 @@ A post-completion outcome change is a **single case-level record** on the Case r
 
 ### What is removed
 
-- The **`qaReviewer`** capability and `QA-Reviewers` group ([the architecture decision] already omits it).
-- The **`override`** access Mode and its `RANK` entry ([the architecture decision]) — modes are back to
+- The **`qaReviewer`** capability and `QA-Reviewers` group ([ADR-0022] already omits it).
+- The **`override`** access Mode and its `RANK` entry ([ADR-0011]) — modes are back to
   `edit | read-only | hidden`.
 - `overrides[]` storage, the embedded override editor (`cora-override-editor.js`), and the
   QA Check Case Types (`qa-*`, e.g. `qa-example-review.js`).
@@ -103,7 +104,7 @@ a known-good baseline rather than half-built override plumbing.
 
 ## Considered options
 
-- **Keep [the architecture decision] Answer Override, just swap QA Reviewer → Controls** — rejected (D7):
+- **Keep [ADR-0018] Answer Override, just swap QA Reviewer → Controls** — rejected (D7):
   the business wants a case-level verdict decision, not per-Answer edits; and keeping the
   heavy QA/override machinery for a role that is itself being redesigned is waste.
 - **Amend at Answer level and re-derive (status quo)** — rejected: contradicts the stated
@@ -129,15 +130,15 @@ a known-good baseline rather than half-built override plumbing.
   existing override data is abandoned. Acceptable pre-go-live (no production data);
   the removal ADR is the record if it must be revived.
 - A future QA design must re-establish its own correction/QA-check model rather than
-  extending [the architecture decision].
+  extending [ADR-0018].
 
-[the architecture decision]: ./0006-applicability-graph-and-outcome-function.md
-[the architecture decision]: ./0007-case-storage-shape.md
-[the architecture decision]: ./0011-section-level-role-based-access.md
-[the architecture decision]: ./0016-summary-section-replaces-outcome-tab.md
-[the architecture decision]: ./0018-answer-override-post-completion-correction.md
-[the architecture decision]: ./0019-effective-outcome-column-for-corrected-reporting.md
-[the architecture decision]: ./0021-versioned-question-bank-snapshots-for-completed-cases.md
-[the architecture decision]: ./0022-two-axis-role-model.md
-[the architecture decision]: ./0023-case-lifecycle-and-reportable-milestone.md
-[the architecture decision]: ./0027-appeal-flow-journeyowner-controls.md
+[ADR-0006]: ./0006-applicability-graph-and-outcome-function.md
+[ADR-0007]: ./0007-case-storage-shape.md
+[ADR-0011]: ./0011-section-level-role-based-access.md
+[ADR-0016]: ./0016-summary-section-replaces-outcome-tab.md
+[ADR-0018]: ./0018-answer-override-post-completion-correction.md
+[ADR-0019]: ./0019-effective-outcome-column-for-corrected-reporting.md
+[ADR-0021]: ./0021-versioned-question-bank-snapshots-for-completed-cases.md
+[ADR-0022]: ./0022-two-axis-role-model.md
+[ADR-0023]: ./0023-case-lifecycle-and-reportable-milestone.md
+[ADR-0027]: ./0027-appeal-flow-journeyowner-controls.md

@@ -4,7 +4,8 @@ Date: 2026-07-01
 
 ## Status
 
-Accepted, as amended 2026-07 (#599, #600) — see **Amendment (2026-07, #599)**
+Accepted (supersedes the QA-based **Appeal** in CONTEXT.md; amends [ADR-0011];
+relates to [ADR-0026]), as amended 2026-07 (#599, #600) — see **Amendment (2026-07, #599)**
 below, which makes the `appealReview` access row Controls-only and hides it
 until the Case carries an Appeal, and **Amendment (2026-07, #600)**, which makes
 the `appealRequest` row the configured raiser's alone.
@@ -13,7 +14,7 @@ the `appealRequest` row the configured raiser's alone.
 
 CONTEXT.md's **Appeal** was raised by the Responsible Party (or their Manager) and
 **resolved by the QA Reviewer**, who then authored corrective **Answer Overrides**. With
-QA retired and Answer Override shelved ([the architecture decision]), the appeal flow is re-homed. Grill
+QA retired and Answer Override shelved ([ADR-0026]), the appeal flow is re-homed. Grill
 decision **D5**: the appeal **raiser is configurable per Case Type** — for Complaints it
 is the **Journey Owner**; for other types it defaults to the **Responsible Party
 Manager** — and the resolver is **Controls**. Two tabs express the two ends: **Appeal
@@ -21,7 +22,7 @@ Request** (raise) and **Appeal Review** (resolve).
 
 ## Decision
 
-### Per-Case-Type configuration ([the architecture decision])
+### Per-Case-Type configuration ([ADR-0004])
 
 The Case Type module declares:
 
@@ -35,7 +36,7 @@ appeal: {
 `example-review` and `complaints` set `raisedBy: 'journeyOwner'`; other types default to
 `'responsiblePartyManager'`.
 
-### Storage (unchanged entity, [the architecture decision])
+### Storage (unchanged entity, [ADR-0007])
 
 An Appeal remains an additive `appeals[]` JSON blob on the original Case row, lifecycle
 `raised → underReview → resolved{ agreed | rejected }`, one open Appeal at a time, full
@@ -45,11 +46,11 @@ history retained. It carries the **appellant's rationale** (required on raise) a
 - **Raised** by whichever role `appeal.raisedBy` names, on a `Completed` Case only.
 - **Resolved** by **Controls**.
 - **Agreeing** no longer means authoring Answer Overrides. It means Controls accepts the
-  outcome was wrong and then authors a case-level **Amended Outcome** ([the architecture decision]) — the
+  outcome was wrong and then authors a case-level **Amended Outcome** ([ADR-0026]) — the
   Appeal id is recorded on the amendment's provenance. **Rejecting** records rationale
   and changes nothing.
 
-### Two tabs, two Sections ([the architecture decision])
+### Two tabs, two Sections ([ADR-0011])
 
 - **`appealRequest`** — where the appeal is raised/triaged. `edit` for the configured
   `raisedBy` role on a `Completed` Case; `read-only` for Controls, Assigned Reviewer,
@@ -66,7 +67,7 @@ Neither feeds the Summary.
 ### Journey Owner's cross-case reach
 
 Separately from a single Case's access row, a **Journey Owner** sees the **Summary of
-every Case of their case type(s)** ([the architecture decision] `ownedJourneyCaseTypes`). That is a
+every Case of their case type(s)** ([ADR-0022] `ownedJourneyCaseTypes`). That is a
 _list-scope_ capability (a dashboard / cross-case query), not expressible in the per-Case
 matrix alone; it is delivered as a Journey Owner view that lists cases of the type and
 links into each Case's (read-only) Summary. The per-Case `summary` matrix cell grants
@@ -170,8 +171,8 @@ role appears on `appealRequest` or `appealReview` any more. That consequence is
 Reviewer whose Case is appealed learns of the outcome through the Amended
 Outcome in the Summary, which is the durable record.
 
-[the architecture decision]: ./0004-case-type-config-as-js-modules.md
-[the architecture decision]: ./0007-case-storage-shape.md
-[the architecture decision]: ./0011-section-level-role-based-access.md
-[the architecture decision]: ./0022-two-axis-role-model.md
-[the architecture decision]: ./0026-amend-outcome-case-level-and-qa-retirement.md
+[ADR-0004]: ./0004-case-type-config-as-js-modules.md
+[ADR-0007]: ./0007-case-storage-shape.md
+[ADR-0011]: ./0011-section-level-role-based-access.md
+[ADR-0022]: ./0022-two-axis-role-model.md
+[ADR-0026]: ./0026-amend-outcome-case-level-and-qa-retirement.md
