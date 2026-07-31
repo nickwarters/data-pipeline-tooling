@@ -109,9 +109,9 @@ function scopeLabelOf(slugs) {
 
 /**
  * Build a single tile from its matched Cases. The headline `count` is deduped by
- * Case. The breakdown axis is decided by data — applicability is data — so it
- * splits by Case Type when the matched Cases span more than one and otherwise
- * falls back to the tile's sub-reasons. Zero rows are suppressed.
+ * Case. The breakdown axis is decided by data: split by Case Type when the
+ * matched Cases span more than one, otherwise fall back to the tile's
+ * sub-reasons. Zero rows are suppressed.
  *
  * @param {TileSpec & { expandByDefault: boolean }} spec
  * @returns {KpiTile}

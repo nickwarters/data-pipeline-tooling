@@ -11,9 +11,7 @@
  * `listCases` methods.
  *
  * Every reason is defined by an **indexed** `ListCasesFilter` so its group-header
- * count is a cheap `$count` and never a blob parse — Answers and Conversation
- * live as JSON blobs on the Case row, so anything read out of them would mean
- * fetching and parsing every row. Each
+ * count is a cheap `$count` and never a blob parse. Each
  * reason measures its own clock from a queryable date column (`clockField`), so
  * groups sort independently and no cross-reason ranking is needed.
  *

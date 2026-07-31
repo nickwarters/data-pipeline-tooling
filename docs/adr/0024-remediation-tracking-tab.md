@@ -4,8 +4,8 @@ Date: 2026-07-01
 
 ## Status
 
-Accepted (amends [ADR-0007], [ADR-0011], [ADR-0016]; builds on [ADR-0020];
-resolves the parked #144), partly amended by
+Accepted (resolves the parked #144; amends [ADR-0007], [ADR-0011], [ADR-0016];
+builds on [ADR-0020]), partly amended by
 [ADR-0037](./0037-question-level-remediation-resolution.md) and, for the
 per-action record's write path, by **Amendment (2026-07, #497)** below.
 

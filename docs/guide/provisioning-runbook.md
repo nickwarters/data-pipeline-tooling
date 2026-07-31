@@ -1,9 +1,7 @@
 # Maintainer provisioning runbook
 
 What a Maintainer must provision in SharePoint to stand up a Case Type, and the
-recurring maintenance the framework depends on: what a Case row carries, the
-group model, the lifecycle and `reportableAt`, the working-day holiday list, and
-the Amended Outcome.
+recurring maintenance the framework depends on.
 
 Provisioning a new Case Type is **config + wiring only**: one module, one
 Question Bank, and the lists and groups below. No framework change per type.

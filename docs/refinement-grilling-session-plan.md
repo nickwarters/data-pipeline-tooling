@@ -199,13 +199,13 @@ Outcome. Plus a _refined_ QA override section. This largely matches CONTEXT.md
 
 Decide which documents change and whether we write new ADRs or amend existing ones.
 
-- [ ] **The tab-layout ADRs** — amend or supersede for the new five-tab set
+- [ ] **ADR-0014 / ADR-0016 (tabs)** — amend or supersede for the new five-tab set
       (Review/Issues/Remediation split, Notes disposition).
-- [ ] **The Remediation Details ADR** — supersede with a new ADR for flexible,
-      grouped, multi-type capture? Or amend in place? (Leaning: a new ADR that
-      supersedes it, given the model change.)
-- [ ] **The section-access ADR** — add the new Sections to the role×Section matrix.
-- [ ] **The storage-shape ADR** — if storage widens beyond `Record<string,string>`.
+- [ ] **ADR-0017 (Remediation Details)** — supersede with a new ADR for flexible,
+      grouped, multi-type capture? Or amend in place? (Leaning: new ADR-0020 that
+      supersedes 0017, given the model change.)
+- [ ] **ADR-0011 (section access)** — add the new Sections to the role×Section matrix.
+- [ ] **ADR-0007 (storage shape)** — if storage widens beyond `Record<string,string>`.
 - [ ] **CONTEXT.md** — new/changed terms to define or revise:
 - [ ] "Review" tab vs the avoid-listed "Review"
 - [ ] "Issues" vs "Remediation" now being two tabs (the Issue / Remediation
@@ -273,5 +273,3 @@ If we only get through five things in the grill, these are them:
       editor) — do Owners author capture groups too, or Maintainers only?
 - [ ] Validation UX: where do required-but-empty errors surface (Issues drawer vs
       completion gate)?
-      </content>
-      </invoke>

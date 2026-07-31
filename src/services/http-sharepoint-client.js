@@ -404,10 +404,9 @@ export class HttpSharePointClient {
   }
 
   /**
-   * Fetches the immutable versioned export `{slug}.{hash}.json`.
-   * Returns the parsed object on success, null on any error
-   * (404, network failure) — never hard-fails so a missing file triggers the
-   * live-fallback path in the loader.
+   * Fetches the immutable versioned export `{slug}.{hash}.json`. Returns the
+   * parsed object on success, null on any error (404, network failure) — never
+   * hard-fails so a missing file triggers the live-fallback path in the loader.
    *
    * @param {string} slug
    * @param {string} hash

@@ -77,9 +77,8 @@ names** (what OData `$filter`/`$select` use); People columns expose an
 
 **Provenance** notes which columns the **app writes** as part of a lifecycle
 transition — in particular the Action Centre reason flag/clock pairs, hoisted
-onto queryable
-columns rather than mined from the JSON blobs so live reads can lead with an
-indexed predicate.
+onto queryable columns rather than mined from the JSON blobs so live reads can
+lead with an indexed predicate.
 
 ### Shared columns
 

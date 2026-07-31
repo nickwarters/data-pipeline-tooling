@@ -52,8 +52,8 @@ Recorded as we go; the numbered sections below carry the detail.
   (CONTEXT.md) for the amended case. **Current Outcome** = amended record if
   present, else `outcomeAtCompletion`.
 - **D8. Rip QA out now** (not leave dormant): remove `qaReviewer` role, `qa-*` Case
-  Types (`qa-example-review.js`), `cora-override-editor.js`, and mark the Answer
-  Override and QA-snapshot decisions **superseded**. QA is redesigned later, closer to when its requirements are known.
+  Types (`qa-example-review.js`), `cora-override-editor.js`, and mark ADR-0018/0021
+  **superseded**. QA is redesigned later, closer to when its requirements are known.
 - **D9. Remediation Action becomes an object** — elevate from plain string to
   `{ id, text, status: 'pending'|'complete'|'cancelled', cancelReason? }`. The **due
   date is a single case-level field** on the Case row (not per action), **stamped when
@@ -425,11 +425,11 @@ on sand:
 - [ ] **New ADR — working-day due dates** (10 working days: which calendar? England &
       Wales bank holidays, or plain Mon–Fri? No third-party deps — a small internal
       calculator + holiday list; where does the holiday list live?).
-- [ ] **Amend the section-access ADR** — add Sections (appealRequest,
+- [ ] **ADR-0011** — add Sections (appealRequest,
       appealReview, amendOutcome; split issues/remediation) and Roles (journeyOwner, controls); Summary RP gate change.
-- [ ] **Amend the answer-override ADR / #145** — settle Amend Outcome ownership (Controls) and whether
+- [ ] **ADR-0018 / #145** — settle Amend Outcome ownership (Controls) and whether
       outcome change stays per-Answer-derived or becomes case-level/hand-set.
-- [ ] **Amend the case-storage ADR** — storage deltas: per-action
+- [ ] **ADR-0007** — storage deltas: per-action
       status/reason/dueDate, `responsibleParty` now Reviewer-set, new status column, send timestamp.
 - [ ] **Resolve #144** (Remediation tab) with §4; touch **#145** (Amend Outcome).
 - [ ] **docs/PLAN.md** — sequence this as its own slice(s); flag what's September-must
@@ -491,5 +491,3 @@ All confirmed. Answers folded into the docs where they change scope:
       existing owner dashboard.
 - [ ] Multiple open appeals / re-appeal after Controls rejects (today's model
       allows one open appeal at a time — does that hold under the Controls flow?).
-      </content>
-      </invoke>

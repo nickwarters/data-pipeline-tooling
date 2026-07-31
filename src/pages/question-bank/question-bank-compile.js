@@ -249,7 +249,7 @@ export async function compileExport(bank) {
  */
 
 /**
- * Builds the artifacts for the versioned publish step.
+ * Builds the versioned publish artifacts.
  *
  * Given an export envelope (from `compileExport`) and the existing manifest
  * (or null on first publish), returns:

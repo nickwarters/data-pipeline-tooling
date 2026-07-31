@@ -66,8 +66,8 @@ export function reasonFlagFields(
 }
 
 /**
- * Route a lone state-flag write through the `SaveQueue` (a field-level PATCH,
- * like every other write). Prefer merging {@link reasonFlagFields} into a transition's own
+ * Route a lone state-flag write through the `SaveQueue` as a field-level PATCH.
+ * Prefer merging {@link reasonFlagFields} into a transition's own
  * `enqueueFields` when the transition also mutates other columns; use this
  * helper when the flag pair is the only write.
  *
