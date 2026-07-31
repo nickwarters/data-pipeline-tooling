@@ -336,6 +336,7 @@ test('state: route state owns loading, save status, and selected tab under route
     completionPending: false,
     captureCollapsed: {},
     attributionSearch: {},
+    responsiblePartySearch: { query: '', people: [] },
     panelMode: 'popover',
     saveStatus: 'saved',
     snapshot: null,
@@ -650,6 +651,258 @@ test('route: selecting the Responsible Party cancels that Question search', (t) 
   assert.deepEqual(searches, []);
   assert.equal(route.state.routes.caseReview.attributionSearch.q1, undefined);
   route.dispose();
+});
+
+/**
+ * Mount the shipped Issues panel with the Case-level Responsible Party picker
+ * editable, so the field is exercised only through the route's public
+ * render/start seams. The queue is real and un-debounced, so a selection can be
+ * followed all the way to the PATCH.
+ *
+ * @param {(query: string) => Promise<any[]>} searchPeople
+ */
+function renderResponsiblePartyRoute(searchPeople) {
+  const editableSnapshot = snapshot();
+  editableSnapshot.caseRow = {
+    ...editableSnapshot.caseRow,
+    responsibleParty: '',
+  };
+  editableSnapshot.machine = {
+    canAttribute: false,
+    canCapture: false,
+    canSelectRemediation: true,
+    canToggleConversation: false,
+  };
+  let state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: editableSnapshot }
+  );
+  state = caseReviewReducer(state, { type: 'case/tab-selected', id: 'issues' });
+  const never = new Promise(() => {});
+  /** @type {any[]} */
+  const patches = [];
+  const client = /** @type {any} */ ({
+    getCase: () => never,
+    getCurrentUser: async () => chrome.currentUser,
+    getExportHash: async () => null,
+    resolveUsers: async () => ({}),
+    searchPeople,
+    async patchCase(/** @type {string} */ _id, /** @type {any} */ fields) {
+      patches.push(fields);
+      return { ok: true, status: 200, data: { ...caseRow, ...fields } };
+    },
+  });
+  const saveQueue = new SaveQueue(client, { debounceMs: 0 });
+  const slice = createRouteSlice(
+    { caseType: 'example-review', id: 'c1' },
+    /** @type {any} */ ({ client, saveQueue, chrome })
+  );
+  const container = document.createElement('main');
+  let active = true;
+  /** @type {any} */
+  let tools;
+  tools = {
+    render,
+    dispatch(/** @type {any} */ action) {
+      state = slice.reducer(state, action);
+      slice.render(container, state, tools);
+    },
+    listen() {},
+    isActive: () => active,
+  };
+  slice.render(container, state, tools);
+  const teardown = slice.start(tools);
+  return {
+    container,
+    patches,
+    dispose() {
+      active = false;
+      teardown?.();
+    },
+    get state() {
+      return state;
+    },
+  };
+}
+
+test('state: the Case-level Responsible Party search is one query, not one per Question', () => {
+  let state = createInitialCaseReviewState(chrome, 'popover');
+  state = caseReviewReducer(state, {
+    type: 'case/responsible-party-search-input',
+    query: 'Jane',
+  });
+  assert.deepEqual(state.routes.caseReview.responsiblePartySearch, {
+    query: 'Jane',
+    people: [],
+  });
+
+  const found = caseReviewReducer(state, {
+    type: 'case/responsible-party-search-results',
+    query: 'Jane',
+    people: [{ loginName: 'jsmith', displayName: 'Jane Smith' }],
+  });
+  assert.deepEqual(found.routes.caseReview.responsiblePartySearch, {
+    query: 'Jane',
+    people: [{ loginName: 'jsmith', displayName: 'Jane Smith' }],
+  });
+
+  assert.equal(
+    caseReviewReducer(found, {
+      type: 'case/responsible-party-search-results',
+      query: 'Jan',
+      people: [],
+    }),
+    found,
+    'results for a query the Reviewer has typed past must not re-render'
+  );
+
+  const typedAgain = caseReviewReducer(found, {
+    type: 'case/responsible-party-search-input',
+    query: 'Janet',
+  });
+  assert.deepEqual(typedAgain.routes.caseReview.responsiblePartySearch, {
+    query: 'Janet',
+    people: [],
+  });
+
+  const cleared = caseReviewReducer(typedAgain, {
+    type: 'case/responsible-party-search-cleared',
+  });
+  assert.deepEqual(cleared.routes.caseReview.responsiblePartySearch, {
+    query: '',
+    people: [],
+  });
+  assert.equal(
+    caseReviewReducer(cleared, {
+      type: 'case/responsible-party-search-cleared',
+    }),
+    cleared,
+    'clearing a search that is already empty must not re-render'
+  );
+});
+
+test('state: setting the Responsible Party advances the Case Row and leaves the access matrix alone', () => {
+  // The matrix is a load-time evaluation: it is built from the row the load
+  // handed over, and every `can*` getter reads that frozen copy. Re-deriving it
+  // from an optimistic edit would change the permission surface mid-session.
+  const loaded = snapshot();
+  loaded.caseRow = { ...loaded.caseRow, responsibleParty: '' };
+  loaded.machine = { canSelectRemediation: true };
+  const state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: loaded }
+  );
+
+  const set = caseReviewReducer(state, {
+    type: 'case/responsible-party-changed',
+    loginName: 'jsmith',
+  });
+  assert.equal(
+    set.routes.caseReview.snapshot?.caseRow?.responsibleParty,
+    'jsmith'
+  );
+  assert.equal(
+    set.routes.caseReview.snapshot?.machine,
+    loaded.machine,
+    'the machine the load built is the machine the page keeps'
+  );
+  assert.equal(
+    caseReviewReducer(set, {
+      type: 'case/responsible-party-changed',
+      loginName: 'jsmith',
+    }),
+    set,
+    're-selecting the same person must not re-render'
+  );
+});
+
+test('the reducer ignores a case/field-edited naming the Responsible Party', () => {
+  // The field has its own action and its own writer precisely because the
+  // generic plain-text writer would be the wrong path for a value that resolves
+  // a Role.
+  const loaded = snapshot();
+  loaded.caseRow = { ...loaded.caseRow, responsibleParty: '' };
+  const state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: loaded }
+  );
+
+  assert.equal(
+    caseReviewReducer(state, {
+      type: 'case/field-edited',
+      field: 'responsibleParty',
+      value: 'jsmith',
+    }),
+    state
+  );
+});
+
+test('route: the Responsible Party search is debounced and its choice is persisted', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  /** @type {string[]} */
+  const searches = [];
+  const route = renderResponsiblePartyRoute(async (query) => {
+    searches.push(query);
+    return [{ loginName: 'jsmith', displayName: 'Jane Smith' }];
+  });
+  const input = getByRole(route.container, 'combobox', {
+    name: 'Search people for Responsible Party',
+  });
+  input.value = 'Ja';
+  fireEvent(input, 'input');
+  const retyped = getByRole(route.container, 'combobox', {
+    name: 'Search people for Responsible Party',
+  });
+  retyped.value = 'Jane';
+  fireEvent(retyped, 'input');
+  assert.equal(
+    route.state.routes.caseReview.responsiblePartySearch.query,
+    'Jane'
+  );
+
+  t.mock.timers.tick(199);
+  assert.deepEqual(searches, []);
+  t.mock.timers.tick(1);
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.deepEqual(searches, ['Jane']);
+
+  fireEvent(
+    getByRole(route.container, 'option', { name: /Jane Smith/ }),
+    'click'
+  );
+  assert.equal(
+    route.state.routes.caseReview.snapshot?.caseRow?.responsibleParty,
+    'jsmith'
+  );
+  assert.deepEqual(route.state.routes.caseReview.responsiblePartySearch, {
+    query: '',
+    people: [],
+  });
+  t.mock.timers.tick(1);
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.deepEqual(route.patches, [{ responsibleParty: 'jsmith' }]);
+  route.dispose();
+});
+
+test('route: disposal drops a pending Responsible Party search', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  /** @type {string[]} */
+  const searches = [];
+  const route = renderResponsiblePartyRoute(async (query) => {
+    searches.push(query);
+    return [];
+  });
+  const input = getByRole(route.container, 'combobox', {
+    name: 'Search people for Responsible Party',
+  });
+  input.value = 'Never sent';
+  fireEvent(input, 'input');
+  route.dispose();
+  t.mock.timers.tick(200);
+
+  assert.deepEqual(searches, []);
 });
 
 test('state: tab selection is store-owned and rejects hidden Sections', () => {
@@ -2373,6 +2626,33 @@ test('Notes effect: a Case field edit dispatches then enqueues against the loade
   ]);
 });
 
+test('Responsible Party effect: its own action and its own field write', () => {
+  /** @type {any[]} */
+  const queued = [];
+  /** @type {any[]} */
+  const dispatched = [];
+  const save = createCaseReviewSaveEffect({
+    saveQueue: /** @type {any} */ ({
+      enqueue: (
+        /** @type {string} */ id,
+        /** @type {string} */ field,
+        /** @type {any} */ value
+      ) => queued.push({ id, field, value }),
+    }),
+    caseId: () => 'c1',
+    dispatch: (action) => dispatched.push(action),
+  });
+
+  save.responsiblePartyChanged('jsmith');
+
+  assert.deepEqual(queued, [
+    { id: 'c1', field: 'responsibleParty', value: 'jsmith' },
+  ]);
+  assert.deepEqual(dispatched, [
+    { type: 'case/responsible-party-changed', loginName: 'jsmith' },
+  ]);
+});
+
 test('Notes effect: `fieldEdited` takes only the plain-text Case fields — a type, not a convention', () => {
   /**
    * `fieldEdited` is the one *generic* Case Row writer: its reducer branch
@@ -2399,6 +2679,9 @@ test('Notes effect: `fieldEdited` takes only the plain-text Case fields — a ty
     // @ts-expect-error — `assignedReviewer` is the other field the machine's
     // guards read, and is not the Notes Section's to edit.
     save.fieldEdited('assignedReviewer', 'someone-else');
+    // @ts-expect-error — `responsibleParty` resolves a Role, so it has its own
+    // action and its own writer rather than riding the generic one.
+    save.fieldEdited('responsibleParty', 'jsmith');
   };
   assert.equal(typeof typeContract, 'function');
 });

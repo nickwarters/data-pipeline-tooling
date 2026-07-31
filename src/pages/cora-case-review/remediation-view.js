@@ -5,6 +5,7 @@ import { evaluate } from '../../evaluators/applicability-evaluator.js';
 import { isFailure } from '../../evaluators/failure-evaluator.js';
 import { buildCaptureControl } from '../../lib/capture-engine.js';
 import { AttributeMenu } from '../../components/sections/cora-attribute-menu.js';
+import { PeoplePicker } from '../../components/base/cora-people-picker.js';
 import { CaptureGroups } from '../../components/sections/cora-capture-groups.js';
 
 import { normaliseConfiguredActions } from '../../evaluators/configured-outcome.js';
@@ -26,7 +27,10 @@ import { normaliseConfiguredActions } from '../../evaluators/configured-outcome.
  * @property {boolean} canCapture
  * @property {Record<string, Map<string, boolean>>} captureCollapsed
  * @property {Record<string, { query: string, people: import('../../sharepoint-client.js').PersonResult[] }>} attributionSearch
+ * @property {{ query: string, people: import('../../sharepoint-client.js').PersonResult[] }} responsiblePartySearch
  * @property {boolean} canSelectRemediation
+ * @property {(party: Party) => void} dispatchResponsibleParty
+ * @property {(query: string) => void} dispatchResponsiblePartySearch
  * @property {(questionId: string, fieldKey: string, value: string) => void} dispatchCapture
  * @property {(questionId: string, groupKey: string, collapsed: boolean) => void} dispatchCaptureToggle
  * @property {(questionId: string, key: string, value: string) => void} dispatchDetail
@@ -58,19 +62,93 @@ export function RemediationSection(props) {
   const failed = failedQuestions(props);
 
   const heading = h('h2', {}, 'Failures');
+  // Case-level, so it belongs to the tab rather than to any failure — and it is
+  // computed once for both exits, because a Case with no failures still needs
+  // someone named before its actions can be sent.
+  const responsibleParty = ResponsiblePartyField(props);
+  const tail = responsibleParty ? [responsibleParty] : [];
 
   if (failed.length === 0) {
     const empty = EmptyState('No failures.', {
       className: 'cora-remediation-empty',
     });
-    return [heading, empty];
+    return [heading, empty, ...tail];
   }
 
   const list = h('ul', { className: 'cora-remediation-list' });
   for (const q of failed) {
     list.appendChild(renderRemediationItem(props, q));
   }
-  return [heading, list];
+  return [heading, list, ...tail];
+}
+
+/**
+ * The Case-level **Responsible Party**: who the Remediation Actions are sent
+ * to. Nothing else on the Case sets it, and the completion control stays hidden
+ * until it is set, so the field lives at the foot of the tab that produces
+ * those actions.
+ *
+ * Editable on the same permission as the Remediation Actions above it — the
+ * Assigned Reviewer, while the Case is still pre-reportable — because naming
+ * the recipient and choosing what is sent to them are one act. Afterwards it
+ * reads back as plain text, because the person named is who the sent actions
+ * are already addressed to. The picker stays visible even once a Party is chosen — a wrong
+ * choice is corrected by choosing again. There is deliberately no clear button:
+ * an empty value only ever re-blocks completion, and a SharePoint person column
+ * is not emptied by writing an empty string in any case.
+ *
+ * @param {RemediationSectionProps} props
+ * @returns {Node | null}
+ */
+export function ResponsiblePartyField(props) {
+  const current = props.responsibleParty;
+
+  if (!props.canSelectRemediation) {
+    return current
+      ? h(
+          'p',
+          { className: 'cora-responsible-party-value' },
+          `Responsible Party: ${current.displayName}`
+        )
+      : null;
+  }
+
+  /** @type {Node[]} */
+  const children = [
+    // A `p`, not a `label`: `PeoplePicker` exposes no input id to point at, and
+    // the picker carries its own accessible name.
+    h(
+      'p',
+      { className: 'cora-responsible-party-label' },
+      'Responsible Party (who these actions are sent to)'
+    ),
+  ];
+  if (current) {
+    children.push(
+      h(
+        'span',
+        { className: 'cora-responsible-party-current' },
+        current.displayName
+      )
+    );
+  }
+  children.push(
+    PeoplePicker({
+      placeholder: 'Search people…',
+      people: props.responsiblePartySearch.people,
+      query: props.responsiblePartySearch.query,
+      inputValue: props.responsiblePartySearch.query,
+      ariaLabel: 'Search people for Responsible Party',
+      // This value resolves a Role and gates completion, and the field is
+      // read-only once the actions are sent, so a mistyped account would be
+      // unrecoverable from here.
+      allowRawAccount: false,
+      onQueryInput: (query) => props.dispatchResponsiblePartySearch(query),
+      onSelect: (party) => props.dispatchResponsibleParty(party),
+    })
+  );
+
+  return h('div', { className: 'cora-responsible-party-field' }, ...children);
 }
 
 /**

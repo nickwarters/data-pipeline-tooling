@@ -74,6 +74,9 @@ import {
  * @property {boolean} completionPending
  * @property {Record<string, Map<string, boolean>>} captureCollapsed
  * @property {Record<string, { query: string, people: import('../sharepoint-client.js').PersonResult[] }>} attributionSearch
+ * @property {{ query: string, people: import('../sharepoint-client.js').PersonResult[] }} responsiblePartySearch
+ *   One search, not one per Question: the Responsible Party is a Case-level
+ *   field, so there is only ever one of these boxes open.
  * @property {CaseReviewSnapshot | null} snapshot
  */
 
@@ -100,6 +103,7 @@ export function createInitialCaseReviewState(chrome, panelMode) {
         completionPending: false,
         captureCollapsed: {},
         attributionSearch: {},
+        responsiblePartySearch: { query: '', people: [] },
         snapshot: null,
       },
     },
@@ -252,6 +256,54 @@ export function caseReviewReducer(state, action) {
     const attributionSearch = { ...route.attributionSearch };
     delete attributionSearch[action.questionId];
     return patchRoute(state, 'caseReview', { attributionSearch });
+  }
+  if (action.type === 'case/responsible-party-search-input') {
+    return patchRoute(state, 'caseReview', {
+      responsiblePartySearch: { query: action.query, people: [] },
+    });
+  }
+  if (action.type === 'case/responsible-party-search-results') {
+    // Identity guard: results for a query the Reviewer has typed past.
+    if (route.responsiblePartySearch.query !== action.query) return state;
+    return patchRoute(state, 'caseReview', {
+      responsiblePartySearch: { query: action.query, people: action.people },
+    });
+  }
+  if (action.type === 'case/responsible-party-search-cleared') {
+    // Identity guard: clearing a search that is not open.
+    const current = route.responsiblePartySearch;
+    if (current.query === '' && current.people.length === 0) return state;
+    return patchRoute(state, 'caseReview', {
+      responsiblePartySearch: { query: '', people: [] },
+    });
+  }
+  // The Case-level Responsible Party, chosen on the Issues tab. Optimistic and
+  // SaveQueue-debounced, so it is neither a `case/field-edited` (a generic
+  // writer whose union is closed for this exact reason) nor a
+  // `case/case-row-patched` (which folds back fields a confirmed PATCH already
+  // wrote).
+  //
+  // `snapshot.machine` is deliberately left as it was. Access resolution reads
+  // this field to grant the Responsible Party Role, and the machine bakes those
+  // Roles and its access matrix from the row it was constructed with at load —
+  // re-deriving it from an optimistic edit would move the permission surface
+  // under the Reviewer mid-session, which is a decision, not a staleness fix.
+  // Nothing needs it to: the reader that must react at once is the completion
+  // control, and it reads the live Case Row.
+  if (
+    action.type === 'case/responsible-party-changed' &&
+    route.snapshot?.caseRow
+  ) {
+    // Identity guard: re-selecting the person already named.
+    if (route.snapshot.caseRow.responsibleParty === action.loginName) {
+      return state;
+    }
+    return patchSnapshot(state, {
+      caseRow: {
+        ...route.snapshot.caseRow,
+        responsibleParty: action.loginName,
+      },
+    });
   }
   if (action.type === 'case/conversation-toggled') {
     if (
@@ -410,6 +462,10 @@ export function createRouteSlice(params, context) {
   const attributionTimers = new Map();
   /** @type {Map<string, string>} */
   const pendingAttributionQueries = new Map();
+  // A plain scalar, not a map: the Responsible Party is a Case-level field, so
+  // there is one search box and one debounce in flight at a time.
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
+  let responsiblePartyTimer;
   /**
    * The client this route **reads** through. Swapped in `start()` for the same
    * client with the mount lifetime bound to its reads, so navigating
@@ -503,6 +559,39 @@ export function createRouteSlice(params, context) {
         });
       }, 200)
     );
+  }
+
+  function clearResponsiblePartySearch() {
+    // Unconditional: there is one timer for the whole Case, and clearing an
+    // unset one is a no-op, so the guard would only be a branch nothing reaches.
+    clearTimeout(responsiblePartyTimer);
+    responsiblePartyTimer = undefined;
+    dispatch({ type: 'case/responsible-party-search-cleared' });
+  }
+
+  /** @param {string} query */
+  function requestResponsiblePartySearch(query) {
+    dispatch({ type: 'case/responsible-party-search-input', query });
+    clearTimeout(responsiblePartyTimer);
+    responsiblePartyTimer = undefined;
+    const trimmed = query.trim();
+    if (!trimmed || !context.client) return;
+    responsiblePartyTimer = setTimeout(() => {
+      responsiblePartyTimer = undefined;
+      void context.client.searchPeople(trimmed).then((people) => {
+        // Only the mount lifetime is checked here. Whether this result is still
+        // the one being waited for is the reducer's own guard: it drops results
+        // whose query is not the query in state, which is the same condition a
+        // pending-query latch here would test.
+        if (isSliceActive()) {
+          dispatch({
+            type: 'case/responsible-party-search-results',
+            query,
+            people,
+          });
+        }
+      });
+    }, 200);
   }
 
   /**
@@ -672,6 +761,13 @@ export function createRouteSlice(params, context) {
       clearAttributionSearch(questionId);
     };
 
+    /** @param {{ loginName: string, displayName: string }} party */
+    const selectResponsibleParty = (party) => {
+      if (!snapshot.machine?.canSelectRemediation) return;
+      save.responsiblePartyChanged(party.loginName);
+      clearResponsiblePartySearch();
+    };
+
     // The panel renderers' half of the contract. Rebuilt per render because
     // `onAnswer` and `selectAttribution` close over this render's snapshot;
     // `currentAnswers` stays a getter so a memoised card's surviving callback
@@ -684,6 +780,8 @@ export function createRouteSlice(params, context) {
       onAnswer,
       selectAttribution,
       requestAttributionSearch,
+      selectResponsibleParty,
+      requestResponsiblePartySearch,
       save,
       appeals,
     };
@@ -968,6 +1066,8 @@ export function createRouteSlice(params, context) {
         for (const timer of attributionTimers.values()) clearTimeout(timer);
         attributionTimers.clear();
         pendingAttributionQueries.clear();
+        clearTimeout(responsiblePartyTimer);
+        responsiblePartyTimer = undefined;
         questionsView.clear();
         dispatch = () => {};
         disposeSaveStatus();

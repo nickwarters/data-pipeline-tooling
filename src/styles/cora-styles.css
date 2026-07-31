@@ -1369,6 +1369,51 @@
   outline: none;
 }
 
+/* ── Responsible Party (Case-level, foot of the Issues tab) ───────────────── */
+
+/* Set once for the whole Case rather than per failure, so it sits apart from
+   the failure list with a rule above it. */
+.cora-responsible-party-field {
+  display: block;
+  margin: var(--cora-space-5) 0 0;
+  padding: var(--cora-space-3) 0 0;
+  border-top: 1px solid var(--cora-color-border);
+}
+
+.cora-responsible-party-label {
+  margin: 0 0 var(--cora-space-2);
+  font-size: var(--cora-font-size-xs);
+  font-weight: var(--cora-font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--cora-color-text-muted);
+}
+
+/* The person currently named, with the picker still below it: choosing again
+   is how a wrong choice is corrected. */
+.cora-responsible-party-current {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cora-space-1);
+  margin: 0 0 var(--cora-space-2);
+  padding: var(--cora-space-1) var(--cora-space-3);
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-medium);
+  color: var(--cora-color-on-surface);
+  background: var(--cora-color-surface-2);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-pill, 999px);
+}
+
+/* Read-only once the actions are sent: the person named is who they went to. */
+.cora-responsible-party-value {
+  margin: var(--cora-space-5) 0 0;
+  padding: var(--cora-space-3) 0 0;
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+  border-top: 1px solid var(--cora-color-border);
+}
+
 /* The per-failure "Is remediation required?" decision, which gates whether the
    Remediation Actions below it render at all. A fieldset for the grouping its
    two radios need, stripped of the UA border/padding so it reads as the same

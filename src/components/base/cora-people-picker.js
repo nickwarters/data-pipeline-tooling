@@ -12,18 +12,34 @@ import { h } from '../../lib/html.js';
  * @property {string} inputValue
  * @property {(value: string) => void} onQueryInput
  * @property {(person: { loginName: string, displayName: string }) => void} onSelect
+ * @property {string} [ariaLabel] The control's accessible name. Defaults to a
+ *   generic one, which suits a picker whose surroundings already say what it
+ *   fills; a caller supplies its own when the name has to carry that itself.
+ * @property {boolean} [allowRawAccount] Whether an unmatched query may be taken
+ *   as an account name. Defaults to true.
  */
 
 /**
  * Build the result option nodes for a query: one per match, or a single
  * raw-account fallback when a non-empty query returns nothing.
  *
+ * A caller may withhold that fallback. It is a convenience for the common case,
+ * where a wrong account is visible and correctable on the spot; a field whose
+ * value carries a permission, or that the page stops offering once the Case
+ * moves on, cannot afford an unresolved string it can never take back.
+ *
  * @param {PersonResult[]} people
  * @param {string} query
  * @param {(person: { loginName: string, displayName: string }) => void} onSelect
+ * @param {boolean} [allowRawAccount]
  * @returns {HTMLElement[]}
  */
-export function peoplePickerOptions(people, query, onSelect) {
+export function peoplePickerOptions(
+  people,
+  query,
+  onSelect,
+  allowRawAccount = true
+) {
   const items = people.map((p) =>
     peoplePickerOption(
       { loginName: p.loginName, displayName: p.displayName },
@@ -31,7 +47,7 @@ export function peoplePickerOptions(people, query, onSelect) {
       onSelect
     )
   );
-  if (people.length === 0 && query !== '') {
+  if (allowRawAccount && people.length === 0 && query !== '') {
     items.push(
       peoplePickerOption(
         { loginName: query, displayName: query },
@@ -54,13 +70,18 @@ export function peoplePickerOptions(people, query, onSelect) {
  * @returns {HTMLElement}
  */
 export function PeoplePicker(props) {
-  const items = peoplePickerOptions(props.people, props.query, props.onSelect);
+  const items = peoplePickerOptions(
+    props.people,
+    props.query,
+    props.onSelect,
+    props.allowRawAccount ?? true
+  );
 
   const inputEl = h('input', {
     className: 'cora-people-picker-input',
     type: 'text',
     role: 'combobox',
-    'aria-label': 'Search people',
+    'aria-label': props.ariaLabel ?? 'Search people',
     placeholder: props.placeholder,
     value: props.inputValue,
     oninput: (/** @type {any} */ ev) => {

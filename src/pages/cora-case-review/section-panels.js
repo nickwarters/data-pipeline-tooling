@@ -84,6 +84,8 @@ import { resolveGeneralQuestionsPlacement } from '../../evaluators/general-quest
  * @property {(questionId: string, value: string | string[]) => void} onAnswer
  * @property {(questionId: string, party: { loginName: string, displayName: string } | null) => void} selectAttribution
  * @property {(questionId: string, query: string) => void} requestAttributionSearch
+ * @property {(party: { loginName: string, displayName: string }) => void} selectResponsibleParty
+ * @property {(query: string) => void} requestResponsiblePartySearch
  * @property {{ fieldEdited: (field: import('./case-actions.js').PlainTextCaseField, value: string) => void }} save
  *   Narrowed on purpose, twice over: panels may report a field edit and nothing
  *   else on the SaveQueue bridge, and the field itself may only be one of the
@@ -176,7 +178,10 @@ export const SECTION_PANELS = {
       canCapture: snapshot.machine?.canCapture ?? false,
       captureCollapsed: route.captureCollapsed,
       attributionSearch: route.attributionSearch,
+      responsiblePartySearch: route.responsiblePartySearch,
       canSelectRemediation: snapshot.machine?.canSelectRemediation ?? false,
+      dispatchResponsibleParty: actions.selectResponsibleParty,
+      dispatchResponsiblePartySearch: actions.requestResponsiblePartySearch,
       dispatchCapture: (questionId, fieldKey, value) =>
         actions.editAnswers(
           issueCaptured({

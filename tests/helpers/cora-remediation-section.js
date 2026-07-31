@@ -101,7 +101,10 @@ export class CORARemediationSection extends HTMLElement {
       canCapture: this.canCapture,
       captureCollapsed: {},
       attributionSearch: {},
+      responsiblePartySearch: { query: '', people: [] },
       canSelectRemediation: this.canSelectRemediation,
+      dispatchResponsibleParty() {},
+      dispatchResponsiblePartySearch() {},
       dispatchCapture: (questionId, fieldKey, value) =>
         this._emit('cora-capture', { questionId, fieldKey, value }),
       dispatchCaptureToggle() {},

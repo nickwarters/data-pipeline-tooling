@@ -477,6 +477,50 @@ test('completionControl: the pre-send path still reads Send Actions and is enabl
   assert.equal(control.label, 'Send Actions');
 });
 
+test('completionControl: no Responsible Party, no way to send the actions', () => {
+  // The Case-level Responsible Party is who the actions are sent to, so the
+  // control does not appear — and writes nothing — until the Reviewer has named
+  // one.
+  const answers = {
+    q1: {
+      value: 'No',
+      remediationRequired: /** @type {const} */ ('yes'),
+      remediationActions: [{ id: 'a1', text: 'Fix' }],
+    },
+  };
+  const base = {
+    machine: machine(),
+    catalogue: CATALOGUE,
+    answers,
+    allAnswered: true,
+  };
+  const patchInput = {
+    computeOutcome: () => ({ outcome: /** @type {string} */ ('fail') }),
+    exportHash: null,
+  };
+  const unset = { ...CASE_ROW, responsibleParty: '' };
+
+  assert.equal(
+    completionControl({ ...base, caseRow: unset }).visible,
+    false,
+    'nothing to press while nobody is named'
+  );
+  assert.equal(
+    completionPatch({ ...base, caseRow: unset, ...patchInput }),
+    null,
+    'and a raw call writes nothing either'
+  );
+
+  const named = completionControl({ ...base, caseRow: CASE_ROW });
+  assert.equal(named.visible, true);
+  assert.equal(named.disabled, false);
+  assert.equal(named.label, 'Send Actions');
+  assert.equal(
+    completionPatch({ ...base, caseRow: CASE_ROW, ...patchInput })?.status,
+    'Actions In Progress'
+  );
+});
+
 test('readyToClose: an absent catalogue is no rows, not a thrown render', () => {
   // The gate is recomputed on every render, so it must tolerate a caller that
   // has no catalogue rather than throwing out of the view. No catalogue means

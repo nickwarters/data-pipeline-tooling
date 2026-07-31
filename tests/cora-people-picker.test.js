@@ -46,7 +46,9 @@ test('PeoplePicker renders an accessible input and hidden empty result list', ()
     onQueryInput: (value) => inputs.push(value),
     onSelect() {},
   });
-  const input = /** @type {any} */ (getByRole(host, 'combobox'));
+  const input = /** @type {any} */ (
+    getByRole(host, 'combobox', { name: 'Search people' })
+  );
   assert.equal(input.placeholder, 'Find a colleague');
   assert.equal(input.value, 'Jan');
   input.value = 'Jane';
@@ -78,6 +80,49 @@ test('peoplePickerOptions offers a raw-account fallback only for a non-empty que
   assert.equal(peoplePickerOptions([], '', () => {}).length, 0);
   const [fallback] = peoplePickerOptions([], 'someone', () => {});
   assert.equal(fallback.textContent, 'Use “someone” as account');
+});
+
+test('a picker can withhold the raw-account fallback its callers usually get', () => {
+  // A field whose value resolves a Role, and which the page stops offering once
+  // the Case moves on, cannot afford an unchecked account string.
+  assert.deepEqual(
+    peoplePickerOptions([], 'someone', () => {}, false),
+    []
+  );
+  assert.equal(
+    queryAllByRole(
+      PeoplePicker({
+        placeholder: '',
+        people: [],
+        query: 'someone',
+        inputValue: 'someone',
+        allowRawAccount: false,
+        onQueryInput() {},
+        onSelect() {},
+      }),
+      'option'
+    ).length,
+    0
+  );
+});
+
+test('a picker names its input for the field it belongs to', () => {
+  // The default name says only that the control searches people. A picker whose
+  // surroundings do not say which field it fills supplies its own.
+  const named = PeoplePicker({
+    placeholder: '',
+    people: [],
+    query: '',
+    inputValue: '',
+    ariaLabel: 'Search people for Responsible Party',
+    onQueryInput() {},
+    onSelect() {},
+  });
+  assert.ok(
+    getByRole(named, 'combobox', {
+      name: 'Search people for Responsible Party',
+    })
+  );
 });
 
 test('searchPeople trims and forwards a query before rendering results', async () => {
