@@ -21,6 +21,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { MockSharePointClient } from '../src/services/mock-sharepoint-client.js';
 import { HttpSharePointClient } from '../src/services/http-sharepoint-client.js';
+import { toClaimsLogin } from '../src/services/account-name.js';
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../src/sharepoint-client.js').PersonResult} PersonResult */
@@ -81,15 +82,28 @@ function seedPeople() {
 
 // --- fake SharePoint REST backend for the HTTP side ---------------------
 
-/** @param {CaseRow} row */
-function toSpItem(row) {
+/**
+ * The Assigned Reviewer and Responsible Party are Person columns: SharePoint
+ * stores a User Information List id and answers the account name only on an
+ * expanded read. The fake allocates an id per account the same way, so the HTTP
+ * client is driven through the same two-shapes-of-identity it meets in prod.
+ *
+ * @param {CaseRow} row
+ * @param {(account: string) => number | null} idFor
+ */
+function toSpItem(row, idFor) {
+  /** @param {string} account */
+  const person = (account) =>
+    account ? { Name: toClaimsLogin(account), Title: account } : null;
   return {
     Id: row.id,
     Title: row.title,
     Status: row.status,
     CaseType: row.caseType,
-    AssignedReviewerId: row.assignedReviewer,
-    ResponsiblePartyId: row.responsibleParty,
+    AssignedReviewerId: idFor(row.assignedReviewer ?? ''),
+    AssignedReviewer: person(row.assignedReviewer ?? ''),
+    ResponsiblePartyId: idFor(row.responsibleParty ?? ''),
+    ResponsibleParty: person(row.responsibleParty ?? ''),
     Answers: JSON.stringify(row.answers ?? {}),
     Conversation: JSON.stringify(row.conversation ?? []),
     Notes: row.notes ?? '',
@@ -99,21 +113,27 @@ function toSpItem(row) {
 
 /**
  * Evaluate a `$filter` expression this suite's `listCases`/`countCases`
- * calls can produce: `Field eq 'value'` clauses ANDed with ` and `.
+ * calls can produce: `Field eq 'value'` clauses, or the unquoted numeric
+ * comparison a Person column takes, ANDed with ` and `.
  * @param {string} expr
  * @param {Record<string, unknown>} item
  */
 function matchesFilterExpr(expr, item) {
   if (!expr) return true;
   return expr.split(' and ').every((cond) => {
-    const m = cond.match(/^(\w+) eq '([^']*)'$/);
-    if (!m) {
-      throw new Error(
-        `sharepoint-client-contract test backend: unsupported $filter clause "${cond}"`
-      );
+    const text = cond.match(/^(\w+) eq '([^']*)'$/);
+    if (text) {
+      const [, field, value] = text;
+      return String(item[field] ?? '') === value;
     }
-    const [, field, value] = m;
-    return String(item[field] ?? '') === value;
+    const num = cond.match(/^(\w+) eq (-?\d+)$/);
+    if (num) {
+      const [, field, value] = num;
+      return item[field] === Number(value);
+    }
+    throw new Error(
+      `sharepoint-client-contract test backend: unsupported $filter clause "${cond}"`
+    );
   });
 }
 
@@ -139,6 +159,23 @@ function readHeader(init, name) {
 function makeSpBackend(seed) {
   const store = new Map((seed.cases ?? []).map((c) => [c.id, { ...c }]));
   const people = new Map((seed.people ?? []).map((p) => [p.loginName, p]));
+  /**
+   * The site's User Information List: an id per account, allocated on first
+   * sight exactly as EnsureUser does.
+   *
+   * @type {Map<string, number>}
+   */
+  const userIds = new Map();
+  let nextUserId = 100;
+  /** @param {string} account @returns {number | null} */
+  const idFor = (account) => {
+    if (!account) return null;
+    const existing = userIds.get(account);
+    if (existing !== undefined) return existing;
+    const id = nextUserId++;
+    userIds.set(account, id);
+    return id;
+  };
   const exportHashes = seed.exportHashes ?? {};
   const versionedExports = seed.versionedExports ?? {};
   let etagCounter = 1000;
@@ -189,13 +226,21 @@ function makeSpBackend(seed) {
       return new Response(JSON.stringify(body), { status: 200 });
     }
 
+    if (url.endsWith('/_api/web/ensureuser')) {
+      const logon = String(JSON.parse(String(init.body)).logonName);
+      const account = logon.slice(logon.lastIndexOf('\\') + 1);
+      return new Response(JSON.stringify({ Id: idFor(account) }), {
+        status: 200,
+      });
+    }
+
     const itemMatch = url.match(/items\('([^']+)'\)/);
     if (itemMatch) {
       const id = decodeURIComponent(itemMatch[1]);
       const row = store.get(id);
       if (method === 'GET') {
         if (!row) return new Response('not found', { status: 404 });
-        return new Response(JSON.stringify(toSpItem(row)), {
+        return new Response(JSON.stringify(toSpItem(row, idFor)), {
           status: 200,
           headers: { ETag: `"${row.etag}"` },
         });
@@ -238,11 +283,14 @@ function makeSpBackend(seed) {
     if (url.includes('/items') && method === 'GET') {
       const filterExpr = decodeFilterExpr(url);
       const rows = [...store.values()].filter((row) =>
-        matchesFilterExpr(filterExpr, toSpItem(row))
+        matchesFilterExpr(filterExpr, toSpItem(row, idFor))
       );
-      return new Response(JSON.stringify({ value: rows.map(toSpItem) }), {
-        status: 200,
-      });
+      return new Response(
+        JSON.stringify({ value: rows.map((row) => toSpItem(row, idFor)) }),
+        {
+          status: 200,
+        }
+      );
     }
 
     throw new Error(

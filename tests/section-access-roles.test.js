@@ -88,6 +88,104 @@ test('resolveRoles: the Responsible Party a real read produces is one this match
   });
 });
 
+test('resolveRoles: the Assigned Reviewer a real read produces is one this matcher recognises', () => {
+  // The Assigned Reviewer is the other Person column, matched the same way and
+  // carrying more: this is the Role that grants edit on the Issues tab. The
+  // Case Row and the viewer must therefore agree on the shape of an identity,
+  // which only an end-to-end read of both can show.
+  const claims = 'i:0#.w|CONTOSO\\jrev';
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.url.endsWith('/_api/web/currentUser'),
+      respond: () =>
+        new Response(
+          JSON.stringify({ LoginName: claims, Title: 'Jordan Reviewer' }),
+          { status: 200 }
+        ),
+    },
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            Id: 'case-1',
+            Title: 'T',
+            Status: 'In-progress',
+            CaseType: 'example-review',
+            AssignedReviewer: { Name: claims, Title: 'Jordan Reviewer' },
+            Answers: '{}',
+            Conversation: '[]',
+            Notes: '',
+            CompletedAt: null,
+          }),
+          { status: 200 }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  return Promise.all([
+    client.getCase('case-1', { listName: 'Cases-ExampleReview' }),
+    client.getCurrentUser(),
+  ]).then(([row, user]) => {
+    assert.ok(row);
+    assert.deepEqual(resolveRoles(row, user.id, caps({ isReviewer: true })), [
+      'assignedReviewer',
+    ]);
+  });
+});
+
+test('resolveRoles: the Reviewer Manager a real read produces is one this matcher recognises', () => {
+  // The manager columns are Person columns as well, and this Role is what
+  // scopes a manager to the Cases of the Reviewers they manage. The row
+  // snapshot and the signed-in user must agree on the shape of an identity,
+  // which only an end-to-end read of both can show.
+  const claims = 'i:0#.w|CONTOSO\\jmgr';
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.url.endsWith('/_api/web/currentUser'),
+      respond: () =>
+        new Response(
+          JSON.stringify({ LoginName: claims, Title: 'Jordan Manager' }),
+          { status: 200 }
+        ),
+    },
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            Id: 'case-1',
+            Title: 'T',
+            Status: 'In-progress',
+            CaseType: 'example-review',
+            AssignedReviewerManager: { Name: claims },
+            Answers: '{}',
+            Conversation: '[]',
+            Notes: '',
+            CompletedAt: null,
+          }),
+          { status: 200 }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  return Promise.all([
+    client.getCase('case-1', { listName: 'Cases-ExampleReview' }),
+    client.getCurrentUser(),
+  ]).then(([row, user]) => {
+    assert.ok(row);
+    assert.deepEqual(resolveRoles(row, user.id, caps({})), ['reviewerManager']);
+  });
+});
+
 test('resolveRoles: case type owner', () => {
   const roles = resolveRoles(
     makeCase(),

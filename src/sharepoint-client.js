@@ -156,13 +156,18 @@
  * at reportable, despite the `Completion` name) and are re-fed from a case-level
  * **Amended Outcome**, not from per-Answer overrides.
  *
- * `responsibleParty` is the Responsible Party's **bare account login name** — the
- * same identity key `assignedReviewer` and `CurrentUser.id` carry — because
- * Section access resolves the Responsible Party Role by matching it against the
- * signed-in user. `responsiblePartyDisplayName` is the directory name that goes
- * with it, carried on the row so a view can name a person without a second round
- * trip. Read-side only: nothing writes it, and it is absent on a Case with no
- * Responsible Party.
+ * The four people on a row — `assignedReviewer`, `responsibleParty` and the
+ * two manager fields below — are all **bare account login names**, the same
+ * identity key `CurrentUser.id` carries, because Section access resolves every
+ * person-derived Role by matching them against the signed-in user. All four
+ * are stored in SharePoint as Person columns, so the numeric id such a column
+ * really holds is the client's business and never reaches a row: whichever way
+ * a row is read, these fields speak accounts. `responsiblePartyDisplayName` is
+ * the directory name that goes with the Responsible Party, carried on the row
+ * so a view can name a person without a second round trip; there is
+ * deliberately no counterpart for the other three, which nothing displays off
+ * the row. Read-side only: nothing writes it, and it is absent on a Case with
+ * no Responsible Party.
  *
  * `assignedReviewerManager` and `responsiblePartyManager` denormalise two
  * org-chart edges onto the row and are **not** equivalent:

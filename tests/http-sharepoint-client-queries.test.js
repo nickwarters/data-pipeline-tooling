@@ -20,6 +20,53 @@ function idPage(n, nextLink) {
   return new Response(JSON.stringify(body), { status: 200 });
 }
 
+/**
+ * A fake backing a filter that names people: the form digest, an EnsureUser
+ * answering from `ids` (keyed by bare account), and the items GET the query
+ * itself issues. An account `ids` does not name cannot be resolved, which is
+ * how a directory miss is spelled.
+ *
+ * @param {Record<string, number>} ids
+ * @param {() => Response} [items] the items response, defaulting to an empty page
+ */
+function peopleFilterFetch(ids, items) {
+  /** @type {import('./helpers/http-sharepoint-client.js').CapturedCall | null} */
+  let ensureCall = null;
+  return makeFetch([
+    {
+      when: (c) => c.url.endsWith('/_api/contextinfo'),
+      respond: () =>
+        new Response(JSON.stringify({ FormDigestValue: 'd' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    },
+    {
+      when: (c) => {
+        if (!c.url.endsWith('/_api/web/ensureuser')) return false;
+        ensureCall = c;
+        return true;
+      },
+      respond: () => {
+        const logon = String(JSON.parse(String(ensureCall?.body)).logonName);
+        const id = ids[logon.slice(logon.lastIndexOf('\\') + 1)];
+        if (id === undefined)
+          return new Response('no such user', { status: 500 });
+        return new Response(JSON.stringify({ Id: id }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      },
+    },
+    {
+      when: (c) => c.method === 'GET',
+      respond:
+        items ??
+        (() => new Response(JSON.stringify({ value: [] }), { status: 200 })),
+    },
+  ]);
+}
+
 test('HttpSharePointClient: listCases follows odata.nextLink across pages and concatenates results', async () => {
   const page2Url = `${WEB_URL}/_api/web/lists/getbytitle('Cases-ExampleReview')/items?$skiptoken=PAGE2`;
   const { fetch, calls } = makeFetch([
@@ -101,13 +148,7 @@ test('HttpSharePointClient: listCases follows odata.nextLink across pages and co
 });
 
 test('HttpSharePointClient: listCases applies status and assignedReviewer filters via $filter', async () => {
-  const { fetch, calls } = makeFetch([
-    {
-      when: (c) => c.method === 'GET',
-      respond: () =>
-        new Response(JSON.stringify({ value: [] }), { status: 200 }),
-    },
-  ]);
+  const { fetch, calls } = peopleFilterFetch({ 'user-1': 5 });
   const client = new HttpSharePointClient({
     webUrl: WEB_URL,
     fetchImpl: fetch,
@@ -118,10 +159,14 @@ test('HttpSharePointClient: listCases applies status and assignedReviewer filter
     { listName: 'Cases-ExampleReview' }
   );
 
-  assert.equal(calls.length, 1);
-  const url = decodeURIComponent(calls[0].url);
+  const url = decodeURIComponent(
+    String(calls.find((c) => c.url.includes('/items?'))?.url)
+  );
   assert.ok(url.includes("Status eq 'In-progress'"), 'should filter on Status');
-  assert.ok(url.includes('user-1'), 'should filter on assigned reviewer id');
+  assert.ok(
+    url.includes('AssignedReviewerId eq 5'),
+    'should filter on the reviewer person id'
+  );
 });
 
 test('HttpSharePointClient: listCases targets the explicitly supplied listName (there is no default Case list)', async () => {
@@ -321,13 +366,7 @@ test('HttpSharePointClient: listCases with outcomeOverridden filters on the Outc
 });
 
 test('HttpSharePointClient: listCases with responsibleParty filters server-side on ResponsiblePartyId', async () => {
-  const { fetch, calls } = makeFetch([
-    {
-      when: (c) => c.method === 'GET',
-      respond: () =>
-        new Response(JSON.stringify({ value: [] }), { status: 200 }),
-    },
-  ]);
+  const { fetch, calls } = peopleFilterFetch({ 'rp-user': 31 });
   const client = new HttpSharePointClient({
     webUrl: WEB_URL,
     fetchImpl: fetch,
@@ -338,21 +377,20 @@ test('HttpSharePointClient: listCases with responsibleParty filters server-side 
     { listName: 'Cases-ExampleReview' }
   );
 
-  const url = decodeURIComponent(calls[0].url);
+  const url = decodeURIComponent(
+    String(calls.find((c) => c.url.includes('/items?'))?.url)
+  );
   assert.ok(
-    url.includes("ResponsiblePartyId eq 'rp-user'"),
+    url.includes('ResponsiblePartyId eq 31'),
     'should filter on ResponsiblePartyId'
   );
 });
 
-test('HttpSharePointClient: listCases with assignedReviewerManager filters server-side on AssignedReviewerManager', async () => {
-  const { fetch, calls } = makeFetch([
-    {
-      when: (c) => c.method === 'GET',
-      respond: () =>
-        new Response(JSON.stringify({ value: [] }), { status: 200 }),
-    },
-  ]);
+test('HttpSharePointClient: an assignedReviewerManager filter compares against the numeric person id', async () => {
+  // The manager column is a Person column like the other two, and this filter
+  // leads every Team Cases read — a quoted account against the lookup returns
+  // an empty team, which reads as "you manage nobody" rather than an error.
+  const { fetch, calls } = peopleFilterFetch({ 'mgr-user': 41 });
   const client = new HttpSharePointClient({
     webUrl: WEB_URL,
     fetchImpl: fetch,
@@ -363,10 +401,17 @@ test('HttpSharePointClient: listCases with assignedReviewerManager filters serve
     { listName: 'Cases-ExampleReview' }
   );
 
-  const url = decodeURIComponent(calls[0].url);
+  const url = decodeURIComponent(
+    String(calls.find((c) => c.url.includes('/items?'))?.url)
+  );
   assert.ok(
-    url.includes("AssignedReviewerManager eq 'mgr-user'"),
-    'should filter on AssignedReviewerManager'
+    url.includes('AssignedReviewerManagerId eq 41'),
+    'the filter names the id column and compares unquoted'
+  );
+  assert.ok(!url.includes("eq '41'"), 'a quoted number is not a person id');
+  assert.ok(
+    !url.includes('mgr-user'),
+    'the account name never reaches the query'
   );
 });
 
@@ -566,12 +611,9 @@ test('HttpSharePointClient: countCases maps the reason flags to indexed boolean 
 });
 
 test('HttpSharePointClient: countCases maps non-held capacity to the indexed OnHold column', async () => {
-  const { fetch, calls } = makeFetch([
-    {
-      when: (c) => c.method === 'GET',
-      respond: () => idPage(2),
-    },
-  ]);
+  const { fetch, calls } = peopleFilterFetch({ 'reviewer-1': 9 }, () =>
+    idPage(2)
+  );
   const client = new HttpSharePointClient({
     webUrl: WEB_URL,
     fetchImpl: fetch,
@@ -586,9 +628,11 @@ test('HttpSharePointClient: countCases maps non-held capacity to the indexed OnH
     { listName: 'Cases-Complaints' }
   );
 
-  const url = decodeURIComponent(calls[0].url);
+  const url = decodeURIComponent(
+    String(calls.find((c) => c.url.includes('/items?'))?.url)
+  );
   assert.ok(url.includes("Status eq 'In-progress'"));
-  assert.ok(url.includes("AssignedReviewerId eq 'reviewer-1'"));
+  assert.ok(url.includes('AssignedReviewerId eq 9'));
   assert.ok(url.includes('OnHold eq 0'));
 });
 
@@ -972,4 +1016,239 @@ test('HttpSharePointClient: countCases with every reason flag false renders ever
   assert.ok(url.includes('HasOpenAppeal eq 1'));
   assert.ok(url.includes('Reopened eq 0'));
   assert.ok(url.includes('OutcomeOverridden eq 0'));
+});
+
+// --- Person columns in a filter ---
+
+test('HttpSharePointClient: a responsibleParty filter compares against the numeric person id', async () => {
+  // The column is a Person column, so the stored value is a number. Comparing
+  // it to a quoted account name matches nothing, which reads as "you have no
+  // Cases" rather than as a failure.
+  const { fetch, calls } = peopleFilterFetch(
+    { jrp: 27 },
+    () =>
+      new Response(
+        JSON.stringify({
+          value: [
+            {
+              Id: 'case-1',
+              Title: 'One',
+              Status: 'In-progress',
+              CaseType: 'example-review',
+              Answers: '{}',
+              Conversation: '[]',
+              Notes: '',
+              CompletedAt: null,
+            },
+          ],
+        }),
+        { status: 200 }
+      )
+  );
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const rows = await client.listCases(
+    { responsibleParty: 'jrp' },
+    { listName: 'Cases-ExampleReview' }
+  );
+
+  assert.equal(rows.length, 1);
+  const url = decodeURIComponent(
+    String(calls.find((c) => c.url.includes('/items?'))?.url)
+  );
+  assert.ok(url.includes('ResponsiblePartyId eq 27'));
+  assert.ok(!url.includes("eq '27'"), 'a quoted number is not a person id');
+  assert.ok(!url.includes('jrp'), 'the account name never reaches the query');
+});
+
+test('HttpSharePointClient: an assignedReviewer count filter compares against the numeric person id', async () => {
+  const { fetch, calls } = peopleFilterFetch({ jrev: 8 }, () => idPage(3));
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const count = await client.countCases(
+    { assignedReviewer: 'jrev' },
+    { listName: 'Cases-ExampleReview' }
+  );
+
+  assert.equal(count, 3);
+  const url = decodeURIComponent(
+    String(calls.find((c) => c.url.includes('/items?'))?.url)
+  );
+  assert.ok(url.includes('AssignedReviewerId eq 8'));
+  assert.ok(!url.includes("eq '8'"));
+});
+
+test('HttpSharePointClient: people inside an anyOf branch are resolved too', async () => {
+  // The Action Centre really does build an anyOf of per-reason filters, so a
+  // resolver that only looked at the top level would leave those branches
+  // matching nothing.
+  const { fetch, calls } = peopleFilterFetch({ a: 3, b: 4 });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  await client.listCases(
+    { anyOf: [{ assignedReviewer: 'a' }, { responsibleParty: 'b' }] },
+    { listName: 'Cases-ExampleReview' }
+  );
+
+  const url = decodeURIComponent(
+    String(calls.find((c) => c.url.includes('/items?'))?.url)
+  );
+  assert.ok(
+    url.includes('(AssignedReviewerId eq 3) or (ResponsiblePartyId eq 4)')
+  );
+});
+
+test('HttpSharePointClient: one account is resolved once across a list and a count', async () => {
+  const { fetch, calls } = peopleFilterFetch({ jrev: 8 }, () => idPage(0));
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  await client.listCases(
+    { assignedReviewer: 'jrev' },
+    { listName: 'Cases-ExampleReview' }
+  );
+  await client.countCases(
+    { assignedReviewer: 'jrev' },
+    { listName: 'Cases-ExampleReview' }
+  );
+
+  assert.equal(
+    calls.filter((c) => c.url.endsWith('/_api/web/ensureuser')).length,
+    1,
+    'a dashboard refresh must not pay a directory round trip per panel'
+  );
+});
+
+test('HttpSharePointClient: an unresolvable account fails the query rather than widening it', async () => {
+  const { fetch, calls } = peopleFilterFetch({});
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  await assert.rejects(() =>
+    client.listCases(
+      { assignedReviewer: 'ghost' },
+      { listName: 'Cases-ExampleReview' }
+    )
+  );
+  assert.equal(
+    calls.find((c) => c.url.includes('/items?')),
+    undefined,
+    'no rows are read when the filter could not be built'
+  );
+});
+
+test('HttpSharePointClient: the signed-in user is already resolved, so a filter on them asks nothing', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.url.endsWith('/_api/web/currentUser'),
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            LoginName: 'i:0#.w|CONTOSO\\jrev',
+            Title: 'Jordan Reviewer',
+            Id: 12,
+          }),
+          { status: 200 }
+        ),
+    },
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(JSON.stringify({ value: [] }), { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const user = await client.getCurrentUser();
+  await client.listCases(
+    { assignedReviewer: user.id },
+    { listName: 'Cases-ExampleReview' }
+  );
+
+  assert.equal(
+    calls.find((c) => c.url.endsWith('/_api/web/ensureuser')),
+    undefined,
+    'the id came back with the user'
+  );
+  const url = decodeURIComponent(
+    String(calls.find((c) => c.url.includes('/items?'))?.url)
+  );
+  assert.ok(url.includes('AssignedReviewerId eq 12'));
+});
+
+test('HttpSharePointClient: a zero id on the current user is discarded, not cached', async () => {
+  // `Number(null)` is 0 and 0 is finite, so a malformed currentUser response
+  // could otherwise seed the id cache with a falsy value — and a falsy person
+  // id later drops its condition from a filter, silently widening "my Cases"
+  // to every Case. Discarding the zero costs one EnsureUser on the next
+  // person filter, and EnsureUser validates its own answer.
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.url.endsWith('/_api/web/currentUser'),
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            LoginName: 'i:0#.w|CONTOSO\\jrev',
+            Title: 'Jordan Reviewer',
+            Id: 0,
+          }),
+          { status: 200 }
+        ),
+    },
+    {
+      when: (c) => c.url.endsWith('/_api/contextinfo'),
+      respond: () =>
+        new Response(JSON.stringify({ FormDigestValue: 'd' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    },
+    {
+      when: (c) => c.url.endsWith('/_api/web/ensureuser'),
+      respond: () =>
+        new Response(JSON.stringify({ Id: 12 }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    },
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(JSON.stringify({ value: [] }), { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const user = await client.getCurrentUser();
+  await client.listCases(
+    { assignedReviewer: user.id },
+    { listName: 'Cases-ExampleReview' }
+  );
+
+  const url = decodeURIComponent(
+    String(calls.find((c) => c.url.includes('/items?'))?.url)
+  );
+  assert.ok(
+    url.includes('AssignedReviewerId eq 12'),
+    'the person condition survives, resolved the slow way'
+  );
 });

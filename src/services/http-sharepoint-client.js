@@ -68,19 +68,27 @@ const ORDER_BY_COLUMNS = {
 /**
  * The projection every Case row read carries.
  *
- * `ResponsibleParty` is a Person column, and SharePoint answers one with the
- * numeric User Information List id (`ResponsiblePartyId`) unless the lookup is
+ * All four people on a row — `AssignedReviewer`, `ResponsibleParty` and their
+ * two manager columns — are Person columns, and SharePoint answers one with
+ * the numeric User Information List id (the `…Id` twin) unless the lookup is
  * expanded. That number is a transport detail of a single site collection — it
  * is allocated on first use, re-allocated if the entry or the AD account is
  * removed, and means nothing anywhere else — while the whole application keys
  * identity on the bare account name, right down to which Sections a viewer may
- * open. So the read expands the person and takes the claims login off it.
+ * open. So the read expands every person and takes the claims login off each.
  *
- * The `*` is load-bearing: naming the person's sub-fields turns the read into a
+ * Only the Responsible Party's `Title` is asked for: it is the one of the four
+ * a view names a person by. The others are matched, never displayed from the
+ * row, so widening the projection for them would buy nothing.
+ *
+ * The `*` is load-bearing: naming the people's sub-fields turns the read into a
  * projection, and without it every other column would silently stop coming back.
  */
-const CASE_SELECT = '$select=*,ResponsibleParty/Name,ResponsibleParty/Title';
-const CASE_EXPAND = '$expand=ResponsibleParty';
+const CASE_SELECT =
+  '$select=*,AssignedReviewer/Name,ResponsibleParty/Name,ResponsibleParty/Title,' +
+  'AssignedReviewerManager/Name,ResponsiblePartyManager/Name';
+const CASE_EXPAND =
+  '$expand=AssignedReviewer,ResponsibleParty,AssignedReviewerManager,ResponsiblePartyManager';
 
 export class HttpSharePointClient {
   /** @param {HttpSharePointClientOptions} [opts] */
@@ -160,14 +168,31 @@ export class HttpSharePointClient {
     const url = this._listItemUrl(this._requireListName(opts), id);
     try {
       const item = itemFromRow(fields);
-      // The Person column is the one field whose value cannot be derived from
-      // the row alone: SharePoint writes it by id, so the account name has to be
-      // resolved first. Inside the try on purpose — a directory lookup that
+      // The Person columns are the fields whose value cannot be derived from
+      // the row alone: SharePoint writes them by id, so the account name has to
+      // be resolved first. Inside the try on purpose — a directory lookup that
       // fails is a failed save, reported like any other, never a Case quietly
-      // left with nobody responsible.
+      // left with nobody responsible or nobody reviewing it. The `?? ''`
+      // normalises the managers' explicit-null spelling of "nobody" to the
+      // empty string the resolver clears a column with.
+      if (fields.assignedReviewer !== undefined) {
+        item.AssignedReviewerId = await this._ensureUserId(
+          fields.assignedReviewer
+        );
+      }
       if (fields.responsibleParty !== undefined) {
         item.ResponsiblePartyId = await this._ensureUserId(
           fields.responsibleParty
+        );
+      }
+      if (fields.assignedReviewerManager !== undefined) {
+        item.AssignedReviewerManagerId = await this._ensureUserId(
+          fields.assignedReviewerManager ?? ''
+        );
+      }
+      if (fields.responsiblePartyManager !== undefined) {
+        item.ResponsiblePartyManagerId = await this._ensureUserId(
+          fields.responsiblePartyManager ?? ''
         );
       }
       const body = JSON.stringify(item);
@@ -184,10 +209,10 @@ export class HttpSharePointClient {
       }
       const newEtag = readEtag(data);
       // The only Case row built from something other than a Case read, and a
-      // PATCH response carries no expanded person — so `responsibleParty` comes
-      // back empty here however full the row looks. Consume it for the ETag and
-      // the Answers baseline only; anything else about the Case must come from
-      // the re-read above.
+      // PATCH response carries no expanded people — so both `assignedReviewer`
+      // and `responsibleParty` come back empty here however full the row looks.
+      // Consume it for the ETag and the Answers baseline only; anything else
+      // about the Case must come from the re-read above.
       const row = rowFromItem(data, newEtag);
       return {
         ok: true,
@@ -209,7 +234,7 @@ export class HttpSharePointClient {
     const listName = this._requireListName(opts);
     /** @type {string[]} */
     const query = [CASE_SELECT, CASE_EXPAND];
-    const expr = buildFilterExpr(filter);
+    const expr = buildFilterExpr(await this._resolvePeopleInFilter(filter));
     if (expr) query.push(`$filter=${encodeURIComponent(expr)}`);
     if (opts.orderBy) {
       const column = orderByColumn(opts.orderBy);
@@ -256,7 +281,7 @@ export class HttpSharePointClient {
    */
   async countCases(filter, opts = {}) {
     const listName = this._requireListName(opts);
-    const expr = buildFilterExpr(filter);
+    const expr = buildFilterExpr(await this._resolvePeopleInFilter(filter));
     const query = [`$select=Id`, `$top=${COUNT_PAGE_SIZE}`];
     if (expr) query.unshift(`$filter=${encodeURIComponent(expr)}`);
     const items = await this._getAllPages(
@@ -298,8 +323,24 @@ export class HttpSharePointClient {
   /** @returns {Promise<CurrentUser>} */
   async getCurrentUser() {
     const body = await this._read(this._absolute('/_api/web/currentUser'));
+    const account = toBareAccount(String(body?.LoginName ?? ''));
+    // This read already answers the one person id every query needs — every
+    // person filter in the app names the signed-in user, and the app reads them
+    // before any route mounts. Taking it here is a correctness point rather
+    // than a saved round trip: the fallback, EnsureUser, is a POST that ADDS a
+    // directory user to this site, so seeding the cache keeps that write off
+    // the read path in the case that is always taken. A filter naming anyone
+    // else still falls back to it, deliberately. The `id > 0` mirrors the
+    // resolver's own guard: `Number(null)` is a finite 0, and a cached falsy
+    // id would later drop a person condition from a filter instead of
+    // rejecting — a malformed response here must cost a round trip, not widen
+    // a query.
+    const id = Number(body?.Id);
+    if (account && Number.isFinite(id) && id > 0) {
+      this._userIds.set(account, id);
+    }
     return {
-      id: toBareAccount(String(body?.LoginName ?? '')),
+      id: account,
       displayName: String(body?.Title ?? body?.LoginName ?? ''),
     };
   }
@@ -541,23 +582,36 @@ export class HttpSharePointClient {
   }
 
   /**
-   * The numeric id SharePoint needs to write a Person column, from the bare
-   * account name the application keys identity on. `EnsureUser` is the endpoint
-   * that answers it, and it also adds a directory user to this site's User
-   * Information List if they are not in it yet — which is what makes naming
-   * someone who has never opened the site work at all.
-   *
-   * An empty account means nobody is responsible, and SharePoint clears a Person
-   * column with `null`; an empty string is not a person and would be rejected.
-   *
-   * A response carrying no usable id throws rather than writing `NaN` — the
-   * caller turns that into a failed save.
+   * The value SharePoint takes for a Person column named by `account`: the
+   * numeric id for somebody, `null` for nobody. An empty account means the
+   * column is being cleared, and SharePoint clears a Person column with
+   * `null`; an empty string is not a person and would be rejected. This is the
+   * write path's spelling — a filter names somebody by definition and calls
+   * `_resolveUserId` directly, so its `Promise<number>` needs no null case.
    *
    * @param {string} account bare account login name
    * @returns {Promise<number | null>}
    */
   async _ensureUserId(account) {
     if (account === '') return null;
+    return this._resolveUserId(account);
+  }
+
+  /**
+   * The numeric id SharePoint holds for a person, from the bare account name
+   * the application keys identity on. `EnsureUser` is the endpoint that
+   * answers it, and it also adds a directory user to this site's User
+   * Information List if they are not in it yet — which is what makes naming
+   * someone who has never opened the site work at all.
+   *
+   * A response carrying no usable id throws rather than yielding `NaN` — a
+   * write caller turns that into a failed save, a filter caller into a
+   * rejected query.
+   *
+   * @param {string} account bare account login name, never empty
+   * @returns {Promise<number>}
+   */
+  async _resolveUserId(account) {
     const cached = this._userIds.get(account);
     if (cached !== undefined) return cached;
     const body = await this._write(
@@ -567,11 +621,61 @@ export class HttpSharePointClient {
       JSON.stringify({ logonName: toClaimsLogin(account) })
     );
     const id = Number(body?.Id ?? /** @type {any} */ (body?.d)?.Id);
-    if (!Number.isFinite(id)) {
+    // Ids are allocated from 1, so anything below that is not a person.
+    // Rejecting zero here is what lets every caller treat a resolved id as
+    // truthy without a filter condition quietly disappearing.
+    if (!Number.isFinite(id) || id <= 0) {
       throw new Error(`EnsureUser returned no id for account "${account}"`);
     }
     this._userIds.set(account, id);
     return id;
+  }
+
+  /**
+   * The same filter with its person fields resolved from account names to the
+   * numeric ids the Person columns actually hold, `anyOf` branches included.
+   *
+   * Only truthy accounts are resolved: `buildFilterExpr` drops a falsy person
+   * field entirely, and resolving one would produce `null` — a filter that
+   * silently matches only the Cases nobody holds.
+   *
+   * An account that cannot be resolved rejects, and the rejection is left to
+   * propagate out of the query. Dropping the condition instead would widen
+   * "my Cases" to every Case, which is a disclosure rather than a degradation.
+   *
+   * @param {ListCasesFilter} filter
+   * @returns {Promise<ResolvedFilter>}
+   */
+  async _resolvePeopleInFilter(filter) {
+    const {
+      assignedReviewer,
+      responsibleParty,
+      assignedReviewerManager,
+      anyOf,
+      ...rest
+    } = filter;
+    /** @type {ResolvedFilter} */
+    const out = { ...rest };
+    if (assignedReviewer) {
+      out.assignedReviewer = await this._resolveUserId(assignedReviewer);
+    }
+    if (responsibleParty) {
+      out.responsibleParty = await this._resolveUserId(responsibleParty);
+    }
+    if (assignedReviewerManager) {
+      out.assignedReviewerManager = await this._resolveUserId(
+        assignedReviewerManager
+      );
+    }
+    if (anyOf !== undefined) {
+      /** @type {ResolvedFilter[]} */
+      const branches = [];
+      for (const branch of anyOf) {
+        branches.push(await this._resolvePeopleInFilter(branch));
+      }
+      out.anyOf = branches;
+    }
+    return out;
   }
 
   /** @returns {Promise<string>} */
@@ -704,13 +808,32 @@ function orderByColumn(key) {
 }
 
 /**
- * Build the OData `$filter` expression for a `ListCasesFilter`.
+ * A `ListCasesFilter` whose two person fields have been resolved from account
+ * names to the ids the Person columns hold. It exists so the resolved and
+ * unresolved forms are different types: they differ in exactly the place this
+ * client used to get wrong, and a filter that reached the query builder still
+ * carrying account names is the bug, not a variation.
+ *
+ * @typedef {Omit<ListCasesFilter, 'assignedReviewer' | 'responsibleParty' | 'assignedReviewerManager' | 'anyOf'> & {
+ *   assignedReviewer?: number,
+ *   responsibleParty?: number,
+ *   assignedReviewerManager?: number,
+ *   anyOf?: ResolvedFilter[],
+ * }} ResolvedFilter
+ */
+
+/**
+ * Build the OData `$filter` expression for a resolved filter.
  * Shared by `listCases` and `countCases` so a paged read and its count are
  * always the same server-side query. Scalar fields AND together; `anyOf` ORs
  * each (parenthesised) sub-expression for the deduped headline count. Every
  * predicate targets an indexed column so the query stays cheap at scale.
  *
- * @param {ListCasesFilter} filter
+ * Pure and synchronous, which is why the person ids arrive already resolved:
+ * making this async would spread the wait through the `anyOf` recursion for
+ * nothing.
+ *
+ * @param {ResolvedFilter} filter
  * @returns {string}
  */
 function buildFilterExpr(filter) {
@@ -726,19 +849,18 @@ function buildFilterExpr(filter) {
     conds.push(`CompletedAt lt '${escapeOData(filter.completedBefore)}'`);
   }
   if (filter.status) conds.push(`Status eq '${escapeOData(filter.status)}'`);
+  // Person columns compare against the numeric id, unquoted: the caller has
+  // already turned the account name into one. A quoted value here matches no
+  // row at all, which reads as an empty dashboard rather than as an error.
   if (filter.assignedReviewer) {
-    conds.push(
-      `AssignedReviewerId eq '${escapeOData(filter.assignedReviewer)}'`
-    );
+    conds.push(`AssignedReviewerId eq ${filter.assignedReviewer}`);
   }
   if (filter.responsibleParty) {
-    conds.push(
-      `ResponsiblePartyId eq '${escapeOData(filter.responsibleParty)}'`
-    );
+    conds.push(`ResponsiblePartyId eq ${filter.responsibleParty}`);
   }
   if (filter.assignedReviewerManager) {
     conds.push(
-      `AssignedReviewerManager eq '${escapeOData(filter.assignedReviewerManager)}'`
+      `AssignedReviewerManagerId eq ${filter.assignedReviewerManager}`
     );
   }
   if (filter.overdue === true) {
@@ -809,9 +931,18 @@ function readEtag(item) {
  * @returns {CaseRow}
  */
 function rowFromItem(item, etag) {
-  // The expanded Person column: `Name` is the claims login, `Title` the
-  // directory display name. Absent or null when nobody is responsible.
+  // The expanded Person columns: `Name` is the claims login, `Title` the
+  // directory display name. Absent or null when nobody holds the role. The
+  // columns are provisioned as "Person or Group", but a group has no claims
+  // login a Role match could ever recognise, so only a single user resolves.
+  const reviewer = /** @type {any} */ (item?.AssignedReviewer ?? null);
   const person = /** @type {any} */ (item?.ResponsibleParty ?? null);
+  const reviewerManager = /** @type {any} */ (
+    item?.AssignedReviewerManager ?? null
+  );
+  const partyManager = /** @type {any} */ (
+    item?.ResponsiblePartyManager ?? null
+  );
   return {
     id: String(item?.Id ?? ''),
     caseType: String(item?.CaseType ?? ''),
@@ -819,18 +950,16 @@ function rowFromItem(item, etag) {
     status: /** @type {import('../lib/case-statuses.js').CaseStatus} */ (
       item?.Status ?? CASE_STATUS.IN_PROGRESS
     ),
-    assignedReviewer: String(item?.AssignedReviewerId ?? ''),
+    assignedReviewer: toBareAccount(String(reviewer?.Name ?? '')),
     responsibleParty: toBareAccount(String(person?.Name ?? '')),
     responsiblePartyDisplayName:
       person?.Title != null ? String(person.Title) : undefined,
-    assignedReviewerManager:
-      item?.AssignedReviewerManager != null
-        ? String(item.AssignedReviewerManager)
-        : undefined,
-    responsiblePartyManager:
-      item?.ResponsiblePartyManager != null
-        ? String(item.ResponsiblePartyManager)
-        : undefined,
+    assignedReviewerManager: reviewerManager?.Name
+      ? toBareAccount(String(reviewerManager.Name))
+      : undefined,
+    responsiblePartyManager: partyManager?.Name
+      ? toBareAccount(String(partyManager.Name))
+      : undefined,
     answers: /** @type {Record<string, Answer>} */ (
       parseJsonField(item?.Answers, {})
     ),
@@ -981,16 +1110,11 @@ function itemFromRow(fields) {
     out.Appeals = JSON.stringify(fields.appeals);
   if (fields.dueDate !== undefined) out.DueDate = fields.dueDate;
   if (fields.relatedDate !== undefined) out.RelatedDate = fields.relatedDate;
-  if (fields.assignedReviewer !== undefined)
-    out.AssignedReviewerId = fields.assignedReviewer;
-  // `responsibleParty` is deliberately absent: it is a Person column, written by
-  // a numeric id that only a round trip to the directory can supply, and this
-  // function is pure. `patchCase` resolves it and sets the column there, so
+  // The four people — `assignedReviewer`, `responsibleParty` and their two
+  // managers — are deliberately absent: they are Person columns, written by a
+  // numeric id that only a round trip to the directory can supply, and this
+  // function is pure. `patchCase` resolves them and sets the columns there, so
   // there is one writer rather than a plausible-looking wrong one here.
-  if (fields.assignedReviewerManager !== undefined)
-    out.AssignedReviewerManager = fields.assignedReviewerManager;
-  if (fields.responsiblePartyManager !== undefined)
-    out.ResponsiblePartyManager = fields.responsiblePartyManager;
   // Action Centre state reason flags + paired clocks.
   // Plain app-written columns — the write counterpart to their reads in
   // `rowFromItem`. Without these an app-set flag would be silently dropped on
