@@ -1108,7 +1108,7 @@
 
 /* ── Question list ───────────────────────────────────────────────────────── */
 
-/* Two-level grouping headings (#390): a `category` (top, presentation-only)
+/* Two-level grouping headings: a `category` (top, presentation-only)
    heading above its nested Question Group headings. */
 .cora-question-category-heading {
   margin: var(--cora-space-5) 0 var(--cora-space-2);
@@ -1133,7 +1133,9 @@
   color: var(--cora-color-text-muted, inherit);
 }
 
-/* Bulk-verdict control on groups configured with allowBulkOutcome (#390). */
+/* The Group Verdict: the labelled select in a Question Group heading that sets
+   one Outcome wording across the whole group. Shown only on groups the Case
+   Type opted in with `allowBulkOutcome`. */
 .cora-group-verdict-label {
   display: inline-flex;
   align-items: center;

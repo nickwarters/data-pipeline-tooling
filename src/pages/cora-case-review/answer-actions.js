@@ -9,6 +9,8 @@
 
 import { evaluate } from '../../evaluators/applicability-evaluator.js';
 import { materializeRemediationActions } from '../../evaluators/failure-evaluator.js';
+import { groupVerdictTargets } from './group-verdict-view.js';
+import { reviewerResponseOptions } from '../../lib/response-options.js';
 import {
   captureValue,
   findCaptureField,
@@ -23,10 +25,52 @@ import {
 /** @typedef {Record<string, Answer>} Answers */
 
 /**
- * Record a response to one Question Definition or General Question.
+ * Apply one or more response writes to the Answers and settle applicability
+ * once over the finished draft.
+ *
+ * Every write of a *response value* goes through here, so recording several
+ * responses at once is the same operation as recording them one at a time —
+ * a bulk path cannot acquire its own materialisation or pruning rules. The
+ * other mutations here deliberately do not: they edit the remediation and
+ * capture fields of an Answer whose response is unchanged, so re-evaluating
+ * applicability over them would be pruning in response to nothing.
+ * The prune is a single pass, not iterated to a fixpoint: an Answer whose
+ * Question the same write made inapplicable is dropped, and a Question the
+ * drop in turn reveals settles on the next render, exactly as a single edit
+ * has always behaved.
  *
  * An answer key outside the catalogue (the `general:` namespace) is carried
  * through untouched: applicability governs Question Definitions only.
+ *
+ * @param {Answers} answers
+ * @param {QuestionDefinition[]} catalogue
+ * @param {Array<[string, string | string[]]>} writes
+ * @returns {Answers}
+ */
+function writeAnswers(answers, catalogue, writes) {
+  const byId = new Map(catalogue.map((q) => [q.id, q]));
+  /** @type {Answers} */
+  const draft = { ...answers };
+  for (const [questionId, value] of writes) {
+    const question = byId.get(questionId);
+    const base = { ...answers[questionId], value };
+    draft[questionId] = question
+      ? materializeRemediationActions(question, base)
+      : base;
+  }
+
+  // Drop Answers to Question Definitions this write made inapplicable.
+  const stillApplicable = evaluate(catalogue, draft);
+  /** @type {Answers} */
+  const next = {};
+  for (const [id, answer] of Object.entries(draft)) {
+    if (!byId.has(id) || stillApplicable.has(id)) next[id] = answer;
+  }
+  return next;
+}
+
+/**
+ * Record a response to one Question Definition or General Question.
  *
  * @param {{
  *   answers: Answers,
@@ -45,24 +89,58 @@ export function answerEdited({
   canEdit,
 }) {
   if (!canEdit) return null;
-  const byId = new Map(catalogue.map((q) => [q.id, q]));
-  const question = byId.get(questionId);
-  const base = { ...answers[questionId], value };
-  const draft = {
-    ...answers,
-    [questionId]: question
-      ? materializeRemediationActions(question, base)
-      : base,
-  };
+  return writeAnswers(answers, catalogue, [[questionId, value]]);
+}
 
-  // Drop Answers to Question Definitions this edit made inapplicable.
-  const stillApplicable = evaluate(catalogue, draft);
-  /** @type {Answers} */
-  const next = {};
-  for (const [id, answer] of Object.entries(draft)) {
-    if (!byId.has(id) || stillApplicable.has(id)) next[id] = answer;
-  }
-  return next;
+/**
+ * Record one **Group Verdict**: the same Outcome wording (or N/A) on every
+ * Question Definition in a Question Group the Reviewer could have set it on
+ * one at a time.
+ *
+ * The target set is frozen against the Answers as they arrive — applicability
+ * is evaluated once, before anything is written — so a Question the verdict
+ * itself reveals is left for the Reviewer to answer, and a Question it hides
+ * is pruned by the shared write path. Nothing group-level is stored: the
+ * verdict is a shortcut for N ordinary Answer writes and leaves each of them
+ * individually editable.
+ *
+ * The wording is validated against each target Question rather than against
+ * the Case Type's Outcome vocabulary, because those two can legitimately
+ * disagree: a reportable Case reads a catalogue frozen into its versioned
+ * export while the live config moves on. The Question the Answer is written to
+ * is the only authority on what that Answer may say.
+ *
+ * @param {{
+ *   answers: Answers,
+ *   catalogue: QuestionDefinition[],
+ *   questionGroup: string,
+ *   value: string,
+ *   canEdit: boolean,
+ * }} input
+ * @returns {Answers | null}
+ */
+export function groupVerdictSet({
+  answers,
+  catalogue,
+  questionGroup,
+  value,
+  canEdit,
+}) {
+  if (!canEdit) return null;
+  const applicable = evaluate(catalogue, answers);
+  const targets = groupVerdictTargets(catalogue, questionGroup).filter(
+    (question) =>
+      applicable.has(question.id) &&
+      reviewerResponseOptions(question).includes(value)
+  );
+  if (!targets.length) return null;
+  return writeAnswers(
+    answers,
+    catalogue,
+    targets.map(
+      (question) => /** @type {[string, string]} */ ([question.id, value])
+    )
+  );
 }
 
 /**

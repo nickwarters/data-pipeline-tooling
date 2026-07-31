@@ -3,6 +3,12 @@ import { computeQuestionGroupProgress } from '../../evaluators/question-group-pr
 import { isFailure } from '../../evaluators/failure-evaluator.js';
 import { createMemo } from '../../core/memo.js';
 import { GroupProgress } from '../../components/base/cora-group-progress.js';
+import {
+  GroupVerdictControl,
+  groupVerdictTargets,
+  groupVerdictValue,
+  questionGroupOf,
+} from './group-verdict-view.js';
 import { h } from '../../lib/html.js';
 import {
   NA_VALUE,
@@ -19,11 +25,6 @@ import {
  * wordings) remain readable.
  */
 const LONG_OPTION_THRESHOLD = 40;
-
-/** @param {QuestionDefinition} question */
-function questionGroupOf(question) {
-  return question.questionGroup || 'General';
-}
 
 /** @param {QuestionDefinition[]} questions */
 export function questionGroupsOf(questions) {
@@ -54,11 +55,22 @@ export function createQuestionPanelView() {
    *   answers: Record<string, Answer>,
    *   access: 'edit'|'read-only'|'hidden',
    *   heading: string,
+   *   questionGroups?: Record<string, import('../../sharepoint-client.js').QuestionGroupConfig>,
    *   onAnswer: (questionId: string, value: string|string[]) => void,
+   *   onGroupVerdict: (questionGroup: string, value: string) => void,
    * }} props
    */
   function view(props) {
-    const { catalogue, questions, answers, access, heading, onAnswer } = props;
+    const {
+      catalogue,
+      questions,
+      answers,
+      access,
+      heading,
+      questionGroups,
+      onAnswer,
+      onGroupVerdict,
+    } = props;
 
     const applicableIds = new Set(questions.map((question) => question.id));
     for (const question of catalogue) {
@@ -97,10 +109,26 @@ export function createQuestionPanelView() {
         prevGroup = null;
       }
       if (group !== prevGroup || category !== prevCategory) {
+        // `questions` is already the applicable set, so an opted-in group whose
+        // Outcome Questions are all hidden right now offers no control rather
+        // than one that would write nothing.
+        const targets = groupVerdictTargets(questions, group);
+        const offerVerdict =
+          access === 'edit' &&
+          questionGroups?.[group]?.allowBulkOutcome === true &&
+          targets.length > 0;
         const anchor = h(
           'div',
           { className: 'cora-question-group-heading', 'data-qgroup': group },
-          h('h4', {}, group)
+          h('h4', {}, group),
+          offerVerdict
+            ? GroupVerdictControl({
+                questionGroup: group,
+                options: reviewerResponseOptions(targets[0]),
+                value: groupVerdictValue(targets, answers),
+                onGroupVerdict,
+              })
+            : null
         );
         groupAnchors.set(group, anchor);
         listChildren.push(anchor);

@@ -7,6 +7,14 @@ import {
   allApplicableAnswered,
   evaluate,
 } from '../src/evaluators/applicability-evaluator.js';
+import {
+  groupVerdictTargets,
+  questionGroupOf,
+} from '../src/pages/cora-case-review/group-verdict-view.js';
+import {
+  answerEdited,
+  groupVerdictSet,
+} from '../src/pages/cora-case-review/answer-actions.js';
 import { deriveFailureValues } from '../src/evaluators/failure-evaluator.js';
 import { validateCaptureGroups } from '../src/evaluators/issue-capture.js';
 import {
@@ -464,4 +472,79 @@ test('complaints fixtures: the outstanding Case is deliberately not completable'
 
 test('complaints offers only a complete or cancelled remediation resolution', () => {
   assert.deepEqual(config.remediationStatuses, ['complete', 'cancelled']);
+});
+
+// --- Group Verdict ---
+
+test('complaints opts every one of its Question Groups into the Group Verdict', () => {
+  const declared = Object.keys(config.questionGroups ?? {});
+  const present = new Set(config.questions.map(questionGroupOf));
+
+  assert.deepEqual(declared.sort(), [...present].sort());
+  for (const group of declared) {
+    assert.equal(
+      config.questionGroups?.[group]?.allowBulkOutcome,
+      true,
+      `${group} is opted in`
+    );
+    assert.ok(
+      groupVerdictTargets(config.questions, group).length > 0,
+      `${group} has at least one Question a verdict can write to`
+    );
+  }
+});
+
+test('complaints: a Regulatory & Reporting verdict can reveal a further Question', () => {
+  const gate = config.questions.find((q) => q.id === 'q-cmp-0045');
+  const gated = config.questions.find((q) => q.id === 'q-cmp-0046');
+
+  assert.equal(gate?.questionGroup, 'Regulatory & Reporting');
+  assert.equal(gated?.questionGroup, 'Regulatory & Reporting');
+  assert.equal(gate?.responseType, 'outcome');
+  assert.equal(gated?.responseType, 'outcome');
+  assert.deepEqual(gated?.showWhen, {
+    'q-cmp-0045': {
+      in: ['Good with process enhancement', 'Poor', 'Poor with harm'],
+    },
+  });
+});
+
+test('complaints: a Group Verdict is exactly the same Answers as marking the group one at a time', () => {
+  // The property the Group Verdict is built on: it is a write shortcut, not a
+  // second way of answering. Acknowledgement is the clean subject — no
+  // intra-group showWhen. Seeding one Answer with a failure-lifetime key means
+  // both routes have something to materialise over, rather than comparing two
+  // runs that never exercised it.
+  const targets = groupVerdictTargets(config.questions, 'Acknowledgement');
+  /** @type {any} */
+  const seed = {
+    [targets[0].id]: { value: 'Poor', remediationRequired: true },
+  };
+  const bulk = groupVerdictSet({
+    answers: seed,
+    catalogue: config.questions,
+    questionGroup: 'Acknowledgement',
+    value: 'Poor',
+    canEdit: true,
+  });
+
+  /** @type {any} */
+  let one = seed;
+  for (const target of targets) {
+    one = answerEdited({
+      answers: one,
+      catalogue: config.questions,
+      questionId: target.id,
+      value: 'Poor',
+      canEdit: true,
+    });
+  }
+
+  assert.equal(targets.length, 7);
+  assert.deepEqual(bulk, one);
+  assert.deepEqual(
+    config.computeOutcome(/** @type {any} */ (bulk)),
+    config.computeOutcome(one),
+    'the Outcome cannot tell the two routes apart either'
+  );
 });

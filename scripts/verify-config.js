@@ -190,6 +190,7 @@ export async function checkCaseTypes(options = {}) {
 
     failures.push(...checkQuestions(entry.slug, file, config));
     failures.push(...checkSections(entry.slug, file, config));
+    failures.push(...checkQuestionGroups(entry.slug, file, config));
     failures.push(...checkRemediationStatuses(entry.slug, file, config));
   }
   return failures;
@@ -406,6 +407,70 @@ function checkSections(slug, file, config) {
               `Case Type "${slug}": unknown role "${r}" in \`sections.${key}.showInSummary\``
             )
           )
+      : [];
+  });
+}
+
+/**
+ * A `questionGroups` key naming no Question Group is a silent defect: the group
+ * simply never finds its configuration, so the Group Verdict control never
+ * appears and nothing anywhere complains. Group names are free text with
+ * ampersands and spacing in them, which is exactly where a near-miss hides.
+ *
+ * A group whose Outcome Questions offer different option sets is the other
+ * silent one: the control can only offer a single list, so a wording some of
+ * the group rejects would be marked on the rest and nowhere else — a partial
+ * write the Reviewer is given no signal about.
+ *
+ * @param {string} slug
+ * @param {string} file
+ * @param {any} config
+ * @returns {Failure[]}
+ */
+function checkQuestionGroups(slug, file, config) {
+  /** @type {any[]} */
+  const questions = config?.questions ?? [];
+  const groupOf = (/** @type {any} */ question) =>
+    question?.questionGroup || 'General';
+  const known = new Set(questions.map(groupOf));
+  /** @param {string} message @returns {Failure} */
+  const fail = (message) => ({
+    kind: /** @type {const} */ ('case-type'),
+    file,
+    message,
+  });
+
+  return Object.entries(
+    /** @type {Record<string, any>} */ (config?.questionGroups ?? {})
+  ).flatMap(([key, group]) => {
+    if (!known.has(key)) {
+      return [
+        fail(
+          `Case Type "${slug}": unknown \`questionGroups\` key "${key}" — no Question Definition is in that Question Group`
+        ),
+      ];
+    }
+    if (group?.allowBulkOutcome !== true) return [];
+    // Deprecated Questions are never verdict targets, so a stale option set on
+    // one cannot cause the partial write this guards against. Order is not part
+    // of the comparison: the control renders one target's ordering, and what
+    // matters is only that every target accepts every wording it offers.
+    const vocabularies = new Set(
+      questions
+        .filter(
+          (q) =>
+            groupOf(q) === key &&
+            q?.responseType === 'outcome' &&
+            q?.deprecated !== true
+        )
+        .map((q) => JSON.stringify([...(q?.options ?? [])].sort()))
+    );
+    return vocabularies.size > 1
+      ? [
+          fail(
+            `Case Type "${slug}": Question Group "${key}" opts into the Group Verdict but its Outcome Questions offer different options — one verdict cannot be marked on all of them`
+          ),
+        ]
       : [];
   });
 }

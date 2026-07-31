@@ -664,3 +664,121 @@ test('checkCaseTypes accepts a narrowed remediationStatuses and an absent one', 
   const absent = await checkCaseTypes({ caseTypes: [demoEntry(demoConfig())] });
   assert.deepEqual(absent, []);
 });
+
+test('checkCaseTypes fails an unknown key in questionGroups', async () => {
+  const failures = await checkCaseTypes({
+    caseTypes: [
+      demoEntry(
+        demoConfig({
+          questions: [
+            {
+              id: 'q1',
+              text: 'Was it handled well?',
+              questionGroup: 'Handling',
+              responseType: 'outcome',
+              options: ['Good'],
+            },
+          ],
+          questionGroups: {
+            Handling: { allowBulkOutcome: true },
+            Handlign: { allowBulkOutcome: true },
+          },
+        })
+      ),
+    ],
+  });
+
+  assert.equal(failures.length, 1);
+  assert.match(failures[0].message, /Handlign/);
+  assert.match(failures[0].message, /questionGroups/);
+});
+
+test('checkCaseTypes accepts the General fallback group in questionGroups', async () => {
+  const failures = await checkCaseTypes({
+    caseTypes: [
+      demoEntry(
+        demoConfig({
+          questions: [
+            {
+              id: 'q1',
+              text: 'Was it handled well?',
+              responseType: 'outcome',
+              options: ['Good'],
+            },
+          ],
+          questionGroups: { General: { allowBulkOutcome: true } },
+        })
+      ),
+    ],
+  });
+
+  assert.deepEqual(failures, []);
+});
+
+test('checkCaseTypes fails an opted-in group whose Outcome Questions disagree on options', async () => {
+  const failures = await checkCaseTypes({
+    caseTypes: [
+      demoEntry(
+        demoConfig({
+          questions: [
+            {
+              id: 'q1',
+              text: 'Was it handled well?',
+              questionGroup: 'Handling',
+              responseType: 'outcome',
+              options: ['Good', 'Poor'],
+            },
+            {
+              id: 'q2',
+              text: 'Was it recorded well?',
+              questionGroup: 'Handling',
+              responseType: 'outcome',
+              options: ['Good', 'Bad'],
+            },
+          ],
+          questionGroups: { Handling: { allowBulkOutcome: true } },
+        })
+      ),
+    ],
+  });
+
+  assert.equal(failures.length, 1);
+  assert.match(failures[0].message, /Handling/);
+  assert.match(failures[0].message, /option/i);
+});
+
+test('checkCaseTypes accepts a group whose Outcome Questions share one option set', async () => {
+  const failures = await checkCaseTypes({
+    caseTypes: [
+      demoEntry(
+        demoConfig({
+          questions: [
+            {
+              id: 'q1',
+              text: 'Was it handled well?',
+              questionGroup: 'Handling',
+              responseType: 'outcome',
+              options: ['Good', 'Poor'],
+            },
+            {
+              id: 'q2',
+              text: 'Was it recorded well?',
+              questionGroup: 'Handling',
+              responseType: 'outcome',
+              options: ['Good', 'Poor'],
+            },
+            {
+              id: 'q3',
+              text: 'Any other comments?',
+              questionGroup: 'Handling',
+              responseType: 'yes-no-na',
+            },
+          ],
+          questionGroups: { Handling: { allowBulkOutcome: true } },
+        })
+      ),
+    ],
+  });
+
+  assert.deepEqual(failures, []);
+});

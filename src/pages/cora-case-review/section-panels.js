@@ -42,6 +42,7 @@ import { AppealReviewSection } from './appeal-review-view.js';
 import { AmendOutcomeSection } from './amend-outcome-view.js';
 import { editRemediationDetail } from './remediation-actions.js';
 import {
+  groupVerdictSet,
   issueCaptured,
   remediationActionToggled,
   remediationFreeFormEdited,
@@ -110,9 +111,10 @@ import { resolveGeneralQuestionsPlacement } from '../../evaluators/general-quest
  * @param {import('../cora-case-review.js').CaseReviewSnapshot} snapshot
  * @param {ReturnType<typeof import('./question-panel-view.js').createQuestionPanelView>} questionsView
  * @param {(questionId: string, value: string | string[]) => void} onAnswer
+ * @param {(questionGroup: string, value: string) => void} onGroupVerdict
  * @returns {Node[]}
  */
-function questionsPanel(snapshot, questionsView, onAnswer) {
+function questionsPanel(snapshot, questionsView, onAnswer, onGroupVerdict) {
   return withGeneralQuestions(
     questionsView.view({
       catalogue: snapshot.catalogue,
@@ -120,7 +122,9 @@ function questionsPanel(snapshot, questionsView, onAnswer) {
       answers: snapshot.answers,
       access: snapshot.access.questions,
       heading: snapshot.sectionHeadings.questions,
+      questionGroups: snapshot.config?.questionGroups,
       onAnswer,
+      onGroupVerdict,
     }),
     {
       fields: snapshot.config?.generalQuestions ?? [],
@@ -148,7 +152,23 @@ export const SECTION_PANELS = {
     caseDetailsView(caseRow, config.detailFields ?? []),
 
   questions: ({ snapshot, actions }) =>
-    questionsPanel(snapshot, actions.questionsView, actions.onAnswer),
+    questionsPanel(
+      snapshot,
+      actions.questionsView,
+      actions.onAnswer,
+      // A Group Verdict is N ordinary Answer writes, so it travels the same
+      // Answer path a single response does — no action type of its own.
+      (questionGroup, value) =>
+        actions.editAnswers(
+          groupVerdictSet({
+            answers: actions.currentAnswers(),
+            catalogue: snapshot.catalogue,
+            questionGroup,
+            value,
+            canEdit: snapshot.access.questions === 'edit',
+          })
+        )
+    ),
 
   notes: ({ snapshot, caseRow, config, actions }) =>
     notesView({

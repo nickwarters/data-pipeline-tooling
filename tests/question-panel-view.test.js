@@ -33,6 +33,7 @@ function props(overrides = {}) {
     access: /** @type {const} */ ('edit'),
     heading: 'Questions',
     onAnswer() {},
+    onGroupVerdict() {},
     ...overrides,
   };
 }
@@ -413,4 +414,100 @@ test('real Questions view answers one of 500 Questions by rebuilding one card, n
     ratio <= 0.2,
     `answering one of 500 Questions cost ${(ratio * 100).toFixed(2)}% of a full rebuild (${answerMedian.toFixed(2)} ms vs ${coldMedian.toFixed(2)} ms) — memoisation is not holding`
   );
+});
+
+// --- Group Verdict ----------------------------------------------------------
+
+/** @param {string} id @param {string} group @returns {QuestionDefinition} */
+function outcomeQuestion(id, group) {
+  return {
+    id,
+    text: `Question ${id}`,
+    questionGroup: group,
+    responseType: 'outcome',
+    options: ['Good', 'Poor'],
+    deprecated: false,
+  };
+}
+
+/** @param {any} overrides */
+function verdictProps(overrides = {}) {
+  const catalogue = [
+    outcomeQuestion('o1', 'Alpha'),
+    outcomeQuestion('o2', 'Alpha'),
+    question('q1', 'Beta'),
+  ];
+  return props({
+    catalogue,
+    questions: catalogue,
+    questionGroups: { Alpha: { allowBulkOutcome: true } },
+    ...overrides,
+  });
+}
+
+/** @param {any} props */
+function verdictControls(props) {
+  return findAllByClass(
+    createQuestionPanelView().view(props),
+    'cora-group-verdict'
+  );
+}
+
+test('a Question Group renders no verdict control unless the Case Type opts it in', () => {
+  assert.equal(
+    verdictControls(verdictProps({ questionGroups: undefined })).length,
+    0
+  );
+  assert.equal(
+    verdictControls(verdictProps({ questionGroups: { Alpha: {} } })).length,
+    0,
+    'a named group that did not ask for bulk marking gets no control'
+  );
+});
+
+test('the verdict control renders once, in the opted-in group heading only', () => {
+  const node = createQuestionPanelView().view(verdictProps());
+  const headings = Array.from(
+    node.querySelectorAll('.cora-question-group-heading')
+  );
+
+  assert.equal(findAllByClass(node, 'cora-group-verdict').length, 1);
+  assert.equal(headings[0].getAttribute('data-qgroup'), 'Alpha');
+  assert.equal(findAllByClass(headings[0], 'cora-group-verdict').length, 1);
+  assert.equal(
+    findAllByClass(headings[1], 'cora-group-verdict').length,
+    0,
+    'a sibling group is unaffected'
+  );
+});
+
+test('a Reviewer who cannot edit gets no verdict control', () => {
+  assert.equal(
+    verdictControls(verdictProps({ access: 'read-only' })).length,
+    0
+  );
+});
+
+test('an opted-in group with no Outcome Question gets no verdict control', () => {
+  const catalogue = [question('q1', 'Alpha')];
+  assert.equal(
+    verdictControls(verdictProps({ catalogue, questions: catalogue })).length,
+    0
+  );
+});
+
+test('choosing a wording reports one verdict for that group', () => {
+  /** @type {any[]} */
+  const calls = [];
+  const node = createQuestionPanelView().view(
+    verdictProps({
+      onGroupVerdict: (/** @type {any[]} */ ...args) => calls.push(args),
+    })
+  );
+  const select = findAllByClass(node, 'cora-group-verdict')[0];
+
+  select.value = 'Poor';
+  fireEvent(select, 'change');
+
+  assert.deepEqual(calls, [['Alpha', 'Poor']]);
 });

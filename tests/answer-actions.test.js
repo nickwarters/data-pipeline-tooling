@@ -1,9 +1,11 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { NA_VALUE } from '../src/lib/response-options.js';
 import {
   answerEdited,
   failureAttributed,
+  groupVerdictSet,
   issueCaptured,
   remediationActionToggled,
   remediationFreeFormEdited,
@@ -506,5 +508,169 @@ test('remediationResolved: clearing an unresolved row writes nothing', () => {
       canResolve: true,
     }),
     null
+  );
+});
+
+// --- groupVerdictSet --------------------------------------------------------
+
+const OUTCOMES = ['Good', 'Poor'];
+
+/**
+ * Two Question Groups plus a third whose only Question offers a different
+ * vocabulary, so every filter the verdict applies has something to exclude.
+ *
+ * @type {any[]}
+ */
+const verdictCatalogue = [
+  {
+    id: 'v1',
+    responseType: 'outcome',
+    questionGroup: 'Alpha',
+    options: OUTCOMES,
+  },
+  {
+    id: 'v2',
+    responseType: 'outcome',
+    questionGroup: 'Alpha',
+    options: OUTCOMES,
+  },
+  {
+    id: 'v3',
+    responseType: 'outcome',
+    questionGroup: 'Alpha',
+    options: OUTCOMES,
+    showWhen: { v1: { equals: 'Poor' } },
+  },
+  {
+    id: 'v4',
+    responseType: 'outcome',
+    questionGroup: 'Alpha',
+    options: OUTCOMES,
+    showWhen: { v1: { equals: 'Good' } },
+  },
+  { id: 'v5', responseType: 'yes-no-na', questionGroup: 'Alpha' },
+  {
+    id: 'v6',
+    responseType: 'outcome',
+    questionGroup: 'Alpha',
+    options: OUTCOMES,
+    deprecated: true,
+  },
+  {
+    id: 'w1',
+    responseType: 'outcome',
+    questionGroup: 'Beta',
+    options: OUTCOMES,
+  },
+  {
+    id: 'x1',
+    responseType: 'outcome',
+    questionGroup: 'Gamma',
+    options: ['Fine'],
+  },
+];
+
+/** @param {any} overrides */
+function verdict(overrides) {
+  return groupVerdictSet({
+    answers: /** @type {any} */ ({}),
+    catalogue: verdictCatalogue,
+    questionGroup: 'Alpha',
+    value: 'Good',
+    canEdit: true,
+    ...overrides,
+  });
+}
+
+test('groupVerdictSet: writes the chosen wording to every applicable Question in the group and nothing else', () => {
+  const next = verdict({
+    answers: {
+      'general:tone': { value: 'Warm' },
+      w1: { value: 'Good' },
+    },
+  });
+
+  assert.deepEqual(Object.keys(next ?? {}).sort(), [
+    'general:tone',
+    'v1',
+    'v2',
+    'w1',
+  ]);
+  assert.deepEqual(next?.v1, { value: 'Good' });
+  assert.deepEqual(next?.v2, { value: 'Good' });
+  assert.deepEqual(
+    next?.w1,
+    { value: 'Good' },
+    'a Question in another group is untouched'
+  );
+  assert.deepEqual(
+    next?.['general:tone'],
+    { value: 'Warm' },
+    'General Question answer keys survive'
+  );
+});
+
+test('groupVerdictSet: marks the group not applicable', () => {
+  const next = verdict({ value: NA_VALUE });
+  assert.deepEqual(next?.v1, { value: NA_VALUE });
+  assert.deepEqual(next?.v2, { value: NA_VALUE });
+});
+
+test('groupVerdictSet: a Question hidden when the verdict is set is not written', () => {
+  const next = verdict({ value: 'Poor' });
+  assert.equal('v4' in (next ?? {}), false);
+});
+
+test('groupVerdictSet: a Question the verdict itself reveals is not filled in', () => {
+  const next = verdict({ value: 'Poor' });
+  assert.equal(
+    'v3' in (next ?? {}),
+    false,
+    'the Reviewer answers a newly revealed Question themselves'
+  );
+});
+
+test('groupVerdictSet: an Answer the verdict makes inapplicable is dropped', () => {
+  const next = verdict({
+    answers: { v1: { value: 'Good' }, v4: { value: 'Good' } },
+    value: 'Poor',
+  });
+
+  assert.deepEqual(Object.keys(next ?? {}).sort(), ['v1', 'v2']);
+});
+
+test('groupVerdictSet: a read-only Reviewer writes nothing', () => {
+  assert.equal(verdict({ canEdit: false }), null);
+});
+
+test('groupVerdictSet: a wording no Question in the group offers writes nothing', () => {
+  assert.equal(verdict({ questionGroup: 'Gamma', value: 'Poor' }), null);
+});
+
+test('groupVerdictSet: a group with no eligible Question writes nothing', () => {
+  assert.equal(verdict({ questionGroup: 'Delta' }), null);
+});
+
+test('groupVerdictSet: leaves the caller Answers untouched', () => {
+  const answers = /** @type {any} */ ({ v1: { value: 'Poor' } });
+  verdict({ answers });
+  assert.deepEqual(answers, { v1: { value: 'Poor' } });
+});
+
+test('groupVerdictSet: every Answer stays individually editable afterwards', () => {
+  const after = verdict({});
+  const edited = answerEdited({
+    answers: /** @type {any} */ (after),
+    catalogue: verdictCatalogue,
+    questionId: 'v2',
+    value: 'Poor',
+    canEdit: true,
+  });
+
+  assert.deepEqual(edited?.v2, { value: 'Poor' });
+  assert.deepEqual(
+    edited?.v1,
+    { value: 'Good' },
+    'the rest of the group holds'
   );
 });
