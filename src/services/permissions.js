@@ -25,7 +25,13 @@ import { CASE_TYPES } from '../../case-types/manifest.js';
  * Resolved capabilities for the current user, derived from group membership.
  * `isReviewer` is implied by any `Reviewers - <type>` list-access group as well
  * as the standalone `Reviewers` functional group. `isVisitor` is DERIVED (not
- * config-driven): true iff the user holds no role at all.
+ * config-driven): true iff the user holds no capability at all.
+ *
+ * These are platform-wide and per-user. They are not the per-Case roles the
+ * Case page's access matrix is keyed by, and only some of them ever become
+ * one: `resolveRoles` in `section-access.js` is the single translation point,
+ * and it documents which capabilities it reads, which it deliberately ignores,
+ * and which roles come off the Case row instead of from any group.
  *
  * @typedef {{
  * isReviewer: boolean,

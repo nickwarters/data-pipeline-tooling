@@ -29,6 +29,9 @@ import {
  * from it (a Summary block can name the roles it is composed for) but may not
  * add to it, because each name only means something to the matrix below and to
  * `resolveRoles`. A contract test holds the matrix rows and this list together.
+ *
+ * A role is not a group. Half of these derive from the Case row rather than
+ * from directory membership — see `resolveRoles` for which, and why.
  */
 export const ROLES = Object.freeze(
   /** @type {const} */ ([
@@ -422,6 +425,26 @@ const RANK = { edit: 3, 'read-only': 1, hidden: 0 };
 
 /**
  * Resolve the viewer's roles for this specific Case.
+ *
+ * This is the one place the platform-wide capability vocabulary and the
+ * per-Case role vocabulary meet, and they are not two spellings of one list.
+ * A capability is what a user is anywhere; a role is what they are *on this
+ * Case*. So the derivation splits:
+ *
+ * - from the Case row — `assignedReviewer`, `reviewerManager`,
+ *   `responsibleParty`, `responsiblePartyManager`. These are relationships to
+ *   one Case, not directory membership, and no group grants them.
+ * - from capabilities — `otherReviewer`, `caseTypeOwner`, `journeyOwner`,
+ *   `controls`.
+ *
+ * `isReviewerManager` and `isResponsiblePartyManager` are deliberately NOT
+ * consulted, despite existing as capabilities backed by real groups. Reading
+ * them here would give every holder of those groups a role on every Case of
+ * every Case Type, which is precisely what the row-based match avoids.
+ * `isAdviser`, `isMaintainer`, `isVisitor` and `listAccessCaseTypes` are not
+ * role sources either — the first three describe what a user does elsewhere in
+ * the app, and the last only feeds `isReviewer`.
+ *
  * @param {CaseRow} caseRow
  * @param {string} userId
  * @param {Capabilities} capabilities
