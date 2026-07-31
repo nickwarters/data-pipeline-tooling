@@ -106,7 +106,7 @@ A **Case Type**-configured field a **Reviewer** answers on the Review tab above 
 _Avoid_: General Question Group (collides with the `General` fallback **Question Group**), Free-text question, Metadata question
 
 **Group Verdict**:
-The bulk-marking control on a **Question Group** a **Case Type** has opted in via `questionGroups: { <group>: { allowBulkOutcome: true } }`. One selection — a configured **Outcome** wording or N/A — writes that value to every applicable, non-deprecated `outcome`-type **Question Definition** in the group, through the normal **Answer** path. A write shortcut, not a lock: no group-level state is stored on the Case, and each Answer stays individually editable afterwards.
+The bulk-marking control on a **Question Group** a **Case Type** has opted in — Case Type-wide with `allowBulkOutcome: true`, per group with `questionGroups: { <group>: { allowBulkOutcome: true } }`, where a group's own setting overrides the Case Type-wide one in either direction. One selection — a configured **Outcome** wording or N/A — writes that value to every applicable, non-deprecated `outcome`-type **Question Definition** in the group, through the normal **Answer** path. A write shortcut, not a lock: no group-level state is stored on the Case, and each Answer stays individually editable afterwards.
 _Avoid_: Bulk outcome (the verdict can also be N/A), Group answer
 
 **Applicable Question**:

@@ -123,6 +123,7 @@ function questionsPanel(snapshot, questionsView, onAnswer, onGroupVerdict) {
       access: snapshot.access.questions,
       heading: snapshot.sectionHeadings.questions,
       questionGroups: snapshot.config?.questionGroups,
+      allowBulkOutcome: snapshot.config?.allowBulkOutcome,
       onAnswer,
       onGroupVerdict,
     }),

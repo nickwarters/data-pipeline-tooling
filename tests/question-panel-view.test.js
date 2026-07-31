@@ -465,6 +465,46 @@ test('a Question Group renders no verdict control unless the Case Type opts it i
   );
 });
 
+test('a Case Type can opt every Question Group in at once', () => {
+  const catalogue = [
+    outcomeQuestion('o1', 'Alpha'),
+    outcomeQuestion('o2', 'Beta'),
+  ];
+  assert.equal(
+    verdictControls(
+      verdictProps({
+        catalogue,
+        questions: catalogue,
+        questionGroups: undefined,
+        allowBulkOutcome: true,
+      })
+    ).length,
+    2
+  );
+});
+
+test('a Question Group can opt out of a Case Type that opted every group in', () => {
+  const catalogue = [
+    outcomeQuestion('o1', 'Alpha'),
+    outcomeQuestion('o2', 'Beta'),
+  ];
+  const controls = verdictControls(
+    verdictProps({
+      catalogue,
+      questions: catalogue,
+      questionGroups: { Beta: { allowBulkOutcome: false } },
+      allowBulkOutcome: true,
+    })
+  );
+
+  assert.equal(controls.length, 1);
+  assert.equal(
+    controls[0].getAttribute('aria-label'),
+    'Group verdict for Alpha',
+    'the group that did not opt out is the one that keeps its control'
+  );
+});
+
 test('the verdict control renders once, in the opted-in group heading only', () => {
   const node = createQuestionPanelView().view(verdictProps());
   const headings = Array.from(

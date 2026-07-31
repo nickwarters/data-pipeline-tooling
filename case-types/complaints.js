@@ -71,19 +71,11 @@ const config = {
   },
   // Every Question Group here is a homogeneous run of Outcome-scored Questions
   // about one part of the complaint, and a Reviewer who finds that part sound
-  // clears the whole run at the same wording. So all seven opt in: the verdict
-  // is the ordinary way to record that judgement, and singling any group out
-  // would only make the Reviewer answer it a question at a time for no reason.
-  // Nothing is locked — each Answer stays individually editable afterwards.
-  questionGroups: {
-    Acknowledgement: { allowBulkOutcome: true },
-    Communication: { allowBulkOutcome: true },
-    'Customer Treatment': { allowBulkOutcome: true },
-    Investigation: { allowBulkOutcome: true },
-    'Records & Evidence': { allowBulkOutcome: true },
-    'Regulatory & Reporting': { allowBulkOutcome: true },
-    Resolution: { allowBulkOutcome: true },
-  },
+  // clears the whole run at the same wording. So the verdict is the ordinary way
+  // to record that judgement rather than a per-group exception, and no group is
+  // singled out to be answered a question at a time for no reason. Nothing is
+  // locked — each Answer stays individually editable afterwards.
+  allowBulkOutcome: true,
   // A remediation on a Complaint is either done or stood down. There is no
   // half-way state a Reviewer is asked to record here, so offering "Partially
   // complete" would only invite a resolution nobody reports on.

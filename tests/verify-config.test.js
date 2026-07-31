@@ -782,3 +782,51 @@ test('checkCaseTypes accepts a group whose Outcome Questions share one option se
 
   assert.deepEqual(failures, []);
 });
+
+test('checkCaseTypes checks the groups a Case Type-wide allowBulkOutcome opts in', async () => {
+  const questions = [
+    {
+      id: 'q1',
+      text: 'Was it handled well?',
+      questionGroup: 'Handling',
+      responseType: 'outcome',
+      options: ['Good', 'Poor'],
+    },
+    {
+      id: 'q2',
+      text: 'Was it recorded well?',
+      questionGroup: 'Handling',
+      responseType: 'outcome',
+      options: ['Good', 'Bad'],
+    },
+  ];
+
+  const failures = await checkCaseTypes({
+    caseTypes: [demoEntry(demoConfig({ questions, allowBulkOutcome: true }))],
+  });
+
+  assert.equal(
+    failures.length,
+    1,
+    'a group named nowhere in questionGroups is still opted in by the Case Type default'
+  );
+  assert.match(failures[0].message, /Handling/);
+
+  const optedOut = await checkCaseTypes({
+    caseTypes: [
+      demoEntry(
+        demoConfig({
+          questions,
+          allowBulkOutcome: true,
+          questionGroups: { Handling: { allowBulkOutcome: false } },
+        })
+      ),
+    ],
+  });
+
+  assert.deepEqual(
+    optedOut,
+    [],
+    'a group that opted out offers no control, so its options cannot disagree'
+  );
+});

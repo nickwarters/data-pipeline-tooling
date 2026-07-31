@@ -477,16 +477,16 @@ test('complaints offers only a complete or cancelled remediation resolution', ()
 // --- Group Verdict ---
 
 test('complaints opts every one of its Question Groups into the Group Verdict', () => {
-  const declared = Object.keys(config.questionGroups ?? {});
-  const present = new Set(config.questions.map(questionGroupOf));
+  const present = [...new Set(config.questions.map(questionGroupOf))];
 
-  assert.deepEqual(declared.sort(), [...present].sort());
-  for (const group of declared) {
-    assert.equal(
-      config.questionGroups?.[group]?.allowBulkOutcome,
-      true,
-      `${group} is opted in`
-    );
+  assert.equal(config.allowBulkOutcome, true);
+  assert.deepEqual(
+    Object.keys(config.questionGroups ?? {}),
+    [],
+    'no group is an exception, so none needs naming'
+  );
+  assert.equal(present.length, 7);
+  for (const group of present) {
     assert.ok(
       groupVerdictTargets(config.questions, group).length > 0,
       `${group} has at least one Question a verdict can write to`

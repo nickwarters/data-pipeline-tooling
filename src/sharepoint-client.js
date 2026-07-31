@@ -453,6 +453,10 @@
  * Outcome wording (or the universal N/A) to every applicable, non-deprecated
  * `outcome`-type question in the group, through the normal answer path.
  *
+ * It overrides the Case Type-wide `allowBulkOutcome` in both directions, so a
+ * Case Type whose groups are mostly uniform states the rule once and names only
+ * the exceptions.
+ *
  * @typedef {{ allowBulkOutcome?: boolean }} QuestionGroupConfig
  */
 
@@ -485,6 +489,7 @@
  * listName?: string,
  * reviewerGroup?: string,
  * sections?: Partial<Record<import('./lib/section-registry.js').Section, SectionConfig>>,
+ * allowBulkOutcome?: boolean,
  * questionGroups?: Record<string, QuestionGroupConfig>,
  * appeal?: AppealConfig,
  * slaHours?: number,

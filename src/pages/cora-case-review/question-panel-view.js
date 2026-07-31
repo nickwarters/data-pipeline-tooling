@@ -56,6 +56,7 @@ export function createQuestionPanelView() {
    *   access: 'edit'|'read-only'|'hidden',
    *   heading: string,
    *   questionGroups?: Record<string, import('../../sharepoint-client.js').QuestionGroupConfig>,
+   *   allowBulkOutcome?: boolean,
    *   onAnswer: (questionId: string, value: string|string[]) => void,
    *   onGroupVerdict: (questionGroup: string, value: string) => void,
    * }} props
@@ -68,6 +69,7 @@ export function createQuestionPanelView() {
       access,
       heading,
       questionGroups,
+      allowBulkOutcome,
       onAnswer,
       onGroupVerdict,
     } = props;
@@ -115,7 +117,8 @@ export function createQuestionPanelView() {
         const targets = groupVerdictTargets(questions, group);
         const offerVerdict =
           access === 'edit' &&
-          questionGroups?.[group]?.allowBulkOutcome === true &&
+          (questionGroups?.[group]?.allowBulkOutcome ?? allowBulkOutcome) ===
+            true &&
           targets.length > 0;
         const anchor = h(
           'div',

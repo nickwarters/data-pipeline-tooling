@@ -440,17 +440,24 @@ function checkQuestionGroups(slug, file, config) {
     message,
   });
 
-  return Object.entries(
-    /** @type {Record<string, any>} */ (config?.questionGroups ?? {})
-  ).flatMap(([key, group]) => {
-    if (!known.has(key)) {
-      return [
-        fail(
-          `Case Type "${slug}": unknown \`questionGroups\` key "${key}" — no Question Definition is in that Question Group`
-        ),
-      ];
-    }
-    if (group?.allowBulkOutcome !== true) return [];
+  /** @type {Record<string, any>} */
+  const declared = config?.questionGroups ?? {};
+  const unknown = Object.keys(declared)
+    .filter((key) => !known.has(key))
+    .map((key) =>
+      fail(
+        `Case Type "${slug}": unknown \`questionGroups\` key "${key}" — no Question Definition is in that Question Group`
+      )
+    );
+
+  // A group's own setting overrides the Case Type-wide one either way, so the
+  // groups to check are every real group, not only the ones named here.
+  const optedIn = [...known].filter(
+    (group) =>
+      (declared[group]?.allowBulkOutcome ?? config?.allowBulkOutcome) === true
+  );
+
+  const mismatched = optedIn.flatMap((group) => {
     // Deprecated Questions are never verdict targets, so a stale option set on
     // one cannot cause the partial write this guards against. Order is not part
     // of the comparison: the control renders one target's ordering, and what
@@ -459,7 +466,7 @@ function checkQuestionGroups(slug, file, config) {
       questions
         .filter(
           (q) =>
-            groupOf(q) === key &&
+            groupOf(q) === group &&
             q?.responseType === 'outcome' &&
             q?.deprecated !== true
         )
@@ -468,11 +475,13 @@ function checkQuestionGroups(slug, file, config) {
     return vocabularies.size > 1
       ? [
           fail(
-            `Case Type "${slug}": Question Group "${key}" opts into the Group Verdict but its Outcome Questions offer different options — one verdict cannot be marked on all of them`
+            `Case Type "${slug}": Question Group "${group}" opts into the Group Verdict but its Outcome Questions offer different options — one verdict cannot be marked on all of them`
           ),
         ]
       : [];
   });
+
+  return [...unknown, ...mismatched];
 }
 
 /**
