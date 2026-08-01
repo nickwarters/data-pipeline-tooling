@@ -213,7 +213,7 @@ test('CaptureGroups renders a person field as a people picker, not a text box', 
   assert.equal(
     input.getAttribute('data-focus-key'),
     'capture:q1-attributedTo',
-    'the picker input carries the field focus key so autosave cannot steal the caret'
+    'the picker input carries the field focus key as a stable handle for tests and DOM inspection'
   );
 
   input.value = 'Jan';

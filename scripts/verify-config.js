@@ -247,7 +247,16 @@ function checkCaptureGroups(slug, file, config) {
     });
 
   const groups = config?.captureGroups;
-  if (!Array.isArray(groups)) return failures;
+  // Most Case Types declare none, so absent is fine. Anything else the loader
+  // cannot iterate would break every Case of this type at load — exactly the
+  // authoring error the gate exists to catch first.
+  if (groups === undefined || groups === null) return failures;
+  if (!Array.isArray(groups)) {
+    fail(
+      '`captureGroups` is present but is not a list, so no Case of this Case Type would load'
+    );
+    return failures;
+  }
 
   try {
     validateCaptureGroups(groups);

@@ -910,6 +910,24 @@ test('checkCaseTypes accepts the capture groups a live Case Type declares', asyn
   assert.deepEqual(failures, [], joined(failures));
 });
 
+test('checkCaseTypes accepts a Case Type declaring no capture groups', async () => {
+  const failures = await checkCaseTypes({
+    caseTypes: [demoEntry(demoConfig())],
+  });
+  assert.deepEqual(failures, [], joined(failures));
+});
+
+test('checkCaseTypes fails captureGroups that is present but not a list', async () => {
+  for (const groups of [{}, 'rootCause', 7]) {
+    const failures = await checkCaseTypes({
+      caseTypes: [demoEntry(demoConfig({ captureGroups: groups }))],
+    });
+
+    assert.equal(failures.length, 1, joined(failures));
+    assert.match(failures[0].message, /captureGroups/);
+  }
+});
+
 test('checkCaseTypes fails an Issue Capture Field key used twice', async () => {
   const failures = await captureFailures(
     [{ key: 'rootCause', label: 'Root cause', type: 'text' }],

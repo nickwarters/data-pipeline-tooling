@@ -84,8 +84,12 @@ export function buildCaptureControl(
 }
 
 /**
- * Tags a control built above with a stable `data-focus-key` so focus and caret
- * survive an autosave-driven re-render, and sets its disabled state.
+ * Tags a control built above with a stable `data-focus-key`, and sets its
+ * disabled state.
+ *
+ * Nothing in the app reads the attribute — the renderer preserves focus and
+ * caret by patching the element in place. It is a stable, readable handle for
+ * tests and for anyone inspecting the DOM.
  *
  * Which field types produce a wrapper around several inputs is knowledge that
  * belongs to the builder, so it lives here rather than in each consumer: add a
