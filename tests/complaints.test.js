@@ -489,12 +489,12 @@ test('complaints opts every one of its Question Groups into the Group Outcome', 
   for (const group of present) {
     assert.ok(
       groupOutcomeTargets(config.questions, group).length > 0,
-      `${group} has at least one Question a outcome can write to`
+      `${group} has at least one Question a Group Outcome can write to`
     );
   }
 });
 
-test('complaints: a Regulatory & Reporting outcome can reveal a further Question', () => {
+test('complaints: a Regulatory & Reporting Group Outcome can reveal a further Question', () => {
   const gate = config.questions.find((q) => q.id === 'q-cmp-0045');
   const gated = config.questions.find((q) => q.id === 'q-cmp-0046');
 

@@ -66,7 +66,7 @@ test('choosing a wording reports it once for the group', () => {
   assert.deepEqual(calls, [['Alpha', 'Poor']]);
 });
 
-test('re-selecting the placeholder reports nothing', () => {
+test('the placeholder cannot be chosen, and writes nothing if it is', () => {
   /** @type {any[]} */
   const calls = [];
   const node = control({
@@ -75,10 +75,14 @@ test('re-selecting the placeholder reports nothing', () => {
   });
   const select = findByClass(node, 'cora-group-outcome');
 
+  // Choosing it would leave the control reading blank over a group that still
+  // holds the wording: no callback fires, so no re-render corrects the display.
+  assert.equal(select._children[0].disabled, true);
+
   select.value = '';
   fireEvent(select, 'change');
 
-  assert.deepEqual(calls, [], 'the blank option is not a outcome');
+  assert.deepEqual(calls, [], 'the placeholder is not a wording');
 });
 
 test('the displayed outcome is the wording the answered Questions agree on', () => {
@@ -102,10 +106,10 @@ test('the control blanks when the group disagrees or holds no Answer yet', () =>
   assert.equal(groupOutcomeValue([target('v1')], {}), '');
 });
 
-test('a outcome that reveals a further Question still shows the chosen wording', () => {
-  // The revealed Question is unanswered by design — the outcome never fills it
-  // in — so requiring every Question to agree would blank the control the
-  // instant a outcome widened its own group.
+test('a Group Outcome that reveals a further Question still shows the chosen wording', () => {
+  // The revealed Question is unanswered by design — nothing fills it in — so
+  // requiring every Question to agree would blank the control the instant the
+  // Reviewer widened the group by using it.
   assert.equal(
     groupOutcomeValue([target('v1'), target('v2'), target('v3')], {
       v1: { value: 'Poor' },

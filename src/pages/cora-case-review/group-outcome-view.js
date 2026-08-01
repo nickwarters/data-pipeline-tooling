@@ -98,7 +98,11 @@ export function GroupOutcomeControl({
           onGroupOutcome(questionGroup, chosen);
         },
       },
-      h('option', { value: '' }, 'Set group outcome…'),
+      // Disabled so it can be displayed but not chosen: choosing it writes
+      // nothing, so nothing would re-render, and the reconciler leaves a live
+      // value alone while the authored one is unchanged — the control would sit
+      // blank over a group that still holds the wording.
+      h('option', { value: '', disabled: true }, 'Set group outcome…'),
       ...options.map((option) => h('option', { value: option }, option))
     )
   );

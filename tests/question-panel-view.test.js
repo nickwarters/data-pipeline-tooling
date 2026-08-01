@@ -463,6 +463,16 @@ test('a Question Group renders no outcome control unless the Case Type opts it i
     0,
     'a named group that did not ask for bulk marking gets no control'
   );
+  assert.equal(
+    outcomeControls(
+      outcomeProps({
+        questionGroups: { Alpha: {} },
+        allowBulkOutcome: true,
+      })
+    ).length,
+    1,
+    'a named group that states nothing falls back to the Case Type, rather than reading as an opt-out'
+  );
 });
 
 test('a Case Type can opt every Question Group in at once', () => {
