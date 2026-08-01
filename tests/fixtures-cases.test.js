@@ -145,3 +145,23 @@ test('the sent-to-adviser Case names a Reviewer Manager persona', () => {
   );
   assert.notEqual(row.assignedReviewerManager, row.assignedReviewer);
 });
+
+test('every assigned mock Case carries the moment it was assigned', () => {
+  // The Assigned column reads this, not the creation date, so a fixture that
+  // omits it demos as an empty column rather than as a wrong one.
+  for (const row of mockCases) {
+    if (row.assignedReviewer) {
+      assert.equal(
+        typeof row.assignedAt,
+        'string',
+        `${row.id} names a Reviewer but no assignment time`
+      );
+    } else {
+      assert.equal(
+        row.assignedAt,
+        null,
+        `${row.id} has nobody assigned, so it can carry no assignment time`
+      );
+    }
+  }
+});

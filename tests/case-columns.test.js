@@ -31,7 +31,8 @@ function row(overrides = {}) {
     completedAt: null,
     etag: 'e',
     dueDate: '2026-01-10',
-    created: 'reviewer-a',
+    created: '2026-01-02',
+    assignedAt: '2026-01-05',
     ...overrides,
   });
 }
@@ -148,7 +149,7 @@ test('the standard date and assigned columns keep their empty-string sort value'
     return /** @type {(row: CaseRow) => unknown} */ (column.value)(subject);
   };
 
-  const blank = row({ dueDate: undefined, created: undefined });
+  const blank = row({ dueDate: undefined, assignedAt: undefined });
   const populated = row();
   /** @type {any} */ (populated).relatedDate = '2026-01-01';
   const keys = ['relatedDate', 'dueDate', 'assigned'];
@@ -159,8 +160,26 @@ test('the standard date and assigned columns keep their empty-string sort value'
   );
   assert.deepEqual(
     keys.map((key) => valueOf(key, populated)),
-    ['2026-01-01', '2026-01-10', 'reviewer-a']
+    ['2026-01-01', '2026-01-10', '2026-01-05']
   );
+});
+
+test('the Assigned column is the assignment time, never the creation date', () => {
+  const assigned = standardCaseColumns({ onOpen: () => {} }).find(
+    (candidate) => candidate.key === 'assigned'
+  );
+  assert.ok(assigned, 'no Assigned column');
+  const value = /** @type {(row: CaseRow) => unknown} */ (assigned.value);
+
+  // The two dates differ, so reading the wrong one is visible rather than
+  // coincidentally right.
+  assert.equal(
+    value(row({ created: '2026-01-02', assignedAt: '2026-03-09' })),
+    '2026-03-09'
+  );
+  // A Case nobody has been assigned shows nothing — the creation date must not
+  // stand in for an assignment that has not happened.
+  assert.equal(value(row({ created: '2026-01-02', assignedAt: null })), '');
 });
 
 test('Responsible Party is a framework column, read off the Case row', () => {

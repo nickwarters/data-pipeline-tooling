@@ -219,7 +219,7 @@ Reviewer**. The reviewing side has a base role (**Reviewer**) and an elevated ro
 _Avoid_: Assessor, evaluator
 
 **Assigned Reviewer**:
-The single **Reviewer** currently assigned to a specific **Case** (the Case row's reviewer field). The role that grants edit access to that Case's **Answers**, **Conversation**, **Notes** and **Remediation Actions**. Reassignment is a single-user-field update; history comes from SharePoint's list version history, not stored explicitly.
+The single **Reviewer** currently assigned to a specific **Case** (the Case row's reviewer field). The role that grants edit access to that Case's **Answers**, **Conversation**, **Notes** and **Remediation Actions**. Reassignment is a single-user-field update. The _current_ assignment carries its own timestamp — `assignedAt` on the Case row, stamped by the client whenever a write sets the Reviewer and cleared when the Reviewer is cleared — which is what the Case tables' **Assigned** column shows. Only the current one: the full reassignment history is still SharePoint's list version history, not stored explicitly.
 _Avoid_: Owner (of the case), primary reviewer, lead
 
 **Responsible Party**:

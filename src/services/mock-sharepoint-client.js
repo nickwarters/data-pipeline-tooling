@@ -1,5 +1,6 @@
 // @ts-check
 import { isOverdue } from '../evaluators/overdue-evaluator.js';
+import { withAssignmentStamp } from './assignment-stamp.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').ListCasesFilter} ListCasesFilter */
@@ -20,7 +21,8 @@ export class MockSharePointClient {
    * exportHashes?: Record<string, string>,
    * versionedExports?: Record<string, VersionedExport>,
    * lists?: Record<string, CaseRow[]>,
-   * roadmapItems?: RoadmapItem[]
+   * roadmapItems?: RoadmapItem[],
+   * now?: () => Date
    * }} opts
    */
   constructor({
@@ -31,7 +33,9 @@ export class MockSharePointClient {
     versionedExports = /** @type {Record<string, VersionedExport>} */ ({}),
     lists = /** @type {Record<string, CaseRow[]>} */ ({}),
     roadmapItems = [],
+    now = () => new Date(),
   }) {
+    this._now = now;
     this._personas = personas;
     this._persona = persona;
     this._people = people.slice();
@@ -104,9 +108,13 @@ export class MockSharePointClient {
     if (cases[idx].etag !== etag) return { ok: false, status: 412 };
 
     const newEtag = String(++this._etagCounter);
+    // The same write-path rule the real client applies, applied here for the
+    // same reason: the mock-first loop must show what production stores, so the
+    // two clients cannot drift on when a Case's assignment time is written.
+    const stamped = withAssignmentStamp(fields, this._now);
     const next = /** @type {CaseRow} */ ({
       ...cases[idx],
-      ...fields,
+      ...stamped,
       etag: newEtag,
     });
     // The Responsible Party is a person, and the real client learns their name

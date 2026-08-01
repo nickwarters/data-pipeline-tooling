@@ -104,6 +104,7 @@ function toSpItem(row, idFor) {
     AssignedReviewer: person(row.assignedReviewer ?? ''),
     ResponsiblePartyId: idFor(row.responsibleParty ?? ''),
     ResponsibleParty: person(row.responsibleParty ?? ''),
+    AssignedAt: row.assignedAt ?? null,
     Answers: JSON.stringify(row.answers ?? {}),
     Conversation: JSON.stringify(row.conversation ?? []),
     Notes: row.notes ?? '',
@@ -255,6 +256,10 @@ function makeSpBackend(seed) {
         if (body.Title !== undefined) row.title = body.Title;
         if (body.Status !== undefined) row.status = body.Status;
         if (body.Notes !== undefined) row.notes = body.Notes;
+        // The assignment clock is written by the client rather than supplied by
+        // the caller, so the fake has to store what it was sent for a later read
+        // to show it.
+        if (body.AssignedAt !== undefined) row.assignedAt = body.AssignedAt;
         row.etag = String(++etagCounter);
         return new Response(null, {
           status: 204,
@@ -318,6 +323,12 @@ function decodeFilterExpr(url) {
 // standard list name so every contract test targets the same store.
 const LIST = 'Cases-Test';
 
+// Both implementations stamp the assignment clock themselves, so both are given
+// the same frozen one — otherwise "they agree" would only mean "they both ran
+// within the same millisecond".
+const FROZEN_ASSIGNMENT = '2026-08-01T09:30:00.000Z';
+const frozenNow = () => new Date(FROZEN_ASSIGNMENT);
+
 /** @type {Array<[string, (seed: Seed) => import('../src/sharepoint-client.js').SharePointClient]>} */
 const clients = [
   [
@@ -329,13 +340,18 @@ const clients = [
         people: seed.people ?? [],
         exportHashes: seed.exportHashes ?? {},
         versionedExports: /** @type {any} */ (seed.versionedExports ?? {}),
+        now: frozenNow,
       }),
   ],
   [
     'HttpSharePointClient',
     (seed) => {
       const { fetch } = makeSpBackend(seed);
-      return new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+      return new HttpSharePointClient({
+        webUrl: WEB_URL,
+        fetchImpl: fetch,
+        now: frozenNow,
+      });
     },
   ],
 ];
@@ -376,6 +392,20 @@ for (const [name, makeClient] of clients) {
       );
       assert.equal(result.ok, true);
       assert.equal(result.data?.title, 'Updated title');
+    });
+
+    test('patchCase: assigning a Reviewer stamps the assignment time on the row', async () => {
+      const client = makeClient({ cases: seedCases() });
+      const before = await client.getCase('case-1', { listName: LIST });
+      const result = await client.patchCase(
+        'case-1',
+        { assignedReviewer: 'user-9' },
+        /** @type {string} */ (before?.etag),
+        { listName: LIST }
+      );
+      assert.equal(result.ok, true);
+      const after = await client.getCase('case-1', { listName: LIST });
+      assert.equal(after?.assignedAt, FROZEN_ASSIGNMENT);
     });
 
     test('listCases: status filter returns the same row-id set from equivalent seed data', async () => {

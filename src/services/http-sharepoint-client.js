@@ -1,5 +1,6 @@
 // @ts-check
 import { toBareAccount, toClaimsLogin } from './account-name.js';
+import { withAssignmentStamp } from './assignment-stamp.js';
 import { CASE_STATUS } from '../lib/case-statuses.js';
 import {
   isOverdue,
@@ -27,7 +28,8 @@ import {
  * listPrefix?: string,
  * exportBasePath?: string,
  * fetchImpl?: FetchImpl,
- * sleep?: (ms: number) => Promise<void>
+ * sleep?: (ms: number) => Promise<void>,
+ * now?: () => Date
  * }} HttpSharePointClientOptions
  */
 
@@ -111,6 +113,9 @@ export class HttpSharePointClient {
     this._fetch =
       opts.fetchImpl ?? ((input, init) => globalThis.fetch(input, init));
     this._sleep = opts.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+    // The clock the write path stamps assignment times from, injected so a test
+    // can freeze it rather than assert around "roughly now".
+    this._now = opts.now ?? (() => new Date());
     /** @type {string | null} */
     this._formDigest = null;
     /**
@@ -171,6 +176,9 @@ export class HttpSharePointClient {
   async patchCase(id, fields, etag, opts = {}) {
     const url = this._listItemUrl(this._requireListName(opts), id);
     try {
+      // The Assigned Reviewer's clock is paired with the Reviewer before the
+      // row is serialised, so a caller that hands over a Case cannot forget it.
+      fields = withAssignmentStamp(fields, this._now);
       const item = itemFromRow(fields);
       // The Person columns are the fields whose value cannot be derived from
       // the row alone: SharePoint writes them by id, so the account name has to
@@ -985,6 +993,7 @@ function rowFromItem(item, etag) {
       item?.CaseJustification != null
         ? String(item.CaseJustification)
         : undefined,
+    assignedAt: typeof item?.AssignedAt === 'string' ? item.AssignedAt : null,
     reportableAt:
       typeof item?.ReportableAt === 'string' ? item.ReportableAt : null,
     remediationDueDate:
@@ -1094,6 +1103,7 @@ function itemFromRow(fields) {
   if (fields.notes !== undefined) out.Notes = fields.notes;
   if (fields.caseJustification !== undefined)
     out.CaseJustification = fields.caseJustification;
+  if (fields.assignedAt !== undefined) out.AssignedAt = fields.assignedAt;
   if (fields.reportableAt !== undefined) out.ReportableAt = fields.reportableAt;
   if (fields.remediationDueDate !== undefined)
     out.RemediationDueDate = fields.remediationDueDate;

@@ -323,6 +323,8 @@ src/
     across-sources.js             # multi-list fan-out: one scoped request per Case source, merged (ADR-0022)
     action-centre-flags.js
     action-centre-model.js
+    assignment-stamp.js           # the write-path rule pairing assignedAt with assignedReviewer, so
+                                  #   no caller can set a Reviewer without stamping when (#633)
     create-sharepoint-client.js
     http-sharepoint-client.js
     journey-cases-fetcher.js

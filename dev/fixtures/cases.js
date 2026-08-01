@@ -93,6 +93,11 @@ function outcomeAnswers(value) {
  * Action Centre (read by ?asUser=action-centre): one row per reason group,
  * carrying the hoisted flags and clocks the real backend would compute.
  *
+ * Every assigned Case here was handed to its Reviewer when it was created, so
+ * its `assignedAt` repeats its `created`. The unallocated Case carries `null`:
+ * nobody holds it, so there is no moment it was handed over — and taking it
+ * through "Request next Case" is what visibly stamps one.
+ *
  * @type {CaseRow[]}
  */
 export const cases = [
@@ -116,6 +121,7 @@ export const cases = [
     placedOnHoldAt: _threeDaysAgo.toISOString(),
     completedAt: null,
     created: _fiveDaysAgo.toISOString(),
+    assignedAt: _fiveDaysAgo.toISOString(),
     etag: 'etag-cm-team1-v1',
   },
   {
@@ -160,6 +166,7 @@ export const cases = [
     effectiveHadRemediation: true,
     outcomeOverridden: false,
     created: _threeDaysAgo.toISOString(),
+    assignedAt: _threeDaysAgo.toISOString(),
     etag: 'etag-cm-team2-v1',
   },
   {
@@ -202,6 +209,7 @@ export const cases = [
     completedAt: null,
     dueDate: _nextWeek.toISOString(),
     created: '2026-06-18T08:00:00Z',
+    assignedAt: '2026-06-18T08:00:00Z',
     etag: 'etag-cm1-v1',
   },
   {
@@ -232,6 +240,7 @@ export const cases = [
     completedAt: _threeDaysAgo.toISOString(),
     outcomeAtCompletion: 'poor',
     created: '2026-05-02T08:00:00Z',
+    assignedAt: '2026-05-02T08:00:00Z',
     etag: 'etag-cm2-v1',
   },
   {
@@ -262,6 +271,7 @@ export const cases = [
     completedAt: _threeDaysAgo.toISOString(),
     outcomeAtCompletion: 'poor-with-harm',
     created: '2026-05-06T08:00:00Z',
+    assignedAt: '2026-05-06T08:00:00Z',
     etag: 'etag-cm3-v1',
   },
   {
@@ -329,6 +339,7 @@ export const cases = [
       },
     ],
     created: '2026-05-09T08:00:00Z',
+    assignedAt: '2026-05-09T08:00:00Z',
     etag: 'etag-cm4-v1',
   },
   {
@@ -448,6 +459,7 @@ export const cases = [
     effectiveHadRemediation: true,
     outcomeOverridden: false,
     created: '2026-06-02T08:00:00Z',
+    assignedAt: '2026-06-02T08:00:00Z',
     etag: 'etag-cm5-v1',
   },
   {
@@ -474,6 +486,7 @@ export const cases = [
     completedAt: null,
     dueDate: _nextWeek.toISOString(),
     created: _fiveDaysAgo.toISOString(),
+    assignedAt: null,
     etag: 'etag-cm6-v1',
   },
   // ── Action Centre demo cases ────────────────────────────────
@@ -495,6 +508,7 @@ export const cases = [
     completedAt: null,
     dueDate: _yesterday.toISOString(),
     created: _nineDaysAgo.toISOString(),
+    assignedAt: _nineDaysAgo.toISOString(),
     etag: 'etag-ac-od1',
   },
   {
@@ -513,6 +527,7 @@ export const cases = [
     awaitingResponsibleParty: true,
     awaitingSince: _nineDaysAgo.toISOString(),
     created: _nineDaysAgo.toISOString(),
+    assignedAt: _nineDaysAgo.toISOString(),
     etag: 'etag-ac-aw1',
   },
   {
@@ -531,6 +546,7 @@ export const cases = [
     awaitingResponsibleParty: true,
     awaitingSince: _fiveDaysAgo.toISOString(),
     created: _fiveDaysAgo.toISOString(),
+    assignedAt: _fiveDaysAgo.toISOString(),
     etag: 'etag-ac-aw2',
   },
   {
@@ -548,6 +564,7 @@ export const cases = [
     dueDate: _nextWeek.toISOString(),
     reviewRequired: true,
     created: _fourDaysAgo.toISOString(),
+    assignedAt: _fourDaysAgo.toISOString(),
     etag: 'etag-ac-rr1',
   },
   {
@@ -565,6 +582,7 @@ export const cases = [
     dueDate: _nextWeek.toISOString(),
     reviewRequired: true,
     created: _twoDaysAgo.toISOString(),
+    assignedAt: _twoDaysAgo.toISOString(),
     etag: 'etag-ac-rr2',
   },
   {
@@ -589,6 +607,7 @@ export const cases = [
     hasOpenAppeal: true,
     appealRaisedAt: _sixDaysAgo.toISOString(),
     created: _twentyDaysAgo.toISOString(),
+    assignedAt: _twentyDaysAgo.toISOString(),
     etag: 'etag-ac-ap1',
   },
   {
@@ -607,6 +626,7 @@ export const cases = [
     reopened: true,
     reopenedAt: _fiveDaysAgo.toISOString(),
     created: _twentyDaysAgo.toISOString(),
+    assignedAt: _twentyDaysAgo.toISOString(),
     etag: 'etag-ac-re1',
   },
 ];

@@ -37,6 +37,7 @@ read-only persona.
 | `CaseType`                | Single line of text            | Case Type slug (`example-review`).                                                                                                                                                                        |
 | `Status`                  | Choice                         | Lifecycle state — **`In-progress`, `Actions In Progress`, `Completed`**. The middle value is new; existing lists must have the choice added.                                                              |
 | `AssignedReviewerId`      | Person or Group                | Current Reviewer. Reassignment history comes from list version history.                                                                                                                                   |
+| `AssignedAt`              | Date and Time (not indexed)    | **New.** When the Case was last handed to its Reviewer — the value the Case tables' **Assigned** column shows. Nothing filters or sorts on it server-side, so it needs no index.                          |
 | `ResponsiblePartyId`      | Person or Group                | Responsible Party — **written in-app by the Reviewer before Send Actions**.                                                                                                                               |
 | `AssignedReviewerManager` | Single line of text            | Reviewer's manager (bare account), for the Reviewer-Manager report.                                                                                                                                       |
 | `ResponsiblePartyManager` | Single line of text            | Responsible Party's manager (bare account).                                                                                                                                                               |
@@ -61,6 +62,14 @@ read-only persona.
 | `RelatedDate`             | Date and Time                  | Case-relevant date (e.g. interaction date).                                                                                                                                                               |
 | `OnHold`                  | Yes/No (indexed)               | Reviewer-controlled hold state and allocation-capacity predicate, available only while the Case is `In-progress`.                                                                                         |
 | `PlacedOnHoldAt`          | Date and Time                  | Timestamp set when `OnHold` is applied; cleared automatically when the Case leaves `In-progress`.                                                                                                         |
+
+**`AssignedAt` must be provisioned on every Case Type list _before_ the frontend
+is deployed.** Reads are safe without it — the Case read is `$select=*`, so a
+list lacking the column simply answers without it and the row hydrates with no
+assignment time — but the client stamps `AssignedAt` on every write that sets
+the Assigned Reviewer, and SharePoint answers a PATCH naming an unknown column
+with a **400**. On a list without it, "Request next Case" fails outright: the
+allocation claim is exactly such a write.
 
 `Created` is the SharePoint system column. **Removed:** the `Overrides` /
 `overrides[]` blob — do not provision it; corrected reporting now flows from

@@ -82,45 +82,46 @@ lead with an indexed predicate.
 
 ### Shared columns
 
-| Column (internal name)                    | Type                                                         | Indexed | Provenance / notes                                                            |
-| ----------------------------------------- | ------------------------------------------------------------ | :-----: | ----------------------------------------------------------------------------- |
-| `Id`                                      | Counter                                                      |  (PK)   | SharePoint built-in item id.                                                  |
-| `Title`                                   | Single line of text                                          |         | Case title.                                                                   |
-| `CaseType`                                | Single line of text                                          |         | Slug; constant per list, so not worth indexing.                               |
-| `Status`                                  | Choice (`In-progress` / `Actions In Progress` / `Completed`) |  **✓**  | Lifecycle state; leading predicate for most live reads.                       |
-| `AssignedReviewer` (`AssignedReviewerId`) | Person                                                       |  **✓**  | The Reviewer the Case is assigned to.                                         |
-| `ResponsibleParty` (`ResponsiblePartyId`) | Person                                                       |  **✓**  | The Responsible Party.                                                        |
-| `AssignedReviewerManager`                 | Person                                                       |  **✓**  | Reviewer's manager; Reviewer-Manager team reads lead with it.                 |
-| `ResponsiblePartyManager`                 | Person                                                       |  **✓**  | Responsible Party's manager.                                                  |
-| `DueDate`                                 | Date and Time                                                |  **✓**  | Working-day SLA due date; app-written on creation.                            |
-| `CompletedAt`                             | Date and Time                                                |  **✓**  | Stamped at the final `Completed` transition; app-written.                     |
-| `ReportableAt`                            | Date and Time                                                |         | Stamped at the reportable milestone; app-written.                             |
-| `RemediationDueDate`                      | Date and Time                                                |         | Remediation SLA; app-written.                                                 |
-| `RelatedDate`                             | Date and Time                                                |         | Case Type–specific reference date.                                            |
-| `Created`                                 | Date and Time                                                |         | SharePoint built-in.                                                          |
-| `HasOpenAppeal`                           | Yes/No                                                       |  **✓**  | Action Centre reason flag; app-written on appeal raise/resolve.               |
-| `AppealRaisedAt`                          | Date and Time                                                |         | Clock paired with `HasOpenAppeal`; app-written.                               |
-| `AwaitingResponsibleParty`                | Yes/No                                                       |  **✓**  | Action Centre reason flag; app-written.                                       |
-| `AwaitingSince`                           | Date and Time                                                |         | Clock paired with `AwaitingResponsibleParty`; app-written.                    |
-| `Reopened`                                | Yes/No                                                       |  **✓**  | Action Centre reason flag; app-written.                                       |
-| `ReopenedAt`                              | Date and Time                                                |         | Clock paired with `Reopened`; app-written.                                    |
-| `ReviewRequired`                          | Yes/No                                                       |  **✓**  | Action Centre reason flag; app-written.                                       |
-| `OnHold`                                  | Yes/No                                                       |  **✓**  | Reviewer hold state; indexed for allocation capacity counts.                  |
-| `PlacedOnHoldAt`                          | Date and Time                                                |         | Cleared automatically when leaving `In-progress`.                             |
-| `Outcome`                                 | Single line of text                                          |         | Live working Outcome.                                                         |
-| `OutcomeAtCompletion`                     | Single line of text                                          |         | Frozen Outcome snapshot taken at reportable; app-written.                     |
-| `HadRemediation`                          | Yes/No                                                       |         | Frozen at reportable; app-written.                                            |
-| `EffectiveOutcome`                        | Single line of text                                          |         | Corrected Outcome for RP-team reporting; app-written.                         |
-| `EffectiveHadRemediation`                 | Yes/No                                                       |         | Corrected remediation flag; app-written.                                      |
-| `OutcomeOverridden`                       | Yes/No                                                       |         | Set when an Amended Outcome diverges from the snapshot.                       |
-| `QuestionBankVersion`                     | Single line of text                                          |         | Question-bank snapshot version for the Case; app-written.                     |
-| `CaseJustification`                       | Multiple lines of text                                       |         | Case-level justification.                                                     |
-| `Notes`                                   | Multiple lines of text (plain)                               |         | Free-text notes; never `innerHTML`.                                           |
-| `Answers`                                 | Multiple lines of text (JSON blob)                           |         | All Answers; field-level PATCH only.                                          |
-| `Conversation`                            | Multiple lines of text (JSON blob)                           |         | Conversation messages.                                                        |
-| `Appeals`                                 | Multiple lines of text (JSON blob)                           |         | Appeal records; additive, never mutates the frozen Case.                      |
-| `AmendedOutcome`                          | Multiple lines of text (JSON blob)                           |         | Case-level Amended Outcome record.                                            |
-| `Details`                                 | Multiple lines of text (JSON blob)                           |         | Case Details values keyed by the Case Type's `detailFields[].key`; read-only. |
+| Column (internal name)                    | Type                                                         | Indexed | Provenance / notes                                                                     |
+| ----------------------------------------- | ------------------------------------------------------------ | :-----: | -------------------------------------------------------------------------------------- |
+| `Id`                                      | Counter                                                      |  (PK)   | SharePoint built-in item id.                                                           |
+| `Title`                                   | Single line of text                                          |         | Case title.                                                                            |
+| `CaseType`                                | Single line of text                                          |         | Slug; constant per list, so not worth indexing.                                        |
+| `Status`                                  | Choice (`In-progress` / `Actions In Progress` / `Completed`) |  **✓**  | Lifecycle state; leading predicate for most live reads.                                |
+| `AssignedReviewer` (`AssignedReviewerId`) | Person                                                       |  **✓**  | The Reviewer the Case is assigned to.                                                  |
+| `AssignedAt`                              | Date and Time                                                |         | When the Case was last handed to its Reviewer; client-written with `AssignedReviewer`. |
+| `ResponsibleParty` (`ResponsiblePartyId`) | Person                                                       |  **✓**  | The Responsible Party.                                                                 |
+| `AssignedReviewerManager`                 | Person                                                       |  **✓**  | Reviewer's manager; Reviewer-Manager team reads lead with it.                          |
+| `ResponsiblePartyManager`                 | Person                                                       |  **✓**  | Responsible Party's manager.                                                           |
+| `DueDate`                                 | Date and Time                                                |  **✓**  | Working-day SLA due date; app-written on creation.                                     |
+| `CompletedAt`                             | Date and Time                                                |  **✓**  | Stamped at the final `Completed` transition; app-written.                              |
+| `ReportableAt`                            | Date and Time                                                |         | Stamped at the reportable milestone; app-written.                                      |
+| `RemediationDueDate`                      | Date and Time                                                |         | Remediation SLA; app-written.                                                          |
+| `RelatedDate`                             | Date and Time                                                |         | Case Type–specific reference date.                                                     |
+| `Created`                                 | Date and Time                                                |         | SharePoint built-in.                                                                   |
+| `HasOpenAppeal`                           | Yes/No                                                       |  **✓**  | Action Centre reason flag; app-written on appeal raise/resolve.                        |
+| `AppealRaisedAt`                          | Date and Time                                                |         | Clock paired with `HasOpenAppeal`; app-written.                                        |
+| `AwaitingResponsibleParty`                | Yes/No                                                       |  **✓**  | Action Centre reason flag; app-written.                                                |
+| `AwaitingSince`                           | Date and Time                                                |         | Clock paired with `AwaitingResponsibleParty`; app-written.                             |
+| `Reopened`                                | Yes/No                                                       |  **✓**  | Action Centre reason flag; app-written.                                                |
+| `ReopenedAt`                              | Date and Time                                                |         | Clock paired with `Reopened`; app-written.                                             |
+| `ReviewRequired`                          | Yes/No                                                       |  **✓**  | Action Centre reason flag; app-written.                                                |
+| `OnHold`                                  | Yes/No                                                       |  **✓**  | Reviewer hold state; indexed for allocation capacity counts.                           |
+| `PlacedOnHoldAt`                          | Date and Time                                                |         | Cleared automatically when leaving `In-progress`.                                      |
+| `Outcome`                                 | Single line of text                                          |         | Live working Outcome.                                                                  |
+| `OutcomeAtCompletion`                     | Single line of text                                          |         | Frozen Outcome snapshot taken at reportable; app-written.                              |
+| `HadRemediation`                          | Yes/No                                                       |         | Frozen at reportable; app-written.                                                     |
+| `EffectiveOutcome`                        | Single line of text                                          |         | Corrected Outcome for RP-team reporting; app-written.                                  |
+| `EffectiveHadRemediation`                 | Yes/No                                                       |         | Corrected remediation flag; app-written.                                               |
+| `OutcomeOverridden`                       | Yes/No                                                       |         | Set when an Amended Outcome diverges from the snapshot.                                |
+| `QuestionBankVersion`                     | Single line of text                                          |         | Question-bank snapshot version for the Case; app-written.                              |
+| `CaseJustification`                       | Multiple lines of text                                       |         | Case-level justification.                                                              |
+| `Notes`                                   | Multiple lines of text (plain)                               |         | Free-text notes; never `innerHTML`.                                                    |
+| `Answers`                                 | Multiple lines of text (JSON blob)                           |         | All Answers; field-level PATCH only.                                                   |
+| `Conversation`                            | Multiple lines of text (JSON blob)                           |         | Conversation messages.                                                                 |
+| `Appeals`                                 | Multiple lines of text (JSON blob)                           |         | Appeal records; additive, never mutates the frozen Case.                               |
+| `AmendedOutcome`                          | Multiple lines of text (JSON blob)                           |         | Case-level Amended Outcome record.                                                     |
+| `Details`                                 | Multiple lines of text (JSON blob)                           |         | Case Details values keyed by the Case Type's `detailFields[].key`; read-only.          |
 
 The JSON-blob columns (`Answers`, `Conversation`, `Appeals`, `AmendedOutcome`,
 `Details`) are **deliberately not indexed and never queried** — reason-defining

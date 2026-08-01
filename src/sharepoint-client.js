@@ -169,6 +169,13 @@
  * the row. Read-side only: nothing writes it, and it is absent on a Case with
  * no Responsible Party.
  *
+ * `assignedAt` is the clock paired with the Assigned Reviewer: the moment the
+ * Case was last handed to whoever holds it. The client stamps it on every write
+ * that sets `assignedReviewer`, and clears it to `null` when the Reviewer is
+ * cleared — so no caller can forget it, and an unassigned Case never carries a
+ * stale assignment time. Deliberately not a filter field: nothing queries on it,
+ * it is displayed and sorted client-side.
+ *
  * `assignedReviewerManager` and `responsiblePartyManager` denormalise two
  * org-chart edges onto the row and are **not** equivalent:
  * `assignedReviewerManager` is a reporting snapshot — the query key behind
@@ -183,6 +190,7 @@
  * title: string,
  * status: import('./lib/case-statuses.js').CaseStatus,
  * assignedReviewer: string,
+ * assignedAt?: string | null,
  * responsibleParty: string,
  * responsiblePartyDisplayName?: string,
  * answers: Record<string, Answer>,

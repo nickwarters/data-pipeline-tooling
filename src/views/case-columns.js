@@ -56,7 +56,7 @@ export const caseStatusColumn = () => ({
 const caseRelatedDateColumn = () => ({
   key: 'relatedDate',
   label: 'Related Date',
-  value: (row) => /** @type {any} */ (row).relatedDate || '',
+  value: (row) => row.relatedDate || '',
   sortable: true,
 });
 
@@ -68,11 +68,17 @@ const caseDueDateColumn = () => ({
   sortable: true,
 });
 
-/** @returns {CaseColumn} */
+/**
+ * When the Case was handed to the Reviewer who holds it — which is what the
+ * heading has always claimed. It used to read the Case's creation date, so a
+ * Case reassigned weeks later still showed the day it was raised.
+ *
+ * @returns {CaseColumn}
+ */
 const caseAssignedColumn = () => ({
   key: 'assigned',
   label: 'Assigned',
-  value: (row) => row.created || '',
+  value: (row) => row.assignedAt || '',
   sortable: true,
 });
 

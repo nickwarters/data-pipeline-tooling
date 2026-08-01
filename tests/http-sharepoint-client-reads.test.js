@@ -234,6 +234,7 @@ test('HttpSharePointClient: getCase hydrates the full CaseRow contract', async (
             Appeals: JSON.stringify(appeals),
             DueDate: '2026-06-10T10:00:00.000Z',
             RelatedDate: '2026-06-04T10:00:00.000Z',
+            AssignedAt: '2026-06-01T11:00:00.000Z',
             OnHold: true,
             PlacedOnHoldAt: '2026-06-05T10:00:00.000Z',
             Created: '2026-06-01T09:00:00.000Z',
@@ -252,6 +253,7 @@ test('HttpSharePointClient: getCase hydrates the full CaseRow contract', async (
   });
 
   assert.equal(row?.assignedReviewer, 'reviewer-1');
+  assert.equal(row?.assignedAt, '2026-06-01T11:00:00.000Z');
   assert.equal(row?.assignedReviewerManager, 'reviewer-manager');
   assert.equal(row?.responsibleParty, 'rp-1');
   assert.equal(row?.responsiblePartyManager, 'rp-manager');
@@ -278,6 +280,42 @@ test('HttpSharePointClient: getCase hydrates the full CaseRow contract', async (
   assert.equal(row?.placedOnHoldAt, '2026-06-05T10:00:00.000Z');
   assert.equal(row?.created, '2026-06-01T09:00:00.000Z');
   assert.equal(row?.overdue, false);
+});
+
+test('HttpSharePointClient: a row from a list with no AssignedAt column still reads', async () => {
+  // The read projection is `$select=*`, so a list that has not been given the
+  // column yet simply answers without it. That is what makes deploying the
+  // frontend ahead of the column safe on the *read* side: the row hydrates with
+  // no assignment time rather than failing.
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            Id: 'case-1',
+            Title: 'Unprovisioned list',
+            Status: 'In-progress',
+            CaseType: 'example-review',
+            Answers: '{}',
+            Conversation: '[]',
+            Notes: '',
+            CompletedAt: null,
+          }),
+          { status: 200 }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const row = await client.getCase('case-1', {
+    listName: 'Cases-ExampleReview',
+  });
+
+  assert.equal(row?.assignedAt, null);
 });
 
 test('HttpSharePointClient: overdue is true for an In-progress case past its DueDate', async () => {
