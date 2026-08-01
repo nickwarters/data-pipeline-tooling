@@ -2,25 +2,27 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  DEFAULT_SECTION_HEADINGS,
   DEFAULT_SECTION_LABELS,
-  resolveSectionHeadings,
   resolveSectionLabels,
 } from '../src/lib/section-labels.js';
 
-test('DEFAULT_SECTION_LABELS: matches the exact current hardcoded tab/heading strings', () => {
+test('DEFAULT_SECTION_LABELS: one entry per Section, each carrying both spellings', () => {
   assert.deepEqual(DEFAULT_SECTION_LABELS, {
-    details: 'Details',
-    questions: 'Review',
-    issues: 'Issues',
-    remediation: 'Remediation',
-    summary: 'Summary',
-    notes: 'Notes',
-    appealRequest: 'Appeal',
-    appealReview: 'Appeal Review',
-    amendOutcome: 'Amend Outcome',
-    conversation: 'Conversation',
+    details: { tab: 'Details', heading: 'Case Details' },
+    questions: { tab: 'Review', heading: 'Questions' },
+    issues: { tab: 'Issues', heading: 'Issues' },
+    remediation: { tab: 'Remediation', heading: 'Remediation' },
+    summary: { tab: 'Summary', heading: 'Summary' },
+    notes: { tab: 'Notes', heading: 'Notes' },
+    appealRequest: { tab: 'Appeal', heading: 'Appeal' },
+    appealReview: { tab: 'Appeal Review', heading: 'Appeal Review' },
+    amendOutcome: { tab: 'Amend Outcome', heading: 'Amend Outcome' },
+    conversation: { tab: 'Conversation', heading: 'Conversation' },
   });
+});
+
+test('DEFAULT_SECTION_LABELS is frozen', () => {
+  assert.equal(Object.isFrozen(DEFAULT_SECTION_LABELS), true);
 });
 
 test('resolveSectionLabels: returns the defaults unchanged when sectionLabels is absent', () => {
@@ -32,35 +34,46 @@ test('resolveSectionLabels: returns the defaults unchanged when config is null/u
   assert.deepEqual(resolveSectionLabels(undefined), DEFAULT_SECTION_LABELS);
 });
 
-test('resolveSectionLabels: an override merges over the defaults, leaving other keys untouched', () => {
+test('resolveSectionLabels: a string override renames both the tab and the heading', () => {
   const resolved = resolveSectionLabels({
     sectionLabels: { questions: 'Assessment' },
   });
 
-  assert.equal(resolved.questions, 'Assessment');
-  assert.equal(resolved.details, 'Details');
-  assert.equal(resolved.summary, 'Summary');
+  assert.deepEqual(resolved.questions, {
+    tab: 'Assessment',
+    heading: 'Assessment',
+  });
+  assert.deepEqual(resolved.details, DEFAULT_SECTION_LABELS.details);
+  assert.deepEqual(resolved.summary, DEFAULT_SECTION_LABELS.summary);
 });
 
-test('DEFAULT_SECTION_HEADINGS: matches the tab labels except the questions panel heading', () => {
-  assert.deepEqual(DEFAULT_SECTION_HEADINGS, {
-    ...DEFAULT_SECTION_LABELS,
-    questions: 'Questions',
+test('resolveSectionLabels: an object override patches only the axes it names', () => {
+  const resolved = resolveSectionLabels({
+    sectionLabels: { questions: { tab: 'Assessment' } },
+  });
+
+  assert.deepEqual(resolved.questions, {
+    tab: 'Assessment',
+    heading: 'Questions',
+  });
+
+  const headingOnly = resolveSectionLabels({
+    sectionLabels: { details: { heading: 'About this Case' } },
+  });
+
+  assert.deepEqual(headingOnly.details, {
+    tab: 'Details',
+    heading: 'About this Case',
   });
 });
 
-test('resolveSectionHeadings: returns the heading defaults unchanged when sectionLabels is absent', () => {
-  assert.deepEqual(resolveSectionHeadings({}), DEFAULT_SECTION_HEADINGS);
-  assert.deepEqual(resolveSectionHeadings(null), DEFAULT_SECTION_HEADINGS);
-});
-
-test('resolveSectionHeadings: an override merges over the heading defaults', () => {
-  const resolved = resolveSectionHeadings({
-    sectionLabels: { questions: 'Assessment' },
+test('resolveSectionLabels: an object override may set both axes to different copy', () => {
+  const resolved = resolveSectionLabels({
+    sectionLabels: { questions: { tab: 'Assess', heading: 'Assessment' } },
   });
 
-  assert.equal(resolved.questions, 'Assessment');
-  assert.equal(resolved.notes, 'Notes');
+  assert.equal(resolved.questions.tab, 'Assess');
+  assert.equal(resolved.questions.heading, 'Assessment');
 });
 
 test('resolveSectionLabels: multiple overrides all apply', () => {
@@ -68,7 +81,13 @@ test('resolveSectionLabels: multiple overrides all apply', () => {
     sectionLabels: { questions: 'Assessment', notes: 'Case Notes' },
   });
 
-  assert.equal(resolved.questions, 'Assessment');
-  assert.equal(resolved.notes, 'Case Notes');
-  assert.equal(resolved.issues, 'Issues');
+  assert.equal(resolved.questions.tab, 'Assessment');
+  assert.equal(resolved.notes.heading, 'Case Notes');
+  assert.equal(resolved.issues.heading, 'Issues');
+});
+
+test('resolveSectionLabels: does not mutate the defaults', () => {
+  resolveSectionLabels({ sectionLabels: { notes: { tab: 'Scribbles' } } });
+
+  assert.equal(DEFAULT_SECTION_LABELS.notes.tab, 'Notes');
 });

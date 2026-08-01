@@ -2,6 +2,7 @@
 import { h } from '../../lib/html.js';
 import { EmptyState } from '../../lib/empty-state.js';
 import { openAppealOf } from './appeal-actions.js';
+import { DEFAULT_SECTION_LABELS } from '../../lib/section-labels.js';
 
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../../sharepoint-client.js').Appeal} Appeal */
@@ -27,6 +28,8 @@ import { openAppealOf } from './appeal-actions.js';
  * @property {CurrentUser | null} currentUser
  * @property {OutcomeOption[]} outcomeOptions
  * @property {(input: {appealId: string, verdict: 'agreed'|'rejected', rationale: string, outcome?: string, justification?: string}) => void} [onResolve]
+ * @property {string} [heading] The Section's resolved heading; defaults to the
+ *   standard copy so the view stays usable standalone.
  */
 
 /**
@@ -35,7 +38,9 @@ import { openAppealOf } from './appeal-actions.js';
  */
 export function AppealReviewSection(props) {
   /** @type {Node[]} */
-  const children = [h('h2', {}, 'Appeal Review')];
+  const children = [
+    h('h2', {}, props.heading ?? DEFAULT_SECTION_LABELS.appealReview.heading),
+  ];
 
   const appeals = props.caseRow?.appeals ?? [];
   for (const appeal of appeals) {

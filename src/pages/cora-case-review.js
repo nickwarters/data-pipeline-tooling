@@ -55,8 +55,7 @@ import {
  *   versioned export could not be fetched, so the *live* catalogue is what the
  *   page is showing. Rendered as a page-level banner — see `versionWarningView`.
  * @property {Record<import('../services/section-access.js').Section, import('../services/section-access.js').Mode>} access
- * @property {Required<import('../sharepoint-client.js').SectionLabels>} sectionLabels
- * @property {Required<import('../sharepoint-client.js').SectionLabels>} sectionHeadings
+ * @property {import('../sharepoint-client.js').ResolvedSectionLabels} sectionLabels
  * @property {import('../lib/case-machine.js').CaseMachine | null} machine
  * @property {import('../sharepoint-client.js').CaseListOptions} caseListOptions
  */
@@ -783,7 +782,7 @@ export function createRouteSlice(params, context) {
               onclick: () =>
                 tools.dispatch({ type: 'case/conversation-toggled' }),
             },
-            snapshot.sectionHeadings.conversation
+            snapshot.sectionLabels.conversation.tab
           )
         : null,
     ]);
@@ -830,7 +829,7 @@ export function createRouteSlice(params, context) {
             onkeydown: (/** @type {KeyboardEvent} */ event) =>
               selectAdjacentTab(event, tabs, route.activeTab, tools.dispatch),
           },
-          snapshot.sectionLabels[entry.id]
+          snapshot.sectionLabels[entry.id].tab
         );
       })
     );
@@ -867,7 +866,7 @@ export function createRouteSlice(params, context) {
         : conversationView({
             messages: caseRow.conversation,
             access: snapshot.access.conversation,
-            heading: snapshot.sectionHeadings.conversation,
+            heading: snapshot.sectionLabels.conversation.heading,
             onSend: async (body) => {
               await postConversationMessage({
                 client: context.client,

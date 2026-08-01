@@ -7,6 +7,7 @@ installDom();
 
 const { summaryView } =
   await import('../src/pages/cora-case-review/summary-view.js');
+const { resolveSectionLabels } = await import('../src/lib/section-labels.js');
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 
@@ -163,22 +164,21 @@ test('summaryView follows the configured showInSummary sections and headings', (
         'q-open': { value: 'No' },
         'q-needs': { value: 'Yes' },
       },
-      sectionHeadings: {
-        details: 'Details',
-        questions: 'Assessment',
-        issues: 'Findings',
-        remediation: 'Fix-up',
-        summary: 'Wrap-up',
-        notes: 'Case Notes',
-        appealRequest: 'Appeal',
-        appealReview: 'Appeal Review',
-        amendOutcome: 'Amend Outcome',
-        conversation: 'Conversation',
-      },
+      sectionLabels: resolveSectionLabels({
+        sectionLabels: {
+          details: 'Overview',
+          questions: 'Assessment',
+          issues: 'Findings',
+          remediation: 'Fix-up',
+          summary: 'Wrap-up',
+          notes: 'Case Notes',
+        },
+      }),
     })
   );
 
   assert.match(root.textContent, /Wrap-up/);
+  assert.match(root.textContent, /Overview/);
   assert.match(root.textContent, /Customer nameJordan Lee/);
   assert.match(root.textContent, /Assessment/);
   assert.match(root.textContent, /Opening: 0 pass, 1 fail/);

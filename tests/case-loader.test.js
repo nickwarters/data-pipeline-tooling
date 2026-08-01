@@ -594,31 +594,37 @@ function makeLabelsLoader(caseType) {
   });
 }
 
-test('CaseLoader: sectionLabels/sectionHeadings default before load()', () => {
+test('CaseLoader: sectionLabels default before load()', () => {
   const loader = makeLabelsLoader('example-review');
-  assert.equal(loader.sectionLabels.questions, 'Review');
-  assert.equal(loader.sectionHeadings.questions, 'Questions');
-  assert.equal(loader.sectionLabels.notes, 'Notes');
+  assert.equal(loader.sectionLabels.questions.tab, 'Review');
+  assert.equal(loader.sectionLabels.questions.heading, 'Questions');
+  assert.equal(loader.sectionLabels.details.heading, 'Case Details');
+  assert.equal(loader.sectionLabels.notes.tab, 'Notes');
 });
 
 test('CaseLoader.load(): a Case Type without sectionLabels keeps the defaults', async () => {
   const loader = makeLabelsLoader('example-review');
   await loader.load();
-  assert.equal(loader.sectionLabels.questions, 'Review');
-  assert.equal(loader.sectionHeadings.questions, 'Questions');
-  assert.equal(loader.sectionLabels.appealReview, 'Appeal Review');
+  assert.equal(loader.sectionLabels.questions.tab, 'Review');
+  assert.equal(loader.sectionLabels.questions.heading, 'Questions');
+  assert.equal(loader.sectionLabels.details.heading, 'Case Details');
+  assert.equal(loader.sectionLabels.appealReview.tab, 'Appeal Review');
 });
 
-test('CaseLoader.load(): resolves a Case Type sectionLabels override into labels and headings', async () => {
-  // No live Case Type declares a sectionLabels override (stress-review, which
-  // did, has been retired). Register a fixture importer that carries the
-  // demonstrative { questions: 'Assessment' } override for this test.
+/**
+ * Register a fixture Case Type carrying `sectionLabels`, run `load()`, and
+ * hand the resolved copy back. No live Case Type declares an override
+ * (stress-review, which did, has been retired).
+ *
+ * @param {any} sectionLabels
+ */
+async function loadWithSectionLabels(sectionLabels) {
   const slug = 'section-labels-fixture';
   CASE_TYPE_IMPORTERS[slug] = async () => ({
     default: /** @type {any} */ ({
       displayName: 'Section Labels Fixture',
       listName: 'Cases-SectionLabelsFixture',
-      sectionLabels: { questions: 'Assessment' },
+      sectionLabels,
       questions: [],
       computeOutcome: () => ({ outcome: 'pass' }),
       outcomeOptions: [{ id: 'pass', wording: 'Pass', severity: 0 }],
@@ -629,14 +635,27 @@ test('CaseLoader.load(): resolves a Case Type sectionLabels override into labels
   try {
     const loader = makeLabelsLoader(slug);
     await loader.load();
-    assert.equal(loader.sectionLabels.questions, 'Assessment');
-    assert.equal(loader.sectionHeadings.questions, 'Assessment');
-    // Every other Section keeps the defaults.
-    assert.equal(loader.sectionLabels.notes, 'Notes');
-    assert.equal(loader.sectionHeadings.remediation, 'Remediation');
+    return loader.sectionLabels;
   } finally {
     delete CASE_TYPE_IMPORTERS[slug];
   }
+}
+
+test('CaseLoader.load(): a string override renames both the tab and the heading', async () => {
+  const labels = await loadWithSectionLabels({ questions: 'Assessment' });
+
+  assert.equal(labels.questions.tab, 'Assessment');
+  assert.equal(labels.questions.heading, 'Assessment');
+  // Every other Section keeps the defaults.
+  assert.equal(labels.notes.tab, 'Notes');
+  assert.equal(labels.remediation.heading, 'Remediation');
+});
+
+test('CaseLoader.load(): an object override renames only the axis it names', async () => {
+  const labels = await loadWithSectionLabels({ questions: { tab: 'Assess' } });
+
+  assert.equal(labels.questions.tab, 'Assess');
+  assert.equal(labels.questions.heading, 'Questions');
 });
 
 test('CaseLoader.load(): a Summary role list narrows the blocks, and access still bounds it', async () => {

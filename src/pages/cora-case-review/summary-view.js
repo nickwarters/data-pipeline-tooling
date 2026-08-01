@@ -10,9 +10,8 @@ import {
 } from '../../evaluators/remediation-status.js';
 import { isReportable } from '../../lib/case-machine.js';
 import { currentOutcome } from '../../evaluators/amended-outcome.js';
-import { DEFAULT_SECTION_HEADINGS } from '../../lib/section-labels.js';
+import { DEFAULT_SECTION_LABELS } from '../../lib/section-labels.js';
 import { CaptureGroups } from '../../components/sections/cora-capture-groups.js';
-import { CASE_STATUS } from '../../lib/case-statuses.js';
 import { generalAnswerKey } from '../../evaluators/general-questions.js';
 import { GENERAL_QUESTIONS_TITLE } from './general-questions-view.js';
 
@@ -33,7 +32,7 @@ import { GENERAL_QUESTIONS_TITLE } from './general-questions-view.js';
  * @property {import('../../sharepoint-client.js').CaptureGroup[]} captureGroups
  * @property {import('../../sharepoint-client.js').CaseDetailField[]} detailFields
  * @property {import('../../sharepoint-client.js').OutcomeOption[]} outcomeOptions
- * @property {Required<import('../../sharepoint-client.js').SectionLabels>} [sectionHeadings] Resolved section headings; defaults to the standard copy so the component stays usable standalone.
+ * @property {import('../../sharepoint-client.js').ResolvedSectionLabels} [sectionLabels] Resolved section display copy; defaults to the standard copy so the component stays usable standalone.
  * @property {import('../../sharepoint-client.js').GeneralQuestionField[]} [generalQuestions] The Case Type's General Questions, rolled up read-only. Display only — they reach no evaluator here either.
  * @property {import('../../evaluators/general-questions.js').GeneralQuestionsPlacement} [generalQuestionsPlacement] Which side of the configured Summary blocks the roll-up sits on. Already resolved by the caller via `resolveGeneralQuestionsPlacement()` — this view never sees the raw config value, so it cannot disagree with the Review tab. 'after' when absent, so the view stays usable standalone.
  * @property {'reviewer' | 'responsibleParty'} [audience] Which side is reading, from `remediationAudience()` — the same value the Remediation tab gets. It selects one thing only: whether the remediation roll-up shows each resolution's details / justification. Absent means `responsibleParty`, the narrower rendering, so a caller that does not say fails closed.
@@ -44,8 +43,7 @@ import { GENERAL_QUESTIONS_TITLE } from './general-questions-view.js';
  * @returns {Node[]}
  */
 export function summaryView(props) {
-  const headings = props.sectionHeadings ?? DEFAULT_SECTION_HEADINGS;
-  const heading = h('h2', {}, headings.summary);
+  const heading = h('h2', {}, labelsOf(props).summary.heading);
 
   // The Outcome snapshot is stamped at the reportable milestone, so
   // read the frozen value from reportable on — not only once Completed. Once
@@ -99,13 +97,13 @@ export function summaryView(props) {
 }
 
 /**
- * The effective section headings for a render: the resolved map threaded by
+ * The effective section display copy for a render: the resolved map threaded by
  * the page, or the defaults when the component is used standalone.
  * @param {SummaryProps} props
- * @returns {Required<import('../../sharepoint-client.js').SectionLabels>}
+ * @returns {import('../../sharepoint-client.js').ResolvedSectionLabels}
  */
-function headingsOf(props) {
-  return props.sectionHeadings ?? DEFAULT_SECTION_HEADINGS;
+function labelsOf(props) {
+  return props.sectionLabels ?? DEFAULT_SECTION_LABELS;
 }
 
 /**
@@ -118,7 +116,7 @@ function renderSectionBlock(props, section, caseRow) {
   if (section === 'details') {
     return renderFieldBlock(
       'cora-summary-details',
-      'Case Details',
+      labelsOf(props).details.heading,
       caseDetailFields(caseRow, props.detailFields).map((f) => ({
         label: f.label,
         display: f.display,
@@ -138,7 +136,7 @@ function renderSectionBlock(props, section, caseRow) {
     return h(
       'section',
       { className: 'cora-summary-notes' },
-      h('h3', {}, headingsOf(props).notes),
+      h('h3', {}, labelsOf(props).notes.heading),
       h('p', {}, caseRow.notes)
     );
   }
@@ -160,7 +158,7 @@ function renderIssues(props) {
   return h(
     'section',
     { className: 'cora-summary-remediation' },
-    h('h3', {}, headingsOf(props).issues),
+    h('h3', {}, labelsOf(props).issues.heading),
     h('p', {}, `Remediation Actions: ${remediationActionCount}`),
     failures.length === 0
       ? h('p', {}, 'No failures.')
@@ -194,7 +192,7 @@ function renderRemediationTracking(props) {
   return h(
     'section',
     { className: 'cora-summary-remediation-tracking' },
-    h('h3', {}, headingsOf(props).remediation),
+    h('h3', {}, labelsOf(props).remediation.heading),
     h('p', {}, `Remediation due: ${dueDate ? dueDate : '—'}`),
     rows.length === 0
       ? h('p', {}, 'No remediation actions sent.')
@@ -302,7 +300,7 @@ function renderCounts(props) {
   return h(
     'section',
     { className: 'cora-summary-counts' },
-    h('h3', {}, headingsOf(props).questions),
+    h('h3', {}, labelsOf(props).questions.heading),
     h(
       'ul',
       {},
@@ -363,7 +361,7 @@ function answerText(answer) {
 function renderKeyDates(caseRow) {
   const dates = [
     { label: 'Created', value: caseRow.created },
-    { label: CASE_STATUS.COMPLETED, value: caseRow.completedAt },
+    { label: 'Completed', value: caseRow.completedAt },
   ];
   return renderFieldBlock(
     'cora-summary-key-dates',

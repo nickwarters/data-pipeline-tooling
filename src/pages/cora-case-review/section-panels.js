@@ -121,7 +121,7 @@ function questionsPanel(snapshot, questionsView, onAnswer, onGroupOutcome) {
       questions: snapshot.applicableQuestions,
       answers: snapshot.answers,
       access: snapshot.access.questions,
-      heading: snapshot.sectionHeadings.questions,
+      heading: snapshot.sectionLabels.questions.heading,
       questionGroups: snapshot.config?.questionGroups,
       allowBulkOutcome: snapshot.config?.allowBulkOutcome,
       onAnswer,
@@ -149,8 +149,12 @@ function questionsPanel(snapshot, questionsView, onAnswer, onGroupOutcome) {
  * @type {Partial<Record<import('../../lib/section-registry.js').Section, PanelView>>}
  */
 export const SECTION_PANELS = {
-  details: ({ caseRow, config }) =>
-    caseDetailsView(caseRow, config.detailFields ?? []),
+  details: ({ snapshot, caseRow, config }) =>
+    caseDetailsView(
+      caseRow,
+      config.detailFields ?? [],
+      snapshot.sectionLabels.details.heading
+    ),
 
   questions: ({ snapshot, actions }) =>
     questionsPanel(
@@ -176,13 +180,14 @@ export const SECTION_PANELS = {
       notes: caseRow.notes,
       caseJustification: caseRow.caseJustification ?? '',
       access: snapshot.access.notes,
-      heading: snapshot.sectionHeadings.notes,
+      heading: snapshot.sectionLabels.notes.heading,
       placeholders: config.placeholders ?? {},
       onFieldInput: (field, value) => actions.save.fieldEdited(field, value),
     }),
 
   issues: ({ snapshot, caseRow, config, route, dispatch, actions }) =>
     RemediationSection({
+      heading: snapshot.sectionLabels.issues.heading,
       catalogue: snapshot.catalogue,
       answers: snapshot.answers,
       attributeFailures: config.attributeFailures === true,
@@ -279,7 +284,7 @@ export const SECTION_PANELS = {
       canResolve: snapshot.access.remediation === 'edit',
       conversationAvailable: snapshot.access.conversation !== 'hidden',
       caseRow,
-      heading: snapshot.sectionHeadings.remediation,
+      heading: snapshot.sectionLabels.remediation.heading,
       statuses: config.remediationStatuses,
       dispatchStatus: (questionId, status, details) =>
         actions.editAnswers(
@@ -312,7 +317,7 @@ export const SECTION_PANELS = {
         captureGroups: config.captureGroups ?? [],
         detailFields: config.detailFields ?? [],
         outcomeOptions: config.outcomeOptions ?? [],
-        sectionHeadings: snapshot.sectionHeadings,
+        sectionLabels: snapshot.sectionLabels,
         generalQuestions: config.generalQuestions ?? [],
         generalQuestionsPlacement: resolveGeneralQuestionsPlacement(config),
         // The same audience the Remediation panel gets: it decides whether the
@@ -338,7 +343,7 @@ export const SECTION_PANELS = {
             rationale,
             citedAnswerKeys,
           }),
-        heading: snapshot.sectionHeadings.appealRequest,
+        heading: snapshot.sectionLabels.appealRequest.heading,
       })
     ),
 
@@ -351,6 +356,7 @@ export const SECTION_PANELS = {
         access: snapshot.access.appealReview,
         currentUser: snapshot.currentUser,
         outcomeOptions: config.outcomeOptions ?? [],
+        heading: snapshot.sectionLabels.appealReview.heading,
         onResolve: (resolution) =>
           actions.appeals.resolve({ caseRow, snapshot, resolution }),
       })
@@ -365,6 +371,7 @@ export const SECTION_PANELS = {
         access: snapshot.access.amendOutcome,
         currentUser: snapshot.currentUser,
         outcomeOptions: config.outcomeOptions ?? [],
+        heading: snapshot.sectionLabels.amendOutcome.heading,
         onAmend: ({ outcome, justification }) =>
           actions.appeals.amend({
             caseRow,

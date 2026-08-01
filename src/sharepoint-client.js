@@ -249,13 +249,21 @@
  */
 
 /**
- * Optional display-copy overrides for Case Review tab labels and section
- * headings, keyed by Section id. Any key absent here falls back to
- * `DEFAULT_SECTION_LABELS` (src/lib/section-labels.js). Distinct from
+ * Optional display-copy overrides for Case Review tab captions and section
+ * headings, keyed by Section id. A bare string renames both the tab and the
+ * heading; an object patches only the axis it names. Any key absent here falls
+ * back to `DEFAULT_SECTION_LABELS` (src/lib/section-labels.js). Distinct from
  * `CaseTypeConfig.labels` above — that is the reporting Label catalogue
  * assigned to Question Definitions, unrelated to this presentation copy.
  *
- * @typedef {{ details?: string, questions?: string, issues?: string, summary?: string, remediation?: string, notes?: string, conversation?: string, appealRequest?: string, appealReview?: string, amendOutcome?: string }} SectionLabels
+ * @typedef {Partial<Record<import('./lib/section-registry.js').Section, string | { heading?: string, tab?: string }>>} SectionLabels
+ */
+
+/**
+ * The resolved shape `resolveSectionLabels` returns: every Section present,
+ * every entry a complete pair, so no consumer normalises on the read path.
+ *
+ * @typedef {Record<import('./lib/section-registry.js').Section, { tab: string, heading: string }>} ResolvedSectionLabels
  */
 
 /**

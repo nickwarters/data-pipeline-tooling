@@ -23,10 +23,7 @@ import {
   SUMMARY_SECTIONS,
 } from '../services/section-access.js';
 import { CaseMachine, isReportable } from './case-machine.js';
-import {
-  resolveSectionHeadings,
-  resolveSectionLabels,
-} from './section-labels.js';
+import { resolveSectionLabels } from './section-labels.js';
 import {
   InvalidCaseTypeConfigError,
   UnknownCaseTypeError,
@@ -110,19 +107,13 @@ export class CaseLoader {
     /** @type {import('../sharepoint-client.js').CaseTypeConfig | null} */
     this.config = null;
     /**
-     * Resolved Case Review tab labels / section headings for this Case Type —
-     * `DEFAULT_SECTION_LABELS` overridden by `config.sectionLabels`.
-     * Populated once `config` loads; defaults until then so components have
-     * something to render before `load()` resolves.
-     * @type {Required<import('../sharepoint-client.js').SectionLabels>}
+     * Resolved Case Review display copy for this Case Type — every Section's
+     * tab caption and panel heading, `DEFAULT_SECTION_LABELS` overridden by
+     * `config.sectionLabels`. Populated once `config` loads; defaults until
+     * then so components have something to render before `load()` resolves.
+     * @type {import('../sharepoint-client.js').ResolvedSectionLabels}
      */
     this.sectionLabels = resolveSectionLabels(null);
-    /**
-     * Resolved section headings (the in-panel `<h2>`/`<h3>` copy) — as
-     * `sectionLabels` but over `DEFAULT_SECTION_HEADINGS`.
-     * @type {Required<import('../sharepoint-client.js').SectionLabels>}
-     */
-    this.sectionHeadings = resolveSectionHeadings(null);
     /** @type {QuestionDefinition[]} */
     this.catalogue = [];
     /**
@@ -176,7 +167,6 @@ export class CaseLoader {
       access: this.access,
       summarySections: this.summarySections,
       sectionLabels: this.sectionLabels,
-      sectionHeadings: this.sectionHeadings,
       versionWarning: this.versionWarning,
       exportHash: this.exportHash,
       caseListOptions: this.caseListOptions,
@@ -247,7 +237,6 @@ export class CaseLoader {
     }
     this.config = config;
     this.sectionLabels = resolveSectionLabels(config);
-    this.sectionHeadings = resolveSectionHeadings(config);
     this.exportHash = exportHash;
 
     validateCaptureGroups(config.captureGroups);

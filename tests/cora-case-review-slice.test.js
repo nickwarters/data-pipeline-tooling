@@ -44,6 +44,7 @@ const { default: exampleReviewConfig } =
 const { default: complaintsConfig } =
   await import('../case-types/complaints.js');
 const { evaluateAccess } = await import('../src/services/section-access.js');
+const { resolveSectionLabels } = await import('../src/lib/section-labels.js');
 
 /** @type {import('../src/core/chrome-state.js').ChromeState} */
 const chrome = {
@@ -129,30 +130,7 @@ function snapshot() {
       appealReview: 'read-only',
       amendOutcome: 'hidden',
     },
-    sectionLabels: {
-      details: 'Details',
-      questions: 'Review',
-      issues: 'Issues',
-      remediation: 'Remediation',
-      summary: 'Summary',
-      notes: 'Notes',
-      conversation: 'Conversation',
-      appealRequest: 'Appeal',
-      appealReview: 'Appeal Review',
-      amendOutcome: 'Amend Outcome',
-    },
-    sectionHeadings: {
-      details: 'Case Details',
-      questions: 'Questions',
-      issues: 'Issues',
-      remediation: 'Remediation',
-      summary: 'Summary',
-      notes: 'Notes',
-      conversation: 'Conversation',
-      appealRequest: 'Appeal',
-      appealReview: 'Appeal Review',
-      amendOutcome: 'Amend Outcome',
-    },
+    sectionLabels: resolveSectionLabels(null),
   });
 }
 
@@ -1716,6 +1694,19 @@ test('Details view mirrors today: config-driven values are read-only with empty 
   assert.match(view.textContent, /Account number—/);
   assert.equal(queryAllByRole(view, 'textbox').length, 0);
   assert.equal(view.getAttribute('data-access'), 'read-only');
+});
+
+test('Details view captions the completedAt date "Completed"', () => {
+  const view = caseDetailsView({
+    .../** @type {any} */ (caseRow),
+    completedAt: '2026-05-04',
+  });
+  assert.match(view.textContent, /Completed2026-05-04/);
+});
+
+test('Details view takes its heading from the resolved section labels', () => {
+  const view = caseDetailsView(caseRow, [], 'About this Case');
+  assert.equal(getByTag(view, 'h2').textContent, 'About this Case');
 });
 
 test('view: shipped tab shell renders only permitted tabs and dispatches selection', async () => {
