@@ -14,6 +14,10 @@ prefix itself is unaffected — it lives on class names, custom properties, the
 `[data-cora-root]` scoping hook, and filenames — and the reworded CLAUDE.md hard
 rule now says so.
 
+One entry below has since moved the other way: the `CR-Maintainers` SharePoint
+group, listed under **Explicitly not renamed**, was renamed by the platform
+owner and the code followed. See the amendment on that bullet.
+
 ## Context
 
 The platform is now named **CORA**. Since ADR-0003, every custom element tag,
@@ -62,7 +66,9 @@ neither diff simultaneously renames and moves 100+ files.
   string would rebind the app to a differently-named group that does not exist
   in the SharePoint environment. Changing it is an operations decision (rename
   the SharePoint group _and_ the code together), out of scope for a branding
-  sweep.
+  sweep. **Amended (2026-08, #634):** that operations decision has since been
+  taken — the SharePoint group is now `CORA Owner Delegates`, and
+  `src/services/permissions.js` names it.
 - The GitHub repository name `case-review-frontend-framework` and any external
   URLs/identifiers outside this codebase.
 - The `Cr` inside unrelated English words.

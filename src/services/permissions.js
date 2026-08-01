@@ -71,9 +71,8 @@ export const permissions = {
   adviser: 'Advisers',
   controls: 'Controls',
   reviewerManager: 'Reviewer Managers',
-  // TBC: placeholder SharePoint group names — confirm with the platform owner.
   responsiblePartyManager: 'ResponsibleParty-Managers',
-  maintainer: 'CR-Maintainers',
+  maintainer: 'CORA Owner Delegates',
   // Per-Case-Type group names derive from `displayName`: each entry
   // yields `Reviewers - X`, `CaseTypeOwner - X`, and `JourneyOwner - X`.
   // Projected from THE Case Type registry (case-types/manifest.js) so adding a

@@ -15,7 +15,7 @@ const sampleConfig = {
   controls: 'Controls',
   reviewerManager: 'Reviewer Managers',
   responsiblePartyManager: 'ResponsibleParty-Managers',
-  maintainer: 'CR-Maintainers',
+  maintainer: 'CORA Owner Delegates',
   caseTypes: [
     { slug: 'example-review', displayName: 'Example Review' },
     { slug: 'complaints', displayName: 'Complaints' },
@@ -137,8 +137,8 @@ test('resolveCapabilities: ResponsibleParty-Managers group → isResponsiblePart
   assert.equal(caps.isVisitor, false);
 });
 
-test('resolveCapabilities: CR-Maintainers group → isMaintainer=true', () => {
-  const caps = resolveCapabilities(['CR-Maintainers'], sampleConfig);
+test('resolveCapabilities: CORA Owner Delegates group → isMaintainer=true', () => {
+  const caps = resolveCapabilities(['CORA Owner Delegates'], sampleConfig);
   assert.equal(caps.isMaintainer, true);
   assert.equal(caps.isReviewer, false);
   assert.equal(caps.isVisitor, false);
@@ -181,7 +181,7 @@ test('permissions: exported config exposes the functional group names and Case T
     permissions.responsiblePartyManager,
     'ResponsibleParty-Managers'
   );
-  assert.equal(permissions.maintainer, 'CR-Maintainers');
+  assert.equal(permissions.maintainer, 'CORA Owner Delegates');
   assert.ok(Array.isArray(permissions.caseTypes));
   assert.ok(
     permissions.caseTypes.some(

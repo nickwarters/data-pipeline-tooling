@@ -34,6 +34,17 @@
           "write": "allow"
         }
       ]
+    },
+    {
+      "name": "responsible party manager",
+      "headersFileEnv": "CORA_UAT_RP_MANAGER_HEADERS_FILE",
+      "expectations": [
+        {
+          "listName": "uat_Cases-Complaints",
+          "read": "allow",
+          "write": "allow"
+        }
+      ]
     }
   ]
 }
