@@ -3,6 +3,7 @@ import './_register-example-review.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
+import { registerCaseType } from '../case-types/manifest.js';
 import { fireEvent } from './helpers/semantic-dom.js';
 
 installDom();
@@ -153,6 +154,7 @@ test('standalone page and reducer render store state without a custom element', 
         caseRow: CASE_ROW,
         access: /** @type {const} */ ('edit'),
         caseListOptions: {},
+        heading: 'Conversation',
         error: null,
       },
     },
@@ -178,6 +180,7 @@ test('standalone page and reducer render store state without a custom element', 
     caseRow: CASE_ROW,
     access: 'read-only',
     caseListOptions: { listName: 'Example Cases' },
+    heading: 'Conversation',
   });
   const changed = slice.reducer(loaded, {
     type: 'conversation/messages-changed',
@@ -348,4 +351,76 @@ test('conversation slice: navigating away aborts the in-flight Case read with no
 
   assert.equal(aborted, true, 'the in-flight Case read was cancelled');
   assert.deepEqual(actions, [], 'the aborted load dispatches nothing at all');
+});
+
+test("the standalone page heads the Conversation with the Case Type's wording", async () => {
+  // The page is opened outside the Case Review shell, so nothing hands it a
+  // resolved label map: it resolves one from the Case Type it loads.
+  const slug = 'conversation-heading-fixture';
+  registerCaseType({
+    slug,
+    displayName: 'Conversation Heading Fixture',
+    importer: async () => ({
+      default: /** @type {any} */ ({
+        displayName: 'Conversation Heading Fixture',
+        listName: 'Cases-ConversationHeadingFixture',
+        sectionLabels: { conversation: 'Discussion' },
+        questions: [],
+        computeOutcome: () => ({ outcome: 'pass' }),
+        outcomeOptions: [{ id: 'pass', wording: 'Pass', severity: 0 }],
+        defaultOutcomeId: 'pass',
+      }),
+    }),
+  });
+
+  const slice = createRouteSlice(
+    { id: 'case-1', caseType: slug },
+    /** @type {any} */ ({
+      chrome: {
+        currentUser: CURRENT_USER,
+        permissions: {
+          isReviewer: true,
+          ownedCaseTypes: [],
+          ownedJourneyCaseTypes: [],
+          isControls: false,
+        },
+      },
+      currentUser: CURRENT_USER,
+      client: {
+        async getCase() {
+          return { ...CASE_ROW, caseType: slug };
+        },
+      },
+      saveQueue: { loadCase() {} },
+    })
+  );
+
+  assert.equal(
+    slice.initialState.routes.conversation.heading,
+    'Conversation',
+    'the default stands in while the Case Type is still loading'
+  );
+
+  let state = slice.initialState;
+  /** @type {() => void} */
+  let onLoaded;
+  const loaded = new Promise((resolve) => {
+    onLoaded = () => resolve(undefined);
+  });
+  slice.start(
+    /** @type {any} */ ({
+      signal: undefined,
+      isActive: () => true,
+      listen() {},
+      dispatch(/** @type {any} */ action) {
+        state = slice.reducer(state, action);
+        if (action.type === 'conversation/loaded') onLoaded();
+      },
+    })
+  );
+  await loaded;
+
+  assert.equal(state.routes.conversation.heading, 'Discussion');
+  const node = conversationPageView(state, { dispatch() {} }, () => {});
+  assert.match(node.textContent, /Discussion/);
 });

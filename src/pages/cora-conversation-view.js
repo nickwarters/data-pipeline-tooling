@@ -5,6 +5,10 @@ import { ignoreAbortError, isAbortError } from '../lib/abort.js';
 import { withAbortSignal } from '../services/abortable-client.js';
 import { navigateTo } from '../lib/navigate.js';
 import { patchRoute } from '../core/route-state.js';
+import {
+  DEFAULT_SECTION_LABELS,
+  resolveSectionLabels,
+} from '../lib/section-labels.js';
 import { CaseMachine } from '../lib/case-machine.js';
 import {
   UnknownCaseTypeError,
@@ -24,6 +28,11 @@ import {
  * @property {CaseRow | null} caseRow
  * @property {'edit'|'read-only'|'hidden'} access
  * @property {CaseListOptions} caseListOptions
+ * @property {string} heading
+ *   The Conversation Section's heading for this Case's Case Type. Held on the
+ *   route rather than resolved in the view because the view is pure and the
+ *   Case Type config only arrives with the load; it starts at the default so
+ *   the page reads correctly before the Case has loaded.
  * @property {string | null} error
  */
 
@@ -63,7 +72,7 @@ export function conversationPageView(state, tools, send) {
     conversationView({
       messages: route.caseRow.conversation,
       access: route.access,
-      heading: 'Conversation',
+      heading: route.heading,
       onSend: (body) => send(body, state),
     })
   );
@@ -112,6 +121,7 @@ export function createRouteSlice(params, context) {
           caseRow: null,
           access: 'read-only',
           caseListOptions: {},
+          heading: DEFAULT_SECTION_LABELS.conversation.heading,
           error: null,
         },
       },
@@ -124,6 +134,7 @@ export function createRouteSlice(params, context) {
           caseRow: action.caseRow,
           access: action.access,
           caseListOptions: action.caseListOptions,
+          heading: action.heading,
         });
       }
       if (action.type === 'conversation/messages-changed' && route.caseRow) {
@@ -179,6 +190,7 @@ export function createRouteSlice(params, context) {
             caseRow,
             access,
             caseListOptions,
+            heading: resolveSectionLabels(config).conversation.heading,
           });
         } catch (error) {
           // An abort is navigation, never a load failure — and it is
