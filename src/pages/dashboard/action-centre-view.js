@@ -24,10 +24,25 @@ import {
 
 export const PAGE_SIZE = 4;
 
-/** @param {import('../../services/permissions.js').Capabilities} capabilities @param {Date} [now] */
-export function initialActionCentreState(capabilities, now = new Date()) {
+/**
+ * The per-Case-Type Action Centre cadences are looked up by `CaseRow.caseType`,
+ * which holds the registry slug — the same string `CaseSource.slug` carries —
+ * and an unmatched key resolves silently to the framework default.
+ *
+ * @param {import('../../services/permissions.js').Capabilities} capabilities
+ * @param {import('../../setup/resolve-eligible-case-types.js').CaseSource[]} caseSources
+ * @param {Date} [now]
+ */
+export function initialActionCentreState(
+  capabilities,
+  caseSources,
+  now = new Date()
+) {
   const allReasons = reasonsForCapabilities(capabilities);
   return {
+    slaDays: Object.fromEntries(
+      caseSources.map((s) => [s.slug, s.actionCentreSlaDays])
+    ),
     allReasons,
     reasons: visibleReasons(allReasons, true),
     counts: /** @type {Record<string, number>} */ ({}),
@@ -119,10 +134,16 @@ function caseWord(count) {
 
 /**
  * @param {CaseRow} row @param {Reason} reason @param {Date} now
+ * @param {Record<string, Record<string, number> | undefined>} slaDays
  * @param {(row: CaseRow) => void} onOpenCase
  */
-function rowView(row, reason, now, onOpenCase) {
-  const wait = waitingInfo(row, reason, now);
+function rowView(row, reason, now, slaDays, onOpenCase) {
+  const wait = waitingInfo(
+    row,
+    reason,
+    now,
+    slaDays[row.caseType]?.[reason.id]
+  );
   const secondary = secondaryReasons(row, reason.id);
   const subline = reason.subLine(row);
   const also = secondary.length
@@ -206,7 +227,14 @@ function groupView(reason, state, handlers) {
             { className: 'cora-ac-peek' },
             'longest: ',
             h('strong', {}, peek.title || peek.id),
-            ` · ${waitingInfo(peek, reason, state.now).label}`
+            ` · ${
+              waitingInfo(
+                peek,
+                reason,
+                state.now,
+                state.slaDays[peek.caseType]?.[reason.id]
+              ).label
+            }`
           )
         : null
     ),
@@ -215,7 +243,7 @@ function groupView(reason, state, handlers) {
           'ul',
           { className: 'cora-ac-rows' },
           ...rows.map((row) =>
-            rowView(row, reason, state.now, handlers.onOpenCase)
+            rowView(row, reason, state.now, state.slaDays, handlers.onOpenCase)
           ),
           remaining > 0
             ? h(

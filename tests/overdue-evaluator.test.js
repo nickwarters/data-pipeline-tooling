@@ -7,7 +7,6 @@ import {
 } from '../src/evaluators/overdue-evaluator.js';
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
-/** @typedef {import('../src/sharepoint-client.js').CaseTypeConfig} CaseTypeConfig */
 
 const PAST = new Date('2020-01-01T00:00:00Z');
 const FUTURE = new Date('2099-01-01T00:00:00Z');
@@ -30,41 +29,30 @@ function baseCase() {
   };
 }
 
-/** @returns {CaseTypeConfig} */
-function baseConfig() {
-  return {
-    slaHours: 48,
-    questions: [],
-    computeOutcome: () => ({ outcome: 'pass' }),
-    outcomeOptions: [{ id: 'pass', wording: 'Pass', severity: 0 }],
-    defaultOutcomeId: 'pass',
-  };
-}
-
 // --- tracer bullet ---
 
 test('isOverdue: past dueDate and In-progress → true', () => {
   const c = { ...baseCase(), dueDate: PAST.toISOString() };
-  assert.strictEqual(isOverdue(c, baseConfig(), NOW), true);
+  assert.strictEqual(isOverdue(c, NOW), true);
 });
 
 // --- null / missing dueDate ---
 
 test('isOverdue: null dueDate → false', () => {
   const c = { ...baseCase(), dueDate: null };
-  assert.strictEqual(isOverdue(c, baseConfig(), NOW), false);
+  assert.strictEqual(isOverdue(c, NOW), false);
 });
 
 test('isOverdue: missing dueDate → false', () => {
   const c = baseCase(); // no dueDate property
-  assert.strictEqual(isOverdue(c, baseConfig(), NOW), false);
+  assert.strictEqual(isOverdue(c, NOW), false);
 });
 
 // --- future dueDate ---
 
 test('isOverdue: future dueDate → false', () => {
   const c = { ...baseCase(), dueDate: FUTURE.toISOString() };
-  assert.strictEqual(isOverdue(c, baseConfig(), NOW), false);
+  assert.strictEqual(isOverdue(c, NOW), false);
 });
 
 // --- completed cases never overdue ---
@@ -75,7 +63,7 @@ test('isOverdue: Completed case with past dueDate → false', () => {
     status: /** @type {'Completed'} */ ('Completed'),
     dueDate: PAST.toISOString(),
   };
-  assert.strictEqual(isOverdue(c, baseConfig(), NOW), false);
+  assert.strictEqual(isOverdue(c, NOW), false);
 });
 
 // Once actions have been sent the review itself is finished, so the review due
@@ -87,14 +75,14 @@ test('isOverdue: Actions In Progress case with past dueDate → false', () => {
     status: /** @type {'Actions In Progress'} */ ('Actions In Progress'),
     dueDate: PAST.toISOString(),
   };
-  assert.strictEqual(isOverdue(c, baseConfig(), NOW), false);
+  assert.strictEqual(isOverdue(c, NOW), false);
 });
 
 // --- boundary ---
 
 test('isOverdue: dueDate exactly at now → false (not strictly past)', () => {
   const c = { ...baseCase(), dueDate: NOW.toISOString() };
-  assert.strictEqual(isOverdue(c, baseConfig(), NOW), false);
+  assert.strictEqual(isOverdue(c, NOW), false);
 });
 
 // --- the remediation clock ---

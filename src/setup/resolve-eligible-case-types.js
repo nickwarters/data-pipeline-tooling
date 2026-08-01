@@ -29,7 +29,21 @@ import {
  * Case Type's human name, carried so per-source consumers (dashboards,
  * fetchers) need not re-resolve it.
  *
- * @typedef {{ slug: string, listName: string, displayName: string, maxInProgressCases?: number }} CaseSource
+ * The two cadence thresholds are **projected** here, not read from a config the
+ * source carries: the dashboard surfaces only ever hold `CaseSource`, and a
+ * source that carried the whole Case Type config would give every dashboard
+ * reader access to every descriptor there is. Each is omitted when the Case
+ * Type declares nothing, so a source is byte-identical to what it was before
+ * the keys existed.
+ *
+ * @typedef {{
+ * slug: string,
+ * listName: string,
+ * displayName: string,
+ * maxInProgressCases?: number,
+ * actionCentreSlaDays?: import('../sharepoint-client.js').ActionCentreSlaDays,
+ * breachWindowHours?: number
+ * }} CaseSource
  */
 
 /**
@@ -43,15 +57,24 @@ import {
 /**
  * Project a resolved Case Type down to the public `CaseSource` shape.
  *
- * @param {{ slug: string, listName: string, displayName: string, maxInProgressCases?: number }} source
+ * @param {CaseSource} source
  * @returns {CaseSource}
  */
-function toCaseSource({ slug, listName, displayName, maxInProgressCases }) {
+function toCaseSource({
+  slug,
+  listName,
+  displayName,
+  maxInProgressCases,
+  actionCentreSlaDays,
+  breachWindowHours,
+}) {
   return {
     slug,
     listName,
     displayName,
     ...(maxInProgressCases === undefined ? {} : { maxInProgressCases }),
+    ...(actionCentreSlaDays === undefined ? {} : { actionCentreSlaDays }),
+    ...(breachWindowHours === undefined ? {} : { breachWindowHours }),
   };
 }
 
@@ -261,6 +284,8 @@ export function resolveCaseSourcesFromCaseTypes(userGroups, caseTypes) {
       listName,
       displayName,
       maxInProgressCases: config.maxInProgressCases,
+      actionCentreSlaDays: config.actionCentreSlaDays,
+      breachWindowHours: config.breachWindowHours,
     })
   );
 }

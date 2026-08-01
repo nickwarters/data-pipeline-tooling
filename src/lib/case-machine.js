@@ -192,11 +192,14 @@ export class CaseMachine {
       status: CASE_STATUS.ACTIONS_IN_PROGRESS,
       reportableAt,
       // Remediation SLA due date, computed **once** here at Send Actions and
-      // stored on the row — never recomputed on read. The reportable
-      // moment is the SLA start; the due date is +10 working days from it.
+      // stored on the row — never recomputed on read. The reportable moment is
+      // the SLA start; the due date is that plus the Case Type's remediation
+      // SLA in working days, or the framework's when it declares none. Because
+      // the date is stored, changing the Case Type's SLA moves no date already
+      // written: only later transitions see the new number.
       remediationDueDate: addWorkingDays(
         reportableAt,
-        REMEDIATION_SLA_WORKING_DAYS,
+        this.config.remediationSlaWorkingDays ?? REMEDIATION_SLA_WORKING_DAYS,
         ENGLAND_WALES_HOLIDAYS
       ),
       ...this._reportableSnapshot(computeOutcome, answers, questionBankVersion),

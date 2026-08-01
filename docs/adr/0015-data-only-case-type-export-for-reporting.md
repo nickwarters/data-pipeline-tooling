@@ -64,7 +64,8 @@ of that Case Type's **Question Bank**, intended as the contract for external
   `computeOutcome` (code; not Python's path), `remediationActions` /
   `allowFreeFormRemediation` (authoring/UI templates — per-Case remediation
   _taken_ lives on the Answer), and Case-Type operational config
-  (`eligibleGroups`, `slaHours`, `attributeFailures`). `showWhen` is carried even
+  (`eligibleGroups`, `actionCentreSlaDays`, `breachWindowHours`,
+  `remediationSlaWorkingDays`, `attributeFailures`). `showWhen` is carried even
   though the headline report does not need it: it is pure data, and it is the
   difference between counting failures and computing applicability-aware rates —
   including it now future-proofs the contract against a breaking format bump.

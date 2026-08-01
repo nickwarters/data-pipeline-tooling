@@ -461,6 +461,21 @@
  */
 
 /**
+ * How long a Case may sit in each Action Centre reason group before its
+ * "waiting" chip reads as breached, in whole days, keyed by reason id
+ * (`overdue`, `awaitingFrontline`, `reviewRequired`, `appeals`, `reopened`).
+ *
+ * Deliberately **partial**: a Case Type names only the reasons whose cadence
+ * differs from the framework's, and every other reason keeps the default that
+ * lives on the reason itself. The reason vocabulary is closed and code-owned —
+ * configuration selects a number against an existing reason and can neither add
+ * nor rename one — so an unrecognised key is a typo, and the verify gate says so
+ * rather than letting it fall back silently.
+ *
+ * @typedef {Record<string, number>} ActionCentreSlaDays
+ */
+
+/**
  * Shape every Case Type module must satisfy.
  *
  * `sections` remains the Section layout descriptor. Case tables are owned by
@@ -477,6 +492,12 @@
  * questions are included by key so their answer keys stay stable across Case
  * Types, and Case Type-specific ones are declared inline beside them.
  *
+ * `actionCentreSlaDays`, `breachWindowHours` and `remediationSlaWorkingDays`
+ * are the review-cadence thresholds. Each is optional and each has a framework
+ * default that lives next to the code reading it, so a Case Type declaring none
+ * of them behaves exactly as it did before the keys existed — an absent key is
+ * "use the default", never "no threshold".
+ *
  * @typedef {{
  * questions: QuestionDefinition[],
  * computeOutcome: (answers: Record<string, Answer>) => OutcomeResult,
@@ -492,7 +513,9 @@
  * allowBulkOutcome?: boolean,
  * questionGroups?: Record<string, QuestionGroupConfig>,
  * appeal?: AppealConfig,
- * slaHours?: number,
+ * actionCentreSlaDays?: ActionCentreSlaDays,
+ * breachWindowHours?: number,
+ * remediationSlaWorkingDays?: number,
  * maxInProgressCases?: number,
  * attributeFailures?: boolean,
  * remediationFields?: RemediationField[],

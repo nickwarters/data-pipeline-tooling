@@ -219,6 +219,58 @@ test('checkCaseTypes fails an unknown key in sections', async () => {
   assert.match(failures[0].message, /sections/);
 });
 
+test('checkCaseTypes accepts declared review-cadence thresholds', async () => {
+  const failures = await checkCaseTypes({
+    caseTypes: [
+      demoEntry(
+        demoConfig({
+          // Zero is meaningful for Overdue: it is breached the moment it lands.
+          actionCentreSlaDays: { overdue: 0, awaitingFrontline: 30 },
+          breachWindowHours: 48,
+          remediationSlaWorkingDays: 5,
+        })
+      ),
+    ],
+  });
+
+  assert.deepEqual(failures, []);
+});
+
+test('checkCaseTypes fails an actionCentreSlaDays key naming no Action Centre reason', async () => {
+  const failures = await checkCaseTypes({
+    caseTypes: [
+      demoEntry(demoConfig({ actionCentreSlaDays: { awaitingFrontLine: 30 } })),
+    ],
+  });
+
+  assert.equal(failures.length, 1);
+  assert.match(failures[0].message, /awaitingFrontLine/);
+  assert.match(failures[0].message, /actionCentreSlaDays/);
+  assert.match(failures[0].message, /no such Action Centre reason/);
+});
+
+test('checkCaseTypes fails nonsensical threshold numbers tsc would accept', async () => {
+  const failures = await checkCaseTypes({
+    caseTypes: [
+      demoEntry(
+        demoConfig({
+          actionCentreSlaDays: { reopened: -1 },
+          breachWindowHours: 0,
+          remediationSlaWorkingDays: 2.5,
+        })
+      ),
+    ],
+  });
+
+  assert.equal(failures.length, 3);
+  assert.match(joined(failures), /actionCentreSlaDays\.reopened/);
+  assert.match(joined(failures), /breachWindowHours` must be a positive/);
+  assert.match(
+    joined(failures),
+    /remediationSlaWorkingDays` must be a positive/
+  );
+});
+
 test('checkCaseTypes fails an unknown role in a showInSummary list', async () => {
   const failures = await checkCaseTypes({
     caseTypes: [

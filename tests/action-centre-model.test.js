@@ -207,29 +207,47 @@ test('daysWaiting: a future clock never goes negative', () => {
   assert.equal(daysWaiting(c, reason('overdue'), NOW), 0);
 });
 
-test('waitingInfo: overdue label and always-breached (slaDays 0)', () => {
+test('waitingInfo: with no SLA given, Overdue breaches the day it lands', () => {
+  const overdue = reason('overdue');
+  assert.equal(overdue.defaultSlaDays, 0);
   const info = waitingInfo(
     caseRow({ dueDate: '2026-06-25T00:00:00Z' }),
-    reason('overdue'),
+    overdue,
     NOW
   );
   assert.deepEqual(info, { days: 9, label: '9 days over', breached: true });
 });
 
-test('waitingInfo: reopened breaches at its SLA, not before', () => {
+test('waitingInfo: with no SLA given, a reason breaches at its own default', () => {
+  const reopened = reason('reopened');
+  const at = (/** @type {number} */ days) =>
+    new Date(NOW.getTime() - days * 24 * 60 * 60 * 1000).toISOString();
+
   const breached = waitingInfo(
-    caseRow({ reopenedAt: '2026-06-29T00:00:00Z' }),
-    reason('reopened'),
+    caseRow({ reopenedAt: at(reopened.defaultSlaDays) }),
+    reopened,
     NOW
   );
-  assert.deepEqual(breached, { days: 5, label: '5 days', breached: true });
+  assert.equal(breached.days, reopened.defaultSlaDays);
+  assert.equal(breached.breached, true);
 
   const within = waitingInfo(
-    caseRow({ reopenedAt: '2026-07-02T00:00:00Z' }),
-    reason('reopened'),
+    caseRow({ reopenedAt: at(reopened.defaultSlaDays - 1) }),
+    reopened,
     NOW
   );
-  assert.deepEqual(within, { days: 2, label: '2 days', breached: false });
+  assert.equal(within.days, reopened.defaultSlaDays - 1);
+  assert.equal(within.breached, false);
+});
+
+test('waitingInfo: an explicit SLA widens and narrows the breach', () => {
+  const reopened = reason('reopened');
+  const row = caseRow({ reopenedAt: '2026-06-29T00:00:00Z' }); // 5 days waiting
+
+  assert.equal(waitingInfo(row, reopened, NOW, 30).breached, false);
+  assert.equal(waitingInfo(row, reopened, NOW, 2).breached, true);
+  // The age and the wording are unaffected — only the judgement moves.
+  assert.equal(waitingInfo(row, reopened, NOW, 30).label, '5 days');
 });
 
 test('waitingInfo: singular day is not pluralised', () => {

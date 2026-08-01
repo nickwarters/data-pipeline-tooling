@@ -13,7 +13,14 @@ import {
 /** @typedef {import('../services/permissions.js').PermissionsConfig} PermissionsConfig */
 /** @typedef {import('../setup/resolve-eligible-case-types.js').CaseSource} CaseSource */
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+
+/**
+ * How far ahead the At-risk tile looks for a Case about to breach its review
+ * due date, when the Case Type says nothing. It lives next to the predicate
+ * that reads it, which is its only reader.
+ */
+export const DEFAULT_BREACH_WINDOW_HOURS = 24;
 
 /**
  * @typedef {{ label: string, count: number }} BreakdownRow
@@ -66,22 +73,39 @@ export function caseTypeDisplayName(slug, config = permissions) {
 }
 
 /**
- * Whether a Case is due within the next 24 hours but not yet overdue. It runs
+ * Whether a Case is due inside the at-risk window but not yet overdue. It runs
  * off the same statuses as the overdue rule, because a Case the review clock
- * has left behind cannot be about to breach it either. `now` is injectable for
- * testing.
+ * has left behind cannot be about to breach it either. The window is the Case
+ * Type's when it declares one; `now` is injectable for testing.
  *
  * @param {CaseRow} caseRow
  * @param {Date} [now]
+ * @param {number} [windowHours]
  * @returns {boolean}
  */
-export function isBreachingWithin24h(caseRow, now = new Date()) {
+export function isBreachingSoon(
+  caseRow,
+  now = new Date(),
+  windowHours = DEFAULT_BREACH_WINDOW_HOURS
+) {
   if (!OVERDUE_STATUSES.includes(caseRow.status)) return false;
   const due = caseRow.dueDate;
   if (!due) return false;
   const dueMs = new Date(due).getTime();
   const nowMs = now.getTime();
-  return dueMs >= nowMs && dueMs < nowMs + DAY_MS;
+  return dueMs >= nowMs && dueMs < nowMs + windowHours * HOUR_MS;
+}
+
+/**
+ * The At-risk sub-reason label for a window. The unit is the abbreviation `h`
+ * so there is no singular/plural form to get wrong, and the number is always
+ * the window actually applied rather than a figure baked into the copy.
+ *
+ * @param {number} windowHours
+ * @returns {string}
+ */
+export function breachingSoonLabel(windowHours) {
+  return `Breaching < ${windowHours}h`;
 }
 
 /**
@@ -198,14 +222,12 @@ async function buildReviewerLane({ client, currentUserId, caseSources, now }) {
     assignedReviewer: currentUserId,
   });
 
-  const overdue = pool.filter((c) => isOverdue(c, undefined, now));
+  const overdue = pool.filter((c) => isOverdue(c, now));
   const awaiting = pool.filter(
-    (c) =>
-      !isOverdue(c, undefined, now) && lastMessageAuthor(c) === currentUserId
+    (c) => !isOverdue(c, now) && lastMessageAuthor(c) === currentUserId
   );
   const inProgress = pool.filter(
-    (c) =>
-      !isOverdue(c, undefined, now) && lastMessageAuthor(c) !== currentUserId
+    (c) => !isOverdue(c, now) && lastMessageAuthor(c) !== currentUserId
   );
 
   return assembleLane({
@@ -288,10 +310,25 @@ async function buildOwnerLane({ client, capabilities, allCaseSources, now }) {
     status: CASE_STATUS.IN_PROGRESS,
   }));
 
-  const atRisk = pool.filter(
-    (c) => isOverdue(c, undefined, now) || isBreachingWithin24h(c, now)
-  );
+  // The at-risk window is per Case Type, so every test of "about to breach"
+  // in this lane has to know which Case Type the row belongs to.
+  /** @param {CaseRow} caseRow */
+  const windowFor = (caseRow) =>
+    ownedSources.find((s) => s.slug === caseRow.caseType)?.breachWindowHours ??
+    DEFAULT_BREACH_WINDOW_HOURS;
+  /** @param {CaseRow} caseRow */
+  const breachingSoon = (caseRow) =>
+    isBreachingSoon(caseRow, now, windowFor(caseRow));
+
+  const atRisk = pool.filter((c) => isOverdue(c, now) || breachingSoon(c));
   const unassigned = pool.filter((c) => !c.assignedReviewer);
+
+  // `buildTile` only renders sub-reasons when the matched Cases span one Case
+  // Type, so this label can name that Type's window.
+  const atRiskWindow =
+    new Set(atRisk.map((c) => c.caseType)).size === 1
+      ? windowFor(atRisk[0])
+      : DEFAULT_BREACH_WINDOW_HOURS;
 
   return assembleLane({
     role: 'owner',
@@ -307,11 +344,11 @@ async function buildOwnerLane({ client, capabilities, allCaseSources, now }) {
         subReasons: [
           {
             label: 'Overdue on team',
-            matches: (c) => isOverdue(c, undefined, now),
+            matches: (c) => isOverdue(c, now),
           },
           {
-            label: 'Breaching < 24h',
-            matches: (c) => isBreachingWithin24h(c, now),
+            label: breachingSoonLabel(atRiskWindow),
+            matches: breachingSoon,
           },
         ],
       },

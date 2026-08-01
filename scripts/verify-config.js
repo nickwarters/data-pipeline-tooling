@@ -23,6 +23,7 @@ import {
 } from '../src/evaluators/applicability-evaluator.js';
 import { sectionIds } from '../src/lib/section-registry.js';
 import { ROLES } from '../src/services/section-access.js';
+import { ACTION_CENTRE_REASONS } from '../src/services/action-centre-model.js';
 import { CASE_TYPES, loadCaseTypeConfig } from '../case-types/manifest.js';
 import { resolveRelative } from './module-graph.js';
 
@@ -192,6 +193,7 @@ export async function checkCaseTypes(options = {}) {
     failures.push(...checkSections(entry.slug, file, config));
     failures.push(...checkQuestionGroups(entry.slug, file, config));
     failures.push(...checkRemediationStatuses(entry.slug, file, config));
+    failures.push(...checkThresholds(entry.slug, file, config));
   }
   return failures;
 }
@@ -482,6 +484,60 @@ function checkQuestionGroups(slug, file, config) {
   });
 
   return [...unknown, ...mismatched];
+}
+
+/**
+ * The review-cadence thresholds: an `actionCentreSlaDays` key naming no reason
+ * is never looked up, and `number` admits values no threshold can mean. Zero IS
+ * meaningful for an Action Centre cadence — Overdue is breached the moment it
+ * lands — so only that one allows it.
+ *
+ * @param {string} slug
+ * @param {string} file
+ * @param {any} config
+ * @returns {Failure[]}
+ */
+function checkThresholds(slug, file, config) {
+  const knownReasons = new Set(ACTION_CENTRE_REASONS.map((r) => r.id));
+  /** @param {string} message @returns {Failure} */
+  const fail = (message) => ({
+    kind: /** @type {const} */ ('case-type'),
+    file,
+    message: `Case Type "${slug}": ${message}`,
+  });
+
+  /** @type {Failure[]} */
+  const failures = [];
+
+  for (const [key, value] of Object.entries(
+    /** @type {Record<string, any>} */ (config?.actionCentreSlaDays ?? {})
+  )) {
+    if (!knownReasons.has(key)) {
+      failures.push(
+        fail(
+          `unknown \`actionCentreSlaDays\` key "${key}" — no such Action Centre reason`
+        )
+      );
+      continue;
+    }
+    if (!Number.isInteger(value) || value < 0) {
+      failures.push(
+        fail(
+          `\`actionCentreSlaDays.${key}\` must be a non-negative integer number of days`
+        )
+      );
+    }
+  }
+
+  for (const key of ['breachWindowHours', 'remediationSlaWorkingDays']) {
+    const value = config?.[key];
+    if (value === undefined) continue;
+    if (!Number.isInteger(value) || value <= 0) {
+      failures.push(fail(`\`${key}\` must be a positive integer`));
+    }
+  }
+
+  return failures;
 }
 
 /**

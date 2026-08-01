@@ -71,6 +71,60 @@ test('resolveCaseSourcesFromCaseTypes: carries the optional allocation limit fro
   ]);
 });
 
+test('resolveCaseSourcesFromCaseTypes: projects the two dashboard cadence thresholds', () => {
+  const sources = resolveCaseSourcesFromCaseTypes(
+    ['Reviewers - Complaints'],
+    [
+      {
+        slug: 'complaints',
+        listName: 'Cases-Complaints',
+        displayName: 'Complaints',
+        config: minimalConfig({
+          actionCentreSlaDays: { awaitingFrontline: 30 },
+          breachWindowHours: 48,
+          // Not a dashboard threshold: the Case Review page reads it off the
+          // config directly, so it must NOT appear on the source.
+          remediationSlaWorkingDays: 5,
+        }),
+      },
+    ]
+  );
+
+  assert.deepEqual(sources, [
+    {
+      slug: 'complaints',
+      listName: 'Cases-Complaints',
+      displayName: 'Complaints',
+      actionCentreSlaDays: { awaitingFrontline: 30 },
+      breachWindowHours: 48,
+    },
+  ]);
+});
+
+test('resolveCaseSourcesFromCaseTypes: a Case Type declaring no threshold carries no threshold key', () => {
+  const [source] = resolveCaseSourcesFromCaseTypes(
+    ['Reviewers - Complaints'],
+    [
+      {
+        slug: 'complaints',
+        listName: 'Cases-Complaints',
+        displayName: 'Complaints',
+        config: minimalConfig(),
+      },
+    ]
+  );
+
+  // Deep-equal rather than a per-key undefined check: an `actionCentreSlaDays:
+  // undefined` property would satisfy the latter and still change the source.
+  assert.deepEqual(source, {
+    slug: 'complaints',
+    listName: 'Cases-Complaints',
+    displayName: 'Complaints',
+  });
+  assert.equal(Object.hasOwn(source, 'actionCentreSlaDays'), false);
+  assert.equal(Object.hasOwn(source, 'breachWindowHours'), false);
+});
+
 test('allocationSourcesFromCaseSources: isolates an invalid limit to that Case Type', async () => {
   const caseSources = resolveCaseSourcesFromCaseTypes(
     ['Reviewer Managers'],
@@ -421,6 +475,10 @@ test('resolveCaseSources: example-review source carries its declared listName an
     slug: 'example-review',
     listName: 'Cases-ExampleReview',
     displayName: 'Example Review',
+    // The end-to-end proof of the projection: this fixture declares diverging
+    // cadence thresholds and the two dashboard ones reach the source.
+    actionCentreSlaDays: { awaitingFrontline: 30 },
+    breachWindowHours: 48,
   });
 });
 

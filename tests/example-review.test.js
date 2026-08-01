@@ -279,18 +279,11 @@ test('computeOutcome: empty answers → pass (no No)', () => {
 
 // --- SLA ---
 
-test('example-review: slaHours is a positive number', () => {
-  assert.ok(
-    typeof config.slaHours === 'number' && config.slaHours > 0,
-    'slaHours should be a positive number'
-  );
-});
-
 test('example-review fixtures: at least one In-progress case with a past dueDate exists', () => {
   const exampleReviewCases = cases.filter(
     (c) => c.caseType === 'example-review'
   );
-  const overdueCases = exampleReviewCases.filter((c) => isOverdue(c, config));
+  const overdueCases = exampleReviewCases.filter((c) => isOverdue(c));
   assert.ok(
     overdueCases.length >= 1,
     'expected at least one overdue example-review fixture case'

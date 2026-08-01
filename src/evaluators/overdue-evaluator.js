@@ -2,7 +2,6 @@
 import { CASE_STATUS } from '../lib/case-statuses.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
-/** @typedef {import('../sharepoint-client.js').CaseTypeConfig} CaseTypeConfig */
 /** @typedef {import('../lib/case-statuses.js').CaseStatus} CaseStatus */
 
 /**
@@ -28,14 +27,15 @@ export const OVERDUE_STATUSES = Object.freeze([CASE_STATUS.IN_PROGRESS]);
 
 /**
  * Returns true when a Case is past its review due date while still under
- * review. `now` is injectable for testing.
+ * review. The due date is read off the Case row — it is written when the Case
+ * is created and never derived here from Case Type configuration, so no config
+ * is needed to answer the question. `now` is injectable for testing.
  *
  * @param {CaseRow} caseRow
- * @param {Partial<CaseTypeConfig>} [_caseTypeConfig]
  * @param {Date} [now]
  * @returns {boolean}
  */
-export function isOverdue(caseRow, _caseTypeConfig, now = new Date()) {
+export function isOverdue(caseRow, now = new Date()) {
   if (!OVERDUE_STATUSES.includes(caseRow.status)) return false;
   const due = caseRow.dueDate;
   if (!due) return false;

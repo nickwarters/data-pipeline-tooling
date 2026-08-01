@@ -209,6 +209,37 @@ test('CaseMachine Send Actions stamps the reportable snapshot without completedA
   assert.equal(fields.questionBankVersion, 'sha256:v1');
 });
 
+test('CaseMachine Send Actions honours the Case Type remediation SLA in working days', () => {
+  const machine = machineFor('In-progress', {
+    ...EMPTY_CONFIG,
+    remediationSlaWorkingDays: 5,
+  });
+  const fields = machine.transitionToActionsInProgress(
+    () => ({ outcome: 'fail' }),
+    {
+      'q-needs': {
+        value: 'No',
+        remediationActions: [{ id: 'ra-0', text: 'x' }],
+      },
+    },
+    null
+  );
+
+  assert.equal(
+    fields.remediationDueDate,
+    addWorkingDays(String(fields.reportableAt), 5, ENGLAND_WALES_HOLIDAYS)
+  );
+  // …and that is genuinely earlier than the framework default would have given.
+  assert.notEqual(
+    fields.remediationDueDate,
+    addWorkingDays(
+      String(fields.reportableAt),
+      REMEDIATION_SLA_WORKING_DAYS,
+      ENGLAND_WALES_HOLIDAYS
+    )
+  );
+});
+
 test('CaseMachine no-actions completion stamps reportable and completed together', () => {
   const fields = machineFor('In-progress').transitionToCompleted(
     () => ({ outcome: 'pass' }),

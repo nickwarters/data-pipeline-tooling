@@ -35,7 +35,7 @@
  * clockField: 'dueDate' | 'awaitingSince' | 'created' | 'appealRaisedAt' | 'reopenedAt',
  * flagField: 'overdue' | 'awaitingResponsibleParty' | 'reviewRequired' | 'hasOpenAppeal' | 'reopened',
  * filter: ListCasesFilter,
- * slaDays: number,
+ * defaultSlaDays: number,
  * reviewerScoped: boolean,
  * tailOnly: boolean,
  * requires: (capabilities: Capabilities) => boolean,
@@ -78,6 +78,10 @@ function assigneeSubLine(caseRow) {
  * Review Required → Appeals → Reopened). Group ordering is this fixed priority;
  * the primary reason of a multi-reason case is the earliest match here.
  *
+ * `defaultSlaDays` is the framework cadence for a reason — what a Case Type
+ * gets when it declares nothing. A Case Type overrides it per reason; it
+ * cannot add a reason.
+ *
  * @type {Reason[]}
  */
 export const ACTION_CENTRE_REASONS = [
@@ -89,7 +93,7 @@ export const ACTION_CENTRE_REASONS = [
     clockField: 'dueDate',
     flagField: 'overdue',
     filter: { overdue: true },
-    slaDays: 0,
+    defaultSlaDays: 0,
     reviewerScoped: true,
     tailOnly: false,
     requires: (c) => c.isReviewer,
@@ -104,7 +108,7 @@ export const ACTION_CENTRE_REASONS = [
     clockField: 'awaitingSince',
     flagField: 'awaitingResponsibleParty',
     filter: { awaitingResponsibleParty: true },
-    slaDays: 7,
+    defaultSlaDays: 7,
     reviewerScoped: true,
     tailOnly: false,
     requires: (c) => c.isReviewer,
@@ -119,7 +123,7 @@ export const ACTION_CENTRE_REASONS = [
     clockField: 'created',
     flagField: 'reviewRequired',
     filter: { reviewRequired: true },
-    slaDays: 14,
+    defaultSlaDays: 14,
     reviewerScoped: true,
     // The within-SLA backlog: the reviewer's remaining in-flight Cases that
     // aren't overdue or awaiting a reply. Hidden until the "All" toggle.
@@ -136,7 +140,7 @@ export const ACTION_CENTRE_REASONS = [
     clockField: 'appealRaisedAt',
     flagField: 'hasOpenAppeal',
     filter: { hasOpenAppeal: true },
-    slaDays: 5,
+    defaultSlaDays: 5,
     reviewerScoped: false,
     tailOnly: false,
     requires: (c) => c.isControls,
@@ -151,7 +155,7 @@ export const ACTION_CENTRE_REASONS = [
     clockField: 'reopenedAt',
     flagField: 'reopened',
     filter: { reopened: true },
-    slaDays: 3,
+    defaultSlaDays: 3,
     reviewerScoped: false,
     tailOnly: false,
     requires: (c) => c.ownedCaseTypes.length > 0,
@@ -323,20 +327,28 @@ export function daysWaiting(caseRow, reason, now = new Date()) {
 
 /**
  * The "waiting" chip for a Case in a reason group: its age, the reason-specific
- * label, and whether it has breached the reason's SLA (drives the urgent
- * styling and the "Needs action now" emphasis).
+ * label, and whether it has breached the SLA (drives the urgent styling and the
+ * "Needs action now" emphasis). `slaDays` defaults to the reason's own
+ * framework cadence; a caller that knows the Case's Case Type passes that Case
+ * Type's cadence instead, and an absent one falls back here.
  *
  * @param {CaseRow} caseRow
  * @param {Reason} reason
  * @param {Date} [now]
+ * @param {number} [slaDays]
  * @returns {{ days: number, label: string, breached: boolean }}
  */
-export function waitingInfo(caseRow, reason, now = new Date()) {
+export function waitingInfo(
+  caseRow,
+  reason,
+  now = new Date(),
+  slaDays = reason.defaultSlaDays
+) {
   const days = daysWaiting(caseRow, reason, now);
   return {
     days,
     label: reason.waitingLabel(days),
-    breached: days >= reason.slaDays,
+    breached: days >= slaDays,
   };
 }
 

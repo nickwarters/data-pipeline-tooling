@@ -31,7 +31,6 @@ const config = {
   // this copy still granting, so anyone left in the decommissioned SharePoint
   // group kept the access the rename was supposed to move. `eligibleGroups` is
   // for genuinely extra groups only.
-  slaHours: 72,
   maxInProgressCases: 3,
   attributeFailures: true,
   // Case Type-specific Case Details fields. Values live in the

@@ -189,13 +189,6 @@ test('complaints: attributes failures to a person', () => {
   assert.equal(config.attributeFailures, true);
 });
 
-test('complaints: slaHours is a positive number', () => {
-  assert.ok(
-    typeof config.slaHours === 'number' && config.slaHours > 0,
-    'slaHours should be a positive number'
-  );
-});
-
 // --- Section / appeal / outcome config ---
 
 test('complaints: declares its own list (Cases-Complaints) like every Case Type', () => {

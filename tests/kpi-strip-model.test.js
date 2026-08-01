@@ -2,15 +2,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-const { loadKpiModel, caseTypeDisplayName, isBreachingWithin24h } =
-  await import('../src/evaluators/kpi-strip-model.js');
+const {
+  loadKpiModel,
+  caseTypeDisplayName,
+  isBreachingSoon,
+  breachingSoonLabel,
+} = await import('../src/evaluators/kpi-strip-model.js');
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 
 // A fixed clock so overdue/breaching windows are deterministic.
 const NOW = new Date('2026-07-04T12:00:00Z');
 const PAST = '2026-07-01T00:00:00Z'; // overdue
-const SOON = '2026-07-04T18:00:00Z'; // breaching < 24h
+const SOON = '2026-07-04T18:00:00Z'; // inside the default 24h window
 const LATER = '2026-07-10T00:00:00Z'; // comfortably in future
 
 /**
@@ -129,36 +133,36 @@ test('caseTypeDisplayName: tolerates empty slug segments', () => {
   assert.equal(caseTypeDisplayName('-lending'), ' Lending');
 });
 
-// ===== isBreachingWithin24h =====
+// ===== isBreachingSoon =====
 
-test('isBreachingWithin24h: true when due within the next 24h', () => {
-  assert.equal(isBreachingWithin24h(caseRow({ dueDate: SOON }), NOW), true);
+test('isBreachingSoon: true when due inside the default window', () => {
+  assert.equal(isBreachingSoon(caseRow({ dueDate: SOON }), NOW), true);
 });
 
-test('isBreachingWithin24h: false when overdue (already past)', () => {
-  assert.equal(isBreachingWithin24h(caseRow({ dueDate: PAST }), NOW), false);
+test('isBreachingSoon: false when overdue (already past)', () => {
+  assert.equal(isBreachingSoon(caseRow({ dueDate: PAST }), NOW), false);
 });
 
-test('isBreachingWithin24h: false when due beyond 24h', () => {
-  assert.equal(isBreachingWithin24h(caseRow({ dueDate: LATER }), NOW), false);
+test('isBreachingSoon: false when due beyond the default window', () => {
+  assert.equal(isBreachingSoon(caseRow({ dueDate: LATER }), NOW), false);
 });
 
-test('isBreachingWithin24h: false when no due date', () => {
-  assert.equal(isBreachingWithin24h(caseRow({ dueDate: null }), NOW), false);
+test('isBreachingSoon: false when no due date', () => {
+  assert.equal(isBreachingSoon(caseRow({ dueDate: null }), NOW), false);
 });
 
-test('isBreachingWithin24h: false for a Completed case', () => {
+test('isBreachingSoon: false for a Completed case', () => {
   assert.equal(
-    isBreachingWithin24h(caseRow({ status: 'Completed', dueDate: SOON }), NOW),
+    isBreachingSoon(caseRow({ status: 'Completed', dueDate: SOON }), NOW),
     false
   );
 });
 
-test('isBreachingWithin24h: false once the review clock has stopped, even mid-remediation', () => {
+test('isBreachingSoon: false once the review clock has stopped, even mid-remediation', () => {
   // The look-ahead window runs off the same statuses as the overdue rule: only
   // a Case still under review can be about to breach its review due date.
   assert.equal(
-    isBreachingWithin24h(
+    isBreachingSoon(
       caseRow({ status: 'Actions In Progress', dueDate: SOON }),
       NOW
     ),
@@ -166,11 +170,20 @@ test('isBreachingWithin24h: false once the review clock has stopped, even mid-re
   );
 });
 
-test('isBreachingWithin24h: defaults now to the current time without throwing', () => {
-  assert.equal(
-    typeof isBreachingWithin24h(caseRow({ dueDate: LATER })),
-    'boolean'
-  );
+test('isBreachingSoon: defaults now to the current time without throwing', () => {
+  assert.equal(typeof isBreachingSoon(caseRow({ dueDate: LATER })), 'boolean');
+});
+
+test('isBreachingSoon: an explicit window widens and narrows the look-ahead', () => {
+  // LATER is ~5.5 days out: outside the default window, inside a 7-day one.
+  assert.equal(isBreachingSoon(caseRow({ dueDate: LATER }), NOW, 24 * 7), true);
+  // SOON is 6 hours out: inside the default window, outside a 2-hour one.
+  assert.equal(isBreachingSoon(caseRow({ dueDate: SOON }), NOW, 2), false);
+});
+
+test('breachingSoonLabel: states the window it was given', () => {
+  assert.equal(breachingSoonLabel(24), 'Breaching < 24h');
+  assert.equal(breachingSoonLabel(48), 'Breaching < 48h');
 });
 
 // ===== loadKpiModel: client guard =====
@@ -450,6 +463,25 @@ test('loadKpiModel: owner lane splits At risk into sub-reasons and defaults it e
   assert.equal(unassigned.defaultExpanded, false);
 
   assert.equal(owner.totalItems, 4);
+});
+
+test("loadKpiModel: owner At risk uses the Case Type's own breach window and says so", async () => {
+  // 36 hours out: past the framework's default window, inside this Case
+  // Type's declared 48-hour one.
+  const in36h = '2026-07-06T00:00:00Z';
+  const rows = [caseRow({ id: 'br1', caseType: 'lending', dueDate: in36h })];
+  const lanes = await loadKpiModel({
+    client: /** @type {any} */ (makeClient(() => rows)),
+    currentUserId: 'me',
+    capabilities: defaultCapabilities({ ownedCaseTypes: ['lending'] }),
+    allCaseSources: [{ ...source('lending'), breachWindowHours: 48 }],
+    now: NOW,
+  });
+  const atRisk = tile(lane(lanes, 'owner'), 'at-risk');
+  assert.equal(atRisk.count, 1);
+  assert.deepEqual(atRisk.breakdown.rows, [
+    { label: 'Breaching < 48h', count: 1 },
+  ]);
 });
 
 test('loadKpiModel: owner At risk drops a sub-reason with zero matches', async () => {

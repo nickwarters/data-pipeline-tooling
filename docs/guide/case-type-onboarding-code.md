@@ -200,7 +200,6 @@ const bank = await loadBank('./banks/widget-review.txt');
  */
 const config = {
   listName: 'Cases-WidgetReview',
-  slaHours: 72,
   maxInProgressCases: 3,
   attributeFailures: true,
   detailFields: [
@@ -262,11 +261,29 @@ What each field does, and how to choose its value:
   not move when the registry display name is renamed, so a decommissioned group
   would keep granting access (#527). A blanket group (e.g. plain `Reviewers`)
   would open the type to every reviewer — almost never what you want.
-- **`slaHours`** — drives the working-day due-date and the overdue evaluator.
 - **`maxInProgressCases`** — optional positive-integer soft limit for allocation.
   Before claiming a Case, the framework counts this Reviewer's `In-progress`
   Cases whose `OnHold` value is No. Omit the field to leave allocation
   unlimited for this Case Type.
+- **Review cadence** — three optional thresholds. Each has a framework default,
+  and omitting a key means "use the default", never "no threshold". There is
+  deliberately no per-Case-Type _review_ SLA: whether a Case is **overdue** is
+  decided solely by the `dueDate` written on the Case row, which this frontend
+  reads and never computes.
+  - **`actionCentreSlaDays`** — how long a Case may sit in each Action Centre
+    reason group before its waiting chip reads as breached, e.g.
+    `{ awaitingFrontline: 14 }`. Partial: name only the reasons you differ on.
+    The reason ids are `overdue`, `awaitingFrontline`, `reviewRequired`,
+    `appeals` and `reopened`; `npm run verify` rejects any other key.
+  - **`breachWindowHours`** — how far ahead the dashboard's Owner "At risk" tile
+    looks for a Case about to breach its due date. Positive integer; default 24.
+    The tile's sub-reason label states the window it applied, so it stays honest.
+  - **`remediationSlaWorkingDays`** — working days from **Send Actions** to the
+    Remediation Due Date. Positive integer; default 10. **Changing it moves no
+    date already written.** The due date is computed once at Send Actions and
+    stored on the Case row, so in-flight Cases keep the date they were given and
+    only later transitions see the new number. Expect this to be reported as a
+    bug; it is the design.
 - **`attributeFailures`** — when true, a failed Answer asks the Reviewer to
   attribute the failure to a person (feeds Responsible-Party reporting).
 - **`detailFields`** — the read-only Case Details panel, `{ key, label }`

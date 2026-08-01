@@ -93,8 +93,7 @@ export async function loadOwnerSummaries({
         caseType,
         outstanding: inProgress.filter((c) => !c.assignedReviewer).length,
         assigned: inProgress.filter((c) => !!c.assignedReviewer).length,
-        overdue: inProgress.filter((c) => isOverdue(c, undefined, currentTime))
-          .length,
+        overdue: inProgress.filter((c) => isOverdue(c, currentTime)).length,
         completedToday: sliceCounts[0],
         completedLast7Days: sliceCounts.reduce((sum, n) => sum + n, 0),
       };

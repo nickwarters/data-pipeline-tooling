@@ -263,7 +263,10 @@ export function createRouteSlice(
         allocationEmpty: false,
         allocationAtCapacity: false,
         ownerSummaries: [],
-        actionCentre: initialActionCentreState(context.chrome.permissions),
+        actionCentre: initialActionCentreState(
+          context.chrome.permissions,
+          context.caseSources
+        ),
         responsibleParty: initialResponsiblePartyState(
           context.chrome.currentUser.id
         ),

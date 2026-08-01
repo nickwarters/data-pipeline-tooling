@@ -51,6 +51,7 @@ function row(id) {
 test('Action Centre state derives its reason descriptors from unchanged model flags', () => {
   const reviewer = initialActionCentreState(
     capabilities({ isReviewer: true }),
+    [],
     new Date('2026-07-04T00:00:00Z')
   );
   assert.deepEqual(
@@ -62,7 +63,8 @@ test('Action Centre state derives its reason descriptors from unchanged model fl
       isReviewer: true,
       isControls: true,
       ownedCaseTypes: ['complaints'],
-    })
+    }),
+    []
   );
   assert.deepEqual(
     multiRole.reasons.map((reason) => reason.id),
@@ -71,8 +73,10 @@ test('Action Centre state derives its reason descriptors from unchanged model fl
 });
 
 test('Action Centre actions sum counts and merge a bounded worst-first page across sources', async () => {
-  const reason = initialActionCentreState(capabilities({ isReviewer: true }))
-    .reasons[0];
+  const reason = initialActionCentreState(
+    capabilities({ isReviewer: true }),
+    []
+  ).reasons[0];
   /** @type {Record<string, import('../src/sharepoint-client.js').CaseRow[]>} */
   const lists = {
     A: [row('a1'), row('a2'), row('a3')],
@@ -123,6 +127,7 @@ test('Action Centre actions sum counts and merge a bounded worst-first page acro
 test('Action Centre pure view renders descriptor rows and exposes store callbacks', () => {
   const state = initialActionCentreState(
     capabilities({ isReviewer: true }),
+    [],
     new Date('2026-07-04T00:00:00Z')
   );
   const reason = state.reasons[0];
@@ -188,6 +193,7 @@ test('Action Centre pure view renders descriptor rows and exposes store callback
 test('Action Centre pure view renders collapsed peeks and the true empty state', () => {
   const state = initialActionCentreState(
     capabilities({ isReviewer: true }),
+    [],
     new Date('2026-07-04T00:00:00Z')
   );
   state.counts = { overdue: 1, awaitingFrontline: 0 };
@@ -218,6 +224,7 @@ test('Action Centre rows preserve fallback references, secondary reasons, and wi
       isReviewer: true,
       ownedCaseTypes: ['complaints'],
     }),
+    [],
     new Date('2026-07-04T00:00:00Z')
   );
   const reopened = state.reasons.find((reason) => reason.id === 'reopened');
@@ -263,4 +270,53 @@ test('Action Centre rows preserve fallback references, secondary reasons, and wi
     awaitingGroup?.querySelector('.cora-ac-count')?.textContent,
     '0'
   );
+});
+
+test("Action Centre judges a row's wait against its own Case Type's cadence", () => {
+  // Two Case Types, one of which allows the Responsible Party 30 days to reply
+  // where the framework allows 7. Two rows waiting the same 10 days: the
+  // divergent Case Type's is still within its SLA, the other's has breached.
+  const now = new Date('2026-07-11T00:00:00Z');
+  const state = initialActionCentreState(
+    capabilities({ isReviewer: true }),
+    [
+      { slug: 'complaints', listName: 'A', displayName: 'Complaints' },
+      {
+        slug: 'example-review',
+        listName: 'B',
+        displayName: 'Example Review',
+        actionCentreSlaDays: { awaitingFrontline: 30 },
+      },
+    ],
+    now
+  );
+  /** @param {string} slug */
+  const waitingRow = (slug) => ({
+    ...row(`${slug}-1`),
+    caseType: slug,
+    awaitingResponsibleParty: true,
+    awaitingSince: '2026-07-01T00:00:00Z',
+  });
+  state.counts = { awaitingFrontline: 2 };
+  state.expanded = new Set(['awaitingFrontline']);
+  state.pages = {
+    awaitingFrontline: [waitingRow('complaints'), waitingRow('example-review')],
+  };
+
+  const view = ActionCentreView(state, {
+    onToggleNeedsAction: () => {},
+    onToggleGroup: () => {},
+    onShowMore: () => {},
+    onOpenCase: () => {},
+  });
+  const group = [...view.querySelectorAll('.cora-ac-group')].find(
+    (g) => g.getAttribute('data-reason') === 'awaitingFrontline'
+  );
+  const classes = [...(group?.querySelectorAll('.cora-ac-wait') ?? [])].map(
+    (chip) => chip.className
+  );
+  assert.deepEqual(classes, [
+    'cora-ac-wait cora-ac-wait--awaiting',
+    'cora-ac-wait',
+  ]);
 });
