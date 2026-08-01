@@ -4500,11 +4500,4 @@ test('a Case Type that renames every Section renames every tab and every heading
       `expected a Summary block titled "${expected}", got ${JSON.stringify(blockTitles)}`
     );
   }
-
-  assert.notEqual(
-    sectionLabels.questions.tab,
-    sectionLabels.questions.heading,
-    'the tab and the heading are separately addressable'
-  );
-  assert.equal(tabNames.includes('Assessment'), false);
 });

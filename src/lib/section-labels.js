@@ -17,8 +17,11 @@
  * should be able to see a Section's whole vocabulary on one line. Two Sections
  * genuinely differ: the `questions` tab has always read "Review" while its
  * panel reads "Questions", and the `details` tab reads "Details" while its
- * panel reads "Case Details". Both splits predate this map and are preserved so
- * a Case Type declaring no override renders exactly as it always has.
+ * panel reads "Case Details". Both splits predate this map and are preserved.
+ *
+ * The `issues` panel heading is the one string that changes here: it read
+ * "Failures" under a tab captioned "Issues", where an Issue is this Section's
+ * own name for a failed Answer. Both spellings now say Issues.
  *
  * @type {Readonly<ResolvedSectionLabels>}
  */
