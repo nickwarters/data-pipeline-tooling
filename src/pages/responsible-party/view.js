@@ -188,17 +188,19 @@ function outcomeSummaryView(summary) {
  * Responsible Party actually works to. `dueDate` is the *review* SLA — the
  * Assigned Reviewer's clock — and dating remediation work by it is wrong.
  *
- * The fallback is retained deliberately: every Case that passes Send Actions is
- * stamped, but a Case carried over from before that transition existed (or
- * closed before the fork learned to see free-form remediation) can still
- * reach this table with only a review `dueDate`, and showing the wrong date
- * beats showing none.
+ * There is deliberately no fallback to `dueDate`. A legacy Case that reaches
+ * this table with no remediation stamp has no remediation clock at all, and
+ * dating the Responsible Party's work by the Assigned Reviewer's SLA misinforms
+ * them twice over: it shows a deadline nobody set for them, and it badges the
+ * row overdue against a clock that stopped when the Case became Reportable. An
+ * empty deadline renders as an em dash and is never overdue, which is the same
+ * absent state the Remediation tab already shows.
  *
  * @param {CaseRow} row
  * @returns {string}
  */
 function remediationDeadline(row) {
-  return row.remediationDueDate || row.dueDate || '';
+  return row.remediationDueDate || '';
 }
 
 /**

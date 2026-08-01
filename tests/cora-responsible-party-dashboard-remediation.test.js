@@ -9,7 +9,14 @@ installDom();
 const { outstandingRemediation, responsiblePartyView } =
   await import('../src/pages/responsible-party/view.js');
 
-/** @param {string} id @param {string} caseType @param {string} dueDate */
+/**
+ * A sent-remediation Case. `dueDate` is the *remediation* deadline these tests
+ * are about: it is spelled onto both clocks so a test that means "past its
+ * remediation deadline" says so on the column this table actually reads, rather
+ * than relying on the review SLA standing in for it.
+ *
+ * @param {string} id @param {string} caseType @param {string} dueDate
+ */
 function row(id, caseType, dueDate) {
   return /** @type {import('../src/sharepoint-client.js').CaseRow} */ ({
     id,
@@ -19,6 +26,7 @@ function row(id, caseType, dueDate) {
     assignedReviewer: 'reviewer',
     responsibleParty: 'rp-1',
     dueDate,
+    remediationDueDate: dueDate || null,
     answers: {
       q1: {
         value: 'No',
@@ -301,4 +309,18 @@ test('a Completed Case has no outstanding remediation, by construction', () => {
   closed.status = 'Completed';
   closed.answers.q1.remediationStatus = { status: 'complete' };
   assert.deepEqual(outstandingRemediation(closed), []);
+});
+
+test('a Case with no remediation stamp shows no remediation deadline and is not overdue', () => {
+  // A legacy Case that reached this table without a Remediation Due Date has no
+  // remediation clock. The review SLA is the Assigned Reviewer's, so it must not
+  // stand in — not as a date, and not as an overdue badge.
+  const section = rpView({
+    dueDate: '2021-03-04T00:00:00Z',
+    remediationDueDate: null,
+  });
+  const tableRow = section?.querySelector('tbody')?.querySelector('tr');
+  assert.match(tableRow?.textContent ?? '', /—/);
+  assert.doesNotMatch(tableRow?.textContent ?? '', /2021/);
+  assert.equal(tableRow?.className, 'cora-remediation-row');
 });

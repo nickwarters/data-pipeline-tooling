@@ -44,9 +44,11 @@ export function isOverdue(caseRow, now = new Date()) {
 
 /**
  * Returns true when a Case is past the given remediation deadline and the
- * remediation is still outstanding; the deadline is passed in rather than read
- * off the row because some surfaces track a fallback date. `now` is injectable
- * for testing.
+ * remediation is still outstanding. The deadline is a parameter rather than
+ * read off the row because each surface already has the date in hand — the
+ * Remediation tab is handed one, the Responsible Party's table reads one — and
+ * passing it keeps this a statement about a date rather than about a column.
+ * An absent deadline is never overdue. `now` is injectable for testing.
  *
  * @param {CaseRow} caseRow
  * @param {string | null} [deadline]
