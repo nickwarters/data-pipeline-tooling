@@ -5,8 +5,6 @@ import assert from 'node:assert/strict';
 import {
   CORARemediationSection,
   CATALOGUE,
-  FAIL_CAT,
-  DETAIL_FIELDS,
   findByClass,
   findAllByClass,
 } from './helpers/cora-remediation-section.js';
@@ -160,81 +158,4 @@ test('CORARemediationSection: _renderItem with no answer shows empty string via 
   const item = /** @type {any} */ (el)._renderItem(q);
   const answerEl = findByClass(item, 'cora-remediation-answer');
   assert.equal(answerEl.textContent, 'Answer: ');
-});
-
-test('CORARemediationSection: select control offers an option per declared option plus a blank', () => {
-  const el = new CORARemediationSection();
-  el.remediationFields = DETAIL_FIELDS;
-  el.canCaptureDetails = true;
-  el.update(FAIL_CAT, { q1: { value: 'No' } }, false);
-
-  const select = findAllByClass(el, 'cora-remediation-detail-input')[1];
-  const optionValues = select._children.map((/** @type {any} */ o) => o.value);
-  assert.deepEqual(optionValues, ['', 'Low', 'Med', 'High']);
-});
-
-test('CORARemediationSection: editable input pre-fills the captured value', () => {
-  const el = new CORARemediationSection();
-  el.remediationFields = DETAIL_FIELDS;
-  el.canCaptureDetails = true;
-  el.update(
-    FAIL_CAT,
-    {
-      q1: {
-        value: 'No',
-        remediationDetails: { rootCause: 'Rushed', severity: 'High' },
-      },
-    },
-    false
-  );
-
-  const inputs = findAllByClass(el, 'cora-remediation-detail-input');
-  assert.equal(inputs[0].value, 'Rushed');
-  assert.equal(inputs[1].value, 'High');
-});
-
-test('CORARemediationSection: read-only viewer sees captured values as text with no inputs', () => {
-  const el = new CORARemediationSection();
-  el.remediationFields = DETAIL_FIELDS;
-  el.canCaptureDetails = false;
-  el.update(
-    FAIL_CAT,
-    {
-      q1: {
-        value: 'No',
-        remediationDetails: { rootCause: 'Rushed', severity: 'High' },
-      },
-    },
-    false
-  );
-
-  assert.equal(
-    findByClass(el, 'cora-remediation-detail-input'),
-    null,
-    'no editable inputs when frozen'
-  );
-  const values = findAllByClass(el, 'cora-remediation-detail-value').map(
-    (v) => v.textContent
-  );
-  assert.deepEqual(values, ['Root cause: Rushed', 'Severity: High']);
-});
-
-test('CORARemediationSection: read-only viewer omits fields with no captured value', () => {
-  const el = new CORARemediationSection();
-  el.remediationFields = DETAIL_FIELDS;
-  el.canCaptureDetails = false;
-  el.update(
-    FAIL_CAT,
-    { q1: { value: 'No', remediationDetails: { rootCause: 'Rushed' } } },
-    false
-  );
-
-  const values = findAllByClass(el, 'cora-remediation-detail-value').map(
-    (v) => v.textContent
-  );
-  assert.deepEqual(
-    values,
-    ['Root cause: Rushed'],
-    'only captured fields are shown read-only'
-  );
 });

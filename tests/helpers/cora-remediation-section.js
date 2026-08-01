@@ -12,7 +12,6 @@ const {
   RemediationSection,
   renderRemediationAttribution,
   renderRemediationCapture,
-  renderRemediationDetails,
   renderRemediationItem,
 } = await import('../../src/pages/cora-case-review/remediation-view.js');
 /** @typedef {Parameters<typeof RemediationSection>[0]} RemediationSectionProps */
@@ -33,9 +32,6 @@ export class CORARemediationSection extends HTMLElement {
     /** @type {{loginName: string, displayName: string} | null} */
     this.responsibleParty = null;
     this.canAttribute = false;
-    /** @type {import('../../src/sharepoint-client.js').RemediationField[]} */
-    this.remediationFields = [];
-    this.canCaptureDetails = false;
     /** @type {import('../../src/sharepoint-client.js').CaptureGroup[]} */
     this.captureGroups = [];
     this.canCapture = false;
@@ -73,11 +69,6 @@ export class CORARemediationSection extends HTMLElement {
   }
 
   /** @param {HTMLElement} node @param {QuestionDefinition} question */
-  _renderDetails(node, question) {
-    renderRemediationDetails(this._buildProps(), node, question);
-  }
-
-  /** @param {HTMLElement} node @param {QuestionDefinition} question */
   _renderCapture(node, question) {
     renderRemediationCapture(this._buildProps(), node, question);
   }
@@ -96,8 +87,6 @@ export class CORARemediationSection extends HTMLElement {
       attributeFailures: this.attributeFailures,
       responsibleParty: this.responsibleParty,
       canAttribute: this.canAttribute,
-      remediationFields: this.remediationFields,
-      canCaptureDetails: this.canCaptureDetails,
       captureGroups: this.captureGroups,
       canCapture: this.canCapture,
       captureCollapsed: {},
@@ -109,8 +98,6 @@ export class CORARemediationSection extends HTMLElement {
       dispatchCapture: (questionId, fieldKey, value) =>
         this._emit('cora-capture', { questionId, fieldKey, value }),
       dispatchCaptureToggle() {},
-      dispatchDetail: (questionId, key, value) =>
-        this._emit('cora-remediation-detail', { questionId, key, value }),
       dispatchAttribute: (questionId, attributedParty) =>
         this._emit('cora-attribute', { questionId, attributedParty }),
       dispatchAttributeSearch() {},
@@ -197,17 +184,6 @@ export const FAIL_CAT = [
     responseType: 'yes-no-na',
     failureValues: ['No'],
     deprecated: false,
-  },
-];
-
-/** @type {import('../../src/sharepoint-client.js').RemediationField[]} */
-export const DETAIL_FIELDS = [
-  { key: 'rootCause', label: 'Root cause', type: 'text' },
-  {
-    key: 'severity',
-    label: 'Severity',
-    type: 'select',
-    options: ['Low', 'Med', 'High'],
   },
 ];
 

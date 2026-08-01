@@ -67,18 +67,6 @@ const config = {
   // applicable Outcome wins from the required configured default.
   // An absent bank field becomes an invalid load-time configuration, not a fallback.
   defaultOutcomeId: bank.defaultOutcomeId ?? '',
-  // Configurable per-failure capture fields. One shared set applies
-  // to every failed Answer; captured inline as Answer.remediationDetails. Legacy:
-  // superseded by captureGroups below but kept while both coexist.
-  remediationFields: [
-    { key: 'rootCause', label: 'Root cause', type: 'text', required: true },
-    {
-      key: 'severity',
-      label: 'Severity',
-      type: 'select',
-      options: ['Low', 'Med', 'High'],
-    },
-  ],
   // Unified Issue Capture engine: everything captured against a failed
   // Answer, as ordered, collapsible groups of typed fields. This slice exercises
   // the four string field types; person/actions arrive in their own slices.

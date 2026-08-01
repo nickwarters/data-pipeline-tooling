@@ -40,7 +40,6 @@ import { summaryView } from './summary-view.js';
 import { AppealSection } from './appeal-view.js';
 import { AppealReviewSection } from './appeal-review-view.js';
 import { AmendOutcomeSection } from './amend-outcome-view.js';
-import { editRemediationDetail } from './remediation-actions.js';
 import {
   groupOutcomeSet,
   issueCaptured,
@@ -202,8 +201,6 @@ export const SECTION_PANELS = {
           }
         : null,
       canAttribute: snapshot.machine?.canAttribute ?? false,
-      remediationFields: config.remediationFields ?? [],
-      canCaptureDetails: snapshot.machine?.canCapture ?? false,
       captureGroups: config.captureGroups ?? [],
       canCapture: snapshot.machine?.canCapture ?? false,
       captureCollapsed: route.captureCollapsed,
@@ -230,17 +227,6 @@ export const SECTION_PANELS = {
           groupKey,
           collapsed,
         }),
-      dispatchDetail: (questionId, key, value) =>
-        actions.editAnswers(
-          editRemediationDetail({
-            answers: actions.currentAnswers(),
-            questionId,
-            key,
-            value,
-            canEdit: snapshot.machine?.canCapture ?? false,
-            fields: config.remediationFields ?? [],
-          })
-        ),
       dispatchAttribute: actions.selectAttribution,
       dispatchAttributeSearch: actions.requestAttributionSearch,
       dispatchRemediationAction: (questionId, action, selected) =>

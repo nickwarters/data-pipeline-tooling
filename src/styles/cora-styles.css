@@ -1502,12 +1502,11 @@
 
 /* ── Issues tab — fill-in fields & Issue Capture accordion ───────────────── */
 
-/* The capture / remediation-detail / free-form controls a Reviewer fills in on
-   a failed item. They previously fell back to browser defaults; give them the
-   app's shared input treatment (surface fill, hairline border, accent focus
-   ring) so they match the Notes and dashboard-filter controls. */
+/* The capture and free-form controls a Reviewer fills in on a failed item. They
+   previously fell back to browser defaults; give them the app's shared input
+   treatment (surface fill, hairline border, accent focus ring) so they match the
+   Notes and dashboard-filter controls. */
 [data-cora-root] .cora-capture-input,
-[data-cora-root] .cora-remediation-detail-input,
 [data-cora-root] .cora-remediation-freeform-input {
   font: inherit;
   width: 100%;
@@ -1520,19 +1519,16 @@
 }
 
 [data-cora-root] textarea.cora-capture-input,
-[data-cora-root] textarea.cora-remediation-detail-input,
 [data-cora-root] textarea.cora-remediation-freeform-input {
   min-height: 4rem;
   resize: vertical;
 }
 
-[data-cora-root] select.cora-capture-input,
-[data-cora-root] select.cora-remediation-detail-input {
+[data-cora-root] select.cora-capture-input {
   cursor: pointer;
 }
 
 [data-cora-root] .cora-capture-input:focus,
-[data-cora-root] .cora-remediation-detail-input:focus,
 [data-cora-root] .cora-remediation-freeform-input:focus {
   outline: none;
   border-color: var(--cora-color-accent);
@@ -1540,17 +1536,10 @@
 }
 
 /* Field groups: a small-caps-ish label caption hugging its control. */
-[data-cora-root] .cora-capture-label,
-[data-cora-root] .cora-remediation-detail-label {
+[data-cora-root] .cora-capture-label {
   font-size: var(--cora-font-size-sm);
   font-weight: var(--cora-font-weight-semibold);
   color: var(--cora-color-text-muted);
-}
-
-[data-cora-root] .cora-remediation-detail-field {
-  display: grid;
-  gap: var(--cora-space-1);
-  margin-top: var(--cora-space-3);
 }
 
 /* Radio-typed capture fields: inline option chips rather than a stacked list. */

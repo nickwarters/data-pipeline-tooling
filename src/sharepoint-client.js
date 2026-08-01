@@ -54,15 +54,7 @@
  * serialised — undecided blocks completion, decided-no does not, and a `false`
  * written into the JSON blob reads the same as a field that was never there.
  *
- * @typedef {{ value: string | string[], justification?: string, remediationRequired?: 'yes' | 'no', remediationActions?: Array<{id: string, text: string}>, freeFormRemediation?: string, remediationStatus?: RemediationStatus, attributedParty?: { loginName: string, displayName: string }, remediationDetails?: Record<string, string>, capture?: Record<string, string | { loginName: string, displayName: string } | Array<string | RemediationAction>> }} Answer
- */
-
-/**
- * A configurable per-failure capture field declared by a Case Type.
- * One shared set applies to every failed Answer; `select` values are validated
- * against `options` at capture time.
- *
- * @typedef {{ key: string, label: string, type: 'text' | 'select', options?: string[], required?: boolean, placeholder?: string }} RemediationField
+ * @typedef {{ value: string | string[], justification?: string, remediationRequired?: 'yes' | 'no', remediationActions?: Array<{id: string, text: string}>, freeFormRemediation?: string, remediationStatus?: RemediationStatus, attributedParty?: { loginName: string, displayName: string }, capture?: Record<string, string | { loginName: string, displayName: string } | Array<string | RemediationAction>> }} Answer
  */
 
 /**
@@ -455,9 +447,9 @@
 /**
  * Per-Case-Type placeholder text for the framework's fixed free-text fields,
  * mirroring the `sectionLabels` override pattern: absent keys keep the
- * framework default; an explicit `''` blanks the hint. (Config-declared
- * fields — Issue Capture Fields, Remediation Fields — carry their own
- * `placeholder` inline on the field definition instead.)
+ * framework default; an explicit `''` blanks the hint. (Config-declared Issue
+ * Capture Fields carry their own `placeholder` inline on the field definition
+ * instead.)
  *
  * @typedef {{ notes?: string, caseJustification?: string }} Placeholders
  */
@@ -534,7 +526,6 @@
  * remediationSlaWorkingDays?: number,
  * maxInProgressCases?: number,
  * attributeFailures?: boolean,
- * remediationFields?: RemediationField[],
  * remediationStatuses?: RemediationStatusValue[],
  * captureGroups?: CaptureGroup[],
  * generalQuestions?: GeneralQuestionField[],

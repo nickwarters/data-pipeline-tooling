@@ -1410,7 +1410,6 @@ test('route: appeal views keep empty Case Type configuration defaults', () => {
   minimal.caseRow = { ...minimal.caseRow, responsibleParty: '' };
   delete minimal.config.detailFields;
   delete minimal.config.captureGroups;
-  delete minimal.config.remediationFields;
   delete minimal.config.placeholders;
   delete minimal.config.outcomeOptions;
   minimal.access = {
@@ -3191,15 +3190,6 @@ test('route: mock-mode store shell keeps Review working at the existing URL', as
   await saveQueue.whenIdle();
   await flush();
 
-  const detail = /** @type {any} */ (
-    issuesPanel?.querySelector('.cora-remediation-detail-input')
-  );
-  assert.ok(detail, 'configured Remediation Detail is rendered');
-  detail.value = 'Rushed';
-  fireEvent(detail, 'change');
-  await saveQueue.whenIdle();
-  await flush();
-
   assert.equal(
     issuesPanel?.querySelector('.cora-remediation-freeform-input'),
     null,
@@ -3239,9 +3229,6 @@ test('route: mock-mode store shell keeps Review working at the existing URL', as
       text: 'Retrain agent on needs-identification protocol.',
     },
   ]);
-  assert.deepEqual(savedAnswer.remediationDetails, {
-    rootCause: 'Rushed',
-  });
   assert.deepEqual(savedAnswer.capture, {
     rootCause: 'Agent rushed',
   });

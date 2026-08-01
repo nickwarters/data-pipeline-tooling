@@ -265,7 +265,6 @@ src/
       summary-view.js          # CASE-4 pure configured Summary view
       outcome-view.js          # CASE-4 configured Outcome view
       completion-actions.js    # CASE-4 CaseMachine-guarded completion actions
-      remediation-actions.js   # CASE-5 route action for configurable Remediation Detail edits
       remediation-view.js      # CASE-5 pure Issues and Remediation Actions view
       remediation-tracking-view.js # pure question-level Remediation tab, reviewer + responsible-party renderings (#499)
       appeal-actions.js        # CASE-6 immutable Appeal/resolution/amendment state transitions
@@ -344,7 +343,6 @@ src/
     issue-capture.js
     kpi-strip-model.js
     overdue-evaluator.js
-    remediation-details.js
     remediation-status.js         # question-level Remediation Resolution + completion gate (#499)
     question-group-progress.js   # per-Question-Group answered/total (was section-progress.js, #390)
     general-questions.js         # General Question answer-key namespace + load-time config gates (#472)

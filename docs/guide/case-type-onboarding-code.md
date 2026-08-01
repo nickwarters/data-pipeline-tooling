@@ -331,10 +331,9 @@ or `{ details: { heading: 'About this Case' } }`). Omitted keys and omitted axes
 keep `DEFAULT_SECTION_LABELS`; `allowBulkOutcome: true` opts every Question
 Group into the bulk-outcome control, and `questionGroups` overrides that per
 group in either direction (`{ Build: { allowBulkOutcome: false } }`), so a type
-states the rule once and names only the exceptions;
-`remediationFields` and `captureGroups` extend per-failure capture;
-`remediationStatuses` narrows which Remediation Resolutions a Reviewer is
-offered (`['complete', 'cancelled']`), see
+states the rule once and names only the exceptions; `captureGroups` extends
+per-failure capture; `remediationStatuses` narrows which Remediation
+Resolutions a Reviewer is offered (`['complete', 'cancelled']`), see
 [ADR-0037](../adr/0037-question-level-remediation-resolution.md). Case table
 columns are not among them: every Case Type is listed under the same
 framework-owned columns (see

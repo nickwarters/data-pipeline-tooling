@@ -1,16 +1,14 @@
 // @ts-check
-// Pure helper: builds an `h()` input control for a capture/remediation field.
 // No component instance, controller object, or lifecycle — just field config in,
 // element out — so function components can call it directly.
 
 import { h } from './html.js';
 
 /** @typedef {import('../sharepoint-client.js').CaptureField} CaptureField */
-/** @typedef {import('../sharepoint-client.js').RemediationField} RemediationField */
 
 /**
- * Builds an input element for a CaptureField or RemediationField.
- * @param {CaptureField | RemediationField} fieldConfig
+ * Builds an input element for a capture field.
+ * @param {CaptureField} fieldConfig
  * @param {string} currentValue
  * @param {(value: string) => void} onChange
  * @param {string} [className]
@@ -95,7 +93,7 @@ export function buildCaptureControl(
  * A `radio` group's inputs each take `<key>:<value>`.
  *
  * @param {HTMLElement} control
- * @param {CaptureField | RemediationField} fieldConfig
+ * @param {CaptureField} fieldConfig
  * @param {string} key
  * @param {boolean} [disabled]
  */

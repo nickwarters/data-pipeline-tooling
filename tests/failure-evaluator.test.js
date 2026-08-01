@@ -352,41 +352,6 @@ test('materializeRemediationActions: retains attributedParty on a still-failing 
   });
 });
 
-test('materializeRemediationActions: strips remediationDetails when answer becomes passing', () => {
-  const stale = {
-    value: 'Yes',
-    remediationDetails: { severity: 'High' },
-  };
-  const out = materializeRemediationActions(Q_FAIL_NO, stale);
-  assert.equal('remediationDetails' in out, false);
-});
-
-test('materializeRemediationActions: retains remediationDetails on a still-failing answer', () => {
-  const ans = { value: 'No', remediationDetails: { severity: 'High' } };
-  const out = materializeRemediationActions(Q_FAIL_NO, ans);
-  assert.deepEqual(out.remediationDetails, { severity: 'High' });
-});
-
-test('materializeRemediationActions: strips remediationDetails alongside attributedParty when passing with no remediationActions defined', () => {
-  /** @type {QuestionDefinition} */
-  const q = {
-    id: 'q-simple',
-    text: 'Simple?',
-    responseType: 'yes-no-na',
-    optionOutcomes: { No: 'fail' },
-    failureValues: ['No'],
-    deprecated: false,
-  };
-  const stale = {
-    value: 'Yes',
-    attributedParty: { loginName: 'dev\\alex', displayName: 'Alex Doe' },
-    remediationDetails: { severity: 'High' },
-  };
-  const out = materializeRemediationActions(q, stale);
-  assert.equal('attributedParty' in out, false);
-  assert.equal('remediationDetails' in out, false);
-});
-
 test('materializeRemediationActions: strips capture when answer becomes passing', () => {
   const stale = {
     value: 'Yes',

@@ -45,8 +45,7 @@ export function findCaptureField(groups, key) {
 
 /**
  * Records a single Issue Capture value against an Answer, returning a
- * fresh Answer with the value stored inline under `capture[field.key]`. Mirrors
- * the configurable remediation-detail capture, generalised to the unified engine.
+ * fresh Answer with the value stored inline under `capture[field.key]`.
  *
  * @param {Answer} answer
  * @param {CaptureField} field

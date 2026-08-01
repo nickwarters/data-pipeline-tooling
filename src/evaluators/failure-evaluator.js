@@ -84,9 +84,9 @@ export function countConfiguredFailures(questions, answers) {
 
 /**
  * Every Answer field that exists only because the Answer is a failure, and so
- * shares the failure's lifecycle: attribution, captured detail, the Reviewer's
- * remediation decision and whatever that decision produced, and the resolution
- * of it. Left behind on an Answer that has stopped failing, each of them would
+ * shares the failure's lifecycle: attribution, captured field values, the
+ * Reviewer's remediation decision, whatever that decision produced, and the
+ * resolution of it. Left behind on an Answer that has stopped failing, each would
  * be read as current the moment the Answer failed again — a re-failed Answer
  * would render pre-attributed and pre-resolved, and the completion gate would
  * count a decision nobody made this time round.
@@ -95,7 +95,6 @@ export function countConfiguredFailures(questions, answers) {
  */
 const FAILURE_LIFETIME_KEYS = [
   'attributedParty',
-  'remediationDetails',
   'capture',
   'remediationRequired',
   'freeFormRemediation',

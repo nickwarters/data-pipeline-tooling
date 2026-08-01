@@ -3,7 +3,6 @@ import { h } from '../../lib/html.js';
 import { EmptyState } from '../../lib/empty-state.js';
 import { evaluate } from '../../evaluators/applicability-evaluator.js';
 import { isFailure } from '../../evaluators/failure-evaluator.js';
-import { buildCaptureControl } from '../../lib/capture-engine.js';
 import { AttributeMenu } from '../../components/sections/cora-attribute-menu.js';
 import { PeoplePicker } from '../../components/base/cora-people-picker.js';
 import { CaptureGroups } from '../../components/sections/cora-capture-groups.js';
@@ -21,8 +20,6 @@ import { normaliseConfiguredActions } from '../../evaluators/configured-outcome.
  * @property {boolean} attributeFailures
  * @property {Party | null} responsibleParty
  * @property {boolean} canAttribute
- * @property {import('../../sharepoint-client.js').RemediationField[]} remediationFields
- * @property {boolean} canCaptureDetails
  * @property {import('../../sharepoint-client.js').CaptureGroup[]} captureGroups
  * @property {boolean} canCapture
  * @property {Record<string, Map<string, boolean>>} captureCollapsed
@@ -33,7 +30,6 @@ import { normaliseConfiguredActions } from '../../evaluators/configured-outcome.
  * @property {(query: string) => void} dispatchResponsiblePartySearch
  * @property {(questionId: string, fieldKey: string, value: string) => void} dispatchCapture
  * @property {(questionId: string, groupKey: string, collapsed: boolean) => void} dispatchCaptureToggle
- * @property {(questionId: string, key: string, value: string) => void} dispatchDetail
  * @property {(questionId: string, attributedParty: Party | null) => void} dispatchAttribute
  * @property {(questionId: string, query: string) => void} dispatchAttributeSearch
  * @property {(questionId: string, action: { id: string, text: string }, selected: boolean) => void} dispatchRemediationAction
@@ -173,7 +169,7 @@ export function renderRemediationItem(props, q) {
 /**
  * Builds a failed item's content around its capture slot: `before` is
  * everything rendered above the capture fields (question, answer,
- * attribution, details), `after` everything below (Remediation Actions).
+ * attribution), `after` everything below (Remediation Actions).
  *
  * @param {RemediationSectionProps} props
  * @param {QuestionDefinition} q
@@ -196,9 +192,6 @@ function buildItemContent(props, q) {
 
   if (props.attributeFailures) {
     renderRemediationAttribution(props, before, q);
-  }
-  if (props.remediationFields?.length) {
-    renderRemediationDetails(props, before, q);
   }
 
   const after = h('div', {});
@@ -437,48 +430,6 @@ export function renderRemediationAttribution(props, li, q) {
     onClear: () => props.dispatchAttribute(q.id, null),
   });
   li.appendChild(/** @type {any} */ (menu));
-}
-
-/**
- * @param {RemediationSectionProps} props
- * @param {HTMLElement} li
- * @param {QuestionDefinition} q
- */
-export function renderRemediationDetails(props, li, q) {
-  const details = props.answers[q.id]?.remediationDetails ?? {};
-
-  for (const field of props.remediationFields) {
-    if (!props.canCaptureDetails) {
-      const captured = details[field.key];
-      if (captured === undefined || captured === '') continue;
-      li.appendChild(
-        h(
-          'p',
-          { className: 'cora-remediation-detail-value' },
-          `${field.label}: ${captured}`
-        )
-      );
-      continue;
-    }
-
-    const control = buildCaptureControl(
-      field,
-      details[field.key] ?? '',
-      (value) => {
-        props.dispatchDetail(q.id, field.key, value);
-      },
-      'cora-remediation-detail-input'
-    );
-
-    const wrap = h(
-      'div',
-      { className: 'cora-remediation-detail-field' },
-      h('label', { className: 'cora-remediation-detail-label' }, field.label),
-      control
-    );
-
-    li.appendChild(wrap);
-  }
 }
 
 /**
