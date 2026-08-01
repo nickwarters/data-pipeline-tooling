@@ -162,6 +162,11 @@
   color: var(--cora-color-accent);
   border-left-color: currentColor;
 }
+.cora-bank-editor .tab-dirty {
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-2xs);
+  color: var(--cora-color-warning);
+}
 .cora-bank-editor .case-bar-right {
   margin-left: auto;
   display: flex;

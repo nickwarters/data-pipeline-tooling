@@ -147,9 +147,10 @@ function banksLoaded(state, banks, failures = []) {
  *
  * Be clear about what that costs, because it is not free. The moved baseline
  * is currently **indistinguishable from the curator's own edits**: `diffCounts`
- * folds both into one `changed` count per question, so an upstream change to a
- * question the curator also touched renders as if the curator had reverted it,
- * and nothing anywhere names the bank whose baseline moved underneath them.
+ * folds both into one `changed` count per question of the bank on screen, so an
+ * upstream change to a question the curator also touched renders as if the
+ * curator had reverted it, and nothing anywhere names the bank whose baseline
+ * moved underneath them.
  * Recovery is soft too — `bank/reverted` recovers the baseline only by
  * discarding the draft wholesale, and a remount dispatches `bank/loaded`, which
  * overwrites the draft anyway. We do NOT raise a conflict prompt here, and
@@ -177,7 +178,8 @@ function banksLoaded(state, banks, failures = []) {
  * rather than dangling. It is NOT authoritative for the draft. A refresh's
  * `banks` may be a partial set, so an omitted slug that carries a curator edit
  * keeps its draft in `cases` (with no baseline left, which `diffCounts`
- * tolerates and reads as wholly added). Dropping it would be the same silent,
+ * tolerates and reads as wholly added once that bank is on screen, and which
+ * `bank/reverted` refuses rather than blanking). Dropping it would be the same silent,
  * unrecoverable data loss this action exists to prevent. An omitted slug with
  * no local edit is dropped.
  *
@@ -259,31 +261,64 @@ export function baselineBank(state) {
   return state.baseline[state.activeSlug];
 }
 
-/** @param {QuestionBankRouteState} state */
-export function isDirty(state) {
-  return JSON.stringify(state.cases) !== JSON.stringify(state.baseline);
+/**
+ * Every Case Type whose bank carries a local edit. The tab strip marks these,
+ * so unsaved work on a Case Type the curator is not looking at stays visible
+ * instead of being folded into one app-wide flag.
+ * @param {QuestionBankRouteState} state
+ * @returns {string[]}
+ */
+export function editedSlugs(state) {
+  return Object.keys(state.cases).filter((slug) => isEdited(state, slug));
 }
 
-/** @param {QuestionBankRouteState} state */
+/**
+ * Whether the bank **on screen** has uncommitted edits. Revert and publish both
+ * act on the active Case Type alone, so the flag that gates them has to be
+ * scoped the same way: an edit to another Case Type's bank must not make this
+ * one offer to discard or submit changes it does not have.
+ * @param {QuestionBankRouteState} state
+ */
+export function isDirty(state) {
+  return isEdited(state, state.activeSlug);
+}
+
+/**
+ * Whether reverting the bank **on screen** would actually do something: it has
+ * uncommitted edits, and a baseline survives for it to return to. Both the
+ * reducer and the control that offers the revert read this, so the prompt, the
+ * confirmation and the state change cannot disagree about what happened.
+ * @param {QuestionBankRouteState} state
+ */
+export function canRevert(state) {
+  return isDirty(state) && Object.hasOwn(state.baseline, state.activeSlug);
+}
+
+/**
+ * How the bank **on screen** differs from its last synced state. Scoped to the
+ * active Case Type for the same reason as {@link isDirty}: the count is read
+ * next to one bank's questions, and summing every Case Type's edits there would
+ * describe work the curator cannot see.
+ * @param {QuestionBankRouteState} state
+ */
 export function diffCounts(state) {
   let added = 0;
   let changed = 0;
   let deprecated = 0;
-  for (const slug in state.cases) {
-    /** @type {Record<string, DraftQuestion>} */
-    const baseById = Object.fromEntries(
-      (state.baseline[slug]?.questions ?? []).map((question) => [
-        question.id,
-        question,
-      ])
-    );
-    for (const question of state.cases[slug].questions) {
-      const before = baseById[question.id];
-      if (!before) added += 1;
-      else if (!before.deprecated && question.deprecated) deprecated += 1;
-      else if (JSON.stringify(before) !== JSON.stringify(question))
-        changed += 1;
-    }
+  const bank = currentBank(state);
+  if (!bank) return { added, changed, deprecated };
+  /** @type {Record<string, DraftQuestion>} */
+  const baseById = Object.fromEntries(
+    (baselineBank(state)?.questions ?? []).map((question) => [
+      question.id,
+      question,
+    ])
+  );
+  for (const question of bank.questions) {
+    const before = baseById[question.id];
+    if (!before) added += 1;
+    else if (!before.deprecated && question.deprecated) deprecated += 1;
+    else if (JSON.stringify(before) !== JSON.stringify(question)) changed += 1;
   }
   return { added, changed, deprecated };
 }
@@ -713,7 +748,16 @@ export function questionBankReducer(state, action) {
     return { ...state, toastMsg: action.message };
   }
   if (action.type === 'bank/reverted') {
-    return { ...state, cases: structuredClone(state.baseline) };
+    // Revert discards the Case Type on screen and nothing else — another Case
+    // Type's unsaved work is not the curator's to throw away from here.
+    if (!canRevert(state)) return state;
+    return {
+      ...state,
+      cases: {
+        ...state.cases,
+        [state.activeSlug]: structuredClone(state.baseline[state.activeSlug]),
+      },
+    };
   }
   if (action.type === 'publish/requested') {
     return { ...state, publishStatus: 'publishing', publishError: '' };
@@ -721,7 +765,15 @@ export function questionBankReducer(state, action) {
   if (action.type === 'publish/succeeded') {
     return {
       ...state,
-      baseline: structuredClone(state.cases),
+      // Exactly one bank is ever submitted, and both which one and what it
+      // contained are carried on the action rather than re-read here: the
+      // curator is free to switch Case Type and keep editing while the write is
+      // in flight, so the bank on screen at this point may be neither the one
+      // that was published nor the state that was published.
+      baseline: {
+        ...state.baseline,
+        [action.slug]: structuredClone(action.bank),
+      },
       drawerOpen: false,
       publishStatus: 'succeeded',
       publishArtifacts: action.artifacts,

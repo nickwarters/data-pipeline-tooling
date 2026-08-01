@@ -17,7 +17,7 @@ test('CaseTabs renders active Case Type counts and reports all actions', () => {
       beta: { label: 'Beta', questions: [{ id: 'b' }, { id: 'c' }] },
     },
     active: 'beta',
-    dirty: false,
+    dirtySlugs: [],
     onSelect: (slug) => actions.push(['select', slug]),
     onRevert: () => actions.push(['revert']),
     onCompile: () => actions.push(['compile']),
@@ -38,10 +38,29 @@ test('CaseTabs renders an empty tab strip when no Case Types are configured', ()
   const nav = CaseTabs({
     types: {},
     active: '',
-    dirty: false,
+    dirtySlugs: [],
     onSelect() {},
     onRevert() {},
     onCompile() {},
   });
   assert.equal(nav.querySelectorAll('.case-tab').length, 0);
+});
+
+test('CaseTabs marks only the Case Types carrying unsynced edits', () => {
+  const nav = CaseTabs({
+    types: {
+      alpha: { label: 'Alpha', questions: [{ id: 'a' }] },
+      beta: { label: 'Beta', questions: [{ id: 'b' }, { id: 'c' }] },
+    },
+    active: 'alpha',
+    dirtySlugs: ['beta'],
+    onSelect() {},
+    onRevert() {},
+    onCompile() {},
+  });
+  const tabs = [...nav.querySelectorAll('.case-tab')];
+  assert.equal(tabs[0].querySelector('.tab-dirty'), null);
+  assert.ok(tabs[1].querySelector('.tab-dirty'));
+  assert.equal(tabs[0].textContent, 'Alpha1 q');
+  assert.match(tabs[1].textContent ?? '', /Beta2 q.+unsynced/);
 });

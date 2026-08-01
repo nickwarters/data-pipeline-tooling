@@ -6,8 +6,10 @@ import { ignoreAbortError } from '../../lib/abort.js';
 import { withAbortSignal } from '../../services/abortable-client.js';
 import {
   baselineBank,
+  canRevert,
   currentBank,
   diffCounts,
+  editedSlugs,
   initialQuestionBankState,
   isDirty,
   questionBankReducer,
@@ -47,23 +49,25 @@ function toast(dispatch, message) {
 /**
  * @param {QuestionBankRouteState} route
  * @param {(action: any) => any} dispatch
- * @param {boolean} dirty
  */
-function caseTabsPropsFor(route, dispatch, dirty) {
+function caseTabsPropsFor(route, dispatch) {
   return {
     types: route.cases,
     active: route.activeSlug,
-    dirty,
+    dirtySlugs: editedSlugs(route),
     onSelect: (/** @type {string} */ slug) =>
       dispatch({ type: 'bank/selected', slug }),
     onRevert: () => {
-      if (!dirty) return toast(dispatch, 'Nothing to revert');
+      // The same gate the reducer applies, so a refused revert is never
+      // announced as a completed one.
+      if (!canRevert(route)) return toast(dispatch, 'Nothing to revert');
+      const label = currentBank(route).label;
       const ok = /** @type {any} */ (globalThis).confirm?.(
-        'Discard all uncommitted edits and return to the last synced state?'
+        `Discard uncommitted edits to ${label} and return to its last synced state?`
       );
       if (!ok) return;
       dispatch({ type: 'bank/reverted' });
-      toast(dispatch, 'Reverted to baseline');
+      toast(dispatch, `Reverted ${label} to baseline`);
     },
     onCompile: () => dispatch({ type: 'drawer/changed', open: true }),
   };
@@ -256,7 +260,7 @@ export function bankEditorView(state, tools) {
           retry ? retryButton(route, retry) : null
         )
       : null,
-    CaseTabs(caseTabsPropsFor(route, tools.dispatch, dirty)),
+    CaseTabs(caseTabsPropsFor(route, tools.dispatch)),
     h(
       'main',
       { className: 'bank-main' },
@@ -330,16 +334,19 @@ export function createRouteSlice(_params, context, deps = {}) {
           // The browser workbench prepares exact artifacts; opening the PR is
           // deliberately a human-controlled handoff when no writer is injected.
         });
+      // Which Case Type is being submitted, and what it held, are both settled
+      // here rather than when the write returns: nothing stops the curator
+      // selecting another Case Type, or editing on, while the write is in
+      // flight, and the baseline that moves must be the one the artifact was
+      // built from.
+      const slug = latestRoute.activeSlug;
+      const bank = currentBank(latestRoute);
       // The supported offline cycle leaves the writer undefined and merges this
       // candidate entry into the existing append-only manifest before deployment.
       // Any future runtime writer must source that existing manifest here first.
-      const artifacts = await publishBankEffect(
-        currentBank(latestRoute),
-        null,
-        write
-      );
+      const artifacts = await publishBankEffect(bank, null, write);
       if (tools.isActive())
-        tools.dispatch({ type: 'publish/succeeded', artifacts });
+        tools.dispatch({ type: 'publish/succeeded', artifacts, slug, bank });
     } catch (error) {
       if (tools.isActive()) {
         tools.dispatch({

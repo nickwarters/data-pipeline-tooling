@@ -8,8 +8,14 @@ installDom();
 
 const { bankEditorView, createRouteSlice, selectQuestionBankState } =
   await import('../src/pages/question-bank/cora-bank-editor.js');
-const { baselineBank, currentBank, diffCounts, isDirty, questionBankReducer } =
-  await import('../src/pages/question-bank/bank-slice.js');
+const {
+  baselineBank,
+  currentBank,
+  diffCounts,
+  editedSlugs,
+  isDirty,
+  questionBankReducer,
+} = await import('../src/pages/question-bank/bank-slice.js');
 const { BankList } =
   await import('../src/pages/question-bank/cora-bank-list.js');
 const { createMemo } = await import('../src/core/memo.js');
@@ -295,6 +301,7 @@ test('bank selectors report added, changed, and deprecated Question Definitions'
 test('bank route reducer owns filters, samples, toast, revert, and publish state', () => {
   const slice = loadedSlice();
   let state = slice.initialState;
+  const seeded = selectQuestionBankState(state);
   for (const action of [
     { type: 'filters/changed', patch: { category: 'Opening' } },
     { type: 'rail/changed', open: true },
@@ -303,7 +310,12 @@ test('bank route reducer owns filters, samples, toast, revert, and publish state
     { type: 'bank/reverted' },
     { type: 'drawer/changed', open: true },
     { type: 'publish/requested' },
-    { type: 'publish/succeeded', artifacts: { currentJson: '{}' } },
+    {
+      type: 'publish/succeeded',
+      artifacts: { currentJson: '{}' },
+      slug: seeded.activeSlug,
+      bank: seeded.cases[seeded.activeSlug],
+    },
     { type: 'publish/failed', message: 'write failed' },
   ]) {
     state = slice.reducer(state, action);
@@ -333,7 +345,12 @@ test('bank editor pure view wires tabs, drawer, simulation, and toast actions', 
   dirtyRoute.toastMsg = 'Ready';
   /** @type {any[]} */
   const actions = [];
-  /** @type {any} */ (globalThis).confirm = () => true;
+  /** @type {string[]} */
+  const confirmed = [];
+  /** @type {any} */ (globalThis).confirm = (/** @type {string} */ message) => {
+    confirmed.push(message);
+    return true;
+  };
   /** @type {any} */ (globalThis).setTimeout = (
     /** @type {() => void} */ callback
   ) => {
@@ -360,6 +377,18 @@ test('bank editor pure view wires tabs, drawer, simulation, and toast actions', 
   } finally {
     /** @type {any} */ (globalThis).location.search = search;
   }
+  // Revert acts on one Case Type, so both the prompt and the confirmation name
+  // it — otherwise the curator cannot tell which bank they are discarding.
+  const label = currentBank(dirtyRoute).label;
+  assert.equal(confirmed.length, 1);
+  assert.ok(confirmed[0].includes(label), confirmed[0]);
+  const toasts = actions
+    .filter((action) => action.type === 'toast/changed')
+    .map((action) => action.message);
+  assert.ok(
+    toasts.includes(`Reverted ${label} to baseline`),
+    toasts.join(' | ')
+  );
   const types = actions.map((action) => action.type);
   assert.ok(types.includes('bank/reverted'));
   assert.ok(types.includes('publish/requested'));
@@ -1043,10 +1072,19 @@ test('a partial refresh keeps an edited draft for a slug it omits', () => {
   });
 
   assert.equal(refreshed.cases.beta.questions[0].text, 'PRECIOUS UNSAVED WORK');
-  assert.equal(isDirty(refreshed), true);
-  // The omitted slug has no baseline left; the diff reads the draft as added.
+  // The refresh reselected the loaded slug, so the on-screen bank reads clean —
+  // the surviving draft belongs to the omitted one, and is still marked.
+  assert.equal(isDirty(refreshed), false);
+  assert.deepEqual(editedSlugs(refreshed), ['beta']);
+  // The omitted slug has no baseline left; on screen, the diff reads the whole
+  // draft as added.
   assert.equal(Object.hasOwn(refreshed.baseline, 'beta'), false);
-  assert.equal(diffCounts(refreshed).added, 1);
+  const refreshedOnBeta = questionBankReducer(refreshed, {
+    type: 'bank/selected',
+    slug: 'beta',
+  });
+  assert.equal(isDirty(refreshedOnBeta), true);
+  assert.equal(diffCounts(refreshedOnBeta).added, 1);
   // The carried draft is its own object, shared with nothing in the baseline.
   assert.notEqual(refreshed.cases, refreshed.baseline);
   assert.notEqual(refreshed.cases.beta, refreshed.baseline.beta);
@@ -1535,7 +1573,12 @@ test('a publish landing during an in-flight retry is not rolled back', async () 
 
   // The curator publishes while the retry is still in the air; publishing
   // promotes their draft to the baseline.
-  mounted.dispatch({ type: 'publish/succeeded', artifacts: {} });
+  mounted.dispatch({
+    type: 'publish/succeeded',
+    artifacts: {},
+    slug: 'alpha',
+    bank: mounted.route.cases.alpha,
+  });
   assert.equal(
     mounted.route.baseline.alpha.questions[0].text,
     'PUBLISHED WORDING'
@@ -2017,4 +2060,272 @@ test('the simulator sample load reads through the mount-lifetime signal', async 
     'Example Cases',
     'and still scopes each read to its own Case list'
   );
+});
+
+/**
+ * Two banks, both seated and both clean — the starting point for every
+ * assertion about one Case Type's edits leaking into another's.
+ * @returns {any}
+ */
+function twoBanksLoaded() {
+  return questionBankReducer(emptyRoute(), {
+    type: 'bank/loaded',
+    banks: {
+      alpha: syntheticBank('alpha', 'A?'),
+      beta: syntheticBank('beta', 'B?'),
+    },
+    failures: [],
+  });
+}
+
+/** @param {any} state @param {string} slug @param {string} text @returns {any} */
+function rewordFirstQuestion(state, slug, text) {
+  return questionBankReducer(
+    questionBankReducer(state, { type: 'bank/selected', slug }),
+    {
+      type: 'question/field-changed',
+      questionId: `${slug}-q1`,
+      field: 'text',
+      value: text,
+    }
+  );
+}
+
+test('editing one Case Type leaves the other reading clean', () => {
+  const edited = rewordFirstQuestion(twoBanksLoaded(), 'alpha', 'A? (edited)');
+
+  assert.equal(isDirty(edited), true);
+  const onBeta = questionBankReducer(edited, {
+    type: 'bank/selected',
+    slug: 'beta',
+  });
+  assert.equal(isDirty(onBeta), false);
+  assert.deepEqual(editedSlugs(edited), ['alpha']);
+  assert.deepEqual(editedSlugs(onBeta), ['alpha']);
+});
+
+test('the change count describes the bank on screen', () => {
+  const withAlphaEdit = rewordFirstQuestion(
+    twoBanksLoaded(),
+    'alpha',
+    'A? (edited)'
+  );
+  const onBeta = questionBankReducer(withAlphaEdit, {
+    type: 'bank/selected',
+    slug: 'beta',
+  });
+  const betaChanged = questionBankReducer(
+    questionBankReducer(onBeta, { type: 'question/added' }),
+    { type: 'question/deprecation-toggled', questionId: 'beta-q1' }
+  );
+
+  assert.deepEqual(diffCounts(betaChanged), {
+    added: 1,
+    changed: 0,
+    deprecated: 1,
+  });
+  assert.deepEqual(
+    diffCounts(
+      questionBankReducer(betaChanged, { type: 'bank/selected', slug: 'alpha' })
+    ),
+    { added: 0, changed: 1, deprecated: 0 }
+  );
+});
+
+test('reverting discards only the Case Type on screen', () => {
+  const bothEdited = rewordFirstQuestion(
+    rewordFirstQuestion(twoBanksLoaded(), 'alpha', 'A? (edited)'),
+    'beta',
+    'B? (edited)'
+  );
+  const reverted = questionBankReducer(bothEdited, { type: 'bank/reverted' });
+
+  assert.equal(reverted.activeSlug, 'beta');
+  assert.deepEqual(reverted.cases.beta, reverted.baseline.beta);
+  assert.notEqual(reverted.cases.beta, reverted.baseline.beta);
+  assert.equal(reverted.cases.alpha.questions[0].text, 'A? (edited)');
+  assert.deepEqual(editedSlugs(reverted), ['alpha']);
+});
+
+test('reverting a draft with no baseline left keeps the draft', () => {
+  const edited = rewordFirstQuestion(twoBanksLoaded(), 'beta', 'B? (edited)');
+  // A partial refresh drops beta's baseline while carrying its draft.
+  const refreshed = questionBankReducer(edited, {
+    type: 'bank/refreshed',
+    banks: { alpha: syntheticBank('alpha', 'A?') },
+    failures: [],
+  });
+  const onBeta = questionBankReducer(refreshed, {
+    type: 'bank/selected',
+    slug: 'beta',
+  });
+
+  const reverted = questionBankReducer(onBeta, { type: 'bank/reverted' });
+  assert.equal(reverted, onBeta);
+  assert.equal(reverted.cases.beta.questions[0].text, 'B? (edited)');
+});
+
+test('a revert the reducer refuses is not reported as a revert', () => {
+  const edited = rewordFirstQuestion(twoBanksLoaded(), 'beta', 'B? (edited)');
+  const refreshed = questionBankReducer(edited, {
+    type: 'bank/refreshed',
+    banks: { alpha: syntheticBank('alpha', 'A?') },
+    failures: [],
+  });
+  const onBeta = questionBankReducer(refreshed, {
+    type: 'bank/selected',
+    slug: 'beta',
+  });
+  /** @type {any[]} */
+  const actions = [];
+  const originalConfirm = /** @type {any} */ (globalThis).confirm;
+  const originalTimeout = /** @type {any} */ (globalThis).setTimeout;
+  try {
+    /** @type {any} */ (globalThis).confirm = () => true;
+    /** @type {any} */ (globalThis).setTimeout = undefined;
+    const view = bankEditorView(
+      /** @type {any} */ ({ routes: { questionBank: onBeta } }),
+      { dispatch: (/** @type {any} */ action) => actions.push(action) }
+    );
+    fireEvent(getByRole(view, 'button', { name: '↺ Revert' }), 'click');
+  } finally {
+    /** @type {any} */ (globalThis).confirm = originalConfirm;
+    /** @type {any} */ (globalThis).setTimeout = originalTimeout;
+  }
+
+  assert.deepEqual(actions, [
+    { type: 'toast/changed', message: 'Nothing to revert' },
+  ]);
+});
+
+test('publishing one Case Type does not mark the others synced', () => {
+  const bothEdited = rewordFirstQuestion(
+    rewordFirstQuestion(twoBanksLoaded(), 'beta', 'B? (edited)'),
+    'alpha',
+    'A? (edited)'
+  );
+  const published = questionBankReducer(bothEdited, {
+    type: 'publish/succeeded',
+    artifacts: null,
+    slug: 'alpha',
+    bank: bothEdited.cases.alpha,
+  });
+
+  assert.equal(published.baseline.alpha.questions[0].text, 'A? (edited)');
+  assert.notEqual(published.baseline.alpha, published.cases.alpha);
+  assert.equal(published.baseline.beta.questions[0].text, 'B?');
+  assert.deepEqual(editedSlugs(published), ['beta']);
+  assert.equal(isDirty(published), false);
+});
+
+test('a Case Type tab is marked unsynced while another Case Type is on screen', async () => {
+  const mounted = mountSlice({
+    loadBanks: async () => ({
+      banks: {
+        alpha: syntheticBank('alpha', 'A?'),
+        beta: syntheticBank('beta', 'B?'),
+      },
+      failures: [],
+    }),
+  });
+  await flush();
+  mounted.dispatch({ type: 'bank/selected', slug: 'beta' });
+  mounted.dispatch({
+    type: 'question/field-changed',
+    questionId: 'beta-q1',
+    field: 'text',
+    value: 'B? (edited)',
+  });
+  mounted.dispatch({ type: 'bank/selected', slug: 'alpha' });
+
+  const tabs = [...mounted.view().querySelectorAll('.case-tab')];
+  const marked = tabs.filter((tab) => tab.querySelector('.tab-dirty'));
+  assert.equal(marked.length, 1);
+  assert.match(marked[0].textContent ?? '', /^beta/);
+  mounted.unmount();
+});
+
+test('publishing promotes the baseline of the Case Type it started on', async () => {
+  /** @type {(value?: unknown) => void} */
+  let release = () => {};
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  /** @type {(value?: unknown) => void} */
+  let started = () => {};
+  const writing = new Promise((resolve) => {
+    started = resolve;
+  });
+  const mounted = mountSlice(
+    {
+      loadBanks: async () => ({
+        banks: {
+          alpha: syntheticBank('alpha', 'A?'),
+          beta: syntheticBank('beta', 'B?'),
+        },
+        failures: [],
+      }),
+    },
+    /** @type {any} */ ({
+      ...context(),
+      writeQuestionBankArtifacts: async () => {
+        started();
+        await gate;
+      },
+    })
+  );
+  await flush();
+  mounted.dispatch({ type: 'bank/selected', slug: 'beta' });
+  mounted.dispatch({
+    type: 'question/field-changed',
+    questionId: 'beta-q1',
+    field: 'text',
+    value: 'B? (edited)',
+  });
+  mounted.dispatch({ type: 'bank/selected', slug: 'alpha' });
+  mounted.dispatch({
+    type: 'question/field-changed',
+    questionId: 'alpha-q1',
+    field: 'text',
+    value: 'A? (edited)',
+  });
+  mounted.dispatch({ type: 'drawer/changed', open: true });
+  fireEvent(
+    getByRole(mounted.view(), 'button', { name: 'Send for Review' }),
+    'click'
+  );
+  await writing;
+
+  // The curator switches Case Type — and keeps editing — while the write is
+  // still in flight.
+  mounted.dispatch({ type: 'bank/selected', slug: 'beta' });
+  mounted.dispatch({
+    type: 'question/field-changed',
+    questionId: 'beta-q1',
+    field: 'text',
+    value: 'B? (edited again)',
+  });
+  release();
+  await flush();
+  await flush();
+
+  assert.equal(mounted.route.publishStatus, 'succeeded');
+  assert.equal(mounted.route.baseline.alpha.questions[0].text, 'A? (edited)');
+  assert.equal(mounted.route.baseline.beta.questions[0].text, 'B?');
+  assert.deepEqual(editedSlugs(mounted.route), ['beta']);
+  mounted.unmount();
+});
+
+test('publishing carries a snapshot of the bank the artifact was built from', () => {
+  const edited = rewordFirstQuestion(twoBanksLoaded(), 'alpha', 'A? (edited)');
+  const published = questionBankReducer(edited, {
+    type: 'publish/succeeded',
+    artifacts: null,
+    slug: 'alpha',
+    bank: edited.cases.alpha,
+  });
+  // Edits made after the artifact was built belong to the draft, not the
+  // baseline, so the two must not share an object.
+  assert.notEqual(published.baseline.alpha, published.cases.alpha);
+  assert.deepEqual(published.baseline.alpha, published.cases.alpha);
 });
