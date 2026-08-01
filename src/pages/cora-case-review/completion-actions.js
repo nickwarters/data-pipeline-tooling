@@ -1,5 +1,6 @@
 // @ts-check
 
+import { unfilledRequiredCapture } from '../../evaluators/issue-capture.js';
 import {
   hasTrackableRemediation,
   remediationComplete,
@@ -41,6 +42,10 @@ const REMEDIATION_GATE_REASON =
 const REMEDIATION_DECISION_REASON =
   'Answer "Is remediation required?" on every failed Question on the Issues tab, and record at least one action or free-form remediation wherever the answer is Yes.';
 
+/** The pre-send gate on configured capture: what the Case Type insists on. */
+const REQUIRED_CAPTURE_REASON =
+  'Fill in every required field on each failed Question on the Issues tab before this Case can go any further.';
+
 /** The other pre-send gate's wording: the named party, actions or no actions. */
 const RESPONSIBLE_PARTY_REASON =
   'Name a Responsible Party at the foot of the Issues tab before this Case can go any further.';
@@ -65,6 +70,7 @@ const RESPONSIBLE_PARTY_REASON =
  *   catalogue: QuestionDefinition[],
  *   answers: Record<string, Answer>,
  *   allAnswered: boolean,
+ *   captureGroups: import('../../sharepoint-client.js').CaptureGroup[],
  * }} input
  * @returns {{ visible: boolean, disabled: boolean, label: string, reason: string | null }}
  */
@@ -79,10 +85,20 @@ export function completionControl(input) {
   // this way, so the walk is skipped entirely once the actions are sent.
   const undecided =
     readyToSend && !remediationDecided(input.catalogue, input.answers);
+  // Independent of that decision: a required Issue Capture Field is asked of
+  // every failure, whether or not it needs remediation. The Case-level
+  // Responsible Party is the last of the three, named at the foot of the tab.
+  const unfilledCapture =
+    readyToSend &&
+    unfilledRequiredCapture(
+      input.catalogue,
+      input.answers,
+      input.captureGroups
+    );
   const missingParty = readyToSend && !input.caseRow.responsibleParty;
   return {
     visible: readyToSend || canClose || gated,
-    disabled: gated || undecided || missingParty,
+    disabled: gated || undecided || unfilledCapture || missingParty,
     // Once the actions are sent there is nothing left to send, so the label is
     // the close either way; before that, remediation makes it the send.
     // "Carries remediation" is `hasTrackableRemediation` — literally "the
@@ -99,9 +115,11 @@ export function completionControl(input) {
       ? REMEDIATION_GATE_REASON
       : undecided
         ? REMEDIATION_DECISION_REASON
-        : missingParty
-          ? RESPONSIBLE_PARTY_REASON
-          : null,
+        : unfilledCapture
+          ? REQUIRED_CAPTURE_REASON
+          : missingParty
+            ? RESPONSIBLE_PARTY_REASON
+            : null,
   };
 }
 
@@ -116,6 +134,7 @@ export function completionControl(input) {
  *   catalogue: QuestionDefinition[],
  *   answers: Record<string, Answer>,
  *   allAnswered: boolean,
+ *   captureGroups: import('../../sharepoint-client.js').CaptureGroup[],
  *   computeOutcome: (answers: Record<string, Answer>) => import('../../sharepoint-client.js').OutcomeResult,
  *   exportHash: string | null,
  * }} input
@@ -133,7 +152,8 @@ export function completionPatch(input) {
     !input.allAnswered ||
     !input.caseRow.responsibleParty ||
     !machine.canComplete ||
-    !remediationDecided(input.catalogue, input.answers)
+    !remediationDecided(input.catalogue, input.answers) ||
+    unfilledRequiredCapture(input.catalogue, input.answers, input.captureGroups)
   ) {
     return null;
   }

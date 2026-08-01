@@ -285,8 +285,11 @@ function renderCapture(props, questionId) {
       canCapture: false,
       namePrefix: `summary-${questionId}-`,
       collapsed: new Map(),
+      // Read-only, so no picker is ever built and nothing can search.
+      peopleSearch: {},
       onToggle() {},
       onCapture() {},
+      onPersonQuery() {},
     })
   );
 }

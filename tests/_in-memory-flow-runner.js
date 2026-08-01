@@ -487,6 +487,7 @@ async function clickCompleteCase(loader, caseRow, answers, navigate) {
     catalogue: loader.catalogue,
     answers,
     allAnswered: allApplicableAnswered(loader.catalogue, answers),
+    captureGroups: loader.config.captureGroups ?? [],
     computeOutcome: loader.config.computeOutcome,
     exportHash: loader.exportHash,
   });

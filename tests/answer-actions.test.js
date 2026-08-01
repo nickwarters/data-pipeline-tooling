@@ -122,6 +122,47 @@ test('issueCaptured: writes the captured field onto the Answer', () => {
   assert.deepEqual(next?.q1.capture, { rootCause: 'Rushed' });
 });
 
+test('issueCaptured: writes a person value as an object, and clears it with null', () => {
+  const groups = /** @type {any} */ ([
+    {
+      key: 'cause',
+      fields: [{ key: 'attributedTo', label: 'Attributed to', type: 'person' }],
+    },
+  ]);
+  const party = { loginName: 'corp\\jsmith', displayName: 'Jane Smith' };
+  const set = issueCaptured({
+    answers: /** @type {any} */ ({ q1: { value: 'No' } }),
+    captureGroups: groups,
+    questionId: 'q1',
+    fieldKey: 'attributedTo',
+    value: party,
+    canCapture: true,
+  });
+  assert.deepEqual(set?.q1.capture, { attributedTo: party });
+
+  assert.equal(
+    issueCaptured({
+      answers: /** @type {any} */ ({ q1: { value: 'No' } }),
+      captureGroups: groups,
+      questionId: 'q1',
+      fieldKey: 'attributedTo',
+      value: party,
+      canCapture: false,
+    }),
+    null
+  );
+
+  const cleared = issueCaptured({
+    answers: /** @type {any} */ (set),
+    captureGroups: groups,
+    questionId: 'q1',
+    fieldKey: 'attributedTo',
+    value: null,
+    canCapture: true,
+  });
+  assert.equal('capture' in (cleared?.q1 ?? {}), false);
+});
+
 test('issueCaptured: writes nothing without the capture guard, Answer, or field', () => {
   const answers = /** @type {any} */ ({ q1: { value: 'No' } });
   const input = {

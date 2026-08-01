@@ -60,10 +60,13 @@
 /**
  * One **Issue Capture Field** declared by a Case Type: a typed input captured
  * against a *failed* Answer. `options` lists the choices for `select`/`radio`
- * (validated at capture time). `required` participates in the completion gate
- * only while the field is visible. `role` is an optional cross-Case-Type
- * reporting tag (not yet built). `showWhen` conditions on a sibling field on the
- * same Answer (not yet built). `placeholder` is hint text for `text`/`textarea`,
+ * (validated at capture time); a `person` is chosen from the directory and
+ * stored as `{ loginName, displayName }`. `showWhen` conditions the field on a
+ * sibling field of the same group, in the same operator vocabulary a Question
+ * Definition uses, and a field it hides loses its stored value on the next
+ * write. `required` holds the Case out of completion while the field is
+ * *visible* and empty on a failed Answer. `role` is an optional cross-Case-Type
+ * reporting tag (not yet built). `placeholder` is hint text for `text`/`textarea`,
  * ignored for choice types.
  *
  * `'actions'` is **not** declarable: per-action Remediation tracking moved to
@@ -84,8 +87,10 @@
 /**
  * One **General Question** declared by a Case Type: a `CaptureField` restricted
  * to the types the General Questions section actually renders. `person` and
- * `actions` are excluded, and `validateGeneralQuestions` rejects them at load
- * time rather than shipping a degraded field.
+ * `actions` are excluded — a General Question answer is a plain string, and the
+ * Review tab holds no people-search state to feed a picker — and
+ * `validateGeneralQuestions` rejects them at load time rather than shipping a
+ * field that cannot work.
  *
  * @typedef {{ key: string, label: string, type: 'text' | 'textarea' | 'select' | 'radio', options?: string[], placeholder?: string }} GeneralQuestionField
  */

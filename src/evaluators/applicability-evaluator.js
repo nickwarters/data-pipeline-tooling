@@ -77,11 +77,18 @@ export function detectCycles(catalogue) {
 }
 
 /**
+ * Evaluate one `showWhen` condition against a map of values.
+ *
+ * The map is typed to the one property a condition can read — a value — rather
+ * than to `Answer`, because Issue Capture Field visibility is evaluated over
+ * the same vocabulary against a Case's captured values. One operator set, two
+ * kinds of thing to look at.
+ *
  * @param {Record<string, unknown>} cond
- * @param {Record<string, Answer>} answers
+ * @param {Record<string, { value: string | string[] }>} answers
  * @returns {boolean}
  */
-function evalCondition(cond, answers) {
+export function evalCondition(cond, answers) {
   if ('$and' in cond) {
     return /** @type {Record<string, unknown>[]} */ (cond['$and']).every((c) =>
       evalCondition(c, answers)
@@ -101,7 +108,7 @@ function evalCondition(cond, answers) {
 
 /**
  * @param {Record<string, unknown>} op
- * @param {Answer|undefined} answer
+ * @param {{ value: string | string[] } | undefined} answer
  * @returns {boolean}
  */
 function evalOp(op, answer) {

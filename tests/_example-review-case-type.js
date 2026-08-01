@@ -68,8 +68,10 @@ const config = {
   // An absent bank field becomes an invalid load-time configuration, not a fallback.
   defaultOutcomeId: bank.defaultOutcomeId ?? '',
   // Unified Issue Capture engine: everything captured against a failed
-  // Answer, as ordered, collapsible groups of typed fields. This slice exercises
-  // the four string field types; person/actions arrive in their own slices.
+  // Answer, as ordered, collapsible groups of typed fields. Exercises the
+  // `text`, `textarea` and `select` types, a `required` field (`rootCause`) and
+  // an intra-group `showWhen` (see `followUpRequired`). The `person` and
+  // `radio` types are covered against the live Complaints Case Type instead.
   captureGroups: [
     {
       key: 'cause',
@@ -155,6 +157,9 @@ const config = {
           label: 'Follow-up required?',
           type: 'select',
           options: ['Yes', 'No'],
+          // Intra-group condition: there is nothing to follow up until the
+          // Reviewer has said what was done.
+          showWhen: { correctiveAction: { answered: true } },
         },
       ],
     },

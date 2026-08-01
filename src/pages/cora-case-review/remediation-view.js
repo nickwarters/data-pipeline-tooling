@@ -24,11 +24,15 @@ import { normaliseConfiguredActions } from '../../evaluators/configured-outcome.
  * @property {boolean} canCapture
  * @property {Record<string, Map<string, boolean>>} captureCollapsed
  * @property {Record<string, { query: string, people: import('../../sharepoint-client.js').PersonResult[] }>} attributionSearch
+ * @property {Record<string, Record<string, { query: string, people: import('../../sharepoint-client.js').PersonResult[] }>>} captureSearch
+ *   Per failed Answer, the open people search of each of its `person` Issue
+ *   Capture Fields.
  * @property {{ query: string, people: import('../../sharepoint-client.js').PersonResult[] }} responsiblePartySearch
  * @property {boolean} canSelectRemediation
  * @property {(party: Party) => void} dispatchResponsibleParty
  * @property {(query: string) => void} dispatchResponsiblePartySearch
- * @property {(questionId: string, fieldKey: string, value: string) => void} dispatchCapture
+ * @property {(questionId: string, fieldKey: string, value: import('../../evaluators/issue-capture.js').CaptureValue | null) => void} dispatchCapture
+ * @property {(questionId: string, fieldKey: string, query: string) => void} dispatchCaptureSearch
  * @property {(questionId: string, groupKey: string, collapsed: boolean) => void} dispatchCaptureToggle
  * @property {(questionId: string, attributedParty: Party | null) => void} dispatchAttribute
  * @property {(questionId: string, query: string) => void} dispatchAttributeSearch
@@ -449,8 +453,11 @@ export function renderRemediationCapture(props, li, q) {
       collapsed,
       onToggle: (groupKey, next) =>
         props.dispatchCaptureToggle(q.id, groupKey, next),
+      peopleSearch: props.captureSearch[q.id] ?? {},
       onCapture: (fieldKey, value) =>
         props.dispatchCapture(q.id, fieldKey, value),
+      onPersonQuery: (fieldKey, query) =>
+        props.dispatchCaptureSearch(q.id, fieldKey, query),
     })
   );
 }

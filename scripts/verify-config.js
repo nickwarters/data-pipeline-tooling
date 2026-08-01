@@ -21,6 +21,7 @@ import {
   detectCycles,
   showWhenReferences,
 } from '../src/evaluators/applicability-evaluator.js';
+import { validateCaptureGroups } from '../src/evaluators/issue-capture.js';
 import { sectionIds } from '../src/lib/section-registry.js';
 import { ROLES } from '../src/services/section-access.js';
 import { ACTION_CENTRE_REASONS } from '../src/services/action-centre-model.js';
@@ -189,6 +190,7 @@ export async function checkCaseTypes(options = {}) {
       );
     }
 
+    failures.push(...checkCaptureGroups(entry.slug, file, config));
     failures.push(...checkQuestions(entry.slug, file, config));
     failures.push(...checkSections(entry.slug, file, config));
     failures.push(...checkQuestionGroups(entry.slug, file, config));
@@ -211,6 +213,177 @@ function caseTypeFile(entry) {
     ? resolveRelative(MANIFEST, specifier, REPO_ROOT)
     : null;
   return resolved ?? MANIFEST;
+}
+
+/** The Issue Capture Field types the capture engine renders. */
+const CAPTURE_FIELD_TYPES = ['text', 'textarea', 'select', 'radio', 'person'];
+
+/** The types whose value is chosen from a declared list. */
+const CHOICE_CAPTURE_TYPES = ['select', 'radio'];
+
+/**
+ * Shape checks over a Case Type's `captureGroups`: every field is one the
+ * engine can render, choice fields offer something to choose, and a person
+ * offers nothing to choose from.
+ *
+ * The duplicate-key rule is the loader's own `validateCaptureGroups`, not a
+ * second copy of it — the gate and the browser must agree on what a colliding
+ * key is, and the browser's answer is the one that stops a Case opening.
+ *
+ * @param {string} slug
+ * @param {string} file
+ * @param {any} config
+ * @returns {Failure[]}
+ */
+function checkCaptureGroups(slug, file, config) {
+  /** @type {Failure[]} */
+  const failures = [];
+  /** @param {string} message */
+  const fail = (message) =>
+    failures.push({
+      kind: 'case-type',
+      file,
+      message: `Case Type "${slug}": ${message}`,
+    });
+
+  const groups = config?.captureGroups;
+  if (!Array.isArray(groups)) return failures;
+
+  try {
+    validateCaptureGroups(groups);
+  } catch (error) {
+    fail(messageOf(error));
+  }
+
+  for (const group of groups) {
+    for (const field of group?.fields ?? []) {
+      if (!CAPTURE_FIELD_TYPES.includes(field?.type)) {
+        fail(
+          `Issue Capture Field "${field?.key}" declares type "${field?.type}", which nothing renders — use one of: ${CAPTURE_FIELD_TYPES.join(', ')}`
+        );
+        continue;
+      }
+      const options = field.options;
+      if (
+        CHOICE_CAPTURE_TYPES.includes(field.type) &&
+        (!Array.isArray(options) || options.length === 0)
+      ) {
+        fail(
+          `Issue Capture Field "${field.key}" is a ${field.type} with no \`options\`, so the Reviewer has nothing to choose`
+        );
+      }
+      if (field.type === 'person' && options !== undefined) {
+        fail(
+          `Issue Capture Field "${field.key}" is a person and also declares \`options\`, which nothing reads — a person is chosen from the directory`
+        );
+      }
+      if (field.required !== undefined && typeof field.required !== 'boolean') {
+        fail(
+          `Issue Capture Field "${field.key}" declares a non-boolean \`required\`, which the completion gate would read as always required`
+        );
+      }
+      // Capture is only editable on a Case Type that opts into attribution, so
+      // a required field on one that does not can never be filled — and the
+      // completion gate would hold every failing Case open forever.
+      if (field.required === true && config?.attributeFailures !== true) {
+        fail(
+          `Issue Capture Field "${field.key}" is \`required\` but the Case Type does not set \`attributeFailures\`, so its capture groups render read-only and no Case with a failed Answer could ever be completed`
+        );
+      }
+    }
+    failures.push(...checkCaptureShowWhen(slug, file, group));
+  }
+  return failures;
+}
+
+/**
+ * The `showWhen` rules of one Issue Capture Group: shaped like a condition,
+ * pointing only at a sibling in the same group, and free of cycles.
+ *
+ * Same-group is a policy the gate enforces and the runtime does not: field keys
+ * are unique across a whole Case Type, so the evaluator — which reads the
+ * Answer's whole captured set — would happily resolve a reference into another
+ * group. Keeping a condition inside the group it is displayed in is what makes
+ * a collapsed group readable on its own, so it is refused here rather than left
+ * to work by accident.
+ *
+ * @param {string} slug
+ * @param {string} file
+ * @param {any} group
+ * @returns {Failure[]}
+ */
+function checkCaptureShowWhen(slug, file, group) {
+  /** @type {Failure[]} */
+  const failures = [];
+  /** @param {string} message */
+  const fail = (message) =>
+    failures.push({
+      kind: 'case-type',
+      file,
+      message: `Case Type "${slug}": ${message}`,
+    });
+
+  const fields = group?.fields ?? [];
+  for (const field of fields) {
+    for (const problem of malformedNodes(field?.showWhen)) {
+      fail(`Issue Capture Field "${field.key}" has a showWhen ${problem}`);
+    }
+  }
+  // Every check below walks the condition tree, and a node that is not shaped
+  // like a condition throws in all of them.
+  if (failures.length) return failures;
+
+  const keys = new Set(fields.map((/** @type {any} */ f) => f?.key));
+  for (const field of fields) {
+    for (const ref of showWhenReferences(field?.showWhen)) {
+      if (ref === field.key) {
+        fail(
+          `Issue Capture Field "${field.key}" has a showWhen that references itself`
+        );
+      } else if (!keys.has(ref)) {
+        fail(
+          `Issue Capture Field "${field.key}" has a showWhen reference to "${ref}", which is not a field of its own group "${group.key}"`
+        );
+      }
+    }
+    for (const siblings of ignoredSiblingKeys(field?.showWhen)) {
+      fail(
+        `Issue Capture Field "${field.key}" has a showWhen node holding ${siblings} together — the evaluator stops at the first of \`$and\`/\`$or\` and ignores everything beside it`
+      );
+    }
+  }
+
+  // A person reaches the evaluator as their display name and nothing else, so
+  // comparing one by value turns the rule into a test of how a name is spelled.
+  // `answered` is the only question worth asking of a person.
+  const personKeys = new Set(
+    fields
+      .filter((/** @type {any} */ f) => f?.type === 'person')
+      .map((/** @type {any} */ f) => f.key)
+  );
+  for (const field of fields) {
+    for (const ref of valueComparedKeys(field?.showWhen)) {
+      if (personKeys.has(ref)) {
+        fail(
+          `Issue Capture Field "${field.key}" has a showWhen comparing the value of "${ref}", which is a person — only \`answered\` is meaningful against one`
+        );
+      }
+    }
+  }
+  if (failures.length) return failures;
+
+  // `detectCycles` asks a list of things with ids and showWhens whether their
+  // graph loops; a capture field is one of those, with its key as its id.
+  const asGraph = fields.map((/** @type {any} */ f) => ({
+    id: f.key,
+    showWhen: f.showWhen,
+  }));
+  if (detectCycles(asGraph)) {
+    fail(
+      `Issue Capture Group "${group.key}" has a showWhen cycle, so its fields could never settle`
+    );
+  }
+  return failures;
 }
 
 /**
@@ -330,6 +503,37 @@ function nodeProblems(node) {
     for (const child of value) problems.push(...nodeProblems(child));
   }
   return problems;
+}
+
+/**
+ * Every key a condition compares *by value* — `equals` or `in` — as opposed to
+ * merely asking whether it is `answered`.
+ *
+ * @param {Record<string, unknown> | undefined} cond
+ * @returns {Set<string>}
+ */
+function valueComparedKeys(cond) {
+  /** @type {Set<string>} */
+  const keys = new Set();
+  collectValueCompared(cond, keys);
+  return keys;
+}
+
+/**
+ * @param {unknown} cond
+ * @param {Set<string>} into
+ */
+function collectValueCompared(cond, into) {
+  if (!cond || typeof cond !== 'object') return;
+  for (const [key, op] of Object.entries(cond)) {
+    if (key === '$and' || key === '$or') {
+      for (const child of /** @type {unknown[]} */ (op ?? [])) {
+        collectValueCompared(child, into);
+      }
+    } else if (op && typeof op === 'object' && ('equals' in op || 'in' in op)) {
+      into.add(key);
+    }
+  }
 }
 
 /**

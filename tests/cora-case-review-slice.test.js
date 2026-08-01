@@ -316,6 +316,7 @@ test('state: route state owns loading, save status, and selected tab under route
     completionPending: false,
     captureCollapsed: {},
     attributionSearch: {},
+    captureSearch: {},
     responsiblePartySearch: { query: '', people: [] },
     panelMode: 'popover',
     saveStatus: 'saved',
@@ -479,6 +480,195 @@ test('state: attribution search query and results stay independent per failed Qu
     }),
     state
   );
+});
+
+test('state: capture person search is held per failed Question and per field', () => {
+  let state = createInitialCaseReviewState(chrome, 'popover');
+  state = caseReviewReducer(state, {
+    type: 'case/capture-search-input',
+    questionId: 'q1',
+    fieldKey: 'attributedTo',
+    query: 'Jane',
+  });
+  state = caseReviewReducer(state, {
+    type: 'case/capture-search-input',
+    questionId: 'q1',
+    fieldKey: 'reviewedBy',
+    query: 'Alex',
+  });
+  state = caseReviewReducer(state, {
+    type: 'case/capture-search-results',
+    questionId: 'q1',
+    fieldKey: 'attributedTo',
+    query: 'Jane',
+    people: [{ loginName: 'jsmith', displayName: 'Jane Smith' }],
+  });
+
+  assert.deepEqual(state.routes.caseReview.captureSearch, {
+    q1: {
+      attributedTo: {
+        query: 'Jane',
+        people: [{ loginName: 'jsmith', displayName: 'Jane Smith' }],
+      },
+      reviewedBy: { query: 'Alex', people: [] },
+    },
+  });
+
+  for (const stale of [
+    { questionId: 'q1', fieldKey: 'attributedTo', query: 'Ja' },
+    { questionId: 'q1', fieldKey: 'unknown', query: 'Jane' },
+    { questionId: 'q2', fieldKey: 'attributedTo', query: 'Jane' },
+  ]) {
+    assert.equal(
+      caseReviewReducer(state, {
+        type: 'case/capture-search-results',
+        ...stale,
+        people: [],
+      }),
+      state,
+      'results the Reviewer has typed past are dropped'
+    );
+  }
+
+  const cleared = caseReviewReducer(state, {
+    type: 'case/capture-search-cleared',
+    questionId: 'q1',
+    fieldKey: 'attributedTo',
+  });
+  assert.deepEqual(cleared.routes.caseReview.captureSearch, {
+    q1: { reviewedBy: { query: 'Alex', people: [] } },
+  });
+  for (const absent of [
+    { questionId: 'q1', fieldKey: 'attributedTo' },
+    { questionId: 'missing', fieldKey: 'attributedTo' },
+  ]) {
+    assert.equal(
+      caseReviewReducer(cleared, {
+        type: 'case/capture-search-cleared',
+        ...absent,
+      }),
+      cleared,
+      'clearing a search that is not open changes nothing'
+    );
+  }
+});
+
+/**
+ * The same mount as the attribution harness, over a Case Type whose capture
+ * groups declare a `person` field and a Reviewer who may capture.
+ *
+ * @param {(query: string) => Promise<any[]>} searchPeople
+ */
+function renderCaptureSearchRoute(searchPeople) {
+  const failedSnapshot = snapshot();
+  failedSnapshot.catalogue[0].failureValues = ['No'];
+  failedSnapshot.answers = { q1: { value: 'No' } };
+  failedSnapshot.caseRow = {
+    ...failedSnapshot.caseRow,
+    answers: failedSnapshot.answers,
+  };
+  failedSnapshot.config.captureGroups = [
+    {
+      key: 'blame',
+      label: 'Blame',
+      fields: [{ key: 'attributedTo', label: 'Attributed to', type: 'person' }],
+    },
+  ];
+  failedSnapshot.machine = {
+    canAttribute: false,
+    canCapture: true,
+    canSelectRemediation: false,
+    canToggleConversation: false,
+  };
+  let state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    { type: 'case/load-finished', snapshot: failedSnapshot }
+  );
+  state = caseReviewReducer(state, { type: 'case/tab-selected', id: 'issues' });
+  const never = new Promise(() => {});
+  const client = /** @type {any} */ ({
+    getCase: () => never,
+    getCurrentUser: async () => chrome.currentUser,
+    getExportHash: async () => null,
+    resolveUsers: async () => ({}),
+    searchPeople,
+  });
+  const saveQueue = new SaveQueue(client, { debounceMs: 0 });
+  const slice = createRouteSlice(
+    { caseType: 'example-review', id: 'c1' },
+    /** @type {any} */ ({ client, saveQueue, chrome })
+  );
+  const container = document.createElement('main');
+  let active = true;
+  /** @type {any} */
+  let tools;
+  tools = {
+    render,
+    dispatch(/** @type {any} */ action) {
+      state = slice.reducer(state, action);
+      slice.render(container, state, tools);
+    },
+    listen() {},
+    isActive: () => active,
+  };
+  slice.render(container, state, tools);
+  const teardown = slice.start(tools);
+  return {
+    container,
+    dispose() {
+      active = false;
+      teardown?.();
+    },
+    get state() {
+      return state;
+    },
+  };
+}
+
+test('route: a person capture field searches, records the person, and closes its search', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  /** @type {string[]} */
+  const searches = [];
+  const route = renderCaptureSearchRoute(async (query) => {
+    searches.push(query);
+    return [{ loginName: 'jsmith', displayName: 'Jane Smith' }];
+  });
+
+  const input = getByRole(route.container, 'combobox', {
+    name: 'Search people for Attributed to',
+  });
+  input.value = 'Jane';
+  fireEvent(input, 'input');
+  assert.equal(
+    route.state.routes.caseReview.captureSearch.q1.attributedTo.query,
+    'Jane'
+  );
+
+  t.mock.timers.tick(200);
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.deepEqual(searches, ['Jane']);
+
+  fireEvent(
+    getByRole(route.container, 'option', { name: /Jane Smith/ }),
+    'click'
+  );
+  assert.deepEqual(
+    route.state.routes.caseReview.snapshot?.answers.q1.capture,
+    { attributedTo: { loginName: 'jsmith', displayName: 'Jane Smith' } },
+    'the chosen person is recorded on the Answer'
+  );
+  assert.equal(
+    route.state.routes.caseReview.captureSearch.q1.attributedTo,
+    undefined,
+    'choosing someone closes the search that found them'
+  );
+  assert.equal(
+    getByRole(route.container, 'button', { name: 'Clear Attributed to' })
+      .tagName,
+    'BUTTON'
+  );
+  route.dispose();
 });
 
 test('route: attribution search is debounced and renders route-owned results', async (t) => {

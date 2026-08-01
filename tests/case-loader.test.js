@@ -3,7 +3,10 @@ import './_register-example-review.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CaseLoader } from '../src/lib/case-loader.js';
-import { CASE_TYPE_IMPORTERS } from '../case-types/manifest.js';
+import {
+  CASE_TYPE_IMPORTERS,
+  registerCaseType,
+} from '../case-types/manifest.js';
 import { isolateBrowserGlobals } from './helpers/browser-globals.js';
 import { caps } from './helpers/section-access.js';
 
@@ -798,4 +801,105 @@ test('CaseLoader.load(): a post-rename versioned export keeps category and quest
   assert.equal(loader.catalogue[0].questionGroup, 'Acknowledgement');
   assert.equal(loader.catalogue[1].category, undefined);
   assert.equal(loader.catalogue[1].questionGroup, undefined);
+});
+
+// A Case Type whose capture groups declare a person field beside a text one:
+// the display-name refresh must tell them apart from the config alone.
+registerCaseType({
+  slug: 'person-capture-review',
+  displayName: 'Person Capture Review',
+  importer: async () => ({
+    default: {
+      listName: 'Cases-PersonCaptureReview',
+      questions: [
+        {
+          id: 'q-needs',
+          text: 'Needs identified?',
+          responseType: 'yes-no-na',
+          deprecated: false,
+        },
+      ],
+      computeOutcome: () => ({ outcome: 'fail' }),
+      outcomeOptions: [{ id: 'pass', wording: 'Pass', severity: 0 }],
+      defaultOutcomeId: 'pass',
+      captureGroups: [
+        {
+          key: 'blame',
+          label: 'Blame',
+          fields: [
+            { key: 'attributedTo', label: 'Attributed to', type: 'person' },
+            { key: 'rootCause', label: 'Root cause', type: 'text' },
+          ],
+        },
+      ],
+    },
+  }),
+});
+
+test('CaseLoader.load() refreshes person capture display names in one directory call', async () => {
+  /** @type {string[][]} */
+  const resolveCalls = [];
+  /** @type {any[]} */
+  const patches = [];
+  const answers = {
+    'q-needs': {
+      value: 'No',
+      // The Attributed Party property and a person Issue Capture Field, both
+      // holding a name the directory has since changed.
+      attributedParty: { loginName: 'jsmith', displayName: 'J. Smith' },
+      capture: {
+        attributedTo: { loginName: 'bjones', displayName: 'B. Jones' },
+        rootCause: 'jsmith',
+      },
+    },
+  };
+  const loader = new CaseLoader({
+    client: /** @type {any} */ ({
+      getCase: async () => ({
+        id: 'c1',
+        caseType: 'person-capture-review',
+        title: 'T',
+        status: 'In-progress',
+        assignedReviewer: 'u1',
+        responsibleParty: 'u2',
+        answers,
+        conversation: [],
+        notes: '',
+        completedAt: null,
+        etag: 'e1',
+      }),
+      getCurrentUser: async () => ({ id: 'u1', displayName: 'User 1' }),
+      getExportHash: async () => null,
+      resolveUsers: async (/** @type {string[]} */ accounts) => {
+        resolveCalls.push(accounts);
+        return { jsmith: 'Jane Smith', bjones: 'Bob Jones' };
+      },
+      patchCase: async (/** @type {any} */ ...args) => {
+        patches.push(args);
+        return { ok: true, status: 200 };
+      },
+    }),
+    saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
+    caseId: 'c1',
+    currentUserId: 'u1',
+    capabilities: caps(),
+    caseType: 'person-capture-review',
+  });
+
+  await loader.load();
+
+  assert.equal(resolveCalls.length, 1, 'one batched directory call');
+  assert.deepEqual(resolveCalls[0].sort(), ['bjones', 'jsmith']);
+  const loaded = loader.answers['q-needs'];
+  assert.equal(loaded.attributedParty?.displayName, 'Jane Smith');
+  assert.deepEqual(loaded.capture?.attributedTo, {
+    loginName: 'bjones',
+    displayName: 'Bob Jones',
+  });
+  assert.equal(
+    loaded.capture?.rootCause,
+    'jsmith',
+    'a non-person capture value is left alone whatever it looks like'
+  );
+  assert.equal(patches.length, 0, 'a display-name refresh is never persisted');
 });

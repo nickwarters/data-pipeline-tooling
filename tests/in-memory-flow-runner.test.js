@@ -286,6 +286,12 @@ test('a failure the Reviewer marks as needing no remediation completes the Case 
     { type: 'answer', questionId: 'q-channel', value: 'Phone' },
     { type: 'answer', questionId: 'q-products', value: ['Account'] },
     { type: 'setRemediationRequired', questionId: 'q-needs', required: 'no' },
+    {
+      type: 'captureIssue',
+      questionId: 'q-needs',
+      fieldKey: 'rootCause',
+      value: 'Agent skipped the needs check.',
+    },
     { type: 'clickCompleteCase' },
   ]);
 
@@ -301,7 +307,52 @@ test('a failure the Reviewer marks as needing no remediation completes the Case 
   assert.deepEqual(row.answers['q-needs'], {
     value: 'No',
     remediationRequired: 'no',
+    capture: { rootCause: 'Agent skipped the needs check.' },
   });
+});
+
+test('a required Issue Capture Field holds the Case until the Reviewer fills it', async () => {
+  const runner = createInMemoryFlowRunner(
+    { lists: { 'Cases-ExampleReview': [CASE_ROW] } },
+    { persona: 'reviewer' }
+  );
+  const stored = () =>
+    /** @type {import('../src/sharepoint-client.js').CaseRow} */ (
+      runner
+        .snapshot()
+        .lists['Cases-ExampleReview'].find((c) => c.id === 'case-flow-1')
+    );
+
+  await runner.run([
+    { type: 'loadCasePage', caseId: 'case-flow-1', caseType: 'example-review' },
+    { type: 'answer', questionId: 'q-welcome', value: 'Yes' },
+    { type: 'answer', questionId: 'q-needs', value: 'No' },
+    { type: 'answer', questionId: 'q-channel', value: 'Phone' },
+    { type: 'answer', questionId: 'q-products', value: ['Account'] },
+    { type: 'setRemediationRequired', questionId: 'q-needs', required: 'no' },
+    { type: 'clickCompleteCase' },
+  ]);
+  assert.equal(
+    stored().status,
+    'In-progress',
+    'the Case Type asks for a Root cause on every failure, and it is empty'
+  );
+  assert.deepEqual(runner.navigations, []);
+
+  await runner.run([
+    {
+      type: 'captureIssue',
+      questionId: 'q-needs',
+      fieldKey: 'rootCause',
+      value: 'Agent skipped the needs check.',
+    },
+    { type: 'clickCompleteCase' },
+  ]);
+  assert.equal(
+    stored().status,
+    'Completed',
+    'filling the last required field releases the same gate'
+  );
 });
 
 test('switching a failure from Yes to No drops the actions from the stored Answer', async () => {
@@ -396,6 +447,12 @@ test('in-memory flow runner completes allocate, review, remediate, appeal, and a
         { type: 'answer', questionId: 'q-welcome', value: 'Yes' },
         { type: 'answer', questionId: 'q-channel', value: 'Phone' },
         { type: 'answer', questionId: 'q-products', value: ['Account'] },
+        {
+          type: 'captureIssue',
+          questionId: 'q-needs',
+          fieldKey: 'rootCause',
+          value: 'Reviewer missed the evidence.',
+        },
         {
           type: 'setRemediationRequired',
           questionId: 'q-needs',

@@ -35,6 +35,8 @@ export class CORARemediationSection extends HTMLElement {
     /** @type {import('../../src/sharepoint-client.js').CaptureGroup[]} */
     this.captureGroups = [];
     this.canCapture = false;
+    /** @type {Record<string, Record<string, { query: string, people: any[] }>>} */
+    this.captureSearch = {};
     this.canSelectRemediation = false;
   }
 
@@ -91,12 +93,15 @@ export class CORARemediationSection extends HTMLElement {
       canCapture: this.canCapture,
       captureCollapsed: {},
       attributionSearch: {},
+      captureSearch: this.captureSearch,
       responsiblePartySearch: { query: '', people: [] },
       canSelectRemediation: this.canSelectRemediation,
       dispatchResponsibleParty() {},
       dispatchResponsiblePartySearch() {},
       dispatchCapture: (questionId, fieldKey, value) =>
         this._emit('cora-capture', { questionId, fieldKey, value }),
+      dispatchCaptureSearch: (questionId, fieldKey, query) =>
+        this._emit('cora-capture-search', { questionId, fieldKey, query }),
       dispatchCaptureToggle() {},
       dispatchAttribute: (questionId, attributedParty) =>
         this._emit('cora-attribute', { questionId, attributedParty }),

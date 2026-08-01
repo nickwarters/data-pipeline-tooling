@@ -42,7 +42,6 @@ import { AppealReviewSection } from './appeal-review-view.js';
 import { AmendOutcomeSection } from './amend-outcome-view.js';
 import {
   groupOutcomeSet,
-  issueCaptured,
   remediationActionToggled,
   remediationFreeFormEdited,
   remediationRequiredSet,
@@ -84,6 +83,8 @@ import { resolveGeneralQuestionsPlacement } from '../../evaluators/general-quest
  * @property {(questionId: string, value: string | string[]) => void} onAnswer
  * @property {(questionId: string, party: { loginName: string, displayName: string } | null) => void} selectAttribution
  * @property {(questionId: string, query: string) => void} requestAttributionSearch
+ * @property {(questionId: string, fieldKey: string, value: import('../../evaluators/issue-capture.js').CaptureValue | null) => void} captureEdited
+ * @property {(questionId: string, fieldKey: string, query: string) => void} requestCaptureSearch
  * @property {(party: { loginName: string, displayName: string }) => void} selectResponsibleParty
  * @property {(query: string) => void} requestResponsiblePartySearch
  * @property {{ fieldEdited: (field: import('./case-actions.js').PlainTextCaseField, value: string) => void }} save
@@ -205,21 +206,13 @@ export const SECTION_PANELS = {
       canCapture: snapshot.machine?.canCapture ?? false,
       captureCollapsed: route.captureCollapsed,
       attributionSearch: route.attributionSearch,
+      captureSearch: route.captureSearch,
       responsiblePartySearch: route.responsiblePartySearch,
       canSelectRemediation: snapshot.machine?.canSelectRemediation ?? false,
       dispatchResponsibleParty: actions.selectResponsibleParty,
       dispatchResponsiblePartySearch: actions.requestResponsiblePartySearch,
-      dispatchCapture: (questionId, fieldKey, value) =>
-        actions.editAnswers(
-          issueCaptured({
-            answers: actions.currentAnswers(),
-            captureGroups: config.captureGroups ?? [],
-            questionId,
-            fieldKey,
-            value,
-            canCapture: snapshot.machine?.canCapture ?? false,
-          })
-        ),
+      dispatchCapture: actions.captureEdited,
+      dispatchCaptureSearch: actions.requestCaptureSearch,
       dispatchCaptureToggle: (questionId, groupKey, collapsed) =>
         dispatch({
           type: 'case/capture-group-toggled',

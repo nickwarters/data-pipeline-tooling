@@ -27,6 +27,7 @@ import { createDebouncedPeopleSearch } from './cora-case-review/people-search-ef
 import {
   answerEdited,
   failureAttributed,
+  issueCaptured,
 } from './cora-case-review/answer-actions.js';
 import { SECTION_PANELS } from './cora-case-review/section-panels.js';
 import {
@@ -75,6 +76,10 @@ import {
  * @property {boolean} completionPending
  * @property {Record<string, Map<string, boolean>>} captureCollapsed
  * @property {Record<string, { query: string, people: import('../sharepoint-client.js').PersonResult[] }>} attributionSearch
+ * @property {Record<string, Record<string, { query: string, people: import('../sharepoint-client.js').PersonResult[] }>>} captureSearch
+ *   Per failed Answer, per `person` Issue Capture Field: the open people search.
+ *   Nested rather than keyed by a joined string so a panel can hand one
+ *   Answer's searches straight to its capture view.
  * @property {{ query: string, people: import('../sharepoint-client.js').PersonResult[] }} responsiblePartySearch
  *   One search, not one per Question: the Responsible Party is a Case-level
  *   field, so there is only ever one of these boxes open.
@@ -104,6 +109,7 @@ export function createInitialCaseReviewState(chrome, panelMode) {
         completionPending: false,
         captureCollapsed: {},
         attributionSearch: {},
+        captureSearch: {},
         responsiblePartySearch: { query: '', people: [] },
         snapshot: null,
       },
@@ -146,6 +152,27 @@ function selectAdjacentTab(event, tabs, activeTab, dispatch) {
     );
     /** @type {any} */ (button)?.focus?.();
   });
+}
+
+/**
+ * The nested capture-search map with one field's entry replaced, or removed
+ * when `entry` is null. Nested by Question then field because two pickers can
+ * be open on different failed Answers at once and neither may see the other's
+ * results.
+ *
+ * @param {CaseReviewRouteState['captureSearch']} captureSearch
+ * @param {{ questionId: string, fieldKey: string }} target
+ * @param {{ query: string, people: import('../sharepoint-client.js').PersonResult[] } | null} entry
+ * @returns {CaseReviewRouteState['captureSearch']}
+ */
+function withCaptureSearch(captureSearch, target, entry) {
+  const forQuestion = { ...captureSearch[target.questionId] };
+  if (entry) {
+    forQuestion[target.fieldKey] = entry;
+  } else {
+    delete forQuestion[target.fieldKey];
+  }
+  return { ...captureSearch, [target.questionId]: forQuestion };
 }
 
 /**
@@ -257,6 +284,33 @@ export function caseReviewReducer(state, action) {
     const attributionSearch = { ...route.attributionSearch };
     delete attributionSearch[action.questionId];
     return patchRoute(state, 'caseReview', { attributionSearch });
+  }
+  if (action.type === 'case/capture-search-input') {
+    return patchRoute(state, 'caseReview', {
+      captureSearch: withCaptureSearch(route.captureSearch, action, {
+        query: action.query,
+        people: [],
+      }),
+    });
+  }
+  if (action.type === 'case/capture-search-results') {
+    const current = route.captureSearch[action.questionId]?.[action.fieldKey];
+    // Identity guard: results for a query the Reviewer has typed past.
+    if (!current || current.query !== action.query) return state;
+    return patchRoute(state, 'caseReview', {
+      captureSearch: withCaptureSearch(route.captureSearch, action, {
+        query: action.query,
+        people: action.people,
+      }),
+    });
+  }
+  if (action.type === 'case/capture-search-cleared') {
+    // Identity guard: clearing a search that is not open.
+    if (!route.captureSearch[action.questionId]?.[action.fieldKey])
+      return state;
+    return patchRoute(state, 'caseReview', {
+      captureSearch: withCaptureSearch(route.captureSearch, action, null),
+    });
   }
   if (action.type === 'case/responsible-party-search-input') {
     return patchRoute(state, 'caseReview', {
@@ -485,6 +539,24 @@ export function createRouteSlice(params, context) {
       });
     },
   });
+  // One debounce per person Issue Capture Field per failed Answer, so two
+  // pickers open at once do not share a timer. The debounce map is flat, so the
+  // two halves are joined with a `:` — a Question Definition id may not contain
+  // one (the namespaced answer keys depend on that), so the join is reversible.
+  const capturePeopleSearch = createDebouncedPeopleSearch({
+    client: context.client,
+    isActive: () => isSliceActive(),
+    onResults: (key, query, people) => {
+      const separator = key.indexOf(':');
+      dispatch({
+        type: 'case/capture-search-results',
+        questionId: key.slice(0, separator),
+        fieldKey: key.slice(separator + 1),
+        query,
+        people,
+      });
+    },
+  });
   const responsiblePartyPeopleSearch = createDebouncedPeopleSearch({
     client: context.client,
     isActive: () => isSliceActive(),
@@ -519,6 +591,28 @@ export function createRouteSlice(params, context) {
   function requestAttributionSearch(questionId, query) {
     dispatch({ type: 'case/attribution-search-input', questionId, query });
     attributionPeopleSearch.request(questionId, query);
+  }
+
+  /** @param {string} questionId @param {string} fieldKey */
+  function captureSearchKey(questionId, fieldKey) {
+    return `${questionId}:${fieldKey}`;
+  }
+
+  /** @param {string} questionId @param {string} fieldKey */
+  function clearCaptureSearch(questionId, fieldKey) {
+    capturePeopleSearch.clear(captureSearchKey(questionId, fieldKey));
+    dispatch({ type: 'case/capture-search-cleared', questionId, fieldKey });
+  }
+
+  /** @param {string} questionId @param {string} fieldKey @param {string} query */
+  function requestCaptureSearch(questionId, fieldKey, query) {
+    dispatch({
+      type: 'case/capture-search-input',
+      questionId,
+      fieldKey,
+      query,
+    });
+    capturePeopleSearch.request(captureSearchKey(questionId, fieldKey), query);
   }
 
   function clearResponsiblePartySearch() {
@@ -699,6 +793,30 @@ export function createRouteSlice(params, context) {
       clearAttributionSearch(questionId);
     };
 
+    /**
+     * The one write path for every Issue Capture Field, whatever its type: a
+     * typed string, a chosen person, or the clearing of either. The search
+     * close is unconditional because only a person can have one open, and
+     * closing one that never opened changes nothing.
+     *
+     * @param {string} questionId
+     * @param {string} fieldKey
+     * @param {import('../evaluators/issue-capture.js').CaptureValue | null} value
+     */
+    const captureEdited = (questionId, fieldKey, value) => {
+      editAnswers(
+        issueCaptured({
+          answers: currentAnswers,
+          captureGroups: config.captureGroups ?? [],
+          questionId,
+          fieldKey,
+          value,
+          canCapture: snapshot.machine?.canCapture ?? false,
+        })
+      );
+      clearCaptureSearch(questionId, fieldKey);
+    };
+
     /** @param {{ loginName: string, displayName: string }} party */
     const selectResponsibleParty = (party) => {
       if (!snapshot.machine?.canSelectRemediation) return;
@@ -718,6 +836,8 @@ export function createRouteSlice(params, context) {
       onAnswer,
       selectAttribution,
       requestAttributionSearch,
+      captureEdited,
+      requestCaptureSearch,
       selectResponsibleParty,
       requestResponsiblePartySearch,
       save,
@@ -852,6 +972,7 @@ export function createRouteSlice(params, context) {
       catalogue: snapshot.catalogue,
       answers: snapshot.answers,
       allAnswered: snapshot.allAnswered,
+      captureGroups: config.captureGroups ?? [],
     });
     tools.render(
       parts.completion,
@@ -872,6 +993,7 @@ export function createRouteSlice(params, context) {
                     catalogue: snapshot.catalogue,
                     answers: snapshot.answers,
                     allAnswered: snapshot.allAnswered,
+                    captureGroups: config.captureGroups ?? [],
                     computeOutcome: config.computeOutcome,
                     exportHash: snapshot.exportHash,
                   });
@@ -1002,6 +1124,7 @@ export function createRouteSlice(params, context) {
         .catch(ignoreAbortError);
       return () => {
         attributionPeopleSearch.dispose();
+        capturePeopleSearch.dispose();
         responsiblePartyPeopleSearch.dispose();
         questionsView.clear();
         dispatch = () => {};

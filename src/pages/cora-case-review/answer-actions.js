@@ -11,10 +11,7 @@ import { evaluate } from '../../evaluators/applicability-evaluator.js';
 import { materializeRemediationActions } from '../../evaluators/failure-evaluator.js';
 import { groupOutcomeTargets } from './group-outcome-view.js';
 import { reviewerResponseOptions } from '../../lib/response-options.js';
-import {
-  captureValue,
-  findCaptureField,
-} from '../../evaluators/issue-capture.js';
+import { applyCapture } from '../../evaluators/issue-capture.js';
 import {
   answerRemediation,
   setRemediationStatus,
@@ -155,7 +152,7 @@ export function groupOutcomeSet({
  *   captureGroups: import('../../sharepoint-client.js').CaptureGroup[],
  *   questionId: string,
  *   fieldKey: string,
- *   value: string,
+ *   value: import('../../evaluators/issue-capture.js').CaptureValue | null,
  *   canCapture: boolean,
  * }} input
  * @returns {Answers | null}
@@ -171,9 +168,11 @@ export function issueCaptured({
   if (!canCapture) return null;
   const existing = answers[questionId];
   if (!existing) return null;
-  const field = findCaptureField(captureGroups, fieldKey);
-  if (!field) return null;
-  return { ...answers, [questionId]: captureValue(existing, field, value) };
+  // Not a bare value write: a capture value can hide a sibling field, and the
+  // sibling's stored value goes with it in the same write.
+  const next = applyCapture(existing, captureGroups, fieldKey, value);
+  if (!next) return null;
+  return { ...answers, [questionId]: next };
 }
 
 /**

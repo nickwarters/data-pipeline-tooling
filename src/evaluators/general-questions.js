@@ -18,9 +18,11 @@ export const GENERAL_ANSWER_PREFIX = 'general:';
 
 /**
  * The field types a General Question may declare. Narrower than the full
- * `CaptureField` vocabulary on purpose: `person` and `actions` fall through to
- * a plain text box in `buildCaptureControl`, and a Case Type Owner should be
- * told that rather than shipping a silently degraded field.
+ * `CaptureField` vocabulary on purpose: a General Question answer is a plain
+ * string stored under its namespaced key, and both the Review tab and the
+ * Summary roll-up format it as text. A people picker also needs per-field
+ * debounced search state, which the Review tab carries nowhere. A Case Type
+ * Owner is told that at load time rather than shipping a field that cannot work.
  */
 export const GENERAL_QUESTION_TYPES = ['text', 'textarea', 'select', 'radio'];
 

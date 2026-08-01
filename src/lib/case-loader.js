@@ -336,41 +336,82 @@ export class CaseLoader {
 
     this.loaded = true;
 
-    await this._resolveAttributedParties();
+    await this._resolvePersonNames();
   }
 
   /**
-   * Refresh stale Attributed Party display names from the directory, as the
-   * last step of the load and before the loader hands its Answers to the
-   * store. Not persisted: a display-name refresh is presentation, not a
+   * Runs as the last step of the load, before the loader hands its Answers to
+   * the store. Not persisted: a display-name refresh is presentation, not a
    * Reviewer edit.
+   *
+   * Covers both the Attributed Party property and every `person` Issue Capture
+   * Field, in one batched call — they are the same cached-name problem, and
+   * asking the directory twice for one Case would be the only difference.
    */
-  async _resolveAttributedParties() {
+  async _resolvePersonNames() {
+    const personKeys = this._personCaptureKeys();
     /** @type {string[]} */
     const accounts = [];
+    /** @param {unknown} value */
+    const collect = (value) => {
+      const login = /** @type {any} */ (value)?.loginName;
+      if (typeof login === 'string' && login && !accounts.includes(login)) {
+        accounts.push(login);
+      }
+    };
     for (const answer of Object.values(this.answers)) {
-      const login = answer.attributedParty?.loginName;
-      if (login && !accounts.includes(login)) accounts.push(login);
+      collect(answer.attributedParty);
+      for (const key of personKeys) collect(answer.capture?.[key]);
     }
     if (accounts.length === 0) return;
 
     const resolved = await this.client.resolveUsers(accounts);
+    /**
+     * The same person with the directory's current name, or null when nothing
+     * needs rewriting.
+     * @param {unknown} value
+     * @returns {{ loginName: string, displayName: string } | null}
+     */
+    const refreshed = (value) => {
+      const party = /** @type {any} */ (value);
+      const name = party?.loginName ? resolved[party.loginName] : null;
+      return name && name !== party.displayName
+        ? { ...party, displayName: name }
+        : null;
+    };
+
     let changed = false;
     /** @type {Record<string, Answer>} */
     const next = {};
     for (const [id, answer] of Object.entries(this.answers)) {
-      const party = answer.attributedParty;
-      const name = party ? resolved[party.loginName] : null;
-      if (party && name && name !== party.displayName) {
-        next[id] = {
-          ...answer,
-          attributedParty: { ...party, displayName: name },
-        };
-        changed = true;
-      } else {
-        next[id] = answer;
+      let updated = answer;
+      const party = refreshed(answer.attributedParty);
+      if (party) updated = { ...updated, attributedParty: party };
+      for (const key of personKeys) {
+        const person = refreshed(answer.capture?.[key]);
+        if (person) {
+          updated = {
+            ...updated,
+            capture: { ...updated.capture, [key]: person },
+          };
+        }
       }
+      if (updated !== answer) changed = true;
+      next[id] = updated;
     }
     if (changed) this.answers = next;
+  }
+
+  /**
+   * The capture field keys this Case Type declares as people. A key the config
+   * does not name a person is left alone whatever it holds — the config is the
+   * only authority on which values are accounts.
+   *
+   * @returns {string[]}
+   */
+  _personCaptureKeys() {
+    return (this.config?.captureGroups ?? []).flatMap((group) =>
+      group.fields.filter((f) => f.type === 'person').map((f) => f.key)
+    );
   }
 }

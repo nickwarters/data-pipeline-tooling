@@ -882,3 +882,251 @@ test('checkCaseTypes checks the groups a Case Type-wide allowBulkOutcome opts in
     'a group that opted out offers no control, so its options cannot disagree'
   );
 });
+
+/**
+ * @param {any[]} fields
+ * @param {any} [second]
+ */
+async function captureFailures(fields, second) {
+  return checkCaseTypes({
+    caseTypes: [
+      demoEntry(
+        demoConfig({
+          captureGroups: [
+            { key: 'g1', label: 'Group one', fields },
+            ...(second ? [second] : []),
+          ],
+        })
+      ),
+    ],
+  });
+}
+
+test('checkCaseTypes accepts the capture groups a live Case Type declares', async () => {
+  const { default: complaints } = await import('../case-types/complaints.js');
+  const failures = await checkCaseTypes({
+    caseTypes: [demoEntry(demoConfig(complaints))],
+  });
+  assert.deepEqual(failures, [], joined(failures));
+});
+
+test('checkCaseTypes fails an Issue Capture Field key used twice', async () => {
+  const failures = await captureFailures(
+    [{ key: 'rootCause', label: 'Root cause', type: 'text' }],
+    {
+      key: 'g2',
+      label: 'Group two',
+      fields: [{ key: 'rootCause', label: 'Again', type: 'text' }],
+    }
+  );
+
+  assert.equal(failures.length, 1);
+  assert.match(failures[0].message, /rootCause/);
+});
+
+test('checkCaseTypes fails an Issue Capture Field the engine cannot render', async () => {
+  const failures = await captureFailures([
+    { key: 'when', label: 'When', type: 'date' },
+  ]);
+
+  assert.equal(failures.length, 1);
+  assert.match(failures[0].message, /when/);
+  assert.match(failures[0].message, /date/);
+});
+
+test('checkCaseTypes fails a choice field with no options and a person with them', async () => {
+  const noOptions = await captureFailures([
+    { key: 'severity', label: 'Severity', type: 'select', options: [] },
+  ]);
+  assert.equal(noOptions.length, 1);
+  assert.match(noOptions[0].message, /severity/);
+
+  const personOptions = await captureFailures([
+    {
+      key: 'attributedTo',
+      label: 'Attributed to',
+      type: 'person',
+      options: ['Someone'],
+    },
+  ]);
+  assert.equal(personOptions.length, 1);
+  assert.match(personOptions[0].message, /attributedTo/);
+});
+
+test('checkCaseTypes fails a `required` that is not a boolean', async () => {
+  const failures = await captureFailures([
+    { key: 'rootCause', label: 'Root cause', type: 'text', required: 'yes' },
+  ]);
+
+  assert.equal(failures.length, 1);
+  assert.match(failures[0].message, /rootCause/);
+  assert.match(failures[0].message, /required/);
+});
+
+test('checkCaseTypes fails a `required` field the Case Type gives nobody a way to fill', async () => {
+  const failures = await captureFailures([
+    { key: 'rootCause', label: 'Root cause', type: 'text', required: true },
+  ]);
+
+  assert.equal(failures.length, 1);
+  assert.match(failures[0].message, /rootCause/);
+  assert.match(failures[0].message, /attributeFailures/);
+
+  const editable = await checkCaseTypes({
+    caseTypes: [
+      demoEntry(
+        demoConfig({
+          attributeFailures: true,
+          captureGroups: [
+            {
+              key: 'g1',
+              label: 'Group one',
+              fields: [
+                {
+                  key: 'rootCause',
+                  label: 'Root cause',
+                  type: 'text',
+                  required: true,
+                },
+              ],
+            },
+          ],
+        })
+      ),
+    ],
+  });
+  assert.deepEqual(editable, [], joined(editable));
+});
+
+test('checkCaptureGroups fails a showWhen comparing a person by value', async () => {
+  const person = { key: 'owner', label: 'Owner', type: 'person' };
+
+  const equals = await captureFailures([
+    person,
+    {
+      key: 'detail',
+      label: 'Detail',
+      type: 'text',
+      showWhen: { owner: { equals: 'Jane Smith' } },
+    },
+  ]);
+  assert.equal(equals.length, 1);
+  assert.match(equals[0].message, /detail/);
+  assert.match(equals[0].message, /owner/);
+
+  const inList = await captureFailures([
+    person,
+    {
+      key: 'detail',
+      label: 'Detail',
+      type: 'text',
+      showWhen: { $or: [{ owner: { in: ['Jane Smith'] } }] },
+    },
+  ]);
+  assert.equal(inList.length, 1);
+  assert.match(inList[0].message, /owner/);
+
+  const answered = await captureFailures([
+    person,
+    {
+      key: 'detail',
+      label: 'Detail',
+      type: 'text',
+      showWhen: { owner: { answered: true } },
+    },
+  ]);
+  assert.deepEqual(
+    answered,
+    [],
+    'whether a person was picked is the one question worth asking'
+  );
+});
+
+test('checkCaptureGroups fails a showWhen reference outside its own group', async () => {
+  const failures = await captureFailures(
+    [
+      { key: 'origin', label: 'Origin', type: 'text' },
+      {
+        key: 'detail',
+        label: 'Detail',
+        type: 'text',
+        showWhen: { elsewhere: { answered: true } },
+      },
+    ],
+    {
+      key: 'g2',
+      label: 'Group two',
+      fields: [{ key: 'elsewhere', label: 'Elsewhere', type: 'text' }],
+    }
+  );
+
+  assert.equal(failures.length, 1);
+  assert.match(failures[0].message, /detail/);
+  assert.match(failures[0].message, /elsewhere/);
+});
+
+test('checkCaptureGroups fails a self-referencing and a cyclic showWhen', async () => {
+  const self = await captureFailures([
+    {
+      key: 'origin',
+      label: 'Origin',
+      type: 'text',
+      showWhen: { origin: { answered: true } },
+    },
+  ]);
+  assert.equal(self.length, 1);
+  assert.match(self[0].message, /origin/);
+
+  const cycle = await captureFailures([
+    {
+      key: 'a',
+      label: 'A',
+      type: 'text',
+      showWhen: { b: { answered: true } },
+    },
+    {
+      key: 'b',
+      label: 'B',
+      type: 'text',
+      showWhen: { a: { answered: true } },
+    },
+  ]);
+  assert.equal(cycle.length, 1);
+  assert.match(cycle[0].message, /cycle/);
+});
+
+test('checkCaptureGroups fails a malformed capture showWhen node', async () => {
+  const notACondition = await captureFailures([
+    { key: 'origin', label: 'Origin', type: 'text', showWhen: 'Sales' },
+  ]);
+  assert.equal(notACondition.length, 1);
+  assert.match(notACondition[0].message, /origin/);
+
+  const ignoredSibling = await captureFailures([
+    { key: 'origin', label: 'Origin', type: 'text' },
+    {
+      key: 'detail',
+      label: 'Detail',
+      type: 'text',
+      showWhen: {
+        origin: { answered: true },
+        $or: [{ origin: { equals: 'Sales' } }],
+      },
+    },
+  ]);
+  assert.equal(ignoredSibling.length, 1);
+  assert.match(ignoredSibling[0].message, /detail/);
+});
+
+test('checkCaptureGroups accepts a well-formed intra-group showWhen', async () => {
+  const failures = await captureFailures([
+    { key: 'origin', label: 'Origin', type: 'select', options: ['Sales'] },
+    {
+      key: 'detail',
+      label: 'Detail',
+      type: 'text',
+      showWhen: { $and: [{ origin: { equals: 'Sales' } }] },
+    },
+  ]);
+  assert.deepEqual(failures, [], joined(failures));
+});

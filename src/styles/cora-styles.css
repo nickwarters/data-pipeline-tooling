@@ -1316,13 +1316,15 @@
 }
 
 /* Set: the attributed person named, with a clear button to re-attribute. */
-.cora-attribute-selected {
+.cora-attribute-selected,
+.cora-capture-person-selected {
   display: flex;
   align-items: center;
   gap: var(--cora-space-2);
 }
 
-.cora-attribute-current {
+.cora-attribute-current,
+.cora-capture-person-current {
   display: inline-flex;
   align-items: center;
   gap: var(--cora-space-1);
@@ -1335,11 +1337,13 @@
   border-radius: var(--cora-radius-pill, 999px);
 }
 
-.cora-attribute-current::before {
+.cora-attribute-current::before,
+.cora-capture-person-current::before {
   content: '\1F464'; /* 👤 */
 }
 
-.cora-attribute-clear {
+.cora-attribute-clear,
+.cora-capture-person-clear {
   display: inline-flex;
   padding: var(--cora-space-1);
   font: inherit;
@@ -1353,7 +1357,9 @@
 }
 
 .cora-attribute-clear:hover,
-.cora-attribute-clear:focus-visible {
+.cora-attribute-clear:focus-visible,
+.cora-capture-person-clear:hover,
+.cora-capture-person-clear:focus-visible {
   color: var(--cora-color-danger);
   outline: none;
 }

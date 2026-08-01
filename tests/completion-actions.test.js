@@ -89,6 +89,7 @@ test('completionPatch freezes outcome and effective columns in the lifecycle PAT
     catalogue: CATALOGUE,
     answers,
     allAnswered: true,
+    captureGroups: [],
     computeOutcome: () => ({ outcome: 'fail' }),
     exportHash: 'sha256:v1',
   });
@@ -124,6 +125,7 @@ test('completionPatch chooses the transition from the catalogue CaseMachine stam
     catalogue: CATALOGUE,
     answers,
     allAnswered: true,
+    captureGroups: [],
     computeOutcome: () => ({ outcome: 'fail' }),
     exportHash: null,
   });
@@ -151,6 +153,7 @@ test('completionPatch atomically clears hold fields when either transition leave
     caseRow: heldCase,
     catalogue: CATALOGUE,
     allAnswered: true,
+    captureGroups: [],
     computeOutcome: () => ({ outcome: 'pass' }),
     exportHash: null,
   };
@@ -190,6 +193,7 @@ test('completionPatch rejects incomplete or unauthorised completion and uses fin
     catalogue: CATALOGUE,
     answers: {},
     allAnswered: false,
+    captureGroups: [],
     computeOutcome: () => ({ outcome: 'pass' }),
     exportHash: null,
   };
@@ -427,6 +431,7 @@ test('completionControl: shows Complete Case disabled, with the reason, while re
     catalogue: CATALOGUE,
     answers: UNRESOLVED,
     allAnswered: true,
+    captureGroups: [],
   });
   assert.equal(control.visible, true);
   assert.equal(control.disabled, true);
@@ -443,6 +448,7 @@ test('completionControl: shows Complete Case disabled, with the reason, while re
       q1: { ...UNRESOLVED.q1, remediationStatus: { status: 'complete' } },
     },
     allAnswered: true,
+    captureGroups: [],
   });
   assert.equal(ready.visible, true);
   assert.equal(ready.disabled, false);
@@ -459,6 +465,7 @@ test('completionControl: a viewer who cannot resolve remediation sees no button 
     catalogue: CATALOGUE,
     answers: UNRESOLVED,
     allAnswered: true,
+    captureGroups: [],
   });
   assert.equal(control.visible, false);
 });
@@ -473,6 +480,7 @@ test('completionControl: the pre-send path still reads Send Actions and is enabl
     catalogue: CATALOGUE,
     answers: UNRESOLVED,
     allAnswered: true,
+    captureGroups: [],
   });
   assert.equal(control.visible, true);
   assert.equal(control.disabled, false);
@@ -495,6 +503,7 @@ test('completionControl: no Responsible Party names the gate instead of hiding i
     catalogue: CATALOGUE,
     answers,
     allAnswered: true,
+    captureGroups: [],
   };
   const patchInput = {
     computeOutcome: () => ({ outcome: /** @type {string} */ ('fail') }),
@@ -558,6 +567,7 @@ test('completionPatch: refuses the final close while a remediation row is unreso
       catalogue: CATALOGUE,
       answers: UNRESOLVED,
       allAnswered: true,
+      captureGroups: [],
       computeOutcome: () => ({ outcome: 'pass' }),
       exportHash: null,
     }),
@@ -584,6 +594,7 @@ test('free-form remediation alone sends the Case down the actions path', () => {
     catalogue: CATALOGUE,
     answers,
     allAnswered: true,
+    captureGroups: [],
     computeOutcome: () => ({ outcome: 'fail' }),
     exportHash: null,
   });
@@ -598,6 +609,7 @@ test('free-form remediation alone sends the Case down the actions path', () => {
     catalogue: CATALOGUE,
     answers,
     allAnswered: true,
+    captureGroups: [],
   });
   assert.equal(control.label, 'Send Actions');
 });
@@ -616,6 +628,7 @@ test('whitespace-only free-form remediation is not remediation', () => {
     catalogue: CATALOGUE,
     answers,
     allAnswered: true,
+    captureGroups: [],
   });
   assert.equal(
     control.label,
@@ -635,6 +648,7 @@ test('whitespace-only free-form remediation is not remediation', () => {
       catalogue: CATALOGUE,
       answers,
       allAnswered: true,
+      captureGroups: [],
       computeOutcome: () => ({ outcome: 'fail' }),
       exportHash: null,
     }),
@@ -667,6 +681,7 @@ test('remediation on a Question that has left the catalogue does not fork the Ca
       catalogue,
       answers,
       allAnswered: true,
+      captureGroups: [],
     };
     assert.equal(completionControl(base).label, 'Complete Case');
 
@@ -691,6 +706,7 @@ function preSend(answers) {
     catalogue: CATALOGUE,
     answers,
     allAnswered: true,
+    captureGroups: [],
   };
 }
 
@@ -780,6 +796,7 @@ test('completionControl: unanswered Questions still show nothing at all', () => 
     ...preSend({ q1: { value: 'No', remediationRequired: 'no' } }),
     caseRow: { ...CASE_ROW, responsibleParty: '' },
     allAnswered: false,
+    captureGroups: [],
   });
   assert.equal(control.visible, false);
 });
@@ -819,6 +836,7 @@ test('the close path is untouched by the pre-send decision gate', () => {
     catalogue: CATALOGUE,
     answers: sent,
     allAnswered: true,
+    captureGroups: [],
   });
   assert.equal(control.disabled, false);
   assert.equal(control.reason, null);
@@ -829,9 +847,97 @@ test('the close path is untouched by the pre-send decision gate', () => {
       catalogue: CATALOGUE,
       answers: sent,
       allAnswered: true,
+      captureGroups: [],
       computeOutcome: () => ({ outcome: 'pass' }),
       exportHash: null,
     }),
     { status: 'Completed' }
+  );
+});
+
+// --- The pre-send required-capture gate ---
+
+/** @type {import('../src/sharepoint-client.js').CaptureGroup[]} */
+const CAPTURE_GROUPS = [
+  {
+    key: 'cause',
+    label: 'Cause',
+    fields: [
+      { key: 'origin', label: 'Origin', type: 'select', options: ['Sales'] },
+      {
+        key: 'salesTeam',
+        label: 'Sales team',
+        type: 'text',
+        required: true,
+        showWhen: { origin: { equals: 'Sales' } },
+      },
+    ],
+  },
+];
+
+/** @param {Record<string, any>} capture @param {string} [value] */
+function withCapture(capture, value = 'No') {
+  return {
+    ...preSend({
+      q1: {
+        value,
+        remediationRequired: /** @type {const} */ ('no'),
+        capture,
+      },
+    }),
+    captureGroups: CAPTURE_GROUPS,
+  };
+}
+
+test('completionControl: an empty required capture field disables the button with its reason', () => {
+  const control = completionControl(withCapture({ origin: 'Sales' }));
+  assert.equal(control.visible, true);
+  assert.equal(control.disabled, true);
+  assert.match(String(control.reason), /required field/);
+  assert.match(String(control.reason), /Issues tab/);
+
+  const filled = completionControl(
+    withCapture({ origin: 'Sales', salesTeam: 'North' })
+  );
+  assert.equal(filled.disabled, false);
+  assert.equal(filled.reason, null);
+});
+
+test('completionControl: a required field its showWhen hides never blocks', () => {
+  const control = completionControl(withCapture({}));
+  assert.equal(control.disabled, false);
+  assert.equal(control.reason, null);
+});
+
+test('completionControl: a required field on a passing Answer never blocks', () => {
+  const control = completionControl(withCapture({ origin: 'Sales' }, 'Yes'));
+  assert.equal(control.disabled, false);
+  assert.equal(control.reason, null);
+});
+
+test('completionControl: the remediation decision is still asked for first', () => {
+  const control = completionControl({
+    ...preSend({ q1: { value: 'No', capture: { origin: 'Sales' } } }),
+    captureGroups: CAPTURE_GROUPS,
+  });
+  assert.match(String(control.reason), /Is remediation required\?/);
+});
+
+test('completionPatch: writes nothing while a required capture field is empty', () => {
+  const patchInput = {
+    computeOutcome: () => ({ outcome: /** @type {const} */ ('fail') }),
+    exportHash: null,
+  };
+  assert.equal(
+    completionPatch({ ...withCapture({ origin: 'Sales' }), ...patchInput }),
+    null,
+    'the button is only a style: the write guard has to hold the same line'
+  );
+  assert.equal(
+    completionPatch({
+      ...withCapture({ origin: 'Sales', salesTeam: 'North' }),
+      ...patchInput,
+    })?.status,
+    'Completed'
   );
 });
