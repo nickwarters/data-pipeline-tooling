@@ -10,6 +10,7 @@ installDom();
 const { createRouteSlice, dashboardView } =
   await import('../src/pages/cora-dashboard.js');
 const { isOverdue } = await import('../src/evaluators/overdue-evaluator.js');
+const { CASE_STATUS } = await import('../src/lib/case-statuses.js');
 
 function capabilities(overrides = {}) {
   return /** @type {any} */ ({
@@ -1887,4 +1888,101 @@ test('dashboard Responsible Party panel: Open conversation navigates to the Conv
     'click'
   );
   assert.equal(location.hash, '#/conversation/complaints/c4');
+});
+
+test('the reviewer status filter offers every lifecycle status, derived from the constant', () => {
+  const ctx = context(capabilities({ isReviewer: true }));
+  ctx.client = null;
+  const slice = createRouteSlice({}, ctx);
+  const view = dashboardView(slice.initialState, {
+    context: ctx,
+    dispatch: () => {},
+  });
+  const select = /** @type {any} */ (
+    view.querySelector('[aria-label="Filter by status"]')
+  );
+  const options = [...select.querySelectorAll('option')];
+  // Written from the constant on purpose: a status added to the Case lifecycle
+  // must fail here until the filter offers it.
+  assert.deepEqual(
+    options.map((option) => /** @type {any} */ (option).value),
+    ['', ...Object.values(CASE_STATUS)]
+  );
+  assert.deepEqual(
+    options.map((option) => option.textContent),
+    ['All statuses', ...Object.values(CASE_STATUS)]
+  );
+});
+
+test('the reviewer status filter can isolate Actions In Progress Cases', () => {
+  const ctx = context(capabilities({ isReviewer: true }));
+  ctx.client = null;
+  const slice = createRouteSlice({}, ctx);
+  const loaded = slice.reducer(slice.initialState, {
+    type: 'reviewer-cases/loaded',
+    cases: [
+      {
+        id: 'alpha',
+        title: 'Alpha case',
+        caseType: 'complaints',
+        status: CASE_STATUS.IN_PROGRESS,
+      },
+      {
+        id: 'gamma',
+        title: 'Gamma case',
+        caseType: 'complaints',
+        status: CASE_STATUS.ACTIONS_IN_PROGRESS,
+      },
+    ],
+  });
+  const filtered = slice.reducer(loaded, {
+    type: 'reviewer-table/status-filter-changed',
+    value: CASE_STATUS.ACTIONS_IN_PROGRESS,
+  });
+  const view = dashboardView(/** @type {any} */ (filtered), {
+    context: ctx,
+    dispatch: () => {},
+  });
+  const body = view.querySelector('.cora-reviewer-cases')?.textContent ?? '';
+  assert.match(body, /Gamma case/);
+  assert.doesNotMatch(body, /Alpha case/);
+});
+
+test('the Outstanding Cases panel fetches both of the statuses it calls outstanding', async () => {
+  const ctx = context(capabilities({ isReviewer: true }));
+  /** @type {any[]} */
+  const filters = [];
+  const slice = createRouteSlice(
+    {},
+    ctx,
+    /** @type {any} */ ({
+      loadKpis: async () => [],
+      listAcrossSources: async (
+        /** @type {any} */ _client,
+        /** @type {any} */ _sources,
+        /** @type {any} */ filter
+      ) => {
+        filters.push(filter);
+        return [];
+      },
+    })
+  );
+  slice.start({
+    context: ctx,
+    params: {},
+    dispatch: () => {},
+    listen: () => {},
+    isActive: () => true,
+  });
+  await Promise.resolve();
+
+  assert.deepEqual(filters, [
+    {
+      anyOf: [
+        { status: CASE_STATUS.IN_PROGRESS },
+        { status: CASE_STATUS.ACTIONS_IN_PROGRESS },
+      ],
+      assignedReviewer: 'u1',
+    },
+  ]);
 });

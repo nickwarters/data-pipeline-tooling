@@ -125,8 +125,14 @@ function reviewerCasesView(route, dispatch) {
             }),
         },
         h('option', { value: '' }, 'All statuses'),
-        h('option', { value: CASE_STATUS.IN_PROGRESS }, 'In Progress'),
-        h('option', { value: CASE_STATUS.COMPLETED }, CASE_STATUS.COMPLETED)
+        // Derived from the lifecycle rather than listed by hand: a status added
+        // to the Case lifecycle has to be filterable here, and nobody adding one
+        // should have to remember that this file exists. Each option shows the
+        // stored value verbatim, which is also what the Status column and the
+        // free-text filter match on, so the three agree by construction.
+        ...Object.values(CASE_STATUS).map((status) =>
+          h('option', { value: status }, status)
+        )
       )
     ),
     dataTableView({
@@ -317,8 +323,14 @@ export function createRouteSlice(
     /** @type {import('../sharepoint-client.js').CaseRow[]} */
     let rows;
     try {
+      // "Outstanding" is In-progress plus Actions In Progress — the same two
+      // statuses the Reviewer workload model counts — so the panel fetches both
+      // rather than heading a single-status list with a word that means two.
       rows = await listAcrossSources(client, effectTools.context.caseSources, {
-        status: CASE_STATUS.IN_PROGRESS,
+        anyOf: [
+          { status: CASE_STATUS.IN_PROGRESS },
+          { status: CASE_STATUS.ACTIONS_IN_PROGRESS },
+        ],
         assignedReviewer: effectTools.context.chrome.currentUser.id,
       });
     } catch (error) {
