@@ -5,8 +5,8 @@
 /**
  * Pairs the Assigned Reviewer's clock with the assignment itself: naming a
  * Reviewer stamps now, clearing the Reviewer clears the time, and a write that
- * says nothing about the Reviewer is returned untouched — by identity, so an
- * ordinary Answers save is provably not rewritten.
+ * says nothing about the Reviewer is returned untouched, so an ordinary Answers
+ * save carries no assignment time at all.
  *
  * It is a shared module rather than a line inside one client because two client
  * implementations back the same interface, and a rule spelled twice is a rule
