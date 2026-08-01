@@ -48,6 +48,18 @@ import {
 const REVIEWER_TABLE = 'reviewer';
 const APPEALS_TABLE = 'appeals';
 
+/**
+ * What the Outstanding Cases panel means by "outstanding" — the same two
+ * statuses the Reviewer workload model counts. Declared once because it has two
+ * uses that must not disagree: it is the query the panel fetches *and* the
+ * choices its status filter offers. A filter offering a status the fetch never
+ * returns is a control that only ever empties the table.
+ */
+const OUTSTANDING_STATUSES = [
+  CASE_STATUS.IN_PROGRESS,
+  CASE_STATUS.ACTIONS_IN_PROGRESS,
+];
+
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../views/data-table.js').TableSort} TableSort */
 /** @typedef {import('../evaluators/kpi-strip-model.js').KpiLane} KpiLane */
@@ -125,12 +137,10 @@ function reviewerCasesView(route, dispatch) {
             }),
         },
         h('option', { value: '' }, 'All statuses'),
-        // Derived from the lifecycle rather than listed by hand: a status added
-        // to the Case lifecycle has to be filterable here, and nobody adding one
-        // should have to remember that this file exists. Each option shows the
-        // stored value verbatim, which is also what the Status column and the
-        // free-text filter match on, so the three agree by construction.
-        ...Object.values(CASE_STATUS).map((status) =>
+        // The statuses this panel fetches, so every choice can match something.
+        // Each option shows the stored value verbatim, which is what the Status
+        // column and the free-text filter match on too.
+        ...OUTSTANDING_STATUSES.map((status) =>
           h('option', { value: status }, status)
         )
       )
@@ -323,14 +333,8 @@ export function createRouteSlice(
     /** @type {import('../sharepoint-client.js').CaseRow[]} */
     let rows;
     try {
-      // "Outstanding" is In-progress plus Actions In Progress — the same two
-      // statuses the Reviewer workload model counts — so the panel fetches both
-      // rather than heading a single-status list with a word that means two.
       rows = await listAcrossSources(client, effectTools.context.caseSources, {
-        anyOf: [
-          { status: CASE_STATUS.IN_PROGRESS },
-          { status: CASE_STATUS.ACTIONS_IN_PROGRESS },
-        ],
+        anyOf: OUTSTANDING_STATUSES.map((status) => ({ status })),
         assignedReviewer: effectTools.context.chrome.currentUser.id,
       });
     } catch (error) {

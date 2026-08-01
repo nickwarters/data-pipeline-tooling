@@ -29,6 +29,22 @@ on you: nothing else is enforced at deploy time.
 The gate needs the dev dependencies installed (`npm install`) in the checkout this
 script lives in.
 
+### List columns this release needs
+
+Nothing in the gate can see SharePoint, so column provisioning is on you and has
+to be done **before** the upload, not after.
+
+- **`AssignedAt`** (Date and Time, not indexed) on **every Case Type list** in
+  the environment you are deploying to — the `uat_`-prefixed lists too. Reads
+  degrade safely without it (the Case read is `$select=*`, so a list lacking the
+  column simply answers without it), but the client writes `AssignedAt` on every
+  PATCH that sets the Assigned Reviewer, and SharePoint answers a PATCH naming an
+  unknown column with a **400**. The allocation claim is exactly such a write, so
+  on a list without the column **"Request next Case" fails outright**.
+
+See the [provisioning runbook](../docs/guide/provisioning-runbook.md) for the
+full column schema.
+
 ## 2. Deploy to prod
 
 ```bash

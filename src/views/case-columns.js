@@ -70,8 +70,7 @@ const caseDueDateColumn = () => ({
 
 /**
  * When the Case was handed to the Reviewer who holds it — which is what the
- * heading has always claimed. It used to read the Case's creation date, so a
- * Case reassigned weeks later still showed the day it was raised.
+ * heading claims, and not the same thing as when the Case was raised.
  *
  * @returns {CaseColumn}
  */

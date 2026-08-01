@@ -178,8 +178,8 @@ export class HttpSharePointClient {
     try {
       // The Assigned Reviewer's clock is paired with the Reviewer before the
       // row is serialised, so a caller that hands over a Case cannot forget it.
-      fields = withAssignmentStamp(fields, this._now);
-      const item = itemFromRow(fields);
+      const stamped = withAssignmentStamp(fields, this._now);
+      const item = itemFromRow(stamped);
       // The Person columns are the fields whose value cannot be derived from
       // the row alone: SharePoint writes them by id, so the account name has to
       // be resolved first. Inside the try on purpose — a directory lookup that

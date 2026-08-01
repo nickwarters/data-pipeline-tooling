@@ -9,15 +9,19 @@ installDom();
 const { outstandingRemediation, responsiblePartyView } =
   await import('../src/pages/responsible-party/view.js');
 
+// The review SLA every row in this file carries, fixed and far in the future so
+// it can never produce the overdue badge. This table is about the remediation
+// clock, and a test here that passed because of the review one would be reading
+// the wrong column without saying so.
+const REVIEW_DUE_DATE = '2099-06-01T00:00:00Z';
+
 /**
- * A sent-remediation Case. `dueDate` is the *remediation* deadline these tests
- * are about: it is spelled onto both clocks so a test that means "past its
- * remediation deadline" says so on the column this table actually reads, rather
- * than relying on the review SLA standing in for it.
+ * A sent-remediation Case, dated by the clock this table shows: its
+ * **Remediation Due Date**.
  *
- * @param {string} id @param {string} caseType @param {string} dueDate
+ * @param {string} id @param {string} caseType @param {string} remediationDueDate
  */
-function row(id, caseType, dueDate) {
+function row(id, caseType, remediationDueDate) {
   return /** @type {import('../src/sharepoint-client.js').CaseRow} */ ({
     id,
     caseType,
@@ -25,8 +29,8 @@ function row(id, caseType, dueDate) {
     status: 'Actions In Progress',
     assignedReviewer: 'reviewer',
     responsibleParty: 'rp-1',
-    dueDate,
-    remediationDueDate: dueDate || null,
+    dueDate: REVIEW_DUE_DATE,
+    remediationDueDate: remediationDueDate || null,
     answers: {
       q1: {
         value: 'No',

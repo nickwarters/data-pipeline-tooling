@@ -1890,27 +1890,58 @@ test('dashboard Responsible Party panel: Open conversation navigates to the Conv
   assert.equal(location.hash, '#/conversation/complaints/c4');
 });
 
-test('the reviewer status filter offers every lifecycle status, derived from the constant', () => {
+test('the reviewer status filter offers exactly the statuses the panel fetches', async () => {
+  // The claim is that the two agree, so neither side is respelled here: the
+  // expected options are read off the query the panel actually issued. An option
+  // the fetch never returns would be a control that only empties the table.
   const ctx = context(capabilities({ isReviewer: true }));
-  ctx.client = null;
-  const slice = createRouteSlice({}, ctx);
+  /** @type {any[]} */
+  const filters = [];
+  const slice = createRouteSlice(
+    {},
+    ctx,
+    /** @type {any} */ ({
+      loadKpis: async () => [],
+      listAcrossSources: async (
+        /** @type {any} */ _client,
+        /** @type {any} */ _sources,
+        /** @type {any} */ filter
+      ) => {
+        filters.push(filter);
+        return [];
+      },
+    })
+  );
+  slice.start({
+    context: ctx,
+    params: {},
+    dispatch: () => {},
+    listen: () => {},
+    isActive: () => true,
+  });
+  await Promise.resolve();
+
+  const fetched = filters[0].anyOf.map(
+    (/** @type {any} */ branch) => branch.status
+  );
+  assert.ok(fetched.length > 1, 'the panel fetches more than one status');
+
   const view = dashboardView(slice.initialState, {
     context: ctx,
     dispatch: () => {},
   });
-  const select = /** @type {any} */ (
-    view.querySelector('[aria-label="Filter by status"]')
-  );
-  const options = [...select.querySelectorAll('option')];
-  // Written from the constant on purpose: a status added to the Case lifecycle
-  // must fail here until the filter offers it.
+  const options = [
+    .../** @type {any} */ (
+      view.querySelector('[aria-label="Filter by status"]')
+    ).querySelectorAll('option'),
+  ];
   assert.deepEqual(
     options.map((option) => /** @type {any} */ (option).value),
-    ['', ...Object.values(CASE_STATUS)]
+    ['', ...fetched]
   );
   assert.deepEqual(
     options.map((option) => option.textContent),
-    ['All statuses', ...Object.values(CASE_STATUS)]
+    ['All statuses', ...fetched]
   );
 });
 

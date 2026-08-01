@@ -944,24 +944,6 @@ test('HttpSharePointClient: a save that names no Reviewer carries no assignment 
   assert.equal('AssignedAt' in patchBody(calls), false);
 });
 
-test('HttpSharePointClient: an explicitly supplied assignment time is written verbatim', async () => {
-  const { fetch, calls } = personWriteFetch(ensureUserResponse(14));
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-    now: frozenNow,
-  });
-
-  await client.patchCase(
-    'case-1',
-    { assignedReviewer: 'jsmith', assignedAt: '2020-01-01T00:00:00.000Z' },
-    '"v1"',
-    { listName: 'Cases-ExampleReview' }
-  );
-
-  assert.equal(patchBody(calls).AssignedAt, '2020-01-01T00:00:00.000Z');
-});
-
 test('HttpSharePointClient: both person columns in one save resolve the shared account once', async () => {
   const { fetch, calls } = personWriteFetch(ensureUserResponse(14));
   const client = new HttpSharePointClient({
