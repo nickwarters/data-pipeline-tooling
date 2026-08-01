@@ -28,11 +28,7 @@ import {
  * @property {CaseRow | null} caseRow
  * @property {'edit'|'read-only'|'hidden'} access
  * @property {CaseListOptions} caseListOptions
- * @property {string} heading
- *   The Conversation Section's heading for this Case's Case Type. Held on the
- *   route rather than resolved in the view because the view is pure and the
- *   Case Type config only arrives with the load; it starts at the default so
- *   the page reads correctly before the Case has loaded.
+ * @property {string} heading The Conversation Section's heading for this Case's Case Type; the default until the Case loads.
  * @property {string | null} error
  */
 

@@ -72,7 +72,7 @@ test('the Responsible Party field is offered even when the Case has no failures'
   // field that gates the whole actions path, so it cannot depend on a failure
   // existing.
   const root = host(RemediationSection(props({ canSelectRemediation: true })));
-  assert.ok(getByText(root, 'No issues.'), 'still says so');
+  assert.ok(getByText(root, 'No failures.'), 'still says so');
   assert.ok(findByClass(root, 'cora-responsible-party-field'));
   assert.ok(getByRole(root, 'combobox', { name: PICKER_NAME }));
 });

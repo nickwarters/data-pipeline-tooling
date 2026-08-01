@@ -2,7 +2,6 @@
 import { h } from '../../lib/html.js';
 import { EmptyState } from '../../lib/empty-state.js';
 import { currentOutcome } from '../../evaluators/amended-outcome.js';
-import { DEFAULT_SECTION_LABELS } from '../../lib/section-labels.js';
 
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../../sharepoint-client.js').AmendedOutcome} AmendedOutcome */
@@ -31,8 +30,7 @@ import { DEFAULT_SECTION_LABELS } from '../../lib/section-labels.js';
  * @property {CurrentUser | null} currentUser
  * @property {OutcomeOption[]} outcomeOptions
  * @property {(input: {outcome: string, justification: string}) => void} [onAmend]
- * @property {string} [heading] The Section's resolved heading; defaults to the
- *   standard copy so the view stays usable standalone.
+ * @property {string} heading The Section's resolved heading.
  */
 
 /**
@@ -41,9 +39,7 @@ import { DEFAULT_SECTION_LABELS } from '../../lib/section-labels.js';
  */
 export function AmendOutcomeSection(props) {
   /** @type {Node[]} */
-  const children = [
-    h('h2', {}, props.heading ?? DEFAULT_SECTION_LABELS.amendOutcome.heading),
-  ];
+  const children = [h('h2', {}, props.heading)];
 
   children.push(renderCurrentOutcome(props));
 

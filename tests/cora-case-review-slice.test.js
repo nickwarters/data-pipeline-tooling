@@ -1690,7 +1690,11 @@ test('case page reducer keeps conversation and field state behind loaded access'
 });
 
 test('Details view mirrors today: config-driven values are read-only with empty fallback', () => {
-  const view = caseDetailsView(caseRow, snapshot().config.detailFields);
+  const view = caseDetailsView(
+    caseRow,
+    snapshot().config.detailFields,
+    'Case Details'
+  );
   assert.equal(getByTag(view, 'h2').textContent, 'Case Details');
   assert.match(view.textContent, /Customer nameAda Lovelace/);
   assert.match(view.textContent, /Account number—/);
@@ -1698,12 +1702,16 @@ test('Details view mirrors today: config-driven values are read-only with empty 
   assert.equal(view.getAttribute('data-access'), 'read-only');
 });
 
-test('Details view captions the completedAt date "Completed"', () => {
-  const view = caseDetailsView({
-    .../** @type {any} */ (caseRow),
-    completedAt: '2026-05-04',
-  });
-  assert.match(view.textContent, /Completed2026-05-04/);
+test('Details view captions the completedAt date "Completed on"', () => {
+  const view = caseDetailsView(
+    {
+      .../** @type {any} */ (caseRow),
+      completedAt: '2026-05-04',
+    },
+    [],
+    'Case Details'
+  );
+  assert.match(view.textContent, /Completed on2026-05-04/);
 });
 
 test('Details view takes its heading from the resolved section labels', () => {

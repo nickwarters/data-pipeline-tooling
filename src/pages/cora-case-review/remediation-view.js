@@ -9,7 +9,6 @@ import { PeoplePicker } from '../../components/base/cora-people-picker.js';
 import { CaptureGroups } from '../../components/sections/cora-capture-groups.js';
 
 import { normaliseConfiguredActions } from '../../evaluators/configured-outcome.js';
-import { DEFAULT_SECTION_LABELS } from '../../lib/section-labels.js';
 
 /** @typedef {import('../../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
@@ -40,8 +39,7 @@ import { DEFAULT_SECTION_LABELS } from '../../lib/section-labels.js';
  * @property {(questionId: string, action: { id: string, text: string }, selected: boolean) => void} dispatchRemediationAction
  * @property {(questionId: string, value: string) => void} dispatchRemediationFreeForm
  * @property {(questionId: string, required: 'yes' | 'no') => void} dispatchRemediationRequired
- * @property {string} [heading] The Section's resolved heading; defaults to the
- *   standard copy so the view stays usable standalone.
+ * @property {string} heading The Section's resolved heading.
  */
 
 /**
@@ -64,11 +62,7 @@ export function failedQuestions(props) {
 export function RemediationSection(props) {
   const failed = failedQuestions(props);
 
-  const heading = h(
-    'h2',
-    {},
-    props.heading ?? DEFAULT_SECTION_LABELS.issues.heading
-  );
+  const heading = h('h2', {}, props.heading);
   // Case-level, so it belongs to the tab rather than to any failure — and it is
   // computed once for both exits, because a Case with no failures still needs
   // someone named before its actions can be sent.
@@ -76,7 +70,7 @@ export function RemediationSection(props) {
   const tail = responsibleParty ? [responsibleParty] : [];
 
   if (failed.length === 0) {
-    const empty = EmptyState('No issues.', {
+    const empty = EmptyState('No failures.', {
       className: 'cora-remediation-empty',
     });
     return [heading, empty, ...tail];

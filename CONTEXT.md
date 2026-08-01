@@ -64,16 +64,13 @@ per-Section config (membership + `showInSummary`, which is either a flag or a li
 the roles the Summary block is composed for). As of the Jul 2026 workflow
 changes the Section set is: `details` · `questions` · `issues` · `summary` ·
 `remediation` · `notes` · `conversation` · `appealRequest` · `appealReview` ·
-`amendOutcome`. Every Section's display copy comes from **one** per-Section
-descriptor carrying two spellings — a `tab` caption and a `heading` — resolved
-per Case Type by `resolveSectionLabels` over `DEFAULT_SECTION_LABELS`
-(`src/lib/section-labels.js`). Most Sections say the same thing in both places;
-two split by default — `questions` is tabbed **Review** but headed
+`amendOutcome`. A Section's display copy is one per-Section descriptor carrying
+two spellings — a `tab` caption and a `heading` — which a **Case Type** may
+rename via `sectionLabels` (`src/lib/section-labels.js`). The **Reviewer**'s tab
+row is **Details · Review · Issues · Remediation · Summary · Notes · Amend
+Outcome**; the `questions` Section is tabbed **Review** but headed
 **Questions**, and `details` is tabbed **Details** but headed **Case Details**.
-A Case Type's `sectionLabels` override is either a bare string (renames both) or
-an object naming either axis. So the **Reviewer**'s tab row is **Details ·
-Review · Issues · Remediation · Summary · Notes · Amend Outcome**, and the
-Issues Section is headed **Issues** — its own name, not "Failures". Two Sections that used to be one: **Issues** _captures_ failed-Answer
+Two Sections that used to be one: **Issues** _captures_ failed-Answer
 detail + **Remediation Actions** (Reviewer-edit until **Reportable**); the standalone
 **Remediation** Section _tracks_ each failed Answer's remediation to a **Remediation
 Resolution** (resolves #144), and shows the same breakdown — without the Reviewer's

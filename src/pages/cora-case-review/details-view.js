@@ -1,6 +1,5 @@
 // @ts-check
 import { h } from '../../lib/html.js';
-import { DEFAULT_SECTION_LABELS } from '../../lib/section-labels.js';
 
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../../sharepoint-client.js').CaseDetailField} CaseDetailField */
@@ -28,7 +27,7 @@ export function caseDetailFields(caseRow, detailFields = []) {
     { field: 'created', label: 'Created', value: caseRow.created },
     {
       field: 'completedAt',
-      label: 'Completed',
+      label: 'Completed on',
       value: caseRow.completedAt,
     },
     ...detailFields.map((field) => ({
@@ -49,16 +48,11 @@ export function caseDetailFields(caseRow, detailFields = []) {
  * em dash for empty values. Details remains read-only under section-access.
  *
  * @param {CaseRow} caseRow
- * @param {CaseDetailField[]} [detailFields]
- * @param {string} [heading] The Section's resolved heading; defaults to the
- *   standard copy so the view stays usable standalone.
+ * @param {CaseDetailField[]} detailFields
+ * @param {string} heading The Section's resolved heading.
  * @returns {HTMLElement}
  */
-export function caseDetailsView(
-  caseRow,
-  detailFields = [],
-  heading = DEFAULT_SECTION_LABELS.details.heading
-) {
+export function caseDetailsView(caseRow, detailFields, heading) {
   const fields = caseDetailFields(caseRow, detailFields);
 
   return h(

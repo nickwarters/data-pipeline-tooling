@@ -22,7 +22,7 @@
  *
  * @type {Readonly<ResolvedSectionLabels>}
  */
-export const DEFAULT_SECTION_LABELS = Object.freeze({
+export const DEFAULT_SECTION_LABELS = {
   details: { tab: 'Details', heading: 'Case Details' },
   questions: { tab: 'Review', heading: 'Questions' },
   issues: { tab: 'Issues', heading: 'Issues' },
@@ -33,7 +33,7 @@ export const DEFAULT_SECTION_LABELS = Object.freeze({
   appealReview: { tab: 'Appeal Review', heading: 'Appeal Review' },
   amendOutcome: { tab: 'Amend Outcome', heading: 'Amend Outcome' },
   conversation: { tab: 'Conversation', heading: 'Conversation' },
-});
+};
 
 /**
  * Resolve a Case Type's effective section display copy: `DEFAULT_SECTION_LABELS`

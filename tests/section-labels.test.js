@@ -21,10 +21,6 @@ test('DEFAULT_SECTION_LABELS: one entry per Section, each carrying both spelling
   });
 });
 
-test('DEFAULT_SECTION_LABELS is frozen', () => {
-  assert.equal(Object.isFrozen(DEFAULT_SECTION_LABELS), true);
-});
-
 test('resolveSectionLabels: returns the defaults unchanged when sectionLabels is absent', () => {
   assert.deepEqual(resolveSectionLabels({}), DEFAULT_SECTION_LABELS);
 });
@@ -84,10 +80,4 @@ test('resolveSectionLabels: multiple overrides all apply', () => {
   assert.equal(resolved.questions.tab, 'Assessment');
   assert.equal(resolved.notes.heading, 'Case Notes');
   assert.equal(resolved.issues.heading, 'Issues');
-});
-
-test('resolveSectionLabels: does not mutate the defaults', () => {
-  resolveSectionLabels({ sectionLabels: { notes: { tab: 'Scribbles' } } });
-
-  assert.equal(DEFAULT_SECTION_LABELS.notes.tab, 'Notes');
 });

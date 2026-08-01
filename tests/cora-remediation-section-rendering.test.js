@@ -15,7 +15,7 @@ import {
 
 // ===== TESTS =====
 
-test('CORARemediationSection: empty answers renders "No issues"', () => {
+test('CORARemediationSection: empty answers renders "No failures"', () => {
   const el = new CORARemediationSection();
   el.catalogue = CATALOGUE;
   el.answers = {};
@@ -23,7 +23,7 @@ test('CORARemediationSection: empty answers renders "No issues"', () => {
 
   const empty = findByClass(el, 'cora-empty cora-remediation-empty');
   assert.ok(empty);
-  assert.equal(empty.textContent, 'No issues.');
+  assert.equal(empty.textContent, 'No failures.');
 });
 
 test('CORARemediationSection: only passing answers renders empty state', () => {

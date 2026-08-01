@@ -61,6 +61,7 @@ function allText(el) {
 /** Render the shipped view directly into a DOM query root. */
 function renderAmendOutcome(overrides = {}, queue = makeQueue()) {
   const props = {
+    heading: 'Amend Outcome',
     caseRow: /** @type {CaseRow | null} */ (null),
     access: /** @type {'edit'|'read-only'|'hidden'} */ ('read-only'),
     currentUser: /** @type {any} */ (null),

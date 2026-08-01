@@ -88,7 +88,7 @@ test('summaryView renders live outcome and key dates', () => {
   assert.equal(nodes[0].textContent, 'Summary');
   assert.match(root.textContent, /Fail/);
   assert.match(root.textContent, /Created2026-04-01/);
-  assert.match(root.textContent, /Completed—/);
+  assert.match(root.textContent, /Completed on—/);
 });
 
 test('summaryView uses frozen and amended outcomes after the reportable milestone', () => {

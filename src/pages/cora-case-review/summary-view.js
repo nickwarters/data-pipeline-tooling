@@ -361,7 +361,7 @@ function answerText(answer) {
 function renderKeyDates(caseRow) {
   const dates = [
     { label: 'Created', value: caseRow.created },
-    { label: 'Completed', value: caseRow.completedAt },
+    { label: 'Completed on', value: caseRow.completedAt },
   ];
   return renderFieldBlock(
     'cora-summary-key-dates',

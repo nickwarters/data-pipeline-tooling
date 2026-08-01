@@ -82,21 +82,6 @@ function stripComments(source) {
   return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
 }
 
-/**
- * Drop `label: '...'` entries before scanning. A label is display copy shown to
- * a reader, not a value compared against or written to `CaseRow.status` — the
- * Case Details and Summary date rows caption `completedAt` with the word
- * "Completed" and would otherwise read as a status reference. Coupling that
- * caption to the persisted status value is the mistake, not the fix: the
- * persisted values must not change, and the wording is free to.
- *
- * @param {string} source
- * @returns {string}
- */
-function stripDisplayLabels(source) {
-  return source.replace(/\blabel:\s*(['"`])[^'"`]*\1/g, 'label: DISPLAY_COPY');
-}
-
 test('contract: no raw case-lifecycle status literals in src/ outside lib/case-statuses.js', () => {
   const forbidden = /['"`](In-progress|Actions In Progress|Completed)['"`]/;
   /** @type {string[]} */
@@ -104,7 +89,7 @@ test('contract: no raw case-lifecycle status literals in src/ outside lib/case-s
   for (const file of jsFilesUnder(SRC_ROOT)) {
     const rel = relative(SRC_ROOT, file).split('\\').join('/');
     if (rel === CONSTANTS_MODULE) continue;
-    const code = stripDisplayLabels(stripComments(readFileSync(file, 'utf8')));
+    const code = stripComments(readFileSync(file, 'utf8'));
     const match = code.match(forbidden);
     if (match) violations.push(`src/${rel}: ${match[0]}`);
   }

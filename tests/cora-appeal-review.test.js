@@ -83,6 +83,7 @@ function makeQueue() {
 /** Render the shipped view directly into a DOM query root. */
 function renderAppealReview(overrides = {}, queue = makeQueue()) {
   const props = {
+    heading: 'Appeal Review',
     caseRow: /** @type {CaseRow | null} */ (null),
     access: /** @type {'edit'|'read-only'|'hidden'} */ ('read-only'),
     currentUser: /** @type {any} */ (null),

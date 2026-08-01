@@ -90,6 +90,7 @@ export class CORARemediationSection extends HTMLElement {
   /** @returns {RemediationSectionProps} */
   _buildProps() {
     return {
+      heading: 'Issues',
       catalogue: this.catalogue,
       answers: this.answers,
       attributeFailures: this.attributeFailures,

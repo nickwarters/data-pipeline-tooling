@@ -20,9 +20,9 @@
  * Summary block set all derive from it.
  *
  * Adding a Section is: an entry here, plus its `MATRIX` access row (policy, not
- * existence — deliberately hand-written), its `DEFAULT_SECTION_LABELS` label,
- * and — for a tab Section — its `SECTION_PANELS` renderer. `tsc` demands the
- * first two, a test the third.
+ * existence — deliberately hand-written), its `DEFAULT_SECTION_LABELS`
+ * `{ tab, heading }` pair, and — for a tab Section — its `SECTION_PANELS`
+ * renderer. `tsc` demands the first two, a test the third.
  *
  * @typedef {(typeof SECTION_REGISTRY)[number]['id']} Section
  */
