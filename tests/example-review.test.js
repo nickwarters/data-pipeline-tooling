@@ -172,11 +172,8 @@ test('example-review: declares the Outcome vocabulary for the hand-set Amend Out
   }
 });
 
-test('example-review: routes appeal-raising to the Journey Owner, resolved by Controls', () => {
-  assert.deepEqual(config.appeal, {
-    raisedBy: 'journeyOwner',
-    resolvedBy: 'controls',
-  });
+test('example-review: routes appeal-raising to the Journey Owner', () => {
+  assert.deepEqual(config.appeal, { raisedBy: 'journeyOwner' });
 });
 
 test('example-review: Notes opts out of the Summary while the other block Sections opt in', () => {

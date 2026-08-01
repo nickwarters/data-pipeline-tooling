@@ -218,11 +218,8 @@ test('complaints: sections enable the appeal/amend Section set', () => {
   ]);
 });
 
-test('complaints: routes appeal-raising to the Journey Owner, resolved by Controls', () => {
-  assert.deepEqual(config.appeal, {
-    raisedBy: 'journeyOwner',
-    resolvedBy: 'controls',
-  });
+test('complaints: routes appeal-raising to the Journey Owner', () => {
+  assert.deepEqual(config.appeal, { raisedBy: 'journeyOwner' });
 });
 
 test('complaints: declares the Outcome vocabulary for the hand-set Amend Outcome verdict', () => {

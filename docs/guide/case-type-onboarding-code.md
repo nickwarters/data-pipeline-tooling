@@ -220,7 +220,7 @@ const config = {
     appealReview: {},
     amendOutcome: {},
   },
-  appeal: { raisedBy: 'responsiblePartyManager', resolvedBy: 'controls' },
+  appeal: { raisedBy: 'responsiblePartyManager' },
   outcomeOptions: bank.outcomeOptions ?? [],
   labels: bank.labels,
   defaultOutcomeId: bank.defaultOutcomeId ?? '',

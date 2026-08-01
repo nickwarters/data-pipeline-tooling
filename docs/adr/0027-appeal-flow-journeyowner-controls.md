@@ -8,7 +8,8 @@ Accepted (supersedes the QA-based **Appeal** in CONTEXT.md; amends [ADR-0011];
 relates to [ADR-0026]), as amended 2026-07 (#599, #600) — see **Amendment (2026-07, #599)**
 below, which makes the `appealReview` access row Controls-only and hides it
 until the Case carries an Appeal, and **Amendment (2026-07, #600)**, which makes
-the `appealRequest` row the configured raiser's alone.
+the `appealRequest` row the configured raiser's alone, and **Amendment (2026-08, #636)**,
+which removes the `resolvedBy` configuration key.
 
 ## Context
 
@@ -170,6 +171,45 @@ role appears on `appealRequest` or `appealReview` any more. That consequence is
 **accepted**: an Appeal is a dispute between the raiser and Controls, and a
 Reviewer whose Case is appealed learns of the outcome through the Amended
 Outcome in the Summary, which is the durable record.
+
+## Amendment (2026-08, #636) — `resolvedBy` is removed from the Case Type config
+
+This amendment supersedes two pieces of text above.
+
+**(a) The Decision's configuration block** (under "Per-Case-Type configuration"),
+which read:
+
+> ```
+> appeal: {
+>  raisedBy: 'journeyOwner' | 'responsiblePartyManager',
+>  resolvedBy: 'controls' // always 'controls' today, kept explicit so gating is data-driven
+> }
+> ```
+
+**(b) The third "Considered options" bullet**, which read:
+
+> - **Drop `resolvedBy` as always-Controls** — rejected: making it explicit keeps tab
+>   gating data-driven and leaves room if a future type routes appeals elsewhere.
+
+The key is now **removed**. A Case Type declares only:
+
+```
+appeal: {
+ raisedBy: 'journeyOwner' | 'responsiblePartyManager'
+}
+```
+
+Three reasons. The vocabulary **never gained a second member**, so its type was a
+one-member union and any code honouring it would carry a branch `tsc` proves
+dead. The `appealReview` access row is **Controls by platform policy**, not by
+configuration — the #599 amendment above already settled that with its mode
+table, which leaves the "kept explicit so gating is data-driven" rationale
+describing something the code no longer does. And **attribution is not lost**:
+who resolved an Appeal and when are recorded on the Appeal record itself, as
+`resolution.resolver` and `resolution.at`, stamped from the viewer and the
+injected clock at resolution time.
+
+Removing the key is a no-op at runtime: nothing read it.
 
 [ADR-0004]: ./0004-case-type-config-as-js-modules.md
 [ADR-0007]: ./0007-case-storage-shape.md

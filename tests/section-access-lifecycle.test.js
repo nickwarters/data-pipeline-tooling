@@ -10,6 +10,7 @@ import {
   openAppeal,
   resolvedAppeal,
   evaluateAccess,
+  ROLES,
   SECTIONS,
 } from './helpers/section-access.js';
 import { MATRIX } from '../src/services/section-access.js';
@@ -39,7 +40,7 @@ test('appealRequest: the raiser is hidden until the Case is Completed', () => {
     'responsiblePartyManager',
     'journeyOwner',
   ])) {
-    const cfg = makeConfig({ appeal: { raisedBy, resolvedBy: 'controls' } });
+    const cfg = makeConfig({ appeal: { raisedBy } });
     assert.equal(
       evaluateAccess(
         'appealRequest',
@@ -101,6 +102,30 @@ test('appealReview: Controls gets no tab before the first Appeal, then edit whil
     'read-only',
     'open Appeal on a non-Completed Case fails closed to read-only'
   );
+});
+
+test('appealReview: resolution is Controls whatever the Case Type routes raising to', () => {
+  // Who resolves an Appeal is a platform decision, not a Case Type one: the
+  // appealReview row names Controls outright, so nothing a Case Type declares
+  // about its Appeal flow can move it.
+  const c = makeCase({ status: 'Completed', appeals: [openAppeal()] });
+  const cfgA = makeConfig({ appeal: { raisedBy: 'journeyOwner' } });
+  const cfgB = makeConfig({
+    appeal: { raisedBy: 'responsiblePartyManager' },
+  });
+  for (const role of ROLES) {
+    const expected = role === 'controls' ? 'edit' : 'hidden';
+    assert.equal(
+      evaluateAccess('appealReview', [role], c, cfgA),
+      expected,
+      `${role} with the Journey Owner raising`
+    );
+    assert.equal(
+      evaluateAccess('appealReview', [role], c, cfgB),
+      expected,
+      `${role} with the Responsible Party Manager raising`
+    );
+  }
 });
 
 test('amendOutcome: Controls edits once the Case is reportable, hidden before', () => {
@@ -254,7 +279,7 @@ test('acceptance: Appeal Request belongs to the configured raiser alone', () => 
     'journeyOwner',
     'responsiblePartyManager',
   ])) {
-    const cfg = makeConfig({ appeal: { raisedBy, resolvedBy: 'controls' } });
+    const cfg = makeConfig({ appeal: { raisedBy } });
     const c = makeCase({ status: 'Completed' });
     for (const role of roles) {
       assert.equal(

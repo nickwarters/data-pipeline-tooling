@@ -1041,7 +1041,6 @@ test('route: configured Journey Owner and alternative Manager raisers reach the 
         ...complaintsConfig,
         appeal: {
           raisedBy: /** @type {const} */ ('responsiblePartyManager'),
-          resolvedBy: /** @type {const} */ ('controls'),
         },
       },
       roles:

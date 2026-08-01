@@ -80,9 +80,8 @@ const config = {
   // half-way state a Reviewer is asked to record here, so offering "Partially
   // complete" would only invite a resolution nobody reports on.
   remediationStatuses: ['complete', 'cancelled'],
-  // Appeal flow: a Complaints journey routes appeal-raising to the
-  // Journey Owner, resolved by Controls.
-  appeal: { raisedBy: 'journeyOwner', resolvedBy: 'controls' },
+  // Appeal flow: a Complaints journey routes appeal-raising to the Journey Owner.
+  appeal: { raisedBy: 'journeyOwner' },
   // Outcome vocabulary. The Outcome is driven wholly by the responses
   // (question bank redesign): each mapped response option scores a configured
   // Outcome and the highest-scoring applicable Outcome wins from the required

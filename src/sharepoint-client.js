@@ -428,12 +428,12 @@
  */
 
 /**
- * Per-Case-Type appeal flow configuration. `raisedBy` names
- * the role that may raise an Appeal — the **Journey Owner** for Complaints-style
- * journeys, otherwise the **Responsible Party Manager**. `resolvedBy` is always
- * `controls` today, kept explicit so the Appeal Review gating stays data-driven.
+ * Per-Case-Type appeal flow configuration. `raisedBy` names the role that may
+ * raise an Appeal — the **Journey Owner** for Complaints-style journeys,
+ * otherwise the **Responsible Party Manager**. Resolution is always Controls,
+ * owned in code by the `appealReview` row in `services/section-access.js`.
  *
- * @typedef {{ raisedBy: 'journeyOwner' | 'responsiblePartyManager', resolvedBy: 'controls' }} AppealConfig
+ * @typedef {{ raisedBy: 'journeyOwner' | 'responsiblePartyManager' }} AppealConfig
  */
 
 /**

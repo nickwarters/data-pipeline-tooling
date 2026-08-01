@@ -50,9 +50,8 @@ const config = {
     appealReview: {},
     amendOutcome: {},
   },
-  // Appeal flow: this journey routes appeal-raising to the Journey
-  // Owner, resolved by Controls.
-  appeal: { raisedBy: 'journeyOwner', resolvedBy: 'controls' },
+  // Appeal flow: this journey routes appeal-raising to the Journey Owner.
+  appeal: { raisedBy: 'journeyOwner' },
   // Outcome vocabulary. `computeOutcome` only yields pass/fail, but the
   // hand-set Amend Outcome verdict lets Controls also pick `refer`, so
   // the full set of selectable Outcomes is declared here.

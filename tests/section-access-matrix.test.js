@@ -218,7 +218,7 @@ test('matrix — Actions In Progress Case with sent actions (reportable freeze)'
 
 test('matrix — Completed Case, journeyOwner raiser, no Appeal raised', () => {
   const cfg = makeConfig({
-    appeal: { raisedBy: 'journeyOwner', resolvedBy: 'controls' },
+    appeal: { raisedBy: 'journeyOwner' },
   });
   const c = makeCase({ status: 'Completed' });
   assertGrid(
@@ -273,7 +273,7 @@ test('matrix — Completed Case, journeyOwner raiser, no Appeal raised', () => {
 
 test('matrix — Completed Case, responsiblePartyManager raiser, open Appeal', () => {
   const cfg = makeConfig({
-    appeal: { raisedBy: 'responsiblePartyManager', resolvedBy: 'controls' },
+    appeal: { raisedBy: 'responsiblePartyManager' },
   });
   const c = makeCase({ status: 'Completed', appeals: [openAppeal()] });
   assertGrid(

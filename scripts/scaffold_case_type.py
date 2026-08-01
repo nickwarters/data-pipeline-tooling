@@ -223,7 +223,7 @@ const config = {{
   // Not the same as `labels`, which is the reporting Label catalogue.
   // sectionLabels: {{ questions: 'Assessment' }},
   // TODO(case-type): Confirm who raises appeals for this Case Type.
-  appeal: {{ raisedBy: 'responsiblePartyManager', resolvedBy: 'controls' }},
+  appeal: {{ raisedBy: 'responsiblePartyManager' }},
   // TODO(case-type): Replace the starter Outcome vocabulary with business wording.
   // `severity` orders the Outcomes (higher = worse); it drives the scoring.
   outcomeOptions: [
