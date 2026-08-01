@@ -308,7 +308,7 @@ What each field does, and how to choose its value:
 Optional fields to know about (all in the `CaseTypeConfig` typedef):
 `sectionLabels` renames tab labels/headings per type (e.g.
 `{ questions: 'Assessment' }`); `allowBulkOutcome: true` opts every Question
-Group into the bulk-verdict control, and `questionGroups` overrides that per
+Group into the bulk-outcome control, and `questionGroups` overrides that per
 group in either direction (`{ Build: { allowBulkOutcome: false } }`), so a type
 states the rule once and names only the exceptions;
 `remediationFields` and `captureGroups` extend per-failure capture;

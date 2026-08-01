@@ -1133,17 +1133,17 @@
   color: var(--cora-color-text-muted, inherit);
 }
 
-/* The Group Verdict: the labelled select in a Question Group heading that sets
+/* The Group Outcome: the labelled select in a Question Group heading that sets
    one Outcome wording across the whole group. Shown only on groups the Case
    Type opted in with `allowBulkOutcome`. */
-.cora-group-verdict-label {
+.cora-group-outcome-label {
   display: inline-flex;
   align-items: center;
   gap: var(--cora-space-2);
   font-size: var(--cora-font-size-sm, 0.875rem);
 }
 
-.cora-group-verdict {
+.cora-group-outcome {
   font: inherit;
   padding: var(--cora-space-1) var(--cora-space-2);
   border: 1px solid var(--cora-color-border);

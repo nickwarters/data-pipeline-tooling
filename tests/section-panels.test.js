@@ -133,7 +133,7 @@ test('the remediation panel offers only the resolutions the Case Type declares',
   );
 });
 
-test('a Group Verdict on the questions panel answers the whole group at once', () => {
+test('a Group Outcome on the questions panel answers the whole group at once', () => {
   /** @type {any[]} */
   const questions = ['o1', 'o2'].map((id) => ({
     id,
@@ -168,7 +168,7 @@ test('a Group Verdict on the questions panel answers the whole group at once', (
   };
 
   const nodes = /** @type {any} */ (SECTION_PANELS.questions)(ctx);
-  const select = findByClass({ _children: nodes }, 'cora-group-verdict');
+  const select = findByClass({ _children: nodes }, 'cora-group-outcome');
   select.value = 'Poor';
   fireEvent(select, 'change');
 

@@ -71,7 +71,7 @@ const config = {
   },
   // Every Question Group here is a homogeneous run of Outcome-scored Questions
   // about one part of the complaint, and a Reviewer who finds that part sound
-  // clears the whole run at the same wording. So the verdict is the ordinary way
+  // clears the whole run at the same wording. So the Group Outcome is the ordinary way
   // to record that judgement rather than a per-group exception, and no group is
   // singled out to be answered a question at a time for no reason. Nothing is
   // locked — each Answer stays individually editable afterwards.

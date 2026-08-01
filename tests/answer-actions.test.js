@@ -5,7 +5,7 @@ import { NA_VALUE } from '../src/lib/response-options.js';
 import {
   answerEdited,
   failureAttributed,
-  groupVerdictSet,
+  groupOutcomeSet,
   issueCaptured,
   remediationActionToggled,
   remediationFreeFormEdited,
@@ -511,17 +511,17 @@ test('remediationResolved: clearing an unresolved row writes nothing', () => {
   );
 });
 
-// --- groupVerdictSet --------------------------------------------------------
+// --- groupOutcomeSet --------------------------------------------------------
 
 const OUTCOMES = ['Good', 'Poor'];
 
 /**
  * Two Question Groups plus a third whose only Question offers a different
- * vocabulary, so every filter the verdict applies has something to exclude.
+ * vocabulary, so every filter the outcome applies has something to exclude.
  *
  * @type {any[]}
  */
-const verdictCatalogue = [
+const outcomeCatalogue = [
   {
     id: 'v1',
     responseType: 'outcome',
@@ -571,10 +571,10 @@ const verdictCatalogue = [
 ];
 
 /** @param {any} overrides */
-function verdict(overrides) {
-  return groupVerdictSet({
+function outcome(overrides) {
+  return groupOutcomeSet({
     answers: /** @type {any} */ ({}),
-    catalogue: verdictCatalogue,
+    catalogue: outcomeCatalogue,
     questionGroup: 'Alpha',
     value: 'Good',
     canEdit: true,
@@ -582,8 +582,8 @@ function verdict(overrides) {
   });
 }
 
-test('groupVerdictSet: writes the chosen wording to every applicable Question in the group and nothing else', () => {
-  const next = verdict({
+test('groupOutcomeSet: writes the chosen wording to every applicable Question in the group and nothing else', () => {
+  const next = outcome({
     answers: {
       'general:tone': { value: 'Warm' },
       w1: { value: 'Good' },
@@ -610,19 +610,19 @@ test('groupVerdictSet: writes the chosen wording to every applicable Question in
   );
 });
 
-test('groupVerdictSet: marks the group not applicable', () => {
-  const next = verdict({ value: NA_VALUE });
+test('groupOutcomeSet: marks the group not applicable', () => {
+  const next = outcome({ value: NA_VALUE });
   assert.deepEqual(next?.v1, { value: NA_VALUE });
   assert.deepEqual(next?.v2, { value: NA_VALUE });
 });
 
-test('groupVerdictSet: a Question hidden when the verdict is set is not written', () => {
-  const next = verdict({ value: 'Poor' });
+test('groupOutcomeSet: a Question hidden when the outcome is set is not written', () => {
+  const next = outcome({ value: 'Poor' });
   assert.equal('v4' in (next ?? {}), false);
 });
 
-test('groupVerdictSet: a Question the verdict itself reveals is not filled in', () => {
-  const next = verdict({ value: 'Poor' });
+test('groupOutcomeSet: a Question the outcome itself reveals is not filled in', () => {
+  const next = outcome({ value: 'Poor' });
   assert.equal(
     'v3' in (next ?? {}),
     false,
@@ -630,8 +630,8 @@ test('groupVerdictSet: a Question the verdict itself reveals is not filled in', 
   );
 });
 
-test('groupVerdictSet: an Answer the verdict makes inapplicable is dropped', () => {
-  const next = verdict({
+test('groupOutcomeSet: an Answer the outcome makes inapplicable is dropped', () => {
+  const next = outcome({
     answers: { v1: { value: 'Good' }, v4: { value: 'Good' } },
     value: 'Poor',
   });
@@ -639,29 +639,29 @@ test('groupVerdictSet: an Answer the verdict makes inapplicable is dropped', () 
   assert.deepEqual(Object.keys(next ?? {}).sort(), ['v1', 'v2']);
 });
 
-test('groupVerdictSet: a read-only Reviewer writes nothing', () => {
-  assert.equal(verdict({ canEdit: false }), null);
+test('groupOutcomeSet: a read-only Reviewer writes nothing', () => {
+  assert.equal(outcome({ canEdit: false }), null);
 });
 
-test('groupVerdictSet: a wording no Question in the group offers writes nothing', () => {
-  assert.equal(verdict({ questionGroup: 'Gamma', value: 'Poor' }), null);
+test('groupOutcomeSet: a wording no Question in the group offers writes nothing', () => {
+  assert.equal(outcome({ questionGroup: 'Gamma', value: 'Poor' }), null);
 });
 
-test('groupVerdictSet: a group with no eligible Question writes nothing', () => {
-  assert.equal(verdict({ questionGroup: 'Delta' }), null);
+test('groupOutcomeSet: a group with no eligible Question writes nothing', () => {
+  assert.equal(outcome({ questionGroup: 'Delta' }), null);
 });
 
-test('groupVerdictSet: leaves the caller Answers untouched', () => {
+test('groupOutcomeSet: leaves the caller Answers untouched', () => {
   const answers = /** @type {any} */ ({ v1: { value: 'Poor' } });
-  verdict({ answers });
+  outcome({ answers });
   assert.deepEqual(answers, { v1: { value: 'Poor' } });
 });
 
-test('groupVerdictSet: every Answer stays individually editable afterwards', () => {
-  const after = verdict({});
+test('groupOutcomeSet: every Answer stays individually editable afterwards', () => {
+  const after = outcome({});
   const edited = answerEdited({
     answers: /** @type {any} */ (after),
-    catalogue: verdictCatalogue,
+    catalogue: outcomeCatalogue,
     questionId: 'v2',
     value: 'Poor',
     canEdit: true,

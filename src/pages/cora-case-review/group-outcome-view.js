@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * The Group Verdict control — one selection that records the same Outcome
+ * The Group Outcome control — one selection that records the same Outcome
  * wording across a Question Group — and the two pure helpers that say what it
  * targets and what it displays. Nothing group-level is stored on the Case, so
  * both are derived from the Answers on every render.
@@ -23,7 +23,7 @@ export function questionGroupOf(question) {
 }
 
 /**
- * The Questions one Group Verdict writes to: only an `outcome`-type Question
+ * The Questions one Group Outcome writes to: only an `outcome`-type Question
  * shares the Case Type's Outcome vocabulary, and a deprecated Question is one
  * no Reviewer is asked to answer any more. Applicability is not decided here —
  * the caller freezes it against the Answers as they stand before the write.
@@ -32,7 +32,7 @@ export function questionGroupOf(question) {
  * @param {string} questionGroup
  * @returns {QuestionDefinition[]}
  */
-export function groupVerdictTargets(questions, questionGroup) {
+export function groupOutcomeTargets(questions, questionGroup) {
   return questions.filter(
     (question) =>
       questionGroupOf(question) === questionGroup &&
@@ -45,16 +45,16 @@ export function groupVerdictTargets(questions, questionGroup) {
  * The wording the control displays: the one the group's **answered** Questions
  * agree on, or blank when they disagree or none is answered yet.
  *
- * Answered-only is the deliberate rule. A verdict can reveal a further Question
- * — that is the point of `showWhen` — and the verdict never fills a revealed
- * Question in, so counting unanswered Questions as disagreement would blank the
- * control at the very moment a verdict succeeded.
+ * Answered-only is the deliberate rule. Setting a group can reveal a further
+ * Question — that is the point of `showWhen` — and a revealed Question is never
+ * filled in, so counting unanswered Questions as disagreement would blank the
+ * control at the very moment the Reviewer used it.
  *
  * @param {QuestionDefinition[]} targets
  * @param {Record<string, Answer>} answers
  * @returns {string}
  */
-export function groupVerdictValue(targets, answers) {
+export function groupOutcomeValue(targets, answers) {
   /** @type {string | null} */
   let shared = null;
   for (const target of targets) {
@@ -71,34 +71,34 @@ export function groupVerdictValue(targets, answers) {
  *   questionGroup: string,
  *   options: string[],
  *   value: string,
- *   onGroupVerdict: (questionGroup: string, value: string) => void,
+ *   onGroupOutcome: (questionGroup: string, value: string) => void,
  * }} props
  */
-export function GroupVerdictControl({
+export function GroupOutcomeControl({
   questionGroup,
   options,
   value,
-  onGroupVerdict,
+  onGroupOutcome,
 }) {
   return h(
     'label',
-    { className: 'cora-group-verdict-label' },
-    h('span', {}, 'Group verdict'),
+    { className: 'cora-group-outcome-label' },
+    h('span', {}, 'Group outcome'),
     h(
       'select',
       {
-        className: 'cora-group-verdict',
+        className: 'cora-group-outcome',
         value,
-        'aria-label': `Group verdict for ${questionGroup}`,
+        'aria-label': `Group outcome for ${questionGroup}`,
         onchange: (/** @type {Event} */ event) => {
           const chosen = /** @type {HTMLSelectElement} */ (event.target).value;
-          // The placeholder is how the control shows "no shared verdict"; it is
+          // The placeholder is how the control shows "no shared wording"; it is
           // not a wording, and clearing it writes nothing.
           if (!chosen) return;
-          onGroupVerdict(questionGroup, chosen);
+          onGroupOutcome(questionGroup, chosen);
         },
       },
-      h('option', { value: '' }, 'Set group verdict…'),
+      h('option', { value: '' }, 'Set group outcome…'),
       ...options.map((option) => h('option', { value: option }, option))
     )
   );

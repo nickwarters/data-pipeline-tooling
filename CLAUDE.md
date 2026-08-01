@@ -254,7 +254,7 @@ src/
       section-panels.js        # SECTION_PANELS: one panel renderer per tab Section, keyed by id (#512)
       details-view.js          # config-driven, read-only Case Details pure view (mirrors current Section behaviour)
       case-actions.js          # Answer dispatch -> unchanged SaveQueue; save status dispatch bridge
-      group-verdict-view.js    # pure Group Verdict control, the Questions one verdict writes to,
+      group-outcome-view.js    # pure Group Outcome control, the Questions one Group Outcome writes to,
                                #   and the wording it displays (derived from the answered Questions)
       question-panel-view.js   # CASE-2 group-scoped Questions view with memoised cards
       general-questions-view.js # pure, non-outcome-driving General Questions section (#472)

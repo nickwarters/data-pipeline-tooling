@@ -413,7 +413,7 @@ function checkSections(slug, file, config) {
 
 /**
  * A `questionGroups` key naming no Question Group is a silent defect: the group
- * simply never finds its configuration, so the Group Verdict control never
+ * simply never finds its configuration, so the Group Outcome control never
  * appears and nothing anywhere complains. Group names are free text with
  * ampersands and spacing in them, which is exactly where a near-miss hides.
  *
@@ -458,7 +458,7 @@ function checkQuestionGroups(slug, file, config) {
   );
 
   const mismatched = optedIn.flatMap((group) => {
-    // Deprecated Questions are never verdict targets, so a stale option set on
+    // Deprecated Questions are never Group Outcome targets, so a stale option set on
     // one cannot cause the partial write this guards against. Order is not part
     // of the comparison: the control renders one target's ordering, and what
     // matters is only that every target accepts every wording it offers.
@@ -475,7 +475,7 @@ function checkQuestionGroups(slug, file, config) {
     return vocabularies.size > 1
       ? [
           fail(
-            `Case Type "${slug}": Question Group "${group}" opts into the Group Verdict but its Outcome Questions offer different options — one verdict cannot be marked on all of them`
+            `Case Type "${slug}": Question Group "${group}" opts into the Group Outcome but its Outcome Questions offer different options — one wording cannot be marked on all of them`
           ),
         ]
       : [];

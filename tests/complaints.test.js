@@ -8,12 +8,12 @@ import {
   evaluate,
 } from '../src/evaluators/applicability-evaluator.js';
 import {
-  groupVerdictTargets,
+  groupOutcomeTargets,
   questionGroupOf,
-} from '../src/pages/cora-case-review/group-verdict-view.js';
+} from '../src/pages/cora-case-review/group-outcome-view.js';
 import {
   answerEdited,
-  groupVerdictSet,
+  groupOutcomeSet,
 } from '../src/pages/cora-case-review/answer-actions.js';
 import { deriveFailureValues } from '../src/evaluators/failure-evaluator.js';
 import { validateCaptureGroups } from '../src/evaluators/issue-capture.js';
@@ -474,9 +474,9 @@ test('complaints offers only a complete or cancelled remediation resolution', ()
   assert.deepEqual(config.remediationStatuses, ['complete', 'cancelled']);
 });
 
-// --- Group Verdict ---
+// --- Group Outcome ---
 
-test('complaints opts every one of its Question Groups into the Group Verdict', () => {
+test('complaints opts every one of its Question Groups into the Group Outcome', () => {
   const present = [...new Set(config.questions.map(questionGroupOf))];
 
   assert.equal(config.allowBulkOutcome, true);
@@ -488,13 +488,13 @@ test('complaints opts every one of its Question Groups into the Group Verdict', 
   assert.equal(present.length, 7);
   for (const group of present) {
     assert.ok(
-      groupVerdictTargets(config.questions, group).length > 0,
-      `${group} has at least one Question a verdict can write to`
+      groupOutcomeTargets(config.questions, group).length > 0,
+      `${group} has at least one Question a outcome can write to`
     );
   }
 });
 
-test('complaints: a Regulatory & Reporting verdict can reveal a further Question', () => {
+test('complaints: a Regulatory & Reporting outcome can reveal a further Question', () => {
   const gate = config.questions.find((q) => q.id === 'q-cmp-0045');
   const gated = config.questions.find((q) => q.id === 'q-cmp-0046');
 
@@ -509,18 +509,18 @@ test('complaints: a Regulatory & Reporting verdict can reveal a further Question
   });
 });
 
-test('complaints: a Group Verdict is exactly the same Answers as marking the group one at a time', () => {
-  // The property the Group Verdict is built on: it is a write shortcut, not a
+test('complaints: a Group Outcome is exactly the same Answers as marking the group one at a time', () => {
+  // The property the Group Outcome is built on: it is a write shortcut, not a
   // second way of answering. Acknowledgement is the clean subject — no
   // intra-group showWhen. Seeding one Answer with a failure-lifetime key means
   // both routes have something to materialise over, rather than comparing two
   // runs that never exercised it.
-  const targets = groupVerdictTargets(config.questions, 'Acknowledgement');
+  const targets = groupOutcomeTargets(config.questions, 'Acknowledgement');
   /** @type {any} */
   const seed = {
     [targets[0].id]: { value: 'Poor', remediationRequired: true },
   };
-  const bulk = groupVerdictSet({
+  const bulk = groupOutcomeSet({
     answers: seed,
     catalogue: config.questions,
     questionGroup: 'Acknowledgement',

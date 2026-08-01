@@ -9,7 +9,7 @@
 
 import { evaluate } from '../../evaluators/applicability-evaluator.js';
 import { materializeRemediationActions } from '../../evaluators/failure-evaluator.js';
-import { groupVerdictTargets } from './group-verdict-view.js';
+import { groupOutcomeTargets } from './group-outcome-view.js';
 import { reviewerResponseOptions } from '../../lib/response-options.js';
 import {
   captureValue,
@@ -93,15 +93,15 @@ export function answerEdited({
 }
 
 /**
- * Record one **Group Verdict**: the same Outcome wording (or N/A) on every
+ * Record one **Group Outcome**: the same Outcome wording (or N/A) on every
  * Question Definition in a Question Group the Reviewer could have set it on
  * one at a time.
  *
  * The target set is frozen against the Answers as they arrive — applicability
- * is evaluated once, before anything is written — so a Question the verdict
+ * is evaluated once, before anything is written — so a Question the write
  * itself reveals is left for the Reviewer to answer, and a Question it hides
- * is pruned by the shared write path. Nothing group-level is stored: the
- * verdict is a shortcut for N ordinary Answer writes and leaves each of them
+ * is pruned by the shared write path. Nothing group-level is stored: a
+ * Group Outcome is a shortcut for N ordinary Answer writes and leaves each of them
  * individually editable.
  *
  * The wording is validated against each target Question rather than against
@@ -119,7 +119,7 @@ export function answerEdited({
  * }} input
  * @returns {Answers | null}
  */
-export function groupVerdictSet({
+export function groupOutcomeSet({
   answers,
   catalogue,
   questionGroup,
@@ -128,7 +128,7 @@ export function groupVerdictSet({
 }) {
   if (!canEdit) return null;
   const applicable = evaluate(catalogue, answers);
-  const targets = groupVerdictTargets(catalogue, questionGroup).filter(
+  const targets = groupOutcomeTargets(catalogue, questionGroup).filter(
     (question) =>
       applicable.has(question.id) &&
       reviewerResponseOptions(question).includes(value)

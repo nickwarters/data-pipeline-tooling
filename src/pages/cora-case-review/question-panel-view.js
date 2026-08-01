@@ -4,11 +4,11 @@ import { isFailure } from '../../evaluators/failure-evaluator.js';
 import { createMemo } from '../../core/memo.js';
 import { GroupProgress } from '../../components/base/cora-group-progress.js';
 import {
-  GroupVerdictControl,
-  groupVerdictTargets,
-  groupVerdictValue,
+  GroupOutcomeControl,
+  groupOutcomeTargets,
+  groupOutcomeValue,
   questionGroupOf,
-} from './group-verdict-view.js';
+} from './group-outcome-view.js';
 import { h } from '../../lib/html.js';
 import {
   NA_VALUE,
@@ -58,7 +58,7 @@ export function createQuestionPanelView() {
    *   questionGroups?: Record<string, import('../../sharepoint-client.js').QuestionGroupConfig>,
    *   allowBulkOutcome?: boolean,
    *   onAnswer: (questionId: string, value: string|string[]) => void,
-   *   onGroupVerdict: (questionGroup: string, value: string) => void,
+   *   onGroupOutcome: (questionGroup: string, value: string) => void,
    * }} props
    */
   function view(props) {
@@ -71,7 +71,7 @@ export function createQuestionPanelView() {
       questionGroups,
       allowBulkOutcome,
       onAnswer,
-      onGroupVerdict,
+      onGroupOutcome,
     } = props;
 
     const applicableIds = new Set(questions.map((question) => question.id));
@@ -114,8 +114,8 @@ export function createQuestionPanelView() {
         // `questions` is already the applicable set, so an opted-in group whose
         // Outcome Questions are all hidden right now offers no control rather
         // than one that would write nothing.
-        const targets = groupVerdictTargets(questions, group);
-        const offerVerdict =
+        const targets = groupOutcomeTargets(questions, group);
+        const offerOutcome =
           access === 'edit' &&
           (questionGroups?.[group]?.allowBulkOutcome ?? allowBulkOutcome) ===
             true &&
@@ -124,12 +124,12 @@ export function createQuestionPanelView() {
           'div',
           { className: 'cora-question-group-heading', 'data-qgroup': group },
           h('h4', {}, group),
-          offerVerdict
-            ? GroupVerdictControl({
+          offerOutcome
+            ? GroupOutcomeControl({
                 questionGroup: group,
                 options: reviewerResponseOptions(targets[0]),
-                value: groupVerdictValue(targets, answers),
-                onGroupVerdict,
+                value: groupOutcomeValue(targets, answers),
+                onGroupOutcome,
               })
             : null
         );

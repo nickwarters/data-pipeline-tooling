@@ -449,7 +449,7 @@
 /**
  * Per-Question-Group configuration declared by a Case Type, keyed by the
  * `questionGroup` name. `allowBulkOutcome` opts the group into
- * the Reviewer-facing bulk-verdict control: one selection writes the chosen
+ * the Reviewer-facing bulk-outcome control: one selection writes the chosen
  * Outcome wording (or the universal N/A) to every applicable, non-deprecated
  * `outcome`-type question in the group, through the normal answer path.
  *

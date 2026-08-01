@@ -42,7 +42,7 @@ import { AppealReviewSection } from './appeal-review-view.js';
 import { AmendOutcomeSection } from './amend-outcome-view.js';
 import { editRemediationDetail } from './remediation-actions.js';
 import {
-  groupVerdictSet,
+  groupOutcomeSet,
   issueCaptured,
   remediationActionToggled,
   remediationFreeFormEdited,
@@ -111,10 +111,10 @@ import { resolveGeneralQuestionsPlacement } from '../../evaluators/general-quest
  * @param {import('../cora-case-review.js').CaseReviewSnapshot} snapshot
  * @param {ReturnType<typeof import('./question-panel-view.js').createQuestionPanelView>} questionsView
  * @param {(questionId: string, value: string | string[]) => void} onAnswer
- * @param {(questionGroup: string, value: string) => void} onGroupVerdict
+ * @param {(questionGroup: string, value: string) => void} onGroupOutcome
  * @returns {Node[]}
  */
-function questionsPanel(snapshot, questionsView, onAnswer, onGroupVerdict) {
+function questionsPanel(snapshot, questionsView, onAnswer, onGroupOutcome) {
   return withGeneralQuestions(
     questionsView.view({
       catalogue: snapshot.catalogue,
@@ -125,7 +125,7 @@ function questionsPanel(snapshot, questionsView, onAnswer, onGroupVerdict) {
       questionGroups: snapshot.config?.questionGroups,
       allowBulkOutcome: snapshot.config?.allowBulkOutcome,
       onAnswer,
-      onGroupVerdict,
+      onGroupOutcome,
     }),
     {
       fields: snapshot.config?.generalQuestions ?? [],
@@ -157,11 +157,11 @@ export const SECTION_PANELS = {
       snapshot,
       actions.questionsView,
       actions.onAnswer,
-      // A Group Verdict is N ordinary Answer writes, so it travels the same
+      // A Group Outcome is N ordinary Answer writes, so it travels the same
       // Answer path a single response does — no action type of its own.
       (questionGroup, value) =>
         actions.editAnswers(
-          groupVerdictSet({
+          groupOutcomeSet({
             answers: actions.currentAnswers(),
             catalogue: snapshot.catalogue,
             questionGroup,
