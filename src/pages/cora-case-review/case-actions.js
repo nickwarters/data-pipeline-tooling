@@ -2,7 +2,7 @@
 
 /** @typedef {import('../../services/save-queue.js').SaveQueue} SaveQueue */
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
-/** @typedef {'saved'|'saving'|'reconnecting'|'conflict'} SaveStatus */
+/** @typedef {import('../../services/save-queue.js').SaveStatus} SaveStatus */
 
 /**
  * The plain-text Case Row fields the Notes Section edits, and the **only**

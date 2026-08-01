@@ -232,7 +232,8 @@ src/
     base/                       # leaf primitives — compose no other view
       cora-people-picker.js        # pure People Picker renderer and search helpers
       cora-group-progress.js      # pure per-Question-Group progress strip
-      cora-status-banner.js
+      cora-status-banner.js       # the save-status surface (saving/reconnecting/conflict),
+                                  #   rendered in the Case Review page chrome
       cora-toast.js
     sections/                   # domain-feature units: take config, wire base components together
       cora-allocation.js          # pure allocation view and candidate loader

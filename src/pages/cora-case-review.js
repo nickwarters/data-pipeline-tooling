@@ -1,6 +1,7 @@
 // @ts-check
 import { h } from '../lib/html.js';
 import { LoadingState } from '../lib/empty-state.js';
+import { StatusBanner } from '../components/base/cora-status-banner.js';
 import { ignoreAbortError } from '../lib/abort.js';
 import { withAbortSignal } from '../services/abortable-client.js';
 import { patchRoute, patchSnapshot } from '../core/route-state.js';
@@ -34,7 +35,7 @@ import {
   completionPatch,
 } from './cora-case-review/completion-actions.js';
 
-/** @typedef {'saved'|'saving'|'reconnecting'|'conflict'} SaveStatus */
+/** @typedef {import('../services/save-queue.js').SaveStatus} SaveStatus */
 
 /**
  * @typedef {Object} CaseReviewSnapshot
@@ -364,46 +365,6 @@ export function caseReviewReducer(state, action) {
 }
 
 /**
- * @param {SaveStatus} status
- * @returns {HTMLElement | null}
- */
-function saveStatusView(status) {
-  if (status === 'saved') return null;
-  if (status === 'conflict') {
-    return h(
-      'div',
-      {
-        className: 'cora-banner cora-banner-conflict',
-        role: 'alert',
-        'aria-live': 'assertive',
-      },
-      h(
-        'p',
-        { className: 'cora-banner-text' },
-        'This Case was edited in another tab. Reload to continue.'
-      ),
-      h(
-        'button',
-        {
-          className: 'cora-banner-reload',
-          onclick: () => location.reload(),
-        },
-        'Reload'
-      )
-    );
-  }
-  return h(
-    'div',
-    {
-      className: `cora-banner cora-banner-${status}`,
-      role: 'status',
-      'aria-live': 'polite',
-    },
-    status === 'saving' ? 'Saving…' : 'Reconnecting…'
-  );
-}
-
-/**
  * The Question Bank fallback, made visible. When the as-reviewed export is
  * missing the page falls back to the live Question Bank — a degraded read beats
  * a blocked audit — and the Cases affected are exactly the ones under audit.
@@ -673,7 +634,7 @@ export function createRouteSlice(params, context) {
     const parts = ensureShell(container, tools);
     const route = state.routes.caseReview;
     const snapshot = route.snapshot;
-    tools.render(parts.status, saveStatusView(route.saveStatus));
+    tools.render(parts.status, StatusBanner({ status: route.saveStatus }));
 
     if (!snapshot) {
       tools.render(parts.header, LoadingState());

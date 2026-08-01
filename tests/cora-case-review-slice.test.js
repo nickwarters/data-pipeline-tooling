@@ -3285,6 +3285,99 @@ test('route: mock-mode store shell keeps Review working at the existing URL', as
   location.hash = previousHash;
 });
 
+test('route: a rejected save surfaces the conflict banner in the mounted page', async () => {
+  let storedRow = {
+    ...caseRow,
+    caseType: 'example-review',
+    answers: { 'q-needs': { value: 'No' } },
+  };
+  const client = {
+    async getCase() {
+      return storedRow;
+    },
+    async getCurrentUser() {
+      return chrome.currentUser;
+    },
+    async getExportHash() {
+      return null;
+    },
+    async resolveUsers() {
+      return {};
+    },
+    async patchCase() {
+      return { ok: false, status: 412 };
+    },
+  };
+  const saveQueue = new SaveQueue(/** @type {any} */ (client), {
+    debounceMs: 0,
+  });
+  const context = /** @type {any} */ ({
+    client,
+    saveQueue,
+    currentUser: chrome.currentUser,
+    capabilities: chrome.permissions,
+    chrome,
+  });
+  const slice = createRouteSlice(
+    { caseType: 'example-review', id: 'c1' },
+    context
+  );
+  let state = slice.initialState;
+  const container = document.createElement('main');
+  /** @type {any} */
+  let tools;
+  tools = {
+    render,
+    dispatch(/** @type {any} */ action) {
+      state = slice.reducer(state, action);
+      slice.render(container, state, tools);
+    },
+    listen(
+      /** @type {EventTarget} */ target,
+      /** @type {string} */ type,
+      /** @type {EventListenerOrEventListenerObject} */ listener
+    ) {
+      target.addEventListener(type, listener);
+    },
+    isActive: () => true,
+  };
+
+  let dispose;
+  try {
+    slice.render(container, state, tools);
+    dispose = slice.start?.(tools);
+    await waitFor(
+      () => state.routes.caseReview.snapshot?.loaded === true,
+      'store-driven Case Review load'
+    );
+
+    // Divergent remote Answers are what make the stale ETag a conflict the
+    // Reviewer must see, rather than a write the queue can silently retry.
+    storedRow = {
+      ...storedRow,
+      answers: { 'q-needs': { value: 'Yes' } },
+      etag: 'e2',
+    };
+
+    const yes = container.querySelector(
+      '[data-focus-key="answer:q-welcome:0"]'
+    );
+    assert.ok(yes);
+    fireEvent(yes, 'change');
+    await saveQueue.whenIdle();
+    await flush();
+
+    assert.equal(state.routes.caseReview.saveStatus, 'conflict');
+    const banner = container.querySelector('.cora-banner-conflict');
+    assert.ok(banner, 'the rejected write reaches the page as a banner');
+    assert.equal(banner.getAttribute('role'), 'alert');
+    assert.equal(banner.getAttribute('aria-live'), 'assertive');
+    assert.match(container.textContent, /edited in another tab/);
+  } finally {
+    if (typeof dispose === 'function') dispose();
+  }
+});
+
 test('route: the Remediation tab resolves a Question through the store seam', async () => {
   let storedRow = {
     ...caseRow,

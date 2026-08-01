@@ -55,7 +55,9 @@ The queue reports `reconnecting` during retries.
 `subscribeStatus(listener)` immediately reports the current status and then
 each transition: `saved`, `saving`, `reconnecting`, or `conflict`. Bind it in a
 route effect and dispatch the value into page state. The view renders that
-state like any other value.
+state like any other value. On Case Review that renderer is
+`src/components/base/cora-status-banner.js` — the saving/reconnecting indicators
+and the conflict banner with its Reload button.
 
 ## Loading and list context
 
