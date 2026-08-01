@@ -255,6 +255,78 @@ test('MockSharePointClient: listCases with overdue:true returns only In-progress
   assert.equal(results[0].id, 'od-1');
 });
 
+test('MockSharePointClient: listCases with overdue:true excludes an Actions In Progress Case past its dueDate', async () => {
+  const client = new MockSharePointClient({
+    lists: {
+      [LIST]: [
+        reasonCase('sent-1', {
+          status: 'Actions In Progress',
+          dueDate: '2020-01-01T00:00:00Z',
+        }),
+        reasonCase('open-1', {
+          status: 'In-progress',
+          dueDate: '2020-01-01T00:00:00Z',
+        }),
+      ],
+    },
+    personas: PERSONAS,
+  });
+
+  const rows = await client.listCases({ overdue: true }, { listName: LIST });
+  assert.deepEqual(
+    rows.map((c) => c.id),
+    ['open-1'],
+    'the review clock stops once the actions are sent'
+  );
+});
+
+test('MockSharePointClient: listCases derives the overdue flag, ignoring a contradictory stored value', async () => {
+  const client = new MockSharePointClient({
+    lists: {
+      [LIST]: [
+        reasonCase('claims-overdue', {
+          status: 'Completed',
+          dueDate: '2020-01-01T00:00:00Z',
+          overdue: true,
+        }),
+        reasonCase('claims-on-time', {
+          status: 'In-progress',
+          dueDate: '2020-01-01T00:00:00Z',
+          overdue: false,
+        }),
+      ],
+    },
+    personas: PERSONAS,
+  });
+
+  const rows = await client.listCases({}, { listName: LIST });
+  assert.deepEqual(
+    rows.map((c) => [c.id, c.overdue]),
+    [
+      ['claims-overdue', false],
+      ['claims-on-time', true],
+    ]
+  );
+});
+
+test('MockSharePointClient: getCase derives the overdue flag, ignoring a contradictory stored value', async () => {
+  const client = new MockSharePointClient({
+    lists: {
+      [LIST]: [
+        reasonCase('claims-overdue', {
+          status: 'Completed',
+          dueDate: '2020-01-01T00:00:00Z',
+          overdue: true,
+        }),
+      ],
+    },
+    personas: PERSONAS,
+  });
+
+  const row = await client.getCase('claims-overdue', { listName: LIST });
+  assert.equal(row?.overdue, false);
+});
+
 test('MockSharePointClient: listCases with overdue:false returns all cases (no overdue filter applied)', async () => {
   const client = makeClient();
   const all = await client.listCases({}, { listName: LIST });

@@ -1,6 +1,7 @@
 // @ts-check
 import { h } from '../../lib/html.js';
 import { CASE_STATUS } from '../../lib/case-statuses.js';
+import { isOverdue } from '../../evaluators/overdue-evaluator.js';
 
 /** @typedef {import('../../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
@@ -92,9 +93,8 @@ export async function loadOwnerSummaries({
         caseType,
         outstanding: inProgress.filter((c) => !c.assignedReviewer).length,
         assigned: inProgress.filter((c) => !!c.assignedReviewer).length,
-        overdue: inProgress.filter(
-          (c) => !!c.dueDate && /** @type {string} */ (c.dueDate) < nowIso
-        ).length,
+        overdue: inProgress.filter((c) => isOverdue(c, undefined, currentTime))
+          .length,
         completedToday: sliceCounts[0],
         completedLast7Days: sliceCounts.reduce((sum, n) => sum + n, 0),
       };

@@ -9,6 +9,7 @@ installDom();
 
 const { createRouteSlice, dashboardView } =
   await import('../src/pages/cora-dashboard.js');
+const { isOverdue } = await import('../src/evaluators/overdue-evaluator.js');
 
 function capabilities(overrides = {}) {
   return /** @type {any} */ ({
@@ -57,7 +58,15 @@ function context(permissions) {
 test('dashboard slice: effects load reviewer rows, KPI lanes, and Controls appeals through actions', async () => {
   const caps = capabilities({ isReviewer: true, isControls: true });
   const ctx = context(caps);
-  const reviewer = [{ id: 'reviewer-case', dueDate: '2020-01-01T00:00:00Z' }];
+  // Overdue is derived from the status as well as the date, so the row carries
+  // the status a Case still under review has.
+  const reviewer = [
+    {
+      id: 'reviewer-case',
+      status: 'In-progress',
+      dueDate: '2020-01-01T00:00:00Z',
+    },
+  ];
   const appeals = [{ id: 'appeal-case' }];
   const lanes = [
     {
@@ -89,7 +98,14 @@ test('dashboard slice: effects load reviewer rows, KPI lanes, and Controls appea
         /** @type {any[]} */ caseSources
       ) => {
         reviewerSources.push(...caseSources);
-        return /** @type {any} */ (reviewer);
+        // A real client derives `overdue` on every Case read, so the fake does
+        // too — the dashboard takes the flag as given rather than re-deriving.
+        return /** @type {any} */ (
+          reviewer.map((row) => ({
+            ...row,
+            overdue: isOverdue(/** @type {any} */ (row)),
+          }))
+        );
       },
       loadAppeals: async () => /** @type {any} */ (appeals),
       loadKpis: async () => /** @type {any} */ (lanes),
@@ -222,11 +238,9 @@ test('reviewer worklist preserves the legacy columns, filters, and Open action',
   // This table's `rowClass` is centralised on the shared
   // `overdueCaseRowClass`, so pin what it renders here too — otherwise only the
   // Journey Cases test fails when the shared helper is broken, and the
-  // reviewer worklist loses its overdue styling silently. The Dashboard is the
-  // one table that derives `overdue` itself — the load effect stamps
-  // `isOverdue(row)` onto each row before dispatching `reviewer-cases/loaded` —
-  // so the flag arrives on the action, as it does here, and the reducer and
-  // view take it as given.
+  // reviewer worklist loses its overdue styling silently. The flag itself
+  // arrives already derived on the rows the client returned, as it does here,
+  // and the reducer and view take it as given.
   assert.deepEqual(
     [
       ...(unfiltered

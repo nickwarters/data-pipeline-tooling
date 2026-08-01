@@ -25,7 +25,6 @@ import {
   loadActionCentrePage,
 } from './dashboard/action-centre-view.js';
 import { visibleReasons } from '../services/action-centre-model.js';
-import { isOverdue } from '../evaluators/overdue-evaluator.js';
 import { loadKpiModel } from '../evaluators/kpi-strip-model.js';
 import { CASE_STATUS } from '../lib/case-statuses.js';
 import { listCasesAcrossSources } from '../services/across-sources.js';
@@ -328,7 +327,7 @@ export function createRouteSlice(
     if (effectsActive()) {
       effectTools.dispatch({
         type: 'reviewer-cases/loaded',
-        cases: rows.map((row) => ({ ...row, overdue: isOverdue(row) })),
+        cases: rows,
       });
     }
   }

@@ -1,5 +1,5 @@
 // @ts-check
-import { CASE_STATUS } from '../lib/case-statuses.js';
+import { isOverdue } from '../evaluators/overdue-evaluator.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').ListCasesFilter} ListCasesFilter */
@@ -82,7 +82,7 @@ export class MockSharePointClient {
    */
   async getCase(id, opts = {}) {
     const c = this._caseStore(opts).find((c) => c.id === id);
-    return settle(opts.signal, c ? { ...c } : null);
+    return settle(opts.signal, c ? withDerivedOverdue(c) : null);
   }
 
   /**
@@ -119,7 +119,7 @@ export class MockSharePointClient {
       )?.displayName;
     }
     cases[idx] = next;
-    return { ok: true, status: 200, data: { ...cases[idx] } };
+    return { ok: true, status: 200, data: withDerivedOverdue(cases[idx]) };
   }
 
   /**
@@ -141,7 +141,8 @@ export class MockSharePointClient {
 
   /**
    * A predicate for one `ListCasesFilter`. Scalar fields are ANDed equalities;
-   * `overdue` is the In-progress + past-due derivation; `anyOf` ORs
+   * `overdue` defers to the shared evaluator, so the mock and the real
+   * server-side query answer the same question; `anyOf` ORs
    * sub-filters. Shared by `listCases` and `countCases` so a filtered count and
    * its paged rows can never drift apart within a single point-in-time read.
    *
@@ -201,11 +202,7 @@ export class MockSharePointClient {
         Boolean(c.reopened) !== filter.reopened
       )
         return false;
-      if (filter.overdue === true) {
-        if (c.status === CASE_STATUS.COMPLETED) return false;
-        if (!c.dueDate) return false;
-        if (new Date(c.dueDate) >= new Date()) return false;
-      }
+      if (filter.overdue === true && !isOverdue(c)) return false;
       // CompletedAt window: inclusive lower, exclusive upper, so
       // adjacent per-day slices sum without double-counting a boundary Case.
       if (filter.completedAfter !== undefined) {
@@ -245,10 +242,7 @@ export class MockSharePointClient {
 
     const skip = opts.skip ?? 0;
     const end = opts.top !== undefined ? skip + opts.top : undefined;
-    return settle(
-      opts.signal,
-      rows.slice(skip, end).map((c) => ({ ...c }))
-    );
+    return settle(opts.signal, rows.slice(skip, end).map(withDerivedOverdue));
   }
 
   /**
@@ -386,4 +380,18 @@ async function settle(signal, value) {
 /** @param {CaseRow} row */
 function cloneCase(row) {
   return structuredClone(row);
+}
+
+/**
+ * A read copy of a stored row with `overdue` derived. The real client derives
+ * the same flag from the row's status and due date on every read, so a fixture
+ * that spells one out by hand — or leaves it out — must not change what a page
+ * sees. Deliberately applied on the way out only: the flag is derived, never
+ * stored, so it stays out of the mutable stores and out of `snapshot()`.
+ *
+ * @param {CaseRow} row
+ * @returns {CaseRow}
+ */
+function withDerivedOverdue(row) {
+  return { ...row, overdue: isOverdue(row) };
 }

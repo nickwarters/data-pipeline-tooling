@@ -2,7 +2,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { HttpSharePointClient } from '../src/services/http-sharepoint-client.js';
-import { WEB_URL, makeFetch } from './helpers/http-sharepoint-client.js';
+import {
+  WEB_URL,
+  makeFetch,
+  peopleFilterFetch,
+} from './helpers/http-sharepoint-client.js';
 
 // Capability: list queries, filters, paging, and counts.
 
@@ -18,53 +22,6 @@ function idPage(n, nextLink) {
   const body = { value: Array.from({ length: n }, (_, i) => ({ Id: i + 1 })) };
   if (nextLink) body['odata.nextLink'] = nextLink;
   return new Response(JSON.stringify(body), { status: 200 });
-}
-
-/**
- * A fake backing a filter that names people: the form digest, an EnsureUser
- * answering from `ids` (keyed by bare account), and the items GET the query
- * itself issues. An account `ids` does not name cannot be resolved, which is
- * how a directory miss is spelled.
- *
- * @param {Record<string, number>} ids
- * @param {() => Response} [items] the items response, defaulting to an empty page
- */
-function peopleFilterFetch(ids, items) {
-  /** @type {import('./helpers/http-sharepoint-client.js').CapturedCall | null} */
-  let ensureCall = null;
-  return makeFetch([
-    {
-      when: (c) => c.url.endsWith('/_api/contextinfo'),
-      respond: () =>
-        new Response(JSON.stringify({ FormDigestValue: 'd' }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        }),
-    },
-    {
-      when: (c) => {
-        if (!c.url.endsWith('/_api/web/ensureuser')) return false;
-        ensureCall = c;
-        return true;
-      },
-      respond: () => {
-        const logon = String(JSON.parse(String(ensureCall?.body)).logonName);
-        const id = ids[logon.slice(logon.lastIndexOf('\\') + 1)];
-        if (id === undefined)
-          return new Response('no such user', { status: 500 });
-        return new Response(JSON.stringify({ Id: id }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      },
-    },
-    {
-      when: (c) => c.method === 'GET',
-      respond:
-        items ??
-        (() => new Response(JSON.stringify({ value: [] }), { status: 200 })),
-    },
-  ]);
 }
 
 test('HttpSharePointClient: listCases follows odata.nextLink across pages and concatenates results', async () => {
@@ -288,8 +245,8 @@ test('HttpSharePointClient: listCases with overdue:true adds DueDate lt and Stat
   const url = decodeURIComponent(calls[0].url);
   assert.ok(url.includes('DueDate lt '), 'should include DueDate lt condition');
   assert.ok(
-    url.includes("Status eq 'In-progress'"),
-    'should restrict to In-progress cases'
+    url.includes("(Status eq 'In-progress')"),
+    'should restrict to the statuses the review clock still runs in'
   );
 });
 

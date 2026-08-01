@@ -304,10 +304,29 @@ test('HttpSharePointClient: overdue is false for an In-progress case with no Due
   assert.equal(await overdueFor({ Status: 'In-progress' }), false);
 });
 
+test('HttpSharePointClient: overdue is true for a past-due item with no Status column, which reads as In-progress', async () => {
+  // A row with an empty Status column hydrates as In-progress, and the overdue
+  // flag is derived from the hydrated row rather than from the raw item — so it
+  // agrees with the status the rest of the app is shown for that same Case.
+  assert.equal(await overdueFor({ DueDate: '2020-01-01T00:00:00.000Z' }), true);
+});
+
 test('HttpSharePointClient: overdue is false for a non-In-progress case even when past due', async () => {
   assert.equal(
     await overdueFor({
       Status: 'Completed',
+      DueDate: '2020-01-01T00:00:00.000Z',
+    }),
+    false
+  );
+});
+
+// The review clock stops once the actions are sent — the remediation deadline
+// governs from there, and it is a different column on the same row.
+test('HttpSharePointClient: overdue is false for an Actions In Progress case past its DueDate', async () => {
+  assert.equal(
+    await overdueFor({
+      Status: 'Actions In Progress',
       DueDate: '2020-01-01T00:00:00.000Z',
     }),
     false

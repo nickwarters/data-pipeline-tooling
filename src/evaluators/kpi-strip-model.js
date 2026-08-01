@@ -1,5 +1,5 @@
 // @ts-check
-import { isOverdue } from './overdue-evaluator.js';
+import { isOverdue, OVERDUE_STATUSES } from './overdue-evaluator.js';
 import { permissions } from '../services/permissions.js';
 import { CASE_STATUS } from '../lib/case-statuses.js';
 import {
@@ -66,15 +66,17 @@ export function caseTypeDisplayName(slug, config = permissions) {
 }
 
 /**
- * Whether a Case is due within the next 24 hours but not yet overdue. Completed
- * and dateless Cases never breach. `now` is injectable for testing.
+ * Whether a Case is due within the next 24 hours but not yet overdue. It runs
+ * off the same statuses as the overdue rule, because a Case the review clock
+ * has left behind cannot be about to breach it either. `now` is injectable for
+ * testing.
  *
  * @param {CaseRow} caseRow
  * @param {Date} [now]
  * @returns {boolean}
  */
 export function isBreachingWithin24h(caseRow, now = new Date()) {
-  if (caseRow.status === CASE_STATUS.COMPLETED) return false;
+  if (!OVERDUE_STATUSES.includes(caseRow.status)) return false;
   const due = caseRow.dueDate;
   if (!due) return false;
   const dueMs = new Date(due).getTime();

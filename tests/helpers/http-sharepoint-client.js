@@ -78,6 +78,53 @@ export function profileResponse(displayName) {
 }
 
 /**
+ * A fake backing a filter that names people: the form digest, an EnsureUser
+ * answering from `ids` (keyed by bare account), and the items GET the query
+ * itself issues. An account `ids` does not name cannot be resolved, which is
+ * how a directory miss is spelled.
+ *
+ * @param {Record<string, number>} ids
+ * @param {() => Response} [items] the items response, defaulting to an empty page
+ */
+export function peopleFilterFetch(ids, items) {
+  /** @type {CapturedCall | null} */
+  let ensureCall = null;
+  return makeFetch([
+    {
+      when: (c) => c.url.endsWith('/_api/contextinfo'),
+      respond: () =>
+        new Response(JSON.stringify({ FormDigestValue: 'd' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    },
+    {
+      when: (c) => {
+        if (!c.url.endsWith('/_api/web/ensureuser')) return false;
+        ensureCall = c;
+        return true;
+      },
+      respond: () => {
+        const logon = String(JSON.parse(String(ensureCall?.body)).logonName);
+        const id = ids[logon.slice(logon.lastIndexOf('\\') + 1)];
+        if (id === undefined)
+          return new Response('no such user', { status: 500 });
+        return new Response(JSON.stringify({ Id: id }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      },
+    },
+    {
+      when: (c) => c.method === 'GET',
+      respond:
+        items ??
+        (() => new Response(JSON.stringify({ value: [] }), { status: 200 })),
+    },
+  ]);
+}
+
+/**
  * Read a minimal Case row and return its derived overdue value.
  * @param {{ Status?: string, DueDate?: string }} fields
  * @returns {Promise<boolean | undefined>}

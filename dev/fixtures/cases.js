@@ -494,7 +494,6 @@ export const cases = [
     notes: '',
     completedAt: null,
     dueDate: _yesterday.toISOString(),
-    overdue: true,
     created: _nineDaysAgo.toISOString(),
     etag: 'etag-ac-od1',
   },

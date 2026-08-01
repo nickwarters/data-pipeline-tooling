@@ -2,7 +2,7 @@
 import { h } from '../../lib/html.js';
 import { caseRouteFor } from '../../lib/case-route-links.js';
 import { CASE_STATUS } from '../../lib/case-statuses.js';
-import { isOverdue } from '../../evaluators/overdue-evaluator.js';
+import { isRemediationOverdue } from '../../evaluators/overdue-evaluator.js';
 import {
   answerRemediation,
   isRemediationResolved,
@@ -324,11 +324,9 @@ export function responsiblePartyView(state, handlers, now = new Date()) {
         emptyMessage: 'No outstanding remediation actions.',
         rowKey: (row) => `${row.caseType}:${row.id}`,
         // Overdue against the *remediation* clock, exactly as the Remediation
-        // tab badges it — `isOverdue` reads `dueDate`, so the deadline this
-        // table is about is substituted in.
+        // tab badges it.
         rowClass: (row) => {
-          const dueDate = remediationDeadline(row);
-          return dueDate && isOverdue({ ...row, dueDate }, undefined, now)
+          return isRemediationOverdue(row, remediationDeadline(row), now)
             ? 'cora-remediation-row cora-overdue'
             : 'cora-remediation-row';
         },

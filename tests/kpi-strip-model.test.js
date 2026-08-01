@@ -154,6 +154,18 @@ test('isBreachingWithin24h: false for a Completed case', () => {
   );
 });
 
+test('isBreachingWithin24h: false once the review clock has stopped, even mid-remediation', () => {
+  // The look-ahead window runs off the same statuses as the overdue rule: only
+  // a Case still under review can be about to breach its review due date.
+  assert.equal(
+    isBreachingWithin24h(
+      caseRow({ status: 'Actions In Progress', dueDate: SOON }),
+      NOW
+    ),
+    false
+  );
+});
+
 test('isBreachingWithin24h: defaults now to the current time without throwing', () => {
   assert.equal(
     typeof isBreachingWithin24h(caseRow({ dueDate: LATER })),

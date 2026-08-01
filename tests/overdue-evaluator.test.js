@@ -1,7 +1,10 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isOverdue } from '../src/evaluators/overdue-evaluator.js';
+import {
+  isOverdue,
+  isRemediationOverdue,
+} from '../src/evaluators/overdue-evaluator.js';
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../src/sharepoint-client.js').CaseTypeConfig} CaseTypeConfig */
@@ -75,9 +78,61 @@ test('isOverdue: Completed case with past dueDate → false', () => {
   assert.strictEqual(isOverdue(c, baseConfig(), NOW), false);
 });
 
+// Once actions have been sent the review itself is finished, so the review due
+// date stops meaning anything: the remediation deadline is the clock that
+// governs this phase, and it is a different date on the same Case.
+test('isOverdue: Actions In Progress case with past dueDate → false', () => {
+  const c = {
+    ...baseCase(),
+    status: /** @type {'Actions In Progress'} */ ('Actions In Progress'),
+    dueDate: PAST.toISOString(),
+  };
+  assert.strictEqual(isOverdue(c, baseConfig(), NOW), false);
+});
+
 // --- boundary ---
 
 test('isOverdue: dueDate exactly at now → false (not strictly past)', () => {
   const c = { ...baseCase(), dueDate: NOW.toISOString() };
   assert.strictEqual(isOverdue(c, baseConfig(), NOW), false);
+});
+
+// --- the remediation clock ---
+
+test('isRemediationOverdue: Actions In Progress past the deadline → true', () => {
+  const c = {
+    ...baseCase(),
+    status: /** @type {'Actions In Progress'} */ ('Actions In Progress'),
+  };
+  assert.strictEqual(isRemediationOverdue(c, PAST.toISOString(), NOW), true);
+});
+
+test('isRemediationOverdue: Completed case past the deadline → false', () => {
+  const c = {
+    ...baseCase(),
+    status: /** @type {'Completed'} */ ('Completed'),
+  };
+  assert.strictEqual(isRemediationOverdue(c, PAST.toISOString(), NOW), false);
+});
+
+test('isRemediationOverdue: null deadline → false', () => {
+  assert.strictEqual(isRemediationOverdue(baseCase(), null, NOW), false);
+});
+
+test('isRemediationOverdue: absent deadline → false', () => {
+  assert.strictEqual(isRemediationOverdue(baseCase(), undefined, NOW), false);
+});
+
+test('isRemediationOverdue: future deadline → false', () => {
+  assert.strictEqual(
+    isRemediationOverdue(baseCase(), FUTURE.toISOString(), NOW),
+    false
+  );
+});
+
+test('isRemediationOverdue: defaults now to the current time without throwing', () => {
+  assert.strictEqual(
+    typeof isRemediationOverdue(baseCase(), PAST.toISOString()),
+    'boolean'
+  );
 });

@@ -172,6 +172,19 @@ is always validated against the full framework vocabulary, so a row resolved bef
 Case Type narrowed its offer keeps that resolution.
 _Avoid_: Action status (that is the separate `actions`-capture-field record), Sign-off
 
+**Overdue**:
+A **Case** past its review due date (`dueDate` on the Case row) while it is
+still under review — i.e. not yet
+**Reportable**, which in status terms is `In-progress` alone. Derived, never
+stored: no column holds it, every surface re-derives it from the row's status and
+Due Date, and a row that carries an `overdue` value has had it derived on read.
+Once the Case is Reportable the review clock stops and says nothing further about
+it — the **Remediation Due Date** governs the `Actions In Progress` phase, and a
+Case past _that_ date is "past its Remediation Due Date", a different statement
+about a different clock.
+_Avoid_: Late, breached (reserve "breach" for the imminent-breach look-ahead),
+"overdue" for the remediation clock (say **past its Remediation Due Date**)
+
 **Remediation Due Date**:
 A single **case-level** SLA date on the Case row (`remediationDueDate`), = **Reportable**
 date + **10 working days**, stamped once when the **Reviewer** clicks **Send Actions**.

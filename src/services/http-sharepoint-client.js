@@ -1,6 +1,10 @@
 // @ts-check
 import { toBareAccount, toClaimsLogin } from './account-name.js';
 import { CASE_STATUS } from '../lib/case-statuses.js';
+import {
+  isOverdue,
+  OVERDUE_STATUSES,
+} from '../evaluators/overdue-evaluator.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').PersonResult} PersonResult */
@@ -864,8 +868,14 @@ function buildFilterExpr(filter) {
     );
   }
   if (filter.overdue === true) {
+    // The indexed, selective date column leads; the statuses the review clock
+    // runs in follow as one ORed group, taken from the shared definition so the
+    // server-side query and the derived row flag cannot drift apart.
     conds.push(`DueDate lt '${new Date().toISOString()}'`);
-    conds.push(`Status eq '${CASE_STATUS.IN_PROGRESS}'`);
+    const statuses = OVERDUE_STATUSES.map(
+      (status) => `Status eq '${escapeOData(status)}'`
+    );
+    conds.push(`(${statuses.join(' or ')})`);
   }
   // Action Centre reason flags — indexed boolean columns hoisted onto the Case
   // row so a reason count is a cheap `$count`, never a blob parse.
@@ -943,7 +953,8 @@ function rowFromItem(item, etag) {
   const partyManager = /** @type {any} */ (
     item?.ResponsiblePartyManager ?? null
   );
-  return {
+  /** @type {CaseRow} */
+  const row = {
     id: String(item?.Id ?? ''),
     caseType: String(item?.CaseType ?? ''),
     title: String(item?.Title ?? ''),
@@ -1015,14 +1026,6 @@ function rowFromItem(item, etag) {
     relatedDate:
       typeof item?.RelatedDate === 'string' ? item.RelatedDate : null,
     created: item?.Created != null ? String(item.Created) : undefined,
-    // Derived, never read from a stored/calculated column: a Case is
-    // overdue when it is still In-progress and its DueDate has passed — the same
-    // rule as the overdue `$filter` above, so the group filter and the "also
-    // overdue" chip can never disagree.
-    overdue:
-      item?.Status === CASE_STATUS.IN_PROGRESS &&
-      typeof item?.DueDate === 'string' &&
-      new Date(item.DueDate).getTime() < Date.now(),
     awaitingResponsibleParty:
       item?.AwaitingResponsibleParty != null
         ? Boolean(item.AwaitingResponsibleParty)
@@ -1042,6 +1045,10 @@ function rowFromItem(item, etag) {
     reopenedAt: typeof item?.ReopenedAt === 'string' ? item.ReopenedAt : null,
     etag,
   };
+  // Derived, never read from a stored or calculated column, and derived by the
+  // same evaluator the overdue `$filter` is built from — so the group filter
+  // and the "also overdue" chip on the row it returns cannot disagree.
+  return { ...row, overdue: isOverdue(row) };
 }
 
 /**

@@ -2,7 +2,7 @@
 import { h } from '../../lib/html.js';
 import { EmptyState } from '../../lib/empty-state.js';
 import { DEFAULT_SECTION_HEADINGS } from '../../lib/section-labels.js';
-import { isOverdue } from '../../evaluators/overdue-evaluator.js';
+import { isRemediationOverdue } from '../../evaluators/overdue-evaluator.js';
 import {
   REMEDIATION_STATUSES,
   REMEDIATION_STATUS_LABELS,
@@ -61,15 +61,10 @@ export function RemediationTracking(props) {
     props.heading ?? DEFAULT_SECTION_HEADINGS.remediation
   );
   const rows = remediationRows(props.catalogue, props.answers);
-  // `isOverdue` reads a Case with an explicit `dueDate`; the remediation SLA is
-  // the one being tracked here, so it is substituted in. Narrowing the Case row
-  // into a local first keeps the guard and the value visibly the same thing.
+  // This tab tracks the remediation clock, not the review one.
   const caseRow = props.caseRow ?? null;
   const dueDate = caseRow?.remediationDueDate ?? null;
-  const overdue =
-    caseRow !== null &&
-    dueDate !== null &&
-    isOverdue({ ...caseRow, dueDate }, undefined);
+  const overdue = caseRow !== null && isRemediationOverdue(caseRow, dueDate);
   const sla = h(
     'p',
     { className: 'cora-remediation-due-date' },

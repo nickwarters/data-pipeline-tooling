@@ -17,9 +17,19 @@ test('loadOwnerSummaries derives bounded per-source ownership metrics', async ()
     client: /** @type {any} */ ({
       async listCases(/** @type {any} */ filter, /** @type {any} */ options) {
         listCalls.push([filter, options]);
+        // The rows carry the status the query asked for: the overdue count is
+        // now a status-aware derivation, not a bare date compare.
         return [
-          { assignedReviewer: '', dueDate: '2026-07-18T00:00:00.000Z' },
-          { assignedReviewer: 'u1', dueDate: '2026-07-22T00:00:00.000Z' },
+          {
+            assignedReviewer: '',
+            status: 'In-progress',
+            dueDate: '2026-07-18T00:00:00.000Z',
+          },
+          {
+            assignedReviewer: 'u1',
+            status: 'In-progress',
+            dueDate: '2026-07-22T00:00:00.000Z',
+          },
         ];
       },
       async countCases(/** @type {any} */ filter, /** @type {any} */ options) {
