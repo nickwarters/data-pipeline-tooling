@@ -8,6 +8,7 @@ import {
   getByRole,
   getByTag,
   queryAllByRole,
+  queryAllByTag,
 } from './helpers/semantic-dom.js';
 import { registerCaseType } from '../case-types/manifest.js';
 
@@ -43,7 +44,8 @@ const { default: exampleReviewConfig } =
   await import('./_example-review-case-type.js');
 const { default: complaintsConfig } =
   await import('../case-types/complaints.js');
-const { evaluateAccess } = await import('../src/services/section-access.js');
+const { evaluateAccess, SECTIONS } =
+  await import('../src/services/section-access.js');
 const { resolveSectionLabels } = await import('../src/lib/section-labels.js');
 
 /** @type {import('../src/core/chrome-state.js').ChromeState} */
@@ -4332,4 +4334,169 @@ test('case review slice: the read carries the signal while the write path keeps 
     [caseRow],
     'the SaveQueue still receives the loaded Case Row'
   );
+});
+
+// --- End-to-end: a Case Type renames every Section ---
+
+/**
+ * A Case whose roles and status leave no Section hidden, so one render can
+ * check every caption at once: the viewer is the Assigned Reviewer (Details,
+ * Review, Issues, Notes), the Journey Owner the Case Type routes appeals to
+ * (Appeal), and Controls (Appeal Review, Amend Outcome); the Case is Completed
+ * with an open Appeal and one failed Question carrying remediation, which is
+ * what opens the Remediation tab.
+ */
+function everySectionVisibleCase() {
+  /** @type {any[]} */
+  const catalogue = [
+    {
+      id: 'q1',
+      text: 'Question one',
+      responseType: 'yes-no-na',
+      failureValues: ['No'],
+      deprecated: false,
+    },
+  ];
+  /** @type {any} */
+  const row = {
+    ...caseRow,
+    status: 'Completed',
+    completedAt: '2026-05-04',
+    notes: 'Reviewer note',
+    answers: {
+      q1: {
+        value: 'No',
+        remediationRequired: 'yes',
+        freeFormRemediation: 'Write to the customer',
+      },
+    },
+    appeals: [
+      {
+        id: 'a1',
+        state: 'open',
+        rationale: 'Please look again',
+        raisedBy: 'u1',
+        raisedAt: '2026-05-05',
+      },
+    ],
+  };
+  /** @type {any} */
+  const config = {
+    detailFields: [{ key: 'customerName', label: 'Customer name' }],
+    captureGroups: [],
+    appeal: { raisedBy: 'journeyOwner' },
+    outcomeOptions: [{ id: 'pass', wording: 'Compliant', severity: 0 }],
+    computeOutcome: () => ({ outcome: 'pass' }),
+  };
+  /** @type {any[]} */
+  const roles = ['assignedReviewer', 'journeyOwner', 'controls'];
+  /** @type {any} */
+  const access = {};
+  for (const section of SECTIONS) {
+    access[section] = evaluateAccess(section, roles, row, config, catalogue);
+  }
+  return { row, config, catalogue, access };
+}
+
+test('a Case Type that renames every Section renames every tab and every heading', () => {
+  const { row, config, catalogue, access } = everySectionVisibleCase();
+
+  assert.deepEqual(
+    Object.entries(access).filter(([, mode]) => mode === 'hidden'),
+    [],
+    'the fixture must leave every Section visible, or the render skips its panel'
+  );
+
+  const sectionLabels = resolveSectionLabels({
+    sectionLabels: {
+      details: 'Background',
+      questions: { tab: 'Assess', heading: 'Assessment' },
+      issues: 'Findings',
+      remediation: 'Fix-ups',
+      summary: 'Wrap-up',
+      notes: 'Scribbles',
+      conversation: 'Chat',
+      appealRequest: 'Challenge',
+      appealReview: 'Challenge Review',
+      amendOutcome: 'Correct Outcome',
+    },
+  });
+
+  const state = caseReviewReducer(
+    createInitialCaseReviewState(chrome, 'popover'),
+    {
+      type: 'case/load-finished',
+      snapshot: /** @type {any} */ ({
+        ...snapshot(),
+        caseRow: row,
+        config,
+        catalogue,
+        applicableQuestions: catalogue,
+        answers: row.answers,
+        allAnswered: true,
+        summarySections: ['details', 'questions', 'issues', 'notes'],
+        access,
+        sectionLabels,
+      }),
+    }
+  );
+  const { container } = renderShippedState(state);
+
+  const tabNames = queryAllByRole(container, 'tab').map(
+    (tab) => tab.textContent
+  );
+  assert.deepEqual(tabNames, [
+    'Background',
+    'Assess',
+    'Findings',
+    'Fix-ups',
+    'Wrap-up',
+    'Scribbles',
+    'Challenge',
+    'Challenge Review',
+    'Correct Outcome',
+  ]);
+
+  const headings = queryAllByTag(container, 'h2').map(
+    (node) => node.textContent
+  );
+  for (const expected of [
+    'Background',
+    'Assessment',
+    'Findings',
+    'Fix-ups',
+    'Wrap-up',
+    'Scribbles',
+    'Challenge',
+    'Challenge Review',
+    'Correct Outcome',
+    'Chat',
+  ]) {
+    assert.ok(
+      headings.includes(expected),
+      `expected an h2 reading "${expected}", got ${JSON.stringify(headings)}`
+    );
+  }
+
+  const blockTitles = queryAllByTag(container, 'h3').map(
+    (node) => node.textContent
+  );
+  for (const expected of [
+    'Background',
+    'Assessment',
+    'Findings',
+    'Scribbles',
+  ]) {
+    assert.ok(
+      blockTitles.includes(expected),
+      `expected a Summary block titled "${expected}", got ${JSON.stringify(blockTitles)}`
+    );
+  }
+
+  assert.notEqual(
+    sectionLabels.questions.tab,
+    sectionLabels.questions.heading,
+    'the tab and the heading are separately addressable'
+  );
+  assert.equal(tabNames.includes('Assessment'), false);
 });
