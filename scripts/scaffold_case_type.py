@@ -178,7 +178,7 @@ import {{ computeConfiguredOutcome }} from '../src/evaluators/configured-outcome
  *
  * Declares its own `listName` (`{opts.list_name}`) like every other Case Type.
  * It is load-bearing in both environments: the mock store partitions the fixture
- * Cases by it (there is no default store — issue #249), so its sample Cases are
+ * Cases by it (there is no default store), so its sample Cases are
  * openable via `?mock=1`, and the HTTP client reads and writes that list. The
  * SharePoint list itself is provisioned separately — see the Case Type
  * onboarding checklist.
@@ -187,13 +187,13 @@ import {{ computeConfiguredOutcome }} from '../src/evaluators/configured-outcome
  */
 const config = {{
   // The display name lives ONLY on this slug's CASE_TYPES entry in
-  // case-types/manifest.js (#527) — the three SharePoint group names derive
+  // case-types/manifest.js — the three SharePoint group names derive
   // from that one copy.
   listName: '{js_list}',
   // No `eligibleGroups`. Access comes from the three group names DERIVED from
   // the registry display name — `Reviewers - {opts.display_name}` and its two
   // siblings — so restating the derived name here would make it a second,
-  // independent grant that a later rename would not move (#527). Add
+  // independent grant that a later rename would not move. Add
   // `eligibleGroups` only for a genuinely EXTRA group, never the org-wide
   // `Reviewers`: a brand-new Case Type must not be visible to every Reviewer.
   attributeFailures: true,
@@ -215,11 +215,12 @@ const config = {{
     appealReview: {{}},
     amendOutcome: {{}},
   }},
-  // Optional (MAINT-11): rename Case Review tab labels / section headings for
-  // this Case Type. Omitted keys keep the defaults from
-  // src/lib/section-labels.js (DEFAULT_SECTION_LABELS / DEFAULT_SECTION_HEADINGS).
+  // Optional: rename Case Review display copy for this Case Type. Each Section
+  // carries a tab caption and a panel heading, so an entry is either a bare
+  // string (renames both) or an object naming either axis. Omitted keys and
+  // omitted axes keep the defaults in src/lib/section-labels.js.
   // Not the same as `labels`, which is the reporting Label catalogue.
-  // sectionLabels: {{ questions: 'Assessment' }},
+  // sectionLabels: {{ questions: {{ tab: 'Assess', heading: 'Assessment' }} }},
   // TODO(case-type): Confirm who raises appeals for this Case Type.
   appeal: {{ raisedBy: 'responsiblePartyManager' }},
   // TODO(case-type): Replace the starter Outcome vocabulary with business wording.
@@ -319,7 +320,7 @@ test('{opts.slug}: no cycles in showWhen graph', () => {{
   assert.strictEqual(detectCycles(config.questions), false);
 }});
 
-test('{opts.slug}: declares its Case list explicitly (there is no default store, #249)', () => {{
+test('{opts.slug}: declares its Case list explicitly — there is no default store', () => {{
   assert.equal(config.listName, '{js_list}');
 }});
 

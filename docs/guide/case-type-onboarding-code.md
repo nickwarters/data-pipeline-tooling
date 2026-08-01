@@ -323,8 +323,12 @@ What each field does, and how to choose its value:
   applicability is data (`showWhen`), outcome is code.
 
 Optional fields to know about (all in the `CaseTypeConfig` typedef):
-`sectionLabels` renames tab labels/headings per type (e.g.
-`{ questions: 'Assessment' }`); `allowBulkOutcome: true` opts every Question
+`sectionLabels` renames a Section's display copy per type. Each Section carries
+two spellings — a `tab` caption and a panel `heading` — so an override is either
+a bare string, renaming both (`{ questions: 'Assessment' }`), or an object
+naming either axis (`{ questions: { tab: 'Assess', heading: 'Assessment' } }`,
+or `{ details: { heading: 'About this Case' } }`). Omitted keys and omitted axes
+keep `DEFAULT_SECTION_LABELS`; `allowBulkOutcome: true` opts every Question
 Group into the bulk-outcome control, and `questionGroups` overrides that per
 group in either direction (`{ Build: { allowBulkOutcome: false } }`), so a type
 states the rule once and names only the exceptions;

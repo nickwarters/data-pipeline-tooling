@@ -47,7 +47,7 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
   says how each one's panel is filled, keyed by Section id — the render loop in
   `cora-case-review.js` never branches on the id. **Adding a Section recipe:** an
   entry in `SECTION_REGISTRY` + its `MATRIX` access row in `services/section-access.js`
-  - its `DEFAULT_SECTION_LABELS` label + a `SECTION_PANELS` renderer. `tsc` demands
+  - its `DEFAULT_SECTION_LABELS` `{ tab, heading }` pair + a `SECTION_PANELS` renderer. `tsc` demands
     the first three; `tests/section-panels.test.js` demands the fourth. The panel map
     lives with the page, not the registry, because `src/lib/` must not import `src/pages/**`.
 - **One authoring model.** Views are synchronous and side-effect free. They do
