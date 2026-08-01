@@ -1153,8 +1153,10 @@
 
 /* Review-tab question cards. Brought in line with the other Sections' card
    language: a surface fill and the shared small elevation, so they read as
-   raised cards rather than flat outlined boxes on the page canvas. */
-.cora-question {
+   raised cards rather than flat outlined boxes on the page canvas. The chrome
+   sits on the wrapper rather than on the fieldset because a legend paints on
+   its own fieldset's border and would straddle the card edge. */
+.cora-question-card {
   background: var(--cora-color-surface);
   border: 1px solid var(--cora-color-border);
   border-radius: var(--cora-radius-md);
@@ -1163,9 +1165,16 @@
   margin: 0 0 var(--cora-space-3);
 }
 
+.cora-question {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
 .cora-question legend {
   font-weight: var(--cora-font-weight-semibold);
-  padding: 0 var(--cora-space-2);
+  padding: 0;
+  margin-bottom: var(--cora-space-2);
 }
 
 .cora-question label {
