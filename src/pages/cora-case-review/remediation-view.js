@@ -84,9 +84,9 @@ export function RemediationSection(props) {
 
 /**
  * The Case-level **Responsible Party**: who the Remediation Actions are sent
- * to. Nothing else on the Case sets it, and the completion control stays hidden
- * until it is set, so the field lives at the foot of the tab that produces
- * those actions.
+ * to. Nothing else on the Case sets it, and until it is set the completion
+ * control is shown disabled with a reason naming this field, so the field lives
+ * at the foot of the tab that produces those actions.
  *
  * Editable on the same permission as the Remediation Actions above it — the
  * Assigned Reviewer, while the Case is still pre-reportable — because naming

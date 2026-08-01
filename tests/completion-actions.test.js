@@ -433,9 +433,11 @@ test('completionControl: shows Complete Case disabled, with the reason, while re
   assert.equal(control.label, 'Complete Case');
   assert.match(String(control.reason), /remediation/i);
 
+  // The close path never asks for a Responsible Party: by then the actions are
+  // already sent, so an empty one holds nothing.
   const ready = completionControl({
     machine: closingMachine(true),
-    caseRow: CASE_ROW,
+    caseRow: { ...CASE_ROW, responsibleParty: '' },
     catalogue: CATALOGUE,
     answers: {
       q1: { ...UNRESOLVED.q1, remediationStatus: { status: 'complete' } },
@@ -477,10 +479,10 @@ test('completionControl: the pre-send path still reads Send Actions and is enabl
   assert.equal(control.label, 'Send Actions');
 });
 
-test('completionControl: no Responsible Party, no way to send the actions', () => {
+test('completionControl: no Responsible Party names the gate instead of hiding it', () => {
   // The Case-level Responsible Party is who the actions are sent to, so the
-  // control does not appear — and writes nothing — until the Reviewer has named
-  // one.
+  // control is offered but disabled — and writes nothing — until the Reviewer
+  // has named one.
   const answers = {
     q1: {
       value: 'No',
@@ -500,10 +502,14 @@ test('completionControl: no Responsible Party, no way to send the actions', () =
   };
   const unset = { ...CASE_ROW, responsibleParty: '' };
 
-  assert.equal(
-    completionControl({ ...base, caseRow: unset }).visible,
-    false,
-    'nothing to press while nobody is named'
+  const unnamed = completionControl({ ...base, caseRow: unset });
+  assert.equal(unnamed.visible, true, 'the gate is legible, not absent');
+  assert.equal(unnamed.disabled, true, 'but nothing can be sent yet');
+  assert.equal(unnamed.label, 'Send Actions');
+  assert.match(
+    String(unnamed.reason),
+    /Responsible Party/,
+    'and the reason says who is missing'
   );
   assert.equal(
     completionPatch({ ...base, caseRow: unset, ...patchInput }),
@@ -711,6 +717,71 @@ test('completionControl: every failure decided No completes the Case directly', 
   assert.equal(control.disabled, false);
   assert.equal(control.reason, null);
   assert.equal(control.label, 'Complete Case');
+});
+
+test('completionControl: the remediation decision is asked for before the Responsible Party', () => {
+  // Both are outstanding, and the Reviewer works down the Issues tab in that
+  // order, so only one reason is shown at a time — the nearer one first.
+  const undecided = completionControl({
+    ...preSend({ q1: { value: 'No' } }),
+    caseRow: { ...CASE_ROW, responsibleParty: '' },
+  });
+  assert.equal(undecided.visible, true);
+  assert.equal(undecided.disabled, true);
+  assert.match(String(undecided.reason), /Is remediation required\?/);
+  assert.doesNotMatch(String(undecided.reason), /Responsible Party/);
+
+  const decided = completionControl({
+    ...preSend({
+      q1: {
+        value: 'No',
+        remediationRequired: 'yes',
+        remediationActions: [{ id: 'a1', text: 'Fix' }],
+      },
+    }),
+    caseRow: { ...CASE_ROW, responsibleParty: '' },
+  });
+  assert.equal(decided.visible, true);
+  assert.equal(decided.disabled, true);
+  assert.match(String(decided.reason), /Responsible Party/);
+});
+
+test('completionControl: the direct-complete path asks for the Responsible Party too', () => {
+  // No remediation to send, but the Case still names who owns what follows, so
+  // the same reason holds the Complete Case button.
+  const control = completionControl({
+    ...preSend({ q1: { value: 'No', remediationRequired: 'no' } }),
+    caseRow: { ...CASE_ROW, responsibleParty: '' },
+  });
+  assert.equal(control.visible, true);
+  assert.equal(control.disabled, true);
+  assert.equal(control.label, 'Complete Case');
+  assert.match(String(control.reason), /Responsible Party/);
+});
+
+test('completionControl: a Case with no failures at all still asks for the Responsible Party', () => {
+  // Nothing failed, so there is nothing to remediate and nothing to send — but
+  // the Case is still owned by someone, and this is the state that used to show
+  // no control whatsoever.
+  const control = completionControl({
+    ...preSend({ q1: { value: 'Yes' } }),
+    caseRow: { ...CASE_ROW, responsibleParty: '' },
+  });
+  assert.equal(control.visible, true);
+  assert.equal(control.disabled, true);
+  assert.equal(control.label, 'Complete Case');
+  assert.match(String(control.reason), /Responsible Party/);
+});
+
+test('completionControl: unanswered Questions still show nothing at all', () => {
+  // The Responsible Party moved onto the disabled path; being part-way through
+  // the Questions did not. There is no gate to explain yet.
+  const control = completionControl({
+    ...preSend({ q1: { value: 'No', remediationRequired: 'no' } }),
+    caseRow: { ...CASE_ROW, responsibleParty: '' },
+    allAnswered: false,
+  });
+  assert.equal(control.visible, false);
 });
 
 test('completionPatch: writes nothing while a failed Question is undecided', () => {

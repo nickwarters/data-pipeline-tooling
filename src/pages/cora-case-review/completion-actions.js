@@ -41,6 +41,10 @@ const REMEDIATION_GATE_REASON =
 const REMEDIATION_DECISION_REASON =
   'Answer "Is remediation required?" on every failed Question on the Issues tab, and record at least one action or free-form remediation wherever the answer is Yes.';
 
+/** The other pre-send gate's wording: the named party, actions or no actions. */
+const RESPONSIBLE_PARTY_REASON =
+  'Name a Responsible Party at the foot of the Issues tab before this Case can go any further.';
+
 /**
  * Derive the one completion control from store state. The same CaseMachine
  * capability that permits the transition also controls whether the UI can
@@ -49,9 +53,11 @@ const REMEDIATION_DECISION_REASON =
  * While remediation is outstanding the Assigned Reviewer sees the button
  * **disabled with its reason** rather than not at all: hiding it left the gate
  * legible only to a Reviewer who happened to open the Remediation tab, and from
- * every other tab the feature simply looked absent. A viewer without the
- * permission half still sees nothing — the disabled button is the Reviewer's
- * gate, not a notice board.
+ * every other tab the feature simply looked absent. An unnamed Responsible
+ * Party is the same kind of gate and is shown the same way, rather than leaving
+ * a Reviewer who has answered everything with no button and no reason. A viewer
+ * without the permission half still sees nothing — the disabled button is the
+ * Reviewer's gate, not a notice board.
  *
  * @param {{
  *   machine: import('../../lib/case-machine.js').CaseMachine | null,
@@ -63,10 +69,7 @@ const REMEDIATION_DECISION_REASON =
  * @returns {{ visible: boolean, disabled: boolean, label: string, reason: string | null }}
  */
 export function completionControl(input) {
-  const readyToSend =
-    input.allAnswered &&
-    input.machine?.canComplete === true &&
-    !!input.caseRow.responsibleParty;
+  const readyToSend = input.allAnswered && input.machine?.canComplete === true;
   const canClose = readyToClose(input);
   // Permission to close without the content half: the actions have been sent and
   // this viewer resolves them, but at least one row is still outstanding.
@@ -76,9 +79,10 @@ export function completionControl(input) {
   // this way, so the walk is skipped entirely once the actions are sent.
   const undecided =
     readyToSend && !remediationDecided(input.catalogue, input.answers);
+  const missingParty = readyToSend && !input.caseRow.responsibleParty;
   return {
     visible: readyToSend || canClose || gated,
-    disabled: gated || undecided,
+    disabled: gated || undecided || missingParty,
     // Once the actions are sent there is nothing left to send, so the label is
     // the close either way; before that, remediation makes it the send.
     // "Carries remediation" is `hasTrackableRemediation` — literally "the
@@ -95,7 +99,9 @@ export function completionControl(input) {
       ? REMEDIATION_GATE_REASON
       : undecided
         ? REMEDIATION_DECISION_REASON
-        : null,
+        : missingParty
+          ? RESPONSIBLE_PARTY_REASON
+          : null,
   };
 }
 

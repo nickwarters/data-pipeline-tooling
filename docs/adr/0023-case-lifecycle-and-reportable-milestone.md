@@ -4,7 +4,9 @@ Date: 2026-07-01
 
 ## Status
 
-Accepted (amends [ADR-0012], [ADR-0016], [ADR-0021]; storage in [ADR-0007])
+Accepted, as amended 2026-08 (#621) — an unset Responsible Party now disables the
+completion button rather than hiding it (amends [ADR-0012], [ADR-0016],
+[ADR-0021]; storage in [ADR-0007])
 
 ## Context
 
@@ -49,10 +51,12 @@ In-progress ──(Issues complete, no actions → "Complete Case")────�
   **Remediation Action** exists across the Case's failed Answers:
 - **≥1 action ⇒ "Send Actions"** → transition to `Actions In Progress`.
 - **0 actions ⇒ "Complete Case"** → transition straight to `Completed`.
-- The button is shown only when the **Issues Section is complete**: every failed
+- The button is **enabled** only when the **Issues Section is complete**: every failed
   Answer's _visible required_ Issue Capture Fields are filled ([ADR-0017]/[ADR-0020]
   gate, unchanged) **and** the Responsible Party has been set ([ADR-0024], set at the
-  bottom of the Issues tab).
+  bottom of the Issues tab). An unset Responsible Party does not hide the button: it is
+  shown disabled, carrying the reason that names the field, so the Reviewer is told what
+  is outstanding rather than left with no control at all.
 - On the actions path, the Case cannot reach `Completed` until the **Remediation tab is
   complete** — every sent action is `complete` or `cancelled` (with a cancellation
   reason) ([ADR-0024]). This gate is **inert on the no-actions path**.
