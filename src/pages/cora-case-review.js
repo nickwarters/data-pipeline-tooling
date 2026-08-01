@@ -22,6 +22,7 @@ import {
   refreshConversation,
 } from './cora-case-review/conversation-view.js';
 import { createAppealEffects } from './cora-case-review/appeal-effects.js';
+import { createDebouncedPeopleSearch } from './cora-case-review/people-search-effects.js';
 import {
   answerEdited,
   failureAttributed,
@@ -449,6 +450,12 @@ export function conversationPanelMode(
 }
 
 /**
+ * The Responsible Party is a Case-level field: one search box, so one entry in
+ * the debounce map, under this key.
+ */
+const RESPONSIBLE_PARTY_SEARCH_KEY = 'responsible-party';
+
+/**
  * Case Review route slice. The loader adapts existing loading/domain behaviour
  * into store snapshots; the interim adapter owns only the unconverted Section
  * components.
@@ -461,14 +468,6 @@ export function createRouteSlice(params, context) {
   let dispatch = (/** @type {any} */ _action) => {};
   // The adapter's mount lifetime, captured in start().
   let isSliceActive = () => false;
-  /** @type {Map<string, ReturnType<typeof setTimeout>>} */
-  const attributionTimers = new Map();
-  /** @type {Map<string, string>} */
-  const pendingAttributionQueries = new Map();
-  // A plain scalar, not a map: the Responsible Party is a Case-level field, so
-  // there is one search box and one debounce in flight at a time.
-  /** @type {ReturnType<typeof setTimeout> | undefined} */
-  let responsiblePartyTimer;
   /**
    * The client this route **reads** through. Swapped in `start()` for the same
    * client with the mount lifetime bound to its reads, so navigating
@@ -512,6 +511,31 @@ export function createRouteSlice(params, context) {
     caseId,
     dispatch: (action) => dispatch(action),
   });
+  // Built here for the same reason as the effects above.
+  // Keyed by Question id: each Question's attribution picker debounces alone.
+  const attributionPeopleSearch = createDebouncedPeopleSearch({
+    client: context.client,
+    isActive: () => isSliceActive(),
+    onResults: (questionId, query, people) => {
+      dispatch({
+        type: 'case/attribution-search-results',
+        questionId,
+        query,
+        people,
+      });
+    },
+  });
+  const responsiblePartyPeopleSearch = createDebouncedPeopleSearch({
+    client: context.client,
+    isActive: () => isSliceActive(),
+    onResults: (key, query, people) => {
+      dispatch({
+        type: 'case/responsible-party-search-results',
+        query,
+        people,
+      });
+    },
+  });
   let requestedOnHold = false;
   /** @type {null | {
    *   root: HTMLElement,
@@ -527,74 +551,25 @@ export function createRouteSlice(params, context) {
 
   /** @param {string} questionId */
   function clearAttributionSearch(questionId) {
-    const timer = attributionTimers.get(questionId);
-    if (timer !== undefined) clearTimeout(timer);
-    attributionTimers.delete(questionId);
-    pendingAttributionQueries.delete(questionId);
+    attributionPeopleSearch.clear(questionId);
     dispatch({ type: 'case/attribution-search-cleared', questionId });
   }
 
   /** @param {string} questionId @param {string} query */
   function requestAttributionSearch(questionId, query) {
     dispatch({ type: 'case/attribution-search-input', questionId, query });
-    const timer = attributionTimers.get(questionId);
-    if (timer !== undefined) clearTimeout(timer);
-    attributionTimers.delete(questionId);
-    pendingAttributionQueries.set(questionId, query);
-    const trimmed = query.trim();
-    if (!trimmed || !context.client) return;
-    attributionTimers.set(
-      questionId,
-      setTimeout(() => {
-        attributionTimers.delete(questionId);
-        void context.client.searchPeople(trimmed).then((people) => {
-          if (
-            isSliceActive() &&
-            pendingAttributionQueries.get(questionId) === query
-          ) {
-            dispatch({
-              type: 'case/attribution-search-results',
-              questionId,
-              query,
-              people,
-            });
-          }
-        });
-      }, 200)
-    );
+    attributionPeopleSearch.request(questionId, query);
   }
 
   function clearResponsiblePartySearch() {
-    // Unconditional: there is one timer for the whole Case, and clearing an
-    // unset one is a no-op, so the guard would only be a branch nothing reaches.
-    clearTimeout(responsiblePartyTimer);
-    responsiblePartyTimer = undefined;
+    responsiblePartyPeopleSearch.clear(RESPONSIBLE_PARTY_SEARCH_KEY);
     dispatch({ type: 'case/responsible-party-search-cleared' });
   }
 
   /** @param {string} query */
   function requestResponsiblePartySearch(query) {
     dispatch({ type: 'case/responsible-party-search-input', query });
-    clearTimeout(responsiblePartyTimer);
-    responsiblePartyTimer = undefined;
-    const trimmed = query.trim();
-    if (!trimmed || !context.client) return;
-    responsiblePartyTimer = setTimeout(() => {
-      responsiblePartyTimer = undefined;
-      void context.client.searchPeople(trimmed).then((people) => {
-        // Only the mount lifetime is checked here. Whether this result is still
-        // the one being waited for is the reducer's own guard: it drops results
-        // whose query is not the query in state, which is the same condition a
-        // pending-query latch here would test.
-        if (isSliceActive()) {
-          dispatch({
-            type: 'case/responsible-party-search-results',
-            query,
-            people,
-          });
-        }
-      });
-    }, 200);
+    responsiblePartyPeopleSearch.request(RESPONSIBLE_PARTY_SEARCH_KEY, query);
   }
 
   /**
@@ -1066,11 +1041,8 @@ export function createRouteSlice(params, context) {
         })
         .catch(ignoreAbortError);
       return () => {
-        for (const timer of attributionTimers.values()) clearTimeout(timer);
-        attributionTimers.clear();
-        pendingAttributionQueries.clear();
-        clearTimeout(responsiblePartyTimer);
-        responsiblePartyTimer = undefined;
+        attributionPeopleSearch.dispose();
+        responsiblePartyPeopleSearch.dispose();
         questionsView.clear();
         dispatch = () => {};
         disposeSaveStatus();

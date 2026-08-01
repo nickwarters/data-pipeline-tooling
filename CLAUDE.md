@@ -254,6 +254,8 @@ src/
       section-panels.js        # SECTION_PANELS: one panel renderer per tab Section, keyed by id (#512)
       details-view.js          # config-driven, read-only Case Details pure view (mirrors current Section behaviour)
       case-actions.js          # Answer dispatch -> unchanged SaveQueue; save status dispatch bridge
+      people-search-effects.js # the debounce/trim/mount-lifetime plumbing both people pickers share;
+                               #   dispatching stays in the page (#622)
       group-outcome-view.js    # pure Group Outcome control, the Questions one Group Outcome writes to,
                                #   and the wording it displays (derived from the answered Questions)
       question-panel-view.js   # CASE-2 group-scoped Questions view with memoised cards
