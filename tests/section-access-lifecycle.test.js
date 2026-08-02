@@ -581,7 +581,13 @@ test('remediationAudience: every Role in the matrix is classified deliberately',
 
 test('conversation: the Responsible Party Manager posts, like the Responsible Party', () => {
   const cfg = makeConfig();
-  for (const status of ['In-progress', 'Actions In Progress', 'Completed']) {
+  const statuses =
+    /** @type {import('../src/lib/case-statuses.js').CaseStatus[]} */ ([
+      'In-progress',
+      'Actions In Progress',
+      'Completed',
+    ]);
+  for (const status of statuses) {
     assert.equal(
       evaluateAccess(
         'conversation',

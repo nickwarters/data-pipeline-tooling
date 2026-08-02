@@ -19,6 +19,8 @@ import {
   SUMMARY_SECTIONS,
 } from '../../src/services/section-access.js';
 
+import { makeCaseRow, makePermissions } from './fixtures.js';
+
 /**
  * The Case's resolved Question catalogue, holding the one Question the fixture
  * Cases below answer. The Remediation cells ask whether the tab would render a
@@ -72,22 +74,20 @@ export function evaluateAccess(
   );
 }
 
-/** @returns {CaseRow} */
+/**
+ * The shared Case fixture, narrowed to what these suites pair it with: the
+ * `example-review` Case Type `makeConfig`/`CATALOGUE` below describe.
+ *
+ * @param {Partial<CaseRow>} [overrides]
+ * @returns {CaseRow}
+ */
 export function makeCase(overrides = {}) {
-  return {
-    id: 'case-1',
+  return makeCaseRow({
     caseType: 'example-review',
     title: 'T',
-    status: 'In-progress',
-    assignedReviewer: 'user-reviewer',
-    responsibleParty: 'user-rp',
-    answers: {},
-    conversation: [],
-    notes: '',
-    completedAt: null,
     etag: 'W/"1"',
     ...overrides,
-  };
+  });
 }
 
 /** @returns {CaseTypeConfig} */
@@ -142,19 +142,7 @@ export function resolvedAppeal() {
  * @returns {Capabilities}
  */
 export function caps(overrides = {}) {
-  return {
-    isReviewer: false,
-    listAccessCaseTypes: [],
-    isAdviser: false,
-    ownedCaseTypes: [],
-    ownedJourneyCaseTypes: [],
-    isControls: false,
-    isReviewerManager: false,
-    isResponsiblePartyManager: false,
-    isMaintainer: false,
-    isVisitor: false,
-    ...overrides,
-  };
+  return makePermissions({ isReviewer: false, ...overrides });
 }
 
 /**

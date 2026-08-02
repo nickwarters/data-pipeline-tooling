@@ -6,38 +6,29 @@ import { MockSharePointClient } from '../../src/services/mock-sharepoint-client.
 
 import { reasonFlagFields } from '../../src/services/action-centre-flags.js';
 
+import { makeCaseRow } from './fixtures.js';
+
 // Standard named Case-list store for mock-client capability suites.
 export const LIST = 'Cases-Test';
 
 /** @type {CaseRow[]} */
 export const CASES = [
-  {
-    id: 'case-1',
+  makeCaseRow({
     caseType: 'example-review',
     title: 'Example Review #1',
-    status: 'In-progress',
     assignedReviewer: 'user-1',
     responsibleParty: 'user-2',
-    answers: {},
-    conversation: [],
-    notes: '',
-    completedAt: null,
-    etag: 'etag-1',
-  },
-  {
+  }),
+  makeCaseRow({
     id: 'case-2',
     caseType: 'example-review',
     title: 'Example Review #2',
-    status: 'In-progress',
     assignedReviewer: 'user-1',
     responsibleParty: 'user-3',
     answers: { 'q-welcome': { value: 'Yes' } },
-    conversation: [],
-    notes: '',
-    completedAt: null,
     etag: 'etag-2',
-  },
-  {
+  }),
+  makeCaseRow({
     id: 'case-3',
     caseType: 'example-review',
     title: 'Example Review #3',
@@ -45,11 +36,9 @@ export const CASES = [
     assignedReviewer: 'user-2',
     responsibleParty: 'user-4',
     answers: { 'q-welcome': { value: 'Yes' }, 'q-needs': { value: 'No' } },
-    conversation: [],
-    notes: '',
     completedAt: '2026-05-07T00:00:00Z',
     etag: 'etag-3',
-  },
+  }),
 ];
 
 export const PERSONAS = {
@@ -72,16 +61,13 @@ export function makeClient(persona = 'reviewer') {
  * @returns {CaseRow}
  */
 export function completedCase(id, completedAt) {
-  return /** @type {CaseRow} */ ({
+  return makeCaseRow({
     id,
     caseType: 'example-review',
     title: id,
     status: completedAt ? 'Completed' : 'In-progress',
     assignedReviewer: 'u',
     responsibleParty: 'rp',
-    answers: {},
-    conversation: [],
-    notes: '',
     completedAt,
     etag: `etag-${id}`,
   });
@@ -138,17 +124,11 @@ export const VERSIONED_EXPORT = {
  * @returns {CaseRow}
  */
 export function reasonCase(id, over = {}) {
-  return /** @type {CaseRow} */ ({
+  return makeCaseRow({
     id,
-    caseType: 'complaints',
     title: id,
-    status: 'In-progress',
     assignedReviewer: '',
     responsibleParty: '',
-    answers: {},
-    conversation: [],
-    notes: '',
-    completedAt: null,
     etag: `etag-${id}`,
     ...over,
   });
