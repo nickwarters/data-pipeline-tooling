@@ -17,8 +17,6 @@ function context() {
   return /** @type {any} */ ({
     client: {},
     chrome: {
-      toasts: [],
-      nav: { currentHash: '#/my-cases' },
       currentUser: { id: 'rp-1', displayName: 'RP' },
       permissions: {},
     },

@@ -213,7 +213,7 @@ src/
 
   core/                         # store-driven view runtime (ADR-0034)
                                 #   see docs/guide/store-actions-and-effects.md for the contract
-    chrome-state.js             # shared toasts/nav/current-user/permissions store slice
+    chrome-state.js             # shared current-user/permissions store slice
     render.js                   # keyed DOM reconciler: commits an h() tree into a live container,
                                 #   patching in place (focus/caret/scroll survive) — CORE-2 (#404),
                                 #   named morph() until ADR-0039

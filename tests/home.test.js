@@ -29,8 +29,6 @@ function capabilities(overrides = {}) {
 function state(permissionOverrides = {}) {
   return {
     chrome: {
-      toasts: [],
-      nav: { currentHash: '#/' },
       currentUser: { id: 'u1', displayName: 'A User' },
       permissions: capabilities(permissionOverrides),
     },

@@ -33,8 +33,6 @@ function context(permissions) {
   return /** @type {any} */ ({
     client: {},
     chrome: {
-      toasts: [],
-      nav: { currentHash: '#/dashboard' },
       currentUser: { id: 'u1', displayName: 'User' },
       permissions,
     },
@@ -1510,7 +1508,6 @@ test('dashboard slice: navigating away aborts the fan-out reads with no error UI
     false,
     'the aborted fan-out dispatches nothing'
   );
-  assert.deepEqual(ctx.chrome.toasts, [], 'an abort raises no toast');
 });
 
 test('dashboard Action Centre: an aborted count or page load dispatches nothing', async () => {
@@ -1561,7 +1558,6 @@ test('dashboard Action Centre: an aborted count or page load dispatches nothing'
     actions.some((action) => action.type === 'action-centre/page-loaded'),
     false
   );
-  assert.deepEqual(ctx.chrome.toasts, [], 'an abort raises no toast');
 });
 
 test('dashboard Action Centre: an aborted reason-page read renders no rows and no error', async () => {
@@ -1615,7 +1611,6 @@ test('dashboard Action Centre: an aborted reason-page read renders no rows and n
     false,
     'the aborted page read dispatches nothing'
   );
-  assert.deepEqual(ctx.chrome.toasts, [], 'an abort raises no toast');
 });
 
 test('dashboard slice: a client-less mount with a mount signal renders an empty dashboard rather than failing the route', async () => {
@@ -1642,7 +1637,6 @@ test('dashboard slice: a client-less mount with a mount signal renders an empty 
   for (let i = 0; i < 20; i += 1) await Promise.resolve();
 
   assert.deepEqual(actions, [], 'no client means no loads and no failures');
-  assert.deepEqual(ctx.chrome.toasts, []);
 });
 
 /*

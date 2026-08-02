@@ -45,8 +45,6 @@ function makeContext(journeyCaseSources = ['complaints']) {
     client: {},
     saveQueue: {},
     chrome: {
-      toasts: [],
-      nav: { currentHash: '#/' },
       currentUser: { id: 'u1', displayName: 'A User' },
       permissions: {},
     },

@@ -22,11 +22,10 @@ Do not duplicate chrome values inside route slices. Pass already-resolved Case
 sources through `AppContext` and store them under the owning route only when
 that route consumes them; a page must not rerun Case Type eligibility rules.
 
-`chrome` is a boot-owned shared reference. Route
-reducers do not replace or mutate it; named helpers in `core/chrome-state.js`
-perform shared writes, and an affected route effect dispatches after the write
-when its view needs to render the change. Application pages do not read parallel
-copies from `AppContext.currentUser` or `AppContext.capabilities`.
+`chrome` is a boot-owned shared reference, built once by
+`createChromeState()` and read-only thereafter. Route reducers do not replace or
+mutate it. Application pages do not read parallel copies from
+`AppContext.currentUser` or `AppContext.capabilities`.
 
 Actions use `domain/event` names such as `query/changed` or `case/saved`.
 `dispatch(action)` runs the reducer synchronously. Rendering happens in a

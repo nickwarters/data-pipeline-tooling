@@ -33,8 +33,6 @@ function context() {
   return /** @type {any} */ ({
     client: {},
     chrome: {
-      toasts: [],
-      nav: { currentHash: '#/journey-cases' },
       currentUser: { id: 'journey-owner-1', displayName: 'Journey Owner' },
       permissions: {},
     },

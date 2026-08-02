@@ -33,8 +33,6 @@ function context() {
   return /** @type {any} */ ({
     client: {},
     chrome: {
-      toasts: [],
-      nav: { currentHash: '#/team-cases' },
       currentUser: { id: 'manager-1', displayName: 'Manager' },
       permissions: {},
     },
@@ -347,7 +345,6 @@ test('team cases slice: navigating away aborts the per-source fan-out and shows 
     [],
     'no cases/loaded and no failure action after navigation'
   );
-  assert.deepEqual(ctx.chrome.toasts, [], 'an abort raises no toast');
 });
 
 test('team cases slice: a read that completes before navigation is unaffected', async () => {

@@ -17,10 +17,7 @@ import { resolveEnvironment } from './config/environment.js';
 import { createSharePointClient } from './services/create-sharepoint-client.js';
 import { SaveQueue } from './services/save-queue.js';
 import { resolveCapabilities } from './services/permissions.js';
-import {
-  bindChromeNavigation,
-  createChromeState,
-} from './core/chrome-state.js';
+import { createChromeState } from './core/chrome-state.js';
 import { Router } from './lib/router.js';
 import { renderBootError } from './lib/boot-error-panel.js';
 import {
@@ -50,9 +47,7 @@ async function boot() {
   const chrome = createChromeState({
     currentUser,
     permissions: capabilities,
-    currentHash: location.hash || '#/',
   });
-  bindChromeNavigation(chrome);
 
   // Every route receives only sources the current user's roles may span.
   // Type-scoped owners get their own types; broad roles (Controls,

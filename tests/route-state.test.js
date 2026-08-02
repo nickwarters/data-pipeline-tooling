@@ -28,7 +28,7 @@ test('patchRoute: preserves sibling fields of the patched route', () => {
 });
 
 test('patchRoute: preserves chrome by reference', () => {
-  const chrome = { toasts: [], nav: { currentHash: '#/' } };
+  const chrome = { currentUser: { id: 'u1' } };
   const state = stateWith({ home: {} }, chrome);
   const next = patchRoute(state, 'home', { greeting: 'hi' });
 
@@ -77,7 +77,7 @@ test('setRoute: drops a key the replacement slice omits — patchRoute keeps it'
 });
 
 test('setRoute: preserves chrome by reference', () => {
-  const chrome = { toasts: [], nav: { currentHash: '#/' } };
+  const chrome = { currentUser: { id: 'u1' } };
   const state = stateWith({ home: { seen: true } }, chrome);
 
   assert.equal(setRoute(state, 'home', {}).chrome, chrome);
@@ -123,7 +123,7 @@ test('patchSnapshot: returns the same state when no snapshot is loaded', () => {
 });
 
 test('patchSnapshot: preserves chrome by reference', () => {
-  const chrome = { toasts: [] };
+  const chrome = { currentUser: { id: 'u1' } };
   const state = stateWith(
     { caseReview: { snapshot: { caseRow: null } } },
     chrome

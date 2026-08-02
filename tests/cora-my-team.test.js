@@ -27,8 +27,6 @@ function context(client = {}) {
   return /** @type {any} */ ({
     client,
     chrome: {
-      toasts: [],
-      nav: { currentHash: '#/my-team' },
       currentUser: { id: 'manager-1', displayName: 'Manager' },
       permissions: { isReviewerManager: true },
     },

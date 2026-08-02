@@ -50,8 +50,6 @@ const { resolveSectionLabels } = await import('../src/lib/section-labels.js');
 
 /** @type {import('../src/core/chrome-state.js').ChromeState} */
 const chrome = {
-  toasts: [],
-  nav: { currentHash: '#/case/example-review/c1' },
   currentUser: { id: 'u1', displayName: 'User 1' },
   permissions: {
     isReviewer: true,
@@ -4182,7 +4180,7 @@ test('case review slice: navigating away aborts the in-flight Case read with no 
       getCurrentUser: async () => ({ id: 'reviewer', groups: [] }),
     },
     saveQueue: { subscribeStatus: () => () => {} },
-    chrome: { currentUser: { id: 'reviewer' }, permissions: {}, toasts: [] },
+    chrome: { currentUser: { id: 'reviewer' }, permissions: {} },
   });
   const slice = createRouteSlice({ id: 'c1' }, context);
 
@@ -4245,7 +4243,6 @@ test('case review slice: the read carries the signal while the write path keeps 
     chrome: {
       currentUser: chrome.currentUser,
       permissions: chrome.permissions,
-      toasts: [],
     },
   });
   const signal = new AbortController().signal;

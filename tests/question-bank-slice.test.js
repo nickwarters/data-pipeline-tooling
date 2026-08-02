@@ -49,8 +49,6 @@ function context() {
   return /** @type {any} */ ({
     appEl: { classList: { add() {}, remove() {} } },
     chrome: {
-      toasts: [],
-      nav: { currentHash: '#/question-bank' },
       currentUser: { id: 'owner-1', displayName: 'Owner' },
       permissions: {},
     },
