@@ -3,7 +3,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  countConfiguredFailures,
   deriveFailureValues,
   isFailure,
   materializeRemediationActions,
@@ -163,37 +162,6 @@ test('isFailure: returns false when array value includes no failure value', () =
 
 test('isFailure: returns false for empty array', () => {
   assert.equal(isFailure(Q_MULTI, { value: [] }), false);
-});
-
-// ===== countConfiguredFailures =====
-
-test('countConfiguredFailures: ignores No answers on informational questions', () => {
-  /** @type {QuestionDefinition[]} */
-  const questions = [
-    {
-      id: 'q-general-info',
-      text: 'Was the case context reviewed?',
-      category: 'General',
-      responseType: 'yes-no-na',
-      deprecated: false,
-    },
-  ];
-  const answers = {
-    'q-general-info': { value: 'No' },
-  };
-
-  assert.equal(countConfiguredFailures(questions, answers), 0);
-});
-
-test('countConfiguredFailures: counts answers hitting derived failure values', () => {
-  const questions = [Q_FAIL_NO, Q_INFORMATIONAL, Q_MULTI];
-  const answers = {
-    [Q_FAIL_NO.id]: { value: 'No' },
-    [Q_INFORMATIONAL.id]: { value: 'Email' },
-    [Q_MULTI.id]: { value: ['Account', 'Billing'] },
-  };
-
-  assert.equal(countConfiguredFailures(questions, answers), 2);
 });
 
 // ===== materializeRemediationActions =====

@@ -66,23 +66,6 @@ export function isFailure(question, answer) {
 }
 
 /**
- * Counts answers selecting a derived failure value. Questions with no
- * non-default outcome mapping are informational, even when answered with
- * values like "No".
- *
- * @param {QuestionDefinition[]} questions
- * @param {Record<string, Answer>} answers
- * @returns {number}
- */
-export function countConfiguredFailures(questions, answers) {
-  let failures = 0;
-  for (const q of questions) {
-    if (isFailure(q, answers[q.id])) failures++;
-  }
-  return failures;
-}
-
-/**
  * Every Answer field that exists only because the Answer is a failure, and so
  * shares the failure's lifecycle: the captured field values, the Reviewer's
  * remediation decision, whatever that decision produced, and the resolution of

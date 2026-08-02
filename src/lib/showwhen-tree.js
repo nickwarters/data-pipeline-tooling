@@ -108,23 +108,6 @@ export function serializeTree(node) {
 }
 
 /**
- * Removes `target` from `root` or any of its descendants. Mutates in place.
- *
- * @param {TreeNode} root
- * @param {TreeNode} target
- * @returns {boolean} true if removal happened
- */
-export function removeNode(root, target) {
-  if (root.type !== 'group') return false;
-  const i = root.children.indexOf(target);
-  if (i >= 0) {
-    root.children.splice(i, 1);
-    return true;
-  }
-  return root.children.some((c) => c.type === 'group' && removeNode(c, target));
-}
-
-/**
  * @param {TreeNode} n
  * @returns {number}
  */
@@ -178,23 +161,4 @@ export function commitTreeFor(q) {
   const out = serializeTree(t);
   if (out) q.showWhen = out;
   else delete q.showWhen;
-}
-
-/**
- * Clears every condition from `q`, deleting its `showWhen`. Empties the cached
- * tree in place then re-serialises (an empty group serialises to null, so the
- * field is removed), keeping the WeakMap cache and the `showWhen` field in step.
- *
- * @param {{ showWhen?: Record<string, unknown> }} q
- */
-export function clearConditions(q) {
-  ensureTree(q).children.length = 0;
-  commitTreeFor(q);
-}
-
-/** Test-only: clear the per-question tree cache. */
-export function _resetTreeCache() {
-  // WeakMap has no clear in older engines; re-create via re-import would be
-  // complex. Tests that need isolation should use fresh question objects.
-  // This helper exists so tests can document intent.
 }

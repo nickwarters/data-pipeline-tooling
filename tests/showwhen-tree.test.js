@@ -8,13 +8,10 @@ import {
   leafFromOp,
   leafToOp,
   serializeTree,
-  removeNode,
   countLeaves,
   treeDepth,
   ensureTree,
   commitTreeFor,
-  clearConditions,
-  _resetTreeCache,
 } from '../src/lib/showwhen-tree.js';
 
 test('parseShowWhen: undefined → empty AND group', () => {
@@ -276,48 +273,6 @@ test('serializeTree: group whose children all serialize to null → null', () =>
   );
 });
 
-test('removeNode: returns false when called on a leaf root', () => {
-  const leaf = {
-    type: /** @type {const} */ ('leaf'),
-    qId: 'q1',
-    op: /** @type {const} */ ('equals'),
-    value: 'A',
-  };
-  assert.equal(removeNode(leaf, leaf), false);
-});
-
-test('removeNode: removes direct child', () => {
-  /** @type {any} */
-  const child = { type: 'leaf', qId: 'q1', op: 'equals', value: 'A' };
-  /** @type {any} */
-  const root = { type: 'group', op: 'and', children: [child] };
-  assert.equal(removeNode(root, child), true);
-  assert.equal(root.children.length, 0);
-});
-
-test('removeNode: recurses into nested groups', () => {
-  /** @type {any} */
-  const target = { type: 'leaf', qId: 'q1', op: 'equals', value: 'A' };
-  /** @type {any} */
-  const inner = { type: 'group', op: 'or', children: [target] };
-  /** @type {any} */
-  const root = { type: 'group', op: 'and', children: [inner] };
-  assert.equal(removeNode(root, target), true);
-  assert.equal(inner.children.length, 0);
-});
-
-test('removeNode: returns false when target not found', () => {
-  /** @type {any} */
-  const stranger = { type: 'leaf', qId: 'q9', op: 'equals', value: '' };
-  /** @type {any} */
-  const root = {
-    type: 'group',
-    op: 'and',
-    children: [{ type: 'group', op: 'and', children: [] }],
-  };
-  assert.equal(removeNode(root, stranger), false);
-});
-
 test('countLeaves / treeDepth: leaf only', () => {
   /** @type {any} */
   const leaf = { type: 'leaf', qId: 'q1', op: 'equals', value: 'A' };
@@ -376,23 +331,4 @@ test('commitTreeFor: no-op when there is no cached tree', () => {
   const q = /** @type {any} */ ({});
   commitTreeFor(q);
   assert.deepEqual(q, {});
-});
-
-test('clearConditions: empties the tree and deletes showWhen', () => {
-  const q = /** @type {any} */ ({
-    showWhen: { $or: [{ q1: { equals: 'A' } }, { q2: { equals: 'B' } }] },
-  });
-  clearConditions(q);
-  assert.equal('showWhen' in q, false);
-  assert.equal(countLeaves(ensureTree(q)), 0);
-});
-
-test('clearConditions: no-op on a question that has no conditions', () => {
-  const q = /** @type {any} */ ({});
-  clearConditions(q);
-  assert.equal('showWhen' in q, false);
-});
-
-test('_resetTreeCache: callable (documented no-op)', () => {
-  _resetTreeCache();
 });
