@@ -3,15 +3,12 @@
 Every application route owns one store and one app-state object. State follows
 the same shape: route state under
 `routes`, plus the shared `chrome` state created once at boot by
-`createChromeState()` for toasts, navigation, and the current user's identity
-and permissions:
+`createChromeState()` for the current user's identity and permissions:
 
 ```js
 {
   routes: { reports: {} },
   chrome: {
-    toasts: [],
-    nav: { currentHash: '#/reports' },
     currentUser: null,
     permissions: {}
   }
