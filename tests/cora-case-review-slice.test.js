@@ -4197,10 +4197,7 @@ test('case review slice: the read carries the signal while the write path keeps 
   const readRow = makeCaseRow({
     id: 'c1',
     caseType: 'example-review',
-    title: 'Case',
     assignedReviewer: 'reviewer',
-    responsibleParty: 'rp',
-    etag: 'e1',
   });
   const context = /** @type {any} */ ({
     client: {
