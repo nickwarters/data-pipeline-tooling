@@ -202,7 +202,7 @@ export function questionCardView({ question, answer, access, onAnswer }) {
         type: isMulti ? 'checkbox' : 'radio',
         name: `cora-q-${question.id}`,
         value: option,
-        'data-focus-key': `answer:${question.id}:${index}`,
+        'data-testid': `answer:${question.id}:${index}`,
         checked: isMulti ? selected.has(option) : value === option,
         disabled: access !== 'edit',
         onchange: (/** @type {any} */ event) => {

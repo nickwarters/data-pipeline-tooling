@@ -24,7 +24,7 @@ export function WordingEditor({ question, baselineQuestion, onTextInput }) {
       rows: '1',
       'aria-label': 'Question wording',
       spellcheck: 'true',
-      'data-focus-key': `wording:${question.id}`,
+      'data-testid': `wording:${question.id}`,
     })
   );
   textarea.value = question.text;

@@ -75,7 +75,7 @@ function rootOf(nodes) {
   return root;
 }
 
-test('CaptureGroups renders typed editable controls with current values and scoped focus keys', () => {
+test('CaptureGroups renders typed editable controls with current values and scoped test ids', () => {
   const root = rootOf(
     CaptureGroups({
       groups: GROUPS,
@@ -95,9 +95,8 @@ test('CaptureGroups renders typed editable controls with current values and scop
     })
   );
   assert.equal(
-    /** @type {any} */ (
-      root.querySelector('[data-focus-key="capture:q1-text"]')
-    )?.value,
+    /** @type {any} */ (root.querySelector('[data-testid="capture:q1-text"]'))
+      ?.value,
     'Rushed'
   );
   assert.equal(root.querySelector('textarea')?.value, 'Details');
@@ -211,9 +210,9 @@ test('CaptureGroups renders a person field as a people picker, not a text box', 
   });
   assert.equal(input.value, 'Ja');
   assert.equal(
-    input.getAttribute('data-focus-key'),
+    input.getAttribute('data-testid'),
     'capture:q1-attributedTo',
-    'the picker input carries the field focus key as a stable handle for tests and DOM inspection'
+    'the picker input carries the field test id as a stable handle for tests and DOM inspection'
   );
 
   input.value = 'Jan';

@@ -50,7 +50,7 @@ function rootOf(nodes) {
  * `radio` field tags each of its inputs instead, so it is not addressed here.
  */
 function controlOf(/** @type {any} */ root, /** @type {string} */ fieldKey) {
-  return root.querySelector(`[data-focus-key="general-question:${fieldKey}"]`);
+  return root.querySelector(`[data-testid="general-question:${fieldKey}"]`);
 }
 
 function render(overrides = {}) {

@@ -67,7 +67,7 @@ test('Question: single-choice uses radiogroup and multi-choice uses group', () =
   );
 });
 
-test('Question: fieldset and answer inputs have stable focus keys', () => {
+test('Question: the fieldset carries the id its legend and label refer to', () => {
   const fieldset = mountQuestion(
     /** @type {QuestionDefinition} */ ({
       id: 'q-chan',
@@ -79,12 +79,6 @@ test('Question: fieldset and answer inputs have stable focus keys', () => {
     ''
   );
   assert.equal(fieldset.id, 'cora-q-q-chan');
-  assert.deepEqual(
-    [...fieldset.querySelectorAll('input')].map((input) =>
-      input.getAttribute('data-focus-key')
-    ),
-    ['answer:q-chan:0', 'answer:q-chan:1', 'answer:q-chan:2']
-  );
 });
 
 test('StatusBanner: saving banner announces polite status', () => {

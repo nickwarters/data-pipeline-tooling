@@ -222,7 +222,7 @@ test('answer re-renders preserve the focused native control without snapshots', 
     container,
     questionsView.view(props({ answers: { q1: { value: 'No' } } }))
   );
-  const input = container.querySelector('[data-focus-key="answer:q1:0"]');
+  const input = container.querySelector('[data-testid="answer:q1:0"]');
   assert.ok(input);
   /** @type {HTMLElement} */ (input).focus();
 
@@ -231,10 +231,7 @@ test('answer re-renders preserve the focused native control without snapshots', 
     questionsView.view(props({ answers: { q1: { value: 'Yes' } } }))
   );
 
-  assert.equal(
-    container.querySelector('[data-focus-key="answer:q1:0"]'),
-    input
-  );
+  assert.equal(container.querySelector('[data-testid="answer:q1:0"]'), input);
   assert.equal(document.activeElement, input);
 });
 

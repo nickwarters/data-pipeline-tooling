@@ -84,7 +84,7 @@ export function buildCaptureControl(
 }
 
 /**
- * Tags a control built above with a stable `data-focus-key`, and sets its
+ * Tags a control built above with a stable `data-testid`, and sets its
  * disabled state.
  *
  * Nothing in the app reads the attribute — the renderer preserves focus and
@@ -101,14 +101,14 @@ export function buildCaptureControl(
  * @param {string} key
  * @param {boolean} [disabled]
  */
-export function applyCaptureFocusKey(control, fieldConfig, key, disabled) {
+export function applyCaptureTestId(control, fieldConfig, key, disabled) {
   if (fieldConfig.type === 'radio') {
     for (const input of control.querySelectorAll('input')) {
-      input.setAttribute('data-focus-key', `${key}:${input.value}`);
+      input.setAttribute('data-testid', `${key}:${input.value}`);
       if (disabled !== undefined) input.disabled = disabled;
     }
     return;
   }
-  control.setAttribute('data-focus-key', key);
+  control.setAttribute('data-testid', key);
   if (disabled !== undefined) /** @type {any} */ (control).disabled = disabled;
 }

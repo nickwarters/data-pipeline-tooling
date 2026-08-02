@@ -2,7 +2,7 @@
 import { h } from '../../lib/html.js';
 import {
   buildCaptureControl,
-  applyCaptureFocusKey,
+  applyCaptureTestId,
 } from '../../lib/capture-engine.js';
 import { generalAnswerKey } from '../../evaluators/general-questions.js';
 
@@ -117,14 +117,8 @@ function questionField(field, answers, canEdit, onAnswer) {
     'cora-capture-input',
     'general-'
   );
-  // A stable focus key per control, so the Reviewer's caret survives an
-  // autosave-driven re-render; disabled outside `edit` access.
-  applyCaptureFocusKey(
-    control,
-    field,
-    `general-question:${field.key}`,
-    !canEdit
-  );
+  // Disabled outside `edit` access.
+  applyCaptureTestId(control, field, `general-question:${field.key}`, !canEdit);
 
   return h(
     'div',

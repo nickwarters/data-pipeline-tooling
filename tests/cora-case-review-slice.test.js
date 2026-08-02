@@ -2976,9 +2976,7 @@ test('route: mock-mode store shell keeps Review working at the existing URL', as
     (panel) => panel.getAttribute('id') === 'case-panel-questions'
   );
   assert.ok(reviewPanel, 'store-driven Review panel remains mounted');
-  const yes = reviewPanel.querySelector(
-    '[data-focus-key="answer:q-welcome:0"]'
-  );
+  const yes = reviewPanel.querySelector('[data-testid="answer:q-welcome:0"]');
   assert.ok(yes);
   fireEvent(yes, 'change');
   await saveQueue.whenIdle();
@@ -3006,7 +3004,7 @@ test('route: mock-mode store shell keeps Review working at the existing URL', as
   };
   const outcomeBefore = outcomeOf();
   const channel = reviewPanel.querySelector(
-    '[data-focus-key="general-question:reviewChannel"]'
+    '[data-testid="general-question:reviewChannel"]'
   );
   assert.ok(channel, 'General Questions render on the Review tab');
   channel.value = 'Call recording';
@@ -3204,9 +3202,7 @@ test('route: a rejected save surfaces the conflict banner in the mounted page', 
       etag: 'e2',
     };
 
-    const yes = container.querySelector(
-      '[data-focus-key="answer:q-welcome:0"]'
-    );
+    const yes = container.querySelector('[data-testid="answer:q-welcome:0"]');
     assert.ok(yes);
     fireEvent(yes, 'change');
     await saveQueue.whenIdle();
@@ -3401,7 +3397,7 @@ test('route: a read-only Reviewer on a reportable Case writes no Answer', async 
     assert.equal(snapshot?.machine?.canEditIssues, false);
 
     const option = /** @type {any} */ (
-      container.querySelector('[data-focus-key="answer:q-welcome:0"]')
+      container.querySelector('[data-testid="answer:q-welcome:0"]')
     );
     assert.ok(option, 'the Review tab still renders its (disabled) controls');
     fireEvent(option, 'change');
@@ -3499,7 +3495,7 @@ test('route: sequential Answer edits accumulate', async () => {
 
     const answerControl = (/** @type {string} */ key) => {
       const control = /** @type {any} */ (
-        container.querySelector(`[data-focus-key="${key}"]`)
+        container.querySelector(`[data-testid="${key}"]`)
       );
       assert.ok(control, `${key} renders`);
       return control;

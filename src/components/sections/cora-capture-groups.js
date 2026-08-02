@@ -2,7 +2,7 @@
 import { h } from '../../lib/html.js';
 import {
   buildCaptureControl,
-  applyCaptureFocusKey,
+  applyCaptureTestId,
 } from '../../lib/capture-engine.js';
 import { PeoplePicker } from '../base/cora-people-picker.js';
 import {
@@ -41,8 +41,8 @@ function isCollapsed(collapsed, group) {
  * In editable mode (`canCapture`) each group is a collapsible section — its
  * default collapse comes from `group.collapsed`, and the Reviewer can toggle it
  * via `onToggle`; the override is ephemeral (never persisted). Each
- * field renders its typed control carrying a stable `data-focus-key`
- * (see `focusKeyFor`) and reports edits through `onCapture`. A `person` field renders a
+ * field renders its typed control carrying a stable `data-testid`
+ * (see `testIdFor`) and reports edits through `onCapture`. A `person` field renders a
  * people picker fed by `peopleSearch` and `onPersonQuery`, which the caller
  * owns: this view holds no state and runs no search of its own.
  *
@@ -95,7 +95,7 @@ function editableGroup(group, props) {
       {
         className: 'cora-capture-group-header',
         'aria-expanded': collapsedNow ? 'false' : 'true',
-        'data-focus-key': `capture-group:${namePrefix}${group.key}`,
+        'data-testid': `capture-group:${namePrefix}${group.key}`,
         onclick: () => onToggle(group.key, !collapsedNow),
       },
       group.label
@@ -124,7 +124,7 @@ function editableField(field, props) {
     // The picker wraps its input, so the key goes on the input itself.
     control
       .querySelector('input')
-      ?.setAttribute('data-focus-key', focusKeyFor(namePrefix, field.key));
+      ?.setAttribute('data-testid', testIdFor(namePrefix, field.key));
   } else {
     control = buildCaptureControl(
       field,
@@ -133,7 +133,7 @@ function editableField(field, props) {
       'cora-capture-input',
       namePrefix
     );
-    applyCaptureFocusKey(control, field, focusKeyFor(namePrefix, field.key));
+    applyCaptureTestId(control, field, testIdFor(namePrefix, field.key));
   }
 
   return h(
@@ -193,7 +193,7 @@ function personControl(field, props) {
 }
 
 /**
- * The `data-focus-key` for a field's control, unique per element instance
+ * The `data-testid` for a field's control, unique per element instance
  * (via `namePrefix`) and per field. Radio options extend it with `:<value>`.
  *
  * Nothing in the app reads it: the renderer preserves focus and caret by
@@ -206,7 +206,7 @@ function personControl(field, props) {
  * @param {string} fieldKey
  * @returns {string}
  */
-function focusKeyFor(namePrefix, fieldKey) {
+function testIdFor(namePrefix, fieldKey) {
   return `capture:${namePrefix}${fieldKey}`;
 }
 

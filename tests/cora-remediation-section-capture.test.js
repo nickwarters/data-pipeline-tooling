@@ -113,7 +113,7 @@ test('Issues tab: every capture edit travels one action, whatever its type', () 
 
   const typed = issuesPanel();
   const summary = /** @type {any} */ (
-    typed.root.querySelector('[data-focus-key="capture:q1-rootCauseSummary"]')
+    typed.root.querySelector('[data-testid="capture:q1-rootCauseSummary"]')
   );
   summary.value = 'Handoff missed';
   fireEvent(summary, 'change');

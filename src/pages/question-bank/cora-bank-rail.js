@@ -242,14 +242,13 @@ export function BankRail(props) {
 
   // The toggle button and backdrop only surface on narrow viewports (CSS
   // media query); on wide viewports they are hidden and the aside is a static
-  // grid column. `data-focus-key` keeps focus on the toggle across the rail's
-  // re-render when it flips the pop-over open/closed.
+  // grid column.
   const toggle = h(
     'button',
     {
       type: 'button',
       className: 'rail-toggle',
-      'data-focus-key': 'bank-rail-toggle',
+      'data-testid': 'bank-rail-toggle',
       'aria-expanded': props.railOpen ? 'true' : 'false',
       'aria-controls': 'bank-rail-panel',
       onclick: props.onToggleRail,
