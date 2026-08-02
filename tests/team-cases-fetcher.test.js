@@ -52,14 +52,7 @@ const src = (slug, listName = `${slug}-list`) => ({
 });
 
 /** @returns {import('../src/services/team-cases-params.js').TeamCasesParams} */
-const baseParams = () => ({
-  manager: 'me',
-  role: 'reviewer-manager',
-  caseType: null,
-  status: null,
-  completedSince: null,
-  completedUntil: null,
-});
+const baseParams = () => ({ caseType: null });
 
 test('fetchTeamCases: fans out to all eligible case types when caseType is null', async () => {
   const client = makeClient();
@@ -85,7 +78,7 @@ test('fetchTeamCases: queries only the specified caseType when set', async () =>
   assert.equal(client.calls[0].filter.caseType, 'example-review');
 });
 
-test('fetchTeamCases: passes assignedReviewerManager filter for role=reviewer-manager', async () => {
+test('fetchTeamCases: scopes every list to the calling manager', async () => {
   const client = makeClient();
   await fetchTeamCases(/** @type {any} */ (client), baseParams(), 'mgr-99', [
     src('example-review'),

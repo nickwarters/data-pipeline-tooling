@@ -15,8 +15,6 @@
  * - `RemediationStatus.status` (`'complete' | 'partial' | 'cancelled'`) — the
  *   live question-level Remediation Resolution, see
  *   `src/evaluators/remediation-status.js`.
- * - Team Cases filter status (`'overdue' | 'outstanding' | 'completed' | null`),
- *   see `src/services/team-cases-params.js`.
  * - `SaveQueue`'s own `'conflict'` status, see `src/services/save-queue.js`.
  */
 export const CASE_STATUS = Object.freeze(
