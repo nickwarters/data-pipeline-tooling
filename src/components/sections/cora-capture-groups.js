@@ -196,11 +196,9 @@ function personControl(field, props) {
  * The `data-testid` for a field's control, unique per element instance
  * (via `namePrefix`) and per field. Radio options extend it with `:<value>`.
  *
- * Nothing in the app reads it: the renderer preserves focus and caret by
- * matching tag and key, not by this attribute. It is a stable, readable handle
- * for tests and for anyone inspecting the DOM, stamped on the editable control
- * itself — so a `person` field carries it while the picker is showing, and not
- * once a person is chosen and the control is a name plus a clear button.
+ * It is stamped on the editable control itself — so a `person` field carries it
+ * while the picker is showing, and not once a person is chosen and the control
+ * is a name plus a clear button.
  *
  * @param {string} namePrefix
  * @param {string} fieldKey

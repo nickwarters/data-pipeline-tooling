@@ -117,7 +117,6 @@ function questionField(field, answers, canEdit, onAnswer) {
     'cora-capture-input',
     'general-'
   );
-  // Disabled outside `edit` access.
   applyCaptureTestId(control, field, `general-question:${field.key}`, !canEdit);
 
   return h(
