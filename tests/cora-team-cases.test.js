@@ -46,7 +46,7 @@ function context() {
   });
 }
 
-test('team cases slice: fetches with parsed route params and dispatches loaded data', async () => {
+test('team cases slice: fetches with the query-string Case Type and dispatches loaded data', async () => {
   /** @type {any[]} */
   const fetchCalls = [];
   /** @type {any[]} */
@@ -85,7 +85,7 @@ test('team cases slice: fetches with parsed route params and dispatches loaded d
   await loadedAction;
 
   assert.equal(fetchCalls.length, 1);
-  assert.equal(fetchCalls[0][1].caseType, 'complaints');
+  assert.equal(fetchCalls[0][1], 'complaints');
   assert.equal(fetchCalls[0][2], 'manager-1');
   assert.deepEqual(actions[0], { type: 'cases/loaded', cases });
 });

@@ -332,7 +332,6 @@ src/
     save-queue.js
     section-access.js
     team-cases-fetcher.js
-    team-cases-params.js
 
   evaluators/                   # pure logic: applicability, failure, and outcome
     amended-outcome.js

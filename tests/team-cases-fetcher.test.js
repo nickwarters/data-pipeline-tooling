@@ -51,12 +51,9 @@ const src = (slug, listName = `${slug}-list`) => ({
   displayName: slug,
 });
 
-/** @returns {import('../src/services/team-cases-params.js').TeamCasesParams} */
-const baseParams = () => ({ caseType: null });
-
 test('fetchTeamCases: fans out to all eligible case types when caseType is null', async () => {
   const client = makeClient();
-  await fetchTeamCases(/** @type {any} */ (client), baseParams(), 'u1', [
+  await fetchTeamCases(/** @type {any} */ (client), null, 'u1', [
     src('example-review'),
     src('product-sale-review'),
   ]);
@@ -69,8 +66,7 @@ test('fetchTeamCases: fans out to all eligible case types when caseType is null'
 
 test('fetchTeamCases: queries only the specified caseType when set', async () => {
   const client = makeClient();
-  const params = { ...baseParams(), caseType: 'example-review' };
-  await fetchTeamCases(/** @type {any} */ (client), params, 'u1', [
+  await fetchTeamCases(/** @type {any} */ (client), 'example-review', 'u1', [
     src('example-review'),
     src('product-sale-review'),
   ]);
@@ -80,7 +76,7 @@ test('fetchTeamCases: queries only the specified caseType when set', async () =>
 
 test('fetchTeamCases: scopes every list to the calling manager', async () => {
   const client = makeClient();
-  await fetchTeamCases(/** @type {any} */ (client), baseParams(), 'mgr-99', [
+  await fetchTeamCases(/** @type {any} */ (client), null, 'mgr-99', [
     src('example-review'),
   ]);
   assert.equal(client.calls[0].filter.assignedReviewerManager, 'mgr-99');
@@ -88,7 +84,7 @@ test('fetchTeamCases: scopes every list to the calling manager', async () => {
 
 test('fetchTeamCases: passes an explicit { listName } for every listCases call', async () => {
   const client = makeClient();
-  await fetchTeamCases(/** @type {any} */ (client), baseParams(), 'u1', [
+  await fetchTeamCases(/** @type {any} */ (client), null, 'u1', [
     src('example-review', 'ExampleReviews'),
     src('product-sale-review', 'ProductSaleReviews'),
   ]);
@@ -111,12 +107,10 @@ test('fetchTeamCases: merges results from multiple case type lists', async () =>
     ],
     'product-sale-review': [row('c3', 'product-sale-review')],
   });
-  const result = await fetchTeamCases(
-    /** @type {any} */ (client),
-    baseParams(),
-    'u1',
-    [src('example-review'), src('product-sale-review')]
-  );
+  const result = await fetchTeamCases(/** @type {any} */ (client), null, 'u1', [
+    src('example-review'),
+    src('product-sale-review'),
+  ]);
   assert.equal(result.length, 3);
   assert.ok(result.some((c) => c.id === 'c1'));
   assert.ok(result.some((c) => c.id === 'c3'));
@@ -126,7 +120,7 @@ test('fetchTeamCases: returns empty array and makes no calls when sources is emp
   const client = makeClient();
   const result = await fetchTeamCases(
     /** @type {any} */ (client),
-    baseParams(),
+    null,
     'u1',
     []
   );
@@ -136,10 +130,9 @@ test('fetchTeamCases: returns empty array and makes no calls when sources is emp
 
 test('fetchTeamCases: caseType matching no source yields no calls and empty result', async () => {
   const client = makeClient();
-  const params = { ...baseParams(), caseType: 'nope' };
   const result = await fetchTeamCases(
     /** @type {any} */ (client),
-    params,
+    'nope',
     'u1',
     [src('example-review'), src('product-sale-review')]
   );

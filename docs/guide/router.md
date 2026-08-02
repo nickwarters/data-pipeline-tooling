@@ -41,8 +41,8 @@ one. A segment beginning with `:` becomes a string in the `params` object.
 The router splits the query string off the hash to match the path, so it hands
 that raw query string back as `params.queryString` — always present, `''` when
 the hash has no query. It stays a raw string (leading `?` included): the page
-owns what its parameters mean, so `#/team-cases` reads it through
-`parseTeamCasesParams()` in `src/services/team-cases-params.js`.
+owns what its parameters mean, so `#/team-cases` reads its own `caseType` out of
+it with `new URLSearchParams(...)` in `src/pages/cora-team-cases.js`.
 
 | Pattern         | Hash               | `params`                        |
 | --------------- | ------------------ | ------------------------------- |

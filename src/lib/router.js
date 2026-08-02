@@ -44,7 +44,7 @@ export class Router {
    * making a route reach for `location.hash` itself. It is the raw
    * string, leading `?` included (or `''` when there is no query), because the
    * vocabulary of what a page's parameters mean belongs to that page — see
-   * `services/team-cases-params.js`.
+   * how `pages/cora-team-cases.js` reads its own `caseType` out of it.
    *
    * `queryString` is a reserved key: it is assigned after the `:param` loop, so
    * a pattern declaring `:queryString` has its path param overwritten. The

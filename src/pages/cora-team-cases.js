@@ -6,7 +6,6 @@ import { withAbortSignal } from '../services/abortable-client.js';
 import { caseRouteFor } from '../lib/case-route-links.js';
 import { navigateTo } from '../lib/navigate.js';
 import { fetchTeamCases } from '../services/team-cases-fetcher.js';
-import { parseTeamCasesParams } from '../services/team-cases-params.js';
 import {
   overdueCaseRowClass,
   standardCaseColumns,
@@ -108,13 +107,15 @@ export function createRouteSlice(
 
       // The router supplies params.queryString for every route — '' when the
       // hash has no query, so there is nothing to fall back to.
-      const parsed = parseTeamCasesParams(tools.params.queryString);
+      const caseType = new URLSearchParams(tools.params.queryString).get(
+        'caseType'
+      );
       // The signal cancels the per-source fan-out on navigation; the
       // isActive() guard still stops a late dispatch.
       const readClient = withAbortSignal(client, tools.signal);
       void fetchCases(
         readClient,
-        parsed,
+        caseType,
         currentUser.id,
         tools.context.caseSources
       )

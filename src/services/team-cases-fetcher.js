@@ -3,24 +3,23 @@ import { listCasesAcrossSources } from './across-sources.js';
 
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
-/** @typedef {import('./team-cases-params.js').TeamCasesParams} TeamCasesParams */
 /** @typedef {import('../setup/resolve-eligible-case-types.js').CaseSource} CaseSource */
 
 /**
- * Fan-out fetch across one or more Case Type lists, scoped by manager and
- * params. Each Case lives in exactly one list (`source.listName`), so every
- * `listCases` call carries an explicit `{ listName }` and the per-list rows
- * are merged client-side.
+ * Fan-out fetch across one or more Case Type lists, scoped by manager and by
+ * the caller's optional Case Type filter. Each Case lives in exactly one list
+ * (`source.listName`), so every `listCases` call carries an explicit
+ * `{ listName }` and the per-list rows are merged client-side.
  *
  * @param {SharePointClient} client
- * @param {TeamCasesParams} params
+ * @param {string | null} caseType the single Case Type to scope to, or null for all
  * @param {string} managerId
  * @param {CaseSource[]} sources
  * @returns {Promise<CaseRow[]>}
  */
-export function fetchTeamCases(client, params, managerId, sources) {
-  const targets = params.caseType
-    ? sources.filter((s) => s.slug === params.caseType)
+export function fetchTeamCases(client, caseType, managerId, sources) {
+  const targets = caseType
+    ? sources.filter((s) => s.slug === caseType)
     : sources;
 
   return listCasesAcrossSources(client, targets, (target) => ({
