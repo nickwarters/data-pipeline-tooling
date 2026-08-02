@@ -9,15 +9,15 @@ const { dataTableView, nextTableSort, reduceTableSort, sortRequested } =
   await import('../src/views/data-table.js');
 
 const rows = [
-  { id: '2', person: { name: 'Bob' }, score: 7 },
-  { id: '1', person: { name: 'Alice' }, score: 12 },
+  { id: '2', name: 'Bob', score: 7 },
+  { id: '1', name: 'Alice', score: 12 },
 ];
 
 const columns = [
   {
     key: 'name',
     label: 'Name',
-    value: 'person.name',
+    value: 'name',
     sortable: true,
     href: (/** @type {any} */ row) => `#/people/${row.id}`,
   },
@@ -30,7 +30,7 @@ const columns = [
   },
 ];
 
-test('data table view: descriptors resolve paths, derivations, formatting, and links', () => {
+test('data table view: descriptors resolve names, derivations, formatting, and links', () => {
   const view = dataTableView({
     rows,
     columns,
@@ -96,9 +96,10 @@ test('data table view: renders its configured empty state without a table', () =
   assert.equal(view.querySelector('table'), null);
 });
 
-test('data table view: row activation navigates through the injected seam', () => {
-  /** @type {string[]} */
-  const navigated = [];
+test('data table view: Enter on a row navigates to its rowHref', () => {
+  // location is a shared stub global, so start from a known value rather than
+  // inheriting whatever the previous test left behind.
+  location.hash = '';
   const view = dataTableView({
     rows,
     columns,
@@ -107,14 +108,13 @@ test('data table view: row activation navigates through the injected seam', () =
     emptyMessage: 'No people.',
     rowKey: (row) => row.id,
     rowHref: (row) => `#/people/${row.id}`,
-    onNavigate: (hash) => navigated.push(hash),
   });
 
   view
     .querySelector('tbody')
     ?.querySelector('tr')
     ?.dispatchEvent(/** @type {any} */ ({ type: 'keydown', key: 'Enter' }));
-  assert.deepEqual(navigated, ['#/people/2']);
+  assert.equal(location.hash, '#/people/2');
 });
 
 test('data table view: arrow keys move focus between grid cells', () => {
@@ -173,10 +173,7 @@ test('data table view: arrow keys move focus between grid cells', () => {
 });
 
 test('data table view: null values stay last in both sort directions', () => {
-  const nullableRows = [
-    ...rows,
-    { id: '3', person: { name: 'Null' }, score: null },
-  ];
+  const nullableRows = [...rows, { id: '3', name: 'Null', score: null }];
 
   for (const [dir, expected] of [
     ['asc', ['2', '1', '3']],
@@ -204,7 +201,7 @@ test('data table view: footer rows remain outside the sortable body', () => {
   for (const dir of /** @type {const} */ (['asc', 'desc'])) {
     const view = dataTableView({
       rows,
-      footerRows: [{ id: 'total', person: { name: 'Total' }, score: 19 }],
+      footerRows: [{ id: 'total', name: 'Total', score: 19 }],
       columns,
       sort: { key: 'score', dir },
       onSort: () => {},

@@ -100,10 +100,6 @@ const caseResponsiblePartyColumn = () => ({
  * from this button and from the row's Reference link while the two go to
  * different places.
  *
- * Deliberately not called `ariaLabel`: `ColumnDescriptor.ariaLabel` means
- * something else one file away — the generic renderer applies it to a cell's
- * `href` link, and this column has no `href`.
- *
  * @param {(row: CaseRow) => void} onOpen
  * @param {{ openLabel?: (value: unknown) => string }} [options]
  * @returns {CaseColumn}

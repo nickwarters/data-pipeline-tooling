@@ -136,8 +136,8 @@ test('the Outstanding Remediation Actions table renders the columns it renders t
   // table also passes no `rowHref`, where the messages table does (view.js),
   // so its rows are not Enter-navigable either — but `rowHref` renders no
   // anchor at all (data-table.js turns it into a keydown handler), so nothing
-  // here can see it. Asserting it needs an Enter-key round trip through
-  // `onNavigate`, not a DOM query; left unpinned rather than faked.
+  // here can see it. Asserting it needs an Enter-key round trip that writes
+  // location.hash, not a DOM query; left unpinned rather than faked.
   assert.equal(section?.querySelector('a'), null);
 });
 

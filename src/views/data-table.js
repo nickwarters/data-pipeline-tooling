@@ -4,8 +4,8 @@ import { navigateTo } from '../lib/navigate.js';
 
 /**
  * Declarative variation supported by the generic data-table view. A column
- * resolves its raw value either from a dot-separated property path or from a
- * derivation function. Formatting and link creation remain functions when the
+ * resolves its raw value either from a property name or from a derivation
+ * function. Formatting and link creation remain functions when the
  * behaviour cannot be expressed as data; descriptors should not contain
  * branching mini-renderers.
  *
@@ -13,11 +13,10 @@ import { navigateTo } from '../lib/navigate.js';
  * @typedef {Object} ColumnDescriptor
  * @property {string} key Stable identity used by sorting and CSS hooks.
  * @property {string} label Visible column heading.
- * @property {string | ((row: Row) => unknown)} value Property path or pure value derivation.
+ * @property {string | ((row: Row) => unknown)} value Property name or pure value derivation.
  * @property {boolean} [sortable] Whether the heading requests sorting.
  * @property {(value: unknown, row: Row) => Node | string | number | null} [format] Optional display formatting.
  * @property {(row: Row) => string} [href] Optional cell link destination.
- * @property {string | ((row: Row) => string)} [ariaLabel] Optional link label.
  */
 
 /**
@@ -35,9 +34,6 @@ import { navigateTo } from '../lib/navigate.js';
  * @property {string} emptyMessage
  * @property {(row: Row) => string} rowKey
  * @property {(row: Row) => string} [rowHref]
- * @property {(hash: string) => void} [onNavigate] How row activation changes
- *   route. Defaults to the `lib/navigate.js` seam so no call site has to pass
- *   it; injectable so this generic renderer never has to reach for a global.
  * @property {(row: Row) => string} [rowClass]
  */
 
@@ -95,15 +91,7 @@ export function reduceTableSort(current, action, table) {
  */
 function columnValue(row, column) {
   if (typeof column.value === 'function') return column.value(row);
-  return column.value
-    .split('.')
-    .reduce(
-      (value, part) =>
-        value == null
-          ? undefined
-          : /** @type {Record<string, unknown>} */ (value)[part],
-      /** @type {unknown} */ (row)
-    );
+  return /** @type {Record<string, unknown>} */ (row)[column.value];
 }
 
 /**
@@ -175,7 +163,6 @@ export function dataTableView({
   emptyMessage,
   rowKey,
   rowHref,
-  onNavigate = navigateTo,
   rowClass = () => '',
 }) {
   if (rows.length === 0 && footerRows.length === 0)
@@ -205,7 +192,7 @@ export function dataTableView({
     if (className) rowProps.className = className;
     if (focusable && rowHref) {
       rowProps.onkeydown = (/** @type {KeyboardEvent} */ event) => {
-        if (event.key === 'Enter') onNavigate(rowHref(row));
+        if (event.key === 'Enter') navigateTo(rowHref(row));
       };
     }
     return h(
@@ -219,17 +206,7 @@ export function dataTableView({
             ? '—'
             : String(value);
         const content = column.href
-          ? h(
-              'a',
-              {
-                href: column.href(row),
-                'aria-label':
-                  typeof column.ariaLabel === 'function'
-                    ? column.ariaLabel(row)
-                    : column.ariaLabel,
-              },
-              formatted
-            )
+          ? h('a', { href: column.href(row) }, formatted)
           : formatted;
         return h(
           'td',
