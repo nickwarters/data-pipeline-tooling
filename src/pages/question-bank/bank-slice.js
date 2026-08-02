@@ -109,8 +109,8 @@ function isEdited(state, slug) {
 /**
  * Seat the banks from the **initial** load: both the curator's draft (`cases`)
  * and what it is diffed against (`baseline`) come from the loaded artifacts.
- * A later load must use {@link banksRefreshed} instead — this one overwrites
- * the draft.
+ * A later load must go through {@link banksRecovered} instead — this one
+ * overwrites the draft.
  *
  * `cases` and `baseline` are separately cloned on purpose: the editor diffs
  * draft against baseline, and sharing one reference would make every diff —
@@ -229,9 +229,9 @@ function banksRefreshed(state, banks, failures = []) {
  *
  * The union is built **here**, from `state.baseline` at dispatch time, and that
  * placement is the whole point of this function existing rather than the effect
- * spreading a captured snapshot into `bank/refreshed`. An effect can only hold
- * state it read before it awaited, and `publish/succeeded` writes `baseline`
- * too. A publish landing during an in-flight retry would then be silently
+ * spreading a captured snapshot into the action it dispatches. An effect can
+ * only hold state it read before it awaited, and `publish/succeeded` writes
+ * `baseline` too. A publish landing during an in-flight retry would then be silently
  * rolled back — `cases` and `baseline` both reverting to the pre-publish
  * artifact while `publishStatus` still read `'succeeded'` and `isDirty` read
  * false, which is exactly the invisible data loss this guards against.
@@ -695,9 +695,6 @@ export function questionBankReducer(state, action) {
   }
   if (action.type === 'bank/loaded') {
     return banksLoaded(state, action.banks ?? {}, action.failures ?? []);
-  }
-  if (action.type === 'bank/refreshed') {
-    return banksRefreshed(state, action.banks ?? {}, action.failures ?? []);
   }
   if (action.type === 'bank/retry-requested') {
     // Nothing named as failed and no wholesale load error: there is nothing to

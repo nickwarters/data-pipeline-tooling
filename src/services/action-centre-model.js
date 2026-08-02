@@ -170,7 +170,7 @@ export const ACTION_CENTRE_REASONS = [
  * @param {string} id
  * @returns {Reason | undefined}
  */
-export function reasonById(id) {
+function reasonById(id) {
   return ACTION_CENTRE_REASONS.find((r) => r.id === id);
 }
 
@@ -248,7 +248,7 @@ export function worstFirstOrder(reason) {
  * @param {Reason} reason
  * @returns {(a: CaseRow, b: CaseRow) => number}
  */
-export function reasonOrderComparator(reason) {
+function reasonOrderComparator(reason) {
   return (a, b) => {
     const av = /** @type {string} */ (a[reason.clockField] ?? '');
     const bv = /** @type {string} */ (b[reason.clockField] ?? '');
@@ -316,7 +316,7 @@ export function mergeWorstFirstWindow(perSourceRows, reason, skip, top) {
  * @param {Date} [now]
  * @returns {number}
  */
-export function daysWaiting(caseRow, reason, now = new Date()) {
+function daysWaiting(caseRow, reason, now = new Date()) {
   const at = /** @type {string | null | undefined} */ (
     caseRow[reason.clockField]
   );
@@ -359,7 +359,7 @@ export function waitingInfo(
  * @param {CaseRow} caseRow
  * @returns {string[]}
  */
-export function matchedReasonIds(caseRow) {
+function matchedReasonIds(caseRow) {
   return ACTION_CENTRE_REASONS.filter((r) => Boolean(caseRow[r.flagField])).map(
     (r) => r.id
   );

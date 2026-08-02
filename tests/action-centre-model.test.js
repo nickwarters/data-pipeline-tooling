@@ -3,17 +3,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   ACTION_CENTRE_REASONS,
-  reasonById,
   reasonsForCapabilities,
   visibleReasons,
   activeFilter,
   headlineFilter,
   worstFirstOrder,
-  daysWaiting,
   waitingInfo,
-  matchedReasonIds,
   secondaryReasons,
-  reasonOrderComparator,
   pickGlobalWorst,
   mergeWorstFirstWindow,
 } from '../src/services/action-centre-model.js';
@@ -57,12 +53,12 @@ function caps(over = {}) {
 }
 
 /**
- * `reasonById` narrowed to a definite Reason for tests (asserts existence).
+ * A reason from the table, narrowed to a definite Reason for tests.
  * @param {string} id
  * @returns {import('../src/services/action-centre-model.js').Reason}
  */
 function reason(id) {
-  const r = reasonById(id);
+  const r = ACTION_CENTRE_REASONS.find((candidate) => candidate.id === id);
   assert.ok(r, `unknown reason: ${id}`);
   return r;
 }
@@ -92,11 +88,6 @@ test('ACTION_CENTRE_REASONS: fixed priority order, labels, roles, tones', () => 
     ACTION_CENTRE_REASONS.map((r) => r.tone),
     ['overdue', 'awaiting', 'review', 'appeal', 'reopened']
   );
-});
-
-test('reasonById: found and not found', () => {
-  assert.equal(reasonById('appeals')?.label, 'Appeals to work');
-  assert.equal(reasonById('nope'), undefined);
 });
 
 test('reasonsForCapabilities: reviewer sees the three reviewer reasons', () => {
@@ -190,21 +181,21 @@ test('worstFirstOrder: oldest on the reason clock first', () => {
   });
 });
 
-test('daysWaiting: whole days from the reason clock', () => {
+test('waitingInfo: counts whole days from the reason clock', () => {
   const c = caseRow({ dueDate: '2026-06-25T00:00:00Z' });
-  assert.equal(daysWaiting(c, reason('overdue'), NOW), 9);
+  assert.equal(waitingInfo(c, reason('overdue'), NOW).days, 9);
 });
 
-test('daysWaiting: missing clock reads as 0', () => {
+test('waitingInfo: a missing clock reads as 0 days', () => {
   assert.equal(
-    daysWaiting(caseRow({ dueDate: null }), reason('overdue'), NOW),
+    waitingInfo(caseRow({ dueDate: null }), reason('overdue'), NOW).days,
     0
   );
 });
 
-test('daysWaiting: a future clock never goes negative', () => {
+test('waitingInfo: a future clock never goes negative', () => {
   const c = caseRow({ dueDate: '2026-08-01T00:00:00Z' });
-  assert.equal(daysWaiting(c, reason('overdue'), NOW), 0);
+  assert.equal(waitingInfo(c, reason('overdue'), NOW).days, 0);
 });
 
 test('waitingInfo: with no SLA given, Overdue breaches the day it lands', () => {
@@ -320,26 +311,31 @@ test('subLine: reopened is a static note', () => {
   );
 });
 
-test('matchedReasonIds: reads the hoisted flags in priority order', () => {
+test('secondaryReasons: reads the hoisted flags in priority order', () => {
   const c = caseRow({ overdue: true, reviewRequired: true, reopened: true });
-  assert.deepEqual(matchedReasonIds(c), [
-    'overdue',
-    'reviewRequired',
-    'reopened',
-  ]);
-  assert.deepEqual(matchedReasonIds(caseRow()), []);
+  assert.deepEqual(
+    secondaryReasons(c, 'overdue').map((r) => r.id),
+    ['reviewRequired', 'reopened']
+  );
+  assert.deepEqual(secondaryReasons(caseRow(), 'overdue'), []);
 });
 
-test('reasonOrderComparator: ascending on the reason clock, missing clock sorts first', () => {
-  const cmp = reasonOrderComparator(reason('overdue'));
+test('mergeWorstFirstWindow: missing clocks sort first and equal clocks keep their order', () => {
   const early = caseRow({ id: 'e', dueDate: '2020-01-01T00:00:00Z' });
+  const tied = caseRow({ id: 't', dueDate: '2020-01-01T00:00:00Z' });
   const late = caseRow({ id: 'l', dueDate: '2020-06-01T00:00:00Z' });
-  const missing = caseRow({ id: 'm', dueDate: null });
-  assert.ok(cmp(early, late) < 0);
-  assert.ok(cmp(late, early) > 0);
-  assert.equal(cmp(early, /** @type {CaseRow} */ ({ ...early })), 0);
-  assert.ok(cmp(missing, early) < 0, 'a missing clock sorts as earliest');
-  assert.ok(cmp(late, missing) > 0, 'missing clock on the right side too');
+  const missingA = caseRow({ id: 'm1', dueDate: null });
+  const missingB = caseRow({ id: 'm2', dueDate: null });
+
+  assert.deepEqual(
+    mergeWorstFirstWindow(
+      [[late, early], [tied], [missingA, missingB]],
+      reason('overdue'),
+      0,
+      5
+    ).map((c) => c.id),
+    ['m1', 'm2', 'e', 't', 'l']
+  );
 });
 
 test('pickGlobalWorst: the earliest candidate on the reason clock wins', () => {

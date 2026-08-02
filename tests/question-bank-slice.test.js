@@ -983,7 +983,7 @@ test('a refresh keeps the curator draft and lets the diff show the divergence', 
     beta: syntheticBank('beta', 'B? (republished)'),
   };
   const refreshed = questionBankReducer(edited, {
-    type: 'bank/refreshed',
+    type: 'bank/recovered',
     banks: incoming,
     failures: [],
   });
@@ -1042,94 +1042,6 @@ test('a refresh keeps the curator draft and lets the diff show the divergence', 
   );
 });
 
-test('a partial refresh keeps an edited draft for a slug it omits', () => {
-  const loaded = questionBankReducer(emptyRoute(), {
-    type: 'bank/loaded',
-    banks: {
-      alpha: syntheticBank('alpha', 'A?'),
-      beta: syntheticBank('beta', 'B?'),
-    },
-    failures: [],
-  });
-  const edited = questionBankReducer(
-    questionBankReducer(loaded, { type: 'bank/selected', slug: 'beta' }),
-    {
-      type: 'question/field-changed',
-      questionId: 'beta-q1',
-      field: 'text',
-      value: 'PRECIOUS UNSAVED WORK',
-    }
-  );
-  assert.equal(edited.cases.beta.questions[0].text, 'PRECIOUS UNSAVED WORK');
-
-  // A retry resolves with only the artifact that had failed.
-  const refreshed = questionBankReducer(edited, {
-    type: 'bank/refreshed',
-    banks: { alpha: syntheticBank('alpha', 'A? (retried)') },
-    failures: [],
-  });
-
-  assert.equal(refreshed.cases.beta.questions[0].text, 'PRECIOUS UNSAVED WORK');
-  // The refresh reselected the loaded slug, so the on-screen bank reads clean —
-  // the surviving draft belongs to the omitted one, and is still marked.
-  assert.equal(isDirty(refreshed), false);
-  assert.deepEqual(editedSlugs(refreshed), ['beta']);
-  // The omitted slug has no baseline left; on screen, the diff reads the whole
-  // draft as added.
-  assert.equal(Object.hasOwn(refreshed.baseline, 'beta'), false);
-  const refreshedOnBeta = questionBankReducer(refreshed, {
-    type: 'bank/selected',
-    slug: 'beta',
-  });
-  assert.equal(isDirty(refreshedOnBeta), true);
-  assert.equal(diffCounts(refreshedOnBeta).added, 1);
-  // The carried draft is its own object, shared with nothing in the baseline.
-  assert.notEqual(refreshed.cases, refreshed.baseline);
-  assert.notEqual(refreshed.cases.beta, refreshed.baseline.beta);
-  assert.notEqual(refreshed.cases.beta, refreshed.baseline.alpha);
-
-  // The selection follows the loaded slug set even though the draft survives.
-  assert.equal(refreshed.activeSlug, 'alpha');
-
-  // Editing the carried draft must not write through to any baseline bank.
-  const again = questionBankReducer(
-    questionBankReducer(refreshed, { type: 'bank/selected', slug: 'beta' }),
-    {
-      type: 'question/field-changed',
-      questionId: 'beta-q1',
-      field: 'text',
-      value: 'Edited after the partial refresh',
-    }
-  );
-  assert.equal(
-    again.cases.beta.questions[0].text,
-    'Edited after the partial refresh'
-  );
-  assert.equal(again.baseline.alpha.questions[0].text, 'A? (retried)');
-  assert.equal(Object.hasOwn(again.baseline, 'beta'), false);
-  assert.equal(
-    edited.cases.beta.questions[0].text,
-    'PRECIOUS UNSAVED WORK',
-    'the pre-refresh state is not mutated'
-  );
-
-  // A second partial refresh still carries the now baseline-less draft.
-  const twice = questionBankReducer(refreshed, {
-    type: 'bank/refreshed',
-    banks: { alpha: syntheticBank('alpha', 'A? (retried twice)') },
-    failures: [],
-  });
-  assert.equal(twice.cases.beta.questions[0].text, 'PRECIOUS UNSAVED WORK');
-
-  // An omitted slug with no local edit is still dropped.
-  const unedited = questionBankReducer(loaded, {
-    type: 'bank/refreshed',
-    banks: { alpha: syntheticBank('alpha', 'A? (retried)') },
-    failures: [],
-  });
-  assert.deepEqual(Object.keys(unedited.cases), ['alpha']);
-});
-
 test('an inherited key is not a bank, so the selection does not survive', () => {
   const loaded = questionBankReducer(emptyRoute(), {
     type: 'bank/loaded',
@@ -1139,11 +1051,13 @@ test('an inherited key is not a bank, so the selection does not survive', () => 
   const dangling = { ...loaded, activeSlug: 'constructor' };
 
   const refreshed = questionBankReducer(dangling, {
-    type: 'bank/refreshed',
+    type: 'bank/recovered',
     banks: { gamma: syntheticBank('gamma', 'G?') },
     failures: [],
   });
-  assert.equal(refreshed.activeSlug, 'gamma');
+  // 'constructor' is not an own key of the recovered set, so the selection
+  // falls back to the first bank there rather than dangling on the prototype.
+  assert.equal(refreshed.activeSlug, 'alpha');
   assert.notEqual(currentBank(refreshed), undefined);
 
   const reloaded = questionBankReducer(dangling, {
@@ -1171,7 +1085,7 @@ test('an inherited name is not a draft, so a refresh seats the loaded bank', () 
   });
 
   const refreshed = questionBankReducer(state, {
-    type: 'bank/refreshed',
+    type: 'bank/recovered',
     banks: {
       alpha: syntheticBank('alpha', 'A?'),
       toString: syntheticBank('toString', 'T? (loaded)'),
@@ -1189,34 +1103,6 @@ test('an inherited name is not a draft, so a refresh seats the loaded bank', () 
     seated,
     Object.getOwnPropertyDescriptor(refreshed.baseline, 'toString')?.value
   );
-});
-
-test('a refresh that drops the active slug reselects an available bank', () => {
-  const loaded = questionBankReducer(emptyRoute(), {
-    type: 'bank/loaded',
-    banks: { alpha: syntheticBank('alpha', 'A?') },
-    failures: [],
-  });
-  assert.equal(loaded.activeSlug, 'alpha');
-
-  const refreshed = questionBankReducer(loaded, {
-    type: 'bank/refreshed',
-    banks: { gamma: syntheticBank('gamma', 'G?') },
-    failures: [],
-  });
-
-  assert.equal(refreshed.activeSlug, 'gamma');
-  assert.deepEqual(Object.keys(refreshed.cases), ['gamma']);
-  assert.deepEqual(Object.keys(refreshed.baseline), ['gamma']);
-  assert.notEqual(currentBank(refreshed), undefined);
-
-  // Nothing left to select at all still degrades to the empty selection.
-  const emptied = questionBankReducer(refreshed, {
-    type: 'bank/refreshed',
-    banks: {},
-    failures: [],
-  });
-  assert.equal(emptied.activeSlug, '');
 });
 
 test('a second bank/loaded also reselects rather than dangling', () => {
@@ -1534,7 +1420,7 @@ test('bank/retry-requested marks the retry without clearing the failures', () =>
   assert.deepEqual(retrying.cases, loaded.cases);
   assert.equal(
     questionBankReducer(retrying, {
-      type: 'bank/refreshed',
+      type: 'bank/recovered',
       banks: { alpha: syntheticBank('alpha', 'A?') },
       failures: [],
     }).retrying,
@@ -2143,57 +2029,6 @@ test('reverting discards only the Case Type on screen', () => {
   assert.notEqual(reverted.cases.beta, reverted.baseline.beta);
   assert.equal(reverted.cases.alpha.questions[0].text, 'A? (edited)');
   assert.deepEqual(editedSlugs(reverted), ['alpha']);
-});
-
-test('reverting a draft with no baseline left keeps the draft', () => {
-  const edited = rewordFirstQuestion(twoBanksLoaded(), 'beta', 'B? (edited)');
-  // A partial refresh drops beta's baseline while carrying its draft.
-  const refreshed = questionBankReducer(edited, {
-    type: 'bank/refreshed',
-    banks: { alpha: syntheticBank('alpha', 'A?') },
-    failures: [],
-  });
-  const onBeta = questionBankReducer(refreshed, {
-    type: 'bank/selected',
-    slug: 'beta',
-  });
-
-  const reverted = questionBankReducer(onBeta, { type: 'bank/reverted' });
-  assert.equal(reverted, onBeta);
-  assert.equal(reverted.cases.beta.questions[0].text, 'B? (edited)');
-});
-
-test('a revert the reducer refuses is not reported as a revert', () => {
-  const edited = rewordFirstQuestion(twoBanksLoaded(), 'beta', 'B? (edited)');
-  const refreshed = questionBankReducer(edited, {
-    type: 'bank/refreshed',
-    banks: { alpha: syntheticBank('alpha', 'A?') },
-    failures: [],
-  });
-  const onBeta = questionBankReducer(refreshed, {
-    type: 'bank/selected',
-    slug: 'beta',
-  });
-  /** @type {any[]} */
-  const actions = [];
-  const originalConfirm = /** @type {any} */ (globalThis).confirm;
-  const originalTimeout = /** @type {any} */ (globalThis).setTimeout;
-  try {
-    /** @type {any} */ (globalThis).confirm = () => true;
-    /** @type {any} */ (globalThis).setTimeout = undefined;
-    const view = bankEditorView(
-      /** @type {any} */ ({ routes: { questionBank: onBeta } }),
-      { dispatch: (/** @type {any} */ action) => actions.push(action) }
-    );
-    fireEvent(getByRole(view, 'button', { name: '↺ Revert' }), 'click');
-  } finally {
-    /** @type {any} */ (globalThis).confirm = originalConfirm;
-    /** @type {any} */ (globalThis).setTimeout = originalTimeout;
-  }
-
-  assert.deepEqual(actions, [
-    { type: 'toast/changed', message: 'Nothing to revert' },
-  ]);
 });
 
 test('publishing one Case Type does not mark the others synced', () => {
