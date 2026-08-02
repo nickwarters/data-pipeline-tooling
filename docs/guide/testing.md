@@ -111,8 +111,10 @@ should each represent a named capability.
 Direct use of DOM stub internals, underscore-prefixed methods, and Router
 internals makes a test fail on a refactor that changed nothing a user can see.
 Prefer `getByRole()`, `queryByRole()`, and `fireEvent()` from
-`tests/helpers/semantic-dom.js`. A stable field key or narrowly scoped
-`data-testid` is acceptable when the UI has no user-facing semantic to query.
+`tests/helpers/semantic-dom.js`. There is no `data-testid` anywhere in the
+tree: a control a test cannot name is a control a screen reader cannot name
+either, so give it a real accessible name in the markup instead of a test-only
+attribute.
 Route tests should use `register()`, `init()`, and `navigate()`, or a public
 registration spy; do not inspect `_routes` or assign `_container` directly.
 The router-internal baseline is now zero and must remain zero. Use

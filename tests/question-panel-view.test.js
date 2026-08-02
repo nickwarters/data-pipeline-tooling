@@ -3,7 +3,7 @@ import { performance } from 'node:perf_hooks';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom, findAllByClass } from './_dom-stub.js';
-import { fireEvent } from './helpers/semantic-dom.js';
+import { fireEvent, getByRole } from './helpers/semantic-dom.js';
 
 installDom();
 
@@ -222,8 +222,15 @@ test('answer re-renders preserve the focused native control without snapshots', 
     container,
     questionsView.view(props({ answers: { q1: { value: 'No' } } }))
   );
-  const input = container.querySelector('[data-testid="answer:q1:0"]');
-  assert.ok(input);
+  const yesOfQ1 = () =>
+    getByRole(
+      getByRole(container, 'radiogroup', { name: 'Question q1' }),
+      'radio',
+      {
+        name: 'Yes',
+      }
+    );
+  const input = yesOfQ1();
   /** @type {HTMLElement} */ (input).focus();
 
   render(
@@ -231,7 +238,7 @@ test('answer re-renders preserve the focused native control without snapshots', 
     questionsView.view(props({ answers: { q1: { value: 'Yes' } } }))
   );
 
-  assert.equal(container.querySelector('[data-testid="answer:q1:0"]'), input);
+  assert.equal(yesOfQ1(), input);
   assert.equal(document.activeElement, input);
 });
 

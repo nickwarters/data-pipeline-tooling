@@ -47,7 +47,6 @@ export function OutcomeOptionsEditor(props) {
                 'Id',
                 h('input', {
                   value: option.id,
-                  'data-testid': `outcome:${bank.slug}:${option.id}:id`,
                   onchange: (/** @type {any} */ e) =>
                     props.renameOutcome(option, e.target.value),
                 })
@@ -56,7 +55,6 @@ export function OutcomeOptionsEditor(props) {
                 'Wording',
                 h('input', {
                   value: option.wording,
-                  'data-testid': `outcome:${bank.slug}:${option.id}:wording`,
                   onchange: (/** @type {any} */ e) =>
                     props.setWording(option, e.target.value),
                 })

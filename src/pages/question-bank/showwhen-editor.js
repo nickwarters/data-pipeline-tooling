@@ -33,7 +33,6 @@ export function ShowwhenEditor(props) {
         className: 'showwhen-mode',
         value: props.conditional ? 'conditional' : 'always',
         'aria-label': 'Show when',
-        'data-testid': `showwhen-mode-${question.id}`,
         onchange: (/** @type {any} */ event) =>
           props.dispatch({
             type: 'question/showwhen-mode-changed',

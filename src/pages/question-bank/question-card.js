@@ -41,7 +41,6 @@ export function QuestionCard(props) {
     },
     h('div', {
       className: 'card-stripe',
-      'data-testid': 'conditional-indicator',
       'aria-hidden': 'true',
       style:
         question.showWhen && !question.deprecated

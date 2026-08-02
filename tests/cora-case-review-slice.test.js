@@ -48,6 +48,22 @@ const { evaluateAccess, SECTIONS } =
   await import('../src/services/section-access.js');
 const { resolveSectionLabels } = await import('../src/lib/section-labels.js');
 
+/**
+ * The radio a Reviewer clicks to answer a Question. Several Questions offer the
+ * same option wording, so the Question's own fieldset scopes the lookup.
+ *
+ * @param {any} root
+ * @param {string} questionId
+ * @param {string} option
+ */
+function answerOption(root, questionId, option) {
+  const fieldset = queryAllByTag(root, 'fieldset').find(
+    (/** @type {any} */ element) => element.id === `cora-q-${questionId}`
+  );
+  assert.ok(fieldset, `${questionId} renders`);
+  return getByRole(fieldset, 'radio', { name: option });
+}
+
 /** @type {import('../src/core/chrome-state.js').ChromeState} */
 const chrome = {
   currentUser: { id: 'u1', displayName: 'User 1' },
@@ -2976,9 +2992,7 @@ test('route: mock-mode store shell keeps Review working at the existing URL', as
     (panel) => panel.getAttribute('id') === 'case-panel-questions'
   );
   assert.ok(reviewPanel, 'store-driven Review panel remains mounted');
-  const yes = reviewPanel.querySelector('[data-testid="answer:q-welcome:0"]');
-  assert.ok(yes);
-  fireEvent(yes, 'change');
+  fireEvent(answerOption(reviewPanel, 'q-welcome', 'Yes'), 'change');
   await saveQueue.whenIdle();
   await flush();
 
@@ -3003,10 +3017,9 @@ test('route: mock-mode store shell keeps Review working at the existing URL', as
     return snapshot.config.computeOutcome(snapshot.answers);
   };
   const outcomeBefore = outcomeOf();
-  const channel = reviewPanel.querySelector(
-    '[data-testid="general-question:reviewChannel"]'
-  );
-  assert.ok(channel, 'General Questions render on the Review tab');
+  const channel = getByRole(reviewPanel, 'combobox', {
+    name: 'How was this Case reviewed?',
+  });
   channel.value = 'Call recording';
   fireEvent(channel, 'change');
   await saveQueue.whenIdle();
@@ -3202,9 +3215,7 @@ test('route: a rejected save surfaces the conflict banner in the mounted page', 
       etag: 'e2',
     };
 
-    const yes = container.querySelector('[data-testid="answer:q-welcome:0"]');
-    assert.ok(yes);
-    fireEvent(yes, 'change');
+    fireEvent(answerOption(container, 'q-welcome', 'Yes'), 'change');
     await saveQueue.whenIdle();
     await flush();
 
@@ -3396,10 +3407,8 @@ test('route: a read-only Reviewer on a reportable Case writes no Answer', async 
     assert.equal(snapshot?.access.questions, 'read-only');
     assert.equal(snapshot?.machine?.canEditIssues, false);
 
-    const option = /** @type {any} */ (
-      container.querySelector('[data-testid="answer:q-welcome:0"]')
-    );
-    assert.ok(option, 'the Review tab still renders its (disabled) controls');
+    // The Review tab still renders its (disabled) controls.
+    const option = answerOption(container, 'q-welcome', 'Yes');
     fireEvent(option, 'change');
     await saveQueue.whenIdle();
     await flush();
@@ -3493,20 +3502,12 @@ test('route: sequential Answer edits accumulate', async () => {
       'store-driven Case Review load'
     );
 
-    const answerControl = (/** @type {string} */ key) => {
-      const control = /** @type {any} */ (
-        container.querySelector(`[data-testid="${key}"]`)
-      );
-      assert.ok(control, `${key} renders`);
-      return control;
-    };
-
-    for (const key of [
-      'answer:q-channel:0', // Phone, over the stored Email
-      'answer:q-welcome:0',
-      'answer:q-needs:0',
+    for (const [questionId, option] of [
+      ['q-channel', 'Phone'], // over the stored Email
+      ['q-welcome', 'Yes'],
+      ['q-needs', 'Yes'],
     ]) {
-      fireEvent(answerControl(key), 'change');
+      fireEvent(answerOption(container, questionId, option), 'change');
       await saveQueue.whenIdle();
       await flush();
     }

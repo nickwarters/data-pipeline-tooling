@@ -248,7 +248,6 @@ export function BankRail(props) {
     {
       type: 'button',
       className: 'rail-toggle',
-      'data-testid': 'bank-rail-toggle',
       'aria-expanded': props.railOpen ? 'true' : 'false',
       'aria-controls': 'bank-rail-panel',
       onclick: props.onToggleRail,
