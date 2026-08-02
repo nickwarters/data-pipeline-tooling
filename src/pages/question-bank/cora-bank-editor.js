@@ -6,7 +6,6 @@ import { ignoreAbortError } from '../../lib/abort.js';
 import { withAbortSignal } from '../../services/abortable-client.js';
 import {
   baselineBank,
-  canRevert,
   currentBank,
   diffCounts,
   editedSlugs,
@@ -60,7 +59,7 @@ function caseTabsPropsFor(route, dispatch) {
     onRevert: () => {
       // The same gate the reducer applies, so a refused revert is never
       // announced as a completed one.
-      if (!canRevert(route)) return toast(dispatch, 'Nothing to revert');
+      if (!isDirty(route)) return toast(dispatch, 'Nothing to revert');
       const label = currentBank(route).label;
       const ok = /** @type {any} */ (globalThis).confirm?.(
         `Discard uncommitted edits to ${label} and return to its last synced state?`

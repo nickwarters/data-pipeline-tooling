@@ -87,9 +87,7 @@ function selectSlug(activeSlug, banks) {
 
 /**
  * Whether the curator holds a local edit for `slug`: a draft that exists as an
- * own key of `cases` and differs from the baseline it was seated against. A
- * draft carried through an earlier partial refresh has no baseline left, and
- * counts as edited — it is unsaved work either way.
+ * own key of `cases` and differs from the baseline it was seated against.
  *
  * Both lookups are own-property lookups for the reason spelled out on
  * {@link selectSlug}.
@@ -134,113 +132,50 @@ function banksLoaded(state, banks, failures = []) {
 }
 
 /**
- * Seat the banks from a **later** load — a retry of a failed artifact,
- * or a refresh after publishing. The freshly loaded artifacts always become the
- * new `baseline`; they replace a bank's draft only where the curator has no
- * local edit for that slug.
+ * Seat the result of a retry: the artifacts it recovered, unioned with the ones
+ * that were already loaded. The unioned set becomes the new `baseline` whole,
+ * and replaces a bank's draft only where the curator has no local edit for that
+ * slug.
  *
- * **Conflict behaviour: when a bank has both a curator edit and a
- * changed baseline, the draft wins and the upstream change is not applied.**
- * This is deliberate, and the reason is asymmetry of harm: a draft is unsaved,
+ * The union is built **here**, from `state.baseline` at dispatch time, rather
+ * than by the effect spreading a captured snapshot into the action it
+ * dispatches. An effect can only hold state it read before it awaited, and
+ * `publish/succeeded` writes `baseline` too. A publish landing during an
+ * in-flight retry would then be silently rolled back — `cases` and `baseline`
+ * both reverting to the pre-publish artifact while `publishStatus` still read
+ * `'succeeded'` and `isDirty` read false, which is exactly the invisible data
+ * loss this guards against. Reading the union in the reducer makes that
+ * unreachable by construction instead of by an undocumented render-ordering
+ * invariant.
+ *
+ * The base is `baseline`, never `cases`: `cases` holds the curator's draft, and
+ * unioning from it would promote that draft into the new baseline, zeroing the
+ * diff and reporting "no changes" to the impact simulation. Unioning is also
+ * what keeps the retry's fetched subset from wiping the rest — passing the
+ * subset alone would drop every other bank, and a curator retrying one artifact
+ * would watch the others disappear.
+ *
+ * **Conflict behaviour: when a bank has both a curator edit and a changed
+ * baseline, the draft wins and the upstream change is not applied.** This is
+ * deliberate, and the reason is asymmetry of harm: a draft is unsaved,
  * curator-authored work that exists nowhere else, so discarding it is
  * unrecoverable data loss, whereas a superseded baseline can be reloaded.
  *
- * Be clear about what that costs, because it is not free. The moved baseline
- * is currently **indistinguishable from the curator's own edits**: `diffCounts`
- * folds both into one `changed` count per question of the bank on screen, so an
- * upstream change to a question the curator also touched renders as if the
- * curator had reverted it, and nothing anywhere names the bank whose baseline
- * moved underneath them.
- * Recovery is soft too — `bank/reverted` recovers the baseline only by
- * discarding the draft wholesale, and a remount dispatches `bank/loaded`, which
- * overwrites the draft anyway. We do NOT raise a conflict prompt here, and
- * there is still no per-bank "baseline moved" signal.
- *
- * **That follow-on was assessed and not built, because neither of this
- * action's two callers can reach the conflict.** A retry (`bank/recovered`)
- * re-fetches only the slugs that FAILED to load, which therefore hold no draft
- * — the curator has never seen them — and it carries the already-loaded
- * artifacts through unchanged from `state.baseline`. The other writer of
- * `baseline` is `publish/succeeded`, which does not go through this action at
- * all: it promotes the curator's own `cases` to `baseline`, so the baseline it
- * moves is by definition the one the draft already matches. The two cannot
- * interleave into a conflict either, because `bank/recovered` reads the union
- * out of `state.baseline` inside this reducer — at dispatch time, after any
- * publish that landed while the retry was in flight — rather than out of
- * anything the effect captured before it awaited.
- *
+ * Be clear about what that costs. The moved baseline is
+ * **indistinguishable from the curator's own edits**: `diffCounts` folds both
+ * into one `changed` count per question of the bank on screen, and nothing names
+ * the bank whose baseline moved underneath them. We do NOT raise a conflict
+ * prompt here. That follow-on was assessed and not built, because the one
+ * caller cannot reach the conflict: a retry re-fetches only the slugs that
+ * FAILED to load, which therefore hold no draft — the curator has never seen
+ * them — and every other slug is carried through unchanged from `state.baseline`.
  * The signal becomes worth building for the first caller that re-fetches a bank
  * the curator may be editing: a post-publish *reload* of the artifacts, or any
  * periodic refresh. Neither exists yet. Whoever adds one owns the signal.
  *
- * The loaded slug set is authoritative for the baseline and the selection: a
- * slug the refresh does not carry leaves `baseline`, and `activeSlug` reselects
- * rather than dangling. It is NOT authoritative for the draft. A refresh's
- * `banks` may be a partial set, so an omitted slug that carries a curator edit
- * keeps its draft in `cases` (with no baseline left, which `diffCounts`
- * tolerates and reads as wholly added once that bank is on screen, and which
- * `bank/reverted` refuses rather than blanking). Dropping it would be the same silent,
- * unrecoverable data loss this action exists to prevent. An omitted slug with
- * no local edit is dropped.
- *
- * Because that drop is real, the retry does not hand this action its
- * fetched subset: `bank/recovered` unions it with the banks already loaded,
- * since both are current. Passing the subset alone would drop every unedited
- * bank from `cases` and every bank from `baseline` — a curator retrying one
- * artifact would watch the others disappear.
- *
- * `cases` and `baseline` never share a reference — each retained or carried
- * bank keeps its own draft object, and each replaced one is cloned separately
- * from the baseline clone.
- *
- * @param {QuestionBankRouteState} state
- * @param {Record<string, QuestionBank>} banks
- * @param {BankLoadFailure[]} [failures]
- * @returns {QuestionBankRouteState}
- */
-function banksRefreshed(state, banks, failures = []) {
-  /** @type {Record<string, QuestionBank>} */
-  const cases = {};
-  for (const slug of Object.keys(banks)) {
-    cases[slug] = isEdited(state, slug)
-      ? state.cases[slug]
-      : structuredClone(banks[slug]);
-  }
-  for (const slug of Object.keys(state.cases)) {
-    if (!Object.hasOwn(banks, slug) && isEdited(state, slug)) {
-      cases[slug] = state.cases[slug];
-    }
-  }
-  return {
-    ...state,
-    cases,
-    baseline: structuredClone(banks),
-    activeSlug: selectSlug(state.activeSlug, banks),
-    loading: false,
-    loadError: '',
-    loadFailures: failures,
-    retrying: false,
-  };
-}
-
-/**
- * Seat the result of a retry: the artifacts it recovered, unioned with the
- * ones that were already loaded.
- *
- * The union is built **here**, from `state.baseline` at dispatch time, and that
- * placement is the whole point of this function existing rather than the effect
- * spreading a captured snapshot into the action it dispatches. An effect can
- * only hold state it read before it awaited, and `publish/succeeded` writes
- * `baseline` too. A publish landing during an in-flight retry would then be silently
- * rolled back — `cases` and `baseline` both reverting to the pre-publish
- * artifact while `publishStatus` still read `'succeeded'` and `isDirty` read
- * false, which is exactly the invisible data loss this guards against.
- * Reading the union in the reducer makes that unreachable by construction
- * instead of by an undocumented render-ordering invariant.
- *
- * The base is `baseline`, never `cases`: `cases` holds the curator's draft, and
- * unioning from it would promote that draft into the new baseline, zeroing the
- * diff and reporting "no changes" to the impact simulation.
+ * `cases` and `baseline` never share a reference — each retained bank keeps its
+ * own draft object, and each replaced one is cloned separately from the
+ * baseline clone.
  *
  * @param {QuestionBankRouteState} state
  * @param {Record<string, QuestionBank>} banks the freshly recovered artifacts
@@ -248,7 +183,24 @@ function banksRefreshed(state, banks, failures = []) {
  * @returns {QuestionBankRouteState}
  */
 function banksRecovered(state, banks, failures = []) {
-  return banksRefreshed(state, { ...state.baseline, ...banks }, failures);
+  const merged = { ...state.baseline, ...banks };
+  /** @type {Record<string, QuestionBank>} */
+  const cases = {};
+  for (const slug of Object.keys(merged)) {
+    cases[slug] = isEdited(state, slug)
+      ? state.cases[slug]
+      : structuredClone(merged[slug]);
+  }
+  return {
+    ...state,
+    cases,
+    baseline: structuredClone(merged),
+    activeSlug: selectSlug(state.activeSlug, merged),
+    loading: false,
+    loadError: '',
+    loadFailures: failures,
+    retrying: false,
+  };
 }
 
 /** @param {QuestionBankRouteState} state */
@@ -277,21 +229,14 @@ export function editedSlugs(state) {
  * act on the active Case Type alone, so the flag that gates them has to be
  * scoped the same way: an edit to another Case Type's bank must not make this
  * one offer to discard or submit changes it does not have.
+ *
+ * This is also the gate on reverting, read by both the reducer and the control
+ * that offers the revert, so the prompt, the confirmation and the state change
+ * cannot disagree about what happened.
  * @param {QuestionBankRouteState} state
  */
 export function isDirty(state) {
   return isEdited(state, state.activeSlug);
-}
-
-/**
- * Whether reverting the bank **on screen** would actually do something: it has
- * uncommitted edits, and a baseline survives for it to return to. Both the
- * reducer and the control that offers the revert read this, so the prompt, the
- * confirmation and the state change cannot disagree about what happened.
- * @param {QuestionBankRouteState} state
- */
-export function canRevert(state) {
-  return isDirty(state) && Object.hasOwn(state.baseline, state.activeSlug);
 }
 
 /**
@@ -747,7 +692,7 @@ export function questionBankReducer(state, action) {
   if (action.type === 'bank/reverted') {
     // Revert discards the Case Type on screen and nothing else — another Case
     // Type's unsaved work is not the curator's to throw away from here.
-    if (!canRevert(state)) return state;
+    if (!isDirty(state)) return state;
     return {
       ...state,
       cases: {
