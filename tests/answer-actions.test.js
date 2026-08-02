@@ -4,7 +4,6 @@ import assert from 'node:assert/strict';
 import { NA_VALUE } from '../src/lib/response-options.js';
 import {
   answerEdited,
-  failureAttributed,
   groupOutcomeSet,
   issueCaptured,
   remediationActionToggled,
@@ -116,7 +115,7 @@ test('issueCaptured: writes the captured field onto the Answer', () => {
     questionId: 'q1',
     fieldKey: 'rootCause',
     value: 'Rushed',
-    canCapture: true,
+    canEditIssues: true,
   });
 
   assert.deepEqual(next?.q1.capture, { rootCause: 'Rushed' });
@@ -136,7 +135,7 @@ test('issueCaptured: writes a person value as an object, and clears it with null
     questionId: 'q1',
     fieldKey: 'attributedTo',
     value: party,
-    canCapture: true,
+    canEditIssues: true,
   });
   assert.deepEqual(set?.q1.capture, { attributedTo: party });
 
@@ -147,7 +146,7 @@ test('issueCaptured: writes a person value as an object, and clears it with null
       questionId: 'q1',
       fieldKey: 'attributedTo',
       value: party,
-      canCapture: false,
+      canEditIssues: false,
     }),
     null
   );
@@ -158,7 +157,7 @@ test('issueCaptured: writes a person value as an object, and clears it with null
     questionId: 'q1',
     fieldKey: 'attributedTo',
     value: null,
-    canCapture: true,
+    canEditIssues: true,
   });
   assert.equal('capture' in (cleared?.q1 ?? {}), false);
 });
@@ -171,56 +170,11 @@ test('issueCaptured: writes nothing without the capture guard, Answer, or field'
     questionId: 'q1',
     fieldKey: 'rootCause',
     value: 'Rushed',
-    canCapture: true,
+    canEditIssues: true,
   };
-  assert.equal(issueCaptured({ ...input, canCapture: false }), null);
+  assert.equal(issueCaptured({ ...input, canEditIssues: false }), null);
   assert.equal(issueCaptured({ ...input, questionId: 'missing' }), null);
   assert.equal(issueCaptured({ ...input, fieldKey: 'unknown' }), null);
-});
-
-// --- failureAttributed ------------------------------------------------------
-
-test('failureAttributed: attaches and clears the Responsible Party', () => {
-  const party = { loginName: 'i:0#.w|corp\\bob', displayName: 'Bob' };
-  const attributed = failureAttributed({
-    answers: /** @type {any} */ ({ q1: { value: 'No' } }),
-    questionId: 'q1',
-    attributedParty: party,
-    canAttribute: true,
-  });
-  assert.deepEqual(attributed?.q1.attributedParty, party);
-
-  const cleared = failureAttributed({
-    answers: /** @type {any} */ (attributed),
-    questionId: 'q1',
-    attributedParty: null,
-    canAttribute: true,
-  });
-  assert.equal(cleared && 'attributedParty' in cleared.q1, false);
-});
-
-test('failureAttributed: a non-attributing Case Type writes nothing', () => {
-  assert.equal(
-    failureAttributed({
-      answers: /** @type {any} */ ({ q1: { value: 'No' } }),
-      questionId: 'q1',
-      attributedParty: { loginName: 'x', displayName: 'X' },
-      canAttribute: false,
-    }),
-    null
-  );
-});
-
-test('failureAttributed: writes nothing when the Answer does not exist', () => {
-  assert.equal(
-    failureAttributed({
-      answers: /** @type {any} */ ({}),
-      questionId: 'q1',
-      attributedParty: null,
-      canAttribute: true,
-    }),
-    null
-  );
 });
 
 // --- remediationActionToggled -----------------------------------------------
@@ -236,7 +190,7 @@ test('remediationActionToggled: ticking writes the selection onto the Answer', (
     questionId: 'q1',
     action: { id: 'ra-0', text: 'Retrain' },
     selected: true,
-    canSelectRemediation: true,
+    canEditIssues: true,
   });
 
   assert.deepEqual(next?.q1.remediationActions, [
@@ -253,7 +207,7 @@ test('remediationActionToggled: ticking preserves the other selected actions', (
     questionId: 'q1',
     action: { id: 'ra-1', text: 'Update script' },
     selected: true,
-    canSelectRemediation: true,
+    canEditIssues: true,
   });
 
   assert.deepEqual(next?.q1.remediationActions, [
@@ -271,7 +225,7 @@ test('remediationActionToggled: unticking the last action drops the key', () => 
     questionId: 'q1',
     action: { id: 'ra-0', text: 'Retrain' },
     selected: false,
-    canSelectRemediation: true,
+    canEditIssues: true,
   });
 
   assert.equal(next && 'remediationActions' in next.q1, false);
@@ -289,7 +243,7 @@ test('remediationActionToggled: a redundant tick or untick writes nothing', () =
       questionId: 'q1',
       action,
       selected: true,
-      canSelectRemediation: true,
+      canEditIssues: true,
     }),
     null
   );
@@ -299,7 +253,7 @@ test('remediationActionToggled: a redundant tick or untick writes nothing', () =
       questionId: 'q1',
       action,
       selected: false,
-      canSelectRemediation: true,
+      canEditIssues: true,
     }),
     null
   );
@@ -313,7 +267,7 @@ test('remediationActionToggled: writes nothing without the guard or the Answer',
       questionId: 'q1',
       action,
       selected: true,
-      canSelectRemediation: false,
+      canEditIssues: false,
     }),
     null
   );
@@ -323,7 +277,7 @@ test('remediationActionToggled: writes nothing without the guard or the Answer',
       questionId: 'missing',
       action,
       selected: true,
-      canSelectRemediation: true,
+      canEditIssues: true,
     }),
     null
   );
@@ -336,7 +290,7 @@ test('remediationFreeFormEdited: stores the text and clears it when empty', () =
     answers: selectionAnswers(),
     questionId: 'q1',
     value: 'Escalate to legal',
-    canSelectRemediation: true,
+    canEditIssues: true,
   });
   assert.equal(stored?.q1.freeFormRemediation, 'Escalate to legal');
 
@@ -344,7 +298,7 @@ test('remediationFreeFormEdited: stores the text and clears it when empty', () =
     answers: /** @type {any} */ (stored),
     questionId: 'q1',
     value: '',
-    canSelectRemediation: true,
+    canEditIssues: true,
   });
   assert.equal(cleared && 'freeFormRemediation' in cleared.q1, false);
 });
@@ -355,7 +309,7 @@ test('remediationFreeFormEdited: writes nothing without the guard or the Answer'
       answers: selectionAnswers(),
       questionId: 'q1',
       value: 'x',
-      canSelectRemediation: false,
+      canEditIssues: false,
     }),
     null
   );
@@ -364,7 +318,7 @@ test('remediationFreeFormEdited: writes nothing without the guard or the Answer'
       answers: selectionAnswers(),
       questionId: 'missing',
       value: 'x',
-      canSelectRemediation: true,
+      canEditIssues: true,
     }),
     null
   );
@@ -377,7 +331,7 @@ test('remediationRequiredSet: records the decision', () => {
     answers: selectionAnswers(),
     questionId: 'q1',
     required: 'yes',
-    canSelectRemediation: true,
+    canEditIssues: true,
   });
   assert.deepEqual(next?.q1, { value: 'No', remediationRequired: 'yes' });
 });
@@ -392,7 +346,7 @@ test('remediationRequiredSet: "no" clears any remediation already recorded', () 
     }),
     questionId: 'q1',
     required: 'no',
-    canSelectRemediation: true,
+    canEditIssues: true,
   });
   assert.deepEqual(next?.q1, { value: 'No', remediationRequired: 'no' });
 });
@@ -403,7 +357,7 @@ test('remediationRequiredSet: writes nothing without the guard, the Answer, or a
       answers: selectionAnswers(),
       questionId: 'q1',
       required: 'yes',
-      canSelectRemediation: false,
+      canEditIssues: false,
     }),
     null
   );
@@ -412,7 +366,7 @@ test('remediationRequiredSet: writes nothing without the guard, the Answer, or a
       answers: selectionAnswers(),
       questionId: 'missing',
       required: 'yes',
-      canSelectRemediation: true,
+      canEditIssues: true,
     }),
     null
   );
@@ -421,7 +375,7 @@ test('remediationRequiredSet: writes nothing without the guard, the Answer, or a
       answers: selectionAnswers({ value: 'No', remediationRequired: 'no' }),
       questionId: 'q1',
       required: 'no',
-      canSelectRemediation: true,
+      canEditIssues: true,
     }),
     null,
     're-selecting the same decision is a no-op'

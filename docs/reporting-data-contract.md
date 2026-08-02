@@ -119,7 +119,7 @@ answer values across every question.
 Intentionally **absent**: `computeOutcome` (code), `remediationActions` /
 `disallowFreeFormRemediation` (authoring templates — the remediation actually _taken_
 lives on the Answer, below), and Case-Type config (`eligibleGroups`, `actionCentreSlaDays`,
-`breachWindowHours`, `remediationSlaWorkingDays`, `attributeFailures`).
+`breachWindowHours`, `remediationSlaWorkingDays`).
 
 ### Label resolution
 
@@ -218,7 +218,10 @@ Each entry in `answers`, keyed by question `id`:
     { "id": "q-rootcause-ra-0", "text": "Open RCA ticket.", "completed": false }
   ],
   "freeFormRemediation": "Re-brief the team at the next huddle.",
-  "attributedParty": { "loginName": "jsmith", "displayName": "J. Smith" }
+  "capture": {
+    "rootCauseSummary": "Handoff missed.",
+    "attributedTo": { "loginName": "jsmith", "displayName": "J. Smith" }
+  }
 }
 ```
 
@@ -226,9 +229,15 @@ Each entry in `answers`, keyed by question `id`:
   `yes-no-na` and `single-choice`, and a **`string[]`** for `multi-choice`. An
   empty string or empty array means **unanswered**.
 - `justification`, `remediationRequired`, `remediationActions`,
-  `freeFormRemediation`, `attributedParty` are optional and not needed for
+  `freeFormRemediation`, `capture` are optional and not needed for
   failure counting (use them for richer reports if you want — e.g. "failures
   with no justification," or remediation-completion rates).
+- `capture` holds the **Issue Capture Fields** the Case Type declares, keyed by
+  field key, and is the only place failure attribution now lives — the retired
+  `attributedParty` Answer property is never written any more. Field keys are
+  per-Case-Type, so a cross-Case-Type report should find the attribution field
+  by its `role: 'attributedParty'` tag in the exported Case Type config rather
+  than by key.
 - `remediationRequired` is the Reviewer's explicit `"yes"` / `"no"` decision on
   a failed Answer. It is absent on Answers that never failed, and on Cases
   completed before the decision existed; treat absent as "not recorded" rather

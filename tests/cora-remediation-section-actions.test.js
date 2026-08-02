@@ -16,7 +16,7 @@ import {
 test('CORARemediationSection: read-only viewer shows only the selected remediation actions as text', () => {
   const el = new CORARemediationSection();
   el.catalogue = CATALOGUE;
-  el.canSelectRemediation = false;
+  el.canEditIssues = false;
   // Only the second configured action (q-needs-ra-1) is selected on the Answer.
   el.answers = {
     'q-needs': {
@@ -44,7 +44,7 @@ test('CORARemediationSection: read-only viewer shows only the selected remediati
 test('CORARemediationSection: read-only viewer with no selected actions shows no actions list', () => {
   const el = new CORARemediationSection();
   el.catalogue = CATALOGUE;
-  el.canSelectRemediation = false;
+  el.canEditIssues = false;
   el.answers = { 'q-needs': { value: 'No', remediationRequired: 'yes' } };
   el.connectedCallback();
 
@@ -54,7 +54,7 @@ test('CORARemediationSection: read-only viewer with no selected actions shows no
 test('CORARemediationSection: a "Remediation Actions" heading precedes the visible actions', () => {
   const el = new CORARemediationSection();
   el.catalogue = CATALOGUE;
-  el.canSelectRemediation = true;
+  el.canEditIssues = true;
   el.answers = { 'q-needs': { value: 'No', remediationRequired: 'yes' } };
   el.connectedCallback();
 
@@ -66,7 +66,7 @@ test('CORARemediationSection: a "Remediation Actions" heading precedes the visib
 test('CORARemediationSection: no actions heading when there are no visible actions', () => {
   const el = new CORARemediationSection();
   el.catalogue = CATALOGUE;
-  el.canSelectRemediation = false;
+  el.canEditIssues = false;
   el.answers = { 'q-needs': { value: 'No', remediationRequired: 'yes' } };
   el.connectedCallback();
 
@@ -76,7 +76,7 @@ test('CORARemediationSection: no actions heading when there are no visible actio
 test('CORARemediationSection: editable viewer renders an unticked checkbox per configured action', () => {
   const el = new CORARemediationSection();
   el.catalogue = CATALOGUE;
-  el.canSelectRemediation = true;
+  el.canEditIssues = true;
   el.answers = { 'q-needs': { value: 'No', remediationRequired: 'yes' } };
   el.connectedCallback();
 
@@ -92,7 +92,7 @@ test('CORARemediationSection: editable viewer renders an unticked checkbox per c
 test('CORARemediationSection: editable viewer pre-ticks actions already selected on the Answer', () => {
   const el = new CORARemediationSection();
   el.catalogue = CATALOGUE;
-  el.canSelectRemediation = true;
+  el.canEditIssues = true;
   el.answers = {
     'q-needs': {
       value: 'No',
@@ -113,7 +113,7 @@ test('CORARemediationSection: editable viewer pre-ticks actions already selected
 test('CORARemediationSection: ticking an action dispatches a bubbling cora-remediation-action', () => {
   const el = new CORARemediationSection();
   el.catalogue = CATALOGUE;
-  el.canSelectRemediation = true;
+  el.canEditIssues = true;
   el.answers = { 'q-needs': { value: 'No', remediationRequired: 'yes' } };
   el.connectedCallback();
 
@@ -139,7 +139,7 @@ test('CORARemediationSection: ticking an action dispatches a bubbling cora-remed
 test('CORARemediationSection: unticking a selected action dispatches selected:false', () => {
   const el = new CORARemediationSection();
   el.catalogue = CATALOGUE;
-  el.canSelectRemediation = true;
+  el.canEditIssues = true;
   el.answers = {
     'q-needs': {
       value: 'No',
@@ -170,7 +170,7 @@ test('CORARemediationSection: unticking a selected action dispatches selected:fa
 test('CORARemediationSection: every failed Question gets a free-form input by default', () => {
   const el = new CORARemediationSection();
   el.catalogue = CATALOGUE;
-  el.canSelectRemediation = true;
+  el.canEditIssues = true;
   el.answers = { 'q-needs': { value: 'No', remediationRequired: 'yes' } };
   el.connectedCallback();
 
@@ -180,7 +180,7 @@ test('CORARemediationSection: every failed Question gets a free-form input by de
 test('CORARemediationSection: no free-form input when the Question Definition disallows it', () => {
   const el = new CORARemediationSection();
   el.catalogue = NO_FREEFORM_CAT;
-  el.canSelectRemediation = true;
+  el.canEditIssues = true;
   el.answers = { 'q-free': { value: 'No', remediationRequired: 'yes' } };
   el.connectedCallback();
 
@@ -190,7 +190,7 @@ test('CORARemediationSection: no free-form input when the Question Definition di
 test('CORARemediationSection: editable viewer renders a free-form input when the question allows it', () => {
   const el = new CORARemediationSection();
   el.catalogue = FREEFORM_CAT;
-  el.canSelectRemediation = true;
+  el.canEditIssues = true;
   el.answers = {
     'q-free': {
       value: 'No',
@@ -222,7 +222,7 @@ test('CORARemediationSection: editable viewer renders a free-form input when the
 test('CORARemediationSection: editing free-form dispatches a bubbling cora-remediation-freeform', () => {
   const el = new CORARemediationSection();
   el.catalogue = FREEFORM_CAT;
-  el.canSelectRemediation = true;
+  el.canEditIssues = true;
   el.answers = { 'q-free': { value: 'No', remediationRequired: 'yes' } };
   el.connectedCallback();
 
@@ -247,7 +247,7 @@ test('CORARemediationSection: editing free-form dispatches a bubbling cora-remed
 test('CORARemediationSection: read-only viewer shows captured free-form as text, no input', () => {
   const el = new CORARemediationSection();
   el.catalogue = FREEFORM_CAT;
-  el.canSelectRemediation = false;
+  el.canEditIssues = false;
   el.answers = {
     'q-free': {
       value: 'No',
@@ -266,7 +266,7 @@ test('CORARemediationSection: read-only viewer shows captured free-form as text,
 test('CORARemediationSection: read-only viewer with no free-form value renders nothing', () => {
   const el = new CORARemediationSection();
   el.catalogue = FREEFORM_CAT;
-  el.canSelectRemediation = false;
+  el.canEditIssues = false;
   el.answers = { 'q-free': { value: 'No', remediationRequired: 'yes' } };
   el.connectedCallback();
 
@@ -321,7 +321,7 @@ test('CORARemediationSection: _renderItem with null remediationActions renders n
 test('CORARemediationSection: an undecided failure offers the decision and nothing else', () => {
   const el = new CORARemediationSection();
   el.catalogue = CATALOGUE;
-  el.canSelectRemediation = true;
+  el.canEditIssues = true;
   el.answers = { 'q-needs': { value: 'No' } };
   el.connectedCallback();
 
@@ -357,7 +357,7 @@ test('CORARemediationSection: an undecided failure offers the decision and nothi
 test('CORARemediationSection: "No" selects No and offers no way to record remediation', () => {
   const el = new CORARemediationSection();
   el.catalogue = CATALOGUE;
-  el.canSelectRemediation = true;
+  el.canEditIssues = true;
   el.answers = { 'q-needs': { value: 'No', remediationRequired: 'no' } };
   el.connectedCallback();
 
@@ -374,7 +374,7 @@ test('CORARemediationSection: "No" selects No and offers no way to record remedi
 test('CORARemediationSection: "Yes" renders the actions and the free-form box', () => {
   const el = new CORARemediationSection();
   el.catalogue = CATALOGUE;
-  el.canSelectRemediation = true;
+  el.canEditIssues = true;
   el.answers = { 'q-needs': { value: 'No', remediationRequired: 'yes' } };
   el.connectedCallback();
 
@@ -393,7 +393,7 @@ test('CORARemediationSection: "Yes" renders the actions and the free-form box', 
 test('CORARemediationSection: choosing a decision dispatches cora-remediation-required', () => {
   const el = new CORARemediationSection();
   el.catalogue = CATALOGUE;
-  el.canSelectRemediation = true;
+  el.canEditIssues = true;
   el.answers = { 'q-needs': { value: 'No' } };
   el.connectedCallback();
 
@@ -420,7 +420,7 @@ test('CORARemediationSection: choosing a decision dispatches cora-remediation-re
 test('CORARemediationSection: a read-only viewer sees the No decision, never the radios', () => {
   const el = new CORARemediationSection();
   el.catalogue = CATALOGUE;
-  el.canSelectRemediation = false;
+  el.canEditIssues = false;
   el.answers = { 'q-needs': { value: 'No', remediationRequired: 'no' } };
   el.connectedCallback();
 
@@ -435,7 +435,7 @@ test('CORARemediationSection: a read-only viewer sees nothing for an undecided f
   // evidence — and an undecided failure has nothing to report.
   const el = new CORARemediationSection();
   el.catalogue = CATALOGUE;
-  el.canSelectRemediation = false;
+  el.canEditIssues = false;
   el.answers = { 'q-needs': { value: 'No' } };
   el.connectedCallback();
 

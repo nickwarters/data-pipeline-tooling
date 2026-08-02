@@ -92,10 +92,6 @@ export const exampleReviewCases = [
         value: 'No',
         justification:
           'Agent jumped straight to resolution without confirming the issue.',
-        attributedParty: {
-          loginName: 'agent.c',
-          displayName: 'Agent C (Casey Doyle)',
-        },
         // Unified Issue Capture: values captured against this failed
         // Answer, keyed by CaptureField.key, demonstrating the four string types.
         capture: {

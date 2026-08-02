@@ -828,6 +828,7 @@ registerCaseType({
           label: 'Blame',
           fields: [
             { key: 'attributedTo', label: 'Attributed to', type: 'person' },
+            { key: 'raisedBy', label: 'Raised by', type: 'person' },
             { key: 'rootCause', label: 'Root cause', type: 'text' },
           ],
         },
@@ -844,11 +845,11 @@ test('CaseLoader.load() refreshes person capture display names in one directory 
   const answers = {
     'q-needs': {
       value: 'No',
-      // The Attributed Party property and a person Issue Capture Field, both
-      // holding a name the directory has since changed.
-      attributedParty: { loginName: 'jsmith', displayName: 'J. Smith' },
+      // Two person Issue Capture Fields, both holding a name the directory has
+      // since changed.
       capture: {
         attributedTo: { loginName: 'bjones', displayName: 'B. Jones' },
+        raisedBy: { loginName: 'jsmith', displayName: 'J. Smith' },
         rootCause: 'jsmith',
       },
     },
@@ -891,7 +892,10 @@ test('CaseLoader.load() refreshes person capture display names in one directory 
   assert.equal(resolveCalls.length, 1, 'one batched directory call');
   assert.deepEqual(resolveCalls[0].sort(), ['bjones', 'jsmith']);
   const loaded = loader.answers['q-needs'];
-  assert.equal(loaded.attributedParty?.displayName, 'Jane Smith');
+  assert.deepEqual(loaded.capture?.raisedBy, {
+    loginName: 'jsmith',
+    displayName: 'Jane Smith',
+  });
   assert.deepEqual(loaded.capture?.attributedTo, {
     loginName: 'bjones',
     displayName: 'Bob Jones',

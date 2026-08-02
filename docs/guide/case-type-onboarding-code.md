@@ -148,9 +148,8 @@ Field-by-field, the parts that carry behaviour:
 - **`optionOutcomes`** — maps a response option to an Outcome id. Unmapped
   options contribute nothing (the default Outcome stands). The same mapping
   drives failure: every option mapped to a non-default Outcome marks the
-  Answer as a failure, feeding the Issues list, remediation, and (if the
-  module sets `attributeFailures`) failure attribution to a person. The
-  universal N/A response is never a failure.
+  Answer as a failure, feeding the Issues list, its Issue Capture Fields and
+  remediation. The universal N/A response is never a failure.
 - **`showWhen`** — the applicability graph. A question with
   `"showWhen": { "q-wr-tested": { "equals": "Yes" } }` is only an Applicable
   Question when that answer holds. The graph must be acyclic —
@@ -201,7 +200,6 @@ const bank = await loadBank('./banks/widget-review.txt');
 const config = {
   listName: 'Cases-WidgetReview',
   maxInProgressCases: 3,
-  attributeFailures: true,
   detailFields: [
     { key: 'orderRef', label: 'Order reference' },
     { key: 'customerName', label: 'Customer name' },
@@ -284,8 +282,9 @@ What each field does, and how to choose its value:
     stored on the Case row, so in-flight Cases keep the date they were given and
     only later transitions see the new number. Expect this to be reported as a
     bug; it is the design.
-- **`attributeFailures`** — when true, a failed Answer asks the Reviewer to
-  attribute the failure to a person (feeds Responsible-Party reporting).
+- **Failure attribution** is not a flag: declare a `person` Issue Capture Field
+  in `captureGroups` and tag it `role: 'attributedParty'`, so cross-Case-Type
+  reporting can find it whatever your field key is.
 - **`detailFields`** — the read-only Case Details panel, `{ key, label }`
   pairs. Values live in each Case row's `details` JSON blob keyed by `key` —
   adding a field here means your fixture Cases (Step 6) should carry that key.

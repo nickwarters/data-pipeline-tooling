@@ -45,9 +45,6 @@ const EMPTY_CONFIG = {
   defaultOutcomeId: 'pass',
 };
 
-/** @type {import('../src/sharepoint-client.js').CaseTypeConfig} */
-const ATTRIBUTE_CONFIG = { ...EMPTY_CONFIG, attributeFailures: true };
-
 // The Remediation Section used to be gated on a Case Type declaring an
 // `actions`-typed Issue Capture Field. Tracking moved to
 // `answer.remediationStatus` and `'actions'` is no longer declarable, so the
@@ -127,18 +124,19 @@ test('CaseMachine lifecycle capabilities freeze at the reportable milestone', ()
   assert.equal(machineFor('Completed').canComplete, false);
 });
 
-test('CaseMachine attribution freezes at reportable while remediation selection follows Issues edit access', () => {
-  assert.equal(machineFor('In-progress', ATTRIBUTE_CONFIG).canAttribute, true);
-  assert.equal(machineFor('In-progress', ATTRIBUTE_CONFIG).canCapture, true);
+test('CaseMachine Issues editing needs no Case Type opt-in and freezes at reportable', () => {
+  // No configuration flag stands between a Case Type and its Issue Capture
+  // Fields: the Assigned Reviewer of a pre-reportable Case may edit them.
+  assert.equal(machineFor('In-progress').canEditIssues, true);
+  assert.equal(machineFor('Actions In Progress').canEditIssues, false);
+  assert.equal(machineFor('Completed').canEditIssues, false);
+
+  // Someone else's Case: the Issues tab is not theirs to edit.
   assert.equal(
-    machineFor('Actions In Progress', ATTRIBUTE_CONFIG).canAttribute,
+    machineFor('In-progress', EMPTY_CONFIG, { assignedReviewer: 'u9' })
+      .canEditIssues,
     false
   );
-  assert.equal(machineFor('Completed', ATTRIBUTE_CONFIG).canAttribute, false);
-
-  assert.equal(machineFor('In-progress').canSelectRemediation, true);
-  assert.equal(machineFor('Actions In Progress').canSelectRemediation, false);
-  assert.equal(machineFor('Completed').canSelectRemediation, false);
 });
 
 test('CaseMachine permits the final close only for the Assigned Reviewer of an Actions In Progress Case', () => {

@@ -185,8 +185,13 @@ test('complaints: every capture field is a supported type with options for choic
   }
 });
 
-test('complaints: attributes failures to a person', () => {
-  assert.equal(config.attributeFailures, true);
+test('complaints: attributes failures through a tagged person capture field', () => {
+  const fields = (config.captureGroups ?? []).flatMap((group) => group.fields);
+  const attribution = fields.filter(
+    (field) => field.role === 'attributedParty'
+  );
+  assert.equal(attribution.length, 1);
+  assert.equal(attribution[0].type, 'person');
 });
 
 // --- Section / appeal / outcome config ---

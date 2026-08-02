@@ -981,41 +981,6 @@ test('checkCaseTypes fails a `required` that is not a boolean', async () => {
   assert.match(failures[0].message, /required/);
 });
 
-test('checkCaseTypes fails a `required` field the Case Type gives nobody a way to fill', async () => {
-  const failures = await captureFailures([
-    { key: 'rootCause', label: 'Root cause', type: 'text', required: true },
-  ]);
-
-  assert.equal(failures.length, 1);
-  assert.match(failures[0].message, /rootCause/);
-  assert.match(failures[0].message, /attributeFailures/);
-
-  const editable = await checkCaseTypes({
-    caseTypes: [
-      demoEntry(
-        demoConfig({
-          attributeFailures: true,
-          captureGroups: [
-            {
-              key: 'g1',
-              label: 'Group one',
-              fields: [
-                {
-                  key: 'rootCause',
-                  label: 'Root cause',
-                  type: 'text',
-                  required: true,
-                },
-              ],
-            },
-          ],
-        })
-      ),
-    ],
-  });
-  assert.deepEqual(editable, [], joined(editable));
-});
-
 test('checkCaptureGroups fails a showWhen comparing a person by value', async () => {
   const person = { key: 'owner', label: 'Owner', type: 'person' };
 

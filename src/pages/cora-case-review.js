@@ -26,7 +26,6 @@ import { createAppealEffects } from './cora-case-review/appeal-effects.js';
 import { createDebouncedPeopleSearch } from './cora-case-review/people-search-effects.js';
 import {
   answerEdited,
-  failureAttributed,
   issueCaptured,
 } from './cora-case-review/answer-actions.js';
 import { SECTION_PANELS } from './cora-case-review/section-panels.js';
@@ -75,7 +74,6 @@ import {
  * @property {boolean} conversationHidden
  * @property {boolean} completionPending
  * @property {Record<string, Map<string, boolean>>} captureCollapsed
- * @property {Record<string, { query: string, people: import('../sharepoint-client.js').PersonResult[] }>} attributionSearch
  * @property {Record<string, Record<string, { query: string, people: import('../sharepoint-client.js').PersonResult[] }>>} captureSearch
  *   Per failed Answer, per `person` Issue Capture Field: the open people search.
  *   Nested rather than keyed by a joined string so a panel can hand one
@@ -108,7 +106,6 @@ export function createInitialCaseReviewState(chrome, panelMode) {
         conversationHidden: true,
         completionPending: false,
         captureCollapsed: {},
-        attributionSearch: {},
         captureSearch: {},
         responsiblePartySearch: { query: '', people: [] },
         snapshot: null,
@@ -258,32 +255,6 @@ export function caseReviewReducer(state, action) {
         [action.questionId]: collapsed,
       },
     });
-  }
-  if (action.type === 'case/attribution-search-input') {
-    return patchRoute(state, 'caseReview', {
-      attributionSearch: {
-        ...route.attributionSearch,
-        [action.questionId]: { query: action.query, people: [] },
-      },
-    });
-  }
-  if (action.type === 'case/attribution-search-results') {
-    const current = route.attributionSearch[action.questionId];
-    // Identity guard: results for a query the reviewer has typed past.
-    if (!current || current.query !== action.query) return state;
-    return patchRoute(state, 'caseReview', {
-      attributionSearch: {
-        ...route.attributionSearch,
-        [action.questionId]: { query: action.query, people: action.people },
-      },
-    });
-  }
-  if (action.type === 'case/attribution-search-cleared') {
-    // Identity guard: clearing a search that is not open.
-    if (!(action.questionId in route.attributionSearch)) return state;
-    const attributionSearch = { ...route.attributionSearch };
-    delete attributionSearch[action.questionId];
-    return patchRoute(state, 'caseReview', { attributionSearch });
   }
   if (action.type === 'case/capture-search-input') {
     return patchRoute(state, 'caseReview', {
@@ -526,19 +497,6 @@ export function createRouteSlice(params, context) {
     dispatch: (action) => dispatch(action),
   });
   // Built here for the same reason as the effects above.
-  // Keyed by Question id: each Question's attribution picker debounces alone.
-  const attributionPeopleSearch = createDebouncedPeopleSearch({
-    client: context.client,
-    isActive: () => isSliceActive(),
-    onResults: (questionId, query, people) => {
-      dispatch({
-        type: 'case/attribution-search-results',
-        questionId,
-        query,
-        people,
-      });
-    },
-  });
   // One debounce per person Issue Capture Field per failed Answer, so two
   // pickers open at once do not share a timer. The debounce map is flat, so the
   // two halves are joined with a `:` — a Question Definition id may not contain
@@ -580,18 +538,6 @@ export function createRouteSlice(params, context) {
    *   completion: HTMLElement,
    * }} */
   let shell = null;
-
-  /** @param {string} questionId */
-  function clearAttributionSearch(questionId) {
-    attributionPeopleSearch.clear(questionId);
-    dispatch({ type: 'case/attribution-search-cleared', questionId });
-  }
-
-  /** @param {string} questionId @param {string} query */
-  function requestAttributionSearch(questionId, query) {
-    dispatch({ type: 'case/attribution-search-input', questionId, query });
-    attributionPeopleSearch.request(questionId, query);
-  }
 
   /** @param {string} questionId @param {string} fieldKey */
   function captureSearchKey(questionId, fieldKey) {
@@ -780,19 +726,6 @@ export function createRouteSlice(params, context) {
         })
       );
 
-    /** @param {string} questionId @param {{ loginName: string, displayName: string } | null} party */
-    const selectAttribution = (questionId, party) => {
-      editAnswers(
-        failureAttributed({
-          answers: currentAnswers,
-          questionId,
-          attributedParty: party,
-          canAttribute: snapshot.machine?.canAttribute ?? false,
-        })
-      );
-      clearAttributionSearch(questionId);
-    };
-
     /**
      * The one write path for every Issue Capture Field, whatever its type: a
      * typed string, a chosen person, or the clearing of either. The search
@@ -811,7 +744,7 @@ export function createRouteSlice(params, context) {
           questionId,
           fieldKey,
           value,
-          canCapture: snapshot.machine?.canCapture ?? false,
+          canEditIssues: snapshot.machine?.canEditIssues ?? false,
         })
       );
       clearCaptureSearch(questionId, fieldKey);
@@ -819,13 +752,13 @@ export function createRouteSlice(params, context) {
 
     /** @param {{ loginName: string, displayName: string }} party */
     const selectResponsibleParty = (party) => {
-      if (!snapshot.machine?.canSelectRemediation) return;
+      if (!snapshot.machine?.canEditIssues) return;
       save.responsiblePartyChanged(party.loginName, party.displayName);
       clearResponsiblePartySearch();
     };
 
     // The panel renderers' half of the contract. Rebuilt per render because
-    // `onAnswer` and `selectAttribution` close over this render's snapshot;
+    // `onAnswer` and `captureEdited` close over this render's snapshot;
     // `currentAnswers` stays a getter so a memoised card's surviving callback
     // still reads the last Answers *written*, not the last ones drawn.
     /** @type {import('./cora-case-review/section-panels.js').PanelActions} */
@@ -834,8 +767,6 @@ export function createRouteSlice(params, context) {
       currentAnswers: () => currentAnswers,
       editAnswers,
       onAnswer,
-      selectAttribution,
-      requestAttributionSearch,
       captureEdited,
       requestCaptureSearch,
       selectResponsibleParty,
@@ -1123,7 +1054,6 @@ export function createRouteSlice(params, context) {
         })
         .catch(ignoreAbortError);
       return () => {
-        attributionPeopleSearch.dispose();
         capturePeopleSearch.dispose();
         responsiblePartyPeopleSearch.dispose();
         questionsView.clear();

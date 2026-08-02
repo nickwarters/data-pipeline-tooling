@@ -299,39 +299,20 @@ test('materializeRemediationActions: returns answer unchanged when question has 
   assert.deepEqual(out, ans);
 });
 
-test('materializeRemediationActions: strips attributedParty when answer becomes passing', () => {
+test('materializeRemediationActions: strips both capture and remediationActions when answer becomes passing', () => {
   const stale = {
     value: 'Yes',
-    attributedParty: { loginName: 'dev\\alex', displayName: 'Alex Doe' },
-  };
-  const out = materializeRemediationActions(Q_FAIL_NO, stale);
-  assert.equal('attributedParty' in out, false);
-});
-
-test('materializeRemediationActions: strips both attributedParty and remediationActions when answer becomes passing', () => {
-  const stale = {
-    value: 'Yes',
-    attributedParty: { loginName: 'dev\\alex', displayName: 'Alex Doe' },
+    capture: {
+      attributedTo: { loginName: 'dev\\alex', displayName: 'Alex Doe' },
+    },
     remediationActions: [{ id: 'q-needs-ra-0', text: 'Retrain agent.' }],
   };
   const out = materializeRemediationActions(Q_FAIL_NO, stale);
-  assert.equal('attributedParty' in out, false);
+  assert.equal('capture' in out, false);
   assert.equal('remediationActions' in out, false);
 });
 
-test('materializeRemediationActions: retains attributedParty on a still-failing answer', () => {
-  const ans = {
-    value: 'No',
-    attributedParty: { loginName: 'dev\\alex', displayName: 'Alex Doe' },
-  };
-  const out = materializeRemediationActions(Q_FAIL_NO, ans);
-  assert.deepEqual(out.attributedParty, {
-    loginName: 'dev\\alex',
-    displayName: 'Alex Doe',
-  });
-});
-
-test('materializeRemediationActions: retains attributedParty on a still-failing answer with no remediationActions defined', () => {
+test('materializeRemediationActions: retains capture on a still-failing answer with no remediationActions defined', () => {
   /** @type {QuestionDefinition} */
   const q = {
     id: 'q-simple',
@@ -343,13 +324,10 @@ test('materializeRemediationActions: retains attributedParty on a still-failing 
   };
   const ans = {
     value: 'No',
-    attributedParty: { loginName: 'dev\\alex', displayName: 'Alex Doe' },
+    capture: { rootCause: 'Rushed' },
   };
   const out = materializeRemediationActions(q, ans);
-  assert.deepEqual(out.attributedParty, {
-    loginName: 'dev\\alex',
-    displayName: 'Alex Doe',
-  });
+  assert.deepEqual(out.capture, { rootCause: 'Rushed' });
 });
 
 test('materializeRemediationActions: strips capture when answer becomes passing', () => {

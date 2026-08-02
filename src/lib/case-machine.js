@@ -97,27 +97,12 @@ export class CaseMachine {
     );
   }
 
-  get canAttribute() {
-    return (
-      this.config.attributeFailures === true &&
-      this.access.issues === 'edit' &&
-      !this.reportable
-    );
-  }
-
-  get canCapture() {
-    return this.canAttribute;
-  }
-
   /**
-   * Whether the viewer may pick which configured Remediation Actions apply to a
-   * failed Answer and add a free-form action — free-form is the default, though
-   * the Question Definition can withhold it.
-   * Unlike `canAttribute`/`canCapture`, this is not gated on the Case Type
-   * opting into `attributeFailures`: any editor of the Issues tab (the Assigned
-   * Reviewer on a not-yet-reportable Case) may select actions.
+   * Whether the viewer may edit what the Issues tab records against a failed
+   * Answer. No Case Type opt-in stands in front of this gate: a Case Type that
+   * declares nothing to capture simply renders nothing to edit.
    */
-  get canSelectRemediation() {
+  get canEditIssues() {
     return this.access.issues === 'edit' && !this.reportable;
   }
 

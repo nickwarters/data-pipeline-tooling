@@ -196,7 +196,6 @@ const config = {{
   // independent grant that a later rename would not move. Add
   // `eligibleGroups` only for a genuinely EXTRA group, never the org-wide
   // `Reviewers`: a brand-new Case Type must not be visible to every Reviewer.
-  attributeFailures: true,
   // TODO(case-type): Replace starter Case Details fields with this Case Type's source fields.
   detailFields: [
     {{ key: 'reference', label: '{js_display} reference' }},

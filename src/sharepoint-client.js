@@ -54,7 +54,7 @@
  * serialised — undecided blocks completion, decided-no does not, and a `false`
  * written into the JSON blob reads the same as a field that was never there.
  *
- * @typedef {{ value: string | string[], justification?: string, remediationRequired?: 'yes' | 'no', remediationActions?: Array<{id: string, text: string}>, freeFormRemediation?: string, remediationStatus?: RemediationStatus, attributedParty?: { loginName: string, displayName: string }, capture?: Record<string, string | { loginName: string, displayName: string } | Array<string | RemediationAction>> }} Answer
+ * @typedef {{ value: string | string[], justification?: string, remediationRequired?: 'yes' | 'no', remediationActions?: Array<{id: string, text: string}>, freeFormRemediation?: string, remediationStatus?: RemediationStatus, capture?: Record<string, string | { loginName: string, displayName: string } | Array<string | RemediationAction>> }} Answer
  */
 
 /**
@@ -530,7 +530,6 @@
  * breachWindowHours?: number,
  * remediationSlaWorkingDays?: number,
  * maxInProgressCases?: number,
- * attributeFailures?: boolean,
  * remediationStatuses?: RemediationStatusValue[],
  * captureGroups?: CaptureGroup[],
  * generalQuestions?: GeneralQuestionField[],

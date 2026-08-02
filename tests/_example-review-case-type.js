@@ -31,7 +31,6 @@ const config = {
   actionCentreSlaDays: { awaitingFrontline: 30 },
   breachWindowHours: 48,
   remediationSlaWorkingDays: 5,
-  attributeFailures: true,
   // Case Type-specific Case Details fields. Values live
   // in the CaseRow.details JSON blob keyed by `key`; the Case Details and
   // Summary Sections render them read-only after the common Case-row fields.

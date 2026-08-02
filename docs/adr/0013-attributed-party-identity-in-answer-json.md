@@ -4,10 +4,11 @@ Date: 2026-06-04
 
 ## Status
 
-Accepted in part. The bare account-name identity and User Profile resolution
-decisions remain current. [ADR-0020](./0020-unified-issue-capture-engine.md)
-supersedes the dedicated `attributedParty` field with a typed person field in
-`Answer.capture`.
+Superseded by [ADR-0020](./0020-unified-issue-capture-engine.md). The bare
+account-name identity and the User Profile resolution decision survive
+unchanged, but they now describe a `person` **Issue Capture Field** stored in
+`Answer.capture` — the dedicated `attributedParty` Answer property and the
+`attributeFailures` Case Type flag below are both gone from the code.
 
 ## Context
 

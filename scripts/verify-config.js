@@ -291,14 +291,6 @@ function checkCaptureGroups(slug, file, config) {
           `Issue Capture Field "${field.key}" declares a non-boolean \`required\`, which the completion gate would read as always required`
         );
       }
-      // Capture is only editable on a Case Type that opts into attribution, so
-      // a required field on one that does not can never be filled — and the
-      // completion gate would hold every failing Case open forever.
-      if (field.required === true && config?.attributeFailures !== true) {
-        fail(
-          `Issue Capture Field "${field.key}" is \`required\` but the Case Type does not set \`attributeFailures\`, so its capture groups render read-only and no Case with a failed Answer could ever be completed`
-        );
-      }
     }
     failures.push(...checkCaptureShowWhen(slug, file, group));
   }

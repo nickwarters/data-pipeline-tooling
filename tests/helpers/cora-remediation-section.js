@@ -8,12 +8,8 @@ import { installDom, findByClass, findAllByClass } from '../_dom-stub.js';
 installDom();
 
 // ===== IMPORTS (after stubs) =====
-const {
-  RemediationSection,
-  renderRemediationAttribution,
-  renderRemediationCapture,
-  renderRemediationItem,
-} = await import('../../src/pages/cora-case-review/remediation-view.js');
+const { RemediationSection, renderRemediationCapture, renderRemediationItem } =
+  await import('../../src/pages/cora-case-review/remediation-view.js');
 /** @typedef {Parameters<typeof RemediationSection>[0]} RemediationSectionProps */
 
 /**
@@ -28,27 +24,23 @@ export class CORARemediationSection extends HTMLElement {
     this.catalogue = [];
     /** @type {Record<string, Answer>} */
     this.answers = {};
-    this.attributeFailures = false;
     /** @type {{loginName: string, displayName: string} | null} */
     this.responsibleParty = null;
-    this.canAttribute = false;
     /** @type {import('../../src/sharepoint-client.js').CaptureGroup[]} */
     this.captureGroups = [];
-    this.canCapture = false;
+    this.canEditIssues = false;
     /** @type {Record<string, Record<string, { query: string, people: any[] }>>} */
     this.captureSearch = {};
-    this.canSelectRemediation = false;
   }
 
   connectedCallback() {
     this._render();
   }
 
-  /** @param {QuestionDefinition[]} catalogue @param {Record<string, Answer>} answers @param {boolean} [attributeFailures] */
-  update(catalogue, answers, attributeFailures = false) {
+  /** @param {QuestionDefinition[]} catalogue @param {Record<string, Answer>} answers */
+  update(catalogue, answers) {
     this.catalogue = catalogue;
     this.answers = answers;
-    this.attributeFailures = attributeFailures;
     this._render();
   }
 
@@ -63,11 +55,6 @@ export class CORARemediationSection extends HTMLElement {
   /** @param {QuestionDefinition} question */
   _renderItem(question) {
     return renderRemediationItem(this._buildProps(), question);
-  }
-
-  /** @param {HTMLElement} node @param {QuestionDefinition} question */
-  _renderAttribution(node, question) {
-    renderRemediationAttribution(this._buildProps(), node, question);
   }
 
   /** @param {HTMLElement} node @param {QuestionDefinition} question */
@@ -86,16 +73,12 @@ export class CORARemediationSection extends HTMLElement {
       heading: 'Issues',
       catalogue: this.catalogue,
       answers: this.answers,
-      attributeFailures: this.attributeFailures,
       responsibleParty: this.responsibleParty,
-      canAttribute: this.canAttribute,
       captureGroups: this.captureGroups,
-      canCapture: this.canCapture,
       captureCollapsed: {},
-      attributionSearch: {},
       captureSearch: this.captureSearch,
       responsiblePartySearch: { query: '', people: [] },
-      canSelectRemediation: this.canSelectRemediation,
+      canEditIssues: this.canEditIssues,
       dispatchResponsibleParty() {},
       dispatchResponsiblePartySearch() {},
       dispatchCapture: (questionId, fieldKey, value) =>
@@ -103,9 +86,6 @@ export class CORARemediationSection extends HTMLElement {
       dispatchCaptureSearch: (questionId, fieldKey, query) =>
         this._emit('cora-capture-search', { questionId, fieldKey, query }),
       dispatchCaptureToggle() {},
-      dispatchAttribute: (questionId, attributedParty) =>
-        this._emit('cora-attribute', { questionId, attributedParty }),
-      dispatchAttributeSearch() {},
       dispatchRemediationAction: (questionId, action, selected) =>
         this._emit('cora-remediation-action', {
           questionId,

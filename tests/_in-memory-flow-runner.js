@@ -249,7 +249,7 @@ export function createInMemoryFlowRunner(state, opts = {}) {
             questionId: action.questionId,
             fieldKey: action.fieldKey,
             value: action.value,
-            canCapture: loader.machine?.canCapture ?? false,
+            canEditIssues: loader.machine?.canEditIssues ?? false,
           })
         );
         await flushCurrentCase();
@@ -262,7 +262,7 @@ export function createInMemoryFlowRunner(state, opts = {}) {
             answers,
             questionId: action.questionId,
             required: action.required,
-            canSelectRemediation: loader.machine?.canSelectRemediation ?? false,
+            canEditIssues: loader.machine?.canEditIssues ?? false,
           })
         );
         await flushCurrentCase();
@@ -276,7 +276,7 @@ export function createInMemoryFlowRunner(state, opts = {}) {
             questionId: action.questionId,
             action: action.action,
             selected: action.selected ?? true,
-            canSelectRemediation: loader.machine?.canSelectRemediation ?? false,
+            canEditIssues: loader.machine?.canEditIssues ?? false,
           })
         );
         await flushCurrentCase();
@@ -289,7 +289,7 @@ export function createInMemoryFlowRunner(state, opts = {}) {
             answers,
             questionId: action.questionId,
             value: action.value,
-            canSelectRemediation: loader.machine?.canSelectRemediation ?? false,
+            canEditIssues: loader.machine?.canEditIssues ?? false,
           })
         );
         await flushCurrentCase();

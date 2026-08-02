@@ -2,7 +2,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
-import { fireEvent, getByRole } from './helpers/semantic-dom.js';
+import {
+  fireEvent,
+  getByRole,
+  queryAllByRole,
+} from './helpers/semantic-dom.js';
 
 installDom();
 
@@ -39,7 +43,7 @@ function issuesPanel(options = {}) {
     snapshot: {
       catalogue: CATALOGUE,
       answers: { q1: { value: 'No', capture: options.capture ?? {} } },
-      machine: { canCapture: true, canAttribute: false },
+      machine: { canEditIssues: true },
       access: {},
       sectionLabels: resolveSectionLabels(complaintsConfig),
     },
@@ -47,7 +51,6 @@ function issuesPanel(options = {}) {
     config: complaintsConfig,
     route: {
       captureCollapsed: {},
-      attributionSearch: {},
       captureSearch: options.captureSearch ?? {},
       responsiblePartySearch: { query: '', people: [] },
     },
@@ -66,6 +69,21 @@ function issuesPanel(options = {}) {
   root.append(...nodes);
   return { root, calls };
 }
+
+test('Issues tab: a failed Answer offers one person control, not two', () => {
+  // The capture field is now the only person control on a failed Answer.
+  const { root } = issuesPanel();
+  // Scoped to the failure itself: the Responsible Party picker at the foot of
+  // the tab is Case-level and is a different question.
+  const item = root.querySelector('.cora-remediation-item');
+
+  assert.deepEqual(
+    queryAllByRole(item, 'combobox', { name: /Search people/ }).map((el) =>
+      el.getAttribute('aria-label')
+    ),
+    ['Search people for Attributed to']
+  );
+});
 
 test('Issues tab: a Complaints person capture field is a people picker', () => {
   const { root, calls } = issuesPanel({

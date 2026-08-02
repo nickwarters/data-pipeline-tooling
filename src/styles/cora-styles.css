@@ -1286,44 +1286,15 @@
   margin: 0 0 var(--cora-space-2);
 }
 
-.cora-remediation-attributed-party {
-  font-size: var(--cora-font-size-sm);
-  font-weight: var(--cora-font-weight-medium);
-  color: var(--cora-color-text-muted);
-  margin: 0 0 var(--cora-space-2);
-}
+/* ── Person Issue Capture Field (chip + clear) ────────────────────────────── */
 
-/* ── Attribute menu (compact icon/chip + popover) ─────────────────────────── */
-
-/* Inline failure-attribution control: always visible under a failed
-   Answer's remediation — no disclosure button, no floating popover. */
-.cora-attribute-menu {
-  display: block;
-  margin: var(--cora-space-2) 0;
-  padding: var(--cora-space-3);
-  background: var(--cora-color-surface);
-  border: 1px solid var(--cora-color-border);
-  border-radius: var(--cora-radius-md);
-}
-
-.cora-attribute-title {
-  margin: 0 0 var(--cora-space-2);
-  font-size: var(--cora-font-size-xs);
-  font-weight: var(--cora-font-weight-semibold);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--cora-color-text-muted);
-}
-
-/* Set: the attributed person named, with a clear button to re-attribute. */
-.cora-attribute-selected,
+/* Set: the chosen person named, with a clear button to choose again. */
 .cora-capture-person-selected {
   display: flex;
   align-items: center;
   gap: var(--cora-space-2);
 }
 
-.cora-attribute-current,
 .cora-capture-person-current {
   display: inline-flex;
   align-items: center;
@@ -1337,12 +1308,10 @@
   border-radius: var(--cora-radius-pill, 999px);
 }
 
-.cora-attribute-current::before,
 .cora-capture-person-current::before {
   content: '\1F464'; /* 👤 */
 }
 
-.cora-attribute-clear,
 .cora-capture-person-clear {
   display: inline-flex;
   padding: var(--cora-space-1);
@@ -1356,33 +1325,9 @@
   cursor: pointer;
 }
 
-.cora-attribute-clear:hover,
-.cora-attribute-clear:focus-visible,
 .cora-capture-person-clear:hover,
 .cora-capture-person-clear:focus-visible {
   color: var(--cora-color-danger);
-  outline: none;
-}
-
-.cora-attribute-responsible {
-  display: block;
-  width: 100%;
-  margin: 0 0 var(--cora-space-2);
-  padding: var(--cora-space-2) var(--cora-space-3);
-  font: inherit;
-  font-size: var(--cora-font-size-sm);
-  font-weight: var(--cora-font-weight-medium);
-  text-align: left;
-  color: var(--cora-color-on-surface);
-  background: var(--cora-color-surface-2);
-  border: 1px solid var(--cora-color-border);
-  border-radius: var(--cora-radius-sm);
-  cursor: pointer;
-}
-
-.cora-attribute-responsible:hover,
-.cora-attribute-responsible:focus-visible {
-  border-color: var(--cora-color-accent);
   outline: none;
 }
 

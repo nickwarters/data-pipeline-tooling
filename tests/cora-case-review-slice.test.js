@@ -236,77 +236,6 @@ function renderShippedState(
   };
 }
 
-/**
- * Mount the shipped Issues panel with one attributable failed Answer while the
- * Case load remains pending, so attribution-search behavior is exercised only
- * through the route's public render/start seams.
- * @param {(query: string) => Promise<any[]>} searchPeople
- */
-function renderAttributionSearchRoute(searchPeople) {
-  const failedSnapshot = snapshot();
-  failedSnapshot.catalogue[0].failureValues = ['No'];
-  failedSnapshot.answers = { q1: { value: 'No' } };
-  failedSnapshot.caseRow = {
-    ...failedSnapshot.caseRow,
-    answers: failedSnapshot.answers,
-  };
-  failedSnapshot.config.attributeFailures = true;
-  failedSnapshot.machine = {
-    canAttribute: true,
-    canCapture: false,
-    canSelectRemediation: false,
-    canToggleConversation: false,
-  };
-  let state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: failedSnapshot }
-  );
-  state = caseReviewReducer(state, {
-    type: 'case/tab-selected',
-    id: 'issues',
-  });
-  const never = new Promise(() => {});
-  const client = /** @type {any} */ ({
-    getCase: () => never,
-    getCurrentUser: async () => chrome.currentUser,
-    getExportHash: async () => null,
-    resolveUsers: async () => ({}),
-    searchPeople,
-  });
-  const saveQueue = new SaveQueue(client, { debounceMs: 0 });
-  const slice = createRouteSlice(
-    { caseType: 'example-review', id: 'c1' },
-    /** @type {any} */ ({ client, saveQueue, chrome })
-  );
-  const container = document.createElement('main');
-  // The adapter's mount lifetime, mirrored here so disposal exercises the
-  // route's `isActive()` guard rather than only its timer/queue clearing.
-  let active = true;
-  /** @type {any} */
-  let tools;
-  tools = {
-    render,
-    dispatch(/** @type {any} */ action) {
-      state = slice.reducer(state, action);
-      slice.render(container, state, tools);
-    },
-    listen() {},
-    isActive: () => active,
-  };
-  slice.render(container, state, tools);
-  const teardown = slice.start(tools);
-  return {
-    container,
-    dispose() {
-      active = false;
-      teardown?.();
-    },
-    get state() {
-      return state;
-    },
-  };
-}
-
 test('state: route state owns loading, save status, and selected tab under routes.caseReview', () => {
   const initial = createInitialCaseReviewState(chrome, 'popover');
   assert.equal(initial.chrome, chrome);
@@ -315,7 +244,6 @@ test('state: route state owns loading, save status, and selected tab under route
     conversationHidden: true,
     completionPending: false,
     captureCollapsed: {},
-    attributionSearch: {},
     captureSearch: {},
     responsiblePartySearch: { query: '', people: [] },
     panelMode: 'popover',
@@ -422,66 +350,6 @@ test('state: expanding a capture group preserves an override of a collapsed case
   );
 });
 
-test('state: attribution search query and results stay independent per failed Question', () => {
-  let state = createInitialCaseReviewState(chrome, 'popover');
-  state = caseReviewReducer(state, {
-    type: 'case/attribution-search-input',
-    questionId: 'q1',
-    query: 'Jane',
-  });
-  state = caseReviewReducer(state, {
-    type: 'case/attribution-search-input',
-    questionId: 'q2',
-    query: 'Alex',
-  });
-  state = caseReviewReducer(state, {
-    type: 'case/attribution-search-results',
-    questionId: 'q1',
-    query: 'Jane',
-    people: [{ loginName: 'jsmith', displayName: 'Jane Smith' }],
-  });
-
-  assert.deepEqual(state.routes.caseReview.attributionSearch, {
-    q1: {
-      query: 'Jane',
-      people: [{ loginName: 'jsmith', displayName: 'Jane Smith' }],
-    },
-    q2: { query: 'Alex', people: [] },
-  });
-  assert.equal(
-    caseReviewReducer(state, {
-      type: 'case/attribution-search-results',
-      questionId: 'missing',
-      query: 'Nobody',
-      people: [],
-    }),
-    state
-  );
-  const cleared = caseReviewReducer(state, {
-    type: 'case/attribution-search-cleared',
-    questionId: 'q1',
-  });
-  assert.deepEqual(cleared.routes.caseReview.attributionSearch, {
-    q2: { query: 'Alex', people: [] },
-  });
-  assert.equal(
-    caseReviewReducer(state, {
-      type: 'case/attribution-search-results',
-      questionId: 'q2',
-      query: 'Stale',
-      people: [],
-    }),
-    state
-  );
-  assert.equal(
-    caseReviewReducer(state, {
-      type: 'case/attribution-search-cleared',
-      questionId: 'missing',
-    }),
-    state
-  );
-});
-
 test('state: capture person search is held per failed Question and per field', () => {
   let state = createInitialCaseReviewState(chrome, 'popover');
   state = caseReviewReducer(state, {
@@ -554,8 +422,10 @@ test('state: capture person search is held per failed Question and per field', (
 });
 
 /**
- * The same mount as the attribution harness, over a Case Type whose capture
- * groups declare a `person` field and a Reviewer who may capture.
+ * Mount the shipped Issues panel over a Case Type whose capture groups declare
+ * a `person` field, with a Reviewer who may edit the tab and the Case load left
+ * pending, so the person search is exercised only through the route's public
+ * render/start seams.
  *
  * @param {(query: string) => Promise<any[]>} searchPeople
  */
@@ -575,9 +445,7 @@ function renderCaptureSearchRoute(searchPeople) {
     },
   ];
   failedSnapshot.machine = {
-    canAttribute: false,
-    canCapture: true,
-    canSelectRemediation: false,
+    canEditIssues: true,
     canToggleConversation: false,
   };
   let state = caseReviewReducer(
@@ -671,158 +539,6 @@ test('route: a person capture field searches, records the person, and closes its
   route.dispose();
 });
 
-test('route: attribution search is debounced and renders route-owned results', async (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
-  /** @type {string[]} */
-  const searches = [];
-  const route = renderAttributionSearchRoute(async (query) => {
-    searches.push(query);
-    return [{ loginName: 'jsmith', displayName: 'Jane Smith' }];
-  });
-  const input = getByRole(route.container, 'combobox', {
-    name: 'Search people',
-  });
-  input.value = 'Ja';
-  fireEvent(input, 'input');
-  const updatedInput = getByRole(route.container, 'combobox', {
-    name: 'Search people',
-  });
-  updatedInput.value = 'Jane';
-  fireEvent(updatedInput, 'input');
-
-  assert.equal(
-    route.state.routes.caseReview.attributionSearch.q1.query,
-    'Jane'
-  );
-  t.mock.timers.tick(199);
-  assert.deepEqual(searches, []);
-  t.mock.timers.tick(1);
-  await Promise.resolve();
-  await Promise.resolve();
-
-  assert.deepEqual(searches, ['Jane']);
-  assert.equal(
-    getByRole(route.container, 'option', { name: /Jane Smith/ }).textContent,
-    'Jane Smith — jsmith'
-  );
-  const clearedInput = getByRole(route.container, 'combobox', {
-    name: 'Search people',
-  });
-  clearedInput.value = '   ';
-  fireEvent(clearedInput, 'input');
-  t.mock.timers.tick(200);
-  assert.deepEqual(searches, ['Jane']);
-  route.dispose();
-});
-
-test('route: a stale attribution result cannot replace the latest query', async (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
-  /** @type {Record<string, (people: any[]) => void>} */
-  const resolveSearch = {};
-  const route = renderAttributionSearchRoute(
-    (query) =>
-      new Promise((resolve) => {
-        resolveSearch[query] = resolve;
-      })
-  );
-  let input = getByRole(route.container, 'combobox', {
-    name: 'Search people',
-  });
-  input.value = 'Jane';
-  fireEvent(input, 'input');
-  t.mock.timers.tick(200);
-
-  input = getByRole(route.container, 'combobox', { name: 'Search people' });
-  input.value = 'Janet';
-  fireEvent(input, 'input');
-  t.mock.timers.tick(200);
-  resolveSearch.Janet([{ loginName: 'jdoe', displayName: 'Janet Doe' }]);
-  await Promise.resolve();
-  await Promise.resolve();
-  resolveSearch.Jane([{ loginName: 'jsmith', displayName: 'Jane Smith' }]);
-  await Promise.resolve();
-  await Promise.resolve();
-
-  assert.equal(
-    route.state.routes.caseReview.attributionSearch.q1.query,
-    'Janet'
-  );
-  assert.equal(
-    getByRole(route.container, 'option', { name: /Janet Doe/ }).textContent,
-    'Janet Doe — jdoe'
-  );
-  assert.equal(route.container.textContent.includes('Jane Smith'), false);
-  route.dispose();
-});
-
-test('route: disposal clears attribution debounce and suppresses an in-flight result', async (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
-  /** @type {string[]} */
-  const searches = [];
-  const waiting = renderAttributionSearchRoute(async (query) => {
-    searches.push(query);
-    return [];
-  });
-  let input = getByRole(waiting.container, 'combobox', {
-    name: 'Search people',
-  });
-  input.value = 'Never sent';
-  fireEvent(input, 'input');
-  waiting.dispose();
-  t.mock.timers.tick(200);
-  assert.deepEqual(searches, []);
-
-  /** @type {(people: any[]) => void} */
-  let resolveSearch = () => {};
-  const inFlight = renderAttributionSearchRoute(
-    () =>
-      new Promise((resolve) => {
-        resolveSearch = resolve;
-      })
-  );
-  input = getByRole(inFlight.container, 'combobox', {
-    name: 'Search people',
-  });
-  input.value = 'Late';
-  fireEvent(input, 'input');
-  t.mock.timers.tick(200);
-  inFlight.dispose();
-  resolveSearch([{ loginName: 'late', displayName: 'Late Result' }]);
-  await Promise.resolve();
-  await Promise.resolve();
-
-  assert.deepEqual(
-    inFlight.state.routes.caseReview.attributionSearch.q1.people,
-    []
-  );
-});
-
-test('route: selecting the Responsible Party cancels that Question search', (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
-  /** @type {string[]} */
-  const searches = [];
-  const route = renderAttributionSearchRoute(async (query) => {
-    searches.push(query);
-    return [];
-  });
-  const input = getByRole(route.container, 'combobox', {
-    name: 'Search people',
-  });
-  input.value = 'Pending';
-  fireEvent(input, 'input');
-  fireEvent(
-    getByRole(route.container, 'button', {
-      name: 'Responsible Party — u2',
-    }),
-    'click'
-  );
-  t.mock.timers.tick(200);
-
-  assert.deepEqual(searches, []);
-  assert.equal(route.state.routes.caseReview.attributionSearch.q1, undefined);
-  route.dispose();
-});
-
 /**
  * Mount the shipped Issues panel with the Case-level Responsible Party picker
  * editable, so the field is exercised only through the route's public
@@ -838,9 +554,7 @@ function renderResponsiblePartyRoute(searchPeople) {
     responsibleParty: '',
   };
   editableSnapshot.machine = {
-    canAttribute: false,
-    canCapture: false,
-    canSelectRemediation: true,
+    canEditIssues: true,
     canToggleConversation: false,
   };
   let state = caseReviewReducer(
@@ -957,7 +671,7 @@ test('state: setting the Responsible Party advances the Case Row and leaves the 
   // from an optimistic edit would change the permission surface mid-session.
   const loaded = snapshot();
   loaded.caseRow = { ...loaded.caseRow, responsibleParty: '' };
-  loaded.machine = { canSelectRemediation: true };
+  loaded.machine = { canEditIssues: true };
   const state = caseReviewReducer(
     createInitialCaseReviewState(chrome, 'popover'),
     { type: 'case/load-finished', snapshot: loaded }
@@ -1664,39 +1378,6 @@ test('case page reducer: every identity guard returns the same state reference',
     'an unchanged save status must not re-render'
   );
 
-  const searching = caseReviewReducer(loaded, {
-    type: 'case/attribution-search-input',
-    questionId: 'q1',
-    query: 'ada',
-  });
-  assert.strictEqual(
-    caseReviewReducer(searching, {
-      type: 'case/attribution-search-results',
-      questionId: 'q1',
-      query: 'ad',
-      people: [{ id: 'u9' }],
-    }),
-    searching,
-    'results for a stale query must not re-render'
-  );
-  assert.strictEqual(
-    caseReviewReducer(searching, {
-      type: 'case/attribution-search-results',
-      questionId: 'q-other',
-      query: 'ada',
-      people: [],
-    }),
-    searching,
-    'results for a question with no open search must not re-render'
-  );
-  assert.strictEqual(
-    caseReviewReducer(loaded, {
-      type: 'case/attribution-search-cleared',
-      questionId: 'q1',
-    }),
-    loaded,
-    'clearing a search that is not open must not re-render'
-  );
   assert.strictEqual(
     caseReviewReducer(loaded, { type: 'case/conversation-toggled' }),
     loaded,
@@ -2862,7 +2543,7 @@ test('Notes effect: `fieldEdited` takes only the plain-text Case fields — a ty
    * its own load-time copy of the row, and every `machine.can*` guard reads
    * exactly `status` and `assignedReviewer` — so a caller writing either
    * through here would move the store's row while completion, capture,
-   * attribution and Remediation selection kept answering from the old one.
+   * capture and Remediation selection kept answering from the old one.
    *
    * The assertion here is `tsc`, not the runtime: each `@ts-expect-error`
    * fails the build with "Unused '@ts-expect-error' directive" the moment the
@@ -3352,24 +3033,6 @@ test('route: mock-mode store shell keeps Review working at the existing URL', as
 
   fireEvent(getByRole(container, 'tab', { name: 'Issues' }), 'click');
   const issuesPanel = container.querySelector('#case-panel-issues');
-  const responsibleParty = issuesPanel?.querySelector(
-    '.cora-attribute-responsible'
-  );
-  assert.ok(responsibleParty, 'Responsible Party quick-pick is rendered');
-  tools.dispatch({
-    type: 'case/attribution-search-input',
-    questionId: 'q-needs',
-    query: 'stale picker text',
-  });
-  assert.equal(
-    state.routes.caseReview.attributionSearch['q-needs'].query,
-    'stale picker text'
-  );
-  fireEvent(responsibleParty, 'click');
-  await saveQueue.whenIdle();
-  await flush();
-  assert.equal(state.routes.caseReview.attributionSearch['q-needs'], undefined);
-
   assert.equal(issuesPanel?.querySelector('cora-capture-groups'), null);
   const capture = /** @type {any} */ (
     issuesPanel?.querySelector('.cora-capture-input')
@@ -3421,10 +3084,6 @@ test('route: mock-mode store shell keeps Review working at the existing URL', as
   ]);
   assert.deepEqual(savedAnswer.capture, {
     rootCause: 'Agent rushed',
-  });
-  assert.deepEqual(savedAnswer.attributedParty, {
-    loginName: 'u2',
-    displayName: 'u2',
   });
   assert.equal(savedAnswer.freeFormRemediation, 'Coach the agent');
   assert.equal(savedAnswer.remediationRequired, 'yes');
@@ -3743,8 +3402,7 @@ test('route: a read-only Reviewer on a reportable Case writes no Answer', async 
 
     const snapshot = state.routes.caseReview.snapshot;
     assert.equal(snapshot?.access.questions, 'read-only');
-    assert.equal(snapshot?.machine?.canCapture, false);
-    assert.equal(snapshot?.machine?.canSelectRemediation, false);
+    assert.equal(snapshot?.machine?.canEditIssues, false);
 
     const option = /** @type {any} */ (
       container.querySelector('[data-focus-key="answer:q-welcome:0"]')
@@ -4464,7 +4122,7 @@ test('route: collapsing an Issue Capture Group dispatches the route’s toggle a
   const captureSnapshot = {
     ...base,
     access: { ...base.access, issues: 'edit' },
-    machine: { canCapture: true, canSelectRemediation: true },
+    machine: { canEditIssues: true },
     config: {
       ...base.config,
       captureGroups: [

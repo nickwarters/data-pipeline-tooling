@@ -81,8 +81,6 @@ import { resolveGeneralQuestionsPlacement } from '../../evaluators/general-quest
  * @property {() => Record<string, import('../../sharepoint-client.js').Answer>} currentAnswers
  * @property {(next: Record<string, import('../../sharepoint-client.js').Answer> | null) => void} editAnswers
  * @property {(questionId: string, value: string | string[]) => void} onAnswer
- * @property {(questionId: string, party: { loginName: string, displayName: string } | null) => void} selectAttribution
- * @property {(questionId: string, query: string) => void} requestAttributionSearch
  * @property {(questionId: string, fieldKey: string, value: import('../../evaluators/issue-capture.js').CaptureValue | null) => void} captureEdited
  * @property {(questionId: string, fieldKey: string, query: string) => void} requestCaptureSearch
  * @property {(party: { loginName: string, displayName: string }) => void} selectResponsibleParty
@@ -185,12 +183,12 @@ export const SECTION_PANELS = {
       onFieldInput: (field, value) => actions.save.fieldEdited(field, value),
     }),
 
-  issues: ({ snapshot, caseRow, config, route, dispatch, actions }) =>
-    RemediationSection({
+  issues: ({ snapshot, caseRow, config, route, dispatch, actions }) => {
+    const canEditIssues = snapshot.machine?.canEditIssues ?? false;
+    return RemediationSection({
       heading: snapshot.sectionLabels.issues.heading,
       catalogue: snapshot.catalogue,
       answers: snapshot.answers,
-      attributeFailures: config.attributeFailures === true,
       responsibleParty: caseRow.responsibleParty
         ? {
             loginName: caseRow.responsibleParty,
@@ -201,14 +199,11 @@ export const SECTION_PANELS = {
               caseRow.responsiblePartyDisplayName || caseRow.responsibleParty,
           }
         : null,
-      canAttribute: snapshot.machine?.canAttribute ?? false,
       captureGroups: config.captureGroups ?? [],
-      canCapture: snapshot.machine?.canCapture ?? false,
       captureCollapsed: route.captureCollapsed,
-      attributionSearch: route.attributionSearch,
       captureSearch: route.captureSearch,
       responsiblePartySearch: route.responsiblePartySearch,
-      canSelectRemediation: snapshot.machine?.canSelectRemediation ?? false,
+      canEditIssues,
       dispatchResponsibleParty: actions.selectResponsibleParty,
       dispatchResponsiblePartySearch: actions.requestResponsiblePartySearch,
       dispatchCapture: actions.captureEdited,
@@ -220,8 +215,6 @@ export const SECTION_PANELS = {
           groupKey,
           collapsed,
         }),
-      dispatchAttribute: actions.selectAttribution,
-      dispatchAttributeSearch: actions.requestAttributionSearch,
       dispatchRemediationAction: (questionId, action, selected) =>
         actions.editAnswers(
           remediationActionToggled({
@@ -229,8 +222,7 @@ export const SECTION_PANELS = {
             questionId,
             action,
             selected,
-            canSelectRemediation:
-              snapshot.machine?.canSelectRemediation ?? false,
+            canEditIssues,
           })
         ),
       dispatchRemediationFreeForm: (questionId, value) =>
@@ -239,8 +231,7 @@ export const SECTION_PANELS = {
             answers: actions.currentAnswers(),
             questionId,
             value,
-            canSelectRemediation:
-              snapshot.machine?.canSelectRemediation ?? false,
+            canEditIssues,
           })
         ),
       dispatchRemediationRequired: (questionId, required) =>
@@ -249,11 +240,11 @@ export const SECTION_PANELS = {
             answers: actions.currentAnswers(),
             questionId,
             required,
-            canSelectRemediation:
-              snapshot.machine?.canSelectRemediation ?? false,
+            canEditIssues,
           })
         ),
-    }),
+    });
+  },
 
   remediation: ({ snapshot, caseRow, config, route, dispatch, actions }) =>
     RemediationTracking({

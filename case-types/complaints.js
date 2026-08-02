@@ -32,7 +32,6 @@ const config = {
   // group kept the access the rename was supposed to move. `eligibleGroups` is
   // for genuinely extra groups only.
   maxInProgressCases: 3,
-  attributeFailures: true,
   // Case Type-specific Case Details fields. Values live in the
   // CaseRow.details JSON blob keyed by `key`.
   detailFields: [
@@ -116,6 +115,10 @@ const config = {
           key: 'attributedTo',
           label: 'Attributed to',
           type: 'person',
+          // The semantic tag reporting will look for, so a cross-Case-Type
+          // query finds who a failure was attributed to without knowing this
+          // Case Type's field key.
+          role: 'attributedParty',
         },
       ],
     },

@@ -3,7 +3,6 @@ import { h } from '../../lib/html.js';
 import { EmptyState } from '../../lib/empty-state.js';
 import { evaluate } from '../../evaluators/applicability-evaluator.js';
 import { isFailure } from '../../evaluators/failure-evaluator.js';
-import { AttributeMenu } from '../../components/sections/cora-attribute-menu.js';
 import { PeoplePicker } from '../../components/base/cora-people-picker.js';
 import { CaptureGroups } from '../../components/sections/cora-capture-groups.js';
 
@@ -17,25 +16,22 @@ import { normaliseConfiguredActions } from '../../evaluators/configured-outcome.
  * @typedef {object} RemediationSectionProps
  * @property {QuestionDefinition[]} catalogue
  * @property {Record<string, Answer>} answers
- * @property {boolean} attributeFailures
  * @property {Party | null} responsibleParty
- * @property {boolean} canAttribute
  * @property {import('../../sharepoint-client.js').CaptureGroup[]} captureGroups
- * @property {boolean} canCapture
  * @property {Record<string, Map<string, boolean>>} captureCollapsed
- * @property {Record<string, { query: string, people: import('../../sharepoint-client.js').PersonResult[] }>} attributionSearch
  * @property {Record<string, Record<string, { query: string, people: import('../../sharepoint-client.js').PersonResult[] }>>} captureSearch
  *   Per failed Answer, the open people search of each of its `person` Issue
  *   Capture Fields.
  * @property {{ query: string, people: import('../../sharepoint-client.js').PersonResult[] }} responsiblePartySearch
- * @property {boolean} canSelectRemediation
+ * @property {boolean} canEditIssues
+ *   Whether the viewer may edit what this tab records — the capture fields, the
+ *   remediation decision and its actions, and the Responsible Party. One flag,
+ *   because they are one permission.
  * @property {(party: Party) => void} dispatchResponsibleParty
  * @property {(query: string) => void} dispatchResponsiblePartySearch
  * @property {(questionId: string, fieldKey: string, value: import('../../evaluators/issue-capture.js').CaptureValue | null) => void} dispatchCapture
  * @property {(questionId: string, fieldKey: string, query: string) => void} dispatchCaptureSearch
  * @property {(questionId: string, groupKey: string, collapsed: boolean) => void} dispatchCaptureToggle
- * @property {(questionId: string, attributedParty: Party | null) => void} dispatchAttribute
- * @property {(questionId: string, query: string) => void} dispatchAttributeSearch
  * @property {(questionId: string, action: { id: string, text: string }, selected: boolean) => void} dispatchRemediationAction
  * @property {(questionId: string, value: string) => void} dispatchRemediationFreeForm
  * @property {(questionId: string, required: 'yes' | 'no') => void} dispatchRemediationRequired
@@ -104,7 +100,7 @@ export function RemediationSection(props) {
 export function ResponsiblePartyField(props) {
   const current = props.responsibleParty;
 
-  if (!props.canSelectRemediation) {
+  if (!props.canEditIssues) {
     return current
       ? h(
           'p',
@@ -172,8 +168,8 @@ export function renderRemediationItem(props, q) {
 
 /**
  * Builds a failed item's content around its capture slot: `before` is
- * everything rendered above the capture fields (question, answer,
- * attribution), `after` everything below (Remediation Actions).
+ * everything rendered above the capture fields (question and answer), `after`
+ * everything below (Remediation Actions).
  *
  * @param {RemediationSectionProps} props
  * @param {QuestionDefinition} q
@@ -193,10 +189,6 @@ function buildItemContent(props, q) {
   const v = props.answers[q.id]?.value;
   const ansText = `Answer: ${Array.isArray(v) ? v.join(', ') : (v ?? '')}`;
   before.appendChild(h('p', { className: 'cora-remediation-answer' }, ansText));
-
-  if (props.attributeFailures) {
-    renderRemediationAttribution(props, before, q);
-  }
 
   const after = h('div', {});
   const remediationRequired = props.answers[q.id]?.remediationRequired;
@@ -228,7 +220,7 @@ function buildItemContent(props, q) {
  * @param {'yes' | 'no' | undefined} current The decision on this Answer, if any.
  */
 function renderRemediationRequired(props, li, q, current) {
-  if (!props.canSelectRemediation) {
+  if (!props.canEditIssues) {
     if (current === 'no') {
       li.appendChild(
         h(
@@ -299,7 +291,7 @@ function renderRemediationActions(props, li, q) {
     q.remediationActions ?? [],
     q.id
   );
-  const editable = props.canSelectRemediation;
+  const editable = props.canEditIssues;
   const visible = editable
     ? configured
     : configured.filter((action) => selectedIds.has(action.id));
@@ -371,7 +363,7 @@ function renderRemediationActionCheckbox(props, q, action, checked) {
  * @param {string} value
  */
 function renderRemediationFreeForm(props, li, q, value) {
-  if (!props.canSelectRemediation) {
+  if (!props.canEditIssues) {
     if (value) {
       li.appendChild(
         h('p', { className: 'cora-remediation-freeform-value' }, value)
@@ -406,41 +398,6 @@ function renderRemediationFreeForm(props, li, q, value) {
  * @param {HTMLElement} li
  * @param {QuestionDefinition} q
  */
-export function renderRemediationAttribution(props, li, q) {
-  const attributedParty = props.answers[q.id]?.attributedParty;
-
-  if (!props.canAttribute) {
-    if (attributedParty) {
-      li.appendChild(
-        h(
-          'p',
-          { className: 'cora-remediation-attributed-party' },
-          `Attributed to: ${attributedParty.displayName}`
-        )
-      );
-    }
-    return;
-  }
-
-  const menu = AttributeMenu({
-    responsibleParty: props.responsibleParty,
-    attributedParty: attributedParty ?? null,
-    query: props.attributionSearch[q.id]?.query ?? '',
-    people: props.attributionSearch[q.id]?.people ?? [],
-    onQueryInput: (query) => props.dispatchAttributeSearch(q.id, query),
-    onSelect: (/** @type {Party} */ party) => {
-      props.dispatchAttribute(q.id, party);
-    },
-    onClear: () => props.dispatchAttribute(q.id, null),
-  });
-  li.appendChild(/** @type {any} */ (menu));
-}
-
-/**
- * @param {RemediationSectionProps} props
- * @param {HTMLElement} li
- * @param {QuestionDefinition} q
- */
 export function renderRemediationCapture(props, li, q) {
   const capture = props.answers[q.id]?.capture ?? {};
   const collapsed = props.captureCollapsed[q.id] ?? new Map();
@@ -448,7 +405,7 @@ export function renderRemediationCapture(props, li, q) {
     ...CaptureGroups({
       groups: props.captureGroups,
       capture,
-      canCapture: props.canCapture,
+      canCapture: props.canEditIssues,
       namePrefix: `${q.id}-`,
       collapsed,
       onToggle: (groupKey, next) =>

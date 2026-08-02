@@ -35,19 +35,13 @@ function props(overrides = {}) {
   return /** @type {Parameters<typeof RemediationSection>[0]} */ ({
     catalogue: CATALOGUE,
     answers: {},
-    attributeFailures: false,
     responsibleParty: null,
-    canAttribute: false,
     captureGroups: [],
-    canCapture: false,
     captureCollapsed: {},
-    attributionSearch: {},
     responsiblePartySearch: { query: '', people: [] },
-    canSelectRemediation: false,
+    canEditIssues: false,
     dispatchCapture() {},
     dispatchCaptureToggle() {},
-    dispatchAttribute() {},
-    dispatchAttributeSearch() {},
     dispatchRemediationAction() {},
     dispatchRemediationFreeForm() {},
     dispatchRemediationRequired() {},
@@ -68,7 +62,7 @@ test('the Responsible Party field is offered even when the Case has no failures'
   // The empty-failures path returns early. The picker is the only way to set the
   // field that gates the whole actions path, so it cannot depend on a failure
   // existing.
-  const root = host(RemediationSection(props({ canSelectRemediation: true })));
+  const root = host(RemediationSection(props({ canEditIssues: true })));
   assert.ok(getByText(root, 'No failures.'), 'still says so');
   assert.ok(findByClass(root, 'cora-responsible-party-field'));
   assert.ok(getByRole(root, 'combobox', { name: PICKER_NAME }));
@@ -78,7 +72,7 @@ test('the Responsible Party field is the last thing on the Issues tab', () => {
   const nodes = RemediationSection(
     props({
       answers: { q1: { value: 'No' } },
-      canSelectRemediation: true,
+      canEditIssues: true,
     })
   );
   const last = /** @type {any} */ (nodes[nodes.length - 1]);
@@ -108,7 +102,7 @@ test('typing in the Responsible Party picker asks the route to search', () => {
   const queries = [];
   const node = ResponsiblePartyField(
     props({
-      canSelectRemediation: true,
+      canEditIssues: true,
       dispatchResponsiblePartySearch: (query) => queries.push(query),
     })
   );
@@ -126,7 +120,7 @@ test('choosing a search result hands the whole Party to the route', () => {
   const person = { loginName: 'jsmith', displayName: 'Jane Smith' };
   const node = ResponsiblePartyField(
     props({
-      canSelectRemediation: true,
+      canEditIssues: true,
       responsibleParty: { loginName: 'old', displayName: 'Old Owner' },
       responsiblePartySearch: { query: 'Jane', people: [person] },
       dispatchResponsibleParty: (party) => chosen.push(party),
@@ -147,7 +141,7 @@ test('a Responsible Party search that finds nobody offers no raw account', () =>
   // once the actions are sent, so a typo would be unrecoverable from the page.
   const node = ResponsiblePartyField(
     props({
-      canSelectRemediation: true,
+      canEditIssues: true,
       responsiblePartySearch: { query: 'nobody', people: [] },
     })
   );

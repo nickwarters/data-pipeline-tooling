@@ -153,7 +153,7 @@ export function groupOutcomeSet({
  *   questionId: string,
  *   fieldKey: string,
  *   value: import('../../evaluators/issue-capture.js').CaptureValue | null,
- *   canCapture: boolean,
+ *   canEditIssues: boolean,
  * }} input
  * @returns {Answers | null}
  */
@@ -163,45 +163,15 @@ export function issueCaptured({
   questionId,
   fieldKey,
   value,
-  canCapture,
+  canEditIssues,
 }) {
-  if (!canCapture) return null;
+  if (!canEditIssues) return null;
   const existing = answers[questionId];
   if (!existing) return null;
   // Not a bare value write: a capture value can hide a sibling field, and the
   // sibling's stored value goes with it in the same write.
   const next = applyCapture(existing, captureGroups, fieldKey, value);
   if (!next) return null;
-  return { ...answers, [questionId]: next };
-}
-
-/**
- * Attribute a failed Answer to a Responsible Party, or clear the attribution.
- *
- * @param {{
- *   answers: Answers,
- *   questionId: string,
- *   attributedParty: { loginName: string, displayName: string } | null,
- *   canAttribute: boolean,
- * }} input
- * @returns {Answers | null}
- */
-export function failureAttributed({
-  answers,
-  questionId,
-  attributedParty,
-  canAttribute,
-}) {
-  if (!canAttribute) return null;
-  const existing = answers[questionId];
-  if (!existing) return null;
-  let next;
-  if (attributedParty) {
-    next = { ...existing, attributedParty };
-  } else {
-    const { attributedParty: _drop, ...rest } = existing;
-    next = rest;
-  }
   return { ...answers, [questionId]: next };
 }
 
@@ -215,7 +185,7 @@ export function failureAttributed({
  *   questionId: string,
  *   action: { id: string, text: string },
  *   selected: boolean,
- *   canSelectRemediation: boolean,
+ *   canEditIssues: boolean,
  * }} input
  * @returns {Answers | null}
  */
@@ -224,9 +194,9 @@ export function remediationActionToggled({
   questionId,
   action,
   selected,
-  canSelectRemediation,
+  canEditIssues,
 }) {
-  if (!canSelectRemediation) return null;
+  if (!canEditIssues) return null;
   const existing = answers[questionId];
   if (!existing) return null;
 
@@ -258,7 +228,7 @@ export function remediationActionToggled({
  *   answers: Answers,
  *   questionId: string,
  *   value: string,
- *   canSelectRemediation: boolean,
+ *   canEditIssues: boolean,
  * }} input
  * @returns {Answers | null}
  */
@@ -266,9 +236,9 @@ export function remediationFreeFormEdited({
   answers,
   questionId,
   value,
-  canSelectRemediation,
+  canEditIssues,
 }) {
-  if (!canSelectRemediation) return null;
+  if (!canEditIssues) return null;
   const existing = answers[questionId];
   if (!existing) return null;
 
@@ -300,7 +270,7 @@ export function remediationFreeFormEdited({
  *   answers: Answers,
  *   questionId: string,
  *   required: 'yes' | 'no',
- *   canSelectRemediation: boolean,
+ *   canEditIssues: boolean,
  * }} input
  * @returns {Answers | null}
  */
@@ -308,9 +278,9 @@ export function remediationRequiredSet({
   answers,
   questionId,
   required,
-  canSelectRemediation,
+  canEditIssues,
 }) {
-  if (!canSelectRemediation) return null;
+  if (!canEditIssues) return null;
   const existing = answers[questionId];
   if (!existing) return null;
   if (existing.remediationRequired === required) return null;

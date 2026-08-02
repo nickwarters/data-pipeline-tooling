@@ -238,7 +238,6 @@ src/
     sections/                   # domain-feature units: take config, wire base components together
       cora-allocation.js          # pure allocation view and candidate loader
       cora-app-nav.js
-      cora-attribute-menu.js
       cora-capture-groups.js      # pure Issue Capture Group renderer
       cora-owner-summary.js       # pure ownership-summary view and loader
     collections/                # page/tab-level assemblies mounted directly by pages

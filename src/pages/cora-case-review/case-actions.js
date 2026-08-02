@@ -12,10 +12,9 @@
  * generic Case Row writer, so a caller passing `status` or `assignedReviewer`
  * would advance `snapshot.caseRow` while `snapshot.machine` kept the copy of the
  * row it was constructed with at load. Every `machine.can*` guard reads exactly
- * those two fields, so the store would show the new value while completion,
- * capture, attribution and Remediation selection answered from the old one. The
- * reducer branch ignores anything else, so a raw dispatch cannot route around
- * the type.
+ * those two fields, so the store would show the new value while completion and
+ * Issue editing answered from the old one. The reducer branch ignores anything
+ * else, so a raw dispatch cannot route around the type.
  *
  * Lifecycle fields have their own writer: `CaseMachine`'s transitions, persisted
  * by `completeCase` and folded back in through `case/case-row-patched`.

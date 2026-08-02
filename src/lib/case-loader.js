@@ -344,9 +344,8 @@ export class CaseLoader {
    * the store. Not persisted: a display-name refresh is presentation, not a
    * Reviewer edit.
    *
-   * Covers both the Attributed Party property and every `person` Issue Capture
-   * Field, in one batched call — they are the same cached-name problem, and
-   * asking the directory twice for one Case would be the only difference.
+   * Covers every `person` Issue Capture Field on the Case in one batched call:
+   * one cached-name problem, so one round trip to the directory.
    */
   async _resolvePersonNames() {
     const personKeys = this._personCaptureKeys();
@@ -360,7 +359,6 @@ export class CaseLoader {
       }
     };
     for (const answer of Object.values(this.answers)) {
-      collect(answer.attributedParty);
       for (const key of personKeys) collect(answer.capture?.[key]);
     }
     if (accounts.length === 0) return;
@@ -385,8 +383,6 @@ export class CaseLoader {
     const next = {};
     for (const [id, answer] of Object.entries(this.answers)) {
       let updated = answer;
-      const party = refreshed(answer.attributedParty);
-      if (party) updated = { ...updated, attributedParty: party };
       for (const key of personKeys) {
         const person = refreshed(answer.capture?.[key]);
         if (person) {
