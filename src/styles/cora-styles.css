@@ -1493,6 +1493,23 @@
   color: var(--cora-color-text-muted);
 }
 
+/* A capture field whose caption is a <legend>, because the field is a set of
+   radios rather than one control. A fieldset carries a border, padding and a
+   min-inline-size of its content by default; strip those so it lays out like
+   the <label>-wrapped fields beside it, and give the legend the gap the grid
+   would otherwise have provided (a rendered legend is not a grid item). */
+[data-cora-root] fieldset.cora-capture-field,
+[data-cora-root] fieldset.cora-general-question {
+  display: block;
+  min-inline-size: 0;
+  border: 0;
+}
+
+[data-cora-root] legend.cora-capture-label {
+  padding: 0;
+  margin-bottom: var(--cora-space-1);
+}
+
 /* Radio-typed capture fields: inline option chips rather than a stacked list. */
 [data-cora-root] .cora-capture-radio-group {
   display: flex;

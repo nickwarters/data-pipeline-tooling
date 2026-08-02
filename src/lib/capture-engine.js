@@ -16,6 +16,8 @@ import { h } from './html.js';
  * render the same field for several rows (e.g. one per failed Answer) must pass
  * a per-row prefix, otherwise every row's radios share a `name` and collapse
  * into a single native radio group — selecting one clears the others.
+ * @param {boolean} [disabled] Disables the control — every input of a `radio`
+ * field, not just the wrapper, which has no disabled state of its own.
  * @returns {HTMLElement}
  */
 export function buildCaptureControl(
@@ -23,7 +25,8 @@ export function buildCaptureControl(
   currentValue,
   onChange,
   className = 'cora-capture-input',
-  namePrefix = ''
+  namePrefix = '',
+  disabled = false
 ) {
   const onChangeHandler = (/** @type {Event} */ ev) => {
     const target =
@@ -46,6 +49,7 @@ export function buildCaptureControl(
             name: `${namePrefix}${fieldConfig.key}`,
             value: opt,
             checked: currentValue === opt,
+            disabled,
             onchange: () => onChange(opt),
           }),
           h('span', {}, opt)
@@ -57,7 +61,7 @@ export function buildCaptureControl(
   if (fieldConfig.type === 'select') {
     return h(
       'select',
-      { className, value: currentValue, onchange: onChangeHandler },
+      { className, value: currentValue, disabled, onchange: onChangeHandler },
       h('option', { value: '' }, '—'),
       ...(fieldConfig.options ?? []).map((opt) =>
         h('option', { value: opt }, opt)
@@ -70,6 +74,7 @@ export function buildCaptureControl(
       className,
       value: currentValue,
       placeholder: fieldConfig.placeholder,
+      disabled,
       onchange: onChangeHandler,
     });
   }
@@ -79,36 +84,7 @@ export function buildCaptureControl(
     type: 'text',
     value: currentValue,
     placeholder: fieldConfig.placeholder,
+    disabled,
     onchange: onChangeHandler,
   });
-}
-
-/**
- * Tags a control built above with a stable `data-testid`, and sets its
- * disabled state.
- *
- * Nothing in the app reads the attribute — the renderer preserves focus and
- * caret by patching the element in place. It is a stable, readable handle for
- * tests and for anyone inspecting the DOM.
- *
- * Which field types produce a wrapper around several inputs is knowledge that
- * belongs to the builder, so it lives here rather than in each consumer: add a
- * multi-input type to `buildCaptureControl` and every caller stays correct.
- * A `radio` group's inputs each take `<key>:<value>`.
- *
- * @param {HTMLElement} control
- * @param {CaptureField} fieldConfig
- * @param {string} key
- * @param {boolean} [disabled]
- */
-export function applyCaptureTestId(control, fieldConfig, key, disabled) {
-  if (fieldConfig.type === 'radio') {
-    for (const input of control.querySelectorAll('input')) {
-      input.setAttribute('data-testid', `${key}:${input.value}`);
-      if (disabled !== undefined) input.disabled = disabled;
-    }
-    return;
-  }
-  control.setAttribute('data-testid', key);
-  if (disabled !== undefined) /** @type {any} */ (control).disabled = disabled;
 }

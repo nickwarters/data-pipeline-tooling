@@ -15,6 +15,7 @@ function implicitRole(element) {
   if (element.tagName === 'TH') return 'columnheader';
   if (element.tagName === 'TD') return 'cell';
   if (element.tagName === 'HEADER') return 'banner';
+  if (element.tagName === 'FIELDSET') return 'group';
   if (element.tagName !== 'INPUT') return null;
 
   const type = String(element.type || 'text').toLowerCase();
@@ -56,9 +57,15 @@ function accessibleName(element) {
         ) ?? wrappingLabel
       )
     : '';
+  // A grouping element's own text is every control inside it, which names
+  // nothing useful; its `<legend>` is the caption a user reads.
+  const legend = element._children?.find(
+    (/** @type {any} */ child) => child.tagName === 'LEGEND'
+  );
   return (
     element.getAttribute?.('aria-label') ||
     labelText ||
+    (legend ? textContent(legend) : '') ||
     textContent(element) ||
     element.getAttribute?.('title') ||
     ''
@@ -179,19 +186,6 @@ export function getByText(root, expected) {
   );
   if (!leaf) throw new Error(`Unable to find text "${String(expected)}"`);
   return leaf;
-}
-
-/** @param {any} root @param {string} testId */
-export function getByTestId(root, testId) {
-  const matches = queryAllByTag(root, '*').filter(
-    (element) => element.getAttribute?.('data-testid') === testId
-  );
-  if (matches.length !== 1) {
-    throw new Error(
-      `Expected one element with data-testid "${testId}", found ${matches.length}`
-    );
-  }
-  return matches[0];
 }
 
 /**

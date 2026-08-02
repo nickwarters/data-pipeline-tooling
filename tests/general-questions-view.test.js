@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom, findAllByClass } from './_dom-stub.js';
-import { fireEvent } from './helpers/semantic-dom.js';
+import { fireEvent, getByRole } from './helpers/semantic-dom.js';
 
 installDom();
 
@@ -46,11 +46,14 @@ function rootOf(nodes) {
 }
 
 /**
- * A field's control, addressed the way the framework restores focus to it. A
- * `radio` field tags each of its inputs instead, so it is not addressed here.
+ * A field's control, addressed by the caption a Reviewer reads. A `radio` field
+ * is a set of inputs named by their options, so it is not addressed here.
  */
 function controlOf(/** @type {any} */ root, /** @type {string} */ fieldKey) {
-  return root.querySelector(`[data-testid="general-question:${fieldKey}"]`);
+  const field = FIELDS.find((candidate) => candidate.key === fieldKey);
+  return getByRole(root, field?.type === 'select' ? 'combobox' : 'textbox', {
+    name: field?.label,
+  });
 }
 
 function render(overrides = {}) {

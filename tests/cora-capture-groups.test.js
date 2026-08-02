@@ -75,7 +75,7 @@ function rootOf(nodes) {
   return root;
 }
 
-test('CaptureGroups renders typed editable controls with current values and scoped test ids', () => {
+test('CaptureGroups renders typed editable controls carrying their current values', () => {
   const root = rootOf(
     CaptureGroups({
       groups: GROUPS,
@@ -94,11 +94,7 @@ test('CaptureGroups renders typed editable controls with current values and scop
       onPersonQuery() {},
     })
   );
-  assert.equal(
-    /** @type {any} */ (root.querySelector('[data-testid="capture:q1-text"]'))
-      ?.value,
-    'Rushed'
-  );
+  assert.equal(getByRole(root, 'textbox', { name: 'Text' }).value, 'Rushed');
   assert.equal(root.querySelector('textarea')?.value, 'Details');
   assert.equal(root.querySelector('select')?.value, 'High');
   assert.equal(getByRole(root, 'radio', { name: 'Yes' }).checked, true);
@@ -209,11 +205,6 @@ test('CaptureGroups renders a person field as a people picker, not a text box', 
     name: 'Search people for Attributed to',
   });
   assert.equal(input.value, 'Ja');
-  assert.equal(
-    input.getAttribute('data-testid'),
-    'capture:q1-attributedTo',
-    'the picker input carries the field test id as a stable handle for tests and DOM inspection'
-  );
 
   input.value = 'Jan';
   fireEvent(input, 'input');

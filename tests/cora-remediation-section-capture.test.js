@@ -112,9 +112,9 @@ test('Issues tab: every capture edit travels one action, whatever its type', () 
   assert.deepEqual(cleared.calls, [['capture', 'q1', 'attributedTo', null]]);
 
   const typed = issuesPanel();
-  const summary = /** @type {any} */ (
-    typed.root.querySelector('[data-testid="capture:q1-rootCauseSummary"]')
-  );
+  const summary = getByRole(typed.root, 'textbox', {
+    name: 'Root cause summary',
+  });
   summary.value = 'Handoff missed';
   fireEvent(summary, 'change');
   assert.deepEqual(typed.calls, [

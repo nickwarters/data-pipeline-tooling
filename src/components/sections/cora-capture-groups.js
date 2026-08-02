@@ -1,9 +1,6 @@
 // @ts-check
 import { h } from '../../lib/html.js';
-import {
-  buildCaptureControl,
-  applyCaptureTestId,
-} from '../../lib/capture-engine.js';
+import { buildCaptureControl } from '../../lib/capture-engine.js';
 import { PeoplePicker } from '../base/cora-people-picker.js';
 import {
   captureDisplayText,
@@ -41,8 +38,8 @@ function isCollapsed(collapsed, group) {
  * In editable mode (`canCapture`) each group is a collapsible section — its
  * default collapse comes from `group.collapsed`, and the Reviewer can toggle it
  * via `onToggle`; the override is ephemeral (never persisted). Each
- * field renders its typed control carrying a stable `data-testid`
- * (see `testIdFor`) and reports edits through `onCapture`. A `person` field renders a
+ * field renders its typed control, named by its caption, and reports edits
+ * through `onCapture`. A `person` field renders a
  * people picker fed by `peopleSearch` and `onPersonQuery`, which the caller
  * owns: this view holds no state and runs no search of its own.
  *
@@ -84,7 +81,7 @@ export function CaptureGroups(props) {
  * @returns {HTMLElement}
  */
 function editableGroup(group, props) {
-  const { namePrefix, collapsed, onToggle } = props;
+  const { collapsed, onToggle } = props;
   const collapsedNow = isCollapsed(collapsed, group);
 
   return h(
@@ -95,7 +92,6 @@ function editableGroup(group, props) {
       {
         className: 'cora-capture-group-header',
         'aria-expanded': collapsedNow ? 'false' : 'true',
-        'data-testid': `capture-group:${namePrefix}${group.key}`,
         onclick: () => onToggle(group.key, !collapsedNow),
       },
       group.label
@@ -115,31 +111,47 @@ function editableGroup(group, props) {
  */
 function editableField(field, props) {
   const { capture, namePrefix, onCapture } = props;
+
   // A person is picked, not typed, so it is built here rather than in the
   // shared capture engine: that engine is a domain-free string control builder
-  // used by Sections that carry no search state to feed a picker with.
-  let control;
+  // used by Sections that carry no search state to feed a picker with. The
+  // picker names its own input, and the chosen-person form is text plus a
+  // button — neither is a control a caption may wrap, so the caption is a plain
+  // span beside them.
   if (field.type === 'person') {
-    control = personControl(field, props);
-    // The picker wraps its input, so the key goes on the input itself.
-    control
-      .querySelector('input')
-      ?.setAttribute('data-testid', testIdFor(namePrefix, field.key));
-  } else {
-    control = buildCaptureControl(
-      field,
-      captureDisplayText(capture[field.key]),
-      (value) => onCapture(field.key, value),
-      'cora-capture-input',
-      namePrefix
+    return h(
+      'div',
+      { className: 'cora-capture-field' },
+      h('span', { className: 'cora-capture-label' }, field.label),
+      personControl(field, props)
     );
-    applyCaptureTestId(control, field, testIdFor(namePrefix, field.key));
+  }
+
+  const control = buildCaptureControl(
+    field,
+    captureDisplayText(capture[field.key]),
+    (value) => onCapture(field.key, value),
+    'cora-capture-input',
+    namePrefix
+  );
+
+  // A `radio` field is several inputs, each already inside its own `<label>`,
+  // so the caption names the set with a `<legend>` rather than trying to label
+  // one control. Every other type is a single control the caption wraps, which
+  // associates the two without needing an id to keep unique across rows.
+  if (field.type === 'radio') {
+    return h(
+      'fieldset',
+      { className: 'cora-capture-field' },
+      h('legend', { className: 'cora-capture-label' }, field.label),
+      control
+    );
   }
 
   return h(
-    'div',
+    'label',
     { className: 'cora-capture-field' },
-    h('label', { className: 'cora-capture-label' }, field.label),
+    h('span', { className: 'cora-capture-label' }, field.label),
     control
   );
 }
@@ -190,22 +202,6 @@ function personControl(field, props) {
     onQueryInput: (query) => props.onPersonQuery(field.key, query),
     onSelect: (person) => props.onCapture(field.key, person),
   });
-}
-
-/**
- * The `data-testid` for a field's control, unique per element instance
- * (via `namePrefix`) and per field. Radio options extend it with `:<value>`.
- *
- * It is stamped on the editable control itself — so a `person` field carries it
- * while the picker is showing, and not once a person is chosen and the control
- * is a name plus a clear button.
- *
- * @param {string} namePrefix
- * @param {string} fieldKey
- * @returns {string}
- */
-function testIdFor(namePrefix, fieldKey) {
-  return `capture:${namePrefix}${fieldKey}`;
 }
 
 /**

@@ -5,7 +5,6 @@ import { installDom, StubEl } from './_dom-stub.js';
 import {
   fireEvent,
   getByTag,
-  getByTestId,
   getByText,
   getByRole,
   queryAllByRole,
@@ -86,18 +85,33 @@ test('semantic DOM helpers query table structure by role and tag', () => {
   assert.equal(getByText(root, 'Case A').tagName, 'SPAN');
 });
 
-test('semantic DOM helpers use title as a fallback name and query test ids', () => {
+test('semantic DOM helpers use title as a fallback name', () => {
   const root = new StubEl('div');
   root.append(
-    /** @type {any} */ (h('button', { title: 'Duplicate question' })),
-    /** @type {any} */ (h('div', { 'data-testid': 'conditional-indicator' }))
+    /** @type {any} */ (h('button', { title: 'Duplicate question' }))
   );
 
   assert.equal(
     getByRole(root, 'button', { name: 'Duplicate question' }).title,
     'Duplicate question'
   );
-  assert.equal(getByTestId(root, 'conditional-indicator').tagName, 'DIV');
+});
+
+test('semantic DOM helpers name a fieldset by its legend, not its contents', () => {
+  const root = new StubEl('div');
+  root.append(
+    /** @type {any} */ (
+      h(
+        'fieldset',
+        {},
+        h('legend', {}, 'Second checked?'),
+        h('label', {}, h('input', { type: 'radio' }), h('span', {}, 'Yes'))
+      )
+    )
+  );
+
+  const group = getByRole(root, 'group', { name: 'Second checked?' });
+  assert.equal(getByRole(group, 'radio', { name: 'Yes' }).type, 'radio');
 });
 
 test('semantic DOM helpers derive a control name from its wrapping label', () => {

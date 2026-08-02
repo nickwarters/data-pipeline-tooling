@@ -1,9 +1,6 @@
 // @ts-check
 import { h } from '../../lib/html.js';
-import {
-  buildCaptureControl,
-  applyCaptureTestId,
-} from '../../lib/capture-engine.js';
+import { buildCaptureControl } from '../../lib/capture-engine.js';
 import { generalAnswerKey } from '../../evaluators/general-questions.js';
 
 /** @typedef {import('../../sharepoint-client.js').GeneralQuestionField} GeneralQuestionField */
@@ -115,14 +112,27 @@ function questionField(field, answers, canEdit, onAnswer) {
     // every other typed field in the app rather than needing its own copy of
     // the input styling.
     'cora-capture-input',
-    'general-'
+    'general-',
+    !canEdit
   );
-  applyCaptureTestId(control, field, `general-question:${field.key}`, !canEdit);
+
+  // A `radio` field is several inputs, each already inside its own `<label>`,
+  // so the caption names the set with a `<legend>` rather than trying to label
+  // one control. Every other type is a single control the caption wraps, which
+  // associates the two without needing an id to keep unique across rows.
+  if (field.type === 'radio') {
+    return h(
+      'fieldset',
+      { className: 'cora-general-question' },
+      h('legend', { className: 'cora-capture-label' }, field.label),
+      control
+    );
+  }
 
   return h(
-    'div',
+    'label',
     { className: 'cora-general-question' },
-    h('label', { className: 'cora-capture-label' }, field.label),
+    h('span', { className: 'cora-capture-label' }, field.label),
     control
   );
 }
