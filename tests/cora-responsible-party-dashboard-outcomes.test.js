@@ -92,8 +92,17 @@ test('Responsible Party pure view renders outcome totals and the month matrix', 
   );
 
   assert.equal(view.querySelector('.cora-rp-outcome-total')?.textContent, '2');
-  assert.equal(view.querySelector('.cora-rp-outcome-pass')?.textContent, '1');
-  assert.equal(view.querySelector('.cora-rp-outcome-fail')?.textContent, '1');
+  // Outcome wording is Case-Type-authored, so the per-Outcome counts carry no
+  // class built from it — only the framework-owned total is addressable.
+  const stats = /** @type {any} */ (
+    view.querySelector('.cora-rp-outcome-stats')
+  );
+  assert.deepEqual(
+    [...stats.querySelectorAll('dd')].map(
+      (/** @type {any} */ dd) => dd.className
+    ),
+    ['cora-rp-outcome-total', '', '']
+  );
   assert.match(
     view.querySelector('.cora-rp-outcome-table')?.textContent ?? '',
     /2026-05012026-0610/

@@ -142,11 +142,7 @@ function outcomeSummaryView(summary) {
       ),
       ...outcomes.flatMap((outcome) => [
         h('dt', {}, outcome),
-        h(
-          'dd',
-          { className: `cora-rp-outcome-${outcome.toLowerCase()}` },
-          String(summary.byOutcome[outcome])
-        ),
+        h('dd', {}, String(summary.byOutcome[outcome])),
       ])
     ),
     outcomes.length

@@ -35,7 +35,9 @@ export function Outcome({
   outcomeOptions,
   displacedOutcome,
 }) {
-  let className, textContent;
+  /** @type {string | null} */
+  let className = null;
+  let textContent;
   /** @type {Node | null} */
   let marker = null;
   if (!allAnswered || !computeOutcome) {
@@ -45,7 +47,6 @@ export function Outcome({
     const result = computeOutcome(answers);
     const option = outcomeOptions.find((o) => o.id === result.outcome);
     if (option) {
-      className = `cora-outcome-${classSuffixFor(result.outcome)}`;
       textContent = option.wording;
       if (displacedOutcome && displacedOutcome !== result.outcome) {
         // Outcome options are Case-Type-editable, so a displaced id can outlive
@@ -65,13 +66,8 @@ export function Outcome({
     }
   }
 
-  return [h('h2', {}, 'Outcome'), h('p', { className }, textContent, marker)];
-}
-
-/** @param {string} value */
-function classSuffixFor(value) {
-  return String(value)
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+  return [
+    h('h2', {}, 'Outcome'),
+    h('p', className ? { className } : {}, textContent, marker),
+  ];
 }

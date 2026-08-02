@@ -43,13 +43,10 @@ test('Outcome renders wording only from the configured option', () => {
   });
 
   assert.equal(nodes[1].textContent, 'Compliant');
-  assert.equal(
-    /** @type {HTMLElement} */ (nodes[1]).className,
-    'cora-outcome-pass'
-  );
+  assert.equal(/** @type {HTMLElement} */ (nodes[1]).className, '');
 });
 
-test('Outcome supports every configured id and creates a safe class suffix', () => {
+test('Outcome carries no class derived from the configured id', () => {
   const nodes = Outcome({
     computeOutcome: () => ({ outcome: 'Needs Review!' }),
     answers: {},
@@ -60,10 +57,9 @@ test('Outcome supports every configured id and creates a safe class suffix', () 
   });
 
   assert.equal(nodes[1].textContent, 'Escalate');
-  assert.equal(
-    /** @type {HTMLElement} */ (nodes[1]).className,
-    'cora-outcome-needs-review'
-  );
+  // Outcome wording is Case-Type-authored, so a class built from it would be
+  // unstyled for one Case Type and malformed for another.
+  assert.equal(/** @type {HTMLElement} */ (nodes[1]).className, '');
 });
 
 test('Outcome exposes an unconfigured result instead of inventing wording', () => {
@@ -91,11 +87,6 @@ test('Outcome names the value an amendment displaced', () => {
   });
 
   assert.equal(nodes[1].textContent, 'Compliant (previously Non-compliant)');
-  // The verdict styling follows the value in force, not the one it displaced.
-  assert.equal(
-    /** @type {HTMLElement} */ (nodes[1]).className,
-    'cora-outcome-pass'
-  );
   assert.ok(
     findByClass(
       /** @type {HTMLElement} */ (nodes[1]),

@@ -1751,30 +1751,15 @@
 
 /* ── Outcome ─────────────────────────────────────────────────────────────── */
 
-.cora-outcome-pass {
-  color: var(--cora-color-success);
-  font-weight: var(--cora-font-weight-semibold);
-}
-
-.cora-outcome-fail {
-  color: var(--cora-color-danger);
-  font-weight: var(--cora-font-weight-semibold);
-}
-
-.cora-outcome-refer {
-  color: var(--cora-color-warning);
-  font-weight: var(--cora-font-weight-semibold);
-}
-
 .cora-outcome-indeterminate {
   color: var(--cora-color-text-muted);
   font-style: italic;
 }
 
-/* The displaced verdict, inline after the one in force. All three declarations
-   are overrides: the Summary enlarges the verdict line and the verdict classes
-   set a colour and semibold weight, every one of which would otherwise inherit
-   into this span and make the displaced value read as loudly as the live one. */
+/* The displaced verdict, inline after the one in force. The declarations are
+   overrides: the Summary enlarges the verdict line, which would otherwise
+   inherit into this span and make the displaced value read as loudly as the
+   live one. */
 .cora-outcome-amended-from {
   font-size: var(--cora-font-size-sm);
   font-weight: var(--cora-font-weight-regular);
@@ -1938,7 +1923,7 @@
 }
 
 /* The Outcome is the headline verdict: a card with the heading demoted to a
-   quiet label above an enlarged verdict line (colour comes from .cora-outcome-*). */
+   quiet label above an enlarged verdict line. */
 [data-cora-root] .cora-summary > .cora-outcome {
   display: block;
   padding: var(--cora-space-4) var(--cora-space-5);
