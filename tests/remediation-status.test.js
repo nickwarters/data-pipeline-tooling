@@ -12,6 +12,7 @@ import {
   isRemediationResolved,
   remediationComplete,
   remediationDecided,
+  anyRemediationRequired,
   setRemediationStatus,
 } from '../src/evaluators/remediation-status.js';
 
@@ -454,6 +455,81 @@ test('remediationDecided: an absent catalogue or absent Answers is vacuously dec
   assert.equal(
     remediationDecided(CATALOGUE, /** @type {any} */ (undefined)),
     true
+  );
+});
+
+test('anyRemediationRequired: false until some failure is decided Yes', () => {
+  assert.equal(
+    anyRemediationRequired(CATALOGUE, { q1: { value: 'Yes' } }),
+    false,
+    'no failures, so nothing can require remediation'
+  );
+  assert.equal(
+    anyRemediationRequired(CATALOGUE, {
+      q1: { value: 'No', remediationRequired: 'no' },
+    }),
+    false,
+    'a failure decided No requires none'
+  );
+  assert.equal(
+    anyRemediationRequired(CATALOGUE, { q1: { value: 'No' } }),
+    false,
+    'an undecided failure has not asked for anything yet'
+  );
+  assert.equal(
+    anyRemediationRequired(CATALOGUE, {
+      q1: { value: 'No', remediationRequired: 'yes' },
+    }),
+    true,
+    'one Yes is enough, with or without an action recorded'
+  );
+});
+
+test('anyRemediationRequired: only active, applicable, failed Answers count', () => {
+  const deprecated = [
+    ...CATALOGUE,
+    {
+      id: 'q4',
+      text: 'Retired',
+      responseType: /** @type {const} */ ('yes-no-na'),
+      failureValues: ['No'],
+      deprecated: true,
+    },
+  ];
+  assert.equal(
+    anyRemediationRequired(deprecated, {
+      q1: { value: 'Yes' },
+      q4: { value: 'No', remediationRequired: 'yes' },
+    }),
+    false,
+    'a deprecated Question is out of the catalogue, so out of the count'
+  );
+  assert.equal(
+    anyRemediationRequired(CATALOGUE, {
+      q1: { value: 'Yes' },
+      q3: { value: 'No', remediationRequired: 'yes' },
+    }),
+    false,
+    'a stale decision on a Question nobody can see does not count'
+  );
+  assert.equal(
+    anyRemediationRequired(CATALOGUE, {
+      q1: { value: 'Yes', remediationRequired: 'yes' },
+    }),
+    false,
+    'a flag stranded on an Answer that now passes does not count'
+  );
+});
+
+test('anyRemediationRequired: an absent catalogue or absent Answers requires nothing', () => {
+  assert.equal(anyRemediationRequired(null, { q1: { value: 'No' } }), false);
+  assert.equal(
+    anyRemediationRequired(undefined, { q1: { value: 'No' } }),
+    false
+  );
+  assert.equal(
+    anyRemediationRequired(CATALOGUE, /** @type {any} */ (undefined)),
+    false
   );
 });
 

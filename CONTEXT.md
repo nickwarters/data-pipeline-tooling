@@ -232,7 +232,14 @@ assessed) — an **Adviser** by group membership, named on one specific **Case**
 from the **Reviewer**. One per **Case**. Distinct from an **Attributed Party** (which is
 per-failure, not per-Case). The **Assigned Reviewer** _sets_ the Responsible Party in-app,
 at the bottom of the **Issues** Section, before **Send Actions**; it cannot be changed
-after send. Once actions are sent the Responsible Party gains `read-only`
+after send. The field only appears — and is only required — once at least one failed
+**Answer**'s "Is remediation required?" decision is `yes`: with nothing to send there is
+nobody to send it to (#677). A Responsible Party already named persists if that decision
+is later withdrawn, and stays visible to the **Assigned Reviewer**. The accepted
+consequence is that a Case needing no remediation now completes with no Responsible Party
+at all, so it carries none in the Case tables' Responsible Party column, appears under
+nobody on the Responsible Party dashboard, and grants nobody the `responsibleParty`
+Section-access role. Once actions are sent the Responsible Party gains `read-only`
 **Summary**, `read-only` **Remediation** and `edit` **Conversation** access (the only
 three Sections they see), and does the remediation work off-system, communicating via
 the Conversation.

@@ -3,6 +3,7 @@ import { h } from '../../lib/html.js';
 import { EmptyState } from '../../lib/empty-state.js';
 import { evaluate } from '../../evaluators/applicability-evaluator.js';
 import { isFailure } from '../../evaluators/failure-evaluator.js';
+import { anyRemediationRequired } from '../../evaluators/remediation-status.js';
 import { PeoplePicker } from '../../components/base/cora-people-picker.js';
 import { CaptureGroups } from '../../components/sections/cora-capture-groups.js';
 
@@ -59,9 +60,7 @@ export function RemediationSection(props) {
   const failed = failedQuestions(props);
 
   const heading = h('h2', {}, props.heading);
-  // Case-level, so it belongs to the tab rather than to any failure — and it is
-  // computed once for both exits, because a Case with no failures still needs
-  // someone named before its actions can be sent.
+  // Hoisted above the no-failures return so the field can appear on either exit.
   const responsibleParty = ResponsiblePartyField(props);
   const tail = responsibleParty ? [responsibleParty] : [];
 
@@ -81,18 +80,24 @@ export function RemediationSection(props) {
 
 /**
  * The Case-level **Responsible Party**: who the Remediation Actions are sent
- * to. Nothing else on the Case sets it, and until it is set the completion
- * control is shown disabled with a reason naming this field, so the field lives
- * at the foot of the tab that produces those actions.
+ * to. Nothing else on the Case sets it, so the field lives at the foot of the
+ * tab that produces those actions.
+ *
+ * It is asked for only once some failed Answer says remediation *is* required:
+ * with nothing to send there is nobody to send it to, and asking anyway left
+ * the completion control disabled against a reason no Reviewer could act on.
+ * An already-stored Party is shown regardless of that decision — it still feeds
+ * reporting, the Responsible Party dashboard and Section access, so withdrawing
+ * the decision must not make the recorded fact illegible. Nothing clears it: a
+ * SharePoint person column is not emptied by writing an empty string.
  *
  * Editable on the same permission as the Remediation Actions above it — the
  * Assigned Reviewer, while the Case is still pre-reportable — because naming
  * the recipient and choosing what is sent to them are one act. Afterwards it
  * reads back as plain text, because the person named is who the sent actions
- * are already addressed to. The picker stays visible even once a Party is chosen — a wrong
- * choice is corrected by choosing again. There is deliberately no clear button:
- * an empty value only ever re-blocks completion, and a SharePoint person column
- * is not emptied by writing an empty string in any case.
+ * are already addressed to. The picker stays visible even once a Party is
+ * chosen — a wrong choice is corrected by choosing again, and there is
+ * deliberately no clear button.
  *
  * @param {RemediationSectionProps} props
  * @returns {Node | null}
@@ -108,6 +113,12 @@ export function ResponsiblePartyField(props) {
           `Responsible Party: ${current.displayName}`
         )
       : null;
+  }
+
+  // After the read-only branch: what has already been sent is a record of what
+  // happened, not a prompt, so it is shown whatever the current decision says.
+  if (!current && !anyRemediationRequired(props.catalogue, props.answers)) {
+    return null;
   }
 
   /** @type {Node[]} */

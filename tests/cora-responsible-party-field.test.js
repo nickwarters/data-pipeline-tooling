@@ -34,7 +34,9 @@ const PICKER_NAME = 'Search people for Responsible Party';
 function props(overrides = {}) {
   return /** @type {Parameters<typeof RemediationSection>[0]} */ ({
     catalogue: CATALOGUE,
-    answers: {},
+    // The field only shows once some failure asks for remediation, so the
+    // default Answers are the state that shows it.
+    answers: { q1: { value: 'No', remediationRequired: 'yes' } },
     responsibleParty: null,
     captureGroups: [],
     captureCollapsed: {},
@@ -58,20 +60,63 @@ function host(nodes) {
   return root;
 }
 
-test('the Responsible Party field is offered even when the Case has no failures', () => {
-  // The empty-failures path returns early. The picker is the only way to set the
-  // field that gates the whole actions path, so it cannot depend on a failure
-  // existing.
-  const root = host(RemediationSection(props({ canEditIssues: true })));
+test('a Case with no failures is not asked for a Responsible Party', () => {
+  // Nobody is being sent anything, so there is nobody to name — and asking
+  // would leave the completion control disabled against an invisible field.
+  const root = host(
+    RemediationSection(props({ answers: {}, canEditIssues: true }))
+  );
   assert.ok(getByText(root, 'No failures.'), 'still says so');
-  assert.ok(findByClass(root, 'cora-responsible-party-field'));
-  assert.ok(getByRole(root, 'combobox', { name: PICKER_NAME }));
+  assert.equal(findByClass(root, 'cora-responsible-party-field'), null);
+  assert.equal(queryByRole(root, 'combobox'), null);
+  assert.equal(
+    ResponsiblePartyField(props({ answers: {}, canEditIssues: true })),
+    null
+  );
+});
+
+test('the Responsible Party field follows the remediation decision', () => {
+  /** @param {any} q1 */
+  const field = (q1) =>
+    ResponsiblePartyField(props({ answers: { q1 }, canEditIssues: true }));
+
+  assert.equal(
+    field({ value: 'No' }),
+    null,
+    'an undecided failure has asked for nothing yet'
+  );
+  assert.equal(
+    field({ value: 'No', remediationRequired: 'no' }),
+    null,
+    'a failure decided No needs no recipient'
+  );
+  assert.ok(
+    field({ value: 'No', remediationRequired: 'yes' }),
+    'one Yes is enough'
+  );
+});
+
+test('an already-named Responsible Party stays visible if the decision is withdrawn', () => {
+  // The stored value still drives reporting, the Responsible Party dashboard
+  // and Section access, so hiding it would hide a fact about the Case.
+  const node = ResponsiblePartyField(
+    props({
+      answers: {},
+      canEditIssues: true,
+      responsibleParty: { loginName: 'jsmith', displayName: 'Jane Smith' },
+    })
+  );
+  const root = host(node ? [node] : []);
+  assert.equal(
+    findByClass(root, 'cora-responsible-party-current').textContent,
+    'Jane Smith'
+  );
 });
 
 test('the Responsible Party field is the last thing on the Issues tab', () => {
   const nodes = RemediationSection(
     props({
-      answers: { q1: { value: 'No' } },
+      answers: { q1: { value: 'No', remediationRequired: 'yes' } },
       canEditIssues: true,
     })
   );

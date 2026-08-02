@@ -102,6 +102,35 @@ function readStatus(answer) {
 const NO_CATALOGUE = /** @type {QuestionDefinition[]} */ ([]);
 
 /**
+ * The active, *applicable*, *failed* Questions and their Answers, in catalogue
+ * order — the three filters every question-level remediation rule shares, so no
+ * rule can come to disagree with the rows the Remediation tab renders.
+ *
+ * A deprecated Question Definition is out of the catalogue, not in it with a
+ * flag: Question Definitions are never deleted, so deprecation is how a Case
+ * Type Owner retires one. `case-loader.js` already filters them on both the live
+ * and the versioned path; filtering here too makes the seam correct for any
+ * caller rather than only the careful one.
+ *
+ * @param {QuestionDefinition[] | null | undefined} catalogue
+ * @param {Record<string, Answer>} answers
+ * @returns {Generator<[QuestionDefinition, Answer]>}
+ */
+function* failedApplicable(catalogue, answers) {
+  const active = (catalogue ?? NO_CATALOGUE).filter(
+    (question) => !question.deprecated
+  );
+  const map = answers ?? {};
+  const applicable = evaluate(active, map);
+  for (const question of active) {
+    if (!applicable.has(question.id)) continue;
+    const answer = map[question.id];
+    if (!isFailure(question, answer)) continue;
+    yield [question, answer];
+  }
+}
+
+/**
  * The last result, keyed by the identity of the inputs that produced it. Both
  * the tab and the completion gate ask for the rows on every render — and the
  * details textarea re-renders on every keystroke — so without this the
@@ -136,19 +165,9 @@ export function remediationRows(catalogue, answers) {
   ) {
     return rowsCache.rows;
   }
-  // A deprecated Question Definition is out of the catalogue, not in it with a
-  // flag: Question Definitions are never deleted (CLAUDE.md), so deprecation is
-  // how a Case Type Owner retires one. `case-loader.js` already
-  // filters them on both the live and the versioned path; filtering here too
-  // makes the seam correct for any caller rather than only the careful one.
-  const active = catalogue.filter((question) => !question.deprecated);
-  const applicable = evaluate(active, answers ?? {});
   /** @type {RemediationRow[]} */
   const rows = [];
-  for (const question of active) {
-    if (!applicable.has(question.id)) continue;
-    const answer = (answers ?? {})[question.id];
-    if (!isFailure(question, answer)) continue;
+  for (const [question, answer] of failedApplicable(catalogue, answers)) {
     const remediation = answerRemediation(answer);
     if (!remediation) continue;
     rows.push({ question, ...remediation, ...readStatus(answer) });
@@ -209,14 +228,7 @@ export function hasTrackableRemediation(catalogue, answers) {
  * @returns {boolean}
  */
 export function remediationDecided(catalogue, answers) {
-  const list = catalogue ?? NO_CATALOGUE;
-  const map = answers ?? {};
-  const active = list.filter((question) => !question.deprecated);
-  const applicable = evaluate(active, map);
-  for (const question of active) {
-    if (!applicable.has(question.id)) continue;
-    const answer = map[question.id];
-    if (!isFailure(question, answer)) continue;
+  for (const [question, answer] of failedApplicable(catalogue, answers)) {
     const required = answer.remediationRequired;
     if (required === 'no') continue;
     if (required !== 'yes') return false;
@@ -231,6 +243,26 @@ export function remediationDecided(catalogue, answers) {
     if (canRecord && answerRemediation(answer) === null) return false;
   }
   return true;
+}
+
+/**
+ * Whether any failure on this Case has been decided as *needing* remediation.
+ *
+ * This is what makes the Case-level Responsible Party relevant: there is
+ * someone to send actions to only once some failed Answer says remediation is
+ * required. It is deliberately the *decision* and not `hasTrackableRemediation`
+ * — the latter also demands a recorded action or free-form text, so a field
+ * gated on it would appear and disappear as the Reviewer typed.
+ *
+ * @param {QuestionDefinition[] | null | undefined} catalogue
+ * @param {Record<string, Answer>} answers
+ * @returns {boolean}
+ */
+export function anyRemediationRequired(catalogue, answers) {
+  for (const [, answer] of failedApplicable(catalogue, answers)) {
+    if (answer.remediationRequired === 'yes') return true;
+  }
+  return false;
 }
 
 /**

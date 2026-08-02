@@ -546,6 +546,12 @@ test('route: a person capture field searches, records the person, and closes its
  */
 function renderResponsiblePartyRoute(searchPeople) {
   const editableSnapshot = snapshot();
+  // The picker only appears once a failure has been decided as needing
+  // remediation, so the Case is put in that state before the tab is opened.
+  editableSnapshot.catalogue[0].failureValues = ['No'];
+  editableSnapshot.answers = {
+    q1: { value: 'No', remediationRequired: 'yes' },
+  };
   editableSnapshot.caseRow = {
     ...editableSnapshot.caseRow,
     responsibleParty: '',

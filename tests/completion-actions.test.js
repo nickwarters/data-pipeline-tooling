@@ -745,31 +745,83 @@ test('completionControl: the remediation decision is asked for before the Respon
   assert.match(String(decided.reason), /Responsible Party/);
 });
 
-test('completionControl: the direct-complete path asks for the Responsible Party too', () => {
-  // No remediation to send, but the Case still names who owns what follows, so
-  // the same reason holds the Complete Case button.
+test('completionControl: the direct-complete path does not ask for a Responsible Party', () => {
+  // Every failure was decided No, so nothing is being sent to anyone and the
+  // field that would name them is not even rendered.
   const control = completionControl({
     ...preSend({ q1: { value: 'No', remediationRequired: 'no' } }),
     caseRow: { ...CASE_ROW, responsibleParty: '' },
   });
   assert.equal(control.visible, true);
-  assert.equal(control.disabled, true);
+  assert.equal(control.disabled, false);
   assert.equal(control.label, 'Complete Case');
-  assert.match(String(control.reason), /Responsible Party/);
+  assert.equal(control.reason, null);
 });
 
-test('completionControl: a Case with no failures at all still asks for the Responsible Party', () => {
-  // Nothing failed, so there is nothing to remediate and nothing to send — but
-  // the Case is still owned by someone, and this is the state that used to show
-  // no control whatsoever.
+test('completionControl: a Case with no failures at all needs no Responsible Party', () => {
+  // Nothing failed, so there is nothing to remediate, nothing to send, and
+  // nobody to name.
   const control = completionControl({
     ...preSend({ q1: { value: 'Yes' } }),
     caseRow: { ...CASE_ROW, responsibleParty: '' },
   });
   assert.equal(control.visible, true);
-  assert.equal(control.disabled, true);
+  assert.equal(control.disabled, false);
   assert.equal(control.label, 'Complete Case');
+  assert.equal(control.reason, null);
+});
+
+test('completionControl: one failure needing remediation still asks, whatever the others say', () => {
+  /** @type {any[]} */
+  const mixedCatalogue = [
+    ...CATALOGUE,
+    {
+      id: 'q2',
+      text: 'Explained?',
+      responseType: 'yes-no-na',
+      failureValues: ['No'],
+      deprecated: false,
+    },
+  ];
+  const mixed = {
+    machine: machine(mixedCatalogue),
+    caseRow: { ...CASE_ROW, responsibleParty: '' },
+    catalogue: mixedCatalogue,
+    answers: {
+      q1: { value: 'No', remediationRequired: /** @type {const} */ ('no') },
+      q2: {
+        value: 'No',
+        remediationRequired: /** @type {const} */ ('yes'),
+        remediationActions: [{ id: 'a1', text: 'Fix' }],
+      },
+    },
+    allAnswered: true,
+    captureGroups: [],
+  };
+  const control = completionControl(mixed);
+  assert.equal(control.visible, true);
+  assert.equal(control.disabled, true);
   assert.match(String(control.reason), /Responsible Party/);
+  assert.equal(
+    completionPatch({
+      ...mixed,
+      computeOutcome: () => ({ outcome: 'fail' }),
+      exportHash: null,
+    }),
+    null,
+    'and nothing is written while it is outstanding'
+  );
+});
+
+test('completionPatch: a Case needing no remediation completes with no Responsible Party', () => {
+  const patch = completionPatch({
+    ...preSend({ q1: { value: 'No', remediationRequired: 'no' } }),
+    caseRow: { ...CASE_ROW, responsibleParty: '' },
+    computeOutcome: () => ({ outcome: 'fail' }),
+    exportHash: null,
+  });
+  assert.equal(patch?.status, 'Completed');
+  assert.equal(patch?.hadRemediation, false);
 });
 
 test('completionControl: unanswered Questions still show nothing at all', () => {

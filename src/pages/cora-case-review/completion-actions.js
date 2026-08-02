@@ -2,6 +2,7 @@
 
 import { unfilledRequiredCapture } from '../../evaluators/issue-capture.js';
 import {
+  anyRemediationRequired,
   hasTrackableRemediation,
   remediationComplete,
   remediationDecided,
@@ -51,6 +52,25 @@ const RESPONSIBLE_PARTY_REASON =
   'Name a Responsible Party at the foot of the Issues tab before this Case can go any further.';
 
 /**
+ * Whether the Case still owes a Responsible Party. Gated on the same condition
+ * that renders the field, so the button is never disabled against a reason
+ * pointing at a control that is not on the page.
+ *
+ * @param {{
+ *   caseRow: import('../../sharepoint-client.js').CaseRow,
+ *   catalogue: QuestionDefinition[],
+ *   answers: Record<string, Answer>,
+ * }} input
+ * @returns {boolean}
+ */
+function missingResponsibleParty(input) {
+  return (
+    !input.caseRow.responsibleParty &&
+    anyRemediationRequired(input.catalogue, input.answers)
+  );
+}
+
+/**
  * Derive the one completion control from store state. The same CaseMachine
  * capability that permits the transition also controls whether the UI can
  * offer it.
@@ -95,7 +115,7 @@ export function completionControl(input) {
       input.answers,
       input.captureGroups
     );
-  const missingParty = readyToSend && !input.caseRow.responsibleParty;
+  const missingParty = readyToSend && missingResponsibleParty(input);
   return {
     visible: readyToSend || canClose || gated,
     disabled: gated || undecided || unfilledCapture || missingParty,
@@ -150,7 +170,7 @@ export function completionPatch(input) {
   }
   if (
     !input.allAnswered ||
-    !input.caseRow.responsibleParty ||
+    missingResponsibleParty(input) ||
     !machine.canComplete ||
     !remediationDecided(input.catalogue, input.answers) ||
     unfilledRequiredCapture(input.catalogue, input.answers, input.captureGroups)
