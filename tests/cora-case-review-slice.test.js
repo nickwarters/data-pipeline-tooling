@@ -237,7 +237,7 @@ function renderShippedState(
 }
 
 test('state: route state owns loading, save status, and selected tab under routes.caseReview', () => {
-  const initial = createInitialCaseReviewState(chrome, 'popover');
+  const initial = createInitialCaseReviewState(chrome);
   assert.equal(initial.chrome, chrome);
   assert.deepEqual(initial.routes.caseReview, {
     activeTab: '',
@@ -246,7 +246,6 @@ test('state: route state owns loading, save status, and selected tab under route
     captureCollapsed: {},
     captureSearch: {},
     responsiblePartySearch: { query: '', people: [] },
-    panelMode: 'popover',
     saveStatus: 'saved',
     snapshot: null,
   });
@@ -287,10 +286,10 @@ test('state: the Conversation panel starts collapsed on every load', () => {
     machine: { canToggleConversation: true },
   });
 
-  let state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: loadSnapshot() }
-  );
+  let state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: loadSnapshot(),
+  });
   assert.equal(state.routes.caseReview.conversationHidden, true);
 
   state = caseReviewReducer(state, { type: 'case/conversation-toggled' });
@@ -305,10 +304,10 @@ test('state: the Conversation panel starts collapsed on every load', () => {
 });
 
 test('On hold reducer: updates both hold fields in the loaded Case snapshot', () => {
-  const loaded = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: snapshot() }
-  );
+  const loaded = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: snapshot(),
+  });
   const placedOnHoldAt = '2026-07-23T09:30:00.000Z';
 
   const held = caseReviewReducer(loaded, {
@@ -335,7 +334,7 @@ test('On hold reducer: updates both hold fields in the loaded Case snapshot', ()
 });
 
 test('state: expanding a capture group preserves an override of a collapsed case-type default', () => {
-  const initial = createInitialCaseReviewState(chrome, 'popover');
+  const initial = createInitialCaseReviewState(chrome);
 
   const expanded = caseReviewReducer(initial, {
     type: 'case/capture-group-toggled',
@@ -351,7 +350,7 @@ test('state: expanding a capture group preserves an override of a collapsed case
 });
 
 test('state: capture person search is held per failed Question and per field', () => {
-  let state = createInitialCaseReviewState(chrome, 'popover');
+  let state = createInitialCaseReviewState(chrome);
   state = caseReviewReducer(state, {
     type: 'case/capture-search-input',
     questionId: 'q1',
@@ -448,10 +447,10 @@ function renderCaptureSearchRoute(searchPeople) {
     canEditIssues: true,
     canToggleConversation: false,
   };
-  let state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: failedSnapshot }
-  );
+  let state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: failedSnapshot,
+  });
   state = caseReviewReducer(state, { type: 'case/tab-selected', id: 'issues' });
   const never = new Promise(() => {});
   const client = /** @type {any} */ ({
@@ -557,10 +556,10 @@ function renderResponsiblePartyRoute(searchPeople) {
     canEditIssues: true,
     canToggleConversation: false,
   };
-  let state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: editableSnapshot }
-  );
+  let state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: editableSnapshot,
+  });
   state = caseReviewReducer(state, { type: 'case/tab-selected', id: 'issues' });
   const never = new Promise(() => {});
   /** @type {any[]} */
@@ -610,7 +609,7 @@ function renderResponsiblePartyRoute(searchPeople) {
 }
 
 test('state: the Case-level Responsible Party search is one query, not one per Question', () => {
-  let state = createInitialCaseReviewState(chrome, 'popover');
+  let state = createInitialCaseReviewState(chrome);
   state = caseReviewReducer(state, {
     type: 'case/responsible-party-search-input',
     query: 'Jane',
@@ -672,10 +671,10 @@ test('state: setting the Responsible Party advances the Case Row and leaves the 
   const loaded = snapshot();
   loaded.caseRow = { ...loaded.caseRow, responsibleParty: '' };
   loaded.machine = { canEditIssues: true };
-  const state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: loaded }
-  );
+  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: loaded,
+  });
 
   const set = caseReviewReducer(state, {
     type: 'case/responsible-party-changed',
@@ -713,10 +712,10 @@ test('the reducer ignores a case/field-edited naming the Responsible Party', () 
   // a Role.
   const loaded = snapshot();
   loaded.caseRow = { ...loaded.caseRow, responsibleParty: '' };
-  const state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: loaded }
-  );
+  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: loaded,
+  });
 
   assert.equal(
     caseReviewReducer(state, {
@@ -797,10 +796,10 @@ test('route: disposal drops a pending Responsible Party search', (t) => {
 });
 
 test('state: tab selection is store-owned and rejects hidden Sections', () => {
-  let state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: snapshot() }
-  );
+  let state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: snapshot(),
+  });
   state = caseReviewReducer(state, {
     type: 'case/tab-selected',
     id: 'notes',
@@ -815,10 +814,10 @@ test('state: tab selection is store-owned and rejects hidden Sections', () => {
 });
 
 test('route: the conversation host is a direct child the scoped popover CSS can target', () => {
-  const state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: snapshot() }
-  );
+  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: snapshot(),
+  });
   const { container } = renderShippedState(state);
   const root = container.querySelector('.cora-case-review');
   assert.ok(root, 'the case-review root is rendered');
@@ -844,10 +843,10 @@ test('route: mounting over a previous route’s leftover DOM keeps the conversat
     ...toggleSnapshot.machine,
     canToggleConversation: true,
   };
-  const state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: toggleSnapshot }
-  );
+  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: toggleSnapshot,
+  });
   // The router does not clear the container between routes; the incoming
   // route's first render replaces whatever the previous page left behind.
   // Seed a tree render() would happily patch in place (a div of divs, the
@@ -888,10 +887,10 @@ test('route: Appeal renders directly from store state without legacy controller 
     ...appealSnapshot.access,
     appealRequest: 'edit',
   };
-  let state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: appealSnapshot }
-  );
+  let state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: appealSnapshot,
+  });
   state = caseReviewReducer(state, {
     type: 'case/tab-selected',
     id: 'appealRequest',
@@ -949,10 +948,10 @@ test('route: configured Journey Owner and alternative Manager raisers reach the 
         config
       ),
     };
-    let state = caseReviewReducer(
-      createInitialCaseReviewState(chrome, 'popover'),
-      { type: 'case/load-finished', snapshot: appealSnapshot }
-    );
+    let state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+      type: 'case/load-finished',
+      snapshot: appealSnapshot,
+    });
     state = caseReviewReducer(state, {
       type: 'case/tab-selected',
       id: 'appealRequest',
@@ -977,10 +976,10 @@ test('route: raising an Appeal persists through the store-owned panel', () => {
     ...appealSnapshot.access,
     appealRequest: 'edit',
   };
-  let state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: appealSnapshot }
-  );
+  let state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: appealSnapshot,
+  });
   state = caseReviewReducer(state, {
     type: 'case/tab-selected',
     id: 'appealRequest',
@@ -1024,10 +1023,10 @@ test('route: a raised Appeal is resolvable in the same mount from the store-owne
     appealRequest: 'edit',
     appealReview: 'edit',
   };
-  let state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: appealSnapshot }
-  );
+  let state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: appealSnapshot,
+  });
   /** @type {Array<{id: string, field: string, value: any}>} */
   const writes = [];
   /** @type {Array<{id: string, fields: any}>} */
@@ -1093,10 +1092,10 @@ test('route: Appeal action remains live after switching from another tab', () =>
     ...appealSnapshot.access,
     appealRequest: 'edit',
   };
-  const state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: appealSnapshot }
-  );
+  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: appealSnapshot,
+  });
   /** @type {Array<{id: string, field: string, value: any}>} */
   const writes = [];
   const route = renderShippedState(state, {
@@ -1158,10 +1157,10 @@ test('route: Controls resolves an Appeal and amends an Outcome through state-der
     },
   };
 
-  let reviewState = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: controlsSnapshot }
-  );
+  let reviewState = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: controlsSnapshot,
+  });
   reviewState = caseReviewReducer(reviewState, {
     type: 'case/tab-selected',
     id: 'appealReview',
@@ -1186,10 +1185,10 @@ test('route: Controls resolves an Appeal and amends an Outcome through state-der
   assert.equal(fieldWrites[0].fields.amendedOutcome.fromAppealId, 'appeal-1');
 
   controlsSnapshot.caseRow.appeals = [];
-  let amendState = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: controlsSnapshot }
-  );
+  let amendState = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: controlsSnapshot,
+  });
   amendState = caseReviewReducer(amendState, {
     type: 'case/tab-selected',
     id: 'amendOutcome',
@@ -1233,10 +1232,10 @@ test('route: Appeal Review action remains live after switching from another tab'
   };
   /** @type {Array<{id: string, fields: any}>} */
   const writes = [];
-  const state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: controlsSnapshot }
-  );
+  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: controlsSnapshot,
+  });
   const route = renderShippedState(state, {
     saveQueue: {
       enqueue() {},
@@ -1279,10 +1278,10 @@ test('route: Amend Outcome action remains live after switching from another tab'
   };
   /** @type {Array<{id: string, fields: any}>} */
   const writes = [];
-  const state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: controlsSnapshot }
-  );
+  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: controlsSnapshot,
+  });
   const route = renderShippedState(state, {
     saveQueue: {
       enqueue() {},
@@ -1322,10 +1321,10 @@ test('route: appeal views keep empty Case Type configuration defaults', () => {
     appealReview: 'read-only',
     amendOutcome: 'read-only',
   };
-  const state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: minimal }
-  );
+  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: minimal,
+  });
   const { container } = renderShippedState(state);
 
   assert.equal(
@@ -1345,10 +1344,10 @@ test('route: appeal views keep empty Case Type configuration defaults', () => {
 });
 
 test('case page reducer: every identity guard returns the same state reference', () => {
-  const loaded = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: snapshot() }
-  );
+  const loaded = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: snapshot(),
+  });
   const activeTab = loaded.routes.caseReview.activeTab;
 
   assert.strictEqual(
@@ -1386,7 +1385,7 @@ test('case page reducer: every identity guard returns the same state reference',
 });
 
 test('case page reducer: a patch preserves chrome and unrelated route fields', () => {
-  const initial = createInitialCaseReviewState(chrome, 'popover');
+  const initial = createInitialCaseReviewState(chrome);
   const loaded = caseReviewReducer(initial, {
     type: 'case/load-finished',
     snapshot: snapshot(),
@@ -1401,7 +1400,6 @@ test('case page reducer: a patch preserves chrome and unrelated route fields', (
     next.routes.caseReview.snapshot,
     loaded.routes.caseReview.snapshot
   );
-  assert.equal(next.routes.caseReview.panelMode, 'popover');
   assert.equal(
     next.routes.caseReview.activeTab,
     loaded.routes.caseReview.activeTab
@@ -1409,7 +1407,7 @@ test('case page reducer: a patch preserves chrome and unrelated route fields', (
 });
 
 test('state: model refreshes and Answer edits preserve valid selection and fall back when access changes', () => {
-  const initial = createInitialCaseReviewState(chrome, 'popover');
+  const initial = createInitialCaseReviewState(chrome);
   assert.equal(
     caseReviewReducer(initial, {
       type: 'case/answers-edited',
@@ -1457,7 +1455,7 @@ test('state: model refreshes and Answer edits preserve valid selection and fall 
 });
 
 test('case page reducer keeps conversation and field state behind loaded access', () => {
-  const initial = createInitialCaseReviewState(chrome, 'popover');
+  const initial = createInitialCaseReviewState(chrome);
   assert.equal(
     caseReviewReducer(initial, {
       type: 'case/conversation-changed',
@@ -1590,10 +1588,10 @@ test('Details view takes its heading from the resolved section labels', () => {
 });
 
 test('view: shipped tab shell renders only permitted tabs and dispatches selection', async () => {
-  const state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: snapshot() }
-  );
+  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: snapshot(),
+  });
   const view = renderShippedState(state);
 
   const tabs = queryAllByRole(view.container, 'tab');
@@ -1625,7 +1623,7 @@ test('view: shipped tab shell renders only permitted tabs and dispatches selecti
 
 test('On hold view: only Reviewers with an In-progress Case see the current hold state', () => {
   const reviewerState = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
+    createInitialCaseReviewState(chrome),
     { type: 'case/load-finished', snapshot: snapshot() }
   );
   const reviewerView = renderShippedState(reviewerState);
@@ -1653,7 +1651,7 @@ test('On hold view: only Reviewers with an In-progress Case see the current hold
     permissions: { ...chrome.permissions, isReviewer: false },
   };
   const nonReviewerState = caseReviewReducer(
-    createInitialCaseReviewState(nonReviewerChrome, 'popover'),
+    createInitialCaseReviewState(nonReviewerChrome),
     { type: 'case/load-finished', snapshot: snapshot() }
   );
   assert.equal(
@@ -1666,7 +1664,7 @@ test('On hold view: only Reviewers with an In-progress Case see the current hold
 
   for (const status of ['Actions In Progress', 'Completed']) {
     const reportableState = caseReviewReducer(
-      createInitialCaseReviewState(chrome, 'popover'),
+      createInitialCaseReviewState(chrome),
       {
         type: 'case/load-finished',
         snapshot: {
@@ -1687,10 +1685,10 @@ test('On hold view: only Reviewers with an In-progress Case see the current hold
 });
 
 test('view: Summary is rendered from store state and configured sections', () => {
-  let state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: snapshot() }
-  );
+  let state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: snapshot(),
+  });
   state = caseReviewReducer(state, {
     type: 'case/tab-selected',
     id: 'summary',
@@ -1751,10 +1749,10 @@ test('view: Summary shows the live Outcome after every Outcome question is answe
       : 'pass',
   });
 
-  let state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: outcomeSnapshot }
-  );
+  let state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: outcomeSnapshot,
+  });
   state = caseReviewReducer(state, {
     type: 'case/answers-edited',
     answers: {
@@ -1782,10 +1780,10 @@ test('view: Summary applies empty config defaults and incomplete snapshots stay 
       computeOutcome: baseSnapshot.config.computeOutcome,
     },
   };
-  let state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: minimalSummarySnapshot }
-  );
+  let state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: minimalSummarySnapshot,
+  });
   state = caseReviewReducer(state, {
     type: 'case/tab-selected',
     id: 'summary',
@@ -1798,7 +1796,7 @@ test('view: Summary applies empty config defaults and incomplete snapshots stay 
     currentUser: null,
   };
   const incompleteState = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
+    createInitialCaseReviewState(chrome),
     { type: 'case/load-finished', snapshot: incomplete }
   );
   assert.doesNotThrow(() => renderShippedState(incompleteState));
@@ -1838,10 +1836,10 @@ test('view: Issues renders failed Answers directly from route state', () => {
     ],
     access: { ...snapshot().access, issues: 'read-only' },
   };
-  let state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: loadedSnapshot }
-  );
+  let state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: loadedSnapshot,
+  });
   state = caseReviewReducer(state, {
     type: 'case/tab-selected',
     id: 'issues',
@@ -1881,10 +1879,10 @@ test('action: completion flushes saves and persists only the CaseMachine transit
     allAnswered: true,
     exportHash: 'bank-hash',
   };
-  const state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: loadedSnapshot }
-  );
+  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: loadedSnapshot,
+  });
   /** @type {any[]} */
   const calls = [];
   const view = renderShippedState(state, {
@@ -1947,10 +1945,10 @@ test('action: completion folds the persisted transition into the store Case Row'
     allAnswered: true,
     exportHash: 'bank-hash',
   };
-  const state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: loadedSnapshot }
-  );
+  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: loadedSnapshot,
+  });
   /** @type {any} */
   let persistedFields = null;
   const view = renderShippedState(state, {
@@ -2036,10 +2034,10 @@ test('action: the Send Actions transition folds into the store Case Row too', as
     allAnswered: true,
     exportHash: 'bank-hash',
   };
-  const state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: loadedSnapshot }
-  );
+  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: loadedSnapshot,
+  });
   /** @type {any} */
   let persistedFields = null;
   const view = renderShippedState(state, {
@@ -2089,10 +2087,10 @@ test('action: a failed completion PATCH leaves the store Case Row as it was', as
     }),
     allAnswered: true,
   };
-  const state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: loadedSnapshot }
-  );
+  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: loadedSnapshot,
+  });
   let attempted = false;
   const view = renderShippedState(state, {
     saveQueue: {
@@ -2148,10 +2146,10 @@ test('action: an Answer edited while the completion PATCH is in flight survives'
     }),
     allAnswered: true,
   };
-  const state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: loadedSnapshot }
-  );
+  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: loadedSnapshot,
+  });
   /** @type {any} */
   let view;
   view = renderShippedState(state, {
@@ -2208,10 +2206,10 @@ test('action: a completion resolving after the mount is disposed dispatches noth
     }),
     allAnswered: true,
   };
-  const state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: loadedSnapshot }
-  );
+  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: loadedSnapshot,
+  });
   /** @type {() => void} */
   let release = () => {};
   const inFlight = new Promise((resolve) => {
@@ -2263,10 +2261,10 @@ test('action: a missing CaseMachine transition cannot dispatch completion', asyn
     }),
     allAnswered: true,
   };
-  const state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: loadedSnapshot }
-  );
+  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: loadedSnapshot,
+  });
   let patches = 0;
   const view = renderShippedState(state, {
     saveQueue: {
@@ -2322,10 +2320,10 @@ test('view: the completion button is disabled with its reason while remediation 
     }),
     allAnswered: true,
   };
-  const state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: loadedSnapshot }
-  );
+  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: loadedSnapshot,
+  });
   const view = renderShippedState(state);
 
   const button = /** @type {HTMLButtonElement} */ (
@@ -2340,10 +2338,10 @@ test('view: the completion button is disabled with its reason while remediation 
 });
 
 test('view: conflict state is surfaced with the existing reload warning', () => {
-  let state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: snapshot() }
-  );
+  let state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: snapshot(),
+  });
   state = caseReviewReducer(state, {
     type: 'case/save-status-changed',
     status: 'conflict',
@@ -2363,7 +2361,7 @@ test('view: conflict state is surfaced with the existing reload warning', () => 
 });
 
 test('view: loading, error, denied, saving, and reconnecting states are explicit', () => {
-  const initial = createInitialCaseReviewState(chrome, 'popover');
+  const initial = createInitialCaseReviewState(chrome);
   assert.match(renderShippedState(initial).container.textContent, /Loading/);
 
   const loaded = caseReviewReducer(initial, {
@@ -2406,10 +2404,10 @@ test('view: loading, error, denied, saving, and reconnecting states are explicit
 test('route: Notes and Conversation write through store-owned callbacks', async () => {
   const interactive = snapshot();
   interactive.machine = { canToggleConversation: true };
-  let state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: interactive }
-  );
+  let state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: interactive,
+  });
   state = caseReviewReducer(state, { type: 'case/tab-selected', id: 'notes' });
   state = caseReviewReducer(state, { type: 'case/conversation-toggled' });
 
@@ -2577,10 +2575,10 @@ test('the reducer ignores a case/field-edited for a field outside the plain-text
   // guard kept answering from its own load-time copy.
   const loaded = snapshot();
   loaded.caseRow = { ...loaded.caseRow, status: 'In-progress', notes: 'kept' };
-  const state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: loaded }
-  );
+  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: loaded,
+  });
 
   const afterLifecycle = caseReviewReducer(state, {
     type: 'case/field-edited',
@@ -2613,10 +2611,10 @@ test('the reducer ignores a case/field-edited for a field outside the plain-text
 test('the route writes to the loaded Case row id, not the route param that found it', () => {
   const loaded = snapshot();
   loaded.caseRow = { ...loaded.caseRow, id: 'c1' };
-  let state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: loaded }
-  );
+  let state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: loaded,
+  });
   state = caseReviewReducer(state, { type: 'case/tab-selected', id: 'notes' });
 
   /** @type {any[]} */
@@ -2670,10 +2668,10 @@ test('every persistence path addresses the loaded Case id, not the route param t
     mayResolveRemediation: false,
     transitionToCompleted: () => transitionPatch,
   });
-  let state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: interactive }
-  );
+  let state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: interactive,
+  });
   state = caseReviewReducer(state, { type: 'case/conversation-toggled' });
 
   /** @type {Array<[string, string]>} */
@@ -3658,10 +3656,10 @@ test('view: the Summary rolls up the Reviewer’s General Question answers', () 
     'general:observations': { value: 'Nothing systemic here' },
   };
 
-  let state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: generalSnapshot }
-  );
+  let state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: generalSnapshot,
+  });
   state = caseReviewReducer(state, {
     type: 'case/tab-selected',
     id: 'summary',
@@ -3693,7 +3691,7 @@ test('the Review tab and the Summary put General Questions on the same side, for
     };
 
     const { container } = renderShippedState(
-      caseReviewReducer(createInitialCaseReviewState(chrome, 'popover'), {
+      caseReviewReducer(createInitialCaseReviewState(chrome), {
         type: 'case/load-finished',
         snapshot: generalSnapshot,
       })
@@ -3764,7 +3762,7 @@ test('the Review tab and the Summary put General Questions on the same side, for
 
 test('panel map: a tab switch keeps every panel mounted and its nodes identical', () => {
   const view = renderShippedState(
-    caseReviewReducer(createInitialCaseReviewState(chrome, 'popover'), {
+    caseReviewReducer(createInitialCaseReviewState(chrome), {
       type: 'case/load-finished',
       snapshot: snapshot(),
     })
@@ -3808,10 +3806,10 @@ test('a Case whose as-reviewed Question Bank is unavailable renders a status-rol
   const warned = snapshot();
   warned.caseRow = { ...warned.caseRow, status: 'Reported' };
   warned.versionWarning = 'as-reviewed version unavailable';
-  const state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: warned }
-  );
+  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: warned,
+  });
   const view = renderShippedState(state);
   const banner = view.container.querySelector('.cora-banner-warning');
   assert.ok(banner, 'the version warning is rendered');
@@ -3827,20 +3825,20 @@ test('a Case with a resolved as-reviewed snapshot renders no warning', () => {
   resolved.caseRow = { ...resolved.caseRow, status: 'Reported' };
   resolved.versionWarning = null;
   resolved.exportHash = 'abc123';
-  const state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: resolved }
-  );
+  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: resolved,
+  });
   const view = renderShippedState(state);
   assert.equal(view.container.querySelector('.cora-banner-warning'), null);
   view.dispose();
 });
 
 test('an In-progress Case renders no version warning', () => {
-  const state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: snapshot() }
-  );
+  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: snapshot(),
+  });
   const view = renderShippedState(state);
   assert.equal(view.container.querySelector('.cora-banner-warning'), null);
   view.dispose();
@@ -4038,10 +4036,10 @@ test('conversationPanelMode defaults to the current page query string', () => {
 test('route: the header Conversation button toggles the Conversation panel', () => {
   const toggleSnapshot = snapshot();
   toggleSnapshot.machine = { canToggleConversation: true };
-  let state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: toggleSnapshot }
-  );
+  let state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: toggleSnapshot,
+  });
 
   const { container, actions } = renderShippedState(state);
   const host = /** @type {any} */ (
@@ -4093,10 +4091,10 @@ function remediationSnapshot() {
 }
 
 test('route: the Remediation tab’s Open conversation button opens the Conversation panel', () => {
-  let state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: remediationSnapshot() }
-  );
+  let state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: remediationSnapshot(),
+  });
   state = caseReviewReducer(state, {
     type: 'case/tab-selected',
     id: 'remediation',
@@ -4135,10 +4133,10 @@ test('route: collapsing an Issue Capture Group dispatches the route’s toggle a
       ],
     },
   };
-  let state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    { type: 'case/load-finished', snapshot: captureSnapshot }
-  );
+  let state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: captureSnapshot,
+  });
   state = caseReviewReducer(state, { type: 'case/tab-selected', id: 'issues' });
 
   const { container, actions } = renderShippedState(state);
@@ -4358,24 +4356,21 @@ test('a Case Type that renames every Section renames every tab and every heading
     },
   });
 
-  const state = caseReviewReducer(
-    createInitialCaseReviewState(chrome, 'popover'),
-    {
-      type: 'case/load-finished',
-      snapshot: /** @type {any} */ ({
-        ...snapshot(),
-        caseRow: row,
-        config,
-        catalogue,
-        applicableQuestions: catalogue,
-        answers: row.answers,
-        allAnswered: true,
-        summarySections: ['details', 'questions', 'issues', 'notes'],
-        access,
-        sectionLabels,
-      }),
-    }
-  );
+  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: /** @type {any} */ ({
+      ...snapshot(),
+      caseRow: row,
+      config,
+      catalogue,
+      applicableQuestions: catalogue,
+      answers: row.answers,
+      allAnswered: true,
+      summarySections: ['details', 'questions', 'issues', 'notes'],
+      access,
+      sectionLabels,
+    }),
+  });
   const { container } = renderShippedState(state);
 
   const tabNames = queryAllByRole(container, 'tab').map(

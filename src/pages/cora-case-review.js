@@ -69,7 +69,6 @@ import {
  *
  * @typedef {Object} CaseReviewRouteState
  * @property {string} activeTab
- * @property {string} panelMode
  * @property {SaveStatus} saveStatus
  * @property {boolean} conversationHidden
  * @property {boolean} completionPending
@@ -92,16 +91,14 @@ import {
 
 /**
  * @param {import('../core/chrome-state.js').ChromeState} chrome
- * @param {string} panelMode
  * @returns {CaseReviewState}
  */
-export function createInitialCaseReviewState(chrome, panelMode) {
+export function createInitialCaseReviewState(chrome) {
   return {
     chrome,
     routes: {
       caseReview: {
         activeTab: '',
-        panelMode,
         saveStatus: 'saved',
         conversationHidden: true,
         completionPending: false,
@@ -985,7 +982,7 @@ export function createRouteSlice(params, context) {
   }
 
   return {
-    initialState: createInitialCaseReviewState(context.chrome, panelMode),
+    initialState: createInitialCaseReviewState(context.chrome),
     reducer: caseReviewReducer,
     render(
       /** @type {Element} */ container,

@@ -86,7 +86,6 @@ function renderAppealReview(overrides = {}, queue = makeQueue()) {
     heading: 'Appeal Review',
     caseRow: /** @type {CaseRow | null} */ (null),
     access: /** @type {'edit'|'read-only'|'hidden'} */ ('read-only'),
-    currentUser: /** @type {any} */ (null),
     outcomeOptions: /** @type {any[]} */ ([]),
     ...overrides,
   };
@@ -99,7 +98,7 @@ function renderAppealReview(overrides = {}, queue = makeQueue()) {
           if (!props.caseRow) return;
           const result = resolveAppeal({
             caseRow: props.caseRow,
-            resolver: props.currentUser?.id ?? '',
+            resolver: 'u-controls',
             at: '2026-06-12T00:00:00Z',
             ...resolution,
           });
@@ -122,7 +121,6 @@ function makeEditable(caseOverrides = {}) {
   return renderAppealReview({
     caseRow: makeCase({ appeals: [openAppeal()], ...caseOverrides }),
     access: 'edit',
-    currentUser: { id: 'u-controls', displayName: 'Controls' },
     outcomeOptions: [
       { id: 'pass', wording: 'Pass', severity: 0 },
       { id: 'fail', wording: 'Fail', severity: 100 },

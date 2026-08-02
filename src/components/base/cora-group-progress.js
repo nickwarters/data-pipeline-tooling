@@ -2,12 +2,10 @@
 import { h } from '../../lib/html.js';
 
 /** @typedef {import('../../evaluators/question-group-progress.js').QuestionGroupProgress} QuestionGroupProgress */
-/** @typedef {import('../../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 
 /**
  * @typedef {Object} GroupProgressProps
  * @property {QuestionGroupProgress[]} groups
- * @property {QuestionDefinition[]} unansweredQuestions
  * @property {(group: string) => void} onGroupJump
  * @property {() => void} onJumpUnanswered
  */

@@ -6,7 +6,6 @@ import { openAppealOf } from './appeal-actions.js';
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../../sharepoint-client.js').Appeal} Appeal */
 /** @typedef {import('../../sharepoint-client.js').OutcomeOption} OutcomeOption */
-/** @typedef {import('../../sharepoint-client.js').CurrentUser} CurrentUser */
 
 /**
  * The **Appeal Review** Section. Lets **Controls** resolve an open
@@ -24,7 +23,6 @@ import { openAppealOf } from './appeal-actions.js';
  * @typedef {object} AppealReviewProps
  * @property {CaseRow | null} caseRow
  * @property {'edit'|'read-only'|'hidden'} access
- * @property {CurrentUser | null} currentUser
  * @property {OutcomeOption[]} outcomeOptions
  * @property {(input: {appealId: string, verdict: 'agreed'|'rejected', rationale: string, outcome?: string, justification?: string}) => void} [onResolve]
  * @property {string} heading The Section's resolved heading.

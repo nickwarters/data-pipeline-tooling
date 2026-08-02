@@ -52,7 +52,6 @@ function renderAppeal(overrides = {}, queue = makeQueue()) {
   const props = {
     caseRow: /** @type {CaseRow | null} */ (null),
     access: /** @type {'edit'|'read-only'|'hidden'} */ ('read-only'),
-    currentUser: /** @type {any} */ (null),
     catalogue: /** @type {any[]} */ ([]),
     answers: /** @type {Record<string, any>} */ ({}),
     heading: 'Appeal',
@@ -67,7 +66,7 @@ function renderAppeal(overrides = {}, queue = makeQueue()) {
           if (!props.caseRow) return;
           const result = raiseAppeal({
             caseRow: props.caseRow,
-            appellant: props.currentUser?.id ?? '',
+            appellant: 'u-rp',
             rationale,
             citedAnswerKeys,
             id: 'appeal-new',
@@ -88,7 +87,6 @@ function makeEditable(caseOverrides = {}) {
   return renderAppeal({
     caseRow: makeCase(caseOverrides),
     access: 'edit',
-    currentUser: { id: 'u-rp', displayName: 'RP' },
   });
 }
 

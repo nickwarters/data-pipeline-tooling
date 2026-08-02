@@ -303,7 +303,6 @@ export const SECTION_PANELS = {
       AppealSection({
         caseRow,
         access: snapshot.access.appealRequest,
-        currentUser: snapshot.currentUser,
         catalogue: snapshot.catalogue,
         answers: snapshot.answers,
         onRaise: ({ rationale, citedAnswerKeys }) =>
@@ -324,7 +323,6 @@ export const SECTION_PANELS = {
       AppealReviewSection({
         caseRow,
         access: snapshot.access.appealReview,
-        currentUser: snapshot.currentUser,
         outcomeOptions: config.outcomeOptions ?? [],
         heading: snapshot.sectionLabels.appealReview.heading,
         onResolve: (resolution) =>
@@ -339,7 +337,6 @@ export const SECTION_PANELS = {
       AmendOutcomeSection({
         caseRow,
         access: snapshot.access.amendOutcome,
-        currentUser: snapshot.currentUser,
         outcomeOptions: config.outcomeOptions ?? [],
         heading: snapshot.sectionLabels.amendOutcome.heading,
         onAmend: ({ outcome, justification }) =>

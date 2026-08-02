@@ -80,10 +80,6 @@ export function createQuestionPanelView() {
     }
 
     const progress = computeQuestionGroupProgress(catalogue, answers);
-    const unansweredQuestions = questions.filter(
-      (question) => !isAnswered(answers[question.id])
-    );
-
     // Compose the grouped question list. Category headings (top level, only when
     // any question declares one) nest Question Group headings; each group
     // heading is a scroll anchor the progress side panel jumps to. Cards are
@@ -157,7 +153,6 @@ export function createQuestionPanelView() {
         { className: 'cora-group-progress', 'aria-label': 'Question Groups' },
         ...GroupProgress({
           groups: progress,
-          unansweredQuestions,
           onGroupJump: (group) =>
             groupAnchors
               .get(group)

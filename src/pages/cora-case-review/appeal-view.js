@@ -10,7 +10,6 @@ import { openAppealOf } from './appeal-actions.js';
 /** @typedef {import('../../sharepoint-client.js').Appeal} Appeal */
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
-/** @typedef {import('../../sharepoint-client.js').CurrentUser} CurrentUser */
 
 /**
  * The Appeal Section. Lets the Case Type's configured appeal raiser — the
@@ -35,7 +34,6 @@ import { openAppealOf } from './appeal-actions.js';
  * @typedef {object} AppealProps
  * @property {CaseRow | null} caseRow
  * @property {'edit'|'read-only'|'hidden'} access
- * @property {CurrentUser | null} currentUser
  * @property {QuestionDefinition[]} catalogue
  * @property {Record<string, Answer>} answers
  * @property {(input: {rationale: string, citedAnswerKeys: string[]}) => void} [onRaise]

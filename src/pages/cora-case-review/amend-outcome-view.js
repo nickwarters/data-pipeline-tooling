@@ -6,7 +6,6 @@ import { currentOutcome } from '../../evaluators/amended-outcome.js';
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../../sharepoint-client.js').AmendedOutcome} AmendedOutcome */
 /** @typedef {import('../../sharepoint-client.js').OutcomeOption} OutcomeOption */
-/** @typedef {import('../../sharepoint-client.js').CurrentUser} CurrentUser */
 
 /**
  * The **Amend Outcome** Section. Lets **Controls** author a case-level
@@ -27,7 +26,6 @@ import { currentOutcome } from '../../evaluators/amended-outcome.js';
  * @typedef {object} AmendOutcomeProps
  * @property {CaseRow | null} caseRow
  * @property {'edit'|'read-only'|'hidden'} access
- * @property {CurrentUser | null} currentUser
  * @property {OutcomeOption[]} outcomeOptions
  * @property {(input: {outcome: string, justification: string}) => void} [onAmend]
  * @property {string} heading The Section's resolved heading.

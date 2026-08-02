@@ -18,7 +18,6 @@ test('GroupProgress renders counts, completion state, and reports navigation act
         { group: 'Opening', answered: 1, total: 1 },
         { group: 'Discovery', answered: 0, total: 2 },
       ],
-      unansweredQuestions: [],
       onGroupJump: (group) => actions.push(['group', group]),
       onJumpUnanswered: () => actions.push(['unanswered']),
     })
@@ -39,7 +38,6 @@ test('GroupProgress renders counts, completion state, and reports navigation act
 test('GroupProgress with no groups renders only the jump action', () => {
   const nodes = GroupProgress({
     groups: [],
-    unansweredQuestions: [],
     onGroupJump() {},
     onJumpUnanswered() {},
   });

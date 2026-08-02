@@ -64,7 +64,6 @@ function renderAmendOutcome(overrides = {}, queue = makeQueue()) {
     heading: 'Amend Outcome',
     caseRow: /** @type {CaseRow | null} */ (null),
     access: /** @type {'edit'|'read-only'|'hidden'} */ ('read-only'),
-    currentUser: /** @type {any} */ (null),
     outcomeOptions: /** @type {any[]} */ ([]),
     ...overrides,
   };
@@ -79,7 +78,7 @@ function renderAmendOutcome(overrides = {}, queue = makeQueue()) {
             caseRow: props.caseRow,
             outcome,
             justification,
-            amendedBy: props.currentUser?.id ?? '',
+            amendedBy: 'controls-1',
             amendedAt: '2026-06-12T00:00:00Z',
           });
           props.caseRow = result.caseRow;
@@ -97,7 +96,6 @@ function makeEditable(caseOverrides = {}) {
   return renderAmendOutcome({
     caseRow: makeCase(caseOverrides),
     access: 'edit',
-    currentUser: { id: 'controls-1', displayName: 'Controls' },
     outcomeOptions: OUTCOME_OPTIONS,
   });
 }
