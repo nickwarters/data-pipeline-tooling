@@ -223,7 +223,7 @@ async function loadCaseTypeSources(slugs, importers) {
 }
 
 /**
- * Pure core of `resolveCaseSources`: which of the given Case Types the user
+ * Pure core of `resolveAppCaseSources`: which of the given Case Types the user
  * may read from or write to. This is THE app-wide eligibility rule.
  * Type-scoped roles grant only their matching source:
  *
@@ -327,31 +327,16 @@ async function resolveAvailableCaseSources(userGroups, options) {
 }
 
 /**
- * Resolves every Case source the current user may read from or write to,
- * derived from their group membership. Every slug in `CASE_TYPE_IMPORTERS`
- * (case-types/manifest.js) is considered — eligibility is purely group-derived,
- * never gated by a slug allow-list. Each returned source carries an explicit
- * `listName`: there is no hidden default list to fall back to.
- *
- * A Case Type whose module fails to load is dropped: a user whose only
- * eligible Case Type is broken gets an empty list, never a broken app.
- *
- * @param {string[]} userGroups
- * @param {ResolveOptions} [options]
- * @returns {Promise<CaseSource[]>}
- */
-export async function resolveCaseSources(userGroups, options = {}) {
-  const { caseSources } = await resolveAvailableCaseSources(
-    userGroups,
-    options
-  );
-  return caseSources;
-}
-
-/**
  * Resolve the source sets supplied to app routes, plus the Case Types that
  * could not be loaded at all — which boot surfaces once, app-wide, so a
  * mysteriously empty Case list is never mistaken for "no Cases assigned".
+ *
+ * `caseSources` covers every Case source the user may read from or write to.
+ * Every slug in the registry is considered — eligibility is purely
+ * group-derived, never gated by a slug allow-list — and each source carries an
+ * explicit `listName`, there being no hidden default list to fall back to. A
+ * Case Type whose module fails to load is dropped, so a user whose only
+ * eligible Case Type is broken gets an empty list rather than a broken app.
  *
  * @param {string[]} userGroups
  * @param {string[]} ownedJourneyCaseTypes

@@ -8,7 +8,6 @@ import {
   reasonCase,
   makeReasonClient,
   MockSharePointClient,
-  reasonFlagFields,
 } from './helpers/mock-sharepoint-client.js';
 
 // Capability: paging, ordering, compound reasons, and persisted flags.
@@ -144,9 +143,9 @@ test('MockSharePointClient: anyOf combines with a base filter (AND of base, OR o
   assert.equal(completedAppealsOrReopened, 1);
 });
 
-// --- Action Centre state flag writes ---
+// --- Indexed flag column writes ---
 
-test('MockSharePointClient: a reasonFlagFields write persists and is queryable', async () => {
+test('MockSharePointClient: a flag-and-clock write persists and is queryable', async () => {
   const client = makeClient();
   const before = await client.countCases(
     { awaitingResponsibleParty: true },
@@ -157,7 +156,10 @@ test('MockSharePointClient: a reasonFlagFields write persists and is queryable',
   const fresh = await client.getCase('case-1', { listName: LIST });
   const res = await client.patchCase(
     'case-1',
-    reasonFlagFields('awaitingFrontline', true, '2026-07-05T09:00:00Z'),
+    {
+      awaitingResponsibleParty: true,
+      awaitingSince: '2026-07-05T09:00:00Z',
+    },
     /** @type {string} */ (fresh?.etag),
     { listName: LIST }
   );
@@ -176,7 +178,7 @@ test('MockSharePointClient: a reasonFlagFields write persists and is queryable',
   // Clearing the flag drops it back out of the reason group.
   const cleared = await client.patchCase(
     'case-1',
-    reasonFlagFields('awaitingFrontline', false),
+    { awaitingResponsibleParty: false, awaitingSince: null },
     /** @type {string} */ (res.data?.etag),
     { listName: LIST }
   );

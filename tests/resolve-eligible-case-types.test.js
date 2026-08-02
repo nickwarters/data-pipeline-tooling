@@ -6,12 +6,12 @@ import assert from 'node:assert/strict';
 import {
   allocationSourcesFromCaseSources,
   resolveCaseSourcesFromCaseTypes,
-  resolveCaseSources,
   resolveAppCaseSources,
 } from '../src/setup/resolve-eligible-case-types.js';
 import { permissions } from '../src/services/permissions.js';
 import { CASE_TYPE_IMPORTERS } from '../case-types/manifest.js';
 import { captureConsoleError } from './_console.js';
+import { resolveCaseSources } from './_resolve-case-sources.js';
 
 /** @param {Partial<import('../src/sharepoint-client.js').CaseTypeConfig>} overrides */
 function minimalConfig(overrides = {}) {
@@ -444,13 +444,7 @@ test('resolveCaseSourcesFromCaseTypes: Responsible Party Managers get every Case
   );
 });
 
-// ===== resolveCaseSources (manifest-loading wrapper) =====
-
-test('resolveCaseSources: returns a Promise', async () => {
-  const result = resolveCaseSources([]);
-  assert.ok(result instanceof Promise, 'should return a Promise');
-  await result;
-});
+// ===== the caseSources half of resolveAppCaseSources =====
 
 test('resolveCaseSources: the org-wide Reviewers group alone grants no Case source', async () => {
   // The bare `Reviewers` functional group is axis 1 (what you can do); reading
@@ -566,7 +560,7 @@ const brokenImporter = () => {
 
 /** @param {Partial<Record<string, any>>} [overrides] */
 /**
- * `resolveAppCaseSources` / `resolveCaseSources` with the console captured.
+ * `resolveAppCaseSources`, and its Case-source half, with the console captured.
  *
  * Several tests below deliberately feed in a Case Type that cannot load, to
  * prove the failure is contained. Containment reports to `console.error` and

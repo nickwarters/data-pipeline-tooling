@@ -365,7 +365,7 @@ const registry = [
 are all **derived** from this table, so there is nothing else to register.
 `displayName` is stated here and **only** here (#527): both the capability side
 (`permissions.caseTypes`) and the Case-source eligibility side
-(`resolveCaseSources`, via `displayNameFor`) read this one copy.
+(`resolveAppCaseSources`, via `displayNameFor`) read this one copy.
 `bank` is optional: omit it and the type simply does not appear in the Question
 Bank editor until its artifact exists.
 
@@ -375,7 +375,7 @@ This is the entire integration surface with the rest of the app:
   outcome configuration on the way through (`validateConfiguredOutcomeConfig`
   checks every `optionOutcomes` target and `defaultOutcomeId` against
   `outcomeOptions`, throwing `InvalidCaseTypeConfigError` on any dangling id).
-- `resolveCaseSources` ([src/setup/resolve-eligible-case-types.js](../../src/setup/resolve-eligible-case-types.js))
+- `resolveAppCaseSources` ([src/setup/resolve-eligible-case-types.js](../../src/setup/resolve-eligible-case-types.js))
   considers **every** slug in `CASE_TYPE_IMPORTERS` when working out which
   Case sources the current user may see. There is no separate allow-list.
 - The Question Bank editor page lists every bank in
@@ -441,7 +441,7 @@ users holding the new groups, one per role you want to exercise:
 ```
 
 Personas are selected with `?asUser=<key>`; the persona's `groups` array is
-what `resolveCapabilities` and `resolveCaseSources` run against, and its
+what `resolveCapabilities` and `resolveAppCaseSources` run against, and its
 `userId` is what `assignedReviewer` on fixture Cases must match for "my
 cases" surfaces. Update the file's header comment listing the available keys.
 The existing cross-type personas (`controls`, `reviewer-manager`,

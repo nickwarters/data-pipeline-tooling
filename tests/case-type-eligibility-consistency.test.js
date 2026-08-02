@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import { CASE_TYPE_IMPORTERS, displayNameFor } from '../case-types/manifest.js';
-import { resolveCaseSources } from '../src/setup/resolve-eligible-case-types.js';
+import { resolveCaseSources } from './_resolve-case-sources.js';
 import { permissions } from '../src/services/permissions.js';
 import { personas } from '../dev/fixtures/personas.js';
 

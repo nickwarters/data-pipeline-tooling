@@ -6,7 +6,7 @@
 // independent consumers derive them:
 //
 //   1. `permissions.caseTypes` / `resolveCapabilities()` — the capability side
-//   2. `resolveCaseSources()` — the Case-source eligibility side
+//   2. `resolveAppCaseSources()` — the Case-source eligibility side
 //
 // Each used to read a DIFFERENT copy of the name (the registry entry vs the
 // Case Type config module), so drift made a user resolve the capability but not
@@ -26,7 +26,7 @@ import {
   resolveCapabilities,
   caseTypeGroupNames,
 } from '../src/services/permissions.js';
-import { resolveCaseSources } from '../src/setup/resolve-eligible-case-types.js';
+import { resolveCaseSources } from './_resolve-case-sources.js';
 
 /** @typedef {import('../case-types/manifest.js').CaseTypeEntry} CaseTypeEntry */
 
@@ -81,7 +81,7 @@ test('registry rename: Case source eligibility moves with the registry display n
   assert.deepEqual(
     viaListAccess.map((s) => s.slug),
     ['complaints'],
-    'resolveCaseSources() must derive `Reviewers - <name>` from the SAME ' +
+    'resolveAppCaseSources() must derive `Reviewers - <name>` from the SAME ' +
       'registry entry the capability side reads.'
   );
 

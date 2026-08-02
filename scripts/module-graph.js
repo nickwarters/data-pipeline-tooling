@@ -126,6 +126,188 @@ export function importSpecifiers(rel, root) {
 }
 
 /**
+ * An `import('<module>')` call, optionally with the member reached off it. The
+ * member matters — `import('<module>').PageState` consumes only `PageState`,
+ * while a bare `typeof import('<module>')` consumes the whole namespace.
+ *
+ * The examples are written with an unresolvable placeholder on purpose: this
+ * pattern is matched against raw bytes, comments included, so a real specifier
+ * spelled here would make this comment a reader of that module.
+ */
+const TYPE_IMPORT =
+  /import\(\s*['"](\.[^'"\n]+)['"]\s*\)(?:\s*\.\s*([A-Za-z_$][\w$]*))?/g;
+
+/** @typedef {{ specifier: string, name: string }} TypeReference */
+
+/**
+ * Every relative `import('…')` in a file, read from the RAW bytes rather than
+ * `readCode()` — this is the one scanner that must see comments. Its reason for
+ * existing is the JSDoc type annotation: a module that exports nothing but
+ * typedefs has no other kind of reader, and a name used only as a type has no
+ * other kind of consumer, so ignoring comments here would report both as dead.
+ *
+ * It does not distinguish a type annotation from a runtime dynamic import,
+ * because the raw bytes do not carry that distinction and the imprecision costs
+ * nothing: `importedNames` already records `'*'` for a real dynamic import, and
+ * a consumer reads the union of the two, so a member captured here can only add
+ * to what a specifier is read for — never narrow a `'*'` back to one name.
+ *
+ * Counting a reference can only suppress a report, never invent one, which is
+ * the safe direction for a gate that deletes code. The accepted cost is the
+ * mirror of that: a specifier written in a comment keeps its target alive until
+ * someone deletes the comment too.
+ *
+ * `name` is the member reached off the call, or `'*'` when nothing is.
+ *
+ * @param {string} rel @param {URL} root @returns {TypeReference[]}
+ */
+export function typeReferences(rel, root) {
+  const text = readFileSync(new URL(rel, root), 'utf8');
+  return [...text.matchAll(TYPE_IMPORT)].map((match) => ({
+    specifier: match[1],
+    name: match[2] ?? '*',
+  }));
+}
+
+/**
+ * A name exported by a declaration: `export const x`, `export function x`,
+ * `export async function* x`, `export class X`.
+ */
+const EXPORT_DECLARATION =
+  /^[ \t]*export[ \t]+(?:async[ \t]+)?(?:function\*?|class|const|let|var)[ \t]+([A-Za-z_$][\w$]*)/gm;
+
+/** An export clause, with or without a `from`: `export { a, b as c } from './x'`. */
+const EXPORT_CLAUSE =
+  /^[ \t]*export[ \t]*\{([^}]*)\}[ \t]*(?:from[ \t]*['"]([^'"\n]+)['"])?/gm;
+
+const EXPORT_DEFAULT = /^[ \t]*export[ \t]+default\b/gm;
+
+/** @typedef {{ name: string, line: number }} ExportedName */
+
+/**
+ * Every name a module exports, with the line it is exported on.
+ *
+ * Two forms are deliberately not matched, neither of which occurs in this tree:
+ * a multi-declarator `export const A = 1, B = 2` (only `A` is seen) and a
+ * destructured `export const { a } = obj` (nothing is seen).
+ *
+ * @param {string} rel @param {URL} root @returns {ExportedName[]}
+ */
+export function exportedNames(rel, root) {
+  const code = readCode(rel, root);
+  /** @type {ExportedName[]} */
+  const names = [];
+  for (const match of code.matchAll(EXPORT_DECLARATION)) {
+    names.push({ name: match[1], line: lineOf(code, match.index) });
+  }
+  for (const match of code.matchAll(EXPORT_CLAUSE)) {
+    const line = lineOf(code, match.index);
+    for (const name of clauseNames(match[1], 'exported'))
+      names.push({ name, line });
+  }
+  for (const match of code.matchAll(EXPORT_DEFAULT)) {
+    names.push({ name: 'default', line: lineOf(code, match.index) });
+  }
+  return names.sort((a, b) => a.line - b.line);
+}
+
+/**
+ * The names in a `{ … }` clause. `a as b` names two different things depending
+ * on the direction: the source module is read for `a`, and `b` is what the
+ * reading module goes on to call it — or, in a re-export, what it publishes.
+ *
+ * @param {string} clause @param {'exported' | 'imported'} side
+ * @returns {string[]}
+ */
+function clauseNames(clause, side) {
+  return clause
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const [local, alias] = part.split(/\s+as\s+/).map((word) => word.trim());
+      return side === 'exported' ? (alias ?? local) : local;
+    })
+    .filter((name) => /^[A-Za-z_$][\w$]*$/.test(name));
+}
+
+/**
+ * A static import or re-export with a clause: the clause text and the module it
+ * is read from.
+ */
+const IMPORT_CLAUSE =
+  /^[ \t]*import[ \t]+([^'";]*?)[ \t]*from[ \t]*['"]([^'"\n]+)['"]/gm;
+const REEXPORT_CLAUSE =
+  /^[ \t]*export[ \t]*(\{[^}]*\}|\*)[ \t]*from[ \t]*['"]([^'"\n]+)['"]/gm;
+
+/** @typedef {{ specifier: string, names: string[] | '*' }} ImportedNames */
+
+/**
+ * Which names a module reads out of each of its dependencies.
+ *
+ * `'*'` means "every name": a namespace import, a `export * from`, or a dynamic
+ * `import()`, whose namespace object hides which properties the caller reads.
+ *
+ * @param {string} rel @param {URL} root @returns {ImportedNames[]}
+ */
+export function importedNames(rel, root) {
+  const code = readCode(rel, root);
+  /** @type {{ entry: ImportedNames, index: number }[]} */
+  const found = [];
+  for (const match of code.matchAll(IMPORT_CLAUSE)) {
+    found.push({
+      entry: { specifier: match[2], names: clauseOf(match[1]) },
+      index: match.index,
+    });
+  }
+  for (const match of code.matchAll(REEXPORT_CLAUSE)) {
+    found.push({
+      entry: {
+        specifier: match[2],
+        names:
+          match[1] === '*'
+            ? '*'
+            : clauseNames(match[1].slice(1, -1), 'imported'),
+      },
+      index: match.index,
+    });
+  }
+  for (const match of code.matchAll(DYNAMIC_IMPORT)) {
+    found.push({
+      entry: { specifier: match[1], names: '*' },
+      index: match.index,
+    });
+  }
+  return found.sort((a, b) => a.index - b.index).map(({ entry }) => entry);
+}
+
+/**
+ * The names an import clause reads: a leading bare identifier is the default
+ * export, `* as ns` is everything, and a brace clause names each one.
+ * @param {string} clause @returns {string[] | '*'}
+ */
+function clauseOf(clause) {
+  if (/^\*/.test(clause.trim())) return '*';
+  const brace = clause.indexOf('{');
+  const head = (brace === -1 ? clause : clause.slice(0, brace)).replace(
+    /,\s*$/,
+    ''
+  );
+  /** @type {string[]} */
+  const names = [];
+  if (/^[A-Za-z_$][\w$]*$/.test(head.trim())) names.push('default');
+  if (brace !== -1) {
+    names.push(
+      ...clauseNames(
+        clause.slice(brace + 1, clause.lastIndexOf('}')),
+        'imported'
+      )
+    );
+  }
+  return names;
+}
+
+/**
  * 1-based line number of a match index.
  * @param {string} code @param {number} index @returns {number}
  */

@@ -26,11 +26,6 @@ import {
  */
 const LONG_OPTION_THRESHOLD = 40;
 
-/** @param {QuestionDefinition[]} questions */
-export function questionGroupsOf(questions) {
-  return [...new Set(questions.map(questionGroupOf))];
-}
-
 /** @param {Answer|undefined} answer */
 function isAnswered(answer) {
   const value = answer?.value;

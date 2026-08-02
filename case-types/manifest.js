@@ -46,7 +46,7 @@ const registry = [
  * it composes the three provisioned SharePoint group names — see
  * `caseTypeGroupNames()` in `src/services/permissions.js` — and both the
  * capability side (`permissions.caseTypes`) and the Case-source eligibility side
- * (`resolveCaseSources`, via `displayNameFor`) read this one copy. A Case Type
+ * (`resolveAppCaseSources`, via `displayNameFor`) read this one copy. A Case Type
  * config module must not restate it.
  *
  * Entries are FROZEN, so "one copy" is structural rather than a convention: a

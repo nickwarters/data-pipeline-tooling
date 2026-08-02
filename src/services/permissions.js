@@ -82,7 +82,7 @@ export const permissions = {
   //
   // Derived ON READ, not snapshotted at module scope. A snapshot was
   // taken the moment this module was first evaluated, so any Case Type
-  // registered afterwards was invisible here while `resolveCaseSources()` —
+  // registered afterwards was invisible here while `resolveAppCaseSources()` —
   // which reads the registry live through `displayNameFor()` — already granted
   // it. The two sides then disagreed about the same user depending on nothing
   // but module-evaluation order: the capability layer called them a Visitor

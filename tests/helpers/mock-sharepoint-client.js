@@ -4,8 +4,6 @@
 
 import { MockSharePointClient } from '../../src/services/mock-sharepoint-client.js';
 
-import { reasonFlagFields } from '../../src/services/action-centre-flags.js';
-
 import { makeCaseRow } from './fixtures.js';
 
 // Standard named Case-list store for mock-client capability suites.
@@ -163,4 +161,4 @@ export function makeReasonClient() {
   });
 }
 
-export { MockSharePointClient, reasonFlagFields };
+export { MockSharePointClient };

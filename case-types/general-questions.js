@@ -49,7 +49,7 @@ export const SHARED_GENERAL_QUESTIONS = {
  *
  * Throws on an unknown shared key, a duplicate key, or an unsupported type.
  * That throw lands at module-evaluation time, which at runtime means *boot* —
- * `resolveCaseSources` loads every registered Case Type before any route
+ * `resolveAppCaseSources` loads every registered Case Type before any route
  * registers, so a bad declaration costs the app its boot rather than one Case
  * Type. The intended catch is therefore CI, not the browser: the manifest sweep
  * in `tests/case-type-manifest.test.js` evaluates every registered Case Type and

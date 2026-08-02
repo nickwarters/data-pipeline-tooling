@@ -7,7 +7,7 @@ import { fireEvent, getByRole } from './helpers/semantic-dom.js';
 
 installDom();
 
-const { createQuestionPanelView, questionGroupsOf } =
+const { createQuestionPanelView } =
   await import('../src/pages/cora-case-review/question-panel-view.js');
 const { render } = await import('../src/core/render.js');
 
@@ -44,10 +44,6 @@ test('Questions view mounts every applicable Question Group in one grouped list'
     props({ answers: { q1: { value: 'Yes' }, q2: { value: 'No' } } })
   );
 
-  assert.deepEqual(questionGroupsOf(props().questions), [
-    'Identity',
-    'Conduct',
-  ]);
   // Both groups' cards render together — this is a scrolling list, not tabs.
   assert.equal(findAllByClass(node, 'cora-question-card').length, 2);
   assert.match(node.textContent, /Question q1/);

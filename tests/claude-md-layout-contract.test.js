@@ -19,11 +19,10 @@ const ROOT = new URL('../', import.meta.url);
  *
  * Known limit, accepted deliberately: matching on basename means a name that is
  * not unique in the tree is satisfied by a single mention. Today that applies to
- * `case-actions.js`, `general-questions.js` and `roadmap.js`, each of which
- * exists at two paths. A second file taking one of those names would pass
- * unnoticed. Matching full paths instead would force the
- * block to spell out its own indentation, which is the kind of brittleness that
- * gets a guard deleted rather than maintained.
+ * `general-questions.js` and `roadmap.js`, each of which exists at two paths. A
+ * second file taking one of those names would pass unnoticed. Matching full
+ * paths instead would force the block to spell out its own indentation, which
+ * is the kind of brittleness that gets a guard deleted rather than maintained.
  *
  * @param {string} directory
  * @returns {string[]}

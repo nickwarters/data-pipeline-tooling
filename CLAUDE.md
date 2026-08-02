@@ -147,8 +147,17 @@ evaluator would silently ignore, no unknown `sections` key, no empty
 `remediationStatuses` list and none omitting `complete`); every
 `case-types/banks/*.txt` artifact is parsed and shape-checked, and every registry
 `bank` thunk must name one that exists; and the route table is checked for
-malformed or duplicated hash patterns. These checks are skipped when the graph is
-not clean, and the graph artifact is written only when everything passes.
+malformed or duplicated hash patterns. On the same clean graph it then reads the
+edges backwards (`scripts/verify-dead-code.js`): a module under `src/` or
+`case-types/` that no host page, tool or dev fixture can reach is a failure, and
+so is an exported name nothing reads — with an explicit, reasoned exemption list
+in the script for the seams that must stay. Reachability counts JSDoc type
+references as edges, so a typedef-only module is not mistaken for dead, and the
+walk stops at `tests/`, because a module kept alive only by its own tests is
+precisely what the check is for. Today it reports only a name referenced nowhere
+at all; narrowing the "exported solely for a test" population is later work. All
+of these checks are skipped when the graph is not clean, and the graph artifact
+is written only when everything passes.
 Per-slug containment and the unavailable-Case-Type boot banner stay the
 serving-time backstop regardless. Run `check`, then `verify`, then
 `test:coverage`, then `test:deploy` (the Python suite for the deploy script)
@@ -224,9 +233,6 @@ src/
     route-state.js              # patchRoute/setRoute/patchSnapshot: the immutable route-slice
                                 #   patch and whole-slice replace reducers call instead of
                                 #   respelling the nest (#518, #546)
-
-  actions/                      # effects: async work reached only via dispatch
-    case-actions.js             # persistence effect example: SharePointClient + SaveQueue re-entering via dispatch
 
   components/                   # reusable pure views, layered by dependency
     base/                       # leaf primitives — compose no other view
@@ -320,7 +326,6 @@ src/
     abortable-client.js           # binds a mount-lifetime AbortSignal to a client's Case reads; writes untouched (#545)
     account-name.js
     across-sources.js             # multi-list fan-out: one scoped request per Case source, merged (ADR-0022)
-    action-centre-flags.js
     action-centre-model.js
     assignment-stamp.js           # the write-path rule pairing assignedAt with assignedReviewer, so
                                   #   no caller can set a Reviewer without stamping when (#633)
@@ -381,6 +386,8 @@ scripts/
   verify-config.js              # the verify gate's configuration half: evaluates Case Type modules,
                                 #   bank artifacts and the route table in Node, so a broken Case Type
                                 #   is found before a browser loads it
+  verify-dead-code.js           # the verify gate's dead-code half: reads the graph backwards to find
+                                #   modules nothing reaches and exports nothing reads
   verify_build.js               # npm run verify: parses every src/ + case-types/ module, resolves every
                                 #   specifier and asset reference case-sensitively over the whole deployed
                                 #   file set; emits .verify/import-graph.json

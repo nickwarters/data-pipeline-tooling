@@ -41,9 +41,12 @@
  * runtime edge from a Case Type module to the Question Bank artifact it awaits,
  * which `verify-config.js` hands over because it already resolves that path.
  *
- * Once the graph is clean, `verify-config.js` evaluates the configuration on top
- * of it — Case Type modules, Question Bank artifacts and the route table — for
- * the reasons its own header gives.
+ * Once the graph is clean, two checks run on top of it. `verify-config.js`
+ * evaluates the configuration — Case Type modules, Question Bank artifacts and
+ * the route table — for the reasons its own header gives. `verify-dead-code.js`
+ * then reads the graph backwards, asking which modules and which exported names
+ * nothing reaches; both need every specifier resolved first, which is why they
+ * run here rather than beside the graph build.
  */
 
 import { execFile } from 'node:child_process';
@@ -57,6 +60,7 @@ import {
   resolveRelative,
 } from './module-graph.js';
 import { checkConfiguration } from './verify-config.js';
+import { checkDeadCode } from './verify-dead-code.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -98,7 +102,8 @@ const HTML_SCRIPT_SRC = /<script\b[^>]*?\ssrc\s*=\s*(['"])([^'"\n]+)\1/g;
 
 /**
  * @typedef {{
- *   kind: 'syntax' | 'unresolved' | 'case-type' | 'bank' | 'route',
+ *   kind: 'syntax' | 'unresolved' | 'case-type' | 'bank' | 'route'
+ *     | 'unreachable' | 'unused-export',
  *   file: string,
  *   specifier?: string,
  *   line?: number,
@@ -521,7 +526,7 @@ async function main() {
     // not parse or does not resolve produces derivative errors, not new
     // information. Fix the graph, then run again.
     console.error(
-      'verify: configuration checks skipped until the module graph is clean'
+      'verify: configuration and dead-code checks skipped until the module graph is clean'
     );
     process.exitCode = 1;
     return;
@@ -532,14 +537,23 @@ async function main() {
     counts,
     bankEdges,
   } = await checkConfiguration();
+  // The dead-code walk reads the graph backwards, so it runs on the finished
+  // graph: the derived Case-Type-to-bank edges are attached first, and are part
+  // of what it walks.
+  const derivedFailures = attachDerivedEdges(graph, bankEdges, root);
+  const { failures: deadCodeFailures, counts: deadCode } = checkDeadCode({
+    root,
+    graph,
+  });
   const remaining = [
     ...configFailures,
-    ...attachDerivedEdges(graph, bankEdges, root),
+    ...derivedFailures,
+    ...deadCodeFailures,
   ];
   if (remaining.length) {
     for (const failure of remaining) console.error(formatFailure(failure));
     console.error(
-      `verify: ${remaining.length} configuration failure(s) — graph not written`
+      `verify: ${remaining.length} failure(s) after the graph — graph not written`
     );
     process.exitCode = 1;
     return;
@@ -561,6 +575,9 @@ async function main() {
   );
   console.log(
     `verify: config clean — ${counts.caseTypes} Case Type(s), ${counts.banks} bank artifact(s), ${counts.routes} route(s) checked`
+  );
+  console.log(
+    `verify: no dead code — ${deadCode.reachable} module(s) reachable, ${deadCode.exports} export(s) declared on them checked, ${deadCode.exempt} exempt`
   );
 }
 
