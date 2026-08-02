@@ -11,7 +11,7 @@ import {
 import { permissions } from '../src/services/permissions.js';
 import { CASE_TYPE_IMPORTERS } from '../case-types/manifest.js';
 import { captureConsoleError } from './_console.js';
-import { resolveCaseSources } from './_resolve-case-sources.js';
+import { caseSourcesFor } from './_case-sources-for.js';
 
 /** @param {Partial<import('../src/sharepoint-client.js').CaseTypeConfig>} overrides */
 function minimalConfig(overrides = {}) {
@@ -446,7 +446,7 @@ test('resolveCaseSourcesFromCaseTypes: Responsible Party Managers get every Case
 
 // ===== the caseSources half of resolveAppCaseSources =====
 
-test('resolveCaseSources: the org-wide Reviewers group alone grants no Case source', async () => {
+test('resolveAppCaseSources: the org-wide Reviewers group alone grants no Case source', async () => {
   // The bare `Reviewers` functional group is axis 1 (what you can do); reading
   // a Case Type's list is axis 2 (which list you can open), and only a
   // per-Case-Type group crosses it. This used to resolve `example-review`,
@@ -454,7 +454,7 @@ test('resolveCaseSources: the org-wide Reviewers group alone grants no Case sour
   // `eligibleGroups` — a pattern since removed from the scaffold as an
   // accident. Asserting the grant was therefore pinning the accident in place;
   // what is worth pinning is that no Case Type opens itself to every Reviewer.
-  const sources = await resolveCaseSources(['Reviewers']);
+  const sources = await caseSourcesFor(['Reviewers']);
   assert.deepEqual(
     sources.map((s) => s.slug),
     [],
@@ -462,8 +462,8 @@ test('resolveCaseSources: the org-wide Reviewers group alone grants no Case sour
   );
 });
 
-test('resolveCaseSources: example-review source carries its declared listName and displayName', async () => {
-  const sources = await resolveCaseSources(['Reviewers - Example Review']);
+test('resolveAppCaseSources: example-review source carries its declared listName and displayName', async () => {
+  const sources = await caseSourcesFor(['Reviewers - Example Review']);
   const exampleReview = sources.find((s) => s.slug === 'example-review');
   assert.deepEqual(exampleReview, {
     slug: 'example-review',
@@ -476,8 +476,8 @@ test('resolveCaseSources: example-review source carries its declared listName an
   });
 });
 
-test('resolveCaseSources: a Reviewers - Complaints user is granted the complaints source via its derived list-access group', async () => {
-  const sources = await resolveCaseSources(['Reviewers - Complaints']);
+test('resolveAppCaseSources: a Reviewers - Complaints user is granted the complaints source via its derived list-access group', async () => {
+  const sources = await caseSourcesFor(['Reviewers - Complaints']);
   assert.deepEqual(sources, [
     {
       slug: 'complaints',
@@ -488,16 +488,16 @@ test('resolveCaseSources: a Reviewers - Complaints user is granted the complaint
   ]);
 });
 
-test('resolveCaseSources: Reviewer Managers are granted every manifest Case Type as a source', async () => {
-  const sources = await resolveCaseSources(['Reviewer Managers']);
+test('resolveAppCaseSources: Reviewer Managers are granted every manifest Case Type as a source', async () => {
+  const sources = await caseSourcesFor(['Reviewer Managers']);
   assert.deepEqual(
     sources.map((s) => s.slug).sort(),
     Object.keys(CASE_TYPE_IMPORTERS).sort()
   );
 });
 
-test('resolveCaseSources: Maintainers can sample Cases from every Question Bank source', async () => {
-  const sources = await resolveCaseSources([permissions.maintainer]);
+test('resolveAppCaseSources: Maintainers can sample Cases from every Question Bank source', async () => {
+  const sources = await caseSourcesFor([permissions.maintainer]);
   assert.deepEqual(
     sources.map((s) => s.slug).sort(),
     Object.keys(CASE_TYPE_IMPORTERS).sort()
@@ -522,14 +522,14 @@ test('resolveCaseSourcesFromCaseTypes: broad roles come from the permissions con
   }
 });
 
-test('resolveCaseSources: complaints carries its explicit Case list', async () => {
-  const sources = await resolveCaseSources(['Reviewer Managers']);
+test('resolveAppCaseSources: complaints carries its explicit Case list', async () => {
+  const sources = await caseSourcesFor(['Reviewer Managers']);
   const complaints = sources.find((s) => s.slug === 'complaints');
   assert.equal(complaints?.listName, 'Cases-Complaints');
 });
 
-test('resolveCaseSources: returns no sources when the user holds no matching group', async () => {
-  const sources = await resolveCaseSources(['SomeOtherGroup']);
+test('resolveAppCaseSources: returns no sources when the user holds no matching group', async () => {
+  const sources = await caseSourcesFor(['SomeOtherGroup']);
   assert.deepEqual(sources, []);
 });
 
@@ -585,13 +585,13 @@ async function quietlyResolveAppCaseSources(
 }
 
 /**
- * @param {Parameters<typeof resolveCaseSources>[0]} userGroups
- * @param {Parameters<typeof resolveCaseSources>[1]} [options]
- * @returns {ReturnType<typeof resolveCaseSources>}
+ * @param {Parameters<typeof caseSourcesFor>[0]} userGroups
+ * @param {Parameters<typeof caseSourcesFor>[1]} [options]
+ * @returns {ReturnType<typeof caseSourcesFor>}
  */
 async function quietlyResolveCaseSources(userGroups, options) {
   const { result } = await captureConsoleError(() =>
-    resolveCaseSources(userGroups, options)
+    caseSourcesFor(userGroups, options)
   );
   return result;
 }
@@ -638,7 +638,7 @@ test('containment: drops the Case Type whose module throws and keeps the rest', 
 
 test('containment: logs the failing slug and its error by default', async () => {
   const { logged } = await captureConsoleError(() =>
-    resolveCaseSources([], {
+    caseSourcesFor([], {
       importers: /** @type {any} */ ({ 'example-review': brokenImporter }),
     })
   );
@@ -823,7 +823,7 @@ test('resolveAppCaseSources: a broken Case Type cannot leak into any resolved so
   );
 });
 
-test('resolveCaseSources: a user whose only Case Type is broken gets an empty list, not a crash', async () => {
+test('resolveAppCaseSources: a user whose only Case Type is broken gets an empty list, not a crash', async () => {
   const sources = await quietlyResolveCaseSources(
     ['Reviewers - Example Review'],
     {

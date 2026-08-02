@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import { CASE_TYPE_IMPORTERS, displayNameFor } from '../case-types/manifest.js';
-import { resolveCaseSources } from './_resolve-case-sources.js';
+import { caseSourcesFor } from './_case-sources-for.js';
 import { permissions } from '../src/services/permissions.js';
 import { personas } from '../dev/fixtures/personas.js';
 
@@ -30,14 +30,14 @@ function jsFilesUnder(dir) {
 }
 
 test('eligibility: Reviewer Managers resolve every manifest slug to a source with an explicit listName', async () => {
-  const sources = await resolveCaseSources(['Reviewer Managers']);
+  const sources = await caseSourcesFor(['Reviewer Managers']);
   const bySlug = new Map(sources.map((s) => [s.slug, s]));
 
   for (const slug of Object.keys(CASE_TYPE_IMPORTERS)) {
     const source = bySlug.get(slug);
     assert.ok(
       source,
-      `resolveCaseSources(['Reviewer Managers']) did not resolve manifest ` +
+      `caseSourcesFor(['Reviewer Managers']) did not resolve manifest ` +
         `slug "${slug}". Every Case Type must be group-derivable — a manager ` +
         `holds every source.`
     );
@@ -51,7 +51,7 @@ test('eligibility: Reviewer Managers resolve every manifest slug to a source wit
 });
 
 test('eligibility: a user holding no groups resolves no sources (purely group-derived, no slug allow-list)', async () => {
-  const sources = await resolveCaseSources([]);
+  const sources = await caseSourcesFor([]);
   assert.deepEqual(
     sources,
     [],

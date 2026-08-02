@@ -26,7 +26,7 @@ import {
   resolveCapabilities,
   caseTypeGroupNames,
 } from '../src/services/permissions.js';
-import { resolveCaseSources } from './_resolve-case-sources.js';
+import { caseSourcesFor } from './_case-sources-for.js';
 
 /** @typedef {import('../case-types/manifest.js').CaseTypeEntry} CaseTypeEntry */
 
@@ -77,7 +77,7 @@ test('registry rename: resolveCapabilities derives its group names from the rena
 });
 
 test('registry rename: Case source eligibility moves with the registry display name too', async () => {
-  const viaListAccess = await resolveCaseSources([renamedGroups.listAccess]);
+  const viaListAccess = await caseSourcesFor([renamedGroups.listAccess]);
   assert.deepEqual(
     viaListAccess.map((s) => s.slug),
     ['complaints'],
@@ -87,7 +87,7 @@ test('registry rename: Case source eligibility moves with the registry display n
 
   for (const group of [renamedGroups.caseTypeOwner, renamedGroups.journeyOwner])
     assert.deepEqual(
-      (await resolveCaseSources([group])).map((s) => s.slug),
+      (await caseSourcesFor([group])).map((s) => s.slug),
       ['complaints'],
       `${group} must resolve the complaints source from the registry name`
     );
@@ -103,14 +103,14 @@ test('registry rename: Case source eligibility moves with the registry display n
     staleGroups.journeyOwner,
   ])
     assert.deepEqual(
-      await resolveCaseSources([group]),
+      await caseSourcesFor([group]),
       [],
       `${group} names the OLD display name — nothing may still derive from it`
     );
 });
 
 test('registry rename: the resolved Case source reports the registry display name', async () => {
-  const [source] = await resolveCaseSources([renamedGroups.listAccess]);
+  const [source] = await caseSourcesFor([renamedGroups.listAccess]);
   assert.equal(
     source?.displayName,
     RENAMED,
@@ -151,7 +151,7 @@ test('a Case Type registered AFTER permissions.js was evaluated reaches BOTH con
     'a user granted a Case source is never simultaneously a Visitor'
   );
 
-  const sources = await resolveCaseSources([groups.listAccess]);
+  const sources = await caseSourcesFor([groups.listAccess]);
   assert.deepEqual(
     sources.map((s) => s.slug),
     ['late-single-source'],

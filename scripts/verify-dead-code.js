@@ -50,8 +50,21 @@ import {
  */
 const PUBLIC_SEAMS = Object.freeze({});
 
-/** Where the deployed tree's own entry points live: nothing imports a host page. */
-const HOST_SUFFIXES = ['.html', '.aspx'];
+/**
+ * What can carry an ES import: a module, or a page with an inline
+ * `<script type="module">`, which reads modules just as a `.js` file does and
+ * whose imports the static scanner finds either way. One list, because a file
+ * followed for its imports and a file scanned for the names it reads have to be
+ * the same set — a page queued as a root but skipped by the name scan would
+ * make a name it imports look unread.
+ */
+const IMPORT_CARRIERS = ['.js', '.html', '.aspx'];
+
+/**
+ * Where the deployed tree's own entry points live: nothing imports a host page.
+ * A host page is a page rather than a module, which is every carrier bar `.js`.
+ */
+const HOST_SUFFIXES = IMPORT_CARRIERS.filter((suffix) => suffix !== '.js');
 
 /** Directories whose modules are checked for being dead. */
 const CHECKED_ROOTS = ['src/', 'case-types/'];
@@ -62,9 +75,6 @@ const CHECKED_ROOTS = ['src/', 'case-types/'];
  * but what they import is alive.
  */
 const TOOL_ROOTS = ['scripts/', 'dev/'];
-
-/** What under a tool root can carry an ES import: a module, or an inline one. */
-const ROOT_SUFFIXES = ['.js', '.html'];
 
 /**
  * The walk stops here. A test is not a consumer — a module kept alive only by
@@ -89,14 +99,14 @@ const NOT_A_CONSUMER = 'tests/';
  * happens to appear in a string literal in its own file suppresses its own
  * report. That can hide dead code; it can never condemn live code.
  *
- * The name goes into the pattern unescaped because every name reaching here is
- * a JavaScript identifier, which carries no regular expression metacharacter.
- *
  * @param {string} name @param {string} code @returns {boolean}
  */
 function referencedNowhereAtAll(name, code) {
+  // A JavaScript identifier may contain `$`, which is an anchor in a pattern:
+  // unescaped, `x$` would match at the end of the file instead of at the name.
+  const escaped = name.replace(/[$\\^*+?.()|[\]{}]/g, '\\$&');
   const occurrences = code.match(
-    new RegExp(`(?<![\\w$])${name}(?![\\w$])`, 'g')
+    new RegExp(`(?<![\\w$])${escaped}(?![\\w$])`, 'g')
   );
   return (occurrences?.length ?? 0) <= 1;
 }
@@ -147,7 +157,7 @@ function reachableModules(root, graph) {
     try {
       queue.push(
         ...filesUnder(new URL(toolRoot, root), root).filter((rel) =>
-          ROOT_SUFFIXES.some((suffix) => rel.endsWith(suffix))
+          IMPORT_CARRIERS.some((suffix) => rel.endsWith(suffix))
         )
       );
     } catch {
@@ -175,7 +185,7 @@ function reachableModules(root, graph) {
     // side-effect import, a stylesheet `@import` and a `<script src>` all make
     // their target reachable while consuming none of its exports.
     for (const target of targetsOf(file, root, graph)) queue.push(target);
-    if (!file.endsWith('.js') && !file.endsWith('.html')) continue;
+    if (!IMPORT_CARRIERS.some((suffix) => file.endsWith(suffix))) continue;
     for (const { specifier, names } of importedNames(file, root)) {
       record(resolveRelative(file, specifier, root), names);
     }

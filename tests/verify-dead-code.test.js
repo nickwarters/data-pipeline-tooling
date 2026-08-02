@@ -222,6 +222,39 @@ test('a JSDoc type import naming no member consumes the whole module', () => {
   assert.deepEqual(result.failures, []);
 });
 
+test('a dollar sign in an export name is matched literally, not as an anchor', () => {
+  const result = checkTree({
+    'src/app.js': "import { entry } from './dollar.js';\nconsole.log(entry);\n",
+    'src/dollar.js': [
+      'export const usedInternally$ = () => 1;',
+      'export const entry = () => usedInternally$();',
+      'export const nowhere$ = 2;',
+    ].join('\n'),
+  });
+
+  assert.deepEqual(
+    result.failures.map((failure) => failure.message),
+    [
+      "'nowhere$' is exported but read by nothing — delete it, or add an entry to PUBLIC_SEAMS saying why it stays",
+    ]
+  );
+});
+
+test('a host page reads names through its inline module script', () => {
+  const result = checkTree({
+    'host/app.aspx': [
+      '<script type="module">',
+      "  import { fromTheHostPage } from '../src/host-seam.js';",
+      '  document.title = String(fromTheHostPage);',
+      '</script>',
+    ].join('\n'),
+    'src/app.js': "import './host-seam.js';\n",
+    'src/host-seam.js': 'export const fromTheHostPage = 1;\n',
+  });
+
+  assert.deepEqual(result.failures, []);
+});
+
 test('an export named in the exemption list is not reported', () => {
   const files = {
     'src/app.js': BOOT,
