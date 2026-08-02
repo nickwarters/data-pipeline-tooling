@@ -4194,7 +4194,7 @@ test('case review slice: the read carries the signal while the write path keeps 
   let readOptions = null;
   /** @type {any[]} */
   const loadedByQueue = [];
-  const caseRow = makeCaseRow({
+  const readRow = makeCaseRow({
     id: 'c1',
     caseType: 'example-review',
     title: 'Case',
@@ -4206,7 +4206,7 @@ test('case review slice: the read carries the signal while the write path keeps 
     client: {
       getCase: async (/** @type {any} */ _id, /** @type {any} */ opts = {}) => {
         readOptions = opts;
-        return caseRow;
+        return readRow;
       },
       getCurrentUser: async () => ({ id: 'reviewer', groups: [] }),
       getExportHash: async () => null,
@@ -4239,7 +4239,7 @@ test('case review slice: the read carries the signal while the write path keeps 
   assert.equal(readOptions?.signal, signal, 'the Case read carries the signal');
   assert.deepEqual(
     loadedByQueue,
-    [caseRow],
+    [readRow],
     'the SaveQueue still receives the loaded Case Row'
   );
 });
