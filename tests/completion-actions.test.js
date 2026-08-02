@@ -9,38 +9,21 @@ import {
   completionPatch,
   readyToClose,
 } from '../src/pages/cora-case-review/completion-actions.js';
+import { makeCaseRow, makePermissions } from './helpers/fixtures.js';
 
 isolateBrowserGlobals();
 /** @type {any} */ (globalThis).location = { hash: '' };
 
-/** @type {import('../src/sharepoint-client.js').CaseRow} */
-const CASE_ROW = {
+const CASE_ROW = makeCaseRow({
   id: 'c1',
   caseType: 'example-review',
   title: 'Case',
-  status: 'In-progress',
   assignedReviewer: 'u1',
   responsibleParty: 'u2',
-  answers: {},
-  conversation: [],
-  notes: '',
-  completedAt: null,
   etag: 'e1',
-};
+});
 
-/** @type {import('../src/services/permissions.js').Capabilities} */
-const CAPABILITIES = {
-  isReviewer: false,
-  ownedCaseTypes: [],
-  isAdviser: false,
-  isReviewerManager: false,
-  isResponsiblePartyManager: false,
-  isMaintainer: false,
-  listAccessCaseTypes: [],
-  ownedJourneyCaseTypes: [],
-  isControls: false,
-  isVisitor: true,
-};
+const CAPABILITIES = makePermissions({ isReviewer: false, isVisitor: true });
 
 /** @type {import('../src/sharepoint-client.js').CaseTypeConfig} */
 const CONFIG = {

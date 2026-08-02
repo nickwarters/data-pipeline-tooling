@@ -1,6 +1,7 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { makeCaseRow } from './helpers/fixtures.js';
 
 const { listCasesPerSource, listCasesAcrossSources, countCasesAcrossSources } =
   await import('../src/services/across-sources.js');
@@ -11,19 +12,15 @@ const { listCasesPerSource, listCasesAcrossSources, countCasesAcrossSources } =
 /** @typedef {import('../src/sharepoint-client.js').SharePointClient} SharePointClient */
 
 /** @param {string} id @param {string} caseType @returns {CaseRow} */
-const row = (id, caseType) => ({
-  id,
-  caseType,
-  title: 'T',
-  status: 'In-progress',
-  assignedReviewer: 'r',
-  responsibleParty: 'rp',
-  answers: {},
-  conversation: [],
-  notes: '',
-  completedAt: null,
-  etag: 'e',
-});
+const row = (id, caseType) =>
+  makeCaseRow({
+    id,
+    caseType,
+    title: 'T',
+    assignedReviewer: 'r',
+    responsibleParty: 'rp',
+    etag: 'e',
+  });
 
 /**
  * @param {string} slug

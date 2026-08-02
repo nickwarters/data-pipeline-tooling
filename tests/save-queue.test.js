@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { SaveQueue } from '../src/services/save-queue.js';
+import { makeCaseRow } from './helpers/fixtures.js';
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../src/sharepoint-client.js').PatchResult} PatchResult */
@@ -39,20 +40,16 @@ function makeTimer() {
   };
 }
 
+// Built once and shared by reference: several tests hand the same object to
+// loadCase twice and rely on the queue seeing one identity, not two equal rows.
 /** @type {CaseRow} */
-const BASE_ROW = {
+const BASE_ROW = makeCaseRow({
   id: 'c1',
   caseType: 'test',
   title: 'Test Case',
-  status: 'In-progress',
   assignedReviewer: 'u1',
   responsibleParty: 'u2',
-  answers: {},
-  conversation: [],
-  notes: '',
-  completedAt: null,
-  etag: 'etag-1',
-};
+});
 
 /**
  * Minimal stub client. patchResponses are consumed in order; when exhausted

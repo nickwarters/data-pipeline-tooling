@@ -11,6 +11,7 @@ import {
   queryAllByTag,
 } from './helpers/semantic-dom.js';
 import { registerCaseType } from '../case-types/manifest.js';
+import { makeCaseRow, makeChrome } from './helpers/fixtures.js';
 
 installDom();
 
@@ -64,40 +65,23 @@ function answerOption(root, questionId, option) {
   return getByRole(fieldset, 'radio', { name: option });
 }
 
-/** @type {import('../src/core/chrome-state.js').ChromeState} */
-const chrome = {
+const chrome = makeChrome({
   currentUser: { id: 'u1', displayName: 'User 1' },
-  permissions: {
-    isReviewer: true,
-    listAccessCaseTypes: [],
-    isAdviser: false,
-    ownedCaseTypes: [],
-    ownedJourneyCaseTypes: [],
-    isControls: false,
-    isReviewerManager: false,
-    isResponsiblePartyManager: false,
-    isMaintainer: false,
-    isVisitor: false,
-  },
-};
+});
 
-/** @type {import('../src/sharepoint-client.js').CaseRow} */
-const caseRow = {
+// `assignedReviewer` matches `chrome.currentUser.id`, which is what makes the
+// default posture "the Assigned Reviewer is looking at their own Case".
+const caseRow = makeCaseRow({
   id: 'c1',
   caseType: 'example-review',
   title: 'Config-driven Case',
-  status: 'In-progress',
   assignedReviewer: 'u1',
   responsibleParty: 'u2',
-  answers: {},
-  conversation: [],
-  notes: '',
   onHold: false,
   placedOnHoldAt: null,
-  completedAt: null,
   etag: 'e1',
   details: { customerName: 'Ada Lovelace', accountNumber: '' },
-};
+});
 
 function snapshot() {
   const catalogue = [

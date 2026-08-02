@@ -2,36 +2,28 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
+import { makeChrome, makePermissions } from './helpers/fixtures.js';
 
 installDom();
 
 const { createRouteSlice, homeView } = await import('../src/pages/home.js');
 
-const NONE = {
-  isReviewer: false,
-  ownedCaseTypes: /** @type {string[]} */ ([]),
-  isAdviser: false,
-  isReviewerManager: false,
-  isResponsiblePartyManager: false,
-  isMaintainer: false,
-  listAccessCaseTypes: /** @type {string[]} */ ([]),
-  ownedJourneyCaseTypes: /** @type {string[]} */ ([]),
-  isControls: false,
-  isVisitor: false,
-};
+/** @typedef {import('../src/services/permissions.js').Capabilities} Capabilities */
 
-/** @param {Partial<typeof NONE>} overrides */
+// Home renders one panel per capability, so the baseline here is a user with
+// none of them — the opposite of the shared factory's Reviewer posture.
+/** @param {Partial<Capabilities>} overrides */
 function capabilities(overrides = {}) {
-  return { ...NONE, ...overrides };
+  return makePermissions({ isReviewer: false, ...overrides });
 }
 
-/** @param {Partial<typeof NONE>} permissionOverrides */
+/** @param {Partial<Capabilities>} permissionOverrides */
 function state(permissionOverrides = {}) {
   return {
-    chrome: {
+    chrome: makeChrome({
       currentUser: { id: 'u1', displayName: 'A User' },
       permissions: capabilities(permissionOverrides),
-    },
+    }),
     routes: { home: {} },
   };
 }

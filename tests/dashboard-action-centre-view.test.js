@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
+import { makeCaseRow, makePermissions } from './helpers/fixtures.js';
 
 installDom();
 
@@ -13,35 +14,21 @@ const {
   loadActionCentrePage,
 } = await import('../src/pages/dashboard/action-centre-view.js');
 
+// Reasons are unlocked one capability at a time, so the baseline grants none.
+/** @param {Partial<import('../src/services/permissions.js').Capabilities>} [overrides] */
 function capabilities(overrides = {}) {
-  return /** @type {import('../src/services/permissions.js').Capabilities} */ ({
-    isReviewer: false,
-    listAccessCaseTypes: [],
-    isAdviser: false,
-    ownedCaseTypes: [],
-    ownedJourneyCaseTypes: [],
-    isControls: false,
-    isReviewerManager: false,
-    isResponsiblePartyManager: false,
-    isMaintainer: false,
-    isVisitor: false,
-    ...overrides,
-  });
+  return makePermissions({ isReviewer: false, ...overrides });
 }
 
+// Long overdue by default: every row here is meant to qualify for the Overdue
+// reason unless a test overrides its clock.
 /** @param {string} id */
 function row(id) {
-  return /** @type {import('../src/sharepoint-client.js').CaseRow} */ ({
+  return makeCaseRow({
     id,
-    caseType: 'complaints',
     title: id,
-    status: 'In-progress',
     assignedReviewer: 'me',
     responsibleParty: 'rp',
-    answers: {},
-    conversation: [],
-    notes: '',
-    completedAt: null,
     dueDate: '2020-01-01T00:00:00Z',
     overdue: true,
     etag: 'e',

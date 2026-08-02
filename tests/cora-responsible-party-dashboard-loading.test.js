@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
 import { fireEvent, getByRole } from './helpers/semantic-dom.js';
+import { makeCaseRow } from './helpers/fixtures.js';
 
 installDom();
 
@@ -126,9 +127,8 @@ function panelState() {
   return {
     ...initialResponsiblePartyState('rp-1'),
     cases: [
-      /** @type {any} */ ({
+      makeCaseRow({
         id: 'c1',
-        caseType: 'complaints',
         title: 'c1',
         status: 'Actions In Progress',
         assignedReviewer: 'reviewer',
@@ -141,10 +141,8 @@ function panelState() {
           },
         },
         conversation: [
-          { author: 'reviewer', timestamp: '2026-02-01T00:00:00Z', text: 'hi' },
+          { author: 'reviewer', timestamp: '2026-02-01T00:00:00Z', body: 'hi' },
         ],
-        notes: '',
-        completedAt: null,
         etag: 'e',
       }),
     ],
@@ -185,7 +183,7 @@ test('Responsible Party panel: clicking the unread Last message header dispatche
  * @param {string} id @param {string} caseType
  */
 function unsortedCase(id, caseType) {
-  return /** @type {any} */ ({
+  return makeCaseRow({
     id,
     caseType,
     title: id,
@@ -199,8 +197,6 @@ function unsortedCase(id, caseType) {
     conversation: [
       { author: 'reviewer', timestamp: '2026-02-01T00:00:00Z', body: 'hi' },
     ],
-    notes: '',
-    completedAt: null,
     etag: 'e',
   });
 }

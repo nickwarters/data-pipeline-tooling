@@ -4,23 +4,20 @@ import assert from 'node:assert/strict';
 import { createAppealEffects } from '../src/pages/cora-case-review/appeal-effects.js';
 import { MockSharePointClient } from '../src/services/mock-sharepoint-client.js';
 import { SaveQueue } from '../src/services/save-queue.js';
+import { makeCaseRow } from './helpers/fixtures.js';
 
-/** @type {import('../src/sharepoint-client.js').CaseRow} */
-const CASE_ROW = {
+const CASE_ROW = makeCaseRow({
   id: 'c1',
   caseType: 'example-review',
   title: 'Case',
   status: 'Completed',
   assignedReviewer: 'u1',
   responsibleParty: 'u2',
-  answers: {},
-  conversation: [],
-  notes: '',
   completedAt: '2026-07-01T00:00:00.000Z',
   outcomeAtCompletion: 'fail',
   hadRemediation: true,
   etag: 'e1',
-};
+});
 
 const SNAPSHOT = { currentUser: { id: 'controls-1' }, caseRow: CASE_ROW };
 

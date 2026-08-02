@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom, findByClass, findAllByClass } from './_dom-stub.js';
+import { makeCaseRow } from './helpers/fixtures.js';
 
 installDom();
 
@@ -16,20 +17,17 @@ const { raiseAppeal } =
 
 /** @returns {CaseRow} */
 function makeCase(overrides = {}) {
-  return {
+  return makeCaseRow({
     id: 'c1',
     caseType: 'example-review',
     title: 'T',
     status: 'Completed',
     assignedReviewer: 'u1',
     responsibleParty: 'u-rp',
-    answers: {},
-    conversation: [],
-    notes: '',
     completedAt: '2026-06-10T00:00:00Z',
     etag: 'e1',
     ...overrides,
-  };
+  });
 }
 
 function makeQueue() {

@@ -13,43 +13,29 @@ import {
   pickGlobalWorst,
   mergeWorstFirstWindow,
 } from '../src/services/action-centre-model.js';
+import { makeCaseRow, makePermissions } from './helpers/fixtures.js';
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../src/services/permissions.js').Capabilities} Capabilities */
 
+// The sub-line tests read the people fields straight off the row, so the
+// baseline row here carries nobody until a test names someone.
 /** @param {Partial<CaseRow>} [over] @returns {CaseRow} */
 function caseRow(over = {}) {
-  return /** @type {CaseRow} */ ({
+  return makeCaseRow({
     id: 'c1',
-    caseType: 'complaints',
     title: 'c1',
-    status: 'In-progress',
     assignedReviewer: '',
     responsibleParty: '',
-    answers: {},
-    conversation: [],
-    notes: '',
-    completedAt: null,
     etag: 'e1',
     ...over,
   });
 }
 
+// Each reason is unlocked by one capability, so the baseline grants none.
 /** @param {Partial<Capabilities>} [over] @returns {Capabilities} */
 function caps(over = {}) {
-  return {
-    isReviewer: false,
-    listAccessCaseTypes: [],
-    isAdviser: false,
-    ownedCaseTypes: [],
-    ownedJourneyCaseTypes: [],
-    isControls: false,
-    isReviewerManager: false,
-    isResponsiblePartyManager: false,
-    isMaintainer: false,
-    isVisitor: false,
-    ...over,
-  };
+  return makePermissions({ isReviewer: false, ...over });
 }
 
 /**

@@ -2,24 +2,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom, StubEl } from './_dom-stub.js';
+import { makePermissions } from './helpers/fixtures.js';
 
 installDom();
 const { mountAppChrome } = await import('../src/setup/app-chrome.js');
 const navModule = await import('../src/components/sections/cora-app-nav.js');
 
+// Owning a Case Type is what puts the Question Bank link in the nav, which the
+// active-item assertions below rely on.
 function capabilities() {
-  return /** @type {any} */ ({
-    isReviewer: true,
-    listAccessCaseTypes: [],
-    isAdviser: false,
-    ownedCaseTypes: ['complaints'],
-    ownedJourneyCaseTypes: [],
-    isControls: false,
-    isReviewerManager: false,
-    isResponsiblePartyManager: false,
-    isMaintainer: false,
-    isVisitor: false,
-  });
+  return makePermissions({ ownedCaseTypes: ['complaints'] });
 }
 
 test('mountAppChrome: mounts the pure nav view into its container', async () => {

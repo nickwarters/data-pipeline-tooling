@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
 import { tableHeaders } from './helpers/semantic-dom.js';
+import { makeCaseRow } from './helpers/fixtures.js';
 
 installDom();
 
@@ -22,7 +23,7 @@ const REVIEW_DUE_DATE = '2099-06-01T00:00:00Z';
  * @param {string} id @param {string} caseType @param {string} remediationDueDate
  */
 function row(id, caseType, remediationDueDate) {
-  return /** @type {import('../src/sharepoint-client.js').CaseRow} */ ({
+  return makeCaseRow({
     id,
     caseType,
     title: id,
@@ -37,9 +38,6 @@ function row(id, caseType, remediationDueDate) {
         remediationActions: [{ id: `action-${id}`, text: `Fix ${id}` }],
       },
     },
-    conversation: [],
-    notes: '',
-    completedAt: null,
     etag: 'e',
   });
 }

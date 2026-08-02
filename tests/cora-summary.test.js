@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { findAllByClass, findByClass, installDom } from './_dom-stub.js';
+import { makeCaseRow } from './helpers/fixtures.js';
 
 installDom();
 
@@ -13,20 +14,16 @@ const { resolveSectionLabels } = await import('../src/lib/section-labels.js');
 
 /** @returns {CaseRow} */
 function makeCase(overrides = {}) {
-  return {
+  return makeCaseRow({
     id: 'c1',
     caseType: 'example-review',
     title: 'Case one',
-    status: 'In-progress',
     assignedReviewer: 'reviewer@example.com',
     responsibleParty: 'owner@example.com',
-    answers: {},
-    conversation: [],
     notes: 'Reviewer note',
-    completedAt: null,
     etag: 'e1',
     ...overrides,
-  };
+  });
 }
 
 const CATALOGUE =

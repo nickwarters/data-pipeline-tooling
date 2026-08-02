@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
 import { registerCaseType } from '../case-types/manifest.js';
 import { fireEvent } from './helpers/semantic-dom.js';
+import { makeCaseRow } from './helpers/fixtures.js';
 
 installDom();
 
@@ -15,20 +16,13 @@ const { conversationView, postConversationMessage, refreshConversation } =
   await import('../src/pages/cora-case-review/conversation-view.js');
 
 const CURRENT_USER = { id: 'reviewer', displayName: 'Alex Reviewer' };
-/** @type {import('../src/sharepoint-client.js').CaseRow} */
-const CASE_ROW = {
-  id: 'case-1',
+const CASE_ROW = makeCaseRow({
   caseType: 'example-review',
   title: 'Example Review #1',
-  status: 'In-progress',
   assignedReviewer: 'reviewer',
   responsibleParty: 'agent',
-  answers: {},
-  conversation: [],
-  notes: '',
-  completedAt: null,
   etag: 'v1',
-};
+});
 
 test('conversation view renders messages and gates composition by access', () => {
   /** @type {string[]} */

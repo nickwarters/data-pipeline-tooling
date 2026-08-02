@@ -7,23 +7,20 @@ import {
   raiseAppeal,
   resolveAppeal,
 } from '../src/pages/cora-case-review/appeal-actions.js';
+import { makeCaseRow } from './helpers/fixtures.js';
 
-/** @type {import('../src/sharepoint-client.js').CaseRow} */
-const CASE_ROW = {
+const CASE_ROW = makeCaseRow({
   id: 'c1',
   caseType: 'example-review',
   title: 'Case',
   status: 'Completed',
   assignedReviewer: 'reviewer',
   responsibleParty: 'rp',
-  answers: {},
-  conversation: [],
-  notes: '',
   completedAt: '2026-07-01T00:00:00Z',
   outcomeAtCompletion: 'fail',
   hadRemediation: true,
   etag: 'e1',
-};
+});
 
 test('raiseAppeal returns a new row and preserves the existing Appeal history', () => {
   const existing = {

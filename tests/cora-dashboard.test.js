@@ -3,6 +3,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
 import { fireEvent, getByRole, tableHeaders } from './helpers/semantic-dom.js';
+import {
+  makeCaseRow,
+  makeChrome,
+  makePermissions,
+} from './helpers/fixtures.js';
 
 installDom();
 /** @type {any} */ (globalThis).location = { hash: '' };
@@ -12,30 +17,21 @@ const { createRouteSlice, dashboardView } =
 const { isOverdue } = await import('../src/evaluators/overdue-evaluator.js');
 const { CASE_STATUS } = await import('../src/lib/case-statuses.js');
 
+// Each panel is gated on one capability, so the baseline holds none and every
+// test names the roles whose panels it is about.
+/** @param {Partial<import('../src/services/permissions.js').Capabilities>} [overrides] */
 function capabilities(overrides = {}) {
-  return /** @type {any} */ ({
-    isReviewer: false,
-    listAccessCaseTypes: [],
-    isAdviser: false,
-    ownedCaseTypes: [],
-    ownedJourneyCaseTypes: [],
-    isControls: false,
-    isReviewerManager: false,
-    isResponsiblePartyManager: false,
-    isMaintainer: false,
-    isVisitor: false,
-    ...overrides,
-  });
+  return makePermissions({ isReviewer: false, ...overrides });
 }
 
 /** @param {any} permissions */
 function context(permissions) {
   return /** @type {any} */ ({
     client: {},
-    chrome: {
+    chrome: makeChrome({
       currentUser: { id: 'u1', displayName: 'User' },
       permissions,
-    },
+    }),
     caseSources: [
       {
         slug: 'complaints',
@@ -1063,42 +1059,40 @@ test('dashboard pure view composes every real panel for a multi-role user', () =
   );
   ctx.client = null;
   const slice = createRouteSlice({}, ctx);
-  const caseRow =
-    /** @type {import('../src/sharepoint-client.js').CaseRow} */ ({
-      id: 'c1',
-      caseType: 'complaints',
-      title: 'Case c1',
-      status: 'In-progress',
-      assignedReviewer: 'u1',
-      responsibleParty: 'u1',
-      answers: {
-        q1: {
-          value: 'No',
-          remediationActions: [{ id: 'r1', text: 'Fix it' }],
-        },
+  // One row that every panel on the page has a reason to show: overdue for the
+  // Reviewer table, remediation for the Responsible Party panel, an open appeal
+  // for Controls, and the signed-in user on both people fields.
+  const caseRow = makeCaseRow({
+    id: 'c1',
+    title: 'Case c1',
+    assignedReviewer: 'u1',
+    responsibleParty: 'u1',
+    answers: {
+      q1: {
+        value: 'No',
+        remediationActions: [{ id: 'r1', text: 'Fix it' }],
       },
-      conversation: [
-        {
-          author: 'reviewer',
-          timestamp: '2026-06-01T00:00:00Z',
-          body: 'Update',
-        },
-      ],
-      notes: '',
-      completedAt: null,
-      dueDate: '2020-01-01T00:00:00Z',
-      overdue: true,
-      appeals: [
-        {
-          id: 'a1',
-          appellant: 'owner',
-          at: '2026-01-01T00:00:00Z',
-          rationale: 'Review',
-          state: 'raised',
-        },
-      ],
-      etag: 'e',
-    });
+    },
+    conversation: [
+      {
+        author: 'reviewer',
+        timestamp: '2026-06-01T00:00:00Z',
+        body: 'Update',
+      },
+    ],
+    dueDate: '2020-01-01T00:00:00Z',
+    overdue: true,
+    appeals: [
+      {
+        id: 'a1',
+        appellant: 'owner',
+        at: '2026-01-01T00:00:00Z',
+        rationale: 'Review',
+        state: 'raised',
+      },
+    ],
+    etag: 'e',
+  });
   const actionCentre = {
     ...slice.initialState.routes.dashboard.actionCentre,
     counts: {
@@ -1260,21 +1254,15 @@ test('dashboard Action Centre controller reloads scope, groups, and pages throug
       pageLoads += 1;
       return {
         rows: [
-          {
+          makeCaseRow({
             id: `${reason.id}-${skip}`,
-            caseType: 'complaints',
             title: `${reason.id}-${skip}`,
-            status: 'In-progress',
             assignedReviewer: 'u1',
             responsibleParty: 'rp',
-            answers: {},
-            conversation: [],
-            notes: '',
-            completedAt: null,
             dueDate: '2020-01-01T00:00:00Z',
             overdue: true,
             etag: 'e',
-          },
+          }),
         ],
         exhausted: false,
       };
@@ -1845,9 +1833,10 @@ test('dashboard Responsible Party panel: Open conversation navigates to the Conv
   const ctx = context(capabilities({ isAdviser: true }));
   const slice = createRouteSlice({}, ctx);
   const route = slice.initialState.routes.dashboard;
-  const unread = {
+  // The signed-in user is the Responsible Party here, and the last message came
+  // from the Reviewer, which is what puts the Case in the unread panel.
+  const unread = makeCaseRow({
     id: 'c4',
-    caseType: 'complaints',
     title: 'Unread case',
     status: 'Actions In Progress',
     assignedReviewer: 'reviewer',
@@ -1859,10 +1848,8 @@ test('dashboard Responsible Party panel: Open conversation navigates to the Conv
     conversation: [
       { author: 'reviewer', timestamp: '2026-02-01T00:00:00Z', body: 'hi' },
     ],
-    notes: '',
-    completedAt: null,
     etag: 'e',
-  };
+  });
   const view = dashboardView(
     /** @type {any} */ ({
       ...slice.initialState,

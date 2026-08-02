@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
 import { getByRole, tableHeaders } from './helpers/semantic-dom.js';
+import { makeCaseRow } from './helpers/fixtures.js';
 
 installDom();
 /** @type {any} */ (globalThis).location = { hash: '' };
@@ -14,17 +15,11 @@ const { createRouteSlice, teamCasesView } =
 
 /** @param {string} id @returns {CaseRow} */
 function row(id) {
-  return /** @type {CaseRow} */ ({
+  return makeCaseRow({
     id,
-    caseType: 'complaints',
     title: `Case ${id}`,
-    status: 'In-progress',
     assignedReviewer: 'r',
     responsibleParty: 'rp',
-    answers: {},
-    conversation: [],
-    notes: '',
-    completedAt: null,
     etag: 'e',
   });
 }

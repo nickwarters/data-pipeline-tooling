@@ -5,6 +5,7 @@ import {
   isOverdue,
   isRemediationOverdue,
 } from '../src/evaluators/overdue-evaluator.js';
+import { makeCaseRow } from './helpers/fixtures.js';
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 
@@ -12,21 +13,17 @@ const PAST = new Date('2020-01-01T00:00:00Z');
 const FUTURE = new Date('2099-01-01T00:00:00Z');
 const NOW = new Date('2026-05-17T12:00:00Z');
 
+// No date fields at all: every case below opts into exactly the one date the
+// assertion is about, so an absent dueDate stays genuinely absent.
 /** @returns {CaseRow} */
 function baseCase() {
-  return {
+  return makeCaseRow({
     id: 'c1',
     caseType: 'example-review',
     title: 'Test',
-    status: 'In-progress',
     assignedReviewer: '',
     responsibleParty: '',
-    answers: {},
-    conversation: [],
-    notes: '',
-    completedAt: null,
-    etag: 'etag-1',
-  };
+  });
 }
 
 // --- tracer bullet ---

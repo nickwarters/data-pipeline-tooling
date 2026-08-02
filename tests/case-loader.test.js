@@ -9,6 +9,7 @@ import {
 } from '../case-types/manifest.js';
 import { isolateBrowserGlobals } from './helpers/browser-globals.js';
 import { caps } from './helpers/section-access.js';
+import { makeCaseRow } from './helpers/fixtures.js';
 
 isolateBrowserGlobals();
 
@@ -125,19 +126,15 @@ test('CaseLoader exposes no Answer mutation surface', () => {
 test('CaseLoader.load() calls getExportHash with the case type slug and stores it as exportHash', async () => {
   const loader = new CaseLoader({
     client: /** @type {any} */ ({
-      getCase: async () => ({
-        id: 'c1',
-        caseType: 'example-review',
-        title: 'T',
-        status: 'In-progress',
-        assignedReviewer: 'u1',
-        responsibleParty: 'u2',
-        answers: {},
-        conversation: [],
-        notes: '',
-        completedAt: null,
-        etag: 'e1',
-      }),
+      getCase: async () =>
+        makeCaseRow({
+          id: 'c1',
+          caseType: 'example-review',
+          title: 'T',
+          assignedReviewer: 'u1',
+          responsibleParty: 'u2',
+          etag: 'e1',
+        }),
       getCurrentUser: async () => ({ id: 'u1', displayName: 'User 1' }),
       getExportHash: async (/** @type {string} */ slug) =>
         slug === 'example-review' ? 'sha256:testHash' : null,
@@ -163,19 +160,14 @@ test('CaseLoader.load() resolves route caseType to listName for getCase and Save
   const getCaseCalls = [];
   /** @type {any[]} */
   const loadCaseCalls = [];
-  const row = {
+  const row = makeCaseRow({
     id: 'c1',
     caseType: 'example-review',
     title: 'T',
-    status: 'In-progress',
     assignedReviewer: 'u1',
     responsibleParty: 'u2',
-    answers: {},
-    conversation: [],
-    notes: '',
-    completedAt: null,
     etag: 'e1',
-  };
+  });
   const loader = new CaseLoader({
     client: /** @type {any} */ ({
       getCase: async (
@@ -218,19 +210,15 @@ test('CaseLoader.load() resolves route caseType to listName for getCase and Save
 test('CaseLoader.load() stores null exportHash when getExportHash returns null', async () => {
   const loader = new CaseLoader({
     client: /** @type {any} */ ({
-      getCase: async () => ({
-        id: 'c1',
-        caseType: 'example-review',
-        title: 'T',
-        status: 'In-progress',
-        assignedReviewer: 'u1',
-        responsibleParty: 'u2',
-        answers: {},
-        conversation: [],
-        notes: '',
-        completedAt: null,
-        etag: 'e1',
-      }),
+      getCase: async () =>
+        makeCaseRow({
+          id: 'c1',
+          caseType: 'example-review',
+          title: 'T',
+          assignedReviewer: 'u1',
+          responsibleParty: 'u2',
+          etag: 'e1',
+        }),
       getCurrentUser: async () => ({ id: 'u1', displayName: 'User 1' }),
       getExportHash: async () => null,
       resolveUsers: async () => ({}),
@@ -257,20 +245,19 @@ function makeStep4Client({
   versionedExport = /** @type {any} */ (null),
 } = {}) {
   return /** @type {any} */ ({
-    getCase: async () => ({
-      id: 'c1',
-      caseType: 'example-review',
-      title: 'T',
-      status,
-      assignedReviewer: 'u1',
-      responsibleParty: 'u2',
-      answers: { 'q-welcome': { value: 'Yes' } },
-      conversation: [],
-      notes: '',
-      completedAt: status === 'Completed' ? '2026-01-01T00:00:00Z' : null,
-      questionBankVersion,
-      etag: 'e1',
-    }),
+    getCase: async () =>
+      makeCaseRow({
+        id: 'c1',
+        caseType: 'example-review',
+        title: 'T',
+        status,
+        assignedReviewer: 'u1',
+        responsibleParty: 'u2',
+        answers: { 'q-welcome': { value: 'Yes' } },
+        completedAt: status === 'Completed' ? '2026-01-01T00:00:00Z' : null,
+        questionBankVersion,
+        etag: 'e1',
+      }),
     getCurrentUser: async () => ({ id: 'u1', displayName: 'User 1' }),
     getExportHash: async () => null,
     getVersionedExport: async () => versionedExport,
@@ -573,19 +560,15 @@ test('CaseLoader.load(): Completed Case without questionBankVersion falls back t
 function makeLabelsLoader(caseType) {
   return new CaseLoader({
     client: /** @type {any} */ ({
-      getCase: async () => ({
-        id: 'c1',
-        caseType,
-        title: 'T',
-        status: 'In-progress',
-        assignedReviewer: 'u1',
-        responsibleParty: 'u2',
-        answers: {},
-        conversation: [],
-        notes: '',
-        completedAt: null,
-        etag: 'e1',
-      }),
+      getCase: async () =>
+        makeCaseRow({
+          id: 'c1',
+          caseType,
+          title: 'T',
+          assignedReviewer: 'u1',
+          responsibleParty: 'u2',
+          etag: 'e1',
+        }),
       getCurrentUser: async () => ({ id: 'u1', displayName: 'User 1' }),
       getExportHash: async () => null,
       resolveUsers: async () => ({}),
@@ -856,19 +839,16 @@ test('CaseLoader.load() refreshes person capture display names in one directory 
   };
   const loader = new CaseLoader({
     client: /** @type {any} */ ({
-      getCase: async () => ({
-        id: 'c1',
-        caseType: 'person-capture-review',
-        title: 'T',
-        status: 'In-progress',
-        assignedReviewer: 'u1',
-        responsibleParty: 'u2',
-        answers,
-        conversation: [],
-        notes: '',
-        completedAt: null,
-        etag: 'e1',
-      }),
+      getCase: async () =>
+        makeCaseRow({
+          id: 'c1',
+          caseType: 'person-capture-review',
+          title: 'T',
+          assignedReviewer: 'u1',
+          responsibleParty: 'u2',
+          answers,
+          etag: 'e1',
+        }),
       getCurrentUser: async () => ({ id: 'u1', displayName: 'User 1' }),
       getExportHash: async () => null,
       resolveUsers: async (/** @type {string[]} */ accounts) => {

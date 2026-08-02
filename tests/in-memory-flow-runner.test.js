@@ -7,21 +7,15 @@ import {
   runFlowFixture,
 } from './_in-memory-flow-runner.js';
 import exampleReviewConfig from './_example-review-case-type.js';
+import { makeCaseRow, makePermissions } from './helpers/fixtures.js';
 
-/** @type {import('../src/sharepoint-client.js').CaseRow} */
-const CASE_ROW = {
+const CASE_ROW = makeCaseRow({
   id: 'case-flow-1',
   caseType: 'example-review',
   title: 'Flow fixture case',
-  status: 'In-progress',
-  assignedReviewer: 'user-reviewer',
   responsibleParty: 'user-agent-a',
-  answers: {},
-  conversation: [],
-  notes: '',
-  completedAt: null,
   etag: 'etag-flow-1',
-};
+});
 
 test('in-memory flow runner rejects actions that cannot run without a loaded Case', async () => {
   const runner = createInMemoryFlowRunner(
@@ -397,18 +391,7 @@ test('switching a failure from Yes to No drops the actions from the stored Answe
 });
 
 test('in-memory flow runner completes allocate, review, remediate, appeal, and amend lifecycle', async () => {
-  const noCapabilities = {
-    isReviewer: false,
-    listAccessCaseTypes: [],
-    isAdviser: false,
-    ownedCaseTypes: [],
-    ownedJourneyCaseTypes: [],
-    isControls: false,
-    isReviewerManager: false,
-    isResponsiblePartyManager: false,
-    isMaintainer: false,
-    isVisitor: false,
-  };
+  const noCapabilities = makePermissions({ isReviewer: false });
   const snapshot = await runFlowFixture({
     state: {
       lists: {
@@ -707,18 +690,7 @@ test('in-memory flow runner can reject an Appeal without amending the Outcome', 
       caseId: 'case-flow-1',
       caseType: 'example-review',
       currentUserId: 'user-controls',
-      capabilities: {
-        isReviewer: false,
-        listAccessCaseTypes: [],
-        isAdviser: false,
-        ownedCaseTypes: [],
-        ownedJourneyCaseTypes: [],
-        isControls: true,
-        isReviewerManager: false,
-        isResponsiblePartyManager: false,
-        isMaintainer: false,
-        isVisitor: false,
-      },
+      capabilities: makePermissions({ isReviewer: false, isControls: true }),
     },
     {
       type: 'resolveAppeal',
@@ -750,18 +722,10 @@ test('in-memory flow runner owns the Case Row; the loader hands it over once', a
       caseId: 'case-flow-1',
       caseType: 'example-review',
       currentUserId: 'user-owner',
-      capabilities: {
+      capabilities: makePermissions({
         isReviewer: false,
-        listAccessCaseTypes: [],
-        isAdviser: false,
-        ownedCaseTypes: [],
         ownedJourneyCaseTypes: ['example-review'],
-        isControls: false,
-        isReviewerManager: false,
-        isResponsiblePartyManager: false,
-        isMaintainer: false,
-        isVisitor: false,
-      },
+      }),
     },
   ]);
   // Captured at the handover, so the assertions below can name the row the

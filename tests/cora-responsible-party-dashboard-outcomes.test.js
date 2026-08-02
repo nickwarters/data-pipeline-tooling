@@ -4,22 +4,17 @@ import assert from 'node:assert/strict';
 import { deriveResponsibleParty } from '../src/pages/responsible-party/view.js';
 import { responsiblePartyView } from '../src/pages/responsible-party/view.js';
 import { installDom } from './_dom-stub.js';
+import { makeCaseRow } from './helpers/fixtures.js';
 
 installDom();
 
 /** @param {string} id @param {Partial<import('../src/sharepoint-client.js').CaseRow>} overrides */
 function row(id, overrides = {}) {
-  return /** @type {import('../src/sharepoint-client.js').CaseRow} */ ({
+  return makeCaseRow({
     id,
-    caseType: 'complaints',
     title: id,
-    status: 'In-progress',
     assignedReviewer: 'reviewer',
     responsibleParty: 'rp-1',
-    answers: {},
-    conversation: [],
-    notes: '',
-    completedAt: null,
     etag: 'e',
     ...overrides,
   });

@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
 import { fireEvent, getByRole, tableHeaders } from './helpers/semantic-dom.js';
+import { makeCaseRow } from './helpers/fixtures.js';
 
 installDom();
 /** @type {any} */ (globalThis).location = { hash: '' };
@@ -17,16 +18,12 @@ const {
 
 /** @param {string} id @param {string} at */
 function row(id, at) {
-  return /** @type {import('../src/sharepoint-client.js').CaseRow} */ ({
+  return makeCaseRow({
     id,
-    caseType: 'complaints',
     title: `Case ${id}`,
     status: 'Completed',
     assignedReviewer: 'r',
     responsibleParty: 'rp',
-    answers: {},
-    conversation: [],
-    notes: '',
     completedAt: '2026-01-01T00:00:00Z',
     appeals: [
       {

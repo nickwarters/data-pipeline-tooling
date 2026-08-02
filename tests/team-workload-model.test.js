@@ -1,6 +1,7 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { makeCaseRow } from './helpers/fixtures.js';
 
 const { buildTeamWorkload } =
   await import('../src/evaluators/team-workload-model.js');
@@ -13,17 +14,11 @@ const { buildTeamWorkload } =
  * @returns {CaseRow}
  */
 function caseRow(id, overrides) {
-  return /** @type {CaseRow} */ ({
+  return makeCaseRow({
     id,
-    caseType: 'complaints',
     title: id,
-    status: 'In-progress',
     assignedReviewer: 'reviewer-a',
     responsibleParty: 'rp',
-    answers: {},
-    conversation: [],
-    notes: '',
-    completedAt: null,
     etag: 'e',
     ...overrides,
   });

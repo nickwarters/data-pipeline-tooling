@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
+import { makeCaseRow } from './helpers/fixtures.js';
 
 installDom();
 /** @type {any} */ (globalThis).location = { hash: '' };
@@ -18,17 +19,11 @@ const {
 
 /** @param {Partial<CaseRow>} [overrides] @returns {CaseRow} */
 function row(overrides = {}) {
-  return /** @type {any} */ ({
+  return makeCaseRow({
     id: 'c1',
-    caseType: 'complaints',
     title: 'Case c1',
-    status: 'In-progress',
     assignedReviewer: 'r',
     responsibleParty: 'rp',
-    answers: {},
-    conversation: [],
-    notes: '',
-    completedAt: null,
     etag: 'e',
     dueDate: '2026-01-10',
     created: '2026-01-02',

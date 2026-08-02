@@ -4,22 +4,17 @@ import assert from 'node:assert/strict';
 import { MockSharePointClient } from '../src/services/mock-sharepoint-client.js';
 import { SaveQueue } from '../src/services/save-queue.js';
 import { saveCaseNotes } from '../src/actions/case-actions.js';
+import { makeCaseRow } from './helpers/fixtures.js';
 
 test('saveCaseNotes persists through SaveQueue and dispatches the saved mock row', async () => {
-  /** @type {import('../src/sharepoint-client.js').CaseRow} */
-  const row = {
-    id: 'case-1',
+  const row = makeCaseRow({
     caseType: 'test',
     title: 'Case',
-    status: 'In-progress',
     assignedReviewer: 'reviewer',
     responsibleParty: 'owner',
-    answers: {},
-    conversation: [],
     notes: 'before',
-    completedAt: null,
     etag: '1',
-  };
+  });
   const client = new MockSharePointClient({
     personas: {},
     lists: { Cases: [row] },

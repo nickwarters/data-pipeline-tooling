@@ -2,26 +2,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
+import { makePermissions } from './helpers/fixtures.js';
 
 installDom();
 const { AppNav, updateActiveNavItems } =
   await import('../src/components/sections/cora-app-nav.js');
 
-/** @param {Record<string, any>} [overrides] */
+/** @typedef {import('../src/services/permissions.js').Capabilities} Capabilities */
+
+// Each test grants exactly the one capability whose nav link it is about, so
+// the baseline is a user with none — not the factory's Reviewer posture.
+/** @param {Partial<Capabilities>} [overrides] */
 function capabilities(overrides = {}) {
-  return {
-    isReviewer: false,
-    listAccessCaseTypes: [],
-    isAdviser: false,
-    ownedCaseTypes: [],
-    ownedJourneyCaseTypes: [],
-    isControls: false,
-    isReviewerManager: false,
-    isResponsiblePartyManager: false,
-    isMaintainer: false,
-    isVisitor: false,
-    ...overrides,
-  };
+  return makePermissions({ isReviewer: false, ...overrides });
 }
 
 /** @param {any} node @param {string} href @returns {any|null} */

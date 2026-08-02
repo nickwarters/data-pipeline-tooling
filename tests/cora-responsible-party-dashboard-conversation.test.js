@@ -7,6 +7,7 @@ import {
   queryAllByRole,
   tableHeaders,
 } from './helpers/semantic-dom.js';
+import { makeCaseRow } from './helpers/fixtures.js';
 
 installDom();
 
@@ -15,17 +16,12 @@ const { hasUnreadMessages, responsiblePartyView } =
 
 /** @param {string} id @param {import('../src/sharepoint-client.js').CaseRow['conversation']} conversation */
 function row(id, conversation) {
-  return /** @type {import('../src/sharepoint-client.js').CaseRow} */ ({
+  return makeCaseRow({
     id,
-    caseType: 'complaints',
     title: id,
-    status: 'In-progress',
     assignedReviewer: 'reviewer',
     responsibleParty: 'rp-1',
-    answers: {},
     conversation,
-    notes: '',
-    completedAt: null,
     etag: 'e',
   });
 }

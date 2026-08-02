@@ -5,22 +5,20 @@ import {
   currentOutcome,
   buildAmendmentFields,
 } from '../src/evaluators/amended-outcome.js';
+import { makeCaseRow } from './helpers/fixtures.js';
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../src/sharepoint-client.js').AmendedOutcome} AmendedOutcome */
 
 /** @returns {CaseRow} */
 function makeCase(overrides = {}) {
-  return /** @type {CaseRow} */ ({
+  return makeCaseRow({
     id: 'c1',
     caseType: 'example-review',
     title: 'T',
     status: 'Completed',
     assignedReviewer: 'u1',
     responsibleParty: 'u2',
-    answers: {},
-    conversation: [],
-    notes: '',
     completedAt: '2026-06-10T00:00:00Z',
     etag: 'e1',
     ...overrides,

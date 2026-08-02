@@ -1,6 +1,7 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { makeCaseRow, makePermissions } from './helpers/fixtures.js';
 
 const {
   loadKpiModel,
@@ -10,6 +11,7 @@ const {
 } = await import('../src/evaluators/kpi-strip-model.js');
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
+/** @typedef {import('../src/services/permissions.js').Capabilities} Capabilities */
 
 // A fixed clock so overdue/breaching windows are deterministic.
 const NOW = new Date('2026-07-04T12:00:00Z');
@@ -22,36 +24,22 @@ const LATER = '2026-07-10T00:00:00Z'; // comfortably in future
  * @returns {CaseRow}
  */
 function caseRow(overrides = {}) {
-  return {
+  return makeCaseRow({
+    // Unique per row so the reviewer lane's dedupe is exercised honestly.
     id: 'c-' + Math.random().toString(36).slice(2),
-    caseType: 'complaints',
     title: 'Case',
-    status: 'In-progress',
+    // The signed-in user of this suite, and the Responsible Party it replies as.
     assignedReviewer: 'me',
     responsibleParty: 'rp',
-    answers: {},
-    conversation: [],
-    notes: '',
-    completedAt: null,
     etag: 'e1',
     ...overrides,
-  };
+  });
 }
 
+// A lane appears only for a capability the user holds, so the baseline holds none.
+/** @param {Partial<Capabilities>} [overrides] */
 function defaultCapabilities(overrides = {}) {
-  return {
-    isReviewer: false,
-    listAccessCaseTypes: [],
-    isAdviser: false,
-    ownedCaseTypes: [],
-    ownedJourneyCaseTypes: [],
-    isControls: false,
-    isReviewerManager: false,
-    isResponsiblePartyManager: false,
-    isMaintainer: false,
-    isVisitor: false,
-    ...overrides,
-  };
+  return makePermissions({ isReviewer: false, ...overrides });
 }
 
 /**

@@ -7,35 +7,21 @@ import {
   ENGLAND_WALES_HOLIDAYS,
   REMEDIATION_SLA_WORKING_DAYS,
 } from '../src/config/working-days.js';
+import { makeCaseRow, makePermissions } from './helpers/fixtures.js';
 
-/** @type {import('../src/services/permissions.js').Capabilities} */
-const NO_CAPABILITIES = {
+const NO_CAPABILITIES = makePermissions({
   isReviewer: false,
-  ownedCaseTypes: [],
-  isAdviser: false,
-  isReviewerManager: false,
-  isResponsiblePartyManager: false,
-  isMaintainer: false,
-  listAccessCaseTypes: [],
-  ownedJourneyCaseTypes: [],
-  isControls: false,
   isVisitor: true,
-};
+});
 
-/** @type {import('../src/sharepoint-client.js').CaseRow} */
-const BASE_ROW = {
+const BASE_ROW = makeCaseRow({
   id: 'c1',
   caseType: 'example-review',
   title: 'Test Case',
-  status: 'In-progress',
   assignedReviewer: 'u1',
   responsibleParty: 'u2',
-  answers: {},
-  conversation: [],
-  notes: '',
-  completedAt: null,
   etag: 'e1',
-};
+});
 
 /** @type {import('../src/sharepoint-client.js').CaseTypeConfig} */
 const EMPTY_CONFIG = {

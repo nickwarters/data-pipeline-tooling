@@ -15,6 +15,7 @@ import {
 import { CaseLoader } from '../src/lib/case-loader.js';
 import { validateCaptureGroups } from '../src/evaluators/issue-capture.js';
 import { caps } from './helpers/section-access.js';
+import { makeCaseRow } from './helpers/fixtures.js';
 import {
   validateGeneralQuestions,
   validateAnswerKeyNamespace,
@@ -368,19 +369,15 @@ test('CaseLoader.load(): unknown primary Case Type slug sets a clear user-facing
   try {
     const loader = new CaseLoader({
       client: /** @type {any} */ ({
-        getCase: async () => ({
-          id: 'c1',
-          caseType: '../unexpected',
-          title: 'T',
-          status: 'In-progress',
-          assignedReviewer: 'u1',
-          responsibleParty: 'u2',
-          answers: {},
-          conversation: [],
-          notes: '',
-          completedAt: null,
-          etag: 'e1',
-        }),
+        getCase: async () =>
+          makeCaseRow({
+            id: 'c1',
+            caseType: '../unexpected',
+            title: 'T',
+            assignedReviewer: 'u1',
+            responsibleParty: 'u2',
+            etag: 'e1',
+          }),
         getCurrentUser: async () => ({ id: 'u1', displayName: 'User 1' }),
         getExportHash: async () => null,
         resolveUsers: async () => ({}),

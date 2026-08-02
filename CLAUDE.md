@@ -401,5 +401,10 @@ tests/                          # node:test unit tests — flat, one file per su
                                 # (e.g. cora-toast.test.js imports the pure Toast view).
                                 # `_`-prefixed files are shared helpers, not suites:
                                 # _in-memory-flow-runner.js is the headless flow
-                                # harness (also driven by scripts/run_in_memory_flow.js)
+                                # harness (also driven by scripts/run_in_memory_flow.js).
+                                # tests/helpers/ holds the rest of the shared helpers;
+                                # helpers/fixtures.js is THE builder for a CaseRow, a
+                                # Capabilities object and the chrome slice — build them
+                                # there, never inline (fixture-factory-contract.test.js
+                                # is the ratchet)
 ```
