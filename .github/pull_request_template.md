@@ -19,6 +19,15 @@ Closes #<!-- issue number, or remove this line if there's no issue -->
   Conversation, Outcome). Call out anything deliberately left out of scope.
 -->
 
+## Supersedes
+
+<!--
+  What does this change make dead, and where does its removal happen? Name the
+  modules, exports, branches or config it replaces and confirm they go in this
+  PR — or link the removal ticket and say why it's deferred. "Nothing — purely
+  additive" is a valid answer; leaving this blank is not.
+-->
+
 ## ADR
 
 <!--

@@ -113,6 +113,29 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
 
 - **Question Bank artifacts are JSON stored in `.txt` files, on purpose.** `case-types/banks/*.txt` (loaded via `case-types/load-bank.js`) hold plain JSON text. This is intentional, not an oversight: SharePoint Subscription Edition has been unreliable at storing/serving `.json` files (MIME/blocking issues), so the artifact extension is `.txt` while the content stays JSON, parsed explicitly by the loader. A repo-wide search for `*.json` will not find the banks — search `case-types/banks/*.txt` instead.
 
+## Planning: what does this change supersede?
+
+**Every plan answers one demolition question before it is implemented: what
+does this change supersede, and where does that removal happen?**
+
+Dead code and duplicate paths here rarely arrive by accident — they arrive by
+additive scoping. The new path lands, the old one's removal is left for
+"later", and a review rediscovers it months on. Naming the replacement at plan
+time costs a sentence; finding it later costs a ticket.
+
+A plan that replaces a behaviour states, in the plan itself, one of:
+
+- **the removal is in this change** — name the modules, exports, branches,
+  styles, tests or config the change makes dead, and delete them here; or
+- **the removal is deferred** — raise the removal ticket _at plan time_, link
+  it, and say why it cannot land together (a consumer to migrate first, a
+  deploy that has to go out in two steps).
+
+"Nothing is superseded" is a good answer, and a purely additive change should
+say it outright. Silence is what is not acceptable. Plan review checks the
+answer is present and honest, and the PR repeats it so the reviewer can see
+what was left standing and why.
+
 ## Test discipline: Red-Green-Refactor, risk-based coverage
 
 **Every behaviour change must be covered at the smallest useful public seam.**
