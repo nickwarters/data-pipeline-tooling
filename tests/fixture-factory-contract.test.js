@@ -91,35 +91,34 @@ function javascriptTests() {
 const ONE_OBJECT = 600;
 
 /**
- * True when some window of the source names every key. Both `key:` and the
- * shorthand `key,` / `key}` count — several suites build these objects from
- * variables of the same name.
+ * Where a key is named. Both `key:` and the shorthand `key,` / `key}` count —
+ * several suites build these objects from variables of the same name.
+ *
+ * @param {string} source @param {string} key
+ */
+const positionsOf = (source, key) =>
+  [...source.matchAll(new RegExp(`(^|[\\s,{(])${key}\\s*[:,}]`, 'g'))].map(
+    (match) => match.index
+  );
+
+/**
+ * True when every key is named within one object's distance of the same
+ * mention of the first key. Anchoring on the first key costs nothing: `id` and
+ * `isReviewer` are in every hand-built copy of these shapes.
+ *
+ * The rule cannot tell a literal from an override bag, so a legitimate
+ * `makeCaseRow()` call that happens to name every field will trip it — say
+ * less in the override and it passes.
  *
  * @param {string} source @param {string[]} keys
  */
 function buildsWholeShape(source, keys) {
-  const hits = keys.flatMap((key) =>
-    [...source.matchAll(new RegExp(`(^|[\\s,{(])${key}\\s*[:,}]`, 'g'))].map(
-      (match) => ({ at: match.index, key })
+  const found = keys.map((key) => positionsOf(source, key));
+  return found[0].some((anchor) =>
+    found.every((positions) =>
+      positions.some((at) => Math.abs(at - anchor) <= ONE_OBJECT)
     )
   );
-  hits.sort((a, b) => a.at - b.at);
-
-  /** @type {Map<string, number>} */
-  const inWindow = new Map();
-  let start = 0;
-  for (const hit of hits) {
-    inWindow.set(hit.key, (inWindow.get(hit.key) ?? 0) + 1);
-    while (hit.at - hits[start].at > ONE_OBJECT) {
-      const dropped = hits[start].key;
-      const remaining = (inWindow.get(dropped) ?? 0) - 1;
-      if (remaining === 0) inWindow.delete(dropped);
-      else inWindow.set(dropped, remaining);
-      start++;
-    }
-    if (inWindow.size === keys.length) return true;
-  }
-  return false;
 }
 
 test('the factories still cover the shapes this rule polices', () => {

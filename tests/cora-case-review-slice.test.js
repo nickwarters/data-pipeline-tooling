@@ -4194,18 +4194,14 @@ test('case review slice: the read carries the signal while the write path keeps 
   let readOptions = null;
   /** @type {any[]} */
   const loadedByQueue = [];
-  const caseRow = {
+  const caseRow = makeCaseRow({
     id: 'c1',
     caseType: 'example-review',
     title: 'Case',
-    status: 'In-progress',
     assignedReviewer: 'reviewer',
     responsibleParty: 'rp',
-    answers: {},
-    conversation: [],
-    notes: '',
     etag: 'e1',
-  };
+  });
   const context = /** @type {any} */ ({
     client: {
       getCase: async (/** @type {any} */ _id, /** @type {any} */ opts = {}) => {

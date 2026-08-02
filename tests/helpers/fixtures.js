@@ -24,12 +24,10 @@
 import { CASE_STATUS } from '../../src/lib/case-statuses.js';
 
 /**
- * The signed-in identity the default fixtures share. `makeChrome`'s
- * `currentUser.id` is deliberately the same string as `makeCaseRow`'s
- * `assignedReviewer`: Section access resolves roles by matching the signed-in
- * account against the Case row's people fields, so these two agreeing is the
- * only thing that makes the default posture "an assigned Reviewer looking at
- * their own Case".
+ * Shared by `makeChrome`'s `currentUser.id` and `makeCaseRow`'s
+ * `assignedReviewer` — Section access matches the signed-in account against the
+ * row, so the two agreeing is what makes the default posture an assigned
+ * Reviewer on their own Case.
  */
 export const REVIEWER = 'user-reviewer';
 
