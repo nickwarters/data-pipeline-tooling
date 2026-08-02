@@ -10,8 +10,6 @@ import {
   serializeTree,
   countLeaves,
   treeDepth,
-  ensureTree,
-  commitTreeFor,
 } from '../src/lib/showwhen-tree.js';
 
 test('parseShowWhen: undefined → empty AND group', () => {
@@ -306,29 +304,4 @@ test('countLeaves / treeDepth: nested', () => {
   };
   assert.equal(countLeaves(t), 3);
   assert.equal(treeDepth(t), 2);
-});
-
-test('ensureTree / commitTreeFor: cache survives across calls; commit serialises back', () => {
-  const q = /** @type {any} */ ({ showWhen: { q1: { equals: 'A' } } });
-  const t1 = ensureTree(q);
-  const t2 = ensureTree(q);
-  assert.equal(t1, t2); // same reference
-  // Mutate the tree: add a second leaf and commit
-  t1.children.push({ type: 'leaf', qId: 'q2', op: 'equals', value: 'B' });
-  commitTreeFor(q);
-  assert.deepEqual(q.showWhen, { q1: { equals: 'A' }, q2: { equals: 'B' } });
-});
-
-test('commitTreeFor: deletes showWhen when tree serialises to null', () => {
-  const q = /** @type {any} */ ({ showWhen: { q1: { equals: 'A' } } });
-  const t = ensureTree(q);
-  t.children.length = 0;
-  commitTreeFor(q);
-  assert.equal('showWhen' in q, false);
-});
-
-test('commitTreeFor: no-op when there is no cached tree', () => {
-  const q = /** @type {any} */ ({});
-  commitTreeFor(q);
-  assert.deepEqual(q, {});
 });

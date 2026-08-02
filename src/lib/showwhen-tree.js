@@ -127,38 +127,3 @@ export function treeDepth(n) {
   if (n.children.length === 0) return 0;
   return 1 + Math.max(...n.children.map(treeDepth));
 }
-
-// ── Per-question cache ─────────────────────────────────────────────────────
-// Questions are mutated in place; the editable tree lives outside the question
-// (in a WeakMap) so the JSON-serialisable showWhen field stays canonical for
-// dirty-check / compile / diff purposes.
-
-/** @type {WeakMap<object, GroupNode>} */
-const treeCache = new WeakMap();
-
-/**
- * @param {{ showWhen?: Record<string, unknown> }} q
- * @returns {GroupNode}
- */
-export function ensureTree(q) {
-  let t = treeCache.get(q);
-  if (!t) {
-    t = parseShowWhen(q.showWhen);
-    treeCache.set(q, t);
-  }
-  return t;
-}
-
-/**
- * Writes the cached tree for `q` back to its showWhen field, or deletes the
- * field when the tree serialises to null.
- *
- * @param {{ showWhen?: Record<string, unknown> }} q
- */
-export function commitTreeFor(q) {
-  const t = treeCache.get(q);
-  if (!t) return;
-  const out = serializeTree(t);
-  if (out) q.showWhen = out;
-  else delete q.showWhen;
-}
