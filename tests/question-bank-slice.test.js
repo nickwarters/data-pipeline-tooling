@@ -2031,6 +2031,32 @@ test('reverting discards only the Case Type on screen', () => {
   assert.deepEqual(editedSlugs(reverted), ['alpha']);
 });
 
+test('a revert the reducer refuses is not reported as a revert', () => {
+  // The Revert control is always offered, edits or not, so a curator can click
+  // it on a bank that has nothing to discard.
+  const clean = twoBanksLoaded();
+  /** @type {any[]} */
+  const actions = [];
+  const originalConfirm = /** @type {any} */ (globalThis).confirm;
+  const originalTimeout = /** @type {any} */ (globalThis).setTimeout;
+  try {
+    /** @type {any} */ (globalThis).confirm = () => true;
+    /** @type {any} */ (globalThis).setTimeout = undefined;
+    const view = bankEditorView(
+      /** @type {any} */ ({ routes: { questionBank: clean } }),
+      { dispatch: (/** @type {any} */ action) => actions.push(action) }
+    );
+    fireEvent(getByRole(view, 'button', { name: '↺ Revert' }), 'click');
+  } finally {
+    /** @type {any} */ (globalThis).confirm = originalConfirm;
+    /** @type {any} */ (globalThis).setTimeout = originalTimeout;
+  }
+
+  assert.deepEqual(actions, [
+    { type: 'toast/changed', message: 'Nothing to revert' },
+  ]);
+});
+
 test('publishing one Case Type does not mark the others synced', () => {
   const bothEdited = rewordFirstQuestion(
     rewordFirstQuestion(twoBanksLoaded(), 'beta', 'B? (edited)'),
