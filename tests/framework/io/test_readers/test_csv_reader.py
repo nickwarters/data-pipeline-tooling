@@ -28,3 +28,10 @@ def test_csv_reader_without_columns_reads_all_columns():
     dataset = CsvReader(FIXTURE).read()
 
     assert dataset.columns == ["case_id", "advisor", "activity_date", "amount"]
+
+
+def test_csv_reader_reports_the_file_it_read():
+    reader = CsvReader(FIXTURE)
+    reader.read()
+
+    assert reader.data_locations == [{"namespace": "file", "name": str(FIXTURE)}]

@@ -272,3 +272,23 @@ def test_selection_pool_is_delivered_to_a_per_case_type_list(tmp_path):
     # The push landed in exactly this Case Type's list and nowhere else — the
     # SelectionPool Deliverable is one list per Case Type.
     assert list(backend._lists.keys()) == [(site, list_name)]
+
+
+def test_the_reported_site_never_carries_the_credentials_in_the_url():
+    """A persisted record must not be the one place credentials survive."""
+    site = "https://user:pass@contoso.sharepoint.com/sites/cases"
+
+    reader = SharePointReader(site, "Advisers", fetcher=RecordingFetcher())
+    reader.read()
+    writer = SharePointWriter(site, "Advisers", pusher=RecordingPusher())
+    writer.write(Dataset.from_pandas(pd.DataFrame({"adviser_id": [1]})))
+
+    expected = [
+        {
+            "namespace": "https://<redacted>@contoso.sharepoint.com/sites/cases",
+            "name": "Advisers",
+        }
+    ]
+    assert reader.data_locations == expected
+    assert writer.data_locations == expected
+    assert "user:pass" not in str(reader.data_locations + writer.data_locations)

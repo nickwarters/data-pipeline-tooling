@@ -86,8 +86,9 @@ whole-dataset input joined into the stream (a small reference table) is read
 **once**, not once per chunk.
 
 **Each step still records exactly once.** The per-chunk records are *folded*
-into one record per step: row counts and duration are summed, warn hits and
-errors concatenate (a warn raised on every chunk reads once), `committed` is true
+into one record per step: row counts and duration are summed, warn hits, errors
+and data locations concatenate (a warn raised on every chunk reads once, as does
+the file every chunk came from), `committed` is true
 if any chunk committed, and one failing chunk makes the step a failure. See
 [the run-log section](#what-a-streamed-run-logs) below.
 
@@ -257,8 +258,9 @@ was added for streaming. What differs is only what the numbers mean:
   scanned** and `rows_excluded` what the filter dropped — including a tail (or a
   whole source) the filter emptied, which yields no chunk at all yet was still
   read.
-- `warn_hits` and `errors` concatenate, dropping a repeat, so a warn raised on
-  every chunk appears once.
+- `warn_hits`, `errors` and `data_locations` concatenate, dropping a repeat, so a
+  warn raised on every chunk appears once — as does the one file a streamed read
+  named on every chunk.
 - `profile` is the payload of the last chunk profiled; a profile step under a
   stream describes a chunk, not the source.
 - The `run` summary's `rows_in` is the whole source scanned and `rows_out` what
