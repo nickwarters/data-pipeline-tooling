@@ -90,6 +90,10 @@ _Avoid_: stage (older/informal for a run step), job, layer
 A stable dependency-target label for either a whole Pipeline or one named run step inside it. The four label forms are `pipeline`, `subject/pipeline`, `pipeline.step`, and `subject/pipeline.step`; `framework.run.RunAddress` owns parsing and formatting so logs, dependency declarations, and registry queries use the same vocabulary. This follows the DAG design's `pipeline_2.step_4` address shape while the builder can still expose `.task(...)` as the authoring method. Invalid labels are configuration failures, not data or runtime failures. A Run Address is a **value**, not an identity: a frozen dataclass whose equality and hashing come from its three parts, constructed by `RunAddress.for_pipeline(...)` / `RunAddress.for_step(...)` (renamed so the constructors no longer share names with the `pipeline` / `step` attributes). Its rendered label is a live on-disk format — it is stored as `step_address` — so the names may change but the rendering may not.
 _Avoid_: ad hoc pipeline key, path (unless referring to a filesystem path)
 
+**Data Location**:
+The file or table a read or write step **actually touched**, identified as a namespace plus a name (`{"namespace": "file", "name": "/data/orders.csv"}`, `{"namespace": "sqlite:/data/raw.db", "name": "orders"}` — OpenLineage's dataset-identity shape). A component reports its own locations during the call and the node drains them into the step's run-log `data_locations`, so a run record answers "which file produced this?" rather than only "which step ran?". Distinct from **Run Address**: the address is the *wiring* label (which step, in which pipeline), a Data Location is the *data* the step reached. A step that touched nothing — a transform, a dry-run write, a console sink — has none.
+_Avoid_: path (unless referring to a filesystem path), dataset (the carrier), source (the feed)
+
 **Ingest**:
 The Pipeline that brings a Case Type's source **Feeds** in and refines them into **Cases** through that Case Type's medallion (raw→silver→gold). Per Case Type.
 _Avoid_: import, load, ETL

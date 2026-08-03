@@ -115,3 +115,21 @@ def test_reads_only_requested_columns_when_source_is_wide(tmp_path):
 
     assert all(c.columns == ["id"] for c in chunks)
     assert [len(c) for c in chunks] == [1, 1]
+
+
+def test_chunked_csv_reader_reports_the_file_it_streamed(tmp_path):
+    src = _write_csv(tmp_path / "feed.csv", [f"{i},{i},n{i}" for i in range(5)])
+    reader = ChunkedCsvReader(src)
+
+    list(reader.chunks(2))
+
+    assert reader.data_locations == [{"namespace": "file", "name": str(src)}]
+
+
+def test_a_wholly_empty_file_still_reports_the_file_it_opened(tmp_path):
+    src = tmp_path / "empty.csv"
+    src.write_text("", encoding="utf-8")
+    reader = ChunkedCsvReader(src)
+
+    assert list(reader.chunks(2)) == []
+    assert reader.data_locations == [{"namespace": "file", "name": str(src)}]

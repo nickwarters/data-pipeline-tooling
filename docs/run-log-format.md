@@ -99,7 +99,10 @@ The console line renders its fragments in that same declared order, so it is a
 projection of the record rather than a separately-maintained format. One
 consequence: the warn-hit fragment now prints before `committed`/`profiled`
 rather than at the end of the line. The console line is for humans and nothing
-parses it — the JSONL is the machine-readable contract.
+parses it — the JSONL is the machine-readable contract. A field that declares
+**no** console form at all is deliberately absent from the human line:
+`data_locations` is stored and logged but never rendered, because a glob read
+carries one entry per file and would swamp the line an operator scans.
 
 Two fields differ between the two surfaces, by design: `step_ordinal` is the
 store's own (assigned at ingest, so re-ingesting a line is a no-op) and never
@@ -125,6 +128,18 @@ appears in the log; `params` is logged but has no column.
 | `committed` | bool                | `true` on a step that durably wrote an artifact (`write`, `quarantine` with rejects, `explain`, `checkpoint`) — independently committed evidence that **survives a later step's failure**. Set only on the success record; `false` everywhere else. |
 | `params`    | object              | The run's parameters, recorded only after caller-side redaction; `{}` when none. Logged for traceability but **not** stored by the registry — it has no column for them. |
 | `profile`   | object \| null      | The per-column statistical profile a `profile` step recorded: a `DatasetProfile` record (`row_count` + per-column `null_rate`, `distinct_count`, `min`/`max`, bounded top-N distribution). `null` on every non-profile step. The registry stores it in a queryable `profile` column and trends it across runs via `recent_profiles(address)`. |
+| `data_locations` | object[]     | The file(s) or table(s) this step actually touched, one `{"namespace", "name"}` entry each (OpenLineage's dataset identity): `{"namespace": "file", "name": "/data/orders.csv"}` for a file, `{"namespace": "sqlite:/data/raw.db", "name": "orders"}` for a table. `[]` on every step that is not a read or a write — and on a few that are, see below. A `GlobCsvReader` over three files carries three entries. Stored by the registry; never shown on the console line. |
+
+Known-empty cases for `data_locations`, all of them deliberate:
+
+- A **dry run**'s write step records `[]`. The write is skipped, so nothing was
+  touched; the configured target is not interrogated as a substitute.
+- A **failed** read or write records `[]` — the error path carries no metrics.
+  A located path may still reach `errors` (the strict CSV reader puts the file
+  in its message).
+- A **zero-chunk** streamed drive records nothing at all: the sub-graph below
+  the source never executes.
+- `quarantine` and `explain` steps record `[]` today even though they commit.
 
 ### Instants are UTC, calendar dates are local
 
@@ -308,7 +323,7 @@ only a stat + DB lookup.
 one is also how it catches up with the declaration: `ensure_columns` adds any
 declared column the table lacks (nullable, in place — never a re-create) and
 returns the names it added. A database written before `committed`, `step_address`,
-`logical_run_id` or `profile` existed therefore keeps ingesting, and its older
+`logical_run_id`, `profile` or `data_locations` existed therefore keeps ingesting, and its older
 rows read back with those fields empty. `tools.orchestration`'s decision store
 uses the same helper over its own separate declaration — shared machinery, two
 distinct contracts.
@@ -321,7 +336,8 @@ format: no field was added for streaming, the key set and key order are
 identical, `step_address` is the usual `<pipeline>.<step>`, and each step still
 emits **exactly one** record. The per-chunk records are folded before they are
 emitted — `rows_in` / `rows_out` / `rows_quarantined` / `rows_excluded` /
-`duration` sum, `warn_hits` and `errors` concatenate dropping a repeat,
+`duration` sum, `warn_hits`, `errors` and `data_locations` concatenate dropping a
+repeat — so the one file every chunk was read from reads once, not fifty times —
 `committed` is true if any chunk committed, `error_category` and `step_address`
 are the step's own, and one failing chunk makes the step's `status` an `error`.
 `profile` is the last chunk's payload, so a profile step under a stream describes

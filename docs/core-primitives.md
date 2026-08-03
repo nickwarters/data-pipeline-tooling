@@ -257,6 +257,21 @@ statement or inject SQL. Values such as `logical_run_id` are passed as bound par
 never interpolated. There is no separate "valid identifier" rule to learn: name a
 table or column whatever the source calls it.
 
+#### Reporting what was touched
+
+A Reader that read a file or a table sets `data_locations` on itself during
+`read()` (or during `chunks()`, on the first `next()`), and the read node drains
+it into that step's run-log record. Each entry is two-part —
+`{"namespace": "file", "name": "/data/orders.csv"}`,
+`{"namespace": "sqlite:/data/raw.db", "name": "orders"}` — and a `GlobCsvReader`
+reports one per matched file, which is the question `describe()` cannot answer:
+it renders the directory and the pattern, never the files that matched.
+
+This is a **convention**, like `retry_attempts` and `rows_scanned`, not part of
+the `read()` signature: the `Reader` protocol is unchanged, so a duck-typed
+reader that reports nothing is still a Reader and its step records `[]`. The
+filtering and retry wrappers forward whatever the source they wrap reported.
+
 #### Source type coverage
 
 The Reader/Writer set is symmetric where the framework supports both inbound
@@ -410,6 +425,16 @@ strategy `TypeError`. Adding a strategy is therefore one class in
 `framework/io/strategy.py` plus one export line in `framework/io/__init__.py`;
 the direction of the dependency is preserved, because strategies are handed a
 db *path*, never a `Store` (`framework.io` must not import `tools.*`).
+
+#### Reporting what was touched
+
+The dual of the Reader convention above: a Writer sets `data_locations` on
+itself at the top of `write()` — before the write, so a Writer reused across
+runs never carries the previous target when a write raises — and the write node
+drains it. `StdoutWriter` persists nothing and so reports nothing. A **dry run**
+skips the write entirely and therefore records `[]`; the configured target is
+not interrogated as a substitute, because the point of the field is what was
+touched, not what would have been.
 
 ### `Store` / `StoreRegistry` — a namespace → file factory
 `Store` / `StoreRegistry` live in `tools.store` — **application infrastructure**,
@@ -675,7 +700,11 @@ and order a run without parsing free text. The builder owns no path or format
 knowledge — it just drives the sink; when no `RunLog` is composed a null sink
 keeps `.run()` branch-free while emitting nothing. The full record schema, the
 per-step breakdown, and the fail-fast/warn examples live in
-[`run-log-format.md`](run-log-format.md).
+[`run-log-format.md`](run-log-format.md). One field is worth naming here:
+`data_locations` carries the file(s) or table(s) a read or write step actually
+touched, drained from the component by the node (see the Reader and Writer
+sections above). It is stored and logged but has **no console form**, so it
+never appears on the human line.
 
 ### `RunRegistry` — the run history that ingests the JSONL
 A `RunRegistry` is the **consumer** for the `RunLog` JSONL — the progressive

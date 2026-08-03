@@ -207,7 +207,7 @@ class ReadNode(Node):
         ):
             session.trace.consider(dataset)
             session._trace_considered = True
-        return StepResult(dataset)
+        return StepResult(dataset, _location_metrics(self.reader))
 
 
 class ChunkedReadNode(Node):
@@ -266,7 +266,10 @@ class ChunkedReadNode(Node):
             session.warn_hits.extend(retries)
         if session.trace is not None:
             session.trace.consider(chunk)
-        return StepResult(chunk, self._chunk_metrics(len(chunk)))
+        return StepResult(
+            chunk,
+            {**self._chunk_metrics(len(chunk)), **_location_metrics(self.reader)},
+        )
 
     @property
     def rows_scanned_total(self) -> int:
@@ -488,7 +491,7 @@ class WriteNode(Node):
             if hasattr(self.writer, "retry_attempts"):
                 self.warn_hits.extend(self.writer.retry_attempts)
                 session.warn_hits.extend(self.writer.retry_attempts)
-        return StepResult(dataset, committed=True)
+        return StepResult(dataset, _location_metrics(self.writer), committed=True)
 
 
 class ActionNode(Node):
@@ -552,6 +555,16 @@ class ProfileNode(Node):
             self.warn_hits.append(located)
             session.warn_hits.append(located)
         return StepResult(dataset, {"profile": payload})
+
+
+def _location_metrics(component: object) -> dict[str, Any]:
+    """What this component reported touching, as a metric — or nothing at all.
+
+    Copied, so a later read on the same component cannot mutate a record that
+    has already been folded.
+    """
+    locations = getattr(component, "data_locations", None)
+    return {"data_locations": list(locations)} if locations else {}
 
 
 def _reset_stateful_components(nodes: list[Node]) -> None:

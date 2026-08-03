@@ -453,6 +453,11 @@ Zero-valued row metrics are printed explicitly because they distinguish a step
 that produced, quarantined, or excluded no rows from a metric that does not
 apply to that step.
 
+The `data_locations` field — the file(s) or table(s) a read or write step
+actually touched — is in the JSONL but is deliberately not rendered on these
+lines: a glob read carries one entry per matched file. Read the log file itself,
+or the run registry, to answer "which file produced this run?".
+
 ## Errors
 
 The CLI turns the expected failure modes into a clear message on `stderr` and a
