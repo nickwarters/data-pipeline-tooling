@@ -68,7 +68,7 @@ The mock client operates entirely in memory. `patchCase` writes to its internal 
  */
 ```
 
-The full shape (the `Effective*` reporting columns, `Appeals`, etc.) lives in `src/sharepoint-client.js`; the fields above are the storage-relevant subset. `status` widened to three values with the lifecycle change; `reportableAt` / `remediationDueDate` are stamped at Send Actions; `amendedOutcome` carries Controls' post-completion verdict and **replaces the removed `overrides[]` blob**. The client stamps `assignedAt` itself on every write that sets `assignedReviewer` (and clears it when the Reviewer is cleared), so no caller stamps it. See the [provisioning runbook](provisioning-runbook.md) for the SharePoint columns behind each field.
+The full shape (the `Effective*` reporting columns, `Appeals`, etc.) lives in `src/sharepoint-client.js`; the fields above are the storage-relevant subset. `status` widened to three values with the lifecycle change; `reportableAt` / `remediationDueDate` are stamped at Send Actions; `amendedOutcome` carries Controls' post-completion verdict and **replaces the removed `overrides[]` blob**. The client stamps `assignedAt` itself on every write that sets `assignedReviewer` (and clears it when the Reviewer is cleared), so no caller stamps it. See the [Case Type onboarding checklist](../case-type-onboarding.md) for the SharePoint columns behind each field.
 
 `answers` and `conversation` are stored as JSON blobs in the SharePoint list. `HttpSharePointClient` handles the serialisation/deserialisation; consumers always receive and send parsed JS objects.
 

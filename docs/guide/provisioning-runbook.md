@@ -5,8 +5,11 @@ recurring maintenance the framework depends on.
 
 Provisioning a new Case Type is **config + wiring only**: one module, one
 Question Bank, and the lists and groups below. No framework change per type.
-~8 Case Types are live for September (Example Review, Complaints, and ~6 more
-structurally like Complaints).
+
+This runbook covers the lists, groups and recurring maintenance. The
+`Cases-{slug}` **column schema and which columns are indexed** live in one place
+only — the [Case Type onboarding checklist](../case-type-onboarding.md) — because
+two copies of that table is exactly how one of them goes stale.
 
 ---
 
@@ -18,10 +21,6 @@ list. Before enabling the Case Type, grant read access on this list to the
 configured Controls, Reviewer-Manager, Adviser, Responsible-Party-Manager and
 Maintainer groups. The app fans broad-role reads across every Case Type list and
 treats a 403 as a provisioning fault rather than silently showing partial data.
-The column **internal names** below are
-authoritative: they are exactly what `HttpSharePointClient`
-(`src/services/http-sharepoint-client.js`, `rowFromItem` / `itemFromRow`) reads
-and writes. Display names are free to differ.
 
 For UAT, provision the matching `uat_`-prefixed list and include it in the ACL
 persona matrix described in the [testing guide](testing.md#selective-security-assurance).
@@ -31,48 +30,37 @@ read-only persona.
 
 ### Columns
 
-| Internal name             | SharePoint type                | Purpose                                                                                                                                                                                                   |
-| ------------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Title`                   | Single line of text            | Case title.                                                                                                                                                                                               |
-| `CaseType`                | Single line of text            | Case Type slug (`example-review`).                                                                                                                                                                        |
-| `Status`                  | Choice                         | Lifecycle state — **`In-progress`, `Actions In Progress`, `Completed`**. The middle value is new; existing lists must have the choice added.                                                              |
-| `AssignedReviewerId`      | Person or Group                | Current Reviewer. Reassignment history comes from list version history.                                                                                                                                   |
-| `AssignedAt`              | Date and Time (not indexed)    | **New.** When the Case was last handed to its Reviewer — the value the Case tables' **Assigned** column shows. Nothing filters or sorts on it server-side, so it needs no index.                          |
-| `ResponsiblePartyId`      | Person or Group                | Responsible Party — **written in-app by the Reviewer before Send Actions**.                                                                                                                               |
-| `AssignedReviewerManager` | Single line of text            | Reviewer's manager (bare account), for the Reviewer-Manager report.                                                                                                                                       |
-| `ResponsiblePartyManager` | Single line of text            | Responsible Party's manager (bare account).                                                                                                                                                               |
-| `Answers`                 | Multiple lines of text (plain) | JSON blob of `{ Qid: Answer }`. A **Remediation Action** inside it is `{ id, text, status, cancelReason? }`; legacy bare strings are coerced on read.                                                     |
-| `Conversation`            | Multiple lines of text (plain) | JSON array of `{ author, timestamp, body }`.                                                                                                                                                              |
-| `Details`                 | Multiple lines of text (plain) | JSON blob of read-only Case Details fields.                                                                                                                                                               |
-| `Notes`                   | Multiple lines of text (plain) | Free-form reviewer notes.                                                                                                                                                                                 |
-| `CaseJustification`       | Multiple lines of text (plain) | Case-level justification.                                                                                                                                                                                 |
-| `ReportableAt`            | Date and Time                  | **New.** Stamped at the reportable milestone (Send Actions, or Complete on the no-actions path) — the freeze/snapshot moment. On the actions path it precedes `CompletedAt`.                              |
-| `RemediationDueDate`      | Date and Time                  | **New.** Case-level remediation SLA, computed **once** at Send Actions (+10 working days) and never recomputed on read.                                                                                   |
-| `CompletedAt`             | Date and Time                  | Stamped only at the final `Completed` transition.                                                                                                                                                         |
-| `Outcome`                 | Single line of text            | Working/current outcome value.                                                                                                                                                                            |
-| `OutcomeAtCompletion`     | Single line of text            | Frozen Outcome snapshot for reporting.                                                                                                                                                                    |
-| `QuestionBankVersion`     | Single line of text            | Content hash of the as-reviewed Question Bank export.                                                                                                                                                     |
-| `HadRemediation`          | Yes/No                         | Whether the frozen Case carried remediation.                                                                                                                                                              |
-| `EffectiveOutcome`        | Single line of text            | Corrected result for the Responsible-Party-team report. **Index this column** — reports `$filter` on it. Re-fed from `AmendedOutcome`.                                                                    |
-| `EffectiveHadRemediation` | Yes/No                         | Corrected remediation flag.                                                                                                                                                                               |
-| `OutcomeOverridden`       | Yes/No                         | Whether the effective result differs from the frozen one. **Index this column.**                                                                                                                          |
-| `AmendedOutcome`          | Multiple lines of text (plain) | **New.** JSON `{ outcome, justification, amendedBy, amendedAt, fromAppealId? }` or empty. Controls' post-completion verdict; feeds the `Effective*` columns. Replaces the **removed** `overrides[]` blob. |
-| `Appeals`                 | Multiple lines of text (plain) | JSON array of Appeals.                                                                                                                                                                                    |
-| `DueDate`                 | Date and Time                  | Review due date (drives `Overdue`).                                                                                                                                                                       |
-| `RelatedDate`             | Date and Time                  | Case-relevant date (e.g. interaction date).                                                                                                                                                               |
-| `OnHold`                  | Yes/No (indexed)               | Reviewer-controlled hold state and allocation-capacity predicate, available only while the Case is `In-progress`.                                                                                         |
-| `PlacedOnHoldAt`          | Date and Time                  | Timestamp set when `OnHold` is applied; cleared automatically when the Case leaves `In-progress`.                                                                                                         |
+**The column schema is the [`Cases-{slug}` column
+schema](../case-type-onboarding.md#cases-slug-column-schema) in the onboarding
+checklist** — every column, its SharePoint type, whether it is indexed, and
+which of them the app writes. Those internal names are authoritative: they are
+exactly what `HttpSharePointClient` (`src/services/http-sharepoint-client.js`,
+`rowFromItem` / `itemFromRow`) reads and writes. Display names are free to
+differ.
 
-**`AssignedAt` must be provisioned on every Case Type list _before_ the frontend
-is deployed.** Reads are safe without it — the Case read is `$select=*`, so a
-list lacking the column simply answers without it and the row hydrates with no
-assignment time — but the client stamps `AssignedAt` on every write that sets
-the Assigned Reviewer, and SharePoint answers a PATCH naming an unknown column
-with a **400**. On a list without it, "Request next Case" fails outright: the
-allocation claim is exactly such a write.
+Three things about that schema are provisioning-critical enough to repeat here:
 
-`Created` is the SharePoint system column. **Removed:** the `Overrides` /
-`overrides[]` blob — do not provision it; corrected reporting now flows from
+- **Index at creation, or not at all.** A SharePoint column index cannot be
+  added once the list is past the List View Threshold. Every indexed column in
+  the schema must be created and indexed **while the list is still empty** —
+  see "The one irreversible step" in the
+  [onboarding checklist](../case-type-onboarding.md).
+- **All four people are Person columns** — `AssignedReviewer`,
+  `ResponsibleParty`, `AssignedReviewerManager` and `ResponsiblePartyManager`
+  alike. The read expands each and takes the claims login off it, and the write
+  path resolves the account to the numeric id the `…Id` twin holds. A manager
+  column provisioned as text will fail both. Rows speak bare account names;
+  columns are Person.
+- **The whole schema must exist before the frontend is deployed.** Reads
+  tolerate a missing column — the Case read is `$select=*`, so the list simply
+  answers without it — but a **write** naming a column the list lacks gets a
+  **400** from SharePoint, which fails the action outright rather than
+  degrading. `AssignedAt` is the sharpest case: the client stamps it on every
+  write that sets the Assigned Reviewer, and the allocation claim behind
+  "Request next Case" is exactly such a write.
+
+`Created` is the SharePoint system column. **Do not provision** the `Overrides`
+/ `overrides[]` blob — it is gone; corrected reporting flows from
 `AmendedOutcome` into the `Effective*` columns.
 
 Before enabling a Case Type's `maxInProgressCases` limit on an existing list,
@@ -125,7 +113,7 @@ as-reviewed question catalogue.
 ## 4. Groups per Case Type
 
 SharePoint groups fall on two orthogonal axes. For a Case Type whose
-display name is `X` (e.g. `Example Review`, **not** the slug), provision:
+display name is `X` (e.g. `Complaints`, **not** the slug `complaints`), provision:
 
 ### Per-type list-access group (the real ACL boundary)
 
