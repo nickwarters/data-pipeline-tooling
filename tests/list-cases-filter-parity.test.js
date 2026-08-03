@@ -108,7 +108,6 @@ function toListItem(row) {
     ReviewRequired: row.reviewRequired ? 1 : 0,
     OnHold: row.onHold ? 1 : 0,
     HasOpenAppeal: row.hasOpenAppeal ? 1 : 0,
-    Reopened: row.reopened ? 1 : 0,
   };
 }
 
@@ -279,12 +278,6 @@ const SCENARIOS = [
     expected: ['appealed'],
   },
   {
-    name: 'reopened',
-    filter: { reopened: true },
-    rows: [caseRow('back', { reopened: true }), caseRow('first-pass')],
-    expected: ['back'],
-  },
-  {
     name: 'completedAfter',
     filter: { completedAfter: MID_PAST },
     rows: COMPLETED_ROWS,
@@ -316,13 +309,13 @@ const SCENARIOS = [
   },
   {
     name: 'anyOf',
-    filter: { anyOf: [{ onHold: true }, { reopened: true }] },
+    filter: { anyOf: [{ onHold: true }, { reviewRequired: true }] },
     rows: [
       caseRow('parked', { onHold: true }),
-      caseRow('back', { reopened: true }),
+      caseRow('queued', { reviewRequired: true }),
       caseRow('plain'),
     ],
-    expected: ['parked', 'back'],
+    expected: ['parked', 'queued'],
   },
   {
     name: 'status and overdue together',
@@ -347,6 +340,17 @@ const SCENARIOS = [
     expected: ['mine-late'],
   },
 ];
+
+// The one scenario the table above cannot hold, because it matches nothing by
+// design: an OR of no branches. Left to itself the server-side query emits no
+// condition for it and silently widens to the whole list, where the mock
+// predicate answers "nothing matches" — a scoping bug rather than a cosmetic
+// one, so the two are pinned together here.
+test('listCases parity: an anyOf with no branches matches nothing on either engine', async () => {
+  const rows = [caseRow('parked', { onHold: true }), caseRow('plain')];
+  assert.deepEqual(await mockMatches({ anyOf: [] }, rows), []);
+  assert.deepEqual(await odataMatches({ anyOf: [] }, rows), []);
+});
 
 for (const scenario of SCENARIOS) {
   test(`listCases parity: ${scenario.name}`, async () => {

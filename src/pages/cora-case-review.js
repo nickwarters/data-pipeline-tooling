@@ -883,6 +883,7 @@ export function createRouteSlice(params, context) {
                 caseId: caseId(),
                 messages: caseRow.conversation,
                 currentUser,
+                roles: snapshot.machine?.roles ?? [],
                 caseListOptions: snapshot.caseListOptions,
                 body,
                 onMessages: (messages) =>

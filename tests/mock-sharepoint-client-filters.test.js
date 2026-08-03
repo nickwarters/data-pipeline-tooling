@@ -523,7 +523,7 @@ test('MockSharePointClient: countCases returns the count of matching cases', asy
     1
   );
   assert.equal(
-    await client.countCases({ reopened: true }, { listName: LIST }),
+    await client.countCases({ reviewRequired: true }, { listName: LIST }),
     1
   );
   assert.equal(await client.countCases({}, { listName: LIST }), 5);
@@ -557,7 +557,7 @@ test('MockSharePointClient: filters by the reviewRequired flag', async () => {
 test('MockSharePointClient: countCases with a listName that has no configured store counts zero', async () => {
   const client = makeReasonClient();
   assert.equal(
-    await client.countCases({ reopened: true }, { listName: 'anything' }),
+    await client.countCases({ hasOpenAppeal: true }, { listName: 'anything' }),
     0
   );
 });

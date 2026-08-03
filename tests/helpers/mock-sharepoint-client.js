@@ -150,9 +150,8 @@ export function makeReasonClient() {
           appealRaisedAt: '2026-06-15T00:00:00Z',
           completedAt: '2026-06-10T00:00:00Z',
         }),
-        reasonCase('reopened-1', {
-          reopened: true,
-          reopenedAt: '2026-06-25T00:00:00Z',
+        reasonCase('review-1', {
+          reviewRequired: true,
         }),
         reasonCase('plain-1', {}),
       ],

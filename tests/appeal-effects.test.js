@@ -52,7 +52,7 @@ function harness() {
   return { effects, writes, dispatched, storeRows };
 }
 
-test('raising an Appeal stamps the injected clock and id, and enqueues only appeals', () => {
+test('raising an Appeal stamps the injected clock and id, and writes the Appeal with its queryable pair', () => {
   const { effects, writes, dispatched, storeRows } = harness();
 
   effects.raise({
@@ -64,27 +64,32 @@ test('raising an Appeal stamps the injected clock and id, and enqueues only appe
 
   assert.equal(writes.length, 1);
   assert.deepEqual(writes[0], {
-    kind: 'enqueue',
+    kind: 'enqueueFields',
     id: 'c1',
-    field: 'appeals',
-    value: [
-      {
-        id: 'appeal-fixed',
-        appellant: 'controls-1',
-        at: '2026-07-23T09:30:00.000Z',
-        rationale: 'The result is wrong.',
-        state: 'raised',
-        citedAnswerKeys: ['q1'],
-      },
-    ],
+    value: {
+      appeals: [
+        {
+          id: 'appeal-fixed',
+          appellant: 'controls-1',
+          at: '2026-07-23T09:30:00.000Z',
+          rationale: 'The result is wrong.',
+          state: 'raised',
+          citedAnswerKeys: ['q1'],
+        },
+      ],
+      // Clocked from the Appeal, not from a second reading, so the SaveQueue's
+      // conflict replay of this same bag persists the same raised-at.
+      hasOpenAppeal: true,
+      appealRaisedAt: '2026-07-23T09:30:00.000Z',
+    },
   });
   assert.equal(dispatched.length, 1);
   assert.equal(dispatched[0].type, 'case/model-changed');
   assert.equal(storeRows().length, 1);
-  assert.deepEqual(storeRows()[0].appeals, writes[0].value);
+  assert.deepEqual(storeRows()[0].appeals, writes[0].value.appeals);
 });
 
-test('rejecting an Appeal writes appeals alone; agreeing writes the corrected columns atomically', () => {
+test('rejecting an Appeal writes the history and its pair; agreeing adds the corrected columns atomically', () => {
   const raised = harness();
   raised.effects.raise({
     caseRow: CASE_ROW,
@@ -105,10 +110,11 @@ test('rejecting an Appeal writes appeals alone; agreeing writes the corrected co
     },
   });
   assert.equal(rejected.writes.length, 1);
-  assert.equal(rejected.writes[0].kind, 'enqueue');
-  assert.equal(rejected.writes[0].field, 'appeals');
-  assert.equal(rejected.writes[0].value[0].state, 'resolved');
-  assert.deepEqual(rejected.writes[0].value[0].resolution, {
+  assert.equal(rejected.writes[0].kind, 'enqueueFields');
+  assert.equal(rejected.writes[0].value.hasOpenAppeal, false);
+  assert.equal(rejected.writes[0].value.appealRaisedAt, null);
+  assert.equal(rejected.writes[0].value.appeals[0].state, 'resolved');
+  assert.deepEqual(rejected.writes[0].value.appeals[0].resolution, {
     verdict: 'rejected',
     rationale: 'Original stands.',
     resolver: 'controls-1',
@@ -179,12 +185,8 @@ function raiseWithDefaults(options = {}, snapshot = SNAPSHOT) {
   const writes = [];
   createAppealEffects({
     saveQueue: /** @type {any} */ ({
-      enqueue: (
-        /** @type {string} */ _id,
-        /** @type {string} */ _field,
-        /** @type {any} */ value
-      ) => writes.push(value),
-      enqueueFields: () => {},
+      enqueueFields: (/** @type {string} */ _id, /** @type {any} */ fields) =>
+        writes.push(fields.appeals),
     }),
     caseId: () => 'c1',
     dispatch: () => {},
@@ -259,6 +261,14 @@ test('round trip: raise, resolve and amend land on the persisted row through the
   await saveQueue.whenIdle();
   assert.equal(persisted().appeals?.[0].state, 'raised');
   assert.equal(persisted().appeals?.[0].id, 'appeal-1');
+  // The Controls worklist filters the column, so the transition has to have
+  // written it, not just the blob.
+  assert.equal(persisted().appealRaisedAt, '2026-07-23T09:30:00.000Z');
+  assert.equal(
+    await client.countCases({ hasOpenAppeal: true }, opts),
+    1,
+    'the raised Appeal is findable by the column the worklist filters on'
+  );
 
   effects.resolve({
     caseRow: row,
@@ -273,6 +283,12 @@ test('round trip: raise, resolve and amend land on the persisted row through the
   });
   await saveQueue.whenIdle();
   assert.equal(persisted().appeals?.[0].state, 'resolved');
+  assert.equal(persisted().appealRaisedAt, null);
+  assert.equal(
+    await client.countCases({ hasOpenAppeal: true }, opts),
+    0,
+    'and drops out of the group once it is resolved'
+  );
   // The resolution and the corrected-reporting columns are on the row together
   // — the agreed branch's single atomic PATCH.
   assert.equal(persisted().effectiveOutcome, 'pass');

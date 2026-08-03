@@ -1,25 +1,10 @@
 // @ts-check
 import { buildAmendmentFields } from '../../evaluators/amended-outcome.js';
+import { openAppealFields } from '../../services/action-centre-flags.js';
 
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../../sharepoint-client.js').Appeal} Appeal */
 /** @typedef {import('../../sharepoint-client.js').AmendedOutcome} AmendedOutcome */
-
-/**
- * The one Appeal still awaiting resolution, or `null`.
- *
- * A Case allows at most one open Appeal at a time, so "not resolved" is a
- * membership question with a single answer. Both Appeal views and the
- * in-memory flow runner ask it, and each used to carry its own copy of the
- * predicate — which is how a rule acquires three definitions that can drift
- * apart one at a time.
- *
- * @param {CaseRow | null | undefined} caseRow
- * @returns {Appeal | null}
- */
-export function openAppealOf(caseRow) {
-  return (caseRow?.appeals ?? []).find((a) => a.state !== 'resolved') ?? null;
-}
 
 /**
  * Build the next immutable Case row for an additive Appeal request.
@@ -46,12 +31,16 @@ export function raiseAppeal(input) {
     appeal.citedAnswerKeys = input.citedAnswerKeys;
   }
   const appeals = [...(input.caseRow.appeals ?? []), appeal];
-  return { caseRow: { ...input.caseRow, appeals }, appeals };
+  // The queryable pair travels with the blob it is derived from: the Controls
+  // worklist filters the column, never the JSON.
+  const fields = { appeals, ...openAppealFields(appeals) };
+  return { caseRow: { ...input.caseRow, ...fields }, fields };
 }
 
 /**
  * Build the immutable Case row and persistence field set for an Appeal
- * resolution. Agreeing includes the linked amendment fields transactionally.
+ * resolution. Agreeing includes the linked amendment fields, which must land in
+ * the same PATCH as the Appeal itself.
  *
  * @param {{
  *   caseRow: CaseRow,
@@ -78,11 +67,12 @@ export function resolveAppeal(input) {
       : appeal
   );
 
+  const appealFields = { appeals, ...openAppealFields(appeals) };
+
   if (input.verdict === 'rejected') {
     return {
-      caseRow: { ...input.caseRow, appeals },
-      fields: { appeals },
-      transactional: false,
+      caseRow: { ...input.caseRow, ...appealFields },
+      fields: appealFields,
     };
   }
 
@@ -96,9 +86,8 @@ export function resolveAppeal(input) {
   };
   const amendmentFields = buildAmendmentFields(input.caseRow, amendment);
   return {
-    caseRow: { ...input.caseRow, appeals, ...amendmentFields },
-    fields: { appeals, ...amendmentFields },
-    transactional: true,
+    caseRow: { ...input.caseRow, ...appealFields, ...amendmentFields },
+    fields: { ...appealFields, ...amendmentFields },
   };
 }
 

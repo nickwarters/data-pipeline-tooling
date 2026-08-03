@@ -3,7 +3,7 @@
  * Reason model for the dashboard **Action Centre** worklist.
  *
  * The Action Centre merges the per-role dashboard tables (Overdue, Awaiting
- * Frontline, Review Required, Appeals to work, Reopened, …) into one
+ * Frontline, Review Required, Appeals to work, …) into one
  * urgency-ranked, reason-grouped list. This module is the pure, data-only core:
  * an ordered table of **reasons**, plus the helpers that turn a Case row into
  * its reason chip, role tag, "waiting" age and sub-line. It performs no I/O —
@@ -31,9 +31,9 @@
  * id: string,
  * label: string,
  * role: string,
- * tone: 'overdue' | 'awaiting' | 'review' | 'appeal' | 'reopened',
- * clockField: 'dueDate' | 'awaitingSince' | 'created' | 'appealRaisedAt' | 'reopenedAt',
- * flagField: 'overdue' | 'awaitingResponsibleParty' | 'reviewRequired' | 'hasOpenAppeal' | 'reopened',
+ * tone: 'overdue' | 'awaiting' | 'review' | 'appeal',
+ * clockField: 'dueDate' | 'awaitingSince' | 'created' | 'appealRaisedAt',
+ * flagField: 'overdue' | 'awaitingResponsibleParty' | 'reviewRequired' | 'hasOpenAppeal',
  * filter: ListCasesFilter,
  * defaultSlaDays: number,
  * reviewerScoped: boolean,
@@ -75,7 +75,7 @@ function assigneeSubLine(caseRow) {
 
 /**
  * The reason table, in fixed priority order (Overdue → Awaiting Frontline →
- * Review Required → Appeals → Reopened). Group ordering is this fixed priority;
+ * Review Required → Appeals). Group ordering is this fixed priority;
  * the primary reason of a multi-reason case is the earliest match here.
  *
  * `defaultSlaDays` is the framework cadence for a reason — what a Case Type
@@ -127,6 +127,13 @@ export const ACTION_CENTRE_REASONS = [
     reviewerScoped: true,
     // The within-SLA backlog: the reviewer's remaining in-flight Cases that
     // aren't overdue or awaiting a reply. Hidden until the "All" toggle.
+    //
+    // Nothing in this app sets the flag this group queries. No lifecycle
+    // transition submits a Case for review — there is no such step and no
+    // status for it — so the group is empty in production, and every part of
+    // it below (the clock, the cadence, the wording) describes a state no
+    // Case reaches. Filling it needs a real "submit for review" transition
+    // that writes ReviewRequired, or the reason retired.
     tailOnly: true,
     requires: (c) => c.isReviewer,
     waitingLabel: (days) => `${dayCount(days)} open`,
@@ -146,21 +153,6 @@ export const ACTION_CENTRE_REASONS = [
     requires: (c) => c.isControls,
     waitingLabel: (days) => `raised ${dayCount(days)} ago`,
     subLine: assigneeSubLine,
-  },
-  {
-    id: 'reopened',
-    label: 'Reopened',
-    role: 'Owner',
-    tone: 'reopened',
-    clockField: 'reopenedAt',
-    flagField: 'reopened',
-    filter: { reopened: true },
-    defaultSlaDays: 3,
-    reviewerScoped: false,
-    tailOnly: false,
-    requires: (c) => c.ownedCaseTypes.length > 0,
-    waitingLabel: (days) => dayCount(days),
-    subLine: () => 'appeal upheld · back under review',
   },
 ];
 

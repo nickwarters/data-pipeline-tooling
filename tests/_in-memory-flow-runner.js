@@ -13,7 +13,8 @@ import {
   completeCase,
   completionPatch,
 } from '../src/pages/cora-case-review/completion-actions.js';
-import { openAppealOf } from '../src/pages/cora-case-review/appeal-actions.js';
+import { openAppealOf } from '../src/evaluators/appeal-state.js';
+import { postConversationMessage } from '../src/pages/cora-case-review/conversation-view.js';
 import { createAppealEffects } from '../src/pages/cora-case-review/appeal-effects.js';
 import {
   answerEdited,
@@ -87,6 +88,9 @@ import { loadCaseTypeConfig } from '../case-types/manifest.js';
  * rationale: string,
  * outcome?: string,
  * justification?: string
+ * } | {
+ * type: 'postMessage',
+ * body: string
  * } | {
  * type: 'flush'
  * }} FlowAction
@@ -319,6 +323,9 @@ export function createInMemoryFlowRunner(state, opts = {}) {
         if (applied && caseRow) caseRow = { ...caseRow, ...applied };
         return;
       }
+      case 'postMessage':
+        await postMessage(action);
+        return;
       case 'raiseAppeal':
         await raiseCurrentAppeal(action);
         return;
@@ -399,6 +406,33 @@ export function createInMemoryFlowRunner(state, opts = {}) {
         newId: (prefix) => `flow-${prefix}-${Date.now()}`,
       }),
     };
+  }
+
+  /**
+   * The Case page's own posting effect, driven headlessly — including the
+   * roles it stamps the Message's side from, which is what moves the Awaiting
+   * Frontline flag on the way to storage.
+   *
+   * @param {Extract<FlowAction, { type: 'postMessage' }>} action
+   */
+  async function postMessage(action) {
+    const loader = requirePage(action);
+    if (!caseRow) throw new Error('Cannot post before the Case has loaded.');
+    if (loader.access.conversation !== 'edit') {
+      throw new Error('Current actor cannot post to the Conversation.');
+    }
+    const currentUser = await client.getCurrentUser();
+    const { messages } = await postConversationMessage({
+      client,
+      saveQueue,
+      caseId: loader.caseId,
+      messages: caseRow.conversation,
+      currentUser,
+      roles: loader.machine?.roles ?? [],
+      caseListOptions: loader.caseListOptions,
+      body: action.body,
+    });
+    caseRow = { ...caseRow, conversation: messages };
   }
 
   /** @param {Extract<FlowAction, { type: 'raiseAppeal' }>} action */

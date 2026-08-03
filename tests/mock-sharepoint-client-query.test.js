@@ -63,16 +63,16 @@ test('MockSharePointClient: orderBy sorts ties stably and treats a missing key a
   const client = new MockSharePointClient({
     lists: {
       [LIST]: [
-        reasonCase('tie-a', { reopenedAt: '2026-06-01T00:00:00Z' }),
-        reasonCase('tie-b', { reopenedAt: '2026-06-01T00:00:00Z' }),
-        reasonCase('no-key', {}), // no reopenedAt → sorts first ascending
+        reasonCase('tie-a', { appealRaisedAt: '2026-06-01T00:00:00Z' }),
+        reasonCase('tie-b', { appealRaisedAt: '2026-06-01T00:00:00Z' }),
+        reasonCase('no-key', {}), // no appealRaisedAt → sorts first ascending
       ],
     },
     personas: PERSONAS,
   });
   const rows = await client.listCases(
     {},
-    { listName: LIST, orderBy: 'reopenedAt' }
+    { listName: LIST, orderBy: 'appealRaisedAt' }
   );
   assert.deepEqual(
     rows.map((c) => c.id),
@@ -89,12 +89,12 @@ test('MockSharePointClient: orderBy treats two rows that both lack the sort key 
   });
   const rows = await client.listCases(
     {},
-    { listName: LIST, orderBy: 'reopenedAt' }
+    { listName: LIST, orderBy: 'appealRaisedAt' }
   );
   assert.deepEqual(
     rows.map((c) => c.id).sort(),
     ['no-key-a', 'no-key-b'],
-    "neither row has reopenedAt — comparator falls back to '' on both sides"
+    "neither row has appealRaisedAt — comparator falls back to '' on both sides"
   );
 });
 
@@ -123,7 +123,7 @@ test('MockSharePointClient: countCases with anyOf ORs sub-filters, deduped acros
         // Qualifies for two reasons — must be counted once by an OR-count.
         reasonCase('multi', {
           awaitingResponsibleParty: true,
-          reopened: true,
+          reviewRequired: true,
         }),
         reasonCase('await-only', { awaitingResponsibleParty: true }),
         reasonCase('none', {}),
@@ -134,7 +134,7 @@ test('MockSharePointClient: countCases with anyOf ORs sub-filters, deduped acros
 
   const orCount = await client.countCases(
     {
-      anyOf: [{ awaitingResponsibleParty: true }, { reopened: true }],
+      anyOf: [{ awaitingResponsibleParty: true }, { reviewRequired: true }],
     },
     { listName: LIST }
   );
@@ -144,21 +144,22 @@ test('MockSharePointClient: countCases with anyOf ORs sub-filters, deduped acros
     (await client.countCases(
       { awaitingResponsibleParty: true },
       { listName: LIST }
-    )) + (await client.countCases({ reopened: true }, { listName: LIST }));
+    )) +
+    (await client.countCases({ reviewRequired: true }, { listName: LIST }));
   assert.equal(sumOfGroups, 3, 'summing groups double-counts the overlap');
 });
 
 test('MockSharePointClient: anyOf combines with a base filter (AND of base, OR of anyOf)', async () => {
   const client = makeReasonClient();
-  const completedAppealsOrReopened = await client.countCases(
+  const completedAppealsOrReviewRequired = await client.countCases(
     {
       status: 'Completed',
-      anyOf: [{ hasOpenAppeal: true }, { reopened: true }],
+      anyOf: [{ hasOpenAppeal: true }, { reviewRequired: true }],
     },
     { listName: LIST }
   );
-  // Only appeal-1 is Completed; reopened-1 is In-progress and excluded by base.
-  assert.equal(completedAppealsOrReopened, 1);
+  // Only appeal-1 is Completed; review-1 is In-progress, excluded by the base.
+  assert.equal(completedAppealsOrReviewRequired, 1);
 });
 
 // --- Indexed flag column writes ---

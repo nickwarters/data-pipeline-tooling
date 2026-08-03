@@ -101,11 +101,7 @@ function renderAppealReview(overrides = {}, queue = makeQueue()) {
             ...resolution,
           });
           props.caseRow = result.caseRow;
-          if (result.transactional) {
-            queue.enqueueFields('c1', result.fields);
-          } else {
-            queue.enqueue('c1', 'appeals', result.fields.appeals);
-          }
+          queue.enqueueFields('c1', result.fields);
           render();
         },
       })
@@ -309,22 +305,22 @@ test('CORAAppealReview: agreeing without justification (but with outcome) shows 
 
 // --- Reject flow ---
 
-test('CORAAppealReview: reject resolves the appeal with rejected verdict and saves only appeals', () => {
+test('CORAAppealReview: reject resolves the appeal with rejected verdict and no amendment', () => {
   const { el, queue } = makeEditable();
   findByClass(el, 'cora-appeal-review-verdict-rejected').checked = true;
   findByClass(el, 'cora-appeal-review-rationale-input').value =
     'Outcome was correct.';
   clickSubmit(el);
 
-  assert.equal(queue.enqueued.length, 1, 'one enqueue call');
-  assert.equal(queue.enqueued[0].id, 'c1');
-  assert.equal(queue.enqueued[0].field, 'appeals');
-  const saved = queue.enqueued[0].value;
+  assert.equal(queue.enqueuedFields.length, 1, 'one field write');
+  assert.equal(queue.enqueuedFields[0].id, 'c1');
+  const written = queue.enqueuedFields[0].fields;
+  assert.equal(written.amendedOutcome, undefined, 'no amendment on reject');
+  const saved = written.appeals;
   assert.equal(saved.length, 1);
   assert.equal(saved[0].state, 'resolved');
   assert.equal(saved[0].resolution.verdict, 'rejected');
   assert.equal(saved[0].resolution.rationale, 'Outcome was correct.');
-  assert.equal(queue.enqueuedFields.length, 0, 'no amendment on reject');
 });
 
 test('CORAAppealReview: reject does not create an Amended Outcome', () => {
@@ -358,7 +354,7 @@ test('CORAAppealReview: reject stamps resolver id and timestamp on the resolutio
   findByClass(el, 'cora-appeal-review-verdict-rejected').checked = true;
   findByClass(el, 'cora-appeal-review-rationale-input').value = 'No change.';
   clickSubmit(el);
-  const saved = queue.enqueued[0].value[0];
+  const saved = queue.enqueuedFields[0].fields.appeals[0];
   assert.equal(saved.resolution.resolver, 'u-controls');
   assert.ok(saved.resolution.at, 'timestamp stamped');
 });
@@ -456,7 +452,7 @@ test('CORAAppealReview: prior resolved Appeals are retained in the appeals array
   findByClass(el, 'cora-appeal-review-rationale-input').value = 'No change.';
   clickSubmit(el);
 
-  const saved = queue.enqueued[0].value;
+  const saved = queue.enqueuedFields[0].fields.appeals;
   assert.equal(saved.length, 2, 'both appeals retained');
   assert.equal(saved[0].id, prior.id, 'prior appeal unchanged');
   assert.equal(saved[1].state, 'resolved', 'new appeal resolved');

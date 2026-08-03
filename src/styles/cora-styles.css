@@ -835,7 +835,6 @@
   --cora-ac-awaiting: var(--cora-color-info);
   --cora-ac-review: #0b7285;
   --cora-ac-appeal: #6d3fbf;
-  --cora-ac-reopened: var(--cora-color-warning);
   display: block;
   background: var(--cora-color-surface);
   border: 1px solid var(--cora-color-border);
@@ -968,9 +967,6 @@
 .cora-ac-dot--appeal {
   background: var(--cora-ac-appeal);
 }
-.cora-ac-dot--reopened {
-  background: var(--cora-ac-reopened);
-}
 
 .cora-ac-group-label {
   font-weight: var(--cora-font-weight-semibold);
@@ -998,9 +994,6 @@
 }
 .cora-ac-count--appeal {
   background: var(--cora-ac-appeal);
-}
-.cora-ac-count--reopened {
-  background: var(--cora-ac-reopened);
 }
 
 .cora-ac-peek {
@@ -1066,10 +1059,6 @@
 }
 .cora-ac-wait--appeal {
   color: var(--cora-ac-appeal);
-  font-weight: var(--cora-font-weight-semibold);
-}
-.cora-ac-wait--reopened {
-  color: var(--cora-ac-reopened);
   font-weight: var(--cora-font-weight-semibold);
 }
 

@@ -219,8 +219,6 @@
  * placedOnHoldAt?: string | null,
  * hasOpenAppeal?: boolean,
  * appealRaisedAt?: string | null,
- * reopened?: boolean,
- * reopenedAt?: string | null,
  * assignedReviewerManager?: string | null,
  * etag: string
  * }} CaseRow
@@ -310,7 +308,7 @@
  * equality on an **indexed** Case column so a filtered count/`$top` stays
  * cheap past the 5000-item threshold: reason-defining data is hoisted onto
  * queryable columns, never mined from the `Answers`/`appeals` blobs.
- * `awaitingResponsibleParty`, `hasOpenAppeal` and `reopened` are the
+ * `awaitingResponsibleParty` and `hasOpenAppeal` are the
  * Action Centre reason flags. `anyOf` is an OR-of-filters (each sub-filter is
  * itself ANDed, then the sub-filters are ORed) used for the server-deduped
  * "N cases need you" headline, whose count is deliberately *not* the sum of the
@@ -337,7 +335,7 @@
  * to its internal column before emitting `$orderby`. Only a key that client maps
  * is sortable — an unmapped one throws there rather than reaching SharePoint.
  *
- * @typedef {{ status?: string, assignedReviewer?: string, caseType?: string, responsibleParty?: string, overdue?: boolean, awaitingResponsibleParty?: boolean, reviewRequired?: boolean, onHold?: boolean, hasOpenAppeal?: boolean, reopened?: boolean, assignedReviewerManager?: string, effectiveOutcome?: string, outcomeOverridden?: boolean, completedAfter?: string, completedBefore?: string, reportableAfter?: string, reportableBefore?: string, titlePrefix?: string, anyOf?: ListCasesFilter[] }} ListCasesFilter
+ * @typedef {{ status?: string, assignedReviewer?: string, caseType?: string, responsibleParty?: string, overdue?: boolean, awaitingResponsibleParty?: boolean, reviewRequired?: boolean, onHold?: boolean, hasOpenAppeal?: boolean, assignedReviewerManager?: string, effectiveOutcome?: string, outcomeOverridden?: boolean, completedAfter?: string, completedBefore?: string, reportableAfter?: string, reportableBefore?: string, titlePrefix?: string, anyOf?: ListCasesFilter[] }} ListCasesFilter
  * @typedef {{ listName?: string, top?: number, skip?: number, orderBy?: string, orderDir?: 'asc' | 'desc' }} CaseListOptions
  */
 
@@ -487,7 +485,7 @@
 /**
  * How long a Case may sit in each Action Centre reason group before its
  * "waiting" chip reads as breached, in whole days, keyed by reason id
- * (`overdue`, `awaitingFrontline`, `reviewRequired`, `appeals`, `reopened`).
+ * (`overdue`, `awaitingFrontline`, `reviewRequired`, `appeals`).
  *
  * Deliberately **partial**: a Case Type names only the reasons whose cadence
  * differs from the framework's, and every other reason keeps the default that

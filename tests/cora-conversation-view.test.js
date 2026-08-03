@@ -92,6 +92,7 @@ test('posting preserves JSON-blob PATCH, ETag, list routing, and queue refresh',
     caseId: 'case-1',
     messages: [],
     currentUser: CURRENT_USER,
+    roles: ['assignedReviewer'],
     caseListOptions: { listName: 'Example Cases' },
     body: 'New message',
     onMessages: (messages) => {
@@ -103,7 +104,11 @@ test('posting preserves JSON-blob PATCH, ETag, list routing, and queue refresh',
   assert.equal(optimistic[0].body, 'New message');
   assert.equal(calls[0][0], 'patchCase');
   assert.equal(calls[0][1], 'case-1');
-  assert.deepEqual(calls[0][2], { conversation: result.messages });
+  assert.deepEqual(calls[0][2], {
+    conversation: result.messages,
+    awaitingResponsibleParty: true,
+    awaitingSince: result.messages[0].timestamp,
+  });
   assert.equal(calls[0][3], 'v1');
   assert.deepEqual(calls[0][4], { listName: 'Example Cases' });
   assert.deepEqual(calls[1], [
@@ -132,6 +137,7 @@ test('posting leaves queue state untouched when the PATCH is rejected', async ()
     caseId: 'case-1',
     messages: [],
     currentUser: CURRENT_USER,
+    roles: ['assignedReviewer'],
     caseListOptions: {},
     body: 'Retry later',
   });
@@ -147,6 +153,7 @@ test('standalone page and reducer render store state without a custom element', 
       conversation: {
         caseRow: CASE_ROW,
         access: /** @type {const} */ ('edit'),
+        roles: [],
         caseListOptions: {},
         heading: 'Conversation',
         error: null,
@@ -241,6 +248,7 @@ test('conversation page: Send posts the typed Message through the route’s own 
     type: 'conversation/loaded',
     caseRow: CASE_ROW,
     access: 'edit',
+    roles: ['assignedReviewer'],
     caseListOptions: { listName: 'Example Cases' },
   });
   const container = document.createElement('main');
@@ -417,4 +425,50 @@ test("the standalone page heads the Conversation with the Case Type's wording", 
   assert.equal(state.routes.conversation.heading, 'Discussion');
   const node = conversationPageView(state, { dispatch() {} }, () => {});
   assert.match(node.textContent, /Discussion/);
+});
+
+// Who posted is what starts or stops the Awaiting Frontline clock, so the pair
+// travels in the same PATCH as the message that moved it — a Case cannot be
+// left flagged as waiting with no message behind it.
+/** @param {import('../src/services/section-access.js').Role[]} roles */
+async function postAs(roles) {
+  /** @type {any[]} */
+  const patches = [];
+  const result = await postConversationMessage({
+    client: /** @type {any} */ ({
+      async patchCase(/** @type {string} */ _id, /** @type {any} */ fields) {
+        patches.push(fields);
+        return { ok: true, data: CASE_ROW };
+      },
+    }),
+    saveQueue: /** @type {any} */ ({
+      getEtag: () => 'v1',
+      loadCase: () => {},
+    }),
+    caseId: 'case-1',
+    messages: [],
+    currentUser: CURRENT_USER,
+    roles,
+    caseListOptions: {},
+    body: 'Any update?',
+  });
+  return { fields: patches[0], message: result.messages[0] };
+}
+
+test('a Reviewer’s post is written with the Awaiting pair, clocked from the message itself', async () => {
+  const { fields, message } = await postAs(['assignedReviewer']);
+  assert.equal(fields.awaitingResponsibleParty, true);
+  assert.equal(fields.awaitingSince, message.timestamp);
+  assert.equal(fields.conversation.at(-1), message);
+});
+
+test('the frontline’s reply is written with the pair cleared', async () => {
+  const { fields } = await postAs(['responsiblePartyManager']);
+  assert.equal(fields.awaitingResponsibleParty, false);
+  assert.equal(fields.awaitingSince, null);
+});
+
+test('a poster on neither side writes the thread and nothing else', async () => {
+  const { fields } = await postAs(['controls']);
+  assert.deepEqual(Object.keys(fields), ['conversation']);
 });

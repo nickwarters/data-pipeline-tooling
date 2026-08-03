@@ -8,13 +8,8 @@ import { makeCaseRow } from './helpers/fixtures.js';
 installDom();
 /** @type {any} */ (globalThis).location = { hash: '' };
 
-const {
-  PAGE_SIZE,
-  appealColumns,
-  controlsAppealsView,
-  fetchOpenAppeals,
-  openAppealOf,
-} = await import('../src/pages/dashboard/controls-view.js');
+const { PAGE_SIZE, appealColumns, controlsAppealsView, fetchOpenAppeals } =
+  await import('../src/pages/dashboard/controls-view.js');
 
 /** @param {string} id @param {string} at */
 function row(id, at) {
@@ -144,11 +139,6 @@ test('Controls appeal descriptors degrade gracefully for resolved and incomplete
       },
     ],
   };
-  assert.equal(openAppealOf(/** @type {any} */ (resolved)), null);
-  assert.equal(
-    openAppealOf(/** @type {any} */ ({ ...resolved, appeals: undefined })),
-    null
-  );
   assert.deepEqual(await fetchOpenAppeals(/** @type {any} */ ({}), []), []);
 
   const columns = appealColumns();

@@ -353,6 +353,10 @@ src/
     across-sources.js             # multi-list fan-out: one scoped request per Case source, merged (ADR-0022)
     case-search.js                # the bounded cross-list Case lookup: one over-fetched window per
                                   #   list, merged, with saturation reported rather than paged
+    action-centre-flags.js        # THE pairing of each Action Centre state flag with its clock,
+                                  #   called by the transitions that write them; every clock is an
+                                  #   already-authored time, so a SaveQueue retry cannot restart an
+                                  #   SLA age (#691)
     action-centre-model.js
     assignment-stamp.js           # the write-path rule pairing assignedAt with assignedReviewer, so
                                   #   no caller can set a Reviewer without stamping when (#633)
@@ -368,6 +372,9 @@ src/
   evaluators/                   # pure logic: applicability, failure, and outcome
     amended-outcome.js
     answer-remediation.js        # leaf: what remediation an Answer carries — no applicability/failure deps (#499)
+    appeal-state.js              # openAppealOf(): THE definition of "the Appeal still awaiting a
+                                 #   resolution", asked by the Appeal views, Section access, the
+                                 #   Controls worklist and the flag pairing (#691)
     applicability-evaluator.js
     configured-outcome.js
     failure-evaluator.js

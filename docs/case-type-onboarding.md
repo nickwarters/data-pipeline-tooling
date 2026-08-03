@@ -99,13 +99,11 @@ lead with an indexed predicate.
 | `RemediationDueDate`                                    | Date and Time                                                |         | Remediation SLA; app-written.                                                          |
 | `RelatedDate`                                           | Date and Time                                                |         | Case Type–specific reference date.                                                     |
 | `Created`                                               | Date and Time                                                |         | SharePoint built-in.                                                                   |
-| `HasOpenAppeal`                                         | Yes/No                                                       |  **✓**  | Action Centre reason flag; app-written on appeal raise/resolve.                        |
+| `HasOpenAppeal`                                         | Yes/No                                                       |  **✓**  | Action Centre reason flag; app-written with the `Appeals` blob.                        |
 | `AppealRaisedAt`                                        | Date and Time                                                |         | Clock paired with `HasOpenAppeal`; app-written.                                        |
-| `AwaitingResponsibleParty`                              | Yes/No                                                       |  **✓**  | Action Centre reason flag; app-written.                                                |
+| `AwaitingResponsibleParty`                              | Yes/No                                                       |  **✓**  | Action Centre reason flag; app-written on every Conversation post.                     |
 | `AwaitingSince`                                         | Date and Time                                                |         | Clock paired with `AwaitingResponsibleParty`; app-written.                             |
-| `Reopened`                                              | Yes/No                                                       |  **✓**  | Action Centre reason flag; app-written.                                                |
-| `ReopenedAt`                                            | Date and Time                                                |         | Clock paired with `Reopened`; app-written.                                             |
-| `ReviewRequired`                                        | Yes/No                                                       |  **✓**  | Action Centre reason flag; app-written.                                                |
+| `ReviewRequired`                                        | Yes/No                                                       |  **✓**  | Action Centre reason flag; nothing writes it yet (issue #699).                         |
 | `OnHold`                                                | Yes/No                                                       |  **✓**  | Reviewer hold state; indexed for allocation capacity counts.                           |
 | `PlacedOnHoldAt`                                        | Date and Time                                                |         | Cleared automatically when leaving `In-progress`.                                      |
 | `Outcome`                                               | Single line of text                                          |         | Live working Outcome.                                                                  |
@@ -152,16 +150,16 @@ list is past the threshold.
 
 ## Indexed columns
 
-The 14 columns to index on the empty `Cases-{slug}` list — the
+The 13 columns to index on the empty `Cases-{slug}` list — the
 lifecycle/date columns, the Action Centre reason flags that live reads lead
 with, and the two columns Case search leads with:
 
 `Status`, `DueDate`, `CompletedAt`, `AssignedReviewer`, `ResponsibleParty`,
 `AssignedReviewerManager`, `ResponsiblePartyManager`, `HasOpenAppeal`,
-`AwaitingResponsibleParty`, `Reopened`, `ReviewRequired`, `OnHold`, `Title`,
+`AwaitingResponsibleParty`, `ReviewRequired`, `OnHold`, `Title`,
 `ReportableAt`.
 
-14 of a maximum 20 indexes per list. Add any promoted detail column (above) to
+13 of a maximum 20 indexes per list. Add any promoted detail column (above) to
 this set only if a live query will lead with it, and keep the total ≤ 20.
 
 `Title` and `ReportableAt` joined this set when Case search was added, and the

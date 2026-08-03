@@ -264,8 +264,6 @@ test('HttpSharePointClient: patchCase writes Action Centre state flags + clocks 
       reviewRequired: false,
       hasOpenAppeal: true,
       appealRaisedAt: '2026-07-05T10:00:00.000Z',
-      reopened: false,
-      reopenedAt: null,
     },
     '"v1"',
     { listName: 'Cases-ExampleReview' }
@@ -280,8 +278,6 @@ test('HttpSharePointClient: patchCase writes Action Centre state flags + clocks 
     ReviewRequired: false,
     HasOpenAppeal: true,
     AppealRaisedAt: '2026-07-05T10:00:00.000Z',
-    Reopened: false,
-    ReopenedAt: null,
   });
 });
 

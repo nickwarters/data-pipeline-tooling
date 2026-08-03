@@ -988,16 +988,12 @@ test('route: raising an Appeal persists through the store-owned panel', () => {
     type: 'case/tab-selected',
     id: 'appealRequest',
   });
-  /** @type {Array<{id: string, field: string, value: any}>} */
+  /** @type {Array<{id: string, fields: any}>} */
   const writes = [];
   const { container } = renderShippedState(state, {
     saveQueue: {
-      enqueue(
-        /** @type {string} */ id,
-        /** @type {string} */ field,
-        /** @type {any} */ value
-      ) {
-        writes.push({ id, field, value });
+      enqueueFields(/** @type {string} */ id, /** @type {any} */ fields) {
+        writes.push({ id, fields });
       },
     },
   });
@@ -1010,8 +1006,8 @@ test('route: raising an Appeal persists through the store-owned panel', () => {
   fireEvent(getByRole(panel, 'button', { name: 'Raise Appeal' }), 'click');
 
   assert.equal(writes.length, 1);
-  assert.equal(writes[0].field, 'appeals');
-  assert.equal(writes[0].value[0].state, 'raised');
+  assert.equal(writes[0].fields.appeals[0].state, 'raised');
+  assert.equal(writes[0].fields.hasOpenAppeal, true);
 });
 
 test('route: a raised Appeal is resolvable in the same mount from the store-owned Case Row', () => {
@@ -1031,21 +1027,12 @@ test('route: a raised Appeal is resolvable in the same mount from the store-owne
     type: 'case/load-finished',
     snapshot: appealSnapshot,
   });
-  /** @type {Array<{id: string, field: string, value: any}>} */
-  const writes = [];
   /** @type {Array<{id: string, fields: any}>} */
-  const fieldWrites = [];
+  const writes = [];
   const route = renderShippedState(state, {
     saveQueue: {
-      enqueue(
-        /** @type {string} */ id,
-        /** @type {string} */ field,
-        /** @type {any} */ value
-      ) {
-        writes.push({ id, field, value });
-      },
       enqueueFields(/** @type {string} */ id, /** @type {any} */ fields) {
-        fieldWrites.push({ id, fields });
+        writes.push({ id, fields });
       },
     },
   });
@@ -1059,7 +1046,7 @@ test('route: a raised Appeal is resolvable in the same mount from the store-owne
     'The result is wrong.';
   fireEvent(getByRole(raisePanel, 'button', { name: 'Raise Appeal' }), 'click');
   assert.equal(writes.length, 1);
-  const raisedId = writes[0].value[0].id;
+  const raisedId = writes[0].fields.appeals[0].id;
 
   // The Appeal exists only in the store now. Resolving it in the same mount is
   // the read-back that would fail if the loader still held a competing copy —
@@ -1081,8 +1068,8 @@ test('route: a raised Appeal is resolvable in the same mount from the store-owne
   );
 
   assert.equal(writes.length, 2);
-  assert.equal(writes[1].value[0].id, raisedId);
-  assert.equal(writes[1].value[0].state, 'resolved');
+  assert.equal(writes[1].fields.appeals[0].id, raisedId);
+  assert.equal(writes[1].fields.appeals[0].state, 'resolved');
   assert.equal(
     route.state.routes.caseReview.snapshot?.caseRow?.appeals?.[0].state,
     'resolved'
@@ -1100,16 +1087,12 @@ test('route: Appeal action remains live after switching from another tab', () =>
     type: 'case/load-finished',
     snapshot: appealSnapshot,
   });
-  /** @type {Array<{id: string, field: string, value: any}>} */
+  /** @type {Array<{id: string, fields: any}>} */
   const writes = [];
   const route = renderShippedState(state, {
     saveQueue: {
-      enqueue(
-        /** @type {string} */ id,
-        /** @type {string} */ field,
-        /** @type {any} */ value
-      ) {
-        writes.push({ id, field, value });
+      enqueueFields(/** @type {string} */ id, /** @type {any} */ fields) {
+        writes.push({ id, fields });
       },
     },
   });

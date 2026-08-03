@@ -570,7 +570,7 @@ test('HttpSharePointClient: countCases follows odata.nextLink and sums every pag
   });
 
   const n = await client.countCases(
-    { reopened: true },
+    { hasOpenAppeal: true },
     { listName: 'Cases-ExampleReview' }
   );
 
@@ -612,7 +612,6 @@ test('HttpSharePointClient: countCases maps the reason flags to indexed boolean 
       awaitingResponsibleParty: true,
       reviewRequired: true,
       hasOpenAppeal: false,
-      reopened: true,
     },
     { listName: 'Cases-ExampleReview' }
   );
@@ -621,7 +620,6 @@ test('HttpSharePointClient: countCases maps the reason flags to indexed boolean 
   assert.ok(url.includes('AwaitingResponsibleParty eq 1'));
   assert.ok(url.includes('ReviewRequired eq 1'));
   assert.ok(url.includes('HasOpenAppeal eq 0'));
-  assert.ok(url.includes('Reopened eq 1'));
 });
 
 test('HttpSharePointClient: countCases maps non-held capacity to the indexed OnHold column', async () => {
@@ -804,7 +802,6 @@ test('HttpSharePointClient: listCases maps every CaseRow sort key to its interna
   const pairs = [
     ['appealRaisedAt', 'AppealRaisedAt'],
     ['awaitingSince', 'AwaitingSince'],
-    ['reopenedAt', 'ReopenedAt'],
     ['placedOnHoldAt', 'PlacedOnHoldAt'],
     ['dueDate', 'DueDate'],
     ['created', 'Created'],
@@ -874,8 +871,6 @@ test('HttpSharePointClient: listCases maps the reason columns from SP into the C
                 ReviewRequired: true,
                 HasOpenAppeal: false,
                 AppealRaisedAt: '2026-06-02T00:00:00Z',
-                Reopened: true,
-                ReopenedAt: '2026-06-03T00:00:00Z',
               },
             ],
           }),
@@ -897,8 +892,6 @@ test('HttpSharePointClient: listCases maps the reason columns from SP into the C
   assert.equal(row.reviewRequired, true);
   assert.equal(row.hasOpenAppeal, false);
   assert.equal(row.appealRaisedAt, '2026-06-02T00:00:00Z');
-  assert.equal(row.reopened, true);
-  assert.equal(row.reopenedAt, '2026-06-03T00:00:00Z');
 });
 
 test('HttpSharePointClient: listCases leaves reason columns undefined/null when SP omits them', async () => {
@@ -928,8 +921,6 @@ test('HttpSharePointClient: listCases leaves reason columns undefined/null when 
   assert.equal(row.reviewRequired, undefined);
   assert.equal(row.hasOpenAppeal, undefined);
   assert.equal(row.appealRaisedAt, null);
-  assert.equal(row.reopened, undefined);
-  assert.equal(row.reopenedAt, null);
 });
 
 test('HttpSharePointClient: countCases throws when called without a listName', async () => {
@@ -1018,7 +1009,6 @@ test('HttpSharePointClient: countCases with every reason flag false renders ever
       awaitingResponsibleParty: false,
       reviewRequired: false,
       hasOpenAppeal: true,
-      reopened: false,
       outcomeOverridden: false,
     },
     { listName: 'Cases-ExampleReview' }
@@ -1028,7 +1018,6 @@ test('HttpSharePointClient: countCases with every reason flag false renders ever
   assert.ok(url.includes('AwaitingResponsibleParty eq 0'));
   assert.ok(url.includes('ReviewRequired eq 0'));
   assert.ok(url.includes('HasOpenAppeal eq 1'));
-  assert.ok(url.includes('Reopened eq 0'));
   assert.ok(url.includes('OutcomeOverridden eq 0'));
 });
 

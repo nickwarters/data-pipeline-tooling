@@ -3,7 +3,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   amendOutcome,
-  openAppealOf,
   raiseAppeal,
   resolveAppeal,
 } from '../src/pages/cora-case-review/appeal-actions.js';
@@ -43,10 +42,13 @@ test('raiseAppeal returns a new row and preserves the existing Appeal history', 
   assert.notEqual(result.caseRow, original);
   assert.deepEqual(original.appeals, [existing]);
   assert.deepEqual(
-    result.appeals.map((appeal) => appeal.id),
+    result.fields.appeals.map((appeal) => appeal.id),
     ['a0', 'a1']
   );
-  assert.deepEqual(result.appeals[1].citedAnswerKeys, ['q1']);
+  assert.deepEqual(result.fields.appeals[1].citedAnswerKeys, ['q1']);
+  // The queryable pair rides with the blob it is derived from.
+  assert.equal(result.fields.hasOpenAppeal, true);
+  assert.equal(result.fields.appealRaisedAt, '2026-07-02T00:00:00Z');
 });
 
 test('raiseAppeal omits citations when none are selected on a Case without history', () => {
@@ -59,11 +61,11 @@ test('raiseAppeal omits citations when none are selected on a Case without histo
     at: '2026-07-02T00:00:00Z',
   });
 
-  assert.equal(result.appeals.length, 1);
-  assert.equal(result.appeals[0].citedAnswerKeys, undefined);
+  assert.equal(result.fields.appeals.length, 1);
+  assert.equal(result.fields.appeals[0].citedAnswerKeys, undefined);
 });
 
-test('resolveAppeal returns one transactional field set when Controls agrees', () => {
+test('resolveAppeal returns one atomic field set when Controls agrees', () => {
   const original = {
     ...CASE_ROW,
     appeals: [
@@ -87,7 +89,6 @@ test('resolveAppeal returns one transactional field set when Controls agrees', (
     justification: 'Corrected',
   });
 
-  assert.equal(result.transactional, true);
   assert.equal(original.appeals[0].state, 'raised');
   assert.equal(result.fields.appeals[0].state, 'resolved');
   assert.equal(result.fields.amendedOutcome?.fromAppealId, 'a1');
@@ -117,10 +118,16 @@ test('resolveAppeal rejection updates only Appeal history without mutating the s
     at: '2026-07-03T00:00:00Z',
   });
 
-  assert.equal(result.transactional, false);
   assert.equal(original.appeals[0].state, 'raised');
   assert.equal(result.fields.appeals[0].resolution?.verdict, 'rejected');
-  assert.deepEqual(Object.keys(result.fields), ['appeals']);
+  assert.deepEqual(Object.keys(result.fields), [
+    'appeals',
+    'hasOpenAppeal',
+    'appealRaisedAt',
+  ]);
+  // Nothing is open once the only Appeal is resolved, whichever way it went.
+  assert.equal(result.fields.hasOpenAppeal, false);
+  assert.equal(result.fields.appealRaisedAt, null);
 });
 
 test('resolveAppeal defensively normalises absent agreement details', () => {
@@ -151,45 +158,4 @@ test('amendOutcome returns immutable fields without changing the frozen snapshot
   assert.equal(result.caseRow.outcomeAtCompletion, 'fail');
   assert.equal(result.fields.amendedOutcome?.outcome, 'pass');
   assert.equal(result.fields.effectiveHadRemediation, true);
-});
-
-// `openAppealOf` is the single definition of "the Appeal that is still open".
-// It previously existed as three copies: one exported `openAppealFrom`
-// per Appeal view, and an inlined `find` in the in-memory flow runner.
-test('openAppealOf finds the one Appeal that is not resolved', () => {
-  const resolved = {
-    id: 'a0',
-    appellant: 'rp',
-    rationale: 'First',
-    citedAnswerKeys: [],
-    at: '2026-07-01T00:00:00Z',
-    state: /** @type {const} */ ('resolved'),
-  };
-  const open = /** @type {const} */ ({
-    ...resolved,
-    id: 'a1',
-    rationale: 'Second',
-    state: 'raised',
-  });
-
-  assert.equal(
-    openAppealOf({ ...CASE_ROW, appeals: [resolved, open] })?.id,
-    'a1'
-  );
-});
-
-test('openAppealOf returns null when every Appeal is resolved, or there are none', () => {
-  const resolved = {
-    id: 'a0',
-    appellant: 'rp',
-    rationale: 'First',
-    citedAnswerKeys: [],
-    at: '2026-07-01T00:00:00Z',
-    state: /** @type {const} */ ('resolved'),
-  };
-
-  assert.equal(openAppealOf({ ...CASE_ROW, appeals: [resolved] }), null);
-  assert.equal(openAppealOf({ ...CASE_ROW, appeals: [] }), null);
-  assert.equal(openAppealOf(CASE_ROW), null);
-  assert.equal(openAppealOf(null), null);
 });

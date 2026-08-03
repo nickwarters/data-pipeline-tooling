@@ -16,6 +16,7 @@ import { exampleReviewCases as cases } from './_example-review-cases.js';
 import { cases as mockCases } from '../dev/fixtures/cases.js';
 import { personas } from '../dev/fixtures/personas.js';
 import { isRemediationResolved } from '../src/evaluators/remediation-status.js';
+import { openAppealFields } from '../src/services/action-centre-flags.js';
 import { outstandingRemediation } from '../src/pages/responsible-party/view.js';
 
 test('fixtures exercise all three lifecycle statuses', () => {
@@ -161,6 +162,45 @@ test('every assigned mock Case carries the moment it was assigned', () => {
         row.assignedAt,
         null,
         `${row.id} has nobody assigned, so it can carry no assignment time`
+      );
+    }
+  }
+});
+
+// A seeded flag has to be a state the product could have reached: the demo set
+// is the first thing anyone sees, and a row claiming to await a reply with
+// nothing in its thread — or an open Appeal with no Appeal — demos a state no
+// transition can produce. `reviewRequired` is exempt while nothing writes it.
+test('every mock fixture row carries flags a transition could have written', () => {
+  for (const row of mockCases) {
+    const where = `fixture ${row.id}`;
+    if (row.appeals !== undefined) {
+      assert.deepEqual(
+        {
+          hasOpenAppeal: Boolean(row.hasOpenAppeal),
+          appealRaisedAt: row.appealRaisedAt ?? null,
+        },
+        openAppealFields(row.appeals),
+        `${where}: the open-Appeal pair does not match its Appeals`
+      );
+    } else {
+      assert.ok(
+        !row.hasOpenAppeal,
+        `${where}: open Appeal flag with no Appeal`
+      );
+    }
+
+    const lastMessage = row.conversation.at(-1);
+    if (row.awaitingResponsibleParty) {
+      assert.equal(
+        row.awaitingSince,
+        lastMessage?.timestamp,
+        `${where}: awaitingSince is not the last message's own timestamp`
+      );
+    } else {
+      assert.ok(
+        !row.awaitingSince,
+        `${where}: an awaiting clock with the flag off`
       );
     }
   }

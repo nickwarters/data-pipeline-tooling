@@ -1,7 +1,7 @@
 // @ts-check
 import { h } from '../../lib/html.js';
 import { EmptyState } from '../../lib/empty-state.js';
-import { openAppealOf } from './appeal-actions.js';
+import { openAppealOf } from '../../evaluators/appeal-state.js';
 
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../../sharepoint-client.js').Appeal} Appeal */

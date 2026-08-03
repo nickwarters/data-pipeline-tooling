@@ -54,25 +54,19 @@ const NOW = new Date('2026-07-04T00:00:00Z');
 test('ACTION_CENTRE_REASONS: fixed priority order, labels, roles, tones', () => {
   assert.deepEqual(
     ACTION_CENTRE_REASONS.map((r) => r.id),
-    ['overdue', 'awaitingFrontline', 'reviewRequired', 'appeals', 'reopened']
+    ['overdue', 'awaitingFrontline', 'reviewRequired', 'appeals']
   );
   assert.deepEqual(
     ACTION_CENTRE_REASONS.map((r) => r.label),
-    [
-      'Overdue',
-      'Awaiting Frontline',
-      'Review Required',
-      'Appeals to work',
-      'Reopened',
-    ]
+    ['Overdue', 'Awaiting Frontline', 'Review Required', 'Appeals to work']
   );
   assert.deepEqual(
     ACTION_CENTRE_REASONS.map((r) => r.role),
-    ['Reviewer', 'Reviewer', 'Reviewer', 'Controls', 'Owner']
+    ['Reviewer', 'Reviewer', 'Reviewer', 'Controls']
   );
   assert.deepEqual(
     ACTION_CENTRE_REASONS.map((r) => r.tone),
-    ['overdue', 'awaiting', 'review', 'appeal', 'reopened']
+    ['overdue', 'awaiting', 'review', 'appeal']
   );
 });
 
@@ -90,11 +84,15 @@ test('reasonsForCapabilities: controls sees appeals', () => {
   assert.deepEqual(ids, ['appeals']);
 });
 
-test('reasonsForCapabilities: owner sees reopened', () => {
-  const ids = reasonsForCapabilities(
-    caps({ ownedCaseTypes: ['complaints'] })
-  ).map((r) => r.id);
-  assert.deepEqual(ids, ['reopened']);
+// Owning a Case Type is no longer a reason to act: Reopened was the only
+// Owner-scoped group and it queried a flag no transition ever wrote. An Owner
+// with no other role therefore gets an empty worklist rather than a group that
+// is permanently empty, and the dashboard drops the panel entirely.
+test('reasonsForCapabilities: owning a Case Type is no reason on its own', () => {
+  assert.deepEqual(
+    reasonsForCapabilities(caps({ ownedCaseTypes: ['complaints'] })),
+    []
+  );
 });
 
 test('reasonsForCapabilities: multi-role user sees the union', () => {
@@ -106,7 +104,6 @@ test('reasonsForCapabilities: multi-role user sees the union', () => {
     'awaitingFrontline',
     'reviewRequired',
     'appeals',
-    'reopened',
   ]);
 });
 
@@ -139,11 +136,10 @@ test('activeFilter: reviewer reasons are scoped to the current reviewer', () => 
   });
 });
 
-test('activeFilter: Controls/Owner reasons stay unscoped', () => {
+test('activeFilter: the Controls reason stays unscoped', () => {
   assert.deepEqual(activeFilter(reason('appeals'), 'u1'), {
     hasOpenAppeal: true,
   });
-  assert.deepEqual(activeFilter(reason('reopened'), 'u1'), { reopened: true });
 });
 
 test('headlineFilter: ORs each visible reason under the current reviewer', () => {
@@ -196,44 +192,44 @@ test('waitingInfo: with no SLA given, Overdue breaches the day it lands', () => 
 });
 
 test('waitingInfo: with no SLA given, a reason breaches at its own default', () => {
-  const reopened = reason('reopened');
+  const appeals = reason('appeals');
   const at = (/** @type {number} */ days) =>
     new Date(NOW.getTime() - days * 24 * 60 * 60 * 1000).toISOString();
 
   const breached = waitingInfo(
-    caseRow({ reopenedAt: at(reopened.defaultSlaDays) }),
-    reopened,
+    caseRow({ appealRaisedAt: at(appeals.defaultSlaDays) }),
+    appeals,
     NOW
   );
-  assert.equal(breached.days, reopened.defaultSlaDays);
+  assert.equal(breached.days, appeals.defaultSlaDays);
   assert.equal(breached.breached, true);
 
   const within = waitingInfo(
-    caseRow({ reopenedAt: at(reopened.defaultSlaDays - 1) }),
-    reopened,
+    caseRow({ appealRaisedAt: at(appeals.defaultSlaDays - 1) }),
+    appeals,
     NOW
   );
-  assert.equal(within.days, reopened.defaultSlaDays - 1);
+  assert.equal(within.days, appeals.defaultSlaDays - 1);
   assert.equal(within.breached, false);
 });
 
 test('waitingInfo: an explicit SLA widens and narrows the breach', () => {
-  const reopened = reason('reopened');
-  const row = caseRow({ reopenedAt: '2026-06-29T00:00:00Z' }); // 5 days waiting
+  const appeals = reason('appeals');
+  const row = caseRow({ appealRaisedAt: '2026-06-29T00:00:00Z' }); // 5 days
 
-  assert.equal(waitingInfo(row, reopened, NOW, 30).breached, false);
-  assert.equal(waitingInfo(row, reopened, NOW, 2).breached, true);
+  assert.equal(waitingInfo(row, appeals, NOW, 30).breached, false);
+  assert.equal(waitingInfo(row, appeals, NOW, 2).breached, true);
   // The age and the wording are unaffected — only the judgement moves.
-  assert.equal(waitingInfo(row, reopened, NOW, 30).label, '5 days');
+  assert.equal(waitingInfo(row, appeals, NOW, 30).label, 'raised 5 days ago');
 });
 
 test('waitingInfo: singular day is not pluralised', () => {
   const info = waitingInfo(
-    caseRow({ reopenedAt: '2026-07-03T00:00:00Z' }),
-    reason('reopened'),
+    caseRow({ appealRaisedAt: '2026-07-03T00:00:00Z' }),
+    reason('appeals'),
     NOW
   );
-  assert.equal(info.label, '1 day');
+  assert.equal(info.label, 'raised 1 day ago');
 });
 
 test('waitingLabel: awaiting frontline, review required, and appeals phrasing', () => {
@@ -290,18 +286,15 @@ test('subLine: reviewer sub-line with no assignee shows only the RP', () => {
   );
 });
 
-test('subLine: reopened is a static note', () => {
-  assert.equal(
-    reason('reopened').subLine(caseRow()),
-    'appeal upheld · back under review'
-  );
-});
-
 test('secondaryReasons: reads the hoisted flags in priority order', () => {
-  const c = caseRow({ overdue: true, reviewRequired: true, reopened: true });
+  const c = caseRow({
+    overdue: true,
+    reviewRequired: true,
+    hasOpenAppeal: true,
+  });
   assert.deepEqual(
     secondaryReasons(c, 'overdue').map((r) => r.id),
-    ['reviewRequired', 'reopened']
+    ['reviewRequired', 'appeals']
   );
   assert.deepEqual(secondaryReasons(caseRow(), 'overdue'), []);
 });

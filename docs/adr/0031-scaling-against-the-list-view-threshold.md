@@ -55,8 +55,11 @@ columns:
 
 `Status`, `DueDate`, `CompletedAt`, `AssignedReviewer`, `ResponsibleParty`,
 `AssignedReviewerManager`, `ResponsiblePartyManager`, `HasOpenAppeal`,
-`AwaitingResponsibleParty`, `Reopened`, `ReviewRequired`, `OnHold`, `Title`,
+`AwaitingResponsibleParty`, `ReviewRequired`, `OnHold`, `Title`,
 `ReportableAt`.
+
+`Reopened` left this set when its read surface was removed (issue #691); no
+existing list needs the index dropped, but a new one no longer needs it added.
 
 `Title` and `ReportableAt` were added to this set by [ADR-0045] (Case search): `Title`
 holds the Case Reference and is matched by anchored prefix, and `ReportableAt` is the

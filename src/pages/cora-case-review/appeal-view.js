@@ -4,7 +4,7 @@ import { EmptyState } from '../../lib/empty-state.js';
 import { DEFAULT_SECTION_LABELS } from '../../lib/section-labels.js';
 import { isFailure } from '../../evaluators/failure-evaluator.js';
 import { buildCaptureControl } from '../../lib/capture-engine.js';
-import { openAppealOf } from './appeal-actions.js';
+import { openAppealOf } from '../../evaluators/appeal-state.js';
 
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../../sharepoint-client.js').Appeal} Appeal */

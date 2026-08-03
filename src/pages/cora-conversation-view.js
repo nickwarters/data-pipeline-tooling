@@ -27,6 +27,7 @@ import {
  * @typedef {Object} ConversationRouteState
  * @property {CaseRow | null} caseRow
  * @property {'edit'|'read-only'|'hidden'} access
+ * @property {import('../services/section-access.js').Role[]} roles The viewer's roles on this Case: what a posted Message records the side of the exchange from.
  * @property {CaseListOptions} caseListOptions
  * @property {string} heading The Conversation Section's heading for this Case's Case Type; the default until the Case loads.
  * @property {string | null} error
@@ -102,6 +103,7 @@ export function createRouteSlice(params, context) {
       caseId: route.caseRow.id,
       messages: route.caseRow.conversation,
       currentUser,
+      roles: route.roles,
       caseListOptions: route.caseListOptions,
       body,
       onMessages: (messages) =>
@@ -116,6 +118,7 @@ export function createRouteSlice(params, context) {
         conversation: {
           caseRow: null,
           access: 'read-only',
+          roles: [],
           caseListOptions: {},
           heading: DEFAULT_SECTION_LABELS.conversation.heading,
           error: null,
@@ -129,6 +132,7 @@ export function createRouteSlice(params, context) {
         return patchRoute(state, 'conversation', {
           caseRow: action.caseRow,
           access: action.access,
+          roles: action.roles,
           caseListOptions: action.caseListOptions,
           heading: action.heading,
         });
@@ -172,19 +176,20 @@ export function createRouteSlice(params, context) {
           const caseRow = await readClient.getCase(params.id, caseListOptions);
           if (!caseRow || !tools.isActive()) return;
           config ??= await loadCaseTypeConfig(caseRow.caseType);
-          const access = currentUser
+          const machine = currentUser
             ? new CaseMachine(
                 caseRow,
                 { id: currentUser.id },
                 context.chrome.permissions,
                 config
-              ).access.conversation
-            : 'read-only';
+              )
+            : null;
           context.saveQueue?.loadCase(caseRow, caseListOptions);
           tools.dispatch({
             type: 'conversation/loaded',
             caseRow,
-            access,
+            access: machine ? machine.access.conversation : 'read-only',
+            roles: machine ? machine.roles : [],
             caseListOptions,
             heading: resolveSectionLabels(config).conversation.heading,
           });

@@ -68,7 +68,7 @@ export const personas = {
   // Multi-role user (Reviewer + Controls + Owner) reusing user-reviewer's id so
   // the reviewer-scoped Action Centre groups pick up their assigned fixtures.
   // Shows all five reason groups: Overdue, Awaiting Frontline, Review Required
-  // (under "All"), Appeals to work, Reopened.
+  // (under "All"), Appeals to work.
   'action-centre': {
     userId: 'user-reviewer',
     displayName: 'Dana Multi-role',

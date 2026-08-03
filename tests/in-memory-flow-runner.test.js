@@ -8,6 +8,10 @@ import {
 } from './_in-memory-flow-runner.js';
 import exampleReviewConfig from './_example-review-case-type.js';
 import { makeCaseRow, makePermissions } from './helpers/fixtures.js';
+import {
+  ACTION_CENTRE_REASONS,
+  activeFilter,
+} from '../src/services/action-centre-model.js';
 
 const CASE_ROW = makeCaseRow({
   id: 'case-flow-1',
@@ -852,4 +856,66 @@ test('a refused completion leaves the runner-owned Case Row untouched', async ()
     runner.snapshot().lists['Cases-ExampleReview'][0].status,
     CASE_ROW.status
   );
+});
+
+// The Awaiting Frontline group is a query, not a rendering: a Case only
+// reaches it if the transition wrote the flag the query reads. This drives the
+// real store's posting effect, the real client and the real reason filter, so
+// nothing between the Send button and the reason count is stubbed.
+test('a Reviewer’s Message puts the Case in the Awaiting Frontline group, and a reply takes it out', async () => {
+  // This Case Type only opens the thread once the Remediation Actions have
+  // been sent, which is exactly when a Reviewer is waiting on the frontline.
+  const runner = createInMemoryFlowRunner({
+    lists: {
+      'Cases-ExampleReview': [
+        {
+          ...CASE_ROW,
+          status: /** @type {const} */ ('Actions In Progress'),
+          reportableAt: '2026-07-19T10:00:00Z',
+          outcomeAtCompletion: 'fail',
+        },
+      ],
+    },
+  });
+  const awaiting = ACTION_CENTRE_REASONS.find(
+    (reason) => reason.id === 'awaitingFrontline'
+  );
+  assert.ok(awaiting);
+  const count = () =>
+    runner.client.countCases(activeFilter(awaiting, 'user-reviewer'), {
+      listName: 'Cases-ExampleReview',
+    });
+
+  assert.equal(await count(), 0);
+
+  await runner.run([
+    {
+      type: 'loadCasePage',
+      caseId: 'case-flow-1',
+      caseType: 'example-review',
+    },
+    { type: 'postMessage', body: 'Please send the call recording.' },
+  ]);
+
+  assert.equal(await count(), 1);
+  const asked = runner.snapshot().lists['Cases-ExampleReview'][0];
+  // The clock is the message's own authored time, not the moment the write
+  // reached the list.
+  assert.equal(asked.awaitingSince, asked.conversation.at(-1)?.timestamp);
+
+  await runner.run([
+    {
+      type: 'loadCasePage',
+      caseId: 'case-flow-1',
+      caseType: 'example-review',
+      currentUserId: 'user-agent-a',
+      capabilities: makePermissions({ isReviewer: false, isAdviser: true }),
+    },
+    { type: 'postMessage', body: 'Recording attached.' },
+  ]);
+
+  assert.equal(await count(), 0);
+  const replied = runner.snapshot().lists['Cases-ExampleReview'][0];
+  assert.equal(replied.awaitingResponsibleParty, false);
+  assert.equal(replied.awaitingSince, null);
 });

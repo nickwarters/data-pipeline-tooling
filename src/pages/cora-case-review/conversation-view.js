@@ -1,6 +1,7 @@
 // @ts-check
 import { h } from '../../lib/html.js';
 import { EmptyState } from '../../lib/empty-state.js';
+import { awaitingFrontlineAfterPost } from '../../services/action-centre-flags.js';
 
 /** @typedef {import('../../sharepoint-client.js').Message} Message */
 /** @typedef {import('../../sharepoint-client.js').CaseListOptions} CaseListOptions */
@@ -77,18 +78,25 @@ function conversationCompose(onSend) {
  * Preserve the existing JSON-blob PATCH path and ETag ownership while the UI
  * moves to store actions.
  *
+ * `roles` is the poster's roles on this Case, as `resolveRoles` derived them
+ * for the page rendering the thread — the same answer that decided the poster
+ * may post at all. Who posted is what starts or stops the Awaiting Frontline
+ * clock, so the pair travels in the same PATCH as the message that moved it.
+ *
  * @param {{
  *   client: import('../../sharepoint-client.js').SharePointClient,
  *   saveQueue: import('../../services/save-queue.js').SaveQueue,
  *   caseId: string,
  *   messages: Message[],
  *   currentUser: import('../../sharepoint-client.js').CurrentUser,
+ *   roles: import('../../services/section-access.js').Role[],
  *   caseListOptions: CaseListOptions,
  *   body: string,
  *   onMessages?: (messages: Message[]) => void,
  * }} input
  */
 export async function postConversationMessage(input) {
+  /** @type {Message} */
   const message = {
     author: input.currentUser.displayName,
     timestamp: new Date().toISOString(),
@@ -98,7 +106,10 @@ export async function postConversationMessage(input) {
   input.onMessages?.(messages);
   const result = await input.client.patchCase(
     input.caseId,
-    { conversation: messages },
+    {
+      conversation: messages,
+      ...awaitingFrontlineAfterPost(input.roles, message),
+    },
     input.saveQueue.getEtag(input.caseId),
     input.caseListOptions
   );

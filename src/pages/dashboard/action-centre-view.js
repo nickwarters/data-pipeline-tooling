@@ -90,11 +90,17 @@ export async function loadActionCentreCounts({
       );
     })
   );
-  const headline = await countCasesAcrossSources(
-    client,
-    sources,
-    headlineFilter(reasons, currentUserId)
-  );
+  // A viewer with no reason to act on is asked nothing: the headline is the OR
+  // of every visible reason's filter, and an OR of no branches matches no Case.
+  // Saved round trip, not a correction — the clients answer that query the same
+  // way whether or not it is sent.
+  const headline = reasons.length
+    ? await countCasesAcrossSources(
+        client,
+        sources,
+        headlineFilter(reasons, currentUserId)
+      )
+    : 0;
   return { counts, peeks, headline };
 }
 

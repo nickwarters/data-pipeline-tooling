@@ -254,7 +254,7 @@ test('checkCaseTypes fails nonsensical threshold numbers tsc would accept', asyn
     caseTypes: [
       demoEntry(
         demoConfig({
-          actionCentreSlaDays: { reopened: -1 },
+          actionCentreSlaDays: { appeals: -1 },
           breachWindowHours: 0,
           remediationSlaWorkingDays: 2.5,
         })
@@ -263,7 +263,7 @@ test('checkCaseTypes fails nonsensical threshold numbers tsc would accept', asyn
   });
 
   assert.equal(failures.length, 3);
-  assert.match(joined(failures), /actionCentreSlaDays\.reopened/);
+  assert.match(joined(failures), /actionCentreSlaDays\.appeals/);
   assert.match(joined(failures), /breachWindowHours` must be a positive/);
   assert.match(
     joined(failures),

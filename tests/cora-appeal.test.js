@@ -31,16 +31,12 @@ function makeCase(overrides = {}) {
 }
 
 function makeQueue() {
-  /** @type {{ id: string, field: string, value: any }[]} */
+  /** @type {{ id: string, fields: any }[]} */
   const enqueued = [];
   return {
     enqueued,
-    enqueue(
-      /** @type {string} */ id,
-      /** @type {string} */ field,
-      /** @type {any} */ value
-    ) {
-      enqueued.push({ id, field, value });
+    enqueueFields(/** @type {string} */ id, /** @type {any} */ fields) {
+      enqueued.push({ id, fields });
     },
   };
 }
@@ -71,7 +67,7 @@ function renderAppeal(overrides = {}, queue = makeQueue()) {
             at: '2026-06-12T00:00:00Z',
           });
           props.caseRow = result.caseRow;
-          queue.enqueue('c1', 'appeals', result.appeals);
+          queue.enqueueFields('c1', result.fields);
           render();
         },
       })
@@ -206,8 +202,7 @@ test('CORAAppeal: raising with a rationale enqueues an additive appeals save wit
 
   assert.equal(queue.enqueued.length, 1);
   assert.equal(queue.enqueued[0].id, 'c1');
-  assert.equal(queue.enqueued[0].field, 'appeals');
-  const saved = queue.enqueued[0].value;
+  const saved = queue.enqueued[0].fields.appeals;
   assert.equal(saved.length, 1);
   assert.equal(saved[0].state, 'raised');
   assert.equal(saved[0].appellant, 'u-rp');
@@ -236,7 +231,7 @@ test('CORAAppeal: raising appends to existing resolved Appeals (full history kep
   const { el, queue } = makeEditable({ appeals: [prior] });
   findByClass(el, 'cora-appeal-rationale').value = 'second appeal';
   findByClass(el, 'cora-appeal-submit')._listeners['click'][0]();
-  const saved = queue.enqueued[0].value;
+  const saved = queue.enqueued[0].fields.appeals;
   assert.equal(saved.length, 2, 'prior Appeal retained');
   assert.equal(saved[0].id, 'a0');
   assert.equal(saved[1].rationale, 'second appeal');
@@ -275,7 +270,7 @@ test('CORAAppeal: citing disputed failed Answers records their keys on the Appea
   boxes[0].checked = true; // cite q-greet only
   findByClass(el, 'cora-appeal-submit')._listeners['click'][0]();
 
-  const saved = queue.enqueued[0].value;
+  const saved = queue.enqueued[0].fields.appeals;
   assert.deepEqual(
     saved[0].citedAnswerKeys,
     ['q-greet'],
@@ -289,11 +284,13 @@ test('CORAAppeal: a raised Appeal does not set Answer values (case-level only)',
   });
   findByClass(el, 'cora-appeal-rationale').value = 'dispute';
   findByClass(el, 'cora-appeal-submit')._listeners['click'][0]();
-  // Only the `appeals` field is ever written — never `answers`.
-  assert.deepEqual(
-    queue.enqueued.map((e) => e.field),
-    ['appeals']
-  );
+  // Only the Appeal history and its queryable pair are written — never
+  // `answers`.
+  assert.deepEqual(Object.keys(queue.enqueued[0].fields), [
+    'appeals',
+    'hasOpenAppeal',
+    'appealRaisedAt',
+  ]);
   assert.deepEqual(
     props.caseRow?.answers,
     { 'q-greet': { value: 'No' } },

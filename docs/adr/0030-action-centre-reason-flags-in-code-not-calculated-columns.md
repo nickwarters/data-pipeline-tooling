@@ -7,6 +7,82 @@ Date: 2026-07-05
 Accepted (supports [ADR-0007]; relates to [ADR-0008], [ADR-0009]; refines the reason
 model introduced for the dashboard **Action Centre**, issue #287)
 
+### Amendment — issue #691, 2026-08-03
+
+**The decision stands; one sentence of its Context did not.** The Decision below says the
+four state flags "only change on an explicit lifecycle transition the app already
+performs (send to Frontline, raise/close an Appeal, reopen, submit for review)". That was
+false when it was written. Only one of those four transitions existed — raise/close an
+Appeal. There was no send-to-Frontline step, no reopen, and no submit-for-review, and
+nothing anywhere in `src/` ever wrote any of the four columns. The ADR's own "Negative"
+consequence — _the app must not miss a transition_ — had therefore been realised in full
+from day one, silently: every reason group but Overdue was permanently empty in
+production, because Overdue is the one reason computed on read.
+
+The written half is now real, and the missing halves are named rather than assumed.
+
+**Where the rule lives.** `src/services/action-centre-flags.js` is the single expression
+of the flag/clock pairing, and the transitions that change these states call it and
+spread the whole pair into the field bag they were already building. It is deliberately
+_not_ an interception inside the clients' `patchCase` (where the assignment stamp sits):
+`conversation` and `appeals` each have exactly one writer, both of which already hold
+everything the derivation needs, and routing through the clients would have meant
+persisting a per-message schema field for ever purely to carry the writer's own knowledge
+to a later interception point. The property that moves with it is worth stating plainly:
+nothing prevents a _new_ writer from setting one of these columns without its clock. The
+module says so, and it is the one place to change if that stops being enough.
+
+- **`AwaitingResponsibleParty` / `AwaitingSince`.** `postConversationMessage` writes the
+  pair in the same PATCH as the message that moved it: a Reviewer posting sets the flag,
+  a Responsible Party or their Manager replying clears it, anyone else changes neither
+  half. The side comes from the roles Section access already resolved for the page, not
+  from `Message.author` — that is a display name, while a Case stores its people by
+  account.
+- **The rule is knowingly coarser than the state it stands for.** It reads _"the newest
+  message came from a Reviewer"_, not _"the Reviewer asked something and no reply has come
+  back"_. A Reviewer posting "thanks, closing" re-arms the flag. The alternative is asking
+  a Reviewer to classify their own message, which buys precision with friction on every
+  post; an occasional over-count that any reply — or completing the Case — clears is the
+  better trade. Accepted, not overlooked.
+- **The flag has an exit.** `CaseMachine`'s two `Completed` transitions clear the pair. A
+  closed Case waits on nobody, and without that clearing a Case whose frontline replied by
+  phone would age in its Reviewer's group indefinitely, because the reason filter carries
+  no status predicate.
+- **`HasOpenAppeal` / `AppealRaisedAt`.** `raiseAppeal` and `resolveAppeal` put the pair
+  in the field bag beside the `appeals` blob it is derived from. Both resolution branches
+  now write one atomic multi-field PATCH — the agreed branch already had to, so the
+  corrected-reporting columns land with the Appeal, and the rejected branch joins it so
+  the flag cannot land apart from the history that justifies it.
+- **Neither clock is a fresh clock reading.** The Awaiting clock is the posted message's
+  own timestamp, the Appeal clock the Appeal's own recorded `at`. `SaveQueue` replays the
+  identical field bag after a 412, so a clock read at write time would re-mint on every
+  retry and silently reset an SLA age the Action Centre sorts and breaches on.
+- **`Reopened` / `ReopenedAt` — read surface removed.** There is no reopen transition in
+  this app and no fourth lifecycle status to reopen into; resolving an Appeal as agreed
+  authors an Amended Outcome and leaves the Case Completed. The reason entry, the
+  `CaseRow` fields, the `ListCasesFilter` key, both clients' filter branches and mappings,
+  the tone styles and the fixtures are gone. The SharePoint columns are left in place —
+  dropping a column is a manual, irreversible list-settings action, and an unread column
+  costs nothing — but they are no longer provisioning requirements ([ADR-0031]'s index set
+  drops from 14 to 13). Consequence tracked as issue #701: `reopened` was the only reason
+  gated on `ownedCaseTypes`, so a Case Type Owner holding no other role now has no Action
+  Centre reason at all. The dashboard panel is already gated on holding at least one
+  reason, so such a viewer sees no panel rather than an empty one.
+- **`ReviewRequired` — still unwritten.** No transition submits a Case for review, and
+  there is no status for one, so the group is empty in production. It is left standing
+  rather than removed because, unlike Reopened, the reason is wanted: issue #699 covers
+  building the transition. The reason entry says so in its own words, and the mock fixture
+  seeding it is labelled as the one flag with no transition behind it.
+
+Separately, and found while removing Reopened: `HttpSharePointClient` read an `anyOf` with
+no branches as _no condition at all_ — the whole list — where the mock read it as matching
+nothing. An OR of no branches now emits a never-true condition, and the two clients are
+asserted to agree on it.
+
+Net: two of the four state flags are written by the app, one reason is retired, and one is
+honestly labelled as pending. Nothing about the "no calculated columns, no scheduled job,
+no Power Automate" decision changes.
+
 ## Context
 
 The dashboard Action Centre groups a Reviewer/Controls/Owner worklist by
@@ -110,3 +186,4 @@ reason logic versions with the code and is unit-tested to 100% coverage.
 [ADR-0008]: ./0008-autosave-and-concurrency.md
 [ADR-0009]: ./0009-mock-first-dev-loop.md
 [ADR-0027]: ./0027-appeal-flow-journeyowner-controls.md
+[ADR-0031]: ./0031-scaling-against-the-list-view-threshold.md

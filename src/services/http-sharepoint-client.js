@@ -67,7 +67,6 @@ const ORDER_BY_COLUMNS = {
   remediationDueDate: 'RemediationDueDate',
   awaitingSince: 'AwaitingSince',
   appealRaisedAt: 'AppealRaisedAt',
-  reopenedAt: 'ReopenedAt',
   placedOnHoldAt: 'PlacedOnHoldAt',
 };
 
@@ -917,9 +916,6 @@ function buildFilterExpr(filter) {
   if (filter.hasOpenAppeal !== undefined) {
     conds.push(`HasOpenAppeal eq ${filter.hasOpenAppeal ? 1 : 0}`);
   }
-  if (filter.reopened !== undefined) {
-    conds.push(`Reopened eq ${filter.reopened ? 1 : 0}`);
-  }
   // Bounded server-side report query by the corrected result. The
   // column is indexed, so the RP-team / true-result reports stay one $filter
   // per Case Type with no full-row fetch.
@@ -934,7 +930,16 @@ function buildFilterExpr(filter) {
       .map(buildFilterExpr)
       .filter(Boolean)
       .map((e) => `(${e})`);
-    if (ors.length) conds.push(`(${ors.join(' or ')})`);
+    if (ors.length) {
+      conds.push(`(${ors.join(' or ')})`);
+    } else if (!filter.anyOf.length) {
+      // An OR of no branches matches nothing, and has to say so out loud: emit
+      // no condition and the whole expression is unconstrained, silently
+      // widening the read to every Case in the list. `Id eq 0` is the
+      // never-true condition — SharePoint item ids start at 1 — and matching
+      // nothing is what the mock's `anyOf` predicate answers for this input.
+      conds.push('Id eq 0');
+    }
   }
   return conds.join(' and ');
 }
@@ -1066,8 +1071,6 @@ function rowFromItem(item, etag) {
       item?.HasOpenAppeal != null ? Boolean(item.HasOpenAppeal) : undefined,
     appealRaisedAt:
       typeof item?.AppealRaisedAt === 'string' ? item.AppealRaisedAt : null,
-    reopened: item?.Reopened != null ? Boolean(item.Reopened) : undefined,
-    reopenedAt: typeof item?.ReopenedAt === 'string' ? item.ReopenedAt : null,
     etag,
   };
   // Derived, never read from a stored or calculated column, and derived by the
@@ -1165,8 +1168,6 @@ function itemFromRow(fields) {
     out.HasOpenAppeal = fields.hasOpenAppeal;
   if (fields.appealRaisedAt !== undefined)
     out.AppealRaisedAt = fields.appealRaisedAt;
-  if (fields.reopened !== undefined) out.Reopened = fields.reopened;
-  if (fields.reopenedAt !== undefined) out.ReopenedAt = fields.reopenedAt;
   if (fields.answers !== undefined)
     out.Answers = JSON.stringify(fields.answers);
   if (fields.conversation !== undefined)

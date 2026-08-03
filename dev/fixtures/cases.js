@@ -338,6 +338,11 @@ export const cases = [
         state: 'raised',
       },
     ],
+    // The queryable pair the app's own write path hoists off that Appeal, so
+    // the Controls Appeals worklist — which filters on the column, not the
+    // blob — actually finds this Case.
+    hasOpenAppeal: true,
+    appealRaisedAt: _threeDaysAgo.toISOString(),
     created: '2026-05-09T08:00:00Z',
     assignedAt: '2026-05-09T08:00:00Z',
     etag: 'etag-cm4-v1',
@@ -490,10 +495,12 @@ export const cases = [
     etag: 'etag-cm6-v1',
   },
   // ── Action Centre demo cases ────────────────────────────────
-  // Carry the hoisted reason flags/clocks the real backend would compute, so
+  // Carry the hoisted reason flags/clocks the app's own write path produces, so
   // the ?asUser=action-centre persona sees every reason group populated. The
   // reviewer reasons are assigned to user-reviewer (the persona's id); Appeals
-  // and Reopened are role-scoped, not reviewer-scoped.
+  // is role-scoped, not reviewer-scoped. `reviewRequired` is the one flag
+  // seeded without a transition behind it — nothing writes it yet — so the
+  // group is demoable before that transition is built.
   {
     id: 'ac-overdue-1',
     caseType: 'complaints',
@@ -520,7 +527,13 @@ export const cases = [
     responsibleParty: 'user-agent-b',
     responsiblePartyDisplayName: 'Rowan Agent',
     answers: {},
-    conversation: [],
+    conversation: [
+      {
+        author: 'Ruth Reviewer',
+        timestamp: _nineDaysAgo.toISOString(),
+        body: 'Please confirm whether the fees were refunded.',
+      },
+    ],
     notes: '',
     completedAt: null,
     dueDate: _nextWeek.toISOString(),
@@ -539,7 +552,18 @@ export const cases = [
     responsibleParty: 'user-agent-c',
     responsiblePartyDisplayName: 'Noor Agent',
     answers: {},
-    conversation: [],
+    conversation: [
+      {
+        author: 'Noor Agent',
+        timestamp: _nineDaysAgo.toISOString(),
+        body: 'Declaration attached.',
+      },
+      {
+        author: 'Ruth Reviewer',
+        timestamp: _fiveDaysAgo.toISOString(),
+        body: 'The declaration is dated after the deadline — can you explain?',
+      },
+    ],
     notes: '',
     completedAt: null,
     dueDate: _nextWeek.toISOString(),
@@ -604,30 +628,20 @@ export const cases = [
     notes: '',
     completedAt: _twentyDaysAgo.toISOString(),
     outcomeAtCompletion: 'poor',
+    appeals: [
+      {
+        id: 'ac-appeal-1-a1',
+        appellant: 'user-agent-c',
+        at: _sixDaysAgo.toISOString(),
+        rationale: 'Redress was offered by phone and is not on the file.',
+        state: 'raised',
+      },
+    ],
     hasOpenAppeal: true,
     appealRaisedAt: _sixDaysAgo.toISOString(),
     created: _twentyDaysAgo.toISOString(),
     assignedAt: _twentyDaysAgo.toISOString(),
     etag: 'etag-ac-ap1',
-  },
-  {
-    id: 'ac-reopened-1',
-    caseType: 'complaints',
-    title: 'Outside business interest',
-    status: 'In-progress',
-    assignedReviewer: 'user-reviewer',
-    responsibleParty: 'user-agent-a',
-    responsiblePartyDisplayName: 'Frankie Agent',
-    answers: {},
-    conversation: [],
-    notes: '',
-    completedAt: null,
-    dueDate: _nextWeek.toISOString(),
-    reopened: true,
-    reopenedAt: _fiveDaysAgo.toISOString(),
-    created: _twentyDaysAgo.toISOString(),
-    assignedAt: _twentyDaysAgo.toISOString(),
-    etag: 'etag-ac-re1',
   },
 
   // Search demo rows. Three references share the `CR-20` prefix and one does

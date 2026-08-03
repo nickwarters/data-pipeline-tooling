@@ -80,7 +80,7 @@ export function createAppealEffects({
         id: newId('appeal'),
         at: now().toISOString(),
       });
-      saveQueue.enqueue(caseId(), 'appeals', result.appeals);
+      saveQueue.enqueueFields(caseId(), result.fields);
       applied(result, snapshot);
     },
 
@@ -104,15 +104,11 @@ export function createAppealEffects({
         at: now().toISOString(),
         ...resolution,
       });
-      // Load-bearing fork, moved verbatim: agreeing writes the appeal *and*
-      // the linked corrected-reporting columns, which must land as one
-      // atomic PATCH or `effectiveOutcome` / `effectiveHadRemediation` /
-      // `outcomeOverridden` can desync (save-queue.js documents why).
-      if (result.transactional) {
-        saveQueue.enqueueFields(caseId(), result.fields);
-      } else {
-        saveQueue.enqueue(caseId(), 'appeals', result.fields.appeals);
-      }
+      // One atomic PATCH either way. Agreeing writes the appeal *and* the
+      // linked corrected-reporting columns, which desync if they land apart
+      // (save-queue.js documents why); rejecting writes the appeal and the
+      // queryable open-appeal pair, which must not part company either.
+      saveQueue.enqueueFields(caseId(), result.fields);
       applied(result, snapshot);
     },
 

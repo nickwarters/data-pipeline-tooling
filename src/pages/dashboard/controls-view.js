@@ -8,18 +8,11 @@ import {
   caseTypeColumn,
 } from '../../views/case-columns.js';
 import { dataTableView } from '../../views/data-table.js';
+import { openAppealOf } from '../../evaluators/appeal-state.js';
 
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
-/** @typedef {import('../../sharepoint-client.js').Appeal} Appeal */
 
 export const PAGE_SIZE = 50;
-
-/** @param {CaseRow} row @returns {Appeal | null} */
-export function openAppealOf(row) {
-  return (
-    (row.appeals ?? []).find((appeal) => appeal.state !== 'resolved') ?? null
-  );
-}
 
 /**
  * @param {import('../../sharepoint-client.js').SharePointClient} client

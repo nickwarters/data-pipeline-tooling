@@ -55,7 +55,7 @@ test('Action Centre state derives its reason descriptors from unchanged model fl
   );
   assert.deepEqual(
     multiRole.reasons.map((reason) => reason.id),
-    ['overdue', 'awaitingFrontline', 'appeals', 'reopened']
+    ['overdue', 'awaitingFrontline', 'appeals']
   );
 });
 
@@ -209,23 +209,24 @@ test('Action Centre rows preserve fallback references, secondary reasons, and wi
   const state = initialActionCentreState(
     capabilities({
       isReviewer: true,
-      ownedCaseTypes: ['complaints'],
+      isControls: true,
     }),
     [],
     new Date('2026-07-04T00:00:00Z')
   );
-  const reopened = state.reasons.find((reason) => reason.id === 'reopened');
-  assert.ok(reopened);
-  const reopenedRow = {
+  const appeals = state.reasons.find((reason) => reason.id === 'appeals');
+  assert.ok(appeals);
+  const appealRow = {
     ...row('fallback-id'),
     title: '',
-    reopened: true,
-    reopenedAt: '2026-07-03T00:00:00Z',
+    overdue: true,
+    hasOpenAppeal: true,
+    appealRaisedAt: '2026-07-03T00:00:00Z',
   };
-  state.counts = { reopened: 1, overdue: 1 };
+  state.counts = { appeals: 1, overdue: 1 };
   state.headline = 1;
-  state.expanded = new Set(['reopened']);
-  state.pages = { reopened: [reopenedRow] };
+  state.expanded = new Set(['appeals']);
+  state.pages = { appeals: [appealRow] };
   const view = ActionCentreView(state, {
     onToggleNeedsAction: () => {},
     onToggleGroup: () => {},
@@ -234,22 +235,22 @@ test('Action Centre rows preserve fallback references, secondary reasons, and wi
   });
 
   const groups = [...view.querySelectorAll('.cora-ac-group')];
-  const reopenedGroup = groups.find(
-    (group) => group.getAttribute('data-reason') === 'reopened'
+  const appealsGroup = groups.find(
+    (group) => group.getAttribute('data-reason') === 'appeals'
   );
   assert.equal(
-    reopenedGroup?.querySelector('.cora-ac-row-ref')?.textContent,
+    appealsGroup?.querySelector('.cora-ac-row-ref')?.textContent,
     'fallback-id'
   );
   assert.match(
-    reopenedGroup?.querySelector('.cora-ac-row-sub')?.textContent ?? '',
+    appealsGroup?.querySelector('.cora-ac-row-sub')?.textContent ?? '',
     /also Overdue/
   );
   assert.equal(
-    reopenedGroup?.querySelector('.cora-ac-wait')?.className,
+    appealsGroup?.querySelector('.cora-ac-wait')?.className,
     'cora-ac-wait'
   );
-  assert.equal(reopenedGroup?.querySelector('.cora-ac-more'), null);
+  assert.equal(appealsGroup?.querySelector('.cora-ac-more'), null);
   const awaitingGroup = groups.find(
     (group) => group.getAttribute('data-reason') === 'awaitingFrontline'
   );
@@ -257,6 +258,41 @@ test('Action Centre rows preserve fallback references, secondary reasons, and wi
     awaitingGroup?.querySelector('.cora-ac-count')?.textContent,
     '0'
   );
+});
+
+// Owning a Case Type is no longer a reason to act on anything, so an Owner
+// holding no other role reaches the loader with an empty reason list. The
+// headline is the OR of those reasons: with none, it is zero and the client is
+// never asked — an OR of no branches is not a query the two clients agree on.
+test('Action Centre asks nothing at all for a viewer with no reasons', async () => {
+  const state = initialActionCentreState(
+    capabilities({ ownedCaseTypes: ['complaints'] }),
+    []
+  );
+  assert.deepEqual(state.reasons, []);
+
+  let asked = 0;
+  const result = await loadActionCentreCounts({
+    client: /** @type {any} */ ({
+      countCases: async () => {
+        asked += 1;
+        return 99;
+      },
+      listCases: async () => [],
+    }),
+    sources: [
+      {
+        slug: 'complaints',
+        displayName: 'Complaints',
+        listName: 'Cases-Complaints',
+      },
+    ],
+    reasons: state.reasons,
+    currentUserId: 'owner-1',
+  });
+
+  assert.equal(asked, 0);
+  assert.deepEqual(result, { counts: {}, peeks: {}, headline: 0 });
 });
 
 test("Action Centre judges a row's wait against its own Case Type's cadence", () => {

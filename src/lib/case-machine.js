@@ -27,6 +27,7 @@ import { CASE_STATUS } from './case-statuses.js';
 // The one definition of "this Case carries remediation": the Remediation
 // tab has ≥1 row. Deliberately catalogue-aware — see `hasTrackableRemediation`.
 import { hasTrackableRemediation } from '../evaluators/remediation-status.js';
+import { awaitingFrontlineCleared } from '../services/action-centre-flags.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').CurrentUser} CurrentUser */
@@ -208,6 +209,10 @@ export class CaseMachine {
       status: CASE_STATUS.COMPLETED,
       reportableAt: now,
       completedAt: now,
+      // A closed Case waits on nobody. Without this the Reviewer's last
+      // unanswered question would keep it in their Awaiting Frontline group,
+      // ageing past its SLA, with no transition left to clear it.
+      ...awaitingFrontlineCleared(),
       ...this._reportableSnapshot(computeOutcome, answers, questionBankVersion),
     };
   }
@@ -224,6 +229,7 @@ export class CaseMachine {
     return {
       status: CASE_STATUS.COMPLETED,
       completedAt: this._now().toISOString(),
+      ...awaitingFrontlineCleared(),
     };
   }
 }

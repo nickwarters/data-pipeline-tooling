@@ -16,6 +16,7 @@
 /** @typedef {import('./permissions.js').Capabilities} Capabilities */
 
 import { hasTrackableRemediation } from '../evaluators/remediation-status.js';
+import { openAppealOf } from '../evaluators/appeal-state.js';
 import { CASE_STATUS } from '../lib/case-statuses.js';
 import {
   sectionIds,
@@ -89,16 +90,6 @@ export const SECTIONS = sectionIds();
  */
 function appealRaiser(config) {
   return config.appeal?.raisedBy ?? 'responsiblePartyManager';
-}
-
-/**
- * Whether the Case currently has an unresolved Appeal.
- *
- * @param {CaseRow} caseRow
- * @returns {boolean}
- */
-function hasOpenAppeal(caseRow) {
-  return (caseRow.appeals ?? []).some((a) => a.state !== 'resolved');
 }
 
 /**
@@ -393,7 +384,7 @@ export const MATRIX = {
     journeyOwner: 'hidden',
     controls: (c) => {
       if (!c.appeals?.length) return 'hidden';
-      return c.status === CASE_STATUS.COMPLETED && hasOpenAppeal(c)
+      return c.status === CASE_STATUS.COMPLETED && Boolean(openAppealOf(c))
         ? 'edit'
         : 'read-only';
     },
@@ -497,6 +488,34 @@ export function resolveRoles(caseRow, userId, capabilities) {
     roles.push('controls');
   }
   return roles.length ? roles : ['none'];
+}
+
+/**
+ * Which side of the Conversation a viewer posts from, or `null` for someone on
+ * neither side of the exchange.
+ *
+ * Awaiting Frontline means "the Reviewer asked the frontline something and no
+ * reply has come back", so only those two sides move that clock. A Reviewer
+ * Manager, Case Type Owner, Journey Owner or Controls may all post; none of
+ * them is the Reviewer asking or the frontline answering.
+ *
+ * A viewer holding roles on both sides posts as the Reviewer, the same
+ * reviewer-side-wins rule `remediationAudience` uses.
+ *
+ * @param {Role[]} roles
+ * @returns {'reviewer' | 'responsibleParty' | null}
+ */
+export function conversationSideOf(roles) {
+  if (roles.includes('assignedReviewer') || roles.includes('otherReviewer')) {
+    return 'reviewer';
+  }
+  if (
+    roles.includes('responsibleParty') ||
+    roles.includes('responsiblePartyManager')
+  ) {
+    return 'responsibleParty';
+  }
+  return null;
 }
 
 /**

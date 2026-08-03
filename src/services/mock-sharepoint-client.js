@@ -205,11 +205,6 @@ export class MockSharePointClient {
         Boolean(c.hasOpenAppeal) !== filter.hasOpenAppeal
       )
         return false;
-      if (
-        filter.reopened !== undefined &&
-        Boolean(c.reopened) !== filter.reopened
-      )
-        return false;
       if (filter.overdue === true && !isOverdue(c)) return false;
       // CompletedAt window: inclusive lower, exclusive upper, so
       // adjacent per-day slices sum without double-counting a boundary Case.
