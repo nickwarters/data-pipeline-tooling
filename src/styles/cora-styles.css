@@ -2950,3 +2950,42 @@
   font-size: var(--cora-font-size-sm);
   color: var(--cora-color-text-muted);
 }
+
+/* Case search — the filter form and its bounded-result notice. */
+
+.cora-case-search-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--cora-space-3);
+  margin-bottom: var(--cora-space-4);
+  padding: var(--cora-space-3) var(--cora-space-4);
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+}
+
+.cora-case-search-field {
+  display: grid;
+  gap: var(--cora-space-1);
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+}
+
+.cora-case-search-cap {
+  margin: 0 0 var(--cora-space-3);
+  padding: var(--cora-space-2) var(--cora-space-3);
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-warning);
+  background: var(--cora-color-warning-bg);
+  border-radius: var(--cora-radius-sm);
+}
+
+.cora-case-search-error {
+  margin: 0;
+  padding: var(--cora-space-2) var(--cora-space-3);
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-danger);
+  background: var(--cora-color-danger-bg);
+  border-radius: var(--cora-radius-sm);
+}

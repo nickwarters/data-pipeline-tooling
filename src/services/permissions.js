@@ -43,6 +43,7 @@ import { CASE_TYPES } from '../../case-types/manifest.js';
  * isReviewerManager: boolean,
  * isResponsiblePartyManager: boolean,
  * isMaintainer: boolean,
+ * canSearchCases: boolean,
  * isVisitor: boolean
  * }} Capabilities
  */
@@ -124,6 +125,8 @@ export function resolveCapabilities(userGroups, config = permissions) {
   const isReviewerManager = has(config.reviewerManager);
   const isResponsiblePartyManager = has(config.responsiblePartyManager);
   const isMaintainer = has(config.maintainer);
+  // Widening search to a second role is this one line and no call site.
+  const canSearchCases = isControls;
   const isVisitor =
     !isReviewer &&
     !isAdviser &&
@@ -144,6 +147,7 @@ export function resolveCapabilities(userGroups, config = permissions) {
     isReviewerManager,
     isResponsiblePartyManager,
     isMaintainer,
+    canSearchCases,
     isVisitor,
   };
 }

@@ -85,7 +85,7 @@ lead with an indexed predicate.
 | Column (internal name)                    | Type                                                         | Indexed | Provenance / notes                                                                     |
 | ----------------------------------------- | ------------------------------------------------------------ | :-----: | -------------------------------------------------------------------------------------- |
 | `Id`                                      | Counter                                                      |  (PK)   | SharePoint built-in item id.                                                           |
-| `Title`                                   | Single line of text                                          |         | Case title.                                                                            |
+| `Title`                                   | Single line of text                                          |  **✓**  | The Case Reference; searched by anchored prefix, so it must be index-served.           |
 | `CaseType`                                | Single line of text                                          |         | Slug; constant per list, so not worth indexing.                                        |
 | `Status`                                  | Choice (`In-progress` / `Actions In Progress` / `Completed`) |  **✓**  | Lifecycle state; leading predicate for most live reads.                                |
 | `AssignedReviewer` (`AssignedReviewerId`) | Person                                                       |  **✓**  | The Reviewer the Case is assigned to.                                                  |
@@ -95,7 +95,7 @@ lead with an indexed predicate.
 | `ResponsiblePartyManager`                 | Person                                                       |  **✓**  | Responsible Party's manager.                                                           |
 | `DueDate`                                 | Date and Time                                                |  **✓**  | Working-day SLA due date; app-written on creation.                                     |
 | `CompletedAt`                             | Date and Time                                                |  **✓**  | Stamped at the final `Completed` transition; app-written.                              |
-| `ReportableAt`                            | Date and Time                                                |         | Stamped at the reportable milestone; app-written.                                      |
+| `ReportableAt`                            | Date and Time                                                |  **✓**  | Stamped at the reportable milestone; app-written. Leads the Case search date window.   |
 | `RemediationDueDate`                      | Date and Time                                                |         | Remediation SLA; app-written.                                                          |
 | `RelatedDate`                             | Date and Time                                                |         | Case Type–specific reference date.                                                     |
 | `Created`                                 | Date and Time                                                |         | SharePoint built-in.                                                                   |
@@ -145,13 +145,21 @@ list is past the threshold.
 
 ## Indexed columns
 
-The 12 columns to index on the empty `Cases-{slug}` list — the
-lifecycle/date columns and the Action Centre reason flags that live reads lead
-with:
+The 14 columns to index on the empty `Cases-{slug}` list — the
+lifecycle/date columns, the Action Centre reason flags that live reads lead
+with, and the two columns Case search leads with:
 
 `Status`, `DueDate`, `CompletedAt`, `AssignedReviewer`, `ResponsibleParty`,
 `AssignedReviewerManager`, `ResponsiblePartyManager`, `HasOpenAppeal`,
-`AwaitingResponsibleParty`, `Reopened`, `ReviewRequired`, `OnHold`.
+`AwaitingResponsibleParty`, `Reopened`, `ReviewRequired`, `OnHold`, `Title`,
+`ReportableAt`.
 
-12 of a maximum 20 indexes per list. Add any promoted detail column (above) to
+14 of a maximum 20 indexes per list. Add any promoted detail column (above) to
 this set only if a live query will lead with it, and keep the total ≤ 20.
+
+`Title` and `ReportableAt` joined this set when Case search was added, and the
+index-at-creation trap applies to them exactly as it does to a promoted detail
+column: a `Cases-{slug}` list already past 5,000 items **cannot** have an index
+added afterwards. Indexing them is therefore a provisioning precondition for
+search on an existing list, not a follow-up — a list past the threshold has to
+be re-provisioned to gain them.

@@ -12,6 +12,7 @@ import {
   makeReasonClient,
   MockSharePointClient,
 } from './helpers/mock-sharepoint-client.js';
+import { makeCaseRow } from './helpers/fixtures.js';
 
 // Capability: case filtering and bounded counts.
 
@@ -406,6 +407,63 @@ test('MockSharePointClient: a never-completed Case is excluded from any Complete
   assert.deepEqual(
     beforeOnly.map((r) => r.id),
     ['done']
+  );
+});
+
+// --- Case search: the ReportableAt window and the Title prefix ---
+
+/** @param {CaseRow[]} rows */
+function searchClient(rows) {
+  return new MockSharePointClient({
+    lists: { [LIST]: rows },
+    personas: PERSONAS,
+  });
+}
+
+test('MockSharePointClient: the ReportableAt window has an inclusive lower and exclusive upper bound', async () => {
+  const client = searchClient([
+    makeCaseRow({ id: 'a', reportableAt: '2026-07-01T00:00:00.000Z' }),
+    makeCaseRow({ id: 'b', reportableAt: '2026-07-02T00:00:00.000Z' }),
+    makeCaseRow({ id: 'c', reportableAt: '2026-07-03T00:00:00.000Z' }),
+    makeCaseRow({ id: 'never' }),
+  ]);
+
+  assert.deepEqual(
+    (
+      await client.listCases(
+        { reportableAfter: '2026-07-02T00:00:00.000Z' },
+        { listName: LIST }
+      )
+    ).map((r) => r.id),
+    ['b', 'c'],
+    'includes the boundary Case, excludes earlier and the never-reportable one'
+  );
+  assert.deepEqual(
+    (
+      await client.listCases(
+        { reportableBefore: '2026-07-02T00:00:00.000Z' },
+        { listName: LIST }
+      )
+    ).map((r) => r.id),
+    ['a'],
+    'excludes the boundary Case so adjacent windows never double-count'
+  );
+});
+
+test('MockSharePointClient: a Title prefix is anchored and case-insensitive', async () => {
+  const client = searchClient([
+    makeCaseRow({ id: 'a', title: 'CR-1001' }),
+    makeCaseRow({ id: 'b', title: 'cr-1002' }),
+    makeCaseRow({ id: 'c', title: 'XCR-1003' }),
+    makeCaseRow({ id: 'd', title: '' }),
+  ]);
+
+  assert.deepEqual(
+    (await client.listCases({ titlePrefix: 'CR-1' }, { listName: LIST })).map(
+      (r) => r.id
+    ),
+    ['a', 'b'],
+    'a mid-string match is not a prefix match, and case is ignored'
   );
 });
 

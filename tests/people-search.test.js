@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createDebouncedPeopleSearch } from '../src/pages/cora-case-review/people-search-effects.js';
+import { createDebouncedPeopleSearch } from '../src/lib/people-search.js';
 
 /**
  * Build a search under test with recorders for both sides of it: the queries

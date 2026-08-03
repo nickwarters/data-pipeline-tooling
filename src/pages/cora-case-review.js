@@ -23,7 +23,7 @@ import {
   refreshConversation,
 } from './cora-case-review/conversation-view.js';
 import { createAppealEffects } from './cora-case-review/appeal-effects.js';
-import { createDebouncedPeopleSearch } from './cora-case-review/people-search-effects.js';
+import { createDebouncedPeopleSearch } from '../lib/people-search.js';
 import {
   answerEdited,
   issueCaptured,

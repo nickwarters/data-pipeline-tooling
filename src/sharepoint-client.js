@@ -321,12 +321,23 @@
  * completion metric leads with the selective column and can be summed from
  * sub-threshold per-day `countCases` slices.
  *
+ * `reportableAfter` (inclusive) and `reportableBefore` (exclusive) bound a read
+ * to a `ReportableAt` window the same way, on the same kind of indexed date
+ * column. It leads the expression for the same reason the completion window
+ * does: a date range is the most selective thing a lookup usually carries.
+ *
+ * `titlePrefix` matches the start of the Case Reference held in `Title`, and is
+ * a **prefix** match on purpose — not a contains. `substringof` cannot use a
+ * column index, so past the List View Threshold SharePoint refuses or throttles
+ * it; an anchored `startswith` stays index-served. Matching is case-insensitive,
+ * because that is what the server does.
+ *
  * `orderBy` names a **`CaseRow` key**, never a SharePoint internal column name:
  * both clients speak the row vocabulary, and `HttpSharePointClient` maps the key
  * to its internal column before emitting `$orderby`. Only a key that client maps
  * is sortable — an unmapped one throws there rather than reaching SharePoint.
  *
- * @typedef {{ status?: string, assignedReviewer?: string, caseType?: string, responsibleParty?: string, overdue?: boolean, awaitingResponsibleParty?: boolean, reviewRequired?: boolean, onHold?: boolean, hasOpenAppeal?: boolean, reopened?: boolean, assignedReviewerManager?: string, effectiveOutcome?: string, outcomeOverridden?: boolean, completedAfter?: string, completedBefore?: string, anyOf?: ListCasesFilter[] }} ListCasesFilter
+ * @typedef {{ status?: string, assignedReviewer?: string, caseType?: string, responsibleParty?: string, overdue?: boolean, awaitingResponsibleParty?: boolean, reviewRequired?: boolean, onHold?: boolean, hasOpenAppeal?: boolean, reopened?: boolean, assignedReviewerManager?: string, effectiveOutcome?: string, outcomeOverridden?: boolean, completedAfter?: string, completedBefore?: string, reportableAfter?: string, reportableBefore?: string, titlePrefix?: string, anyOf?: ListCasesFilter[] }} ListCasesFilter
  * @typedef {{ listName?: string, top?: number, skip?: number, orderBy?: string, orderDir?: 'asc' | 'desc' }} CaseListOptions
  */
 

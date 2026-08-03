@@ -11,6 +11,7 @@ import * as responsiblePartyPage from '../pages/cora-responsible-party-dashboard
 import * as journeyCasesPage from '../pages/cora-journey-cases.js';
 import * as roadmapPage from '../pages/roadmap.js';
 import * as myTeamPage from '../pages/cora-my-team.js';
+import * as caseSearchPage from '../pages/cora-case-search.js';
 
 /**
  * @typedef {Object} AppContext
@@ -119,6 +120,19 @@ export function routeTable(context) {
     'my-team': {
       paths: ['#/my-team'],
       page: myTeamPage,
+    },
+    search: {
+      paths: ['#/search'],
+      page: caseSearchPage,
+      // Cross-Case-Type lookup is a capability, not a page: the mapping from
+      // groups to it lives in one place, so widening it never touches a route.
+      // The bounce replaces rather than pushes, so Back does not return the
+      // user to the route that just bounced them.
+      guard: () => {
+        if (context.chrome.permissions.canSearchCases) return true;
+        redirectTo('#/');
+        return false;
+      },
     },
   };
 }

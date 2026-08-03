@@ -860,6 +860,22 @@ function buildFilterExpr(filter) {
   if (filter.completedBefore) {
     conds.push(`CompletedAt lt '${escapeOData(filter.completedBefore)}'`);
   }
+  // The ReportableAt window sits alongside the CompletedAt one, and for the
+  // same reason: an indexed date range is the most selective predicate a lookup
+  // is likely to carry, so it must be the one that narrows first. Inclusive
+  // lower, exclusive upper, so two adjacent windows never count a Case twice.
+  if (filter.reportableAfter) {
+    conds.push(`ReportableAt ge '${escapeOData(filter.reportableAfter)}'`);
+  }
+  if (filter.reportableBefore) {
+    conds.push(`ReportableAt lt '${escapeOData(filter.reportableBefore)}'`);
+  }
+  // A prefix match, never `substringof`: an unanchored contains cannot be served
+  // from a column index, so past the List View Threshold SharePoint throttles or
+  // refuses it outright.
+  if (filter.titlePrefix) {
+    conds.push(`startswith(Title,'${escapeOData(filter.titlePrefix)}')`);
+  }
   if (filter.status) conds.push(`Status eq '${escapeOData(filter.status)}'`);
   // Person columns compare against the numeric id, unquoted: the caller has
   // already turned the account name into one. A quoted value here matches no

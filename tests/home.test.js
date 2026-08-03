@@ -52,6 +52,8 @@ test('home view: each role keeps its existing destination and order', () => {
   const view = homeView(
     state({
       isReviewer: true,
+      isControls: true,
+      canSearchCases: true,
       isReviewerManager: true,
       isResponsiblePartyManager: true,
       isAdviser: true,
@@ -64,6 +66,7 @@ test('home view: each role keeps its existing destination and order', () => {
 
   assert.deepEqual(headings(view), [
     'Reviewer',
+    'Controls',
     'Responsible Party',
     'Case Type Owner',
     'Journey Owner',
@@ -72,11 +75,19 @@ test('home view: each role keeps its existing destination and order', () => {
   ]);
   assert.deepEqual(links(view), [
     '#/dashboard',
+    '#/search',
     '#/my-cases',
     '#/question-bank',
     '#/journey-cases',
     '#/question-bank',
   ]);
+});
+
+test('home view: a Controls-only user is offered search rather than an empty page', () => {
+  const view = homeView(state({ isControls: true, canSearchCases: true }));
+
+  assert.deepEqual(headings(view), ['Controls']);
+  assert.deepEqual(links(view), ['#/search']);
 });
 
 test('home view: no capabilities render an empty page tree', () => {

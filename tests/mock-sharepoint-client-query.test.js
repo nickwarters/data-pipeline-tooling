@@ -98,6 +98,24 @@ test('MockSharePointClient: orderBy treats two rows that both lack the sort key 
   );
 });
 
+test('MockSharePointClient: orderBy ranks numeric-string ids as numbers', async () => {
+  const client = new MockSharePointClient({
+    lists: {
+      [LIST]: ['9', '51', '100'].map((id) => reasonCase(id, {})),
+    },
+    personas: PERSONAS,
+  });
+  const rows = await client.listCases(
+    {},
+    { listName: LIST, orderBy: 'id', orderDir: 'desc' }
+  );
+  assert.deepEqual(
+    rows.map((c) => c.id),
+    ['100', '51', '9'],
+    'a lexicographic compare would rank 9 highest, unlike the server'
+  );
+});
+
 test('MockSharePointClient: countCases with anyOf ORs sub-filters, deduped across reasons', async () => {
   const client = new MockSharePointClient({
     lists: {

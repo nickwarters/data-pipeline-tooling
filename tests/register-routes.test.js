@@ -21,6 +21,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { isolateBrowserGlobals } from './helpers/browser-globals.js';
+import { makePermissions } from './helpers/fixtures.js';
 
 isolateBrowserGlobals();
 
@@ -38,15 +39,16 @@ const { routeTable, registerRoutes } =
 
 /**
  * @param {string[]} journeyCaseSources
+ * @param {Partial<import('../src/services/permissions.js').Capabilities>} [permissions]
  * @returns {import('../src/setup/register-routes.js').AppContext}
  */
-function makeContext(journeyCaseSources = ['complaints']) {
+function makeContext(journeyCaseSources = ['complaints'], permissions = {}) {
   return /** @type {any} */ ({
     client: {},
     saveQueue: {},
     chrome: {
       currentUser: { id: 'u1', displayName: 'A User' },
-      permissions: {},
+      permissions: makePermissions(permissions),
     },
     caseSources: [],
     journeyCaseSources,
@@ -83,6 +85,7 @@ test('registerRoutes: registers the complete public route contract, in order', (
     '#/journey-cases',
     '#/roadmap',
     '#/my-team',
+    '#/search',
   ]);
 });
 
@@ -213,10 +216,33 @@ test('journey cases guard: bounces a non-Journey-Owner without mounting the page
   assert.equal(location.hash, '', 'does not push a history entry');
 });
 
-test('journey cases guard: no other route gates its mount', () => {
+test('route table: only the eligibility-gated routes guard their mount', () => {
   const gated = Object.entries(routeTable(makeContext()))
     .filter(([, entry]) => entry.guard)
     .map(([name]) => name);
 
-  assert.deepEqual(gated, ['journey-cases']);
+  assert.deepEqual(gated, ['journey-cases', 'search']);
+});
+
+test('search guard: admits a user whose capabilities permit a cross-Case-Type lookup', () => {
+  replacedUrls.length = 0;
+  const { guard } = routeTable(makeContext([], { canSearchCases: true }))[
+    'search'
+  ];
+
+  assert.equal(guard?.(), true);
+  assert.deepEqual(replacedUrls, [], 'an eligible user is not bounced');
+});
+
+test('search guard: bounces a user without the capability, without mounting the page', () => {
+  replacedUrls.length = 0;
+  const { guard } = routeTable(makeContext([], { canSearchCases: false }))[
+    'search'
+  ];
+
+  assert.equal(guard?.(), false);
+  // Replaces rather than pushes, for the same reason the Journey Cases guard
+  // does: Back must not return the user to the route that just bounced them.
+  assert.deepEqual(replacedUrls, ['/SitePages/app.aspx#/']);
+  assert.equal(location.hash, '', 'does not push a history entry');
 });

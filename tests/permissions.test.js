@@ -84,6 +84,29 @@ test('resolveCapabilities: Controls group → isControls=true', () => {
   assert.equal(caps.isVisitor, false);
 });
 
+test('resolveCapabilities: only Controls may search across every Case Type', () => {
+  assert.equal(
+    resolveCapabilities(['Controls'], sampleConfig).canSearchCases,
+    true
+  );
+  for (const groups of [
+    ['Reviewers'],
+    ['Advisers'],
+    ['Reviewer Managers'],
+    ['ResponsibleParty-Managers'],
+    ['CaseTypeOwner - Example Review'],
+    ['JourneyOwner - Example Review'],
+    ['CORA Owner Delegates'],
+    [],
+  ]) {
+    assert.equal(
+      resolveCapabilities(groups, sampleConfig).canSearchCases,
+      false,
+      `${groups.join(', ') || 'no groups'} must not reach cross-Case-Type search`
+    );
+  }
+});
+
 test('resolveCapabilities: CaseTypeOwner - <type> → owned slug, not a reviewer', () => {
   const caps = resolveCapabilities(
     ['CaseTypeOwner - Example Review'],

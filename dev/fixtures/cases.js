@@ -629,4 +629,39 @@ export const cases = [
     assignedAt: _twentyDaysAgo.toISOString(),
     etag: 'etag-ac-re1',
   },
+
+  // Search demo rows. Three references share the `CR-20` prefix and one does
+  // not, so an anchored prefix filter visibly separates them; their reportable
+  // dates are spread across the last three weeks so a date window narrows
+  // further rather than matching all or nothing.
+  ...[
+    { id: 'cr-2001', title: 'CR-2001', reportableAt: _twentyDaysAgo },
+    { id: 'cr-2002', title: 'CR-2002', reportableAt: _nineDaysAgo },
+    { id: 'cr-2003', title: 'CR-2003', reportableAt: _fourDaysAgo },
+    { id: 'xr-2001', title: 'XR-2001', reportableAt: _yesterday },
+  ].map(
+    (demo) =>
+      /** @type {CaseRow} */ ({
+        id: demo.id,
+        caseType: 'complaints',
+        title: demo.title,
+        status: 'Actions In Progress',
+        assignedReviewer: 'user-reviewer',
+        responsibleParty: 'user-agent-a',
+        responsiblePartyDisplayName: 'Frankie Agent',
+        // Past the reportable milestone, so the catalogue is answered and the
+        // Outcome frozen, as it is on every other reportable fixture row.
+        answers: outcomeAnswers('Good'),
+        conversation: [],
+        notes: '',
+        completedAt: null,
+        dueDate: _nextWeek.toISOString(),
+        reportableAt: demo.reportableAt.toISOString(),
+        outcomeAtCompletion: 'good',
+        hadRemediation: false,
+        created: demo.reportableAt.toISOString(),
+        assignedAt: demo.reportableAt.toISOString(),
+        etag: `etag-${demo.id}`,
+      })
+  ),
 ];

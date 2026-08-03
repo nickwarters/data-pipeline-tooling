@@ -412,6 +412,63 @@ test('HttpSharePointClient: listCases with a CompletedAt window leads with the i
   );
 });
 
+// --- Case search: the ReportableAt window and the Title prefix ---
+
+test('HttpSharePointClient: a Case search leads with the ReportableAt window and matches Title by anchored prefix', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(JSON.stringify({ value: [] }), { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  await client.listCases(
+    {
+      titlePrefix: "O'Brien",
+      reportableAfter: '2026-07-02T00:00:00.000Z',
+      reportableBefore: '2026-07-03T00:00:00.000Z',
+      status: 'In-progress',
+    },
+    { listName: 'Cases-ExampleReview' }
+  );
+
+  const url = decodeURIComponent(calls[0].url);
+  assert.ok(
+    url.includes("ReportableAt ge '2026-07-02T00:00:00.000Z'"),
+    'inclusive lower bound'
+  );
+  assert.ok(
+    url.includes("ReportableAt lt '2026-07-03T00:00:00.000Z'"),
+    'exclusive upper bound'
+  );
+  // An apostrophe in a Case Reference is doubled, as it is in every other
+  // string literal the client emits — an unescaped one would end the literal
+  // early and make the rest of the reference a syntax error.
+  assert.ok(
+    url.includes("startswith(Title,'O''Brien')"),
+    'the prefix is an anchored startswith with a doubled apostrophe'
+  );
+  assert.ok(
+    !url.includes('substringof'),
+    'an unanchored contains cannot be served from an index'
+  );
+
+  const filterExpr = url.slice(url.indexOf('$filter='));
+  assert.ok(
+    filterExpr.indexOf('ReportableAt') < filterExpr.indexOf('startswith('),
+    'the indexed date window narrows before the prefix match'
+  );
+  assert.ok(
+    filterExpr.indexOf('startswith(') < filterExpr.indexOf('Status eq'),
+    'both new predicates precede the far less selective Status'
+  );
+});
+
 test('HttpSharePointClient: countCases sums a bounded CompletedAt day-slice', async () => {
   const { fetch, calls } = makeFetch([
     {

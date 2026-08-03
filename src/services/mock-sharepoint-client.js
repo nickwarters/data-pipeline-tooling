@@ -221,6 +221,25 @@ export class MockSharePointClient {
         if (!c.completedAt || c.completedAt >= filter.completedBefore)
           return false;
       }
+      // ReportableAt window: the same inclusive/exclusive bounds as the
+      // CompletedAt one above.
+      if (filter.reportableAfter !== undefined) {
+        if (!c.reportableAt || c.reportableAt < filter.reportableAfter)
+          return false;
+      }
+      if (filter.reportableBefore !== undefined) {
+        if (!c.reportableAt || c.reportableAt >= filter.reportableBefore)
+          return false;
+      }
+      // Anchored and case-insensitive, matching SharePoint's own `startswith`
+      // — the dev loop must not answer a search differently from the server.
+      if (filter.titlePrefix) {
+        if (
+          !c.title ||
+          !c.title.toLowerCase().startsWith(filter.titlePrefix.toLowerCase())
+        )
+          return false;
+      }
       if (filter.anyOf !== undefined) {
         if (!filter.anyOf.some((sub) => this._predicate(sub)(c))) return false;
       }
@@ -242,6 +261,14 @@ export class MockSharePointClient {
       rows = rows.slice().sort((a, b) => {
         const av = a[key] ?? '';
         const bv = b[key] ?? '';
+        // `Id` is a counter carried as a string, so a lexicographic compare
+        // would rank '9' above '51' — the server sorts it as the number it is.
+        // Date keys are ISO, where the two orderings agree.
+        const an = Number(av);
+        const bn = Number(bv);
+        if (av !== '' && bv !== '' && !Number.isNaN(an) && !Number.isNaN(bn)) {
+          return (an - bn) * dir;
+        }
         if (av < bv) return -1 * dir;
         if (av > bv) return 1 * dir;
         return 0;

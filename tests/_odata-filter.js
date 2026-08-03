@@ -6,9 +6,10 @@
  * returned?" without a server.
  *
  * Deliberately NOT a general OData engine. It covers exactly the grammar the
- * client produces and nothing else: `and`-joined terms, where a term is either
- * an atomic `Column op value` comparison or a parenthesised group of `or`-ed
- * expressions, and a value is either a single-quoted string or a bare number.
+ * client produces and nothing else: `and`-joined terms, where a term is an
+ * atomic `Column op value` comparison, a `startswith(Column,'literal')` call, or
+ * a parenthesised group of `or`-ed expressions, and a value is either a
+ * single-quoted string or a bare number.
  * Anything outside that throws rather than guessing, so a query form that grows
  * a new shape is a loud failure here rather than a silently wrong answer.
  *
@@ -47,15 +48,28 @@ function splitTop(expr, separator) {
 }
 
 /**
- * Evaluate one atomic `Column op value` comparison against a row. A column the
- * row does not carry, or carries as null, matches nothing — SharePoint's answer
- * for an empty column.
+ * Evaluate one atomic comparison against a row — either a
+ * `startswith(Column,'literal')` call or a `Column op value` comparison. A
+ * column the row does not carry, or carries as null, matches nothing —
+ * SharePoint's answer for an empty column.
  *
  * @param {string} term
  * @param {Record<string, unknown>} item
  * @returns {boolean}
  */
 function matchesTerm(term, item) {
+  // SharePoint's `startswith` ignores case, which `String.prototype.startsWith`
+  // does not; the evaluator has to model the server, not JavaScript.
+  const prefix = /^startswith\((\w+),'(.*)'\)$/.exec(term);
+  if (prefix) {
+    const [, column, literal] = prefix;
+    const actual = item[column];
+    if (actual === undefined || actual === null) return false;
+    return String(actual)
+      .toLowerCase()
+      .startsWith(literal.replaceAll("''", "'").toLowerCase());
+  }
+
   const parsed = /^(\w+) (eq|lt|ge) (.+)$/.exec(term);
   if (!parsed) throw new Error(`Unsupported $filter term: ${term}`);
   const [, column, op, literal] = parsed;

@@ -79,6 +79,47 @@ test('AppNav: only Reviewer Managers see My Team', () => {
   }
 });
 
+test('AppNav: only Controls see Search, and Controls reach the rest of the app', () => {
+  const controls = AppNav({
+    capabilities: /** @type {any} */ (
+      capabilities({ isControls: true, canSearchCases: true })
+    ),
+    hash: '#/search',
+  }).node;
+  assert.ok(findLink(controls, '#/search'));
+  // Controls held no nav link at all before search existed, which would have
+  // left the one role the feature is for with no way to reach it.
+  assert.ok(findLink(controls, '#/dashboard'), 'Controls keep the Dashboard');
+
+  for (const role of [
+    { isReviewer: true },
+    { isAdviser: true },
+    { isReviewerManager: true },
+    { ownedCaseTypes: ['complaints'] },
+  ]) {
+    const node = AppNav({
+      capabilities: /** @type {any} */ (capabilities(role)),
+      hash: '#/',
+    }).node;
+    assert.equal(findLink(node, '#/search'), null);
+  }
+});
+
+test('updateActiveNavItems: Search stays active while its filters are in the hash', () => {
+  const { navItems } = AppNav({
+    capabilities: /** @type {any} */ (
+      capabilities({ isControls: true, canSearchCases: true })
+    ),
+    hash: '#/search',
+  });
+  const search = navItems.find((item) => item.href === '#/search')?.el;
+  assert.ok(search);
+  assert.equal(search.getAttribute('aria-current'), 'page');
+
+  updateActiveNavItems(navItems, '#/search?titlePrefix=CR-1');
+  assert.equal(search.getAttribute('aria-current'), 'page');
+});
+
 test('AppNav: Visitor sees no navigation links beyond the CORA brand', () => {
   const { node, navItems } = AppNav({
     capabilities: /** @type {any} */ (capabilities()),

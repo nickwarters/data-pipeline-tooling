@@ -1,15 +1,19 @@
 /**
- * Debounced people search: the plumbing both people pickers on the Case Review
- * page share — the per-key debounce timer, the trim-and-skip guard, and the
- * mount-lifetime check at resolution.
+ * Debounced people search: the plumbing every people picker shares — the
+ * per-key debounce timer, the trim-and-skip guard, and the mount-lifetime check
+ * at resolution.
+ *
+ * It carries no domain knowledge, and more than one page now wires a picker
+ * with it, so it belongs beside the other framework primitives rather than
+ * inside any one page's subsystem.
  *
  * It knows nothing about actions. Dispatching stays in the page, where the
  * action vocabulary is greppable next to the reducer that reads it.
  */
 
 /**
- * @typedef {import('../../sharepoint-client.js').SharePointClient} SharePointClient
- * @typedef {import('../../sharepoint-client.js').PersonResult} PersonResult
+ * @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient
+ * @typedef {import('../sharepoint-client.js').PersonResult} PersonResult
  */
 
 /** Long enough that a typist does not fire a request per keystroke. */

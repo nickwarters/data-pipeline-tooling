@@ -55,7 +55,15 @@ columns:
 
 `Status`, `DueDate`, `CompletedAt`, `AssignedReviewer`, `ResponsibleParty`,
 `AssignedReviewerManager`, `ResponsiblePartyManager`, `HasOpenAppeal`,
-`AwaitingResponsibleParty`, `Reopened`, `ReviewRequired`.
+`AwaitingResponsibleParty`, `Reopened`, `ReviewRequired`, `OnHold`, `Title`,
+`ReportableAt`.
+
+`Title` and `ReportableAt` were added to this set by [ADR-0045] (Case search): `Title`
+holds the Case Reference and is matched by anchored prefix, and `ReportableAt` is the
+date window a search leads with. The index-at-creation trap above applies to both without
+softening — a `Cases-{slug}` list already past the threshold cannot gain them, so
+indexing them is a **provisioning precondition** for search on an existing list, not a
+follow-up task.
 
 (Max 20 indexes/list; we are well under. Compound indexes are available if a future live
 query needs a two-column narrowing.)
@@ -140,6 +148,7 @@ re-derive report rules, or the two will drift.
 [ADR-0009]: ./0009-mock-first-dev-loop.md
 [ADR-0015]: ./0015-data-only-case-type-export-for-reporting.md
 [ADR-0030]: ./0030-action-centre-reason-flags-in-code-not-calculated-columns.md
+[ADR-0045]: ./0045-case-search-is-one-bounded-cross-list-lookup.md
 [issue #286]: https://github.com/nickwarters/case-review-frontend-framework/issues/286
 [issue #287]: https://github.com/nickwarters/case-review-frontend-framework/issues/287
 [issue #289]: https://github.com/nickwarters/case-review-frontend-framework/issues/289

@@ -9,8 +9,8 @@ Before doing any non-trivial work in this repo, read:
 1. **[CONTEXT.md](./CONTEXT.md)** — domain language. Use these terms exactly when discussing or coding (`Case Type`, `Question Definition`, `Applicable Question`, `Answer`, `Remediation Action`, `Reviewer`, `Responsible Party`, `Case Type Owner`, `Conversation`, `Outcome`).
 2. **[docs/guide/add-a-page.md](./docs/guide/add-a-page.md)** — the one-page
    authoring path: state → `h()`, actions, effects, route entry, and tests.
-3. **[docs/adr/](./docs/adr/)** — 44 architecture decisions, numbered
-   (`0001`–`0044`). Read the status before relying on an older decision, and do
+3. **[docs/adr/](./docs/adr/)** — 45 architecture decisions, numbered
+   (`0001`–`0045`). Read the status before relying on an older decision, and do
    not deviate from an accepted ADR without surfacing the deviation explicitly.
 
 ## Project overview
@@ -235,6 +235,8 @@ src/
                                 #   in-flight placeholders, one spelling of each
     html.js                     # h() plain-function view primitive
     navigate.js                 # navigateTo/redirectTo: the only writers of location.hash (#519)
+    people-search.js            # debounced, mount-lifetime-checked directory search shared by every
+                                #   people picker (was pages/cora-case-review/)
     question-order.js           # generic question/category ordering helpers (was question-bank/)
     response-options.js         # single source of truth for response options + the NA_VALUE literal (#391)
     route-error-panel.js        # shared route-failure panel, used by router.js and core/store-route.js (#437)
@@ -283,8 +285,6 @@ src/
       section-panels.js        # SECTION_PANELS: one panel renderer per tab Section, keyed by id (#512)
       details-view.js          # config-driven, read-only Case Details pure view (mirrors current Section behaviour)
       case-actions.js          # Answer dispatch -> unchanged SaveQueue; save status dispatch bridge
-      people-search-effects.js # the debounce/trim/mount-lifetime plumbing both people pickers share;
-                               #   dispatching stays in the page (#622)
       group-outcome-view.js    # pure Group Outcome control, the Questions one Group Outcome writes to,
                                #   and the wording it displays (derived from the answered Questions)
       question-panel-view.js   # CASE-2 group-scoped Questions view with memoised cards
@@ -302,6 +302,8 @@ src/
       appeal-review-view.js    # CASE-6 pure Controls resolution form and history view
       amend-outcome-view.js    # CASE-6 pure ADR-0026 Amend Outcome form and record view
     cora-conversation-view.js
+    cora-case-search.js           # store-driven #/search slice: URL-held filters, one bounded
+                                  #   cross-Case-Type lookup, standard Case columns
     cora-dashboard.js             # store-driven dashboard slice + descriptor-selected panels (GRID-3/4)
     dashboard/
       action-centre-view.js       # pure reason-descriptor view + bounded load actions (ADR-0030 flags unchanged)
@@ -349,6 +351,8 @@ src/
     abortable-client.js           # binds a mount-lifetime AbortSignal to a client's Case reads; writes untouched (#545)
     account-name.js
     across-sources.js             # multi-list fan-out: one scoped request per Case source, merged (ADR-0022)
+    case-search.js                # the bounded cross-list Case lookup: one over-fetched window per
+                                  #   list, merged, with saturation reported rather than paged
     action-centre-model.js
     assignment-stamp.js           # the write-path rule pairing assignedAt with assignedReviewer, so
                                   #   no caller can set a Reviewer without stamping when (#633)

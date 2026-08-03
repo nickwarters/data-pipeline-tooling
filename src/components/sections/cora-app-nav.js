@@ -58,10 +58,19 @@ export function AppNav({ capabilities, hash }) {
 
   const itemsEl = h('div', { className: 'cora-app-nav-items', role: 'list' });
 
-  const { isReviewer, ownedCaseTypes, isAdviser, isReviewerManager } =
-    capabilities;
+  const {
+    isReviewer,
+    ownedCaseTypes,
+    isAdviser,
+    isReviewerManager,
+    isControls,
+    canSearchCases,
+  } = capabilities;
   const isOwner = ownedCaseTypes.length > 0;
-  const hasAnyRole = isReviewer || isAdviser || isReviewerManager || isOwner;
+  // Controls belong here too: without them a Controls-only account reached no
+  // nav item at all, not even the Dashboard.
+  const hasAnyRole =
+    isReviewer || isAdviser || isReviewerManager || isOwner || isControls;
 
   if (hasAnyRole) {
     itemsEl.appendChild(AppNavItem('Dashboard', '#/dashboard', navItems));
@@ -74,6 +83,9 @@ export function AppNav({ capabilities, hash }) {
   }
   if (isReviewerManager) {
     itemsEl.appendChild(AppNavItem('My Team', '#/my-team', navItems));
+  }
+  if (canSearchCases) {
+    itemsEl.appendChild(AppNavItem('Search', '#/search', navItems));
   }
 
   const node = h('div', { className: 'cora-app-nav-bar' }, brand, itemsEl);

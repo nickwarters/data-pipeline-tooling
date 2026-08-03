@@ -23,6 +23,11 @@ export function homeView(state) {
   if (capabilities.isReviewer) {
     sections.push(roleSection('Reviewer', '#/dashboard'));
   }
+  // Controls landed on an empty page before search existed: they are not a
+  // Visitor, and nothing else here was theirs.
+  if (capabilities.canSearchCases) {
+    sections.push(roleSection('Controls', '#/search'));
+  }
   if (capabilities.isAdviser) {
     sections.push(roleSection('Responsible Party', '#/my-cases'));
   }

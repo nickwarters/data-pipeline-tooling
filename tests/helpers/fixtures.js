@@ -78,6 +78,7 @@ export function makePermissions(overrides = {}) {
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
+    canSearchCases: false,
     isVisitor: false,
     ...overrides,
   };

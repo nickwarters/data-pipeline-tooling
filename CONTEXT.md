@@ -14,6 +14,22 @@ _Avoid_: Category, template
 One concrete review job: an instance of a **Case Type** that a **Reviewer** works through. Has details, **Answers**, a **Conversation**, an **Outcome**, and notes.
 _Avoid_: Review (ambiguous — "review" is the activity, not the thing)
 
+**Case Reference**:
+The **Case**'s human-facing identifier — what a person quotes when they ask where a Case
+is. Held in the `Title` column, which exists for nothing else, and searchable **by prefix
+only**: an unanchored contains cannot be served from a column index, so the app never
+offers one.
+
+Uniqueness is scoped to the **Case Type**: each Case Type has its own list and its own
+numbering, so two Case Types may hold the same Reference and a Reference on its own does
+not identify a Case across the app — the pair (Case Type, Reference) does. _This is an
+assumption to confirm with the business, not an observed rule._
+
+The Reference **is** the `Title`. Where a Case row carries no Title the Case tables fall
+back to showing its `id`, which is a display-only degradation and not a second kind of
+Reference: a Case shown by `id` has no Reference, and the prefix filter can never find it.
+_Avoid_: Case number, ID (the `id` is the SharePoint row key, not the Reference)
+
 **In-progress Case**:
 A **Case** with one or more applicable unanswered **Question Definitions**. Cannot be marked complete.
 
@@ -398,4 +414,5 @@ _Avoid_: Overridden Outcome, Amended Outcome (that is the _record_; Current Outc
 - "Outcome" was nearly modeled as a stored entity — resolved as a _computed_ property of a Case.
 - "Reviewer" was being used for both group membership and per-Case assignment — resolved as **Reviewer** (group) vs **Assigned Reviewer** (per-Case role).
 - "Visitor" is _derived_ (absence of all named-group memberships), not a SharePoint group. Capability flags are UX-only and the real boundary is SharePoint list ACLs.
+- **Case Reference** uniqueness is assumed to be per **Case Type** (one list, one numbering sequence each) and needs confirming with the business. If References turn out to be globally unique, a Reference alone identifies a Case and search could resolve straight to it.
 - "Question Bank" vs "catalogue" — both name a Case Type's set of **Question Definitions**. Resolved: **Question Bank** is the _authoring_ form (edited in `#/question-bank`, compiled to a module + reporting export); _catalogue_ is the _runtime_ form (the same questions joined to **Answers** to compute applicability). One concept, two lifecycle stages.

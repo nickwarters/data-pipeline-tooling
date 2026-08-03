@@ -94,7 +94,9 @@ function toListItem(row) {
     account ? (PERSON_IDS[account] ?? null) : null;
   return {
     Id: row.id,
+    Title: row.title,
     Status: row.status,
+    ReportableAt: row.reportableAt ?? null,
     AssignedReviewerId: personId(row.assignedReviewer),
     ResponsiblePartyId: personId(row.responsibleParty),
     AssignedReviewerManagerId: personId(row.assignedReviewerManager),
@@ -168,6 +170,23 @@ const COMPLETED_ROWS = [
   caseRow('done-mid', { status: 'Completed', completedAt: MID_PAST }),
   caseRow('done-late', { status: 'Completed', completedAt: LATE_PAST }),
   caseRow('never-done'),
+];
+
+const REPORTABLE_ROWS = [
+  caseRow('rep-early', { reportableAt: LONG_PAST }),
+  caseRow('rep-mid', { reportableAt: MID_PAST }),
+  caseRow('rep-late', { reportableAt: LATE_PAST }),
+  caseRow('never-reportable'),
+];
+
+// Titles sharing partial prefixes, so a prefix filter genuinely separates them
+// rather than passing on any anchored match. `cr-109` pins the case-insensitive
+// answer: SharePoint's `startswith` ignores case, so both engines must too.
+const TITLE_ROWS = [
+  caseRow('CR-100'),
+  caseRow('CR-101'),
+  caseRow('XX-100'),
+  caseRow('mixed-case', { title: 'cr-109' }),
 ];
 
 /** @type {Array<{ name: string, filter: ListCasesFilter, rows: CaseRow[], expected: string[] }>} */
@@ -278,6 +297,24 @@ const SCENARIOS = [
     expected: ['done-early', 'done-mid'],
   },
   {
+    name: 'reportableAfter',
+    filter: { reportableAfter: MID_PAST },
+    rows: REPORTABLE_ROWS,
+    expected: ['rep-mid', 'rep-late'],
+  },
+  {
+    name: 'reportableBefore',
+    filter: { reportableBefore: LATE_PAST },
+    rows: REPORTABLE_ROWS,
+    expected: ['rep-early', 'rep-mid'],
+  },
+  {
+    name: 'titlePrefix',
+    filter: { titlePrefix: 'CR-1' },
+    rows: TITLE_ROWS,
+    expected: ['CR-100', 'CR-101', 'mixed-case'],
+  },
+  {
     name: 'anyOf',
     filter: { anyOf: [{ onHold: true }, { reopened: true }] },
     rows: [
@@ -350,6 +387,20 @@ test('$filter evaluator: parentheses override the default precedence', () => {
   const expr = "(Status eq 'a' or Status eq 'b') and OnHold eq 1";
   assert.equal(matchesFilter(expr, { Status: 'a', OnHold: 0 }), false);
   assert.equal(matchesFilter(expr, { Status: 'a', OnHold: 1 }), true);
+});
+
+test('$filter evaluator: startswith is anchored, case-insensitive, and empty-column-blind', () => {
+  const expr = "startswith(Title,'CR-1')";
+  assert.equal(matchesFilter(expr, { Title: 'CR-100' }), true);
+  assert.equal(matchesFilter(expr, { Title: 'cr-100' }), true);
+  assert.equal(matchesFilter(expr, { Title: 'XCR-100' }), false);
+  assert.equal(matchesFilter(expr, { Title: null }), false);
+  assert.equal(matchesFilter(expr, {}), false);
+  // A quote in the literal arrives doubled, as the client escapes it.
+  assert.equal(
+    matchesFilter("startswith(Title,'O''B')", { Title: "O'Brien" }),
+    true
+  );
 });
 
 // --- every filter field both engines handle has a scenario ---
