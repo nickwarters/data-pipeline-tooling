@@ -43,6 +43,20 @@ export function isOverdue(caseRow, now = new Date()) {
 }
 
 /**
+ * The Case statuses in which the remediation clock is still running. An
+ * allow-list for the same reason as `OVERDUE_STATUSES`: a status added later
+ * has to be considered rather than silently inheriting the clock. It also means
+ * a row with an empty or unrecognised status is not overdue, where the old
+ * "anything but Completed" test would have said it was.
+ *
+ * @type {readonly CaseStatus[]}
+ */
+const REMEDIATION_CLOCK_STATUSES = Object.freeze([
+  CASE_STATUS.IN_PROGRESS,
+  CASE_STATUS.ACTIONS_IN_PROGRESS,
+]);
+
+/**
  * Returns true when a Case is past the given remediation deadline and the
  * remediation is still outstanding. An absent deadline is never overdue, which
  * is what makes a Case with no Remediation Due Date read as having no
@@ -59,7 +73,7 @@ export function isOverdue(caseRow, now = new Date()) {
  * @returns {boolean}
  */
 export function isRemediationOverdue(caseRow, deadline, now = new Date()) {
-  if (caseRow.status === CASE_STATUS.COMPLETED) return false;
+  if (!REMEDIATION_CLOCK_STATUSES.includes(caseRow.status)) return false;
   if (!deadline) return false;
   return new Date(deadline) < now;
 }

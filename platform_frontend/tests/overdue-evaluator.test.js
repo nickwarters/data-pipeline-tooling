@@ -100,6 +100,14 @@ test('isRemediationOverdue: Completed case past the deadline → false', () => {
   assert.strictEqual(isRemediationOverdue(c, PAST.toISOString(), NOW), false);
 });
 
+test('isRemediationOverdue: voided case past the deadline → false', () => {
+  const c = {
+    ...baseCase(),
+    status: /** @type {'Void'} */ ('Void'),
+  };
+  assert.strictEqual(isRemediationOverdue(c, PAST.toISOString(), NOW), false);
+});
+
 test('isRemediationOverdue: null deadline → false', () => {
   assert.strictEqual(isRemediationOverdue(baseCase(), null, NOW), false);
 });

@@ -238,11 +238,13 @@ test('CaseLoader.load() stores null exportHash when getExportHash returns null',
 
 /** Minimal stub client for Step 4 tests. */
 function makeStep4Client({
-  status = /** @type {'In-progress'|'Actions In Progress'|'Completed'} */ (
+  status = /** @type {import('../src/lib/case-statuses.js').CaseStatus} */ (
     'In-progress'
   ),
   questionBankVersion = /** @type {string|undefined} */ (undefined),
+  reportableAt = /** @type {string|undefined} */ (undefined),
   versionedExport = /** @type {any} */ (null),
+  versionedExportCalls = /** @type {any[]} */ ([]),
 } = {}) {
   return /** @type {any} */ ({
     getCase: async () =>
@@ -255,12 +257,20 @@ function makeStep4Client({
         responsibleParty: 'u2',
         answers: { 'q-welcome': { value: 'Yes' } },
         completedAt: status === 'Completed' ? '2026-01-01T00:00:00Z' : null,
+        reportableAt,
         questionBankVersion,
         etag: 'e1',
       }),
     getCurrentUser: async () => ({ id: 'u1', displayName: 'User 1' }),
     getExportHash: async () => null,
-    getVersionedExport: async () => versionedExport,
+    /**
+     * @param {string} slug
+     * @param {string} hash
+     */
+    getVersionedExport: async (slug, hash) => {
+      versionedExportCalls.push([slug, hash]);
+      return versionedExport;
+    },
     resolveUsers: async () => ({}),
   });
 }
@@ -350,6 +360,62 @@ test('CaseLoader.load(): Actions In Progress Case freezes on the versioned catal
     null,
     'snapshot resolved, no warning'
   );
+});
+
+test('CaseLoader.load(): a Case voided after the reportable milestone keeps its stamped bank', async () => {
+  // Void is terminal but not reportable, so asking the reportable predicate
+  // would drop a stamped snapshot back onto the live bank and re-render frozen
+  // Answers against Questions that have since moved.
+  /** @type {any[]} */
+  const versionedExportCalls = [];
+  const loader = new CaseLoader({
+    client: makeStep4Client({
+      status: 'Void',
+      reportableAt: '2026-01-01T00:00:00Z',
+      questionBankVersion: 'sha256:abc123',
+      versionedExport: {
+        slug: 'example-review',
+        questions: versionedCatalogue,
+      },
+      versionedExportCalls,
+    }),
+    saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
+    caseId: 'c1',
+    currentUserId: 'u1',
+    capabilities: caps(),
+  });
+
+  await loader.load();
+
+  assert.deepEqual(versionedExportCalls, [['example-review', 'sha256:abc123']]);
+  assert.deepEqual(
+    loader.catalogue.map((q) => q.id),
+    ['q-old']
+  );
+});
+
+test('CaseLoader.load(): a Case voided before the reportable milestone reads the live bank', async () => {
+  /** @type {any[]} */
+  const versionedExportCalls = [];
+  const loader = new CaseLoader({
+    client: makeStep4Client({
+      status: 'Void',
+      questionBankVersion: 'sha256:abc123',
+      versionedExport: {
+        slug: 'example-review',
+        questions: versionedCatalogue,
+      },
+      versionedExportCalls,
+    }),
+    saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
+    caseId: 'c1',
+    currentUserId: 'u1',
+    capabilities: caps(),
+  });
+
+  await loader.load();
+
+  assert.deepEqual(versionedExportCalls, [], 'nothing was ever frozen');
 });
 
 test('CaseLoader.load(): versioned catalogue mapping normalises null optional fields to undefined', async () => {

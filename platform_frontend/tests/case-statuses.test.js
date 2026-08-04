@@ -12,6 +12,7 @@ test('CASE_STATUS exposes the exact persisted Case lifecycle status values', () 
   assert.equal(CASE_STATUS.IN_PROGRESS, 'In-progress');
   assert.equal(CASE_STATUS.ACTIONS_IN_PROGRESS, 'Actions In Progress');
   assert.equal(CASE_STATUS.COMPLETED, 'Completed');
+  assert.equal(CASE_STATUS.VOID, 'Void');
 });
 
 test('CASE_STATUS is frozen (values cannot be reassigned)', () => {
@@ -22,11 +23,12 @@ test('CASE_STATUS is frozen (values cannot be reassigned)', () => {
   assert.equal(CASE_STATUS.IN_PROGRESS, 'In-progress');
 });
 
-test('CASE_STATUS has exactly the three case-lifecycle statuses (no accidental extra keys)', () => {
+test('CASE_STATUS has exactly the four case-lifecycle statuses (no accidental extra keys)', () => {
   assert.deepEqual(Object.keys(CASE_STATUS).sort(), [
     'ACTIONS_IN_PROGRESS',
     'COMPLETED',
     'IN_PROGRESS',
+    'VOID',
   ]);
 });
 
@@ -83,7 +85,8 @@ function stripComments(source) {
 }
 
 test('contract: no raw case-lifecycle status literals in src/ outside lib/case-statuses.js', () => {
-  const forbidden = /['"`](In-progress|Actions In Progress|Completed)['"`]/;
+  const forbidden =
+    /['"`](In-progress|Actions In Progress|Completed|Void)['"`]/;
   /** @type {string[]} */
   const violations = [];
   for (const file of jsFilesUnder(SRC_ROOT)) {
