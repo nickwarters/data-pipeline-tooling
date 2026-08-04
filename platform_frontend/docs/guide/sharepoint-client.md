@@ -52,7 +52,7 @@ The mock client operates entirely in memory. `patchCase` writes to its internal 
  * id: string,
  * caseType: string,
  * title: string,
- * status: 'In-progress' | 'Actions In Progress' | 'Completed',
+ * status: 'In-progress' | 'Actions In Progress' | 'Completed' | 'Void',
  * assignedReviewer: string,
  * assignedAt?: string | null,
  * responsibleParty: string,
@@ -62,6 +62,9 @@ The mock client operates entirely in memory. `patchCase` writes to its internal 
  * reportableAt?: string | null,
  * remediationDueDate?: string | null,
  * completedAt: string | null,
+ * voidReason?: string | null,
+ * voidedAt?: string | null,
+ * voidedBy?: string | null,
  * amendedOutcome?: AmendedOutcome | null,
  * etag: string
  * }} CaseRow
