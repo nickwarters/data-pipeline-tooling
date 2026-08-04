@@ -566,7 +566,7 @@
   overflow-x: auto;
 }
 
-[data-cora-root] .cora-data-table .cora-my-team-total-row td {
+[data-cora-root] .cora-data-table .cora-workload-row--total td {
   background: var(--cora-color-surface-2);
   border-top: 2px solid var(--cora-color-border-strong);
   font-weight: var(--cora-font-weight-bold);
@@ -2355,6 +2355,12 @@
   color: var(--cora-color-surface);
   font-size: var(--cora-font-size-sm);
   text-transform: uppercase;
+}
+
+[data-cora-root] .cora-data-table .cora-void-volume-row--total td {
+  background: var(--cora-color-surface-2);
+  border-top: 2px solid var(--cora-color-border-strong);
+  font-weight: var(--cora-font-weight-bold);
 }
 
 /* ── Section progress sidebar ────────────────────────────────────────────── */
