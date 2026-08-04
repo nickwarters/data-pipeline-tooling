@@ -241,6 +241,9 @@ test('state: route state owns loading, save status, and selected tab under route
     activeTab: '',
     conversationHidden: true,
     completionPending: false,
+    voidPanelOpen: false,
+    voidReason: '',
+    voidPending: false,
     captureCollapsed: {},
     captureSearch: {},
     responsiblePartySearch: { query: '', people: [] },
@@ -1363,6 +1366,14 @@ test('case page reducer: every identity guard returns the same state reference',
     loaded,
     'an unchanged save status must not re-render'
   );
+  assert.strictEqual(
+    caseReviewReducer(loaded, {
+      type: 'case/void-pending',
+      pending: loaded.routes.caseReview.voidPending,
+    }),
+    loaded,
+    'an unchanged void flag must not re-render'
+  );
 
   assert.strictEqual(
     caseReviewReducer(loaded, { type: 'case/conversation-toggled' }),
@@ -1980,7 +1991,7 @@ test('action: completion folds the persisted transition into the store Case Row'
 
 test('action: the Send Actions transition folds into the store Case Row too', async () => {
   // The non-terminal half of the same path: sending Remediation Actions is not
-  // the end of the Case, yet it goes through `completeCase` and navigates away.
+  // the end of the Case, yet it goes through `closeCase` and navigates away.
   // A Case Type that kept the Reviewer in the Remediation loop would read a
   // pre-transition row on the very next render.
   const catalogue = [
@@ -2060,6 +2071,141 @@ test('action: the Send Actions transition folds into the store Case Row too', as
     stored.answers,
     answers,
     'the Answers on the row are untouched by the lifecycle patch'
+  );
+});
+
+// --- Voiding a Case ---
+
+/**
+ * A snapshot whose machine permits the void and stamps a fixed patch.
+ * @param {Partial<import('../src/sharepoint-client.js').CaseRow>} fields
+ */
+function voidableSnapshot(fields) {
+  return {
+    ...snapshot(),
+    machine: /** @type {any} */ ({
+      canVoid: true,
+      catalogue: [],
+      transitionToVoid: (/** @type {string} */ reasonKey) => ({
+        ...fields,
+        voidReason: reasonKey,
+      }),
+    }),
+  };
+}
+
+test('void: the panel toggles open and closed, forgetting a chosen reason on close', () => {
+  const loaded = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: voidableSnapshot({}),
+  });
+
+  const opened = caseReviewReducer(loaded, {
+    type: 'case/void-panel-toggled',
+  });
+  assert.equal(opened.routes.caseReview.voidPanelOpen, true);
+
+  const chosen = caseReviewReducer(opened, {
+    type: 'case/void-reason-selected',
+    reasonKey: 'duplicate',
+  });
+  assert.equal(chosen.routes.caseReview.voidReason, 'duplicate');
+
+  const closed = caseReviewReducer(chosen, {
+    type: 'case/void-panel-toggled',
+  });
+  assert.equal(closed.routes.caseReview.voidPanelOpen, false);
+  assert.equal(
+    closed.routes.caseReview.voidReason,
+    '',
+    'a reason chosen and then abandoned does not survive the panel'
+  );
+});
+
+test('action: voiding a Case PATCHes the transition and folds only those fields into the store Case Row', async () => {
+  /** @type {Partial<import('../src/sharepoint-client.js').CaseRow>} */
+  const transitionPatch = {
+    status: 'Void',
+    voidedAt: '2026-07-19T12:00:00Z',
+    voidedBy: 'u1',
+    onHold: false,
+    placedOnHoldAt: null,
+  };
+  const loadedSnapshot = voidableSnapshot(transitionPatch);
+  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: loadedSnapshot,
+  });
+  /** @type {any} */
+  let persistedFields = null;
+  const view = renderShippedState(state, {
+    saveQueue: {
+      async flushCase() {
+        return true;
+      },
+      getEtag: () => 'e1',
+    },
+    client: {
+      async patchCase(/** @type {string} */ _id, /** @type {any} */ fields) {
+        persistedFields = fields;
+        return { ok: true, status: 200 };
+      },
+    },
+  });
+
+  fireEvent(
+    getByRole(view.container, 'button', { name: 'Void Case…' }),
+    'click'
+  );
+  const select = getByRole(view.container, 'combobox', {
+    name: 'Reason for voiding',
+  });
+  select.value = 'raised-in-error';
+  fireEvent(select, 'change');
+  assert.equal(view.state.routes.caseReview.voidReason, 'raised-in-error');
+
+  fireEvent(
+    getByRole(view.container, 'button', { name: 'Void Case' }),
+    'click'
+  );
+  await flush();
+
+  assert.equal(persistedFields?.status, 'Void');
+  assert.equal(persistedFields?.voidReason, 'raised-in-error');
+  const stored = view.state.routes.caseReview.snapshot.caseRow;
+  assert.equal(stored.status, 'Void');
+  assert.equal(stored.voidReason, 'raised-in-error');
+  assert.equal(stored.id, caseRow.id, 'the rest of the row is carried through');
+  assert.equal(view.state.routes.caseReview.voidPending, false);
+  assert.equal(location.hash, '#/dashboard');
+});
+
+test('view: a voided Case names the reason, who voided it and when', () => {
+  const voided = {
+    ...snapshot(),
+    caseRow: {
+      ...caseRow,
+      status: 'Void',
+      voidReason: 'duplicate',
+      voidedBy: 'u7',
+      voidedAt: '2026-07-19T12:00:00Z',
+    },
+  };
+  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: voided,
+  });
+  const view = renderShippedState(state);
+
+  const banner = getByTag(view.container, 'header').textContent;
+  assert.match(banner, /Voided/);
+  assert.match(banner, /Duplicate of another Case/);
+  assert.match(banner, /u7/);
+  assert.match(banner, /2026-07-19/);
+  assert.equal(
+    queryAllByRole(view.container, 'button', { name: 'Void Case…' }).length,
+    0,
+    'a Case cannot be voided twice'
   );
 });
 
@@ -2721,7 +2867,7 @@ test('every persistence path addresses the loaded Case id, not the route param t
   );
 
   // 2. Completion: the SaveQueue flush, the ETag read and the lifecycle PATCH.
-  // Order-free: whether `completeCase` flushes before it PATCHes is its own
+  // Order-free: whether `closeCase` flushes before it PATCHes is its own
   // business, not this test's subject.
   fireEvent(
     getByRole(view.container, 'button', { name: 'Complete Case' }),

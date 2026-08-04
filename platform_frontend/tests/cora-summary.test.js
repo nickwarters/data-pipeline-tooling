@@ -138,6 +138,33 @@ test('summaryView shows no marker for an amendment with no frozen snapshot to di
   assert.doesNotMatch(root.textContent, /previously/);
 });
 
+test('summaryView keeps the frozen Outcome of a Case voided after Send Actions', () => {
+  const root = rootOf(
+    render({
+      computeOutcome: () => ({ outcome: 'pass' }),
+      caseRow: makeCase({
+        status: 'Void',
+        reportableAt: '2026-06-01T00:00:00Z',
+        outcomeAtCompletion: 'fail',
+      }),
+    })
+  );
+  assert.match(root.textContent, /Fail/);
+});
+
+test('summaryView shows no Outcome at all for a Case voided before Send Actions', () => {
+  // Voiding stamps no Outcome, so computing one live would put a result on a
+  // half-answered Case that was deliberately never concluded.
+  const root = rootOf(
+    render({
+      computeOutcome: () => ({ outcome: 'fail' }),
+      caseRow: makeCase({ status: 'Void' }),
+    })
+  );
+  assert.equal(findByClass(root, 'cora-outcome'), null);
+  assert.doesNotMatch(root.textContent, /Fail/);
+});
+
 test('summaryView falls back to live outcome when no snapshot exists', () => {
   const root = rootOf(
     render({

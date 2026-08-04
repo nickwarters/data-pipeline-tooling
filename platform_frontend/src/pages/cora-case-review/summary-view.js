@@ -8,7 +8,8 @@ import {
   REMEDIATION_STATUS_LABELS,
   remediationRows,
 } from '../../evaluators/remediation-status.js';
-import { isReportable } from '../../lib/case-machine.js';
+import { reachedReportable } from '../../services/section-access.js';
+import { CASE_STATUS } from '../../lib/case-statuses.js';
 import { currentOutcome } from '../../evaluators/amended-outcome.js';
 import { DEFAULT_SECTION_LABELS } from '../../lib/section-labels.js';
 import { CaptureGroups } from '../../components/sections/cora-capture-groups.js';
@@ -49,9 +50,14 @@ export function summaryView(props) {
   // read the frozen value from reportable on — not only once Completed. Once
   // reportable, the block shows the **Current Outcome**: the case-level
   // Amended Outcome when Controls has amended it, otherwise the frozen snapshot.
-  const reportable = isReportable(props.caseRow?.status ?? '');
+  //
+  // A voided Case that never got there is the third case: voiding stamps no
+  // Outcome, so computing one live would put a result on a Case that was
+  // deliberately never concluded. It shows no Outcome block at all.
+  const frozen = props.caseRow ? reachedReportable(props.caseRow) : false;
   const current =
-    reportable && props.caseRow ? currentOutcome(props.caseRow) : undefined;
+    frozen && props.caseRow ? currentOutcome(props.caseRow) : undefined;
+  const neverConcluded = !frozen && props.caseRow?.status === CASE_STATUS.VOID;
   // The Amended Outcome record is the fact that an amendment happened; the
   // reporting columns are only a projection of it. When one exists, the frozen
   // snapshot is the value it displaced, and the Outcome block is told explicitly
@@ -59,27 +65,31 @@ export function summaryView(props) {
   const displacedOutcome = props.caseRow?.amendedOutcome
     ? props.caseRow.outcomeAtCompletion
     : undefined;
-  const outcomeNodes = current
-    ? Outcome({
-        computeOutcome: () => ({ outcome: current }),
-        answers: {},
-        allAnswered: true,
-        outcomeOptions: props.outcomeOptions,
-        displacedOutcome,
-      })
-    : Outcome({
-        computeOutcome: props.computeOutcome,
-        answers: props.answers,
-        allAnswered: props.allAnswered,
-        outcomeOptions: props.outcomeOptions,
-      });
+  const outcomeNodes = neverConcluded
+    ? null
+    : current
+      ? Outcome({
+          computeOutcome: () => ({ outcome: current }),
+          answers: {},
+          allAnswered: true,
+          outcomeOptions: props.outcomeOptions,
+          displacedOutcome,
+        })
+      : Outcome({
+          computeOutcome: props.computeOutcome,
+          answers: props.answers,
+          allAnswered: props.allAnswered,
+          outcomeOptions: props.outcomeOptions,
+        });
+
+  /** @type {Node[]} */
+  const children = [heading];
   // A CSS hook for the `.cora-summary > .cora-outcome` contract, nothing more.
   // See the note at the top of section-panels.js for why it is a class rather
   // than a `cora-outcome` element.
-  const outcome = h('div', { className: 'cora-outcome' }, outcomeNodes);
-
-  /** @type {Node[]} */
-  const children = [heading, outcome];
+  if (outcomeNodes) {
+    children.push(h('div', { className: 'cora-outcome' }, outcomeNodes));
+  }
 
   if (props.caseRow) {
     children.push(renderKeyDates(props.caseRow));

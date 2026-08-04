@@ -30,10 +30,12 @@ import {
 } from './cora-case-review/answer-actions.js';
 import { SECTION_PANELS } from './cora-case-review/section-panels.js';
 import {
-  completeCase,
+  closeCase,
   completionControl,
   completionPatch,
 } from './cora-case-review/completion-actions.js';
+import { voidControl, voidPatch } from './cora-case-review/void-actions.js';
+import { voidReasonLabel } from '../lib/void-reasons.js';
 
 /** @typedef {import('../services/save-queue.js').SaveStatus} SaveStatus */
 
@@ -72,6 +74,9 @@ import {
  * @property {SaveStatus} saveStatus
  * @property {boolean} conversationHidden
  * @property {boolean} completionPending
+ * @property {boolean} voidPanelOpen
+ * @property {string} voidReason The Void Reason key chosen in the open panel.
+ * @property {boolean} voidPending
  * @property {Record<string, Map<string, boolean>>} captureCollapsed
  * @property {Record<string, Record<string, { query: string, people: import('../sharepoint-client.js').PersonResult[] }>>} captureSearch
  *   Per failed Answer, per `person` Issue Capture Field: the open people search.
@@ -102,6 +107,9 @@ export function createInitialCaseReviewState(chrome) {
         saveStatus: 'saved',
         conversationHidden: true,
         completionPending: false,
+        voidPanelOpen: false,
+        voidReason: '',
+        voidPending: false,
         captureCollapsed: {},
         captureSearch: {},
         responsiblePartySearch: { query: '', people: [] },
@@ -378,6 +386,22 @@ export function caseReviewReducer(state, action) {
       completionPending: action.pending,
     });
   }
+  if (action.type === 'case/void-panel-toggled') {
+    // Closing forgets the reason: an abandoned panel must not leave a terminal
+    // choice armed behind it.
+    return patchRoute(state, 'caseReview', {
+      voidPanelOpen: !route.voidPanelOpen,
+      voidReason: '',
+    });
+  }
+  if (action.type === 'case/void-reason-selected') {
+    return patchRoute(state, 'caseReview', { voidReason: action.reasonKey });
+  }
+  if (action.type === 'case/void-pending') {
+    // Identity guard: the pending flag is already what the effect reports.
+    if (action.pending === route.voidPending) return state;
+    return patchRoute(state, 'caseReview', { voidPending: action.pending });
+  }
   if (action.type === 'case/save-status-changed') {
     // Identity guard: SaveQueue re-reports the status it last reported.
     if (action.status === route.saveStatus) return state;
@@ -412,6 +436,29 @@ function versionWarningView(warning) {
       'The as-reviewed Question Bank for this Case could not be loaded. ' +
         'You are seeing the current Question Bank, which may differ from ' +
         'what was reviewed at the time.'
+    )
+  );
+}
+
+/**
+ * The terminal-state banner on a voided Case: what was decided, by whom and
+ * when. It stands in the page header rather than on one tab because it
+ * qualifies every Section — the Answers below it are frozen and there is no
+ * Outcome to read.
+ *
+ * @param {import('../sharepoint-client.js').CaseRow} caseRow
+ * @returns {HTMLElement}
+ */
+function voidBannerView(caseRow) {
+  return h(
+    'div',
+    { key: 'void-banner', className: 'cora-void-banner', role: 'status' },
+    h('span', { className: 'cora-void-pill' }, CASE_STATUS.VOID),
+    h('p', {}, voidReasonLabel(caseRow.voidReason)),
+    h(
+      'p',
+      {},
+      `Voided by ${caseRow.voidedBy ?? '—'} on ${caseRow.voidedAt ?? '—'}`
     )
   );
 }
@@ -794,6 +841,7 @@ export function createRouteSlice(params, context) {
             snapshot.sectionLabels.conversation.tab
           )
         : null,
+      caseRow.status === CASE_STATUS.VOID ? voidBannerView(caseRow) : null,
     ]);
 
     const tabs = visibleCaseTabs(snapshot);
@@ -903,12 +951,16 @@ export function createRouteSlice(params, context) {
       allAnswered: snapshot.allAnswered,
       captureGroups: config.captureGroups ?? [],
     });
-    tools.render(
-      parts.completion,
+    const voiding = voidControl({
+      machine: snapshot.machine,
+      config,
+      reasonKey: route.voidReason,
+    });
+    tools.render(parts.completion, [
       completion.visible
         ? h(
             'div',
-            { className: 'cora-completion' },
+            { className: 'cora-completion', key: 'completion' },
             h(
               'button',
               {
@@ -932,7 +984,7 @@ export function createRouteSlice(params, context) {
                     pending: true,
                   });
                   try {
-                    const persisted = await completeCase({
+                    const persisted = await closeCase({
                       caseId: caseId(),
                       client: context.client,
                       saveQueue: context.saveQueue,
@@ -977,6 +1029,110 @@ export function createRouteSlice(params, context) {
                   ),
                 ]
               : [])
+          )
+        : null,
+      voiding.visible
+        ? voidNode(route, voiding, tools, snapshot, config)
+        : null,
+    ]);
+  }
+
+  /**
+   * The Void control: a disclosure button, then a panel naming the
+   * consequences, the reason list and the confirm. Two steps by design — a
+   * transition with no way back does not sit behind a single click.
+   *
+   * @param {CaseReviewRouteState} route
+   * @param {ReturnType<typeof voidControl>} control
+   * @param {any} tools
+   * @param {CaseReviewSnapshot} snapshot
+   * @param {import('../sharepoint-client.js').CaseTypeConfig} config
+   */
+  function voidNode(route, control, tools, snapshot, config) {
+    return h(
+      'div',
+      { className: 'cora-void', key: 'void' },
+      h(
+        'button',
+        {
+          className: 'cora-void-btn',
+          'aria-expanded': String(route.voidPanelOpen),
+          onclick: () => tools.dispatch({ type: 'case/void-panel-toggled' }),
+        },
+        'Void Case…'
+      ),
+      route.voidPanelOpen
+        ? h(
+            'div',
+            { className: 'cora-void-panel' },
+            h(
+              'p',
+              { className: 'cora-void-consequence' },
+              'Voiding closes this Case for good. It records no Outcome, it cannot be reopened, and the Conversation stops accepting messages.'
+            ),
+            h(
+              'label',
+              {},
+              'Reason for voiding',
+              h(
+                'select',
+                {
+                  className: 'cora-void-reason',
+                  value: control.reason,
+                  onchange: (/** @type {any} */ event) =>
+                    tools.dispatch({
+                      type: 'case/void-reason-selected',
+                      reasonKey: event.target.value,
+                    }),
+                },
+                h('option', { value: '' }, '— Select a reason —'),
+                ...control.reasons.map((reason) =>
+                  h('option', { value: reason.key }, reason.label)
+                )
+              )
+            ),
+            h(
+              'button',
+              {
+                className: 'cora-void-confirm',
+                disabled: route.voidPending || control.disabled,
+                onclick: async () => {
+                  const patchFields = voidPatch({
+                    machine: snapshot.machine,
+                    config,
+                    reasonKey: route.voidReason,
+                  });
+                  if (!patchFields) return;
+                  tools.dispatch({ type: 'case/void-pending', pending: true });
+                  try {
+                    const persisted = await closeCase({
+                      caseId: caseId(),
+                      client: context.client,
+                      saveQueue: context.saveQueue,
+                      patchFields,
+                      caseListOptions: snapshot.caseListOptions,
+                    });
+                    // Only the fields travel, for the same reason completion
+                    // sends only its own: the snapshot in this closure is two
+                    // round-trips old.
+                    if (persisted && tools.isActive()) {
+                      tools.dispatch({
+                        type: 'case/case-row-patched',
+                        fields: patchFields,
+                      });
+                    }
+                  } finally {
+                    if (tools.isActive()) {
+                      tools.dispatch({
+                        type: 'case/void-pending',
+                        pending: false,
+                      });
+                    }
+                  }
+                },
+              },
+              'Void Case'
+            )
           )
         : null
     );

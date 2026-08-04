@@ -244,6 +244,8 @@ src/
     section-labels.js           # DEFAULT_SECTION_LABELS + per-Case-Type sectionLabels overrides
     section-registry.js         # ADR-0032 single source of truth for which Sections exist and their order
     showwhen-tree.js            # generic showWhen tree parse/serialise/mutate (was question-bank/)
+    void-reasons.js             # VOID_REASONS: the framework-owned Void Reason vocabulary a
+                                #   Case Type may narrow but not extend
 
   core/                         # store-driven view runtime (ADR-0034)
                                 #   see docs/guide/store-actions-and-effects.md for the contract
@@ -293,7 +295,9 @@ src/
       notes-view.js            # CASE-3 pure Notes and Case Justification view; SaveQueue remains the writer
       summary-view.js          # CASE-4 pure configured Summary view
       outcome-view.js          # CASE-4 configured Outcome view
-      completion-actions.js    # CASE-4 CaseMachine-guarded completion actions
+      completion-actions.js    # CASE-4 CaseMachine-guarded completion actions; closeCase is
+                               #   the shared "persist the transition and leave" write
+      void-actions.js          # the Reviewer's Void control and the patch behind it
       remediation-view.js      # CASE-5 pure Issues and Remediation Actions view
       remediation-tracking-view.js # pure question-level Remediation tab, reviewer + responsible-party renderings (#499)
       appeal-actions.js        # CASE-6 immutable Appeal/resolution/amendment state transitions

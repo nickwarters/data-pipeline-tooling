@@ -2300,6 +2300,63 @@
   color: var(--cora-color-danger);
 }
 
+/* ── Voiding a Case ──────────────────────────────────────────────────────── */
+
+/* Deliberately quieter than the Complete button: voiding is the way out, not
+   the goal, so it reads as secondary until its panel is open. */
+[data-cora-root] .cora-void {
+  margin-top: var(--cora-space-4);
+}
+
+[data-cora-root] .cora-void-btn {
+  background: transparent;
+  border-color: var(--cora-color-border-strong);
+  color: var(--cora-color-text-muted);
+}
+
+[data-cora-root] .cora-void-panel {
+  margin-top: var(--cora-space-3);
+  padding: var(--cora-space-4);
+  border: 1px solid var(--cora-color-danger);
+  background: var(--cora-color-danger-bg);
+}
+
+[data-cora-root] .cora-void-consequence {
+  margin: 0 0 var(--cora-space-3);
+  color: var(--cora-color-danger);
+}
+
+[data-cora-root] .cora-void-reason {
+  display: block;
+  margin-top: var(--cora-space-2);
+}
+
+[data-cora-root] .cora-void-confirm {
+  margin-top: var(--cora-space-3);
+  background: var(--cora-color-danger);
+  border-color: var(--cora-color-danger);
+  color: var(--cora-color-text-on-accent);
+}
+
+[data-cora-root] .cora-void-banner {
+  display: flex;
+  align-items: baseline;
+  gap: var(--cora-space-3);
+  margin-top: var(--cora-space-3);
+  padding: var(--cora-space-3) var(--cora-space-4);
+  border-left: 4px solid var(--cora-color-border-strong);
+  background: var(--cora-color-surface-2);
+}
+
+[data-cora-root] .cora-void-pill {
+  padding: 0 var(--cora-space-2);
+  border-radius: var(--cora-radius-pill);
+  background: var(--cora-color-border-strong);
+  color: var(--cora-color-surface);
+  font-size: var(--cora-font-size-sm);
+  text-transform: uppercase;
+}
+
 /* ── Section progress sidebar ────────────────────────────────────────────── */
 
 [data-cora-root] section:has(.cora-group-progress) {
