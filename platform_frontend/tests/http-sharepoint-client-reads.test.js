@@ -411,14 +411,27 @@ test('HttpSharePointClient: getCase reads both managers as account names, not lo
   assert.equal(row?.assignedReviewerManager, 'mgr-r');
   assert.equal(row?.responsiblePartyManager, 'mgr-rp');
   const url = decodeURIComponent(calls[0].url);
+  // Asserted as the whole expand list, not a prefix: a person column dropped
+  // off the end costs no error and no empty column, only a row that quietly
+  // reads as having nobody in that role.
   assert.ok(
     url.includes(
-      '$expand=AssignedReviewer,ResponsibleParty,AssignedReviewerManager,ResponsiblePartyManager'
+      '$expand=AssignedReviewer,ResponsibleParty,AssignedReviewerManager,ResponsiblePartyManager,VoidedBy'
     ),
-    'all four person columns must be expanded for their account names'
+    'every person column must be expanded for its account name'
   );
-  assert.ok(url.includes('AssignedReviewerManager/Name'));
-  assert.ok(url.includes('ResponsiblePartyManager/Name'));
+  for (const column of [
+    'AssignedReviewer',
+    'ResponsibleParty',
+    'AssignedReviewerManager',
+    'ResponsiblePartyManager',
+    'VoidedBy',
+  ]) {
+    assert.ok(
+      url.includes(`${column}/Name`),
+      `${column}/Name must be selected, or the expanded entity carries no account`
+    );
+  }
 });
 
 test('HttpSharePointClient: a Case with no managers reads them as absent, not empty accounts', async () => {
