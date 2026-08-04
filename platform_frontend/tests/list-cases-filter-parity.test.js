@@ -102,6 +102,7 @@ function toListItem(row) {
     AssignedReviewerManagerId: personId(row.assignedReviewerManager),
     DueDate: row.dueDate ?? null,
     CompletedAt: row.completedAt ?? null,
+    VoidedAt: row.voidedAt ?? null,
     EffectiveOutcome: row.effectiveOutcome ?? null,
     OutcomeOverridden: row.outcomeOverridden ? 1 : 0,
     AwaitingResponsibleParty: row.awaitingResponsibleParty ? 1 : 0,
@@ -176,6 +177,13 @@ const REPORTABLE_ROWS = [
   caseRow('rep-mid', { reportableAt: MID_PAST }),
   caseRow('rep-late', { reportableAt: LATE_PAST }),
   caseRow('never-reportable'),
+];
+
+const VOIDED_ROWS = [
+  caseRow('void-early', { status: 'Void', voidedAt: LONG_PAST }),
+  caseRow('void-mid', { status: 'Void', voidedAt: MID_PAST }),
+  caseRow('void-late', { status: 'Void', voidedAt: LATE_PAST }),
+  caseRow('never-voided'),
 ];
 
 // Titles sharing partial prefixes, so a prefix filter genuinely separates them
@@ -300,6 +308,18 @@ const SCENARIOS = [
     filter: { reportableBefore: LATE_PAST },
     rows: REPORTABLE_ROWS,
     expected: ['rep-early', 'rep-mid'],
+  },
+  {
+    name: 'voidedAfter',
+    filter: { voidedAfter: MID_PAST },
+    rows: VOIDED_ROWS,
+    expected: ['void-mid', 'void-late'],
+  },
+  {
+    name: 'voidedBefore',
+    filter: { voidedBefore: LATE_PAST },
+    rows: VOIDED_ROWS,
+    expected: ['void-early', 'void-mid'],
   },
   {
     name: 'titlePrefix',

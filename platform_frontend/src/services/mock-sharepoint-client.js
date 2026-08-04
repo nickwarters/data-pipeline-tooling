@@ -226,6 +226,14 @@ export class MockSharePointClient {
         if (!c.reportableAt || c.reportableAt >= filter.reportableBefore)
           return false;
       }
+      // VoidedAt window: the same bounds again, so the void report reads the
+      // same population in the dev loop as it does against SharePoint.
+      if (filter.voidedAfter !== undefined) {
+        if (!c.voidedAt || c.voidedAt < filter.voidedAfter) return false;
+      }
+      if (filter.voidedBefore !== undefined) {
+        if (!c.voidedAt || c.voidedAt >= filter.voidedBefore) return false;
+      }
       // Anchored and case-insensitive, matching SharePoint's own `startswith`
       // — the dev loop must not answer a search differently from the server.
       if (filter.titlePrefix) {

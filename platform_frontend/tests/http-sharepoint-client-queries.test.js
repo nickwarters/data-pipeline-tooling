@@ -412,6 +412,55 @@ test('HttpSharePointClient: listCases with a CompletedAt window leads with the i
   );
 });
 
+// --- The void report window ---
+
+test('HttpSharePointClient: a void report leads with the indexed VoidedAt window', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(JSON.stringify({ value: [] }), { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  await client.listCases(
+    {
+      status: 'Void',
+      voidedAfter: '2026-07-02T00:00:00.000Z',
+      voidedBefore: '2026-08-02T00:00:00.000Z',
+    },
+    { listName: 'Cases-ExampleReview' }
+  );
+
+  const url = decodeURIComponent(calls[0].url);
+  const filterExpr = url.slice(url.indexOf('$filter=') + '$filter='.length);
+  assert.ok(
+    filterExpr.startsWith("VoidedAt ge '2026-07-02T00:00:00.000Z'"),
+    `the indexed date window narrows first: ${filterExpr}`
+  );
+  assert.ok(
+    url.includes("VoidedAt lt '2026-08-02T00:00:00.000Z'"),
+    'exclusive upper bound'
+  );
+  assert.ok(
+    filterExpr.indexOf('VoidedAt') < filterExpr.indexOf('Status eq'),
+    'Status alone is not selective enough to lead'
+  );
+
+  await client.listCases(
+    { status: 'Void' },
+    { listName: 'Cases-ExampleReview' }
+  );
+  assert.ok(
+    !decodeURIComponent(calls[1].url).includes('VoidedAt'),
+    'no window, no condition'
+  );
+});
+
 // --- Case search: the ReportableAt window and the Title prefix ---
 
 test('HttpSharePointClient: a Case search leads with the ReportableAt window and matches Title by anchored prefix', async () => {
