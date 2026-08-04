@@ -10,7 +10,7 @@ import { MockSharePointClient } from '../src/services/mock-sharepoint-client.js'
 import { resolveCapabilities } from '../src/services/permissions.js';
 import { SaveQueue } from '../src/services/save-queue.js';
 import {
-  closeCase,
+  completeCase,
   completionPatch,
 } from '../src/pages/cora-case-review/completion-actions.js';
 import { openAppealOf } from '../src/evaluators/appeal-state.js';
@@ -178,7 +178,7 @@ export function createInMemoryFlowRunner(state, opts = {}) {
   let caseRow = null;
   /**
    * Where the app would have navigated. The runner has no `location`, and the
-   * action it drives no longer sniffs for one: `closeCase` takes the
+   * action it drives no longer sniffs for one: `completeCase` takes the
    * navigation as a callback, so the harness records it and a flow can assert
    * that completing a Case leaves the Case page rather than merely tolerating
    * that it tried.
@@ -495,7 +495,7 @@ export function createInMemoryFlowRunner(state, opts = {}) {
 
 /**
  * Completing a Case persists lifecycle fields that the route now folds back into
- * its store as a Case Row patch — it no longer relies on `closeCase`
+ * its store as a Case Row patch — it no longer relies on `completeCase`
  * navigating to the dashboard to make the stale row unobservable. The runner has
  * no browser to navigate: it records the navigation rather than performing it,
  * so a flow may keep acting on the Case afterwards. It returns the persisted
@@ -526,7 +526,7 @@ async function clickCompleteCase(loader, caseRow, answers, navigate) {
     exportHash: loader.exportHash,
   });
 
-  const ok = await closeCase({
+  const ok = await completeCase({
     caseId: caseRow.id,
     client: loader.client,
     saveQueue: loader.saveQueue,
