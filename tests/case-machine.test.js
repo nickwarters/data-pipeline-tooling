@@ -319,6 +319,20 @@ test('CaseMachine stamps every lifecycle timestamp from the injected clock', () 
   );
 });
 
+test('CaseMachine closing a Case stops it awaiting the frontline', () => {
+  // Both routes to Completed clear the pair: a Reviewer's last unanswered
+  // question would otherwise keep a closed Case ageing in their Awaiting
+  // Frontline group, with no transition left to clear it.
+  for (const fields of [
+    machineFor('In-progress').transitionToCompleted(null, undefined, null),
+    machineFor('Actions In Progress').transitionToFinalComplete(),
+  ]) {
+    assert.equal(fields.status, 'Completed');
+    assert.equal(fields.awaitingResponsibleParty, false);
+    assert.equal(fields.awaitingSince, null);
+  }
+});
+
 test('CaseMachine final close does not re-snapshot the reportable outcome', () => {
   const fields = machineFor('Actions In Progress').transitionToFinalComplete();
 
