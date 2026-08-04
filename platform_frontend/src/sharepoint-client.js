@@ -459,6 +459,10 @@
  * can only narrow: the Section's access mode is checked first, so naming a role
  * never shows it a Section it is otherwise denied.
  *
+ * `allowMessagesWhen` gates when Conversation messages may be posted during a
+ * live review. It also only narrows: a terminal Case closes the thread for
+ * everyone, and listing a terminal status here does not reopen it.
+ *
  * @typedef {{ showInSummary?: boolean | import('./services/section-access.js').Role[], allowMessagesWhen?: import('./lib/case-statuses.js').CaseStatus[] }} SectionConfig
  */
 

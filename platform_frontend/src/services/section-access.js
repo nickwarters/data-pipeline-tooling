@@ -199,11 +199,19 @@ export function remediationAudience(roles) {
  * unless the Case Type's `allowMessagesWhen` gate excludes the current status,
  * in which case the thread is still readable.
  *
+ * A terminal Case closes the thread for everyone, gate or no gate. The freeze
+ * on a closed Case is a framework rule, and the Conversation is part of the
+ * record it freezes — a Case Type's gate chooses when the thread is open
+ * during the review, not whether it survives the end of one.
+ *
  * @param {CaseRow} c
  * @param {CaseTypeConfig} config
  * @returns {Mode}
  */
 const postsWhenAllowed = (c, config) => {
+  if (c.status === CASE_STATUS.COMPLETED || c.status === CASE_STATUS.VOID) {
+    return 'read-only';
+  }
   const allowed = config.sections?.conversation?.allowMessagesWhen;
   return allowed && !allowed.includes(c.status) ? 'read-only' : 'edit';
 };
