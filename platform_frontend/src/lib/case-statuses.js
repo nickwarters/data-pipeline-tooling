@@ -16,12 +16,17 @@
  *   live question-level Remediation Resolution, see
  *   `src/evaluators/remediation-status.js`.
  * - `SaveQueue`'s own `'conflict'` status, see `src/services/save-queue.js`.
+ *
+ * `VOID` is terminal and has no way back: a Case abandoned mid-review is voided
+ * with a reason, freezing it without ever reaching the reportable milestone, so
+ * it carries no Outcome and never counts as reviewed work.
  */
 export const CASE_STATUS = Object.freeze(
   /** @type {const} */ ({
     IN_PROGRESS: 'In-progress',
     ACTIONS_IN_PROGRESS: 'Actions In Progress',
     COMPLETED: 'Completed',
+    VOID: 'Void',
   })
 );
 

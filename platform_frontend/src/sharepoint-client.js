@@ -146,6 +146,11 @@
  * Complete Case on the no-actions path), where the Answers freeze and the
  * Outcome snapshot is taken. `completedAt` is stamped only at the final
  * `Completed` transition, so on the actions path `reportableAt` precedes it.
+ * A Case abandoned before either close leaves that path for the terminal
+ * `Void`, stamping `voidReason` (a key from the framework's Void Reason
+ * vocabulary), `voidedAt` and `voidedBy` (a bare account login). Voiding takes
+ * no Outcome snapshot, so a Case voided before the reportable milestone carries
+ * none at all.
  *
  * `effectiveOutcome` / `effectiveHadRemediation` / `outcomeOverridden`
  * carry the corrected result for the responsible-party-team report; they
@@ -198,6 +203,9 @@
  * reportableAt?: string | null,
  * remediationDueDate?: string | null,
  * completedAt: string | null,
+ * voidReason?: string | null,
+ * voidedAt?: string | null,
+ * voidedBy?: string | null,
  * outcome?: string | null,
  * outcomeAtCompletion?: string,
  * questionBankVersion?: string,

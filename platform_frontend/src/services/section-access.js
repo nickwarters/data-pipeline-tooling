@@ -71,6 +71,37 @@ export function isReportable(status) {
 }
 
 /**
+ * Whether the Case's Answers are frozen. Reportable is one way to get there;
+ * being voided is the other, and it arrives without stamping an Outcome.
+ *
+ * Editability asks this, not `isReportable` — the two questions coincided until
+ * a terminal state existed that freezes the Answers without snapshotting them.
+ *
+ * @param {string} status
+ * @returns {boolean}
+ */
+export function isFrozen(status) {
+  return isReportable(status) || status === CASE_STATUS.VOID;
+}
+
+/**
+ * Whether the Case ever passed the reportable milestone, including one it was
+ * later voided from. Everything that reads the *snapshot* taken at that
+ * milestone — the frozen Outcome, the stamped Question Bank version, the sent
+ * Remediation Actions — asks this rather than the current status, because a
+ * voided Case still has whatever was stamped before it was voided.
+ *
+ * @param {CaseRow} caseRow
+ * @returns {boolean}
+ */
+export function reachedReportable(caseRow) {
+  return (
+    isReportable(caseRow.status) ||
+    (caseRow.status === CASE_STATUS.VOID && Boolean(caseRow.reportableAt))
+  );
+}
+
+/**
  * The Sections that exist on the Case Review page, in canonical order, derived
  * from the Section registry.
  * @type {Section[]}
@@ -115,7 +146,7 @@ function appealRaiser(config) {
  */
 function remediationTabIsLive(caseRow, catalogue) {
   return (
-    isReportable(caseRow.status) &&
+    reachedReportable(caseRow) &&
     hasTrackableRemediation(catalogue, caseRow.answers)
   );
 }
@@ -247,7 +278,7 @@ export const MATRIX = {
   // Owner and the Journey Owner observe read-only; the Responsible Party side
   // does not see it.
   questions: {
-    assignedReviewer: (c) => (isReportable(c.status) ? 'read-only' : 'edit'),
+    assignedReviewer: (c) => (isFrozen(c.status) ? 'read-only' : 'edit'),
     otherReviewer: 'read-only',
     reviewerManager: 'read-only',
     responsibleParty: 'hidden',
@@ -263,7 +294,7 @@ export const MATRIX = {
   // Controls, the Case Type Owner and the Journey Owner; hidden from the Adviser
   // and their Manager.
   issues: {
-    assignedReviewer: (c) => (isReportable(c.status) ? 'read-only' : 'edit'),
+    assignedReviewer: (c) => (isFrozen(c.status) ? 'read-only' : 'edit'),
     otherReviewer: 'read-only',
     reviewerManager: 'read-only',
     responsibleParty: 'hidden',
@@ -282,7 +313,7 @@ export const MATRIX = {
     assignedReviewer: 'read-only',
     otherReviewer: 'read-only',
     reviewerManager: 'read-only',
-    responsibleParty: (c) => (isReportable(c.status) ? 'read-only' : 'hidden'),
+    responsibleParty: (c) => (reachedReportable(c) ? 'read-only' : 'hidden'),
     responsiblePartyManager: (c) =>
       c.status === CASE_STATUS.COMPLETED ? 'read-only' : 'hidden',
     caseTypeOwner: 'read-only',
@@ -318,8 +349,12 @@ export const MATRIX = {
   // observe them read-only; the Journey Owner and Controls do not see them, nor
   // do the Adviser and their Manager.
   notes: {
+    // Deliberately not the freeze predicate: Notes stay editable through
+    // `Actions In Progress`, so only the two terminal states close them.
     assignedReviewer: (c) =>
-      c.status === CASE_STATUS.COMPLETED ? 'read-only' : 'edit',
+      c.status === CASE_STATUS.COMPLETED || c.status === CASE_STATUS.VOID
+        ? 'read-only'
+        : 'edit',
     otherReviewer: 'read-only',
     reviewerManager: 'read-only',
     responsibleParty: 'hidden',

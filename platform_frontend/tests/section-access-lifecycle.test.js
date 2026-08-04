@@ -238,6 +238,113 @@ test('notes: reviewer edits until Completed, then read-only', () => {
   );
 });
 
+// --- Void: the terminal status freezes the Case without making it reportable ---
+
+test('questions/issues: a voided Case is read-only for the Assigned Reviewer', () => {
+  const cfg = makeConfig();
+  for (const section of /** @type {const} */ (['questions', 'issues'])) {
+    assert.equal(
+      evaluateAccess(
+        section,
+        ['assignedReviewer'],
+        makeCase({ status: 'Void' }),
+        cfg
+      ),
+      'read-only',
+      section
+    );
+  }
+});
+
+test('notes: a voided Case is read-only, like a Completed one', () => {
+  assert.equal(
+    evaluateAccess(
+      'notes',
+      ['assignedReviewer'],
+      makeCase({ status: 'Void' }),
+      makeConfig()
+    ),
+    'read-only'
+  );
+});
+
+test('amendOutcome: hidden on a voided Case — there is no Outcome to correct', () => {
+  assert.equal(
+    evaluateAccess(
+      'amendOutcome',
+      ['controls'],
+      makeCase({ status: 'Void' }),
+      makeConfig()
+    ),
+    'hidden'
+  );
+});
+
+test('appealRequest: hidden on a voided Case for either configured raiser', () => {
+  for (const raisedBy of /** @type {const} */ ([
+    'responsiblePartyManager',
+    'journeyOwner',
+  ])) {
+    assert.equal(
+      evaluateAccess(
+        'appealRequest',
+        [raisedBy],
+        makeCase({ status: 'Void' }),
+        makeConfig({ appeal: { raisedBy } })
+      ),
+      'hidden',
+      raisedBy
+    );
+  }
+});
+
+test('summary: the RP reads a voided Case only if it had reached the reportable milestone', () => {
+  const cfg = makeConfig();
+  assert.equal(
+    evaluateAccess(
+      'summary',
+      ['responsibleParty'],
+      makeCase({ status: 'Void', reportableAt: '2026-01-01T00:00:00Z' }),
+      cfg
+    ),
+    'read-only'
+  );
+  assert.equal(
+    evaluateAccess(
+      'summary',
+      ['responsibleParty'],
+      makeCase({ status: 'Void' }),
+      cfg
+    ),
+    'hidden'
+  );
+});
+
+test('remediation: a voided Case keeps its tracking breakdown only if actions were sent', () => {
+  const cfg = makeConfig();
+  assert.equal(
+    evaluateAccess(
+      'remediation',
+      ['assignedReviewer'],
+      makeCaseWithRemediation({
+        status: 'Void',
+        reportableAt: '2026-01-01T00:00:00Z',
+      }),
+      cfg
+    ),
+    'read-only'
+  );
+  assert.equal(
+    evaluateAccess(
+      'remediation',
+      ['assignedReviewer'],
+      makeCaseWithRemediation({ status: 'Void' }),
+      cfg
+    ),
+    'hidden'
+  );
+});
+
 // --- Remediation tracking visibility ---
 
 test('remediation: hidden for every viewer until actions are sent', () => {

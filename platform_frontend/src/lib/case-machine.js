@@ -8,6 +8,7 @@
 
 import {
   evaluateAccess,
+  isFrozen,
   isReportable,
   resolveRoles,
   SECTIONS,
@@ -94,7 +95,7 @@ export class CaseMachine {
     return (
       this.access.questions === 'edit' &&
       this.caseRow.assignedReviewer === this.currentUser.id &&
-      !this.reportable
+      !isFrozen(this.caseRow.status)
     );
   }
 
@@ -104,7 +105,7 @@ export class CaseMachine {
    * declares nothing to capture simply renders nothing to edit.
    */
   get canEditIssues() {
-    return this.access.issues === 'edit' && !this.reportable;
+    return this.access.issues === 'edit' && !isFrozen(this.caseRow.status);
   }
 
   /**

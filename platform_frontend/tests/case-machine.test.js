@@ -54,7 +54,7 @@ const CATALOGUE = ['q-a', 'q-needs', 'q-welcome'].map((id) => ({
 }));
 
 /**
- * @param {'In-progress'|'Actions In Progress'|'Completed'} status
+ * @param {import('../src/lib/case-statuses.js').CaseStatus} status
  * @param {import('../src/sharepoint-client.js').CaseTypeConfig} [config]
  * @param {Partial<import('../src/sharepoint-client.js').CaseRow>} [overrides]
  * @param {import('../src/sharepoint-client.js').QuestionDefinition[]} [catalogue]
@@ -108,6 +108,14 @@ test('CaseMachine lifecycle capabilities freeze at the reportable milestone', ()
   assert.equal(machineFor('In-progress').canComplete, true);
   assert.equal(machineFor('Actions In Progress').canComplete, false);
   assert.equal(machineFor('Completed').canComplete, false);
+});
+
+test('CaseMachine: a voided Case can be neither completed nor edited', () => {
+  // Void freezes the Case without ever making it reportable, so the freeze has
+  // to be asked as its own question rather than read off `reportable`.
+  assert.equal(machineFor('Void').reportable, false);
+  assert.equal(machineFor('Void').canComplete, false);
+  assert.equal(machineFor('Void').canEditIssues, false);
 });
 
 test('CaseMachine Issues editing needs no Case Type opt-in and freezes at reportable', () => {

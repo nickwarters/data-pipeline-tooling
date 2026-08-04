@@ -18,11 +18,12 @@ import {
   validateAnswerKeyNamespace,
 } from '../evaluators/general-questions.js';
 import {
+  reachedReportable,
   showInSummary,
   SECTIONS,
   SUMMARY_SECTIONS,
 } from '../services/section-access.js';
-import { CaseMachine, isReportable } from './case-machine.js';
+import { CaseMachine } from './case-machine.js';
 import { resolveSectionLabels } from './section-labels.js';
 import {
   InvalidCaseTypeConfigError,
@@ -209,9 +210,12 @@ export class CaseLoader {
 
     // A Case freezes at the reportable milestone, not only at final
     // completion: once reportable we load the as-reviewed bank snapshot so a
-    // newly-applicable Question Definition no longer reopens the Case.
+    // newly-applicable Question Definition no longer reopens the Case. A Case
+    // voided after that milestone keeps the snapshot it was stamped with,
+    // which is why this asks whether the milestone was reached rather than
+    // what the status is now.
     const versionHash =
-      isReportable(caseRow.status) && caseRow.questionBankVersion
+      reachedReportable(caseRow) && caseRow.questionBankVersion
         ? caseRow.questionBankVersion
         : null;
 
