@@ -1,0 +1,1813 @@
+/*
+ * Question Bank Editor — route #/question-bank.
+ *
+ * All selectors are scoped under `.cora-bank-editor` so they cannot bleed
+ * into the rest of the app. The editor uses the same design tokens as
+ * the rest of the platform (see cora-design-tokens.css) — Barlow Condensed
+ * for display, Barlow for body, JetBrains Mono for code/eyebrows, and
+ * the brand accent (#DB0011) for emphasis.
+ *
+ * Class names are stable; this file is structured around the DOM that
+ * cora-bank-editor.js, cora-bank-rail.js, cora-bank-list.js, cora-question-card.js,
+ * cora-bank-dock.js, compile-drawer.js and cora-toast.js render.
+ */
+
+/* Neutralise the [data-cora-root] base button rule so this file's bespoke
+   button styles (icon-btn, mini-btn, pill-btn, dock-btn, drawer-close,
+   add-card, op-toggle, tag-add) are not overridden by the framework's
+   filled red default. The .cora-btn helpers are unaffected. */
+.cora-bank-editor button {
+  all: revert;
+}
+
+/* ── Root ─────────────────────────────────────────────────────────────── */
+.cora-bank-editor {
+  display: block;
+  background: var(--cora-color-bg);
+  color: var(--cora-color-on-surface);
+  font-family: var(--cora-font-body);
+  min-height: 100vh;
+  position: relative;
+}
+
+.cora-bank-editor *,
+.cora-bank-editor *::before,
+.cora-bank-editor *::after {
+  box-sizing: border-box;
+}
+
+/* Single editor column at every width. The filter rail is never a static
+   grid column — it is always the off-canvas `☰ Filters` pop-over (see below).
+   `minmax(0, 1fr)` lets the editor column shrink so its own overflow-x scroll
+   containers (e.g. .code-block) work instead of overflowing the page. */
+.cora-bank-editor .bank-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: calc(100vh - 220px);
+}
+
+/* ── Masthead ─────────────────────────────────────────────────────────── */
+.cora-bank-editor .masthead {
+  background: var(--cora-color-surface);
+  border-bottom: 1px solid var(--cora-color-border);
+  padding: var(--cora-space-6) var(--cora-space-7) var(--cora-space-5);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: var(--cora-space-5);
+}
+
+.cora-bank-editor .eyebrow {
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-2xs);
+  letter-spacing: var(--cora-tracking-widest);
+  text-transform: uppercase;
+  color: var(--cora-color-text-muted);
+  margin-bottom: var(--cora-space-2);
+}
+.cora-bank-editor .eyebrow .dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--cora-color-accent);
+  margin: 0 var(--cora-space-2) 2px;
+  vertical-align: middle;
+}
+
+.cora-bank-editor h1 {
+  font-family: var(--cora-font-display);
+  font-weight: var(--cora-font-weight-black);
+  font-size: var(--cora-font-size-3xl);
+  line-height: var(--cora-line-height-tight);
+  letter-spacing: var(--cora-tracking-tight);
+  color: var(--cora-color-on-surface);
+  margin: 0;
+}
+.cora-bank-editor h1 em {
+  font-style: normal;
+  color: var(--cora-color-accent);
+}
+
+.cora-bank-editor .masthead-meta {
+  text-align: right;
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-xs);
+  color: var(--cora-color-text-muted);
+  line-height: var(--cora-line-height-loose);
+  border-left: 1px solid var(--cora-color-border);
+  padding-left: var(--cora-space-4);
+}
+.cora-bank-editor .masthead-meta strong {
+  color: var(--cora-color-on-surface);
+  font-weight: var(--cora-font-weight-semibold);
+}
+
+/* ── Case-type tab bar ────────────────────────────────────────────────── */
+.cora-bank-editor .case-bar {
+  padding: var(--cora-space-3) var(--cora-space-7);
+  background: var(--cora-color-surface);
+  border-bottom: 1px solid var(--cora-color-border);
+  display: flex;
+  align-items: center;
+  gap: var(--cora-space-5);
+  flex-wrap: wrap;
+}
+.cora-bank-editor .case-bar-label {
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-xs);
+  letter-spacing: var(--cora-tracking-wider);
+  text-transform: uppercase;
+  color: var(--cora-color-text-muted);
+}
+.cora-bank-editor .case-tabs {
+  display: flex;
+  gap: var(--cora-space-1);
+}
+.cora-bank-editor .case-tab {
+  background: transparent;
+  border: 1px solid transparent;
+  padding: var(--cora-space-2) var(--cora-space-3);
+  font-family: var(--cora-font-body);
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-medium);
+  color: var(--cora-color-text-muted);
+  cursor: pointer;
+  border-radius: var(--cora-radius-md);
+  transition:
+    color var(--cora-duration-fast) var(--cora-easing-standard),
+    background var(--cora-duration-fast) var(--cora-easing-standard),
+    border-color var(--cora-duration-fast) var(--cora-easing-standard);
+  display: flex;
+  align-items: center;
+  gap: var(--cora-space-2);
+}
+.cora-bank-editor .case-tab:hover {
+  color: var(--cora-color-on-surface);
+  background: var(--cora-color-surface-2);
+}
+.cora-bank-editor .case-tab.active {
+  color: var(--cora-color-accent);
+  border-color: var(--cora-color-accent);
+  background: var(--cora-color-accent-muted);
+}
+.cora-bank-editor .tab-count {
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-2xs);
+  color: var(--cora-color-text-muted);
+  padding-left: var(--cora-space-2);
+  border-left: 1px solid var(--cora-color-border);
+}
+.cora-bank-editor .case-tab.active .tab-count {
+  color: var(--cora-color-accent);
+  border-left-color: currentColor;
+}
+.cora-bank-editor .tab-dirty {
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-2xs);
+  color: var(--cora-color-warning);
+}
+.cora-bank-editor .case-bar-right {
+  margin-left: auto;
+  display: flex;
+  gap: var(--cora-space-2);
+  align-items: center;
+}
+
+/* ── Pill buttons (used in case-bar and drawer footer) ────────────────── */
+.cora-bank-editor .pill-btn {
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border-strong);
+  padding: var(--cora-space-2) var(--cora-space-3);
+  font-family: var(--cora-font-body);
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-semibold);
+  color: var(--cora-color-on-surface);
+  cursor: pointer;
+  border-radius: var(--cora-radius-md);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cora-space-2);
+  transition:
+    background var(--cora-duration-fast) var(--cora-easing-standard),
+    border-color var(--cora-duration-fast) var(--cora-easing-standard);
+}
+.cora-bank-editor .pill-btn:hover {
+  background: var(--cora-color-surface-2);
+}
+.cora-bank-editor .pill-btn.primary {
+  background: var(--cora-color-accent);
+  border-color: var(--cora-color-accent);
+  color: var(--cora-color-text-on-accent);
+}
+.cora-bank-editor .pill-btn.primary:hover {
+  background: var(--cora-color-accent-hover);
+  border-color: var(--cora-color-accent-hover);
+}
+.cora-bank-editor .pill-btn .key {
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-2xs);
+  opacity: 0.75;
+  padding: 1px var(--cora-space-1);
+  border: 1px solid currentColor;
+  border-radius: var(--cora-radius-sm);
+}
+
+/* ── Left rail (always an off-canvas pop-over) ────────────────────────── */
+/* The rail slides in from the left as an off-canvas pop-over at every width,
+   surfaced by the `☰ Filters` toggle. This keeps the editor full-width and
+   avoids the intermediate widths where a static rail squeezed the cards. */
+.cora-bank-editor aside.rail {
+  border-right: 1px solid var(--cora-color-border);
+  padding: var(--cora-space-5) var(--cora-space-4);
+  background: var(--cora-color-surface);
+  overflow-y: auto;
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  height: 100vh;
+  width: min(20rem, 85vw);
+  z-index: 95;
+  transform: translateX(-100%);
+  visibility: hidden;
+  box-shadow: var(--cora-shadow-lg);
+  transition:
+    transform var(--cora-duration-base) var(--cora-easing-standard),
+    visibility var(--cora-duration-base) var(--cora-easing-standard);
+}
+.cora-bank-editor aside.rail.open {
+  transform: translateX(0);
+  visibility: visible;
+}
+.cora-bank-editor .rail-section {
+  margin-bottom: var(--cora-space-5);
+}
+.cora-bank-editor .rail-section h3 {
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-2xs);
+  letter-spacing: var(--cora-tracking-wider);
+  text-transform: uppercase;
+  color: var(--cora-color-text-muted);
+  margin: 0 0 var(--cora-space-2);
+  padding-bottom: var(--cora-space-1);
+  border-bottom: 1px solid var(--cora-color-border);
+  font-weight: var(--cora-font-weight-semibold);
+}
+.cora-bank-editor .filter-chip {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--cora-space-1) var(--cora-space-2);
+  margin: 2px 0;
+  cursor: pointer;
+  border-radius: var(--cora-radius-sm);
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-on-surface);
+  transition: background var(--cora-duration-fast) var(--cora-easing-standard);
+}
+.cora-bank-editor .filter-chip:hover {
+  background: var(--cora-color-surface-2);
+}
+.cora-bank-editor .filter-chip.active {
+  background: var(--cora-color-accent-muted);
+  color: var(--cora-color-accent);
+  font-weight: var(--cora-font-weight-semibold);
+}
+.cora-bank-editor .filter-chip .chip-count {
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-xs);
+  color: var(--cora-color-text-muted);
+}
+.cora-bank-editor .chip-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cora-space-1);
+}
+.cora-bank-editor .chip-move {
+  width: 24px;
+  height: 24px;
+  font-size: var(--cora-font-size-sm);
+}
+.cora-bank-editor .filter-chip.active .chip-count {
+  color: var(--cora-color-accent);
+}
+
+.cora-bank-editor .toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--cora-space-2) 0;
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-on-surface);
+}
+.cora-bank-editor .toggle {
+  --w: 32px;
+  --h: 18px;
+  width: var(--w);
+  height: var(--h);
+  position: relative;
+  background: var(--cora-color-surface-2);
+  border: 1px solid var(--cora-color-border-strong);
+  border-radius: var(--cora-radius-pill);
+  padding: 0;
+  cursor: pointer;
+  transition:
+    background var(--cora-duration-base) var(--cora-easing-standard),
+    border-color var(--cora-duration-base) var(--cora-easing-standard);
+}
+.cora-bank-editor .toggle::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 14px;
+  height: 14px;
+  background: var(--cora-color-surface);
+  border-radius: 50%;
+  box-shadow: var(--cora-shadow-sm);
+  transition: transform var(--cora-duration-base) var(--cora-easing-standard);
+}
+.cora-bank-editor .toggle.on {
+  background: var(--cora-color-accent);
+  border-color: var(--cora-color-accent);
+}
+.cora-bank-editor .toggle.on::after {
+  transform: translateX(14px);
+}
+
+.cora-bank-editor .rail-stat {
+  font-family: var(--cora-font-display);
+  font-weight: var(--cora-font-weight-black);
+  font-size: var(--cora-font-size-2xl);
+  line-height: var(--cora-line-height-tight);
+  letter-spacing: var(--cora-tracking-tight);
+  color: var(--cora-color-on-surface);
+}
+.cora-bank-editor .rail-stat-label {
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-2xs);
+  letter-spacing: var(--cora-tracking-wider);
+  text-transform: uppercase;
+  color: var(--cora-color-text-muted);
+  margin-top: 2px;
+}
+
+.cora-bank-editor .rail-legend {
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-xs);
+  line-height: var(--cora-line-height-loose);
+  color: var(--cora-color-text-muted);
+}
+.cora-bank-editor .rail-legend .swatch {
+  display: inline-block;
+  width: 3px;
+  height: 11px;
+  vertical-align: middle;
+  margin-right: var(--cora-space-2);
+}
+.cora-bank-editor .rail-legend .swatch.active {
+  background: var(--cora-color-accent);
+}
+.cora-bank-editor .rail-legend .swatch.deprecated {
+  background: var(--cora-color-text-subtle);
+}
+.cora-bank-editor .rail-legend .swatch.conditional {
+  background: var(--cora-color-warning);
+}
+
+/* ── Rail pop-over trigger + backdrop ─────────────────────────────────── */
+/* The `☰ Filters` toggle sits above the editor at every width and opens the
+   off-canvas rail; the backdrop dims the page while the rail is open. */
+.cora-bank-editor .rail-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cora-space-2);
+  margin: var(--cora-space-4) var(--cora-space-5) 0;
+  padding: var(--cora-space-2) var(--cora-space-4);
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border-strong);
+  border-radius: var(--cora-radius-md);
+  font-family: var(--cora-font-body);
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-semibold);
+  color: var(--cora-color-on-surface);
+  cursor: pointer;
+  transition:
+    background var(--cora-duration-fast) var(--cora-easing-standard),
+    border-color var(--cora-duration-fast) var(--cora-easing-standard);
+}
+.cora-bank-editor .rail-toggle:hover {
+  background: var(--cora-color-surface-2);
+  border-color: var(--cora-color-accent);
+  color: var(--cora-color-accent);
+}
+
+.cora-bank-editor .rail-backdrop {
+  display: block;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 94;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--cora-duration-base) var(--cora-easing-standard);
+}
+.cora-bank-editor .rail-backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ── Editor pane ──────────────────────────────────────────────────────── */
+.cora-bank-editor .editor {
+  padding: var(--cora-space-6) var(--cora-space-7)
+    calc(var(--cora-space-12) + var(--cora-space-5));
+  max-width: var(--cora-content-max-width);
+  width: 100%;
+}
+
+.cora-bank-editor .editor-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: var(--cora-space-5);
+  padding-bottom: var(--cora-space-3);
+  border-bottom: 1px solid var(--cora-color-border);
+}
+.cora-bank-editor .editor-head h2 {
+  font-family: var(--cora-font-display);
+  font-weight: var(--cora-font-weight-bold);
+  font-size: var(--cora-font-size-xl);
+  letter-spacing: var(--cora-tracking-tight);
+  margin: 0;
+  color: var(--cora-color-on-surface);
+}
+.cora-bank-editor .editor-head h2 .meta {
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-xs);
+  font-weight: var(--cora-font-weight-regular);
+  letter-spacing: var(--cora-tracking-wide);
+  text-transform: uppercase;
+  color: var(--cora-color-text-muted);
+  margin-left: var(--cora-space-3);
+  vertical-align: middle;
+}
+
+.cora-bank-editor .dirty-indicator {
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-xs);
+  letter-spacing: var(--cora-tracking-wider);
+  text-transform: uppercase;
+  color: var(--cora-color-text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cora-space-2);
+}
+.cora-bank-editor .dirty-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cora-color-success);
+}
+.cora-bank-editor .dirty-indicator.is-dirty {
+  color: var(--cora-color-warning);
+}
+.cora-bank-editor .dirty-indicator.is-dirty .dirty-dot {
+  background: var(--cora-color-warning);
+  animation: cora-bank-pulse 1.8s infinite;
+}
+@keyframes cora-bank-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* ── Outcome options ─────────────────────────────────────────────────── */
+.cora-bank-editor .outcome-options {
+  margin-bottom: var(--cora-space-4);
+  padding: var(--cora-space-3);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  background: var(--cora-color-surface);
+}
+.cora-bank-editor .outcome-options-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cora-space-3);
+  margin-bottom: var(--cora-space-2);
+}
+.cora-bank-editor .outcome-options h3 {
+  margin: 0;
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-2xs);
+  letter-spacing: var(--cora-tracking-wider);
+  text-transform: uppercase;
+  color: var(--cora-color-text-muted);
+}
+.cora-bank-editor .default-outcome-row {
+  margin-bottom: var(--cora-space-3);
+  max-width: 24rem;
+}
+.cora-bank-editor .outcome-option-list {
+  display: grid;
+  gap: var(--cora-space-2);
+}
+.cora-bank-editor .outcome-option-row {
+  display: grid;
+  grid-template-columns:
+    minmax(8rem, 1fr) minmax(12rem, 2fr) minmax(5rem, 0.6fr)
+    auto;
+  gap: var(--cora-space-2);
+  align-items: end;
+}
+.cora-bank-editor .outcome-option-field {
+  display: grid;
+  gap: 3px;
+  font-family: var(--cora-font-body);
+  font-size: var(--cora-font-size-xs);
+  color: var(--cora-color-text-muted);
+}
+.cora-bank-editor .outcome-option-field input,
+.cora-bank-editor .outcome-option-field select {
+  min-width: 0;
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-sm);
+  padding: var(--cora-space-1) var(--cora-space-2);
+  background: var(--cora-color-surface-2);
+  color: var(--cora-color-on-surface);
+  font-family: var(--cora-font-body);
+  font-size: var(--cora-font-size-sm);
+}
+.cora-bank-editor .outcome-empty {
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-xs);
+  color: var(--cora-color-text-muted);
+}
+
+/* ── Question card ────────────────────────────────────────────────────── */
+.cora-bank-editor .card {
+  display: block;
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  margin-bottom: var(--cora-space-4);
+  padding: var(--cora-space-4) var(--cora-space-5);
+  box-shadow: var(--cora-shadow-sm);
+  position: relative;
+  transition:
+    border-color var(--cora-duration-fast) var(--cora-easing-standard),
+    box-shadow var(--cora-duration-fast) var(--cora-easing-standard);
+}
+.cora-bank-editor .card:hover {
+  border-color: var(--cora-color-border-strong);
+  box-shadow: var(--cora-shadow-md);
+}
+.cora-bank-editor .card.deprecated {
+  opacity: 0.6;
+  background: var(--cora-color-surface-2);
+}
+
+.cora-bank-editor .card-stripe {
+  position: absolute;
+  left: -1px;
+  top: var(--cora-space-3);
+  bottom: var(--cora-space-3);
+  width: 3px;
+  background: var(--cora-color-accent);
+  border-radius: var(--cora-radius-sm);
+}
+.cora-bank-editor .card.deprecated .card-stripe {
+  background: var(--cora-color-text-subtle);
+}
+
+.cora-bank-editor .card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--cora-space-5);
+  margin-bottom: var(--cora-space-3);
+}
+.cora-bank-editor .card-num {
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-xs);
+  letter-spacing: var(--cora-tracking-wide);
+  color: var(--cora-color-text-muted);
+  padding-top: var(--cora-space-1);
+  min-width: 110px;
+}
+.cora-bank-editor .card-num-label {
+  margin-bottom: var(--cora-space-1);
+}
+.cora-bank-editor .card-num .id-input {
+  background: transparent;
+  border: none;
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-xs);
+  color: var(--cora-color-text-muted);
+  width: 100%;
+  border-bottom: 1px dashed transparent;
+  padding: 2px 0;
+}
+.cora-bank-editor .card-num .id-input:focus {
+  outline: none;
+  border-bottom-color: var(--cora-color-border-strong);
+  color: var(--cora-color-on-surface);
+}
+
+.cora-bank-editor .card-body {
+  flex: 1;
+  /* Allow the body to shrink below its content's intrinsic width so the
+     action buttons stay inside the card instead of overflowing its right
+     edge at narrow widths (default flex min-width is `auto`). */
+  min-width: 0;
+}
+
+/* ── Wording editor ───────────────────────────────────────────────────── */
+.cora-bank-editor .wording {
+  position: relative;
+  padding: var(--cora-space-3) var(--cora-space-4);
+  margin-bottom: var(--cora-space-1);
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  transition:
+    border-color var(--cora-duration-fast) var(--cora-easing-standard),
+    box-shadow var(--cora-duration-fast) var(--cora-easing-standard);
+}
+.cora-bank-editor .wording:hover,
+.cora-bank-editor .wording.focused {
+  border-color: var(--cora-color-accent);
+  box-shadow: var(--cora-focus-ring);
+}
+.cora-bank-editor .wording::before {
+  content: 'Question wording';
+  position: absolute;
+  top: -8px;
+  left: var(--cora-space-3);
+  background: var(--cora-color-surface);
+  padding: 0 var(--cora-space-2);
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-2xs);
+  letter-spacing: var(--cora-tracking-wider);
+  text-transform: uppercase;
+  color: var(--cora-color-text-muted);
+}
+.cora-bank-editor .wording .edit-mark {
+  position: absolute;
+  top: -8px;
+  right: var(--cora-space-3);
+  background: var(--cora-color-surface);
+  padding: 0 var(--cora-space-2);
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-2xs);
+  letter-spacing: var(--cora-tracking-wider);
+  text-transform: uppercase;
+  color: var(--cora-color-accent);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cora-space-1);
+}
+.cora-bank-editor .wording .edit-mark::before {
+  content: '✎';
+  font-size: var(--cora-font-size-sm);
+}
+
+.cora-bank-editor .q-text {
+  font-family: var(--cora-font-body);
+  font-weight: var(--cora-font-weight-medium);
+  font-size: var(--cora-font-size-md);
+  line-height: var(--cora-line-height-snug);
+  width: 100%;
+  border: none;
+  background: transparent;
+  resize: none;
+  color: var(--cora-color-on-surface);
+  padding: 2px 0;
+  caret-color: var(--cora-color-accent);
+}
+.cora-bank-editor .q-text:focus {
+  outline: none;
+}
+.cora-bank-editor .q-text.deprecated-text {
+  text-decoration: line-through;
+  text-decoration-color: var(--cora-color-text-subtle);
+}
+.cora-bank-editor .wording-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: var(--cora-space-2);
+  padding-top: var(--cora-space-2);
+  border-top: 1px dotted var(--cora-color-border);
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-2xs);
+  letter-spacing: var(--cora-tracking-wide);
+  text-transform: uppercase;
+  color: var(--cora-color-text-muted);
+}
+.cora-bank-editor .wording-foot .changed {
+  color: var(--cora-color-warning);
+}
+.cora-bank-editor .wording-foot .charcount.warn {
+  color: var(--cora-color-danger);
+}
+
+/* ── Card actions (icon buttons) ──────────────────────────────────────── */
+.cora-bank-editor .card-actions {
+  display: flex;
+  gap: var(--cora-space-1);
+  align-items: flex-start;
+  /* Keep the control cluster at its natural size and inside the card; the
+     card-body absorbs the width pressure (see its min-width: 0). */
+  flex-shrink: 0;
+}
+.cora-bank-editor .icon-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+  color: var(--cora-color-text-muted);
+  border-radius: var(--cora-radius-md);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-base);
+  transition: all var(--cora-duration-fast) var(--cora-easing-standard);
+}
+.cora-bank-editor .icon-btn:hover {
+  color: var(--cora-color-on-surface);
+  background: var(--cora-color-surface-2);
+  border-color: var(--cora-color-border);
+}
+.cora-bank-editor .icon-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+.cora-bank-editor .icon-btn:disabled:hover {
+  color: var(--cora-color-text-muted);
+  background: transparent;
+  border-color: transparent;
+}
+.cora-bank-editor .icon-btn.danger:hover {
+  color: var(--cora-color-danger);
+  border-color: var(--cora-color-danger);
+  background: var(--cora-color-danger-bg);
+}
+
+/* ── Field grid (category / response-type / failure criteria) ─────────── */
+.cora-bank-editor .field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--cora-space-3) var(--cora-space-5);
+  margin-top: var(--cora-space-4);
+}
+.cora-bank-editor .field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cora-space-1);
+}
+.cora-bank-editor .field label {
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-2xs);
+  letter-spacing: var(--cora-tracking-wider);
+  text-transform: uppercase;
+  color: var(--cora-color-text-muted);
+  font-weight: var(--cora-font-weight-semibold);
+}
+.cora-bank-editor .field-input,
+.cora-bank-editor .field-select {
+  border: none;
+  border-bottom: 1px solid var(--cora-color-border-strong);
+  padding: var(--cora-space-1) 0;
+  font-family: var(--cora-font-body);
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-on-surface);
+  width: 100%;
+}
+.cora-bank-editor .field-input:focus,
+.cora-bank-editor .field-select:focus {
+  outline: none;
+  border-bottom-color: var(--cora-color-accent);
+}
+.cora-bank-editor .field-input {
+  /* A transparent native input can retain SharePoint's white control fill in
+     dark mode. Give it the same tokenised surface as .field-select below. */
+  background-color: var(--cora-color-surface);
+}
+.cora-bank-editor .field-select {
+  /* A transparent native select can retain SharePoint's white control fill in
+     dark mode. Give the select an explicit tokenised surface instead. */
+  background-color: var(--cora-color-surface);
+  appearance: none;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%235C5C65' stroke-width='1.4'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 4px center;
+  padding-right: var(--cora-space-5);
+}
+
+/* ── Options editor (tag list for multi-choice) ───────────────────────── */
+.cora-bank-editor .options-label {
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-2xs);
+  letter-spacing: var(--cora-tracking-wider);
+  text-transform: uppercase;
+  color: var(--cora-color-text-muted);
+  font-weight: var(--cora-font-weight-semibold);
+  display: block;
+  margin-bottom: var(--cora-space-2);
+}
+.cora-bank-editor .tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cora-space-1);
+  margin-top: var(--cora-space-1);
+}
+.cora-bank-editor .tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cora-space-1);
+  background: var(--cora-color-surface-2);
+  border: 1px solid var(--cora-color-border);
+  padding: var(--cora-space-1) var(--cora-space-2);
+  border-radius: var(--cora-radius-md);
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-on-surface);
+}
+.cora-bank-editor .tag .tag-x {
+  cursor: pointer;
+  color: var(--cora-color-text-muted);
+  font-family: var(--cora-font-mono);
+}
+.cora-bank-editor .tag .tag-x:hover {
+  color: var(--cora-color-danger);
+}
+.cora-bank-editor .tag-add {
+  background: transparent;
+  border: 1px dashed var(--cora-color-border-strong);
+  padding: var(--cora-space-1) var(--cora-space-3);
+  font-family: var(--cora-font-body);
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+  border-radius: var(--cora-radius-md);
+  cursor: pointer;
+}
+.cora-bank-editor .tag-add:hover {
+  border-color: var(--cora-color-accent);
+  color: var(--cora-color-accent);
+  border-style: solid;
+}
+
+/* ── Per-option Outcome mapping (response drives the outcome) ──────────── */
+.cora-bank-editor .opt-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cora-space-1);
+  margin-top: var(--cora-space-1);
+}
+.cora-bank-editor .opt-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--cora-space-2);
+}
+.cora-bank-editor .opt-label {
+  flex: 1 1 auto;
+  background: var(--cora-color-surface-2);
+  border: 1px solid var(--cora-color-border);
+  padding: var(--cora-space-1) var(--cora-space-2);
+  border-radius: var(--cora-radius-md);
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-on-surface);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.cora-bank-editor .opt-outcome-select {
+  flex: 0 0 auto;
+  min-width: 9rem;
+  border: none;
+  border-bottom: 1px solid var(--cora-color-border-strong);
+  padding: var(--cora-space-1) 0;
+  font-family: var(--cora-font-body);
+  font-size: var(--cora-font-size-sm);
+  /* A transparent native select can retain SharePoint's white control fill in
+     dark mode. Give the select an explicit tokenised surface instead. */
+  color: var(--cora-color-on-surface);
+  background-color: var(--cora-color-surface);
+  appearance: none;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%235C5C65' stroke-width='1.4'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 4px center;
+  padding-right: var(--cora-space-5);
+}
+.cora-bank-editor .opt-outcome-select:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+.cora-bank-editor .opt-row .tag-x {
+  cursor: pointer;
+  color: var(--cora-color-text-muted);
+  font-family: var(--cora-font-mono);
+}
+.cora-bank-editor .opt-row .tag-x:hover {
+  color: var(--cora-color-danger);
+}
+
+/* ── Labels block (reporting tags) ────────────────────────────────────── */
+.cora-bank-editor .labels-block {
+  margin-top: var(--cora-space-4);
+}
+.cora-bank-editor .labels-help {
+  font-size: var(--cora-font-size-2xs);
+  color: var(--cora-color-text-muted);
+  margin: 2px 0 var(--cora-space-2);
+}
+.cora-bank-editor .label-row,
+.cora-bank-editor .label-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--cora-space-2);
+}
+.cora-bank-editor .label-add-row {
+  margin-top: var(--cora-space-2);
+}
+.cora-bank-editor .label-empty {
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+  font-style: italic;
+}
+.cora-bank-editor .label-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cora-space-1);
+  padding: 2px var(--cora-space-2) 2px 4px;
+  border-radius: var(--cora-radius-pill, 999px);
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-medium);
+  color: var(--cora-color-on-surface);
+  background: color-mix(in srgb, var(--pill) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--pill) 45%, transparent);
+}
+.cora-bank-editor .label-pill-name {
+  line-height: 1;
+}
+/* A native colour input squeezed into a swatch that reads as the pill dot. */
+.cora-bank-editor .label-pill-color {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+.cora-bank-editor .label-pill-color::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+.cora-bank-editor .label-pill-color::-webkit-color-swatch {
+  border: 1px solid color-mix(in srgb, var(--pill) 60%, transparent);
+  border-radius: 50%;
+}
+.cora-bank-editor .label-pill-x {
+  cursor: pointer;
+  color: var(--cora-color-text-muted);
+  font-family: var(--cora-font-mono);
+  line-height: 1;
+}
+.cora-bank-editor .label-pill-x:hover {
+  color: var(--cora-color-danger);
+}
+.cora-bank-editor .label-add-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cora-space-1);
+  background: transparent;
+  border: 1px dashed var(--cora-color-border-strong);
+  padding: var(--cora-space-1) var(--cora-space-2);
+  border-radius: var(--cora-radius-pill, 999px);
+  font-family: var(--cora-font-body);
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+  cursor: pointer;
+}
+.cora-bank-editor .label-add-chip:hover {
+  border-style: solid;
+  border-color: var(--pill);
+  color: var(--cora-color-on-surface);
+}
+.cora-bank-editor .label-swatch-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pill);
+}
+.cora-bank-editor .label-new {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cora-space-1);
+}
+.cora-bank-editor .label-new-name {
+  background: transparent;
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  padding: var(--cora-space-1) var(--cora-space-2);
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-on-surface);
+  width: 9rem;
+}
+.cora-bank-editor .label-new-color {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-sm);
+  background: transparent;
+  cursor: pointer;
+}
+.cora-bank-editor .label-new-add {
+  background: transparent;
+  border: 1px dashed var(--cora-color-border-strong);
+  padding: var(--cora-space-1) var(--cora-space-3);
+  font-family: var(--cora-font-body);
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+  border-radius: var(--cora-radius-md);
+  cursor: pointer;
+}
+.cora-bank-editor .label-new-add:hover {
+  border-color: var(--cora-color-accent);
+  color: var(--cora-color-accent);
+  border-style: solid;
+}
+
+/* ── showWhen block ───────────────────────────────────────────────────── */
+.cora-bank-editor .showwhen-block {
+  margin-top: var(--cora-space-4);
+  padding: var(--cora-space-3) var(--cora-space-4);
+  background: var(--cora-color-warning-bg);
+  border-left: 3px solid var(--cora-color-warning);
+  border-radius: 0 var(--cora-radius-md) var(--cora-radius-md) 0;
+}
+.cora-bank-editor .showwhen-header {
+  display: flex;
+  align-items: center;
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-xs);
+  letter-spacing: var(--cora-tracking-wider);
+  text-transform: uppercase;
+  color: var(--cora-color-warning);
+  font-weight: var(--cora-font-weight-semibold);
+  margin-bottom: var(--cora-space-2);
+}
+.cora-bank-editor .showwhen-desc {
+  color: var(--cora-color-text-muted);
+  font-weight: var(--cora-font-weight-regular);
+  margin-left: auto;
+}
+.cora-bank-editor .showwhen-mode {
+  appearance: none;
+  cursor: pointer;
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-xs);
+  letter-spacing: var(--cora-tracking-wider);
+  text-transform: uppercase;
+  font-weight: var(--cora-font-weight-bold);
+  color: var(--cora-color-warning);
+  background: var(--cora-color-surface);
+  border: 1px solid currentColor;
+  border-radius: var(--cora-radius-sm);
+  padding: var(--cora-space-1) var(--cora-space-5) var(--cora-space-1)
+    var(--cora-space-2);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23D99A00' stroke-width='1.4'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+}
+.cora-bank-editor .showwhen-mode:focus {
+  outline: none;
+  border-color: var(--cora-color-accent);
+}
+.cora-bank-editor .showwhen-empty {
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-xs);
+  color: var(--cora-color-text-muted);
+  padding: var(--cora-space-1) 0;
+}
+
+.cora-bank-editor .group {
+  position: relative;
+  display: block;
+  margin: var(--cora-space-1) 0;
+  padding: var(--cora-space-2) var(--cora-space-3);
+  border-radius: var(--cora-radius-md);
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+}
+.cora-bank-editor .group.op-and {
+  border-left: 3px solid var(--cora-color-warning);
+}
+.cora-bank-editor .group.op-or {
+  border-left: 3px dashed var(--cora-color-info);
+}
+.cora-bank-editor .group .group {
+  margin-left: var(--cora-space-3);
+}
+
+.cora-bank-editor .group-head {
+  display: flex;
+  align-items: center;
+  gap: var(--cora-space-2);
+  margin-bottom: var(--cora-space-2);
+}
+.cora-bank-editor .op-toggle {
+  cursor: pointer;
+  user-select: none;
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-xs);
+  letter-spacing: var(--cora-tracking-wider);
+  text-transform: uppercase;
+  font-weight: var(--cora-font-weight-bold);
+  padding: var(--cora-space-1) var(--cora-space-2);
+  border-radius: var(--cora-radius-sm);
+  background: var(--cora-color-surface-2);
+  color: var(--cora-color-on-surface);
+  border: 1px solid currentColor;
+  transition: all var(--cora-duration-fast) var(--cora-easing-standard);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cora-space-2);
+}
+.cora-bank-editor .op-toggle.op-and {
+  color: var(--cora-color-warning);
+}
+.cora-bank-editor .op-toggle.op-or {
+  color: var(--cora-color-info);
+}
+.cora-bank-editor .op-toggle:hover {
+  background: var(--cora-color-on-surface);
+  color: var(--cora-color-surface);
+  border-color: var(--cora-color-on-surface);
+}
+.cora-bank-editor .op-toggle .arrow {
+  font-size: var(--cora-font-size-xs);
+  opacity: 0.6;
+}
+.cora-bank-editor .op-toggle .qual {
+  font-family: var(--cora-font-body);
+  font-size: var(--cora-font-size-xs);
+  letter-spacing: var(--cora-tracking-base);
+  text-transform: none;
+  font-weight: var(--cora-font-weight-medium);
+  color: var(--cora-color-text-muted);
+  margin-left: var(--cora-space-1);
+}
+.cora-bank-editor .op-toggle:hover .qual {
+  color: var(--cora-color-surface-2);
+}
+
+.cora-bank-editor .group-actions {
+  margin-left: auto;
+  display: flex;
+  gap: var(--cora-space-1);
+  align-items: center;
+}
+.cora-bank-editor .mini-btn {
+  background: transparent;
+  border: 1px solid var(--cora-color-border);
+  color: var(--cora-color-text-muted);
+  padding: var(--cora-space-0-5) var(--cora-space-2);
+  font-family: var(--cora-font-body);
+  font-size: var(--cora-font-size-xs);
+  cursor: pointer;
+  border-radius: var(--cora-radius-sm);
+}
+.cora-bank-editor .mini-btn:hover {
+  color: var(--cora-color-on-surface);
+  border-color: var(--cora-color-border-strong);
+}
+.cora-bank-editor .mini-btn.danger:hover {
+  color: var(--cora-color-danger);
+  border-color: var(--cora-color-danger);
+}
+/* Busy controls keep focus, so they are `aria-disabled` rather than `disabled`
+   (see the Retry control in cora-bank-editor.js); both spellings read the
+   same. */
+.cora-bank-editor .mini-btn:disabled,
+.cora-bank-editor .mini-btn[aria-disabled='true'] {
+  opacity: 0.6;
+  cursor: default;
+}
+.cora-bank-editor .mini-btn[aria-disabled='true']:hover {
+  color: var(--cora-color-text-muted);
+  border-color: var(--cora-color-border);
+}
+
+.cora-bank-editor .group-children {
+  padding-left: 0;
+}
+
+.cora-bank-editor .leaf {
+  display: flex;
+  align-items: center;
+  gap: var(--cora-space-2);
+  margin: var(--cora-space-1) 0;
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-sm);
+  background: var(--cora-color-surface);
+  padding: var(--cora-space-1) var(--cora-space-2);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-sm);
+}
+.cora-bank-editor .leaf select,
+.cora-bank-editor .leaf input {
+  background: transparent;
+  border: none;
+  border-bottom: 1px dashed var(--cora-color-border);
+  padding: 2px var(--cora-space-1);
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-on-surface);
+}
+.cora-bank-editor .leaf select:focus,
+.cora-bank-editor .leaf input:focus {
+  outline: none;
+  border-bottom-color: var(--cora-color-accent);
+}
+.cora-bank-editor .leaf .leaf-op {
+  color: var(--cora-color-warning);
+  font-weight: var(--cora-font-weight-bold);
+  padding: 0 2px;
+}
+.cora-bank-editor .leaf .leaf-x {
+  margin-left: auto;
+  cursor: pointer;
+  color: var(--cora-color-text-muted);
+  font-family: var(--cora-font-mono);
+}
+.cora-bank-editor .leaf .leaf-x:hover {
+  color: var(--cora-color-danger);
+}
+.cora-bank-editor .leaf-answered-hint {
+  color: var(--cora-color-text-muted);
+  font-size: var(--cora-font-size-xs);
+}
+
+.cora-bank-editor .group.op-or > .group-children > .leaf .leaf-op {
+  color: var(--cora-color-info);
+}
+
+.cora-bank-editor .conjunction {
+  display: flex;
+  align-items: center;
+  gap: var(--cora-space-2);
+  margin: 2px 0 2px var(--cora-space-3);
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-2xs);
+  letter-spacing: var(--cora-tracking-wider);
+  text-transform: uppercase;
+  color: var(--cora-color-text-muted);
+}
+.cora-bank-editor .conjunction .glyph {
+  padding: 1px var(--cora-space-2);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-pill);
+  background: var(--cora-color-surface);
+}
+
+/* ── Remediation editor ───────────────────────────────────────────────── */
+.cora-bank-editor .rem-block {
+  margin-top: var(--cora-space-4);
+}
+.cora-bank-editor .rem-block h4 {
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-2xs);
+  letter-spacing: var(--cora-tracking-wider);
+  text-transform: uppercase;
+  color: var(--cora-color-text-muted);
+  font-weight: var(--cora-font-weight-semibold);
+  margin: 0 0 var(--cora-space-2);
+}
+.cora-bank-editor .rem-count {
+  color: var(--cora-color-text-muted);
+  margin-left: var(--cora-space-1);
+}
+.cora-bank-editor .rem-free-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--cora-space-2) var(--cora-space-3);
+  margin-bottom: var(--cora-space-2);
+  background: var(--cora-color-success-bg);
+  border-left: 3px solid var(--cora-color-success);
+  border-radius: 0 var(--cora-radius-md) var(--cora-radius-md) 0;
+}
+.cora-bank-editor .rem-free-title {
+  font-family: var(--cora-font-body);
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-on-surface);
+  font-weight: var(--cora-font-weight-semibold);
+}
+.cora-bank-editor .rem-free-help {
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-xs);
+  color: var(--cora-color-text-muted);
+  margin-top: 2px;
+}
+.cora-bank-editor .rem-free-preview {
+  margin: var(--cora-space-1) 0 var(--cora-space-3);
+  padding: var(--cora-space-2) var(--cora-space-3);
+  border: 1px dashed var(--cora-color-success);
+  border-radius: var(--cora-radius-md);
+  background: var(--cora-color-surface);
+}
+.cora-bank-editor .rem-free-preview-eyebrow {
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-2xs);
+  letter-spacing: var(--cora-tracking-wider);
+  text-transform: uppercase;
+  color: var(--cora-color-success);
+  font-weight: var(--cora-font-weight-semibold);
+  margin-bottom: var(--cora-space-1);
+}
+.cora-bank-editor .rem-free-preview-body {
+  font-family: var(--cora-font-body);
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+  font-style: italic;
+}
+.cora-bank-editor .rem-item {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) minmax(12rem, 0.8fr) auto;
+  align-items: center;
+  gap: var(--cora-space-2);
+  padding: var(--cora-space-2) 0;
+  border-bottom: 1px dotted var(--cora-color-border);
+}
+.cora-bank-editor .rem-item:last-child {
+  border-bottom: none;
+}
+.cora-bank-editor .rem-item::before {
+  content: none;
+}
+.cora-bank-editor .rem-item input {
+  min-width: 0;
+  background: transparent;
+  border: none;
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-on-surface);
+  font-family: var(--cora-font-body);
+}
+.cora-bank-editor .rem-item input:focus {
+  outline: none;
+}
+.cora-bank-editor .rem-item .x {
+  cursor: pointer;
+  color: var(--cora-color-text-muted);
+  font-family: var(--cora-font-mono);
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.cora-bank-editor .rem-item .x:hover {
+  color: var(--cora-color-danger);
+}
+.cora-bank-editor .rem-empty {
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-xs);
+  color: var(--cora-color-text-muted);
+  padding: var(--cora-space-1) 0;
+}
+.cora-bank-editor .rem-add {
+  margin-top: var(--cora-space-2);
+}
+.cora-bank-editor .rem-outcome-block {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) minmax(14rem, 1fr);
+  align-items: center;
+  gap: var(--cora-space-3);
+  padding: var(--cora-space-2) var(--cora-space-3);
+  margin-bottom: var(--cora-space-2);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  background: var(--cora-color-surface);
+}
+.cora-bank-editor .rem-outcome-block h5 {
+  margin: 0;
+  font-size: var(--cora-font-size-xs);
+  color: var(--cora-color-text-muted);
+  font-weight: var(--cora-font-weight-semibold);
+}
+.cora-bank-editor .rem-outcome-select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-sm);
+  padding: var(--cora-space-1) var(--cora-space-2);
+  background: var(--cora-color-surface-2);
+  color: var(--cora-color-on-surface);
+  font-family: var(--cora-font-body);
+  font-size: var(--cora-font-size-sm);
+}
+
+/* ── Add-card (dashed "Draft a new question" CTA) ─────────────────────── */
+.cora-bank-editor .add-card {
+  border: 1.5px dashed var(--cora-color-border-strong);
+  padding: var(--cora-space-5);
+  text-align: center;
+  cursor: pointer;
+  border-radius: var(--cora-radius-md);
+  color: var(--cora-color-text-muted);
+  font-family: var(--cora-font-body);
+  font-size: var(--cora-font-size-base);
+  font-weight: var(--cora-font-weight-semibold);
+  background: transparent;
+  display: block;
+  width: 100%;
+  margin-top: var(--cora-space-2);
+  transition:
+    border-color var(--cora-duration-fast) var(--cora-easing-standard),
+    color var(--cora-duration-fast) var(--cora-easing-standard),
+    background var(--cora-duration-fast) var(--cora-easing-standard);
+}
+.cora-bank-editor .add-card:hover {
+  border-color: var(--cora-color-accent);
+  color: var(--cora-color-accent);
+  background: var(--cora-color-accent-muted);
+}
+.cora-bank-editor .add-card .plus {
+  display: inline-block;
+  font-family: var(--cora-font-display);
+  font-size: var(--cora-font-size-lg);
+  font-weight: var(--cora-font-weight-bold);
+  vertical-align: middle;
+  margin-right: var(--cora-space-2);
+}
+
+/* ── Dock (sticky footer summary) ─────────────────────────────────────── */
+.cora-bank-editor .dock {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--cora-color-surface);
+  color: var(--cora-color-on-surface);
+  border-top: 1px solid var(--cora-color-border);
+  padding: var(--cora-space-3) var(--cora-space-7);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: var(--cora-shadow-md);
+  z-index: 50;
+}
+.cora-bank-editor .dock-status {
+  display: flex;
+  align-items: center;
+  gap: var(--cora-space-3);
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-sm);
+}
+.cora-bank-editor .dock-stat {
+  padding: 0 var(--cora-space-3);
+  border-right: 1px solid var(--cora-color-border);
+}
+.cora-bank-editor .dock-stat:last-child {
+  border-right: none;
+}
+.cora-bank-editor .dock-stat strong {
+  color: var(--cora-color-on-surface);
+  font-weight: var(--cora-font-weight-semibold);
+}
+.cora-bank-editor .dock-stat .label {
+  color: var(--cora-color-text-muted);
+  margin-right: var(--cora-space-1);
+  letter-spacing: var(--cora-tracking-wider);
+  text-transform: uppercase;
+  font-size: var(--cora-font-size-2xs);
+}
+.cora-bank-editor .dock-actions {
+  display: flex;
+  gap: var(--cora-space-2);
+}
+.cora-bank-editor .dock-btn {
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border-strong);
+  color: var(--cora-color-on-surface);
+  padding: var(--cora-space-2) var(--cora-space-4);
+  font-family: var(--cora-font-body);
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-semibold);
+  cursor: pointer;
+  border-radius: var(--cora-radius-md);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cora-space-2);
+  transition:
+    background var(--cora-duration-fast) var(--cora-easing-standard),
+    border-color var(--cora-duration-fast) var(--cora-easing-standard);
+}
+.cora-bank-editor .dock-btn:hover {
+  background: var(--cora-color-surface-2);
+}
+.cora-bank-editor .dock-btn.primary {
+  background: var(--cora-color-accent);
+  border-color: var(--cora-color-accent);
+  color: var(--cora-color-text-on-accent);
+}
+.cora-bank-editor .dock-btn.primary:hover {
+  background: var(--cora-color-accent-hover);
+  border-color: var(--cora-color-accent-hover);
+}
+
+/* ── Drawer (compile preview) ─────────────────────────────────────────── */
+.cora-bank-editor .drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 90;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--cora-duration-base) var(--cora-easing-standard);
+}
+.cora-bank-editor .drawer-backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.cora-bank-editor .drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(720px, 90vw);
+  background: var(--cora-color-surface);
+  border-left: 1px solid var(--cora-color-border);
+  z-index: 100;
+  transform: translateX(100%);
+  transition: transform var(--cora-duration-slow) var(--cora-easing-standard);
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--cora-shadow-lg);
+}
+.cora-bank-editor .drawer.open {
+  transform: translateX(0);
+}
+
+.cora-bank-editor .drawer-head {
+  padding: var(--cora-space-5) var(--cora-space-6) var(--cora-space-4);
+  border-bottom: 1px solid var(--cora-color-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.cora-bank-editor .drawer-head h3 {
+  font-family: var(--cora-font-display);
+  font-weight: var(--cora-font-weight-bold);
+  font-size: var(--cora-font-size-xl);
+  letter-spacing: var(--cora-tracking-tight);
+  line-height: var(--cora-line-height-tight);
+  margin: 0;
+  color: var(--cora-color-on-surface);
+}
+.cora-bank-editor .drawer-head h3 em {
+  font-style: normal;
+  color: var(--cora-color-accent);
+}
+.cora-bank-editor .drawer-head p {
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+  margin: var(--cora-space-1) 0 0;
+  max-width: 380px;
+}
+.cora-bank-editor .drawer-close {
+  background: transparent;
+  border: 1px solid var(--cora-color-border);
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-md);
+  color: var(--cora-color-text-muted);
+  border-radius: var(--cora-radius-md);
+}
+.cora-bank-editor .drawer-close:hover {
+  color: var(--cora-color-danger);
+  border-color: var(--cora-color-danger);
+}
+
+.cora-bank-editor .drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--cora-space-4) var(--cora-space-6);
+}
+.cora-bank-editor .diff-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--cora-space-3);
+  margin-bottom: var(--cora-space-4);
+}
+.cora-bank-editor .diff-card {
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  padding: var(--cora-space-3) var(--cora-space-4);
+  border-radius: var(--cora-radius-md);
+}
+.cora-bank-editor .diff-card .n {
+  font-family: var(--cora-font-display);
+  font-weight: var(--cora-font-weight-black);
+  font-size: var(--cora-font-size-2xl);
+  line-height: var(--cora-line-height-tight);
+  letter-spacing: var(--cora-tracking-tight);
+}
+.cora-bank-editor .diff-card .l {
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-2xs);
+  letter-spacing: var(--cora-tracking-wider);
+  text-transform: uppercase;
+  color: var(--cora-color-text-muted);
+  margin-top: var(--cora-space-1);
+}
+.cora-bank-editor .diff-card.added .n {
+  color: var(--cora-color-success);
+}
+.cora-bank-editor .diff-card.changed .n {
+  color: var(--cora-color-warning);
+}
+.cora-bank-editor .diff-card.removed .n {
+  color: var(--cora-color-danger);
+}
+
+.cora-bank-editor .sim-panel {
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  padding: var(--cora-space-3) var(--cora-space-4);
+  margin-bottom: var(--cora-space-4);
+}
+.cora-bank-editor .sim-panel h4 {
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-2xs);
+  letter-spacing: var(--cora-tracking-wider);
+  text-transform: uppercase;
+  color: var(--cora-color-text-muted);
+  margin: 0 0 var(--cora-space-2);
+}
+.cora-bank-editor .sim-summary {
+  font-size: var(--cora-font-size-sm);
+  margin: 0 0 var(--cora-space-2);
+}
+.cora-bank-editor .sim-empty {
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+  margin: 0;
+}
+.cora-bank-editor .sim-cases {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--cora-space-2);
+}
+.cora-bank-editor .sim-case {
+  border-top: 1px solid var(--cora-color-border);
+  padding-top: var(--cora-space-2);
+  font-size: var(--cora-font-size-sm);
+}
+.cora-bank-editor .sim-case ul {
+  margin: var(--cora-space-1) 0 0;
+  padding-left: var(--cora-space-5);
+  color: var(--cora-color-text-muted);
+}
+
+.cora-bank-editor .code-block {
+  background: #0e0e0f;
+  color: #eaeaec;
+  padding: var(--cora-space-4) var(--cora-space-5);
+  border-radius: var(--cora-radius-md);
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-sm);
+  line-height: var(--cora-line-height-loose);
+  white-space: pre;
+  overflow-x: auto;
+  max-height: 50vh;
+}
+.cora-bank-editor .code-block .k {
+  color: #ff9f43;
+}
+.cora-bank-editor .code-block .s {
+  color: #b5e48c;
+}
+.cora-bank-editor .code-block .b {
+  color: #ff8a80;
+}
+.cora-bank-editor .code-block .p {
+  color: #9fb8d0;
+}
+.cora-bank-editor .code-block .c {
+  color: #6a6f7f;
+  font-style: italic;
+}
+.cora-bank-editor .code-inline {
+  font-family: var(--cora-font-mono);
+}
+
+.cora-bank-editor .drawer-foot {
+  padding: var(--cora-space-3) var(--cora-space-6);
+  border-top: 1px solid var(--cora-color-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--cora-space-3);
+  background: var(--cora-color-surface-2);
+}
+.cora-bank-editor .drawer-foot small {
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-xs);
+  color: var(--cora-color-text-muted);
+  letter-spacing: var(--cora-tracking-wide);
+}
+.cora-bank-editor .drawer-foot-actions {
+  display: flex;
+  gap: var(--cora-space-2);
+}
+
+/* ── Toast ────────────────────────────────────────────────────────────── */
+.cora-bank-editor .toast {
+  position: fixed;
+  bottom: 90px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--cora-color-on-surface);
+  color: var(--cora-color-surface);
+  padding: var(--cora-space-2) var(--cora-space-5);
+  border-radius: var(--cora-radius-md);
+  font-family: var(--cora-font-body);
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-semibold);
+  box-shadow: var(--cora-shadow-lg);
+  z-index: 200;
+  opacity: 0;
+  transition:
+    opacity var(--cora-duration-base) var(--cora-easing-standard),
+    transform var(--cora-duration-base) var(--cora-easing-standard);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cora-space-2);
+}
+.cora-bank-editor .toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+.cora-bank-editor .toast .dot {
+  width: 6px;
+  height: 6px;
+  background: var(--cora-color-success);
+  border-radius: 50%;
+}
+
+/* ── Partial bank-load failure (#521) ─────────────────────────────────── */
+/*
+ * A named Question Bank failed to load and the curator can retry it (#521,
+ * #549). This carried surface/muted styling until the #551 browser pass, which
+ * read it as neutral chrome rather than a warning — the one place in the
+ * editor that has to catch the eye looked like a caption. It now uses the same
+ * warning tokens as `cora-banner-warning`.
+ */
+.cora-bank-editor .bank-load-warning {
+  padding: var(--cora-space-3) var(--cora-space-7);
+  background: var(--cora-color-warning-bg);
+  border-bottom: 1px solid var(--cora-color-warning);
+  color: var(--cora-color-warning);
+  font-size: var(--cora-font-size-sm);
+  display: flex;
+  align-items: center;
+  gap: var(--cora-space-3);
+}
+
+/* ── Empty state ──────────────────────────────────────────────────────── */
+.cora-bank-editor .empty {
+  text-align: center;
+  padding: var(--cora-space-10) var(--cora-space-4);
+  color: var(--cora-color-text-muted);
+}
+.cora-bank-editor .empty h3 {
+  font-family: var(--cora-font-display);
+  font-weight: var(--cora-font-weight-bold);
+  font-size: var(--cora-font-size-lg);
+  color: var(--cora-color-text-muted);
+  margin-bottom: var(--cora-space-2);
+}
+.cora-bank-editor .empty .mini-btn {
+  margin-top: var(--cora-space-3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cora-bank-editor aside.rail,
+  .cora-bank-editor .rail-backdrop {
+    transition: none;
+  }
+}

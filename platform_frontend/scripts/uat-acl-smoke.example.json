@@ -1,0 +1,50 @@
+{
+  "siteUrl": "https://sharepoint.example/sites/cora",
+  "requiredListPrefix": "uat_",
+  "personas": [
+    {
+      "name": "complaints reviewer",
+      "headersFileEnv": "CORA_UAT_REVIEWER_HEADERS_FILE",
+      "expectations": [
+        {
+          "listName": "uat_Cases-Complaints",
+          "read": "allow",
+          "write": "deny"
+        }
+      ]
+    },
+    {
+      "name": "unrelated reviewer",
+      "headersFileEnv": "CORA_UAT_UNRELATED_HEADERS_FILE",
+      "expectations": [
+        {
+          "listName": "uat_Cases-Complaints",
+          "read": "deny",
+          "write": "deny"
+        }
+      ]
+    },
+    {
+      "name": "controls writer",
+      "headersFileEnv": "CORA_UAT_CONTROLS_HEADERS_FILE",
+      "expectations": [
+        {
+          "listName": "uat_Cases-Complaints",
+          "read": "allow",
+          "write": "allow"
+        }
+      ]
+    },
+    {
+      "name": "responsible party manager",
+      "headersFileEnv": "CORA_UAT_RP_MANAGER_HEADERS_FILE",
+      "expectations": [
+        {
+          "listName": "uat_Cases-Complaints",
+          "read": "allow",
+          "write": "allow"
+        }
+      ]
+    }
+  ]
+}

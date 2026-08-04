@@ -1,0 +1,9 @@
+node_modules/
+.claude
+.worktrees/
+coverage/
+.verify/
+
+# Python (deploy/scaffold tooling)
+__pycache__/
+*.pyc

@@ -1,0 +1,591 @@
+// @ts-check
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+
+import {
+  REMEDIATION_STATUSES,
+  REMEDIATION_STATUS_LABELS,
+  REMEDIATION_DETAIL_LABELS,
+  answerRemediation,
+  hasTrackableRemediation,
+  remediationRows,
+  isRemediationResolved,
+  remediationComplete,
+  remediationDecided,
+  anyRemediationRequired,
+  setRemediationStatus,
+} from '../src/evaluators/remediation-status.js';
+
+/** @typedef {import('../src/sharepoint-client.js').QuestionDefinition} QuestionDefinition */
+/** @typedef {import('../src/sharepoint-client.js').Answer} Answer */
+
+/** @type {QuestionDefinition[]} */
+const CATALOGUE = [
+  {
+    id: 'q1',
+    text: 'Greeted the customer?',
+    responseType: 'yes-no-na',
+    failureValues: ['No'],
+    deprecated: false,
+  },
+  {
+    id: 'q2',
+    text: 'Explained the outcome?',
+    responseType: 'yes-no-na',
+    failureValues: ['No'],
+    deprecated: false,
+  },
+  {
+    id: 'q3',
+    text: 'Only applies after q1 fails',
+    responseType: 'yes-no-na',
+    failureValues: ['No'],
+    deprecated: false,
+    showWhen: { q1: { equals: 'No' } },
+  },
+];
+
+/** @returns {Record<string, Answer>} */
+function failedWithActions() {
+  return {
+    q1: {
+      value: 'No',
+      remediationActions: [{ id: 'a1', text: 'Call the customer back' }],
+    },
+  };
+}
+
+test('answerRemediation: reads selected actions and free-form text; null when neither', () => {
+  assert.equal(answerRemediation(undefined), null);
+  assert.equal(answerRemediation({ value: 'No' }), null);
+  assert.equal(
+    answerRemediation({ value: 'No', remediationActions: [] }),
+    null
+  );
+  assert.equal(
+    answerRemediation({ value: 'No', freeFormRemediation: '   ' }),
+    null
+  );
+
+  assert.deepEqual(
+    answerRemediation({
+      value: 'No',
+      remediationActions: [{ id: 'a1', text: 'Refund' }],
+      freeFormRemediation: 'Also apologise',
+    }),
+    { actions: [{ id: 'a1', text: 'Refund' }], freeForm: 'Also apologise' }
+  );
+
+  assert.deepEqual(
+    answerRemediation({ value: 'No', freeFormRemediation: 'Apologise' }),
+    { actions: [], freeForm: 'Apologise' }
+  );
+});
+
+test('hasTrackableRemediation: true when the Case has at least one remediation row', () => {
+  assert.equal(hasTrackableRemediation(CATALOGUE, failedWithActions()), true);
+  assert.equal(
+    hasTrackableRemediation(CATALOGUE, {
+      q1: { value: 'No', freeFormRemediation: 'Apologise' },
+    }),
+    true
+  );
+  assert.equal(
+    hasTrackableRemediation(CATALOGUE, { q1: { value: 'No' } }),
+    false
+  );
+  assert.equal(hasTrackableRemediation(CATALOGUE, {}), false);
+  assert.equal(
+    hasTrackableRemediation(CATALOGUE, /** @type {any} */ (undefined)),
+    false
+  );
+});
+
+test('hasTrackableRemediation: remediation on a Question that has left the catalogue is not remediation', () => {
+  // The whole point of the seam. An Answer whose Question is deprecated, no
+  // longer applicable or no longer failing keeps its remediation in the Answers
+  // blob, but there is no row to resolve it on — so it must not be counted as
+  // remediation by anything that decides the lifecycle either.
+  const orphaned = {
+    'q-old': { value: 'No', freeFormRemediation: 'Refund the customer £40' },
+  };
+  assert.equal(answerRemediation(orphaned['q-old']) !== null, true);
+  assert.equal(hasTrackableRemediation([], orphaned), false);
+  assert.equal(
+    hasTrackableRemediation(/** @type {any} */ (undefined), orphaned),
+    false
+  );
+});
+
+test('remediationRows: a deprecated Question is not in the catalogue', () => {
+  const deprecated = CATALOGUE.map((q) =>
+    q.id === 'q1' ? { ...q, deprecated: true } : q
+  );
+  assert.deepEqual(remediationRows(deprecated, failedWithActions()), []);
+});
+
+test('remediationRows: only applicable, failed Questions that carry remediation', () => {
+  const rows = remediationRows(CATALOGUE, {
+    // fails and has remediation -> a row
+    q1: {
+      value: 'No',
+      remediationActions: [{ id: 'a1', text: 'Call back' }],
+    },
+    // fails but has no remediation (optional) -> no row
+    q2: { value: 'No' },
+    // applicable (q1 = No) and carries remediation, but passed -> no row
+    q3: {
+      value: 'Yes',
+      remediationActions: [{ id: 'a2', text: 'Nope' }],
+    },
+  });
+
+  assert.deepEqual(
+    rows.map((row) => row.question.id),
+    ['q1']
+  );
+  assert.deepEqual(rows[0].actions, [{ id: 'a1', text: 'Call back' }]);
+  assert.equal(rows[0].freeForm, '');
+  assert.equal(rows[0].status, null);
+  assert.equal(rows[0].details, '');
+});
+
+test('remediationRows: a non-applicable Question never produces a row', () => {
+  // q3 needs q1 = 'No'; here q1 passes, so q3 is not applicable even though it
+  // still carries remediation from an earlier edit.
+  const rows = remediationRows(CATALOGUE, {
+    q1: { value: 'Yes' },
+    q3: {
+      value: 'No',
+      remediationActions: [{ id: 'a3', text: 'Stale' }],
+    },
+  });
+  assert.deepEqual(rows, []);
+});
+
+test('remediationRows: surfaces the stored status and details', () => {
+  const rows = remediationRows(CATALOGUE, {
+    q1: {
+      value: 'No',
+      freeFormRemediation: 'Write to the customer',
+      remediationStatus: { status: 'partial', details: 'Letter drafted' },
+    },
+  });
+  assert.equal(rows[0].status, 'partial');
+  assert.equal(rows[0].details, 'Letter drafted');
+  assert.equal(rows[0].freeForm, 'Write to the customer');
+});
+
+test('remediationRows: an unrecognised stored status reads as unset', () => {
+  const rows = remediationRows(CATALOGUE, {
+    q1: /** @type {any} */ ({
+      value: 'No',
+      freeFormRemediation: 'x',
+      remediationStatus: { status: 'nonsense' },
+    }),
+  });
+  assert.equal(rows[0].status, null);
+  assert.equal(rows[0].details, '');
+});
+
+test('setRemediationStatus: complete drops any details', () => {
+  const next = setRemediationStatus(
+    { value: 'No', remediationStatus: { status: 'partial', details: 'half' } },
+    'complete',
+    'ignored'
+  );
+  assert.deepEqual(next.remediationStatus, { status: 'complete' });
+});
+
+test('setRemediationStatus: partial and cancelled keep their text', () => {
+  assert.deepEqual(
+    setRemediationStatus({ value: 'No' }, 'partial', 'Two of three done')
+      .remediationStatus,
+    { status: 'partial', details: 'Two of three done' }
+  );
+  assert.deepEqual(
+    setRemediationStatus({ value: 'No' }, 'cancelled', 'Customer declined')
+      .remediationStatus,
+    { status: 'cancelled', details: 'Customer declined' }
+  );
+});
+
+test('setRemediationStatus: missing text is stored as empty, leaving the row unresolved', () => {
+  const next = setRemediationStatus({ value: 'No' }, 'cancelled', '');
+  assert.deepEqual(next.remediationStatus, {
+    status: 'cancelled',
+    details: '',
+  });
+  assert.equal(
+    isRemediationResolved(/** @type {any} */ (next.remediationStatus)),
+    false
+  );
+});
+
+test('setRemediationStatus: an empty status clears the field entirely', () => {
+  const next = setRemediationStatus(
+    { value: 'No', remediationStatus: { status: 'complete' } },
+    '',
+    ''
+  );
+  assert.equal('remediationStatus' in next, false);
+});
+
+test('remediationRows: an unchanged catalogue and Answers reuse the last result', () => {
+  // The rows are derived through a full applicability pass, and both the view and
+  // the completion gate ask for them on every render — which, while the Reviewer
+  // types a justification, is every keystroke. Same inputs, same array.
+  const answers = failedWithActions();
+  const first = remediationRows(CATALOGUE, answers);
+  assert.equal(remediationRows(CATALOGUE, answers), first);
+
+  const edited = {
+    ...answers,
+    q1: { ...answers.q1, remediationStatus: { status: 'complete' } },
+  };
+  const second = remediationRows(CATALOGUE, /** @type {any} */ (edited));
+  assert.notEqual(second, first);
+  assert.equal(second[0].status, 'complete');
+
+  // A different catalogue against the same Answers is not the cached result.
+  assert.notEqual(
+    remediationRows([CATALOGUE[0]], /** @type {any} */ (edited)),
+    second
+  );
+});
+
+test('setRemediationStatus: clearing an already-unresolved row is a no-op', () => {
+  // The caller short-circuits on identity to skip the write. Returning a fresh
+  // object for a field that was never there would PATCH the Answers blob — and
+  // bump the ETag — for nothing.
+  /** @type {Answer} */
+  const answer = { value: 'No' };
+  assert.equal(setRemediationStatus(answer, '', ''), answer);
+});
+
+test('setRemediationStatus: an unrecognised status is rejected, leaving the Answer untouched', () => {
+  /** @type {Answer} */
+  const answer = { value: 'No', remediationStatus: { status: 'complete' } };
+  assert.equal(
+    setRemediationStatus(answer, /** @type {any} */ ('done-ish'), ''),
+    answer
+  );
+});
+
+test('isRemediationResolved: complete always; partial/cancelled only with text', () => {
+  assert.equal(isRemediationResolved(null), false);
+  assert.equal(isRemediationResolved({ status: 'complete' }), true);
+  assert.equal(isRemediationResolved({ status: 'partial' }), false);
+  assert.equal(
+    isRemediationResolved({ status: 'partial', details: '  ' }),
+    false
+  );
+  assert.equal(
+    isRemediationResolved({ status: 'partial', details: 'some' }),
+    true
+  );
+  assert.equal(
+    isRemediationResolved({ status: 'cancelled', details: 'why' }),
+    true
+  );
+});
+
+test('remediationComplete: every remediation row must be resolved', () => {
+  // Answers are replaced, never mutated in place — that is how the store writes
+  // them, and what lets `remediationRows` key its cache on identity.
+  const answers = failedWithActions();
+  assert.equal(remediationComplete(CATALOGUE, answers), false);
+
+  const started = { q1: setRemediationStatus(answers.q1, 'partial', '') };
+  assert.equal(
+    remediationComplete(CATALOGUE, started),
+    false,
+    'partial without details is not resolved'
+  );
+
+  const finished = {
+    q1: setRemediationStatus(answers.q1, 'partial', 'Half done'),
+  };
+  assert.equal(remediationComplete(CATALOGUE, finished), true);
+});
+
+test('remediationComplete: vacuously true when the Case carries no remediation', () => {
+  assert.equal(remediationComplete(CATALOGUE, {}), true);
+  assert.equal(remediationComplete(CATALOGUE, { q1: { value: 'No' } }), true);
+});
+
+test('the gate treats an absent Answers map as no remediation, never as resolved', () => {
+  // The gate runs on every render, including one where the store has not
+  // handed its Answers over yet: an absent map must read as "nothing to
+  // resolve", the same as an empty one — and must not throw.
+  assert.deepEqual(
+    remediationRows(CATALOGUE, /** @type {any} */ (undefined)),
+    []
+  );
+  assert.equal(
+    remediationComplete(CATALOGUE, /** @type {any} */ (undefined)),
+    true
+  );
+});
+
+test('remediationRows: a complete resolution carries no details', () => {
+  const answers = {
+    q1: setRemediationStatus(failedWithActions().q1, 'complete'),
+  };
+  assert.deepEqual(remediationRows(CATALOGUE, answers)[0].details, '');
+  assert.equal(remediationComplete(CATALOGUE, answers), true);
+});
+
+test('the status vocabulary is complete/partial/cancelled with viewer-facing labels', () => {
+  assert.deepEqual(REMEDIATION_STATUSES, ['complete', 'partial', 'cancelled']);
+  assert.deepEqual(REMEDIATION_STATUS_LABELS, {
+    complete: 'Complete',
+    partial: 'Partially complete',
+    cancelled: 'Cancelled',
+  });
+  assert.deepEqual(REMEDIATION_DETAIL_LABELS, {
+    partial: 'Details',
+    cancelled: 'Justification',
+  });
+});
+
+test('remediationDecided: an undecided failed Question blocks; "no" satisfies', () => {
+  assert.equal(
+    remediationDecided(CATALOGUE, {
+      q1: { value: 'No' },
+      q2: { value: 'Yes' },
+    }),
+    false,
+    'a failed Answer with no decision blocks'
+  );
+  assert.equal(
+    remediationDecided(CATALOGUE, {
+      q1: { value: 'No', remediationRequired: 'no' },
+      q2: { value: 'Yes' },
+      q3: { value: 'Yes' },
+    }),
+    true
+  );
+});
+
+test('remediationDecided: "yes" needs remediation recorded against it', () => {
+  /** @param {Answer} q1 */
+  const decide = (q1) =>
+    remediationDecided(CATALOGUE, {
+      q1,
+      q2: { value: 'Yes' },
+      q3: { value: 'Yes' },
+    });
+
+  assert.equal(
+    decide({ value: 'No', remediationRequired: 'yes' }),
+    false,
+    'yes with nothing chosen blocks'
+  );
+  assert.equal(
+    decide({
+      value: 'No',
+      remediationRequired: 'yes',
+      remediationActions: [{ id: 'a1', text: 'Call back' }],
+    }),
+    true
+  );
+  assert.equal(
+    decide({
+      value: 'No',
+      remediationRequired: 'yes',
+      freeFormRemediation: 'Apologise in writing',
+    }),
+    true
+  );
+  assert.equal(
+    decide({
+      value: 'No',
+      remediationRequired: 'yes',
+      freeFormRemediation: '   ',
+    }),
+    false,
+    'whitespace-only free-form text is not remediation'
+  );
+});
+
+test('remediationDecided: only failed, applicable, active Questions are gated', () => {
+  assert.equal(
+    remediationDecided(CATALOGUE, {
+      q1: { value: 'Yes' },
+      q2: { value: 'Yes' },
+    }),
+    true,
+    'passing Answers are vacuously decided'
+  );
+  assert.equal(
+    remediationDecided(CATALOGUE, {
+      q1: { value: 'Yes' },
+      q2: { value: 'Yes' },
+      q3: { value: 'No' },
+    }),
+    true,
+    'an inapplicable Question is not gated even when its stale Answer fails'
+  );
+
+  const deprecated = [
+    ...CATALOGUE,
+    {
+      id: 'q4',
+      text: 'Retired',
+      responseType: /** @type {const} */ ('yes-no-na'),
+      failureValues: ['No'],
+      deprecated: true,
+    },
+  ];
+  assert.equal(
+    remediationDecided(deprecated, {
+      q1: { value: 'Yes' },
+      q2: { value: 'Yes' },
+      q4: { value: 'No' },
+    }),
+    true,
+    'a deprecated Question is out of the catalogue, so out of the gate'
+  );
+});
+
+test('remediationDecided: an absent catalogue or absent Answers is vacuously decided', () => {
+  assert.equal(remediationDecided(null, { q1: { value: 'No' } }), true);
+  assert.equal(remediationDecided(undefined, { q1: { value: 'No' } }), true);
+  assert.equal(
+    remediationDecided(CATALOGUE, /** @type {any} */ (undefined)),
+    true
+  );
+});
+
+test('anyRemediationRequired: false until some failure is decided Yes', () => {
+  assert.equal(
+    anyRemediationRequired(CATALOGUE, { q1: { value: 'Yes' } }),
+    false,
+    'no failures, so nothing can require remediation'
+  );
+  assert.equal(
+    anyRemediationRequired(CATALOGUE, {
+      q1: { value: 'No', remediationRequired: 'no' },
+    }),
+    false,
+    'a failure decided No requires none'
+  );
+  assert.equal(
+    anyRemediationRequired(CATALOGUE, { q1: { value: 'No' } }),
+    false,
+    'an undecided failure has not asked for anything yet'
+  );
+  assert.equal(
+    anyRemediationRequired(CATALOGUE, {
+      q1: { value: 'No', remediationRequired: 'yes' },
+    }),
+    true,
+    'one Yes is enough, with or without an action recorded'
+  );
+});
+
+test('anyRemediationRequired: only active, applicable, failed Answers count', () => {
+  const deprecated = [
+    ...CATALOGUE,
+    {
+      id: 'q4',
+      text: 'Retired',
+      responseType: /** @type {const} */ ('yes-no-na'),
+      failureValues: ['No'],
+      deprecated: true,
+    },
+  ];
+  assert.equal(
+    anyRemediationRequired(deprecated, {
+      q1: { value: 'Yes' },
+      q4: { value: 'No', remediationRequired: 'yes' },
+    }),
+    false,
+    'a deprecated Question is out of the catalogue, so out of the count'
+  );
+  assert.equal(
+    anyRemediationRequired(CATALOGUE, {
+      q1: { value: 'Yes' },
+      q3: { value: 'No', remediationRequired: 'yes' },
+    }),
+    false,
+    'a stale decision on a Question nobody can see does not count'
+  );
+  assert.equal(
+    anyRemediationRequired(CATALOGUE, {
+      q1: { value: 'Yes', remediationRequired: 'yes' },
+    }),
+    false,
+    'a flag stranded on an Answer that now passes does not count'
+  );
+});
+
+test('anyRemediationRequired: an absent catalogue or absent Answers requires nothing', () => {
+  assert.equal(anyRemediationRequired(null, { q1: { value: 'No' } }), false);
+  assert.equal(
+    anyRemediationRequired(undefined, { q1: { value: 'No' } }),
+    false
+  );
+  assert.equal(
+    anyRemediationRequired(CATALOGUE, /** @type {any} */ (undefined)),
+    false
+  );
+});
+
+test('remediationDecided: "yes" alone decides a Question that can record no remediation', () => {
+  /** @type {QuestionDefinition[]} */
+  const unsatisfiable = [
+    {
+      id: 'q1',
+      text: 'Greeted the customer?',
+      responseType: 'yes-no-na',
+      failureValues: ['No'],
+      deprecated: false,
+      disallowFreeFormRemediation: true,
+    },
+    {
+      id: 'q2',
+      text: 'Explained the outcome?',
+      responseType: 'yes-no-na',
+      failureValues: ['No'],
+      deprecated: false,
+      disallowFreeFormRemediation: true,
+      remediationActions: ['Retrain the agent.'],
+    },
+  ];
+  assert.equal(
+    remediationDecided(unsatisfiable, {
+      q1: { value: 'No', remediationRequired: 'yes' },
+      q2: { value: 'Yes' },
+    }),
+    true
+  );
+  assert.equal(
+    remediationDecided(unsatisfiable, {
+      q1: { value: 'No' },
+      q2: { value: 'Yes' },
+    }),
+    false,
+    'the decision itself is still required'
+  );
+  assert.equal(
+    remediationDecided(unsatisfiable, {
+      q1: { value: 'Yes' },
+      q2: { value: 'No', remediationRequired: 'yes' },
+    }),
+    false,
+    'a Question with configured actions must still record one'
+  );
+  assert.equal(
+    remediationDecided(unsatisfiable, {
+      q1: { value: 'Yes' },
+      q2: {
+        value: 'No',
+        remediationRequired: 'yes',
+        remediationActions: [{ id: 'a1', text: 'Retrain the agent.' }],
+      },
+    }),
+    true
+  );
+});
