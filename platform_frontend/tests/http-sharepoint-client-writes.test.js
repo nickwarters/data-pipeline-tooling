@@ -1001,6 +1001,10 @@ test('HttpSharePointClient: patchCase writes the void columns, and omits them wh
       respond: () => digestResponse('d'),
     },
     {
+      when: (/** @type {any} */ c) => c.url.endsWith('/_api/web/ensureuser'),
+      respond: () => ensureUserResponse(14),
+    },
+    {
       when: (/** @type {any} */ c) => c.method === 'PATCH',
       respond: () =>
         new Response(null, { status: 204, headers: { ETag: '"v2"' } }),
@@ -1046,7 +1050,7 @@ test('HttpSharePointClient: patchCase writes the void columns, and omits them wh
     Status: 'Void',
     VoidReason: 'duplicate',
     VoidedAt: '2026-07-05T09:00:00.000Z',
-    VoidedBy: 'reviewer-1',
+    VoidedById: 14,
   });
 
   const other = makeFetch(respondToWrite());

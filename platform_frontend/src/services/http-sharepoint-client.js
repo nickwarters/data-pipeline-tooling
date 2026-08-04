@@ -73,16 +73,17 @@ const ORDER_BY_COLUMNS = {
 /**
  * The projection every Case row read carries.
  *
- * All four people on a row — `AssignedReviewer`, `ResponsibleParty` and their
- * two manager columns — are Person columns, and SharePoint answers one with
- * the numeric User Information List id (the `…Id` twin) unless the lookup is
- * expanded. That number is a transport detail of a single site collection — it
- * is allocated on first use, re-allocated if the entry or the AD account is
- * removed, and means nothing anywhere else — while the whole application keys
- * identity on the bare account name, right down to which Sections a viewer may
- * open. So the read expands every person and takes the claims login off each.
+ * All five people on a row — `AssignedReviewer`, `ResponsibleParty`, their two
+ * manager columns, and `VoidedBy` — are Person columns, and SharePoint answers
+ * one with the numeric User Information List id (the `…Id` twin) unless the
+ * lookup is expanded. That number is a transport detail of a single site
+ * collection — it is allocated on first use, re-allocated if the entry or the
+ * AD account is removed, and means nothing anywhere else — while the whole
+ * application keys identity on the bare account name, right down to which
+ * Sections a viewer may open. So the read expands every person and takes the
+ * claims login off each.
  *
- * Only the Responsible Party's `Title` is asked for: it is the one of the four
+ * Only the Responsible Party's `Title` is asked for: it is the one of the five
  * a view names a person by. The others are matched, never displayed from the
  * row, so widening the projection for them would buy nothing.
  *
@@ -91,9 +92,9 @@ const ORDER_BY_COLUMNS = {
  */
 const CASE_SELECT =
   '$select=*,AssignedReviewer/Name,ResponsibleParty/Name,ResponsibleParty/Title,' +
-  'AssignedReviewerManager/Name,ResponsiblePartyManager/Name';
+  'AssignedReviewerManager/Name,ResponsiblePartyManager/Name,VoidedBy/Name';
 const CASE_EXPAND =
-  '$expand=AssignedReviewer,ResponsibleParty,AssignedReviewerManager,ResponsiblePartyManager';
+  '$expand=AssignedReviewer,ResponsibleParty,AssignedReviewerManager,ResponsiblePartyManager,VoidedBy';
 
 export class HttpSharePointClient {
   /** @param {HttpSharePointClientOptions} [opts] */
@@ -205,6 +206,9 @@ export class HttpSharePointClient {
         item.ResponsiblePartyManagerId = await this._ensureUserId(
           fields.responsiblePartyManager ?? ''
         );
+      }
+      if (fields.voidedBy !== undefined) {
+        item.VoidedById = await this._ensureUserId(fields.voidedBy ?? '');
       }
       const body = JSON.stringify(item);
       const data = await this._write(url, 'PATCH', { 'If-Match': etag }, body);
@@ -991,6 +995,7 @@ function rowFromItem(item, etag) {
   const partyManager = /** @type {any} */ (
     item?.ResponsiblePartyManager ?? null
   );
+  const voidedByPerson = /** @type {any} */ (item?.VoidedBy ?? null);
   /** @type {CaseRow} */
   const row = {
     id: String(item?.Id ?? ''),
@@ -1034,7 +1039,9 @@ function rowFromItem(item, etag) {
       typeof item?.CompletedAt === 'string' ? item.CompletedAt : null,
     voidReason: item?.VoidReason != null ? String(item.VoidReason) : undefined,
     voidedAt: typeof item?.VoidedAt === 'string' ? item.VoidedAt : null,
-    voidedBy: item?.VoidedBy != null ? String(item.VoidedBy) : undefined,
+    voidedBy: voidedByPerson?.Name
+      ? toBareAccount(String(voidedByPerson.Name))
+      : undefined,
     outcome: item?.Outcome != null ? String(item.Outcome) : undefined,
     outcomeAtCompletion:
       item?.OutcomeAtCompletion != null
@@ -1176,12 +1183,11 @@ function itemFromRow(fields) {
   if (fields.onHold !== undefined) out.OnHold = fields.onHold;
   if (fields.placedOnHoldAt !== undefined)
     out.PlacedOnHoldAt = fields.placedOnHoldAt;
-  // The void stamp. `VoidedBy` is a plain-text column holding a bare account
-  // name, not a Person column, so it is written here with the rest of the
-  // transition rather than resolved to a numeric id in `patchCase`.
+  // `voidedBy` is deliberately absent: it is a Person column, written by a
+  // numeric id that only a round trip to the directory can supply, and this
+  // function is pure. `patchCase` resolves it and sets the column there.
   if (fields.voidReason !== undefined) out.VoidReason = fields.voidReason;
   if (fields.voidedAt !== undefined) out.VoidedAt = fields.voidedAt;
-  if (fields.voidedBy !== undefined) out.VoidedBy = fields.voidedBy;
   if (fields.hasOpenAppeal !== undefined)
     out.HasOpenAppeal = fields.hasOpenAppeal;
   if (fields.appealRaisedAt !== undefined)
