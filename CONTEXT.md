@@ -2,6 +2,8 @@
 
 The data pipeline framework ingests data about reviewable work from many heterogeneous sources, processes it through medallion layers, and exposes it to review workflows through clean domain abstractions (e.g. `CasePool`) instead of raw `pandas.read_*` calls.
 
+> **This glossary covers the data pipeline half of the system only.** The Case Review Platform frontend shares this repository under `platform_frontend/` and keeps its own glossary at [`platform_frontend/CONTEXT.md`](platform_frontend/CONTEXT.md). Some nouns appear in both — **Case** and **Case Type** most of all — and they are *not* automatically the same term: this file defines what a pipeline produces, that one defines what a Reviewer works on. When a change spans both halves, read both entries and say which one you mean.
+
 ## Language
 
 **Case**:

@@ -19,6 +19,14 @@ through clean domain abstractions (a `CasePool` of `Case`s) instead of raw
 - **Cross-platform** — the deployment target is **Windows**, with **macOS** as
   the development environment. Paths are `pathlib`, processing is pure Python,
   and dependencies are first-class on both (see [`../CLAUDE.md`](../CLAUDE.md)).
+- **The frontend** — this guide covers the pipeline half of the system only. The
+  Case Review Platform frontend is the other half, and keeps its documentation
+  with its code: start at
+  [`../platform_frontend/docs/`](../platform_frontend/docs/), with its own
+  [`CONTEXT.md`](../platform_frontend/CONTEXT.md) glossary and
+  [`adr/`](../platform_frontend/docs/adr/) decision records. The two projects
+  share a repository, not a toolchain — see
+  [`../CLAUDE.md`](../CLAUDE.md) for what runs where.
 
 ---
 
