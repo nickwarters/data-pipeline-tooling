@@ -129,6 +129,19 @@ export class CaseMachine {
     );
   }
 
+  /**
+   * Whether the viewer may void the Case: the Assigned Reviewer, while the
+   * review is still live. Both terminal states are excluded — a Completed Case
+   * has a result to preserve, and a voided one is already where voiding leads.
+   */
+  get canVoid() {
+    return (
+      this.caseRow.assignedReviewer === this.currentUser.id &&
+      (this.caseRow.status === CASE_STATUS.IN_PROGRESS ||
+        this.caseRow.status === CASE_STATUS.ACTIONS_IN_PROGRESS)
+    );
+  }
+
   get canToggleConversation() {
     return this.access.conversation !== 'hidden';
   }
@@ -230,6 +243,33 @@ export class CaseMachine {
     return {
       status: CASE_STATUS.COMPLETED,
       completedAt: this._now().toISOString(),
+      ...awaitingFrontlineCleared(),
+    };
+  }
+
+  /**
+   * **Void**: the Case is abandoned with a reason and there is no way back.
+   *
+   * Deliberately stamps no Outcome and no `reportableAt`: a voided Case was
+   * never reviewed to a conclusion, so giving it one would put a result into
+   * every report that counts Outcomes. Whatever was stamped before the void
+   * — on a Case voided after Send Actions — is left exactly as it was.
+   *
+   * The hold and the Awaiting Frontline clocks are cleared for the same reason
+   * a close clears them: a terminal Case waits on nobody, and no later
+   * transition would ever clear them.
+   *
+   * @param {string} reasonKey a key from the Void Reason vocabulary
+   * @returns {Partial<CaseRow>}
+   */
+  transitionToVoid(reasonKey) {
+    return {
+      status: CASE_STATUS.VOID,
+      voidReason: reasonKey,
+      voidedAt: this._now().toISOString(),
+      voidedBy: this.currentUser.id,
+      onHold: false,
+      placedOnHoldAt: null,
       ...awaitingFrontlineCleared(),
     };
   }

@@ -118,6 +118,49 @@ test('CaseMachine: a voided Case can be neither completed nor edited', () => {
   assert.equal(machineFor('Void').canEditIssues, false);
 });
 
+test('CaseMachine: only the Assigned Reviewer of a live Case may void it', () => {
+  assert.equal(machineFor('In-progress').canVoid, true);
+  assert.equal(machineFor('Actions In Progress').canVoid, true);
+  assert.equal(machineFor('Completed').canVoid, false);
+  assert.equal(machineFor('Void').canVoid, false);
+  assert.equal(
+    machineFor('In-progress', EMPTY_CONFIG, { assignedReviewer: 'u9' }).canVoid,
+    false
+  );
+});
+
+test('CaseMachine void stamps the terminal fields and no Outcome', () => {
+  const machine = new CaseMachine(
+    { ...BASE_ROW, status: 'In-progress', onHold: true },
+    { id: 'u1' },
+    NO_CAPABILITIES,
+    EMPTY_CONFIG,
+    { catalogue: CATALOGUE, now: () => new Date('2026-03-04T09:00:00Z') }
+  );
+
+  const fields = machine.transitionToVoid('duplicate');
+
+  assert.deepEqual(fields, {
+    status: 'Void',
+    voidReason: 'duplicate',
+    voidedAt: '2026-03-04T09:00:00.000Z',
+    voidedBy: 'u1',
+    onHold: false,
+    placedOnHoldAt: null,
+    awaitingResponsibleParty: false,
+    awaitingSince: null,
+  });
+  for (const key of [
+    'outcomeAtCompletion',
+    'effectiveOutcome',
+    'reportableAt',
+    'completedAt',
+    'hadRemediation',
+  ]) {
+    assert.equal(Object.hasOwn(fields, key), false, key);
+  }
+});
+
 test('CaseMachine Issues editing needs no Case Type opt-in and freezes at reportable', () => {
   // No configuration flag stands between a Case Type and its Issue Capture
   // Fields: the Assigned Reviewer of a pre-reportable Case may edit them.

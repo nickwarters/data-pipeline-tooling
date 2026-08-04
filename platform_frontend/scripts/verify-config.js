@@ -24,6 +24,7 @@ import {
 import { validateCaptureGroups } from '../src/evaluators/issue-capture.js';
 import { sectionIds } from '../src/lib/section-registry.js';
 import { ROLES } from '../src/services/section-access.js';
+import { isVoidReasonKey, VOID_REASONS } from '../src/lib/void-reasons.js';
 import { ACTION_CENTRE_REASONS } from '../src/services/action-centre-model.js';
 import { CASE_TYPES, loadCaseTypeConfig } from '../case-types/manifest.js';
 import { resolveRelative } from './module-graph.js';
@@ -195,6 +196,7 @@ export async function checkCaseTypes(options = {}) {
     failures.push(...checkSections(entry.slug, file, config));
     failures.push(...checkQuestionGroups(entry.slug, file, config));
     failures.push(...checkRemediationStatuses(entry.slug, file, config));
+    failures.push(...checkVoidReasons(entry.slug, file, config));
     failures.push(...checkThresholds(entry.slug, file, config));
   }
   return failures;
@@ -777,6 +779,39 @@ function checkRemediationStatuses(slug, file, config) {
     ];
   }
   return [];
+}
+
+/**
+ * tsc catches the shape; these two are runtime-only: an empty list reads as
+ * "offer none" and behaves as "offer all", and a key outside the framework
+ * vocabulary is silently dropped from what the Reviewer is offered, so a Case
+ * Type could narrow itself down to nothing without saying anything.
+ *
+ * @param {string} slug
+ * @param {string} file
+ * @param {any} config
+ * @returns {Failure[]}
+ */
+function checkVoidReasons(slug, file, config) {
+  const declared = config?.voidReasons;
+  if (!Array.isArray(declared)) return [];
+  if (declared.length === 0) {
+    return [
+      {
+        kind: /** @type {const} */ ('case-type'),
+        file,
+        message: `Case Type "${slug}": declares an empty \`voidReasons\` — omit the key to offer every Void Reason`,
+      },
+    ];
+  }
+  const vocabulary = VOID_REASONS.map((reason) => reason.key);
+  return declared
+    .filter((key) => !isVoidReasonKey(key))
+    .map((key) => ({
+      kind: /** @type {const} */ ('case-type'),
+      file,
+      message: `Case Type "${slug}": \`voidReasons\` names "${key}", which is not a Void Reason — the vocabulary is ${vocabulary.join(', ')}`,
+    }));
 }
 
 /**

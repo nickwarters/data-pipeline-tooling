@@ -528,6 +528,11 @@
  * of them behaves exactly as it did before the keys existed — an absent key is
  * "use the default", never "no threshold".
  *
+ * `voidReasons` narrows the Void Reasons the Case Type offers a Reviewer, from
+ * the framework vocabulary in `lib/void-reasons.js`. Display-only: an absent key
+ * offers all of them, and storage validates against the whole vocabulary either
+ * way, because the manager report groups reasons across Case Types.
+ *
  * @typedef {{
  * questions: QuestionDefinition[],
  * computeOutcome: (answers: Record<string, Answer>) => OutcomeResult,
@@ -548,6 +553,7 @@
  * remediationSlaWorkingDays?: number,
  * maxInProgressCases?: number,
  * remediationStatuses?: RemediationStatusValue[],
+ * voidReasons?: string[],
  * captureGroups?: CaptureGroup[],
  * generalQuestions?: GeneralQuestionField[],
  * generalQuestionsPlacement?: 'before' | 'after',

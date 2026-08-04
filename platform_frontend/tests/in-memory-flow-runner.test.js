@@ -788,7 +788,7 @@ test('completing a Case updates the runner-owned Case Row, so later actions see 
 
   await runner.run([{ type: 'clickCompleteCase' }]);
 
-  // The browser never needs this: `completeCase` navigates to the dashboard on
+  // The browser never needs this: `closeCase` navigates to the dashboard on
   // success, so the mount ends before anything can read a stale row. The runner
   // does not navigate, so a flow may keep acting on the Case — its row has to
   // carry the transition or the next action reads pre-completion state.

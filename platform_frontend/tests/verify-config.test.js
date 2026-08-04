@@ -717,6 +717,40 @@ test('checkCaseTypes accepts a narrowed remediationStatuses and an absent one', 
   assert.deepEqual(absent, []);
 });
 
+test('checkCaseTypes fails an empty voidReasons list', async () => {
+  const failures = await checkCaseTypes({
+    caseTypes: [demoEntry(demoConfig({ voidReasons: [] }))],
+  });
+
+  assert.equal(failures.length, 1);
+  assert.match(failures[0].message, /voidReasons/);
+  assert.match(failures[0].message, /omit/i);
+});
+
+test('checkCaseTypes fails a voidReasons key outside the framework vocabulary', async () => {
+  const failures = await checkCaseTypes({
+    caseTypes: [
+      demoEntry(demoConfig({ voidReasons: ['duplicate', 'not-a-reason'] })),
+    ],
+  });
+
+  assert.equal(failures.length, 1);
+  assert.match(failures[0].message, /not-a-reason/);
+  assert.match(failures[0].message, /duplicate/);
+});
+
+test('checkCaseTypes accepts a narrowed voidReasons and an absent one', async () => {
+  const narrowed = await checkCaseTypes({
+    caseTypes: [
+      demoEntry(demoConfig({ voidReasons: ['duplicate', 'withdrawn'] })),
+    ],
+  });
+  assert.deepEqual(narrowed, []);
+
+  const absent = await checkCaseTypes({ caseTypes: [demoEntry(demoConfig())] });
+  assert.deepEqual(absent, []);
+});
+
 test('checkCaseTypes fails an unknown key in questionGroups', async () => {
   const failures = await checkCaseTypes({
     caseTypes: [

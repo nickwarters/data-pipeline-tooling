@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { isolateBrowserGlobals } from './helpers/browser-globals.js';
 import { CaseMachine } from '../src/lib/case-machine.js';
 import {
-  completeCase,
+  closeCase,
   completionControl,
   completionPatch,
   readyToClose,
@@ -194,7 +194,7 @@ test('completionPatch rejects incomplete or unauthorised completion and uses fin
   );
 });
 
-test('completeCase flushes first and sends the frozen snapshot in the same PATCH', async () => {
+test('closeCase flushes first and sends the frozen snapshot in the same PATCH', async () => {
   /** @type {any[]} */
   const calls = [];
   const patchFields = machine().transitionToCompleted(
@@ -223,7 +223,7 @@ test('completeCase flushes first and sends the frozen snapshot in the same PATCH
     },
   });
 
-  const ok = await completeCase({
+  const ok = await closeCase({
     caseId: 'c1',
     client,
     saveQueue,
@@ -239,7 +239,7 @@ test('completeCase flushes first and sends the frozen snapshot in the same PATCH
   assert.equal(location.hash, '#/dashboard');
 });
 
-test('completeCase navigates through an injected callback, leaving location alone', async () => {
+test('closeCase navigates through an injected callback, leaving location alone', async () => {
   /** @type {string[]} */
   const navigations = [];
   const saveQueue = /** @type {any} */ ({
@@ -258,7 +258,7 @@ test('completeCase navigates through an injected callback, leaving location alon
   location.hash = 'untouched';
 
   assert.equal(
-    await completeCase({
+    await closeCase({
       caseId: 'c1',
       client,
       saveQueue,
@@ -276,7 +276,7 @@ test('completeCase navigates through an injected callback, leaving location alon
   );
 });
 
-test('completeCase does not PATCH after a failed flush or navigate after a failed PATCH', async () => {
+test('closeCase does not PATCH after a failed flush or navigate after a failed PATCH', async () => {
   let patches = 0;
   const client = /** @type {any} */ ({
     async patchCase() {
@@ -294,7 +294,7 @@ test('completeCase does not PATCH after a failed flush or navigate after a faile
   });
   location.hash = 'keep-me';
   assert.equal(
-    await completeCase({
+    await closeCase({
       caseId: 'c1',
       client,
       saveQueue: failedFlush,
@@ -313,7 +313,7 @@ test('completeCase does not PATCH after a failed flush or navigate after a faile
     },
   });
   assert.equal(
-    await completeCase({
+    await closeCase({
       caseId: 'c1',
       client,
       saveQueue: successfulFlush,
@@ -324,9 +324,9 @@ test('completeCase does not PATCH after a failed flush or navigate after a faile
   assert.equal(location.hash, 'keep-me');
 });
 
-test('completeCase returns false when dependencies or patch fields are absent', async () => {
+test('closeCase returns false when dependencies or patch fields are absent', async () => {
   assert.equal(
-    await completeCase({
+    await closeCase({
       caseId: 'c1',
       client: null,
       saveQueue: null,
