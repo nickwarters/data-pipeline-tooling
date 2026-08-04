@@ -208,7 +208,7 @@ export function myTeamView(
               row.reviewerId === null
                 ? 'workload-total'
                 : `reviewer:${row.reviewerId}`,
-            rowClass: (row) => (row.isTotal ? 'cora-my-team-total-row' : ''),
+            rowClass: (row) => (row.isTotal ? 'cora-workload-row--total' : ''),
           })
         )
       : null,
@@ -240,7 +240,8 @@ export function myTeamView(
               row.reviewerId === null
                 ? 'void-total'
                 : `void-reviewer:${row.reviewerId}`,
-            rowClass: (row) => (row.isTotal ? 'cora-my-team-total-row' : ''),
+            rowClass: (row) =>
+              row.isTotal ? 'cora-void-volume-row--total' : '',
           })
         )
       : null
