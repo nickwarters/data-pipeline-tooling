@@ -54,4 +54,11 @@ def test_excel_reader_composes_in_the_pipeline_builder(workbook, tmp_path):
     assert landed.columns == ["case_id", "advisor"]
     assert len(landed) == 3
 
+
+def test_excel_reader_reports_the_workbook_it_read(workbook):
+    reader = ExcelReader(workbook, sheet="reference")
+    reader.read()
+
+    assert reader.data_locations == [{"namespace": "file", "name": str(workbook)}]
+
 ```

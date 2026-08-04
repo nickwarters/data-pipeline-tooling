@@ -59,10 +59,13 @@ class SmallId:
 class ListChunkReader:
     """A ChunkReader over rows held in memory, handed out ``size`` at a time."""
 
-    def __init__(self, rows: list[dict]) -> None:
+    def __init__(self, rows: list[dict], location: dict | None = None) -> None:
         self._rows = rows
+        self._location = location
 
     def chunks(self, size: int = 10_000):
+        if self._location is not None:
+            self.data_locations = [self._location]
         for start in range(0, len(self._rows), size):
             window = self._rows[start : start + size]
             if window:
@@ -635,5 +638,42 @@ def test_a_profile_step_runs_over_a_streamed_source():
     assert payloads == [10, 10, 5]
     [record] = run_log.records_for_step("profile")
     assert record["profile"] == {"columns": [{"name": "id"}]}
+
+
+# --------------------------------------------------------------------------
+# Data locations: reported per chunk, recorded once
+# --------------------------------------------------------------------------
+
+
+def test_a_streamed_read_records_one_location_however_many_chunks_it_took():
+    location = {"namespace": "file", "name": "/d/big.csv"}
+    run_log = RecordingRunLog()
+    p = Pipeline("big", run_log=run_log)
+    source = p.read_chunks(
+        ListChunkReader(_rows(25), location), name="read", chunk_size=10
+    )
+    p.write(CountingWriter(), source, name="write")
+    p.run()
+
+    [record] = run_log.records_for_step("read")
+    assert record["data_locations"] == [location]
+
+
+def test_a_write_under_a_streamed_source_records_its_target_once(tmp_path):
+    db = tmp_path / "raw.db"
+    context = RunContext(
+        pipeline="big", logical_run_id="2026-07-27", load_date="2026-07-27"
+    )
+    run_log = RecordingRunLog()
+    p = Pipeline("big", run_log=run_log)
+    source = p.read_chunks(ListChunkReader(_rows(35)), name="read", chunk_size=10)
+    writer = AccumulateByRun.from_context(context).writer_for(db, "feed")
+    p.write(writer, source, name="write")
+    p.run(context)
+
+    [record] = run_log.records_for_step("write")
+    assert record["data_locations"] == [
+        {"namespace": f"sqlite:{db.as_posix()}", "name": "feed"}
+    ]
 
 ```

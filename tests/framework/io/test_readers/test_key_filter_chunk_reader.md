@@ -208,4 +208,29 @@ def test_describe_summarises_inner_key_and_allow_list_size():
     assert "key_column='id'" in summary
     assert "allowed_keys=3" in summary  # a count, never the keys themselves
 
+
+def test_the_chunk_filters_forward_the_source_location():
+    location = {"namespace": "file", "name": "/d/big.csv"}
+
+    class _LocatingChunkReader(_ListChunkReader):
+        def chunks(self, size=10_000):
+            self.data_locations = [location]
+            return super().chunks(size)
+
+    inner = _LocatingChunkReader([{"id": 1}, {"id": 2}])
+    predicate = PredicateChunkReader(inner, lambda chunk: chunk)
+    keyed = KeyFilterChunkReader(inner, "id", [1])
+
+    list(predicate.chunks(1))
+    list(keyed.chunks(1))
+
+    assert predicate.data_locations == [location]
+    assert keyed.data_locations == [location]
+
+
+def test_a_source_that_reports_nothing_forwards_an_empty_list():
+    reader = PredicateChunkReader(_ListChunkReader([{"id": 1}]), lambda chunk: chunk)
+
+    assert reader.data_locations == []
+
 ```

@@ -227,4 +227,11 @@ def test_describe_reports_escapechar(tmp_path):
 
     assert "escapechar" in summary
 
+
+def test_strict_csv_reader_reports_the_file_it_read():
+    reader = StrictCsvReader(FIXTURE)
+    reader.read()
+
+    assert reader.data_locations == [{"namespace": "file", "name": str(FIXTURE)}]
+
 ```

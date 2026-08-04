@@ -16,6 +16,7 @@ import pandas as pd
 
 from framework._internal.connection import connect
 from framework._internal.describe import component_summary, render
+from framework._internal.locations import file_location, table_location
 from framework.core.dataset import Dataset
 from framework.core.protocols import DEFAULT_CHUNK_SIZE, ChunkReader, Reader
 from framework.io.sql import quote_identifier
@@ -77,8 +78,10 @@ class CsvReader:
     ) -> None:
         self._path = Path(path)
         self._columns = columns
+        self.data_locations: list[dict[str, str]] = []
 
     def read(self) -> Dataset:
+        self.data_locations = [file_location(self._path)]
         kwargs: dict = {}
         if self._columns is not None:
             kwargs["usecols"] = self._columns
@@ -149,8 +152,10 @@ class StrictCsvReader:
         self._quotechar = quotechar
         self._escapechar = escapechar
         self._encoding = encoding
+        self.data_locations: list[dict[str, str]] = []
 
     def read(self) -> Dataset:
+        self.data_locations = [file_location(self._path)]
         # newline="" so Python performs no universal-newline translation; the
         # parser is the sole authority on what ends a record, which is what lets
         # an embedded CRLF survive inside a quoted field.
@@ -301,10 +306,14 @@ class ChunkedCsvReader:
         self._path = Path(path)
         self._columns = columns
         self._encoding = encoding
+        self.data_locations: list[dict[str, str]] = []
 
     def chunks(self, size: int = DEFAULT_CHUNK_SIZE) -> Iterator[Dataset]:
         if size < 1:
             raise ValueError("chunk size must be a positive integer")
+        # The generator body runs on the first next(), so this is set before any
+        # chunk reaches the node that drains it — and before an empty file bails.
+        self.data_locations = [file_location(self._path)]
         kwargs: dict = {"chunksize": size}
         if self._columns is not None:
             kwargs["usecols"] = self._columns
@@ -394,10 +403,12 @@ class SasFileReader:
         self._columns = columns
         self._format = format if format is not None else _infer_sas_format(self._path)
         self._encoding = encoding
+        self.data_locations: list[dict[str, str]] = []
 
     def chunks(self, size: int = DEFAULT_CHUNK_SIZE) -> Iterator[Dataset]:
         if size < 1:
             raise ValueError("chunk size must be a positive integer")
+        self.data_locations = [file_location(self._path)]
         kwargs: dict = {"format": self._format, "chunksize": size}
         if self._encoding is not None:
             kwargs["encoding"] = self._encoding
@@ -505,6 +516,10 @@ class PredicateChunkReader:
         """Rows the filter kept across the most recent ``chunks()`` pass."""
         return self._rows_kept
 
+    @property
+    def data_locations(self) -> list[dict[str, str]]:
+        return getattr(self._inner, "data_locations", [])
+
     def describe(self) -> str:
         return render(self, inner=component_summary(self._inner))
 
@@ -572,6 +587,10 @@ class KeyFilterChunkReader:
         """Rows kept (allow-list hits) across the most recent ``chunks()`` pass."""
         return self._filter.rows_kept
 
+    @property
+    def data_locations(self) -> list[dict[str, str]]:
+        return self._filter.data_locations
+
     def describe(self) -> str:
         return render(
             self,
@@ -593,6 +612,7 @@ class GlobCsvReader:
         self._directory = Path(directory)
         self._pattern = pattern
         self._columns = columns
+        self.data_locations: list[dict[str, str]] = []
 
     def read(self) -> Dataset:
         paths = sorted(self._directory.glob(self._pattern))
@@ -600,6 +620,7 @@ class GlobCsvReader:
             raise FileNotFoundError(
                 f"No files match {self._pattern!r} in directory {self._directory}"
             )
+        self.data_locations = [file_location(path) for path in paths]
         kwargs: dict = {}
         if self._columns is not None:
             kwargs["usecols"] = self._columns
@@ -627,8 +648,12 @@ class ExcelReader:
     ) -> None:
         self._path = Path(path)
         self._sheet = sheet
+        self.data_locations: list[dict[str, str]] = []
 
     def read(self) -> Dataset:
+        # The file is the location; the sheet is a projection within it, the
+        # same way a column projection is not recorded.
+        self.data_locations = [file_location(self._path)]
         frame = pd.read_excel(self._path, sheet_name=self._sheet)
         return Dataset.from_pandas(frame)
 
@@ -650,8 +675,10 @@ class SqliteReader:
         self._table = table
         self._busy_timeout_ms = busy_timeout_ms
         self._columns = columns
+        self.data_locations: list[dict[str, str]] = []
 
     def read(self) -> Dataset:
+        self.data_locations = [table_location(self._db_path, self._table)]
         table = quote_identifier(self._table)
         if self._columns is not None:
             col_list = ", ".join(quote_identifier(c) for c in self._columns)

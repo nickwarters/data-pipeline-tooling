@@ -31,6 +31,7 @@ from framework.run.builder import Node, Pipeline, StepResult
 from framework.run.run_context import RunContext
 from framework.transform.quarantine import SchemaValueRulePartitioner
 from tests.framework_testing import RecordingRunLog
+from tools.observability.profile import DataProfiler
 
 
 @dataclass
@@ -203,5 +204,67 @@ def test_a_failing_node_still_records_its_error_and_category():
     # A step that raised committed nothing: the marker stays off, leaving the
     # quarantine above as the authoritative record of what actually landed.
     assert failed["committed"] is False
+
+
+class _ReportingReader:
+    """A Reader that reports the location it read, the way the real ones do."""
+
+    def __init__(self, locations) -> None:
+        self._locations = locations
+
+    def read(self) -> Dataset:
+        self.data_locations = list(self._locations)
+        return _feed()
+
+
+class _ReportingWriter(CapturingWriter):
+    def __init__(self, locations) -> None:
+        super().__init__()
+        self._locations = locations
+
+    def write(self, dataset: Dataset) -> None:
+        self.data_locations = list(self._locations)
+        super().write(dataset)
+
+
+_SOURCE = [{"namespace": "file", "name": "/d/orders.csv"}]
+_TARGET = [{"namespace": "sqlite:/d/raw.db", "name": "orders"}]
+
+
+def test_a_read_step_records_the_locations_its_reader_reported():
+    run_log = RecordingRunLog()
+    p = Pipeline("cases", run_log=run_log)
+    read = p.read(_ReportingReader(_SOURCE), name="read")
+    p.write(CapturingWriter(), read, name="write")
+    p.run()
+
+    [record] = run_log.records_for_step("read")
+    assert record["data_locations"] == _SOURCE
+
+
+def test_a_write_step_records_the_locations_its_writer_reported():
+    run_log = RecordingRunLog()
+    p = Pipeline("cases", run_log=run_log)
+    read = p.read(DatasetReader(_feed()), name="read")
+    p.write(_ReportingWriter(_TARGET), read, name="write")
+    p.run()
+
+    [record] = run_log.records_for_step("write")
+    assert record["data_locations"] == _TARGET
+
+
+def test_steps_that_touch_no_data_location_record_an_empty_list():
+    run_log = RecordingRunLog()
+    p = Pipeline("cases", run_log=run_log)
+    read = p.read(DatasetReader(_feed()), name="read")
+    shaped = p.transform(lambda dataset: dataset, read, name="transform")
+    checked = p.validate(RowCountValidator(minimum=1), shaped, name="validate")
+    p.profile(DataProfiler(), checked, name="profile")
+    p.write(CapturingWriter(), checked, name="write")
+    p.run()
+
+    for step in ("read", "transform", "validate", "profile", "write"):
+        [record] = run_log.records_for_step(step)
+        assert record["data_locations"] == []
 
 ```

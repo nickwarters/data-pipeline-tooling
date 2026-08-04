@@ -59,4 +59,13 @@ def test_sqlite_reader_without_columns_reads_all_columns(fixture_db):
 
     assert dataset.columns == ["adviser_id", "name"]
 
+
+def test_sqlite_reader_reports_the_table_it_read(fixture_db):
+    reader = SqliteReader(fixture_db, "advisers")
+    reader.read()
+
+    assert reader.data_locations == [
+        {"namespace": f"sqlite:{fixture_db.as_posix()}", "name": "advisers"}
+    ]
+
 ```

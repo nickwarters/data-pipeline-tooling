@@ -224,6 +224,30 @@ def test_console_output_is_human_readable_not_raw_json(tmp_path, caplog):
         json.loads(line)
 
 
+_ORDERS = [{"namespace": "file", "name": "/d/orders.csv"}]
+
+
+def test_a_record_carries_the_data_locations_it_was_given(tmp_path):
+    log_path = tmp_path / "cases.log"
+
+    RunLog(log_path).record("run-1", "cases", "read", "ok", data_locations=_ORDERS)
+
+    assert _read_records(log_path)[0]["data_locations"] == _ORDERS
+
+
+def test_data_locations_are_logged_but_never_echoed_to_the_console(tmp_path, caplog):
+    log_path = tmp_path / "cases.log"
+
+    with caplog.at_level(logging.INFO, logger="tools.observability.run_log"):
+        RunLog(log_path).record(
+            "run-1", "cases", "read", "ok", rows_in=2, data_locations=_ORDERS
+        )
+
+    assert any("rows_in=2" in message for message in caplog.messages)
+    assert not any("orders.csv" in message for message in caplog.messages)
+    assert _read_records(log_path)[0]["data_locations"] == _ORDERS
+
+
 def test_checkpoint_emits_its_own_step_record(tmp_path):
     log_path = tmp_path / "cases.log"
     ds = Dataset.from_pandas(pd.DataFrame({"id": [1, 2, 3]}))

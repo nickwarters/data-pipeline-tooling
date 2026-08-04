@@ -149,4 +149,12 @@ def test_sas7bdat_format_is_passed_through_to_the_engine(monkeypatch):
     assert captured["format"] == "sas7bdat"
     assert captured["chunksize"] == 500
 
+
+def test_sas_file_reader_reports_the_file_it_streamed():
+    reader = SasFileReader(SAMPLE)
+
+    list(reader.chunks(2))
+
+    assert reader.data_locations == [{"namespace": "file", "name": str(SAMPLE)}]
+
 ```

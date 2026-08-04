@@ -14,6 +14,9 @@ connection lifetime (``_writing_connection``), the staging/commit/cleanup shape
 of a merge (``_staged_merge``), and the delete-then-append that makes a
 re-driven logical run idempotent (``_replace_logical_run``). The transaction
 boundary is therefore stated once rather than re-derived per Writer.
+
+A Writer reports the target it touched in ``data_locations`` for the run record,
+set at the top of ``write`` because every Writer owns its target before it writes.
 """
 
 from __future__ import annotations
@@ -31,6 +34,7 @@ import pandas as pd
 
 from framework._internal.connection import connect
 from framework._internal.describe import render
+from framework._internal.locations import file_location, table_location
 from framework.core.dataset import Dataset
 from framework.core.protocols import ChunkWritable, Writer
 from framework.io.sql import quote_identifier
@@ -131,8 +135,10 @@ class _AppendingChunkWriter:
         self._table = table
         self._busy_timeout_ms = busy_timeout_ms
         self._prepare = prepare
+        self.data_locations: list[dict[str, str]] = []
 
     def write(self, dataset: Dataset) -> None:
+        self.data_locations = [table_location(self._db_path, self._table)]
         frame = dataset.to_pandas()
         if self._prepare is not None:
             frame = self._prepare(frame)
@@ -277,8 +283,10 @@ class _FileWriter:
     ) -> None:
         self._path = Path(path)
         self._strategy = strategy
+        self.data_locations: list[dict[str, str]] = []
 
     def write(self, dataset: Dataset) -> None:
+        self.data_locations = [file_location(self._path)]
         frame = _frame_for_strategy(self, dataset, self._strategy, self._read_existing)
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._serialise(frame)
@@ -398,8 +406,10 @@ class SqliteTruncateReloadWriter:
         self._db_path = Path(db_path)
         self._table = table
         self._busy_timeout_ms = busy_timeout_ms
+        self.data_locations: list[dict[str, str]] = []
 
     def write(self, dataset: Dataset) -> None:
+        self.data_locations = [table_location(self._db_path, self._table)]
         with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
             dataset.to_pandas().to_sql(
                 self._table, con, if_exists="replace", index=False
@@ -433,8 +443,10 @@ class QuarantineWriter:
         self._db_path = Path(db_path)
         self._table = table
         self._busy_timeout_ms = busy_timeout_ms
+        self.data_locations: list[dict[str, str]] = []
 
     def write(self, dataset: Dataset) -> None:
+        self.data_locations = [table_location(self._db_path, self._table)]
         frame = dataset.to_pandas()
         with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
             if "logical_run_id" in frame.columns:
@@ -474,13 +486,15 @@ class _QuarantineChunkWriter:
     def __init__(self, inner: "QuarantineWriter") -> None:
         self._inner = inner
         self._cleared = False
+        self.data_locations: list[dict[str, str]] = []
 
     def write(self, dataset: Dataset) -> None:
         if not self._cleared:
             self._inner.write(dataset)
             self._cleared = True
-            return
-        self._inner._append(dataset.to_pandas())
+        else:
+            self._inner._append(dataset.to_pandas())
+        self.data_locations = self._inner.data_locations
 
 
 class SqliteUpsertWriter:
@@ -514,8 +528,10 @@ class SqliteUpsertWriter:
         self._table = table
         self._key_columns = key_columns
         self._busy_timeout_ms = busy_timeout_ms
+        self.data_locations: list[dict[str, str]] = []
 
     def write(self, dataset: Dataset) -> None:
+        self.data_locations = [table_location(self._db_path, self._table)]
         frame = dataset.to_pandas()
         missing = [c for c in self._key_columns if c not in frame.columns]
         if missing:
@@ -586,8 +602,10 @@ class SqliteInsertOrIgnoreWriter:
         self._db_path = Path(db_path)
         self._table = table
         self._busy_timeout_ms = busy_timeout_ms
+        self.data_locations: list[dict[str, str]] = []
 
     def write(self, dataset: Dataset) -> None:
+        self.data_locations = [table_location(self._db_path, self._table)]
         frame = dataset.to_pandas()
         with _staged_merge(
             self._db_path,
@@ -643,8 +661,10 @@ class SqliteInsertIfAbsentWriter:
         self._key_columns = key_columns
         self._surrogate_column = surrogate_column
         self._busy_timeout_ms = busy_timeout_ms
+        self.data_locations: list[dict[str, str]] = []
 
     def write(self, dataset: Dataset) -> None:
+        self.data_locations = [table_location(self._db_path, self._table)]
         frame = dataset.to_pandas()
         missing = [c for c in self._key_columns if c not in frame.columns]
         if missing:
@@ -752,8 +772,10 @@ class AccumulateByRunWriter:
         self._load_date = load_date
         self._pipeline_run_id = pipeline_run_id
         self._busy_timeout_ms = busy_timeout_ms
+        self.data_locations: list[dict[str, str]] = []
 
     def write(self, dataset: Dataset) -> None:
+        self.data_locations = [table_location(self._db_path, self._table)]
         frame = self._stamp(dataset.to_pandas())
         with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
             _replace_logical_run(con, self._table, self._logical_run_id, frame)

@@ -21,10 +21,10 @@ _SUMMED_FIELDS = (
     "duration",
 )
 
-#: Record fields that are lists of human notes: concatenated, keeping the order
-#: they were raised in and dropping a message already present, so the same warn
-#: raised on every chunk reads once rather than fifty times.
-_CONCATENATED_FIELDS = ("errors", "warn_hits")
+#: List-valued record fields: merged, keeping first-seen order and dropping an
+#: entry already present, so the same warn raised on every chunk reads once
+#: rather than fifty times — and the one file every chunk came from likewise.
+_CONCATENATED_FIELDS = ("errors", "warn_hits", "data_locations")
 
 
 class _FoldedSteps:
@@ -55,7 +55,7 @@ class _FoldedSteps:
             if key in _SUMMED_FIELDS:
                 held_fields[key] = _add(held_fields.get(key), value)
             elif key in _CONCATENATED_FIELDS:
-                held_fields[key] = _merge_notes(held_fields.get(key), value)
+                held_fields[key] = _merge_unique(held_fields.get(key), value)
             elif key == "committed":
                 held_fields[key] = bool(held_fields.get(key)) or bool(value)
             elif value is not None or key not in held_fields:
@@ -91,11 +91,11 @@ def _add(held: Any, value: Any) -> Any:
     return (held or 0) + (value or 0)
 
 
-def _merge_notes(held: Any, value: Any) -> list:
+def _merge_unique(held: Any, value: Any) -> list:
     merged = list(held or [])
-    for note in value or []:
-        if note not in merged:
-            merged.append(note)
+    for entry in value or []:
+        if entry not in merged:
+            merged.append(entry)
     return merged
 
 

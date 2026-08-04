@@ -47,6 +47,7 @@ EXPECTED_LOGGED = [
     "committed",
     "params",
     "profile",
+    "data_locations",
 ]
 
 EXPECTED_COLUMNS = [
@@ -68,6 +69,7 @@ EXPECTED_COLUMNS = [
     ("warn_hits", "TEXT"),
     ("committed", "INTEGER"),
     ("profile", "TEXT"),
+    ("data_locations", "TEXT"),
 ]
 
 
@@ -108,6 +110,7 @@ def test_the_declared_table_matches_the_deployed_shape():
             warn_hits        TEXT,
             committed        INTEGER,
             profile          TEXT,
+            data_locations   TEXT,
             PRIMARY KEY (pipeline_run_id, step, step_ordinal)
         )
     """
@@ -134,6 +137,7 @@ def test_build_run_record_applies_the_declared_empty_defaults():
     assert record["warn_hits"] == []
     assert record["params"] == {}
     assert record["profile"] is None
+    assert record["data_locations"] == []
 
 
 def test_build_run_record_rejects_an_undeclared_field():
@@ -150,6 +154,10 @@ def test_encodings_round_trip_through_the_declaration():
         "committed": (True, True),
         "profile": (profile, profile),
         "rows_in": (3, 3),
+        "data_locations": (
+            [{"namespace": "file", "name": "/d/orders.csv"}],
+            [{"namespace": "file", "name": "/d/orders.csv"}],
+        ),
     }
     for name, (value, expected) in cases.items():
         field = by_name[name]

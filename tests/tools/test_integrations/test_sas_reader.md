@@ -91,4 +91,19 @@ def test_sas_reader_composes_in_the_pipeline_builder(landing, tmp_path):
     assert landed.columns == ["case_id", "advisor"]
     assert len(landed) == 3
 
+
+def test_reports_the_files_that_landed_not_the_glob_it_asked_for(tmp_path):
+    dest = tmp_path / "landing"
+    dest.mkdir()
+    (dest / "part_a.csv").write_text("case_id\n1\n")
+    (dest / "part_b.csv").write_text("case_id\n2\n")
+
+    reader = SasReader("run.sas", "part_*.csv", dest)
+    reader.read()
+
+    assert reader.data_locations == [
+        {"namespace": "file", "name": str(dest / "part_a.csv")},
+        {"namespace": "file", "name": str(dest / "part_b.csv")},
+    ]
+
 ```

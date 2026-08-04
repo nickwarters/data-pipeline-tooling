@@ -143,6 +143,7 @@ class RunLog:
         step_address: str | None = None,
         params: dict[str, str] | None = None,
         profile: dict | None = None,
+        data_locations: list[dict[str, str]] | None = None,
     ) -> None:
         """Append one JSONL record and echo a human-readable line to the console.
 
@@ -172,6 +173,7 @@ class RunLog:
             committed=committed,
             params=params,
             profile=profile,
+            data_locations=data_locations,
         )
         self._path.parent.mkdir(parents=True, exist_ok=True)
         with self._path.open("a", encoding="utf-8") as fh:

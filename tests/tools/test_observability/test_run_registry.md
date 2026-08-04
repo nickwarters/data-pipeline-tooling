@@ -21,6 +21,8 @@ from framework.core.validators import (
     ValidationError,
     VolumeAnomalyValidator,
 )
+from framework.io.readers import CsvReader
+from framework.io.writers import SqliteTruncateReloadWriter
 from framework.run import RunAddress
 from framework.run.builder import Pipeline
 from tools.observability.run_log import RunLog
@@ -754,6 +756,83 @@ def test_committed_marker_round_trips_through_ingest(tmp_path):
     by_step = {r["step"]: r for r in registry.records_for_run(run_id)}
     assert by_step["write"]["committed"] is True
     assert by_step["read"]["committed"] is False
+
+
+def _run_file_to_table_pipeline(tmp_path, log_path):
+    """Drive a real file->table run; return its run_id and the two locations."""
+    csv_path = tmp_path / "orders.csv"
+    csv_path.write_text("id\n1\n2\n", encoding="utf-8")
+    db_path = tmp_path / "raw.db"
+
+    p = Pipeline("cases", run_log=RunLog(log_path))
+    r = p.read(CsvReader(csv_path), name="read")
+    p.write(SqliteTruncateReloadWriter(db_path, "orders"), r, name="write")
+    p.run()
+    return p.pipeline_run_id, csv_path, db_path
+
+
+def test_data_locations_round_trip_through_ingest(tmp_path):
+    # "Which file produced this run, and where did it land?" answered from the
+    # registry, decoded back to a list of dicts rather than JSON text.
+    log_path = tmp_path / "cases.log"
+    run_id, csv_path, db_path = _run_file_to_table_pipeline(tmp_path, log_path)
+
+    registry = RunRegistry(tmp_path / "registry.db")
+    registry.ingest(log_path)
+
+    by_step = {r["step"]: r for r in registry.records_for_run(run_id)}
+    assert by_step["read"]["data_locations"] == [
+        {"namespace": "file", "name": str(csv_path)}
+    ]
+    assert by_step["write"]["data_locations"] == [
+        {"namespace": f"sqlite:{db_path.as_posix()}", "name": "orders"}
+    ]
+
+
+def test_ingest_migrates_a_pre_data_locations_registry_db(tmp_path):
+    # A registry DB created before the `data_locations` column existed must keep
+    # ingesting: _connect adds the column in place rather than erroring on the
+    # INSERT that names it.
+    db_path = tmp_path / "registry.db"
+    con = sqlite3.connect(db_path)
+    con.execute(
+        """
+        CREATE TABLE run_records (
+            timestamp        TEXT,
+            pipeline_run_id  TEXT NOT NULL,
+            logical_run_id   TEXT,
+            pipeline         TEXT,
+            step             TEXT NOT NULL,
+            step_address     TEXT,
+            step_ordinal     INTEGER NOT NULL,
+            status           TEXT,
+            rows_in          INTEGER,
+            rows_out         INTEGER,
+            rows_quarantined INTEGER,
+            rows_excluded    INTEGER,
+            duration         REAL,
+            errors           TEXT,
+            error_category   TEXT,
+            warn_hits        TEXT,
+            committed        INTEGER,
+            profile          TEXT,
+            PRIMARY KEY (pipeline_run_id, step, step_ordinal)
+        )
+        """
+    )
+    con.commit()
+    con.close()
+
+    log_path = tmp_path / "cases.log"
+    run_id, csv_path, _ = _run_file_to_table_pipeline(tmp_path, log_path)
+
+    registry = RunRegistry(db_path)
+    assert registry.ingest(log_path) > 0  # the migration let the INSERT through
+
+    by_step = {r["step"]: r for r in registry.records_for_run(run_id)}
+    assert by_step["read"]["data_locations"] == [
+        {"namespace": "file", "name": str(csv_path)}
+    ]
 
 
 def test_ingest_migrates_a_pre_committed_registry_db(tmp_path):

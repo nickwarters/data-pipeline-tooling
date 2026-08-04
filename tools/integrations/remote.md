@@ -124,11 +124,16 @@ class SasReader:
         self._copy_glob = copy_glob
         self._dest = Path(dest)
         self._runner = runner or StubbedRemoteRunner()
+        self.data_locations: list[dict[str, str]] = []
 
     def read(self) -> Dataset:
         self._runner.run_script(self._script)
         self._runner.fetch(self._copy_glob, self._dest)
-        return GlobCsvReader(self._dest, self._copy_glob).read()
+        reader = GlobCsvReader(self._dest, self._copy_glob)
+        dataset = reader.read()
+        # The files that actually landed, not the glob asked of the runner.
+        self.data_locations = list(reader.data_locations)
+        return dataset
 
     def describe(self) -> str:
         return render(
@@ -137,6 +142,12 @@ class SasReader:
             copy_glob=self._copy_glob,
             dest=str(self._dest),
         )
+
+
+def _sharepoint_location(site: str, list_name: str) -> dict[str, str]:
+    # Redacted like describe(): a persisted record must not be the one place
+    # credentials embedded in the site URL survive.
+    return {"namespace": redact_url(site), "name": list_name}
 
 
 class SharePointReader:
@@ -154,8 +165,10 @@ class SharePointReader:
         self._list_name = list_name
         self._auth = auth
         self._fetcher = fetcher or StubbedSharePointFetcher()
+        self.data_locations: list[dict[str, str]] = []
 
     def read(self) -> Dataset:
+        self.data_locations = [_sharepoint_location(self._site, self._list_name)]
         return self._fetcher.fetch(self._site, self._list_name, self._auth)
 
     def describe(self) -> str:
@@ -181,8 +194,10 @@ class SharePointWriter:
         self._auth = auth
         self._strategy = strategy
         self._pusher = pusher or StubbedSharePointPusher()
+        self.data_locations: list[dict[str, str]] = []
 
     def write(self, dataset: Dataset) -> None:
+        self.data_locations = [_sharepoint_location(self._site, self._list_name)]
         if isinstance(self._strategy, AccumulateByRun):
             dataset = Dataset.from_pandas(self._strategy.stamp(dataset.to_pandas()))
         self._pusher.push(

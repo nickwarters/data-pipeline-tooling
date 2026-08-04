@@ -442,4 +442,95 @@ def test_the_accumulating_session_clears_the_run_once_then_appends(tmp_path):
 
     assert _read_table(db, "feed")["id"].tolist() == [9]
 
+
+# --- what a Writer reports having touched -------------------------------------
+
+
+def _table(db_path, table):
+    return [{"namespace": f"sqlite:{db_path.as_posix()}", "name": table}]
+
+
+def _one_row() -> Dataset:
+    return Dataset.from_pandas(pd.DataFrame({"id": [1]}))
+
+
+def test_the_file_writers_report_the_file_they_wrote(tmp_path):
+    for writer_type, suffix in (
+        (CsvWriter, "csv"),
+        (ExcelWriter, "xlsx"),
+        (JsonWriter, "json"),
+    ):
+        path = tmp_path / f"out.{suffix}"
+        writer = writer_type(path, Refresh())
+        writer.write(_one_row())
+
+        assert writer.data_locations == [{"namespace": "file", "name": str(path)}]
+
+
+def test_stdout_writer_reports_no_data_location(capsys):
+    writer = StdoutWriter()
+    writer.write(_one_row())
+
+    # A display sink persists nothing, so it names nothing.
+    assert not hasattr(writer, "data_locations")
+
+
+def test_the_sqlite_writers_report_the_table_they_wrote(tmp_path):
+    db = tmp_path / "raw.db"
+    writers = [
+        SqliteTruncateReloadWriter(db, "refreshed"),
+        SqliteInsertOrIgnoreWriter(db, "appended"),
+        SqliteUpsertWriter(db, "merged", ("id",)),
+        AccumulateByRunWriter(db, "accumulated", "run-a", "2026-07-27"),
+        QuarantineWriter(db, "rejects"),
+    ]
+    for writer in writers:
+        writer.write(_one_row())
+
+    assert [w.data_locations for w in writers] == [
+        _table(db, "refreshed"),
+        _table(db, "appended"),
+        _table(db, "merged"),
+        _table(db, "accumulated"),
+        _table(db, "rejects"),
+    ]
+
+
+def test_insert_if_absent_reports_its_table_even_when_no_rows_are_new(tmp_path):
+    db = tmp_path / "reference.db"
+    writer = SqliteInsertIfAbsentWriter(db, "advisers", ("code",))
+    writer.write(Dataset.from_pandas(pd.DataFrame({"code": ["a"]})))
+
+    fresh = SqliteInsertIfAbsentWriter(db, "advisers", ("code",))
+    fresh.write(Dataset.from_pandas(pd.DataFrame({"code": ["a"]})))  # nothing new
+
+    assert writer.data_locations == _table(db, "advisers")
+    assert fresh.data_locations == _table(db, "advisers")
+
+
+def test_the_appending_chunk_writer_reports_the_table_it_appended_to(tmp_path):
+    from framework.io.writers import writing_chunks
+
+    db = tmp_path / "raw.db"
+    with writing_chunks(AccumulateByRunWriter(db, "feed", "run-a", "2026-07-27")) as w:
+        w.write(_one_row())
+
+        assert w.data_locations == _table(db, "feed")
+
+
+def test_the_quarantine_chunk_writer_forwards_what_it_rejected_to(tmp_path):
+    from framework.io.writers import writing_chunks
+
+    db = tmp_path / "raw.db"
+    quarantine = QuarantineWriter(db, "rejects")
+    with writing_chunks(quarantine) as w:
+        assert w.data_locations == []  # nothing rejected yet, nothing touched
+        w.write(_one_row())
+
+        assert w.data_locations == _table(db, "rejects")
+
+    # A reused Writer starts each session clean rather than reporting the last.
+    with writing_chunks(quarantine) as w:
+        assert w.data_locations == []
+
 ```

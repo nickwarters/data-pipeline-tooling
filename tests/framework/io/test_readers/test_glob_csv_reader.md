@@ -44,4 +44,32 @@ def test_glob_csv_reader_projects_only_requested_columns(tmp_path):
     assert dataset.columns == ["case_id", "amount"]
     assert len(dataset) == 2
 
+
+def test_glob_csv_reader_reports_every_file_it_read(tmp_path):
+    landing = tmp_path / "landing"
+    landing.mkdir()
+    for part in ("a", "b", "c"):
+        (landing / f"part_{part}.csv").write_text(
+            "case_id,advisor\n1,x\n", encoding="utf-8"
+        )
+
+    reader = GlobCsvReader(landing, "part_*.csv")
+    reader.read()
+
+    assert reader.data_locations == [
+        {"namespace": "file", "name": str(landing / f"part_{part}.csv")}
+        for part in ("a", "b", "c")
+    ]
+
+
+def test_a_glob_that_matches_nothing_reports_no_data_location(tmp_path):
+    landing = tmp_path / "landing"
+    landing.mkdir()
+    reader = GlobCsvReader(landing, "part_*.csv")
+
+    with pytest.raises(FileNotFoundError):
+        reader.read()
+
+    assert reader.data_locations == []
+
 ```

@@ -16,6 +16,7 @@ import pytest
 
 from framework.core.dataset import Dataset
 from framework.run.builder import Pipeline
+from tests.framework_testing import RecordingRunLog
 from tools.observability.run_log import RunLog
 from tools.retry import (
     RetryingChunkReader,
@@ -23,6 +24,9 @@ from tools.retry import (
     RetryingWriter,
     RetryPolicy,
 )
+
+_SOURCE = {"namespace": "file", "name": "/d/orders.csv"}
+_TARGET = {"namespace": "sqlite:/d/raw.db", "name": "orders"}
 
 
 class FlakyReader:
@@ -37,6 +41,7 @@ class FlakyReader:
         self.calls += 1
         if self.calls <= self._fails:
             raise self._error
+        self.data_locations = [_SOURCE]
         return Dataset.from_pandas(pd.DataFrame({"id": [1, 2]}))
 
 
@@ -78,6 +83,7 @@ class FlakyWriter:
         self.calls += 1
         if self.calls <= self._fails:
             raise self._error
+        self.data_locations = [_TARGET]
         self.written = dataset
 
 
@@ -201,6 +207,7 @@ class FlakyChunkReader:
         self.attempts += 1
         if self.attempts <= self._fails:
             raise self._error
+        self.data_locations = [_SOURCE]
         for start in range(0, self._rows, size):
             frame = pd.DataFrame(
                 {"id": list(range(start, min(start + size, self._rows)))}
@@ -374,5 +381,82 @@ def test_retry_passes_a_chunked_load_through_to_a_writer_that_takes_one(tmp_path
 
     with sqlite3.connect(tmp_path / "raw.db") as con:
         assert pd.read_sql("SELECT * FROM feed", con)["id"].tolist() == [0, 1, 2, 3]
+
+
+# --------------------------------------------------------------------------
+# Data locations survive the decorator: a silently blank field is the failure
+# mode.
+# --------------------------------------------------------------------------
+
+
+def test_a_read_node_behind_retry_still_records_the_source():
+    run_log = RecordingRunLog()
+    p = Pipeline("orders", run_log=run_log)
+    reader = RetryingReader(
+        FlakyReader(ConnectionError("briefly unavailable"), fails=1),
+        RetryPolicy(attempts=3, retry_on=(ConnectionError,)),
+    )
+    r = p.read(reader, name="read")
+    p.write(_MuteWriter(), r, name="write")
+    p.run()
+
+    [record] = run_log.records_for_step("read")
+    assert record["data_locations"] == [_SOURCE]
+
+
+def test_a_write_node_behind_retry_still_records_the_target():
+    run_log = RecordingRunLog()
+    p = Pipeline("orders", run_log=run_log)
+    r = p.read(FlakyReader(ConnectionError("x"), fails=0), name="read")
+    writer = RetryingWriter(
+        FlakyWriter(ConnectionError("briefly unavailable"), fails=1),
+        RetryPolicy(attempts=3, retry_on=(ConnectionError,)),
+    )
+    p.write(writer, r, name="write")
+    p.run()
+
+    [record] = run_log.records_for_step("write")
+    assert record["data_locations"] == [_TARGET]
+
+
+def test_a_retried_chunk_reader_forwards_what_the_source_reported():
+    inner = FlakyChunkReader(ConnectionError("share unreachable"), fails=1)
+    reader = RetryingChunkReader(
+        inner, RetryPolicy(attempts=3, retry_on=(ConnectionError,))
+    )
+
+    list(reader.chunks(size=2))
+
+    assert reader.data_locations == [_SOURCE]
+
+
+def test_a_nested_chunk_write_session_still_reaches_the_innermost_writer(tmp_path):
+    from framework.io.writers import SqliteInsertOrIgnoreWriter, writing_chunks
+
+    db = tmp_path / "raw.db"
+    writer = RetryingWriter(
+        SqliteInsertOrIgnoreWriter(db, "feed"),
+        RetryPolicy(attempts=2, retry_on=(OSError,)),
+    )
+
+    with writing_chunks(writer) as chunk_writer:
+        chunk_writer.write(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
+        assert chunk_writer.data_locations == [
+            {"namespace": f"sqlite:{db.as_posix()}", "name": "feed"}
+        ]
+
+
+def test_a_wrapped_component_that_reports_nothing_forwards_an_empty_list():
+    reader = RetryingReader(
+        FlakyReader(ConnectionError("x"), fails=99),
+        RetryPolicy(attempts=1, retry_on=(ConnectionError,)),
+    )
+
+    assert reader.data_locations == []
+
+
+class _MuteWriter:
+    def write(self, dataset: Dataset) -> None:
+        pass
 
 ```
