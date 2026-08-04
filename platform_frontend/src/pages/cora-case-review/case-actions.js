@@ -17,7 +17,7 @@
  * else, so a raw dispatch cannot route around the type.
  *
  * Lifecycle fields have their own writer: `CaseMachine`'s transitions, persisted
- * by `closeCase` and folded back in through `case/case-row-patched`.
+ * by `completeCase` and folded back in through `case/case-row-patched`.
  *
  * `responsibleParty` is a plain-text Case Row field too, and is still not one of
  * these. Access resolution grants the Responsible Party Role by matching that

@@ -201,10 +201,8 @@ export function completionPatch(input) {
 
 /**
  * Flush autosaves, then persist the CaseMachine-owned transition using the
- * queue's current ETag, and leave the Case behind. Nothing here is specific to
- * one transition — sending actions, completing and voiding all end this way —
- * so it is named for what it does rather than for which lifecycle step called
- * it. The transition itself carries whatever fields it stamps.
+ * queue's current ETag. The transition already contains the frozen Outcome and
+ * bank version fields a reportable Case must carry.
  *
  * @param {{
  *   caseId: string,
@@ -214,13 +212,13 @@ export function completionPatch(input) {
  *   caseListOptions?: import('../../sharepoint-client.js').CaseListOptions,
  *   opts?: import('../../sharepoint-client.js').CaseListOptions,
  *   navigate?: (hash: string) => void,
- * }} input `navigate` is where a successful write goes next. Defaults to
+ * }} input `navigate` is where a successful completion goes next. Defaults to
  *   the `lib/navigate.js` seam so no page call site has to pass it; injectable
  *   so a non-browser caller — `tests/_in-memory-flow-runner.js` drives real
  *   completions in Node — can record the navigation instead of this action
  *   sniffing for a `location` global.
  */
-export async function closeCase({
+export async function completeCase({
   caseId,
   client,
   saveQueue,

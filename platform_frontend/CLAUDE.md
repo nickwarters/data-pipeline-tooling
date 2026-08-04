@@ -295,8 +295,9 @@ src/
       notes-view.js            # CASE-3 pure Notes and Case Justification view; SaveQueue remains the writer
       summary-view.js          # CASE-4 pure configured Summary view
       outcome-view.js          # CASE-4 configured Outcome view
-      completion-actions.js    # CASE-4 CaseMachine-guarded completion actions; closeCase is
-                               #   the shared "persist the transition and leave" write
+      completion-actions.js    # CASE-4 CaseMachine-guarded completion actions; completeCase is
+                               #   the shared "persist the transition and leave" write, called by
+                               #   both completion and voiding
       void-actions.js          # the Reviewer's Void control and the patch behind it
       remediation-view.js      # CASE-5 pure Issues and Remediation Actions view
       remediation-tracking-view.js # pure question-level Remediation tab, reviewer + responsible-party renderings (#499)

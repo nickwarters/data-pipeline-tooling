@@ -30,7 +30,7 @@ import {
 } from './cora-case-review/answer-actions.js';
 import { SECTION_PANELS } from './cora-case-review/section-panels.js';
 import {
-  closeCase,
+  completeCase,
   completionControl,
   completionPatch,
 } from './cora-case-review/completion-actions.js';
@@ -984,7 +984,7 @@ export function createRouteSlice(params, context) {
                     pending: true,
                   });
                   try {
-                    const persisted = await closeCase({
+                    const persisted = await completeCase({
                       caseId: caseId(),
                       client: context.client,
                       saveQueue: context.saveQueue,
@@ -1119,7 +1119,7 @@ export function createRouteSlice(params, context) {
                   if (!patchFields) return;
                   tools.dispatch({ type: 'case/void-pending', pending: true });
                   try {
-                    const persisted = await closeCase({
+                    const persisted = await completeCase({
                       caseId: caseId(),
                       client: context.client,
                       saveQueue: context.saveQueue,

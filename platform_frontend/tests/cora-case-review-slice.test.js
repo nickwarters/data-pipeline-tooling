@@ -1991,7 +1991,7 @@ test('action: completion folds the persisted transition into the store Case Row'
 
 test('action: the Send Actions transition folds into the store Case Row too', async () => {
   // The non-terminal half of the same path: sending Remediation Actions is not
-  // the end of the Case, yet it goes through `closeCase` and navigates away.
+  // the end of the Case, yet it goes through `completeCase` and navigates away.
   // A Case Type that kept the Reviewer in the Remediation loop would read a
   // pre-transition row on the very next render.
   const catalogue = [
@@ -2867,7 +2867,7 @@ test('every persistence path addresses the loaded Case id, not the route param t
   );
 
   // 2. Completion: the SaveQueue flush, the ETag read and the lifecycle PATCH.
-  // Order-free: whether `closeCase` flushes before it PATCHes is its own
+  // Order-free: whether `completeCase` flushes before it PATCHes is its own
   // business, not this test's subject.
   fireEvent(
     getByRole(view.container, 'button', { name: 'Complete Case' }),
