@@ -123,6 +123,42 @@ test('evaluateAccess: conversation without allowMessagesWhen defaults to edit', 
   );
 });
 
+test('evaluateAccess: a terminal Case closes the Conversation even with no allowMessagesWhen gate', () => {
+  const cfg = makeConfig({ sections: { conversation: {} } });
+  for (const status of /** @type {const} */ (['Completed', 'Void'])) {
+    const c = makeCase({ status });
+    for (const role of /** @type {const} */ ([
+      'assignedReviewer',
+      'responsibleParty',
+      'responsiblePartyManager',
+    ])) {
+      assert.equal(
+        evaluateAccess('conversation', [role], c, cfg),
+        'read-only',
+        `${status} / ${role}`
+      );
+    }
+  }
+});
+
+test('evaluateAccess: allowMessagesWhen cannot reopen the Conversation on a terminal Case', () => {
+  const cfg = makeConfig({
+    sections: { conversation: { allowMessagesWhen: ['Completed', 'Void'] } },
+  });
+  for (const status of /** @type {const} */ (['Completed', 'Void'])) {
+    assert.equal(
+      evaluateAccess(
+        'conversation',
+        ['assignedReviewer'],
+        makeCase({ status }),
+        cfg
+      ),
+      'read-only',
+      status
+    );
+  }
+});
+
 // --- showInSummary ---
 
 test('SUMMARY_SECTIONS lists the Sections that can appear as Summary blocks', () => {

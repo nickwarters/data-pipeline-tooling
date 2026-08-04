@@ -688,13 +688,12 @@ test('remediationAudience: every Role in the matrix is classified deliberately',
 
 test('conversation: the Responsible Party Manager posts, like the Responsible Party', () => {
   const cfg = makeConfig();
-  const statuses =
+  const live =
     /** @type {import('../src/lib/case-statuses.js').CaseStatus[]} */ ([
       'In-progress',
       'Actions In Progress',
-      'Completed',
     ]);
-  for (const status of statuses) {
+  for (const status of live) {
     assert.equal(
       evaluateAccess(
         'conversation',
@@ -703,6 +702,25 @@ test('conversation: the Responsible Party Manager posts, like the Responsible Pa
         cfg
       ),
       'edit',
+      status
+    );
+  }
+  // Parity holds at the end too: a terminal Case closes the thread for the
+  // Manager exactly as it does for the Responsible Party.
+  const terminal =
+    /** @type {import('../src/lib/case-statuses.js').CaseStatus[]} */ ([
+      'Completed',
+      'Void',
+    ]);
+  for (const status of terminal) {
+    assert.equal(
+      evaluateAccess(
+        'conversation',
+        ['responsiblePartyManager'],
+        makeCase({ status }),
+        cfg
+      ),
+      'read-only',
       status
     );
   }

@@ -51,8 +51,10 @@ whoever voided it). Voided by its **Assigned Reviewer** alone, from `In-progress
 `Actions In Progress`, through a two-step control that names the consequences and demands
 a reason. **Deliberately carries no Outcome** — it is not reviewed work and must not count
 as any — and there is no un-void: a Case voided in error is raised again. Its Answers,
-Issues and Notes freeze, and its **Conversation** stops accepting messages wherever the
-**Case Type**'s `allowMessagesWhen` excludes the status.
+Issues and Notes freeze, and its **Conversation** stops accepting messages for everyone —
+a terminal **status** (`Void` or `Completed`) closes the thread regardless of the
+**Case Type**'s `allowMessagesWhen` gate, which only chooses when the thread is open
+during a live review.
 _Avoid_: Cancelled, deleted, closed (a Case is never removed — voiding is a status)
 
 **Void Reason**:

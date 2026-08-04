@@ -292,8 +292,10 @@ What each field does, and how to choose its value:
 - **`sections`** — membership is the allow-list: a Section absent from this
   object does not exist for this type. `showInSummary` opts a Section's block
   into the read-only Summary tab; `allowMessagesWhen` gates when Conversation
-  messages may be posted. The set above is the current standard full set —
-  start from it and remove what the type genuinely doesn't need.
+  messages may be posted during a live review — a terminal Case (`Completed` or
+  `Void`) closes the thread for everyone regardless of the gate. The set above
+  is the current standard full set — start from it and remove what the type
+  genuinely doesn't need.
 
   `showInSummary` also takes a **list of roles** instead of a boolean, naming who
   the block is composed for rather than switching it on for everyone:

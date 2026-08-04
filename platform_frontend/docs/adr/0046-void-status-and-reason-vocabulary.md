@@ -112,12 +112,17 @@ trip and no numeric-id resolution on the write path.
   SharePoint rejects a PATCH writing a choice value the column does not offer,
   so voiding fails on every list that has not been updated, in both
   environments.
-- **Voiding freezes the Conversation.** Complaints allows messages only while
-  `Actions In Progress`, so voiding a Case with remediation in flight silently
-  ends posting for the Responsible Party who was working on it. That is correct
-  for a terminal state — but nothing is auto-posted to the thread to say so, so
-  the Reviewer who voids a Case mid-remediation should say so in the Conversation
-  first.
+- **Voiding freezes the Conversation, as a framework rule.** A terminal status
+  (`Void` or `Completed`) resolves the Conversation read-only for every
+  participant, regardless of the Case Type's `allowMessagesWhen` gate — the gate
+  chooses when the thread is open during a live review, not whether it survives
+  the end of one. (Originally this leaned on Complaints' gate happening to
+  exclude the terminal statuses; a Case Type declaring no gate would have kept
+  the thread writable on a closed Case, so the rule was made structural.)
+  Voiding a Case with remediation in flight therefore silently ends posting for
+  the Responsible Party who was working on it. That is correct for a terminal
+  state — but nothing is auto-posted to the thread to say so, so the Reviewer
+  who voids a Case mid-remediation should say so in the Conversation first.
 - **The remediation clock became an allow-list.** `isRemediationOverdue` asked
   "is this not Completed?"; it now asks "is this `In-progress` or
   `Actions In Progress`?". Behaviour is identical for the four real statuses, but
