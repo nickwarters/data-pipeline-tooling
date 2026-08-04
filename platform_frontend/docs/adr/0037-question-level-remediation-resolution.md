@@ -378,7 +378,7 @@ and one omitting `complete`; `tsc` already rejects an unknown value at the
 declaration site.
 
 This is a legitimate descriptor under
-[ADR-0035](./0035-case-type-descriptors-express-variation-only.md): it selects
+[ADR-0035](./0035-case-type-descriptors-express-variation-behaviour-stays-in-code.md): it selects
 from a fixed set of stable keys and changes no behaviour. Everything decided
 here is unchanged — the store (`remediationStatus: { status, details? }`), the
 free-text requirement on `partial` / `cancelled`, and the completion gate all
