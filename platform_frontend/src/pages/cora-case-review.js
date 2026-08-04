@@ -1038,13 +1038,28 @@ export function createRouteSlice(params, context) {
   }
 
   /**
+   * The actions the Void control dispatches, spelled out so a mistyped action
+   * type inside it is a compile error rather than a dispatch nothing handles.
+   *
+   * @typedef {
+   *   | { type: 'case/void-panel-toggled' }
+   *   | { type: 'case/void-reason-selected', reasonKey: string }
+   *   | { type: 'case/void-pending', pending: boolean }
+   *   | { type: 'case/case-row-patched', fields: Partial<import('../sharepoint-client.js').CaseRow> }
+   * } VoidAction
+   */
+
+  /**
    * The Void control: a disclosure button, then a panel naming the
    * consequences, the reason list and the confirm. Two steps by design — a
    * transition with no way back does not sit behind a single click.
    *
    * @param {CaseReviewRouteState} route
    * @param {ReturnType<typeof voidControl>} control
-   * @param {any} tools
+   * @param {{
+   *   dispatch: (action: VoidAction) => void,
+   *   isActive: () => boolean,
+   * }} tools
    * @param {CaseReviewSnapshot} snapshot
    * @param {import('../sharepoint-client.js').CaseTypeConfig} config
    */

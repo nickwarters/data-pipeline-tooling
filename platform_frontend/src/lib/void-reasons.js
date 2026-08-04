@@ -18,14 +18,17 @@
 
 /** @typedef {{ key: string, label: string }} VoidReason */
 
+// Frozen through to the members, not just the list: the report groups on these
+// keys across Case Types, so a caller that could reword or re-key one in place
+// would silently change what every other reader is grouping by.
 /** @type {readonly VoidReason[]} */
 export const VOID_REASONS = Object.freeze([
-  { key: 'duplicate', label: 'Duplicate of another Case' },
-  { key: 'raised-in-error', label: 'Raised in error' },
-  { key: 'out-of-scope', label: 'Out of scope for review' },
-  { key: 'no-evidence', label: 'Evidence unavailable' },
-  { key: 'superseded', label: 'Superseded by another Case' },
-  { key: 'withdrawn', label: 'Withdrawn by the business' },
+  Object.freeze({ key: 'duplicate', label: 'Duplicate of another Case' }),
+  Object.freeze({ key: 'raised-in-error', label: 'Raised in error' }),
+  Object.freeze({ key: 'out-of-scope', label: 'Out of scope for review' }),
+  Object.freeze({ key: 'no-evidence', label: 'Evidence unavailable' }),
+  Object.freeze({ key: 'superseded', label: 'Superseded by another Case' }),
+  Object.freeze({ key: 'withdrawn', label: 'Withdrawn by the business' }),
 ]);
 
 /**

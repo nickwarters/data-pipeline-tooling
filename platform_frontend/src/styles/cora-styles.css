@@ -566,7 +566,7 @@
   overflow-x: auto;
 }
 
-[data-cora-root] .cora-data-table .cora-workload-row--total td {
+[data-cora-root] .cora-data-table .cora-my-team-total-row td {
   background: var(--cora-color-surface-2);
   border-top: 2px solid var(--cora-color-border-strong);
   font-weight: var(--cora-font-weight-bold);

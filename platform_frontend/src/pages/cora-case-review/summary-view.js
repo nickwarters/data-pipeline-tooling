@@ -65,9 +65,10 @@ export function summaryView(props) {
   const displacedOutcome = props.caseRow?.amendedOutcome
     ? props.caseRow.outcomeAtCompletion
     : undefined;
-  const outcomeNodes = neverConcluded
-    ? null
-    : current
+  /** @type {Node[]} */
+  const children = [heading];
+  if (!neverConcluded) {
+    const outcomeNodes = current
       ? Outcome({
           computeOutcome: () => ({ outcome: current }),
           answers: {},
@@ -81,13 +82,9 @@ export function summaryView(props) {
           allAnswered: props.allAnswered,
           outcomeOptions: props.outcomeOptions,
         });
-
-  /** @type {Node[]} */
-  const children = [heading];
-  // A CSS hook for the `.cora-summary > .cora-outcome` contract, nothing more.
-  // See the note at the top of section-panels.js for why it is a class rather
-  // than a `cora-outcome` element.
-  if (outcomeNodes) {
+    // A CSS hook for the `.cora-summary > .cora-outcome` contract, nothing more.
+    // See the note at the top of section-panels.js for why it is a class rather
+    // than a `cora-outcome` element.
     children.push(h('div', { className: 'cora-outcome' }, outcomeNodes));
   }
 

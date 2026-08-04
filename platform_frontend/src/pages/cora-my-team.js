@@ -149,9 +149,13 @@ export function myTeamView(
   const route = state.routes.myTeam;
   const staffRows = route.rows?.filter((row) => !row.isTotal) ?? [];
   const totalRows = route.rows?.filter((row) => row.isTotal) ?? [];
+  // Refresh starts both reads, so the page is busy until both have finished:
+  // re-enabling the button on the first one back invites a second refresh on
+  // top of a read still in flight.
+  const busy = route.loading || route.voidLoading;
   return h(
     'main',
-    { className: 'cora-my-team', 'aria-busy': String(route.loading) },
+    { className: 'cora-my-team', 'aria-busy': String(busy) },
     h(
       'header',
       { className: 'cora-my-team-header' },
@@ -169,14 +173,14 @@ export function myTeamView(
         'button',
         {
           type: 'button',
-          disabled: route.loading,
+          disabled: busy,
           onclick: () => {
             dispatch({ type: 'workload/refresh-requested' });
             dispatch({ type: 'void-volumes/refresh-requested' });
             runRefreshEffect();
           },
         },
-        route.loading ? 'Refreshing…' : 'Refresh'
+        busy ? 'Refreshing…' : 'Refresh'
       )
     ),
     h('h2', {}, 'Current Workload'),
@@ -204,8 +208,7 @@ export function myTeamView(
               row.reviewerId === null
                 ? 'workload-total'
                 : `reviewer:${row.reviewerId}`,
-            rowClass: (row) =>
-              row.isTotal ? 'cora-workload-row cora-workload-row--total' : '',
+            rowClass: (row) => (row.isTotal ? 'cora-my-team-total-row' : ''),
           })
         )
       : null,
@@ -237,8 +240,7 @@ export function myTeamView(
               row.reviewerId === null
                 ? 'void-total'
                 : `void-reviewer:${row.reviewerId}`,
-            rowClass: (row) =>
-              row.isTotal ? 'cora-workload-row cora-workload-row--total' : '',
+            rowClass: (row) => (row.isTotal ? 'cora-my-team-total-row' : ''),
           })
         )
       : null
@@ -263,10 +265,11 @@ export function createRouteSlice(
     now = () => new Date(),
   } = {}
 ) {
-  let loadSequence = 0;
-  // Its own sequence token: the two reads finish independently, so one must not
-  // be able to discard the other's rows.
-  let voidLoadSequence = 0;
+  // One token per table: the two reads finish independently, so one must not be
+  // able to discard the other's rows. Held in a box so the shared load path can
+  // read and bump whichever token it was handed.
+  const loadSequence = { value: 0 };
+  const voidLoadSequence = { value: 0 };
   // The mount lifetime comes from the adapter's tools, not a page-local latch.
   /** @type {null | { dispatch: (action: MyTeamAction) => void, context: import('../setup/register-routes.js').AppContext, isActive: () => boolean, signal?: AbortSignal }} */
   let effectTools = null;
@@ -275,87 +278,49 @@ export function createRouteSlice(
   /** @type {null | import('../sharepoint-client.js').SharePointClient} */
   let readClient = null;
 
-  function runRefreshEffect() {
+  /**
+   * The one load path both tables take. They differ only in what they read, how
+   * they shape it and what they dispatch; the rules that make a load safe — the
+   * mount lifetime, the per-table sequence token, and directory enrichment that
+   * must never cost a load — are the same for both, so they are written once.
+   *
+   * The read is started *inside* the chain rather than before it: a mount with
+   * no client throws where the fetcher first touches it, and that has to reach
+   * the failure handler rather than out of `start()`, where it would take the
+   * whole route down.
+   *
+   * @template {{ reviewerId: string | null, reviewer: string }} Row
+   * @param {{
+   *   sequence: { value: number },
+   *   read: (client: import('../sharepoint-client.js').SharePointClient) => Promise<import('../sharepoint-client.js').CaseRow[]>,
+   *   build: (cases: import('../sharepoint-client.js').CaseRow[]) => Row[],
+   *   loaded: (rows: Row[]) => MyTeamAction,
+   *   failed: (message: string) => MyTeamAction,
+   *   fallbackMessage: string,
+   * }} spec
+   */
+  function runLoad(spec) {
     const tools = effectTools;
     if (!tools || !tools.isActive()) return;
-    const sequence = ++loadSequence;
-    void fetchCases(
-      // `readClient` and `effectTools` are set and cleared together, so this is
-      // the single source; the cast covers the client-less mount, which reaches
-      // the rejection handler below.
-      /** @type {import('../sharepoint-client.js').SharePointClient} */ (
-        readClient
-      ),
-      tools.context.chrome.currentUser.id,
-      tools.context.caseSources
-    ).then(
-      async (cases) => {
-        if (!tools.isActive() || sequence !== loadSequence) return;
-        const rows = buildTeamWorkload(cases, tools.context.caseSources, now());
-        const reviewerIds = rows.flatMap((row) =>
-          row.reviewerId === null ? [] : [row.reviewerId]
-        );
-        /** @type {Record<string, string | null>} */
-        let displayNames = {};
-        try {
-          if (typeof tools.context.client.resolveUsers === 'function') {
-            displayNames = await tools.context.client.resolveUsers(reviewerIds);
-          }
-        } catch {
-          // Workload data remains useful when directory enrichment is unavailable.
-        }
-        if (tools.isActive() && sequence === loadSequence) {
-          tools.dispatch({
-            type: 'workload/loaded',
-            rows: withReviewerDisplayNames(rows, displayNames),
-          });
-        }
-      },
-      (error) => {
-        // An abort reaches here with isActive() already false, so navigation
-        // never renders a load failure.
-        if (tools.isActive() && sequence === loadSequence) {
-          tools.dispatch({
-            type: 'workload/load-failed',
-            message:
-              error instanceof Error
-                ? error.message
-                : 'Unable to load current workload.',
-          });
-        }
-      }
-    );
-  }
-
-  function runVoidRefreshEffect() {
-    const tools = effectTools;
-    if (!tools || !tools.isActive()) return;
-    const sequence = ++voidLoadSequence;
-    const since = new Date(
-      now().getTime() - VOID_WINDOW_DAYS * 24 * 60 * 60 * 1000
-    ).toISOString();
-    // Started inside the chain, not before it: a mount with no client throws
-    // where the fetcher first touches it, and that has to reach the failure
-    // handler below rather than out of the effect's caller.
+    const sequence = (spec.sequence.value += 1);
+    // Still the load this table is waiting for: the mount is alive and no later
+    // read of the same table has overtaken this one.
+    const current = () => tools.isActive() && sequence === spec.sequence.value;
     void Promise.resolve()
       .then(() =>
-        fetchVoidedCases(
+        spec.read(
+          // `readClient` and `effectTools` are set and cleared together, so this
+          // is the single source; the cast covers the client-less mount, which
+          // reaches the rejection handler below.
           /** @type {import('../sharepoint-client.js').SharePointClient} */ (
             readClient
-          ),
-          tools.context.chrome.currentUser.id,
-          tools.context.caseSources,
-          since
+          )
         )
       )
       .then(
         async (cases) => {
-          if (!tools.isActive() || sequence !== voidLoadSequence) return;
-          const rows = buildVoidVolumes(
-            cases,
-            tools.context.caseSources,
-            now()
-          );
+          if (!current()) return;
+          const rows = spec.build(cases);
           const reviewerIds = rows.flatMap((row) =>
             row.reviewerId === null ? [] : [row.reviewerId]
           );
@@ -369,27 +334,66 @@ export function createRouteSlice(
           } catch {
             // The counts remain useful when directory enrichment is unavailable.
           }
-          if (tools.isActive() && sequence === voidLoadSequence) {
-            tools.dispatch({
-              type: 'void-volumes/loaded',
-              rows: withReviewerDisplayNames(rows, displayNames),
-            });
+          if (current()) {
+            tools.dispatch(
+              spec.loaded(withReviewerDisplayNames(rows, displayNames))
+            );
           }
         },
         (error) => {
           // An abort reaches here with isActive() already false, so navigation
           // never renders a load failure.
-          if (tools.isActive() && sequence === voidLoadSequence) {
-            tools.dispatch({
-              type: 'void-volumes/load-failed',
-              message:
-                error instanceof Error
-                  ? error.message
-                  : 'Unable to load voided Cases.',
-            });
+          if (current()) {
+            tools.dispatch(
+              spec.failed(
+                error instanceof Error ? error.message : spec.fallbackMessage
+              )
+            );
           }
         }
       );
+  }
+
+  function runRefreshEffect() {
+    const tools = effectTools;
+    if (!tools) return;
+    runLoad({
+      sequence: loadSequence,
+      read: (client) =>
+        fetchCases(
+          client,
+          tools.context.chrome.currentUser.id,
+          tools.context.caseSources
+        ),
+      build: (cases) =>
+        buildTeamWorkload(cases, tools.context.caseSources, now()),
+      loaded: (rows) => ({ type: 'workload/loaded', rows }),
+      failed: (message) => ({ type: 'workload/load-failed', message }),
+      fallbackMessage: 'Unable to load current workload.',
+    });
+  }
+
+  function runVoidRefreshEffect() {
+    const tools = effectTools;
+    if (!tools) return;
+    const since = new Date(
+      now().getTime() - VOID_WINDOW_DAYS * 24 * 60 * 60 * 1000
+    ).toISOString();
+    runLoad({
+      sequence: voidLoadSequence,
+      read: (client) =>
+        fetchVoidedCases(
+          client,
+          tools.context.chrome.currentUser.id,
+          tools.context.caseSources,
+          since
+        ),
+      build: (cases) =>
+        buildVoidVolumes(cases, tools.context.caseSources, now()),
+      loaded: (rows) => ({ type: 'void-volumes/loaded', rows }),
+      failed: (message) => ({ type: 'void-volumes/load-failed', message }),
+      fallbackMessage: 'Unable to load voided Cases.',
+    });
   }
 
   /** @type {MyTeamState} */
@@ -490,8 +494,8 @@ export function createRouteSlice(
       return () => {
         effectTools = null;
         readClient = null;
-        loadSequence += 1;
-        voidLoadSequence += 1;
+        loadSequence.value += 1;
+        voidLoadSequence.value += 1;
       };
     },
   };
