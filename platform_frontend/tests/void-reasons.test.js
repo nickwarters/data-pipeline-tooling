@@ -27,6 +27,12 @@ test('VOID_REASONS is the frozen framework vocabulary, in display order', () => 
   for (const reason of VOID_REASONS) {
     assert.equal(typeof reason.label, 'string');
     assert.ok(reason.label.length > 0);
+    // The members are frozen too: freezing only the list would leave every key
+    // and label editable in place, which is the half nothing else could detect.
+    assert.ok(Object.isFrozen(reason), reason.key);
+    assert.throws(() => {
+      /** @type {any} */ (reason).label = 'reworded';
+    });
   }
   assert.ok(Object.isFrozen(VOID_REASONS));
 });

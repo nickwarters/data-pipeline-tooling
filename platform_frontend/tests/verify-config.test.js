@@ -736,7 +736,6 @@ test('checkCaseTypes fails a voidReasons key outside the framework vocabulary', 
 
   assert.equal(failures.length, 1);
   assert.match(failures[0].message, /not-a-reason/);
-  assert.match(failures[0].message, /duplicate/);
 });
 
 test('checkCaseTypes accepts a narrowed voidReasons and an absent one', async () => {

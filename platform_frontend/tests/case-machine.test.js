@@ -113,9 +113,23 @@ test('CaseMachine lifecycle capabilities freeze at the reportable milestone', ()
 test('CaseMachine: a voided Case can be neither completed nor edited', () => {
   // Void freezes the Case without ever making it reportable, so the freeze has
   // to be asked as its own question rather than read off `reportable`.
-  assert.equal(machineFor('Void').reportable, false);
-  assert.equal(machineFor('Void').canComplete, false);
-  assert.equal(machineFor('Void').canEditIssues, false);
+  const machine = machineFor('Void');
+  assert.equal(machine.reportable, false);
+  assert.equal(machine.canComplete, false);
+  assert.equal(machine.canEditIssues, false);
+
+  // The access matrix already answers `read-only` on a voided Case, so both
+  // getters would be false whatever guard stood beside it. Forcing `edit`
+  // leaves the machine's own freeze guard as the only thing that can say no —
+  // which is the rule being claimed here.
+  machine.access.questions = 'edit';
+  machine.access.issues = 'edit';
+  assert.equal(machine.canComplete, false, 'the freeze guard, not the matrix');
+  assert.equal(
+    machine.canEditIssues,
+    false,
+    'the freeze guard, not the matrix'
+  );
 });
 
 test('CaseMachine: only the Assigned Reviewer of a live Case may void it', () => {
