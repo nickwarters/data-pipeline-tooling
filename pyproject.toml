@@ -1,7 +1,22 @@
 [tool.ruff]
 line-length = 88
 target-version = "py312"
+# The frontend framework under platform_frontend/ is a JavaScript project that
+# carries a handful of its own Python scripts. It has its own toolchain (eslint,
+# prettier, `node --test`) wired into .pre-commit-config.yaml; its Python is not
+# held to this project's ruff style, so linting it here would only produce churn
+# in files this project does not own.
+extend-exclude = ["platform_frontend"]
+# Honour the exclusion even when a path is passed explicitly. pre-commit invokes
+# ruff with the staged filenames, which would otherwise override extend-exclude.
+force-exclude = true
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
 ignore = []
+
+[tool.pytest.ini_options]
+# Scope collection to this project's suite. Without this, a bare `pytest` from
+# the repo root also collects platform_frontend/tests/, whose Python tests are
+# run by that project's own `npm run test:deploy`.
+testpaths = ["tests"]

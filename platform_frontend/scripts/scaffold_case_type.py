@@ -623,14 +623,14 @@ def scaffold(opts: ScaffoldOptions) -> None:
     if f"caseType: '{opts.slug}'" not in cases:
         cases = insert_after_match(
             cases,
-            r" \*   complaints-case-2 — Completed, one failure → outcomeAtCompletion=refer\n",
+            r" \*   complaints-case-2 — Completed, one failure → outcomeAtCompletion=poor\n",
             f" *   {opts.slug}-case-1 — In-progress scaffold sample (assigned)\n"
             f" *   {opts.slug}-case-2 — Completed scaffold sample, one failure → outcomeAtCompletion=refer\n",
             cases_path,
         )
         cases = insert_before(
             cases,
-            "  // ── Action Centre demo cases (issue #287) ────────────────────────────────",
+            "  // ── Action Centre demo cases ────────────────────────────────",
             fixture_cases(opts),
             cases_path,
         )

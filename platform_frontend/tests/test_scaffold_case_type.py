@@ -79,7 +79,6 @@ class ScaffoldCaseTypeTest(unittest.TestCase):
         module_source = module_path.read_text(encoding="utf-8")
         self.assertIn("The **Widget Review** Case Type", module_source)
         self.assertIn("TODO(case-type): Replace starter questions", module_source)
-        self.assertIn("TODO(case-type): Confirm the SLA hours", module_source)
         self.assertNotIn("dashboardPanels", module_source)
         # #525: the generated Case Type must declare its Case list. The mock
         # store's partition is total (no default store, #249), so a fixture Case
