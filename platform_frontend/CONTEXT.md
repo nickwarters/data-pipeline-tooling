@@ -44,12 +44,35 @@ actions path a Case is Reportable (its Answers frozen, Outcome snapshotted) at *
 Actions**, then only later Completed.
 _Avoid_: Closed, finished, done
 
+**Void Case**:
+A **Case** in the terminal `Void` **status**: abandoned before it could be reviewed to a
+conclusion, and stamped with a **Void Reason**, `voidedAt` and `voidedBy` (the account of
+whoever voided it). Voided by its **Assigned Reviewer** alone, from `In-progress` or
+`Actions In Progress`, through a two-step control that names the consequences and demands
+a reason. **Deliberately carries no Outcome** — it is not reviewed work and must not count
+as any — and there is no un-void: a Case voided in error is raised again. Its Answers,
+Issues and Notes freeze, and its **Conversation** stops accepting messages wherever the
+**Case Type**'s `allowMessagesWhen` excludes the status.
+_Avoid_: Cancelled, deleted, closed (a Case is never removed — voiding is a status)
+
+**Void Reason**:
+Why a **Case** was voided, chosen from a framework-owned vocabulary of six —
+_Duplicate of another Case_, _Raised in error_, _Out of scope for review_, _Evidence
+unavailable_, _Superseded by another Case_, _Withdrawn by the business_. A **Case Type**
+may narrow which of them it offers (`voidReasons`) but may not add one: the **Reviewer
+Manager**'s report groups reasons across Case Types, which only means something while a
+key means the same everywhere. Stored as the key; a key no longer in the vocabulary
+renders as itself rather than blank.
+_Avoid_: Void code, cancellation reason
+
 **Case Status**:
 The lifecycle state on the Case row: **`In-progress`** → (**Send Actions** if any
 Remediation Actions exist) **`Actions In Progress`** → **`Completed`**, or `In-progress`
 → (**Complete Case** when no actions) → `Completed`. One button at the bottom
 of **Summary** drives the transition, labelled **"Send Actions"** when actions exist and
-**"Complete Case"** otherwise.
+**"Complete Case"** otherwise. A third, terminal exit leaves either live status: **`Void`**
+(see **Void Case**), reached from the Void control beside that button and never returned
+from.
 _Avoid_: State (overloaded), phase
 
 **Reportable**:
@@ -59,6 +82,13 @@ when actions are **sent** (`Actions In Progress`) or, with no actions, when the 
 **Completed**. Equivalently `status ∈ { Actions In Progress, Completed }`. Timestamped as
 `reportableAt`. Past this point a newly-applicable **Question Definition** no longer
 reopens the Case. Distinct from `completedAt`, which marks final closure only.
+
+A **Void Case** is frozen but was **not** necessarily Reportable: voiding freezes the
+Answers without stamping an Outcome, so "the Answers are frozen" (`isFrozen`) and "a
+snapshot was taken" (`reachedReportable` — Reportable, or Void with a `reportableAt`) are
+two questions now. A Case voided from `Actions In Progress` reached the milestone and
+keeps everything stamped at it; a Case voided from `In-progress` never did and has no
+Outcome at all.
 _Avoid_: Frozen (describes the effect, not the milestone), Locked
 
 **QA Check** _(shelved — see **Amended Outcome**)_:
@@ -291,6 +321,9 @@ _Avoid_: Responsible Party (case-level, a different concept), Owner, Culprit, Bl
 
 **Reviewer Manager**:
 A SharePoint user in the Reviewer Managers **SharePoint Group** who manages a team of **Reviewers**. Sees the `#/reports/reviewer-team` report — their team's completed-Case volumes (7- and 30-day) and current assigned-Case queue health (outstanding, overdue), totalled and broken down by **Case Type**. The relationship "Reviewer X is managed by Reviewer Manager Y" is denormalised onto every **Case** row as `assignedReviewerManager` (a user field) so reports can be queried via a single server-side `$filter` per **Case Type** list. It is **decided to be a reporting snapshot, and is not one yet**: the decision on the manager fields is that it _is to be_ current while the Case is `In-progress`, frozen at **Reportable** alongside the Outcome snapshot, and never rewritten afterwards — so that a Completed Case would belong permanently to the manager who owned the Reviewer while the work was done, not to whoever manages them today. **Nothing in `src/` writes the field today**: no allocation or reassignment surface sets it and `CaseMachine` does not stamp it, so its value is whatever the row was created with. The decision is recorded; the work is listed as follow-up on that decision and is not built. A user is either a Reviewer Manager _or_ a **Responsible Party Manager**, never both — a Maintainer convention, not code, and no longer load-bearing: both roles are resolved per Case and compose safely if one user ever holds both. On a Case that names them in `assignedReviewerManager` they hold a **Section** access role of their own (`reviewerManager`), observing read-only whatever a non-assigned **Reviewer** observes — including the **Remediation** Section's reviewer-side breakdown. The role is scoped to the Case by that field, exactly as the **Responsible Party Manager**'s is: group membership alone grants nothing, so a manager reads the Cases of the **Reviewers** they manage rather than every Case of every **Case Type**.
+On `#/my-team` they read two tables: **Current Workload**, and beneath it **Voided Cases**
+— the **Void Case** volumes of their team over 7 and 30 days, grouped by whoever voided
+each Case, broken down by **Case Type** and naming each Reviewer's leading **Void Reason**.
 _Avoid_: Team Lead, Reviewer Supervisor
 
 **Responsible Party Manager**:
