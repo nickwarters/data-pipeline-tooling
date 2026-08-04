@@ -390,6 +390,8 @@ src/
     general-questions.js         # General Question answer-key namespace + load-time config gates (#472)
     summary-model.js
     team-workload-model.js       # per-Reviewer workload rows for the My Team page
+    void-volume-model.js         # per-Reviewer voided-Case rows over a 30-day window, grouped
+                                 #   by who voided, for the My Team page's second table
 
   setup/                        # app startup helpers
     app-chrome.js                 # guarded nav mount (a nav that fails to load is fatal, with a message)

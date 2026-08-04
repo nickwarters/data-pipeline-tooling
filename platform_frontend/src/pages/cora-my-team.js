@@ -3,23 +3,33 @@ import {
   buildTeamWorkload,
   withReviewerDisplayNames,
 } from '../evaluators/team-workload-model.js';
+import { buildVoidVolumes } from '../evaluators/void-volume-model.js';
 import { h } from '../lib/html.js';
 import { LoadingState } from '../lib/empty-state.js';
 import { patchRoute } from '../core/route-state.js';
 import { withAbortSignal } from '../services/abortable-client.js';
-import { fetchTeamWorkloadCases } from '../services/team-cases-fetcher.js';
+import {
+  fetchTeamVoidedCases,
+  fetchTeamWorkloadCases,
+} from '../services/team-cases-fetcher.js';
 import {
   dataTableView,
   reduceTableSort,
   sortRequested,
 } from '../views/data-table.js';
 
-/** The one table name this page sorts by: used by both the view and the reducer. */
+/** The table names this page sorts by: used by both the view and the reducer. */
 const TABLE = 'workload';
+const VOID_TABLE = 'void-volumes';
+
+/** How far back the void report reads. Both of its columns come from this one window. */
+const VOID_WINDOW_DAYS = 30;
 
 /** @typedef {import('../evaluators/team-workload-model.js').WorkloadRow} WorkloadRow */
 /** @typedef {import('../setup/resolve-eligible-case-types.js').CaseSource} CaseSource */
+/** @typedef {import('../evaluators/void-volume-model.js').VoidVolumeRow} VoidVolumeRow */
 /** @typedef {import('../views/data-table.js').ColumnDescriptor<WorkloadRow>} WorkloadColumn */
+/** @typedef {import('../views/data-table.js').ColumnDescriptor<VoidVolumeRow>} VoidVolumeColumn */
 /** @typedef {import('../views/data-table.js').TableSort} TableSort */
 
 /**
@@ -28,6 +38,10 @@ const TABLE = 'workload';
  * @property {TableSort | null} sort
  * @property {boolean} loading
  * @property {string | null} error
+ * @property {VoidVolumeRow[] | null} voidRows
+ * @property {TableSort | null} voidSort
+ * @property {boolean} voidLoading
+ * @property {string | null} voidError
  */
 
 /**
@@ -42,6 +56,10 @@ const TABLE = 'workload';
  *   | { type: 'workload/loaded', rows: WorkloadRow[] }
  *   | { type: 'workload/load-failed', message: string }
  *   | { type: 'workload-table/sort-requested', key: string }
+ *   | { type: 'void-volumes/refresh-requested' }
+ *   | { type: 'void-volumes/loaded', rows: VoidVolumeRow[] }
+ *   | { type: 'void-volumes/load-failed', message: string }
+ *   | { type: 'void-volumes-table/sort-requested', key: string }
  * } MyTeamAction
  */
 
@@ -86,6 +104,36 @@ export function myTeamColumns(sources) {
 }
 
 /**
+ * @param {CaseSource[]} sources
+ * @returns {VoidVolumeColumn[]}
+ */
+export function voidVolumeColumns(sources) {
+  return [
+    { key: 'reviewer', label: 'Reviewer', value: 'reviewer', sortable: true },
+    { key: 'last7', label: 'Voided (7 days)', value: 'last7', sortable: true },
+    {
+      key: 'last30',
+      label: 'Voided (30 days)',
+      value: 'last30',
+      sortable: true,
+    },
+    ...sources.map((source) => ({
+      key: `void-case-type-${source.slug}`,
+      label: source.displayName || source.slug,
+      value: (/** @type {VoidVolumeRow} */ row) =>
+        row.countsByCaseType[source.slug] ?? 0,
+      sortable: true,
+    })),
+    {
+      key: 'leadingReason',
+      label: 'Leading reason (30 days)',
+      value: 'leadingReason',
+      sortable: true,
+    },
+  ];
+}
+
+/**
  * @param {MyTeamState} state
  * @param {{
  *   dispatch: (action: MyTeamAction) => void,
@@ -124,6 +172,7 @@ export function myTeamView(
           disabled: route.loading,
           onclick: () => {
             dispatch({ type: 'workload/refresh-requested' });
+            dispatch({ type: 'void-volumes/refresh-requested' });
             runRefreshEffect();
           },
         },
@@ -159,6 +208,39 @@ export function myTeamView(
               row.isTotal ? 'cora-workload-row cora-workload-row--total' : '',
           })
         )
+      : null,
+    // The second table stands or falls on its own: its rows, its sort, its
+    // error. A void report that cannot be read must not take the workload the
+    // manager came for down with it.
+    h('h2', {}, 'Voided Cases'),
+    h(
+      'p',
+      { className: 'cora-my-team-void-note' },
+      'Cases voided by your team in the last 30 days, by whoever voided them.'
+    ),
+    route.voidError ? h('p', { role: 'alert' }, route.voidError) : null,
+    route.voidLoading && route.voidRows === null
+      ? LoadingState('Loading voided Cases')
+      : null,
+    route.voidRows !== null
+      ? h(
+          'div',
+          { className: 'cora-my-team-table' },
+          dataTableView({
+            rows: route.voidRows.filter((row) => !row.isTotal),
+            footerRows: route.voidRows.filter((row) => row.isTotal),
+            columns: voidVolumeColumns(caseSources),
+            sort: route.voidSort,
+            onSort: (key) => dispatch(sortRequested(VOID_TABLE, key)),
+            emptyMessage: 'No Cases voided in the last 30 days.',
+            rowKey: (row) =>
+              row.reviewerId === null
+                ? 'void-total'
+                : `void-reviewer:${row.reviewerId}`,
+            rowClass: (row) =>
+              row.isTotal ? 'cora-workload-row cora-workload-row--total' : '',
+          })
+        )
       : null
   );
 }
@@ -168,15 +250,23 @@ export function myTeamView(
  * @param {import('../setup/register-routes.js').AppContext} context
  * @param {{
  *   fetchCases?: typeof fetchTeamWorkloadCases,
+ *   fetchVoidedCases?: typeof fetchTeamVoidedCases,
  *   now?: () => Date,
  * }} [dependencies]
  */
 export function createRouteSlice(
   _params,
   context,
-  { fetchCases = fetchTeamWorkloadCases, now = () => new Date() } = {}
+  {
+    fetchCases = fetchTeamWorkloadCases,
+    fetchVoidedCases = fetchTeamVoidedCases,
+    now = () => new Date(),
+  } = {}
 ) {
   let loadSequence = 0;
+  // Its own sequence token: the two reads finish independently, so one must not
+  // be able to discard the other's rows.
+  let voidLoadSequence = 0;
   // The mount lifetime comes from the adapter's tools, not a page-local latch.
   /** @type {null | { dispatch: (action: MyTeamAction) => void, context: import('../setup/register-routes.js').AppContext, isActive: () => boolean, signal?: AbortSignal }} */
   let effectTools = null;
@@ -237,6 +327,71 @@ export function createRouteSlice(
     );
   }
 
+  function runVoidRefreshEffect() {
+    const tools = effectTools;
+    if (!tools || !tools.isActive()) return;
+    const sequence = ++voidLoadSequence;
+    const since = new Date(
+      now().getTime() - VOID_WINDOW_DAYS * 24 * 60 * 60 * 1000
+    ).toISOString();
+    // Started inside the chain, not before it: a mount with no client throws
+    // where the fetcher first touches it, and that has to reach the failure
+    // handler below rather than out of the effect's caller.
+    void Promise.resolve()
+      .then(() =>
+        fetchVoidedCases(
+          /** @type {import('../sharepoint-client.js').SharePointClient} */ (
+            readClient
+          ),
+          tools.context.chrome.currentUser.id,
+          tools.context.caseSources,
+          since
+        )
+      )
+      .then(
+        async (cases) => {
+          if (!tools.isActive() || sequence !== voidLoadSequence) return;
+          const rows = buildVoidVolumes(
+            cases,
+            tools.context.caseSources,
+            now()
+          );
+          const reviewerIds = rows.flatMap((row) =>
+            row.reviewerId === null ? [] : [row.reviewerId]
+          );
+          /** @type {Record<string, string | null>} */
+          let displayNames = {};
+          try {
+            if (typeof tools.context.client.resolveUsers === 'function') {
+              displayNames =
+                await tools.context.client.resolveUsers(reviewerIds);
+            }
+          } catch {
+            // The counts remain useful when directory enrichment is unavailable.
+          }
+          if (tools.isActive() && sequence === voidLoadSequence) {
+            tools.dispatch({
+              type: 'void-volumes/loaded',
+              rows: withReviewerDisplayNames(rows, displayNames),
+            });
+          }
+        },
+        (error) => {
+          // An abort reaches here with isActive() already false, so navigation
+          // never renders a load failure.
+          if (tools.isActive() && sequence === voidLoadSequence) {
+            tools.dispatch({
+              type: 'void-volumes/load-failed',
+              message:
+                error instanceof Error
+                  ? error.message
+                  : 'Unable to load voided Cases.',
+            });
+          }
+        }
+      );
+  }
+
   /** @type {MyTeamState} */
   const initialState = {
     chrome: context.chrome,
@@ -246,6 +401,10 @@ export function createRouteSlice(
         sort: null,
         loading: true,
         error: null,
+        voidRows: null,
+        voidSort: null,
+        voidLoading: true,
+        voidError: null,
       },
     },
   };
@@ -275,8 +434,29 @@ export function createRouteSlice(
           error: action.message,
         });
       }
+      if (action.type === 'void-volumes/refresh-requested') {
+        return patchRoute(state, 'myTeam', {
+          voidLoading: true,
+          voidError: null,
+        });
+      }
+      if (action.type === 'void-volumes/loaded') {
+        return patchRoute(state, 'myTeam', {
+          voidRows: action.rows,
+          voidLoading: false,
+          voidError: null,
+        });
+      }
+      if (action.type === 'void-volumes/load-failed') {
+        return patchRoute(state, 'myTeam', {
+          voidLoading: false,
+          voidError: action.message,
+        });
+      }
       const sort = reduceTableSort(route.sort, action, TABLE);
       if (sort) return patchRoute(state, 'myTeam', { sort });
+      const voidSort = reduceTableSort(route.voidSort, action, VOID_TABLE);
+      if (voidSort) return patchRoute(state, 'myTeam', { voidSort });
       return state;
     },
     view(
@@ -286,7 +466,10 @@ export function createRouteSlice(
       return myTeamView(state, {
         dispatch: tools.dispatch,
         caseSources: tools.context.caseSources,
-        runRefreshEffect,
+        runRefreshEffect: () => {
+          runRefreshEffect();
+          runVoidRefreshEffect();
+        },
       });
     },
     start(
@@ -301,11 +484,14 @@ export function createRouteSlice(
         : tools.context.client;
       tools.dispatch({ type: 'workload/refresh-requested' });
       runRefreshEffect();
+      tools.dispatch({ type: 'void-volumes/refresh-requested' });
+      runVoidRefreshEffect();
 
       return () => {
         effectTools = null;
         readClient = null;
         loadSequence += 1;
+        voidLoadSequence += 1;
       };
     },
   };

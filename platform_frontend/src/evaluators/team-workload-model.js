@@ -133,9 +133,14 @@ export function buildTeamWorkload(cases, sources, now) {
  * Apply directory display names without losing the account id used as the
  * stable row identity. Missing names deliberately fall back to the account.
  *
- * @param {WorkloadRow[]} rows
+ * Typed by shape rather than by row: every per-Reviewer table on the My Team
+ * page names people the same way, and a second copy of this would be a second
+ * answer to "what do we call someone the directory does not know".
+ *
+ * @template {{ reviewerId: string | null, reviewer: string }} Row
+ * @param {Row[]} rows
  * @param {Record<string, string | null>} displayNames
- * @returns {WorkloadRow[]}
+ * @returns {Row[]}
  */
 export function withReviewerDisplayNames(rows, displayNames) {
   return rows.map((row) =>

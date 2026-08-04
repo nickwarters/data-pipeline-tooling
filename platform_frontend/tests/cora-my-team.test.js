@@ -119,6 +119,7 @@ test('my team slice: loads fresh data, refreshes manually, sorts, and ignores st
   };
   const slice = createRouteSlice({}, context(), {
     fetchCases: /** @type {any} */ (fetchCases),
+    fetchVoidedCases: async () => [],
     now: () => new Date('2026-07-24T00:00:00.000Z'),
   });
   let active = true;
@@ -130,12 +131,17 @@ test('my team slice: loads fresh data, refreshes manually, sorts, and ignores st
     isActive: () => active,
   });
 
+  /** @param {string} type */
+  const workloadActions = (type) =>
+    actions.filter((action) => action.type === type);
+
   assert.deepEqual(actions[0], { type: 'workload/refresh-requested' });
   pending[0].release();
   await pending[0].promise;
-  assert.equal(actions[1].type, 'workload/loaded');
+  const loaded = workloadActions('workload/loaded');
+  assert.equal(loaded.length, 1);
 
-  const loadedState = slice.reducer(slice.initialState, actions[1]);
+  const loadedState = slice.reducer(slice.initialState, loaded[0]);
   const rendered = slice.view?.(
     loadedState,
     /** @type {any} */ ({
@@ -146,7 +152,7 @@ test('my team slice: loads fresh data, refreshes manually, sorts, and ignores st
     })
   );
   fireEvent(getByRole(rendered, 'button', { name: 'Refresh' }), 'click');
-  assert.deepEqual(actions[2], { type: 'workload/refresh-requested' });
+  assert.equal(workloadActions('workload/refresh-requested').length, 2);
 
   const sorted = slice.reducer(slice.initialState, {
     type: 'workload-table/sort-requested',
@@ -162,7 +168,11 @@ test('my team slice: loads fresh data, refreshes manually, sorts, and ignores st
   dispose?.();
   pending[1].release();
   await pending[1].promise;
-  assert.equal(actions.length, 3);
+  assert.equal(
+    workloadActions('workload/loaded').length,
+    1,
+    'the load started before the mount ended lands nothing'
+  );
 });
 
 test('my team view: keeps Total last under every sortable column and direction', () => {
@@ -239,6 +249,7 @@ test('my team slice: resolves reviewer display names and falls back to account i
     },
   };
   const slice = createRouteSlice({}, context(), {
+    fetchVoidedCases: async () => [],
     fetchCases: async () => [
       /** @type {any} */ ({
         id: 'a',
@@ -266,11 +277,13 @@ test('my team slice: resolves reviewer display names and falls back to account i
   await Promise.resolve();
   await Promise.resolve();
 
+  const workloadLoaded = actions.filter(
+    (/** @type {any} */ action) => action.type === 'workload/loaded'
+  );
   assert.deepEqual(
-    /** @type {any} */ (actions.at(-1)).rows.map((/** @type {any} */ row) => [
-      row.reviewerId,
-      row.reviewer,
-    ]),
+    /** @type {any} */ (workloadLoaded.at(-1)).rows.map(
+      (/** @type {any} */ row) => [row.reviewerId, row.reviewer]
+    ),
     [
       ['reviewer-a', 'Alex Reviewer'],
       ['reviewer-b', 'reviewer-b'],
@@ -288,6 +301,7 @@ test('my team slice: the adapter mount lifetime, not a page latch, suppresses a 
   });
   const slice = createRouteSlice({}, context(), {
     fetchCases: /** @type {any} */ (() => pending),
+    fetchVoidedCases: async () => [],
     now: () => new Date('2026-07-24T00:00:00.000Z'),
   });
   /** @type {any[]} */
@@ -396,7 +410,179 @@ test('my team slice: a client-less mount with a mount signal still degrades to t
 
   assert.deepEqual(seenClients, [null], 'there was nothing to wrap');
   assert.deepEqual(
-    actions.map((action) => action.type),
-    ['workload/refresh-requested', 'workload/load-failed']
+    actions.map((action) => action.type).sort(),
+    [
+      'void-volumes/load-failed',
+      'void-volumes/refresh-requested',
+      'workload/load-failed',
+      'workload/refresh-requested',
+    ],
+    'both reads degrade to their own message'
   );
+});
+
+// --- Voided Cases: the second table on the page ---
+
+/** @param {any[]} [rows] */
+function voidRow(rows = []) {
+  return rows;
+}
+
+test('my team view: the void volumes table renders beneath Current Workload', () => {
+  const slice = createRouteSlice({}, context(), {
+    fetchCases: async () => [],
+    fetchVoidedCases: async () => [],
+  });
+  const tools = { dispatch() {}, caseSources: sources };
+
+  const loaded = slice.reducer(
+    slice.reducer(slice.initialState, { type: 'workload/loaded', rows: [] }),
+    {
+      type: 'void-volumes/loaded',
+      rows: voidRow([
+        {
+          reviewerId: 'reviewer-a',
+          reviewer: 'Alex Reviewer',
+          last7: 1,
+          last30: 3,
+          countsByCaseType: { complaints: 2, conduct: 1 },
+          leadingReason: 'Duplicate of another Case',
+          isTotal: false,
+        },
+      ]),
+    }
+  );
+  const view = myTeamView(loaded, tools);
+
+  assert.match(view.textContent, /Voided Cases/);
+  assert.match(view.textContent, /Alex Reviewer/);
+  assert.match(view.textContent, /Duplicate of another Case/);
+  assert.ok(
+    view.textContent.indexOf('Current Workload') <
+      view.textContent.indexOf('Voided Cases'),
+    'the workload the manager came for stays first'
+  );
+});
+
+test('my team view: a failed void load leaves the workload table standing', () => {
+  const slice = createRouteSlice({}, context(), {
+    fetchCases: async () => [],
+    fetchVoidedCases: async () => [],
+  });
+  const loaded = slice.reducer(
+    slice.reducer(slice.initialState, {
+      type: 'workload/loaded',
+      rows: [
+        {
+          reviewerId: 'reviewer-a',
+          reviewer: 'Alex Reviewer',
+          countsByCaseType: { complaints: 1, conduct: 0 },
+          totalOutstanding: 1,
+          onHold: 0,
+          longestHoldDays: null,
+          isTotal: false,
+        },
+      ],
+    }),
+    {
+      type: 'void-volumes/load-failed',
+      message: 'Unable to read voided Cases.',
+    }
+  );
+  const view = myTeamView(loaded, { dispatch() {}, caseSources: sources });
+
+  const alerts = [...view.querySelectorAll('[role="alert"]')];
+  assert.deepEqual(
+    alerts.map((node) => node.textContent),
+    ['Unable to read voided Cases.']
+  );
+  assert.equal(view.querySelector('tbody')?.querySelectorAll('tr').length, 1);
+});
+
+test('my team slice: loads void volumes alongside the workload, and discards a stale one', async () => {
+  /** @type {any[]} */
+  const actions = [];
+  /** @type {Array<(rows: any[]) => void>} */
+  const releases = [];
+  const slice = createRouteSlice({}, context(), {
+    fetchCases: async () => [],
+    fetchVoidedCases: () =>
+      new Promise((resolve) => {
+        releases.push(resolve);
+      }),
+    now: () => new Date('2026-07-24T00:00:00.000Z'),
+  });
+  let active = true;
+  const dispose = slice.start?.(
+    /** @type {any} */ ({
+      dispatch: (/** @type {any} */ action) => actions.push(action),
+      context: context(),
+      isActive: () => active,
+    })
+  );
+
+  assert.ok(
+    actions.some((action) => action.type === 'void-volumes/refresh-requested')
+  );
+  await Promise.resolve();
+  releases[0]([]);
+  for (let i = 0; i < 20; i += 1) await Promise.resolve();
+  assert.ok(actions.some((action) => action.type === 'void-volumes/loaded'));
+
+  // A second read started and then abandoned: its rows must not land.
+  const before = actions.length;
+  active = false;
+  dispose?.();
+  releases[0]([]);
+  for (let i = 0; i < 20; i += 1) await Promise.resolve();
+  assert.equal(actions.length, before);
+});
+
+test('my team slice: the two tables sort independently', () => {
+  const slice = createRouteSlice({}, context(), {
+    fetchCases: async () => [],
+    fetchVoidedCases: async () => [],
+  });
+  const sorted = slice.reducer(slice.initialState, {
+    type: 'void-volumes-table/sort-requested',
+    key: 'last30',
+  });
+  assert.deepEqual(sorted.routes.myTeam.voidSort, {
+    key: 'last30',
+    dir: 'asc',
+  });
+  assert.equal(
+    sorted.routes.myTeam.sort,
+    null,
+    'the workload sort is untouched'
+  );
+
+  const workloadSorted = slice.reducer(sorted, {
+    type: 'workload-table/sort-requested',
+    key: 'reviewer',
+  });
+  assert.deepEqual(workloadSorted.routes.myTeam.voidSort, {
+    key: 'last30',
+    dir: 'asc',
+  });
+});
+
+test('my team slice: a void load failure leaves the workload slice untouched', () => {
+  const slice = createRouteSlice({}, context(), {
+    fetchCases: async () => [],
+    fetchVoidedCases: async () => [],
+  });
+  const withWorkload = slice.reducer(slice.initialState, {
+    type: 'workload/loaded',
+    rows: [],
+  });
+  const failed = slice.reducer(withWorkload, {
+    type: 'void-volumes/load-failed',
+    message: 'nope',
+  });
+
+  assert.deepEqual(failed.routes.myTeam.rows, []);
+  assert.equal(failed.routes.myTeam.error, null);
+  assert.equal(failed.routes.myTeam.loading, false);
+  assert.equal(failed.routes.myTeam.voidError, 'nope');
 });

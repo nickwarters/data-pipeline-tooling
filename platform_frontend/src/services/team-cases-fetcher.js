@@ -1,5 +1,6 @@
 // @ts-check
 import { listCasesAcrossSources } from './across-sources.js';
+import { CASE_STATUS } from '../lib/case-statuses.js';
 
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
@@ -42,5 +43,25 @@ export function fetchTeamWorkloadCases(client, managerId, sources) {
   return listCasesAcrossSources(client, sources, (source) => ({
     caseType: source.slug,
     assignedReviewerManager: managerId,
+  }));
+}
+
+/**
+ * Read the Cases a manager's team has voided since `since`, across the same
+ * per-source fan-out. One 30-day window answers both of the report's columns:
+ * the shorter split is derived client-side rather than read a second time.
+ *
+ * @param {SharePointClient} client
+ * @param {string} managerId
+ * @param {CaseSource[]} sources
+ * @param {string} since ISO instant; the inclusive start of the window
+ * @returns {Promise<CaseRow[]>}
+ */
+export function fetchTeamVoidedCases(client, managerId, sources, since) {
+  return listCasesAcrossSources(client, sources, (source) => ({
+    caseType: source.slug,
+    assignedReviewerManager: managerId,
+    status: CASE_STATUS.VOID,
+    voidedAfter: since,
   }));
 }

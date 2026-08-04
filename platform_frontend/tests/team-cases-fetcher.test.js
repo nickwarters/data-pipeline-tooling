@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { makeCaseRow } from './helpers/fixtures.js';
 
-const { fetchTeamCases, fetchTeamWorkloadCases } =
+const { fetchTeamCases, fetchTeamVoidedCases, fetchTeamWorkloadCases } =
   await import('../src/services/team-cases-fetcher.js');
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
@@ -165,6 +165,50 @@ test('fetchTeamWorkloadCases: reuses manager-scoped fan-out without Team Cases p
         filter: {
           caseType: 'conduct',
           assignedReviewerManager: 'manager-1',
+        },
+        listName: 'conduct-list',
+      },
+    ]
+  );
+  assert.deepEqual(
+    result.map((item) => item.id),
+    ['c1', 'c2']
+  );
+});
+
+test('fetchTeamVoidedCases: scopes each source by manager, Void status and the window', async () => {
+  const client = makeClient({
+    complaints: [row('c1', 'complaints')],
+    conduct: [row('c2', 'conduct')],
+  });
+  const result = await fetchTeamVoidedCases(
+    /** @type {any} */ (client),
+    'manager-1',
+    [src('complaints'), src('conduct')],
+    '2026-06-24T00:00:00.000Z'
+  );
+
+  assert.deepEqual(
+    client.calls.map(({ filter, opts }) => ({
+      filter,
+      listName: opts?.listName,
+    })),
+    [
+      {
+        filter: {
+          caseType: 'complaints',
+          assignedReviewerManager: 'manager-1',
+          status: 'Void',
+          voidedAfter: '2026-06-24T00:00:00.000Z',
+        },
+        listName: 'complaints-list',
+      },
+      {
+        filter: {
+          caseType: 'conduct',
+          assignedReviewerManager: 'manager-1',
+          status: 'Void',
+          voidedAfter: '2026-06-24T00:00:00.000Z',
         },
         listName: 'conduct-list',
       },
