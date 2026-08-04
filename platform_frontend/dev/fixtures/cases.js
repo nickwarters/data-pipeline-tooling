@@ -644,6 +644,86 @@ export const cases = [
     etag: 'etag-ac-ap1',
   },
 
+  // --- voided Cases: the two shapes a void can take, dated so the manager
+  // report on #/my-team shows one inside its 7-day column and one only inside
+  // the 30-day one. Both are held by Reviewers Morgan Manager manages. ---
+  {
+    // Voided before the reportable milestone: no Outcome was ever stamped, so
+    // the row carries none, and the Answers stop wherever the Reviewer did.
+    id: 'complaints-void-1',
+    caseType: 'complaints',
+    title: 'Complaint raised twice',
+    status: 'Void',
+    assignedReviewer: 'user-reviewer',
+    assignedReviewerManager: 'user-rm',
+    responsibleParty: 'user-agent-a',
+    responsiblePartyDisplayName: 'Frankie Agent',
+    answers: {
+      'q-cmp-0001': { value: 'Good' },
+      'q-cmp-0002': { value: 'Good' },
+    },
+    conversation: [],
+    notes: 'Same complaint as CR-2001; closing this one.',
+    onHold: false,
+    placedOnHoldAt: null,
+    awaitingResponsibleParty: false,
+    awaitingSince: null,
+    completedAt: null,
+    voidReason: 'duplicate',
+    voidedAt: _fourDaysAgo.toISOString(),
+    voidedBy: 'user-reviewer',
+    created: _nineDaysAgo.toISOString(),
+    assignedAt: _nineDaysAgo.toISOString(),
+    etag: 'etag-cm-void1-v1',
+  },
+  {
+    // Voided after Send Actions: the snapshot taken at the reportable milestone
+    // stays exactly as it was, and the remediation the Case had sent is left
+    // frozen mid-flight — which is the state the Void banner has to explain.
+    id: 'complaints-void-2',
+    caseType: 'complaints',
+    title: 'Complaint with no case file',
+    status: 'Void',
+    assignedReviewer: 'user-reviewer-2',
+    assignedReviewerManager: 'user-rm',
+    responsibleParty: 'user-agent-b',
+    responsiblePartyDisplayName: 'Rowan Agent',
+    answers: {
+      ...outcomeAnswers('Good'),
+      'q-cmp-0016': {
+        value: 'Poor',
+        remediationRequired: 'yes',
+        justification: 'The redress offer could not be checked.',
+        freeFormRemediation:
+          'Re-check the redress calculation once the file is recovered.',
+      },
+    },
+    conversation: [],
+    notes: '',
+    onHold: false,
+    placedOnHoldAt: null,
+    awaitingResponsibleParty: false,
+    awaitingSince: null,
+    reportableAt: _twentyDaysAgo.toISOString(),
+    remediationDueDate: addWorkingDays(
+      _twentyDaysAgo.toISOString(),
+      REMEDIATION_SLA_WORKING_DAYS,
+      ENGLAND_WALES_HOLIDAYS
+    ),
+    completedAt: null,
+    outcomeAtCompletion: 'poor',
+    hadRemediation: true,
+    effectiveOutcome: 'poor',
+    effectiveHadRemediation: true,
+    outcomeOverridden: false,
+    voidReason: 'no-evidence',
+    voidedAt: _nineDaysAgo.toISOString(),
+    voidedBy: 'user-reviewer-2',
+    created: _twentyDaysAgo.toISOString(),
+    assignedAt: _twentyDaysAgo.toISOString(),
+    etag: 'etag-cm-void2-v1',
+  },
+
   // Search demo rows. Three references share the `CR-20` prefix and one does
   // not, so an anchored prefix filter visibly separates them; their reportable
   // dates are spread across the last three weeks so a date window narrows

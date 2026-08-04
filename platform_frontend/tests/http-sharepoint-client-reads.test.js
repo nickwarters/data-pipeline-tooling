@@ -793,3 +793,56 @@ test('HttpSharePointClient: getCase passes through an already-parsed (non-string
   });
   assert.deepEqual(row?.answers, { 'q-1': { value: 'Yes' } });
 });
+
+test('HttpSharePointClient: listCases maps the void columns onto the Case Row', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            value: [
+              {
+                Id: 'case-void',
+                Title: 'Voided',
+                Status: 'Void',
+                CaseType: 'example-review',
+                Answers: '{}',
+                Conversation: '[]',
+                Notes: '',
+                CompletedAt: null,
+                VoidReason: 'duplicate',
+                VoidedAt: '2026-06-04T10:00:00.000Z',
+                VoidedBy: 'reviewer-1',
+              },
+              {
+                Id: 'case-live',
+                Title: 'Live',
+                Status: 'In-progress',
+                CaseType: 'example-review',
+                Answers: '{}',
+                Conversation: '[]',
+                Notes: '',
+                CompletedAt: null,
+              },
+            ],
+          }),
+          { status: 200 }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const rows = await client.listCases({}, { listName: 'Cases-ExampleReview' });
+
+  assert.equal(rows[0].voidReason, 'duplicate');
+  assert.equal(rows[0].voidedAt, '2026-06-04T10:00:00.000Z');
+  assert.equal(rows[0].voidedBy, 'reviewer-1');
+  // A list that has not been given the columns yet still hydrates.
+  assert.equal(rows[1].voidReason, undefined);
+  assert.equal(rows[1].voidedAt, null);
+  assert.equal(rows[1].voidedBy, undefined);
+});

@@ -993,3 +993,70 @@ test('HttpSharePointClient: an EnsureUser answer of zero is no person at all', a
     undefined
   );
 });
+
+test('HttpSharePointClient: patchCase writes the void columns, and omits them when absent', async () => {
+  const respondToWrite = () => [
+    {
+      when: (/** @type {any} */ c) => c.url.endsWith('/_api/contextinfo'),
+      respond: () => digestResponse('d'),
+    },
+    {
+      when: (/** @type {any} */ c) => c.method === 'PATCH',
+      respond: () =>
+        new Response(null, { status: 204, headers: { ETag: '"v2"' } }),
+    },
+    {
+      when: (/** @type {any} */ c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            Id: 'case-1',
+            Title: 'T',
+            Status: 'Void',
+            Answers: '{}',
+            Conversation: '[]',
+            Notes: 'n',
+            CompletedAt: null,
+            CaseType: 'example-review',
+          }),
+          { status: 200, headers: { ETag: '"v2"' } }
+        ),
+    },
+  ];
+
+  const voided = makeFetch(respondToWrite());
+  await new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: voided.fetch,
+  }).patchCase(
+    'case-1',
+    {
+      status: 'Void',
+      voidReason: 'duplicate',
+      voidedAt: '2026-07-05T09:00:00.000Z',
+      voidedBy: 'reviewer-1',
+    },
+    '"v1"',
+    { listName: 'Cases-ExampleReview' }
+  );
+
+  const patch = voided.calls.find((c) => c.method === 'PATCH');
+  assert.ok(patch, 'PATCH was issued');
+  assert.deepEqual(JSON.parse(String(patch.body)), {
+    Status: 'Void',
+    VoidReason: 'duplicate',
+    VoidedAt: '2026-07-05T09:00:00.000Z',
+    VoidedBy: 'reviewer-1',
+  });
+
+  const other = makeFetch(respondToWrite());
+  await new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: other.fetch,
+  }).patchCase('case-1', { notes: 'n' }, '"v1"', {
+    listName: 'Cases-ExampleReview',
+  });
+
+  const untouched = other.calls.find((c) => c.method === 'PATCH');
+  assert.deepEqual(JSON.parse(String(untouched?.body)), { Notes: 'n' });
+});

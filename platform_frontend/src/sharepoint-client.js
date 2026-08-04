@@ -332,6 +332,11 @@
  * column. It leads the expression for the same reason the completion window
  * does: a date range is the most selective thing a lookup usually carries.
  *
+ * `voidedAfter` (inclusive) and `voidedBefore` (exclusive) bound a read to a
+ * `VoidedAt` window, again on an indexed date column and again leading the
+ * expression: `Status eq 'Void'` alone matches every Case ever voided, which
+ * only grows.
+ *
  * `titlePrefix` matches the start of the Case Reference held in `Title`, and is
  * a **prefix** match on purpose — not a contains. `substringof` cannot use a
  * column index, so past the List View Threshold SharePoint refuses or throttles
@@ -343,7 +348,7 @@
  * to its internal column before emitting `$orderby`. Only a key that client maps
  * is sortable — an unmapped one throws there rather than reaching SharePoint.
  *
- * @typedef {{ status?: string, assignedReviewer?: string, caseType?: string, responsibleParty?: string, overdue?: boolean, awaitingResponsibleParty?: boolean, reviewRequired?: boolean, onHold?: boolean, hasOpenAppeal?: boolean, assignedReviewerManager?: string, effectiveOutcome?: string, outcomeOverridden?: boolean, completedAfter?: string, completedBefore?: string, reportableAfter?: string, reportableBefore?: string, titlePrefix?: string, anyOf?: ListCasesFilter[] }} ListCasesFilter
+ * @typedef {{ status?: string, assignedReviewer?: string, caseType?: string, responsibleParty?: string, overdue?: boolean, awaitingResponsibleParty?: boolean, reviewRequired?: boolean, onHold?: boolean, hasOpenAppeal?: boolean, assignedReviewerManager?: string, effectiveOutcome?: string, outcomeOverridden?: boolean, completedAfter?: string, completedBefore?: string, reportableAfter?: string, reportableBefore?: string, voidedAfter?: string, voidedBefore?: string, titlePrefix?: string, anyOf?: ListCasesFilter[] }} ListCasesFilter
  * @typedef {{ listName?: string, top?: number, skip?: number, orderBy?: string, orderDir?: 'asc' | 'desc' }} CaseListOptions
  */
 

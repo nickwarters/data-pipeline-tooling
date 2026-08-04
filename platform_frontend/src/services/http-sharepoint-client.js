@@ -869,6 +869,15 @@ function buildFilterExpr(filter) {
   if (filter.reportableBefore) {
     conds.push(`ReportableAt lt '${escapeOData(filter.reportableBefore)}'`);
   }
+  // And the VoidedAt window, for the third time and the same reason: the void
+  // report reads one rolling window, and `Status eq 'Void'` on its own would
+  // scan every Case ever voided.
+  if (filter.voidedAfter) {
+    conds.push(`VoidedAt ge '${escapeOData(filter.voidedAfter)}'`);
+  }
+  if (filter.voidedBefore) {
+    conds.push(`VoidedAt lt '${escapeOData(filter.voidedBefore)}'`);
+  }
   // A prefix match, never `substringof`: an unanchored contains cannot be served
   // from a column index, so past the List View Threshold SharePoint throttles or
   // refuses it outright.
@@ -1023,6 +1032,9 @@ function rowFromItem(item, etag) {
         : null,
     completedAt:
       typeof item?.CompletedAt === 'string' ? item.CompletedAt : null,
+    voidReason: item?.VoidReason != null ? String(item.VoidReason) : undefined,
+    voidedAt: typeof item?.VoidedAt === 'string' ? item.VoidedAt : null,
+    voidedBy: item?.VoidedBy != null ? String(item.VoidedBy) : undefined,
     outcome: item?.Outcome != null ? String(item.Outcome) : undefined,
     outcomeAtCompletion:
       item?.OutcomeAtCompletion != null
@@ -1164,6 +1176,12 @@ function itemFromRow(fields) {
   if (fields.onHold !== undefined) out.OnHold = fields.onHold;
   if (fields.placedOnHoldAt !== undefined)
     out.PlacedOnHoldAt = fields.placedOnHoldAt;
+  // The void stamp. `VoidedBy` is a plain-text column holding a bare account
+  // name, not a Person column, so it is written here with the rest of the
+  // transition rather than resolved to a numeric id in `patchCase`.
+  if (fields.voidReason !== undefined) out.VoidReason = fields.voidReason;
+  if (fields.voidedAt !== undefined) out.VoidedAt = fields.voidedAt;
+  if (fields.voidedBy !== undefined) out.VoidedBy = fields.voidedBy;
   if (fields.hasOpenAppeal !== undefined)
     out.HasOpenAppeal = fields.hasOpenAppeal;
   if (fields.appealRaisedAt !== undefined)

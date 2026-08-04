@@ -19,7 +19,11 @@ import { isRemediationResolved } from '../src/evaluators/remediation-status.js';
 import { openAppealFields } from '../src/services/action-centre-flags.js';
 import { outstandingRemediation } from '../src/pages/responsible-party/view.js';
 
-test('fixtures exercise all three lifecycle statuses', () => {
+test('the example-review fixtures exercise the three statuses a review passes through', () => {
+  // Scoped to the reviewing path on purpose: these fixtures drive the
+  // example-review walkthrough from opening a Case to completing it. The
+  // terminal Void status is demonstrated by the mock-client fixtures instead,
+  // which is where the manager report reads its rows from.
   const statuses = new Set(cases.map((c) => c.status));
   /** @type {Array<'In-progress' | 'Actions In Progress' | 'Completed'>} */
   const expectedStatuses = ['In-progress', 'Actions In Progress', 'Completed'];

@@ -450,6 +450,36 @@ test('MockSharePointClient: the ReportableAt window has an inclusive lower and e
   );
 });
 
+test('MockSharePointClient: the VoidedAt window has an inclusive lower and exclusive upper bound', async () => {
+  const client = searchClient([
+    makeCaseRow({ id: 'a', voidedAt: '2026-07-01T00:00:00.000Z' }),
+    makeCaseRow({ id: 'b', voidedAt: '2026-07-02T00:00:00.000Z' }),
+    makeCaseRow({ id: 'c', voidedAt: '2026-07-03T00:00:00.000Z' }),
+    makeCaseRow({ id: 'never' }),
+  ]);
+
+  assert.deepEqual(
+    (
+      await client.listCases(
+        { voidedAfter: '2026-07-02T00:00:00.000Z' },
+        { listName: LIST }
+      )
+    ).map((r) => r.id),
+    ['b', 'c'],
+    'includes the boundary Case, excludes earlier and the never-voided one'
+  );
+  assert.deepEqual(
+    (
+      await client.listCases(
+        { voidedBefore: '2026-07-02T00:00:00.000Z' },
+        { listName: LIST }
+      )
+    ).map((r) => r.id),
+    ['a'],
+    'excludes the boundary Case so adjacent windows never double-count'
+  );
+});
+
 test('MockSharePointClient: a Title prefix is anchored and case-insensitive', async () => {
   const client = searchClient([
     makeCaseRow({ id: 'a', title: 'CR-1001' }),
