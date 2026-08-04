@@ -89,16 +89,19 @@ un-void: correcting a mistaken void means raising the Case again.
 ### Storage
 
 Three new columns on every `Cases-{slug}` list: `VoidedAt` (Date and Time,
-**indexed**), `VoidReason` (single line of text) and `VoidedBy` (single line of
-text). `Status` gains `Void` as a fourth choice value.
+**indexed**), `VoidReason` (single line of text) and `VoidedBy` (**Person or
+Group**). `Status` gains `Void` as a fourth choice value.
 
-`VoidedBy` is **plain text, not a Person column**, and that diverges from the
-four other people on a Case row. Those are Person columns, expanded on read and
-reduced to a bare account name, because they are matched against the signed-in
-user to resolve Section-access Roles. `VoidedBy` is never matched against
-anybody: it is an audit stamp and a grouping key for one report, and storing the
-account name directly is exactly what the report wants with no directory round
-trip and no numeric-id resolution on the write path.
+`VoidedBy` is a Person column, the same as the four other people on a Case row:
+expanded on read and reduced to a bare account name, and resolved to a numeric
+id on write via the same `_ensureUserId` round trip `AssignedReviewer` and
+`ResponsiblePartyManager` go through. It is never matched against the signed-in
+user — nothing gates on who voided a Case — so the column earns its keep only
+as an audit stamp and the manager report's grouping key, but a directory
+identity is still what it names, and every other identity on the row is stored
+the same way; a plain-text divergence would have meant the report joining a
+name to an id through a second mechanism instead of the one every other person
+column already uses.
 
 ## Consequences
 

@@ -813,7 +813,7 @@ test('HttpSharePointClient: listCases maps the void columns onto the Case Row', 
                 CompletedAt: null,
                 VoidReason: 'duplicate',
                 VoidedAt: '2026-06-04T10:00:00.000Z',
-                VoidedBy: 'reviewer-1',
+                VoidedBy: { Name: 'i:0#.w|CONTOSO\\reviewer-1' },
               },
               {
                 Id: 'case-live',
