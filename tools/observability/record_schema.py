@@ -38,7 +38,9 @@ class Field:
     example a list stored as JSON text); ``default`` supplies the value a
     falsy/absent field logs (an empty list rather than ``None``). ``console``
     renders the field for the human-readable line, or returns ``None`` to omit
-    it — which is how a field states its own "only show this when set" rule.
+    it — which is how a field states its own "only show this when set" rule. A
+    field that declares no ``console`` at all is deliberately absent from the
+    human line: stored and logged, but never rendered.
     """
 
     name: str
@@ -231,6 +233,18 @@ RUN_RECORD_FIELDS: tuple[Field, ...] = (
         console=lambda value: (
             f"profiled {len(value.get('columns', []))} col(s)" if value else None
         ),
+    ),
+    # The file(s) or table(s) a read or write step actually touched, one
+    # ``{"namespace", "name"}`` entry each (OpenLineage's dataset identity).
+    # No ``console``: an audit field for the JSONL and the registry, where a
+    # glob read yields an entry per file and would swamp the line an operator
+    # scans.
+    Field(
+        "data_locations",
+        "TEXT",
+        default=list,
+        encode=_json_list_to_sql,
+        decode=_json_list_from_sql,
     ),
 )
 

@@ -113,6 +113,11 @@ class _RetryingEdge:
             f"attempts={self._policy.attempts})"
         )
 
+    @property
+    def data_locations(self) -> list[dict[str, str]]:
+        """What the wrapped component reported touching, or nothing."""
+        return getattr(self._inner, "data_locations", [])
+
     def _run(self, operation: Callable[[], T]) -> T:
         self.retry_attempts = []
         return self._policy.call(operation, on_retry=self._note)

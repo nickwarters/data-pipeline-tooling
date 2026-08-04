@@ -91,7 +91,8 @@ One non-facade package sits inside `framework/`, and two more are top-level
 siblings beside it:
 
 - `framework/_internal/` — cross-cutting helpers with **no** public name:
-  `connection` (`connect`), `describe` (`render` / `redact_url`), and `schema`
+  `connection` (`connect`), `describe` (`render` / `redact_url`), `locations`
+  (`file_location` / `table_location`), and `schema`
   (the shared `ValueRule` protocol + the Python↔pandas type mapping and
   annotation reading both schema adapters derive from). The leading underscore
   marks it private; nothing outside the framework imports from here.
@@ -227,6 +228,9 @@ without notice:
 - `framework._internal.describe` (`render`, `redact_url`) — shared helpers for the opt-in
   `describe()` protocol; a component implements `describe()` using these
   to render its own safe plan summary, not imported by pipeline scripts.
+- `framework._internal.locations` (`file_location`, `table_location`) — the
+  two-part `{namespace, name}` shape a Reader/Writer reports on
+  `data_locations` for the run record; not imported by pipeline scripts.
 - `tools.integrations.remote` (`RemoteRunner`, `StubbedRemoteRunner`, `SharePointFetcher`,
   `SharePointPusher`,
   …) — the **stubbed remote-client seam** behind the `tools.integrations`

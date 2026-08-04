@@ -18,6 +18,7 @@ from framework.core.validators import ValidationError
 from framework.io.readers import DatasetReader
 from framework.run import RunContext
 from framework.run.builder import Pipeline
+from tests.framework_testing import RecordingRunLog
 
 
 class RecordingReader:
@@ -36,6 +37,7 @@ class CapturingWriter:
 
     def write(self, dataset: Dataset) -> None:
         self.write_count += 1
+        self.data_locations = [{"namespace": "sqlite:/d/raw.db", "name": "orders"}]
 
 
 def test_dry_run_skips_the_final_write():
@@ -202,3 +204,17 @@ def test_dry_run_reports_a_validation_failure_clearly_then_fails_fast():
     assert context.dry_run_report.step("read").row_count == 2
     failure = context.dry_run_report.step("floor-check")
     assert failure.note is not None and "row count below floor" in failure.note
+
+
+def test_a_dry_run_write_records_no_data_locations():
+    """The writer would report if written to, so an empty field proves the skip."""
+    run_log = RecordingRunLog()
+    reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1, 2, 3]})))
+    pipeline = Pipeline("orders", run_log=run_log)
+    r = pipeline.read(reader, name="read")
+    pipeline.write(CapturingWriter(), r, name="write")
+
+    pipeline.run(RunContext(pipeline="orders", dry_run=True))
+
+    [record] = run_log.records_for_step("write")
+    assert record["data_locations"] == []
