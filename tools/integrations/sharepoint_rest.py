@@ -58,6 +58,7 @@ import pandas as pd
 from framework._internal.describe import redact_url, render
 from framework.core.dataset import Dataset
 from framework.core.errors import ErrorCategory, PipelineError
+from tools.integrations.locations import sharepoint_location
 from tools.observability.timestamps import utc_now_iso
 
 __all__ = [
@@ -222,9 +223,7 @@ class SharePointModifiedReader:
         return _odata(start) if start is not None else "(first load)"
 
     def read(self) -> Dataset:
-        self.data_locations = [
-            {"namespace": redact_url(self._site), "name": self._list_name}
-        ]
+        self.data_locations = [sharepoint_location(self._site, self._list_name)]
         frame = self._client.fetch_items(
             self._list_name,
             list(self._expand_fields),

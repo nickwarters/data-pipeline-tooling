@@ -238,7 +238,10 @@ without notice:
   `StubbedSharePointListClient`)
   — the **stubbed remote-client seams** behind the `tools.integrations`
   `SasReader` / `SharePointReader` / `SharePointWriter` /
-  `SharePointModifiedReader`. This lives in
+  `SharePointModifiedReader`; and `tools.integrations.locations`
+  (`sharepoint_location`) — the one `{namespace, name}` shape those components
+  report on `data_locations`, credentials stripped, kept in one copy because a
+  second copy of that redaction is a second place to forget it. This lives in
   the `tools` sibling package (above), not a `framework` facade. An advanced extension
   point, documented in [adding-a-feed.md](adding-a-feed.md); not part of the day-to-day surface.
 - Other helpers inside `framework.transform.quarantine` — implementation details

@@ -210,6 +210,61 @@ def test_a_neighbours_missing_etag_does_not_re_identify_an_unchanged_item():
     assert second["source_version"][1] != ""
 
 
+def test_a_later_named_version_column_is_used_when_the_preferred_one_is_absent():
+    # SharePoint surfaces the version under several names depending on how the
+    # item was projected; the reader prefers them in order rather than knowing
+    # only about ETag.
+    client = FakeListClient(
+        items({"Id": 1, "Modified": "2026-08-05T08:15:00Z", "Version": "4.0"})
+    )
+
+    frame = reader(client, columns=("Version",)).read().to_pandas()
+
+    assert list(frame["source_version"]) == ["4.0"]
+
+
+def test_the_preferred_version_column_wins_when_several_are_present():
+    client = FakeListClient(
+        items(
+            {
+                "Id": 1,
+                "Modified": "2026-08-05T08:15:00Z",
+                "odata.etag": '"9"',
+                "Version": "4.0",
+            }
+        )
+    )
+
+    frame = reader(client, columns=("odata.etag", "Version")).read().to_pandas()
+
+    assert list(frame["source_version"]) == ['"9"']
+
+
+def test_a_row_blank_in_the_preferred_column_falls_to_the_next_one():
+    # Per row, not per column: the first row takes the etag, the second — blank
+    # there — takes its Version rather than being pushed onto the digest.
+    client = FakeListClient(
+        items(
+            {
+                "Id": 1,
+                "Modified": "2026-08-05T08:15:00Z",
+                "ETag": '"9"',
+                "Version": "4.0",
+            },
+            {
+                "Id": 2,
+                "Modified": "2026-08-05T08:16:00Z",
+                "ETag": None,
+                "Version": "5.0",
+            },
+        )
+    )
+
+    frame = reader(client, columns=("ETag", "Version")).read().to_pandas()
+
+    assert list(frame["source_version"]) == ['"9"', "5.0"]
+
+
 def test_a_row_without_a_stamp_is_digested_over_its_non_version_values():
     # The digest excludes the version columns themselves: otherwise the
     # partially-populated ETag column would feed the very fallback it triggered,
