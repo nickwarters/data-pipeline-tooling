@@ -29,7 +29,9 @@ The strategies:
   many times a day: `AccumulateByRun` would land the same observation once per
   run (the run id is not what makes it unique), and `InsertOrIgnore` delegates
   to whatever constraints the table happens to carry, silently discarding rows
-  that break constraints unrelated to duplicate identity. Physical uniqueness
+  that break constraints unrelated to duplicate identity. Rows are compared
+  whole and null-safe, so neither drift direction can narrow the comparison
+  silently. Physical uniqueness
   on the target is deliberately **not** required here — the single-writer rule
   plus the Writer's one transaction is the boundary, and a later schema
   migration can add a UNIQUE constraint without changing these semantics.

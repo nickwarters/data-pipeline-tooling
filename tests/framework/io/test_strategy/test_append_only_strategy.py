@@ -260,7 +260,7 @@ def test_an_empty_batch_is_a_noop(tmp_path):
     assert _rows(store, "observations") == [{"observation_id": "v1", "status": "open"}]
 
 
-def test_column_drift_fails_visibly(tmp_path):
+def test_a_batch_carrying_a_column_the_target_lacks_fails_visibly(tmp_path):
     # The staged-merge behaviour every merge Writer shares: a batch whose shape
     # no longer matches the target is a loud failure, not a silent partial load.
     store = Store(tmp_path / "raw.db")
@@ -272,6 +272,41 @@ def test_column_drift_fails_visibly(tmp_path):
     assert "assignee" in str(excinfo.value)
 
     assert _rows(store, "observations") == [{"observation_id": "v1", "status": "open"}]
+
+
+def test_a_batch_missing_a_column_the_target_holds_fails_visibly(tmp_path):
+    # The other drift direction, and the dangerous one: the comparison spans the
+    # batch's columns, so a narrower batch would read a changed row as unchanged
+    # and land a new key with the dropped column NULL — which would then look
+    # like a source mutation the next time that key arrived complete.
+    store = Store(tmp_path / "raw.db")
+    writer = store.writer("observations", AppendOnly("observation_id"))
+    writer.write(_ds({"observation_id": "v1", "status": "open", "note": "first"}))
+
+    with pytest.raises(ValueError, match="note"):
+        writer.write(
+            _ds(
+                {"observation_id": "v1", "status": "open"},
+                {"observation_id": "v2", "status": "closed"},
+            )
+        )
+
+    assert _rows(store, "observations") == [
+        {"observation_id": "v1", "status": "open", "note": "first"}
+    ]
+
+
+def test_an_unchanged_row_re_read_with_a_wider_dtype_is_still_a_noop(tmp_path):
+    # Comparison is by SQLite's affinity rules, not by pandas dtype: a re-read
+    # that widens int to float carries the same value and must not be read as a
+    # mutation of an immutable observation.
+    store = Store(tmp_path / "raw.db")
+    writer = store.writer("observations", AppendOnly("observation_id"))
+    writer.write(_ds({"observation_id": "v1", "count": 1}))
+
+    writer.write(_ds({"observation_id": "v1", "count": 1.0}))
+
+    assert _rows(store, "observations") == [{"observation_id": "v1", "count": 1}]
 
 
 def test_chunked_writes_see_the_keys_earlier_chunks_appended(tmp_path):

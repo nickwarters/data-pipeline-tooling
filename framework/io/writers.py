@@ -773,14 +773,19 @@ class SqliteAppendOnlyWriter:
     2. Exact duplicate rows inside the incoming batch are collapsed to one; two
        rows sharing a key but disagreeing on any value are an
        ``AppendOnlyConflictError`` before staging.
-    3. The batch is staged and compared against the target on the key columns,
-       column-complete and null-safe (SQLite's ``IS``, so NULL equals NULL and a
-       single changed value is a difference).
-    4. A key whose target row differs is an ``AppendOnlyConflictError``, raised
+    3. The batch is staged. A batch that has dropped a column the target holds
+       is refused: the comparison spans the batch's columns, so a narrower one
+       could not see a change in what it no longer carries.
+    4. The staged rows are compared against the target on the key columns,
+       across every column of the row and null-safe (SQLite's ``IS``, so NULL
+       equals NULL and a single changed value is a difference). Comparison is
+       by SQLite's own affinity rules, so a re-read that lands ``1`` where the
+       target holds ``1.0`` is unchanged rather than a conflict.
+    5. A key whose target row differs is an ``AppendOnlyConflictError``, raised
        inside the merge's transaction, so nothing lands.
-    5. Only the keys the target has never seen are inserted.
+    6. Only the keys the target has never seen are inserted.
 
-    Steps 3–5 are the shared staged-merge shape; no target row is updated or
+    Steps 3–6 are the shared staged-merge shape; no target row is updated or
     deleted at any point, which is the whole contract.
 
     Physical uniqueness on the target is **not** required: the repository's
@@ -817,6 +822,7 @@ class SqliteAppendOnlyWriter:
                 f"{merge.target}.{quote_identifier(k)}"
                 for k in self._key_columns
             )
+            self._refuse_narrowed_batch(merge, frame)
             self._refuse_changed_rows(merge, key_match, frame)
             # Insert the unseen keys only. Staging holds at most one row per key
             # by now, so no staged row can be excluded by another's insertion.
@@ -862,6 +868,35 @@ class SqliteAppendOnlyWriter:
                 f"{self._render_keys(contradicted.itertuples(index=False))}"
             )
         return collapsed
+
+    def _refuse_narrowed_batch(self, merge: _StagedMerge, frame: pd.DataFrame) -> None:
+        """Raise if the batch has dropped a column the target already holds.
+
+        The comparison below spans the batch's columns, so a column the batch
+        no longer carries could not take part in it: a row whose only change is
+        in that column would read as unchanged, and a genuinely new key would
+        land with the column NULL — then conflict the next time it arrived
+        complete, blaming the source for a gap this Writer created. Both are
+        silent, so the narrowing itself is refused instead.
+
+        The opposite drift — a batch carrying a column the target lacks — is
+        already loud: the staged merge's INSERT names a column the target has
+        no room for and SQLite refuses it.
+        """
+        target_columns = [
+            row[1]
+            for row in merge.con.execute(
+                f"PRAGMA table_info({merge.target})"
+            ).fetchall()
+        ]
+        dropped = [c for c in target_columns if c not in frame.columns]
+        if dropped:
+            raise ValueError(
+                f"append-only load of {self._table!r} refused: the incoming "
+                f"batch is missing column(s) the target holds: {dropped}. An "
+                "append-only row is compared whole, so a narrower batch could "
+                "neither confirm nor contradict what those columns already say."
+            )
 
     def _refuse_changed_rows(
         self, merge: _StagedMerge, key_match: str, frame: pd.DataFrame

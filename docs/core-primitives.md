@@ -358,9 +358,14 @@ Deliverables and SQLite tables:
   unchanged (a no-op), or seen and changed (an `AppendOnlyConflictError`). No
   target row is ever updated or deleted. Exact duplicate rows inside one batch
   are collapsed; two rows sharing a key but disagreeing are refused before
-  staging, as is a missing or null key. The comparison against the target is
-  **column-complete and null-safe** (SQLite's `IS`), so a value that appeared or
-  disappeared counts as a change. Minted by
+  staging, as is a missing or null key. The comparison against the target spans
+  **every column of the row and is null-safe** (SQLite's `IS`), so a value that
+  appeared or disappeared counts as a change — and because it spans the whole
+  row, a batch that has *dropped* a column the target holds is refused rather
+  than compared on what is left (the opposite drift, a column the target lacks,
+  is already refused by the merge itself). Equality is by SQLite's own affinity
+  rules, not by pandas dtype: a re-read that lands `1` where the target holds
+  `1.0` is unchanged, not a conflict. Minted by
   `store.writer(table, AppendOnly(key_columns))`. Use it for a source re-read
   many times a day whose rows are *observations* keyed by their own immutable
   id — where `AccumulateByRun` would land the same observation once per run, and

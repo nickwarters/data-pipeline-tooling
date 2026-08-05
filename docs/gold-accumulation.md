@@ -144,6 +144,42 @@ In both, `logical_run_id` is the **unit of replacement**: you can re-drive a who
 load idempotently, but you cannot "correct one record" via delete-by-logical-run —
 you re-run the load that produced it.
 
+### A third shape: immutable versions, keyed rather than run-partitioned
+
+Both shapes above make the **run** the unit of identity and replacement. Some
+sources don't work that way: a SharePoint list polled several times a working
+day yields *observations* that already carry their own immutable id, and the
+same observation is deliberately re-read by overlapping poll windows. Stamping
+those by run would land the same observation once per run — the run id is not
+what makes it unique — and the periodic-snapshot cost above (records × runs)
+arrives at intraday frequency.
+
+For that, `AppendOnly(key_columns)` accumulates by the **row's own key** instead:
+
+```python
+writer = store.writer("case_version", AppendOnly(key_columns=("source_observation_id",)))
+```
+
+An unseen key appends; a re-presented key whose row is unchanged is a no-op, so
+an overlapping window costs nothing; a key that arrives with *different* values
+raises `AppendOnlyConflictError`, because the source promised immutability and
+broke it. Nothing already in the target is updated or deleted.
+
+Choose between them by asking what the unit of replacement is:
+
+| | `AccumulateByRun` | `AppendOnly` |
+|---|---|---|
+| Unit of identity | the logical run | the row's own key |
+| Re-drive | replaces that run's rows | appends only what is missing |
+| Re-reading the same rows | lands them again, stamped to the new run | costs nothing |
+| A row that changed | a new run's version sits beside the old | a visible failure |
+| Volume | records × runs | records |
+
+`AppendOnly` is the wrong choice where rows legitimately restate (a nightly
+snapshot of mutable current state) — a changed value there is normal, and
+`AccumulateByRun` keeps both versions as history. It is the right choice where a
+changed value means the feed is wrong.
+
 ## Reading gold concurrently
 
 Gold is the one layer that is *both* written by a pipeline and read by others
