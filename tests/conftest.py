@@ -27,9 +27,17 @@ zone fixture — ``uk_summer`` in ``tests/framework/run/test_runner.py``,
 its own body wins outright. Nothing here weakens those; it removes the silent
 dependency from everything else.
 
-Note this pins the zone, not the clock: ``date.today()`` and ``utc_now_iso()``
-still read the real time, so a test that needs a fixed *instant* must still
-inject one.
+Two limits worth knowing. This pins the zone, not the clock: ``date.today()``
+and ``utc_now_iso()`` still read the real time, so a test that needs a fixed
+*instant* must still inject one. And the override ordering above holds for a
+**function-scoped** fixture; a module- or session-scoped one would be set up
+*before* this pin and then be silently overwritten by it, so keep zone fixtures
+function-scoped.
+
+Because the pin substitutes a concrete zone, ``local_timezone``'s own production
+default — ``None``, meaning "the system zone, resolved per instant" — is no
+longer reached by the tests it displaces. ``tests/test_suite_defaults.py``
+restores and exercises it directly so that branch keeps its cover.
 """
 
 from __future__ import annotations

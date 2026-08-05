@@ -155,9 +155,9 @@ The demo-pipeline tests (`tests/pipelines/test_demo_pipeline.py`,
 ## The local zone is pinned to UTC for every test
 
 Instants are UTC, calendar dates are local, and every comparison converts the
-instant to the local date first — the rule in
-[`tools/observability/timestamps.py`](run-log-format.md). So a test that stamps a
-run near midnight and asserts against a calendar date is really asking about
+instant to the local date first — the rule `tools/observability/timestamps.py`
+owns, described in [run-log-format.md](run-log-format.md). So a test that stamps
+a run near midnight and asserts against a calendar date is really asking about
 *the box's offset* unless it says which zone it means.
 
 `tests/conftest.py` therefore pins the local zone to UTC for the whole suite,
@@ -186,5 +186,12 @@ def test_a_run_just_after_local_midnight_counts_as_today(uk_summer):
 `tests/tools/test_orchestration/test_freshness_rule.py` all do this — the last
 even over a zone that changes offset mid-year.
 
+Keep such a fixture **function-scoped**. A module- or session-scoped one is set
+up *before* the autouse pin and would be silently overwritten by it.
+
 The pin covers the *zone*, not the *clock*: `date.today()` and `utc_now_iso()`
 still read the real time, so a test that needs a fixed instant must inject one.
+And because the pin substitutes a concrete zone, `local_timezone`'s production
+default (`None` — the system zone, resolved per instant) is no longer reached by
+the tests it displaces; `tests/test_suite_defaults.py` restores and exercises it
+directly so that branch keeps its cover.
