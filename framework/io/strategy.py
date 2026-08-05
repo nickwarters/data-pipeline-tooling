@@ -40,6 +40,9 @@ The strategies shipped today:
   preserve existing rows, and mint compact integer surrogates in Python for
   each new key. Conflict resolution is key-driven (the strategy declares the
   natural key) rather than constraint-driven.
+- :class:`AppendOnly` — immutable-version load: append unseen keys, treat a
+  re-presented key whose row is unchanged as a no-op, and raise on a key whose
+  values have changed. Nothing already in the target is ever updated or deleted.
 """
 
 from __future__ import annotations
@@ -61,6 +64,7 @@ __all__ = [
     "UpsertStrategy",
     "InsertOrIgnore",
     "InsertIfAbsent",
+    "AppendOnly",
 ]
 
 # A callable returning whatever a file Writer's target already holds (an empty
@@ -362,5 +366,71 @@ class InsertIfAbsent:
             table,
             self.key_columns,
             surrogate_column=self.surrogate_column,
+            busy_timeout_ms=busy_timeout_ms,
+        )
+
+
+@dataclass(frozen=True)
+class AppendOnly:
+    """Append-once load for immutable versions: unseen keys land, seen keys hold.
+
+    Declared for a target whose rows are *observations* rather than current
+    state — an intraday SharePoint version, a source snapshot keyed by its own
+    immutable id. Each write compares the incoming rows against the target on
+    the declared ``key_columns`` and does exactly one of three things per key:
+
+    - **unseen** — the row is appended;
+    - **seen, unchanged** — the write is a no-op for that key, so re-presenting
+      a batch (an overlapping poll window, a re-driven run) is idempotent;
+    - **seen, changed** — an ``AppendOnlyConflictError``, because a value that
+      was supposed to be immutable moved.
+
+    No target row is ever updated or deleted, so the target is only ever added
+    to.
+
+    This is the *keyed* alternative to ``AccumulateByRun`` for sources that are
+    re-read many times a day: run-stamped accumulation would land the same
+    observation once per run, and the run id is not what makes the observation
+    unique. It is also narrower than ``InsertOrIgnore``, which delegates to
+    whatever constraints the table happens to carry and silently discards rows
+    that break constraints having nothing to do with duplicate identity.
+
+    Accepts a bare string or a sequence for ``key_columns``::
+
+        AppendOnly("source_observation_id")
+        AppendOnly(key_columns=("list_guid", "item_id", "version"))
+
+    Deliberately offers no ``apply_to_frame``: deciding what is unseen needs
+    the target's existing keys and values, which only a table-backed Writer
+    holds.
+    """
+
+    # Declared as either for the ergonomic single-key form; always a tuple once
+    # ``__post_init__`` has normalised it.
+    key_columns: str | tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        key_columns = self.key_columns
+        if isinstance(key_columns, str):
+            normalised: tuple[str, ...] = (key_columns,)
+        else:
+            normalised = tuple(key_columns)
+        if not normalised:
+            raise ValueError("AppendOnly requires at least one key column")
+        object.__setattr__(self, "key_columns", normalised)
+
+    def writer_for(
+        self,
+        db_path: str | os.PathLike[str],
+        table: str,
+        *,
+        busy_timeout_ms: int = 5000,
+    ) -> Writer:
+        from framework.io.writers import SqliteAppendOnlyWriter
+
+        return SqliteAppendOnlyWriter(
+            db_path,
+            table,
+            self.key_columns,
             busy_timeout_ms=busy_timeout_ms,
         )
