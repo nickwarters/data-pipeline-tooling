@@ -880,8 +880,8 @@ class SqliteAppendOnlyWriter:
         silent, so the narrowing itself is refused instead.
 
         The opposite drift — a batch carrying a column the target lacks — is
-        already loud: the staged merge's INSERT names a column the target has
-        no room for and SQLite refuses it.
+        already loud: the comparison below names that column on both sides and
+        SQLite refuses the statement.
         """
         target_columns = [
             row[1]

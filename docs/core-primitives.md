@@ -363,9 +363,11 @@ Deliverables and SQLite tables:
   appeared or disappeared counts as a change — and because it spans the whole
   row, a batch that has *dropped* a column the target holds is refused rather
   than compared on what is left (the opposite drift, a column the target lacks,
-  is already refused by the merge itself). Equality is by SQLite's own affinity
-  rules, not by pandas dtype: a re-read that lands `1` where the target holds
-  `1.0` is unchanged, not a conflict. Minted by
+  is already refused: the comparison names that column on both sides and SQLite
+  rejects the statement). Equality is by SQLite's own **affinity** rules, not by
+  pandas dtype, so a re-read that lands `1` where the target holds `1.0` — or
+  the text `'1'` where it holds the integer `1` — is unchanged, not a conflict.
+  Minted by
   `store.writer(table, AppendOnly(key_columns))`. Use it for a source re-read
   many times a day whose rows are *observations* keyed by their own immutable
   id — where `AccumulateByRun` would land the same observation once per run, and
