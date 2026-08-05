@@ -106,7 +106,21 @@ def test_requirement_within_days_allows_recent_successful_task(tmp_path):
     assert freshness[-1]["warn_hits"] == []
 
 
-def test_requirement_same_day_requires_success_on_run_date(tmp_path):
+@pytest.fixture
+def utc_box(monkeypatch):
+    """Pretend the box's local zone is UTC, without touching its clock.
+
+    A same-day check compares a *local* calendar date against a UTC instant, so a
+    test that stamps an upstream near midnight only means what it says once the
+    local zone is pinned. Left unpinned, the two tests below passed in the UK in
+    winter and failed in summer — the offset decided the answer, not the rule
+    under test. (The complementary case, where the offset *is* the subject, is
+    ``uk_summer`` further down.)
+    """
+    monkeypatch.setattr(timestamps, "local_timezone", lambda: dt.timezone.utc)
+
+
+def test_requirement_same_day_requires_success_on_run_date(tmp_path, utc_box):
     log_path = tmp_path / "runs.log"
     _record_run(
         log_path,
@@ -126,7 +140,7 @@ def test_requirement_same_day_requires_success_on_run_date(tmp_path):
     assert freshness[-1]["status"] == "error"
 
 
-def test_requirement_same_day_allows_success_on_run_date(tmp_path):
+def test_requirement_same_day_allows_success_on_run_date(tmp_path, utc_box):
     log_path = tmp_path / "runs.log"
     _record_run(
         log_path,
