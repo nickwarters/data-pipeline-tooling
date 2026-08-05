@@ -117,10 +117,12 @@ selectable by name or zero-based index; pandas + **openpyxl** behind the seam);
 `SqliteReader(db_path, table)` is the read-side dual of the Sqlite Writers — it
 reads one table from a layer db back into a `Dataset` (a subject's own layer, or
 another subject's read-only Reference Data medallion, joined in Python).
-`SasReader(script, copy_glob, dest)` and
-`SharePointReader(site, list_name, auth)` follow the same `read()` shape but
+`SasReader(script, copy_glob, dest)`,
+`SharePointReader(site, list_name, auth)` and
+`SharePointModifiedReader(site, list_name, columns, window)` follow the same
+`read()` shape but
 reach a remote source whose client is **stubbed for now**, behind a swappable
-seam in `tools.integrations.remote`; see
+seam in `tools.integrations.remote` / `tools.integrations.sharepoint_rest`; see
 [`adding-a-feed.md`](adding-a-feed.md#remote-feeds-sas-sharepoint). Readers are
 the home of the concrete engine and are tested against **local fixture files** —
 no network, no SAS, no SharePoint. Paths are handled with `pathlib` so they
@@ -287,6 +289,7 @@ directions are explicit:
 | SAS extract (remote) | `SasReader` | _intentionally absent_ | SAS is an inbound-only remote source; the framework lands the remote output then reads local CSV files. |
 | Large source, streamed | `ChunkedCsvReader`, `SasFileReader` | _intentionally absent_ | The `ChunkReader` seam (`chunks(size) -> Iterator[Dataset]`) for sources too big to hold whole — a local CSV or an **already-landed** `.sas7bdat`/xport file (incl. gzipped). Distinct from the remote `SasReader`: no script, no remote run, no copy — read-only by nature. |
 | SharePoint list | `SharePointReader` | `SharePointWriter` | Target is **SE on-prem**. Both sides are stubbed behind swappable `SharePointFetcher` / `SharePointPusher` seams until the on-prem SE client (NTLM/Kerberos/REST) lands. `SharePointWriter` emits the canonical Selection Deliverable — one list per Case Type. |
+| SharePoint list, incremental | `SharePointModifiedReader` | _intentionally absent_ | The items whose `Modified` falls in a caller-supplied half-open window, stamped with immutable observation metadata. Configures the organisational client behind the `SharePointListClient` seam; holds no checkpoint. Cannot see a **hard delete** — a deleted item has no `Modified`, so reconciliation against a snapshot is a separate mechanism. |
 | Console (stdout) | _intentionally absent_ | `StdoutWriter` | A terminal sink for *seeing* a result rather than persisting it — e.g. printing a Selection explainer's per-Case trace while driving a feed by hand. Owns no location or load strategy; prints the dataset as a plain-text table to the stream (defaulting to `sys.stdout`). |
 
 ### `Writer` — the destination, behind one method

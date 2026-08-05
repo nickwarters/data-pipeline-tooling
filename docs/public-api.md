@@ -194,6 +194,7 @@ directly:
 | `tools.orchestration` — `Orchestrator`, `PipelineSet`, `ScheduledPipeline`, `PathPipelineInvoker`, `Schedule`, `Weekdays`, `SpecificWeekdays`, `DayOfMonth`, `NthWorkingDayOfMonth`, `LastWorkingDayOfMonth`, `ManualOnly` | Scheduled orchestration over **path-addressed** pipelines: each `ScheduledPipeline` names a `pipelines/<name>` path, invoked at runtime by the default `PathPipelineInvoker` (the same addressing as the `run` command — no handler registry). Evaluate due work for a run date, isolate failures by scheduled item/PipelineSet, and record decisions in `_orchestration/runs.db`. `Schedule` carries friendly constructors (`Schedule.daily()`, `Schedule.on_weekdays("monday", …)`, `Schedule.day_of_month(n)`, `Schedule.nth_working_day_of_month(n)`, `Schedule.last_working_day_of_month()`, `Schedule.manual_only()`) over the concrete schedule classes. |
 | `tools.observability` — `RunLog`, `RunRegistry`, `RunStore`; `record_schema` module — `RUN_RECORD_FIELDS`, `Field`, `ensure_columns`; `profile` module — `DataProfiler`, `DatasetProfile`, `ColumnProfile`, `profile_dataset`, `ProfileDriftCheck`, `ProfileBaseline`, `ProfileError` | The structured-observability seam and its query store (`RunLog` / `RunRegistry` also re-exported via `framework.run`), plus the per-column profiling surface — the statistical sibling that records per-column shape on the run log and trends it via `RunRegistry.recent_profiles(...)`. `DataProfiler` is the concrete `framework.core.DatasetProfiler` the builder's `.profile(...)` drives; the profiling logic lives here in the upper `tools` layer, never imported down into `framework`. `record_schema` declares the run-record field set **once, as data** — the log record, the registry DDL/migration/`INSERT`/decode and the console line all derive from it, and `tools.orchestration`'s decision store reuses `Field` / `ensure_columns` for its own separate contract. `framework` never imports it: the framework knows the `RunLog` protocol, not the record schema. `run_store` owns the **on-disk layout** of a base directory's run metadata (`_runs/`, `_registry/runs.db`, `_orchestration/runs.db`) and the `catch_up()` sweep over it — the counterpart of `tools.store`'s `StoreRegistry`, which owns where the *data* lands; `timestamps` owns the UTC-instant / local-calendar-date rule every freshness comparison and date-bounded query reads. |
 | `tools.integrations.remote` — `SasReader`, `SharePointReader`, `SharePointWriter` | The remote-source/sink Reader and Writer (SAS extract, SharePoint list) — same `read()` / `write()` ports as the file/SQLite ones, but reaching a remote client that is **stubbed** behind swappable seams (`RemoteRunner`, `SharePointFetcher` / `SharePointPusher`) until the on-prem SE client (NTLM/Kerberos/REST) lands. |
+| `tools.integrations.sharepoint_rest` — `SharePointModifiedReader`, `ModifiedWindow`, `METADATA_COLUMNS`, `SharePointFeedError` | The **incremental** SharePoint Reader: the items of one list whose `Modified` falls in a caller-supplied half-open window, stamped with immutable observation metadata (`METADATA_COLUMNS`). Configures the organisational client behind the `SharePointListClient` seam (`fetch_items(list_name, expand_fields, select_fields, filters)`); the client owns auth, transport and paging. Holds no checkpoint, no retry, and no medallion knowledge — see [adding-a-feed.md](adding-a-feed.md#remote-feeds-sas-sharepoint). |
 
 ## Internal modules — do not import from these
 
@@ -233,8 +234,14 @@ without notice:
   `data_locations` for the run record; not imported by pipeline scripts.
 - `tools.integrations.remote` (`RemoteRunner`, `StubbedRemoteRunner`, `SharePointFetcher`,
   `SharePointPusher`,
-  …) — the **stubbed remote-client seam** behind the `tools.integrations`
-  `SasReader` / `SharePointReader` / `SharePointWriter`. This lives in
+  …) and `tools.integrations.sharepoint_rest` (`SharePointListClient`,
+  `StubbedSharePointListClient`)
+  — the **stubbed remote-client seams** behind the `tools.integrations`
+  `SasReader` / `SharePointReader` / `SharePointWriter` /
+  `SharePointModifiedReader`; and `tools.integrations.locations`
+  (`sharepoint_location`) — the one `{namespace, name}` shape those components
+  report on `data_locations`, credentials stripped, kept in one copy because a
+  second copy of that redaction is a second place to forget it. This lives in
   the `tools` sibling package (above), not a `framework` facade. An advanced extension
   point, documented in [adding-a-feed.md](adding-a-feed.md); not part of the day-to-day surface.
 - Other helpers inside `framework.transform.quarantine` — implementation details

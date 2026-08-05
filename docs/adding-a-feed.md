@@ -379,7 +379,8 @@ Concrete Readers that ship:
 | `ExcelReader(path, sheet=0)` | One worksheet of an `.xlsx` workbook | path + sheet **name or zero-based index** (default the first sheet) |
 | `SqliteReader(db_path, table)` | One table of a SQLite layer db | db path + table name |
 | `SasReader(script, copy_glob, dest)` | A SAS feed run on a remote box | script name + glob of outputs to copy back + local landing dir |
-| `SharePointReader(site, list_name, auth)` | A SharePoint list | site URL + list name + auth config |
+| `SharePointReader(site, list_name, auth)` | A SharePoint list, whole (a snapshot) | site URL + list name + auth config |
+| `SharePointModifiedReader(site, list_name, columns, window)` | A SharePoint list, only the items changed in one `Modified` window | site URL + list name + the columns to project + the window |
 
 `GlobCsvReader` reads every file matching `directory / pattern` in sorted
 deterministic order, concatenates them behind the `Dataset` seam, and returns
@@ -530,6 +531,114 @@ reader = SharePointReader(
 )
 dataset = reader.read()
 ```
+
+### `SharePointModifiedReader(site, list_name, columns, window)`
+
+The **incremental** counterpart of `SharePointReader`, in
+`tools.integrations.sharepoint_rest`. Where `SharePointReader` answers "give me
+the whole list", this one answers "give me the items whose `Modified` falls in
+*this* window" — the shape an incremental feed needs and the one a snapshot
+cannot express.
+
+The window is the **caller's**, always: `ModifiedWindow(start, end)` is passed
+in and never computed here. Where the previous window ended, how much overlap to
+re-read, and where that is persisted are a *checkpoint's* concerns; keeping them
+out means the Reader has no state and one read is reproducible from its
+constructor arguments alone. `start=None` is the first-load shape — every
+current item strictly before `end`.
+
+The window is **half-open** (`Modified ge start and Modified lt end`), so
+consecutive windows tile without dropping or double-counting an item whose
+`Modified` lands exactly on a boundary. Both bounds must be timezone-aware and
+are converted to UTC **once**, so a Windows box and a macOS box send the same
+predicate; a naive bound is refused rather than read as the local zone.
+
+Fetching is somebody else's: the organisational SharePoint client (auth,
+transport, and server paging) sits behind the `SharePointListClient` seam —
+anything with
+
+```python
+fetch_items(list_name, expand_fields, select_fields, filters) -> DataFrame
+```
+
+— and this Reader only *configures* the query, supplying the projection
+(`Id`, `Modified`, then the caller's `columns`) and the `Modified` predicates.
+Nothing here builds a URL, follows a paging link, or holds a credential; the
+default `StubbedSharePointListClient` raises `NotImplementedError` until a real
+client is passed, and tests use a fake. Retry is **not** built in — wrap it in
+`RetryingReader` so one policy covers every source (see [retry.md](retry.md)).
+
+Every row comes back with immutable observation metadata (`METADATA_COLUMNS`)
+appended, so downstream can tell "this item changed again" from "we read the
+same item twice" without asking SharePoint a second time:
+
+| Column | What it holds |
+|--------|---------------|
+| `source_list_name` | the list the item came from |
+| `source_item_id` | the item's SharePoint `Id` |
+| `source_modified_at` | its `Modified`, normalised to a UTC ISO-8601 instant |
+| `source_version` | the list's own version stamp (`odata.etag`, `ETag`, `OData__UIVersionString` or `Version`, in that order of preference) when supplied, otherwise a `sha256` digest of the item's values |
+| `source_observation_id` | the identity of "this item, at this version, in this list" |
+| `observed_at` | when the read happened |
+
+Both hashes are `sha256` over a canonical, key-sorted JSON rendering — never
+Python's `hash()`, which is salted per process and would give the same item a
+different identity on every run and on every machine. JSON rather than a
+`field=value` join because a join is forgeable: a value *containing* the
+separator can reproduce another item's payload exactly.
+
+**Two properties of the version worth knowing before you build on it.**
+
+The version is decided **per row**, not per response. One row's missing stamp
+must not re-identify its neighbours — otherwise an item that did not change comes
+back with a new `source_observation_id` and downstream reads it as "changed
+again". For the same reason the fallback digest excludes the version columns
+themselves.
+
+Where the list supplies no stamp, the digest covers the item's **projected**
+values — so **widening `columns` re-identifies every item** on the next read.
+Keep the projection stable, or accept one re-observation of the whole list when
+it changes.
+
+An item missing `Id`, or carrying a `Modified` that will not parse, raises a
+located `SharePointFeedError` naming the list and the row: the identity contract
+is what the metadata is built from, so a breach fails rather than landing
+un-addressable rows. Every flavour of null counts as missing — a nullable `Int64`
+`pd.NA` and a float `NaN` are rejected, not stringified into an id that looks
+present.
+
+An empty window is **not** an error: it returns a zero-row `Dataset` carrying the
+declared projection plus the metadata columns, so a schema check over **those**
+does not depend on volume. The limit is worth knowing — a column the *client*
+adds that was never projected (an expanded lookup such as `Owner/Title`) cannot
+be invented for an empty window, so hold a downstream check to the declared
+columns rather than to whatever a populated read happened to carry.
+
+```python
+import datetime as dt
+
+from tools.integrations.sharepoint_rest import ModifiedWindow, SharePointModifiedReader
+
+reader = SharePointModifiedReader(
+    "https://sharepoint/sites/case-review",
+    "Cases",
+    ("CaseRef", "Status", "Owner"),
+    ModifiedWindow(
+        start=dt.datetime(2026, 8, 5, 8, tzinfo=dt.timezone.utc),
+        end=dt.datetime(2026, 8, 5, 9, tzinfo=dt.timezone.utc),
+    ),
+    client=sharepoint_client,
+)
+dataset = reader.read()
+```
+
+**The hard-delete limitation.** A `Modified` window can only see items that
+still exist: an item *deleted* from the list has no `Modified` to fall inside
+any window, so no sequence of window reads will ever report it. An incremental
+feed built on this Reader therefore accumulates rows that may no longer be in
+SharePoint. Detecting deletions needs a different mechanism — a periodic
+snapshot (`SharePointReader`) reconciled against what has been landed, or a
+change-API feed — and is deliberately **not** this Reader's job.
 
 ### `SharePointWriter(site, list_name, auth, strategy=Refresh())`
 
