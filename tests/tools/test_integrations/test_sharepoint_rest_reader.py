@@ -186,6 +186,48 @@ def test_the_version_falls_back_to_a_digest_of_the_item_payload():
     assert first["source_version"][0] != second["source_version"][0]
 
 
+def test_a_neighbours_missing_etag_does_not_re_identify_an_unchanged_item():
+    # The version is decided per row, not per response. Deciding it per response
+    # ("use the ETag column only if every row has one") let one row's blank stamp
+    # push every other row onto the digest fallback, so an item that had not
+    # changed came back with a new observation id and read as "changed again".
+    alone = FakeListClient(
+        items({"Id": 1, "Modified": "2026-08-05T08:15:00Z", "ETag": '"3"'})
+    )
+    with_a_blank_neighbour = FakeListClient(
+        items(
+            {"Id": 1, "Modified": "2026-08-05T08:15:00Z", "ETag": '"3"'},
+            {"Id": 2, "Modified": "2026-08-05T08:16:00Z", "ETag": None},
+        )
+    )
+
+    first = reader(alone, columns=("ETag",)).read().to_pandas()
+    second = reader(with_a_blank_neighbour, columns=("ETag",)).read().to_pandas()
+
+    assert second["source_version"][0] == '"3"'
+    assert second["source_observation_id"][0] == first["source_observation_id"][0]
+    # The neighbour with no stamp still gets one, from its own values.
+    assert second["source_version"][1] != ""
+
+
+def test_a_row_without_a_stamp_is_digested_over_its_non_version_values():
+    # The digest excludes the version columns themselves: otherwise the
+    # partially-populated ETag column would feed the very fallback it triggered,
+    # so the same item would digest differently depending on its neighbours.
+    lonely = FakeListClient(items({"Id": 9, "Modified": "2026-08-05T08:15:00Z"}))
+    beside_a_stamped_row = FakeListClient(
+        items(
+            {"Id": 9, "Modified": "2026-08-05T08:15:00Z", "ETag": None},
+            {"Id": 10, "Modified": "2026-08-05T08:16:00Z", "ETag": '"7"'},
+        )
+    )
+
+    first = reader(lonely, columns=()).read().to_pandas()
+    second = reader(beside_a_stamped_row, columns=("ETag",)).read().to_pandas()
+
+    assert second["source_version"][0] == first["source_version"][0]
+
+
 def test_the_observation_id_is_deterministic_for_the_same_item_and_version():
     # Pinned to a literal so the identity is stable across platforms and
     # interpreter runs — a salted hash() would pass an equality check within one
@@ -200,13 +242,14 @@ def test_the_observation_id_is_deterministic_for_the_same_item_and_version():
     assert first["source_observation_id"][0] == second["source_observation_id"][0]
     assert (
         first["source_observation_id"][0]
-        == "9c9daa96ab03e66a4ed61e0e3e23f27f97c37bfb387712b489188966f218e943"
+        == "3ab0b1fba767825318a63ed8699d8384a30d67bbc88233ac7134c1b37f6361a4"
     )
 
 
 def test_an_empty_response_is_a_zero_row_dataset_with_the_declared_columns():
-    # A window with no changes is not an error: downstream sees the same shape
-    # it would have seen with rows, so a schema check does not depend on volume.
+    # A window with no changes is not an error: the declared projection and the
+    # metadata are present either way, so a schema check over *those* does not
+    # depend on volume.
     client = FakeListClient(pd.DataFrame())
 
     dataset = reader(client).read()
@@ -219,6 +262,70 @@ def test_an_empty_response_is_a_zero_row_dataset_with_the_declared_columns():
         "Status",
         *METADATA_COLUMNS,
     ]
+
+
+def test_a_quiet_window_cannot_declare_a_column_the_client_adds_itself():
+    # The limit of the guarantee above, pinned rather than left to be discovered
+    # on the first quiet night: an expanded lookup the client appends is not in
+    # the projection, so nothing here can invent it for an empty window. A
+    # downstream schema check must be over the declared columns.
+    expanded = {
+        "Id": 1,
+        "Modified": "2026-08-05T08:15:00Z",
+        "CaseRef": "c1",
+        "Owner/Title": "Ada",
+    }
+    populated = reader(
+        FakeListClient(items(expanded)), columns=("CaseRef",), expand_fields=("Owner",)
+    ).read()
+    quiet = reader(
+        FakeListClient(pd.DataFrame()), columns=("CaseRef",), expand_fields=("Owner",)
+    ).read()
+
+    assert "Owner/Title" in populated.columns
+    assert "Owner/Title" not in quiet.columns
+    declared = ["Id", "Modified", "CaseRef", *METADATA_COLUMNS]
+    assert all(column in populated.columns for column in declared)
+    assert quiet.columns == declared
+
+
+@pytest.mark.parametrize(
+    "null_id",
+    [
+        pytest.param(pd.array([None], dtype="Int64"), id="nullable-int64"),
+        pytest.param(pd.array([None], dtype="string"), id="nullable-string"),
+        pytest.param([float("nan")], id="float-nan"),
+        pytest.param([None], id="object-none"),
+    ],
+)
+def test_every_flavour_of_null_id_is_rejected(null_id):
+    # A nullable Int64 null once stringified to "<NA>" and a float32 NaN to
+    # "nan" — both looked like present ids to the blank check and landed as
+    # un-addressable rows rather than failing.
+    client = FakeListClient(
+        pd.DataFrame({"Id": null_id, "Modified": ["2026-08-05T08:15:00Z"]})
+    )
+
+    with pytest.raises(SharePointFeedError) as failure:
+        reader(client, columns=()).read()
+
+    assert "row 0" in str(failure.value) and "Id" in str(failure.value)
+
+
+def test_a_value_containing_the_digest_separator_cannot_forge_another_item():
+    # The digest was a "field=value" join on control characters, so a value
+    # holding one could reproduce a different item's payload exactly.
+    forged = FakeListClient(
+        items({"Id": 1, "Modified": "2026-08-05T08:15:00Z", "a": "x\x1fb=y"})
+    )
+    plain = FakeListClient(
+        items({"Id": 1, "Modified": "2026-08-05T08:15:00Z", "a": "x", "b": "y"})
+    )
+
+    first = reader(forged, columns=("a",)).read().to_pandas()
+    second = reader(plain, columns=("a", "b")).read().to_pandas()
+
+    assert first["source_version"][0] != second["source_version"][0]
 
 
 @pytest.mark.parametrize("missing", ["Id", "Modified"])

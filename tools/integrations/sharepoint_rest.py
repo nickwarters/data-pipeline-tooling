@@ -24,6 +24,13 @@ came from, which item they are, the version observed, and when it was observed
 (:data:`METADATA_COLUMNS`). Downstream can then tell "this item changed again"
 from "we read the same item twice" without asking SharePoint a second time.
 
+That last promise is only as good as the version is stable, so two things follow.
+The version is decided **per row** — one row's missing ETag must not re-identify
+its neighbours — and where the list supplies no stamp the fallback digest covers
+the item's *projected* values, which means **widening ``columns`` re-identifies
+every item** on the next read. Keep the projection stable, or accept one
+re-observation of the whole list when it changes.
+
 The window is **half-open** — ``Modified ge start and Modified lt end`` — so
 consecutive windows tile without dropping or double-counting an item whose
 ``Modified`` lands exactly on a boundary, and both bounds are converted to UTC
@@ -42,6 +49,7 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
+import json
 from dataclasses import dataclass
 from typing import Callable, Protocol, Sequence, runtime_checkable
 
@@ -81,13 +89,9 @@ _ITEM_ID = "Id"
 _MODIFIED = "Modified"
 
 # Where the list's own version stamp shows up, in the order preferred. Absent
-# them, the version is a digest of the item's values.
+# one — for that *row*, not for the response — the version is a digest of the
+# item's values.
 _VERSION_COLUMNS = ("odata.etag", "ETag", "OData__UIVersionString", "Version")
-
-# Field and record separators for the canonical digest input. Control characters
-# so a value containing a comma, quote or newline cannot forge a boundary.
-_FIELD = "\x1f"
-_RECORD = "\x1e"
 
 
 class SharePointFeedError(PipelineError):
@@ -228,6 +232,13 @@ class SharePointModifiedReader:
             self._window.filters(),
         )
         if frame.empty:
+            # A window with no changes is not a failure, so it returns the
+            # declared shape rather than nothing: the projection plus the
+            # metadata. Note the limit — a column the *client* adds that was
+            # never projected (an expanded lookup such as ``Owner/Title``) cannot
+            # be invented here, so it is absent from a quiet window. Hold a
+            # downstream schema check to the declared columns, not to whatever a
+            # populated read happened to carry.
             return Dataset.from_pandas(
                 pd.DataFrame(columns=[*self._select_fields, *METADATA_COLUMNS])
             )
@@ -306,40 +317,85 @@ def _require_modified(value: object, row: int, list_name: str) -> str:
 
 
 def _versions(frame: pd.DataFrame) -> list[str]:
-    """The version observed per row: the list's own stamp, else a payload digest."""
+    """The version observed **per row**: the list's own stamp, else a digest.
+
+    Decided row by row, not for the response as a whole. Deciding it per response
+    — "use the ETag column only if every row has one" — makes one row's blank
+    stamp change the identity of every *other* row in that read, so an item that
+    did not change comes back with a new ``source_observation_id`` and downstream
+    reads it as "changed again".
+
+    The digest deliberately excludes the version columns themselves: a partially
+    populated ETag column would otherwise feed the fallback it triggered.
+    """
+    supplied = _supplied_versions(frame)
+    payload = frame.drop(columns=[c for c in _VERSION_COLUMNS if c in frame.columns])
+    return [
+        stamp or _digest(payload.iloc[position])
+        for position, stamp in enumerate(supplied)
+    ]
+
+
+def _supplied_versions(frame: pd.DataFrame) -> list[str]:
+    """Each row's own version stamp, or ``""`` where the list supplied none."""
+    stamps = [""] * len(frame)
     for column in _VERSION_COLUMNS:
-        if column in frame.columns:
-            supplied = [_canonical(value) for value in frame[column]]
-            if all(supplied):
-                return supplied
-    return [_digest(row) for _, row in frame.iterrows()]
+        if column not in frame.columns:
+            continue
+        for position, value in enumerate(frame[column]):
+            stamps[position] = stamps[position] or _canonical(value)
+    return stamps
 
 
 def _digest(row: "pd.Series") -> str:
     """A stable digest of one item's values.
 
-    ``sha256`` over an explicitly delimited, column-sorted rendering — not
-    Python's ``hash()``, which is salted per process and would give the same item
-    a different identity on every run and on every machine.
+    ``sha256`` over a canonical JSON rendering with sorted keys — not Python's
+    ``hash()``, which is salted per process and would give the same item a
+    different identity on every run and on every machine.
+
+    JSON rather than a hand-rolled ``field=value`` join because the join was
+    forgeable: a value *containing* the separator could reproduce another item's
+    payload exactly (``{"a": "x\\x1fb=y"}`` collided with ``{"a": "x", "b": "y"}``).
+    JSON escapes its own delimiters, so no value can close a field it is inside.
     """
-    payload = _FIELD.join(
-        f"{column}={_canonical(row[column])}" for column in sorted(row.index)
-    )
-    return hashlib.sha256((payload + _RECORD).encode("utf-8")).hexdigest()
+    return _sha256_json({str(column): _canonical(row[column]) for column in row.index})
 
 
 def _observation_id(list_name: str, item_id: str, version: str) -> str:
     """The identity of "this item, at this version, in this list"."""
-    payload = _FIELD.join((list_name, item_id, version)) + _RECORD
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return _sha256_json(
+        {"list_name": list_name, "item_id": item_id, "version": version}
+    )
+
+
+def _sha256_json(payload: dict[str, str]) -> str:
+    """Hash a mapping through one canonical, unforgeable encoding."""
+    encoded = json.dumps(
+        payload, sort_keys=True, ensure_ascii=True, separators=(",", ":")
+    )
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
 def _canonical(value: object) -> str:
-    """One value as the text the digests and identity columns are built from."""
-    if value is None or (isinstance(value, float) and pd.isna(value)):
+    """One value as the text the digests and identity columns are built from.
+
+    Every flavour of null the client's frame can carry becomes ``""`` — the
+    blank the ``Id``/``Modified`` guards reject. That means asking pandas rather
+    than type-testing: a nullable ``Int64`` column yields ``pd.NA``, a float32
+    column yields a non-``float`` NaN, and both once slipped past a
+    ``isinstance(value, float)`` check to be stringified as ``"<NA>"`` / ``"nan"``
+    — an item id that looks present, is not, and is not rejected.
+    """
+    if value is None:
         return ""
-    if value is pd.NaT:
-        return ""
+    try:
+        if bool(pd.isna(value)):
+            return ""
+    except (TypeError, ValueError):
+        # A list/array/dict value: not a null, and not something pandas can
+        # answer elementwise. Fall through and render it.
+        pass
     if isinstance(value, dt.datetime):
         return value.isoformat()
     if isinstance(value, float) and value.is_integer():

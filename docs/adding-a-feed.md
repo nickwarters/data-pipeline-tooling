@@ -577,20 +577,42 @@ same item twice" without asking SharePoint a second time:
 | `source_list_name` | the list the item came from |
 | `source_item_id` | the item's SharePoint `Id` |
 | `source_modified_at` | its `Modified`, normalised to a UTC ISO-8601 instant |
-| `source_version` | the list's own version stamp (ETag / `OData__UIVersionString`) when supplied, otherwise a `sha256` digest of the item's values |
+| `source_version` | the list's own version stamp (`odata.etag`, `ETag`, `OData__UIVersionString` or `Version`, in that order of preference) when supplied, otherwise a `sha256` digest of the item's values |
 | `source_observation_id` | the identity of "this item, at this version, in this list" |
 | `observed_at` | when the read happened |
 
-Both hashes are `sha256` over an explicitly delimited, column-sorted rendering —
-never Python's `hash()`, which is salted per process and would give the same
-item a different identity on every run and on every machine.
+Both hashes are `sha256` over a canonical, key-sorted JSON rendering — never
+Python's `hash()`, which is salted per process and would give the same item a
+different identity on every run and on every machine. JSON rather than a
+`field=value` join because a join is forgeable: a value *containing* the
+separator can reproduce another item's payload exactly.
+
+**Two properties of the version worth knowing before you build on it.**
+
+The version is decided **per row**, not per response. One row's missing stamp
+must not re-identify its neighbours — otherwise an item that did not change comes
+back with a new `source_observation_id` and downstream reads it as "changed
+again". For the same reason the fallback digest excludes the version columns
+themselves.
+
+Where the list supplies no stamp, the digest covers the item's **projected**
+values — so **widening `columns` re-identifies every item** on the next read.
+Keep the projection stable, or accept one re-observation of the whole list when
+it changes.
 
 An item missing `Id`, or carrying a `Modified` that will not parse, raises a
 located `SharePointFeedError` naming the list and the row: the identity contract
 is what the metadata is built from, so a breach fails rather than landing
-un-addressable rows. An empty window is **not** an error — it returns a zero-row
-`Dataset` with the same columns, so a downstream schema check does not depend on
-volume.
+un-addressable rows. Every flavour of null counts as missing — a nullable `Int64`
+`pd.NA` and a float `NaN` are rejected, not stringified into an id that looks
+present.
+
+An empty window is **not** an error: it returns a zero-row `Dataset` carrying the
+declared projection plus the metadata columns, so a schema check over **those**
+does not depend on volume. The limit is worth knowing — a column the *client*
+adds that was never projected (an expanded lookup such as `Owner/Title`) cannot
+be invented for an empty window, so hold a downstream check to the declared
+columns rather than to whatever a populated read happened to carry.
 
 ```python
 import datetime as dt
