@@ -74,7 +74,15 @@ so the system can be read and changed in one place; they share a commit gate,
   `tests/pipelines/`, plus `tests/integration/` for tests that span trees (e.g.
   the public-API and framework/domain boundary tests).
   Shared helpers (`tests/_schema_fixtures.py`, `tests/fixtures/`) sit at the
-  `tests/` root. Each test dir is a package (`__init__.py`) so module paths are
+  `tests/` root, as does `tests/conftest.py`, which pins the **local calendar
+  zone to UTC** for the whole suite via an autouse fixture over the
+  `tools.observability.timestamps.local_timezone` seam. Instants are UTC and
+  calendar dates are local, so a test that stamps a run near midnight otherwise
+  answers a question about the box's offset — two `same_day` freshness tests did
+  exactly that and asserted the opposite of their rule at UTC+1, blocking every
+  local commit from a UK box in summer. A test whose subject *is* the conversion
+  overrides the pin by asking for its own zone fixture (autouse is set up first,
+  so a named fixture wins); see [`docs/testing-helpers.md`](docs/testing-helpers.md). Each test dir is a package (`__init__.py`) so module paths are
   unique under pytest's default import mode — no basename collisions. This is
   enforced by convention, not tooling, and had drifted: five `tests/` dirs and
   the three `tools/` package dirs were missing `__init__.py`, with a real
