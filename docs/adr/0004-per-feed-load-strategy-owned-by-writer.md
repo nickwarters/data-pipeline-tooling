@@ -21,6 +21,18 @@ The strategies:
 - **`InsertOrIgnore` / `InsertIfAbsent` / `UpsertStrategy`** — key-aware loads for
   the cases an accumulate or refresh doesn't fit (e.g. minting stable surrogate
   keys, or merging on a business key).
+- **`AppendOnly(key_columns)`** — append-once by a declared key, for a target
+  whose rows are *immutable observations* rather than current state. An unseen
+  key appends, a re-presented unchanged key is a no-op, and a key whose values
+  changed raises `AppendOnlyConflictError`; nothing already in the target is
+  updated or deleted. It exists because neither neighbour fits a source polled
+  many times a day: `AccumulateByRun` would land the same observation once per
+  run (the run id is not what makes it unique), and `InsertOrIgnore` delegates
+  to whatever constraints the table happens to carry, silently discarding rows
+  that break constraints unrelated to duplicate identity. Physical uniqueness
+  on the target is deliberately **not** required here — the single-writer rule
+  plus the Writer's one transaction is the boundary, and a later schema
+  migration can add a UNIQUE constraint without changing these semantics.
 
 ## How the ownership is mechanised
 
@@ -39,8 +51,9 @@ are handed a db **path**, never a `Store`, so `framework.io` keeps its one-way
 dependency and never imports the application-level `tools` package.
 
 A strategy that cannot be expressed as a whole-file rewrite (`UpsertStrategy`,
-`InsertIfAbsent` — their merges need the target's constraints or its
-key→surrogate mapping) simply defines no `apply_to_frame`, and a file Writer
+`InsertIfAbsent`, `AppendOnly` — their merges need the target's constraints, its
+key→surrogate mapping, or its existing keys and values) simply defines no
+`apply_to_frame`, and a file Writer
 handed one fails with a message naming both. This ADR's decision is unchanged:
 only the mechanism that enforces it is recorded here.
 

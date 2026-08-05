@@ -146,7 +146,7 @@ session opens.
 | Writer / strategy | Under a chunked read |
 | --- | --- |
 | `AccumulateByRun` | The delete-by-`logical_run_id` that makes a re-drive idempotent runs **once, when the session opens**, and every chunk after it appends. A per-chunk delete would delete the chunks this same run had already landed. |
-| `InsertOrIgnore`, `UpsertStrategy`, `InsertIfAbsent` | Taken unchanged — each write is already independent, so nothing has to happen once per load. |
+| `InsertOrIgnore`, `UpsertStrategy`, `InsertIfAbsent`, `AppendOnly` | Taken unchanged — each write is already independent, so nothing has to happen once per load. (`AppendOnly` compares each chunk against the live target, so chunk N+1 treats chunk N's keys as seen; a conflicting chunk aborts the stream with earlier chunks landed, which a re-drive appends past.) |
 | `QuarantineWriter` | The run's prior rejects are cleared with the **first** chunk that has any, then appended to. A run that rejects nothing writes and clears nothing, exactly as a whole-dataset quarantine of the same run does. |
 | `Refresh` (`SqliteTruncateReloadWriter`), `CsvWriter` / `ExcelWriter` / `JsonWriter` | **Refused at wiring time.** They replace their target wholesale, and a file Writer additionally reads the whole existing file back — the opposite of bounded memory. |
 
