@@ -253,6 +253,28 @@ class SharePointModifiedReader:
                 f"{', '.join(missing)}: the item identity contract needs "
                 f"{_ITEM_ID} and {_MODIFIED} in every response."
             )
+        self._check_columns_are_unique(frame)
+
+    def _check_columns_are_unique(self, frame: pd.DataFrame) -> None:
+        """Refuse a response carrying the same column label twice.
+
+        A duplicate label makes ``frame[label]`` a *frame* rather than a series,
+        and iterating a frame yields its column labels — so a list returning two
+        ``ETag`` columns stamped every row with the literal string ``"ETag"``,
+        silently, giving every item the same wrong version. Reading a column by
+        name is the whole basis of the identity contract, so an ambiguous name
+        is a contract breach and fails here rather than corrupting the metadata.
+        """
+        labels = [str(label) for label in frame.columns]
+        duplicated = sorted({label for label in labels if labels.count(label) > 1})
+        if duplicated:
+            raise SharePointFeedError(
+                f"SharePoint list {self._list_name!r} at "
+                f"{redact_url(self._site)} returned duplicate column "
+                f"{'names' if len(duplicated) > 1 else 'name'} "
+                f"{', '.join(duplicated)}: a column read by name must be "
+                "unambiguous."
+            )
 
     def _stamp(self, frame: pd.DataFrame) -> pd.DataFrame:
         stamped = frame.copy()

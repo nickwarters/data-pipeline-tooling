@@ -210,6 +210,27 @@ def test_a_neighbours_missing_etag_does_not_re_identify_an_unchanged_item():
     assert second["source_version"][1] != ""
 
 
+@pytest.mark.parametrize("duplicated", ["ETag", "Id"])
+def test_a_duplicate_column_name_is_refused_rather_than_read_ambiguously(duplicated):
+    # A duplicate label makes frame[label] a frame, and iterating a frame yields
+    # its column *labels*: two ETag columns once stamped every row with the
+    # literal string "ETag", silently. Reading a column by name is the basis of
+    # the identity contract, so an ambiguous name fails loudly.
+    frame = pd.DataFrame(
+        [
+            [1, "2026-08-05T08:15:00Z", '"3"', '"4"'],
+            [2, "2026-08-05T08:16:00Z", '"5"', '"6"'],
+        ],
+        columns=["Id", "Modified", duplicated, duplicated],
+    )
+
+    with pytest.raises(SharePointFeedError) as failure:
+        reader(FakeListClient(frame), columns=("ETag",)).read()
+
+    assert duplicated in str(failure.value)
+    assert LIST_NAME in str(failure.value)
+
+
 def test_a_later_named_version_column_is_used_when_the_preferred_one_is_absent():
     # SharePoint surfaces the version under several names depending on how the
     # item was projected; the reader prefers them in order rather than knowing
