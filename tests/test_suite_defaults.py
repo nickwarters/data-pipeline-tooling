@@ -41,21 +41,29 @@ def test_a_test_that_asks_for_its_own_zone_still_wins(uk_summer):
     assert local_date("2026-05-28T23:59:00+00:00") == dt.date(2026, 5, 29)
 
 
-def test_the_unpinned_system_zone_still_produces_a_stored_shape_bound(monkeypatch):
+def test_the_unpinned_system_zone_bound_round_trips_to_local_midnight(monkeypatch):
     """Cover the branch the pin takes away: ``local_timezone()`` returning None.
 
     ``None`` means "the system zone, resolved per instant" and is what actually
     runs in production — but pinning the seam for every test means no test
     executes it any more, so ``start_of_local_day``'s ``zone is None`` arm could
-    be broken (dropping the ``.astimezone()``, say, and emitting a naive local
-    midnight that SQLite's text comparison would silently mis-order) with the
-    suite green in every zone. Call the real function explicitly to keep it
-    covered; the assertion is about the *shape*, which holds on any box.
+    be broken with the suite green in every zone.
+
+    The assertion is a **round trip**, not a shape check. Checking only that the
+    bound ends in ``+00:00`` is far too weak: mis-labelling local midnight as
+    *UTC* midnight — the exact confusion this module exists to prevent — keeps
+    that suffix and a zero offset, so it passes. Converting the bound back to the
+    system zone and requiring it to land on midnight of the day asked for is what
+    catches it. On a box already at UTC the two are indistinguishable and nothing
+    could tell them apart; everywhere else this fails loudly.
     """
     monkeypatch.setattr(timestamps, "local_timezone", _SYSTEM_LOCAL_TIMEZONE)
     assert timestamps.local_timezone() is None
+    day = dt.date(2026, 5, 29)
 
-    bound = start_of_local_day(dt.date(2026, 5, 29))
+    bound = start_of_local_day(day)
 
     assert bound.endswith("+00:00")
-    assert dt.datetime.fromisoformat(bound).utcoffset() == dt.timedelta(0)
+    local = dt.datetime.fromisoformat(bound).astimezone()
+    assert local.date() == day
+    assert local.time() == dt.time.min
