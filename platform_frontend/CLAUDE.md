@@ -222,6 +222,15 @@ src/
   app.js                        # entry point
   sharepoint-client.js          # shared typedefs (SharePointClient interface)
 
+  new-dashboard/                # clean-room Case Review route (ADR-0047)
+    entry.js                    # hash-selecting compatibility entry
+    browser.js                  # browser/SharePoint dependency assembly
+    case-model.js               # pure access, applicability, failure and Outcome rules
+    page-context.js             # prod/UAT host globals to retained HTTP client options
+    route-boundary.js           # reload when navigation crosses old/new router boundary
+    new-dashboard.js            # route state, rendering, access and writes
+    void-reasons.js             # clean route's six persisted Void Reason keys and labels
+
   lib/                          # framework-level primitives (no domain knowledge)
     abort.js                    # isAbortError/ignoreAbortError: an aborted read is navigation, not a failure (#545)
     add-working-days.js
@@ -412,7 +421,9 @@ case-types/                     # one module per Case Type, lazy-loaded via mani
                                 #   QUESTION_BANK_IMPORTERS and permissions.caseTypes derive from it
   load-bank.js                  # loads a bank .txt artifact as parsed JSON (see Gotchas)
   general-questions.js          # shared General Question catalogue + resolveGeneralQuestions (#489)
+  complaints-data.js            # shared data-only descriptor consumed by both Case Review routes
   complaints.js                 # the only live Case Type (#383)
+  new-dashboard/                # clean-route re-exports of shared Case Type data
   banks/                        # Question Bank content, JSON text stored as .txt (see Gotchas)
     complaints.txt
 

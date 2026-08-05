@@ -21,7 +21,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { MockSharePointClient } from '../src/services/mock-sharepoint-client.js';
 import { HttpSharePointClient } from '../src/services/http-sharepoint-client.js';
-import { toClaimsLogin } from '../src/services/account-name.js';
+import { toClaimsLogin } from '../src/services/http-sharepoint-client.js';
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../src/sharepoint-client.js').PersonResult} PersonResult */

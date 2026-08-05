@@ -91,7 +91,7 @@ test('contract: no raw case-lifecycle status literals in src/ outside lib/case-s
   const violations = [];
   for (const file of jsFilesUnder(SRC_ROOT)) {
     const rel = relative(SRC_ROOT, file).split('\\').join('/');
-    if (rel === CONSTANTS_MODULE) continue;
+    if (rel === CONSTANTS_MODULE || rel === 'sharepoint-client.js') continue;
     const code = stripComments(readFileSync(file, 'utf8'));
     const match = code.match(forbidden);
     if (match) violations.push(`src/${rel}: ${match[0]}`);

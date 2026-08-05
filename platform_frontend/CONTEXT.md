@@ -451,3 +451,11 @@ _Avoid_: Overridden Outcome, Amended Outcome (that is the _record_; Current Outc
 - "Visitor" is _derived_ (absence of all named-group memberships), not a SharePoint group. Capability flags are UX-only and the real boundary is SharePoint list ACLs.
 - **Case Reference** uniqueness is assumed to be per **Case Type** (one list, one numbering sequence each) and needs confirming with the business. If References turn out to be globally unique, a Reference alone identifies a Case and search could resolve straight to it.
 - "Question Bank" vs "catalogue" — both name a Case Type's set of **Question Definitions**. Resolved: **Question Bank** is the _authoring_ form (edited in `#/question-bank`, compiled to a module + reporting export); _catalogue_ is the _runtime_ form (the same questions joined to **Answers** to compute applicability). One concept, two lifecycle stages.
+
+# Clean-room Case Review route
+
+`#/new_dashboard/:caseType/:id` is the parallel, clean-room Case Review route.
+It reads the Case Type descriptor and Question Bank from `case-types/`, and
+always passes the descriptor's `listName` to `HttpSharePointClient`. The
+established `#/case/:caseType/:id` route remains the behavioural and visual
+oracle while parity is developed; neither route redirects to the other.

@@ -74,6 +74,12 @@ Reviewers should be able to request the next available case to be assigned to th
 
 ### Case Review Page
 
+The experimental clean-room Case Review is available at
+`#/new_dashboard/:caseType/:id`. It coexists with the established
+`#/case/:caseType/:id` route while parity is built and verified. See
+[`docs/guide/new-dashboard.md`](docs/guide/new-dashboard.md) for its deliberately
+small runtime boundary and current capability status.
+
 This is the main page used by reviewers to review the cases. Cases have a few section, all should be configurable.
 
 #### Case Details

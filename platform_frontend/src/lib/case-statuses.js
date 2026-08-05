@@ -21,14 +21,8 @@
  * with a reason, freezing it without ever reaching the reportable milestone, so
  * it carries no Outcome and never counts as reviewed work.
  */
-export const CASE_STATUS = Object.freeze(
-  /** @type {const} */ ({
-    IN_PROGRESS: 'In-progress',
-    ACTIONS_IN_PROGRESS: 'Actions In Progress',
-    COMPLETED: 'Completed',
-    VOID: 'Void',
-  })
-);
+import { CASE_STATUS } from '../sharepoint-client.js';
+export { CASE_STATUS };
 
 /**
  * @typedef {(typeof CASE_STATUS)[keyof typeof CASE_STATUS]} CaseStatus

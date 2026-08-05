@@ -6,7 +6,7 @@ import {
   toClaimsLogin,
   CLAIMS_PREFIX,
   AD_DOMAIN,
-} from '../src/services/account-name.js';
+} from '../src/services/http-sharepoint-client.js';
 
 test('toBareAccount: strips the claims prefix and AD domain to a bare account', () => {
   assert.equal(toBareAccount('i:0#.w|CONTOSO\\jsmith'), 'jsmith');

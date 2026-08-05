@@ -1,4 +1,14 @@
 // @ts-check
+
+/** The persisted Case lifecycle vocabulary, defined on the retained contract. */
+export const CASE_STATUS = Object.freeze(
+  /** @type {const} */ ({
+    IN_PROGRESS: 'In-progress',
+    ACTIONS_IN_PROGRESS: 'Actions In Progress',
+    COMPLETED: 'Completed',
+    VOID: 'Void',
+  })
+);
 /**
  * A case-type-level outcome option. Questions and actions select these by id so
  * wording is configured once per Case Type. `severity` is the sort key that

@@ -16,6 +16,7 @@ you are changing.
 | [Provisioning runbook](provisioning-runbook.md)             | SharePoint lists, per-Case-Type groups, and holiday-list maintenance |
 | [Testing](testing.md)                                       | Public seams, semantic DOM tests, and repository gates               |
 | [In-memory flow runner](in-memory-flow-runner.md)           | Browser-free end-to-end domain and persistence journeys              |
+| [Clean-room Case Review](new-dashboard.md)                  | `new_dashboard` route, retained runtime boundary, and parity status  |
 
 ## Prerequisites
 

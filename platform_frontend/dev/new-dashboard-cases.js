@@ -1,0 +1,33 @@
+export const cases = [
+  {
+    id: 'complaints-case-1',
+    caseType: 'complaints',
+    title: 'Complaint #1',
+    status: 'In-progress',
+    assignedReviewer: 'user-reviewer',
+    responsibleParty: 'user-agent-a',
+    responsiblePartyDisplayName: 'Frankie Agent',
+    answers: {
+      'q-cmp-0001': { value: 'Good' },
+      'q-cmp-0002': { value: 'Poor', remediationRequired: 'no' },
+      'q-cmp-0003': { value: 'Poor' },
+      'q-cmp-0004': { value: 'Good' },
+      'q-cmp-0005': { value: 'Good' },
+      'q-cmp-0006': { value: 'Good' },
+      'q-cmp-0007': { value: 'Good' },
+    },
+    conversation: [],
+    details: {
+      complaintRef: 'CMP-2026-0001',
+      customerName: 'Priya Nair',
+      complaintDate: '2026-06-18',
+    },
+    notes: '',
+    onHold: true,
+    placedOnHoldAt: '2026-08-04T08:00:00Z',
+    completedAt: null,
+    dueDate: '2026-08-12T08:00:00Z',
+    created: '2026-06-18T08:00:00Z',
+    etag: 'etag-cm1-v1',
+  },
+];

@@ -1,11 +1,44 @@
 // @ts-check
-import { toBareAccount, toClaimsLogin } from './account-name.js';
-import { withAssignmentStamp } from './assignment-stamp.js';
-import { CASE_STATUS } from '../lib/case-statuses.js';
-import {
-  isOverdue,
-  OVERDUE_STATUSES,
-} from '../evaluators/overdue-evaluator.js';
+import { CASE_STATUS } from '../sharepoint-client.js';
+// This retained transport is deliberately self-contained: the clean-room
+// dashboard may use it without pulling the previous UI framework into its
+// deployed module graph.
+/** @type {readonly string[]} */
+const OVERDUE_STATUSES = Object.freeze([CASE_STATUS.IN_PROGRESS]);
+export const CLAIMS_PREFIX = 'i:0#.w|';
+export const AD_DOMAIN = 'CONTOSO';
+
+/** @param {string} account */
+export function toClaimsLogin(account) {
+  return `${CLAIMS_PREFIX}${AD_DOMAIN}\\${account}`;
+}
+
+/** @param {string} key */
+export function toBareAccount(key) {
+  let value = String(key ?? '').trim();
+  if (value.startsWith(CLAIMS_PREFIX))
+    value = value.slice(CLAIMS_PREFIX.length);
+  const slash = value.lastIndexOf('\\');
+  return slash === -1 ? value : value.slice(slash + 1);
+}
+
+/** @param {Partial<import('../sharepoint-client.js').CaseRow>} fields @param {() => Date} now */
+function withAssignmentStamp(fields, now) {
+  if (fields.assignedReviewer === undefined) return fields;
+  return {
+    ...fields,
+    assignedAt: fields.assignedReviewer ? now().toISOString() : null,
+  };
+}
+
+/** @param {import('../sharepoint-client.js').CaseRow} caseRow */
+function isOverdue(caseRow) {
+  return (
+    OVERDUE_STATUSES.includes(caseRow.status) &&
+    Boolean(caseRow.dueDate) &&
+    new Date(/** @type {string} */ (caseRow.dueDate)) < new Date()
+  );
+}
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').PersonResult} PersonResult */
