@@ -126,12 +126,13 @@ column already uses.
   the Responsible Party who was working on it. That is correct for a terminal
   state — but nothing is auto-posted to the thread to say so, so the Reviewer
   who voids a Case mid-remediation should say so in the Conversation first.
-- **The remediation clock became an allow-list.** `isRemediationOverdue` asked
-  "is this not Completed?"; it now asks "is this `In-progress` or
-  `Actions In Progress`?". Behaviour is identical for the four real statuses, but
-  a row whose status is empty or unrecognised is no longer overdue where it
-  previously would have been. Expected: the client defaults an absent `Status`,
-  and a status nobody has considered should not inherit a clock.
+- **The remediation clock stops on both terminal statuses.**
+  `isRemediationOverdue` asked "is this not Completed?"; it now names
+  `Completed` and `Void` — a closed Case has no clock left to breach, however
+  it closed. Behaviour for the four real statuses is exactly what the old test
+  gave three. Converting the guard to an allow-list (so an empty or
+  unrecognised status also sheds the clock) is a semantics change in its own
+  right and is deliberately not part of this decision — it is tracked as #365.
 - **The manager report inherits the empty-team failure mode.** It is scoped by
   `assignedReviewerManager`, and nothing writes that field ([ADR-0038]), so a
   manager whose team's rows carry no value sees an empty table — exactly as
