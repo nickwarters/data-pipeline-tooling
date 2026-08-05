@@ -151,3 +151,40 @@ assert any("schema drift" in w for w in warns)
 
 The demo-pipeline tests (`tests/pipelines/test_demo_pipeline.py`,
 `tests/pipelines/test_demo_selection.py`) use these helpers — a working reference.
+
+## The local zone is pinned to UTC for every test
+
+Instants are UTC, calendar dates are local, and every comparison converts the
+instant to the local date first — the rule in
+[`tools/observability/timestamps.py`](run-log-format.md). So a test that stamps a
+run near midnight and asserts against a calendar date is really asking about
+*the box's offset* unless it says which zone it means.
+
+`tests/conftest.py` therefore pins the local zone to UTC for the whole suite,
+via an autouse fixture over the `local_timezone` seam. Nothing needs to opt in,
+and a near-midnight timestamp means the same thing in London, New York and
+Kiritimati.
+
+**Override it when the conversion *is* what you're testing.** Ask for your own
+zone fixture and it wins — an autouse fixture is set up before the ones a test
+names:
+
+```python
+BST = dt.timezone(dt.timedelta(hours=1))
+
+@pytest.fixture
+def uk_summer(monkeypatch):
+    monkeypatch.setattr(timestamps, "local_timezone", lambda: BST)
+
+def test_a_run_just_after_local_midnight_counts_as_today(uk_summer):
+    # 23:10 UTC on the 27th is 00:10 local on the 28th.
+    assert local_date("2026-07-27T23:10:00+00:00") == dt.date(2026, 7, 28)
+```
+
+`tests/framework/run/test_runner.py`,
+`tests/tools/test_observability/test_timestamps.py` and
+`tests/tools/test_orchestration/test_freshness_rule.py` all do this — the last
+even over a zone that changes offset mid-year.
+
+The pin covers the *zone*, not the *clock*: `date.today()` and `utc_now_iso()`
+still read the real time, so a test that needs a fixed instant must inject one.
