@@ -785,6 +785,19 @@ feed's only column gate: the raw hop composes `source_to_raw` *without*
 `expected_columns`, because a presence check downstream of a projection that
 already guarantees the columns could never fire.
 
+The same decorator **flattens the expanded people**. SharePoint answers an
+expanded lookup as a nested object on the property —
+`{"AssignedReviewer": {"Name": …}}` — and a role nobody holds as a plain `null`
+there, not an object of null members. The slash form the read asks with
+(`AssignedReviewer/Name`) is OData `$select` syntax for *which sub-field to bring
+back*; it says nothing about the response's shape. A tabular carrier has nowhere
+to put a nested cell, so the feed undoes the nesting itself rather than obliging
+every client to do it — the client's contract stays "return the items as
+SharePoint returned them", which is the only contract a client author could
+satisfy without reading this feed's source. A person value that is neither an
+object nor null fails with a `SharePointFeedError` naming the list, item and
+column.
+
 **2. A quiet window runs the same hops as a busy one**, which costs one cast.
 `SchemaCoercion` repairs the types a storage round-trip loses — dates and
 booleans — and deliberately leaves `int`/`float`/`str` alone, so a zero-row batch

@@ -24,6 +24,7 @@ from pipelines.sharepoint_cases.pipeline import (
     FEED_NAME,
     LIST_ID,
     LIST_NAME,
+    PERSON_SUBFIELDS,
     RAW_FEED_COLUMNS,
     RENAME,
     SAFETY_LAG,
@@ -85,22 +86,30 @@ class FakeListClient:
 
 
 def item(**overrides: object) -> dict[str, object]:
-    """One list item in the shape the organisational client returns.
+    """One list item in the shape SharePoint returns it.
 
-    Every stored column is present, because a real read leads with ``$select=*``
-    and the client flattens each expanded person onto ``Column/Name``. The
-    unmentioned columns are null, which is what most of them are on a live row.
+    A real read leads with ``$select=*``, so every column is present; and an
+    expanded Person answers as a **nested object** on the property, or ``null``
+    where nobody holds the role. The fake must not be tidier than the payload, or
+    the tests stop proving anything about the real path. Unmentioned columns are
+    null, which is what most of them are on a live row.
     """
     row: dict[str, object] = {
         "Id": 101,
         "Modified": "2026-08-05T08:10:00Z",
-        "odata.etag": "3",
+        # SharePoint's etag carries its own quotes.
+        "odata.etag": '"3"',
         "Title": "CMP-000101",
         "CaseType": "complaints",
         "Status": "In-progress",
-        "AssignedReviewer/Name": "i:0#.w|CONTOSO\\a.khan",
-        "ResponsibleParty/Name": "i:0#.w|CONTOSO\\b.okafor",
-        "ResponsibleParty/Title": "Bola Okafor",
+        "AssignedReviewer": {"Name": "i:0#.w|CONTOSO\\a.khan"},
+        "ResponsibleParty": {
+            "Name": "i:0#.w|CONTOSO\\b.okafor",
+            "Title": "Bola Okafor",
+        },
+        "AssignedReviewerManager": {"Name": "i:0#.w|CONTOSO\\d.reid"},
+        "ResponsiblePartyManager": {"Name": "i:0#.w|CONTOSO\\e.novak"},
+        "VoidedBy": None,
         "DueDate": "2026-08-14T00:00:00Z",
         "Created": "2026-07-01T09:14:00Z",
         "HasOpenAppeal": False,
@@ -108,10 +117,17 @@ def item(**overrides: object) -> dict[str, object]:
         "Notes": "Awaiting the call recording.",
         "Answers": '{"q-outcome":{"value":"Not upheld"}}',
     }
+    # Every stored column the fixture did not name, minus the ones the feed
+    # derives: the persons arrive nested above, and the provenance is stamped.
+    flattened = {
+        f"{person}/{sub}" for person, subs in PERSON_SUBFIELDS.items() for sub in subs
+    }
     absent = [
         column
         for column in RAW_FEED_COLUMNS
-        if column not in row and not column.startswith("source_")
+        if column not in row
+        and column not in flattened
+        and not column.startswith("source_")
     ]
     row.update(dict.fromkeys(absent))
     row.update(overrides)
@@ -175,15 +191,47 @@ def test_raw_keeps_the_source_names_and_the_stamped_observation():
 
     assert row["Title"] == "CMP-000101"
     assert row["Status"] == "In-progress"
-    assert row["ResponsibleParty/Name"] == "i:0#.w|CONTOSO\\b.okafor"
     assert row["Details"] is None
     assert row["source_list_name"] == LIST_NAME
     assert row["source_item_id"] == "101"
-    assert row["source_version"] == "3"
+    assert row["source_version"] == '"3"'
     assert len(row["source_observation_id"]) == 64
     # source_modified_at and source_version say what Modified and the etag said,
     # so raw does not also carry them -- nor when we happened to look.
     assert not {"Modified", "odata.etag", "observed_at"} & set(row)
+
+
+def test_an_expanded_person_is_flattened_onto_its_selected_sub_fields():
+    # SharePoint answers an expanded lookup as a nested object on the property.
+    # A tabular carrier has nowhere to put that, so the feed undoes the nesting
+    # -- and only for the sub-fields the read actually selected.
+    [row] = landed(FakeListClient())
+
+    assert row["AssignedReviewer/Name"] == "i:0#.w|CONTOSO\\a.khan"
+    assert row["ResponsibleParty/Name"] == "i:0#.w|CONTOSO\\b.okafor"
+    assert row["ResponsibleParty/Title"] == "Bola Okafor"
+    assert row["ResponsiblePartyManager/Name"] == "i:0#.w|CONTOSO\\e.novak"
+    # The nested property itself does not survive into raw.
+    assert "ResponsibleParty" not in row
+
+
+def test_a_role_nobody_holds_lands_as_nulls_rather_than_failing():
+    # The nobody case is a plain null on the property, not an object of nulls.
+    client = FakeListClient(items(item(AssignedReviewer=None, ResponsibleParty=None)))
+
+    [row] = landed(client)
+
+    assert row["AssignedReviewer/Name"] is None
+    assert row["ResponsibleParty/Name"] is None
+    assert row["ResponsibleParty/Title"] is None
+    assert row["VoidedBy/Name"] is None
+
+
+def test_a_person_column_that_is_neither_an_object_nor_null_is_refused():
+    client = FakeListClient(items(item(ResponsibleParty="i:0#.w|CONTOSO\\b.okafor")))
+
+    with pytest.raises(SharePointFeedError, match="item 101.*'ResponsibleParty'"):
+        raw_builder(observations(client), RecordingWriter()).run()
 
 
 def test_the_read_asks_for_the_star_and_expands_every_person():
@@ -240,13 +288,13 @@ def test_silver_snake_cases_coerces_and_keeps_the_provenance():
     assert row["due_date"] == pd.Timestamp("2026-08-14T00:00:00Z")
     assert row["has_open_appeal"] is False
     assert row["source_item_id"] == "101"
-    assert row["source_version"] == "3"
+    assert row["source_version"] == '"3"'
 
 
 def test_silver_accepts_a_case_with_no_reference_and_nobody_assigned():
     # Title is the human Case Reference: nullable, and carrying no format any
     # part of the application enforces. A row without one is an ordinary row.
-    client = FakeListClient(items(item(Title=None, **{"AssignedReviewer/Name": None})))
+    client = FakeListClient(items(item(Title=None, AssignedReviewer=None)))
     writer = RecordingWriter()
 
     silver_builder(given_rows(landed(client)), writer).run()
@@ -361,7 +409,7 @@ def test_a_repeated_observation_is_a_no_op_in_raw_and_silver(tmp_path):
 
 def test_a_later_source_version_appends_a_second_case_version(tmp_path):
     later = item(Status="Completed")
-    later.update({"Modified": "2026-08-05T08:45:00Z", "odata.etag": "4"})
+    later.update({"Modified": "2026-08-05T08:45:00Z", "odata.etag": '"4"'})
     client = FakeListClient(items(item()), items(later))
     context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
 
@@ -372,7 +420,7 @@ def test_a_later_source_version_appends_a_second_case_version(tmp_path):
     assert [
         (row["status"], row["source_version"])
         for row in read_rows(med.silver, "case_version")
-    ] == [("In-progress", "3"), ("Completed", "4")]
+    ] == [("In-progress", '"3"'), ("Completed", '"4"')]
 
 
 def test_the_same_observation_carrying_a_different_payload_is_refused(tmp_path):

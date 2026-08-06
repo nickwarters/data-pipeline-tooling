@@ -157,7 +157,7 @@ per-column mapping to keep in step with the list.
 | `source_observation_id` | *(stamped)* | `str` | No | `NonNull` | The observation's identity, and the append-only key. | *(64-char sha256)* | None | |
 | `source_list_name` | *(stamped)* | `str` | No | `NonNull` | The list observed. | `Cases-Complaints` | None | |
 | `source_item_id` | *(stamped)* | `str` | No | `NonNull` | The list item observed, as text. | `101` | Internal | Same value as `id`, in the provenance vocabulary. |
-| `source_version` | *(stamped)* | `str` | No | `NonNull` | The version observed. | `3` | None | |
+| `source_version` | *(stamped)* | `str` | No | `NonNull` | The version observed. | `\"3\"` | None | Opaque text. SharePoint's ETag carries its own quotes, and they are kept rather than stripped — the value is compared, never parsed. |
 | `source_modified_at` | *(stamped)* | `datetime` | No | `NonNull` | When the source last changed the item. | `2026-08-05T08:10:00+00:00` | None | Orders the versions of one item. |
 | `id` | `Id` | `int` | No | `NonNull` | The SharePoint item id — **the Case's identity**. | `101` | Internal | Unique within the Case Type's list. |
 | `title` | `Title` | `str` | Yes | — | The human **Case Reference**. | `CMP-000101` | Internal | Nullable, and carries no format the application enforces. Unique only within a Case Type, and prefix-searchable only. A Case without one is ordinary. |
@@ -206,6 +206,14 @@ There are **no multi-value columns on this list** — no Lookup, no multi Choice
 no multi User. All five person columns hold a single user, and the read expands
 each so it answers with `{Name, Title}` rather than the numeric id it otherwise
 returns.
+
+An expanded person arrives **nested on the property** —
+`{"AssignedReviewer": {"Name": …}}` — or as a plain `null` where nobody holds the
+role. The feed flattens that onto the `AssignedReviewer/Name` columns above
+before anything is stored; the `Name`/`Title` split in the column names is this
+feed's storage shape, not the payload's. Only `ResponsibleParty` has a `Title`
+column, because it is the only one of the five whose display name the read
+selects.
 
 `Name` is the claims login (`i:0#.w|CONTOSO\a.khan`) and is what the review
 application keys identity on, right down to which Sections a viewer may open.

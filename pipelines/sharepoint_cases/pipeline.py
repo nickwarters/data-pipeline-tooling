@@ -85,27 +85,29 @@ LIST_ID = UUID(int=0)
 LIST_NAME = "Cases-Complaints"
 
 # The five Person columns, expanded so each answers with the claims login rather
-# than the numeric id it otherwise returns.
-PERSON_COLUMNS = (
-    "AssignedReviewer",
-    "ResponsibleParty",
-    "AssignedReviewerManager",
-    "ResponsiblePartyManager",
-    "VoidedBy",
-)
-EXPAND_FIELDS = PERSON_COLUMNS
+# than the numeric id it otherwise returns, and the sub-field of each the read
+# asks for. Only the Responsible Party's display name is selected: it is the one
+# of the five a view names a person by, and the rest are matched, never shown.
+PERSON_SUBFIELDS = {
+    "AssignedReviewer": ("Name",),
+    "ResponsibleParty": ("Name", "Title"),
+    "AssignedReviewerManager": ("Name",),
+    "ResponsiblePartyManager": ("Name",),
+    "VoidedBy": ("Name",),
+}
+EXPAND_FIELDS = tuple(PERSON_SUBFIELDS)
 
 # What is asked of the list. The ``*`` is load-bearing: naming a person's
 # sub-field turns the read into a projection, and without it every other column
-# silently stops coming back.
+# silently stops coming back. The slash form is OData ``$select`` syntax -- it
+# says which sub-field to bring back, not what the response is shaped like.
 SOURCE_COLUMNS = (
     "*",
-    "AssignedReviewer/Name",
-    "ResponsibleParty/Name",
-    "ResponsibleParty/Title",
-    "AssignedReviewerManager/Name",
-    "ResponsiblePartyManager/Name",
-    "VoidedBy/Name",
+    *(
+        f"{person}/{subfield}"
+        for person, subfields in PERSON_SUBFIELDS.items()
+        for subfield in subfields
+    ),
 )
 
 # What raw stores: every documented column of the list, in the source's own
@@ -224,6 +226,56 @@ def batch_id_for(source: SharePointSource, watermark: dt.datetime | None) -> str
     return f"{source.list_id}:{watermark.isoformat() if watermark else 'first-load'}"
 
 
+def _flatten_people(frame: pd.DataFrame) -> pd.DataFrame:
+    """Spread each expanded person across the columns the rest of the feed reads.
+
+    SharePoint answers an expanded lookup as a **nested object on the property**
+    -- ``{"AssignedReviewer": {"Name": ...}}`` -- and a role nobody holds as a
+    plain ``null`` there, not as an object of null members. The slash form the
+    read asks with is ``$select`` syntax for *which sub-field to bring back*, and
+    says nothing about the response's shape.
+
+    A tabular carrier has nowhere to put a nested cell, so the nesting is undone
+    here, at the edge that already owns the read's shape. The feed owns this
+    rather than the client because it is the feed that decided to store a person
+    as columns; a client would otherwise have to know that, undocumented.
+
+    A quiet window has no person column to flatten -- the Reader declares the
+    projection's own names, which are already the flat ones -- so this is a no-op
+    there and the reindex below handles the rest.
+    """
+    if not any(person in frame.columns for person in PERSON_SUBFIELDS):
+        return frame
+    flattened = frame.copy()
+    item_ids = list(flattened.get("source_item_id", pd.Series(dtype="object")))
+    for person, subfields in PERSON_SUBFIELDS.items():
+        if person not in flattened.columns:
+            continue
+        people = list(flattened.pop(person))
+        for subfield in subfields:
+            flattened[f"{person}/{subfield}"] = [
+                _person_subfield(value, person, subfield, item_id)
+                for value, item_id in zip(people, item_ids)
+            ]
+    return flattened
+
+
+def _person_subfield(
+    value: object, person: str, subfield: str, item_id: object
+) -> object:
+    """One sub-field of one expanded person, or ``None`` where nobody holds it."""
+    if isinstance(value, dict):
+        return value.get(subfield)
+    if value is None or value is pd.NA or (isinstance(value, float) and pd.isna(value)):
+        return None
+    raise SharePointFeedError(
+        f"SharePoint list {LIST_NAME!r}, item {item_id}: column {person!r} holds "
+        f"a {type(value).__name__} where an expanded person object or null was "
+        "expected. A Person column is read expanded, so it answers with its "
+        "sub-fields or with nothing."
+    )
+
+
 class StorableObservations:
     """Narrow one SharePoint read to the observation raw stores.
 
@@ -246,7 +298,7 @@ class StorableObservations:
         return self._inner.describe()
 
     def read(self) -> Dataset:
-        frame = self._inner.read().to_pandas()
+        frame = _flatten_people(self._inner.read().to_pandas())
         if frame.empty:
             # A quiet window comes back as the *declared* projection, and this
             # list is read with ``$select=*`` -- so almost every column arrives
@@ -280,11 +332,12 @@ class CaseListClient(SharePointListClient, Protocol):
     Stated here rather than upstream because it is this feed's requirement, not
     the Reader's -- and stated as an extension, so the fetch is declared once.
 
-    One obligation the frame carries that the fetch signature cannot express:
-    an expanded person must arrive **flattened** onto a ``AssignedReviewer/Name``
-    column, not nested as the ``{"AssignedReviewer": {"Name": ...}}`` object
-    SharePoint's OData JSON actually returns. A client wrapping the real API owns
-    that flattening; a column-shaped frame is what a tabular Reader can project.
+    A client returns the items **as SharePoint returned them**, and owes the feed
+    no reshaping: an expanded person arrives as the nested
+    ``{"AssignedReviewer": {"Name": ...}}`` object the API answers with, or null
+    where nobody holds the role. Flattening that onto columns is the feed's own
+    doing (:func:`_flatten_people`), because it is the feed that decided to store
+    a person as columns.
     """
 
     def server_time(self) -> dt.datetime: ...
