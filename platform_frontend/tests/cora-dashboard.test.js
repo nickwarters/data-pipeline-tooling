@@ -50,7 +50,12 @@ function context(permissions) {
   });
 }
 
-test('dashboard slice: effects load reviewer rows, KPI lanes, and Controls appeals through actions', async () => {
+// Appeals are switched off in this build, so the Controls appeals fan-out does
+// not go out and no `appeals/loaded` action is dispatched — asserted below by
+// the action list, and directly in `appeals-feature-switch.test.js`. When the
+// switch goes, restore `appeals/loaded` to the expected list, take the barrier
+// back to three actions, and put "and Controls appeals" back in this name.
+test('dashboard slice: effects load reviewer rows and KPI lanes through actions', async () => {
   const caps = capabilities({ isReviewer: true, isControls: true });
   const ctx = context(caps);
   // Overdue is derived from the status as well as the date, so the row carries
@@ -111,7 +116,7 @@ test('dashboard slice: effects load reviewer rows, KPI lanes, and Controls appea
     params: {},
     dispatch: (/** @type {any} */ action) => {
       actions.push(action);
-      if (actions.length === 3) markLoaded();
+      if (actions.length === 2) markLoaded();
     },
     listen: (
       /** @type {any} */ target,
@@ -123,7 +128,6 @@ test('dashboard slice: effects load reviewer rows, KPI lanes, and Controls appea
   await loaded;
 
   assert.deepEqual(actions.map((action) => action.type).sort(), [
-    'appeals/loaded',
     'kpis/loaded',
     'reviewer-cases/loaded',
   ]);
@@ -1168,7 +1172,11 @@ test('dashboard pure view composes every real panel for a multi-role user', () =
   assert.ok(view.querySelector('.cora-action-centre'));
   assert.ok(view.querySelector('.cora-reviewer-cases'));
   assert.ok(view.querySelector('.cora-rp-remediation'));
-  assert.ok(view.querySelector('.cora-controls-appeals'));
+  // The Controls Appeals panel is absent only because the Appeals feature
+  // switch is off; restore `assert.ok(view.querySelector('.cora-controls-appeals'))`
+  // when the switch goes — this test is the one that proves the panel is wired
+  // into the page at all.
+  assert.equal(view.querySelector('.cora-controls-appeals'), null);
   assert.ok(view.querySelector('.cora-owner-summary-heading'));
   assert.ok(view.querySelector('.cora-allocation-btn'));
   assert.equal(view.querySelector('cora-owner-summary'), null);
@@ -1200,7 +1208,12 @@ test('dashboard pure view composes every real panel for a multi-role user', () =
     actions.some((action) => !Array.isArray(action)),
     'and the store-driven panels dispatched too'
   );
-  assert.equal(location.hash, '#/case/complaints/c1');
+  // The hash left by the last navigating button in document order. The Appeals
+  // panel is last in the panel list, so while appeals were on this read
+  // '#/case/complaints/c1' — its Open button opens the Case. With the panel
+  // switched off, the Responsible Party panel's "Open conversation" is now the
+  // last to navigate. Restore the Case route here when the switch goes.
+  assert.equal(location.hash, '#/conversation/complaints/c1');
 
   const withoutController = dashboardView(/** @type {any} */ (state), {
     context: ctx,
@@ -1356,35 +1369,17 @@ test('dashboard view: clicking a reviewer column header dispatches the reviewer 
   ]);
 });
 
-test('dashboard view: clicking an appeals column header dispatches the appeals table sort action', () => {
-  const ctx = context(capabilities({ isControls: true }));
-  const slice = createRouteSlice({}, ctx);
-  const loaded = slice.reducer(slice.initialState, {
-    type: 'appeals/loaded',
-    cases: [
-      {
-        id: 'appeal',
-        title: 'Appealed case',
-        caseType: 'complaints',
-        responsibleParty: 'rp-1',
-        appeal: { raisedAt: '2026-01-01T00:00:00Z', raisedBy: 'rp-1' },
-      },
-    ],
-  });
-  /** @type {any[]} */
-  const actions = [];
-  const view = dashboardView(/** @type {any} */ (loaded), {
-    context: ctx,
-    dispatch: (/** @type {any} */ action) => actions.push(action),
-  });
-
-  fireEvent(getByRole(view, 'button', { name: 'Raised' }), 'click');
-  assert.deepEqual(actions, [
-    { type: 'appeals-table/sort-requested', key: 'raised' },
-  ]);
-});
-
-test('dashboard appeals: Reference and Case Type sort for real — click, dispatch, sorted render', () => {
+// Appeals are switched off in this build, so `dashboardView` composes no
+// Appeals panel and there is no column header in the rendered tree to click.
+// What survives here is the half the switch does not reach: the slice's own
+// Appeals state — its default sort, and the two reducers behind loading and
+// re-sorting the table. The rendering half — that clicking `Raised`,
+// `Reference` or `Case Type` dispatches the sort and re-orders the rows within
+// `.cora-controls-appeals` — moves to `dashboard-controls-view.test.js`, which
+// drives the panel view directly and is unaffected by the switch. When the
+// switch goes, a test that clicks through `dashboardView` is worth restoring:
+// it is the only thing that proves the panel is wired into the page at all.
+test('dashboard slice: Appeals state loads and re-sorts, default oldest-raised first', () => {
   const ctx = context(capabilities({ isControls: true }));
   const slice = createRouteSlice({}, ctx);
   // The Appeals table's deliberate default, unmoved by gaining two sortable
@@ -1410,48 +1405,33 @@ test('dashboard appeals: Reference and Case Type sort for real — click, dispat
       },
     ],
   });
+  const cases = [
+    appealRow('Zed case', 'sales'),
+    appealRow('Alpha case', 'banking'),
+  ];
   const loaded = slice.reducer(slice.initialState, {
     type: 'appeals/loaded',
-    cases: [appealRow('Zed case', 'sales'), appealRow('Alpha case', 'banking')],
+    cases,
   });
+  assert.deepEqual(loaded.routes.dashboard.appealCases, cases);
 
-  /** @param {any} state @param {any[]} actions */
-  const render = (state, actions) =>
-    dashboardView(/** @type {any} */ (state), {
-      context: ctx,
-      dispatch: (/** @type {any} */ action) => actions.push(action),
+  // A new key sorts ascending; re-requesting the key already sorted on flips
+  // the direction rather than restarting it.
+  for (const key of ['reference', 'caseType']) {
+    const sorted = slice.reducer(loaded, {
+      type: 'appeals-table/sort-requested',
+      key,
     });
-  // Scoped to the Appeals panel: Controls happens to render one table today,
-  // so an unscoped 'tbody' would read the right rows by luck.
-  /** @param {any} view */
-  const references = (view) =>
-    [
-      ...(view
-        .querySelector('.cora-controls-appeals')
-        ?.querySelector('tbody')
-        ?.querySelectorAll('tr') ?? []),
-    ].map(
-      (/** @type {any} */ row) => row.querySelectorAll('td')[0].textContent
-    );
-
-  for (const [column, key, expected] of [
-    ['Reference', 'reference', ['Alpha case', 'Zed case']],
-    ['Case Type', 'caseType', ['Alpha case', 'Zed case']],
-  ]) {
-    /** @type {any[]} */
-    const actions = [];
-    fireEvent(
-      getByRole(render(loaded, actions), 'button', {
-        name: /** @type {string} */ (column),
-      }),
-      'click'
-    );
-    assert.deepEqual(actions, [{ type: 'appeals-table/sort-requested', key }]);
-
-    const sorted = slice.reducer(loaded, actions[0]);
     assert.deepEqual(sorted.routes.dashboard.appealSort, { key, dir: 'asc' });
-    assert.deepEqual(references(render(sorted, [])), expected);
   }
+  const toggled = slice.reducer(loaded, {
+    type: 'appeals-table/sort-requested',
+    key: 'raised',
+  });
+  assert.deepEqual(toggled.routes.dashboard.appealSort, {
+    key: 'raised',
+    dir: 'desc',
+  });
 });
 
 test('dashboard slice: navigating away aborts the fan-out reads with no error UI', async () => {
@@ -1722,9 +1702,13 @@ test('dashboard KPI strip: a lane header and a tile dispatch the disclosure acti
 });
 
 test('dashboard Action Centre: its own Open button navigates to the Case', () => {
-  // Deliberately not a Reviewer: the reviewer worklist has an Open button too,
-  // and this assertion must fail when *this* panel stops navigating.
-  const ctx = context(capabilities({ isControls: true }));
+  // The reviewer worklist has an Open button too, so the query below is scoped
+  // to `.cora-action-centre` — this assertion must fail when *this* panel stops
+  // navigating, not be satisfied by the other one. A Controls-only user used to
+  // give that isolation for free, holding an Action Centre reason without a
+  // worklist; with Appeals switched off, Controls holds no reason at all, so
+  // the scoping is now doing the work on its own.
+  const ctx = context(capabilities({ isReviewer: true }));
   const slice = createRouteSlice({}, ctx);
   const route = slice.initialState.routes.dashboard;
   const [reason] = route.actionCentre.reasons;
@@ -1742,7 +1726,7 @@ test('dashboard Action Centre: its own Open button navigates to the Case', () =>
               {
                 id: 'c7',
                 caseType: 'complaints',
-                title: 'Appealed case',
+                title: 'Worklist case',
                 status: 'Completed',
               },
             ],
@@ -1762,7 +1746,7 @@ test('dashboard Action Centre: its own Open button navigates to the Case', () =>
       []),
   ].find(
     (/** @type {any} */ button) =>
-      button.getAttribute('aria-label') === 'Open Appealed case'
+      button.getAttribute('aria-label') === 'Open Worklist case'
   );
   fireEvent(open, 'click');
   assert.equal(location.hash, '#/case/complaints/c7');
@@ -1772,7 +1756,10 @@ test('dashboard Action Centre: the group header and Show more reach the panel’
   // `onToggleGroup` and `onShowMore` are the last two Action Centre seams the
   // page owns. Stubbing either to a no-op used to leave the suite green while
   // the header stopped expanding and pagination died silently.
-  const ctx = context(capabilities({ isControls: true }));
+  //
+  // A Reviewer rather than Controls: with Appeals switched off, Controls holds
+  // no Action Centre reason, so there would be no group to expand.
+  const ctx = context(capabilities({ isReviewer: true }));
   const slice = createRouteSlice({}, ctx);
   const route = slice.initialState.routes.dashboard;
   const [reason] = route.actionCentre.reasons;
@@ -1786,7 +1773,7 @@ test('dashboard Action Centre: the group header and Show more reach the panel’
         {
           id: 'c7',
           caseType: 'complaints',
-          title: 'Appealed case',
+          title: 'Worklist case',
           status: 'Completed',
         },
       ],

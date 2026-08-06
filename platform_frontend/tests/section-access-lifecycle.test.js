@@ -10,6 +10,7 @@ import {
   openAppeal,
   resolvedAppeal,
   evaluateAccess,
+  matrixMode,
   ROLES,
   SECTIONS,
 } from './helpers/section-access.js';
@@ -20,19 +21,23 @@ import { MATRIX } from '../src/services/section-access.js';
 // Capability: status transitions and most-permissive role composition.
 
 // --- Appeal-config-conditional and status-conditional edge cells ---
+//
+// These read the MATRIX rows through `matrixMode` rather than `evaluateAccess`.
+// Appeals are switched off in this build, so `evaluateAccess` answers `hidden`
+// for both Appeal Sections before the matrix is consulted — that behaviour is
+// asserted in `appeals-feature-switch.test.js`. What is asserted here is the
+// policy the rows will resume under, which would otherwise go untested for as
+// long as the switch stands.
 
 test('appealRequest: default config (no appeal block) routes raising to the RP Manager', () => {
   // Exercises the `appealRaiser` default (`?? responsiblePartyManager`).
   const cfg = makeConfig();
   const c = makeCase({ status: 'Completed' });
   assert.equal(
-    evaluateAccess('appealRequest', ['responsiblePartyManager'], c, cfg),
+    matrixMode('appealRequest', 'responsiblePartyManager', c, cfg),
     'edit'
   );
-  assert.equal(
-    evaluateAccess('appealRequest', ['journeyOwner'], c, cfg),
-    'hidden'
-  );
+  assert.equal(matrixMode('appealRequest', 'journeyOwner', c, cfg), 'hidden');
 });
 
 test('appealRequest: the raiser is hidden until the Case is Completed', () => {
@@ -42,9 +47,9 @@ test('appealRequest: the raiser is hidden until the Case is Completed', () => {
   ])) {
     const cfg = makeConfig({ appeal: { raisedBy } });
     assert.equal(
-      evaluateAccess(
+      matrixMode(
         'appealRequest',
-        [raisedBy],
+        raisedBy,
         makeCase({ status: 'Actions In Progress' }),
         cfg
       ),
@@ -59,9 +64,9 @@ test('appealReview: Controls gets no tab before the first Appeal, then edit whil
   // No Appeal has ever been raised → no tab at all: the Section would render an
   // empty resolution history.
   assert.equal(
-    evaluateAccess(
+    matrixMode(
       'appealReview',
-      ['controls'],
+      'controls',
       makeCase({ status: 'Completed' }),
       cfg
     ),
@@ -70,9 +75,9 @@ test('appealReview: Controls gets no tab before the first Appeal, then edit whil
   );
   // Resolved Appeal → read-only, so Controls can read back their own resolution.
   assert.equal(
-    evaluateAccess(
+    matrixMode(
       'appealReview',
-      ['controls'],
+      'controls',
       makeCase({ status: 'Completed', appeals: [resolvedAppeal()] }),
       cfg
     ),
@@ -81,9 +86,9 @@ test('appealReview: Controls gets no tab before the first Appeal, then edit whil
   );
   // Open Appeal on a Completed Case → the resolution form.
   assert.equal(
-    evaluateAccess(
+    matrixMode(
       'appealReview',
-      ['controls'],
+      'controls',
       makeCase({ status: 'Completed', appeals: [openAppeal()] }),
       cfg
     ),
@@ -93,9 +98,9 @@ test('appealReview: Controls gets no tab before the first Appeal, then edit whil
   // An open Appeal on a Case that is not Completed cannot arise from the flow,
   // so it means inconsistent data: show the history, withhold the form.
   assert.equal(
-    evaluateAccess(
+    matrixMode(
       'appealReview',
-      ['controls'],
+      'controls',
       makeCase({ status: 'Actions In Progress', appeals: [openAppeal()] }),
       cfg
     ),
@@ -116,12 +121,12 @@ test('appealReview: resolution is Controls whatever the Case Type routes raising
   for (const role of ROLES) {
     const expected = role === 'controls' ? 'edit' : 'hidden';
     assert.equal(
-      evaluateAccess('appealReview', [role], c, cfgA),
+      matrixMode('appealReview', role, c, cfgA),
       expected,
       `${role} with the Journey Owner raising`
     );
     assert.equal(
-      evaluateAccess('appealReview', [role], c, cfgB),
+      matrixMode('appealReview', role, c, cfgB),
       expected,
       `${role} with the Responsible Party Manager raising`
     );
@@ -390,7 +395,7 @@ test('acceptance: Appeal Request belongs to the configured raiser alone', () => 
     const c = makeCase({ status: 'Completed' });
     for (const role of roles) {
       assert.equal(
-        evaluateAccess('appealRequest', [role], c, cfg),
+        matrixMode('appealRequest', role, c, cfg),
         role === raisedBy ? 'edit' : 'hidden',
         `${role} with ${raisedBy} raising`
       );
@@ -401,7 +406,10 @@ test('acceptance: Appeal Request belongs to the configured raiser alone', () => 
 test('acceptance: Controls is the role that gets Appeal Review + Amend Outcome (edit)', () => {
   const cfg = makeConfig();
   const c = makeCase({ status: 'Completed', appeals: [openAppeal()] });
-  assert.equal(evaluateAccess('appealReview', ['controls'], c, cfg), 'edit');
+  // Appeal Review at the matrix (the switch hides it); Amend Outcome through
+  // `evaluateAccess`, because it is deliberately not gated — Controls amends a
+  // reportable Outcome whether or not an Appeal prompted it.
+  assert.equal(matrixMode('appealReview', 'controls', c, cfg), 'edit');
   assert.equal(evaluateAccess('amendOutcome', ['controls'], c, cfg), 'edit');
 });
 

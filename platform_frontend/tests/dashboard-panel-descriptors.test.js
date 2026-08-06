@@ -28,7 +28,14 @@ test('dashboard panel descriptors express the role-visible panel set', () => {
         ownedCaseTypes: ['complaints'],
       })
     ),
-    ['kpis', 'actionCentre', 'ownerSummary', 'responsibleParty', 'appeals']
+    // Two panels are absent only because the Appeals feature switch is off.
+    // 'appeals' because the Controls panel would be a permanently empty table;
+    // 'actionCentre' because Appeals is the only reason a Controls capability
+    // contributes, and this user holds no reviewer role — so their worklist has
+    // no groups at all and the panel is dropped rather than shown empty.
+    // Restore both when the switch goes:
+    // ['kpis', 'actionCentre', 'ownerSummary', 'responsibleParty', 'appeals']
+    ['kpis', 'ownerSummary', 'responsibleParty']
   );
   assert.deepEqual(visibleDashboardPanels(capabilities()), []);
 });

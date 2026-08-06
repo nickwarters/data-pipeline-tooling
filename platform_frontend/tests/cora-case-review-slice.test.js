@@ -48,6 +48,12 @@ const { default: complaintsConfig } =
 const { evaluateAccess, SECTIONS } =
   await import('../src/services/section-access.js');
 const { resolveSectionLabels } = await import('../src/lib/section-labels.js');
+// Appeals are switched off in this build, so `evaluateAccess` answers `hidden`
+// for both Appeal Sections. The panels themselves are not gated — they are pure
+// views of whatever `access` they are handed — so the tests below that are about
+// the Appeal *panels* keep rendering them, sourcing the mode from the access
+// policy through `matrixMode` rather than from the switched-off resolver.
+const { matrixMode } = await import('./helpers/section-access.js');
 
 /**
  * The radio a Reviewer clicks to answer a Question. Several Questions offer the
@@ -948,9 +954,9 @@ test('route: configured Journey Owner and alternative Manager raisers reach the 
     };
     appealSnapshot.access = {
       ...appealSnapshot.access,
-      appealRequest: evaluateAccess(
+      appealRequest: matrixMode(
         'appealRequest',
-        roles,
+        roles[0],
         appealSnapshot.caseRow,
         config
       ),
@@ -4434,6 +4440,17 @@ function everySectionVisibleCase() {
   const access = {};
   for (const section of SECTIONS) {
     access[section] = evaluateAccess(section, roles, row, config, catalogue);
+  }
+  // The two Appeal Sections come from the access policy rather than the
+  // switched-off resolver, so this fixture keeps its name: every Section
+  // visible, so the renaming assertions below cover all nine panels.
+  for (const section of /** @type {any[]} */ ([
+    'appealRequest',
+    'appealReview',
+  ])) {
+    access[section] = roles
+      .map((role) => matrixMode(section, role, row, config))
+      .find((mode) => mode !== 'hidden');
   }
   return { row, config, catalogue, access };
 }

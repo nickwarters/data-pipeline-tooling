@@ -77,11 +77,15 @@ test('reasonsForCapabilities: reviewer sees the three reviewer reasons', () => {
   assert.deepEqual(ids, ['overdue', 'awaitingFrontline', 'reviewRequired']);
 });
 
-test('reasonsForCapabilities: controls sees appeals', () => {
+// Appeals are switched off in this build, so the reason stays in the table —
+// its labels, clock and cadence are still asserted above — but no capability
+// qualifies for it and Controls gets an empty worklist rather than a group that
+// is permanently empty. Restore this to `['appeals']` when the switch goes.
+test('reasonsForCapabilities: controls sees no appeals group while appeals are off', () => {
   const ids = reasonsForCapabilities(caps({ isControls: true })).map(
     (r) => r.id
   );
-  assert.deepEqual(ids, ['appeals']);
+  assert.deepEqual(ids, []);
 });
 
 // Owning a Case Type is no longer a reason to act: Reopened was the only
@@ -99,12 +103,9 @@ test('reasonsForCapabilities: multi-role user sees the union', () => {
   const ids = reasonsForCapabilities(
     caps({ isReviewer: true, isControls: true, ownedCaseTypes: ['complaints'] })
   ).map((r) => r.id);
-  assert.deepEqual(ids, [
-    'overdue',
-    'awaitingFrontline',
-    'reviewRequired',
-    'appeals',
-  ]);
+  // 'appeals' is absent only because the feature switch is off; restore it to
+  // the tail of this list when the switch goes.
+  assert.deepEqual(ids, ['overdue', 'awaitingFrontline', 'reviewRequired']);
 });
 
 test('reasonsForCapabilities: a visitor sees no reasons', () => {

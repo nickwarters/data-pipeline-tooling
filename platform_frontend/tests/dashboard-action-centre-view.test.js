@@ -53,9 +53,11 @@ test('Action Centre state derives its reason descriptors from unchanged model fl
     }),
     []
   );
+  // 'appeals' is absent only because the Appeals feature switch is off; restore
+  // it to the tail of this list when the switch goes.
   assert.deepEqual(
     multiRole.reasons.map((reason) => reason.id),
-    ['overdue', 'awaitingFrontline', 'appeals']
+    ['overdue', 'awaitingFrontline']
   );
 });
 
@@ -214,19 +216,27 @@ test('Action Centre rows preserve fallback references, secondary reasons, and wi
     [],
     new Date('2026-07-04T00:00:00Z')
   );
-  const appeals = state.reasons.find((reason) => reason.id === 'appeals');
-  assert.ok(appeals);
-  const appealRow = {
+  // Three generic row behaviours, exercised on one group: the reference falls
+  // back to the id when a Case has no title, a Case matching more than one
+  // reason names the others in its sub-line, and a clock still inside its SLA
+  // gets the plain wait class. This used the Appeals group until that feature
+  // was switched off; Awaiting Frontline carries the same three properties, and
+  // none of the three is specific to either reason.
+  const awaiting = state.reasons.find(
+    (reason) => reason.id === 'awaitingFrontline'
+  );
+  assert.ok(awaiting);
+  const awaitingRow = {
     ...row('fallback-id'),
     title: '',
     overdue: true,
-    hasOpenAppeal: true,
-    appealRaisedAt: '2026-07-03T00:00:00Z',
+    awaitingResponsibleParty: true,
+    awaitingSince: '2026-07-03T00:00:00Z',
   };
-  state.counts = { appeals: 1, overdue: 1 };
+  state.counts = { awaitingFrontline: 1 };
   state.headline = 1;
-  state.expanded = new Set(['appeals']);
-  state.pages = { appeals: [appealRow] };
+  state.expanded = new Set(['awaitingFrontline']);
+  state.pages = { awaitingFrontline: [awaitingRow] };
   const view = ActionCentreView(state, {
     onToggleNeedsAction: () => {},
     onToggleGroup: () => {},
@@ -235,29 +245,26 @@ test('Action Centre rows preserve fallback references, secondary reasons, and wi
   });
 
   const groups = [...view.querySelectorAll('.cora-ac-group')];
-  const appealsGroup = groups.find(
-    (group) => group.getAttribute('data-reason') === 'appeals'
-  );
-  assert.equal(
-    appealsGroup?.querySelector('.cora-ac-row-ref')?.textContent,
-    'fallback-id'
-  );
-  assert.match(
-    appealsGroup?.querySelector('.cora-ac-row-sub')?.textContent ?? '',
-    /also Overdue/
-  );
-  assert.equal(
-    appealsGroup?.querySelector('.cora-ac-wait')?.className,
-    'cora-ac-wait'
-  );
-  assert.equal(appealsGroup?.querySelector('.cora-ac-more'), null);
   const awaitingGroup = groups.find(
     (group) => group.getAttribute('data-reason') === 'awaitingFrontline'
   );
   assert.equal(
-    awaitingGroup?.querySelector('.cora-ac-count')?.textContent,
-    '0'
+    awaitingGroup?.querySelector('.cora-ac-row-ref')?.textContent,
+    'fallback-id'
   );
+  assert.match(
+    awaitingGroup?.querySelector('.cora-ac-row-sub')?.textContent ?? '',
+    /also Overdue/
+  );
+  assert.equal(
+    awaitingGroup?.querySelector('.cora-ac-wait')?.className,
+    'cora-ac-wait'
+  );
+  assert.equal(awaitingGroup?.querySelector('.cora-ac-more'), null);
+  const overdueGroup = groups.find(
+    (group) => group.getAttribute('data-reason') === 'overdue'
+  );
+  assert.equal(overdueGroup?.querySelector('.cora-ac-count')?.textContent, '0');
 });
 
 // Owning a Case Type is no longer a reason to act on anything, so an Owner

@@ -1,5 +1,6 @@
 // @ts-check
 import { isOverdue, OVERDUE_STATUSES } from './overdue-evaluator.js';
+import { APPEALS_ENABLED } from '../config/features.js';
 import { permissions } from '../services/permissions.js';
 import { CASE_STATUS } from '../lib/case-statuses.js';
 import {
@@ -403,7 +404,10 @@ export async function loadKpiModel({
       })
     );
   }
-  if (capabilities.isControls) {
+  // Appeals are switched off in this build: the lane's only tile counts open
+  // Appeals, which is permanently zero, so the whole lane is omitted rather
+  // than rendered empty.
+  if (APPEALS_ENABLED && capabilities.isControls) {
     lanes.push(await buildControlsLane({ client, allCaseSources }));
   }
   if (capabilities.ownedCaseTypes.length > 0) {

@@ -278,6 +278,9 @@ src/
 
   config/
     environment.js              # ADR-0033: the only resolver of window.CORA_ENV (prod vs uat)
+    features.js                 # hard-coded feature switches (APPEALS_ENABLED = false). Enabling one
+                                #   means DELETING the constant and every `if` reading it, never
+                                #   flipping it to true — see docs/guide/feature-switches.md
     working-days.js
 
   pages/                        # route slices, top-level views, and focused page actions

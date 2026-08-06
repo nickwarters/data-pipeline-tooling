@@ -1,5 +1,6 @@
 // @ts-check
 import { reasonsForCapabilities } from '../../services/action-centre-model.js';
+import { APPEALS_ENABLED } from '../../config/features.js';
 
 /**
  * The dashboard has a fixed, intentionally small panel vocabulary. Role
@@ -23,7 +24,15 @@ export const dashboardPanels = [
   { key: 'reviewerCases', visible: (c) => c.isReviewer },
   { key: 'allocation', visible: (c) => c.isReviewer },
   { key: 'responsibleParty', visible: (c) => c.isAdviser },
-  { key: 'appeals', visible: (c) => c.isControls },
+  {
+    key: 'appeals',
+    // Appeals are switched off in this build: no Case carries one, so the panel
+    // would be a permanently empty table for every Controls user.
+    visible: (c) => {
+      if (!APPEALS_ENABLED) return false;
+      return c.isControls;
+    },
+  },
 ];
 
 /** @param {import('../../services/permissions.js').Capabilities} capabilities */
