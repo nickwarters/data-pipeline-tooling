@@ -226,6 +226,23 @@ registry" step a run or a plan takes before consulting history. Before it, the
 same three path fragments were spelled out in the runner, the orchestrator and
 the operator CLI; a layout with no owner drifts.
 
+**Source checkpoint (watermark)**:
+Durable **control state** recording how far a source has been polled, so the next
+run resumes rather than re-reads everything. _Here_: `SharePointCheckpointStore`
+(`tools/integrations/sharepoint_checkpoint.py`) keeps one `Modified` watermark per
+SharePoint list under `<base_dir>/_checkpoints/sharepoint.db`, and computes the
+next window from it — `end = server_now - safety_lag`, `start = watermark -
+overlap` (`None` on a first load, meaning the full current list). The commit is
+the **last act of a successful run**; nothing else advances it. **Do not confuse
+the two senses of "checkpoint"**: elsewhere in this glossary and in
+`framework/run`, a *checkpoint* is a mid-graph `.write()` node landing an
+intermediate dataset for lineage — a thing inside one run's graph. A *source
+checkpoint* is state **between** runs, about an external source. Say "source
+checkpoint" or "watermark" when that is what you mean. It is also a **third**
+category of thing in a base directory, alongside the rows the `StoreRegistry`
+lays out and the runs the **Run store** does — kept separate because the
+lifecycles differ: pruning run logs must not lose a feed's place in its source.
+
 **Run time semantics**:
 Two clocks meet in the run metadata, and the rule for reconciling them lives in
 one module (`tools/observability/timestamps.py`). _Here_: an **instant** —

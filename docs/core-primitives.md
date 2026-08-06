@@ -898,6 +898,12 @@ metadata is stored under `<base_dir>/_runs/<label-stem>.log` and
 (`tools.observability.run_store`), the run-metadata counterpart of
 `tools.store`'s `StoreRegistry` — so the runner, the orchestrator and the
 operator CLI all read the paths from one place rather than each restating them.
+Those two are not the whole of a base directory: a third category, source
+**control state**, sits under `<base_dir>/_checkpoints/` — today the SharePoint
+`Modified` watermarks owned by `SharePointCheckpointStore`
+([adding-a-feed.md](adding-a-feed.md#sharepointcheckpointstorebase_dir--where-the-polling-got-to)).
+It is beside the run metadata rather than inside it because their lifecycles
+differ: pruning run logs must not lose a feed's place in its source.
 
 `run_pipeline` (`framework.run`) is the execution core `PipelineRunner.run`
 delegates to, and the path-addressed `run` command calls directly: given a

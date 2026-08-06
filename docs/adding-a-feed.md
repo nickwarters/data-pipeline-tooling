@@ -542,7 +542,9 @@ cannot express.
 
 The window is the **caller's**, always: `ModifiedWindow(start, end)` is passed
 in and never computed here. Where the previous window ended, how much overlap to
-re-read, and where that is persisted are a *checkpoint's* concerns; keeping them
+re-read, and where that is persisted are a
+[*checkpoint's*](#sharepointcheckpointstorebase_dir--where-the-polling-got-to)
+concerns; keeping them
 out means the Reader has no state and one read is reproducible from its
 constructor arguments alone. `start=None` is the first-load shape — every
 current item strictly before `end`.
@@ -639,6 +641,107 @@ feed built on this Reader therefore accumulates rows that may no longer be in
 SharePoint. Detecting deletions needs a different mechanism — a periodic
 snapshot (`SharePointReader`) reconciled against what has been landed, or a
 change-API feed — and is deliberately **not** this Reader's job.
+
+### `SharePointCheckpointStore(base_dir)` — where the polling got to
+
+The other half of the split above, in `tools.integrations.sharepoint_checkpoint`.
+The Reader is handed a window; this is what computes the next one and remembers
+where the last one ended.
+
+**"Checkpoint" here is not the pipeline sense.** A `Pipeline` checkpoint is a
+mid-graph `.write()` node landing an intermediate dataset for lineage. This one
+is **source control state**: how far a source has been polled.
+
+The window rule, in three lines:
+
+```text
+end   = server_now - safety_lag
+start = committed_watermark - overlap   # None when nothing is committed yet
+window = ModifiedWindow(start, end)     # None when end <= committed_watermark
+```
+
+`start=None` is the **first load**: no watermark has been committed, so the run
+fetches the full current list up to `end`.
+
+The **overlap** re-reads a little of what the previous window already covered,
+and that is safe because the observation metadata is immutable: the same item at
+the same version yields the same `source_observation_id`
+([the metadata table above](#sharepointmodifiedreadersite-list_name-columns-window)),
+so a re-read is recognised as the same observation rather than as a change. The
+**safety lag** holds `end` behind SharePoint's own clock, because an item written
+*while* a window is being read can be stamped inside that window and still be
+invisible to the read — without the lag those items are lost for good. Both are
+the caller's numbers; `server_now` is **SharePoint's** clock, not the box's, since
+the bounds are a predicate the list evaluates.
+
+An **empty window is routine**: when `server_now - safety_lag` has not yet passed
+the committed `watermark`, `window(...)` returns `None`. That is a run repeated too
+soon after the last commit — ordinary operation, so it is not an error and there
+is simply nothing to poll.
+
+**The commit is the last act of a successful run**, and nothing else advances the
+watermark: `commit(source, window_end=…, ingestion_batch_id=…, pipeline_run_id=…)`
+is called once the run's writes have landed. A run that fails part-way therefore
+re-polls the same window next time. An *equal* `window_end` is accepted (not
+advancing is not going backwards) and refreshes the provenance columns, so
+repeating an identical commit is a no-op in effect; an *earlier* one raises,
+because a watermark that moved backwards would quietly re-poll covered ground and
+hide that a run had lost its place. The `ingestion_batch_id` is opaque provenance
+handed in by the caller, not derived here.
+
+The state lives at **`<base>/_checkpoints/sharepoint.db`** — beside `_runs/`,
+not inside it. A base directory now holds three kinds of thing: the medallion
+**rows** (`tools.store`), the **run metadata** (`tools.observability.run_store`),
+and this **source control state**. They are separate because their lifecycles
+are: pruning run logs must not lose a feed's place, and re-landing silver must
+not either.
+
+A source is identified by the list's **GUID**, not its title — even though the
+Reader addresses lists by name. A title is a mutable display name, and keying a
+watermark on it would fork the checkpoint the moment somebody renames the list,
+with the new key looking like a first load of the whole list. The site part of
+the key has any embedded credentials removed (persisted control state is never
+where a credential survives) and a trailing `/` stripped, so `.../sites/X` and
+`.../sites/X/` are one source. The host folds to lower case, since DNS does not
+distinguish them; the path does not, because a site path's case is the tenant's
+business and two spellings may be two addresses.
+
+```python
+import datetime as dt
+from uuid import UUID
+
+from tools.integrations.sharepoint_checkpoint import (
+    SharePointCheckpointStore,
+    SharePointSource,
+)
+from tools.integrations.sharepoint_rest import SharePointModifiedReader
+
+checkpoints = SharePointCheckpointStore(base_dir)
+source = SharePointSource(
+    "https://sharepoint/sites/case-review",
+    UUID("1b6f2a3c-0000-4a1f-9c7e-5f2d8a4b1e01"),
+)
+
+window = checkpoints.window(
+    source,
+    server_now=sharepoint_client.server_time(),
+    overlap=dt.timedelta(minutes=5),
+    safety_lag=dt.timedelta(minutes=2),
+)
+if window is not None:  # None: nothing new is safe to poll
+    reader = SharePointModifiedReader(source.site, "Cases", COLUMNS, window)
+    ...  # land the rows, then — and only then:
+    checkpoints.commit(
+        source,
+        window_end=window.end,
+        ingestion_batch_id=batch_id,
+        pipeline_run_id=context.pipeline_run_id,
+    )
+```
+
+Committing is not automatic: no Reader, node, or runner advances the watermark
+for you. Deliberately — the store cannot know whether the rows it would be
+vouching for actually landed.
 
 ### `SharePointWriter(site, list_name, auth, strategy=Refresh())`
 
