@@ -18,7 +18,6 @@ import json
 import pandas as pd
 import pytest
 
-from framework.core import ValidationError
 from framework.io import AppendOnlyConflictError
 from framework.run import RunContext, RunLog
 from pipelines.sharepoint_cases.pipeline import (
@@ -52,6 +51,7 @@ from tools.integrations.sharepoint_checkpoint import (
 )
 from tools.integrations.sharepoint_rest import (
     ModifiedWindow,
+    SharePointFeedError,
     SharePointModifiedReader,
 )
 from tools.medallion import medallion
@@ -88,8 +88,8 @@ def item(
     risk_score: int = 42,
     owner_id: int = 17,
     owner_title: str = "A. Khan",
-    party_ids: list[int] | None = None,
-    party_titles: list[str] | None = None,
+    party_ids: object = None,
+    party_titles: object = None,
 ) -> dict[str, object]:
     """One list item in the shape the organisational client returns."""
     return {
@@ -177,14 +177,69 @@ def test_raw_reads_a_quiet_window_as_the_declared_shape():
     assert "Owner/Title" in writer.writes[0].to_pandas().columns
 
 
-def test_raw_gates_the_columns_it_stores():
+def test_a_populated_response_missing_an_expanded_column_is_refused():
+    # The projection has to select every stored column to build the row at all,
+    # so this is where a broken promise surfaces -- named, and before anything
+    # lands.
+    client = FakeListClient(items(item()).drop(columns=["Owner/Title"]))
+
+    with pytest.raises(SharePointFeedError, match="Owner/Title"):
+        raw_builder(observations(client), RecordingWriter()).run()
+
+
+def test_a_single_valued_multi_value_cell_is_stored_as_a_one_item_list():
+    # A client that flattens a one-element multi-value cell to the bare value
+    # means the same thing as the list; raw stores one representation either way.
+    client = FakeListClient(items(item(party_ids=17, party_titles="A. Khan")))
     writer = RecordingWriter()
-    reader = given_rows([{"CaseRef": "C000101"}])
 
-    with pytest.raises(ValidationError, match="missing required column.*Status"):
-        raw_builder(reader, writer).run()
+    raw_builder(observations(client), writer).run()
 
-    assert writer.writes == []
+    [row] = rows_of(writer)
+    assert (row["PartiesId"], row["Parties/Title"]) == ("[17]", '["A. Khan"]')
+
+
+def test_an_odata_results_envelope_is_stored_as_the_list_it_wraps():
+    client = FakeListClient(
+        items(
+            item(
+                party_ids={"results": [17, 23]},
+                party_titles={"results": ["A. Khan", "B. Okafor"]},
+            )
+        )
+    )
+    writer = RecordingWriter()
+
+    raw_builder(observations(client), writer).run()
+
+    [row] = rows_of(writer)
+    assert (row["PartiesId"], row["Parties/Title"]) == (
+        "[17,23]",
+        '["A. Khan","B. Okafor"]',
+    )
+
+
+def test_a_multi_value_cell_in_a_shape_this_feed_cannot_read_is_refused():
+    client = FakeListClient(items(item(party_ids={"unexpected": [17]})))
+
+    with pytest.raises(SharePointFeedError, match="item 101.*'PartiesId'"):
+        raw_builder(observations(client), RecordingWriter()).run()
+
+
+def test_the_bridge_reads_back_every_shape_raw_normalised():
+    # The point of normalising at encode time: whatever the client sent, the
+    # bridge decodes one representation.
+    client = FakeListClient(items(item(party_ids=17, party_titles="A. Khan")))
+    raw = RecordingWriter()
+    raw_builder(observations(client), raw).run()
+    writer = RecordingWriter()
+
+    party_builder(given_rows(rows_of(raw)), writer).run()
+
+    assert [
+        (row["party_user_id"], row["party_display_name"], row["party_position"])
+        for row in rows_of(writer)
+    ] == [(17, "A. Khan", 0)]
 
 
 # --- silver ----------------------------------------------------------------
@@ -260,7 +315,7 @@ def test_ids_and_titles_that_do_not_pair_positionally_are_refused():
         observations(FakeListClient(items(item(party_titles=["A. Khan"])))), raw
     ).run()
 
-    with pytest.raises(Exception, match="item 101.*2 value.*1"):
+    with pytest.raises(SharePointFeedError, match="item 101.*2 value.*1"):
         party_builder(given_rows(rows_of(raw)), RecordingWriter()).run()
 
 
@@ -388,6 +443,32 @@ def test_a_quiet_window_writes_cleanly_and_a_later_one_still_appends(tmp_path):
     assert (busy.raw_rows, busy.silver_rows, busy.party_rows) == (1, 1, 2)
     assert len(read_rows(med.raw, "case_observation")) == 1
     assert len(read_rows(med.silver, "case_version")) == 1
+    assert len(read_rows(med.silver, "case_party_version")) == 2
+
+
+def test_a_quiet_window_still_runs_and_records_all_three_hops(tmp_path):
+    # A quiet poll is not a different pipeline: an operator reading the run log
+    # sees the same steps against the same three tables, with zero rows.
+    log_path = tmp_path / "runs.log"
+    context = RunContext(
+        base_dir=tmp_path, pipeline=FEED_NAME, run_log=RunLog(log_path)
+    )
+
+    run(context, client=FakeListClient(pd.DataFrame()))
+
+    records = read_run_log(log_path)
+    assert {record["pipeline"] for record in records} == {
+        f"{FEED_NAME}:raw",
+        f"{FEED_NAME}:silver",
+        f"{FEED_NAME}:parties",
+    }
+    assert {row["name"] for record in records for row in record["data_locations"]} == {
+        LIST_NAME,
+        "case_observation",
+        "case_version",
+        "case_party_version",
+    }
+    assert {record["rows_out"] for record in records} == {0}
 
 
 def test_nothing_safe_to_poll_returns_none_and_writes_nothing(tmp_path):

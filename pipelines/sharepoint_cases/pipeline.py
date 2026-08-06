@@ -35,7 +35,7 @@ import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
+from typing import Protocol, Sequence
 from uuid import UUID
 
 import pandas as pd
@@ -59,7 +59,6 @@ from tools.integrations.sharepoint_checkpoint import (
 from tools.integrations.sharepoint_rest import (
     ModifiedWindow,
     SharePointFeedError,
-    SharePointListClient,
     SharePointModifiedReader,
 )
 from tools.medallion import medallion
@@ -145,6 +144,10 @@ SILVER_SOURCE_COLUMNS = (
     "source_version",
 )
 
+# The silver schema's integer columns, in source names. Named because a zero-row
+# batch has no rows to type them and ``SchemaCoercion`` does not reach ``int``.
+SILVER_INTEGER_COLUMNS = ("RiskScore", "OwnerId")
+
 # How far back each window reaches over the last one, and how far behind
 # SharePoint's clock its upper bound is held.
 OVERLAP = dt.timedelta(minutes=5)
@@ -184,30 +187,77 @@ def batch_id_for(source: SharePointSource, watermark: dt.datetime | None) -> str
     return f"{source.list_id}:{watermark.isoformat() if watermark else 'first-load'}"
 
 
-class EncodeMultiValueColumns:
-    """Render a multi-value cell as JSON text.
+def _encode_multi_value(frame: pd.DataFrame, columns: Sequence[str]) -> pd.DataFrame:
+    """Render each multi-value cell as compact JSON text.
 
     A list cell cannot be bound by ``sqlite3``, so raw stores the multi-value
     field as the compact JSON its own values spell out. ASCII-escaped and
     separator-fixed so the same cell encodes to the same bytes on every machine
     -- raw is compared whole by the append-only load, and a re-encoding that
     drifted would read as a changed row.
+
+    This is also the **one** place the source's several spellings of a
+    multi-value cell become one, so the bridge that decodes it can assume a JSON
+    array and needs no guesswork of its own.
     """
+    encoded = frame.copy()
+    item_ids = list(encoded["source_item_id"])
+    for column in columns:
+        encoded[column] = [
+            _as_json_text(value, column, item_ids[position])
+            for position, value in enumerate(encoded[column])
+        ]
+    return encoded
 
-    def __init__(self, columns: Sequence[str]) -> None:
-        self._columns = tuple(columns)
 
-    def __call__(self, dataset: Dataset) -> Dataset:
-        frame = dataset.to_pandas()
-        for column in self._columns:
-            frame[column] = [_as_json_text(value) for value in frame[column]]
-        return Dataset.from_pandas(frame)
+def _as_json_text(value: object, column: str, item_id: object) -> str:
+    try:
+        return json.dumps(
+            _multi_value_list(value, column, item_id),
+            ensure_ascii=True,
+            separators=(",", ":"),
+        )
+    except TypeError as exc:
+        raise SharePointFeedError(
+            f"SharePoint list {LIST_NAME!r}, item {item_id}: column {column!r} "
+            f"holds a value that cannot be stored as JSON ({exc})."
+        ) from None
 
 
-def _as_json_text(value: object) -> str:
+def _multi_value_list(value: object, column: str, item_id: object) -> list:
+    """One multi-value cell as the single list shape this feed stores.
+
+    A REST client hands a multi-value lookup back in more than one spelling: as
+    a plain list, as OData's verbose ``{"results": [...]}`` envelope, or -- when
+    the cell holds exactly one value -- flattened to the bare value. All three
+    say the same thing, so all three normalise here rather than each reader
+    downstream having to know the difference. Anything else is a shape this feed
+    has never been shown, and says so with the list, item and column named.
+    """
+    if isinstance(value, dict):
+        value = value.get("results", value)
     if isinstance(value, (list, tuple)):
-        return json.dumps(list(value), ensure_ascii=True, separators=(",", ":"))
-    return "[]" if value is None or bool(pd.isna(value)) else str(value)
+        return list(value)
+    if value is None or _is_missing(value):
+        return []
+    if pd.api.types.is_scalar(value):
+        # ``.item()`` unwraps a numpy scalar to the Python one ``json`` can
+        # encode; a column of flattened single values arrives typed, not object.
+        return [value.item() if hasattr(value, "item") else value]
+    raise SharePointFeedError(
+        f"SharePoint list {LIST_NAME!r}, item {item_id}: column {column!r} holds "
+        f"a {type(value).__name__}, which is not a multi-value cell this feed "
+        "can read (expected a list, an OData results envelope, or a single "
+        "value)."
+    )
+
+
+def _is_missing(value: object) -> bool:
+    """Whether pandas calls this value null; one it cannot judge is not null."""
+    try:
+        return bool(pd.isna(value))
+    except (TypeError, ValueError):
+        return False
 
 
 class StorableObservations:
@@ -228,34 +278,41 @@ class StorableObservations:
     ) -> None:
         self._inner = inner
         self._columns = list(columns)
-        self._encode = EncodeMultiValueColumns(multi_value_columns)
+        self._multi_value_columns = tuple(multi_value_columns)
 
     @property
     def data_locations(self) -> list[dict[str, str]]:
-        return getattr(self._inner, "data_locations", [])
+        return self._inner.data_locations
 
     def describe(self) -> str:
         return self._inner.describe()
 
     def read(self) -> Dataset:
         frame = self._inner.read().to_pandas()
-        # A quiet window comes back as the declared projection only: the columns
-        # the *client* adds by expanding a lookup were never asked for by name,
-        # so they cannot be there to select. A populated read missing one is a
-        # broken promise and says so, rather than manufacturing the very column
-        # the raw hop's gate is about to check.
         if frame.empty:
-            return self._encode(
-                Dataset.from_pandas(frame.reindex(columns=self._columns))
-            )
-        missing = [c for c in self._columns if c not in frame.columns]
-        if missing:
-            raise SharePointFeedError(
-                f"SharePoint list {LIST_NAME!r} returned items without "
-                f"{', '.join(missing)}: the observation raw stores needs every "
-                "projected and expanded column."
-            )
-        return self._encode(Dataset.from_pandas(frame.loc[:, self._columns]))
+            # A quiet window comes back as the *declared* projection: the columns
+            # the client adds by expanding a lookup were never asked for by name,
+            # so they cannot be there. Reindexing declares the shape raw stores
+            # rather than leaving the hop below to fail on an absence that means
+            # "nothing changed". The cast goes with it: reindex fills a column it
+            # had to invent with NaN and so types it float, and raw's columns are
+            # text.
+            frame = frame.reindex(columns=self._columns).astype("object")
+        else:
+            missing = [c for c in self._columns if c not in frame.columns]
+            if missing:
+                # Named here rather than left to the raw hop's column gate: the
+                # projection has to select these columns to build the row at all,
+                # so a populated read that lacks one cannot reach that gate.
+                raise SharePointFeedError(
+                    f"SharePoint list {LIST_NAME!r} returned items without "
+                    f"{', '.join(missing)}: the observation raw stores needs "
+                    "every projected and expanded column."
+                )
+            frame = frame.loc[:, self._columns]
+        return Dataset.from_pandas(
+            _encode_multi_value(frame, self._multi_value_columns)
+        )
 
 
 class ExplodeParties:
@@ -309,8 +366,31 @@ class ExplodeParties:
         )
 
 
+class CaseListClient(Protocol):
+    """What this feed needs of the organisational SharePoint client.
+
+    ``SharePointListClient`` declares the fetch alone, because there the window
+    is the caller's to supply. This feed *computes* the window, so it needs the
+    list server's own clock as well: the bounds are a predicate the list
+    evaluates, and a skewed local clock would silently widen or narrow them.
+
+    Stated here rather than upstream because it is this feed's requirement, not
+    the Reader's.
+    """
+
+    def fetch_items(
+        self,
+        list_name: str,
+        expand_fields: Sequence[str],
+        select_fields: Sequence[str],
+        filters: Sequence[str],
+    ) -> pd.DataFrame: ...
+
+    def server_time(self) -> dt.datetime: ...
+
+
 class LocalJsonListClient:
-    """A ``SharePointListClient`` replaying the bundled fixture pages offline.
+    """A ``CaseListClient`` replaying the bundled fixture pages offline.
 
     The organisational client owns paging, so the pages are concatenated before
     they are returned. ``filters`` are ignored, which makes every read of this
@@ -404,7 +484,7 @@ def run(
     context: RunContext,
     *,
     describe: bool = False,
-    client: SharePointListClient | None = None,
+    client: CaseListClient | None = None,
 ) -> SharePointIngestResult | None:
     """Poll the list once and refine what it returned source -> raw -> silver.
 
@@ -447,43 +527,34 @@ def run(
         print(raw_p.describe())
     batch = raw_p.run()
 
-    silver_rows = 0
-    party_rows = 0
     # Both hops below normalise the batch just fetched, never the whole raw
-    # history. A quiet window leaves nothing to normalise -- and an empty batch
-    # carries none of the dtypes the schema gates check, since only rows give a
-    # column its type -- so the two hops are skipped rather than asked to
-    # validate a shape that is not there yet.
-    if len(batch) > 0:
-        silver_p = silver_builder(
-            reader=DatasetReader(SelectColumns(SILVER_SOURCE_COLUMNS)(batch)),
-            writer=med.silver.writer(
-                "case_version", AppendOnly("source_observation_id")
-            ),
-            reject_writer=med.silver.quarantine_writer("case_version"),
-            run_log=context.run_log,
-        )
-        if describe:
-            print(silver_p.describe())
-        silver_rows = len(silver_p.run())
+    # history. The projection they read is applied here rather than as a step,
+    # so it shows up in neither plan nor run log -- the recipe owns the hop's
+    # shape, and reshaping its input is the caller's side of that bargain.
+    silver_p = silver_builder(
+        reader=DatasetReader(_silver_source(batch)),
+        writer=med.silver.writer("case_version", AppendOnly("source_observation_id")),
+        reject_writer=med.silver.quarantine_writer("case_version"),
+        run_log=context.run_log,
+    )
+    if describe:
+        print(silver_p.describe())
+    silver_rows = len(silver_p.run())
 
-        party_p = party_builder(
-            reader=DatasetReader(batch),
-            writer=med.silver.writer(
-                "case_party_version",
-                # Keyed on the position as well as the observation: the same
-                # person may legitimately appear twice in one cell, and keying
-                # on the person would read that as a contradiction.
-                AppendOnly(("source_observation_id", "party_position")),
-            ),
-            run_log=context.run_log,
-        )
-        if describe:
-            print(party_p.describe())
-        party_rows = len(party_p.run())
-
-    # The watermark is deliberately not committed here. Advancing it vouches for
-    # the rows having been published, and publication is the gold step's to do.
+    party_p = party_builder(
+        reader=DatasetReader(batch),
+        writer=med.silver.writer(
+            "case_party_version",
+            # Keyed on the position as well as the observation: the same person
+            # may legitimately appear twice in one cell, and keying on the
+            # person would read that as a contradiction.
+            AppendOnly(("source_observation_id", "party_position")),
+        ),
+        run_log=context.run_log,
+    )
+    if describe:
+        print(party_p.describe())
+    party_rows = len(party_p.run())
 
     # --- gold is yours to assemble ------------------------------------------
     # How these accumulated versions become gold is still open: a Case Type may
@@ -501,22 +572,41 @@ def run(
     )
 
 
-def _server_time(client: SharePointListClient | None) -> dt.datetime:
+def _silver_source(batch: Dataset) -> Dataset:
+    """The batch narrowed to what a Case row is made of, typed even when empty.
+
+    The multi-value columns are at the wrong grain for a Case row, so they are
+    dropped rather than renamed into a schema with nowhere to put them.
+
+    The cast is for the quiet window. ``SchemaCoercion`` repairs only the types a
+    storage round-trip loses -- dates and booleans -- and leaves ``int`` alone,
+    so a zero-row batch reaches the silver gate with its integer columns still
+    object-typed and no row to give them a type. Casting them here is what lets a
+    quiet poll run the same three hops, and emit the same run-log steps, as a
+    busy one. Only when empty: casting a populated batch would hide a genuine
+    dtype breach the gate exists to catch.
+    """
+    frame = SelectColumns(SILVER_SOURCE_COLUMNS)(batch).to_pandas()
+    if frame.empty:
+        frame = frame.astype(dict.fromkeys(SILVER_INTEGER_COLUMNS, "int64"))
+    return Dataset.from_pandas(frame)
+
+
+def _server_time(client: CaseListClient | None) -> dt.datetime:
     """SharePoint's own clock, never this box's.
 
     The window bounds a predicate the *list* evaluates, so a skewed local clock
     would silently widen or narrow it. There is no local fallback for that
     reason.
     """
-    server_time = getattr(client, "server_time", None)
-    if server_time is None:
+    if client is None:
         raise NotImplementedError(
             "No SharePoint client was supplied: pass client=<the organisational "
-            "client> (anything with fetch_items(...) and a server_time() "
-            "returning the list server's clock), or --sample to replay the "
-            "bundled fixture pages offline."
+            "client> (fetch_items(...) plus a server_time() returning the list "
+            "server's clock), or --sample to replay the bundled fixture pages "
+            "offline."
         )
-    return server_time()
+    return client.server_time()
 
 
 def main(argv: list[str]) -> int:

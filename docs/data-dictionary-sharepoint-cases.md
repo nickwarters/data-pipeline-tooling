@@ -71,7 +71,7 @@ the diagnosable, re-runnable copy of what the list returned.
 | `RiskScore` | `RiskScore` | number | No | — | The Case's risk score out of 100. | `42` | None | Range-checked at silver, not here. |
 | `OwnerId` | `OwnerId` | number | No | — | The owning user's SharePoint lookup id. | `17` | Internal | The identity; the title is not. |
 | `Owner/Title` | `Owner/Title` (expanded) | text | Yes | — | The owning user's display name. | `A. Khan` | PII | Added by `$expand`, not projected by name — absent from a quiet window's response. |
-| `PartiesId` | `PartiesId` | text (JSON) | No | — | The parties' lookup ids, as a JSON array. | `[17,23]` | Internal | Encoded to compact JSON so a list cell can be stored; `[]` when there are none. |
+| `PartiesId` | `PartiesId` | text (JSON) | No | — | The parties' lookup ids, as a JSON array. | `[17,23]` | Internal | Encoded to compact JSON so a list cell can be stored; `[]` when there are none. A client's list, OData `{"results": […]}` envelope and flattened single value all normalise to the array here. |
 | `Parties/Title` | `Parties/Title` (expanded) | text (JSON) | No | — | The parties' display names, as a JSON array. | `["A. Khan","B. Okafor"]` | PII | Pairs with `PartiesId` **by position**. |
 | `source_list_name` | *(stamped)* | text | No | — | The list the observation came from. | `Cases` | None | Stamped by the Reader. |
 | `source_item_id` | *(stamped, from `Id`)* | text | No | — | The list item's id. | `101` | Internal | Replaces `Id`, which is not stored. |

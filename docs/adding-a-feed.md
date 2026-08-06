@@ -764,7 +764,7 @@ vouching for actually landed.
 
 The two halves above wired into a real feed. It follows the ordinary scaffold
 shape — a `*_builder` per hop, composed from the shared recipes, driven by
-`run(context)` — with the four things an incremental SharePoint source adds.
+`run(context)` — with the five things an incremental SharePoint source adds.
 
 **1. The read is narrowed to what raw stores.** `StorableObservations` is a
 Reader decorator (the `tools.retry` shape: forward `data_locations`, delegate
@@ -775,24 +775,52 @@ the vocabulary every hop below reads — and so is `observed_at`, for the reason
 point 3. Note the split it has to make: an **empty** window comes back as the
 declared projection only, with none of the columns the *client* adds by expanding
 a lookup (`Owner/Title`), so an empty frame is reindexed onto the target columns
-while a populated one is selected strictly. Selecting strictly in both cases
-raises `KeyError` on the ordinary quiet poll; reindexing in both cases would
-manufacture the very column the raw hop's `ColumnValidator` is about to check.
+(and cast to object — `reindex` types a column it had to invent as float) while a
+populated one is selected strictly, naming any it lacks in a
+`SharePointFeedError`. Selecting strictly in both cases raises a bare `KeyError`
+on the ordinary quiet poll. Reindexing in both cases would instead invent a
+column a populated read genuinely failed to return, and nothing downstream would
+notice: the raw hop's `ColumnValidator` checks *presence*, which a reindex
+satisfies by construction. That is why the decorator names the absence itself and
+the recipe's gate is, in this wiring, the scaffold's standard node rather than
+this feed's real check.
 
-**2. Every hop is `AppendOnly`, keyed on the observation.** Raw and silver key on
+The same decorator is the one place a **multi-value** cell is normalised. A REST
+client spells one back three ways — a plain list, OData's verbose
+`{"results": [...]}` envelope, or the bare value when the cell holds exactly one
+— and all three mean the same thing, so all three become one JSON array before
+raw stores them (a list cell cannot be bound by `sqlite3` anyway). Normalising at
+the point of *encoding* is what lets the bridge that decodes it assume an array
+instead of re-deriving the client's habits; a shape the feed has not been shown
+raises a `SharePointFeedError` naming the list, item and column rather than
+escaping as a `JSONDecodeError` three steps later.
+
+**2. A quiet window runs the same hops as a busy one**, which costs one cast.
+`SchemaCoercion` repairs the types a storage round-trip loses — dates and
+booleans — and deliberately leaves `int`/`float`/`str` alone, so a zero-row batch
+reaches the silver schema gate with its integer columns still object-typed and no
+row to give them a type. The feed casts them where it already narrows the batch
+for silver (`_silver_source`), and only when the batch is empty: casting a
+populated one would hide a real dtype breach. The bridge needs no such help — it
+builds its columns with declared dtypes — and neither does raw. Skipping the hops
+on an empty batch would have been the smaller change and the wrong one: a quiet
+poll is not a different pipeline, and an operator reading the run log should see
+the same steps against the same three tables, with zero rows.
+
+**3. Every hop is `AppendOnly`, keyed on the observation.** Raw and silver key on
 `source_observation_id`, so re-reading the overlap is a no-op and a changed value
 under a key already accepted is an `AppendOnlyConflictError`. The multi-value
 bridge keys on `("source_observation_id", "party_position")`: the same person may
 legitimately appear twice in one cell, and keying on the person would read that
 as a contradiction.
 
-**3. No "when we saw it" column.** `AppendOnly` compares every non-key column of
+**4. No "when we saw it" column.** `AppendOnly` compares every non-key column of
 a re-presented row, so a per-read timestamp would make each overlapping re-read
 of an unchanged item look like a changed row. The same reasoning excludes the
 ingestion batch id and the pipeline run id. When we saw it lives in the run log
 and in the returned `ingestion_batch_id` instead.
 
-**4. The watermark is not committed.** `run` returns a `SharePointIngestResult`
+**5. The watermark is not committed.** `run` returns a `SharePointIngestResult`
 carrying the window, the batch id and the row counts, and leaves the checkpoint
 alone: advancing it vouches for the rows having been *published*, which is the
 gold step's to do.
