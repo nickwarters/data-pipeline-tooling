@@ -31,6 +31,7 @@ from pipelines.sharepoint_cases.pipeline import (
     SOURCE_COLUMNS,
     LocalJsonListClient,
     StorableObservations,
+    main,
     raw_builder,
     run,
     silver_builder,
@@ -470,6 +471,17 @@ def test_the_run_log_identifies_the_list_and_both_tables(tmp_path):
         "case_version",
     }
     assert not any("@" in location["namespace"] for location in located)
+
+
+def test_running_with_no_client_refuses_as_an_operator_failure(tmp_path, capsys):
+    # The documented default invocation without --sample. Forgetting the client
+    # is an operator's mistake, and the message names the fix, so it is worth
+    # more to print it than a stack trace.
+    exit_code = main(["prog", "--base-dir", str(tmp_path)])
+
+    assert exit_code == 1
+    assert "--sample" in capsys.readouterr().err
+    assert not (tmp_path / FEED_NAME).exists()
 
 
 def test_the_sample_client_replays_both_pages_as_one_first_load():

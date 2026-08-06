@@ -35,9 +35,9 @@ import datetime as dt
 import json
 import re
 import sys
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol, Sequence, get_type_hints
+from typing import Protocol, Sequence
 from uuid import UUID
 
 import pandas as pd
@@ -191,27 +191,10 @@ def snake_case(name: str) -> str:
 RENAME = {column: snake_case(column) for column in RAW_FEED_COLUMNS}
 
 
-def _integer_columns_in_source_names() -> tuple[str, ...]:
-    """The silver schema's ``int`` fields, named as the source names them.
-
-    Derived rather than listed: the cast this feeds has to stay in step with
-    ``CaseVersion`` *through* the rename, and a hand-kept parallel list is a
-    second place to forget. ``get_type_hints`` without ``include_extras``
-    resolves ``Annotated[int, ...]`` down to the ``int`` being asked about.
-    """
-    to_source = {canonical: source for source, canonical in RENAME.items()}
-    hints = get_type_hints(CaseVersion)
-    return tuple(
-        to_source.get(field.name, field.name)
-        for field in fields(CaseVersion)
-        if hints[field.name] is int
-    )
-
-
 # A zero-row batch has no rows to type these and ``SchemaCoercion`` repairs only
 # what a storage round-trip loses -- dates and booleans -- so it does not reach
-# ``int``.
-SILVER_INTEGER_COLUMNS = _integer_columns_in_source_names()
+# ``int``. In source names, because the cast lands before the rename.
+SILVER_INTEGER_COLUMNS = ("Id",)
 
 
 @dataclass(frozen=True)
@@ -296,6 +279,12 @@ class CaseListClient(SharePointListClient, Protocol):
 
     Stated here rather than upstream because it is this feed's requirement, not
     the Reader's -- and stated as an extension, so the fetch is declared once.
+
+    One obligation the frame carries that the fetch signature cannot express:
+    an expanded person must arrive **flattened** onto a ``AssignedReviewer/Name``
+    column, not nested as the ``{"AssignedReviewer": {"Name": ...}}`` object
+    SharePoint's OData JSON actually returns. A client wrapping the real API owns
+    that flattening; a column-shaped frame is what a tabular Reader can project.
     """
 
     def server_time(self) -> dt.datetime: ...
@@ -539,6 +528,11 @@ def main(argv: list[str]) -> int:
         result = runner.run("", FEED_NAME, base_dir=base_dir)
     except PipelineError as exc:
         print(format_failure(exc), file=sys.stderr)
+        return 1
+    except NotImplementedError as exc:
+        # Running with no client at all is an operator forgetting one, not a
+        # bug: the message says what to pass, so it is worth more than a stack.
+        print(str(exc), file=sys.stderr)
         return 1
 
     if result is None:
