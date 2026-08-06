@@ -43,7 +43,7 @@ class CaseVersion:
     status: Annotated[str, NonNull(), OneOf(*CASE_STATUSES)]
     opened_on: Annotated[date, NonNull()]
     target_close_on: date
-    risk_score: Annotated[int, Range(minimum=0, maximum=100)]
+    risk_score: Annotated[int, NonNull(), Range(minimum=0, maximum=100)]
     owner_user_id: Annotated[int, NonNull(), Range(minimum=1)]
     owner_display_name: str
 

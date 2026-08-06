@@ -33,9 +33,9 @@ import argparse
 import datetime as dt
 import json
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from pathlib import Path
-from typing import Protocol, Sequence
+from typing import Protocol, Sequence, get_type_hints
 from uuid import UUID
 
 import pandas as pd
@@ -59,6 +59,7 @@ from tools.integrations.sharepoint_checkpoint import (
 from tools.integrations.sharepoint_rest import (
     ModifiedWindow,
     SharePointFeedError,
+    SharePointListClient,
     SharePointModifiedReader,
 )
 from tools.medallion import medallion
@@ -144,9 +145,27 @@ SILVER_SOURCE_COLUMNS = (
     "source_version",
 )
 
-# The silver schema's integer columns, in source names. Named because a zero-row
-# batch has no rows to type them and ``SchemaCoercion`` does not reach ``int``.
-SILVER_INTEGER_COLUMNS = ("RiskScore", "OwnerId")
+
+def _integer_columns_in_source_names() -> tuple[str, ...]:
+    """The silver schema's ``int`` fields, named as the source names them.
+
+    Derived rather than listed: the cast this feeds has to stay in step with
+    ``CaseVersion`` *through* ``RENAME``, and a hand-kept parallel list is a
+    second place to forget. ``get_type_hints`` without ``include_extras``
+    resolves ``Annotated[int, ...]`` down to the ``int`` being asked about.
+    """
+    to_source = {canonical: source for source, canonical in RENAME.items()}
+    hints = get_type_hints(CaseVersion)
+    return tuple(
+        to_source.get(field.name, field.name)
+        for field in fields(CaseVersion)
+        if hints[field.name] is int
+    )
+
+
+# The silver schema's integer columns, in source names: a zero-row batch has no
+# rows to type them and ``SchemaCoercion`` does not reach ``int``.
+SILVER_INTEGER_COLUMNS = _integer_columns_in_source_names()
 
 # How far back each window reaches over the last one, and how far behind
 # SharePoint's clock its upper bound is held.
@@ -197,15 +216,18 @@ def _encode_multi_value(frame: pd.DataFrame, columns: Sequence[str]) -> pd.DataF
     drifted would read as a changed row.
 
     This is also the **one** place the source's several spellings of a
-    multi-value cell become one, so the bridge that decodes it can assume a JSON
-    array and needs no guesswork of its own.
+    multi-value cell become one, so the bridge that decodes it can assume what it
+    actually relies on: a JSON array of single values, which is enforced here
+    element by element rather than discovered three steps later.
     """
     encoded = frame.copy()
+    if not columns:
+        return encoded
     item_ids = list(encoded["source_item_id"])
     for column in columns:
         encoded[column] = [
-            _as_json_text(value, column, item_ids[position])
-            for position, value in enumerate(encoded[column])
+            _as_json_text(value, column, item_id)
+            for value, item_id in zip(encoded[column], item_ids)
         ]
     return encoded
 
@@ -216,8 +238,12 @@ def _as_json_text(value: object, column: str, item_id: object) -> str:
             _multi_value_list(value, column, item_id),
             ensure_ascii=True,
             separators=(",", ":"),
+            # NaN is not JSON. Python would happily emit the bare token ``NaN``,
+            # which no strict parser downstream accepts -- so a cell carrying one
+            # fails here rather than landing unreadable text in raw.
+            allow_nan=False,
         )
-    except TypeError as exc:
+    except (TypeError, ValueError) as exc:
         raise SharePointFeedError(
             f"SharePoint list {LIST_NAME!r}, item {item_id}: column {column!r} "
             f"holds a value that cannot be stored as JSON ({exc})."
@@ -231,25 +257,36 @@ def _multi_value_list(value: object, column: str, item_id: object) -> list:
     a plain list, as OData's verbose ``{"results": [...]}`` envelope, or -- when
     the cell holds exactly one value -- flattened to the bare value. All three
     say the same thing, so all three normalise here rather than each reader
-    downstream having to know the difference. Anything else is a shape this feed
-    has never been shown, and says so with the list, item and column named.
+    downstream having to know the difference.
     """
     if isinstance(value, dict):
         value = value.get("results", value)
     if isinstance(value, (list, tuple)):
-        return list(value)
+        return [_multi_value_element(v, column, item_id) for v in value]
     if value is None or _is_missing(value):
         return []
-    if pd.api.types.is_scalar(value):
-        # ``.item()`` unwraps a numpy scalar to the Python one ``json`` can
-        # encode; a column of flattened single values arrives typed, not object.
-        return [value.item() if hasattr(value, "item") else value]
-    raise SharePointFeedError(
-        f"SharePoint list {LIST_NAME!r}, item {item_id}: column {column!r} holds "
-        f"a {type(value).__name__}, which is not a multi-value cell this feed "
-        "can read (expected a list, an OData results envelope, or a single "
-        "value)."
-    )
+    return [_multi_value_element(value, column, item_id)]
+
+
+def _multi_value_element(value: object, column: str, item_id: object) -> object:
+    """One value out of a multi-value cell, as something JSON can hold.
+
+    The bridge reads these back as an id and a display name, one per party, so an
+    element has to be a *single value*. OData's verbose mode -- the same mode that
+    wraps a cell in a results envelope -- can also hand each element back as a
+    person **object**; that is a shape this feed has not been shown, and it is
+    refused here rather than stored as JSON the bridge then dies on.
+    """
+    if not pd.api.types.is_scalar(value):
+        raise SharePointFeedError(
+            f"SharePoint list {LIST_NAME!r}, item {item_id}: column {column!r} "
+            f"holds a {type(value).__name__} where a single value was expected. "
+            "This feed reads a multi-value cell as a list of ids or of titles, "
+            "not of objects."
+        )
+    # ``.item()`` unwraps a numpy scalar to the Python one ``json`` can encode.
+    # A typed column yields these whether the cell was flattened or a list.
+    return value.item() if hasattr(value, "item") else value
 
 
 def _is_missing(value: object) -> bool:
@@ -301,9 +338,6 @@ class StorableObservations:
         else:
             missing = [c for c in self._columns if c not in frame.columns]
             if missing:
-                # Named here rather than left to the raw hop's column gate: the
-                # projection has to select these columns to build the row at all,
-                # so a populated read that lacks one cannot reach that gate.
                 raise SharePointFeedError(
                     f"SharePoint list {LIST_NAME!r} returned items without "
                     f"{', '.join(missing)}: the observation raw stores needs "
@@ -366,7 +400,7 @@ class ExplodeParties:
         )
 
 
-class CaseListClient(Protocol):
+class CaseListClient(SharePointListClient, Protocol):
     """What this feed needs of the organisational SharePoint client.
 
     ``SharePointListClient`` declares the fetch alone, because there the window
@@ -375,16 +409,8 @@ class CaseListClient(Protocol):
     evaluates, and a skewed local clock would silently widen or narrow them.
 
     Stated here rather than upstream because it is this feed's requirement, not
-    the Reader's.
+    the Reader's — and stated as an extension, so the fetch is declared once.
     """
-
-    def fetch_items(
-        self,
-        list_name: str,
-        expand_fields: Sequence[str],
-        select_fields: Sequence[str],
-        filters: Sequence[str],
-    ) -> pd.DataFrame: ...
 
     def server_time(self) -> dt.datetime: ...
 
@@ -426,11 +452,16 @@ def raw_builder(
     The standard raw hop, composed from the shared recipe. To diverge, inline
     the recipe's body here and edit it: a recipe is composition, not
     inheritance, so there is nothing to fight.
+
+    Composed **without** the recipe's ``expected_columns`` gate, unlike a file
+    feed. This source is read through ``StorableObservations``, which projects
+    the response onto exactly the columns raw stores and names any it could not
+    find; a presence check downstream of that projection is satisfied by
+    construction and could never fire. One gate, and it is the live one.
     """
     return source_to_raw(
         reader,
         writer,
-        expected_columns=list(RAW_FEED_COLUMNS),
         name=f"{FEED_NAME}:raw",
         run_log=run_log,
     )

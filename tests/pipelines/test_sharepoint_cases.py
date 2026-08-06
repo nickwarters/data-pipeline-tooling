@@ -15,6 +15,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -226,10 +227,31 @@ def test_a_multi_value_cell_in_a_shape_this_feed_cannot_read_is_refused():
         raw_builder(observations(client), RecordingWriter()).run()
 
 
-def test_the_bridge_reads_back_every_shape_raw_normalised():
+@pytest.mark.parametrize(
+    "party_ids, party_titles, expected",
+    [
+        # Flattened to the bare value by a client that saw one element.
+        (17, "A. Khan", [(17, "A. Khan", 0)]),
+        # Numpy scalars, which a typed column yields either way.
+        (
+            [np.int64(17), np.int64(23)],
+            ["A. Khan", "B. Okafor"],
+            [(17, "A. Khan", 0), (23, "B. Okafor", 1)],
+        ),
+        # OData's verbose envelope.
+        (
+            {"results": [17, 23]},
+            {"results": ["A. Khan", "B. Okafor"]},
+            [(17, "A. Khan", 0), (23, "B. Okafor", 1)],
+        ),
+    ],
+)
+def test_the_bridge_reads_back_each_shape_raw_normalised(
+    party_ids, party_titles, expected
+):
     # The point of normalising at encode time: whatever the client sent, the
     # bridge decodes one representation.
-    client = FakeListClient(items(item(party_ids=17, party_titles="A. Khan")))
+    client = FakeListClient(items(item(party_ids=party_ids, party_titles=party_titles)))
     raw = RecordingWriter()
     raw_builder(observations(client), raw).run()
     writer = RecordingWriter()
@@ -239,7 +261,28 @@ def test_the_bridge_reads_back_every_shape_raw_normalised():
     assert [
         (row["party_user_id"], row["party_display_name"], row["party_position"])
         for row in rows_of(writer)
-    ] == [(17, "A. Khan", 0)]
+    ] == expected
+
+
+def test_a_person_object_inside_a_multi_value_cell_is_refused():
+    # OData verbose is the mode that wraps a cell in a results envelope, and the
+    # same mode can spell each element as an object. Supporting the envelope but
+    # not its contents would land JSON the bridge dies on.
+    client = FakeListClient(
+        items(item(party_ids={"results": [{"Id": 17, "Title": "A. Khan"}]}))
+    )
+
+    with pytest.raises(SharePointFeedError, match="item 101.*'PartiesId'.*single"):
+        raw_builder(observations(client), RecordingWriter()).run()
+
+
+def test_a_nan_inside_a_multi_value_cell_is_refused():
+    # ``json.dumps`` would emit the bare token NaN, which no strict parser
+    # accepts -- the one shape that could otherwise land unreadable in raw.
+    client = FakeListClient(items(item(party_ids=[17, float("nan")])))
+
+    with pytest.raises(SharePointFeedError, match="cannot be stored as JSON"):
+        raw_builder(observations(client), RecordingWriter()).run()
 
 
 # --- silver ----------------------------------------------------------------
@@ -342,11 +385,13 @@ def test_a_person_named_twice_in_one_cell_is_two_bridge_rows(tmp_path):
 def test_all_three_hops_plan_exactly_the_steps_they_always_have():
     reader, writer, rejects = given_rows([]), RecordingWriter(), RecordingWriter()
 
+    # No column gate on the raw hop, unlike a file feed: the Reader decorator
+    # projects onto exactly the stored columns, so a presence check below it
+    # could never fire.
     assert raw_builder(reader, writer).describe().splitlines() == [
         "Pipeline: sharepoint_cases:raw",
         "  [Read] read",
-        "  [Validate] columns (depends on: read)",
-        "  [Write] write (depends on: columns)",
+        "  [Write] write (depends on: read)",
     ]
     assert silver_builder(reader, writer, rejects).describe().splitlines() == [
         "Pipeline: sharepoint_cases:silver",
@@ -448,7 +493,7 @@ def test_a_quiet_window_writes_cleanly_and_a_later_one_still_appends(tmp_path):
 
 def test_a_quiet_window_still_runs_and_records_all_three_hops(tmp_path):
     # A quiet poll is not a different pipeline: an operator reading the run log
-    # sees the same steps against the same three tables, with zero rows.
+    # still sees all three hops, against all three tables, with zero rows.
     log_path = tmp_path / "runs.log"
     context = RunContext(
         base_dir=tmp_path, pipeline=FEED_NAME, run_log=RunLog(log_path)

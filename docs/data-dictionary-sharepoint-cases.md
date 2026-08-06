@@ -77,7 +77,7 @@ the diagnosable, re-runnable copy of what the list returned.
 | `source_item_id` | *(stamped, from `Id`)* | text | No | — | The list item's id. | `101` | Internal | Replaces `Id`, which is not stored. |
 | `source_modified_at` | *(stamped, from `Modified`)* | text | No | — | The item's `Modified`, in UTC. | `2026-08-05T08:10:00+00:00` | None | Replaces `Modified`, which is not stored. |
 | `source_version` | *(stamped, from `odata.etag`)* | text | No | — | The version observed. | `3` | None | Falls back to a digest of the item's projected values where the list supplies no stamp. |
-| `source_observation_id` | *(stamped)* | text | No | — | The identity of "this item, at this version, in this list" — the append-only key. | *(64-char sha256)* | None | Replaces `odata.etag`, which is not stored. |
+| `source_observation_id` | *(stamped)* | text | No | — | The identity of "this item, at this version, in this list" — the append-only key. | *(64-char sha256)* | None | A sha256 over those three inputs; derived, so it replaces no source column. |
 
 ### Part C — Row checks
 
@@ -129,7 +129,7 @@ record: a later `Modified` on the same item is a **new row**, never an update.
 | `status` | `Status` | `str` | No | `OneOf(Open, With Adviser, Awaiting Evidence, Closed, Void)` | The Case's lifecycle state at this version. | `Open` | None | A new source value quarantines the row rather than reaching a report. |
 | `opened_on` | `OpenedOn` | `date` | No | — | When the Case was opened. | `2026-07-01` | None | |
 | `target_close_on` | `TargetCloseOn` | `date` | Yes | — | The target close date. | `2026-08-01` | None | Null is meaningful (no target set). |
-| `risk_score` | `RiskScore` | `int` | No | `Range(0, 100)` | The Case's risk score. | `42` | None | The usual quarantine trigger. Non-null in practice: a nullable int round-trips as a float and fails the dtype gate. |
+| `risk_score` | `RiskScore` | `int` | No | `NonNull`, `Range(0, 100)` | The Case's risk score. | `42` | None | The usual quarantine trigger. Non-null is also forced by the representation: a nullable int round-trips as a float and fails the dtype gate. |
 | `owner_user_id` | `OwnerId` | `int` | No | `Range(min 1)` | The owning user — **the identity**. | `17` | Internal | A lookup id, not a name; joins to the people reference data. |
 | `owner_display_name` | `Owner/Title` | `str` | Yes | — | The owning user's display name. | `A. Khan` | PII | Display only. Never identity: a title is a mutable display name. |
 

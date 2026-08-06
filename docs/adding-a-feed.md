@@ -772,7 +772,7 @@ Reader decorator (the `tools.retry` shape: forward `data_locations`, delegate
 stamped metadata. `Id` / `Modified` / `odata.etag` are dropped — the stamped
 `source_item_id` / `source_modified_at` / `source_version` say the same thing in
 the vocabulary every hop below reads — and so is `observed_at`, for the reason in
-point 3. Note the split it has to make: an **empty** window comes back as the
+point 4. Note the split it has to make: an **empty** window comes back as the
 declared projection only, with none of the columns the *client* adds by expanding
 a lookup (`Owner/Title`), so an empty frame is reindexed onto the target columns
 (and cast to object — `reindex` types a column it had to invent as float) while a
