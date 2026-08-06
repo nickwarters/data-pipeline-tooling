@@ -706,6 +706,23 @@ where a credential survives) and a trailing `/` stripped, so `.../sites/X` and
 distinguish them; the path does not, because a site path's case is the tenant's
 business and two spellings may be two addresses.
 
+#### Finding a list's GUID
+
+A one-off lookup, done once when the feed is written. Either:
+
+- **From the browser.** Open the list, then the gear menu → **List settings**.
+  The address ends `...&List=%7B1B6F2A3C-0000-4A1F-9C7E-5F2D8A4B1E01%7D`;
+  `%7B` and `%7D` are the encoded braces, so the GUID is what sits between them.
+- **From the REST API**, if the organisational client is already to hand:
+  `GET <site>/_api/web/lists/getbytitle('Cases')/id`. Send
+  `Accept: application/json;odata=nometadata` and the GUID is the `value`;
+  without it the response is XML and the GUID is the `<d:Id>` element. A title
+  containing an apostrophe needs it doubled (`getbytitle('O''Brien')`).
+
+Record it as a constant beside the list title in the feed's module. The pair
+is the point: the title is what the Reader asks for and may change, the GUID is
+what the checkpoint is keyed on and does not.
+
 ```python
 import datetime as dt
 from uuid import UUID
