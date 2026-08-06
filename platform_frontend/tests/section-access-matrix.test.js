@@ -7,6 +7,7 @@ import {
   makeCaseWithRemediation,
   openAppeal,
   assertGrid,
+  assertMatrixGrid,
   SECTIONS,
 } from './helpers/section-access.js';
 
@@ -236,22 +237,6 @@ test('matrix — Completed Case, journeyOwner raiser, no Appeal raised', () => {
         responsibleParty: 'read-only',
         responsiblePartyManager: 'read-only',
       },
-      // The Journey Owner is the configured raiser → edit on Appeal Request.
-      appealRequest: {
-        assignedReviewer: 'hidden',
-        otherReviewer: 'hidden',
-        responsibleParty: 'hidden',
-        responsiblePartyManager: 'hidden',
-        caseTypeOwner: 'hidden',
-        journeyOwner: 'edit',
-        controls: 'hidden',
-        none: 'hidden',
-      },
-      // No Appeal raised → Appeal Review has nothing to show, not even to
-      // Controls.
-      appealReview: {
-        controls: 'hidden',
-      },
       // Amend Outcome is Controls-only: edit on a Completed Case, hidden for
       // every other role (observers read the Current Outcome in the Summary,
       // not this tab).
@@ -269,6 +254,33 @@ test('matrix — Completed Case, journeyOwner raiser, no Appeal raised', () => {
     c,
     cfg
   );
+
+  // The Appeal rows are asserted at the matrix, not through `evaluateAccess`:
+  // appeals are switched off in this build, so `evaluateAccess` answers `hidden`
+  // for both Sections whatever the row says. This is the policy they resume
+  // under.
+  assertMatrixGrid(
+    {
+      // The Journey Owner is the configured raiser → edit on Appeal Request.
+      appealRequest: {
+        assignedReviewer: 'hidden',
+        otherReviewer: 'hidden',
+        responsibleParty: 'hidden',
+        responsiblePartyManager: 'hidden',
+        caseTypeOwner: 'hidden',
+        journeyOwner: 'edit',
+        controls: 'hidden',
+        none: 'hidden',
+      },
+      // No Appeal raised → Appeal Review has nothing to show, not even to
+      // Controls.
+      appealReview: {
+        controls: 'hidden',
+      },
+    },
+    c,
+    cfg
+  );
 });
 
 test('matrix — Completed Case, responsiblePartyManager raiser, open Appeal', () => {
@@ -276,7 +288,9 @@ test('matrix — Completed Case, responsiblePartyManager raiser, open Appeal', (
     appeal: { raisedBy: 'responsiblePartyManager' },
   });
   const c = makeCase({ status: 'Completed', appeals: [openAppeal()] });
-  assertGrid(
+  // Matrix policy, for the reason given above: with the switch off, both Appeal
+  // Sections are `hidden` to every role through `evaluateAccess`.
+  assertMatrixGrid(
     {
       // The RP Manager is the configured raiser → edit on Appeal Request.
       appealRequest: {

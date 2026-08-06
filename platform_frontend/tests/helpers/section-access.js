@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 
 import {
   evaluateAccess as evaluateAccessWithCatalogue,
+  MATRIX,
   remediationAudience,
   resolveRoles,
   showInSummary,
@@ -160,6 +161,55 @@ export function assertGrid(grid, caseRow, config) {
         evaluateAccess(section, [role], caseRow, config),
         row[role],
         `${section} × ${role}`
+      );
+    }
+  }
+}
+
+/**
+ * The access policy one `MATRIX` cell states, read without going through
+ * `evaluateAccess`.
+ *
+ * This exists for the Appeal Sections and nothing else. Appeals are switched
+ * off in this build, so `evaluateAccess` answers `hidden` for both of them
+ * ahead of the matrix — which is the behaviour the app must have, and is
+ * asserted as such in `appeals-feature-switch.test.js`. But the rows themselves
+ * are the policy Appeals resume under, and a policy nothing exercises is a
+ * policy that rots: the raiser default, the Completed-only gate, the
+ * no-Appeal-yet and resolved-Appeal modes would all go untested for as long as
+ * the switch stands, and be rediscovered by whoever removes it.
+ *
+ * So the Appeal cells are tested here at the matrix, and the switch is tested
+ * at `evaluateAccess`. When the switch goes, these callers can move back to
+ * `assertGrid`/`evaluateAccess` unchanged in expectation.
+ *
+ * @param {Section} section
+ * @param {Role} role
+ * @param {CaseRow} caseRow
+ * @param {CaseTypeConfig} config
+ * @returns {Mode}
+ */
+export function matrixMode(section, role, caseRow, config) {
+  const cell = MATRIX[section][role];
+  return typeof cell === 'function' ? cell(caseRow, config, CATALOGUE) : cell;
+}
+
+/**
+ * `assertGrid`, but reading the `MATRIX` rows directly — see `matrixMode`.
+ *
+ * @param {Partial<Record<Section, Partial<Record<Role, Mode>>>>} grid
+ * @param {CaseRow} caseRow
+ * @param {CaseTypeConfig} config
+ */
+export function assertMatrixGrid(grid, caseRow, config) {
+  for (const section of /** @type {Section[]} */ (Object.keys(grid))) {
+    const row = grid[section];
+    if (!row) continue;
+    for (const role of /** @type {Role[]} */ (Object.keys(row))) {
+      assert.equal(
+        matrixMode(section, role, caseRow, config),
+        row[role],
+        `${section} × ${role} (matrix policy)`
       );
     }
   }

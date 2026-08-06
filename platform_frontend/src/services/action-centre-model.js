@@ -44,6 +44,8 @@
  * }} Reason
  */
 
+import { APPEALS_ENABLED } from '../config/features.js';
+
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /**
@@ -150,7 +152,12 @@ export const ACTION_CENTRE_REASONS = [
     defaultSlaDays: 5,
     reviewerScoped: false,
     tailOnly: false,
-    requires: (c) => c.isControls,
+    // Appeals are switched off in this build: nothing sets the flag this group
+    // queries, so it would be an empty group on every Controls worklist.
+    requires: (c) => {
+      if (!APPEALS_ENABLED) return false;
+      return c.isControls;
+    },
     waitingLabel: (days) => `raised ${dayCount(days)} ago`,
     subLine: assigneeSubLine,
   },

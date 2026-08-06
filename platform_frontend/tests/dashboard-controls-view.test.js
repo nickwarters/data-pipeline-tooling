@@ -125,6 +125,47 @@ test('Controls appeal descriptors render through the generic table and keep navi
   assert.ok(/** @type {any} */ (open)._listeners.click.length === 1);
 });
 
+test('Controls appeals: Reference and Case Type sort for real — click, report, sorted render', () => {
+  // Held here rather than through `dashboardView`: appeals are switched off, so
+  // the page composes no Appeals panel. This drives the panel view directly, so
+  // it says the same thing about sorting without depending on the switch.
+  const cases = [
+    { ...row('Zed case', '2026-01-01T00:00:00Z'), caseType: 'sales' },
+    { ...row('Alpha case', '2026-01-01T00:00:00Z'), caseType: 'banking' },
+  ];
+  /** @param {any} view */
+  const references = (view) =>
+    [...(view.querySelector('tbody')?.querySelectorAll('tr') ?? [])].map(
+      (/** @type {any} */ tableRow) =>
+        tableRow.querySelectorAll('td')[0].textContent
+    );
+
+  for (const [column, key] of [
+    ['Reference', 'reference'],
+    ['Case Type', 'caseType'],
+  ]) {
+    /** @type {string[]} */
+    const sorts = [];
+    fireEvent(
+      getByRole(
+        controlsAppealsView(cases, { key: 'raised', dir: 'asc' }, (sortKey) =>
+          sorts.push(sortKey)
+        ),
+        'button',
+        { name: /** @type {string} */ (column) }
+      ),
+      'click'
+    );
+    assert.deepEqual(sorts, [key]);
+
+    // The reported sort, applied: both columns order Alpha before Zed ascending.
+    assert.deepEqual(
+      references(controlsAppealsView(cases, { key, dir: 'asc' }, () => {})),
+      ['Case Alpha case', 'Case Zed case']
+    );
+  }
+});
+
 test('Controls appeal descriptors degrade gracefully for resolved and incomplete appeal data', async () => {
   const resolved = {
     ...row('resolved', '2026-01-01T00:00:00Z'),

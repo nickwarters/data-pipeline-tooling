@@ -14,6 +14,7 @@ import {
   completionPatch,
 } from '../src/pages/cora-case-review/completion-actions.js';
 import { openAppealOf } from '../src/evaluators/appeal-state.js';
+import { MATRIX } from '../src/services/section-access.js';
 import { postConversationMessage } from '../src/pages/cora-case-review/conversation-view.js';
 import { createAppealEffects } from '../src/pages/cora-case-review/appeal-effects.js';
 import {
@@ -435,10 +436,52 @@ export function createInMemoryFlowRunner(state, opts = {}) {
     caseRow = { ...caseRow, conversation: messages };
   }
 
+  /**
+   * The access mode one of the two Appeal Sections grants this actor, read from
+   * the `MATRIX` row rather than from `loader.access`.
+   *
+   * Appeals are switched off in this build, so `evaluateAccess` — which is what
+   * fills `loader.access` — answers `hidden` for both Sections regardless of
+   * role or Case state. That is the right answer for the app and the wrong one
+   * for this harness: the appeal journeys below exist to prove the Appeal
+   * domain code still works end to end, which is the whole premise of leaving
+   * it in the tree. Reading the row keeps them driving the same guard the app
+   * will re-impose when the switch is deleted.
+   *
+   * Every other Section here still goes through `loader.access`.
+   *
+   * @param {any} loader
+   * @param {'appealRequest' | 'appealReview'} section
+   * @returns {import('../src/services/section-access.js').Mode}
+   */
+  function appealPolicyMode(loader, section) {
+    const roles =
+      /** @type {import('../src/services/section-access.js').Role[]} */ (
+        loader.machine?.roles ?? []
+      );
+    /** @type {Record<import('../src/services/section-access.js').Mode, number>} */
+    const rank = { edit: 3, 'read-only': 1, hidden: 0 };
+    /** @type {import('../src/services/section-access.js').Mode} */
+    let best = 'hidden';
+    for (const role of roles) {
+      const cell = MATRIX[section][role];
+      const mode =
+        typeof cell === 'function'
+          ? cell(
+              /** @type {any} */ (caseRow),
+              /** @type {any} */ (loader.config),
+              []
+            )
+          : cell;
+      if (rank[mode] > rank[best]) best = mode;
+    }
+    return best;
+  }
+
   /** @param {Extract<FlowAction, { type: 'raiseAppeal' }>} action */
   async function raiseCurrentAppeal(action) {
     const loader = requirePage(action);
-    if (loader.access.appealRequest !== 'edit') {
+    if (appealPolicyMode(loader, 'appealRequest') !== 'edit') {
       throw new Error('Current actor cannot raise an Appeal.');
     }
     if (!caseRow) throw new Error('Cannot raise before the Case has loaded.');
@@ -455,7 +498,7 @@ export function createInMemoryFlowRunner(state, opts = {}) {
   /** @param {Extract<FlowAction, { type: 'resolveAppeal' }>} action */
   async function resolveCurrentAppeal(action) {
     const loader = requirePage(action);
-    if (loader.access.appealReview !== 'edit') {
+    if (appealPolicyMode(loader, 'appealReview') !== 'edit') {
       throw new Error('Current actor cannot resolve an Appeal.');
     }
     const appeal = openAppealOf(caseRow);

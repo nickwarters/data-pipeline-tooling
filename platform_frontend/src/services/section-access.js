@@ -17,6 +17,7 @@
 
 import { hasTrackableRemediation } from '../evaluators/remediation-status.js';
 import { openAppealOf } from '../evaluators/appeal-state.js';
+import { APPEALS_ENABLED } from '../config/features.js';
 import { CASE_STATUS } from '../lib/case-statuses.js';
 import {
   sectionIds,
@@ -582,6 +583,21 @@ export function evaluateAccess(
   caseTypeConfig,
   catalogue = []
 ) {
+  // Appeals are switched off in this build, so neither Appeal tab is offered to
+  // any role on any Case. This sits ahead of the matrix rather than inside the
+  // two rows so the rows keep stating the access policy they will resume when
+  // the switch is deleted. Amend Outcome is untouched: Controls amends a
+  // reportable Outcome whether or not an Appeal prompted it.
+  //
+  // The two ids are tested one per line rather than joined with `||` on
+  // purpose. The "Section id union is stated in exactly one place" guard reads
+  // this file as text, looking for a quoted Section id followed by a pipe —
+  // how a hand-written union would start. Keeping the ids apart keeps that
+  // proxy honest rather than teaching it an exception.
+  if (!APPEALS_ENABLED) {
+    if (section === 'appealRequest') return 'hidden';
+    if (section === 'appealReview') return 'hidden';
+  }
   if (caseTypeConfig.sections && !(section in caseTypeConfig.sections)) {
     return 'hidden';
   }

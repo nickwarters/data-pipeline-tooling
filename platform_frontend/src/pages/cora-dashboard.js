@@ -1,5 +1,6 @@
 // @ts-check
 import { ignoreAbortError } from '../lib/abort.js';
+import { APPEALS_ENABLED } from '../config/features.js';
 import { withAbortSignal } from '../services/abortable-client.js';
 import { h } from '../lib/html.js';
 import { patchRoute } from '../core/route-state.js';
@@ -655,7 +656,10 @@ export function createRouteSlice(
               tools.dispatch({ type: 'kpis/loaded', lanes });
           })
           .catch(ignoreAbortError);
-        if (capabilities.isControls) {
+        // Appeals are switched off in this build, so the panel this feeds is
+        // never rendered — skip the fan-out rather than spending a request per
+        // Case source on a result nothing reads.
+        if (APPEALS_ENABLED && capabilities.isControls) {
           void loadAppeals(client, tools.context.caseSources)
             .then((cases) => {
               if (tools.isActive())

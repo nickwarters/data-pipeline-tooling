@@ -338,57 +338,27 @@ test('loadKpiModel: reviewer lane sends an assignedReviewer + In-progress filter
 
 // ===== Controls lane =====
 
-test('loadKpiModel: controls lane counts Completed cases with an open appeal via the indexed flag', async () => {
-  const rows = [
-    caseRow({
-      id: 'ap1',
-      status: 'Completed',
-      caseType: 'complaints',
-      hasOpenAppeal: true,
-    }),
-    caseRow({
-      id: 'ap2',
-      status: 'Completed',
-      caseType: 'conduct',
-      hasOpenAppeal: true,
-    }),
-    // resolved appeal: the indexed flag is cleared, so it is not open work
-    caseRow({ id: 'resolved', status: 'Completed', hasOpenAppeal: false }),
-    caseRow({ id: 'none', status: 'Completed' }),
-  ];
-  const lanes = await loadKpiModel({
-    client: /** @type {any} */ (
-      makeClient((f, opts) =>
-        rows.filter((r) => `Cases-${r.caseType}` === opts.listName)
-      )
-    ),
-    currentUserId: 'me',
-    capabilities: defaultCapabilities({ isControls: true }),
-    allCaseSources: [source('complaints'), source('conduct')],
-    now: NOW,
-  });
-  const controls = lane(lanes, 'controls');
-  assert.ok(controls);
-  assert.equal(controls.scopeLabel, 'all case types');
-  const appeals = tile(controls, 'appeals');
-  // 1 per list, summed across both source lists
-  assert.equal(appeals.count, 2);
-  assert.equal(appeals.defaultExpanded, false);
-  // count-only lane: no rows to split, so no breakdown
-  assert.equal(appeals.breakdown, null);
-  assert.equal(controls.totalItems, 2);
-});
-
-test('loadKpiModel: controls lane derives its count via countCases({ hasOpenAppeal: true }) per source list, summed, and never lists', async () => {
+// Appeals are switched off in this build. The lane's only tile counts open
+// Appeals, which no transition can now raise, so the lane is omitted rather
+// than rendered as a permanent zero — and, because it is the lane that would
+// have issued them, no `countCases` request goes out either.
+//
+// Two tests were displaced to get here: one asserting the tile's count, sum
+// across source lists, `defaultExpanded: false` and null breakdown, and one
+// asserting the lane leads with `countCases({ hasOpenAppeal: true })` per list
+// and never falls back to listing. Both must come back when the switch goes.
+test('loadKpiModel: no controls lane, and no counting, while appeals are off', async () => {
   /** @type {any[]} */
   const countCalls = [];
-  // No `listCases` on the client: a full-Completed fetch would throw here, so
-  // this proves the lane leads with `countCases` alone.
   const client = {
     /** @param {any} f @param {any} opts */
     async countCases(f, opts) {
       countCalls.push([f, opts]);
       return 3;
+    },
+    /** @param {any} _f @param {any} _opts */
+    async listCases(_f, _opts) {
+      return [];
     },
   };
   const lanes = await loadKpiModel({
@@ -398,12 +368,11 @@ test('loadKpiModel: controls lane derives its count via countCases({ hasOpenAppe
     allCaseSources: [source('complaints'), source('conduct')],
     now: NOW,
   });
-  assert.deepEqual(countCalls, [
-    [{ hasOpenAppeal: true }, { listName: 'Cases-complaints' }],
-    [{ hasOpenAppeal: true }, { listName: 'Cases-conduct' }],
-  ]);
-  // summed across both source lists
-  assert.equal(tile(lane(lanes, 'controls'), 'appeals').count, 6);
+  assert.deepEqual(
+    lanes.map((l) => l.role),
+    []
+  );
+  assert.deepEqual(countCalls, []);
 });
 
 // ===== Owner lane =====
@@ -595,13 +564,12 @@ test('loadKpiModel: first held lane is primary and open; secondary owner lane fo
   });
 
   const rev = lane(lanes, 'reviewer');
-  const controls = lane(lanes, 'controls');
   const owner = lane(lanes, 'owner');
 
   assert.equal(rev.isPrimary, true);
   assert.equal(rev.defaultOpen, true);
-  assert.equal(controls.isPrimary, false);
-  assert.equal(controls.defaultOpen, true);
+  // The Controls lane sat between these two while appeals were on, secondary
+  // and open; restore its two assertions when the switch goes.
   assert.equal(owner.isPrimary, false);
   assert.equal(owner.defaultOpen, false); // secondary owner lane starts folded
 });
