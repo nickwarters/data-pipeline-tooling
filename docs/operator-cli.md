@@ -31,6 +31,10 @@ fragments out:
 | `<base>/_registry/runs.db` | the queryable run registry those logs are ingested into |
 | `<base>/_orchestration/runs.db` | the scheduled-work decision log |
 
+A base directory holds one further category the CLI does not read: source
+**control state** under `<base>/_checkpoints/`
+([adding-a-feed.md](adding-a-feed.md#sharepointcheckpointstorebase_dir--where-the-polling-got-to)).
+
 `status` / `runs` / `log` read from there. `orchestrate`
 also writes `<base>/_orchestration/runs.db`, a separate SQLite decision log for
 due, skipped, succeeded, failed, and blocked scheduled items. Each decision
