@@ -1,66 +1,104 @@
-"""Declared silver schemas for the ``sharepoint_cases`` feed.
+"""Declared silver schema for the ``sharepoint_cases`` feed.
 
-Two tables, two grains. :class:`CaseVersion` is one row per *observation of a
-Case* — the SharePoint item as it stood at one version — and :class:`CasePartyVersion`
-is the bridge for the list's one multi-value person column, at one row per
-observation × party.
+One row per observation of a Case: the ``Cases-Complaints`` list item as it stood
+at one version, with the source's column names mechanically snake_cased and the
+columns typed. Nothing is derived and nothing is reshaped -- this hop is the
+rename and the type contract, and that is all it is meant to be.
 
-Both carry the observation's provenance, because provenance has to survive every
-hop: a silver row that cannot say which list item and which version it came from
-cannot be traced back to the source that produced it. Identity is always the
-lookup **id**, never the display title — a title is a mutable display name.
+The rules are deliberately thin. Only three things about this list are knowable
+enough to fail a run over: an observation must say where it came from, a Case
+must carry the id the list keys it on, and ``Status`` is a Choice column with a
+closed vocabulary. Everything else is typed and left alone: ``Title`` is the
+human Case Reference and carries no format anyone has ever enforced, and the
+outcome/void/justification columns are free text whose constraints live in the
+review application, not here.
 
-What is deliberately *not* here: when we saw the item. An append-only target
+What is deliberately *not* here: when we saw the row. An append-only target
 compares every non-key column, so a per-read stamp would make each overlapping
 re-read look like a changed row. Observation time lives in the run log and the
-ingestion batch id instead — see
-[`docs/data-dictionary-sharepoint-cases.md`](../../docs/data-dictionary-sharepoint-cases.md).
+ingestion batch id instead.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import datetime
 from typing import Annotated
 
-from framework.core import Length, NonNull, OneOf, Pattern, Range
+from framework.core import NonNull, OneOf
 
-# The Case lifecycle states the list offers. A sixth would be a source change,
-# and quarantine is where it should surface rather than silently in a report.
-CASE_STATUSES = ("Open", "With Adviser", "Awaiting Evidence", "Closed", "Void")
+# The Case lifecycle states, exactly as the review application persists them --
+# note the hyphen in "In-progress" and that "Actions In Progress" carries none.
+# A fifth value means the list's Choice column changed under us, and quarantine
+# is where that should surface rather than silently in a report.
+CASE_STATUSES = ("In-progress", "Actions In Progress", "Completed", "Void")
 
 
 @dataclass
 class CaseVersion:
-    """One immutable observation of one Case in the SharePoint list."""
+    """One immutable observation of one Case in the Case Type's list."""
 
-    source_observation_id: Annotated[str, NonNull(), Length(64, 64)]
+    # Provenance: which list, which item, which version, and the identity of the
+    # three together. Non-null because an observation that cannot say where it
+    # came from cannot be traced back to the source that produced it.
+    source_observation_id: Annotated[str, NonNull()]
     source_list_name: Annotated[str, NonNull()]
     source_item_id: Annotated[str, NonNull()]
     source_version: Annotated[str, NonNull()]
     source_modified_at: Annotated[datetime, NonNull()]
-    case_ref: Annotated[str, NonNull(), Pattern(r"^C\d{6}$")]
+
+    id: Annotated[int, NonNull()]
+    title: str
+    case_type: str
     status: Annotated[str, NonNull(), OneOf(*CASE_STATUSES)]
-    opened_on: Annotated[date, NonNull()]
-    target_close_on: date
-    risk_score: Annotated[int, NonNull(), Range(minimum=0, maximum=100)]
-    owner_user_id: Annotated[int, NonNull(), Range(minimum=1)]
-    owner_display_name: str
 
+    # The five Person columns, as the claims login the list expanded them to.
+    # Landed as the source spells them: mapping a login to a person is a gold
+    # concern, and the numeric twin SharePoint also offers is a transport detail
+    # of one site collection rather than an identity.
+    assigned_reviewer_name: str
+    assigned_at: datetime
+    responsible_party_name: str
+    responsible_party_title: str
+    assigned_reviewer_manager_name: str
+    responsible_party_manager_name: str
 
-@dataclass
-class CasePartyVersion:
-    """One party named on one observation of a Case, at that party's position.
+    due_date: datetime
+    completed_at: datetime
+    reportable_at: datetime
+    remediation_due_date: datetime
+    related_date: datetime
+    created: datetime
 
-    ``party_position`` is the party's index in the source's multi-value cell. It
-    is part of the bridge's identity because the same person may legitimately
-    appear twice in one cell, and two rows that differ only by position are two
-    facts about the observation rather than a contradiction.
-    """
+    # The Action Centre reason flags and the clock paired with each.
+    has_open_appeal: bool
+    appeal_raised_at: datetime
+    awaiting_responsible_party: bool
+    awaiting_since: datetime
+    review_required: bool
+    on_hold: bool
+    placed_on_hold_at: datetime
 
-    source_observation_id: Annotated[str, NonNull()]
-    source_item_id: Annotated[str, NonNull()]
-    source_modified_at: Annotated[datetime, NonNull()]
-    party_user_id: Annotated[int, NonNull(), Range(minimum=1)]
-    party_display_name: str
-    party_position: Annotated[int, NonNull(), Range(minimum=0)]
+    voided_at: datetime
+    void_reason: str
+    voided_by_name: str
+
+    outcome: str
+    outcome_at_completion: str
+    had_remediation: bool
+    effective_outcome: str
+    effective_had_remediation: bool
+    outcome_overridden: bool
+
+    question_bank_version: str
+    case_justification: str
+    notes: str
+
+    # The JSON blob columns, landed as the unparsed text the list holds. Parsing
+    # them is a gold concern and needs the Case Type's own question bank to mean
+    # anything.
+    answers: str
+    conversation: str
+    appeals: str
+    amended_outcome: str
+    details: str

@@ -1,14 +1,15 @@
 """Ingest pipeline for the ``sharepoint_cases`` feed: source -> raw -> silver.
 
-The feed polls one SharePoint Case list by its ``Modified`` window and lands what
-it observes three times over:
+The feed polls one Case Type's SharePoint list by its ``Modified`` window and
+lands what it observes twice:
 
 - ``raw_builder``    lands the observation faithfully, in SharePoint's own
   column names, keyed on the observation id so a re-read is a no-op.
-- ``silver_builder`` renames, coerces, quarantines and validates one row per
-  observed Case version (``CaseVersion``).
-- ``party_builder``  fans the list's one multi-value person column out to the
-  ``case_party_version`` bridge, at one row per observation × party.
+- ``silver_builder`` snake_cases those names, coerces the types, quarantines
+  value-rule breaches and validates ``CaseVersion``.
+
+There is no third hop and very little in the second: this feed's job is to get
+the list's rows into the database as immutable versions, not to interpret them.
 
 It deliberately **stops at silver**, and it deliberately does **not** commit the
 polling watermark: the checkpoint vouches for rows having been published, and
@@ -32,6 +33,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import re
 import sys
 from dataclasses import dataclass, fields
 from pathlib import Path
@@ -40,17 +42,10 @@ from uuid import UUID
 
 import pandas as pd
 
-from framework.core import (
-    Dataset,
-    PipelineError,
-    Reader,
-    SchemaValidator,
-    Writer,
-    format_failure,
-)
+from framework.core import Dataset, PipelineError, Reader, Writer, format_failure
 from framework.io import AppendOnly, DatasetReader
 from framework.run import Pipeline, RunContext, RunLog
-from framework.transform import SchemaCoercion, SelectColumns
+from framework.transform import SelectColumns
 from tools.environments import known_environments, resolve_base_dir
 from tools.integrations.sharepoint_checkpoint import (
     SharePointCheckpointStore,
@@ -66,7 +61,7 @@ from tools.medallion import medallion
 from tools.recipes import raw_to_silver, source_to_raw
 from tools.store import StoreRegistry
 
-from .schema import CasePartyVersion, CaseVersion
+from .schema import CaseVersion
 
 FEED_NAME = "sharepoint_cases"
 
@@ -74,40 +69,90 @@ FEED_NAME = "sharepoint_cases"
 # none.
 UPSTREAMS = ()
 
-# The list this feed polls. The title is what the Reader asks for and may be
-# renamed; the GUID is what the watermark is keyed on and never changes.
-SITE = "https://contoso.sharepoint.com/sites/case-review"
-LIST_NAME = "Cases"
-LIST_ID = UUID("1b6f2a3c-0000-4a1f-9c7e-5f2d8a4b1e01")
+# PLACEHOLDER -- both must be filled in from the tenant before this feed can
+# reach a real list. The review application derives its site from the page it is
+# served from and addresses lists by title, so neither value exists anywhere to
+# copy: the site is whichever site collection holds the Case lists, and the GUID
+# comes from the list's own settings page. The watermark is keyed on the GUID, so
+# a wrong one silently forks the feed's place rather than failing.
+SITE = "https://sharepoint.invalid/sites/REPLACE-ME"
+LIST_ID = UUID(int=0)
 
-# What is asked of the list. The projection is stable on purpose: the Reader's
-# fallback version digest covers the projected values, so widening this
-# re-identifies every item once.
+# One list per Case Type, named ``Cases-{slug}``; there is no combined list and
+# no default. Only Complaints is live, so this feed names it directly rather
+# than growing a per-Case-Type indirection for a second type that may never come.
+# A UAT tenant prefixes the same list ``uat_``.
+LIST_NAME = "Cases-Complaints"
+
+# The five Person columns, expanded so each answers with the claims login rather
+# than the numeric id it otherwise returns.
+PERSON_COLUMNS = (
+    "AssignedReviewer",
+    "ResponsibleParty",
+    "AssignedReviewerManager",
+    "ResponsiblePartyManager",
+    "VoidedBy",
+)
+EXPAND_FIELDS = PERSON_COLUMNS
+
+# What is asked of the list. The ``*`` is load-bearing: naming a person's
+# sub-field turns the read into a projection, and without it every other column
+# silently stops coming back.
 SOURCE_COLUMNS = (
-    "CaseRef",
-    "Status",
-    "OpenedOn",
-    "TargetCloseOn",
-    "RiskScore",
-    "OwnerId",
-    "PartiesId",
+    "*",
+    "AssignedReviewer/Name",
+    "ResponsibleParty/Name",
+    "ResponsibleParty/Title",
+    "AssignedReviewerManager/Name",
+    "ResponsiblePartyManager/Name",
+    "VoidedBy/Name",
 )
-EXPAND_FIELDS = ("Owner", "Parties")
 
-# What raw stores: the source's own names, plus the observation metadata the
-# Reader stamps. ``Id`` / ``Modified`` / ``odata.etag`` are dropped -- the
-# stamped ``source_item_id`` / ``source_modified_at`` / ``source_version`` say
-# the same thing in the vocabulary every hop below reads.
+# What raw stores: every documented column of the list, in the source's own
+# names, plus the observation metadata the Reader stamps. ``Modified`` and
+# ``odata.etag`` are dropped -- the stamped ``source_modified_at`` /
+# ``source_version`` say the same thing in the vocabulary every hop below reads.
 RAW_FEED_COLUMNS = (
-    "CaseRef",
+    "Id",
+    "Title",
+    "CaseType",
     "Status",
-    "OpenedOn",
-    "TargetCloseOn",
-    "RiskScore",
-    "OwnerId",
-    "Owner/Title",
-    "PartiesId",
-    "Parties/Title",
+    "AssignedReviewer/Name",
+    "AssignedAt",
+    "ResponsibleParty/Name",
+    "ResponsibleParty/Title",
+    "AssignedReviewerManager/Name",
+    "ResponsiblePartyManager/Name",
+    "DueDate",
+    "CompletedAt",
+    "ReportableAt",
+    "RemediationDueDate",
+    "RelatedDate",
+    "Created",
+    "HasOpenAppeal",
+    "AppealRaisedAt",
+    "AwaitingResponsibleParty",
+    "AwaitingSince",
+    "ReviewRequired",
+    "OnHold",
+    "PlacedOnHoldAt",
+    "VoidedAt",
+    "VoidReason",
+    "VoidedBy/Name",
+    "Outcome",
+    "OutcomeAtCompletion",
+    "HadRemediation",
+    "EffectiveOutcome",
+    "EffectiveHadRemediation",
+    "OutcomeOverridden",
+    "QuestionBankVersion",
+    "CaseJustification",
+    "Notes",
+    "Answers",
+    "Conversation",
+    "Appeals",
+    "AmendedOutcome",
+    "Details",
     "source_list_name",
     "source_item_id",
     "source_modified_at",
@@ -115,42 +160,42 @@ RAW_FEED_COLUMNS = (
     "source_observation_id",
 )
 
-# The list's one multi-value person column, as its two halves: the lookup ids
-# and their display titles, paired by position.
-PARTY_ID_COLUMN = "PartiesId"
-PARTY_TITLE_COLUMN = "Parties/Title"
-MULTI_VALUE_COLUMNS = (PARTY_ID_COLUMN, PARTY_TITLE_COLUMN)
+# How far back each window reaches over the last one, and how far behind
+# SharePoint's clock its upper bound is held.
+OVERLAP = dt.timedelta(minutes=5)
+SAFETY_LAG = dt.timedelta(seconds=30)
 
-# Source columns whose names differ from the schema's fields, mapped to the
-# canonical field names. raw keeps the source names faithfully; silver renames.
-RENAME = {
-    "CaseRef": "case_ref",
-    "Status": "status",
-    "OpenedOn": "opened_on",
-    "TargetCloseOn": "target_close_on",
-    "RiskScore": "risk_score",
-    "OwnerId": "owner_user_id",
-    "Owner/Title": "owner_display_name",
-}
-
-# What the silver hop reads, in source names. The multi-value columns are at the
-# wrong grain for a Case row, so they are dropped before the hop rather than
-# renamed into a schema that has nowhere to put them.
-SILVER_SOURCE_COLUMNS = (
-    *RENAME,
-    "source_observation_id",
-    "source_list_name",
-    "source_item_id",
-    "source_modified_at",
-    "source_version",
+SAMPLE_PAGES = (
+    Path(__file__).parent / "sample_data" / "cases_page_1.json",
+    Path(__file__).parent / "sample_data" / "cases_page_2.json",
 )
+
+_WORDS = re.compile(r"[A-Z]+(?![a-z])|[A-Z][a-z0-9]*|[a-z0-9]+")
+
+
+def snake_case(name: str) -> str:
+    """One SharePoint column name as its canonical silver name.
+
+    Mechanical rather than curated: ``DueDate`` -> ``due_date``,
+    ``AssignedReviewerId`` -> ``assigned_reviewer_id``, and an expanded
+    sub-field's ``/`` reads as another word boundary
+    (``ResponsibleParty/Title`` -> ``responsible_party_title``). A map of
+    forty hand-written pairs would be forty chances to drift from the list.
+    Already-snake_case names pass through unchanged, so the stamped provenance
+    columns need no special case.
+    """
+    return "_".join(word.lower() for word in _WORDS.findall(name.replace("/", "_")))
+
+
+# Source name -> canonical name, for every column raw stores.
+RENAME = {column: snake_case(column) for column in RAW_FEED_COLUMNS}
 
 
 def _integer_columns_in_source_names() -> tuple[str, ...]:
     """The silver schema's ``int`` fields, named as the source names them.
 
     Derived rather than listed: the cast this feeds has to stay in step with
-    ``CaseVersion`` *through* ``RENAME``, and a hand-kept parallel list is a
+    ``CaseVersion`` *through* the rename, and a hand-kept parallel list is a
     second place to forget. ``get_type_hints`` without ``include_extras``
     resolves ``Annotated[int, ...]`` down to the ``int`` being asked about.
     """
@@ -163,19 +208,10 @@ def _integer_columns_in_source_names() -> tuple[str, ...]:
     )
 
 
-# The silver schema's integer columns, in source names: a zero-row batch has no
-# rows to type them and ``SchemaCoercion`` does not reach ``int``.
+# A zero-row batch has no rows to type these and ``SchemaCoercion`` repairs only
+# what a storage round-trip loses -- dates and booleans -- so it does not reach
+# ``int``.
 SILVER_INTEGER_COLUMNS = _integer_columns_in_source_names()
-
-# How far back each window reaches over the last one, and how far behind
-# SharePoint's clock its upper bound is held.
-OVERLAP = dt.timedelta(minutes=5)
-SAFETY_LAG = dt.timedelta(seconds=30)
-
-SAMPLE_PAGES = (
-    Path(__file__).parent / "sample_data" / "cases_page_1.json",
-    Path(__file__).parent / "sample_data" / "cases_page_2.json",
-)
 
 
 @dataclass(frozen=True)
@@ -191,7 +227,6 @@ class SharePointIngestResult:
     ingestion_batch_id: str
     raw_rows: int
     silver_rows: int
-    party_rows: int
 
 
 def batch_id_for(source: SharePointSource, watermark: dt.datetime | None) -> str:
@@ -206,97 +241,6 @@ def batch_id_for(source: SharePointSource, watermark: dt.datetime | None) -> str
     return f"{source.list_id}:{watermark.isoformat() if watermark else 'first-load'}"
 
 
-def _encode_multi_value(frame: pd.DataFrame, columns: Sequence[str]) -> pd.DataFrame:
-    """Render each multi-value cell as compact JSON text.
-
-    A list cell cannot be bound by ``sqlite3``, so raw stores the multi-value
-    field as the compact JSON its own values spell out. ASCII-escaped and
-    separator-fixed so the same cell encodes to the same bytes on every machine
-    -- raw is compared whole by the append-only load, and a re-encoding that
-    drifted would read as a changed row.
-
-    This is also the **one** place the source's several spellings of a
-    multi-value cell become one, so the bridge that decodes it can assume what it
-    actually relies on: a JSON array of single values, which is enforced here
-    element by element rather than discovered three steps later.
-    """
-    encoded = frame.copy()
-    if not columns:
-        return encoded
-    item_ids = list(encoded["source_item_id"])
-    for column in columns:
-        encoded[column] = [
-            _as_json_text(value, column, item_id)
-            for value, item_id in zip(encoded[column], item_ids)
-        ]
-    return encoded
-
-
-def _as_json_text(value: object, column: str, item_id: object) -> str:
-    try:
-        return json.dumps(
-            _multi_value_list(value, column, item_id),
-            ensure_ascii=True,
-            separators=(",", ":"),
-            # NaN is not JSON. Python would happily emit the bare token ``NaN``,
-            # which no strict parser downstream accepts -- so a cell carrying one
-            # fails here rather than landing unreadable text in raw.
-            allow_nan=False,
-        )
-    except (TypeError, ValueError) as exc:
-        raise SharePointFeedError(
-            f"SharePoint list {LIST_NAME!r}, item {item_id}: column {column!r} "
-            f"holds a value that cannot be stored as JSON ({exc})."
-        ) from None
-
-
-def _multi_value_list(value: object, column: str, item_id: object) -> list:
-    """One multi-value cell as the single list shape this feed stores.
-
-    A REST client hands a multi-value lookup back in more than one spelling: as
-    a plain list, as OData's verbose ``{"results": [...]}`` envelope, or -- when
-    the cell holds exactly one value -- flattened to the bare value. All three
-    say the same thing, so all three normalise here rather than each reader
-    downstream having to know the difference.
-    """
-    if isinstance(value, dict):
-        value = value.get("results", value)
-    if isinstance(value, (list, tuple)):
-        return [_multi_value_element(v, column, item_id) for v in value]
-    if value is None or _is_missing(value):
-        return []
-    return [_multi_value_element(value, column, item_id)]
-
-
-def _multi_value_element(value: object, column: str, item_id: object) -> object:
-    """One value out of a multi-value cell, as something JSON can hold.
-
-    The bridge reads these back as an id and a display name, one per party, so an
-    element has to be a *single value*. OData's verbose mode -- the same mode that
-    wraps a cell in a results envelope -- can also hand each element back as a
-    person **object**; that is a shape this feed has not been shown, and it is
-    refused here rather than stored as JSON the bridge then dies on.
-    """
-    if not pd.api.types.is_scalar(value):
-        raise SharePointFeedError(
-            f"SharePoint list {LIST_NAME!r}, item {item_id}: column {column!r} "
-            f"holds a {type(value).__name__} where a single value was expected. "
-            "This feed reads a multi-value cell as a list of ids or of titles, "
-            "not of objects."
-        )
-    # ``.item()`` unwraps a numpy scalar to the Python one ``json`` can encode.
-    # A typed column yields these whether the cell was flattened or a list.
-    return value.item() if hasattr(value, "item") else value
-
-
-def _is_missing(value: object) -> bool:
-    """Whether pandas calls this value null; one it cannot judge is not null."""
-    try:
-        return bool(pd.isna(value))
-    except (TypeError, ValueError):
-        return False
-
-
 class StorableObservations:
     """Narrow one SharePoint read to the observation raw stores.
 
@@ -307,15 +251,9 @@ class StorableObservations:
     unchanged item look like a contradiction.
     """
 
-    def __init__(
-        self,
-        inner: Reader,
-        columns: Sequence[str],
-        multi_value_columns: Sequence[str] = (),
-    ) -> None:
+    def __init__(self, inner: Reader, columns: Sequence[str]) -> None:
         self._inner = inner
         self._columns = list(columns)
-        self._multi_value_columns = tuple(multi_value_columns)
 
     @property
     def data_locations(self) -> list[dict[str, str]]:
@@ -327,13 +265,14 @@ class StorableObservations:
     def read(self) -> Dataset:
         frame = self._inner.read().to_pandas()
         if frame.empty:
-            # A quiet window comes back as the *declared* projection: the columns
-            # the client adds by expanding a lookup were never asked for by name,
-            # so they cannot be there. Reindexing declares the shape raw stores
-            # rather than leaving the hop below to fail on an absence that means
-            # "nothing changed". The cast goes with it: reindex fills a column it
-            # had to invent with NaN and so types it float, and raw's columns are
-            # text.
+            # A quiet window comes back as the *declared* projection, and this
+            # list is read with ``$select=*`` -- so almost every column arrives
+            # because the client expanded the star, and none of them can be
+            # there when there are no rows. Reindexing declares the shape raw
+            # stores rather than leaving the hop below to fail on an absence that
+            # means "nothing changed". The cast goes with it: reindex fills a
+            # column it had to invent with NaN and so types it float, and raw's
+            # columns are text.
             frame = frame.reindex(columns=self._columns).astype("object")
         else:
             missing = [c for c in self._columns if c not in frame.columns]
@@ -344,60 +283,7 @@ class StorableObservations:
                     "every projected and expanded column."
                 )
             frame = frame.loc[:, self._columns]
-        return Dataset.from_pandas(
-            _encode_multi_value(frame, self._multi_value_columns)
-        )
-
-
-class ExplodeParties:
-    """Fan one observation's multi-value person cell out to one row per party.
-
-    The two halves of the field pair **positionally** -- SharePoint returns the
-    lookup ids and their titles as parallel lists -- so lengths that disagree are
-    a broken pairing rather than a row to guess at.
-    """
-
-    def __call__(self, dataset: Dataset) -> Dataset:
-        frame = dataset.to_pandas()
-        observation_ids: list[str] = []
-        item_ids: list[str] = []
-        modified: list[str] = []
-        user_ids: list[int] = []
-        display_names: list[object] = []
-        positions: list[int] = []
-        for _, row in frame.iterrows():
-            party_ids = json.loads(row[PARTY_ID_COLUMN])
-            titles = json.loads(row[PARTY_TITLE_COLUMN])
-            if len(party_ids) != len(titles):
-                raise SharePointFeedError(
-                    f"SharePoint list {LIST_NAME!r}, item "
-                    f"{row['source_item_id']}: {PARTY_ID_COLUMN} holds "
-                    f"{len(party_ids)} value(s) but {PARTY_TITLE_COLUMN} holds "
-                    f"{len(titles)}; a multi-value person field pairs its ids "
-                    "and titles by position."
-                )
-            for position, (party_id, title) in enumerate(zip(party_ids, titles)):
-                observation_ids.append(row["source_observation_id"])
-                item_ids.append(row["source_item_id"])
-                modified.append(row["source_modified_at"])
-                user_ids.append(party_id)
-                display_names.append(title)
-                positions.append(position)
-        # Built column by column with declared dtypes: a list with no parties at
-        # all still has to present the integer columns the bridge's schema gate
-        # checks, and an empty object column is not an integer one.
-        return Dataset.from_pandas(
-            pd.DataFrame(
-                {
-                    "source_observation_id": pd.Series(observation_ids, dtype="object"),
-                    "source_item_id": pd.Series(item_ids, dtype="object"),
-                    "source_modified_at": pd.Series(modified, dtype="object"),
-                    "party_user_id": pd.Series(user_ids, dtype="int64"),
-                    "party_display_name": pd.Series(display_names, dtype="object"),
-                    "party_position": pd.Series(positions, dtype="int64"),
-                }
-            )
-        )
+        return Dataset.from_pandas(frame)
 
 
 class CaseListClient(SharePointListClient, Protocol):
@@ -409,7 +295,7 @@ class CaseListClient(SharePointListClient, Protocol):
     evaluates, and a skewed local clock would silently widen or narrow them.
 
     Stated here rather than upstream because it is this feed's requirement, not
-    the Reader's — and stated as an extension, so the fetch is declared once.
+    the Reader's -- and stated as an extension, so the fetch is declared once.
     """
 
     def server_time(self) -> dt.datetime: ...
@@ -473,7 +359,7 @@ def silver_builder(
     reject_writer: Writer | None = None,
     run_log: RunLog | None = None,
 ) -> Pipeline:
-    """Build the silver hop: schema coercion and enforcement + quarantine.
+    """Build the silver hop: rename, coerce, quarantine, validate.
 
     The standard silver hop, composed from the shared recipe; inline it here to
     diverge.
@@ -487,28 +373,6 @@ def silver_builder(
         name=f"{FEED_NAME}:silver",
         run_log=run_log,
     )
-
-
-def party_builder(
-    reader: Reader,
-    writer: Writer,
-    run_log: RunLog | None = None,
-) -> Pipeline:
-    """Build the bridge hop: one row per observation × party.
-
-    Hand-composed rather than a recipe: this hop changes the grain, which is the
-    one thing the standard raw/silver hops do not do. It is a pure function of
-    the raw observation -- the bridge is keyed on the observation and holds no
-    reference into ``case_version``, so a Case row quarantined for an unrelated
-    value rule does not take its parties with it.
-    """
-    p = Pipeline(f"{FEED_NAME}:parties", run_log=run_log)
-    node = p.read(reader, name="read")
-    node = p.transform(ExplodeParties(), node, name="explode")
-    node = p.transform(SchemaCoercion(CasePartyVersion), node, name="coerce")
-    node = p.validate(SchemaValidator(CasePartyVersion), node, name="post-validate")
-    p.write(writer, node, name="write")
-    return p
 
 
 def run(
@@ -549,7 +413,6 @@ def run(
                 client=client,
             ),
             RAW_FEED_COLUMNS,
-            MULTI_VALUE_COLUMNS,
         ),
         writer=med.raw.writer("case_observation", AppendOnly("source_observation_id")),
         run_log=context.run_log,
@@ -558,10 +421,10 @@ def run(
         print(raw_p.describe())
     batch = raw_p.run()
 
-    # Both hops below normalise the batch just fetched, never the whole raw
-    # history. The projection they read is applied here rather than as a step,
-    # so it shows up in neither plan nor run log -- the recipe owns the hop's
-    # shape, and reshaping its input is the caller's side of that bargain.
+    # Silver normalises the batch just fetched, never the whole raw history. The
+    # projection it reads is applied here rather than as a step, so it shows up
+    # in neither plan nor run log -- the recipe owns the hop's shape, and
+    # reshaping its input is the caller's side of that bargain.
     silver_p = silver_builder(
         reader=DatasetReader(_silver_source(batch)),
         writer=med.silver.writer("case_version", AppendOnly("source_observation_id")),
@@ -572,52 +435,33 @@ def run(
         print(silver_p.describe())
     silver_rows = len(silver_p.run())
 
-    party_p = party_builder(
-        reader=DatasetReader(batch),
-        writer=med.silver.writer(
-            "case_party_version",
-            # Keyed on the position as well as the observation: the same person
-            # may legitimately appear twice in one cell, and keying on the
-            # person would read that as a contradiction.
-            AppendOnly(("source_observation_id", "party_position")),
-        ),
-        run_log=context.run_log,
-    )
-    if describe:
-        print(party_p.describe())
-    party_rows = len(party_p.run())
-
     # --- gold is yours to assemble ------------------------------------------
     # How these accumulated versions become gold is still open: a Case Type may
     # want the version that was current at a point in time copied forward, or
-    # the current row joined live to its parties and to other feeds. The two
-    # answers differ in what a later correction does to yesterday's report, so
-    # the choice is per-Case-Type and the seam is left commented.
+    # the current row joined live to other feeds. The two answers differ in what
+    # a later correction does to yesterday's report, so the choice is
+    # per-Case-Type and the seam is left commented.
     # ------------------------------------------------------------------------
     return SharePointIngestResult(
         window=window,
         ingestion_batch_id=batch_id,
         raw_rows=len(batch),
         silver_rows=silver_rows,
-        party_rows=party_rows,
     )
 
 
 def _silver_source(batch: Dataset) -> Dataset:
-    """The batch narrowed to what a Case row is made of, typed even when empty.
-
-    The multi-value columns are at the wrong grain for a Case row, so they are
-    dropped rather than renamed into a schema with nowhere to put them.
+    """The batch narrowed to the columns silver declares, typed even when empty.
 
     The cast is for the quiet window. ``SchemaCoercion`` repairs only the types a
     storage round-trip loses -- dates and booleans -- and leaves ``int`` alone,
     so a zero-row batch reaches the silver gate with its integer columns still
     object-typed and no row to give them a type. Casting them here is what lets a
-    quiet poll run the same three hops, and emit the same run-log steps, as a
-    busy one. Only when empty: casting a populated batch would hide a genuine
-    dtype breach the gate exists to catch.
+    quiet poll run the same hops, and emit the same run-log steps, as a busy one.
+    Only when empty: casting a populated batch would hide a genuine dtype breach
+    the gate exists to catch.
     """
-    frame = SelectColumns(SILVER_SOURCE_COLUMNS)(batch).to_pandas()
+    frame = SelectColumns(tuple(RENAME))(batch).to_pandas()
     if frame.empty:
         frame = frame.astype(dict.fromkeys(SILVER_INTEGER_COLUMNS, "int64"))
     return Dataset.from_pandas(frame)
@@ -643,7 +487,7 @@ def _server_time(client: CaseListClient | None) -> dt.datetime:
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m pipelines.sharepoint_cases.pipeline",
-        description="Poll the SharePoint Cases list source -> raw -> silver.",
+        description=f"Poll the {LIST_NAME} list source -> raw -> silver.",
     )
     parser.add_argument(
         "--base-dir",
@@ -703,8 +547,8 @@ def main(argv: list[str]) -> int:
     print(
         f"Polled {LIST_NAME} up to {result.window.end.isoformat()} as batch "
         f"{result.ingestion_batch_id}: {result.raw_rows} observation(s) -> "
-        f"{result.silver_rows} case version(s) + {result.party_rows} party row(s) "
-        f"under {base_dir / FEED_NAME}. The watermark was not committed."
+        f"{result.silver_rows} case version(s) under {base_dir / FEED_NAME}. "
+        "The watermark was not committed."
     )
     return 0
 

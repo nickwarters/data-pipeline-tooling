@@ -1,10 +1,9 @@
 """Tests for the ``sharepoint_cases`` SharePoint list ingest.
 
-Most of these drive a builder directly, in memory: `given_rows` (or a fake list
-client) as the Reader, `RecordingWriter` as the Writer, no SQLite and no
-filesystem. Only the behaviours that *are* the store — append-only idempotence,
-a conflicting re-observation, the checkpoint being left alone — go end to end
-under `tmp_path`.
+Most of these drive a builder directly, in memory: a fake list client behind the
+real Reader, `RecordingWriter` as the Writer, no SQLite and no filesystem. Only
+the behaviours that *are* the store — append-only idempotence, a conflicting
+re-observation, the checkpoint being left alone — go end to end under `tmp_path`.
 
 No network, no tenant, no auth: the organisational SharePoint client is a seam,
 so every test here hands the Reader a fake that replays frames.
@@ -13,12 +12,11 @@ so every test here hands the Reader a fake that replays frames.
 from __future__ import annotations
 
 import datetime as dt
-import json
 
-import numpy as np
 import pandas as pd
 import pytest
 
+from framework.core import ValidationError
 from framework.io import AppendOnlyConflictError
 from framework.run import RunContext, RunLog
 from pipelines.sharepoint_cases.pipeline import (
@@ -26,19 +24,19 @@ from pipelines.sharepoint_cases.pipeline import (
     FEED_NAME,
     LIST_ID,
     LIST_NAME,
-    MULTI_VALUE_COLUMNS,
     RAW_FEED_COLUMNS,
+    RENAME,
     SAFETY_LAG,
-    SILVER_SOURCE_COLUMNS,
     SITE,
     SOURCE_COLUMNS,
     LocalJsonListClient,
     StorableObservations,
-    party_builder,
     raw_builder,
     run,
     silver_builder,
+    snake_case,
 )
+from pipelines.sharepoint_cases.schema import CASE_STATUSES
 from tests.framework_testing import (
     RecordingWriter,
     given_rows,
@@ -64,7 +62,7 @@ SOURCE = SharePointSource(SITE, LIST_ID)
 
 
 class FakeListClient:
-    """A ``SharePointListClient`` replaying one frame per call, with a clock."""
+    """A ``CaseListClient`` replaying one frame per call, with a clock."""
 
     def __init__(self, *frames: pd.DataFrame, server_now: dt.datetime = SERVER_NOW):
         self._frames = list(frames) or [items()]
@@ -72,43 +70,51 @@ class FakeListClient:
         self.calls: list[dict[str, object]] = []
 
     def fetch_items(self, list_name, expand_fields, select_fields, filters):
-        self.calls.append({"list_name": list_name, "filters": list(filters)})
+        self.calls.append(
+            {
+                "list_name": list_name,
+                "expand_fields": list(expand_fields),
+                "select_fields": list(select_fields),
+            }
+        )
         return self._frames[min(len(self.calls) - 1, len(self._frames) - 1)].copy()
 
     def server_time(self) -> dt.datetime:
         return self._server_now
 
 
-def item(
-    *,
-    item_id: int = 101,
-    modified: str = "2026-08-05T08:10:00Z",
-    etag: str = "3",
-    case_ref: str = "C000101",
-    status: str = "Open",
-    risk_score: int = 42,
-    owner_id: int = 17,
-    owner_title: str = "A. Khan",
-    party_ids: object = None,
-    party_titles: object = None,
-) -> dict[str, object]:
-    """One list item in the shape the organisational client returns."""
-    return {
-        "Id": item_id,
-        "Modified": modified,
-        "odata.etag": etag,
-        "CaseRef": case_ref,
-        "Status": status,
-        "OpenedOn": "2026-07-01T00:00:00Z",
-        "TargetCloseOn": "2026-08-01T00:00:00Z",
-        "RiskScore": risk_score,
-        "OwnerId": owner_id,
-        "Owner/Title": owner_title,
-        "PartiesId": [17, 23] if party_ids is None else party_ids,
-        "Parties/Title": (
-            ["A. Khan", "B. Okafor"] if party_titles is None else party_titles
-        ),
+def item(**overrides: object) -> dict[str, object]:
+    """One list item in the shape the organisational client returns.
+
+    Every stored column is present, because a real read leads with ``$select=*``
+    and the client flattens each expanded person onto ``Column/Name``. The
+    unmentioned columns are null, which is what most of them are on a live row.
+    """
+    row: dict[str, object] = {
+        "Id": 101,
+        "Modified": "2026-08-05T08:10:00Z",
+        "odata.etag": "3",
+        "Title": "CMP-000101",
+        "CaseType": "complaints",
+        "Status": "In-progress",
+        "AssignedReviewer/Name": "i:0#.w|CONTOSO\\a.khan",
+        "ResponsibleParty/Name": "i:0#.w|CONTOSO\\b.okafor",
+        "ResponsibleParty/Title": "Bola Okafor",
+        "DueDate": "2026-08-14T00:00:00Z",
+        "Created": "2026-07-01T09:14:00Z",
+        "HasOpenAppeal": False,
+        "OnHold": False,
+        "Notes": "Awaiting the call recording.",
+        "Answers": '{"q-outcome":{"value":"Not upheld"}}',
     }
+    absent = [
+        column
+        for column in RAW_FEED_COLUMNS
+        if column not in row and not column.startswith("source_")
+    ]
+    row.update(dict.fromkeys(absent))
+    row.update(overrides)
+    return row
 
 
 def items(*rows: dict[str, object]) -> pd.DataFrame:
@@ -127,262 +133,170 @@ def observations(client: FakeListClient) -> StorableObservations:
             client=client,
         ),
         RAW_FEED_COLUMNS,
-        MULTI_VALUE_COLUMNS,
     )
 
 
-def landed(rows: list[dict]) -> list[dict]:
-    """The raw rows, projected to the source columns silver reads."""
-    return [{k: row[k] for k in SILVER_SOURCE_COLUMNS} for row in rows]
+def landed(client: FakeListClient) -> list[dict]:
+    """The rows the raw hop would store for ``client``'s response."""
+    writer = RecordingWriter()
+    raw_builder(observations(client), writer).run()
+    return rows_of(writer)
+
+
+# --- the rename ------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "source, canonical",
+    [
+        ("Id", "id"),
+        ("DueDate", "due_date"),
+        ("AssignedReviewerId", "assigned_reviewer_id"),
+        ("HasOpenAppeal", "has_open_appeal"),
+        ("ResponsibleParty/Title", "responsible_party_title"),
+        # Already canonical: the stamped provenance columns need no special case.
+        ("source_observation_id", "source_observation_id"),
+    ],
+)
+def test_the_rename_is_one_mechanical_rule(source, canonical):
+    assert snake_case(source) == canonical
+
+
+def test_every_stored_column_has_a_canonical_name():
+    assert set(RENAME) == set(RAW_FEED_COLUMNS)
 
 
 # --- raw -------------------------------------------------------------------
 
 
 def test_raw_keeps_the_source_names_and_the_stamped_observation():
-    writer = RecordingWriter()
+    [row] = landed(FakeListClient())
 
-    raw_builder(observations(FakeListClient()), writer).run()
-
-    [row] = rows_of(writer)
-    assert row["CaseRef"] == "C000101"
-    assert row["Owner/Title"] == "A. Khan"
+    assert row["Title"] == "CMP-000101"
+    assert row["Status"] == "In-progress"
+    assert row["ResponsibleParty/Name"] == "i:0#.w|CONTOSO\\b.okafor"
+    assert row["Details"] is None
     assert row["source_list_name"] == LIST_NAME
     assert row["source_item_id"] == "101"
     assert row["source_version"] == "3"
     assert len(row["source_observation_id"]) == 64
-    # The identity columns say what Id/Modified/etag said, so raw does not also
-    # carry them -- nor when we happened to look.
-    assert not {"Id", "Modified", "odata.etag", "observed_at"} & set(row)
+    # source_modified_at and source_version say what Modified and the etag said,
+    # so raw does not also carry them -- nor when we happened to look.
+    assert not {"Modified", "odata.etag", "observed_at"} & set(row)
 
 
-def test_raw_stores_a_multi_value_cell_as_json_text():
-    writer = RecordingWriter()
+def test_the_read_asks_for_the_star_and_expands_every_person():
+    # The star is load-bearing: naming a person's sub-field turns the read into
+    # a projection, and every other column silently stops coming back.
+    client = FakeListClient()
 
-    raw_builder(observations(FakeListClient()), writer).run()
+    landed(client)
 
-    [row] = rows_of(writer)
-    assert row["PartiesId"] == "[17,23]"
-    assert row["Parties/Title"] == '["A. Khan","B. Okafor"]'
+    assert client.calls[0]["select_fields"][:3] == ["Id", "Modified", "*"]
+    assert client.calls[0]["expand_fields"] == [
+        "AssignedReviewer",
+        "ResponsibleParty",
+        "AssignedReviewerManager",
+        "ResponsiblePartyManager",
+        "VoidedBy",
+    ]
 
 
 def test_raw_reads_a_quiet_window_as_the_declared_shape():
-    # The client adds Owner/Title and Parties/Title by expanding a lookup, so an
-    # empty response cannot carry them; the read still has to present the
-    # columns the raw gate checks.
+    # Almost every column arrives because the client expanded the star, so none
+    # of them can be there when there are no rows; the shape is declared anyway.
     writer = RecordingWriter()
 
     raw_builder(observations(FakeListClient(pd.DataFrame())), writer).run()
 
     assert rows_of(writer) == []
-    assert "Owner/Title" in writer.writes[0].to_pandas().columns
+    assert list(writer.writes[0].to_pandas().columns) == list(RAW_FEED_COLUMNS)
 
 
-def test_a_populated_response_missing_an_expanded_column_is_refused():
+def test_a_populated_response_missing_a_stored_column_is_refused():
     # The projection has to select every stored column to build the row at all,
     # so this is where a broken promise surfaces -- named, and before anything
     # lands.
-    client = FakeListClient(items(item()).drop(columns=["Owner/Title"]))
+    client = FakeListClient(items(item()).drop(columns=["Status"]))
 
-    with pytest.raises(SharePointFeedError, match="Owner/Title"):
-        raw_builder(observations(client), RecordingWriter()).run()
-
-
-def test_a_single_valued_multi_value_cell_is_stored_as_a_one_item_list():
-    # A client that flattens a one-element multi-value cell to the bare value
-    # means the same thing as the list; raw stores one representation either way.
-    client = FakeListClient(items(item(party_ids=17, party_titles="A. Khan")))
-    writer = RecordingWriter()
-
-    raw_builder(observations(client), writer).run()
-
-    [row] = rows_of(writer)
-    assert (row["PartiesId"], row["Parties/Title"]) == ("[17]", '["A. Khan"]')
-
-
-def test_an_odata_results_envelope_is_stored_as_the_list_it_wraps():
-    client = FakeListClient(
-        items(
-            item(
-                party_ids={"results": [17, 23]},
-                party_titles={"results": ["A. Khan", "B. Okafor"]},
-            )
-        )
-    )
-    writer = RecordingWriter()
-
-    raw_builder(observations(client), writer).run()
-
-    [row] = rows_of(writer)
-    assert (row["PartiesId"], row["Parties/Title"]) == (
-        "[17,23]",
-        '["A. Khan","B. Okafor"]',
-    )
-
-
-def test_a_multi_value_cell_in_a_shape_this_feed_cannot_read_is_refused():
-    client = FakeListClient(items(item(party_ids={"unexpected": [17]})))
-
-    with pytest.raises(SharePointFeedError, match="item 101.*'PartiesId'"):
-        raw_builder(observations(client), RecordingWriter()).run()
-
-
-@pytest.mark.parametrize(
-    "party_ids, party_titles, expected",
-    [
-        # Flattened to the bare value by a client that saw one element.
-        (17, "A. Khan", [(17, "A. Khan", 0)]),
-        # Numpy scalars, which a typed column yields either way.
-        (
-            [np.int64(17), np.int64(23)],
-            ["A. Khan", "B. Okafor"],
-            [(17, "A. Khan", 0), (23, "B. Okafor", 1)],
-        ),
-        # OData's verbose envelope.
-        (
-            {"results": [17, 23]},
-            {"results": ["A. Khan", "B. Okafor"]},
-            [(17, "A. Khan", 0), (23, "B. Okafor", 1)],
-        ),
-    ],
-)
-def test_the_bridge_reads_back_each_shape_raw_normalised(
-    party_ids, party_titles, expected
-):
-    # The point of normalising at encode time: whatever the client sent, the
-    # bridge decodes one representation.
-    client = FakeListClient(items(item(party_ids=party_ids, party_titles=party_titles)))
-    raw = RecordingWriter()
-    raw_builder(observations(client), raw).run()
-    writer = RecordingWriter()
-
-    party_builder(given_rows(rows_of(raw)), writer).run()
-
-    assert [
-        (row["party_user_id"], row["party_display_name"], row["party_position"])
-        for row in rows_of(writer)
-    ] == expected
-
-
-def test_a_person_object_inside_a_multi_value_cell_is_refused():
-    # OData verbose is the mode that wraps a cell in a results envelope, and the
-    # same mode can spell each element as an object. Supporting the envelope but
-    # not its contents would land JSON the bridge dies on.
-    client = FakeListClient(
-        items(item(party_ids={"results": [{"Id": 17, "Title": "A. Khan"}]}))
-    )
-
-    with pytest.raises(SharePointFeedError, match="item 101.*'PartiesId'.*single"):
-        raw_builder(observations(client), RecordingWriter()).run()
-
-
-def test_a_nan_inside_a_multi_value_cell_is_refused():
-    # ``json.dumps`` would emit the bare token NaN, which no strict parser
-    # accepts -- the one shape that could otherwise land unreadable in raw.
-    client = FakeListClient(items(item(party_ids=[17, float("nan")])))
-
-    with pytest.raises(SharePointFeedError, match="cannot be stored as JSON"):
+    with pytest.raises(SharePointFeedError, match="Status"):
         raw_builder(observations(client), RecordingWriter()).run()
 
 
 # --- silver ----------------------------------------------------------------
 
 
-def test_silver_renames_coerces_and_keeps_the_provenance():
-    raw = RecordingWriter()
-    raw_builder(observations(FakeListClient()), raw).run()
+def test_silver_snake_cases_coerces_and_keeps_the_provenance():
     writer = RecordingWriter()
 
-    silver_builder(given_rows(landed(rows_of(raw))), writer).run()
+    silver_builder(given_rows(landed(FakeListClient())), writer).run()
 
     [row] = rows_of(writer)
-    assert row["case_ref"] == "C000101"
-    assert row["owner_user_id"] == 17
-    assert row["owner_display_name"] == "A. Khan"
-    assert row["opened_on"] == pd.Timestamp("2026-07-01T00:00:00Z")
+    assert row["id"] == 101
+    assert row["title"] == "CMP-000101"
+    assert row["case_type"] == "complaints"
+    assert row["responsible_party_title"] == "Bola Okafor"
+    assert row["due_date"] == pd.Timestamp("2026-08-14T00:00:00Z")
+    assert row["has_open_appeal"] is False
     assert row["source_item_id"] == "101"
     assert row["source_version"] == "3"
 
 
-def test_silver_quarantines_a_bad_risk_score_while_raw_keeps_every_row():
-    raw = RecordingWriter()
-    raw_builder(
-        observations(
-            FakeListClient(items(item(), item(item_id=102, etag="1", risk_score=250)))
-        ),
-        raw,
+def test_silver_accepts_a_case_with_no_reference_and_nobody_assigned():
+    # Title is the human Case Reference: nullable, and carrying no format any
+    # part of the application enforces. A row without one is an ordinary row.
+    client = FakeListClient(items(item(Title=None, **{"AssignedReviewer/Name": None})))
+    writer = RecordingWriter()
+
+    silver_builder(given_rows(landed(client)), writer).run()
+
+    [row] = rows_of(writer)
+    assert row["title"] is None
+    assert row["assigned_reviewer_name"] is None
+
+
+@pytest.mark.parametrize("status", CASE_STATUSES)
+def test_silver_accepts_every_real_status(status):
+    writer = RecordingWriter()
+
+    silver_builder(
+        given_rows(landed(FakeListClient(items(item(Status=status))))), writer
     ).run()
+
+    assert rows_of(writer)[0]["status"] == status
+
+
+def test_silver_quarantines_an_unknown_status_while_raw_keeps_every_row():
+    # The one closed vocabulary this list has. A fifth value means the Choice
+    # column changed under us, which should surface rather than reach a report.
+    client = FakeListClient(items(item(), item(Id=102, Status="Closed")))
+    raw = landed(client)
     writer, rejects = RecordingWriter(), RecordingWriter()
 
-    silver_builder(given_rows(landed(rows_of(raw))), writer, rejects).run()
+    silver_builder(given_rows(raw), writer, rejects).run()
 
-    assert len(rows_of(raw)) == 2
+    assert len(raw) == 2
     assert [row["source_item_id"] for row in rows_of(writer)] == ["101"]
     [rejected] = rows_of(rejects)
     assert rejected["source_item_id"] == "102"
-    assert "value not in [0, 100]" in rejected["failed_rule"]
+    assert "Closed" in rejected["failed_rule"] or "outside" in rejected["failed_rule"]
 
 
-# --- the party bridge ------------------------------------------------------
-
-
-def test_a_multi_value_cell_fans_out_to_the_bridge_at_its_own_grain():
-    raw = RecordingWriter()
-    raw_builder(observations(FakeListClient()), raw).run()
+def test_silver_aborts_when_the_id_is_missing():
+    # Structural, not a value rule: a Case with no id cannot be a Case version.
     writer = RecordingWriter()
+    reader = given_rows([{column: None for column in RAW_FEED_COLUMNS}])
 
-    party_builder(given_rows(rows_of(raw)), writer).run()
+    with pytest.raises(ValidationError, match="'id'"):
+        silver_builder(reader, writer).run()
 
-    assert [
-        (row["party_user_id"], row["party_display_name"], row["party_position"])
-        for row in rows_of(writer)
-    ] == [(17, "A. Khan", 0), (23, "B. Okafor", 1)]
-    assert {row["source_item_id"] for row in rows_of(writer)} == {"101"}
-
-
-def test_an_empty_parties_cell_yields_no_bridge_rows():
-    raw = RecordingWriter()
-    raw_builder(
-        observations(FakeListClient(items(item(party_ids=[], party_titles=[])))), raw
-    ).run()
-    writer = RecordingWriter()
-
-    party_builder(given_rows(rows_of(raw)), writer).run()
-
-    assert rows_of(writer) == []
-
-
-def test_ids_and_titles_that_do_not_pair_positionally_are_refused():
-    raw = RecordingWriter()
-    raw_builder(
-        observations(FakeListClient(items(item(party_titles=["A. Khan"])))), raw
-    ).run()
-
-    with pytest.raises(SharePointFeedError, match="item 101.*2 value.*1"):
-        party_builder(given_rows(rows_of(raw)), RecordingWriter()).run()
-
-
-def test_a_person_named_twice_in_one_cell_is_two_bridge_rows(tmp_path):
-    # Keyed on the position, not the person: a legally duplicated party must not
-    # read as an append-only contradiction when the observation is re-read.
-    client = FakeListClient(
-        items(item(party_ids=[17, 17], party_titles=["A. Khan", "A. Khan"]))
-    )
-    context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
-
-    run(context, client=client)
-    result = run(context, client=client)
-
-    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
-    parties = read_rows(med.silver, "case_party_version")
-    assert [row["party_position"] for row in parties] == [0, 1]
-    assert result.party_rows == 2
+    assert writer.writes == []
 
 
 # --- the composed plan -----------------------------------------------------
 
 
-def test_all_three_hops_plan_exactly_the_steps_they_always_have():
+def test_both_hops_plan_exactly_the_steps_they_always_have():
     reader, writer, rejects = given_rows([]), RecordingWriter(), RecordingWriter()
 
     # No column gate on the raw hop, unlike a file feed: the Reader decorator
@@ -402,14 +316,6 @@ def test_all_three_hops_plan_exactly_the_steps_they_always_have():
         "  [Validate] post-validate (depends on: quarantine)",
         "  [Write] write (depends on: post-validate)",
     ]
-    assert party_builder(reader, writer).describe().splitlines() == [
-        "Pipeline: sharepoint_cases:parties",
-        "  [Read] read",
-        "  [Transform] explode (depends on: read)",
-        "  [Transform] coerce (depends on: explode)",
-        "  [Validate] post-validate (depends on: coerce)",
-        "  [Write] write (depends on: post-validate)",
-    ]
 
 
 # --- end to end ------------------------------------------------------------
@@ -421,18 +327,23 @@ def test_the_bundled_sample_lands_every_item_across_both_pages(tmp_path):
     )
 
     med = medallion(StoreRegistry(tmp_path), FEED_NAME)
-    assert [row["CaseRef"] for row in read_rows(med.raw, "case_observation")] == [
-        "C000101",
-        "C000102",
-        "C000103",
-        "C000104",
-        "C000105",
+    landed_raw = read_rows(med.raw, "case_observation")
+    assert [row["source_item_id"] for row in landed_raw] == [
+        "101",
+        "102",
+        "103",
+        "104",
+        "105",
     ]
-    assert result.raw_rows == 5
-    assert result.silver_rows == 5
-    # 2 + 1 + 0 + 1 + 2 parties across the five items.
-    assert result.party_rows == 6
-    assert len(read_rows(med.silver, "case_party_version")) == 6
+    # One fixture Case carries no Case Reference at all, which is ordinary.
+    assert [row["Title"] for row in landed_raw][:2] == ["CMP-000101", "CMP-000102"]
+    assert pd.isna(landed_raw[2]["Title"])
+    assert (result.raw_rows, result.silver_rows) == (5, 5)
+    # The fixture exercises all four real statuses, so the whole vocabulary
+    # passes the schema gate rather than only the one a happy path would use.
+    assert {row["status"] for row in read_rows(med.silver, "case_version")} == set(
+        CASE_STATUSES
+    )
 
 
 def test_a_repeated_observation_is_a_no_op_in_raw_and_silver(tmp_path):
@@ -448,10 +359,9 @@ def test_a_repeated_observation_is_a_no_op_in_raw_and_silver(tmp_path):
 
 
 def test_a_later_source_version_appends_a_second_case_version(tmp_path):
-    client = FakeListClient(
-        items(item()),
-        items(item(modified="2026-08-05T08:45:00Z", etag="4", status="Closed")),
-    )
+    later = item(Status="Completed")
+    later.update({"Modified": "2026-08-05T08:45:00Z", "odata.etag": "4"})
+    client = FakeListClient(items(item()), items(later))
     context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
 
     run(context, client=client)
@@ -461,12 +371,12 @@ def test_a_later_source_version_appends_a_second_case_version(tmp_path):
     assert [
         (row["status"], row["source_version"])
         for row in read_rows(med.silver, "case_version")
-    ] == [("Open", "3"), ("Closed", "4")]
+    ] == [("In-progress", "3"), ("Completed", "4")]
 
 
 def test_the_same_observation_carrying_a_different_payload_is_refused(tmp_path):
     # Same Id and same etag, so the same observation id -- but the row moved.
-    client = FakeListClient(items(item()), items(item(status="Closed")))
+    client = FakeListClient(items(item()), items(item(Status="Completed")))
     context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
 
     run(context, client=client)
@@ -484,16 +394,15 @@ def test_a_quiet_window_writes_cleanly_and_a_later_one_still_appends(tmp_path):
     busy = run(context, client=client)
 
     med = medallion(StoreRegistry(tmp_path), FEED_NAME)
-    assert (quiet.raw_rows, quiet.silver_rows, quiet.party_rows) == (0, 0, 0)
-    assert (busy.raw_rows, busy.silver_rows, busy.party_rows) == (1, 1, 2)
+    assert (quiet.raw_rows, quiet.silver_rows) == (0, 0)
+    assert (busy.raw_rows, busy.silver_rows) == (1, 1)
     assert len(read_rows(med.raw, "case_observation")) == 1
     assert len(read_rows(med.silver, "case_version")) == 1
-    assert len(read_rows(med.silver, "case_party_version")) == 2
 
 
-def test_a_quiet_window_still_runs_and_records_all_three_hops(tmp_path):
+def test_a_quiet_window_still_runs_and_records_both_hops(tmp_path):
     # A quiet poll is not a different pipeline: an operator reading the run log
-    # still sees all three hops, against all three tables, with zero rows.
+    # still sees both hops, against both tables, with zero rows.
     log_path = tmp_path / "runs.log"
     context = RunContext(
         base_dir=tmp_path, pipeline=FEED_NAME, run_log=RunLog(log_path)
@@ -505,13 +414,11 @@ def test_a_quiet_window_still_runs_and_records_all_three_hops(tmp_path):
     assert {record["pipeline"] for record in records} == {
         f"{FEED_NAME}:raw",
         f"{FEED_NAME}:silver",
-        f"{FEED_NAME}:parties",
     }
     assert {row["name"] for record in records for row in record["data_locations"]} == {
         LIST_NAME,
         "case_observation",
         "case_version",
-        "case_party_version",
     }
     assert {record["rows_out"] for record in records} == {0}
 
@@ -543,7 +450,7 @@ def test_the_result_carries_the_candidate_end_but_commits_no_checkpoint(tmp_path
     assert not checkpoints.path.exists()
 
 
-def test_the_run_log_identifies_the_list_and_the_three_tables(tmp_path):
+def test_the_run_log_identifies_the_list_and_both_tables(tmp_path):
     log_path = tmp_path / "runs.log"
     context = RunContext(
         base_dir=tmp_path, pipeline=FEED_NAME, run_log=RunLog(log_path)
@@ -561,7 +468,6 @@ def test_the_run_log_identifies_the_list_and_the_three_tables(tmp_path):
         LIST_NAME,
         "case_observation",
         "case_version",
-        "case_party_version",
     }
     assert not any("@" in location["namespace"] for location in located)
 
@@ -570,4 +476,3 @@ def test_the_sample_client_replays_both_pages_as_one_first_load():
     frame = LocalJsonListClient().fetch_items(LIST_NAME, (), (), ())
 
     assert list(frame["Id"]) == [101, 102, 103, 104, 105]
-    assert json.loads(json.dumps(list(frame["PartiesId"])[0])) == [17, 23]
