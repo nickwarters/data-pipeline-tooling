@@ -237,7 +237,7 @@ test('the Appeal code itself is intact and importable', async () => {
   // The point of the switch is that Appeals are unreachable, not absent. If
   // these modules are deleted or emptied while the switch stands, the switch has
   // become cover for a removal, and turning the feature back on is a rewrite
-  // rather than the six-step edit the guide describes.
+  // rather than the mechanical removal the guide describes.
   const [state, actions, effects, view, reviewView] = await Promise.all([
     import('../src/evaluators/appeal-state.js'),
     import('../src/pages/cora-case-review/appeal-actions.js'),

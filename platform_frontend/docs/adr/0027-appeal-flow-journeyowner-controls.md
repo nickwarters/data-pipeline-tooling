@@ -11,6 +11,16 @@ until the Case carries an Appeal, and **Amendment (2026-07, #600)**, which makes
 the `appealRequest` row the configured raiser's alone, and **Amendment (2026-08, #636)**,
 which removes the `resolvedBy` configuration key.
 
+**Currently unreachable, not withdrawn.** The decision below stands and its code
+is intact, but the Appeals journey is switched off in the shipped build behind
+the hard-coded `APPEALS_ENABLED` constant, because the operating model around it
+— who raises an Appeal, what Controls owes in response, and how long they have —
+is unsettled. Both Appeal tabs resolve `hidden` for every role and the Controls
+dashboard surfaces are not composed, so nothing this ADR describes is visible to
+a user today. The access rows, the raiser configuration and the resolution flow
+are all as specified here and resume as specified when the switch is deleted.
+See [the feature switches guide](../guide/feature-switches.md).
+
 ## Context
 
 CONTEXT.md's **Appeal** was raised by the Responsible Party (or their Manager) and

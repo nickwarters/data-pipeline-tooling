@@ -30,12 +30,12 @@ So the rule is:
 > `features.js`.
 
 This also means a switch must be written so that it _can_ be deleted
-mechanically. Each gate below is a plain `if` that returns or skips early, or an
-`if` at the top of a small function body. None of them entangles the flag with
-the logic it is gating — no `flag && realCondition` fused into a larger boolean,
-no ternary selecting between two behaviours. Deleting the wrapper restores the
-original expression exactly, which is what makes the removal reviewable as a
-diff.
+mechanically. Each gate below is one of two shapes: a plain `if` that returns or
+skips early, or a leading `APPEALS_ENABLED &&` conjunct whose deletion leaves
+the original condition verbatim. No gate uses a ternary to select between two
+behaviours, and none fuses the flag into a larger boolean it would have to be
+untangled from. Removing a gate is always a deletion that restores the original
+expression exactly, which is what makes the removal reviewable as a diff.
 
 ## The switches in force
 
@@ -114,10 +114,13 @@ Do these in one commit. A half-removed switch is worse than either state.
      `MATRIX` rows below it already carry the real access policy and need no
      edit.
    - `src/pages/dashboard/panel-descriptors.js` — delete the
-     `if (!APPEALS_ENABLED) return false;` line; the descriptor collapses back
-     to `{ key: 'appeals', visible: (c) => c.isControls }`.
-   - `src/services/action-centre-model.js` — likewise; `requires` collapses back
-     to `(c) => c.isControls`.
+     `if (!APPEALS_ENABLED) return false;` line, leaving a body of
+     `return c.isControls;`. Collapsing that back to the original one-line
+     descriptor — `{ key: 'appeals', visible: (c) => c.isControls }` — is a
+     separate, optional tidy; prettier will not do it for you.
+   - `src/services/action-centre-model.js` — likewise; `requires` is left as a
+     block returning `c.isControls`, optionally collapsed to
+     `(c) => c.isControls`.
    - `src/pages/cora-dashboard.js` — drop the `APPEALS_ENABLED &&` conjunct,
      leaving `if (capabilities.isControls)`.
    - `src/evaluators/kpi-strip-model.js` — the same, leaving
@@ -125,29 +128,47 @@ Do these in one commit. A half-removed switch is worse than either state.
 
 3. **Delete the import line** from all five files.
 
-4. **Delete the switch's comments.** Each gate carries a comment explaining that
-   Appeals are switched off in this build. Those are now false. Grep the tree
-   for `switched off` and for `APPEALS_ENABLED` — after this step both must
-   return nothing outside `docs/`.
+4. **Delete the gates' comments.** Each of the five gates carries a comment
+   saying Appeals are switched off in this build. Those are now false.
 
-5. **Delete or rewrite the switched-off tests.** `tests/appeals-feature-switch.test.js`
-   asserts the gated behaviour and exists only to hold the switch honest; it
-   goes when the switch does. The tests it displaced — the Appeal tab access
-   cases, the Controls dashboard panel, KPI lane and Action Centre reason cases —
-   are marked in that file, and must be restored to their unswitched
-   assertions in their own suites.
+5. **Delete the switch's own test.** `tests/appeals-feature-switch.test.js`
+   asserts the gated behaviour and exists only to hold the switch honest. It
+   goes when the switch does.
 
-6. **Remove this section** and the table row above, and delete this file if
+6. **Restore the displaced tests.** Every test this switch changed carries a
+   comment saying what to put back — the grep in step 8 finds all of them.
+   There are three kinds, and the last two are easy to overlook:
+
+   - **Assertions weakened to the switched-off result**, each naming the value
+     to restore: the Appeal tab access cases, the Controls dashboard panel and
+     Action Centre reason lists, the KPI lane, the dashboard's dispatched
+     actions and its last-navigation hash.
+   - **The test helper.** Delete `matrixMode` and `assertMatrixGrid` from
+     `tests/helpers/section-access.js` and move their callers back to
+     `evaluateAccess` / `assertGrid` — in `section-access-lifecycle.test.js`,
+     `section-access-matrix.test.js` and `cora-case-review-slice.test.js`. The
+     expectations do not change; only the function called does.
+   - **The flow harness.** In `tests/_in-memory-flow-runner.js`, delete
+     `appealPolicyMode` and take both Appeal guards back to reading
+     `loader.access.appealRequest` / `loader.access.appealReview`.
+
+7. **Remove this section** and the table row above, and delete this file if
    `APPEALS_ENABLED` was the last switch in it.
 
-7. **Run the gates.** `npm run check`, `npm run verify`, `npm run test:coverage`.
+8. **Grep, then run the gates.** Search the tree for `APPEALS_ENABLED` and for
+   `switched off`: once steps 1–7 are done, both must return nothing outside
+   `docs/`. Then `npm run check`, `npm run verify`, `npm run test:coverage`.
    `verify`'s dead-code half is the useful one here: it reads the import graph
    backwards, so a leftover import of a deleted `features.js` fails loudly.
 
-8. **Provision nothing.** The `HasOpenAppeal` and `AppealRaisedAt` columns and
-   their indexes already exist on every Case list — see
-   [provisioning-runbook.md](provisioning-runbook.md). Confirm rather than
-   re-create.
+9. **Amend the ADRs.** ADR-0027 (the Appeal flow) and ADR-0030's appeals reason
+   carry a note that the journey is unreachable behind this switch. Remove it —
+   they are live decisions again.
+
+10. **Provision nothing.** The `HasOpenAppeal` and `AppealRaisedAt` columns and
+    their indexes already exist on every Case list — see
+    [provisioning-runbook.md](provisioning-runbook.md). Confirm rather than
+    re-create.
 
 ### What the switch costs while it stands
 

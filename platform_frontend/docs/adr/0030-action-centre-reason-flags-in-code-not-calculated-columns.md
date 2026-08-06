@@ -7,6 +7,15 @@ Date: 2026-07-05
 Accepted (supports [ADR-0007]; relates to [ADR-0008], [ADR-0009]; refines the reason
 model introduced for the dashboard **Action Centre**, issue #287)
 
+**One of the four reasons is currently unreachable.** The `appeals` reason — the
+Controls "Appeals to work" group, keyed on the `hasOpenAppeal` flag — qualifies
+for no capability in the shipped build, because the Appeals journey is switched
+off behind the hard-coded `APPEALS_ENABLED` constant. Its row, clock, cadence
+and flag pairing are unchanged and resume when the switch is deleted; the
+consequence today is that a Controls-only user has no Action Centre groups at
+all, so the panel is not composed for them. The other three reasons are
+unaffected. See [the feature switches guide](../guide/feature-switches.md).
+
 ### Amendment — issue #691, 2026-08-03
 
 **The decision stands; one sentence of its Context did not.** The Decision below says the

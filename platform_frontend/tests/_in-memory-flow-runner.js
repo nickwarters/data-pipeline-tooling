@@ -450,6 +450,13 @@ export function createInMemoryFlowRunner(state, opts = {}) {
    *
    * Every other Section here still goes through `loader.access`.
    *
+   * It composes roles the way `evaluateAccess` does — most permissive wins —
+   * rather than calling it, and so restates that rule and skips the Case Type
+   * `sections` allow-list check that runs ahead of the matrix. Both are
+   * acceptable only because this is a temporary detour around a switch: if the
+   * composition rule changes while the switch stands, this diverges silently.
+   * Deleting it is step 6 of the removal in `docs/guide/feature-switches.md`.
+   *
    * @param {any} loader
    * @param {'appealRequest' | 'appealReview'} section
    * @returns {import('../src/services/section-access.js').Mode}
