@@ -760,6 +760,61 @@ Committing is not automatic: no Reader, node, or runner advances the watermark
 for you. Deliberately — the store cannot know whether the rows it would be
 vouching for actually landed.
 
+#### A worked incremental feed — `pipelines/sharepoint_cases/`
+
+The two halves above wired into a real feed. It follows the ordinary scaffold
+shape — a `*_builder` per hop, composed from the shared recipes, driven by
+`run(context)` — with the four things an incremental SharePoint source adds.
+
+**1. The read is narrowed to what raw stores.** `StorableObservations` is a
+Reader decorator (the `tools.retry` shape: forward `data_locations`, delegate
+`describe()`) that projects the response down to the source columns plus the
+stamped metadata. `Id` / `Modified` / `odata.etag` are dropped — the stamped
+`source_item_id` / `source_modified_at` / `source_version` say the same thing in
+the vocabulary every hop below reads — and so is `observed_at`, for the reason in
+point 3. Note the split it has to make: an **empty** window comes back as the
+declared projection only, with none of the columns the *client* adds by expanding
+a lookup (`Owner/Title`), so an empty frame is reindexed onto the target columns
+while a populated one is selected strictly. Selecting strictly in both cases
+raises `KeyError` on the ordinary quiet poll; reindexing in both cases would
+manufacture the very column the raw hop's `ColumnValidator` is about to check.
+
+**2. Every hop is `AppendOnly`, keyed on the observation.** Raw and silver key on
+`source_observation_id`, so re-reading the overlap is a no-op and a changed value
+under a key already accepted is an `AppendOnlyConflictError`. The multi-value
+bridge keys on `("source_observation_id", "party_position")`: the same person may
+legitimately appear twice in one cell, and keying on the person would read that
+as a contradiction.
+
+**3. No "when we saw it" column.** `AppendOnly` compares every non-key column of
+a re-presented row, so a per-read timestamp would make each overlapping re-read
+of an unchanged item look like a changed row. The same reasoning excludes the
+ingestion batch id and the pipeline run id. When we saw it lives in the run log
+and in the returned `ingestion_batch_id` instead.
+
+**4. The watermark is not committed.** `run` returns a `SharePointIngestResult`
+carrying the window, the batch id and the row counts, and leaves the checkpoint
+alone: advancing it vouches for the rows having been *published*, which is the
+gold step's to do.
+
+Two smaller notes. The batch id is `f"{list_id}:{watermark or 'first-load'}"` —
+it identifies the *source window resumed from*, not the run, so a re-drive of a
+failed window mints the same id; and only the GUID travels in it, so no site or
+credential does. And `server_now` comes from the client's own clock
+(`client.server_time()`), never a local `utcnow`: the window bounds a predicate
+the list evaluates, so a skewed local clock silently widens or narrows it.
+
+Run the bundled fixture pages offline — the feed's `LocalJsonListClient` is
+opt-in via `--sample`, because a production run that forgot its client must
+refuse rather than quietly ingest five fake Cases:
+
+```sh
+python -m pipelines.sharepoint_cases.pipeline --base-dir /tmp/demo --sample
+```
+
+The three tables it lands, field by field, are documented in
+[`data-dictionary-sharepoint-cases.md`](data-dictionary-sharepoint-cases.md).
+
 ### `SharePointWriter(site, list_name, auth, strategy=Refresh())`
 
 The outbound dual of `SharePointReader` and the emitter of the canonical

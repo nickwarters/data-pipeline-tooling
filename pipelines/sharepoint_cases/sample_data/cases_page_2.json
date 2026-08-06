@@ -1,0 +1,30 @@
+[
+  {
+    "Id": 104,
+    "Modified": "2026-08-05T08:30:00Z",
+    "odata.etag": "5",
+    "CaseRef": "C000104",
+    "Status": "Closed",
+    "OpenedOn": "2026-06-20T00:00:00Z",
+    "TargetCloseOn": "2026-07-20T00:00:00Z",
+    "RiskScore": 0,
+    "OwnerId": 31,
+    "Owner/Title": "C. Silva",
+    "PartiesId": [31],
+    "Parties/Title": ["C. Silva"]
+  },
+  {
+    "Id": 105,
+    "Modified": "2026-08-05T08:40:00Z",
+    "odata.etag": "1",
+    "CaseRef": "C000105",
+    "Status": "Void",
+    "OpenedOn": "2026-06-25T00:00:00Z",
+    "TargetCloseOn": null,
+    "RiskScore": 100,
+    "OwnerId": 31,
+    "Owner/Title": "C. Silva",
+    "PartiesId": [17, 31],
+    "Parties/Title": ["A. Khan", "C. Silva"]
+  }
+]

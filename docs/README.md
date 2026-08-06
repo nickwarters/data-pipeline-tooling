@@ -588,9 +588,10 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 |-----|--------|
 | [`public-api.md`](public-api.md) | The public API: the four facades (`framework.core` / `framework.io` / `framework.transform` / `framework.run`) and the `tools.*` siblings application code may also import, the internal-module boundary, and the packaging non-goal. |
 | [`core-primitives.md`](core-primitives.md) | The consolidated framework primitives reference with worked examples and build status per slice. |
-| [`adding-a-feed.md`](adding-a-feed.md) | Every Reader, the stubbed remote (SAS / SharePoint) seams, and the SharePoint `Modified` checkpoint (`SharePointCheckpointStore`) that computes the next polling window. |
+| [`adding-a-feed.md`](adding-a-feed.md) | Every Reader, the stubbed remote (SAS / SharePoint) seams, the SharePoint `Modified` checkpoint (`SharePointCheckpointStore`) that computes the next polling window, and the worked incremental feed that wires the two halves together. |
 | [`schema-enforcement.md`](schema-enforcement.md) | `Schema` / `SchemaValidator` / `SchemaCoercion`, value-level rules, composing the schema boundary onto a pipeline. |
 | [`data-dictionary-template.md`](data-dictionary-template.md) | The Confluence-ready template for documenting what every table/Feed and each of its fields means — the prose companion to `schema.py`. |
+| [`data-dictionary-sharepoint-cases.md`](data-dictionary-sharepoint-cases.md) | The template filled in for the `sharepoint_cases` feed: the raw observation, the Case version, and the party bridge — and why none of them stores when we saw the row. |
 | [`gold-accumulation.md`](gold-accumulation.md) | Gold's accumulate-by-run semantics, idempotent re-run, reading "current". |
 | [`processors.md`](processors.md) | The Selection transforms (`JoinWith`, per-group sampling) and the Ingest / fan-out transforms (`SelectColumns`, `Unpivot`, `DeriveKey`, `LatestPerKey`). |
 | [`selection.md`](selection.md) | The full CaseType / Variation → CasePool → SelectionPool flow + explainability. |

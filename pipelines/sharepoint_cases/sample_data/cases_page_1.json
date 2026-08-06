@@ -1,0 +1,44 @@
+[
+  {
+    "Id": 101,
+    "Modified": "2026-08-05T08:10:00Z",
+    "odata.etag": "3",
+    "CaseRef": "C000101",
+    "Status": "Open",
+    "OpenedOn": "2026-07-01T00:00:00Z",
+    "TargetCloseOn": "2026-08-01T00:00:00Z",
+    "RiskScore": 42,
+    "OwnerId": 17,
+    "Owner/Title": "A. Khan",
+    "PartiesId": [17, 23],
+    "Parties/Title": ["A. Khan", "B. Okafor"]
+  },
+  {
+    "Id": 102,
+    "Modified": "2026-08-05T08:20:00Z",
+    "odata.etag": "1",
+    "CaseRef": "C000102",
+    "Status": "With Adviser",
+    "OpenedOn": "2026-07-02T00:00:00Z",
+    "TargetCloseOn": "2026-08-15T00:00:00Z",
+    "RiskScore": 7,
+    "OwnerId": 23,
+    "Owner/Title": "B. Okafor",
+    "PartiesId": [23],
+    "Parties/Title": ["B. Okafor"]
+  },
+  {
+    "Id": 103,
+    "Modified": "2026-08-05T08:25:00Z",
+    "odata.etag": "2",
+    "CaseRef": "C000103",
+    "Status": "Awaiting Evidence",
+    "OpenedOn": "2026-07-03T00:00:00Z",
+    "TargetCloseOn": null,
+    "RiskScore": 88,
+    "OwnerId": 17,
+    "Owner/Title": "A. Khan",
+    "PartiesId": [],
+    "Parties/Title": []
+  }
+]
