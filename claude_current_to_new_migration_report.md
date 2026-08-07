@@ -84,7 +84,7 @@ These are **built today** (verified in `framework/`), not roadmap:
   (lazy cross-feed join, resolved in Python) against **Reference Data** subjects,
   each with its own medallion.
 - **"Latest state of all cases" from partial daily files** → deterministic
-  `case_id` via `DeriveKey` (`uuid5` over a natural key) + `LatestPerKey` reduces
+  `case_id` via `DeriveKey` (a `sha256` over a natural key) + `LatestPerKey` reduces
   accumulated history to current-only gold. Both are **built** (`processors.py`).
   This is exactly the history-upstream / current-gold Ingest profile your S1.1
   needs, and it is the right model for "Monday brings Fri/Sat/Sun files."

@@ -8,7 +8,6 @@ not hidden inside ``process``.
 """
 
 import json
-import uuid as _uuid
 
 import pandas as pd
 import pytest
@@ -21,7 +20,13 @@ from framework.transform import AntiJoinWith as PublicAntiJoinWith
 # The bounded-subset processors are imported through the facade on purpose: that
 # is how a pipeline author reaches them, and until they were exported these
 # classes were only usable by their internal module path.
-from framework.transform import Parse, Sample, SamplePerGroup, TopNPerGroup
+from framework.transform import (
+    IdentityError,
+    Parse,
+    Sample,
+    SamplePerGroup,
+    TopNPerGroup,
+)
 from framework.transform.processors import (
     AntiJoinWith,
     DeriveKey,
@@ -341,18 +346,30 @@ def test_pipeline_filters_one_feed_and_joins_another_feeds_silver(tmp_path):
     assert list(selected["region"]) == ["north", "south"]
 
 
-_NS = _uuid.UUID("12345678-1234-5678-1234-567812345678")
+_NS = "cases"
 
 
-def test_derive_key_stamps_uuid5_for_a_single_column_key():
+def _key_of(dataset, namespace=_NS, natural_key=("ref",)):
+    """The one key ``DeriveKey`` stamps on a single-row dataset."""
+    return (
+        DeriveKey(into="case_id", namespace=namespace, natural_key=list(natural_key))(
+            dataset
+        )
+        .to_pandas()["case_id"]
+        .iloc[0]
+    )
+
+
+def test_derive_key_stamps_the_sha256_of_its_canonical_payload():
+    # The golden digest is spelled out rather than recomputed with the helper, so
+    # a change to the encoding fails here instead of agreeing with itself. This
+    # value is on disk in every id already published: it is not free to change.
     dataset = Dataset.from_pandas(
         pd.DataFrame({"surname": ["SMITH"], "dob": ["2024-01-15"]})
     )
-    result = DeriveKey(into="case_id", namespace=_NS, natural_key=["surname"])(
-        dataset
-    ).to_pandas()
-    expected = str(_uuid.uuid5(_NS, "SMITH"))
-    assert result["case_id"].iloc[0] == expected
+    assert _key_of(dataset, natural_key=["surname"]) == (
+        "2059eda96ffb0022c23b297c48af2b571cd4c8c12810dbb37ba6461a333bc5eb"
+    )
 
 
 def test_derive_key_is_deterministic_across_runs():
@@ -364,51 +381,75 @@ def test_derive_key_is_deterministic_across_runs():
 
 
 def test_derive_key_different_namespaces_yield_different_ids():
-    _NS2 = _uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
     dataset = Dataset.from_pandas(pd.DataFrame({"ref": ["X"]}))
-    id_ns1 = (
-        DeriveKey(into="case_id", namespace=_NS, natural_key=["ref"])(dataset)
-        .to_pandas()["case_id"]
-        .iloc[0]
-    )
-    id_ns2 = (
-        DeriveKey(into="case_id", namespace=_NS2, natural_key=["ref"])(dataset)
-        .to_pandas()["case_id"]
-        .iloc[0]
-    )
-    assert id_ns1 != id_ns2
+    assert _key_of(dataset) != _key_of(dataset, namespace="claims")
 
 
-def test_derive_key_multi_column_key_composes_in_declared_order():
+def test_derive_key_composes_every_key_column():
     dataset = Dataset.from_pandas(
         pd.DataFrame({"surname": ["SMITH"], "dob": ["2024-01-15"]})
     )
-    result = DeriveKey(into="case_id", namespace=_NS, natural_key=["surname", "dob"])(
-        dataset
-    ).to_pandas()
-    expected = str(_uuid.uuid5(_NS, "SMITH|2024-01-15"))
-    assert result["case_id"].iloc[0] == expected
+    assert _key_of(dataset, natural_key=["surname", "dob"]) == (
+        "0df4839c7bdeedcd6640c309a5a1c1939ad8bb0316b619b76ca421ba1548872a"
+    )
 
 
-def test_derive_key_multi_column_key_order_matters():
+def test_derive_key_a_value_cannot_forge_another_rows_identity():
+    # Two distinct Cases whose key values differ only in where the boundary
+    # between the columns falls. Both join to "SMITH|2024-01-15|EXTRA", so the
+    # old separator-joined key minted one id for both; hashing the columns by
+    # name cannot be forged that way.
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({"surname": ["SMITH"], "dob": ["2024-01-15|EXTRA"]})
+    )
+    twin = Dataset.from_pandas(
+        pd.DataFrame({"surname": ["SMITH|2024-01-15"], "dob": ["EXTRA"]})
+    )
+    key = ["surname", "dob"]
+    assert _key_of(dataset, natural_key=key) != _key_of(twin, natural_key=key)
+
+
+def test_derive_key_does_not_depend_on_the_order_the_key_is_declared_in():
+    # The key is the named columns, not a concatenation of them, so the Case
+    # builder and a Detail builder cannot drift apart by listing the same
+    # contract in a different order. Which columns are in it still matters.
     dataset = Dataset.from_pandas(
         pd.DataFrame({"surname": ["SMITH"], "dob": ["2024-01-15"]})
     )
-    id_ab = (
-        DeriveKey(into="case_id", namespace=_NS, natural_key=["surname", "dob"])(
-            dataset
-        )
-        .to_pandas()["case_id"]
-        .iloc[0]
-    )
-    id_ba = (
-        DeriveKey(into="case_id", namespace=_NS, natural_key=["dob", "surname"])(
-            dataset
-        )
-        .to_pandas()["case_id"]
-        .iloc[0]
-    )
-    assert id_ab != id_ba
+    both = _key_of(dataset, natural_key=["surname", "dob"])
+    assert both == _key_of(dataset, natural_key=["dob", "surname"])
+    assert both != _key_of(dataset, natural_key=["surname"])
+
+
+def test_derive_key_ignores_the_dtypes_of_columns_outside_the_key():
+    # Read out of a row, a key column takes the frame's common dtype: in an
+    # all-numeric frame an unrelated float upcasts the key and 123 renders
+    # "123.0", re-keying a row by a column not in its identity contract.
+    dataset = Dataset.from_pandas(pd.DataFrame({"ref": [123]}))
+    with_a_float = Dataset.from_pandas(pd.DataFrame({"ref": [123], "amount": [1.5]}))
+
+    assert _key_of(dataset) == _key_of(with_a_float)
+
+
+def test_derive_key_renders_a_whole_number_the_same_however_it_is_carried():
+    # pandas turns an int column into float64 the moment any value in it is
+    # null, so the same id would otherwise key differently across two runs of
+    # the same feed.
+    as_int = Dataset.from_pandas(pd.DataFrame({"ref": [123]}))
+    as_float = Dataset.from_pandas(pd.DataFrame({"ref": pd.Series([123.0])}))
+
+    assert _key_of(as_int) == _key_of(as_float)
+
+
+@pytest.mark.parametrize("dtype", ["object", "Int64", "float64"])
+def test_derive_key_refuses_a_row_with_no_natural_key(dtype):
+    # Every flavour of null stringifies to a different plausible key --
+    # "None", "<NA>", "nan" -- so identifying one would mint an id that looks
+    # present, is not, and changes with the column's dtype.
+    dataset = Dataset.from_pandas(pd.DataFrame({"ref": pd.Series([None], dtype=dtype)}))
+
+    with pytest.raises(IdentityError, match="row 0 has no 'ref'"):
+        _key_of(dataset)
 
 
 def test_derive_key_returns_a_dataset_not_a_dataframe():

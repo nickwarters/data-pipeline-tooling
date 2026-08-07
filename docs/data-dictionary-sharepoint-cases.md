@@ -1,8 +1,10 @@
 # Data dictionary — `sharepoint_cases`
 
 The filled-in entry for the `sharepoint_cases` feed, following
-[`data-dictionary-template.md`](data-dictionary-template.md). Two tables: the
-faithful raw observation and the typed Case version. The Python contract is
+[`data-dictionary-template.md`](data-dictionary-template.md). Six tables: the
+faithful raw observation, the typed Case version, and the four gold tables
+reduced from the version history — the current Case and three aggregates. The
+Python contract is
 [`pipelines/sharepoint_cases/schema.py`](../pipelines/sharepoint_cases/schema.py);
 this page is its prose companion.
 
@@ -36,8 +38,10 @@ run needs `LIST_NAME` changed accordingly.
 
 ## Where "when we saw it" lives
 
-Neither table carries an observation timestamp, an ingestion batch id, or a
-pipeline run id as a **column**, and that is deliberate. The load strategy is
+Neither the raw nor the silver table carries an observation timestamp, an
+ingestion batch id, or a pipeline run id as a **column**, and that is
+deliberate. (Gold does carry `as_of_utc`, but that is the run's *candidate
+window end*, not when we looked — see below.) The load strategy is
 `AppendOnly`, which compares every non-key column of a re-presented row against
 the row already stored; a per-read stamp would differ on every overlapping poll
 and turn each ordinary re-read into an append-only conflict. The rows record
@@ -45,7 +49,7 @@ and turn each ordinary re-read into an append-only conflict. The rows record
 
 When we saw it is recorded elsewhere, and is still recoverable: the **run log**
 (`<base>/_runs/sharepoint_cases.log`) timestamps every step and its
-`data_locations` name the list and both tables, and the **ingestion batch id**
+`data_locations` name the list and every table, and the **ingestion batch id**
 returned on `SharePointIngestResult` identifies the source window the poll
 resumed from. The Reader's `observed_at` stamp is an injectable callable and is
 dropped at the storable-observation boundary for the same reason.
@@ -64,7 +68,7 @@ the diagnosable, re-runnable copy of what the list returned.
 | **Subject / Case Type** | `sharepoint_cases` |
 | **Medallion layer** | raw |
 | **Grain** | one row per observation (one list item at one version) |
-| **Is this a Case Type?** | No — an ingest feed; the Case Type question is settled at gold |
+| **Is this a Case Type?** | No — an ingest feed; identity is derived at gold |
 | **Natural key → `case_id`** | n/a at this layer |
 | **Source system** | SharePoint list `Cases-Complaints` (site and GUID: placeholders, see above) |
 | **Reader** | `SharePointModifiedReader`, behind the feed's `StorableObservations` projection |
@@ -132,8 +136,8 @@ own question bank and that is a gold concern.
 | **Subject / Case Type** | `sharepoint_cases` |
 | **Medallion layer** | silver |
 | **Grain** | one row per observation of a Case |
-| **Is this a Case Type?** | Not yet — the gold assembly is an open decision |
-| **Natural key → `case_id`** | n/a until gold; `id` (the SharePoint item id) is the candidate |
+| **Is this a Case Type?** | No — no `CaseType` is declared; gold derives `case_id` from a namespace constant (see below) |
+| **Natural key → `case_id`** | `source_item_id` (the SharePoint item id), namespaced by `schema.LIST_NAME` — applied at gold, not here |
 | **Source system** | `raw.case_observation` (the batch just fetched, not the whole history) |
 | **Reader** | `DatasetReader` over the fetched batch |
 | **Load strategy** | `AppendOnly("source_observation_id")` |
@@ -253,3 +257,154 @@ guessed at here would quarantine real data.
   the review application (`outcome`, `void_reason`, `question_bank_version`) get
   no rule here, because a rule this feed cannot justify is a rule that will
   eventually reject good data.
+
+## Gold — the current Case and three aggregates
+
+Silver accumulates *observations*; gold answers *what is true now*. Four tables,
+all rebuilt whole with `Refresh()` on every poll from the entire silver history,
+in [`pipelines/sharepoint_cases/gold.py`](../pipelines/sharepoint_cases/gold.py).
+They are published **before** the polling watermark is committed, so a failure
+anywhere leaves the watermark where it was and the next run rebuilds all four.
+
+| Table | Declared grain | Measure |
+|-------|----------------|---------|
+| `case_current` | one row per `case_id` | the Case, as it currently stands |
+| `case_counts_current` | `assigned_reviewer_name` × `assigned_reviewer_manager_name` × `status` | `case_count` |
+| `case_age_buckets_current` | `age_bucket` × `status` | `case_count` |
+| `case_throughput_daily` | `terminal_date` × `terminal_status` | `case_count` |
+
+Only `case_current` carries a live grain gate (`UniqueValidator("case_id")`); the
+three aggregates get none, for the reason set out in `case_current_builder`'s
+docstring. Their grain is declared here and in each builder's docstring instead.
+
+### `as_of_utc`, on every table
+
+`as_of_utc` is the **candidate SharePoint window end** — the instant this run is
+about to commit as its watermark — as ISO-8601 UTC text. Never `utcnow()`: a
+re-drive of the same window must produce identical gold. Where a *calendar date*
+is derived from it (`terminal_date`, the age arithmetic) the instant is converted
+to the **local** date first, per
+[`tools/observability/timestamps.py`](../tools/observability/timestamps.py).
+
+### `case_current`
+
+| Attribute | Value |
+|-----------|-------|
+| **Grain** | one row per `case_id` |
+| **Identity** | a `sha256` over `{namespace: LIST_NAME, natural_key: {source_item_id}}`, stamped by `DeriveKey` |
+| **Load strategy** | `Refresh()` |
+| **Source** | the whole `silver.case_version` history |
+| **Columns** | every silver column, plus `case_id` and `as_of_utc` |
+
+**Which version is current.** One stable sort on `case_id`,
+`source_modified_at` (parsed UTC), the parsed source version's major then minor
+part, and finally `source_observation_id`; then keep the last row per `case_id`.
+`Modified` leads because it is the source's own idea of when the item changed. It
+is not enough on its own: two versions can share a `Modified` to the second and
+append-only silver keeps both, so the parsed version breaks that tie. The version
+is **parsed, never compared as text** — `"10"` sorts before `"9"` lexically. All
+three shapes the column really holds are handled: an ETag (`"3"`, `W/"3"`,
+`"4,1"`), a dotted UI version (`3.0`, `512.0`), and — for a row that arrived with
+no version at all — a sha256 digest, which is not a version and sorts below every
+real one. Two *digest* rows at the same `Modified` are therefore separated only by
+`source_observation_id`: deterministic, but arbitrary.
+
+**The namespace is the list name, not the list GUID.** The GUID
+is still a placeholder, so keying on it would silently re-key every Case in gold
+the day the real one lands. The cost is stated plainly: **renaming the list
+re-keys history**, so a rename needs the treatment a re-key always needs.
+
+Two things to know about what this table holds:
+
+- It republishes **every** silver column, including the `answers`,
+  `conversation` and `details` JSON blobs, on every poll. A consumer has nowhere
+  else to read them; the price is that `Refresh()` rewrites them each time.
+- **A Case deleted from the list stays here forever.** The poll asks for items
+  modified in a window, and a deleted item is not returned by anything —
+  deletion inference is out of scope for this feed. `case_current` is "every
+  Case we have ever seen, at its latest observed version", which is the same
+  thing only while nothing is deleted.
+
+### `case_counts_current`
+
+| Attribute | Value |
+|-----------|-------|
+| **Grain** | `assigned_reviewer_name` × `assigned_reviewer_manager_name` × `status` |
+| **Columns** | `assigned_reviewer_name`, `assigned_reviewer_manager_name`, `status`, `case_count`, `as_of_utc` |
+
+**The Assigned Reviewer leads**, because the question this table answers is who
+is holding what. That reviewer's manager is kept on the same row rather than in
+a table of its own: it is how the rows roll up, so a consumer wanting counts per
+manager sums this table instead of reading a second one that could disagree with
+it.
+
+Both are **claims logins**, as silver holds them — not display names, and
+*neither is a team*. There is no team column on the provisioned list; what the
+review platform calls "my team" is exactly the set of Cases whose
+`AssignedReviewerManagerId` is the signed-in user. Calling a dimension
+`owning_team` would assert something that does not exist, and shortening the
+manager to `reviewer_manager_name` would invent a synonym for a row that also
+carries `responsible_party_manager_name`.
+
+A Case with no Assigned Reviewer, or none recorded for that reviewer's manager,
+is counted under the literal `(unassigned)` in that column. That is a
+**reporting fill, never a source value**; it exists because a NULL group key is
+a hole in the grain that a reader may silently drop, which would make the table
+quietly fail to add up to the number of current Cases.
+
+### `case_age_buckets_current`
+
+| Attribute | Value |
+|-----------|-------|
+| **Grain** | `age_bucket` × `status` |
+| **Columns** | `age_bucket`, `age_bucket_order`, `status`, `case_count`, `as_of_utc` |
+
+Age is whole **calendar** days from `created` to `as_of`, both as local dates.
+Not working days: `tools.calendar.WorkingDayCalendar` needs a seeded holiday set
+and nothing here supplies one, so a working-day age would be a guess dressed as a
+measure. Seed the calendar first if a consumer asks for it.
+
+| `age_bucket` | `age_bucket_order` | Rule |
+|--------------|--------------------|------|
+| `0-7 days` | 0 | `0 <= age < 8` |
+| `8-14 days` | 1 | `8 <= age < 15` |
+| `15-30 days` | 2 | `15 <= age < 31` |
+| `31-60 days` | 3 | `31 <= age < 61` |
+| `61+ days` | 4 | `age >= 61` |
+| `unknown` | 5 | `created` is null or unparseable, **or** the age is negative |
+
+`age_bucket_order` travels with the label so a consumer sorts without parsing
+`"15-30 days"`. A negative age is impossible while `created <= Modified < as_of`,
+so if one appears it is corruption and is bucketed where someone will see it
+rather than clamped to zero where nobody will. Every current Case lands in
+exactly one bucket, so this table's total reconciles exactly with
+`case_counts_current`'s. The reviewer dimensions are deliberately absent — they
+are one join away in `case_current`.
+
+### `case_throughput_daily`
+
+| Attribute | Value |
+|-----------|-------|
+| **Grain** | `terminal_date` × `terminal_status` |
+| **Columns** | `terminal_date`, `terminal_status`, `case_count`, `as_of_utc` |
+
+Cases that **first entered** a terminal state (`Completed`, `Void`) on a local
+calendar date. That event is derivable rather than reconstructed, because the
+source writes it: in `platform_frontend/src/lib/case-machine.js`, `completedAt`
+has exactly two writers and both refuse an already-terminal Case, no path moves a
+Case back to `In-progress`, and `voidedAt` is the same shape. So there is one
+transition into a terminal state per Case and its stamp is write-once. The count
+is taken from the *current* row, one per Case, so overlapping re-reads cannot
+inflate it.
+
+Two caveats, both real:
+
+- The invariant "terminal status implies a stamp" is **enforced nowhere**, and a
+  list row is editable by hand in the SharePoint web UI. A terminal Case with no
+  stamp is counted under the literal `(unstamped)` rather than dropped or given a
+  NULL date, so the table still totals the number of Cases currently in a
+  terminal status.
+- It is the *source's* stamp under `Refresh()`. A hand-edited or backdated stamp
+  therefore **changes a historical count on the next poll**. That is the honest
+  reading of a source that owns the event; a frozen copy would report a number
+  the source no longer agrees with.
