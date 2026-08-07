@@ -32,8 +32,9 @@ is therefore addressable by its location on disk like any other::
 
 Both run from the repo root so the import-only ``framework`` package resolves on
 ``sys.path``. There is no organisational client to hand back yet, so the first
-form refuses today rather than pretend to have reached a tenant; scheduling this
-feed waits on that client, not on anything here.
+form refuses today rather than pretend to have reached a tenant; the feed is
+scheduled on working days by ``case_review.schedules``, so it is the successful
+*run* that waits on that client, not the scheduling.
 """
 
 from __future__ import annotations

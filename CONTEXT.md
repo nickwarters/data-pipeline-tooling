@@ -323,8 +323,10 @@ date. _Here_: an `Orchestrator` owns one or more `PipelineSet`s of
 due ones **by that path at runtime** — the same addressing as the `run` command,
 so no handler registry is wired up front; it is not a Pipeline that runs other
 Pipelines. Python
-definitions own the canonical sets, dependencies, and default schedules, while
-YAML may override enablement, timing, and freshness windows. Schedules are
+definitions own the canonical sets, dependencies, and default schedules — and
+those definitions are **application-owned**, here `case_review/schedules.py`,
+which the operator CLI's `--app` names. YAML
+may override enablement, timing, and freshness windows. Schedules are
 expressed with the friendly `Schedule.*` constructors (`Schedule.daily()`,
 `Schedule.on_weekdays("monday", …)`, `Schedule.day_of_month(n)`,
 `Schedule.nth_working_day_of_month(n)`, `Schedule.last_working_day_of_month()`,

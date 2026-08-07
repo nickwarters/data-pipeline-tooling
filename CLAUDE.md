@@ -63,7 +63,9 @@ so the system can be read and changed in one place; they share a commit gate,
   `tools/observability/timestamps.py`. Then `case_review/` (the
   case-review *application* — domain types
   like `CaseType`/`CasePool` and its gold helpers, which live outside the
-  framework), `pipelines/` (scripts), `tests/` (pytest, with author test helpers
+  framework; it also owns the application's orchestration schedules,
+  `case_review/schedules.py`, which `orchestrate --app` names),
+  `pipelines/` (scripts), `tests/` (pytest, with author test helpers
   in `tests/framework_testing/`), `docs/` (architecture, ADRs).
 - **Test layout:** `tests/` mirrors the source shape — `tests/framework/`
   (itself split into `core/`, `io/`, `transform/`, `run/`,
