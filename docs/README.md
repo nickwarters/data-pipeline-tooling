@@ -100,7 +100,12 @@ Every Pipeline reuses the **same** three-layer medallion. A **subject**
 SQLite databases `<subject>/{raw,silver,gold}.db` on a network share, isolated
 from every other subject's files for blast-radius containment and independent
 onboarding ([SQLite per-subject medallion store on a network share,
-single-writer](adr/0001-sqlite-per-subject-medallion-store.md)).
+single-writer](adr/0001-sqlite-per-subject-medallion-store.md)). A subject is not
+always one Case Type: the **Sync** store is a single subject, `cora_cases`,
+holding every Case Type discriminated by a `case_type` column, because its lists
+are provisioned from one template and cross-Case-Type reporting would otherwise
+need an `ATTACH` forever ([one Sync subject for every Case
+Type](adr/0016-one-sync-subject-for-every-case-type.md)).
 The medallion is an **application-level profile** (`tools.medallion`), not
 framework vocabulary: the framework stores an opaque `namespace` → file,
 and `medallion(registry, subject)` exposes the `.raw` / `.silver` / `.gold`
@@ -115,7 +120,8 @@ namespace Stores. Each layer Store mints `writer(table, strategy)` /
 
 Case-review meanings are layered on top by the application code: Ingest may make
 gold the current CasePool, Selection may make gold an accumulating SelectionPool,
-and Sync may make gold review-platform history. Those meanings are common
+and Sync makes gold the current state of every Case in the review platform (its
+history lives in the accumulated silver below it). Those meanings are common
 case-review profiles, not framework guarantees. Common boundaries still apply by
 convention: silver is often the schema boundary
 ([graduated schema enforcement](adr/0006-graduated-schema-enforcement.md)) and
@@ -332,7 +338,10 @@ Swapping the Reader is the only change needed to ingest the same feed from a
 different source type. A wide feed (one Case table + Detail Tables) is fanned out
 into N single-table pipelines over the shared raw table — see [case identity and
 the gold grain](adr/0009-case-identity-and-gold-grain.md) and
-`pipelines/demo_fan_out.py`.
+`pipelines/demo_fan_out.py`. When such a feed *polls* and each observation
+carries the whole Case, its Detail Tables reduce to gold by the parent's winning
+observation, not by their own grain — [Detail Tables reduce to the parent's
+latest observation](adr/0015-detail-tables-reduce-to-the-parents-latest-observation.md).
 
 For a fuller authoring example, run
 `python -m pipelines.comprehensive_examples /tmp/comprehensive-demo`. It lands
