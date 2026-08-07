@@ -11,6 +11,7 @@ they pass through untouched and stay the validator's gate.
 
 from dataclasses import dataclass
 from datetime import date
+from decimal import Decimal
 from typing import Annotated
 
 import pandas as pd
@@ -99,6 +100,51 @@ def test_leaves_round_trip_safe_and_undeclared_columns_untouched():
     assert list(coerced["score"]) == [10, 20]
     assert coerced["score"].dtype == raw["score"].dtype  # int untouched, not recast
     assert list(coerced["note"]) == ["keep", "me"]  # undeclared, untouched
+
+
+def test_types_every_declared_column_when_the_frame_has_no_rows():
+    # A quiet source's window has no row to type its columns and no value to
+    # infer one from: it arrives object-typed, or float64 where `reindex` had to
+    # invent the column. The validator lets an empty frame past on exactly that
+    # basis — but the dtypes still reach storage, and an empty write is what
+    # *creates* the table, fixing each column's affinity for the life of the
+    # feed. So when there are no rows the coercer types every declared column,
+    # including the round-trip-safe ones it leaves alone when there are.
+    empty = pd.DataFrame(
+        {
+            "case_ref": pd.Series([], dtype="float64"),  # as reindex invents it
+            "score": pd.Series([], dtype="object"),
+            "opened": pd.Series([], dtype="object"),
+        }
+    )
+
+    coerced = SchemaCoercion(MixedCase)(Dataset.from_pandas(empty)).to_pandas()
+
+    assert pd.api.types.is_string_dtype(coerced["case_ref"])
+    assert pd.api.types.is_integer_dtype(coerced["score"])
+    assert pd.api.types.is_datetime64_any_dtype(coerced["opened"])
+
+
+def test_leaves_a_type_it_cannot_map_alone_on_an_empty_frame():
+    # A declared type outside the supported six is a schema configuration error,
+    # and `SchemaValidator` is where it is reported — at build time, naming the
+    # field. The coercer must not pre-empt that with a raw KeyError from its own
+    # dtype table, which an empty frame would otherwise be the only way to hit.
+    @dataclass
+    class OddCase:
+        case_ref: str
+        amount: Decimal
+
+    empty = pd.DataFrame(
+        {
+            "case_ref": pd.Series([], dtype="object"),
+            "amount": pd.Series([], dtype="object"),
+        }
+    )
+
+    coerced = SchemaCoercion(OddCase)(Dataset.from_pandas(empty)).to_pandas()
+
+    assert coerced["amount"].dtype == object  # untouched, not crashed on
 
 
 def test_unparseable_date_fails_fast_with_a_located_message():

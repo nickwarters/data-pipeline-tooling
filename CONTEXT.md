@@ -145,7 +145,7 @@ A **Feed**'s landed column set changing run-over-run — an owner-controlled sou
 _Avoid_: schema change, schema mismatch (use the precise term)
 
 **Schema Breach**:
-Data violating a Case Type's declared **Schema** (a missing column or wrong dtype) at the **silver** or **gold** boundary — a hard, fail-fast abort, not a warning. Contrast **Schema Drift**: drift is a soft, run-over-run *change* signal at raw; a breach is a hard *contract* violation downstream.
+Data violating a Case Type's declared **Schema** (a missing column or wrong dtype) at the **silver** or **gold** boundary — a hard, fail-fast abort, not a warning. A dtype is a claim about *values*, so a **zero-row** frame cannot breach one: only the missing-column half of the definition applies to it. Contrast **Schema Drift**: drift is a soft, run-over-run *change* signal at raw; a breach is a hard *contract* violation downstream.
 _Avoid_: drift, schema error
 
 ## Engineering vocabulary (cross-cutting)
