@@ -158,6 +158,7 @@ test('amending an Outcome writes the amendment fields atomically with the inject
     caseRow: CASE_ROW,
     snapshot: SNAPSHOT,
     outcome: 'pass',
+    reason: 'qa-check',
     justification: 'Corrected on review.',
   });
 
@@ -168,6 +169,7 @@ test('amending an Outcome writes the amendment fields atomically with the inject
   assert.equal(writes[0].value.outcomeOverridden, true);
   assert.deepEqual(writes[0].value.amendedOutcome, {
     outcome: 'pass',
+    reason: 'qa-check',
     justification: 'Corrected on review.',
     amendedBy: 'controls-1',
     amendedAt: '2026-07-23T09:30:00.000Z',
@@ -300,11 +302,13 @@ test('round trip: raise, resolve and amend land on the persisted row through the
     caseRow: row,
     snapshot,
     outcome: 'fail',
+    reason: 'appeal',
     justification: 'Corrected again.',
   });
   await saveQueue.whenIdle();
   assert.equal(persisted().effectiveOutcome, 'fail');
   assert.equal(persisted().amendedOutcome?.justification, 'Corrected again.');
+  assert.equal(persisted().amendedOutcome?.reason, 'appeal');
   // Nothing in this flow touches the frozen completion snapshot.
   assert.equal(persisted().outcomeAtCompletion, 'fail');
   assert.equal(persisted().completedAt, '2026-07-01T00:00:00.000Z');

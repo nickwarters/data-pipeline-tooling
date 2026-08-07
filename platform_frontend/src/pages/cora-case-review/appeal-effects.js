@@ -117,13 +117,15 @@ export function createAppealEffects({
      *   caseRow: CaseRow,
      *   snapshot: Snapshot,
      *   outcome: string,
+     *   reason: string,
      *   justification: string,
      * }} input
      */
-    amend({ caseRow, snapshot, outcome, justification }) {
+    amend({ caseRow, snapshot, outcome, reason, justification }) {
       const result = amendOutcome({
         caseRow,
         outcome,
+        reason,
         justification,
         amendedBy: viewer(snapshot),
         amendedAt: now().toISOString(),

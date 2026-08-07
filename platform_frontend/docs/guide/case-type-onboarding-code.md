@@ -336,7 +336,13 @@ group in either direction (`{ Build: { allowBulkOutcome: false } }`), so a type
 states the rule once and names only the exceptions; `captureGroups` extends
 per-failure capture; `remediationStatuses` narrows which Remediation
 Resolutions a Reviewer is offered (`['complete', 'cancelled']`), see
-[ADR-0037](../adr/0037-question-level-remediation-resolution.md). Case table
+[ADR-0037](../adr/0037-question-level-remediation-resolution.md);
+`extraAmendmentReasons` **adds** to the shared Amendment Reasons offered on the
+Amend Outcome Section (`[{ key: 'data-correction', label: 'Data correction' }]`).
+The shared three are always offered, so declare only the additions — and note the
+direction, which is why the key is not spelled like `voidReasons`: that one
+narrows a closed vocabulary, this one extends an open one. A key colliding with a
+shared one is ignored rather than re-labelling it. Case table
 columns are not among them: every Case Type is listed under the same
 framework-owned columns (see
 [ADR-0040](../adr/0040-case-tables-are-framework-owned.md)).

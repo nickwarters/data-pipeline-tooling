@@ -97,6 +97,7 @@ export function resolveAppeal(input) {
  * @param {{
  *   caseRow: CaseRow,
  *   outcome: string,
+ *   reason: string,
  *   justification: string,
  *   amendedBy: string,
  *   amendedAt: string,
@@ -105,6 +106,7 @@ export function resolveAppeal(input) {
 export function amendOutcome(input) {
   const fields = buildAmendmentFields(input.caseRow, {
     outcome: input.outcome,
+    reason: input.reason,
     justification: input.justification,
     amendedBy: input.amendedBy,
     amendedAt: input.amendedAt,

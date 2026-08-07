@@ -98,7 +98,9 @@ Former separate `qa-{slug}` **Case** that meta-reviewed a **Completed Case** and
 append **Answer Overrides**. **Removed pre-go-live**: QA is being re-designed
 later, so the QA Check Case Types, the embedded override editor, and the cross-row write
 are gone. Post-completion corrections are now the **Controls** role's case-level **Amended
-Outcome**. Kept here only to redirect old references.
+Outcome**. Kept here only to redirect old references. The **Amendment Reason** labelled
+_QA Check_ is unrelated display copy for one reason an amendment may be filed under; it
+does not revive this Case Type.
 _Avoid_: reusing this in new work — there is no QA Check surface today.
 
 **Case Details**:
@@ -170,11 +172,11 @@ _Avoid_: Response (overloaded — used in HTTP context elsewhere)
 
 **Answer Justification**:
 The per-**Answer** free-text rationale: why the **Reviewer** answered _one specific_ **Question Definition** the way they did. Lives inside the Answer (per-question scope). Always qualified — never the bare word "justification" — to keep it distinct from **Case Justification**.
-_Avoid_: Justification (bare — ambiguous with Case Justification)
+_Avoid_: Justification (bare — ambiguous with Case Justification and Amendment Justification)
 
 **Case Justification**:
 A **case-level** free-text box in the **Notes** Section: the **Reviewer**'s overall rationale for the Case as a whole. Distinct from **Answer Justification** (which is per-question). One of the **Notes** Section's two fixed free-text boxes (the other being the general note); stored as its own plain-text field on the Case row. Like the rest of Notes, deliberately excluded from the **Summary** Section.
-_Avoid_: Justification (bare — ambiguous with Answer Justification)
+_Avoid_: Justification (bare — ambiguous with Answer Justification and Amendment Justification)
 
 **Remediation Action**:
 A corrective action attached to a _failed_ **Answer**. A failed Answer can have many
@@ -391,14 +393,37 @@ The computed verdict for a **Case**, derived by the **Case Type**'s algorithm fr
 A **case-level** correction of a **Reportable** Case's **Outcome**,
 authored by **Controls** on the **Amend Outcome** Section.
 Unlike the retired **Answer Override**, this is an **explicit, hand-set verdict**: Controls
-chooses the new **Outcome** value directly, with a mandatory **justification**. Stored as
-`amendedOutcome: { outcome, justification, amendedBy, amendedAt } | null` on the Case row —
-additive, so the frozen `outcomeAtCompletion` and Answers are never mutated. `amendedBy` /
+chooses the new **Outcome** value directly, with a mandatory **Amendment Reason** and
+**Amendment Justification**. Stored as
+`amendedOutcome: { outcome, reason, justification, amendedBy, amendedAt } | null` on the Case
+row — additive, so the frozen `outcomeAtCompletion` and Answers are never mutated. `reason`
+holds the Amendment Reason's _key_, and is absent on amendments authored before the field
+existed and on appeal-derived ones, which carry `fromAppealId` instead. `amendedBy` /
 `amendedAt` are captured explicitly for **audit** (not mined from SharePoint version
 history). Typically follows an **agreed Appeal** but does not require one. Drives the
 `effectiveOutcome` reporting column. This deliberately relaxes the old "Outcome
 is always derived, never hand-set" rule — for amended Cases only.
 _Avoid_: Answer Override (retired), Outcome Override, Amendment (bare), Revised Outcome
+
+**Amendment Reason**:
+Why **Controls** amended a Case's **Outcome**, chosen on the **Amend Outcome** Section from
+a shared vocabulary of three — _QA Check_, _TM Check_, _Appeal_ — that every **Case Type**
+offers. Unlike the **Void Reason** vocabulary, a Case Type _may add_ to it
+(`extraAmendmentReasons`), because nothing aggregates amendment reasons across Case Types
+today while the checks that prompt an amendment genuinely differ by type; the three shared
+keys stay framework-owned so a future report still has a common spine. A declared key that
+collides with a shared one does not displace it. Stored as the key on the **Amended
+Outcome** record; a key no longer offered renders as itself rather than blank.
+_Avoid_: the label _QA Check_ standing in for the shelved **QA Check** Case Type — this is
+display copy for one Amendment Reason and revives no meta-review surface; Amendment type,
+amendment category
+
+**Amendment Justification**:
+The free-text rationale on the **Amended Outcome** record: why **Controls** set this
+verdict on this Case, beyond the **Amendment Reason** it was filed under. Its on-screen
+label is the bare word "Justification" only because the **Amend Outcome** Section is its
+whole context; in writing it is always qualified, like its two siblings.
+_Avoid_: Justification (bare — ambiguous with Answer Justification and Case Justification)
 
 **Answer Override** _(retired — see **Amended Outcome**)_:
 Former per-**Answer** post-completion correction with the **Current Outcome** re-derived

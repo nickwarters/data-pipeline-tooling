@@ -178,3 +178,36 @@ test('a Group Outcome on the questions panel answers the whole group at once', (
     o2: { value: 'Poor' },
   });
 });
+
+/**
+ * @param {any} config
+ * @returns {any}
+ */
+function amendReasonSelect(config) {
+  /** @type {any} */
+  const ctx = {
+    snapshot: {
+      access: { amendOutcome: 'edit' },
+      sectionLabels: { amendOutcome: { heading: 'Amend Outcome' } },
+    },
+    caseRow: { id: 1, status: 'Completed', outcomeAtCompletion: 'fail' },
+    config,
+    route: {},
+    dispatch: () => {},
+    actions: { appeals: { amend: () => {} } },
+  };
+  const panel = /** @type {any} */ (SECTION_PANELS.amendOutcome)(ctx);
+  return findByClass(panel, 'cora-amend-outcome-reason');
+}
+
+test('the amend panel offers the shared Amendment Reasons plus whatever the Case Type declares', () => {
+  const select = amendReasonSelect({
+    extraAmendmentReasons: [
+      { key: 'data-correction', label: 'Data correction' },
+    ],
+  });
+  assert.deepEqual(
+    select._children.map((/** @type {any} */ o) => o.value),
+    ['', 'qa-check', 'tm-check', 'appeal', 'data-correction']
+  );
+});
