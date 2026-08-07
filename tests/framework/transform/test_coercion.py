@@ -11,6 +11,7 @@ they pass through untouched and stay the validator's gate.
 
 from dataclasses import dataclass
 from datetime import date
+from decimal import Decimal
 from typing import Annotated
 
 import pandas as pd
@@ -122,6 +123,28 @@ def test_types_every_declared_column_when_the_frame_has_no_rows():
     assert pd.api.types.is_string_dtype(coerced["case_ref"])
     assert pd.api.types.is_integer_dtype(coerced["score"])
     assert pd.api.types.is_datetime64_any_dtype(coerced["opened"])
+
+
+def test_leaves_a_type_it_cannot_map_alone_on_an_empty_frame():
+    # A declared type outside the supported six is a schema configuration error,
+    # and `SchemaValidator` is where it is reported — at build time, naming the
+    # field. The coercer must not pre-empt that with a raw KeyError from its own
+    # dtype table, which an empty frame would otherwise be the only way to hit.
+    @dataclass
+    class OddCase:
+        case_ref: str
+        amount: Decimal
+
+    empty = pd.DataFrame(
+        {
+            "case_ref": pd.Series([], dtype="object"),
+            "amount": pd.Series([], dtype="object"),
+        }
+    )
+
+    coerced = SchemaCoercion(OddCase)(Dataset.from_pandas(empty)).to_pandas()
+
+    assert coerced["amount"].dtype == object  # untouched, not crashed on
 
 
 def test_unparseable_date_fails_fast_with_a_located_message():

@@ -93,8 +93,12 @@ table — a column landed as `object` takes `TEXT` affinity for the life of the
 feed, so a feed whose first poll is quiet would store every later integer id as
 text. So on an empty frame `SchemaCoercion` types **every** declared column,
 including the round-trip-safe `str` / `int` / `float` it leaves alone when there
-are rows (`str` lands as `object`, matching what a populated column read back
-from storage carries). The gate stands down and the shape is still declared.
+are rows. The target dtypes are chosen for the affinity they create — `object` →
+`TEXT`, `int64` → `INTEGER`, `float64` → `REAL` — since fixing the created
+table's column types is the whole point. A declared type the coercer cannot map
+is left alone: an unsupported type is a schema configuration error, and
+`SchemaValidator` reports it at build time naming the field. The gate stands
+down and the shape is still declared.
 
 Every breach is collected and reported **at once** in one located message
 naming the column and the expected-vs-actual type, then raised:
