@@ -233,8 +233,10 @@ accumulated and prior gold rows stay intact.
 Not every gold accumulates. **Ingest** gold is *current-only*: the
 `case_review.gold.ingest_silver_to_gold` helper reduces accumulated silver to one
 row per Case (`DeriveKey → LatestPerKey → UniqueValidator → Refresh`), so its gold
-is a current snapshot, not a per-run history. **Selection** / **Sync** gold use
-`AccumulateByRun`, where history must survive. *Which* model a Case Type's gold
+is a current snapshot, not a per-run history. **Sync** gold is current-only for
+the same reason and by the same shape — one row per Case under `Refresh()`, its
+change-over-time record held in the accumulated silver beneath it. **Selection**
+gold uses `AccumulateByRun`, where history must survive. *Which* model a Case Type's gold
 takes — and how multiple feeds fan into it (snapshot-vs-join) — is a per-Case-Type
 choice; the `case_review.gold` helpers are where that assembly lives, in the
 application layer rather than the framework.
@@ -266,3 +268,23 @@ sorts below every real one rather than as NA, because pandas sorts NA *last*).
 This stays local to that feed. Generalising it into a framework processor waits
 for a second caller with the same problem; until then `LatestPerKey` is untouched
 and still right for every feed that carries a `load_date`.
+
+### And a shape where neither reduce is right: Detail Tables
+
+Both shapes above reduce the **Case** table. A **Detail Table** hanging off a
+Polling Feed whose observation carries the whole Case — the answers, capture
+values and messages folded into one item's JSON blobs — does **not** reduce on
+its own key at all. It is semi-joined to the winning
+`(case_id, source_observation_id)` pairs the Case reduce produced, so gold holds
+the children of the winning observation and nothing else.
+
+Reducing such a table by its own grain looks obvious and is wrong. The review
+application *deletes* children between observations — untick the last Remediation
+Action, or set Remediation Required to `no`, and the key is destructured off the
+Answer entirely. A deletion writes no row, so a child-keyed `LatestPerKey` has
+nothing newer to prefer and keeps the deleted child in gold forever. The
+semi-join reads the absence correctly, and as a bonus guarantees every gold Case
+is assembled from one coherent snapshot.
+
+The rule and its precondition — the observation must carry the *whole* parent —
+are recorded in [ADR-0015](adr/0015-detail-tables-reduce-to-the-parents-latest-observation.md).
