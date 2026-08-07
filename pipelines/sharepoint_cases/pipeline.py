@@ -7,8 +7,8 @@ lands what it observes twice, then reduces the accumulated history:
   column names, keyed on the observation id so a re-read is a no-op.
 - ``silver_builder`` snake_cases those names, coerces the types, quarantines
   value-rule breaches and validates ``CaseVersion``.
-- ``gold.publish_gold`` rebuilds the current Case from the whole silver
-  history, with ``Refresh()``.
+- ``gold.publish_gold`` rebuilds the current Case and an aggregate from the
+  whole silver history, each with ``Refresh()``.
 
 There is very little in the second hop: getting the list's rows into the
 database as immutable versions is a separate job from interpreting them, and
@@ -518,7 +518,7 @@ def run(
     # Not wired as a ``p.action(...)`` node on the last gold pipeline, which
     # would inherit the dry-run skip for free: the checkpoint is source-control
     # state rather than a data step, and burying it inside a pipeline named for
-    # a gold table would make "visibly last" less true than this reads.
+    # an aggregate would make "visibly last" less true than this reads.
     if not context.dry_run:
         checkpoints.commit(
             source,

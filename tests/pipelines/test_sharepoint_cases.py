@@ -20,7 +20,12 @@ from framework.core import ErrorCategory, ValidationError
 from framework.io import AppendOnlyConflictError
 from framework.run import RunContext, RunLog, dry_run_pipeline
 from pipelines.sharepoint_cases import gold
-from pipelines.sharepoint_cases.gold import GOLD_TABLES, case_current_builder
+from pipelines.sharepoint_cases.gold import (
+    GOLD_TABLES,
+    UNASSIGNED,
+    case_counts_current_builder,
+    case_current_builder,
+)
 from pipelines.sharepoint_cases.pipeline import (
     EXPAND_FIELDS,
     FEED_NAME,
@@ -426,6 +431,7 @@ def version(**overrides: object) -> dict[str, object]:
         {
             "id": 101,
             "status": "In-progress",
+            "assigned_reviewer_name": "i:0#.w|CONTOSO\\p.shah",
             "assigned_reviewer_manager_name": "i:0#.w|CONTOSO\\d.reid",
             "created": "2026-07-01 09:14:00+00:00",
             "source_list_name": LIST_NAME,
@@ -565,6 +571,78 @@ def test_current_gold_republishes_every_silver_column():
     assert set(row) - set(SILVER_COLUMNS) == {"case_id", "as_of_utc"}
 
 
+# --- gold: the current counts ------------------------------------------------
+
+
+def counts(*rows: dict) -> list[dict]:
+    return gold_rows(case_counts_current_builder, current(*rows))
+
+
+def grain(rows: list[dict]) -> list[tuple]:
+    return [
+        (
+            row["assigned_reviewer_name"],
+            row["assigned_reviewer_manager_name"],
+            row["status"],
+            row["case_count"],
+        )
+        for row in rows
+    ]
+
+
+def test_current_counts_match_the_current_table():
+    # Two Cases with one reviewer, split by status, and a third under a second
+    # reviewer reporting to a different manager.
+    rows = counts(
+        version(),
+        version(id=102, source_item_id="102", status="Completed"),
+        version(
+            id=103,
+            source_item_id="103",
+            assigned_reviewer_name="i:0#.w|CONTOSO\\r.okafor",
+            assigned_reviewer_manager_name="i:0#.w|CONTOSO\\z.hale",
+        ),
+    )
+
+    assert grain(rows) == [
+        ("i:0#.w|CONTOSO\\p.shah", "i:0#.w|CONTOSO\\d.reid", "Completed", 1),
+        ("i:0#.w|CONTOSO\\p.shah", "i:0#.w|CONTOSO\\d.reid", "In-progress", 1),
+        ("i:0#.w|CONTOSO\\r.okafor", "i:0#.w|CONTOSO\\z.hale", "In-progress", 1),
+    ]
+    assert {row["as_of_utc"] for row in rows} == {AS_OF.isoformat()}
+
+
+def test_the_reviewer_leads_the_grain_and_the_manager_rolls_it_up():
+    # Two reviewers under one manager. The rows are per reviewer, and a count
+    # per manager is their sum — one table, not two that could disagree.
+    rows = counts(
+        version(),
+        version(
+            id=102,
+            source_item_id="102",
+            assigned_reviewer_name="i:0#.w|CONTOSO\\r.okafor",
+        ),
+    )
+
+    assert grain(rows) == [
+        ("i:0#.w|CONTOSO\\p.shah", "i:0#.w|CONTOSO\\d.reid", "In-progress", 1),
+        ("i:0#.w|CONTOSO\\r.okafor", "i:0#.w|CONTOSO\\d.reid", "In-progress", 1),
+    ]
+    assert sum(row["case_count"] for row in rows) == 2
+
+
+def test_a_case_with_nobody_assigned_is_counted_as_unassigned():
+    # A NULL group key is a hole in the grain that a reader may silently drop,
+    # so this Case is counted under a literal instead — in a table whose whole
+    # job is to add up to the number of current Cases. Both Person dimensions
+    # are filled, because an unassigned Case has neither.
+    rows = counts(
+        version(assigned_reviewer_name=None, assigned_reviewer_manager_name=None)
+    )
+
+    assert grain(rows) == [(UNASSIGNED, UNASSIGNED, "In-progress", 1)]
+
+
 # --- the composed plan -----------------------------------------------------
 
 
@@ -593,7 +671,7 @@ def test_both_hops_plan_exactly_the_steps_they_always_have():
 def test_the_gold_hops_plan_exactly_the_steps_they_always_have():
     reader, writer = given_rows([]), RecordingWriter()
 
-    # The current hop carries a grain gate; see case_current_builder.
+    # Only the current hop carries a grain gate; see case_current_builder.
     assert case_current_builder(
         reader, writer, as_of=AS_OF
     ).describe().splitlines() == [
@@ -604,6 +682,15 @@ def test_the_gold_hops_plan_exactly_the_steps_they_always_have():
         "  [Transform] stamp-as-of (depends on: latest-version)",
         "  [Validate] unique-validate (depends on: stamp-as-of)",
         "  [Write] write (depends on: unique-validate)",
+    ]
+    assert case_counts_current_builder(
+        reader, writer, as_of=AS_OF
+    ).describe().splitlines() == [
+        f"Pipeline: {FEED_NAME}:gold:case_counts_current",
+        "  [Read] read",
+        "  [Transform] count-by-reviewer-and-status (depends on: read)",
+        "  [Transform] stamp-as-of (depends on: count-by-reviewer-and-status)",
+        "  [Write] write (depends on: stamp-as-of)",
     ]
 
 
@@ -812,9 +899,9 @@ def test_a_poll_publishes_every_gold_table_and_then_commits_the_watermark(tmp_pa
     )
 
 
-def test_a_quiet_first_window_commits_and_publishes_an_empty_gold_table(tmp_path):
+def test_a_quiet_first_window_commits_and_publishes_empty_gold_tables(tmp_path):
     # Nothing to reduce is not nothing to publish: a consumer reading gold must
-    # find the table, empty, rather than a missing one it has to special-case.
+    # find the tables, empty, rather than a missing one it has to special-case.
     run(
         RunContext(base_dir=tmp_path, pipeline=FEED_NAME),
         client=FakeListClient(pd.DataFrame()),
@@ -839,6 +926,9 @@ def test_an_overlap_reread_does_not_double_count_gold(tmp_path):
 
     med = medallion(StoreRegistry(tmp_path), FEED_NAME)
     assert len(read_rows(med.gold, "case_current")) == 1
+    assert [
+        row["case_count"] for row in read_rows(med.gold, "case_counts_current")
+    ] == [1]
 
 
 def test_a_failure_in_current_gold_leaves_no_gold_and_no_checkpoint(
@@ -851,6 +941,23 @@ def test_a_failure_in_current_gold_leaves_no_gold_and_no_checkpoint(
 
     checkpoints = SharePointCheckpointStore(tmp_path)
     assert landed_gold(tmp_path) == set()
+    assert checkpoints.committed_watermark(SOURCE) is None
+    assert not checkpoints.path.exists()
+
+
+def test_a_failure_in_the_last_aggregate_leaves_the_earlier_gold_and_no_checkpoint(
+    tmp_path, monkeypatch
+):
+    # Gold Writers commit independently, so an earlier table stays refreshed.
+    # That is acceptable evidence: the watermark did not move, so the next run
+    # rebuilds every table from the same history and converges.
+    monkeypatch.setattr(gold, "case_counts_current_builder", explode)
+
+    with pytest.raises(RuntimeError, match="boom"):
+        run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME), client=FakeListClient())
+
+    checkpoints = SharePointCheckpointStore(tmp_path)
+    assert landed_gold(tmp_path) == {"case_current"}
     assert checkpoints.committed_watermark(SOURCE) is None
     assert not checkpoints.path.exists()
 
@@ -898,8 +1005,9 @@ def test_a_dry_run_previews_every_write_and_commits_none_of_them(tmp_path):
 
     report = dry_run_pipeline(lambda ctx: run(ctx, client=client), FEED_NAME, tmp_path)
 
-    # Raw, silver and gold are all previewed; none is committed.
+    # Raw, silver and every gold table are previewed; none is committed.
     assert [step.note for step in report.steps if step.node_type == "Write"] == [
+        "would write 1 row(s)",
         "would write 1 row(s)",
         "would write 1 row(s)",
         "would write 1 row(s)",

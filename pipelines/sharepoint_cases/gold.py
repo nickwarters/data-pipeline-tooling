@@ -1,49 +1,67 @@
-"""Gold for the ``sharepoint_cases`` feed: the current Case.
+"""Gold for the ``sharepoint_cases`` feed: the current Case, and an aggregate.
 
 Silver is an append-only history of *observations* -- one row per (list item,
 version) the poll ever saw, with overlapping windows re-presenting rows that did
-not change. Gold is the other shape: **one row per Case as it stands now**. It is
-rebuilt whole with ``Refresh()`` on every poll, so a re-drive converges rather
-than accumulating.
+not change. Gold is the other shape: **one row per Case as it stands now**, and a
+count reduced from it. Every table is rebuilt whole with ``Refresh()`` on every
+poll, so a re-drive converges rather than accumulating.
 
-One table, and its declared grain:
+Two tables, and their declared grain:
 
-================  =====================================================
-``case_current``  one row per ``case_id`` -- the latest observation
-================  =====================================================
+=======================  =====================================================
+``case_current``         one row per ``case_id`` -- the latest observation
+``case_counts_current``  reviewer x that reviewer's manager x ``status``
+=======================  =====================================================
 
-It carries a live grain gate; see :func:`case_current_builder`. The grain is
-declared both in that builder's docstring and in the data dictionary.
+Only the first has a live grain gate; see :func:`case_current_builder` for why
+the aggregate gets none. Every grain is declared, in each builder's docstring
+and in the data dictionary.
 
 **One instant decides everything.** ``as_of`` is the candidate SharePoint window
 end -- the value the run is about to commit as its watermark -- and never
 ``utcnow()``: a re-drive of the same window must produce byte-identical gold.
-The table carries it as ``as_of_utc``.
+Every table carries it as ``as_of_utc``.
 """
 
 from __future__ import annotations
 
 import datetime as dt
 import re
+from collections.abc import Callable
 
 import pandas as pd
 
 from framework.core import Dataset, Reader, UniqueValidator, Writer
-from framework.io import Refresh
+from framework.io import DatasetReader, Refresh
 from framework.run import Pipeline, RunLog
 from framework.transform import DeriveKey, Stamp
 from tools.medallion import Medallion
 
 from .schema import FEED_NAME, LIST_NAME
 
-# The silver table gold reduces, and the current-state table it reduces to.
-# ``GOLD_TABLES`` -- every gold table, in publication order -- sits at the foot
-# of this module, beside the publication it describes.
+# The silver table gold reduces, and the current-state table every aggregate is
+# then reduced from. ``GOLD_TABLES`` -- every gold table, in publication order --
+# is derived from the aggregate list at the foot of this module, so it cannot
+# drift from what :func:`publish_gold` actually writes.
 SILVER_TABLE = "case_version"
 CURRENT_TABLE = "case_current"
 
 CASE_ID_COLUMN = "case_id"
 AS_OF_COLUMN = "as_of_utc"
+
+# A reporting fill, not a source value. It is a literal key rather than NULL so
+# the grain of an aggregate has no hole in it: a NULL group key is a hole a
+# reader may silently drop, losing rows from a total.
+UNASSIGNED = "(unassigned)"
+
+# The grain of ``case_counts_current``, in the order it groups and sorts by. The
+# Assigned Reviewer leads: the question this table answers is "who is holding
+# what", and the manager is the roll-up over that, not the other way round.
+COUNT_DIMENSIONS = (
+    "assigned_reviewer_name",
+    "assigned_reviewer_manager_name",
+    "status",
+)
 
 # ``"3"``, ``W/"3"``, ``"4,1"`` and ``"3.0"`` are all shapes this list's version
 # column really holds; the separator is whichever of the two the source used.
@@ -147,6 +165,28 @@ def latest_case_version(dataset: Dataset) -> Dataset:
     return Dataset.from_pandas(current.reset_index(drop=True))
 
 
+# --- the aggregates ---------------------------------------------------------
+
+
+def _case_counts(dataset: Dataset) -> Dataset:
+    """Count current Cases by reviewer, that reviewer's manager, and status."""
+    frame = dataset.to_pandas()
+    # Only the two Person columns are filled; ``status`` is declared non-null in
+    # silver and a null there is a schema breach, not a reporting gap.
+    filled = {
+        column: frame[column].where(frame[column].notna(), UNASSIGNED)
+        for column in ("assigned_reviewer_name", "assigned_reviewer_manager_name")
+    }
+    counted = (
+        frame.assign(**filled)
+        .groupby(list(COUNT_DIMENSIONS))
+        .size()
+        .reset_index(name="case_count")
+        .sort_values(list(COUNT_DIMENSIONS), kind="stable")
+    )
+    return Dataset.from_pandas(counted.reset_index(drop=True))
+
+
 # --- the builders -----------------------------------------------------------
 
 
@@ -165,9 +205,11 @@ def case_current_builder(
 
     ``UniqueValidator(CASE_ID_COLUMN)`` sits after the reduction, where it can
     never fire: ``drop_duplicates`` has just guaranteed what it checks. It is
-    kept anyway as a **tripwire**: this grain is produced by a *rule* rather
-    than by construction, so it is the one thing here a future change to that
-    rule could get wrong.
+    kept anyway, and only here, as a **tripwire** -- the one place in this
+    feed's gold where the grain is produced by a rule rather than by a
+    ``groupby``, so the one place a future change to that rule could get it
+    wrong. The aggregate hop gets no such gate, because there the check would be
+    satisfied by construction with no rule to guard.
 
     Every silver column is republished, including the ``answers`` /
     ``conversation`` / ``details`` JSON blobs. They are the Case as it stands and
@@ -196,11 +238,91 @@ def case_current_builder(
     return p
 
 
+def _aggregate_hop(
+    reader: Reader,
+    writer: Writer,
+    *,
+    table: str,
+    transform: Callable[[Dataset], Dataset],
+    step: str,
+    as_of: dt.datetime,
+    run_log: RunLog | None,
+) -> Pipeline:
+    """The wiring every aggregate hop shares: read, count, stamp, refresh.
+
+    An aggregate differs only in what it counts, so only the table it publishes,
+    the transform that counts and the step's name are its own. Each keeps its own
+    builder, because the grain and the reasoning behind it are the part worth
+    reading.
+    """
+    p = Pipeline(f"{FEED_NAME}:gold:{table}", run_log=run_log)
+    r = p.read(reader, name="read")
+    counted = p.transform(transform, r, name=step)
+    stamped = p.transform(
+        Stamp(AS_OF_COLUMN, as_of.isoformat()), counted, name="stamp-as-of"
+    )
+    p.write(writer, stamped, name="write")
+    return p
+
+
+def case_counts_current_builder(
+    reader: Reader,
+    writer: Writer,
+    *,
+    as_of: dt.datetime,
+    run_log: RunLog | None = None,
+) -> Pipeline:
+    """Build the current-count hop.
+    **Grain: ``assigned_reviewer_name`` x ``assigned_reviewer_manager_name`` x
+    ``status``.**
+
+    The Assigned Reviewer leads, because the question is who is holding what.
+    The manager is kept alongside rather than as a separate table: it is how the
+    rows roll up, and a consumer that wants counts per manager sums this table
+    instead of reading a second one that could disagree with it. Both are
+    carried under silver's own column names.
+
+    Neither is a team. The provisioned list has no team column, and what the
+    review platform calls "my team" is exactly the set of Cases whose
+    ``AssignedReviewerManagerId`` is the signed-in user. Naming a dimension
+    ``owning_team`` would assert something that does not exist, and shortening
+    the manager to ``reviewer_manager_name`` would invent a synonym for a row
+    that also carries ``responsible_party_manager_name``.
+
+    A Case with no Assigned Reviewer, or none recorded for that reviewer's
+    manager, is counted under the literal ``"(unassigned)"``. That is a
+    reporting fill and never a source value; it exists because a NULL group key
+    is a hole in the grain that a reader may silently drop, which would make the
+    table quietly fail to add up to the number of current Cases.
+    """
+    return _aggregate_hop(
+        reader,
+        writer,
+        table="case_counts_current",
+        transform=_case_counts,
+        step="count-by-reviewer-and-status",
+        as_of=as_of,
+        run_log=run_log,
+    )
+
+
 # --- publication ------------------------------------------------------------
 
 
-# Every gold table, in publication order.
-GOLD_TABLES = (CURRENT_TABLE,)
+def _aggregates() -> list[tuple[str, Callable[..., Pipeline]]]:
+    """The aggregates in publication order: each table and its builder.
+
+    Resolved per call rather than bound into a module constant, so a test that
+    substitutes a builder on this module is still the builder that runs.
+    """
+    return [
+        ("case_counts_current", case_counts_current_builder),
+    ]
+
+
+# Every gold table, in publication order. Derived from the pair list rather than
+# written out beside it, so the declared set and the published set are one thing.
+GOLD_TABLES = (CURRENT_TABLE, *(table for table, _ in _aggregates()))
 
 
 def _publish(pipeline: Pipeline, describe: bool) -> Dataset:
@@ -217,12 +339,14 @@ def publish_gold(
     describe: bool = False,
     run_log: RunLog | None = None,
 ) -> None:
-    """Rebuild the gold tables from the accumulated silver history.
+    """Rebuild every gold table from the accumulated silver history.
 
-    ``case_current`` is reduced from the whole history, not from the batch a poll
-    happened to fetch: a Case whose latest version arrived three polls ago is
-    still current. It is refreshed rather than appended to, so a re-drive of the
-    same window converges.
+    ``case_current`` is published first and its resulting dataset feeds the
+    aggregates through a :class:`~framework.io.DatasetReader`, so silver is read
+    once and every aggregate counts exactly the rows the current table holds. The
+    aggregates commit independently, in order; a failure part-way leaves the
+    earlier ones refreshed, which is safe because the caller has not advanced the
+    watermark and the next run rebuilds them all from the same history.
 
     Every hop runs as a bare ``p.run()``, exactly as the raw and silver hops
     above it do, and so inherits the **ambient** run context the runner makes
@@ -240,7 +364,7 @@ def publish_gold(
     if med.silver.columns_of(SILVER_TABLE).columns() is None:
         return
 
-    _publish(
+    current = _publish(
         case_current_builder(
             med.silver.reader(SILVER_TABLE),
             med.gold.writer(CURRENT_TABLE, Refresh()),
@@ -249,3 +373,14 @@ def publish_gold(
         ),
         describe,
     )
+
+    for table, builder in _aggregates():
+        _publish(
+            builder(
+                DatasetReader(current),
+                med.gold.writer(table, Refresh()),
+                as_of=as_of,
+                run_log=run_log,
+            ),
+            describe,
+        )
