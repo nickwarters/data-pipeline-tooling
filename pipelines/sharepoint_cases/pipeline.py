@@ -7,7 +7,7 @@ lands what it observes twice, then reduces the accumulated history:
   column names, keyed on the observation id so a re-read is a no-op.
 - ``silver_builder`` snake_cases those names, coerces the types, quarantines
   value-rule breaches and validates ``CaseVersion``.
-- ``gold.publish_gold`` rebuilds the current Case and two aggregates from the
+- ``gold.publish_gold`` rebuilds the current Case and three aggregates from the
   whole silver history, each with ``Refresh()``.
 
 There is very little in the second hop: getting the list's rows into the
