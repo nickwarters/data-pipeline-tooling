@@ -117,6 +117,18 @@ def test_schema_validator_accepts_a_zero_row_frame_whatever_its_dtypes():
     SchemaValidator(Measurement).validate(Dataset.from_pandas(frame))
 
 
+def test_schema_validator_still_reports_a_missing_column_on_a_zero_row_frame():
+    # Only the *value* claims stand down when there are no rows. A declared
+    # column that is absent is a breach of shape, and a shape is real whether or
+    # not anything filled it — an empty frame arriving without a column has lost
+    # it, not merely emptied it. Guards the short-circuit against being widened
+    # past the presence check.
+    frame = pd.DataFrame({"count": pd.Series([], dtype="int64")})
+
+    with pytest.raises(ValidationError, match="missing column 'score'"):
+        SchemaValidator(Measurement).validate(Dataset.from_pandas(frame))
+
+
 def test_schema_validator_resolves_postponed_string_annotations():
     # Real schemas live in modules with `from __future__ import annotations`, so
     # their field types arrive as strings. The validator must resolve them to
