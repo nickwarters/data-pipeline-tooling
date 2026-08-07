@@ -52,7 +52,7 @@ class CaseVersion:
     case_type: str
     status: Annotated[str, NonNull(), OneOf(*CASE_STATUSES)]
 
-    # The five Person columns, as the claims login the list expanded them to.
+    # The Person columns, as the claims login the list expanded them to.
     # Landed as the source spells them: mapping a login to a person is a gold
     # concern, and the numeric twin SharePoint also offers is a transport detail
     # of one site collection rather than an identity.

@@ -250,8 +250,9 @@ def test_a_person_with_no_display_name_keeps_the_identity_the_read_returned():
 
 
 def test_an_unexpanded_person_is_refused_rather_than_read_as_nobody():
-    # A lookup the read failed to expand still answers with an object, so taking
-    # any object at face value would report a broken $expand as an empty role.
+    # Some metadata modes answer an unexpanded lookup with a reference envelope
+    # rather than omitting the property; taking that object at face value would
+    # report a broken $expand as a role nobody holds.
     deferred = {"__deferred": {"uri": "https://sp.example.com/_api/Web/Lists(1)"}}
     client = FakeListClient(items(item(ResponsibleParty=deferred)))
 
@@ -566,7 +567,7 @@ def test_running_with_no_client_refuses_as_an_operator_failure(tmp_path, capsys)
     assert not (tmp_path / FEED_NAME).exists()
 
 
-def test_the_path_addressed_route_refuses_as_a_wiring_failure(tmp_path):
+def test_run_with_no_client_refuses_as_a_wiring_failure(tmp_path):
     # How the operator CLI and the orchestrator both reach a feed: run(context),
     # with no way to pass a client. That must abort as a caught, categorised
     # failure rather than as a stack trace the operator has to read.

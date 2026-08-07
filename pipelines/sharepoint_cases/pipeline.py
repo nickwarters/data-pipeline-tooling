@@ -541,7 +541,7 @@ class NoClientError(PipelineError):
 
 
 def _resolve_client(client: CaseListClient | None) -> CaseListClient:
-    """The client to poll with: the caller's, or the organisation's.
+    """The client to poll with, once there is an organisational one to fall on.
 
     Where an unattended run acquires its client, and the one place that changes
     once there is an organisational one to hand back. There is none yet, so a
