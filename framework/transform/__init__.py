@@ -35,6 +35,7 @@ from framework.transform.processors import (
     DeriveKey,
     DropColumns,
     Filter,
+    IdentityError,
     JoinColumns,
     JoinDependency,
     JoinWith,
@@ -79,6 +80,7 @@ __all__ = [
     "Sample",
     "SamplePerGroup",
     "CoercionError",
+    "IdentityError",
     # The coerce half of the schema adapter
     "SchemaCoercion",
     # Quarantine partitioning

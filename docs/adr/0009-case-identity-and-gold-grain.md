@@ -5,9 +5,9 @@ status: accepted
 # Case identity and the gold grain: deterministic keys, one row per Case, Detail Tables for the rest
 
 An **Ingest** feed is refined into a **current-state gold** whose grain
-is **one row per Case**. A Case's identity is a **deterministic surrogate** —
-`case_id = uuid5(case_type_namespace, natural_key)` — derived from the feed's
-stable natural key. Data that does not fit the one-row-per-Case grain (repeated
+is **one row per Case**. A Case's identity is a **deterministic surrogate** — a `sha256`
+hex digest over a canonical encoding of the Case Type's name (the namespace) and
+the feed's stable natural-key columns. Data that does not fit the one-row-per-Case grain (repeated
 sections such as product 1..10, or child collections) is split off into **Detail
 Tables**, keyed back to the Case by the same deterministic `case_id`. A wide feed
 is fanned into its Case table and its Detail Tables by **N independent
@@ -19,9 +19,9 @@ columns it needs — not by a multi-output node or a splitting transform.
 - **Deterministic identity preserves idempotency.** A random `uuid4` would break
   delete-by-logical-run-then-insert: a re-run would mint *different*
   ids, so a re-driven run is no longer identical and a Case cannot be tracked
-  across runs. `uuid5(namespace, natural_key)` is a pure function of the input —
-  the same Case yields the same id on every run and machine (pure stdlib,
-  identical on Windows/macOS). Because the derivation is deterministic, the Case
+  across runs. The digest is a pure function of the input — the same Case yields
+  the same id on every run and machine (pure stdlib, identical on
+  Windows/macOS). Because the derivation is deterministic, the Case
   pipeline and each Detail pipeline compute the *same* `case_id` independently from
   the shared natural key, so the parent/child link needs **no** cross-pipeline
   join.
@@ -65,11 +65,33 @@ columns it needs — not by a multi-output node or a splitting transform.
   the natural-key columns) is therefore a **stable contract**: changing it re-keys
   all history.
 - The identity contract is **owned by the `CaseType`** (`case_review.case_type`):
-  the `natural_key` is a declared field and the `namespace` is a property derived
-  from the Case Type's `name` (`uuid5(NAMESPACE_DNS, name)`). The Case builder and
-  each Detail builder take the *same* `CaseType`, so the "same namespace + key"
-  invariant the parent/child link depends on is **structural**, not two call sites
-  kept in step by a comment.
+  the `natural_key` is a declared field and the Case Type's `name` is the
+  namespace. The Case builder and each Detail builder take the *same* `CaseType`,
+  so the "same namespace + key" invariant the parent/child link depends on is
+  **structural**, not two call sites kept in step by a comment.
+- The key columns are hashed **by name**, in a canonical JSON payload, not
+  joined into one string. A joined key is forgeable: `("SMITH",
+  "2024-01-15|EXTRA")` and `("SMITH|2024-01-15", "EXTRA")` produce the same
+  `"|"`-joined string, so two distinct Cases would share one `case_id`. A
+  consequence worth stating: the *order* `natural_key` is declared in no longer
+  changes the key, only *which* columns are in it — which removes a way for a
+  Case builder and a Detail builder to drift apart.
+- **A row with a null natural-key value is refused**, not keyed. There is no
+  honest identity for a row that does not carry the values it is identified by,
+  and the alternative is worse than a failure: `None`, `<NA>` and `nan`
+  stringify differently, so a missing value would mint a plausible key that
+  changes with the column's dtype.
+- Each key column is rendered **from the column**, not by reading values out of
+  a row, and a whole number renders the same however pandas is carrying it
+  (`123` and `123.0` agree). Both matter because a derived key must not depend
+  on a dtype: reading a row upcasts the key in an all-numeric frame, and an
+  integer column becomes `float64` the moment any value in it is null — either
+  would re-key a Case for a reason that has nothing to do with its identity.
+- The derivation was `uuid5(uuid5(NAMESPACE_DNS, name), "|".join(values))` until
+  the forgeable join was closed. `uuid5` is itself a namespaced SHA-1 hash, so
+  the change is a stronger digest and an unforgeable encoding, not the
+  introduction of hashing. The encoding is now a **live on-disk format**:
+  changing the separators, the payload shape or the digest re-keys history.
 - **Known shortfall (accepted):** because the namespace derives from `name`,
   **renaming a Case Type silently re-keys all its history.** This is rare and we
   deliberately do not engineer a pinned-namespace escape hatch — the run-to-run

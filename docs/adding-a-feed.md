@@ -215,8 +215,8 @@ tests/pipelines/
 ```
 
 - **It declares the Case Type's identity contract** in `case_type.py`: a
-  `CaseType` bundling the `schema` with its `natural_key`, from which the derived
-  `namespace` and deterministic `case_id` come for free. This is the
+  `CaseType` bundling the `schema` with its `natural_key`, which the Case Type's
+  `name` namespaces to give the deterministic `case_id` for free. This is the
   part that's tedious to hand-assemble, and the generic scaffold deliberately
   omits it.
 - **It refines through the settled ingest spine** — source → raw (a faithful,

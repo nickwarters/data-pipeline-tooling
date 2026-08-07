@@ -27,12 +27,12 @@ requires no external dependency.
 This ADR governs **internal write-level surrogate keys** — the "id" column a
 `Writer` mints for its own table's primary key when the table has no
 externally-meaningful identity. It is **not** about `case_id`, which is a
-domain-level identity that propagates to consumers and is derived via
-`uuid5(namespace, natural_key)`. The two coexist:
+domain-level identity that propagates to consumers (see ADR 0009). The two
+coexist:
 
-- `case_id` = `uuid5(CaseType namespace, natural key string)` — domain identity,
-  UUID-formatted so it's consumable as a standard opaque handle by downstream
-  systems.
+- `case_id` = `sha256` over a canonical encoding of the CaseType namespace and
+  the natural-key columns — domain identity, and the stronger digest and
+  unforgeable encoding are worth their cost because it is consumed downstream.
 - Write-level surrogate = `md5(natural key string)` — internal storage key, never
   exposed past the layer that minted it.
 
@@ -51,11 +51,11 @@ domain-level identity that propagates to consumers and is derived via
   can derive the same key independently and in any order, with no shared counter
   and no risk of gaps or races.
 
-- **Simpler than `uuid5`.** `uuid5` requires a caller-supplied namespace UUID
-  that must be stable and documented; the resulting key is UUID-formatted (36
-  chars with hyphens). For a write-level surrogate that never leaves its own
-  table, neither the namespace indirection nor the UUID format adds value — a raw
-  32-char hex digest is shorter, self-contained, and easier to inspect in SQLite.
+- **Simpler than the `case_id` derivation.** A domain `case_id` carries a
+  namespace that must be stable and documented, and a canonical payload that
+  makes it unforgeable. For a write-level surrogate that never leaves its own
+  table, neither adds value — a raw 32-char hex digest is shorter,
+  self-contained, and easier to inspect in SQLite.
 
 - **MD5 over SHA-256.** MD5 produces a 128-bit digest (32 hex chars). For
   surrogate keys the collision criterion is uniqueness within a single table's
