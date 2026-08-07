@@ -42,6 +42,13 @@ _BOOL_ENCODINGS: dict[str, bool] = {
 }
 
 
+# The dtype each round-trip-safe declared type takes on a zero-row frame, where
+# there is no value to carry it. `str` lands as `object` rather than pandas'
+# `string`, because that is what a populated column read back from storage
+# carries — an empty table and its first rows should agree.
+_EMPTY_DTYPES: dict[type, str] = {str: "object", int: "int64", float: "float64"}
+
+
 class SchemaCoercion:
     """Cast a dataset's round-trip-lossy columns to a Case Type schema's types.
 
@@ -66,6 +73,16 @@ class SchemaCoercion:
                 frame[name] = self._to_datetime(frame[name], name)
             elif declared is bool:
                 frame[name] = self._to_bool(frame[name], name)
+            elif frame.empty:
+                # No row to carry the type and no value to infer one from, so a
+                # quiet window's column arrives object-typed (float64 where
+                # `reindex` had to invent it). The validator lets that past —
+                # there is nothing to check — but the dtype still reaches
+                # storage, and an empty write is what *creates* the table, fixing
+                # the column's affinity for the life of the feed. Round-trip-safe
+                # types are left alone only while there are rows to make them
+                # true; with none, declaring them here is the whole repair.
+                frame[name] = frame[name].astype(_EMPTY_DTYPES[declared])
         return Dataset.from_pandas(frame)
 
     def _to_datetime(self, series: "pd.Series", name: str) -> "pd.Series":

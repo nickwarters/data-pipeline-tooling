@@ -101,6 +101,29 @@ def test_leaves_round_trip_safe_and_undeclared_columns_untouched():
     assert list(coerced["note"]) == ["keep", "me"]  # undeclared, untouched
 
 
+def test_types_every_declared_column_when_the_frame_has_no_rows():
+    # A quiet source's window has no row to type its columns and no value to
+    # infer one from: it arrives object-typed, or float64 where `reindex` had to
+    # invent the column. The validator lets an empty frame past on exactly that
+    # basis — but the dtypes still reach storage, and an empty write is what
+    # *creates* the table, fixing each column's affinity for the life of the
+    # feed. So when there are no rows the coercer types every declared column,
+    # including the round-trip-safe ones it leaves alone when there are.
+    empty = pd.DataFrame(
+        {
+            "case_ref": pd.Series([], dtype="float64"),  # as reindex invents it
+            "score": pd.Series([], dtype="object"),
+            "opened": pd.Series([], dtype="object"),
+        }
+    )
+
+    coerced = SchemaCoercion(MixedCase)(Dataset.from_pandas(empty)).to_pandas()
+
+    assert pd.api.types.is_string_dtype(coerced["case_ref"])
+    assert pd.api.types.is_integer_dtype(coerced["score"])
+    assert pd.api.types.is_datetime64_any_dtype(coerced["opened"])
+
+
 def test_unparseable_date_fails_fast_with_a_located_message():
     # A value the coercer cannot parse aborts at the coerce step with a message
     # naming the column, so the breach is diagnosable.

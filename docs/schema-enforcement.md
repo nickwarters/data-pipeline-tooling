@@ -77,15 +77,24 @@ What it checks:
 
 A dtype — like a null check, like a value rule — is a claim about *values*, and
 a column with no rows has none. Nothing types an empty column either: a quiet
-source's window arrives `object`-typed (`SchemaCoercion` deliberately leaves
-`str` / `int` / `float` alone, since they survive storage), and a column
-`DataFrame.reindex` had to invent arrives `float64`. So on an **empty frame the
-validator checks column presence only** — the declared shape is real even when
-the rows are not — and every value-level gate stands down.
+source's window arrives `object`-typed, and a column `DataFrame.reindex` had to
+invent arrives `float64`. So on an **empty frame the validator checks column
+presence only** — the declared shape is real even when the rows are not. The
+value-level gates still *run* (a rule is called with the empty series, as a rule
+author should expect); they simply have nothing to match.
 
 This is why an incremental poll's steady state (an empty window) and an empty
 chunk in a `.read_chunks` stream run the same hops as a busy one, with no
 per-feed casting to get them past the gate.
+
+**The coercer has the other half of the rule.** A dtype the validator waves
+through still reaches storage, and an empty write is what *creates* a SQLite
+table — a column landed as `object` takes `TEXT` affinity for the life of the
+feed, so a feed whose first poll is quiet would store every later integer id as
+text. So on an empty frame `SchemaCoercion` types **every** declared column,
+including the round-trip-safe `str` / `int` / `float` it leaves alone when there
+are rows (`str` lands as `object`, matching what a populated column read back
+from storage carries). The gate stands down and the shape is still declared.
 
 Every breach is collected and reported **at once** in one located message
 naming the column and the expected-vs-actual type, then raised:
@@ -138,6 +147,7 @@ the round-trip-lossy declared types**:
 |---------------|--------------|------------|
 | `date` / `datetime` | text (`"2026-01-01"`) | datetime64 |
 | `bool` | `TRUE`/`FALSE`, `Y`/`N`, `YES`/`NO` text, or `1`/`0` (incl. the `1.0`/`0.0` a nulled numeric column comes back as) | pandas `"boolean"` |
+| `str` / `int` / `float` | **only when the frame has no rows** (see above) | `object` / `int64` / `float64` |
 
 Boolean encodings are compared **case-folded and whitespace-stripped**, so
 `true`, `True` and `TRUE ` all map.
