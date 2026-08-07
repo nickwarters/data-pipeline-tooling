@@ -73,6 +73,20 @@ What it checks:
   | `bool`               | bool / boolean        |
   | `date` / `datetime`  | datetime64            |
 
+### A zero-row frame satisfies any declared schema
+
+A dtype — like a null check, like a value rule — is a claim about *values*, and
+a column with no rows has none. Nothing types an empty column either: a quiet
+source's window arrives `object`-typed (`SchemaCoercion` deliberately leaves
+`str` / `int` / `float` alone, since they survive storage), and a column
+`DataFrame.reindex` had to invent arrives `float64`. So on an **empty frame the
+validator checks column presence only** — the declared shape is real even when
+the rows are not — and every value-level gate stands down.
+
+This is why an incremental poll's steady state (an empty window) and an empty
+chunk in a `.read_chunks` stream run the same hops as a busy one, with no
+per-feed casting to get them past the gate.
+
 Every breach is collected and reported **at once** in one located message
 naming the column and the expected-vs-actual type, then raised:
 

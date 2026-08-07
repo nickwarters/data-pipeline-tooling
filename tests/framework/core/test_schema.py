@@ -102,6 +102,21 @@ def test_schema_validator_rejects_int_where_float_declared():
         SchemaValidator(Measurement).validate(Dataset.from_pandas(frame))
 
 
+def test_schema_validator_accepts_a_zero_row_frame_whatever_its_dtypes():
+    # A column with no rows has no value to breach a declared type, and nothing
+    # types it: a quiet source's empty window arrives object-typed (and
+    # `reindex` invents a column as float64). Dtype is a claim about values, so
+    # with no values there is nothing to check and the frame passes.
+    frame = pd.DataFrame(
+        {
+            "count": pd.Series([], dtype="object"),
+            "score": pd.Series([], dtype="object"),
+        }
+    )
+
+    SchemaValidator(Measurement).validate(Dataset.from_pandas(frame))
+
+
 def test_schema_validator_resolves_postponed_string_annotations():
     # Real schemas live in modules with `from __future__ import annotations`, so
     # their field types arrive as strings. The validator must resolve them to
