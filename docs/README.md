@@ -538,6 +538,13 @@ python -m cli runs --base-dir /data --pipeline ingest --limit 5
 python -m cli log ingest --base-dir /data --pipeline-run-id 5f8ff8c7
 ```
 
+`orchestrate` runs the scheduled due work instead of one named pipeline. In this
+repository the `--app` module is `case_review.schedules`:
+
+```sh
+python -m cli orchestrate --app case_review.schedules --base-dir /data --once
+```
+
 `run` addresses a pipeline by **its location on disk**: `pipelines/ingest` maps
 to the module `pipelines.ingest.pipeline`, imported at runtime, whose
 `run(context)` callable the framework executes after checking its declared
@@ -592,6 +599,7 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 | [`schema-enforcement.md`](schema-enforcement.md) | `Schema` / `SchemaValidator` / `SchemaCoercion`, value-level rules, composing the schema boundary onto a pipeline. |
 | [`data-dictionary-template.md`](data-dictionary-template.md) | The Confluence-ready template for documenting what every table/Feed and each of its fields means — the prose companion to `schema.py`. |
 | [`data-dictionary-sharepoint-cases.md`](data-dictionary-sharepoint-cases.md) | The template filled in for the `sharepoint_cases` feed: the raw observation, the Case version, and the four gold tables with their declared grains; why raw and silver do not store when we saw the row; and the two provisioning prerequisites (an index on `Modified`, and the site/GUID placeholders) that stand between it and a tenant. |
+| [`sharepoint-rest-ingest.md`](sharepoint-rest-ingest.md) | The operator runbook for that feed: scheduling it, re-driving it, and what REST polling cannot tell you. |
 | [`gold-accumulation.md`](gold-accumulation.md) | Gold's accumulate-by-run semantics, idempotent re-run, reading "current" — and the two shapes of current-only reduce (`LatestPerKey` by `load_date`, vs a Polling Feed's source-version ordering). |
 | [`processors.md`](processors.md) | The Selection transforms (`JoinWith`, per-group sampling) and the Ingest / fan-out transforms (`SelectColumns`, `Unpivot`, `DeriveKey`, `LatestPerKey`). |
 | [`selection.md`](selection.md) | The full CaseType / Variation → CasePool → SelectionPool flow + explainability. |
@@ -599,7 +607,7 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 | [`run-log-format.md`](run-log-format.md) | The JSONL record schema and the run registry. |
 | [`streaming-large-sources.md`](streaming-large-sources.md) | Streaming a source too big to hold whole: `Pipeline.read_chunks` driving the DAG once per chunk, chunk-level row filtering (id allow-list / predicate), which pairings are refused at wiring time and why, and `stream_step` as the low-level fallback. |
 | [`retry.md`](retry.md) | Targeted retry at the reader/writer edges — `RetryPolicy`, where to use it and where not. |
-| [`operator-cli.md`](operator-cli.md) | The operator CLI (`run` / `status` / `runs` / `log`) with example commands and output. |
+| [`operator-cli.md`](operator-cli.md) | The operator CLI (`run` / `orchestrate` / `status` / `runs` / `log` / `scaffold`) with example commands and output. |
 | [`resolving-a-failed-run.md`](resolving-a-failed-run.md) | The operator loop from a failed run — investigate (`status`/`log`), diagnose, resolve, and re-drive idempotently. |
 | [`escape-hatch-store.md`](escape-hatch-store.md) | Iterating against a flat scratch db (and a pre-baked SQL query) outside the medallion / namespace Store, and migrating back. |
 | [`testing-helpers.md`](testing-helpers.md) | `tests.framework_testing` — the test-only helpers for testing concrete pipelines (`given_rows`, `RecordingWriter`, `read_rows`, `RecordingRunLog`, `read_run_log`). |

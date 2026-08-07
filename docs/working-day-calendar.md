@@ -60,3 +60,16 @@ cal.last_n_working_days(2, date(2026, 1, 3))   # a Saturday
 
 For an availability criterion, `result[-1]` is the earliest eligible day (the
 window's far edge) and `result[0]` the most recent.
+
+## Where the calendar is used — orchestration
+
+A scheduled pipeline reaches the calendar through its `Schedule`. The worked
+example is [`case_review/schedules.py`](../case_review/schedules.py), where the
+`sharepoint_cases` feed is declared `Schedule.daily()`, so a weekend or a seeded
+holiday is what makes the orchestrator record `skipped` rather than invoke the
+pipeline.
+
+**`python -m cli orchestrate` seeds no holidays.** It builds a bare
+`WorkingDayCalendar()`, so today only the weekend rule applies in practice; a
+holiday calendar has to be constructed in Python. The scheduling side is in
+[operator-cli.md](operator-cli.md#orchestrate--run-scheduled-due-work).

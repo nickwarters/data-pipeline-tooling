@@ -141,6 +141,10 @@ database error — a locked file on the share included — fails the run rather 
 silently downgrading the replace to an append, which is what would duplicate the
 run's rows. Wait for the competing writer to finish and re-drive.
 
+A polling feed (`sharepoint_cases`) is idempotent by its **source watermark plus
+an append-only key** rather than by logical run id; its recovery procedure is in
+[sharepoint-rest-ingest.md](sharepoint-rest-ingest.md#4-recovery--why-re-running-is-safe).
+
 ## 5. Confirm — green status, clean log
 
 ```sh
