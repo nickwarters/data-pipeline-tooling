@@ -7,21 +7,13 @@ are linked from here rather than restated.
 
 ## 1. Do not attach this to an external scheduler yet
 
-The feed cannot reach a tenant. `_resolve_client` has no organisational client to
-hand back, and `SITE` / `LIST_ID` in `pipelines/sharepoint_cases/pipeline.py` are
-placeholders, so every working-day pass ends `failed` today with a
-`config`-category `NoClientError`. Three things must be wired first:
+The feed cannot reach a tenant: `_resolve_client` has no organisational client to
+hand back and `SITE` / `LIST_ID` are placeholders, so every working-day pass ends
+`failed` today with a `config`-category `NoClientError`.
 
-1. **A `CaseListClient`** returned by `_resolve_client` — `fetch_items(...)` plus
-   a `server_time()` reading the *list server's* clock.
-2. **`SITE` and `LIST_ID`** filled in from the tenant. The watermark is keyed on
-   the GUID, so a wrong one does not fail — it forks the feed's place and looks
-   like a first load.
-3. **An index on `Modified`**, while the list is still under the 5,000-row List
-   View Threshold (see §5).
-
-All three are recorded in
-[data-dictionary-sharepoint-cases.md](data-dictionary-sharepoint-cases.md#three-things-to-know-before-this-feed-reaches-a-tenant).
+What must be wired first, in what order, and how to verify each step is
+[sharepoint-cases-going-live.md](sharepoint-cases-going-live.md). Everything
+below describes the feed once that is done.
 
 ## 2. The daily command
 
