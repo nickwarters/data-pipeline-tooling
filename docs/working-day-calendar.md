@@ -129,3 +129,19 @@ weekday gate: with the 1st of the month seeded as a holiday,
 schedule prints names the aspect of the date *it* judged — for `Weekdays`, the
 weekday name — so a holiday skip on a Monday reads
 `schedule daily is not due on monday`.
+
+## Where the calendar is used — availability windows
+
+`CasePool.fetch_available_cases(..., within_working_days=N)` counts the same
+working days, so the same file seeds it. A path-addressed pipeline takes it as
+the `calendar` run parameter rather than a flag of its own:
+
+```sh
+python -m cli run pipelines/selection --base-dir /share \
+    --param calendar=/config/calendar.yml
+```
+
+Without the parameter the window counts weekends only, so a bank holiday
+silently narrows it by a day. Seeding the same file both commands read is what
+keeps a Case eligible for Selection on the day the schedule expects to select
+it. See [selection.md](selection.md).
