@@ -18,8 +18,11 @@ branch is **`py-to-markdown`** — if the user names something close but wrong
 
 1. **Checkout + sync the branch**
    ```sh
-   git checkout py-to-markdown && git pull --ff-only
+   git checkout py-to-markdown && git pull --ff-only --no-rebase
    ```
+   `--no-rebase` is required: this clone sets `pull.rebase = true`, and a rebasing
+   pull combined with `--ff-only` aborts with `fatal: Cannot rebase onto multiple
+   branches` before syncing anything.
 2. **Merge the latest main**
    ```sh
    git fetch origin
@@ -34,8 +37,11 @@ branch is **`py-to-markdown`** — if the user names something close but wrong
    ```sh
    .venv/bin/python scripts/generate_md_mirrors.py
    ```
-   Expect output like `Removed N existing Markdown mirror(s). / Wrote N Markdown
-   mirror(s).` — the two N counts should match.
+   Expect output like `Removed N existing Markdown mirror(s). / Wrote M Markdown
+   mirror(s).` The two counts match only when the merge added and removed no `.py`
+   files; otherwise `M - N` should equal the net change in `.py` files the merge
+   brought in. Check that difference against the merge rather than treating any
+   mismatch as a failure.
 4. **Review** `git status --short`. Sanity-check that the changed/added/deleted
    `.md` files track the `.py` changes the merge brought in (a deleted `.py`
    should drop its `.md`; a new `.py` should add one).
@@ -47,6 +53,11 @@ branch is **`py-to-markdown`** — if the user names something close but wrong
    ```
    The pre-commit `ruff`/`pytest` hooks will report **Skipped (no files to
    check)** because the commit is `.md`-only — that's expected, not a failure.
+
+   If `git status --short` was empty at step 4, main hasn't moved since the last
+   run: the mirrors are already current, so skip the commit and push and report
+   that there was nothing to do. An empty regeneration is the confirmation that
+   the mirrors match — don't force an empty commit.
 6. **Return to main**
    ```sh
    git checkout main
