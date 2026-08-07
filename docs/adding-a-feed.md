@@ -808,19 +808,22 @@ never expanded and reading it as an empty role would hide a broken read. A
 missing `Title` is *not* an error — only the Responsible Party's display name is
 selected at all, and a directory display name is optional even then.
 
-**2. A quiet window runs the same hops as a busy one**, and costs the feed
-nothing to do so. A zero-row batch reaches the silver schema gate with its
-integer column still object-typed — `SchemaCoercion` repairs only the types a
-storage round-trip loses, dates and booleans — but a column with no rows has no
-value to breach a declared type, so [the gate checks presence
-only](schema-enforcement.md#a-zero-row-frame-satisfies-any-declared-schema) on an
-empty frame. The feed once cast the declared integers itself where it narrows the
-batch for silver; that workaround came out when the rule moved into the framework
-(#394), which is where it belongs — the next quiet source would have
-rediscovered the same failure. Skipping the hop on an empty batch would have been
-the smaller change and the wrong one — a quiet poll is not a different pipeline,
-and an operator reading the run log should see the same steps against the same
-tables, with zero rows.
+**2. A quiet window runs the same hops as a busy one**, and the feed no longer
+pays for it below raw. A zero-row batch has no value to breach a declared type,
+so [the silver gate checks presence
+only](schema-enforcement.md#a-zero-row-frame-satisfies-any-declared-schema), and
+`SchemaCoercion` types every declared column on the way past — which matters
+because a quiet *first* poll is what creates the silver table, and a column
+landed as `object` would take `TEXT` affinity for the life of the feed. The feed
+once cast its integer column itself where it narrows the batch for silver; that
+workaround came out when both halves of the rule moved into the framework
+(#394), which is where they belong — the next quiet source would have
+rediscovered the same failure. What stays feed-side is the *raw* reindex in point
+1: raw stores what the list returned, so declaring an empty window's columns
+there is the feed's shape decision, not the schema's. Skipping the hop on an
+empty batch would have been the smaller change and the wrong one — a quiet poll
+is not a different pipeline, and an operator reading the run log should see the
+same steps against the same tables, with zero rows.
 
 **3. Silver is the rename and the type contract, and nothing else.** The rename
 is one mechanical rule rather than a curated map: split each source name on word
