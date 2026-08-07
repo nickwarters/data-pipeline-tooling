@@ -165,11 +165,13 @@ the intended model, and why it is safe is
 [the runbook's §2](sharepoint-rest-ingest.md#2-the-daily-command). Do not use
 `--loop` as an hourly daemon; it settles the day's due work and stops.
 
-Weekends skip. **Holidays do not** — `python -m cli orchestrate` builds its
-calendar with no holidays seeded ([#407](https://github.com/nickwarters/data-pipeline-tooling/issues/407)),
-so a bank holiday polls like any other weekday. That is harmless for this feed
-(a quiet poll is cheap and convergent) but it will not stay harmless for
-schedules like "first working day of the month".
+Weekends skip. Holidays skip **when you seed them**: pass
+`--calendar <file>`, a YAML calendar file of `holidays` and `weekend`
+([working-day-calendar.md](working-day-calendar.md#from-a-calendar-file--workingdaycalendarfrom_yamlpath)).
+Omit the flag and the calendar is weekends-only, so a bank holiday polls like
+any other weekday — harmless for this feed (a quiet poll is cheap and
+convergent), but seed the file before you add schedules like "first working day
+of the month", which count their working days against the same calendar.
 
 From here, [sharepoint-rest-ingest.md](sharepoint-rest-ingest.md) is the
 document you operate from.

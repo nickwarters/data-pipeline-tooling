@@ -197,7 +197,7 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 | **`RunContext` / `PipelineRunner` / `Requirement`** | The thin domain runner: register handlers by `(subject, pipeline)`, receive a context carrying execution/logical identity, dates, explicit run params, RunLog, and RunRegistry, and block stale downstream runs with `Requirement.succeeded(RunAddress.for_pipeline(...)).same_day()` or task-level `within_days(...)` predicates. `FreshnessRequirement` remains compatible. → [core-primitives.md](core-primitives.md) |
 | **`CaseType` / `Variation`** | Case-review application/domain objects in `case_review.case_type`, not framework primitives: a Case Type bundles its `schema`, its identity contract (`natural_key` + a `namespace` derived from `name`), and its `variations`, imported directly (no global CaseType config registry). A Variation overrides only what differs — most often the `question_bank_id`. → [selection.md](selection.md) |
 | **`CasePool`** | Case-review application/domain helper in `case_review.case_pool`: the per-Case-Type population read from ingested silver, surfaced through intention-revealing retrievals (e.g. `fetch_available_cases(...)`) instead of raw `read_*`. → [selection.md](selection.md) |
-| **`WorkingDayCalendar`** | A config-seeded **pure utility** for availability arithmetic ("the last 20 working days"). Touches no Dataset/Store/engine; not a Feed. → [working-day-calendar.md](working-day-calendar.md) |
+| **`WorkingDayCalendar`** | A config-seeded **pure utility** for availability arithmetic ("the last 20 working days"). The config is a YAML calendar file (`holidays` + `weekend`) loaded by `WorkingDayCalendar.from_yaml`, which is also what `python -m cli orchestrate --calendar` passes. Touches no Dataset/Store/engine; not a Feed. → [working-day-calendar.md](working-day-calendar.md) |
 
 Two cross-cutting flows extend the pipeline: **quarantine** routes value-rule
 rejects aside (keeping good rows — [opt-in row-level quarantine for value-rule
@@ -613,7 +613,7 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 | [`gold-accumulation.md`](gold-accumulation.md) | Gold's accumulate-by-run semantics, idempotent re-run, reading "current" — and the two shapes of current-only reduce (`LatestPerKey` by `load_date`, vs a Polling Feed's source-version ordering). |
 | [`processors.md`](processors.md) | The Selection transforms (`JoinWith`, per-group sampling) and the Ingest / fan-out transforms (`SelectColumns`, `Unpivot`, `DeriveKey`, `LatestPerKey`). |
 | [`selection.md`](selection.md) | The full CaseType / Variation → CasePool → SelectionPool flow + explainability. |
-| [`working-day-calendar.md`](working-day-calendar.md) | Availability arithmetic. |
+| [`working-day-calendar.md`](working-day-calendar.md) | Availability arithmetic, and the YAML calendar file that seeds its holidays and weekend rule (`WorkingDayCalendar.from_yaml`, `orchestrate --calendar`). |
 | [`run-log-format.md`](run-log-format.md) | The JSONL record schema and the run registry. |
 | [`streaming-large-sources.md`](streaming-large-sources.md) | Streaming a source too big to hold whole: `Pipeline.read_chunks` driving the DAG once per chunk, chunk-level row filtering (id allow-list / predicate), which pairings are refused at wiring time and why, and `stream_step` as the low-level fallback. |
 | [`retry.md`](retry.md) | Targeted retry at the reader/writer edges — `RetryPolicy`, where to use it and where not. |

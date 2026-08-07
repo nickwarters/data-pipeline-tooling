@@ -37,9 +37,12 @@ writing anything.) Each pass appends its own decision row to
 daemon, and this project ships no scheduler of its own: an external one (Windows
 Task Scheduler, cron) invokes the command.
 
-Weekends and holidays skip — but `python -m cli orchestrate` builds its
-`WorkingDayCalendar` with **no holidays seeded**, so in practice only weekends
-skip today. A skipped pass prints its reason:
+Weekends and holidays skip. Weekends always; holidays when you seed them, by
+passing `--calendar <file>` — a YAML calendar file of `holidays` and `weekend`
+([working-day-calendar.md](working-day-calendar.md#from-a-calendar-file--workingdaycalendarfrom_yamlpath)).
+Without the flag the calendar is weekends-only. A skipped pass prints its reason
+— which names the aspect of the date the schedule judged, so for a daily
+schedule that is the weekday name, holiday or not:
 
 ```console
 2026-08-08  case_management  sharepoint_cases  skipped  schedule daily is not due on saturday

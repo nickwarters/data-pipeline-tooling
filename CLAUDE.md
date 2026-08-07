@@ -201,7 +201,9 @@ framework never statically depends on `pipelines/`. `orchestrate` addresses
 pipelines the **same** way — each `ScheduledPipeline` names a `pipelines/<name>`
 path, run at its scheduled time by the same rule (no handler registry) — and
 takes a required `--app` naming an application's schedules module that exposes
-`build_pipeline_sets()`.
+`build_pipeline_sets()`, plus an optional `--calendar <file>` naming a YAML
+calendar file (`holidays` + `weekend`) that seeds the `WorkingDayCalendar` every
+schedule judges against (omitted, it is weekends-only).
 
 Scaffold a new feed with `python -m cli scaffold <feed>`: it renders the
 feed code as a `pipelines/<feed>/` subpackage (schema, pipeline, sample fixture)

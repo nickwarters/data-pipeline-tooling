@@ -213,7 +213,8 @@ diagnosis; values whose keys look sensitive, such as `password`, `secret`,
 
 ```sh
 python -m cli orchestrate [--base-dir DIR] [--env ENV] --app MODULE \
-    [--run-date YYYY-MM-DD] [--once | --loop] [--poll-seconds N]
+    [--run-date YYYY-MM-DD] [--once | --loop] [--poll-seconds N] \
+    [--calendar FILE]
 ```
 
 Runs the configured `PipelineSet`s for the given run date. `--once` performs one
@@ -224,6 +225,37 @@ limit is reached.
 A `--app` that names a module which cannot be imported, or which exposes no
 `build_pipeline_sets()`, is a configuration error: it exits non-zero with the
 same clean, traceback-free message every other CLI failure prints.
+
+### Seeding the working-day calendar — `--calendar`
+
+Every schedule judges its run date against a `WorkingDayCalendar`. `--calendar`
+points at the YAML file that seeds it:
+
+```yaml
+# holidays.yml
+weekend: [saturday, sunday]   # optional; this is the default
+holidays:
+  - 2026-01-01                # New Year's Day
+  - 2026-12-25                # Christmas Day
+```
+
+```sh
+python -m cli orchestrate --app case_review.schedules --env prod --once \
+    --calendar holidays.yml
+```
+
+Omit the flag and the calendar is the default: **weekends only, no holidays**.
+The full file format, the date-parsing rules and the error messages are in
+[working-day-calendar.md](working-day-calendar.md#from-a-calendar-file--workingdaycalendarfrom_yamlpath).
+
+The same file drives every schedule that consults the calendar — `Weekdays`,
+`DayOfMonth`, `NthWorkingDayOfMonth` and `LastWorkingDayOfMonth`. The month-walk
+schedules *count* their working days against it, so seeding the 1st of a month
+as a holiday makes `NthWorkingDayOfMonth(1)` due on the 2nd instead.
+
+A skipped item's reason names the aspect of the date its schedule judged, not
+the calendar entry: a daily schedule skipping a Monday holiday prints
+`schedule daily is not due on monday`.
 
 `orchestrate` runs the **same path-addressed pipelines** as `run`. Each
 `ScheduledPipeline` names a `pipelines/<name>` path; when it comes due the
@@ -289,7 +321,7 @@ Schedules are Python definitions owned by the pipeline code. The framework
 provides `Weekdays`, `SpecificWeekdays`, `DayOfMonth`,
 `NthWorkingDayOfMonth`, `LastWorkingDayOfMonth`, and `ManualOnly`. `Weekdays()`
 is the normal "daily" schedule; weekends and holidays are evaluated by
-`WorkingDayCalendar`.
+`WorkingDayCalendar`, seeded by `--calendar`.
 
 For everyday authoring, prefer the friendly `Schedule.*` constructors over the
 implementation class names and weekday ordinals — they read as operator language
@@ -512,6 +544,8 @@ Pipeline run failed [ValidationError]
 | Validation failure | the `ValidationError` message from the failing check |
 | No registry yet (`status` / `runs`) | `no run registry under '/data'; run a pipeline first` |
 | No run log (`log`) | `no run log at /data/_runs/<pipeline>.log` |
+| Missing calendar file (`orchestrate --calendar`) | `no calendar file at '/etc/holidays.yml'` |
+| Malformed calendar file (`orchestrate --calendar`) | `calendar file '/etc/holidays.yml': holidays[0] must be a YYYY-MM-DD date, got 'not-a-date'` |
 
 The same `except PipelineError` / `format_failure` pair is what a scaffolded
 feed's `main()` uses, so running a feed directly (`python -m pipelines.<feed>.pipeline`)
