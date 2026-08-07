@@ -1,8 +1,9 @@
 # Data dictionary — `sharepoint_cases`
 
 The filled-in entry for the `sharepoint_cases` feed, following
-[`data-dictionary-template.md`](data-dictionary-template.md). Two tables: the
-faithful raw observation and the typed Case version. The Python contract is
+[`data-dictionary-template.md`](data-dictionary-template.md). Three tables: the
+faithful raw observation, the typed Case version, and the current Case reduced
+from the version history. The Python contract is
 [`pipelines/sharepoint_cases/schema.py`](../pipelines/sharepoint_cases/schema.py);
 this page is its prose companion.
 
@@ -36,8 +37,10 @@ run needs `LIST_NAME` changed accordingly.
 
 ## Where "when we saw it" lives
 
-Neither table carries an observation timestamp, an ingestion batch id, or a
-pipeline run id as a **column**, and that is deliberate. The load strategy is
+Neither the raw nor the silver table carries an observation timestamp, an
+ingestion batch id, or a pipeline run id as a **column**, and that is
+deliberate. (Gold does carry `as_of_utc`, but that is the run's *candidate
+window end*, not when we looked — see below.) The load strategy is
 `AppendOnly`, which compares every non-key column of a re-presented row against
 the row already stored; a per-read stamp would differ on every overlapping poll
 and turn each ordinary re-read into an append-only conflict. The rows record
@@ -45,7 +48,7 @@ and turn each ordinary re-read into an append-only conflict. The rows record
 
 When we saw it is recorded elsewhere, and is still recoverable: the **run log**
 (`<base>/_runs/sharepoint_cases.log`) timestamps every step and its
-`data_locations` name the list and both tables, and the **ingestion batch id**
+`data_locations` name the list and every table, and the **ingestion batch id**
 returned on `SharePointIngestResult` identifies the source window the poll
 resumed from. The Reader's `observed_at` stamp is an injectable callable and is
 dropped at the storable-observation boundary for the same reason.
@@ -64,7 +67,7 @@ the diagnosable, re-runnable copy of what the list returned.
 | **Subject / Case Type** | `sharepoint_cases` |
 | **Medallion layer** | raw |
 | **Grain** | one row per observation (one list item at one version) |
-| **Is this a Case Type?** | No — an ingest feed; the Case Type question is settled at gold |
+| **Is this a Case Type?** | No — an ingest feed; identity is derived at gold |
 | **Natural key → `case_id`** | n/a at this layer |
 | **Source system** | SharePoint list `Cases-Complaints` (site and GUID: placeholders, see above) |
 | **Reader** | `SharePointModifiedReader`, behind the feed's `StorableObservations` projection |
@@ -132,8 +135,8 @@ own question bank and that is a gold concern.
 | **Subject / Case Type** | `sharepoint_cases` |
 | **Medallion layer** | silver |
 | **Grain** | one row per observation of a Case |
-| **Is this a Case Type?** | Not yet — the gold assembly is an open decision |
-| **Natural key → `case_id`** | n/a until gold; `id` (the SharePoint item id) is the candidate |
+| **Is this a Case Type?** | No — no `CaseType` is declared; gold derives `case_id` from a namespace constant (see below) |
+| **Natural key → `case_id`** | `source_item_id` (the SharePoint item id), namespaced by `schema.LIST_NAME` — applied at gold, not here |
 | **Source system** | `raw.case_observation` (the batch just fetched, not the whole history) |
 | **Reader** | `DatasetReader` over the fetched batch |
 | **Load strategy** | `AppendOnly("source_observation_id")` |
@@ -253,3 +256,63 @@ guessed at here would quarantine real data.
   the review application (`outcome`, `void_reason`, `question_bank_version`) get
   no rule here, because a rule this feed cannot justify is a rule that will
   eventually reject good data.
+
+## Gold — the current Case
+
+Silver accumulates *observations*; gold answers *what is true now*. One table,
+rebuilt whole with `Refresh()` on every poll from the entire silver history, in
+[`pipelines/sharepoint_cases/gold.py`](../pipelines/sharepoint_cases/gold.py).
+It is published **before** the polling watermark is committed, so a failure
+leaves the watermark where it was and the next run rebuilds it.
+
+| Table | Declared grain | Measure |
+|-------|----------------|---------|
+| `case_current` | one row per `case_id` | the Case, as it currently stands |
+
+`case_current` carries a live grain gate (`UniqueValidator("case_id")`) because
+its grain is produced by a rule rather than by construction.
+
+### `as_of_utc`
+
+`as_of_utc` is the **candidate SharePoint window end** — the instant this run is
+about to commit as its watermark — as ISO-8601 UTC text. Never `utcnow()`: a
+re-drive of the same window must produce identical gold.
+
+### `case_current`
+
+| Attribute | Value |
+|-----------|-------|
+| **Grain** | one row per `case_id` |
+| **Identity** | a `sha256` over `{namespace: LIST_NAME, natural_key: {source_item_id}}`, stamped by `DeriveKey` |
+| **Load strategy** | `Refresh()` |
+| **Source** | the whole `silver.case_version` history |
+| **Columns** | every silver column, plus `case_id` and `as_of_utc` |
+
+**Which version is current.** One stable sort on `case_id`,
+`source_modified_at` (parsed UTC), the parsed source version's major then minor
+part, and finally `source_observation_id`; then keep the last row per `case_id`.
+`Modified` leads because it is the source's own idea of when the item changed. It
+is not enough on its own: two versions can share a `Modified` to the second and
+append-only silver keeps both, so the parsed version breaks that tie. The version
+is **parsed, never compared as text** — `"10"` sorts before `"9"` lexically. All
+three shapes the column really holds are handled: an ETag (`"3"`, `W/"3"`,
+`"4,1"`), a dotted UI version (`3.0`, `512.0`), and — for a row that arrived with
+no version at all — a sha256 digest, which is not a version and sorts below every
+real one. Two *digest* rows at the same `Modified` are therefore separated only by
+`source_observation_id`: deterministic, but arbitrary.
+
+**The namespace is the list name, not the list GUID.** The GUID
+is still a placeholder, so keying on it would silently re-key every Case in gold
+the day the real one lands. The cost is stated plainly: **renaming the list
+re-keys history**, so a rename needs the treatment a re-key always needs.
+
+Two things to know about what this table holds:
+
+- It republishes **every** silver column, including the `answers`,
+  `conversation` and `details` JSON blobs, on every poll. A consumer has nowhere
+  else to read them; the price is that `Refresh()` rewrites them each time.
+- **A Case deleted from the list stays here forever.** The poll asks for items
+  modified in a window, and a deleted item is not returned by anything —
+  deletion inference is out of scope for this feed. `case_current` is "every
+  Case we have ever seen, at its latest observed version", which is the same
+  thing only while nothing is deleted.
