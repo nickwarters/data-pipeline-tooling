@@ -117,6 +117,22 @@ def test_schema_validator_accepts_a_zero_row_frame_whatever_its_dtypes():
     SchemaValidator(Measurement).validate(Dataset.from_pandas(frame))
 
 
+def test_schema_validator_accepts_a_zero_row_column_reindex_invented_as_float():
+    # The other way an empty column gets the wrong type: `DataFrame.reindex`
+    # fills a column it had to invent with NaN, and so types it float64 —
+    # including where the schema declares `str`. That is the shape a feed
+    # declaring an empty window's columns hands to the gate, and it passes for
+    # the same reason: no rows, nothing to check.
+    frame = pd.DataFrame({"opened": pd.Series([], dtype="datetime64[ns]")}).reindex(
+        columns=["case_ref", "opened", "active"]
+    )
+    # The premise the test rests on, not the claim it makes: `case_ref` is
+    # declared `str` and arrives float64, because reindex had to invent it.
+    assert frame["case_ref"].dtype == "float64"
+
+    SchemaValidator(CaseA).validate(Dataset.from_pandas(frame))
+
+
 def test_schema_validator_still_reports_a_missing_column_on_a_zero_row_frame():
     # Only the *value* claims stand down when there are no rows. A declared
     # column that is absent is a breach of shape, and a shape is real whether or
