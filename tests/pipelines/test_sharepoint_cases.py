@@ -23,6 +23,7 @@ from pipelines.sharepoint_cases import gold
 from pipelines.sharepoint_cases.gold import (
     GOLD_TABLES,
     UNASSIGNED,
+    case_age_buckets_current_builder,
     case_counts_current_builder,
     case_current_builder,
 )
@@ -643,6 +644,66 @@ def test_a_case_with_nobody_assigned_is_counted_as_unassigned():
     assert grain(rows) == [(UNASSIGNED, UNASSIGNED, "In-progress", 1)]
 
 
+# --- gold: the age profile ---------------------------------------------------
+
+
+def aged(*rows: dict) -> list[dict]:
+    return gold_rows(case_age_buckets_current_builder, current(*rows))
+
+
+def created_days_before(age: int) -> str:
+    """A ``created`` stamp exactly ``age`` local calendar days before ``as_of``."""
+    return f"{AS_OF.date() - dt.timedelta(days=age)} 09:14:00+00:00"
+
+
+@pytest.mark.parametrize(
+    "age, label, order",
+    [
+        (0, "0-7 days", 0),
+        (7, "0-7 days", 0),
+        (8, "8-14 days", 1),
+        (14, "8-14 days", 1),
+        (15, "15-30 days", 2),
+        (30, "15-30 days", 2),
+        (31, "31-60 days", 3),
+        (60, "31-60 days", 3),
+        (61, "61+ days", 4),
+    ],
+)
+def test_an_age_falls_in_exactly_one_declared_bucket(age, label, order):
+    [row] = aged(version(created=created_days_before(age)))
+
+    assert (row["age_bucket"], row["age_bucket_order"]) == (label, order)
+    assert row["case_count"] == 1
+    assert row["as_of_utc"] == AS_OF.isoformat()
+
+
+def test_a_case_with_no_created_date_has_an_unknown_age():
+    [row] = aged(version(created=None))
+
+    assert (row["age_bucket"], row["age_bucket_order"]) == ("unknown", 5)
+
+
+def test_a_case_created_after_the_as_of_instant_is_unknown_rather_than_clamped():
+    # Impossible while created <= Modified < as_of, so if it happens it is
+    # corruption and belongs somewhere visible.
+    [row] = aged(version(created=created_days_before(-3)))
+
+    assert row["age_bucket"] == "unknown"
+
+
+def test_every_current_case_lands_in_exactly_one_age_bucket():
+    # The docs claim the age profile totals to the number of current Cases —
+    # every Case in one bucket, `unknown` catching the ones with no created date.
+    history = (
+        version(created=created_days_before(2)),
+        version(id=102, source_item_id="102", created=created_days_before(40)),
+        version(id=103, source_item_id="103", created=None, status="Completed"),
+    )
+
+    assert sum(row["case_count"] for row in aged(*history)) == len(current(*history))
+
+
 # --- the composed plan -----------------------------------------------------
 
 
@@ -690,6 +751,15 @@ def test_the_gold_hops_plan_exactly_the_steps_they_always_have():
         "  [Read] read",
         "  [Transform] count-by-reviewer-and-status (depends on: read)",
         "  [Transform] stamp-as-of (depends on: count-by-reviewer-and-status)",
+        "  [Write] write (depends on: stamp-as-of)",
+    ]
+    assert case_age_buckets_current_builder(
+        reader, writer, as_of=AS_OF
+    ).describe().splitlines() == [
+        f"Pipeline: {FEED_NAME}:gold:case_age_buckets_current",
+        "  [Read] read",
+        "  [Transform] bucket-by-age (depends on: read)",
+        "  [Transform] stamp-as-of (depends on: bucket-by-age)",
         "  [Write] write (depends on: stamp-as-of)",
     ]
 
@@ -951,13 +1021,13 @@ def test_a_failure_in_the_last_aggregate_leaves_the_earlier_gold_and_no_checkpoi
     # Gold Writers commit independently, so an earlier table stays refreshed.
     # That is acceptable evidence: the watermark did not move, so the next run
     # rebuilds every table from the same history and converges.
-    monkeypatch.setattr(gold, "case_counts_current_builder", explode)
+    monkeypatch.setattr(gold, "case_age_buckets_current_builder", explode)
 
     with pytest.raises(RuntimeError, match="boom"):
         run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME), client=FakeListClient())
 
     checkpoints = SharePointCheckpointStore(tmp_path)
-    assert landed_gold(tmp_path) == {"case_current"}
+    assert landed_gold(tmp_path) == {"case_current", "case_counts_current"}
     assert checkpoints.committed_watermark(SOURCE) is None
     assert not checkpoints.path.exists()
 
@@ -1007,6 +1077,7 @@ def test_a_dry_run_previews_every_write_and_commits_none_of_them(tmp_path):
 
     # Raw, silver and every gold table are previewed; none is committed.
     assert [step.note for step in report.steps if step.node_type == "Write"] == [
+        "would write 1 row(s)",
         "would write 1 row(s)",
         "would write 1 row(s)",
         "would write 1 row(s)",

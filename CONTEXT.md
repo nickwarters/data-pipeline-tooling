@@ -75,7 +75,7 @@ One row of a **Polling Feed**: what the source said about one item, at one sourc
 _Avoid_: snapshot (that is the whole source at a moment), record, event
 
 **Aggregate table**:
-A **gold** table whose rows are *counts of Cases*, not Cases — one row per combination of the dimensions it declares (its **grain**), plus the measure. Distinct from a current-state gold table, which is one row per Case. An Aggregate table is rebuilt whole from the current-state table on every run (`Refresh()`), so it cannot drift from it and a re-drive converges; and its grain is *declared* (in the builder's docstring and the Data Dictionary) rather than gated, because a uniqueness check sitting immediately below the group-by that produced it is satisfied by construction and could never fire. Today: `case_counts_current` on the `sharepoint_cases` Feed.
+A **gold** table whose rows are *counts of Cases*, not Cases — one row per combination of the dimensions it declares (its **grain**), plus the measure. Distinct from a current-state gold table, which is one row per Case. An Aggregate table is rebuilt whole from the current-state table on every run (`Refresh()`), so it cannot drift from it and a re-drive converges; and its grain is *declared* (in the builder's docstring and the Data Dictionary) rather than gated, because a uniqueness check sitting immediately below the group-by that produced it is satisfied by construction and could never fire. Today: `case_counts_current` and `case_age_buckets_current` on the `sharepoint_cases` Feed.
 _Avoid_: summary, rollup, cube, report (that is a **Deliverable**)
 
 **As-of instant**:

@@ -1,9 +1,9 @@
 # Data dictionary — `sharepoint_cases`
 
 The filled-in entry for the `sharepoint_cases` feed, following
-[`data-dictionary-template.md`](data-dictionary-template.md). Four tables: the
-faithful raw observation, the typed Case version, and the two gold tables
-reduced from the version history — the current Case and an aggregate. The
+[`data-dictionary-template.md`](data-dictionary-template.md). Five tables: the
+faithful raw observation, the typed Case version, and the three gold tables
+reduced from the version history — the current Case and two aggregates. The
 Python contract is
 [`pipelines/sharepoint_cases/schema.py`](../pipelines/sharepoint_cases/schema.py);
 this page is its prose companion.
@@ -258,28 +258,32 @@ guessed at here would quarantine real data.
   no rule here, because a rule this feed cannot justify is a rule that will
   eventually reject good data.
 
-## Gold — the current Case and an aggregate
+## Gold — the current Case and two aggregates
 
-Silver accumulates *observations*; gold answers *what is true now*. Two tables,
-both rebuilt whole with `Refresh()` on every poll from the entire silver history,
+Silver accumulates *observations*; gold answers *what is true now*. Three tables,
+all rebuilt whole with `Refresh()` on every poll from the entire silver history,
 in [`pipelines/sharepoint_cases/gold.py`](../pipelines/sharepoint_cases/gold.py).
 They are published **before** the polling watermark is committed, so a failure
-anywhere leaves the watermark where it was and the next run rebuilds both.
+anywhere leaves the watermark where it was and the next run rebuilds all three.
 
 | Table | Declared grain | Measure |
 |-------|----------------|---------|
 | `case_current` | one row per `case_id` | the Case, as it currently stands |
 | `case_counts_current` | `assigned_reviewer_name` × `assigned_reviewer_manager_name` × `status` | `case_count` |
+| `case_age_buckets_current` | `age_bucket` × `status` | `case_count` |
 
 Only `case_current` carries a live grain gate (`UniqueValidator("case_id")`); the
-aggregate gets none, for the reason set out in `case_current_builder`'s
-docstring. Its grain is declared here and in its builder's docstring instead.
+two aggregates get none, for the reason set out in `case_current_builder`'s
+docstring. Their grain is declared here and in each builder's docstring instead.
 
 ### `as_of_utc`, on every table
 
 `as_of_utc` is the **candidate SharePoint window end** — the instant this run is
 about to commit as its watermark — as ISO-8601 UTC text. Never `utcnow()`: a
-re-drive of the same window must produce identical gold.
+re-drive of the same window must produce identical gold. Where a *calendar date*
+is derived from it (the age arithmetic) the instant is converted to the **local**
+date first, per
+[`tools/observability/timestamps.py`](../tools/observability/timestamps.py).
 
 ### `case_current`
 
@@ -346,3 +350,32 @@ is counted under the literal `(unassigned)` in that column. That is a
 **reporting fill, never a source value**; it exists because a NULL group key is
 a hole in the grain that a reader may silently drop, which would make the table
 quietly fail to add up to the number of current Cases.
+
+### `case_age_buckets_current`
+
+| Attribute | Value |
+|-----------|-------|
+| **Grain** | `age_bucket` × `status` |
+| **Columns** | `age_bucket`, `age_bucket_order`, `status`, `case_count`, `as_of_utc` |
+
+Age is whole **calendar** days from `created` to `as_of`, both as local dates.
+Not working days: `tools.calendar.WorkingDayCalendar` needs a seeded holiday set
+and nothing here supplies one, so a working-day age would be a guess dressed as a
+measure. Seed the calendar first if a consumer asks for it.
+
+| `age_bucket` | `age_bucket_order` | Rule |
+|--------------|--------------------|------|
+| `0-7 days` | 0 | `0 <= age < 8` |
+| `8-14 days` | 1 | `8 <= age < 15` |
+| `15-30 days` | 2 | `15 <= age < 31` |
+| `31-60 days` | 3 | `31 <= age < 61` |
+| `61+ days` | 4 | `age >= 61` |
+| `unknown` | 5 | `created` is null or unparseable, **or** the age is negative |
+
+`age_bucket_order` travels with the label so a consumer sorts without parsing
+`"15-30 days"`. A negative age is impossible while `created <= Modified < as_of`,
+so if one appears it is corruption and is bucketed where someone will see it
+rather than clamped to zero where nobody will. Every current Case lands in
+exactly one bucket, so this table's total reconciles exactly with
+`case_counts_current`'s. The reviewer dimensions are deliberately absent — they
+are one join away in `case_current`.

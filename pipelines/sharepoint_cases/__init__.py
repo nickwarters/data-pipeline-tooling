@@ -3,6 +3,6 @@
 Polls the list by its ``Modified`` window and lands each observation twice: raw
 in SharePoint's own column names, silver snake_cased, typed and validated. Both
 are append-only histories of immutable source versions. Gold reduces that
-history to the current Case and an aggregate, rebuilt whole on every poll, and
-the polling watermark is committed only once both have landed.
+history to the current Case and two aggregates, rebuilt whole on every poll,
+and the polling watermark is committed only once all three have landed.
 """

@@ -1,26 +1,30 @@
-"""Gold for the ``sharepoint_cases`` feed: the current Case, and an aggregate.
+"""Gold for the ``sharepoint_cases`` feed: the current Case, and two aggregates.
 
 Silver is an append-only history of *observations* -- one row per (list item,
 version) the poll ever saw, with overlapping windows re-presenting rows that did
-not change. Gold is the other shape: **one row per Case as it stands now**, and a
-count reduced from it. Every table is rebuilt whole with ``Refresh()`` on every
-poll, so a re-drive converges rather than accumulating.
+not change. Gold is the other shape: **one row per Case as it stands now**, and
+two counts reduced from it. Every table is rebuilt whole with ``Refresh()`` on
+every poll, so a re-drive converges rather than accumulating.
 
-Two tables, and their declared grain:
+Three tables, and their declared grain:
 
-=======================  =====================================================
-``case_current``         one row per ``case_id`` -- the latest observation
-``case_counts_current``  reviewer x that reviewer's manager x ``status``
-=======================  =====================================================
+===========================  =================================================
+``case_current``             one row per ``case_id`` -- the latest observation
+``case_counts_current``      reviewer x that reviewer's manager x ``status``
+``case_age_buckets_current`` ``age_bucket`` x ``status``
+===========================  =================================================
 
 Only the first has a live grain gate; see :func:`case_current_builder` for why
-the aggregate gets none. Every grain is declared, in each builder's docstring
-and in the data dictionary.
+the two aggregates get none. Every grain is declared, in each builder's
+docstring and in the data dictionary.
 
 **One instant decides everything.** ``as_of`` is the candidate SharePoint window
 end -- the value the run is about to commit as its watermark -- and never
 ``utcnow()``: a re-drive of the same window must produce byte-identical gold.
-Every table carries it as ``as_of_utc``.
+Every table carries it as ``as_of_utc``. Where a *calendar date* is needed
+(the age arithmetic) the UTC instant is converted to the **local** date through
+``tools.observability.timestamps``, which is where this repository settles
+instants-are-UTC / dates-are-local.
 """
 
 from __future__ import annotations
@@ -28,6 +32,7 @@ from __future__ import annotations
 import datetime as dt
 import re
 from collections.abc import Callable
+from functools import partial
 
 import pandas as pd
 
@@ -36,6 +41,7 @@ from framework.io import DatasetReader, Refresh
 from framework.run import Pipeline, RunLog
 from framework.transform import DeriveKey, Stamp
 from tools.medallion import Medallion
+from tools.observability.timestamps import local_date
 
 from .schema import FEED_NAME, LIST_NAME
 
@@ -62,6 +68,18 @@ COUNT_DIMENSIONS = (
     "assigned_reviewer_manager_name",
     "status",
 )
+
+# ``(exclusive upper bound in days, label)``, tried in order; the last entry is
+# the open-ended bucket and its bound is ignored. A bucket's sort order is its
+# position here, so the order cannot be hand-numbered out of step with it.
+AGE_BUCKETS = (
+    (8, "0-7 days"),
+    (15, "8-14 days"),
+    (31, "15-30 days"),
+    (61, "31-60 days"),
+    (None, "61+ days"),
+)
+UNKNOWN_AGE_BUCKET = ("unknown", len(AGE_BUCKETS))
 
 # ``"3"``, ``W/"3"``, ``"4,1"`` and ``"3.0"`` are all shapes this list's version
 # column really holds; the separator is whichever of the two the source used.
@@ -187,6 +205,60 @@ def _case_counts(dataset: Dataset) -> Dataset:
     return Dataset.from_pandas(counted.reset_index(drop=True))
 
 
+def _age_in_days(created: pd.Timestamp | None, as_of_day: dt.date) -> int | None:
+    """Whole local calendar days from ``created`` to ``as_of_day``, or ``None``.
+
+    Both ends are converted to a **local** calendar date first. Taking ``.date()``
+    off a UTC instant would pass on a UTC box and be a day out for a UK operator
+    in British Summer Time -- the exact confusion ``tools.observability.
+    timestamps`` exists to settle.
+    """
+    if created is None or created is pd.NaT or pd.isna(created):
+        return None
+    return (as_of_day - local_date(created)).days
+
+
+def _age_bucket(age_days: int | None) -> tuple[str, int]:
+    """The bucket ``age_days`` falls in, as ``(label, sort order)``.
+
+    A negative age means the Case was created after the window this run is
+    reporting as of, which cannot happen while ``created <= Modified < as_of``.
+    So it is corruption, and it is bucketed as ``unknown`` where someone will see
+    it rather than clamped to zero where nobody will.
+    """
+    if age_days is None or age_days < 0:
+        return UNKNOWN_AGE_BUCKET
+    for order, (upper, label) in enumerate(AGE_BUCKETS):
+        if upper is None or age_days < upper:
+            return (label, order)
+    raise AssertionError("the last bucket is open-ended")  # pragma: no cover
+
+
+def _age_buckets(dataset: Dataset, *, as_of: dt.datetime) -> Dataset:
+    """Count current Cases by age bucket and status."""
+    frame = dataset.to_pandas()
+    as_of_day = local_date(as_of)
+    created = pd.to_datetime(
+        frame["created"], utc=True, format="ISO8601", errors="coerce"
+    )
+    buckets = [_age_bucket(_age_in_days(value, as_of_day)) for value in created]
+    counted = (
+        frame.assign(
+            age_bucket=pd.Series(
+                [label for label, _ in buckets], index=frame.index, dtype="object"
+            ),
+            age_bucket_order=pd.Series(
+                [order for _, order in buckets], index=frame.index, dtype="int64"
+            ),
+        )
+        .groupby(["age_bucket", "age_bucket_order", "status"])
+        .size()
+        .reset_index(name="case_count")
+        .sort_values(["age_bucket_order", "status"], kind="stable")
+    )
+    return Dataset.from_pandas(counted.reset_index(drop=True))
+
+
 # --- the builders -----------------------------------------------------------
 
 
@@ -208,8 +280,8 @@ def case_current_builder(
     kept anyway, and only here, as a **tripwire** -- the one place in this
     feed's gold where the grain is produced by a rule rather than by a
     ``groupby``, so the one place a future change to that rule could get it
-    wrong. The aggregate hop gets no such gate, because there the check would be
-    satisfied by construction with no rule to guard.
+    wrong. The two aggregate hops get no such gate, because there the check
+    would be satisfied by construction with no rule to guard.
 
     Every silver column is republished, including the ``answers`` /
     ``conversation`` / ``details`` JSON blobs. They are the Case as it stands and
@@ -250,10 +322,10 @@ def _aggregate_hop(
 ) -> Pipeline:
     """The wiring every aggregate hop shares: read, count, stamp, refresh.
 
-    An aggregate differs only in what it counts, so only the table it publishes,
-    the transform that counts and the step's name are its own. Each keeps its own
-    builder, because the grain and the reasoning behind it are the part worth
-    reading.
+    The aggregates differ only in what they count, so only the table they
+    publish, the transform that counts and the step's name are theirs. Each
+    keeps its own builder, because the grain and the reasoning behind it are the
+    part worth reading.
     """
     p = Pipeline(f"{FEED_NAME}:gold:{table}", run_log=run_log)
     r = p.read(reader, name="read")
@@ -306,17 +378,53 @@ def case_counts_current_builder(
     )
 
 
+def case_age_buckets_current_builder(
+    reader: Reader,
+    writer: Writer,
+    *,
+    as_of: dt.datetime,
+    run_log: RunLog | None = None,
+) -> Pipeline:
+    """Build the age-profile hop. **Grain: ``age_bucket`` x ``status``.**
+
+    Age is whole **calendar** days from ``created`` to ``as_of``, both taken as
+    local dates. Not working days: ``tools.calendar.WorkingDayCalendar`` needs a
+    seeded holiday set and nothing in this feed supplies one, so a working-day
+    age would be a guess dressed as a measure. If a consumer asks for it, that is
+    the later change -- seed the calendar, then use it.
+
+    ``age_bucket_order`` travels with the label so a consumer can sort the
+    buckets without parsing ``"15-30 days"``. Every current Case appears in
+    exactly one bucket (``unknown`` catches a null ``created``), so this table's
+    total reconciles exactly with ``case_counts_current``.
+
+    The reviewer dimensions are deliberately absent: they are one join away in
+    ``case_current``, and carrying them here would multiply the table for a
+    breakdown nobody has asked for.
+    """
+    return _aggregate_hop(
+        reader,
+        writer,
+        table="case_age_buckets_current",
+        transform=partial(_age_buckets, as_of=as_of),
+        step="bucket-by-age",
+        as_of=as_of,
+        run_log=run_log,
+    )
+
+
 # --- publication ------------------------------------------------------------
 
 
 def _aggregates() -> list[tuple[str, Callable[..., Pipeline]]]:
-    """The aggregates in publication order: each table and its builder.
+    """The two aggregates in publication order: each table and its builder.
 
     Resolved per call rather than bound into a module constant, so a test that
     substitutes a builder on this module is still the builder that runs.
     """
     return [
         ("case_counts_current", case_counts_current_builder),
+        ("case_age_buckets_current", case_age_buckets_current_builder),
     ]
 
 
