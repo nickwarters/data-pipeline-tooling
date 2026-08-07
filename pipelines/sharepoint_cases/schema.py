@@ -17,15 +17,39 @@ What is deliberately *not* here: when we saw the row. An append-only target
 compares every non-key column, so a per-read stamp would make each overlapping
 re-read look like a changed row. Observation time lives in the run log and the
 ingestion batch id instead.
+
+Alongside the schema this module holds the feed's **declarations** -- the names
+it is known by and the identity a Case is keyed on. They live here rather than
+in ``pipeline.py`` because ``gold.py`` needs them and ``pipeline.py`` imports
+``gold.py``; a declaration both hops read belongs below both.
 """
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated
 
 from framework.core import NonNull, OneOf
+
+FEED_NAME = "sharepoint_cases"
+
+# One list per Case Type, named ``Cases-{slug}``; there is no combined list and
+# no default. Only Complaints is live, so this feed names it directly rather
+# than growing a per-Case-Type indirection for a second type that may never come.
+# A UAT tenant prefixes the same list ``uat_``.
+LIST_NAME = "Cases-Complaints"
+
+# The namespace every gold ``case_id`` is derived in, paired with the natural key
+# ``source_item_id`` (the list item id, which is what the list keys a Case on).
+#
+# Seeded from the **list name**, not the list GUID: the GUID is still the
+# ``UUID(int=0)`` placeholder, so keying on it would silently re-key every Case
+# in gold the day the real one lands. The trade is stated plainly -- *renaming
+# the list re-keys history*, and a rename would therefore need the same
+# treatment a re-key always needs, not a quiet redeploy.
+CASE_ID_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_DNS, LIST_NAME)
 
 # The Case lifecycle states, exactly as the review application persists them --
 # note the hyphen in "In-progress" and that "Actions In Progress" carries none.

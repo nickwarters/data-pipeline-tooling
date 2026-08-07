@@ -47,7 +47,10 @@ pipelines/orders` imports `pipelines.orders.pipeline` and executes
   the declared schema (`SchemaValidator`). It composes the shared
   `tools.recipes.raw_to_silver` recipe.
 - **`gold_builder`** is a passthrough to start — reads silver, writes gold — with
-  a `TODO` to build the assembly (it's per-feed and an open decision).
+  a `TODO` to build the assembly, because *what* gold means is per-feed. It is
+  the one hop with no shared recipe. For a worked example of a real one, see
+  `pipelines/sharepoint_cases/gold.py`: a current-state reduce with a declared
+  grain, plus three aggregates, all refreshed whole on every run.
 
 ### Recipe-first authoring, and how to diverge
 
@@ -763,11 +766,14 @@ vouching for actually landed.
 #### A worked incremental feed — `pipelines/sharepoint_cases/`
 
 The two halves above wired into a real feed: one Case Type's SharePoint list,
-polled by its `Modified` window into append-only raw and silver. It follows the
-ordinary scaffold shape — a `*_builder` per hop composed from the shared recipes,
-driven by `run(context)` — and is deliberately thin between them. Landing the
-list's rows as immutable versions is the whole job; there is no third hop, no
-derivation and no parsing.
+polled by its `Modified` window into append-only raw and silver, then reduced to
+gold and checkpointed. It follows the ordinary scaffold shape — a `*_builder`
+per hop composed from the shared recipes, driven by `run(context)` — and the
+first two hops are deliberately thin. Landing the list's rows as immutable
+versions is one job and interpreting them is another: raw and silver do no
+derivation and no parsing, and everything that reads meaning into a Case happens
+in the third hop (`gold.py`, four tables refreshed whole on every poll — see the
+[data dictionary](data-dictionary-sharepoint-cases.md)).
 
 **1. The read is narrowed to what raw stores.** `StorableObservations` is a
 Reader decorator (the `tools.retry` shape: forward `data_locations`, delegate
@@ -829,10 +835,26 @@ of an unchanged item look like a changed row. The same reasoning excludes the
 ingestion batch id and the pipeline run id. When we saw it lives in the run log
 and in the returned `ingestion_batch_id` instead.
 
-**5. The watermark is not committed.** `run` returns a `SharePointIngestResult`
-carrying the window, the batch id and the row counts, and leaves the checkpoint
-alone: advancing it vouches for the rows having been *published*, which is the
-gold step's to do.
+**5. The watermark is committed last, after gold.** Advancing it vouches for the
+window having been *published*, not merely fetched — so the commit is the final
+statement of `run`, below the raw hop, the silver hop and all four gold tables.
+A failure anywhere above leaves the watermark where it was, and the next run
+re-polls the same window and converges. `run` still returns a
+`SharePointIngestResult` carrying the window, the batch id and the row counts.
+
+Under a dry run nothing is committed, and the two halves of that come from
+different places. Every hop — raw, silver, and each gold table — is a bare
+`p.run()`, so it inherits the **ambient** run context the runner makes active
+and previews its writes; nothing in the feed's own code decides that. The
+checkpoint is not a pipeline step, so it has no ambient skip to inherit and is
+guarded explicitly by `if not context.dry_run`. That is the one in-code skip in
+the feed.
+
+It is deliberately *not* wired as a `p.action(...)` node on the last gold
+pipeline, which would inherit the dry-run skip for free: the checkpoint is
+source-control state rather than a data step, and burying it inside a pipeline
+named for an aggregate would make "visibly last" less true than the plain `if`
+does.
 
 Two smaller notes. The batch id is
 `f"{list_id}:{watermark.isoformat() if watermark else 'first-load'}"` —

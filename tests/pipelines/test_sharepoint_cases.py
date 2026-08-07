@@ -18,7 +18,17 @@ import pytest
 
 from framework.core import ErrorCategory, ValidationError
 from framework.io import AppendOnlyConflictError
-from framework.run import RunContext, RunLog
+from framework.run import RunContext, RunLog, dry_run_pipeline
+from pipelines.sharepoint_cases import gold
+from pipelines.sharepoint_cases.gold import (
+    GOLD_TABLES,
+    UNASSIGNED,
+    UNSTAMPED,
+    case_age_buckets_current_builder,
+    case_counts_current_builder,
+    case_current_builder,
+    case_throughput_daily_builder,
+)
 from pipelines.sharepoint_cases.pipeline import (
     EXPAND_FIELDS,
     FEED_NAME,
@@ -60,17 +70,47 @@ from tools.integrations.sharepoint_rest import (
 from tools.medallion import medallion
 from tools.store import StoreRegistry
 
+# Every column silver holds, in the order it holds them — which is exactly the
+# feed's rename map read the other way round.
+SILVER_COLUMNS = tuple(RENAME.values())
+
 SERVER_NOW = dt.datetime(2026, 8, 5, 9, tzinfo=dt.timezone.utc)
 WINDOW = ModifiedWindow(start=None, end=SERVER_NOW - SAFETY_LAG)
 SOURCE = SharePointSource(SITE, LIST_ID)
 
+# How far a multi-run client's clock moves between polls. A successful run now
+# commits the watermark, and `window()` answers `None` when the safe upper bound
+# has not advanced past it — so a second `run()` against a *frozen* clock returns
+# before it reaches the list, and a test meaning to poll twice must let time pass.
+NEXT_POLL = dt.timedelta(minutes=10)
+
+# The instant gold is published as of: the candidate window end of a first poll.
+AS_OF = SERVER_NOW - SAFETY_LAG
+
+# Every pipeline one poll runs, in the run log's vocabulary.
+EVERY_HOP = {
+    f"{FEED_NAME}:raw",
+    f"{FEED_NAME}:silver",
+    *(f"{FEED_NAME}:gold:{table}" for table in GOLD_TABLES),
+}
+
 
 class FakeListClient:
-    """A ``CaseListClient`` replaying one frame per call, with a clock."""
+    """A ``CaseListClient`` replaying one frame per call, with a clock.
 
-    def __init__(self, *frames: pd.DataFrame, server_now: dt.datetime = SERVER_NOW):
+    ``advance`` moves the clock on after each ``server_time()`` — one step per
+    poll — so a single client can serve a test that runs the feed more than once.
+    """
+
+    def __init__(
+        self,
+        *frames: pd.DataFrame,
+        server_now: dt.datetime = SERVER_NOW,
+        advance: dt.timedelta = dt.timedelta(0),
+    ):
         self._frames = list(frames) or [items()]
         self._server_now = server_now
+        self._advance = advance
         self.calls: list[dict[str, object]] = []
 
     def fetch_items(self, list_name, expand_fields, select_fields, filters):
@@ -84,7 +124,9 @@ class FakeListClient:
         return self._frames[min(len(self.calls) - 1, len(self._frames) - 1)].copy()
 
     def server_time(self) -> dt.datetime:
-        return self._server_now
+        now = self._server_now
+        self._server_now = now + self._advance
+        return now
 
 
 def item(**overrides: object) -> dict[str, object]:
@@ -377,6 +419,339 @@ def test_silver_aborts_when_the_id_is_missing():
     assert writer.writes == []
 
 
+# --- gold: the current-state rule -------------------------------------------
+
+
+def version(**overrides: object) -> dict[str, object]:
+    """One silver row — one observation of a Case — in gold's own vocabulary.
+
+    Every silver column is present, because gold reads a landed table and not a
+    tidy projection of one. The observation id is derived from the item and the
+    version, as the Reader derives it, unless a test names its own.
+    """
+    row: dict[str, object] = dict.fromkeys(SILVER_COLUMNS)
+    row.update(
+        {
+            "id": 101,
+            "status": "In-progress",
+            "assigned_reviewer_manager_name": "i:0#.w|CONTOSO\\d.reid",
+            "created": "2026-07-01 09:14:00+00:00",
+            "source_list_name": LIST_NAME,
+            "source_item_id": "101",
+            "source_version": '"3"',
+            "source_modified_at": "2026-08-05 08:10:00+00:00",
+        }
+    )
+    row.update(overrides)
+    if row["source_observation_id"] is None:
+        row["source_observation_id"] = (
+            f"{row['source_item_id']}@{row['source_version']}"
+        )
+    return row
+
+
+def gold_rows(builder, rows: list[dict], *, as_of: dt.datetime = AS_OF) -> list[dict]:
+    """Drive one gold hop in memory and hand back what it would have written."""
+    writer = RecordingWriter()
+    builder(given_rows(rows), writer, as_of=as_of).run()
+    return rows_of(writer)
+
+
+def current(*rows: dict) -> list[dict]:
+    """The ``case_current`` rows for a silver history."""
+    return gold_rows(case_current_builder, list(rows))
+
+
+def test_two_versions_of_one_case_reduce_to_the_later_status():
+    rows = current(
+        version(source_version='"3"', source_modified_at="2026-08-05 08:10:00+00:00"),
+        version(
+            source_version='"4"',
+            source_modified_at="2026-08-05 08:45:00+00:00",
+            status="Completed",
+        ),
+    )
+
+    assert [(row["source_item_id"], row["status"]) for row in rows] == [
+        ("101", "Completed")
+    ]
+
+
+def test_two_cases_stay_two_current_rows_with_distinct_ids():
+    rows = current(version(), version(id=102, source_item_id="102"))
+
+    # Ordered by the derived case_id, which is deterministic but not the item
+    # order: the reduction sorts by key, and the key is a uuid5.
+    assert {row["source_item_id"] for row in rows} == {"101", "102"}
+    assert len({row["case_id"] for row in rows}) == 2
+
+
+@pytest.mark.parametrize(
+    "earlier, later",
+    [
+        # An ETag, and the reason not to compare these as text: "10" sorts
+        # before "9" lexically, so a text tie-break would resolve backwards.
+        ('"9"', '"10"'),
+        # The weak-ETag form, which carries a W/ prefix as well as the quotes.
+        ('W/"9"', 'W/"10"'),
+        # The comma form SharePoint uses for a major,minor ETag.
+        ('"4,1"', '"4,2"'),
+        # The dotted UI version, which is a different shape of the same idea.
+        ("3.0", "10.0"),
+        ("512.0", "512.1"),
+    ],
+)
+def test_a_same_modified_tie_is_broken_by_the_parsed_version(earlier, later):
+    # Two versions of one item really can share a Modified to the second, and
+    # append-only silver keeps both, so this tie is reachable.
+    tied = "2026-08-05 08:10:00+00:00"
+    rows = current(
+        version(source_version=later, source_modified_at=tied, status="Completed"),
+        version(source_version=earlier, source_modified_at=tied),
+    )
+
+    assert [row["status"] for row in rows] == ["Completed"]
+
+
+def test_a_versionless_observation_loses_to_a_versioned_one_at_the_same_modified():
+    # A row that arrived with no version at all falls back to a sha256 digest,
+    # which is not a version and must not out-sort one. It sorts at -1 rather
+    # than NA, because pandas sorts NA *last*.
+    tied = "2026-08-05 08:10:00+00:00"
+    rows = current(
+        version(source_version='"3"', source_modified_at=tied, status="Completed"),
+        version(source_version="a" * 64, source_modified_at=tied),
+    )
+
+    assert [row["status"] for row in rows] == ["Completed"]
+
+
+def test_two_versionless_observations_are_separated_by_the_observation_id():
+    # Both sit in the same unparseable bucket, so only the deterministic
+    # observation id is left. Which one wins is arbitrary; that it is the same
+    # one every time is the guarantee.
+    tied = "2026-08-05 08:10:00+00:00"
+    args = (
+        version(
+            source_version="a" * 64,
+            source_modified_at=tied,
+            source_observation_id="aaa",
+        ),
+        version(
+            source_version="b" * 64,
+            source_modified_at=tied,
+            source_observation_id="bbb",
+            status="Completed",
+        ),
+    )
+
+    assert [row["source_observation_id"] for row in current(*args)] == ["bbb"]
+    assert [row["source_observation_id"] for row in current(*reversed(args))] == ["bbb"]
+
+
+def test_an_unparseable_modified_stamp_stops_the_reduction():
+    # Silver declares source_modified_at non-null and typed, so this cannot
+    # honestly arrive — and coercing it to NaT would sort the bad row *last* and
+    # hand it the Case, which is exactly the trap the version parse avoids.
+    with pytest.raises(ValueError):
+        current(
+            version(),
+            version(source_version='"4"', source_modified_at="not a timestamp"),
+        )
+
+
+def test_every_current_row_carries_the_candidate_window_end():
+    [row] = current(version())
+
+    assert row["as_of_utc"] == AS_OF.isoformat()
+
+
+def test_current_gold_republishes_every_silver_column():
+    [row] = current(version())
+
+    assert set(SILVER_COLUMNS) <= set(row)
+    assert set(row) - set(SILVER_COLUMNS) == {"case_id", "as_of_utc"}
+
+
+# --- gold: the current counts ------------------------------------------------
+
+
+def counts(*rows: dict) -> list[dict]:
+    return gold_rows(case_counts_current_builder, current(*rows))
+
+
+def test_current_counts_match_the_current_table():
+    rows = counts(
+        version(),
+        version(id=102, source_item_id="102", status="Completed"),
+        version(
+            id=103,
+            source_item_id="103",
+            assigned_reviewer_manager_name="i:0#.w|CONTOSO\\z.hale",
+        ),
+    )
+
+    assert [
+        (row["status"], row["assigned_reviewer_manager_name"], row["case_count"])
+        for row in rows
+    ] == [
+        ("Completed", "i:0#.w|CONTOSO\\d.reid", 1),
+        ("In-progress", "i:0#.w|CONTOSO\\d.reid", 1),
+        ("In-progress", "i:0#.w|CONTOSO\\z.hale", 1),
+    ]
+    assert {row["as_of_utc"] for row in rows} == {AS_OF.isoformat()}
+
+
+def test_a_case_with_no_reviewer_manager_is_counted_as_unassigned():
+    # A NULL group key is a hole in the grain that a reader may silently drop,
+    # so this Case is counted under a literal instead — in a table whose whole
+    # job is to add up to the number of current Cases.
+    rows = counts(version(assigned_reviewer_manager_name=None))
+
+    assert [
+        (row["assigned_reviewer_manager_name"], row["case_count"]) for row in rows
+    ] == [(UNASSIGNED, 1)]
+
+
+# --- gold: the age profile ---------------------------------------------------
+
+
+def aged(*rows: dict) -> list[dict]:
+    return gold_rows(case_age_buckets_current_builder, current(*rows))
+
+
+def created_days_before(age: int) -> str:
+    """A ``created`` stamp exactly ``age`` local calendar days before ``as_of``."""
+    return f"{AS_OF.date() - dt.timedelta(days=age)} 09:14:00+00:00"
+
+
+@pytest.mark.parametrize(
+    "age, label, order",
+    [
+        (0, "0-7 days", 0),
+        (7, "0-7 days", 0),
+        (8, "8-14 days", 1),
+        (14, "8-14 days", 1),
+        (15, "15-30 days", 2),
+        (30, "15-30 days", 2),
+        (31, "31-60 days", 3),
+        (60, "31-60 days", 3),
+        (61, "61+ days", 4),
+    ],
+)
+def test_an_age_falls_in_exactly_one_declared_bucket(age, label, order):
+    [row] = aged(version(created=created_days_before(age)))
+
+    assert (row["age_bucket"], row["age_bucket_order"]) == (label, order)
+    assert row["case_count"] == 1
+    assert row["as_of_utc"] == AS_OF.isoformat()
+
+
+def test_a_case_with_no_created_date_has_an_unknown_age():
+    [row] = aged(version(created=None))
+
+    assert (row["age_bucket"], row["age_bucket_order"]) == ("unknown", 5)
+
+
+def test_a_case_created_after_the_as_of_instant_is_unknown_rather_than_clamped():
+    # Impossible while created <= Modified < as_of, so if it happens it is
+    # corruption and belongs somewhere visible.
+    [row] = aged(version(created=created_days_before(-3)))
+
+    assert row["age_bucket"] == "unknown"
+
+
+def test_every_current_case_lands_in_exactly_one_age_bucket():
+    # The docs claim the age profile totals to the number of current Cases —
+    # every Case in one bucket, `unknown` catching the ones with no created date.
+    history = (
+        version(created=created_days_before(2)),
+        version(id=102, source_item_id="102", created=created_days_before(40)),
+        version(id=103, source_item_id="103", created=None, status="Completed"),
+    )
+
+    assert sum(row["case_count"] for row in aged(*history)) == len(current(*history))
+
+
+# --- gold: daily throughput --------------------------------------------------
+
+
+def throughput(*rows: dict) -> list[dict]:
+    return gold_rows(case_throughput_daily_builder, current(*rows))
+
+
+def test_a_case_observed_many_times_but_completed_once_counts_once():
+    # Five observations across overlapping windows, one terminal transition.
+    history = [
+        version(
+            source_version=f'"{n}"',
+            source_modified_at=f"2026-08-05 08:{10 + n}:00+00:00",
+        )
+        for n in range(1, 5)
+    ]
+    history.append(
+        version(
+            source_version='"5"',
+            source_modified_at="2026-08-05 08:45:00+00:00",
+            status="Completed",
+            completed_at="2026-08-05 08:44:00+00:00",
+        )
+    )
+
+    assert [
+        (row["terminal_date"], row["terminal_status"], row["case_count"])
+        for row in throughput(*history)
+    ] == [("2026-08-05", "Completed", 1)]
+
+
+def test_a_voided_case_counts_on_the_date_it_was_voided():
+    rows = throughput(
+        version(status="Void", voided_at="2026-08-04 16:00:00+00:00"),
+        version(
+            id=102,
+            source_item_id="102",
+            status="Completed",
+            completed_at="2026-08-05 08:44:00+00:00",
+        ),
+    )
+
+    assert [(row["terminal_date"], row["terminal_status"]) for row in rows] == [
+        ("2026-08-04", "Void"),
+        ("2026-08-05", "Completed"),
+    ]
+
+
+def test_a_terminal_case_with_no_stamp_is_counted_as_unstamped():
+    # Nothing enforces "terminal status implies a stamp" and the list row is
+    # editable by hand, so the Case is counted under a literal key rather than
+    # dropped out of a total.
+    rows = throughput(version(status="Completed", completed_at=None))
+
+    assert [(row["terminal_date"], row["case_count"]) for row in rows] == [
+        (UNSTAMPED, 1)
+    ]
+
+
+def test_throughput_totals_the_cases_currently_in_a_terminal_status():
+    history = (
+        version(),
+        version(
+            id=102,
+            source_item_id="102",
+            status="Completed",
+            completed_at="2026-08-05 08:44:00+00:00",
+        ),
+        version(id=103, source_item_id="103", status="Void", voided_at=None),
+        version(id=104, source_item_id="104", status="Actions In Progress"),
+    )
+
+    assert sum(row["case_count"] for row in throughput(*history)) == 2
+
+
+def test_throughput_is_empty_when_nothing_has_ended():
+    assert throughput(version()) == []
+
+
 # --- the composed plan -----------------------------------------------------
 
 
@@ -399,6 +774,50 @@ def test_both_hops_plan_exactly_the_steps_they_always_have():
         "  [Quarantine] quarantine (depends on: coerce)",
         "  [Validate] post-validate (depends on: quarantine)",
         "  [Write] write (depends on: post-validate)",
+    ]
+
+
+def test_the_gold_hops_plan_exactly_the_steps_they_always_have():
+    reader, writer = given_rows([]), RecordingWriter()
+
+    # Only the current hop carries a grain gate; see case_current_builder.
+    assert case_current_builder(
+        reader, writer, as_of=AS_OF
+    ).describe().splitlines() == [
+        f"Pipeline: {FEED_NAME}:gold:case_current",
+        "  [Read] read",
+        "  [Transform] derive-key (depends on: read)",
+        "  [Transform] latest-version (depends on: derive-key)",
+        "  [Transform] stamp-as-of (depends on: latest-version)",
+        "  [Validate] unique-validate (depends on: stamp-as-of)",
+        "  [Write] write (depends on: unique-validate)",
+    ]
+    assert case_counts_current_builder(
+        reader, writer, as_of=AS_OF
+    ).describe().splitlines() == [
+        f"Pipeline: {FEED_NAME}:gold:case_counts_current",
+        "  [Read] read",
+        "  [Transform] count-by-status-and-manager (depends on: read)",
+        "  [Transform] stamp-as-of (depends on: count-by-status-and-manager)",
+        "  [Write] write (depends on: stamp-as-of)",
+    ]
+    assert case_age_buckets_current_builder(
+        reader, writer, as_of=AS_OF
+    ).describe().splitlines() == [
+        f"Pipeline: {FEED_NAME}:gold:case_age_buckets_current",
+        "  [Read] read",
+        "  [Transform] bucket-by-age (depends on: read)",
+        "  [Transform] stamp-as-of (depends on: bucket-by-age)",
+        "  [Write] write (depends on: stamp-as-of)",
+    ]
+    assert case_throughput_daily_builder(
+        reader, writer, as_of=AS_OF
+    ).describe().splitlines() == [
+        f"Pipeline: {FEED_NAME}:gold:case_throughput_daily",
+        "  [Read] read",
+        "  [Transform] count-by-terminal-date (depends on: read)",
+        "  [Transform] stamp-as-of (depends on: count-by-terminal-date)",
+        "  [Write] write (depends on: stamp-as-of)",
     ]
 
 
@@ -431,7 +850,7 @@ def test_the_bundled_sample_lands_every_item_across_both_pages(tmp_path):
 
 
 def test_a_repeated_observation_is_a_no_op_in_raw_and_silver(tmp_path):
-    client = FakeListClient()
+    client = FakeListClient(advance=NEXT_POLL)
     context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
 
     run(context, client=client)
@@ -445,7 +864,7 @@ def test_a_repeated_observation_is_a_no_op_in_raw_and_silver(tmp_path):
 def test_a_later_source_version_appends_a_second_case_version(tmp_path):
     later = item(Status="Completed")
     later.update({"Modified": "2026-08-05T08:45:00Z", "odata.etag": '"4"'})
-    client = FakeListClient(items(item()), items(later))
+    client = FakeListClient(items(item()), items(later), advance=NEXT_POLL)
     context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
 
     run(context, client=client)
@@ -460,7 +879,9 @@ def test_a_later_source_version_appends_a_second_case_version(tmp_path):
 
 def test_the_same_observation_carrying_a_different_payload_is_refused(tmp_path):
     # Same Id and same etag, so the same observation id -- but the row moved.
-    client = FakeListClient(items(item()), items(item(Status="Completed")))
+    client = FakeListClient(
+        items(item()), items(item(Status="Completed")), advance=NEXT_POLL
+    )
     context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
 
     run(context, client=client)
@@ -471,7 +892,7 @@ def test_the_same_observation_carrying_a_different_payload_is_refused(tmp_path):
 
 def test_a_quiet_window_writes_cleanly_and_a_later_one_still_appends(tmp_path):
     # The common steady-state poll: nothing changed in the window.
-    client = FakeListClient(pd.DataFrame(), items(item()))
+    client = FakeListClient(pd.DataFrame(), items(item()), advance=NEXT_POLL)
     context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
 
     quiet = run(context, client=client)
@@ -484,9 +905,9 @@ def test_a_quiet_window_writes_cleanly_and_a_later_one_still_appends(tmp_path):
     assert len(read_rows(med.silver, "case_version")) == 1
 
 
-def test_a_quiet_window_still_runs_and_records_both_hops(tmp_path):
+def test_a_quiet_window_still_runs_and_records_every_hop(tmp_path):
     # A quiet poll is not a different pipeline: an operator reading the run log
-    # still sees both hops, against both tables, with zero rows.
+    # still sees all six hops, against every table, with zero rows.
     log_path = tmp_path / "runs.log"
     context = RunContext(
         base_dir=tmp_path, pipeline=FEED_NAME, run_log=RunLog(log_path)
@@ -495,14 +916,12 @@ def test_a_quiet_window_still_runs_and_records_both_hops(tmp_path):
     run(context, client=FakeListClient(pd.DataFrame()))
 
     records = read_run_log(log_path)
-    assert {record["pipeline"] for record in records} == {
-        f"{FEED_NAME}:raw",
-        f"{FEED_NAME}:silver",
-    }
+    assert {record["pipeline"] for record in records} == EVERY_HOP
     assert {row["name"] for record in records for row in record["data_locations"]} == {
         LIST_NAME,
         "case_observation",
         "case_version",
+        *GOLD_TABLES,
     }
     assert {record["rows_out"] for record in records} == {0}
 
@@ -522,19 +941,7 @@ def test_nothing_safe_to_poll_returns_none_and_writes_nothing(tmp_path):
     assert not (tmp_path / FEED_NAME).exists()
 
 
-def test_the_result_carries_the_candidate_end_but_commits_no_checkpoint(tmp_path):
-    result = run(
-        RunContext(base_dir=tmp_path, pipeline=FEED_NAME), client=FakeListClient()
-    )
-
-    assert result.window.end == SERVER_NOW - SAFETY_LAG
-    assert result.ingestion_batch_id == f"{LIST_ID}:first-load"
-    checkpoints = SharePointCheckpointStore(tmp_path)
-    assert checkpoints.committed_watermark(SOURCE) is None
-    assert not checkpoints.path.exists()
-
-
-def test_the_run_log_identifies_the_list_and_both_tables(tmp_path):
+def test_the_run_log_identifies_the_list_and_every_table(tmp_path):
     log_path = tmp_path / "runs.log"
     context = RunContext(
         base_dir=tmp_path, pipeline=FEED_NAME, run_log=RunLog(log_path)
@@ -552,6 +959,7 @@ def test_the_run_log_identifies_the_list_and_both_tables(tmp_path):
         LIST_NAME,
         "case_observation",
         "case_version",
+        *GOLD_TABLES,
     }
     assert not any("@" in location["namespace"] for location in located)
 
@@ -582,3 +990,165 @@ def test_the_sample_client_replays_both_pages_as_one_first_load():
     frame = LocalJsonListClient().fetch_items(LIST_NAME, (), (), ())
 
     assert list(frame["Id"]) == [101, 102, 103, 104, 105]
+
+
+# --- end to end: gold, and the checkpoint last -------------------------------
+
+
+def landed_gold(tmp_path) -> set[str]:
+    """Which gold tables exist under ``tmp_path`` — not how many rows they hold."""
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    return {
+        table
+        for table in GOLD_TABLES
+        if med.gold.columns_of(table).columns() is not None
+    }
+
+
+def explode(*args: object, **kwargs: object):
+    raise RuntimeError("boom")
+
+
+def test_a_poll_publishes_every_gold_table_and_then_commits_the_watermark(tmp_path):
+    result = run(
+        RunContext(base_dir=tmp_path, pipeline=FEED_NAME), client=FakeListClient()
+    )
+
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    assert result.window.end == SERVER_NOW - SAFETY_LAG
+    assert result.ingestion_batch_id == f"{LIST_ID}:first-load"
+    assert landed_gold(tmp_path) == set(GOLD_TABLES)
+    [case] = read_rows(med.gold, "case_current")
+    assert (case["source_item_id"], case["status"]) == ("101", "In-progress")
+    assert case["as_of_utc"] == (SERVER_NOW - SAFETY_LAG).isoformat()
+    assert SharePointCheckpointStore(tmp_path).committed_watermark(SOURCE) == (
+        SERVER_NOW - SAFETY_LAG
+    )
+
+
+def test_a_quiet_first_window_commits_and_publishes_four_empty_gold_tables(tmp_path):
+    # Nothing to reduce is not nothing to publish: a consumer reading gold must
+    # find the tables, empty, rather than a missing one it has to special-case.
+    run(
+        RunContext(base_dir=tmp_path, pipeline=FEED_NAME),
+        client=FakeListClient(pd.DataFrame()),
+    )
+
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    assert landed_gold(tmp_path) == set(GOLD_TABLES)
+    assert all(read_rows(med.gold, table) == [] for table in GOLD_TABLES)
+    assert SharePointCheckpointStore(tmp_path).committed_watermark(SOURCE) == (
+        SERVER_NOW - SAFETY_LAG
+    )
+
+
+def test_an_overlap_reread_does_not_double_count_gold(tmp_path):
+    # The overlap re-presents rows that did not change. Silver no-ops them; gold
+    # must not count the Case twice either.
+    context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
+    client = FakeListClient(advance=NEXT_POLL)
+
+    run(context, client=client)
+    run(context, client=client)
+
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    assert len(read_rows(med.gold, "case_current")) == 1
+    assert [
+        row["case_count"] for row in read_rows(med.gold, "case_counts_current")
+    ] == [1]
+
+
+def test_a_failure_in_current_gold_leaves_no_gold_and_no_checkpoint(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(gold, "case_current_builder", explode)
+
+    with pytest.raises(RuntimeError, match="boom"):
+        run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME), client=FakeListClient())
+
+    checkpoints = SharePointCheckpointStore(tmp_path)
+    assert landed_gold(tmp_path) == set()
+    assert checkpoints.committed_watermark(SOURCE) is None
+    assert not checkpoints.path.exists()
+
+
+def test_a_failure_in_the_last_aggregate_leaves_the_earlier_gold_and_no_checkpoint(
+    tmp_path, monkeypatch
+):
+    # Gold Writers commit independently, so an earlier table stays refreshed.
+    # That is acceptable evidence: the watermark did not move, so the next run
+    # rebuilds all four from the same history and converges.
+    monkeypatch.setattr(gold, "case_throughput_daily_builder", explode)
+
+    with pytest.raises(RuntimeError, match="boom"):
+        run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME), client=FakeListClient())
+
+    checkpoints = SharePointCheckpointStore(tmp_path)
+    assert landed_gold(tmp_path) == {
+        "case_current",
+        "case_counts_current",
+        "case_age_buckets_current",
+    }
+    assert checkpoints.committed_watermark(SOURCE) is None
+    assert not checkpoints.path.exists()
+
+
+def test_a_retry_after_a_partial_failure_converges_and_advances_once(
+    tmp_path, monkeypatch
+):
+    context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
+    client = FakeListClient(advance=NEXT_POLL)
+    checkpoints = SharePointCheckpointStore(tmp_path)
+    monkeypatch.setattr(gold, "case_throughput_daily_builder", explode)
+
+    with pytest.raises(RuntimeError, match="boom"):
+        run(context, client=client)
+    assert checkpoints.committed_watermark(SOURCE) is None
+
+    monkeypatch.undo()
+    run(context, client=client)
+
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    assert landed_gold(tmp_path) == set(GOLD_TABLES)
+    assert len(read_rows(med.gold, "case_current")) == 1
+    # The first attempt left the watermark alone, so exactly one advance has
+    # happened: to the *retry's* candidate end.
+    assert checkpoints.committed_watermark(SOURCE) == (
+        SERVER_NOW + NEXT_POLL - SAFETY_LAG
+    )
+
+
+def test_a_dry_run_on_a_fresh_base_dir_writes_no_gold_and_commits_nothing(tmp_path):
+    # The silver write is previewed rather than performed, so there is no table
+    # for gold to reduce. Previewing no gold steps is the honest answer.
+    report = dry_run_pipeline(
+        lambda ctx: run(ctx, client=FakeListClient()), FEED_NAME, tmp_path
+    )
+
+    assert not report.failed
+    assert landed_gold(tmp_path) == set()
+    assert not SharePointCheckpointStore(tmp_path).path.exists()
+
+
+def test_a_dry_run_previews_every_write_and_commits_none_of_them(tmp_path):
+    client = FakeListClient(advance=NEXT_POLL)
+    run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME), client=client)
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    before = read_rows(med.gold, "case_current")
+
+    report = dry_run_pipeline(lambda ctx: run(ctx, client=client), FEED_NAME, tmp_path)
+
+    # Raw, silver and all four gold tables are previewed; none is committed.
+    assert [step.note for step in report.steps if step.node_type == "Write"] == [
+        "would write 1 row(s)",
+        "would write 1 row(s)",
+        "would write 1 row(s)",
+        "would write 1 row(s)",
+        "would write 1 row(s)",
+        "would write 0 row(s)",
+    ]
+    assert read_rows(med.gold, "case_current") == before
+    # The real run's watermark stands; the preview did not move it on.
+    assert SharePointCheckpointStore(tmp_path).committed_watermark(SOURCE) == (
+        SERVER_NOW - SAFETY_LAG
+    )
