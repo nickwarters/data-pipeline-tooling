@@ -1,24 +1,18 @@
 ```python
-import uuid
-
 import pytest
 
 from case_review.case_type import CaseType, Variation
 from tests._schema_fixtures import LandedCase
 
 
-def test_case_type_derives_its_namespace_from_its_name():
-    # The identity contract: the Case Type owns the UUID space its
-    # case_id derives under, computed deterministically from its name so each
-    # Case Type has its own space without storing an opaque UUID by hand.
+def test_case_type_declares_its_identity_contract():
+    # The identity contract is the pair a case_id is minted from: the Case
+    # Type's name, which is the namespace, and the natural-key columns that
+    # identify a Case within it.
     case_type = CaseType(name="cases", schema=LandedCase, natural_key=("case_ref",))
 
-    assert case_type.namespace == uuid.uuid5(uuid.NAMESPACE_DNS, "cases")
-    # Stable across constructions — same name, same space.
-    assert (
-        case_type.namespace
-        == CaseType(name="cases", schema=LandedCase, natural_key=("ref",)).namespace
-    )
+    assert case_type.name == "cases"
+    assert case_type.natural_key == ("case_ref",)
 
 
 def test_case_type_looks_up_a_variation_by_id():

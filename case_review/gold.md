@@ -1,11 +1,11 @@
 ```python
 """Case-review gold helpers composed from generic framework transforms.
 
-These read a Case Type's **identity contract** (its ``namespace`` and
+These read a Case Type's **identity contract** (its ``name`` and
 ``natural_key``) straight off the :class:`~case_review.case_type.CaseType` and
 feed it to :class:`~framework.transform.DeriveKey`, which knows only a
 namespace, a list of natural-key columns and the column to stamp the derived
-``uuid5`` into — nothing about Cases. Naming that column ``case_id`` is this
+digest into — nothing about Cases. Naming that column ``case_id`` is this
 layer's business, not the framework's. The Case builder and each Detail-Table
 builder take the *same* Case Type, so a Case and its Detail rows derive the same
 deterministic ``case_id`` independently — the parent/child link is structural,
@@ -37,7 +37,7 @@ def ingest_silver_to_gold(
 ) -> Pipeline:
     """Reduce accumulated case silver to one current gold row per Case.
 
-    Identity (``namespace`` / ``natural_key``) comes from ``case_type``; the
+    Identity (``name`` / ``natural_key``) comes from ``case_type``; the
     silver/gold ``table`` defaults to the Case Type's ``name``.
     """
     table_name = table or case_type.name
@@ -47,7 +47,7 @@ def ingest_silver_to_gold(
     keyed = p.transform(
         DeriveKey(
             into=CASE_ID_COLUMN,
-            namespace=case_type.namespace,
+            namespace=case_type.name,
             natural_key=list(case_type.natural_key),
         ),
         r,
@@ -84,7 +84,7 @@ def detail_ingest_silver_to_gold(
     keyed = p.transform(
         DeriveKey(
             into=CASE_ID_COLUMN,
-            namespace=case_type.namespace,
+            namespace=case_type.name,
             natural_key=list(case_type.natural_key),
         ),
         r,

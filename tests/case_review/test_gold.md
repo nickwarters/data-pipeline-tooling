@@ -1,20 +1,18 @@
 ```python
-import uuid
-
 import pandas as pd
 
 from case_review.case_type import CaseType
 from case_review.gold import ingest_silver_to_gold
+from framework._internal.identity import sha256_json
 from framework.core.dataset import Dataset
 from framework.io.strategy import AccumulateByRun, Refresh
 from tests._schema_fixtures import LandedCase
 from tools.medallion import Medallion, medallion
 from tools.store import StoreRegistry
 
-# The Case Type owns identity now; its namespace derives from its name, so this
-# is the same UUID space the explicit _NS used to name.
+# The Case Type owns identity: its name is the namespace and case_ref the
+# natural key, which is the whole of what a case_id is minted from.
 _CASES = CaseType(name="cases", schema=LandedCase, natural_key=("case_ref",))
-_NS = uuid.uuid5(uuid.NAMESPACE_DNS, "cases")
 
 
 def _land_silver(
@@ -124,7 +122,7 @@ def test_ingest_silver_to_gold_new_snapshot_updates_gold_to_current(tmp_path):
 
 
 def test_ingest_silver_to_gold_deterministic_case_id(tmp_path):
-    # case_id is a deterministic uuid5: same natural key, same namespace, same
+    # case_id is a deterministic digest: same natural key, same namespace, same
     # id across runs and machines.
     med = medallion(StoreRegistry(tmp_path), "cases")
     _land_silver(
@@ -141,6 +139,8 @@ def test_ingest_silver_to_gold_deterministic_case_id(tmp_path):
     second_id = med.gold.reader("cases").read().to_pandas()["case_id"].iloc[0]
 
     assert first_id == second_id
-    assert first_id == str(uuid.uuid5(_NS, "c1"))
+    assert first_id == sha256_json(
+        {"namespace": "cases", "natural_key": {"case_ref": "c1"}}
+    )
 
 ```

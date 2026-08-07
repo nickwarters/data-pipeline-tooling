@@ -33,7 +33,7 @@ def test_case_type_declares_its_identity_contract():
     assert CASE_TYPE.schema is MyfeedRow
     declared = {f.name for f in fields(MyfeedRow)}
     assert set(CASE_TYPE.natural_key) <= declared
-    assert CASE_TYPE.namespace is not None
+    assert CASE_TYPE.name
 
 
 def test_source_lands_in_raw_then_conforms_to_silver(tmp_path):

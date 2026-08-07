@@ -54,7 +54,7 @@ class ActivityCase:
 
 # The Case Type bundles its schema and identity contract with its Variations --
 # declarative and imported directly. ``natural_key`` is the stable identifying
-# column; the Case Type derives its own ``namespace`` from its name, so case_id
+# column; the Case Type's name is the namespace, so case_id
 # derivation is owned in one place. The downstream ``selection`` pipeline imports
 # this same CASES so the two halves share one identity definition.
 CASES = CaseType(

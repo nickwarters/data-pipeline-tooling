@@ -49,14 +49,13 @@ reconciliation is a separate mechanism), and any knowledge of raw/silver/gold.
 from __future__ import annotations
 
 import datetime as dt
-import hashlib
-import json
 from dataclasses import dataclass
 from typing import Callable, Protocol, Sequence, runtime_checkable
 
 import pandas as pd
 
 from framework._internal.describe import redact_url, render
+from framework._internal.identity import canonical_text, sha256_json
 from framework.core.dataset import Dataset
 from framework.core.errors import ErrorCategory, PipelineError
 from tools.integrations.locations import sharepoint_location
@@ -372,58 +371,26 @@ def _supplied_versions(frame: pd.DataFrame) -> list[str]:
 def _digest(row: "pd.Series") -> str:
     """A stable digest of one item's values.
 
-    ``sha256`` over a canonical JSON rendering with sorted keys — not Python's
-    ``hash()``, which is salted per process and would give the same item a
-    different identity on every run and on every machine.
-
-    JSON rather than a hand-rolled ``field=value`` join because the join was
-    forgeable: a value *containing* the separator could reproduce another item's
-    payload exactly (``{"a": "x\\x1fb=y"}`` collided with ``{"a": "x", "b": "y"}``).
-    JSON escapes its own delimiters, so no value can close a field it is inside.
+    Covers the item's *projected* values, through the repository's one canonical
+    identity encoding.
     """
-    return _sha256_json({str(column): _canonical(row[column]) for column in row.index})
+    return sha256_json({str(column): _canonical(row[column]) for column in row.index})
 
 
 def _observation_id(list_name: str, item_id: str, version: str) -> str:
     """The identity of "this item, at this version, in this list"."""
-    return _sha256_json(
-        {"list_name": list_name, "item_id": item_id, "version": version}
-    )
-
-
-def _sha256_json(payload: dict[str, str]) -> str:
-    """Hash a mapping through one canonical, unforgeable encoding."""
-    encoded = json.dumps(
-        payload, sort_keys=True, ensure_ascii=True, separators=(",", ":")
-    )
-    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+    return sha256_json({"list_name": list_name, "item_id": item_id, "version": version})
 
 
 def _canonical(value: object) -> str:
     """One value as the text the digests and identity columns are built from.
 
-    Every flavour of null the client's frame can carry becomes ``""`` — the
-    blank the ``Id``/``Modified`` guards reject. That means asking pandas rather
-    than type-testing: a nullable ``Int64`` column yields ``pd.NA``, a float32
-    column yields a non-``float`` NaN, and both once slipped past a
-    ``isinstance(value, float)`` check to be stringified as ``"<NA>"`` / ``"nan"``
-    — an item id that looks present, is not, and is not rejected.
+    The shared rendering rule, plus this module's own null policy: a null
+    becomes ``""``, the blank the ``Id``/``Modified`` guards reject. A key
+    derivation refuses a null outright instead, which is why the rule itself
+    returns ``None`` and leaves the choice here.
     """
-    if value is None:
-        return ""
-    try:
-        if bool(pd.isna(value)):
-            return ""
-    except (TypeError, ValueError):
-        # A list/array/dict value: not a null, and not something pandas can
-        # answer elementwise. Fall through and render it.
-        pass
-    if isinstance(value, dt.datetime):
-        return value.isoformat()
-    if isinstance(value, float) and value.is_integer():
-        # A frame column holding item ids may arrive as float64 once a null is
-        # present; 7.0 and 7 must not be two different items.
-        return str(int(value))
-    return str(value)
+    text = canonical_text(value)
+    return "" if text is None else text
 
 ```

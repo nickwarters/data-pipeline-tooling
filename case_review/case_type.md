@@ -10,17 +10,16 @@ A **Variation** is a specialization within a Case Type that inherits its config
 and overrides only what differs, most commonly the review platform's Question
 Bank reference (``question_bank_id``).
 
-A Case Type also owns its **identity contract**: the ``natural_key`` columns
-that identify a Case, and the ``namespace`` those are hashed under to mint the
-deterministic ``case_id = uuid5(namespace, natural_key)``. Both the Case builder
-and each Detail-Table builder read this one contract off the Case Type, so a
-Case and its Detail rows derive the same ``case_id`` independently with no
-cross-pipeline join.
+A Case Type also owns its **identity contract**: its ``name``, which is the
+namespace Cases are keyed in, and the ``natural_key`` columns that identify one
+within it. Both are hashed together to mint the deterministic ``case_id``. The
+Case builder and each Detail-Table builder read this one contract off the Case
+Type, so a Case and its Detail rows derive the same ``case_id`` independently
+with no cross-pipeline join.
 """
 
 from __future__ import annotations
 
-import uuid
 from dataclasses import dataclass
 
 
@@ -36,20 +35,16 @@ class Variation:
 class CaseType:
     """A Case Type: its schema and identity contract, with its Variations.
 
-    ``natural_key`` is the feed's stable identifying column(s). ``namespace`` is
-    derived from ``name`` so each Case Type gets its own UUID space. Because the
-    namespace seeds from the name, renaming a Case Type re-keys its history.
+    ``natural_key`` is the feed's stable identifying column(s), and ``name`` is
+    the namespace they are keyed in, so the same natural key identifies a
+    different Case under each Case Type. Because the namespace *is* the name,
+    renaming a Case Type re-keys its history.
     """
 
     name: str
     schema: type
     natural_key: tuple[str, ...]
     variations: tuple[Variation, ...] = ()
-
-    @property
-    def namespace(self) -> uuid.UUID:
-        """The per-Case-Type UUID space for ``case_id`` derivation."""
-        return uuid.uuid5(uuid.NAMESPACE_DNS, self.name)
 
     def variation(self, variation_id: str) -> Variation:
         """Return the Variation with ``variation_id``; raise if it is unknown."""
