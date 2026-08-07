@@ -91,11 +91,13 @@ One non-facade package sits inside `framework/`, and two more are top-level
 siblings beside it:
 
 - `framework/_internal/` — cross-cutting helpers with **no** public name:
-  `connection` (`connect`), `describe` (`render` / `redact_url`), `locations`
-  (`file_location` / `table_location`), and `schema`
+  `connection` (`connect`), `describe` (`render` / `redact_url`), `identity`
+  (`sha256_json`), `locations` (`file_location` / `table_location`), and `schema`
   (the shared `ValueRule` protocol + the Python↔pandas type mapping and
   annotation reading both schema adapters derive from). The leading underscore
-  marks it private; nothing outside the framework imports from here.
+  marks it private: application code (`pipelines/` + `case_review/`) never
+  imports from here, and the public-API test enforces that. The sibling `tools/`
+  package does, where a helper is genuinely shared with the framework.
 - `cli/` (top-level) — the `python -m cli` **entry point**, not an import
   surface: `scaffold` (generate a feed) and `operator` (the `run` /
   `orchestrate` / `runs` / `status` / `log` commands), dispatched by
@@ -230,6 +232,11 @@ without notice:
 - `framework._internal.describe` (`render`, `redact_url`) — shared helpers for the opt-in
   `describe()` protocol; a component implements `describe()` using these
   to render its own safe plan summary, not imported by pipeline scripts.
+- `framework._internal.identity` (`sha256_json`) — the one canonical encoding
+  every deterministic id in this repository is hashed through: sorted keys,
+  tight separators, `sha256`. Shared by `DeriveKey` and the SharePoint Reader's
+  observation ids, so the two cannot drift; a live on-disk format, so changing
+  it re-keys history. Not imported by pipeline scripts.
 - `framework._internal.locations` (`file_location`, `table_location`) — the
   two-part `{namespace, name}` shape a Reader/Writer reports on
   `data_locations` for the run record; not imported by pipeline scripts.

@@ -292,9 +292,9 @@ JoinColumns(["region", "adviser"], "group_key", drop=True)
 (`","` by default) into the `into` column (new, or an overwrite). The source
 columns are kept by default (`drop=False`) — joining typically adds a composite
 alongside its parts; pass `drop=True` to consume them. It is the plain-text
-sibling of `DeriveKey`, which hashes the joined natural key into a deterministic
-UUID; reach for `JoinColumns` when you want the readable composite itself, and
-`DeriveKey` when you want the stable `case_id`.
+sibling of `DeriveKey`, which hashes the natural-key columns into a
+deterministic digest; reach for `JoinColumns` when you want the readable
+composite itself, and `DeriveKey` when you want the stable `case_id`.
 
 ## `JoinWith` — explicit cross-feed dependency join
 
@@ -478,23 +478,54 @@ blank. Pass `drop_empty=False` to keep them.
 ### `DeriveKey` — stamp the deterministic `case_id`
 
 ```python
-import uuid
 from framework.transform import DeriveKey
 
-namespace = uuid.uuid5(uuid.NAMESPACE_DNS, "wide_cases")  # the case-type namespace
-DeriveKey(into="case_id", namespace=namespace, natural_key=["case_ref"])
+DeriveKey(into="case_id", namespace="wide_cases", natural_key=["case_ref"])
 ```
 
-Computes `uuid5(namespace, natural_key_string)` for every row and writes it into
-the `into` column (new or overwrite). The natural-key string joins the `str()` of
-each `natural_key` column's value with `"|"`, in declared order — so the **same
-values always produce the same UUID on every run and every machine** (pure stdlib
-`uuid`, no platform variance). This is the deterministic `case_id` of the
-case-identity contract: because the Case pipeline and each Detail pipeline
-derive it from the *same* `namespace` + `natural_key`, a Detail row links back
-to its Case with **no join**
-and idempotency holds across runs. (Contrast `Stamp`, which writes one constant;
-`DeriveKey` computes a per-row key from the row's natural-key columns.)
+For every row, hashes
+
+```json
+{"namespace": "wide_cases", "natural_key": {"case_ref": "c1"}}
+```
+
+as canonical JSON (sorted keys, tight separators) and writes the 64-character
+`sha256` hex digest into the `into` column (new or overwrite), so the **same
+values always produce the same key on every run and every machine**.
+
+Each key column is rendered **from the column itself**, not by reading values
+out of a row. That matters because pandas hands a row over as a single-dtype
+Series: in an all-numeric frame an unrelated float column upcasts the key, so
+`123` renders `"123.0"` and the row is re-keyed by a column that is not in its
+identity contract. A whole number also renders the same however pandas is
+carrying it (`123` and `123.0` agree), because an integer column becomes
+`float64` the moment any value in it is null.
+
+A **null** natural-key value raises `IdentityError`. There is no honest identity
+for a row that does not carry the values it is identified by, and the
+alternative is worse than a failure: `None`, `<NA>` and `nan` stringify
+differently, so a missing value would mint a plausible key that changes with the
+column's dtype.
+
+`namespace` is the caller's key space as a plain string — typically the Case
+Type's `name`. This is the deterministic `case_id` of the case-identity
+contract: because the Case pipeline and each Detail pipeline derive it from the
+*same* `namespace` + `natural_key`, a Detail row links back to its Case with
+**no join** and idempotency holds across runs.
+
+Two properties follow from hashing a *mapping* rather than a joined string:
+
+- **A value cannot forge another row's identity.** A `"|".join(values)` key is
+  forgeable — `("SMITH", "2024-01-15|EXTRA")` and `("SMITH|2024-01-15", "EXTRA")`
+  join to the same string, so two distinct Cases would share one `case_id`.
+  Carrying the keys by name closes that.
+- **The order `natural_key` is declared in does not change the key.** The
+  identity is the named columns, so a Case builder and a Detail builder cannot
+  drift apart by listing the same contract in a different order. *Which* columns
+  are in the key still matters — adding or dropping one re-keys.
+
+(Contrast `Stamp`, which writes one constant; `DeriveKey` computes a per-row key
+from the row's natural-key columns.)
 
 ### `LatestPerKey` — collapse accumulated history to current state
 

@@ -28,7 +28,6 @@ from __future__ import annotations
 import hashlib
 import json
 import random
-import uuid
 from typing import (
     Any,
     Callable,
@@ -38,6 +37,7 @@ from typing import (
 )
 
 from framework._internal.describe import render
+from framework._internal.identity import canonical_text, sha256_json
 from framework.core.dataset import Dataset
 from framework.core.errors import ErrorCategory, PipelineError
 from framework.core.protocols import DatasetSupplier
@@ -45,6 +45,16 @@ from framework.core.protocols import DatasetSupplier
 
 class CoercionError(PipelineError):
     """Raised by a Processor when it cannot cast a value to its declared type."""
+
+    category = ErrorCategory.DATA
+
+
+class IdentityError(PipelineError):
+    """Raised when a row cannot be given the deterministic key it needs.
+
+    Categorised as ``DATA``: a row missing the values it is identified by is a
+    defect in the feed, not in the wiring.
+    """
 
     category = ErrorCategory.DATA
 
@@ -285,8 +295,8 @@ class JoinColumns:
     (``drop=False``) — joining typically adds a composite alongside its parts;
     pass ``drop=True`` to consume them.
 
-    The plain-text sibling of :class:`DeriveKey` (which hashes the joined key
-    into a UUID) — this one leaves the composite readable. Raises
+    The plain-text sibling of :class:`DeriveKey` (which hashes the key columns
+    into a digest) — this one leaves the composite readable. Raises
     ``ValueError`` if any source column is absent.
     """
 
@@ -629,25 +639,42 @@ class Unpivot:
 
 
 class DeriveKey:
-    """Stamp a deterministic ``uuid5`` key onto every row.
+    """Stamp a deterministic ``sha256`` key onto every row.
 
-    Computes ``uuid5(namespace, natural_key_string)`` for each row and writes
-    the result into the ``into`` column (new or overwrite). The natural-key
-    string is formed by joining the ``str()`` of each listed column's value
-    with ``"|"`` as the separator, in declared order — so the same values
-    always produce the same UUID on every run and every machine (pure stdlib
-    ``uuid``, no platform variance).
+    For each row, hashes ``{"namespace": namespace, "natural_key": {column:
+    value, ...}}`` through :func:`~framework._internal.identity.sha256_json` and
+    writes the 64-character hex digest into the ``into`` column (new or
+    overwrite).
 
-    ``namespace`` is a ``uuid.UUID`` instance supplied by the caller (typically
-    the case-type namespace). ``natural_key`` is a list of column names whose
-    values are composed into the key string.
+    ``namespace`` is the caller's key space as a plain string — typically the
+    Case Type's name. Two namespaces never collide, so the same natural key
+    identifies a different thing under each.
+
+    ``natural_key`` is the column names whose values identify a row. The keys
+    are carried into the hashed payload **by name**, so a value containing a
+    separator cannot forge another row's identity, and column order is part of
+    the contract only in the sense that the *set* of columns is: reordering the
+    argument does not change the digest, but adding or dropping one does.
+
+    Each key column is rendered **from the column itself**, through
+    :func:`~framework._internal.identity.canonical_text`. Reading the values out
+    of a row instead is what makes a derived key fragile: pandas gives a row as a
+    single-dtype Series, so in an all-numeric frame an unrelated float column
+    upcasts the key and ``7`` renders ``"7.0"`` — a Case re-keyed by a column
+    that is not in its identity contract at all.
+
+    A **null** natural-key value raises :class:`IdentityError`. There is no
+    honest identity for a row that does not carry the values it is identified
+    by, and the alternative is worse than a failure: each flavour of null
+    stringifies differently, so a missing value would mint a plausible key that
+    changes with the column's dtype.
     """
 
     def __init__(
         self,
         *,
         into: str,
-        namespace: uuid.UUID,
+        namespace: str,
         natural_key: Sequence[str],
     ) -> None:
         self._into = into
@@ -656,22 +683,37 @@ class DeriveKey:
 
     def __call__(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
-        frame[self._into] = frame.apply(
-            lambda row: str(
-                uuid.uuid5(
-                    self._namespace,
-                    "|".join(str(row[col]) for col in self._natural_key),
-                )
-            ),
-            axis=1,
-        )
+        rendered = {col: self._render(frame, col) for col in self._natural_key}
+        frame[self._into] = [
+            sha256_json(
+                {
+                    "namespace": self._namespace,
+                    "natural_key": {col: rendered[col][row] for col in rendered},
+                }
+            )
+            for row in range(len(frame))
+        ]
         return Dataset.from_pandas(frame)
+
+    def _render(self, frame: Any, column: str) -> list[str]:
+        """One key column as the text it is hashed as, refusing a null."""
+        texts = []
+        for row, value in enumerate(frame[column]):
+            text = canonical_text(value)
+            if text is None:
+                raise IdentityError(
+                    f"Cannot derive {self._into!r}: row {row} has no "
+                    f"{column!r}, and a row cannot be identified by a value it "
+                    "does not carry."
+                )
+            texts.append(text)
+        return texts
 
     def describe(self) -> str:
         return render(
             self,
             into=self._into,
-            namespace=str(self._namespace),
+            namespace=self._namespace,
             natural_key=self._natural_key,
         )
 
