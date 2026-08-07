@@ -830,7 +830,8 @@ carrying the window, the batch id and the row counts, and leaves the checkpoint
 alone: advancing it vouches for the rows having been *published*, which is the
 gold step's to do.
 
-Two smaller notes. The batch id is `f"{list_id}:{watermark or 'first-load'}"` —
+Two smaller notes. The batch id is
+`f"{list_id}:{watermark.isoformat() if watermark else 'first-load'}"` —
 it identifies the *source window resumed from*, not the run, so a re-drive of a
 failed window mints the same id; and only the GUID travels in it, so no site or
 credential does. And `server_now` comes from the client's own clock

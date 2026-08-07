@@ -15,17 +15,14 @@ It deliberately **stops at silver**, and it deliberately does **not** commit the
 polling watermark: the checkpoint vouches for rows having been published, and
 gold publication is not this feed's to do.
 
-Address it by its location on disk -- the framework imports
-``pipelines.sharepoint_cases.pipeline`` and runs its ``run(context)`` callable::
-
-    python -m cli run pipelines/sharepoint_cases --base-dir BASE_DIR
-
-or run the module directly against the bundled fixture pages::
+Run the module directly, from the repo root so the import-only ``framework``
+package resolves on ``sys.path``::
 
     python -m pipelines.sharepoint_cases.pipeline --base-dir BASE_DIR --sample
 
-Both run from the repo root so the import-only ``framework`` package resolves on
-``sys.path``.
+Unlike a file-sourced feed, this one cannot be addressed by its location on disk:
+reaching a tenant needs a client passed in, and the path-addressed route calls
+``run(context)`` with nothing else to give it.
 """
 
 from __future__ import annotations
@@ -243,11 +240,13 @@ def _flatten_people(frame: pd.DataFrame) -> pd.DataFrame:
     A quiet window has no person column to flatten -- the Reader declares the
     projection's own names, which are already the flat ones -- so this is a no-op
     there and the reindex below handles the rest.
+
+    Consumes ``frame``: the caller's copy is spent, not preserved.
     """
     if not any(person in frame.columns for person in PERSON_SUBFIELDS):
         return frame
-    flattened = frame.copy()
-    item_ids = list(flattened.get("source_item_id", pd.Series(dtype="object")))
+    flattened = frame
+    item_ids = list(flattened["source_item_id"])
     for person, subfields in PERSON_SUBFIELDS.items():
         if person not in flattened.columns:
             continue
@@ -265,7 +264,16 @@ def _person_subfield(
 ) -> object:
     """One sub-field of one expanded person, or ``None`` where nobody holds it."""
     if isinstance(value, dict):
-        return value.get(subfield)
+        # An unexpanded lookup still answers with an object -- {"__deferred": ...}
+        # -- so accepting any dict would read a broken $expand as five empty roles
+        # rather than as the failure it is.
+        if subfield not in value:
+            raise SharePointFeedError(
+                f"SharePoint list {LIST_NAME!r}, item {item_id}: column {person!r} "
+                f"holds an object without {subfield!r}, which is what an "
+                "unexpanded lookup answers with. Check the read still expands it."
+            )
+        return value[subfield]
     if value is None or value is pd.NA or (isinstance(value, float) and pd.isna(value)):
         return None
     raise SharePointFeedError(

@@ -40,6 +40,7 @@ from pipelines.sharepoint_cases.pipeline import (
 )
 from pipelines.sharepoint_cases.schema import CASE_STATUSES
 from tests.framework_testing import (
+    RecordingRunLog,
     RecordingWriter,
     given_rows,
     read_rows,
@@ -234,6 +235,16 @@ def test_a_person_column_that_is_neither_an_object_nor_null_is_refused():
         raw_builder(observations(client), RecordingWriter()).run()
 
 
+def test_an_unexpanded_person_is_refused_rather_than_read_as_nobody():
+    # A lookup the read failed to expand still answers with an object, so taking
+    # any object at face value would report a broken $expand as an empty role.
+    deferred = {"__deferred": {"uri": "https://sp.example.com/_api/Web/Lists(1)"}}
+    client = FakeListClient(items(item(ResponsibleParty=deferred)))
+
+    with pytest.raises(SharePointFeedError, match="unexpanded lookup"):
+        raw_builder(observations(client), RecordingWriter()).run()
+
+
 def test_the_read_asks_for_the_star_and_expands_every_person():
     # The star is load-bearing: naming a person's sub-field turns the read into
     # a projection, and every other column silently stops coming back.
@@ -321,14 +332,23 @@ def test_silver_quarantines_an_unknown_status_while_raw_keeps_every_row():
     client = FakeListClient(items(item(), item(Id=102, Status="Closed")))
     raw = landed(client)
     writer, rejects = RecordingWriter(), RecordingWriter()
+    run_log = RecordingRunLog()
 
-    silver_builder(given_rows(raw), writer, rejects).run()
+    silver_builder(given_rows(raw), writer, rejects, run_log=run_log).run()
+
+    quarantine = next(r for r in run_log.records if r["step"] == "quarantine")
+    assert quarantine["rows_in"] == 2
+    assert quarantine["rows_out"] == 1
+    assert quarantine["rows_quarantined"] == 1
 
     assert len(raw) == 2
     assert [row["source_item_id"] for row in rows_of(writer)] == ["101"]
     [rejected] = rows_of(rejects)
     assert rejected["source_item_id"] == "102"
-    assert "Closed" in rejected["failed_rule"] or "outside" in rejected["failed_rule"]
+    assert rejected["failed_rule"] == (
+        "column 'status' has value(s) outside "
+        "{'Actions In Progress', 'Completed', 'In-progress', 'Void'}"
+    )
 
 
 def test_silver_aborts_when_the_id_is_missing():
