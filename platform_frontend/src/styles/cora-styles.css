@@ -1807,6 +1807,7 @@
 }
 
 .cora-amend-outcome-select,
+.cora-amend-outcome-reason,
 .cora-amend-outcome-justification {
   font: inherit;
   width: 100%;
@@ -1824,6 +1825,7 @@
 }
 
 .cora-amend-outcome-select:focus,
+.cora-amend-outcome-reason:focus,
 .cora-amend-outcome-justification:focus {
   outline: none;
   border-color: var(--cora-color-accent);

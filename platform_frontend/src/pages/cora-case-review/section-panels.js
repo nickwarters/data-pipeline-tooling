@@ -40,6 +40,7 @@ import { summaryView } from './summary-view.js';
 import { AppealSection } from './appeal-view.js';
 import { AppealReviewSection } from './appeal-review-view.js';
 import { AmendOutcomeSection } from './amend-outcome-view.js';
+import { amendmentReasonsFor } from '../../lib/amendment-reasons.js';
 import {
   groupOutcomeSet,
   remediationActionToggled,
@@ -339,11 +340,13 @@ export const SECTION_PANELS = {
         access: snapshot.access.amendOutcome,
         outcomeOptions: config.outcomeOptions ?? [],
         heading: snapshot.sectionLabels.amendOutcome.heading,
-        onAmend: ({ outcome, justification }) =>
+        reasons: amendmentReasonsFor(config),
+        onAmend: ({ outcome, reason, justification }) =>
           actions.appeals.amend({
             caseRow,
             snapshot,
             outcome,
+            reason,
             justification,
           }),
       })

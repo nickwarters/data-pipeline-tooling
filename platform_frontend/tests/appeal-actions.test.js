@@ -148,6 +148,7 @@ test('amendOutcome returns immutable fields without changing the frozen snapshot
   const result = amendOutcome({
     caseRow: CASE_ROW,
     outcome: 'pass',
+    reason: 'qa-check',
     justification: 'Corrected',
     amendedBy: 'controls',
     amendedAt: '2026-07-03T00:00:00Z',
@@ -157,5 +158,22 @@ test('amendOutcome returns immutable fields without changing the frozen snapshot
   assert.equal(CASE_ROW.amendedOutcome, undefined);
   assert.equal(result.caseRow.outcomeAtCompletion, 'fail');
   assert.equal(result.fields.amendedOutcome?.outcome, 'pass');
+  assert.equal(result.fields.amendedOutcome?.reason, 'qa-check');
   assert.equal(result.fields.effectiveHadRemediation, true);
+});
+
+test('an appeal-agreed amendment records no reason — fromAppealId already says where it came from', () => {
+  const result = resolveAppeal({
+    caseRow: { ...CASE_ROW, appeals: [] },
+    appealId: 'a1',
+    verdict: 'agreed',
+    rationale: 'Agreed',
+    resolver: 'controls',
+    at: '2026-07-03T00:00:00Z',
+    outcome: 'pass',
+    justification: 'Reconsidered.',
+  });
+
+  assert.equal(result.fields.amendedOutcome?.reason, undefined);
+  assert.equal(result.fields.amendedOutcome?.fromAppealId, 'a1');
 });

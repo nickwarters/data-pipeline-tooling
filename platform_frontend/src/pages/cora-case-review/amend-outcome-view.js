@@ -6,11 +6,12 @@ import { currentOutcome } from '../../evaluators/amended-outcome.js';
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../../sharepoint-client.js').AmendedOutcome} AmendedOutcome */
 /** @typedef {import('../../sharepoint-client.js').OutcomeOption} OutcomeOption */
+/** @typedef {import('../../lib/amendment-reasons.js').AmendmentReason} AmendmentReason */
 
 /**
  * The **Amend Outcome** Section. Lets **Controls** author a case-level
  * **Amended Outcome** on a reportable Case: an explicit, hand-set verdict with a
- * mandatory justification. The write is additive — the frozen `outcomeAtCompletion`
+ * mandatory reason and justification. The write is additive — the frozen `outcomeAtCompletion`
  * is never touched. It emits one intent that the route slice persists as a
  * single ETag-guarded PATCH carrying the record and re-stamping the reporting columns
  * (`effectiveOutcome` / `outcomeOverridden` / `effectiveHadRemediation`) together
@@ -27,7 +28,8 @@ import { currentOutcome } from '../../evaluators/amended-outcome.js';
  * @property {CaseRow | null} caseRow
  * @property {'edit'|'read-only'|'hidden'} access
  * @property {OutcomeOption[]} outcomeOptions
- * @property {(input: {outcome: string, justification: string}) => void} [onAmend]
+ * @property {AmendmentReason[]} reasons The reasons this Case Type offers, in display order.
+ * @property {(input: {outcome: string, reason: string, justification: string}) => void} [onAmend]
  * @property {string} heading The Section's resolved heading.
  */
 
@@ -44,7 +46,7 @@ export function AmendOutcomeSection(props) {
   if (props.access === 'edit') {
     children.push(renderAmendForm(props));
   } else if (props.caseRow?.amendedOutcome) {
-    children.push(renderAmendmentRecord(props.caseRow.amendedOutcome));
+    children.push(renderAmendmentRecord(props, props.caseRow.amendedOutcome));
   } else {
     children.push(
       EmptyState('No amendment has been made.', {
@@ -73,13 +75,31 @@ function renderCurrentOutcome(props) {
 
 /**
  * The read-only view of an existing amendment (for non-editing observers).
+ * @param {AmendOutcomeProps} props
  * @param {AmendedOutcome} amendment
  * @returns {HTMLElement}
  */
-function renderAmendmentRecord(amendment) {
+function renderAmendmentRecord(props, amendment) {
+  /** @type {Node[]} */
+  const children = [];
+  // Amendments authored before the reason existed, and appeal-derived ones,
+  // carry none — they render exactly as they always did rather than showing an
+  // empty line.
+  if (amendment.reason) {
+    children.push(
+      h(
+        'p',
+        { className: 'cora-amend-outcome-record-reason' },
+        // A reason the Case Type has since stopped offering renders as its raw
+        // key, which reads better than a blank line.
+        `Reason: ${props.reasons.find((r) => r.key === amendment.reason)?.label ?? amendment.reason}`
+      )
+    );
+  }
   return h(
     'section',
     { className: 'cora-amend-outcome-record' },
+    ...children,
     h(
       'p',
       { className: 'cora-amend-outcome-record-justification' },
@@ -94,8 +114,9 @@ function renderAmendmentRecord(amendment) {
 }
 
 /**
- * The Controls-only amend form: an Outcome picker (pre-filled with the current
- * amended value when one exists) plus a mandatory justification.
+ * The Controls-only amend form: an Outcome picker and a Reason picker (both
+ * pre-filled with the current amended values when one exists) plus a mandatory
+ * justification.
  * @param {AmendOutcomeProps} props
  * @returns {HTMLElement}
  */
@@ -118,6 +139,22 @@ function renderAmendForm(props) {
   );
   select.setAttribute('aria-label', 'Amended outcome');
 
+  const reasonSelect = /** @type {HTMLSelectElement} */ (
+    h(
+      'select',
+      {
+        id: 'cora-amend-outcome-reason',
+        className: 'cora-amend-outcome-reason',
+        value: existing?.reason ?? '',
+      },
+      h('option', { value: '' }, 'Select a reason…'),
+      ...props.reasons.map((reason) =>
+        h('option', { value: reason.key }, reason.label)
+      )
+    )
+  );
+  reasonSelect.setAttribute('aria-label', 'Amendment reason');
+
   const justification = /** @type {HTMLTextAreaElement} */ (
     h('textarea', {
       id: 'cora-amend-outcome-justification',
@@ -131,7 +168,7 @@ function renderAmendForm(props) {
   const error = h(
     'p',
     { className: 'cora-amend-outcome-error', hidden: true },
-    'An outcome and a justification are both required to amend the Outcome.'
+    'An outcome, a reason and a justification are all required to amend the Outcome.'
   );
 
   return h(
@@ -146,10 +183,16 @@ function renderAmendForm(props) {
     h(
       'div',
       { className: 'cora-amend-outcome-field' },
+      h('label', { htmlFor: 'cora-amend-outcome-reason' }, 'Reason'),
+      reasonSelect
+    ),
+    h(
+      'div',
+      { className: 'cora-amend-outcome-field' },
       h(
         'label',
         { htmlFor: 'cora-amend-outcome-justification' },
-        'Why are you amending this outcome?'
+        'Justification'
       ),
       justification
     ),
@@ -172,6 +215,9 @@ function renderAmendForm(props) {
             /** @type {HTMLSelectElement | null} */ (
               form?.querySelector('.cora-amend-outcome-select')
             ) ?? select,
+            /** @type {HTMLSelectElement | null} */ (
+              form?.querySelector('.cora-amend-outcome-reason')
+            ) ?? reasonSelect,
             /** @type {HTMLTextAreaElement | null} */ (
               form?.querySelector('.cora-amend-outcome-justification')
             ) ?? justification,
@@ -187,22 +233,24 @@ function renderAmendForm(props) {
 }
 
 /**
- * Validate and emit a single amendment intent. Both an Outcome and a
- * justification are required.
+ * Validate and emit a single amendment intent. An Outcome, a reason and a
+ * justification are all required.
  * @param {AmendOutcomeProps} props
  * @param {{ value?: string }} selectEl
+ * @param {{ value?: string }} reasonEl
  * @param {{ value?: string }} justificationEl
  * @param {HTMLElement} errorEl
  */
-export function amend(props, selectEl, justificationEl, errorEl) {
+export function amend(props, selectEl, reasonEl, justificationEl, errorEl) {
   const outcome = (selectEl.value ?? '').trim();
+  const reason = (reasonEl.value ?? '').trim();
   const justification = (justificationEl.value ?? '').trim();
-  if (!outcome || !justification) {
+  if (!outcome || !reason || !justification) {
     errorEl.hidden = false;
     return;
   }
 
-  props.onAmend?.({ outcome, justification });
+  props.onAmend?.({ outcome, reason, justification });
 }
 
 /**

@@ -1195,6 +1195,8 @@ test('route: Controls resolves an Appeal and amends an Outcome through state-der
   );
   assert.ok(amendPanel);
   getByRole(amendPanel, 'combobox', { name: 'Amended outcome' }).value = 'fail';
+  getByRole(amendPanel, 'combobox', { name: 'Amendment reason' }).value =
+    'qa-check';
   getByRole(amendPanel, 'textbox', {
     name: 'Amendment justification',
   }).value = 'Reconsidered.';
@@ -1296,6 +1298,7 @@ test('route: Amend Outcome action remains live after switching from another tab'
   );
   assert.ok(panel);
   getByRole(panel, 'combobox', { name: 'Amended outcome' }).value = 'pass';
+  getByRole(panel, 'combobox', { name: 'Amendment reason' }).value = 'qa-check';
   getByRole(panel, 'textbox', { name: 'Amendment justification' }).value =
     'Corrected.';
   fireEvent(getByRole(panel, 'button', { name: 'Amend Outcome' }), 'click');

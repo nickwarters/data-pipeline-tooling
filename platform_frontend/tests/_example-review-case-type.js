@@ -56,6 +56,10 @@ const config = {
   },
   // Appeal flow: this journey routes appeal-raising to the Journey Owner.
   appeal: { raisedBy: 'journeyOwner' },
+  // One Case Type-specific Amendment Reason on top of the shared three, so the
+  // extension path has a fixture — Complaints declares none and must be offered
+  // exactly the shared vocabulary.
+  extraAmendmentReasons: [{ key: 'data-correction', label: 'Data correction' }],
   // Outcome vocabulary. `computeOutcome` only yields pass/fail, but the
   // hand-set Amend Outcome verdict lets Controls also pick `refer`, so
   // the full set of selectable Outcomes is declared here.
