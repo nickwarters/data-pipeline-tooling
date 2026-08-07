@@ -760,6 +760,128 @@ Committing is not automatic: no Reader, node, or runner advances the watermark
 for you. Deliberately — the store cannot know whether the rows it would be
 vouching for actually landed.
 
+#### A worked incremental feed — `pipelines/sharepoint_cases/`
+
+The two halves above wired into a real feed: one Case Type's SharePoint list,
+polled by its `Modified` window into append-only raw and silver. It follows the
+ordinary scaffold shape — a `*_builder` per hop composed from the shared recipes,
+driven by `run(context)` — and is deliberately thin between them. Landing the
+list's rows as immutable versions is the whole job; there is no third hop, no
+derivation and no parsing.
+
+**1. The read is narrowed to what raw stores.** `StorableObservations` is a
+Reader decorator (the `tools.retry` shape: forward `data_locations`, delegate
+`describe()`) that projects the response onto the source columns plus the stamped
+metadata. `Modified` and `odata.etag` are dropped — `source_modified_at` and
+`source_version` say the same thing in the vocabulary every hop below reads — and
+so is `observed_at`, for the reason in point 4. Note the split it has to make: an
+**empty** window comes back as the declared projection only, and this list is read
+with `$select=*`, so almost every column is there because the client expanded the
+star and none of them can be present when there are no rows. An empty frame is
+therefore reindexed onto the target columns (and cast to object — `reindex` types
+a column it had to invent as float), while a populated one is selected strictly
+and any missing column is named in a `SharePointFeedError`. This decorator is the
+feed's only column gate: the raw hop composes `source_to_raw` *without*
+`expected_columns`, because a presence check downstream of a projection that
+already guarantees the columns could never fire.
+
+The same decorator **flattens the expanded people**. SharePoint answers an
+expanded lookup as a nested object on the property —
+`{"AssignedReviewer": {"Name": …}}` — and a role nobody holds as a plain `null`
+there, not an object of null members. The slash form the read asks with
+(`AssignedReviewer/Name`) is OData `$select` syntax for *which sub-field to bring
+back*; it says nothing about the response's shape. A tabular carrier has nowhere
+to put a nested cell, so the feed undoes the nesting itself rather than obliging
+every client to do it — the client's contract stays "return the items as
+SharePoint returned them", which is the only contract a client author could
+satisfy without reading this feed's source. A person value that is neither an
+object nor null fails with a `SharePointFeedError` naming the list, item and
+column, and so does an object carrying no `Name`: these columns hold only people
+here, an expanded person carries a claims login, so a `Name`-less object was
+never expanded and reading it as an empty role would hide a broken read. A
+missing `Title` is *not* an error — only the Responsible Party's display name is
+selected at all, and a directory display name is optional even then.
+
+**2. A quiet window runs the same hops as a busy one**, which costs one cast.
+`SchemaCoercion` repairs the types a storage round-trip loses — dates and
+booleans — and deliberately leaves `int`/`float`/`str` alone, so a zero-row batch
+reaches the silver schema gate with its integer column still object-typed and no
+row to give it a type. The feed casts where it already narrows the batch for
+silver, and only when the batch is empty: casting a populated one would hide a
+real dtype breach. Skipping the hop on an empty batch would have been the smaller
+change and the wrong one — a quiet poll is not a different pipeline, and an
+operator reading the run log should see the same steps against the same tables,
+with zero rows.
+
+**3. Silver is the rename and the type contract, and nothing else.** The rename
+is one mechanical rule rather than a curated map: split each source name on word
+boundaries and on `/`, lower-snake-case it (`DueDate` → `due_date`,
+`ResponsibleParty/Title` → `responsible_party_title`). Forty hand-written pairs
+would be forty chances to drift from the list. The rules are equally thin —
+provenance non-null, the item id non-null, and `Status` in the four values the
+review application actually persists. Columns whose constraints live in that
+application get typed and nothing more: a rule the feed cannot justify is one
+that will eventually reject good data.
+
+**4. No "when we saw it" column.** `AppendOnly` compares every non-key column of
+a re-presented row, so a per-read timestamp would make each overlapping re-read
+of an unchanged item look like a changed row. The same reasoning excludes the
+ingestion batch id and the pipeline run id. When we saw it lives in the run log
+and in the returned `ingestion_batch_id` instead.
+
+**5. The watermark is not committed.** `run` returns a `SharePointIngestResult`
+carrying the window, the batch id and the row counts, and leaves the checkpoint
+alone: advancing it vouches for the rows having been *published*, which is the
+gold step's to do.
+
+Two smaller notes. The batch id is
+`f"{list_id}:{watermark.isoformat() if watermark else 'first-load'}"` —
+it identifies the *source window resumed from*, not the run, so a re-drive of a
+failed window mints the same id; and only the GUID travels in it, so no site or
+credential does. And `server_now` comes from the client's own clock
+(`client.server_time()`), never a local `utcnow`: the window bounds a predicate
+the list evaluates, so a skewed local clock silently widens or narrows it. The
+feed states that requirement as a local `CaseListClient` Protocol extending
+`SharePointListClient`, because the upstream seam declares the fetch alone.
+
+**Two provisioning prerequisites**, both recorded rather than solved:
+
+- **`Modified` must be indexed on the list, while it is still small.** It is not
+  one of the 14 columns the Case Review Platform indexes at creation, and
+  SharePoint cannot add an index to a list already past the 5,000-row List View
+  Threshold. A `Modified`-windowed poll works on a small list and starts failing
+  as it grows.
+- **The site URL and list GUID are placeholders in the code.** The review
+  application derives its site from page context and addresses lists by title, so
+  no GUID exists anywhere to copy. The watermark is keyed on the GUID, and a
+  wrong one silently forks the feed's place rather than failing.
+
+Run the bundled fixture pages offline — the feed's `LocalJsonListClient` is
+opt-in via `--sample`, because a production run that forgot its client must
+refuse rather than quietly ingest five fake Cases:
+
+```sh
+python -m pipelines.sharepoint_cases.pipeline --base-dir /tmp/demo --sample
+```
+
+**Needing a client does not cost the feed its ordinary addressing.** `run` takes
+one so a test can pass a fake and `--sample` can pass the fixture replayer, and
+an unattended run — the operator CLI, the orchestrator, both of which reach a
+feed by calling `run(context)` — asks `_resolve_client` for the organisation's:
+
+```sh
+python -m cli run pipelines/sharepoint_cases --base-dir /tmp/demo
+```
+
+There is no organisational client to hand back yet, so that form refuses today
+with a `NoClientError`, categorised `CONFIG` because the fix is in the wiring.
+Both entry points therefore fail the same way, as a caught, categorised failure
+rather than a stack trace. Wiring a real client is a change in one function; it
+is what scheduling this feed waits on, not anything in the dataflow.
+
+The two tables it lands, field by field, are documented in
+[`data-dictionary-sharepoint-cases.md`](data-dictionary-sharepoint-cases.md).
+
 ### `SharePointWriter(site, list_name, auth, strategy=Refresh())`
 
 The outbound dual of `SharePointReader` and the emitter of the canonical

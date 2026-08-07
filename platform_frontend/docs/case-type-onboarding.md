@@ -23,7 +23,7 @@ so getting it right up front is the whole game.
 
 - **Index these columns on the empty list, up front.** See
   [Indexed columns](#indexed-columns) below.
-- **Max 20 indexes per list.** We currently index 14, so there is headroom, but
+- **Max 20 indexes per list.** We currently index 15, so there is headroom, but
   the ceiling is real — do not index blindly.
 - **Compound (two-column) indexes** are available if a future live query needs a
   two-column narrowing; they count against the same 20-index budget.
@@ -105,6 +105,7 @@ lead with an indexed predicate.
 | `RemediationDueDate`                                    | Date and Time                                                         |         | Remediation SLA; app-written.                                                                                                                                                                                                      |
 | `RelatedDate`                                           | Date and Time                                                         |         | Case Type–specific reference date.                                                                                                                                                                                                 |
 | `Created`                                               | Date and Time                                                         |         | SharePoint built-in.                                                                                                                                                                                                               |
+| `Modified`                                              | Date and Time                                                         |  **✓**  | SharePoint built-in. Indexed for the data pipeline, which polls the list incrementally on `Modified gt <watermark>`; nothing in the browser application reads it.                                                                  |
 | `HasOpenAppeal`                                         | Yes/No                                                                |  **✓**  | Action Centre reason flag; app-written with the `Appeals` blob.                                                                                                                                                                    |
 | `AppealRaisedAt`                                        | Date and Time                                                         |         | Clock paired with `HasOpenAppeal`; app-written.                                                                                                                                                                                    |
 | `AwaitingResponsibleParty`                              | Yes/No                                                                |  **✓**  | Action Centre reason flag; app-written on every Conversation post.                                                                                                                                                                 |
@@ -159,17 +160,26 @@ list is past the threshold.
 
 ## Indexed columns
 
-The 14 columns to index on the empty `Cases-{slug}` list — the
+The 15 columns to index on the empty `Cases-{slug}` list — the
 lifecycle/date columns, the Action Centre reason flags that live reads lead
-with, and the two columns Case search leads with:
+with, the two columns Case search leads with, and the one the data pipeline
+polls on:
 
 `Status`, `DueDate`, `CompletedAt`, `AssignedReviewer`, `ResponsibleParty`,
 `AssignedReviewerManager`, `ResponsiblePartyManager`, `HasOpenAppeal`,
 `AwaitingResponsibleParty`, `ReviewRequired`, `OnHold`, `Title`,
-`ReportableAt`, `VoidedAt`.
+`ReportableAt`, `VoidedAt`, `Modified`.
 
-14 of a maximum 20 indexes per list. Add any promoted detail column (above) to
+15 of a maximum 20 indexes per list. Add any promoted detail column (above) to
 this set only if a live query will lead with it, and keep the total ≤ 20.
+
+`Modified` is a SharePoint built-in, so it needs no creating — but it does need
+indexing, and it is the one entry here no part of the browser application asks
+for. The data pipeline ingests each list incrementally by polling
+`Modified gt <watermark>`, so every poll leads with that predicate. Unindexed, it
+reads the whole list and stops working altogether once the list passes the List
+View Threshold — the same irreversible trap as `VoidedAt`, and easy to miss
+because nothing in the front end degrades when it is skipped.
 
 `VoidedAt` joined this set with the Void status, and it is the same trap again:
 the manager's void report leads with its date window, so a `Cases-{slug}` list
