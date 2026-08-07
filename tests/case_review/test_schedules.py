@@ -66,9 +66,10 @@ def test_a_weekend_or_configured_holiday_pass_skips_it(tmp_path):
         assert decision.status == "skipped"
         assert decision.was_due is False
 
-    # A holiday skips only when the calendar was seeded with one. `python -m cli
-    # orchestrate` seeds none today, so this proves the schedule honours a seeded
-    # calendar — not that the operator command has holidays.
+    # A holiday skips only when the calendar was seeded with one. The operator
+    # command seeds its calendar from `--calendar <file>` (proved end-to-end in
+    # tests/framework/_cli/test_operator.py); what this proves is the other half
+    # — that the schedule honours whatever calendar it is handed.
     wednesday = dt.date(2026, 8, 5)
     orchestrator, calls = _orchestrator(WorkingDayCalendar(holidays={wednesday}))
 

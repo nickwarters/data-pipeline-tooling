@@ -26,7 +26,9 @@ depends on ``framework``, not the reverse.
 the scheduled machinery but not *which* pipelines an application schedules, so it
 takes a required ``--app`` naming a module that exposes ``build_pipeline_sets()``
 (the schedules); execution itself is by path, exactly as ``run`` does it, so no
-handler registry is wired up front.
+handler registry is wired up front. Its working-day calendar is seeded by the
+optional ``--calendar <file>`` (a YAML calendar file of ``holidays`` and
+``weekend``); omitted, the calendar is weekends-only.
 """
 
 from __future__ import annotations
@@ -89,6 +91,23 @@ def _base_dir_or_report(args: argparse.Namespace) -> Path | None:
         return Path(args.base_dir)
     try:
         return resolve_base_dir(getattr(args, "env", None))
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return None
+
+
+def _calendar_or_report(args: argparse.Namespace) -> WorkingDayCalendar | None:
+    """Resolve the working-day calendar from the optional ``--calendar`` file.
+
+    Without the flag the calendar is the weekends-only default, so every
+    existing invocation keeps working. Returns ``None`` — reserved strictly for
+    the failure case, never for "no flag given" — after printing an actionable
+    message when the file is missing or malformed.
+    """
+    if not getattr(args, "calendar", None):
+        return WorkingDayCalendar()
+    try:
+        return WorkingDayCalendar.from_yaml(args.calendar)
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return None
@@ -189,11 +208,14 @@ def _orchestrate(args: argparse.Namespace) -> int:
     base_dir = _base_dir_or_report(args)
     if base_dir is None:
         return 1
+    calendar = _calendar_or_report(args)
+    if calendar is None:
+        return 1
     try:
         app = _resolve_app(args.app)
         orchestrator = Orchestrator(
             app.build_pipeline_sets(),
-            WorkingDayCalendar(),
+            calendar,
         )
         # The two modes are mutually exclusive at the parser, and a single pass
         # is the default when neither is named.
@@ -372,6 +394,13 @@ def register(sub) -> None:
         "--app",
         required=True,
         help="application module exposing build_pipeline_sets() (the schedules)",
+    )
+    orchestrate.add_argument(
+        "--calendar",
+        default=None,
+        metavar="FILE",
+        help="YAML calendar file seeding the working-day calendar's holidays "
+        "and weekend rule; omit for the default (weekends only, no holidays)",
     )
     orchestrate.set_defaults(func=_orchestrate)
 

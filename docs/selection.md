@@ -98,6 +98,7 @@ available = pool.fetch_available_cases(
 `fetch_available_cases` is the headline retrieval — the *concept* of **available
 cases**: the candidate Cases eligible to enter Selection, here those with
 activity dated within the last N working days on or before `as_of` (CONTEXT.md).
+
 The retrieval:
 
 1. reads the Case Type's **silver** through the `Store`;
@@ -105,6 +106,12 @@ The retrieval:
    (`SchemaCoercion` — silver stores dates as text), so the window comparison is
    date-vs-date;
 3. narrows to the working-day window in **Python**, never SQL.
+
+A bare `WorkingDayCalendar()` counts weekends only, so a bank holiday inside the
+window silently narrows it by a day. `pipelines/selection` therefore seeds its
+calendar from the `calendar` run parameter — `--param
+calendar=/config/calendar.yml`, the same file `orchestrate --calendar` reads — so
+the window and the schedule agree about which days were working days.
 
 It returns the bulk-tier `Dataset` (the carrier), which flows straight into the
 Selection pipeline. Surfacing fully typed `Case` objects is the
