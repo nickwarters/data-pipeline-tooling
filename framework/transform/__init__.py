@@ -7,7 +7,9 @@ The stable import surface for everything that reshapes or gates a
 ``Rename`` / ``Stamp``, the column-shaping ``JoinColumns``,
 the lazy ``JoinWith`` / ``AntiJoinWith``, the Ingest / fan-out
 ``SelectColumns`` / ``DropColumns`` / ``Unpivot`` / ``DeriveKey`` /
-``LatestPerKey``, the packed-column ``Parse``, and the bounded-subset
+``LatestPerKey``, the packed-column ``Parse``, the JSON blob reshaping
+``ExplodeJsonMap`` / ``ExplodeJsonList`` / ``FlattenJsonObject``,
+and the bounded-subset
 ``TopNPerGroup`` / ``Sample`` / ``SamplePerGroup``)
 and ``SchemaCoercion`` — the *coerce* half of the schema adapter, which casts a
 column's round-trip-lossy values to the declared types, and every declared column
@@ -30,6 +32,12 @@ public contract, the submodule paths are not.
 
 from framework.core.protocols import Processor
 from framework.transform.coercion import SchemaCoercion
+from framework.transform.json_shaping import (
+    ExplodeJsonList,
+    ExplodeJsonMap,
+    FlattenJsonObject,
+    JsonShapeError,
+)
 from framework.transform.processors import (
     AntiJoinWith,
     CoercionError,
@@ -75,6 +83,9 @@ __all__ = [
     "SelectColumns",
     "DropColumns",
     "Unpivot",
+    "ExplodeJsonMap",
+    "ExplodeJsonList",
+    "FlattenJsonObject",
     "DeriveKey",
     "Parse",
     "TopNPerGroup",
@@ -82,6 +93,7 @@ __all__ = [
     "SamplePerGroup",
     "CoercionError",
     "IdentityError",
+    "JsonShapeError",
     # The coerce half of the schema adapter
     "SchemaCoercion",
     # Quarantine partitioning
