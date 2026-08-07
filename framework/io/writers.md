@@ -36,6 +36,7 @@ from framework._internal.connection import connect
 from framework._internal.describe import render
 from framework._internal.locations import file_location, table_location
 from framework.core.dataset import Dataset
+from framework.core.errors import ErrorCategory, PipelineError
 from framework.core.protocols import ChunkWritable, Writer
 from framework.io.sql import quote_identifier
 from framework.io.strategy import LoadStrategy
@@ -58,7 +59,22 @@ __all__ = [
     "AccumulateByRunWriter",
     "SqliteInsertOrIgnoreWriter",
     "SqliteInsertIfAbsentWriter",
+    "SqliteAppendOnlyWriter",
+    "AppendOnlyConflictError",
 ]
+
+
+class AppendOnlyConflictError(PipelineError):
+    """An append-only key was presented twice carrying different values.
+
+    Raised by :class:`SqliteAppendOnlyWriter` when the immutability the target
+    was declared with does not hold: either two rows in one incoming batch share
+    a key but disagree, or a key already in the target arrives with changed
+    values. Categorised as a **data** failure — the fix is upstream, in the
+    feed, not in the wiring or the run conditions.
+    """
+
+    category = ErrorCategory.DATA
 
 
 def _frame_for_strategy(
@@ -111,7 +127,8 @@ def writing_chunks(writer: object):
             "writing_chunks session, so each chunk would be written as if it "
             "were the whole dataset — the target would end up holding only the "
             "last chunk. Land the source with a Writer that accumulates "
-            "(AccumulateByRun, InsertOrIgnore, UpsertStrategy, InsertIfAbsent)."
+            "(AccumulateByRun, InsertOrIgnore, UpsertStrategy, InsertIfAbsent, "
+            "AppendOnly)."
         )
     return writer.writing_chunks()
 
@@ -743,6 +760,209 @@ class SqliteInsertIfAbsentWriter:
             table=self._table,
             key_columns=list(self._key_columns),
             surrogate_column=self._surrogate_column,
+        )
+
+
+class SqliteAppendOnlyWriter:
+    """A Writer that appends unseen keys and refuses to contradict seen ones.
+
+    Implements :class:`~framework.io.strategy.AppendOnly` against one table. Per
+    write, in order:
+
+    1. The declared key columns must be present and null-free — checked on the
+       frame, so a mis-keyed batch fails before a single row is staged.
+    2. Exact duplicate rows inside the incoming batch are collapsed to one; two
+       rows sharing a key but disagreeing on any value are an
+       ``AppendOnlyConflictError`` before staging.
+    3. The batch is staged. A batch that has dropped a column the target holds
+       is refused: the comparison spans the batch's columns, so a narrower one
+       could not see a change in what it no longer carries.
+    4. The staged rows are compared against the target on the key columns,
+       across every column of the row and null-safe (SQLite's ``IS``, so NULL
+       equals NULL and a single changed value is a difference). Comparison is
+       by SQLite's own affinity rules, so a re-read that lands ``1`` where the
+       target holds ``1.0`` is unchanged rather than a conflict.
+    5. A key whose target row differs is an ``AppendOnlyConflictError``, raised
+       inside the merge's transaction, so nothing lands.
+    6. Only the keys the target has never seen are inserted.
+
+    Steps 3–6 are the shared staged-merge shape; no target row is updated or
+    deleted at any point, which is the whole contract.
+
+    Physical uniqueness on the target is **not** required: the repository's
+    single-writer rule plus this Writer's one transaction is the boundary
+    today, and a later schema migration can add a UNIQUE constraint without
+    changing these semantics.
+    """
+
+    def __init__(
+        self,
+        db_path: str | os.PathLike[str],
+        table: str,
+        key_columns: tuple[str, ...],
+        busy_timeout_ms: int = 5000,
+    ) -> None:
+        self._db_path = Path(db_path)
+        self._table = table
+        self._key_columns = key_columns
+        self._busy_timeout_ms = busy_timeout_ms
+        self.data_locations: list[dict[str, str]] = []
+
+    def write(self, dataset: Dataset) -> None:
+        self.data_locations = [table_location(self._db_path, self._table)]
+        frame = self._collapsed(dataset.to_pandas())
+
+        with _staged_merge(
+            self._db_path,
+            self._table,
+            frame,
+            busy_timeout_ms=self._busy_timeout_ms,
+        ) as merge:
+            key_match = " AND ".join(
+                f"{merge.staging}.{quote_identifier(k)} = "
+                f"{merge.target}.{quote_identifier(k)}"
+                for k in self._key_columns
+            )
+            self._refuse_narrowed_batch(merge, frame)
+            self._refuse_changed_rows(merge, key_match, frame)
+            # Insert the unseen keys only. Staging holds at most one row per key
+            # by now, so no staged row can be excluded by another's insertion.
+            merge.con.execute(
+                f"INSERT INTO {merge.target} ({merge.columns}) "
+                f"SELECT {merge.columns} FROM {merge.staging} "
+                f"WHERE NOT EXISTS "
+                f"(SELECT 1 FROM {merge.target} WHERE {key_match})"
+            )
+
+    def _collapsed(self, frame: pd.DataFrame) -> pd.DataFrame:
+        """Validate the keys and collapse exact duplicates, or refuse the batch.
+
+        Done on the frame rather than in SQL so a batch that cannot be appended
+        never reaches the staging table, and the message names the offending
+        columns and keys rather than a constraint number.
+        """
+        missing = [c for c in self._key_columns if c not in frame.columns]
+        if missing:
+            raise ValueError(
+                f"AppendOnly key column(s) not found in dataset: {missing}"
+            )
+
+        keys = list(self._key_columns)
+        null_keyed = [c for c in keys if frame[c].isna().any()]
+        if null_keyed:
+            raise ValueError(
+                f"AppendOnly key column(s) contain null values: {null_keyed}. "
+                "An append-only target is identified by its key, so a row "
+                "without one cannot be matched against what is already there."
+            )
+
+        # Byte-identical rows are the same observation seen twice; keep one.
+        collapsed = frame.drop_duplicates().reset_index(drop=True)
+
+        # Whatever repeats a key now disagrees on some value.
+        repeated = collapsed.duplicated(subset=keys, keep=False)
+        contradicted = collapsed.loc[repeated, keys].drop_duplicates()
+        if len(contradicted) > 0:
+            raise AppendOnlyConflictError(
+                f"append-only load of {self._table!r} refused: the incoming "
+                "batch carries different values for the same key: "
+                f"{self._render_keys(contradicted.itertuples(index=False))}"
+            )
+        return collapsed
+
+    def _refuse_narrowed_batch(self, merge: _StagedMerge, frame: pd.DataFrame) -> None:
+        """Raise if the batch has dropped a column the target already holds.
+
+        The comparison below spans the batch's columns, so a column the batch
+        no longer carries could not take part in it: a row whose only change is
+        in that column would read as unchanged, and a genuinely new key would
+        land with the column NULL — then conflict the next time it arrived
+        complete, blaming the source for a gap this Writer created. Both are
+        silent, so the narrowing itself is refused instead.
+
+        The opposite drift — a batch carrying a column the target lacks — is
+        already loud: the comparison below names that column on both sides and
+        SQLite refuses the statement.
+        """
+        target_columns = [
+            row[1]
+            for row in merge.con.execute(
+                f"PRAGMA table_info({merge.target})"
+            ).fetchall()
+        ]
+        dropped = [c for c in target_columns if c not in frame.columns]
+        if dropped:
+            raise ValueError(
+                f"append-only load of {self._table!r} refused: the incoming "
+                f"batch is missing column(s) the target holds: {dropped}. An "
+                "append-only row is compared whole, so a narrower batch could "
+                "neither confirm nor contradict what those columns already say."
+            )
+
+    def _refuse_changed_rows(
+        self, merge: _StagedMerge, key_match: str, frame: pd.DataFrame
+    ) -> None:
+        """Raise if any staged key contradicts the row the target already holds."""
+        value_columns = [c for c in frame.columns if c not in self._key_columns]
+        if not value_columns:
+            # Key-only rows carry nothing that could have changed.
+            return
+
+        # ``IS NOT`` rather than ``<>``: null-safe, so a value that appeared or
+        # disappeared is a difference rather than an unknown that compares false.
+        differs = " OR ".join(
+            f"{merge.staging}.{quote_identifier(c)} IS NOT "
+            f"{merge.target}.{quote_identifier(c)}"
+            for c in value_columns
+        )
+        staged_keys = ", ".join(
+            f"{merge.staging}.{quote_identifier(k)}" for k in self._key_columns
+        )
+        conflicts = merge.con.execute(
+            f"SELECT DISTINCT {staged_keys} FROM {merge.staging} "
+            f"WHERE EXISTS (SELECT 1 FROM {merge.target} "
+            f"WHERE {key_match} AND ({differs}))"
+        ).fetchall()
+        if conflicts:
+            raise AppendOnlyConflictError(
+                f"append-only load of {self._table!r} refused: "
+                f"{len(conflicts)} key(s) already present with different "
+                f"values: {self._render_keys(conflicts)}. An append-only "
+                "target never rewrites a row it has already accepted, so a "
+                "changed value means the source is not immutable after all."
+            )
+
+    @staticmethod
+    def _render_keys(keys, limit: int = 5) -> str:
+        """Name the offending keys, capped so one bad batch is not a wall of text."""
+        shown = [tuple(key) for key in keys]
+        rendered = ", ".join(repr(key) for key in shown[:limit])
+        if len(shown) > limit:
+            rendered += f", ... ({len(shown) - limit} more)"
+        return rendered
+
+    @contextmanager
+    def writing_chunks(self) -> Iterator[Writer]:
+        """Take a chunked load unchanged: each batch compares against the target.
+
+        Every write re-reads the target through its own staged comparison, so
+        chunk N+1 sees the keys chunk N just appended and treats them as seen
+        rather than re-appending them. Nothing has to happen once per load, so
+        the session is the Writer itself.
+
+        A chunk that conflicts aborts the stream with the earlier chunks already
+        landed — which is exactly what append-only makes safe: re-driving the
+        source finds those keys unchanged and appends only what is still
+        missing.
+        """
+        yield self
+
+    def describe(self) -> str:
+        return render(
+            self,
+            db_path=str(self._db_path),
+            table=self._table,
+            key_columns=list(self._key_columns),
         )
 
 

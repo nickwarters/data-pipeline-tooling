@@ -17,10 +17,12 @@ from framework.core.dataset import Dataset
 from framework.io import (
     AccumulateByRun,
     AccumulateByRunWriter,
+    AppendOnly,
     CsvWriter,
     InsertIfAbsent,
     InsertOrIgnore,
     Refresh,
+    SqliteAppendOnlyWriter,
     SqliteInsertIfAbsentWriter,
     SqliteInsertOrIgnoreWriter,
     SqliteTruncateReloadWriter,
@@ -40,6 +42,7 @@ STRATEGIES = {
     "upsert": (UpsertStrategy("case_id"), SqliteUpsertWriter),
     "insert_or_ignore": (InsertOrIgnore(), SqliteInsertOrIgnoreWriter),
     "insert_if_absent": (InsertIfAbsent("case_id"), SqliteInsertIfAbsentWriter),
+    "append_only": (AppendOnly("case_id"), SqliteAppendOnlyWriter),
 }
 
 
@@ -95,7 +98,7 @@ class _RecordingWriter:
 
 
 class _MarkRows:
-    """A sixth strategy, defined entirely here — the blast-radius proof.
+    """A strategy beyond the shipped set, defined here — the blast-radius proof.
 
     It is unknown to the store, to the writers module, and to the facade, and
     yet it loads through both seams. Adding a real strategy is the same shape
@@ -134,7 +137,8 @@ def test_a_new_strategy_also_drives_the_file_writers(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "strategy", [UpsertStrategy("case_id"), InsertIfAbsent("case_id")]
+    "strategy",
+    [UpsertStrategy("case_id"), InsertIfAbsent("case_id"), AppendOnly("case_id")],
 )
 def test_a_file_writer_names_the_strategy_it_cannot_realise(tmp_path, strategy):
     # A key-driven load has no whole-file rewrite, so those strategies define no

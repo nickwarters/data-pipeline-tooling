@@ -18,6 +18,7 @@ from framework._internal.describe import redact_url, render
 from framework.core.dataset import Dataset
 from framework.io.readers import GlobCsvReader
 from framework.io.strategy import AccumulateByRun, Refresh
+from tools.integrations.locations import sharepoint_location
 
 
 @runtime_checkable
@@ -144,12 +145,6 @@ class SasReader:
         )
 
 
-def _sharepoint_location(site: str, list_name: str) -> dict[str, str]:
-    # Redacted like describe(): a persisted record must not be the one place
-    # credentials embedded in the site URL survive.
-    return {"namespace": redact_url(site), "name": list_name}
-
-
 class SharePointReader:
     """Read a SharePoint list into a Dataset through a swappable fetcher."""
 
@@ -168,7 +163,7 @@ class SharePointReader:
         self.data_locations: list[dict[str, str]] = []
 
     def read(self) -> Dataset:
-        self.data_locations = [_sharepoint_location(self._site, self._list_name)]
+        self.data_locations = [sharepoint_location(self._site, self._list_name)]
         return self._fetcher.fetch(self._site, self._list_name, self._auth)
 
     def describe(self) -> str:
@@ -197,7 +192,7 @@ class SharePointWriter:
         self.data_locations: list[dict[str, str]] = []
 
     def write(self, dataset: Dataset) -> None:
-        self.data_locations = [_sharepoint_location(self._site, self._list_name)]
+        self.data_locations = [sharepoint_location(self._site, self._list_name)]
         if isinstance(self._strategy, AccumulateByRun):
             dataset = Dataset.from_pandas(self._strategy.stamp(dataset.to_pandas()))
         self._pusher.push(

@@ -37,6 +37,7 @@ from framework.io.readers import (
 )
 from framework.io.strategy import (
     AccumulateByRun,
+    AppendOnly,
     InsertIfAbsent,
     InsertOrIgnore,
     LoadStrategy,
@@ -45,11 +46,13 @@ from framework.io.strategy import (
 )
 from framework.io.writers import (
     AccumulateByRunWriter,
+    AppendOnlyConflictError,
     ChunkWritable,
     CsvWriter,
     ExcelWriter,
     JsonWriter,
     QuarantineWriter,
+    SqliteAppendOnlyWriter,
     SqliteInsertIfAbsentWriter,
     SqliteInsertOrIgnoreWriter,
     SqliteTruncateReloadWriter,
@@ -96,6 +99,9 @@ __all__ = [
     "SqliteInsertOrIgnoreWriter",
     "InsertIfAbsent",
     "SqliteInsertIfAbsentWriter",
+    "AppendOnly",
+    "SqliteAppendOnlyWriter",
+    "AppendOnlyConflictError",
 ]
 
 ```
