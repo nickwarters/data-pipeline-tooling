@@ -1,9 +1,10 @@
 # Data dictionary — `sharepoint_cases`
 
 The filled-in entry for the `sharepoint_cases` feed, following
-[`data-dictionary-template.md`](data-dictionary-template.md). Three tables: the
-faithful raw observation, the typed Case version, and the current Case reduced
-from the version history. The Python contract is
+[`data-dictionary-template.md`](data-dictionary-template.md). Four tables: the
+faithful raw observation, the typed Case version, and the two gold tables
+reduced from the version history — the current Case and an aggregate. The
+Python contract is
 [`pipelines/sharepoint_cases/schema.py`](../pipelines/sharepoint_cases/schema.py);
 this page is its prose companion.
 
@@ -257,22 +258,24 @@ guessed at here would quarantine real data.
   no rule here, because a rule this feed cannot justify is a rule that will
   eventually reject good data.
 
-## Gold — the current Case
+## Gold — the current Case and an aggregate
 
-Silver accumulates *observations*; gold answers *what is true now*. One table,
-rebuilt whole with `Refresh()` on every poll from the entire silver history, in
-[`pipelines/sharepoint_cases/gold.py`](../pipelines/sharepoint_cases/gold.py).
-It is published **before** the polling watermark is committed, so a failure
-leaves the watermark where it was and the next run rebuilds it.
+Silver accumulates *observations*; gold answers *what is true now*. Two tables,
+both rebuilt whole with `Refresh()` on every poll from the entire silver history,
+in [`pipelines/sharepoint_cases/gold.py`](../pipelines/sharepoint_cases/gold.py).
+They are published **before** the polling watermark is committed, so a failure
+anywhere leaves the watermark where it was and the next run rebuilds both.
 
 | Table | Declared grain | Measure |
 |-------|----------------|---------|
 | `case_current` | one row per `case_id` | the Case, as it currently stands |
+| `case_counts_current` | `assigned_reviewer_name` × `assigned_reviewer_manager_name` × `status` | `case_count` |
 
-`case_current` carries a live grain gate (`UniqueValidator("case_id")`) because
-its grain is produced by a rule rather than by construction.
+Only `case_current` carries a live grain gate (`UniqueValidator("case_id")`); the
+aggregate gets none, for the reason set out in `case_current_builder`'s
+docstring. Its grain is declared here and in its builder's docstring instead.
 
-### `as_of_utc`
+### `as_of_utc`, on every table
 
 `as_of_utc` is the **candidate SharePoint window end** — the instant this run is
 about to commit as its watermark — as ISO-8601 UTC text. Never `utcnow()`: a
@@ -316,3 +319,30 @@ Two things to know about what this table holds:
   deletion inference is out of scope for this feed. `case_current` is "every
   Case we have ever seen, at its latest observed version", which is the same
   thing only while nothing is deleted.
+
+### `case_counts_current`
+
+| Attribute | Value |
+|-----------|-------|
+| **Grain** | `assigned_reviewer_name` × `assigned_reviewer_manager_name` × `status` |
+| **Columns** | `assigned_reviewer_name`, `assigned_reviewer_manager_name`, `status`, `case_count`, `as_of_utc` |
+
+**The Assigned Reviewer leads**, because the question this table answers is who
+is holding what. That reviewer's manager is kept on the same row rather than in
+a table of its own: it is how the rows roll up, so a consumer wanting counts per
+manager sums this table instead of reading a second one that could disagree with
+it.
+
+Both are **claims logins**, as silver holds them — not display names, and
+*neither is a team*. There is no team column on the provisioned list; what the
+review platform calls "my team" is exactly the set of Cases whose
+`AssignedReviewerManagerId` is the signed-in user. Calling a dimension
+`owning_team` would assert something that does not exist, and shortening the
+manager to `reviewer_manager_name` would invent a synonym for a row that also
+carries `responsible_party_manager_name`.
+
+A Case with no Assigned Reviewer, or none recorded for that reviewer's manager,
+is counted under the literal `(unassigned)` in that column. That is a
+**reporting fill, never a source value**; it exists because a NULL group key is
+a hole in the grain that a reader may silently drop, which would make the table
+quietly fail to add up to the number of current Cases.
