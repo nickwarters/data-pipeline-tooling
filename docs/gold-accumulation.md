@@ -238,3 +238,31 @@ is a current snapshot, not a per-run history. **Selection** / **Sync** gold use
 takes — and how multiple feeds fan into it (snapshot-vs-join) — is a per-Case-Type
 choice; the `case_review.gold` helpers are where that assembly lives, in the
 application layer rather than the framework.
+
+### Two shapes of current-only reduce, and when `LatestPerKey` is the wrong one
+
+`LatestPerKey(key, by="load_date")` reduces a **batch-loaded** silver: every row
+a run landed carries that run's `load_date`, so "latest" is "from the most recent
+load", and rows that tie inside one load are settled by input order.
+
+A **Polling Feed** breaks both halves of that. `pipelines/sharepoint_cases` polls
+a SharePoint list by its `Modified` window and appends one row per observed
+*version*, so there is no `load_date` on the row at all — deliberately, because
+`AppendOnly` compares every non-key column and a per-read stamp would make each
+overlapping re-read look like a changed row. And several versions of one item can
+arrive in a single poll, so "last in input order" is not an ordering you can rely
+on across an append-only history that many polls have contributed to.
+
+Its reduce is therefore **ordered by the source's own version**, in
+`pipelines/sharepoint_cases/gold.py`: one stable sort on `case_id`, the parsed
+`source_modified_at`, the *parsed* source version (major, then minor), and
+finally the deterministic `source_observation_id`, then keep the last row per
+Case. Two details are load-bearing. The version is parsed and never compared as
+text — `"10"` sorts before `"9"` lexically — and it handles all three shapes the
+column really holds (an ETag `"3"` / `W/"3"` / `"4,1"`, a dotted UI version
+`3.0`, and a sha256 digest fallback for a row that carried no version, which
+sorts below every real one rather than as NA, because pandas sorts NA *last*).
+
+This stays local to that feed. Generalising it into a framework processor waits
+for a second caller with the same problem; until then `LatestPerKey` is untouched
+and still right for every feed that carries a `load_date`.

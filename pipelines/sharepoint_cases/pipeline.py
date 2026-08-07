@@ -1,19 +1,26 @@
-"""Ingest pipeline for the ``sharepoint_cases`` feed: source -> raw -> silver.
+"""Ingest pipeline for the ``sharepoint_cases`` feed: source -> raw -> silver -> gold.
 
 The feed polls one Case Type's SharePoint list by its ``Modified`` window and
-lands what it observes twice:
+lands what it observes twice, then reduces the accumulated history:
 
 - ``raw_builder``    lands the observation faithfully, in SharePoint's own
   column names, keyed on the observation id so a re-read is a no-op.
 - ``silver_builder`` snake_cases those names, coerces the types, quarantines
   value-rule breaches and validates ``CaseVersion``.
+- ``gold.publish_gold`` rebuilds the current Case from the whole silver
+  history, with ``Refresh()``.
 
-There is no third hop and very little in the second: this feed's job is to get
-the list's rows into the database as immutable versions, not to interpret them.
+There is very little in the second hop: getting the list's rows into the
+database as immutable versions is a separate job from interpreting them, and
+only gold interprets.
 
-It deliberately **stops at silver**, and it deliberately does **not** commit the
-polling watermark: the checkpoint vouches for rows having been published, and
-gold publication is not this feed's to do.
+**The watermark is committed last**, after every gold table has been written,
+because advancing it is what vouches for the window having been *published*. A
+run that fails anywhere above leaves it alone and the next run re-polls the same
+window and converges. Under a dry run nothing is committed: every hop's writes
+are previewed by the ambient run context the runner makes active, and the
+checkpoint -- which is not a pipeline step and so has no ambient skip to inherit
+-- is guarded explicitly by ``context.dry_run``.
 
 Reaching the list needs a client. ``run`` takes one so a test can hand it a fake
 and ``--sample`` can hand it the bundled fixture pages; an unattended run has
@@ -69,9 +76,8 @@ from tools.medallion import medallion
 from tools.recipes import raw_to_silver, source_to_raw
 from tools.store import StoreRegistry
 
-from .schema import CaseVersion
-
-FEED_NAME = "sharepoint_cases"
+from .gold import publish_gold
+from .schema import FEED_NAME, LIST_NAME, CaseVersion
 
 # Pipelines this feed depends on being fresh before it runs. A source feed has
 # none.
@@ -86,11 +92,9 @@ UPSTREAMS = ()
 SITE = "https://sharepoint.invalid/sites/REPLACE-ME"
 LIST_ID = UUID(int=0)
 
-# One list per Case Type, named ``Cases-{slug}``; there is no combined list and
-# no default. Only Complaints is live, so this feed names it directly rather
-# than growing a per-Case-Type indirection for a second type that may never come.
-# A UAT tenant prefixes the same list ``uat_``.
-LIST_NAME = "Cases-Complaints"
+# ``FEED_NAME`` and ``LIST_NAME`` are declared in ``schema.py`` and re-exported
+# here, where every caller has always read them: ``gold.py`` needs both and this
+# module imports ``gold.py``.
 
 # The five Person columns, expanded so each answers with the claims login rather
 # than the numeric id it otherwise returns, and the sub-field of each the read
@@ -445,11 +449,11 @@ def run(
     describe: bool = False,
     client: CaseListClient | None = None,
 ) -> SharePointIngestResult | None:
-    """Poll the list once and refine what it returned source -> raw -> silver.
+    """Poll the list once, refine source -> raw -> silver -> gold, then commit.
 
     Returns ``None`` when there is nothing safe to poll yet -- a run repeated
     sooner than the safety lag, which is ordinary operation rather than a
-    failure.
+    failure. Nothing is committed on that path, and nothing is written.
     """
     client = _resolve_client(client)
     med = medallion(StoreRegistry(context.base_dir), FEED_NAME)
@@ -502,13 +506,27 @@ def run(
         print(silver_p.describe())
     silver_rows = len(silver_p.run())
 
-    # --- gold is yours to assemble ------------------------------------------
-    # How these accumulated versions become gold is still open: a Case Type may
-    # want the version that was current at a point in time copied forward, or
-    # the current row joined live to other feeds. The two answers differ in what
-    # a later correction does to yesterday's report, so the choice is
-    # per-Case-Type and the seam is left commented.
-    # ------------------------------------------------------------------------
+    # Gold is rebuilt from the whole accumulated history, not from the batch:
+    # a Case whose latest version arrived three polls ago is still current.
+    publish_gold(med, as_of=window.end, describe=describe, run_log=context.run_log)
+
+    # Visibly last, and only on a real run. Advancing the watermark is what
+    # vouches for the window having been *published*, so nothing above it may be
+    # allowed to fail silently: every hop either committed or raised before this
+    # line was reached.
+    #
+    # Not wired as a ``p.action(...)`` node on the last gold pipeline, which
+    # would inherit the dry-run skip for free: the checkpoint is source-control
+    # state rather than a data step, and burying it inside a pipeline named for
+    # a gold table would make "visibly last" less true than this reads.
+    if not context.dry_run:
+        checkpoints.commit(
+            source,
+            window_end=window.end,
+            ingestion_batch_id=batch_id,
+            pipeline_run_id=context.pipeline_run_id,
+        )
+
     return SharePointIngestResult(
         window=window,
         ingestion_batch_id=batch_id,
@@ -562,7 +580,7 @@ def _resolve_client(client: CaseListClient | None) -> CaseListClient:
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m pipelines.sharepoint_cases.pipeline",
-        description=f"Poll the {LIST_NAME} list source -> raw -> silver.",
+        description=f"Poll the {LIST_NAME} list source -> raw -> silver -> gold.",
     )
     parser.add_argument(
         "--base-dir",
@@ -622,8 +640,8 @@ def main(argv: list[str]) -> int:
     print(
         f"Polled {LIST_NAME} up to {result.window.end.isoformat()} as batch "
         f"{result.ingestion_batch_id}: {result.raw_rows} observation(s) -> "
-        f"{result.silver_rows} case version(s) under {base_dir / FEED_NAME}. "
-        "The watermark was not committed."
+        f"{result.silver_rows} case version(s) under {base_dir / FEED_NAME}, "
+        f"gold rebuilt. The watermark now sits at {result.window.end.isoformat()}."
     )
     return 0
 
