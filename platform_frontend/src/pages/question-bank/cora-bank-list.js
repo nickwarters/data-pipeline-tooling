@@ -1,0 +1,158 @@
+// @ts-check
+import { h } from '../../lib/html.js';
+import { QuestionCard } from './question-card.js';
+import { OutcomeOptionsEditor } from './cora-outcome-options-editor.js';
+
+/**
+ * Pure Question Bank list. Each card is memoised on only the values that can
+ * change its rendered subtree.
+ * @param {{ bank: any, baselineQuestions: any[], filters: any, dirty: boolean, conditionalQuestionIds?: string[], dispatch: (action: any) => void, addQuestion: () => void, memo?: (key: PropertyKey, deps: readonly unknown[], viewFn: () => HTMLElement) => HTMLElement }} props
+ */
+export function BankList(props) {
+  const { bank, dirty } = props;
+  const filters = props.filters;
+  const visible = bank.questions.filter((/** @type {any} */ question) => {
+    if (!filters.showDeprecated && question.deprecated) return false;
+    if (
+      filters.category &&
+      (question.category || 'Uncategorised') !== filters.category
+    )
+      return false;
+    if (
+      filters.questionGroup &&
+      (question.questionGroup || 'Uncategorised') !== filters.questionGroup
+    )
+      return false;
+    if (filters.conditionalOnly && !question.showWhen) return false;
+    return true;
+  });
+
+  const outcomeEditor = OutcomeOptionsEditor({
+    bank,
+    addOutcome: () => props.dispatch({ type: 'outcome/added' }),
+    setDefaultOutcome: (id) =>
+      props.dispatch({ type: 'outcome/default-changed', id }),
+    renameOutcome: (option, id) =>
+      props.dispatch({ type: 'outcome/renamed', outcomeId: option.id, id }),
+    setWording: (option, wording) =>
+      props.dispatch({
+        type: 'outcome/wording-changed',
+        outcomeId: option.id,
+        wording,
+      }),
+    setSeverity: (option, severity) =>
+      props.dispatch({
+        type: 'outcome/severity-changed',
+        outcomeId: option.id,
+        severity,
+      }),
+    removeOutcome: (option) =>
+      props.dispatch({ type: 'outcome/removed', outcomeId: option.id }),
+  });
+
+  const baselineById = new Map(
+    props.baselineQuestions.map((question) => [question.id, question])
+  );
+  const questionIndexById = new Map(
+    bank.questions.map(
+      (/** @type {any} */ question, /** @type {number} */ index) => [
+        question.id,
+        index,
+      ]
+    )
+  );
+  // Neighbouring cards depend on catalogue topology for within-group move
+  // controls and showWhen target options. Keep that dependency coarse but
+  // stable so ordinary wording edits still invalidate only their own card.
+  const questionTopology = bank.questions
+    .map((/** @type {any} */ question) =>
+      [
+        question.id,
+        question.category,
+        question.questionGroup,
+        question.deprecated,
+      ].join('\u0000')
+    )
+    .join('\u0001');
+  const cards = visible.map((/** @type {any} */ question) => {
+    const baselineQuestion = baselineById.get(question.id);
+    const conditional =
+      Boolean(question.showWhen) ||
+      Boolean(props.conditionalQuestionIds?.includes(question.id));
+    const view = () =>
+      /** @type {HTMLElement} */ (
+        QuestionCard({
+          question,
+          questionIndex: /** @type {number} */ (
+            questionIndexById.get(question.id)
+          ),
+          bank,
+          baselineQuestions: props.baselineQuestions,
+          groupFilterActive: Boolean(filters.questionGroup),
+          conditional,
+          dispatch: props.dispatch,
+        })
+      );
+    return props.memo
+      ? props.memo(
+          question.id,
+          [
+            question,
+            bank.outcomeOptions,
+            bank.labels,
+            baselineQuestion,
+            filters.questionGroup,
+            conditional,
+            questionTopology,
+          ],
+          view
+        )
+      : view();
+  });
+
+  return h(
+    'section',
+    { className: 'editor' },
+    h(
+      'div',
+      { className: 'editor-head' },
+      h(
+        'h2',
+        {},
+        h('span', {}, bank.label),
+        h(
+          'span',
+          { className: 'meta' },
+          `${bank.questions.length} questions · slug: ${bank.slug}`
+        )
+      ),
+      h(
+        'div',
+        { className: 'dirty-indicator' + (dirty ? ' is-dirty' : '') },
+        h('span', { className: 'dirty-dot' }),
+        h('span', {}, dirty ? 'Unsynced edits' : 'Clean · synced')
+      )
+    ),
+    outcomeEditor,
+    h(
+      'div',
+      {},
+      ...(cards.length
+        ? cards
+        : [
+            h(
+              'div',
+              { className: 'empty' },
+              h('h3', {}, 'No questions match your filters.'),
+              h('p', {}, 'Clear filters or add a new question below.')
+            ),
+          ])
+    ),
+    h(
+      'button',
+      { className: 'add-card', onclick: props.addQuestion },
+      h('span', { className: 'plus' }, '+'),
+      ' Draft a new question'
+    )
+  );
+}

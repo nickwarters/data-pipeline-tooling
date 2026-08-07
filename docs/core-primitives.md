@@ -60,7 +60,8 @@ faithful, and schema enforcement arrives at silver and gold.
 > Writer owns its load strategy. Callers choose `Refresh()`,
 > `AccumulateByRun(logical_run_id, load_date)`,
 > `AccumulateByRun.from_context(context)`, `UpsertStrategy(key_columns)`,
-> `InsertOrIgnore()`, or `InsertIfAbsent(key_columns)` when asking the Store
+> `InsertOrIgnore()`, `InsertIfAbsent(key_columns)`, or
+> `AppendOnly(key_columns)` when asking the Store
 > for a Writer. This supports both current-state hops and accumulated histories
 > without baking a universal layer→strategy rule into the Store.
 
@@ -117,10 +118,12 @@ selectable by name or zero-based index; pandas + **openpyxl** behind the seam);
 `SqliteReader(db_path, table)` is the read-side dual of the Sqlite Writers — it
 reads one table from a layer db back into a `Dataset` (a subject's own layer, or
 another subject's read-only Reference Data medallion, joined in Python).
-`SasReader(script, copy_glob, dest)` and
-`SharePointReader(site, list_name, auth)` follow the same `read()` shape but
+`SasReader(script, copy_glob, dest)`,
+`SharePointReader(site, list_name, auth)` and
+`SharePointModifiedReader(site, list_name, columns, window)` follow the same
+`read()` shape but
 reach a remote source whose client is **stubbed for now**, behind a swappable
-seam in `tools.integrations.remote`; see
+seam in `tools.integrations.remote` / `tools.integrations.sharepoint_rest`; see
 [`adding-a-feed.md`](adding-a-feed.md#remote-feeds-sas-sharepoint). Readers are
 the home of the concrete engine and are tested against **local fixture files** —
 no network, no SAS, no SharePoint. Paths are handled with `pathlib` so they
@@ -241,7 +244,7 @@ class ChunkWritable(Protocol):
 A Writer that can express "these many writes are one logical load" implements it;
 whatever must happen once per load happens when the session opens.
 `AccumulateByRun` clears the run's prior rows **once, on entry**, then appends;
-`InsertOrIgnore` / `UpsertStrategy` / `InsertIfAbsent` are already
+`InsertOrIgnore` / `UpsertStrategy` / `InsertIfAbsent` / `AppendOnly` are already
 per-batch-independent and take a chunked load unchanged; `QuarantineWriter`
 clears with the first chunk that has rejects. `Refresh` and the file Writers
 offer no session at all, which is what makes the wiring-time refusal possible.
@@ -283,10 +286,11 @@ directions are explicit:
 | CSV file | `CsvReader`, `StrictCsvReader`, `GlobCsvReader` | `CsvWriter` | `CsvWriter(path, strategy)` emits one CSV file; `StrictCsvReader` is the char-by-char RFC 4180 parser for grammar-correct feeds that defeat pandas; `GlobCsvReader` is read-only because many inbound files together form one logical snapshot. |
 | Excel file | `ExcelReader` | `ExcelWriter` | Both target one worksheet (`sheet=...`). |
 | JSON file | _intentionally absent_ | `JsonWriter` | JSON is currently a Reporting Deliverable format only; no inbound JSON Feed has been needed yet. |
-| SQLite table | `SqliteReader` | `SqliteTruncateReloadWriter`, `AccumulateByRunWriter`, `SqliteUpsertWriter`, `SqliteInsertOrIgnoreWriter`, `SqliteInsertIfAbsentWriter` | The Store mints these over medallion layer databases. |
+| SQLite table | `SqliteReader` | `SqliteTruncateReloadWriter`, `AccumulateByRunWriter`, `SqliteUpsertWriter`, `SqliteInsertOrIgnoreWriter`, `SqliteInsertIfAbsentWriter`, `SqliteAppendOnlyWriter` | The Store mints these over medallion layer databases. |
 | SAS extract (remote) | `SasReader` | _intentionally absent_ | SAS is an inbound-only remote source; the framework lands the remote output then reads local CSV files. |
 | Large source, streamed | `ChunkedCsvReader`, `SasFileReader` | _intentionally absent_ | The `ChunkReader` seam (`chunks(size) -> Iterator[Dataset]`) for sources too big to hold whole — a local CSV or an **already-landed** `.sas7bdat`/xport file (incl. gzipped). Distinct from the remote `SasReader`: no script, no remote run, no copy — read-only by nature. |
 | SharePoint list | `SharePointReader` | `SharePointWriter` | Target is **SE on-prem**. Both sides are stubbed behind swappable `SharePointFetcher` / `SharePointPusher` seams until the on-prem SE client (NTLM/Kerberos/REST) lands. `SharePointWriter` emits the canonical Selection Deliverable — one list per Case Type. |
+| SharePoint list, incremental | `SharePointModifiedReader` | _intentionally absent_ | The items whose `Modified` falls in a caller-supplied half-open window, stamped with immutable observation metadata. Configures the organisational client behind the `SharePointListClient` seam; holds no checkpoint. Cannot see a **hard delete** — a deleted item has no `Modified`, so reconciliation against a snapshot is a separate mechanism. |
 | Console (stdout) | _intentionally absent_ | `StdoutWriter` | A terminal sink for *seeing* a result rather than persisting it — e.g. printing a Selection explainer's per-Case trace while driving a feed by hand. Owns no location or load strategy; prints the dataset as a plain-text table to the stream (defaulting to `sys.stdout`). |
 
 ### `Writer` — the destination, behind one method
@@ -349,16 +353,39 @@ Deliverables and SQLite tables:
   `InsertOrIgnore`: conflict resolution here is key-driven (the strategy
   declares `key_columns`), not constraint-driven (no table constraints are
   required). Minted by `Store.writer(layer, table, InsertIfAbsent(key_columns))`.
+- `SqliteAppendOnlyWriter(db_path, table, key_columns)` — **append-once load for
+  immutable versions**: each incoming key is either unseen (appended), seen and
+  unchanged (a no-op), or seen and changed (an `AppendOnlyConflictError`). No
+  target row is ever updated or deleted. Exact duplicate rows inside one batch
+  are collapsed; two rows sharing a key but disagreeing are refused before
+  staging, as is a missing or null key. The comparison against the target spans
+  **every column of the row and is null-safe** (SQLite's `IS`), so a value that
+  appeared or disappeared counts as a change — and because it spans the whole
+  row, a batch that has *dropped* a column the target holds is refused rather
+  than compared on what is left (the opposite drift, a column the target lacks,
+  is already refused: the comparison names that column on both sides and SQLite
+  rejects the statement). Equality is by SQLite's own **affinity** rules, not by
+  pandas dtype, so a re-read that lands `1` where the target holds `1.0` — or
+  the text `'1'` where it holds the integer `1` — is unchanged, not a conflict.
+  Minted by
+  `store.writer(table, AppendOnly(key_columns))`. Use it for a source re-read
+  many times a day whose rows are *observations* keyed by their own immutable
+  id — where `AccumulateByRun` would land the same observation once per run, and
+  `InsertOrIgnore` would silently drop rows for constraint breaches having
+  nothing to do with duplicate identity. Physical uniqueness on the target is
+  not required: the single-writer rule plus the Writer's one transaction is the
+  boundary today.
 
 The file Writers accept `Refresh()`, `AccumulateByRun(...)`, and `InsertOrIgnore()`
 strategies: `Refresh()` overwrites the file; `AccumulateByRun(...)` reads any
 existing file, replaces rows for that logical run, stamps the new rows, and
 rewrites the file; `InsertOrIgnore()` appends incoming rows to the existing file
 (files carry no table constraints, so no rows are ignored — equivalent to a plain
-append). `UpsertStrategy(...)` and `InsertIfAbsent(...)` are **table-backed
-only** — their merges need the target's own constraints or key→surrogate
-mapping, which a whole-file rewrite cannot supply — so handing one to a file
-Writer raises a `TypeError` naming both the Writer and the strategy.
+append). `UpsertStrategy(...)`, `InsertIfAbsent(...)` and `AppendOnly(...)` are
+**table-backed only** — their merges need the target's own constraints,
+key→surrogate mapping, or existing keys and values, which a whole-file rewrite
+cannot supply — so handing one to a file Writer raises a `TypeError` naming both
+the Writer and the strategy.
 Round-tripping through matching Readers is stable for CSV and Excel at
 the Dataset shape level; exact pandas dtype inference can still differ after a
 file round-trip, so schema-sensitive flows should continue to validate after
@@ -376,7 +403,8 @@ it is shared:
   atomicity the framework promises now has a single implementation rather than
   five hand-maintained copies.
 - **One staging convention.** The merge Writers (`SqliteUpsertWriter`,
-  `SqliteInsertOrIgnoreWriter`) share a `_staged_merge` helper that lands the
+  `SqliteInsertOrIgnoreWriter`, `SqliteAppendOnlyWriter`) share a
+  `_staged_merge` helper that lands the
   incoming rows in `_stage_<table>`, ensures the target exists, yields the
   connection plus the quoted operands, commits, and only then drops the scratch
   table. Each Writer's body is its merge statement and nothing else. The former
@@ -449,7 +477,8 @@ components over the tables in its file:
 
 - `store.writer(table, strategy)` — mints a Writer over a table in this namespace
   using the caller's explicit `Refresh()`, `AccumulateByRun(...)`,
-  `UpsertStrategy(...)`, `InsertOrIgnore()`, or `InsertIfAbsent(key_columns)`
+  `UpsertStrategy(...)`, `InsertOrIgnore()`, `InsertIfAbsent(key_columns)`, or
+  `AppendOnly(key_columns)`
   strategy — by asking that strategy to realise itself (`writer_for`), so the
   store branches on nothing and any `LoadStrategy` works. Context-driven
   accumulation uses `AccumulateByRun.from_context(context)`.
@@ -869,6 +898,12 @@ metadata is stored under `<base_dir>/_runs/<label-stem>.log` and
 (`tools.observability.run_store`), the run-metadata counterpart of
 `tools.store`'s `StoreRegistry` — so the runner, the orchestrator and the
 operator CLI all read the paths from one place rather than each restating them.
+Those two are not the whole of a base directory: a third category, source
+**control state**, sits under `<base_dir>/_checkpoints/` — today the SharePoint
+`Modified` watermarks owned by `SharePointCheckpointStore`
+([adding-a-feed.md](adding-a-feed.md#sharepointcheckpointstorebase_dir--where-the-polling-got-to)).
+It is beside the run metadata rather than inside it because their lifecycles
+differ: pruning run logs must not lose a feed's place in its source.
 
 `run_pipeline` (`framework.run`) is the execution core `PipelineRunner.run`
 delegates to, and the path-addressed `run` command calls directly: given a

@@ -827,7 +827,7 @@ class Pipeline:
             "load, so every chunk would replace the one before it and the "
             "target would end up holding only the last. Use an accumulating "
             "load strategy (AccumulateByRun, InsertOrIgnore, UpsertStrategy, "
-            "InsertIfAbsent)."
+            "InsertIfAbsent, AppendOnly)."
         )
 
     def describe(self) -> str:

@@ -2,6 +2,8 @@
 
 The data pipeline framework ingests data about reviewable work from many heterogeneous sources, processes it through medallion layers, and exposes it to review workflows through clean domain abstractions (e.g. `CasePool`) instead of raw `pandas.read_*` calls.
 
+> **This glossary covers the data pipeline half of the system only.** The Case Review Platform frontend shares this repository under `platform_frontend/` and keeps its own glossary at [`platform_frontend/CONTEXT.md`](platform_frontend/CONTEXT.md). Some nouns appear in both — **Case** and **Case Type** most of all — and they are *not* automatically the same term: this file defines what a pipeline produces, that one defines what a Reviewer works on. When a change spans both halves, read both entries and say which one you mean.
+
 ## Language
 
 **Case**:
@@ -63,6 +65,14 @@ _Avoid_: result, verdict, assessment
 **Feed**:
 A single configured **inbound** data stream the framework ingests (e.g. one Excel workbook, one SharePoint list, one SAS extract, the returned Review Outcomes); outbound artifacts are **Deliverables**, not Feeds.
 _Avoid_: source (reserved for source *type*: Excel/CSV/SAS/SQLite/SharePoint), import, Deliverable (that is outbound)
+
+**Polling Feed**:
+A **Feed** whose source is not handed over as a file but *asked for*, repeatedly, over an API — today the SharePoint REST list read by a `Modified` window. It differs from a file Feed in one way that matters to the language: there is no snapshot boundary, so "the feed" is a sequence of overlapping windows rather than a delivery, and where the polling got to is durable **source control state** (the watermark), not run metadata. Consecutive windows deliberately overlap, so the same row arrives many times and the load must be idempotent.
+_Avoid_: stream (reserved for a **Streamed Feed**, which is about size not arrival), sync (reserved for the **Sync** Pipeline)
+
+**Version observation**:
+One row of a **Polling Feed**: what the source said about one item, at one source version, on one read. The unit of an append-only history — a later source version of the same item is a **new** observation, never an update — identified by the list, the item id and the version (`source_observation_id`). *When we saw it* is not part of the observation: an observation is what the source said, so read time lives in the run log and the ingestion batch id rather than in the row.
+_Avoid_: snapshot (that is the whole source at a moment), record, event
 
 **Deliverable**:
 An outbound artifact a Pipeline produces for downstream consumption, in one of three concrete forms: a **file** (CSV/Excel/JSON), a **directly-readable view/table** the consumer reads, or **rows pushed to a platform-owned remote list** (a SharePoint Subscription Edition list — the canonical **Selection** Deliverable, one list per Case Type). The push form is an *active* write to a system the framework does not own, not a passive artifact left for collection; files are reserved for **Reporting** outputs. Emitted by a **Writer**: `CsvWriter`, `ExcelWriter`, and `JsonWriter` emit file Deliverables; SQLite Writers emit directly-readable tables; the stubbed `SharePointWriter` is the outbound dual of the **SharePoint Reader** (same source type, both directions).
@@ -223,6 +233,23 @@ constructs the other. `catch_up()` is the "sweep every run log into the
 registry" step a run or a plan takes before consulting history. Before it, the
 same three path fragments were spelled out in the runner, the orchestrator and
 the operator CLI; a layout with no owner drifts.
+
+**Source checkpoint (watermark)**:
+Durable **control state** recording how far a source has been polled, so the next
+run resumes rather than re-reads everything. _Here_: `SharePointCheckpointStore`
+(`tools/integrations/sharepoint_checkpoint.py`) keeps one `Modified` watermark per
+SharePoint list under `<base_dir>/_checkpoints/sharepoint.db`, and computes the
+next window from it — `end = server_now - safety_lag`, `start = watermark -
+overlap` (`None` on a first load, meaning the full current list). The commit is
+the **last act of a successful run**; nothing else advances it. **Do not confuse
+the two senses of "checkpoint"**: elsewhere in this glossary and in
+`framework/run`, a *checkpoint* is a mid-graph `.write()` node landing an
+intermediate dataset for lineage — a thing inside one run's graph. A *source
+checkpoint* is state **between** runs, about an external source. Say "source
+checkpoint" or "watermark" when that is what you mean. It is also a **third**
+category of thing in a base directory, alongside the rows the `StoreRegistry`
+lays out and the runs the **Run store** does — kept separate because the
+lifecycles differ: pruning run logs must not lose a feed's place in its source.
 
 **Run time semantics**:
 Two clocks meet in the run metadata, and the rule for reconciling them lives in
@@ -389,5 +416,5 @@ So **CasePool** and **SelectionPool** relate to **Ingest** and **Selection** onl
 - **One feed, many tables** — RESOLVED: the old "one feed → one silver table → one gold table" assumption is dropped. A Feed yields **one Case table and zero or more Detail Tables**; the wide feed is fanned out by **N single-table pipelines over the shared raw table**, each projecting its columns and sharing one reusable normalisation `Processor`. No new core seam (rejected a multi-Writer terminus and a splitting Processor — both break the single-Writer/single-Dataset shape). Built through `SelectColumns`, `Unpivot`, `DeriveKey`, `LatestPerKey`, `UniqueValidator`, and the case-review gold helpers.
 - **Case identity** — RESOLVED: a Case's identity is a **deterministic** surrogate `case_id = uuid5(case_type_namespace, natural_key)`, derived from the feed's stable natural key — same Case → same id every run/machine, so idempotency holds and the Case ↔ Detail link needs no join. A random `uuid4` is rejected (breaks idempotency); a persistent identity map is the deferred fallback for a feed with no natural key.
 - **Streaming vs the small-volume premise** — RESOLVED (opaque-carrier ADR amendment): that ADR's Consequences said volumes were small (≤ ~1M rows/feed/run) so "no chunking/streaming machinery is needed up front. Revisit only if a feed grows large." A feed *did* grow large (~100M rows, ~500MB landed per run, ~1.5GB after three) and the revisit happened in code, but the ADR was never amended and so contradicted both the code and `docs/streaming-large-sources.md` while carrying `status: accepted`. Now amended. The **opaque-carrier decision stands unchanged**: the in-memory contract holds per chunk, there is no lazy `Dataset` variant, and `ChunkReader` is deliberately *not* unified with `Reader` by a materialising `read()`. Only the volume premise is corrected.
-- **Load strategy vs layer** — RESOLVED: load strategy is **per-feed, owned by the Writer**; the Store maps `layer → location` only (no load decision). The global "refresh upstream / accumulate downstream" rule becomes the *default* profile, not a law. Ingest can adopt **history-upstream / current-gold**; Selection/Sync/Reporting keep accumulate-by-run gold. Consequence: where the source is destructive, accumulated raw/silver are a **system of record** (backup matters) and volume grows `records × snapshots`. Built through explicit Writer strategies (`Refresh`, `AccumulateByRun`, `UpsertStrategy`, `InsertOrIgnore`, `InsertIfAbsent`), each of which mints the Writer that implements it.
+- **Load strategy vs layer** — RESOLVED: load strategy is **per-feed, owned by the Writer**; the Store maps `layer → location` only (no load decision). The global "refresh upstream / accumulate downstream" rule becomes the *default* profile, not a law. Ingest can adopt **history-upstream / current-gold**; Selection/Sync/Reporting keep accumulate-by-run gold. Consequence: where the source is destructive, accumulated raw/silver are a **system of record** (backup matters) and volume grows `records × snapshots`. Built through explicit Writer strategies (`Refresh`, `AccumulateByRun`, `UpsertStrategy`, `InsertOrIgnore`, `InsertIfAbsent`, `AppendOnly`), each of which mints the Writer that implements it.
 - **Atomicity of run artifacts (publish unit)** — RESOLVED: a run's artifacts — **quarantine** rejects, the **Selection trace**, **checkpoints**, and the final output — are **independently committed evidence**, *not* one all-or-nothing publish unit. Atomicity is **per writer, per layer DB** (a single delete+insert), not across writers; an abort *after* an artifact write leaves that artifact on disk. Chosen deliberately: evidence is most valuable when the run then fails. Each run-log step carries a **`committed`** marker so operators can see what landed before an abort — and each step carries exactly one such record. Hardening the per-writer transaction itself is a separate concern.

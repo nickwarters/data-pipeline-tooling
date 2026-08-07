@@ -379,7 +379,8 @@ Concrete Readers that ship:
 | `ExcelReader(path, sheet=0)` | One worksheet of an `.xlsx` workbook | path + sheet **name or zero-based index** (default the first sheet) |
 | `SqliteReader(db_path, table)` | One table of a SQLite layer db | db path + table name |
 | `SasReader(script, copy_glob, dest)` | A SAS feed run on a remote box | script name + glob of outputs to copy back + local landing dir |
-| `SharePointReader(site, list_name, auth)` | A SharePoint list | site URL + list name + auth config |
+| `SharePointReader(site, list_name, auth)` | A SharePoint list, whole (a snapshot) | site URL + list name + auth config |
+| `SharePointModifiedReader(site, list_name, columns, window)` | A SharePoint list, only the items changed in one `Modified` window | site URL + list name + the columns to project + the window |
 
 `GlobCsvReader` reads every file matching `directory / pattern` in sorted
 deterministic order, concatenates them behind the `Dataset` seam, and returns
@@ -530,6 +531,356 @@ reader = SharePointReader(
 )
 dataset = reader.read()
 ```
+
+### `SharePointModifiedReader(site, list_name, columns, window)`
+
+The **incremental** counterpart of `SharePointReader`, in
+`tools.integrations.sharepoint_rest`. Where `SharePointReader` answers "give me
+the whole list", this one answers "give me the items whose `Modified` falls in
+*this* window" — the shape an incremental feed needs and the one a snapshot
+cannot express.
+
+The window is the **caller's**, always: `ModifiedWindow(start, end)` is passed
+in and never computed here. Where the previous window ended, how much overlap to
+re-read, and where that is persisted are a
+[*checkpoint's*](#sharepointcheckpointstorebase_dir--where-the-polling-got-to)
+concerns; keeping them
+out means the Reader has no state and one read is reproducible from its
+constructor arguments alone. `start=None` is the first-load shape — every
+current item strictly before `end`.
+
+The window is **half-open** (`Modified ge start and Modified lt end`), so
+consecutive windows tile without dropping or double-counting an item whose
+`Modified` lands exactly on a boundary. Both bounds must be timezone-aware and
+are converted to UTC **once**, so a Windows box and a macOS box send the same
+predicate; a naive bound is refused rather than read as the local zone.
+
+Fetching is somebody else's: the organisational SharePoint client (auth,
+transport, and server paging) sits behind the `SharePointListClient` seam —
+anything with
+
+```python
+fetch_items(list_name, expand_fields, select_fields, filters) -> DataFrame
+```
+
+— and this Reader only *configures* the query, supplying the projection
+(`Id`, `Modified`, then the caller's `columns`) and the `Modified` predicates.
+Nothing here builds a URL, follows a paging link, or holds a credential; the
+default `StubbedSharePointListClient` raises `NotImplementedError` until a real
+client is passed, and tests use a fake. Retry is **not** built in — wrap it in
+`RetryingReader` so one policy covers every source (see [retry.md](retry.md)).
+
+Every row comes back with immutable observation metadata (`METADATA_COLUMNS`)
+appended, so downstream can tell "this item changed again" from "we read the
+same item twice" without asking SharePoint a second time:
+
+| Column | What it holds |
+|--------|---------------|
+| `source_list_name` | the list the item came from |
+| `source_item_id` | the item's SharePoint `Id` |
+| `source_modified_at` | its `Modified`, normalised to a UTC ISO-8601 instant |
+| `source_version` | the list's own version stamp (`odata.etag`, `ETag`, `OData__UIVersionString` or `Version`, in that order of preference) when supplied, otherwise a `sha256` digest of the item's values |
+| `source_observation_id` | the identity of "this item, at this version, in this list" |
+| `observed_at` | when the read happened |
+
+Both hashes are `sha256` over a canonical, key-sorted JSON rendering — never
+Python's `hash()`, which is salted per process and would give the same item a
+different identity on every run and on every machine. JSON rather than a
+`field=value` join because a join is forgeable: a value *containing* the
+separator can reproduce another item's payload exactly.
+
+**Two properties of the version worth knowing before you build on it.**
+
+The version is decided **per row**, not per response. One row's missing stamp
+must not re-identify its neighbours — otherwise an item that did not change comes
+back with a new `source_observation_id` and downstream reads it as "changed
+again". For the same reason the fallback digest excludes the version columns
+themselves.
+
+Where the list supplies no stamp, the digest covers the item's **projected**
+values — so **widening `columns` re-identifies every item** on the next read.
+Keep the projection stable, or accept one re-observation of the whole list when
+it changes.
+
+An item missing `Id`, or carrying a `Modified` that will not parse, raises a
+located `SharePointFeedError` naming the list and the row: the identity contract
+is what the metadata is built from, so a breach fails rather than landing
+un-addressable rows. Every flavour of null counts as missing — a nullable `Int64`
+`pd.NA` and a float `NaN` are rejected, not stringified into an id that looks
+present.
+
+An empty window is **not** an error: it returns a zero-row `Dataset` carrying the
+declared projection plus the metadata columns, so a schema check over **those**
+does not depend on volume. The limit is worth knowing — a column the *client*
+adds that was never projected (an expanded lookup such as `Owner/Title`) cannot
+be invented for an empty window, so hold a downstream check to the declared
+columns rather than to whatever a populated read happened to carry.
+
+```python
+import datetime as dt
+
+from tools.integrations.sharepoint_rest import ModifiedWindow, SharePointModifiedReader
+
+reader = SharePointModifiedReader(
+    "https://sharepoint/sites/case-review",
+    "Cases",
+    ("CaseRef", "Status", "Owner"),
+    ModifiedWindow(
+        start=dt.datetime(2026, 8, 5, 8, tzinfo=dt.timezone.utc),
+        end=dt.datetime(2026, 8, 5, 9, tzinfo=dt.timezone.utc),
+    ),
+    client=sharepoint_client,
+)
+dataset = reader.read()
+```
+
+**The hard-delete limitation.** A `Modified` window can only see items that
+still exist: an item *deleted* from the list has no `Modified` to fall inside
+any window, so no sequence of window reads will ever report it. An incremental
+feed built on this Reader therefore accumulates rows that may no longer be in
+SharePoint. Detecting deletions needs a different mechanism — a periodic
+snapshot (`SharePointReader`) reconciled against what has been landed, or a
+change-API feed — and is deliberately **not** this Reader's job.
+
+### `SharePointCheckpointStore(base_dir)` — where the polling got to
+
+The other half of the split above, in `tools.integrations.sharepoint_checkpoint`.
+The Reader is handed a window; this is what computes the next one and remembers
+where the last one ended.
+
+**"Checkpoint" here is not the pipeline sense.** A `Pipeline` checkpoint is a
+mid-graph `.write()` node landing an intermediate dataset for lineage. This one
+is **source control state**: how far a source has been polled.
+
+The window rule, in three lines:
+
+```text
+end   = server_now - safety_lag
+start = committed_watermark - overlap   # None when nothing is committed yet
+window = ModifiedWindow(start, end)     # None when end <= committed_watermark
+```
+
+`start=None` is the **first load**: no watermark has been committed, so the run
+fetches the full current list up to `end`.
+
+The **overlap** re-reads a little of what the previous window already covered,
+and that is safe because the observation metadata is immutable: the same item at
+the same version yields the same `source_observation_id`
+([the metadata table above](#sharepointmodifiedreadersite-list_name-columns-window)),
+so a re-read is recognised as the same observation rather than as a change. The
+**safety lag** holds `end` behind SharePoint's own clock, because an item written
+*while* a window is being read can be stamped inside that window and still be
+invisible to the read — without the lag those items are lost for good. Both are
+the caller's numbers; `server_now` is **SharePoint's** clock, not the box's, since
+the bounds are a predicate the list evaluates.
+
+An **empty window is routine**: when `server_now - safety_lag` has not yet passed
+the committed `watermark`, `window(...)` returns `None`. That is a run repeated too
+soon after the last commit — ordinary operation, so it is not an error and there
+is simply nothing to poll.
+
+**The commit is the last act of a successful run**, and nothing else advances the
+watermark: `commit(source, window_end=…, ingestion_batch_id=…, pipeline_run_id=…)`
+is called once the run's writes have landed. A run that fails part-way therefore
+re-polls the same window next time. An *equal* `window_end` is accepted (not
+advancing is not going backwards) and refreshes the provenance columns, so
+repeating an identical commit is a no-op in effect; an *earlier* one raises,
+because a watermark that moved backwards would quietly re-poll covered ground and
+hide that a run had lost its place. The `ingestion_batch_id` is opaque provenance
+handed in by the caller, not derived here.
+
+The state lives at **`<base>/_checkpoints/sharepoint.db`** — beside `_runs/`,
+not inside it. A base directory now holds three kinds of thing: the medallion
+**rows** (`tools.store`), the **run metadata** (`tools.observability.run_store`),
+and this **source control state**. They are separate because their lifecycles
+are: pruning run logs must not lose a feed's place, and re-landing silver must
+not either.
+
+A source is identified by the list's **GUID**, not its title — even though the
+Reader addresses lists by name. A title is a mutable display name, and keying a
+watermark on it would fork the checkpoint the moment somebody renames the list,
+with the new key looking like a first load of the whole list. The site part of
+the key has any embedded credentials removed (persisted control state is never
+where a credential survives) and a trailing `/` stripped, so `.../sites/X` and
+`.../sites/X/` are one source. The host folds to lower case, since DNS does not
+distinguish them; the path does not, because a site path's case is the tenant's
+business and two spellings may be two addresses.
+
+#### Finding a list's GUID
+
+A one-off lookup, done once when the feed is written. Either:
+
+- **From the browser.** Open the list, then the gear menu → **List settings**.
+  The address ends `...&List=%7B1B6F2A3C-0000-4A1F-9C7E-5F2D8A4B1E01%7D`;
+  `%7B` and `%7D` are the encoded braces, so the GUID is what sits between them.
+- **From the REST API**, if the organisational client is already to hand:
+  `GET <site>/_api/web/lists/getbytitle('Cases')/id`. Send
+  `Accept: application/json;odata=nometadata` and the GUID is the `value`;
+  without it the response is XML and the GUID is the `<d:Id>` element. A title
+  containing an apostrophe needs it doubled (`getbytitle('O''Brien')`).
+
+Record it as a constant beside the list title in the feed's module. The pair
+is the point: the title is what the Reader asks for and may change, the GUID is
+what the checkpoint is keyed on and does not.
+
+```python
+import datetime as dt
+from uuid import UUID
+
+from tools.integrations.sharepoint_checkpoint import (
+    SharePointCheckpointStore,
+    SharePointSource,
+)
+from tools.integrations.sharepoint_rest import SharePointModifiedReader
+
+checkpoints = SharePointCheckpointStore(base_dir)
+source = SharePointSource(
+    "https://sharepoint/sites/case-review",
+    UUID("1b6f2a3c-0000-4a1f-9c7e-5f2d8a4b1e01"),
+)
+
+window = checkpoints.window(
+    source,
+    server_now=sharepoint_client.server_time(),
+    overlap=dt.timedelta(minutes=5),
+    safety_lag=dt.timedelta(minutes=2),
+)
+if window is not None:  # None: nothing new is safe to poll
+    reader = SharePointModifiedReader(source.site, "Cases", COLUMNS, window)
+    ...  # land the rows, then — and only then:
+    checkpoints.commit(
+        source,
+        window_end=window.end,
+        ingestion_batch_id=batch_id,
+        pipeline_run_id=context.pipeline_run_id,
+    )
+```
+
+Committing is not automatic: no Reader, node, or runner advances the watermark
+for you. Deliberately — the store cannot know whether the rows it would be
+vouching for actually landed.
+
+#### A worked incremental feed — `pipelines/sharepoint_cases/`
+
+The two halves above wired into a real feed: one Case Type's SharePoint list,
+polled by its `Modified` window into append-only raw and silver. It follows the
+ordinary scaffold shape — a `*_builder` per hop composed from the shared recipes,
+driven by `run(context)` — and is deliberately thin between them. Landing the
+list's rows as immutable versions is the whole job; there is no third hop, no
+derivation and no parsing.
+
+**1. The read is narrowed to what raw stores.** `StorableObservations` is a
+Reader decorator (the `tools.retry` shape: forward `data_locations`, delegate
+`describe()`) that projects the response onto the source columns plus the stamped
+metadata. `Modified` and `odata.etag` are dropped — `source_modified_at` and
+`source_version` say the same thing in the vocabulary every hop below reads — and
+so is `observed_at`, for the reason in point 4. Note the split it has to make: an
+**empty** window comes back as the declared projection only, and this list is read
+with `$select=*`, so almost every column is there because the client expanded the
+star and none of them can be present when there are no rows. An empty frame is
+therefore reindexed onto the target columns (and cast to object — `reindex` types
+a column it had to invent as float), while a populated one is selected strictly
+and any missing column is named in a `SharePointFeedError`. This decorator is the
+feed's only column gate: the raw hop composes `source_to_raw` *without*
+`expected_columns`, because a presence check downstream of a projection that
+already guarantees the columns could never fire.
+
+The same decorator **flattens the expanded people**. SharePoint answers an
+expanded lookup as a nested object on the property —
+`{"AssignedReviewer": {"Name": …}}` — and a role nobody holds as a plain `null`
+there, not an object of null members. The slash form the read asks with
+(`AssignedReviewer/Name`) is OData `$select` syntax for *which sub-field to bring
+back*; it says nothing about the response's shape. A tabular carrier has nowhere
+to put a nested cell, so the feed undoes the nesting itself rather than obliging
+every client to do it — the client's contract stays "return the items as
+SharePoint returned them", which is the only contract a client author could
+satisfy without reading this feed's source. A person value that is neither an
+object nor null fails with a `SharePointFeedError` naming the list, item and
+column, and so does an object carrying no `Name`: these columns hold only people
+here, an expanded person carries a claims login, so a `Name`-less object was
+never expanded and reading it as an empty role would hide a broken read. A
+missing `Title` is *not* an error — only the Responsible Party's display name is
+selected at all, and a directory display name is optional even then.
+
+**2. A quiet window runs the same hops as a busy one**, which costs one cast.
+`SchemaCoercion` repairs the types a storage round-trip loses — dates and
+booleans — and deliberately leaves `int`/`float`/`str` alone, so a zero-row batch
+reaches the silver schema gate with its integer column still object-typed and no
+row to give it a type. The feed casts where it already narrows the batch for
+silver, and only when the batch is empty: casting a populated one would hide a
+real dtype breach. Skipping the hop on an empty batch would have been the smaller
+change and the wrong one — a quiet poll is not a different pipeline, and an
+operator reading the run log should see the same steps against the same tables,
+with zero rows.
+
+**3. Silver is the rename and the type contract, and nothing else.** The rename
+is one mechanical rule rather than a curated map: split each source name on word
+boundaries and on `/`, lower-snake-case it (`DueDate` → `due_date`,
+`ResponsibleParty/Title` → `responsible_party_title`). Forty hand-written pairs
+would be forty chances to drift from the list. The rules are equally thin —
+provenance non-null, the item id non-null, and `Status` in the four values the
+review application actually persists. Columns whose constraints live in that
+application get typed and nothing more: a rule the feed cannot justify is one
+that will eventually reject good data.
+
+**4. No "when we saw it" column.** `AppendOnly` compares every non-key column of
+a re-presented row, so a per-read timestamp would make each overlapping re-read
+of an unchanged item look like a changed row. The same reasoning excludes the
+ingestion batch id and the pipeline run id. When we saw it lives in the run log
+and in the returned `ingestion_batch_id` instead.
+
+**5. The watermark is not committed.** `run` returns a `SharePointIngestResult`
+carrying the window, the batch id and the row counts, and leaves the checkpoint
+alone: advancing it vouches for the rows having been *published*, which is the
+gold step's to do.
+
+Two smaller notes. The batch id is
+`f"{list_id}:{watermark.isoformat() if watermark else 'first-load'}"` —
+it identifies the *source window resumed from*, not the run, so a re-drive of a
+failed window mints the same id; and only the GUID travels in it, so no site or
+credential does. And `server_now` comes from the client's own clock
+(`client.server_time()`), never a local `utcnow`: the window bounds a predicate
+the list evaluates, so a skewed local clock silently widens or narrows it. The
+feed states that requirement as a local `CaseListClient` Protocol extending
+`SharePointListClient`, because the upstream seam declares the fetch alone.
+
+**Two provisioning prerequisites**, both recorded rather than solved:
+
+- **`Modified` must be indexed on the list, while it is still small.** It is not
+  one of the 14 columns the Case Review Platform indexes at creation, and
+  SharePoint cannot add an index to a list already past the 5,000-row List View
+  Threshold. A `Modified`-windowed poll works on a small list and starts failing
+  as it grows.
+- **The site URL and list GUID are placeholders in the code.** The review
+  application derives its site from page context and addresses lists by title, so
+  no GUID exists anywhere to copy. The watermark is keyed on the GUID, and a
+  wrong one silently forks the feed's place rather than failing.
+
+Run the bundled fixture pages offline — the feed's `LocalJsonListClient` is
+opt-in via `--sample`, because a production run that forgot its client must
+refuse rather than quietly ingest five fake Cases:
+
+```sh
+python -m pipelines.sharepoint_cases.pipeline --base-dir /tmp/demo --sample
+```
+
+**Needing a client does not cost the feed its ordinary addressing.** `run` takes
+one so a test can pass a fake and `--sample` can pass the fixture replayer, and
+an unattended run — the operator CLI, the orchestrator, both of which reach a
+feed by calling `run(context)` — asks `_resolve_client` for the organisation's:
+
+```sh
+python -m cli run pipelines/sharepoint_cases --base-dir /tmp/demo
+```
+
+There is no organisational client to hand back yet, so that form refuses today
+with a `NoClientError`, categorised `CONFIG` because the fix is in the wiring.
+Both entry points therefore fail the same way, as a caught, categorised failure
+rather than a stack trace. Wiring a real client is a change in one function; it
+is what scheduling this feed waits on, not anything in the dataflow.
+
+The two tables it lands, field by field, are documented in
+[`data-dictionary-sharepoint-cases.md`](data-dictionary-sharepoint-cases.md).
 
 ### `SharePointWriter(site, list_name, auth, strategy=Refresh())`
 

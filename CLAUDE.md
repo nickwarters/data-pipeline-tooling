@@ -9,6 +9,24 @@ core primitives. Architecture is governed by the ADRs in `docs/adr/` and the
 domain language in `CONTEXT.md`; the core primitives are documented in
 [`docs/core-primitives.md`](docs/core-primitives.md).
 
+**This repository holds two projects.** Everything described below is the Python
+data pipeline tooling, which owns the repository root. The Case Review Platform
+frontend — vanilla JavaScript, no build step, deployed to SharePoint — lives
+entirely under [`platform_frontend/`](platform_frontend/) and is governed by its
+own [`CLAUDE.md`](platform_frontend/CLAUDE.md),
+[`CONTEXT.md`](platform_frontend/CONTEXT.md) and
+[`docs/adr/`](platform_frontend/docs/adr/). They were merged into one repository
+so the system can be read and changed in one place; they share a commit gate,
+**not** a toolchain, a domain language, or a release. Two rules follow:
+
+- **Each project's documentation stays with its code.** The frontend's docs are
+  under `platform_frontend/docs/`, not the root `docs/`. Its tests read that tree
+  by path and its prettier configuration resolves through it, so moving those
+  docs breaks both. The root [`docs/README.md`](docs/README.md) links across.
+- **Terms are per-project.** `Case Type` and `Case` in the frontend's CONTEXT.md
+  are that application's vocabulary; do not assume they match this project's
+  `case_review/` domain types without checking both glossaries.
+
 - **Language/runtime:** Python 3.12. The `framework/` package is **import-only**
   (on `sys.path`, never `pip install`ed); `pipelines/` holds runnable scripts.
   Packaging/installing the framework is an **explicit non-goal**.
@@ -56,7 +74,15 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   `tests/pipelines/`, plus `tests/integration/` for tests that span trees (e.g.
   the public-API and framework/domain boundary tests).
   Shared helpers (`tests/_schema_fixtures.py`, `tests/fixtures/`) sit at the
-  `tests/` root. Each test dir is a package (`__init__.py`) so module paths are
+  `tests/` root, as does `tests/conftest.py`, which pins the **local calendar
+  zone to UTC** for the whole suite via an autouse fixture over the
+  `tools.observability.timestamps.local_timezone` seam. Instants are UTC and
+  calendar dates are local, so a test that stamps a run near midnight otherwise
+  answers a question about the box's offset — two `same_day` freshness tests did
+  exactly that and asserted the opposite of their rule at UTC+1, blocking every
+  local commit from a UK box in summer. A test whose subject *is* the conversion
+  overrides the pin by asking for its own zone fixture (autouse is set up first,
+  so a named fixture wins); see [`docs/testing-helpers.md`](docs/testing-helpers.md). Each test dir is a package (`__init__.py`) so module paths are
   unique under pytest's default import mode — no basename collisions. This is
   enforced by convention, not tooling, and had drifted: five `tests/` dirs and
   the three `tools/` package dirs were missing `__init__.py`, with a real
@@ -128,7 +154,15 @@ python3 -m venv .venv
 .venv/bin/python -m cli scaffold --case-type claims # scaffold a Case Type ingest feed (source->raw->silver, identity declared)
 .venv/bin/python -m cli run pipelines/ingest --base-dir /tmp/demo  # operator CLI: run/orchestrate/status/runs/log (see docs/operator-cli.md)
 .venv/bin/pre-commit run --all-files             # lint + format the whole tree on demand
+
+npm ci --prefix platform_frontend                # install the frontend toolchain (once per clone)
+npm --prefix platform_frontend test              # frontend JS suite (node --test)
+.venv/bin/python -m pytest platform_frontend/tests  # frontend Python suite (deploy + scaffold scripts)
 ```
+
+The two `once per clone` steps — `pre-commit install` and `npm ci --prefix
+platform_frontend` — are both required. Without the second, every frontend hook
+fails at commit time with a missing binary rather than a lint error.
 
 **Lint/format/test:** `ruff` is the linter and formatter (config in
 `pyproject.toml`). The `.pre-commit-config.yaml` hooks run `ruff check --fix` then
@@ -139,6 +173,19 @@ same `pyproject.toml` config, so they match a local `ruff` invocation. A third
 hook runs the **full `pytest` suite** whenever any Python file is staged (a
 `language: system` local hook, so it uses the active environment — activate the
 venv before committing); a failing test blocks the commit.
+
+**The two projects are scoped apart, deliberately.** `ruff` and the root `pytest`
+hook both stop at `platform_frontend/`: `extend-exclude` plus `force-exclude` in
+`pyproject.toml` (the second matters because pre-commit passes staged filenames
+explicitly, which otherwise overrides `extend-exclude`), `testpaths` for pytest,
+and an `exclude:` on the hook. The frontend's Python is a JavaScript project's
+helper scripts and is not held to this project's style. In return,
+`.pre-commit-config.yaml` carries four hooks scoped to `platform_frontend/` —
+`eslint --fix` and `prettier --write` (what its `.husky/pre-commit` +
+`lint-staged` ran before nesting silenced them, since git reads hooks only from
+the repository root), plus its `pytest` and `node --test` suites. Adding a check
+for one project means scoping it to that project; an unscoped hook will reach
+into the other.
 
 Run pipelines as **modules from the repo root** (`python -m pipelines.<name>`)
 so the import-only `framework` package resolves on `sys.path`. The framework

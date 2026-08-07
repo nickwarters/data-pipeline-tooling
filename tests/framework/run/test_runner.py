@@ -108,6 +108,10 @@ def test_requirement_within_days_allows_recent_successful_task(tmp_path):
 
 def test_requirement_same_day_requires_success_on_run_date(tmp_path):
     log_path = tmp_path / "runs.log"
+    # 23:59 on the day *before* the run date: same_day() rejects a success one
+    # minute short of it, which is what separates it from within_days(1). The
+    # local zone is UTC here (tests/conftest.py), so the instant's date is the
+    # local date — the conversion is exercised by the uk_summer tests below.
     _record_run(
         log_path,
         pipeline="cases/ingest",
@@ -128,6 +132,7 @@ def test_requirement_same_day_requires_success_on_run_date(tmp_path):
 
 def test_requirement_same_day_allows_success_on_run_date(tmp_path):
     log_path = tmp_path / "runs.log"
+    # The mirror of the test above: 23:59 *on* the run date is accepted.
     _record_run(
         log_path,
         pipeline="cases/ingest",

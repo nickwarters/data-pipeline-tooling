@@ -1,0 +1,3043 @@
+/*
+ * Case Review framework styles.
+ * Design tokens are declared in cora-design-tokens.css (imported below).
+ * All selectors scoped to [data-cora-root] so they cannot leak into
+ * surrounding SharePoint chrome.
+ */
+
+@import url('./cora-design-tokens.css');
+
+/* Scoped reset — :where() keeps specificity at zero so component rules below
+   don't have to fight a high-specificity reset. */
+:where([data-cora-root]) *,
+:where([data-cora-root]) *::before,
+:where([data-cora-root]) *::after {
+  box-sizing: border-box;
+}
+
+/* ── Scoped SharePoint SE reset ──────────────────────────────────────────────
+   We embed via a Content Editor Web Part and render in light DOM, with no
+   Shadow DOM boundary), so SharePoint SE's global CSS (shipped from the master
+   page / core styles) cascades into our cora-* subtree and wins wherever its
+   selectors target an element directly — which beats our root-level inheritance
+   — or out-specify us. Re-establish our own baseline for the properties SP
+   actually leaks, scoped to our root so SharePoint's own chrome is left
+   untouched and keeps the cora- isolation contract.
+
+   The [data-cora-root] prefix lifts these over SP's bare element selectors; the
+   :where() element lists stay at zero specificity so ordinary cora- component
+   rules still win without a fight — no !important needed for the common case.
+   Deliberately conservative: this restates *inherited* text properties and the
+   heavily-styled form controls, and does NOT blanket-reset list markers or
+   block margins, which several components rely on as UA defaults. Enumerate and
+   add further overrides here (with !important only where SP genuinely can't be
+   out-specified) as concrete offenders surface against a real SE page. */
+
+/* Text baseline: SP core styles set font/colour on generic elements (e.g. its
+   own `body`-scoped rules), and an element-level rule beats our inherited
+   baseline on [data-cora-root]. Restate the inherited properties on the subtree so
+   our fonts/colour win back. The token font stacks fall back to a system stack
+   (system-ui / Segoe UI), so on-prem SE with no Google Fonts CDN still renders
+   in a sensible face rather than SP's UI font. */
+[data-cora-root]
+  :where(
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6,
+    p,
+    span,
+    div,
+    li,
+    dt,
+    dd,
+    td,
+    th,
+    label,
+    legend,
+    small,
+    strong,
+    em
+  ) {
+  font-family: inherit;
+  color: inherit;
+}
+
+/* Form controls: SP heavily restyles inputs/buttons/selects/textareas (font,
+   colour, letter-spacing). UA defaults also drop inheritance here. Pull them
+   back to our inherited typography so controls don't render in SP's UI font. */
+[data-cora-root] :where(input, select, textarea, button, optgroup) {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+}
+
+/* Links: SP repaints anchors via `a:link` / `a:visited` (a pseudo-class rule
+   that beats plain inheritance). Restate our accent colour + no-underline
+   baseline at the root scope so links don't come through in SharePoint blue. */
+[data-cora-root] :where(a:link, a:visited) {
+  color: var(--cora-color-accent);
+  text-decoration: none;
+}
+
+/* Tables: SP core styling adds borders, backgrounds and cell padding. Reset the
+   collapse/spacing baseline; per-table rules (e.g. .cora-data-table) still layer
+   their own padding and colour on top. */
+[data-cora-root] :where(table) {
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+
+/* Reduced-motion: disable transitions / animations globally inside the app */
+@media (prefers-reduced-motion: reduce) {
+  :where([data-cora-root]) * {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
+}
+
+:where([data-cora-root]) :focus-visible {
+  outline: var(--cora-focus-outline);
+  outline-offset: var(--cora-focus-offset);
+}
+
+/* Layout shell — full-viewport, no padding. Content centering lives in
+   .cora-page-content so the nav bar can span edge-to-edge naturally. */
+[data-cora-root] {
+  min-height: 100vh;
+  font-family: var(--cora-font-body);
+  font-size: var(--cora-font-size-base);
+  line-height: var(--cora-line-height-base);
+  color: var(--cora-color-on-surface);
+  background: var(--cora-color-bg);
+}
+
+/* Full-viewport breakout. Embedded via a Content Editor Web Part,
+   the app otherwise renders inside the SharePoint page's content well with the
+   suite bar, site header, nav and ribbon left visible around it — a normal web
+   page stuffed into a SharePoint content box. Promote the *real* app root to a
+   fixed, full-viewport layer so it sits over that chrome and the review UI reads
+   as a standalone web page (matches the README intent of removing SharePoint
+   branding). The root owns the vertical scroll and clips horizontal overflow so
+   the SharePoint page never scrolls — the app container does.
+
+   Scoped to `#app` (the id app.js sets on the mount element), NOT every
+   [data-cora-root]: the attribute doubles as a generic scoping/theming hook on
+   inline wrappers (styleguide demos, nested previews) that must stay in normal
+   flow. The id also raises specificity to sit over SP's own positioned chrome.
+   Verified target: Edge Chromium against a SharePoint SE page layout. */
+#app[data-cora-root] {
+  position: fixed;
+  inset: 0;
+  z-index: var(--cora-z-app-root);
+  overflow-x: hidden;
+  overflow-y: auto;
+  /* Reserve the vertical scrollbar's gutter so it doesn't come and go as route
+     content grows and shrinks (e.g. filtering the case table down to a few
+     rows). Without this the scrollbar disappears on short pages, the scroll
+     container widens by the scrollbar width, and centred .cora-page-content
+     re-centres — headings and content nudge sideways. Edge/Chromium
+     supports scrollbar-gutter. */
+  scrollbar-gutter: stable;
+}
+
+/* Centered content wrapper used by all standard routes */
+[data-cora-root] .cora-page-content {
+  max-width: var(--cora-content-max-width-narrow);
+  margin: 0 auto;
+  padding: var(--cora-space-5) var(--cora-space-4) var(--cora-space-6);
+}
+
+/* Full-viewport escape hatch for routes that need to own the entire viewport
+   (e.g. #/question-bank). Cascades to remove .cora-page-content centering. */
+[data-cora-root].cora-fullbleed .cora-page-content {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── Typography ──────────────────────────────────────────────────────────── */
+
+[data-cora-root] h1 {
+  font-family: var(--cora-font-display);
+  font-size: var(--cora-font-size-xl);
+  font-weight: var(--cora-font-weight-bold);
+  line-height: var(--cora-line-height-tight);
+  letter-spacing: var(--cora-tracking-tight);
+  margin: 0 0 var(--cora-space-3);
+}
+
+[data-cora-root] h2 {
+  font-family: var(--cora-font-display);
+  font-size: var(--cora-font-size-lg);
+  font-weight: var(--cora-font-weight-bold);
+  line-height: var(--cora-line-height-snug);
+  letter-spacing: var(--cora-tracking-tight);
+  /* SharePoint SE targets headings directly with high-specificity theme
+     selectors. A concrete, scoped declaration is required here rather than
+     relying on the generic inherited-text reset above. */
+  color: var(--cora-color-on-surface) !important;
+  margin: var(--cora-space-6) 0 var(--cora-space-3);
+}
+
+[data-cora-root] h3 {
+  font-size: var(--cora-font-size-base);
+  font-weight: var(--cora-font-weight-semibold);
+  margin: 0 0 var(--cora-space-2);
+}
+
+[data-cora-root] h4 {
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--cora-tracking-wider);
+  color: var(--cora-color-text-muted);
+  margin: 0 0 var(--cora-space-2);
+}
+
+[data-cora-root] p {
+  margin: 0 0 var(--cora-space-3);
+}
+
+[data-cora-root] code,
+[data-cora-root] .cora-mono {
+  font-family: var(--cora-font-mono);
+  font-size: 0.9em;
+}
+
+/* ── Links ───────────────────────────────────────────────────────────────── */
+
+[data-cora-root] a {
+  color: var(--cora-color-accent);
+  text-decoration: none;
+  transition: color var(--cora-duration-fast) var(--cora-easing-standard);
+}
+
+[data-cora-root] a:hover {
+  text-decoration: underline;
+}
+
+/* ── Buttons — base ──────────────────────────────────────────────────────── */
+
+[data-cora-root] button,
+[data-cora-root] .cora-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cora-space-2);
+  font: inherit;
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-semibold);
+  line-height: 1;
+  color: var(--cora-color-text-on-accent);
+  background: var(--cora-color-accent);
+  border: 1px solid var(--cora-color-accent);
+  border-radius: var(--cora-radius-md);
+  padding: var(--cora-space-2) var(--cora-space-4);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background var(--cora-duration-fast) var(--cora-easing-standard),
+    border-color var(--cora-duration-fast) var(--cora-easing-standard),
+    box-shadow var(--cora-duration-fast) var(--cora-easing-standard);
+}
+
+[data-cora-root] button:hover,
+[data-cora-root] .cora-btn:hover {
+  background: var(--cora-color-accent-hover);
+  border-color: var(--cora-color-accent-hover);
+}
+
+[data-cora-root] button:active,
+[data-cora-root] .cora-btn:active {
+  background: var(--cora-color-accent-active);
+  border-color: var(--cora-color-accent-active);
+}
+
+[data-cora-root] button:focus-visible,
+[data-cora-root] .cora-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--cora-focus-ring);
+}
+
+[data-cora-root] button[disabled],
+[data-cora-root] .cora-btn[disabled],
+[data-cora-root] .cora-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Button variants */
+[data-cora-root] .cora-btn-secondary {
+  color: var(--cora-color-on-surface);
+  background: transparent;
+  border-color: var(--cora-color-border-strong);
+}
+
+[data-cora-root] .cora-btn-secondary:hover {
+  background: var(--cora-color-surface-2);
+  border-color: var(--cora-color-border-strong);
+}
+
+[data-cora-root] .cora-btn-ghost {
+  color: var(--cora-color-on-surface);
+  background: transparent;
+  border-color: transparent;
+}
+
+[data-cora-root] .cora-btn-ghost:hover {
+  background: var(--cora-color-surface-2);
+}
+
+[data-cora-root] .cora-btn-danger {
+  background: var(--cora-color-danger);
+  border-color: var(--cora-color-danger);
+  color: #fff;
+}
+
+[data-cora-root] .cora-btn-danger:hover {
+  background: var(--cora-color-accent-hover);
+  border-color: var(--cora-color-accent-hover);
+}
+
+/* Button sizes */
+[data-cora-root] .cora-btn-sm {
+  font-size: var(--cora-font-size-xs);
+  padding: var(--cora-space-1) var(--cora-space-3);
+}
+
+[data-cora-root] .cora-btn-lg {
+  font-size: var(--cora-font-size-base);
+  padding: var(--cora-space-3) var(--cora-space-5);
+}
+
+/* ── Status badges ───────────────────────────────────────────────────────── */
+
+.cora-badge {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--cora-font-body);
+  font-size: var(--cora-font-size-xs);
+  font-weight: var(--cora-font-weight-semibold);
+  letter-spacing: var(--cora-tracking-wide);
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: var(--cora-radius-sm);
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.cora-badge-open {
+  background: var(--cora-color-info-bg);
+  color: var(--cora-color-info);
+}
+
+.cora-badge-in-progress {
+  background: var(--cora-color-warning-bg);
+  color: var(--cora-color-warning);
+}
+
+.cora-badge-complete {
+  background: var(--cora-color-success-bg);
+  color: var(--cora-color-success);
+}
+
+.cora-badge-overdue {
+  background: var(--cora-color-danger-bg);
+  color: var(--cora-color-danger);
+}
+
+/* ── Banner — reconnecting & conflict surfaces ───────────────────────────── */
+
+.cora-banner {
+  border-radius: var(--cora-radius-md);
+  padding: var(--cora-space-3) var(--cora-space-4);
+  font-size: var(--cora-font-size-sm);
+  border: 1px solid var(--cora-color-border);
+}
+
+.cora-banner-saving,
+.cora-banner-reconnecting {
+  background: var(--cora-color-warning-bg);
+  color: var(--cora-color-warning);
+}
+
+/* ADR-0021 fallback notice (#513). In the header's normal flow, not fixed like
+   the save-status banner: it qualifies the whole page for as long as it is open. */
+.cora-banner-warning {
+  background: var(--cora-color-warning-bg);
+  color: var(--cora-color-warning);
+  border-color: var(--cora-color-warning);
+  margin-bottom: var(--cora-space-3);
+}
+
+.cora-banner-conflict {
+  background: var(--cora-color-danger-bg);
+  color: var(--cora-color-danger);
+  border-color: var(--cora-color-danger);
+  display: flex;
+  align-items: center;
+  gap: var(--cora-space-3);
+  font-size: var(--cora-font-size-base);
+  font-weight: var(--cora-font-weight-medium);
+}
+
+.cora-banner-text {
+  margin: 0;
+  flex: 1;
+}
+
+.cora-banner-reload {
+  background: var(--cora-color-danger);
+  border-color: var(--cora-color-danger);
+}
+
+.cora-banner-reload:hover {
+  background: var(--cora-color-accent-active);
+  border-color: var(--cora-color-accent-active);
+}
+
+/* ── Dashboard ───────────────────────────────────────────────────────────── */
+
+.cora-case-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--cora-space-5);
+  display: grid;
+  gap: var(--cora-space-2);
+}
+
+.cora-case-row {
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  padding: var(--cora-space-3) var(--cora-space-4);
+  box-shadow: var(--cora-shadow-sm);
+}
+
+/* ── Dashboard table filter toolbar ──────────────────────────────────────── */
+
+/* The filter row above the case table (free-text filter + status select). Lay
+   the two controls out on one line and give them the app's shared input
+   treatment — surface fill, hairline border, accent focus ring — so they match
+   the people picker and the other form controls. */
+[data-cora-root] .cora-case-table-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cora-space-2);
+  margin: 0 0 var(--cora-space-3);
+}
+
+[data-cora-root] .cora-case-table-filter,
+[data-cora-root] .cora-case-table-status-filter {
+  font: inherit;
+  padding: var(--cora-space-2) var(--cora-space-3);
+  color: inherit;
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  transition: border-color var(--cora-duration-fast) var(--cora-easing-standard);
+}
+
+/* The free-text filter grows to fill the row; the status select stays compact. */
+[data-cora-root] .cora-case-table-filter {
+  flex: 1 1 16rem;
+  min-width: 12rem;
+}
+
+[data-cora-root] .cora-case-table-status-filter {
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+
+[data-cora-root] .cora-case-table-filter:focus,
+[data-cora-root] .cora-case-table-status-filter:focus {
+  outline: none;
+  border-color: var(--cora-color-accent);
+  box-shadow: var(--cora-focus-ring);
+}
+
+/* ── Dashboard table primitive ───────────────────────────────────────────── */
+
+[data-cora-root] .cora-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: var(--cora-space-3) 0;
+  font-size: var(--cora-font-size-sm);
+  background: var(--cora-color-surface);
+}
+
+[data-cora-root] .cora-data-table th,
+[data-cora-root] .cora-data-table td {
+  text-align: left;
+  padding: var(--cora-space-2) var(--cora-space-3);
+  border-bottom: 1px solid var(--cora-color-border);
+  vertical-align: top;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-cora-root] .cora-data-table thead th {
+  background: var(--cora-color-surface-2);
+  font-size: var(--cora-font-size-xs);
+  font-weight: var(--cora-font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--cora-tracking-wider);
+  color: var(--cora-color-text-muted);
+  border-bottom: 2px solid var(--cora-color-border);
+}
+
+[data-cora-root] .cora-data-table thead th button {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+
+[data-cora-root]
+  .cora-data-table
+  thead
+  th[aria-sort='ascending']
+  button::after {
+  content: ' ▲';
+  color: var(--cora-color-accent);
+}
+
+[data-cora-root]
+  .cora-data-table
+  thead
+  th[aria-sort='descending']
+  button::after {
+  content: ' ▼';
+  color: var(--cora-color-accent);
+}
+
+[data-cora-root] .cora-data-table tbody tr:hover td {
+  background: var(--cora-color-surface-2);
+}
+
+[data-cora-root] .cora-data-table tbody tr:focus,
+[data-cora-root] .cora-data-table tbody td:focus {
+  outline: var(--cora-focus-outline);
+  outline-offset: -2px;
+}
+
+/* ── My Team workload ──────────────────────────────────────────────────── */
+
+[data-cora-root] .cora-my-team-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--cora-space-4);
+  padding-bottom: var(--cora-space-4);
+  border-bottom: 1px solid var(--cora-color-border);
+}
+
+[data-cora-root] .cora-my-team-header h1 {
+  margin-bottom: var(--cora-space-1);
+}
+
+[data-cora-root] .cora-my-team-header p,
+[data-cora-root] .cora-my-team-roster-note {
+  color: var(--cora-color-text-muted);
+}
+
+[data-cora-root] .cora-my-team-header button {
+  flex: 0 0 auto;
+}
+
+[data-cora-root] .cora-my-team-roster-note {
+  max-width: 48rem;
+  padding-left: var(--cora-space-3);
+  border-left: 3px solid var(--cora-color-border-strong);
+  font-size: var(--cora-font-size-sm);
+}
+
+[data-cora-root] .cora-my-team-table {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+[data-cora-root] .cora-data-table .cora-workload-row--total td {
+  background: var(--cora-color-surface-2);
+  border-top: 2px solid var(--cora-color-border-strong);
+  font-weight: var(--cora-font-weight-bold);
+}
+
+/* Overdue rows, on every Case-shaped table: a tinted cell background plus a
+   danger rule down the leading edge. Two class hooks, one treatment.
+   `cora-overdue` is what the Responsible Party remediation table puts on a
+   breached row; `cora-case-row--overdue` is what `overdueCaseRowClass()` in
+   views/case-columns.js puts on the Dashboard reviewer worklist, Team Cases and
+   Journey Cases rows. The modifier had no rule at all until #542, so those
+   three tables emitted the class and rendered no differently — grouped here
+   rather than duplicated so the four tables cannot drift apart again. */
+[data-cora-root] .cora-overdue td,
+[data-cora-root] .cora-case-row--overdue td {
+  background: var(--cora-color-danger-bg);
+}
+
+[data-cora-root] .cora-overdue td:first-child,
+[data-cora-root] .cora-case-row--overdue td:first-child {
+  border-left: 3px solid var(--cora-color-danger);
+}
+
+.cora-allocation-btn {
+  margin-top: var(--cora-space-3);
+}
+
+.cora-allocation-empty {
+  color: var(--cora-color-text-muted);
+  font-style: italic;
+}
+
+/* ── Owner summary cards ─────────────────────────────────────────────────── */
+
+.cora-owner-summary-heading {
+  margin-top: var(--cora-space-7);
+}
+
+.cora-owner-card {
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  padding: var(--cora-space-4);
+  margin-bottom: var(--cora-space-3);
+  box-shadow: var(--cora-shadow-sm);
+}
+
+.cora-owner-card-title {
+  margin-top: 0;
+}
+
+.cora-owner-stats {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--cora-space-1) var(--cora-space-4);
+  margin: 0;
+}
+
+.cora-owner-stats dt {
+  color: var(--cora-color-text-muted);
+}
+
+.cora-owner-stats dd {
+  margin: 0;
+  font-weight: var(--cora-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.cora-owner-overdue {
+  color: var(--cora-color-danger);
+}
+
+/* ── Controls: outstanding appeals ───────────────────────────────────────── */
+
+.cora-controls-appeals {
+  margin-top: var(--cora-space-7);
+}
+
+/* ── Dashboard: role-scoped KPI strip ────────────────────────────────────────
+   Every rule is scoped under `.cora-kpi-strip` so it out-specifies the global
+   `[data-cora-root] button` accent styling (lanes and tiles are <button>s and
+   must NOT become solid accent bars) and does not collide with the unrelated
+   `.cora-kpi-tile` grid tiles elsewhere in this sheet. Tone colour is an accent
+   only — a left border on each tile — never a fill behind text. */
+
+[data-cora-root] .cora-kpi-strip {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cora-space-4);
+  margin: 0 0 var(--cora-space-6);
+}
+
+[data-cora-root] .cora-kpi-strip .cora-kpi-lane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cora-space-3);
+}
+
+/* A quiet text toggle — not the app's solid accent button. */
+[data-cora-root] .cora-kpi-strip .cora-kpi-lane__header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--cora-space-2);
+  width: 100%;
+  padding: var(--cora-space-1) 0;
+  background: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--cora-color-on-surface);
+}
+
+[data-cora-root] .cora-kpi-strip .cora-kpi-lane__header:hover {
+  background: none;
+  color: var(--cora-color-accent);
+}
+
+[data-cora-root] .cora-kpi-strip .cora-kpi-caret {
+  color: var(--cora-color-text-muted);
+  font-size: var(--cora-font-size-xs);
+}
+
+[data-cora-root] .cora-kpi-strip .cora-kpi-lane__role {
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-semibold);
+  letter-spacing: var(--cora-tracking-wider);
+  text-transform: uppercase;
+}
+
+[data-cora-root] .cora-kpi-strip .cora-kpi-lane__scope {
+  color: var(--cora-color-text-muted);
+  font-size: var(--cora-font-size-sm);
+  font-weight: normal;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+[data-cora-root] .cora-kpi-strip .cora-kpi-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cora-space-3);
+}
+
+/* A plain surface card — the tone accent is the left border, set below. */
+[data-cora-root] .cora-kpi-strip .cora-kpi-tile {
+  --cora-kpi-tone: var(--cora-color-border);
+  display: block;
+  min-width: 12rem;
+  padding: var(--cora-space-3) var(--cora-space-4);
+  background: var(--cora-color-surface);
+  color: var(--cora-color-on-surface);
+  border: 1px solid var(--cora-color-border);
+  border-left: 4px solid var(--cora-kpi-tone);
+  border-radius: var(--cora-radius-md);
+  box-shadow: var(--cora-shadow-sm);
+  text-align: left;
+}
+
+[data-cora-root] .cora-kpi-strip button.cora-kpi-tile {
+  cursor: pointer;
+}
+
+[data-cora-root] .cora-kpi-strip button.cora-kpi-tile:hover {
+  background: var(--cora-color-surface);
+  border-color: var(--cora-color-border);
+  border-left-color: var(--cora-kpi-tone);
+  box-shadow: var(--cora-shadow-md, var(--cora-shadow-sm));
+}
+
+[data-cora-root] .cora-kpi-strip .cora-kpi-tile__face {
+  display: flex;
+  align-items: baseline;
+  gap: var(--cora-space-2);
+}
+
+[data-cora-root] .cora-kpi-strip .cora-kpi-tile__count {
+  font-size: var(--cora-font-size-xl);
+  font-weight: var(--cora-font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+[data-cora-root] .cora-kpi-strip .cora-kpi-tile__label {
+  color: var(--cora-color-text-muted);
+}
+
+[data-cora-root] .cora-kpi-strip .cora-kpi-tile__caret {
+  margin-left: auto;
+  color: var(--cora-color-text-muted);
+  font-size: var(--cora-font-size-xs);
+}
+
+/* Tone accents — the left border keys each worklist to its role/reason. */
+[data-cora-root] .cora-kpi-strip .cora-kpi-tile--overdue {
+  --cora-kpi-tone: var(--cora-color-danger);
+}
+[data-cora-root] .cora-kpi-strip .cora-kpi-tile--awaiting {
+  --cora-kpi-tone: var(--cora-color-accent);
+}
+[data-cora-root] .cora-kpi-strip .cora-kpi-tile--progress {
+  --cora-kpi-tone: var(--cora-color-border);
+}
+[data-cora-root] .cora-kpi-strip .cora-kpi-tile--appeals {
+  --cora-kpi-tone: var(--cora-color-controls, #7c3aed);
+}
+[data-cora-root] .cora-kpi-strip .cora-kpi-tile--at-risk {
+  --cora-kpi-tone: var(--cora-color-warning);
+}
+[data-cora-root] .cora-kpi-strip .cora-kpi-tile--unassigned {
+  --cora-kpi-tone: var(--cora-color-success);
+}
+
+[data-cora-root] .cora-kpi-strip .cora-kpi-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cora-space-1);
+  margin-top: var(--cora-space-3);
+  padding-top: var(--cora-space-3);
+  border-top: 1px dashed var(--cora-color-border);
+}
+
+[data-cora-root] .cora-kpi-strip .cora-kpi-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: var(--cora-space-3);
+}
+
+[data-cora-root] .cora-kpi-strip .cora-kpi-row--caseType {
+  grid-template-columns: auto 1fr auto;
+}
+
+[data-cora-root] .cora-kpi-strip .cora-kpi-row__label {
+  color: var(--cora-color-text-muted);
+}
+
+[data-cora-root] .cora-kpi-strip .cora-kpi-row__track {
+  height: 0.4rem;
+  background: var(--cora-color-surface-2, var(--cora-color-border));
+  border-radius: var(--cora-radius-sm);
+  overflow: hidden;
+}
+
+[data-cora-root] .cora-kpi-strip .cora-kpi-row__bar {
+  display: block;
+  height: 100%;
+  background: var(--cora-kpi-tone, var(--cora-color-accent));
+}
+
+[data-cora-root] .cora-kpi-strip .cora-kpi-row__count {
+  font-weight: var(--cora-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Action Centre worklist ──────────────────────────────────────────────────
+   One reason-grouped, count-driven worklist replacing the stack of per-role
+   tables. Each reason carries a tone (mirrors its KPI tile) used for the dot,
+   the count badge and the breached "waiting" age. `appeal` has no semantic
+   token, so a fixed accessible purple is declared here with a dark variant. */
+
+.cora-action-centre {
+  --cora-ac-overdue: var(--cora-color-danger);
+  --cora-ac-awaiting: var(--cora-color-info);
+  --cora-ac-review: #0b7285;
+  --cora-ac-appeal: #6d3fbf;
+  display: block;
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  box-shadow: var(--cora-shadow-sm);
+  margin-bottom: var(--cora-space-6);
+  overflow: hidden;
+}
+
+@media (prefers-color-scheme: dark) {
+  .cora-action-centre {
+    --cora-ac-review: #4bb3c9;
+    --cora-ac-appeal: #b18cf0;
+  }
+}
+
+:root[data-theme='dark'] .cora-action-centre {
+  --cora-ac-review: #4bb3c9;
+  --cora-ac-appeal: #b18cf0;
+}
+
+:root[data-theme='light'] .cora-action-centre {
+  --cora-ac-review: #0b7285;
+  --cora-ac-appeal: #6d3fbf;
+}
+
+.cora-ac-header {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--cora-space-2) var(--cora-space-3);
+  padding: var(--cora-space-4);
+  border-bottom: 1px solid var(--cora-color-border);
+}
+
+.cora-ac-title {
+  margin: 0;
+  font-size: var(--cora-font-size-md);
+}
+
+.cora-ac-subtitle {
+  color: var(--cora-color-text-muted);
+  font-size: var(--cora-font-size-sm);
+}
+
+.cora-ac-toggle {
+  margin-left: auto;
+  display: inline-flex;
+  background: var(--cora-color-surface-2);
+  border-radius: var(--cora-radius-pill);
+  padding: var(--cora-space-0-5);
+}
+
+/* The Action Centre's controls are <button>s, so they must out-specify the
+   `[data-cora-root] button` reset (0,1,1) that otherwise paints them solid
+   accent. Scoping each under [data-cora-root] lifts them to 0,2,0, and the
+   hover/focus states are re-declared so the reset's `button:hover` cannot win
+   them back (same technique as the tabs). */
+[data-cora-root] .cora-ac-toggle-btn,
+[data-cora-root] .cora-ac-toggle-btn:hover {
+  border: 0;
+  background: transparent;
+  color: var(--cora-color-text-muted);
+  font: inherit;
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-medium);
+  padding: var(--cora-space-1) var(--cora-space-3);
+  border-radius: var(--cora-radius-pill);
+  cursor: pointer;
+}
+
+[data-cora-root] .cora-ac-toggle-btn--on,
+[data-cora-root] .cora-ac-toggle-btn--on:hover {
+  background: var(--cora-color-on-surface);
+  color: var(--cora-color-surface);
+  font-weight: var(--cora-font-weight-semibold);
+}
+
+.cora-ac-empty {
+  padding: var(--cora-space-5);
+  color: var(--cora-color-text-muted);
+  text-align: center;
+}
+
+.cora-ac-group {
+  border-top: 1px solid var(--cora-color-border);
+}
+
+.cora-ac-group:first-of-type {
+  border-top: 0;
+}
+
+[data-cora-root] .cora-ac-group-header,
+[data-cora-root] .cora-ac-group-header:hover {
+  display: flex;
+  align-items: center;
+  gap: var(--cora-space-2);
+  width: 100%;
+  border: 0;
+  background: var(--cora-color-surface-2);
+  color: var(--cora-color-on-surface);
+  font: inherit;
+  font-weight: var(--cora-font-weight-regular);
+  text-align: left;
+  padding: var(--cora-space-2) var(--cora-space-4);
+  cursor: pointer;
+}
+
+.cora-ac-caret {
+  color: var(--cora-color-text-muted);
+  width: 1em;
+}
+
+.cora-ac-dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: var(--cora-radius-pill);
+  flex: none;
+}
+
+.cora-ac-dot--overdue {
+  background: var(--cora-ac-overdue);
+}
+.cora-ac-dot--awaiting {
+  background: var(--cora-ac-awaiting);
+}
+.cora-ac-dot--review {
+  background: var(--cora-ac-review);
+}
+.cora-ac-dot--appeal {
+  background: var(--cora-ac-appeal);
+}
+
+.cora-ac-group-label {
+  font-weight: var(--cora-font-weight-semibold);
+}
+
+.cora-ac-count {
+  color: var(--cora-color-text-on-accent);
+  font-size: var(--cora-font-size-xs);
+  font-weight: var(--cora-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  border-radius: var(--cora-radius-pill);
+  padding: 0 var(--cora-space-2);
+  min-width: 1.5rem;
+  text-align: center;
+}
+
+.cora-ac-count--overdue {
+  background: var(--cora-ac-overdue);
+}
+.cora-ac-count--awaiting {
+  background: var(--cora-ac-awaiting);
+}
+.cora-ac-count--review {
+  background: var(--cora-ac-review);
+}
+.cora-ac-count--appeal {
+  background: var(--cora-ac-appeal);
+}
+
+.cora-ac-peek {
+  color: var(--cora-color-text-muted);
+  font-size: var(--cora-font-size-sm);
+  margin-left: var(--cora-space-2);
+}
+
+.cora-ac-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cora-ac-row {
+  display: flex;
+  align-items: center;
+  gap: var(--cora-space-3);
+  padding: var(--cora-space-3) var(--cora-space-4);
+  border-top: 1px solid var(--cora-color-border);
+}
+
+.cora-ac-row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.cora-ac-row-ref {
+  font-weight: var(--cora-font-weight-semibold);
+}
+
+.cora-ac-row-sub {
+  color: var(--cora-color-text-muted);
+  font-size: var(--cora-font-size-sm);
+}
+
+.cora-ac-chip {
+  background: var(--cora-color-surface-2);
+  color: var(--cora-color-text-muted);
+  font-size: var(--cora-font-size-xs);
+  border-radius: var(--cora-radius-sm);
+  padding: var(--cora-space-0-5) var(--cora-space-2);
+  white-space: nowrap;
+}
+
+.cora-ac-wait {
+  font-size: var(--cora-font-size-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cora-ac-wait--overdue {
+  color: var(--cora-ac-overdue);
+  font-weight: var(--cora-font-weight-semibold);
+}
+.cora-ac-wait--awaiting {
+  color: var(--cora-ac-awaiting);
+  font-weight: var(--cora-font-weight-semibold);
+}
+.cora-ac-wait--review {
+  color: var(--cora-ac-review);
+  font-weight: var(--cora-font-weight-semibold);
+}
+.cora-ac-wait--appeal {
+  color: var(--cora-ac-appeal);
+  font-weight: var(--cora-font-weight-semibold);
+}
+
+[data-cora-root] .cora-ac-open {
+  border: 1px solid var(--cora-color-border-strong);
+  background: var(--cora-color-surface);
+  color: var(--cora-color-accent);
+  font: inherit;
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-semibold);
+  border-radius: var(--cora-radius-md);
+  padding: var(--cora-space-1) var(--cora-space-3);
+  cursor: pointer;
+}
+
+[data-cora-root] .cora-ac-open:hover {
+  background: var(--cora-color-surface-2);
+  border-color: var(--cora-color-border-strong);
+}
+
+.cora-ac-more-row {
+  padding: var(--cora-space-3) var(--cora-space-4);
+  border-top: 1px solid var(--cora-color-border);
+  text-align: center;
+}
+
+[data-cora-root] .cora-ac-more,
+[data-cora-root] .cora-ac-more:hover {
+  border: 0;
+  background: transparent;
+  color: var(--cora-color-accent);
+  font: inherit;
+  font-weight: var(--cora-font-weight-semibold);
+  cursor: pointer;
+}
+
+/* ── Question list ───────────────────────────────────────────────────────── */
+
+/* Two-level grouping headings: a `category` (top, presentation-only)
+   heading above its nested Question Group headings. */
+.cora-question-category-heading {
+  margin: var(--cora-space-5) 0 var(--cora-space-2);
+  padding-bottom: var(--cora-space-1);
+  border-bottom: 2px solid var(--cora-color-border);
+  font-size: var(--cora-font-size-lg, 1.125rem);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.cora-question-group-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cora-space-3);
+  margin: var(--cora-space-4) 0 var(--cora-space-2);
+}
+
+.cora-question-group-heading h4 {
+  margin: 0;
+  font-weight: var(--cora-font-weight-semibold);
+  color: var(--cora-color-text-muted, inherit);
+}
+
+/* The Group Outcome: the labelled select in a Question Group heading that sets
+   one Outcome wording across the whole group. Shown only on groups the Case
+   Type opted in with `allowBulkOutcome`. */
+.cora-group-outcome-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cora-space-2);
+  font-size: var(--cora-font-size-sm, 0.875rem);
+}
+
+.cora-group-outcome {
+  font: inherit;
+  padding: var(--cora-space-1) var(--cora-space-2);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-sm, 4px);
+  background: var(--cora-color-surface);
+}
+
+/* Review-tab question cards. Brought in line with the other Sections' card
+   language: a surface fill and the shared small elevation, so they read as
+   raised cards rather than flat outlined boxes on the page canvas. The chrome
+   sits on the wrapper rather than on the fieldset because a legend paints on
+   its own fieldset's border and would straddle the card edge. */
+.cora-question-card {
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  box-shadow: var(--cora-shadow-sm);
+  padding: var(--cora-space-3) var(--cora-space-4);
+  margin: 0 0 var(--cora-space-3);
+}
+
+.cora-question {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.cora-question legend {
+  font-weight: var(--cora-font-weight-semibold);
+  padding: 0;
+  margin-bottom: var(--cora-space-2);
+}
+
+.cora-question label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cora-space-1);
+  margin-right: var(--cora-space-4);
+  cursor: pointer;
+}
+
+/* Sentence-length single-option answers (e.g. `outcome` wordings): stack the
+   options as full-width cards instead of the default inline pill layout, so
+   long text wraps legibly rather than crowding onto one line. */
+.cora-question-options-long label {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--cora-space-2);
+  width: 100%;
+  margin-right: 0;
+  margin-bottom: var(--cora-space-2);
+  padding: var(--cora-space-2) var(--cora-space-3);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  background: var(--cora-color-surface);
+  cursor: pointer;
+}
+
+.cora-question-options-long label:last-child {
+  margin-bottom: 0;
+}
+
+.cora-question-options-long label input {
+  margin-top: 3px;
+  flex: 0 0 auto;
+}
+
+.cora-question-options-long label span {
+  white-space: normal;
+  line-height: var(--cora-line-height-base);
+}
+
+.cora-question-options-long label:hover {
+  border-color: var(--cora-color-accent);
+}
+
+.cora-question-options-long label:has(input:checked) {
+  border-color: var(--cora-color-accent);
+  background: var(--cora-color-accent-muted);
+}
+
+.cora-question-options-long label:has(input:focus-visible) {
+  outline: var(--cora-focus-outline);
+  outline-offset: var(--cora-focus-offset);
+}
+
+.cora-question-options-long label:has(input:disabled) {
+  opacity: 0.7;
+  cursor: default;
+}
+
+/* ── Remediation panels & section ────────────────────────────────────────── */
+
+.cora-remediation-panel {
+  margin-top: var(--cora-space-3);
+  padding: var(--cora-space-2) var(--cora-space-3);
+  background: var(--cora-color-danger-bg);
+  border-left: 3px solid var(--cora-color-danger);
+  border-radius: var(--cora-radius-sm);
+}
+
+.cora-remediation-panel summary {
+  cursor: pointer;
+  font-weight: var(--cora-font-weight-medium);
+  color: var(--cora-color-danger);
+}
+
+.cora-remediation-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: var(--cora-space-3);
+}
+
+.cora-remediation-item {
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  box-shadow: var(--cora-shadow-sm);
+  padding: var(--cora-space-3) var(--cora-space-4);
+}
+
+.cora-remediation-group {
+  font-size: var(--cora-font-size-xs);
+  font-weight: var(--cora-font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--cora-tracking-wider);
+  color: var(--cora-color-text-muted);
+  margin: 0 0 var(--cora-space-1);
+}
+
+.cora-remediation-question {
+  font-weight: var(--cora-font-weight-medium);
+  margin: 0 0 var(--cora-space-1);
+}
+
+.cora-remediation-answer {
+  color: var(--cora-color-danger);
+  margin: 0 0 var(--cora-space-2);
+}
+
+/* ── Person Issue Capture Field (chip + clear) ────────────────────────────── */
+
+/* Set: the chosen person named, with a clear button to choose again. */
+.cora-capture-person-selected {
+  display: flex;
+  align-items: center;
+  gap: var(--cora-space-2);
+}
+
+.cora-capture-person-current {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cora-space-1);
+  padding: var(--cora-space-1) var(--cora-space-3);
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-medium);
+  color: var(--cora-color-on-surface);
+  background: var(--cora-color-surface-2);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-pill, 999px);
+}
+
+.cora-capture-person-current::before {
+  content: '\1F464'; /* 👤 */
+}
+
+.cora-capture-person-clear {
+  display: inline-flex;
+  padding: var(--cora-space-1);
+  font: inherit;
+  font-size: var(--cora-font-size-xs);
+  line-height: 1;
+  color: var(--cora-color-text-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--cora-radius-sm);
+  cursor: pointer;
+}
+
+.cora-capture-person-clear:hover,
+.cora-capture-person-clear:focus-visible {
+  color: var(--cora-color-danger);
+  outline: none;
+}
+
+/* ── Responsible Party (Case-level, foot of the Issues tab) ───────────────── */
+
+/* Set once for the whole Case rather than per failure, so it sits apart from
+   the failure list with a rule above it. */
+.cora-responsible-party-field {
+  display: block;
+  margin: var(--cora-space-5) 0 0;
+  padding: var(--cora-space-3) 0 0;
+  border-top: 1px solid var(--cora-color-border);
+}
+
+.cora-responsible-party-label {
+  margin: 0 0 var(--cora-space-2);
+  font-size: var(--cora-font-size-xs);
+  font-weight: var(--cora-font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--cora-color-text-muted);
+}
+
+/* The person currently named, with the picker still below it: choosing again
+   is how a wrong choice is corrected. */
+.cora-responsible-party-current {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cora-space-1);
+  margin: 0 0 var(--cora-space-2);
+  padding: var(--cora-space-1) var(--cora-space-3);
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-medium);
+  color: var(--cora-color-on-surface);
+  background: var(--cora-color-surface-2);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-pill, 999px);
+}
+
+/* Read-only once the actions are sent: the person named is who they went to. */
+.cora-responsible-party-value {
+  margin: var(--cora-space-5) 0 0;
+  padding: var(--cora-space-3) 0 0;
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+  border-top: 1px solid var(--cora-color-border);
+}
+
+/* The per-failure "Is remediation required?" decision, which gates whether the
+   Remediation Actions below it render at all. A fieldset for the grouping its
+   two radios need, stripped of the UA border/padding so it reads as the same
+   label-over-control idiom as the free-form box; the options sit on one row
+   because there are only ever two. */
+.cora-remediation-required {
+  border: 0;
+  padding: 0;
+  margin: var(--cora-space-3) 0 0;
+}
+
+.cora-remediation-required-label {
+  padding: 0;
+  margin-bottom: var(--cora-space-1);
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+}
+
+.cora-remediation-required-option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cora-space-1);
+  margin-right: var(--cora-space-4);
+}
+
+.cora-remediation-required-value {
+  margin: var(--cora-space-2) 0 0;
+}
+
+/* The "Remediation Actions" caption that heads the reviewer-selectable
+   options on a failed item, separating them from the answer/detail rows above. */
+.cora-remediation-actions-heading {
+  font-size: var(--cora-font-size-xs);
+  font-weight: var(--cora-font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--cora-tracking-wider);
+  color: var(--cora-color-text-muted);
+  margin: var(--cora-space-3) 0 var(--cora-space-2);
+}
+
+.cora-remediation-actions {
+  margin: 0;
+  padding-left: var(--cora-space-5);
+  display: grid;
+  gap: var(--cora-space-2);
+}
+
+/* Reviewer-selectable Remediation Actions: checkboxes replace the
+   old static list, so drop the bullet indent when a checkbox is present. */
+.cora-remediation-action {
+  list-style: none;
+  margin-left: calc(-1 * var(--cora-space-5));
+}
+
+.cora-remediation-action label {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--cora-space-2);
+}
+
+.cora-remediation-freeform {
+  display: grid;
+  gap: var(--cora-space-1);
+  margin-top: var(--cora-space-2);
+}
+
+.cora-remediation-freeform-label {
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+}
+
+.cora-remediation-freeform-value {
+  margin: var(--cora-space-2) 0 0;
+}
+
+/* ── Issues tab — fill-in fields & Issue Capture accordion ───────────────── */
+
+/* The capture and free-form controls a Reviewer fills in on a failed item. They
+   previously fell back to browser defaults; give them the app's shared input
+   treatment (surface fill, hairline border, accent focus ring) so they match the
+   Notes and dashboard-filter controls. */
+[data-cora-root] .cora-capture-input,
+[data-cora-root] .cora-remediation-freeform-input {
+  font: inherit;
+  width: 100%;
+  padding: var(--cora-space-2) var(--cora-space-3);
+  color: inherit;
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  transition: border-color var(--cora-duration-fast) var(--cora-easing-standard);
+}
+
+[data-cora-root] textarea.cora-capture-input,
+[data-cora-root] textarea.cora-remediation-freeform-input {
+  min-height: 4rem;
+  resize: vertical;
+}
+
+[data-cora-root] select.cora-capture-input {
+  cursor: pointer;
+}
+
+[data-cora-root] .cora-capture-input:focus,
+[data-cora-root] .cora-remediation-freeform-input:focus {
+  outline: none;
+  border-color: var(--cora-color-accent);
+  box-shadow: var(--cora-focus-ring);
+}
+
+/* Field groups: a small-caps-ish label caption hugging its control. */
+[data-cora-root] .cora-capture-label {
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-semibold);
+  color: var(--cora-color-text-muted);
+}
+
+/* A capture field whose caption is a <legend>, because the field is a set of
+   radios rather than one control. A fieldset carries a border, padding and a
+   min-inline-size of its content by default; strip those so it lays out like
+   the <label>-wrapped fields beside it, and give the legend the gap the grid
+   would otherwise have provided (a rendered legend is not a grid item). */
+[data-cora-root] fieldset.cora-capture-field,
+[data-cora-root] fieldset.cora-general-question {
+  display: block;
+  min-inline-size: 0;
+  border: 0;
+}
+
+[data-cora-root] legend.cora-capture-label {
+  padding: 0;
+  margin-bottom: var(--cora-space-1);
+}
+
+/* Radio-typed capture fields: inline option chips rather than a stacked list. */
+[data-cora-root] .cora-capture-radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cora-space-2) var(--cora-space-4);
+}
+
+[data-cora-root] .cora-capture-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cora-space-1);
+  cursor: pointer;
+}
+
+/* Each Issue Capture Group is a collapsible accordion section: a framed panel
+   with a full-width disclosure header and a padded body of fields. */
+[data-cora-root] .cora-capture-group {
+  margin-top: var(--cora-space-3);
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  overflow: hidden; /* clip the header fill to the rounded corners */
+}
+
+/* The header is a disclosure button, not a CTA. Override the global button
+   reset (which would paint it as a solid accent pill) with a quiet recessed
+   accordion header carrying a rotating disclosure triangle. */
+[data-cora-root] .cora-capture-group-header {
+  display: flex;
+  align-items: center;
+  gap: var(--cora-space-2);
+  width: 100%;
+  margin: 0;
+  padding: var(--cora-space-2) var(--cora-space-3);
+  font-family: var(--cora-font-display);
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-semibold);
+  letter-spacing: var(--cora-tracking-wide);
+  text-align: left;
+  color: var(--cora-color-on-surface);
+  background: var(--cora-color-surface-2);
+  border: none;
+  border-radius: 0;
+  cursor: pointer;
+}
+
+[data-cora-root] .cora-capture-group-header:hover {
+  background: var(--cora-color-border);
+  color: var(--cora-color-on-surface);
+}
+
+/* Disclosure triangle: points right when collapsed, down when expanded. */
+[data-cora-root] .cora-capture-group-header::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 0;
+  height: 0;
+  border-left: 5px solid currentColor;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transition: transform var(--cora-duration-fast) var(--cora-easing-standard);
+}
+
+[data-cora-root] .cora-capture-group-header[aria-expanded='true']::before {
+  transform: rotate(90deg);
+}
+
+[data-cora-root] .cora-capture-group-header:focus-visible {
+  outline: var(--cora-focus-outline);
+  outline-offset: calc(-1 * var(--cora-focus-offset));
+  box-shadow: none;
+}
+
+/* The fields the header discloses form the accordion body. There is no body
+   wrapper element, so pad each field and let the last one close the panel. */
+[data-cora-root] .cora-capture-field {
+  display: grid;
+  gap: var(--cora-space-1);
+  padding: var(--cora-space-3) var(--cora-space-3) 0;
+}
+
+[data-cora-root] .cora-capture-field:last-child {
+  padding-bottom: var(--cora-space-3);
+}
+
+/* General Questions: a Case Type's non-outcome-driving fields, separated from
+   the Applicable Questions by a rule (either side, per `generalQuestionsPlacement`).
+   The Questions panel is a `1fr var(--cora-progress-rail-width)` grid with a
+   sticky progress rail; these render outside it, so reserve the rail's width to
+   keep both columns of content left-aligned. */
+[data-cora-root] .cora-general-questions-rule {
+  margin: var(--cora-space-5)
+    calc(var(--cora-progress-rail-width) + var(--cora-space-5))
+    var(--cora-space-5) 0;
+  border: 0;
+  border-top: 1px solid var(--cora-color-border);
+}
+
+[data-cora-root] .cora-general-questions {
+  display: grid;
+  gap: var(--cora-space-3);
+  margin-right: calc(var(--cora-progress-rail-width) + var(--cora-space-5));
+}
+
+[data-cora-root] .cora-general-questions-heading {
+  margin: 0;
+  font-size: var(--cora-font-size-lg, 1.125rem);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Each question is a label hugging its shared capture control. */
+[data-cora-root] .cora-general-question {
+  display: grid;
+  gap: var(--cora-space-1);
+}
+
+/* Read-only capture rendering (Summary): heading + static label:value lines. */
+[data-cora-root] .cora-capture-group-heading {
+  margin: 0;
+  padding: var(--cora-space-2) var(--cora-space-3);
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-semibold);
+  color: var(--cora-color-text-muted);
+  background: var(--cora-color-surface-2);
+}
+
+[data-cora-root] .cora-capture-value {
+  margin: 0;
+  padding: var(--cora-space-2) var(--cora-space-3) 0;
+}
+
+[data-cora-root] .cora-capture-value:last-child {
+  padding-bottom: var(--cora-space-3);
+}
+
+/* Read-only selected-remediation mirror beneath a failed question on the Review
+   tab. Empty when nothing is selected. */
+.cora-question-remediation:not(:empty) {
+  margin-top: var(--cora-space-2);
+  padding-left: var(--cora-space-3);
+  border-left: 2px solid var(--cora-color-border);
+}
+
+.cora-question-remediation-label {
+  margin: 0 0 var(--cora-space-1);
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+}
+
+.cora-question-remediation-actions {
+  margin: 0;
+  padding-left: var(--cora-space-5);
+}
+
+.cora-question-remediation-freeform {
+  margin: var(--cora-space-1) 0 0;
+}
+
+.cora-remediation-empty {
+  color: var(--cora-color-text-muted);
+  font-style: italic;
+}
+
+/* ── Conversation ────────────────────────────────────────────────────────── */
+
+.cora-conversation-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--cora-space-3);
+  display: grid;
+  gap: var(--cora-space-2);
+}
+
+.cora-conversation-message {
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  padding: var(--cora-space-3);
+}
+
+.cora-message-author {
+  font-weight: var(--cora-font-weight-semibold);
+  margin: 0;
+}
+
+.cora-message-timestamp {
+  font-size: var(--cora-font-size-xs);
+  color: var(--cora-color-text-muted);
+  margin: 0 0 var(--cora-space-2);
+}
+
+.cora-message-body {
+  margin: 0;
+}
+
+.cora-conversation-empty {
+  color: var(--cora-color-text-muted);
+  font-style: italic;
+}
+
+.cora-conversation-compose {
+  display: grid;
+  gap: var(--cora-space-2);
+}
+
+.cora-conversation-input,
+.cora-notes-input,
+.cora-case-justification-input {
+  font: inherit;
+  width: 100%;
+  min-height: 5rem;
+  padding: var(--cora-space-2) var(--cora-space-3);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  background: var(--cora-color-surface);
+  color: inherit;
+  resize: vertical;
+  transition: border-color var(--cora-duration-fast) var(--cora-easing-standard);
+}
+
+.cora-conversation-input:focus,
+.cora-notes-input:focus,
+.cora-case-justification-input:focus {
+  outline: none;
+  border-color: var(--cora-color-accent);
+  box-shadow: var(--cora-focus-ring);
+}
+
+.cora-conversation-send {
+  justify-self: start;
+}
+
+/* ── Notes ───────────────────────────────────────────────────────────────── */
+
+/* The Notes tab's field rhythm was described by four `cora-notes > …` rules
+   that matched nothing, and that the ratchet in
+   tests/cora-element-type-contract.test.js now forbids (#536). All four are
+   deleted rather than re-pointed at `.cora-notes`, but for two different
+   reasons — worth recording, because whoever picks up the follow-up needs to
+   know which is which:
+
+     - `> textarea` and `> textarea:last-child` (the bottom-margin rhythm) are
+       genuinely dead. `notes-view.js` renders each textarea *inside* its label,
+       so there is no textarea child of `.cora-notes` to select at all.
+     - `> h2` (margin) and `> label` (display/margin/font-size/font-weight) do
+       still match the current DOM. The `> h2` rule could have been
+       class-converted losslessly; the `> label` rule could not, because its
+       font-size/font-weight would now inherit into the nested textarea (which
+       is `font: inherit`) — a restyle, not a restoration.
+
+   Since the Notes tab has rendered without any of them for as long as the
+   element selectors have been inert, reinstating the two live ones is a visual
+   change on its own merits and wants its own ticket. Deleting all four leaves
+   the tab exactly as it renders today. */
+
+/* ── Outcome ─────────────────────────────────────────────────────────────── */
+
+.cora-outcome-indeterminate {
+  color: var(--cora-color-text-muted);
+  font-style: italic;
+}
+
+/* The displaced verdict, inline after the one in force. The declarations are
+   overrides: the Summary enlarges the verdict line, which would otherwise
+   inherit into this span and make the displaced value read as loudly as the
+   live one. */
+.cora-outcome-amended-from {
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-regular);
+  color: var(--cora-color-text-muted);
+}
+
+/* ── Amend Outcome ───────────────────────────────────────────────────────── */
+
+/* The Current Outcome line: quiet label, emphasised value carried by the text. */
+.cora-amend-outcome-current {
+  font-weight: var(--cora-font-weight-medium);
+  color: var(--cora-color-text-muted);
+}
+
+/* The Controls-only amend form. A card with stacked field groups so the two
+   controls no longer collapse onto one line — takes its spacing cue from the
+   Review tab's question cards. */
+.cora-amend-outcome-form {
+  display: grid;
+  gap: var(--cora-space-5);
+  max-width: 40rem;
+  margin-top: var(--cora-space-4);
+  padding: var(--cora-space-5);
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  box-shadow: var(--cora-shadow-sm);
+}
+
+/* Label hugs its control (small gap) while whole groups sit apart (form gap). */
+.cora-amend-outcome-field {
+  display: grid;
+  gap: var(--cora-space-2);
+}
+
+.cora-amend-outcome-field label {
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-semibold);
+}
+
+.cora-amend-outcome-select,
+.cora-amend-outcome-justification {
+  font: inherit;
+  width: 100%;
+  padding: var(--cora-space-2) var(--cora-space-3);
+  color: inherit;
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  transition: border-color var(--cora-duration-fast) var(--cora-easing-standard);
+}
+
+.cora-amend-outcome-justification {
+  min-height: 6rem;
+  resize: vertical;
+}
+
+.cora-amend-outcome-select:focus,
+.cora-amend-outcome-justification:focus {
+  outline: none;
+  border-color: var(--cora-color-accent);
+  box-shadow: var(--cora-focus-ring);
+}
+
+.cora-amend-outcome-error {
+  margin: 0;
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-danger);
+}
+
+/* Keep the CTA to its own width rather than stretching across the grid. */
+.cora-amend-outcome-submit {
+  justify-self: start;
+}
+
+/* Read-only view of an existing amendment, for the observing roles. */
+.cora-amend-outcome-record {
+  margin-top: var(--cora-space-4);
+  padding: var(--cora-space-4);
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-left: 3px solid var(--cora-color-accent);
+  border-radius: var(--cora-radius-md);
+}
+
+.cora-amend-outcome-record-justification {
+  margin: 0 0 var(--cora-space-2);
+}
+
+.cora-amend-outcome-record-audit {
+  margin: 0;
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+}
+
+.cora-amend-outcome-empty {
+  color: var(--cora-color-text-muted);
+  font-style: italic;
+}
+
+/* ── Case Details ────────────────────────────────────────────────────────── */
+
+/* The Case Details Section renders a semantic <dl> of label/value pairs. With no
+   styling it fell back to the browser's indented definition-list default. Lay it
+   out instead as an aligned two-column panel: a shaded label column and a value
+   column, each row divided by a hairline — scannable like the dashboard tables,
+   card-framed like the other Sections. */
+.cora-case-details-list {
+  display: grid;
+  grid-template-columns: minmax(8rem, max-content) 1fr;
+  margin: var(--cora-space-4) 0 0;
+  max-width: 48rem;
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  box-shadow: var(--cora-shadow-sm);
+  overflow: hidden; /* clip the shaded label column to the rounded corners */
+}
+
+.cora-case-details-label,
+.cora-case-details-value {
+  margin: 0;
+  padding: var(--cora-space-3) var(--cora-space-4);
+  border-top: 1px solid var(--cora-color-border);
+}
+
+/* The first row (first dt + its dd) carries no divider above it. */
+.cora-case-details-label:first-child,
+.cora-case-details-label:first-child + .cora-case-details-value {
+  border-top: none;
+}
+
+.cora-case-details-label {
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-semibold);
+  color: var(--cora-color-text-muted);
+  background: var(--cora-color-surface-2);
+}
+
+.cora-case-details-value {
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere; /* long values (ids, emails) wrap rather than overflow */
+}
+
+/* ── Summary ─────────────────────────────────────────────────────────────── */
+
+/* The Summary rolls the whole Case onto one page as a stack of heterogeneous
+   blocks (Outcome, dates, details, question counts, issues, remediation, notes).
+   Unstyled they ran together as one undifferentiated stream. Lay them out as an
+   even-gapped column of surface cards — the same card language as the Review tab
+   and the other refined Sections — so each block reads as its own panel. */
+[data-cora-root] .cora-summary {
+  display: grid;
+  gap: var(--cora-space-5);
+  align-content: start;
+}
+
+/* The page-level "Summary" title: let the grid gap own the rhythm below it. */
+[data-cora-root] .cora-summary > h2 {
+  margin: 0;
+}
+
+/* The Outcome is the headline verdict: a card with the heading demoted to a
+   quiet label above an enlarged verdict line. */
+[data-cora-root] .cora-summary > .cora-outcome {
+  display: block;
+  padding: var(--cora-space-4) var(--cora-space-5);
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  box-shadow: var(--cora-shadow-sm);
+}
+
+[data-cora-root] .cora-summary > .cora-outcome h2 {
+  font-family: var(--cora-font-body);
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--cora-tracking-wider);
+  color: var(--cora-color-text-muted);
+  margin: 0 0 var(--cora-space-1);
+}
+
+[data-cora-root] .cora-summary > .cora-outcome > p {
+  font-size: var(--cora-font-size-lg);
+  margin: 0;
+}
+
+/* Each Summary Section as a surface card with a divider under its heading. */
+[data-cora-root] .cora-summary > section {
+  margin: 0;
+  padding: var(--cora-space-4) var(--cora-space-5);
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  box-shadow: var(--cora-shadow-sm);
+}
+
+[data-cora-root] .cora-summary > section > h3 {
+  margin: 0 0 var(--cora-space-3);
+  padding-bottom: var(--cora-space-2);
+  border-bottom: 1px solid var(--cora-color-border);
+}
+
+/* Key dates and Case Details render a <dl>; align it as label/value columns
+   instead of the browser's indented definition-list default. */
+[data-cora-root] .cora-summary dl {
+  display: grid;
+  grid-template-columns: minmax(7rem, max-content) 1fr;
+  gap: var(--cora-space-2) var(--cora-space-4);
+  margin: 0;
+}
+
+[data-cora-root] .cora-summary dt {
+  color: var(--cora-color-text-muted);
+  font-weight: var(--cora-font-weight-medium);
+}
+
+[data-cora-root] .cora-summary dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* The Questions counts: a plain bulleted list, kept tidy with row spacing. */
+[data-cora-root] .cora-summary .cora-summary-counts ul {
+  margin: 0;
+  padding-left: var(--cora-space-5);
+  display: grid;
+  gap: var(--cora-space-1);
+}
+
+/* The count/due lines that sit directly under an Issues / Remediation heading. */
+[data-cora-root] .cora-summary .cora-summary-remediation > p,
+[data-cora-root] .cora-summary .cora-summary-remediation-tracking > p {
+  color: var(--cora-color-text-muted);
+  font-size: var(--cora-font-size-sm);
+}
+
+/* Failed-Answer entries: drop the list marker and set each out as a left-accented
+   block so the failures are individually scannable within the card. */
+[data-cora-root] .cora-summary .cora-summary-remediation > ul,
+[data-cora-root] .cora-summary .cora-summary-remediation-tracking > ul {
+  list-style: none;
+  margin: 0;
+  padding-left: 0;
+  display: grid;
+  gap: var(--cora-space-3);
+}
+
+[data-cora-root] .cora-summary .cora-summary-remediation > ul > li,
+[data-cora-root] .cora-summary .cora-summary-remediation-tracking > ul > li {
+  padding-left: var(--cora-space-3);
+  border-left: 2px solid var(--cora-color-border);
+}
+
+[data-cora-root] .cora-summary .cora-summary-remediation li p,
+[data-cora-root] .cora-summary .cora-summary-remediation-tracking li p {
+  margin: 0 0 var(--cora-space-1);
+}
+
+/* The Answer line and configured/sent action lists read as supporting detail. */
+[data-cora-root] .cora-summary .cora-summary-remediation li ul,
+[data-cora-root] .cora-summary .cora-summary-remediation-tracking li ul {
+  margin: var(--cora-space-1) 0 0;
+  padding-left: var(--cora-space-5);
+  color: var(--cora-color-text-muted);
+  font-size: var(--cora-font-size-sm);
+}
+
+/* ── Appeal & Appeal Review ──────────────────────────────────────────────── */
+
+/* Both Sections render an <h2>, a run of read-only record cards, and (for the
+   appellant / Controls) a capture form. Unstyled, the forms collapsed onto
+   shared inline rows — label, control and button ran together — and the records
+   were an undifferentiated paragraph stream. Lay both out as an even-gapped
+   column and adopt the same card + form language as Amend Outcome / Summary. */
+[data-cora-root] .cora-appeal,
+[data-cora-root] .cora-appeal-review {
+  display: grid;
+  gap: var(--cora-space-5);
+  align-content: start;
+}
+
+[data-cora-root] .cora-appeal > h2,
+[data-cora-root] .cora-appeal-review > h2 {
+  margin: 0;
+}
+
+/* Each Appeal / resolution record as a surface card, accented on the leading
+   edge to read as an audit entry (cf. .cora-amend-outcome-record). */
+[data-cora-root] .cora-appeal .cora-appeal-item,
+[data-cora-root] .cora-appeal-review .cora-appeal-review-item {
+  display: grid;
+  gap: var(--cora-space-2);
+  margin: 0;
+  padding: var(--cora-space-4) var(--cora-space-5);
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-left: 3px solid var(--cora-color-accent);
+  border-radius: var(--cora-radius-md);
+  box-shadow: var(--cora-shadow-sm);
+}
+
+/* State is the card's eyebrow: a quiet uppercase label above the rationale. */
+[data-cora-root] .cora-appeal .cora-appeal-state,
+[data-cora-root] .cora-appeal-review .cora-appeal-review-state {
+  margin: 0;
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--cora-tracking-wider);
+  color: var(--cora-color-text-muted);
+}
+
+/* The rationale carries the card — plain body text. */
+[data-cora-root] .cora-appeal .cora-appeal-item-rationale,
+[data-cora-root] .cora-appeal-review .cora-appeal-review-rationale {
+  margin: 0;
+}
+
+/* Cited Answers and the resolution line read as supporting detail. */
+[data-cora-root] .cora-appeal .cora-appeal-item-cited,
+[data-cora-root] .cora-appeal .cora-appeal-resolution,
+[data-cora-root] .cora-appeal-review .cora-appeal-review-resolution {
+  margin: 0;
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+}
+
+/* The capture form: a card of stacked field groups so controls no longer
+   collapse onto one line — same frame as .cora-amend-outcome-form. */
+[data-cora-root] .cora-appeal .cora-appeal-form,
+[data-cora-root] .cora-appeal-review .cora-appeal-review-form {
+  display: grid;
+  gap: var(--cora-space-4);
+  max-width: 40rem;
+  margin: 0;
+  padding: var(--cora-space-5);
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  box-shadow: var(--cora-shadow-sm);
+}
+
+/* Standalone prompt labels sit as small, emphasised captions above their field. */
+[data-cora-root] .cora-appeal .cora-appeal-form > label,
+[data-cora-root] .cora-appeal-review .cora-appeal-review-form > label {
+  margin-bottom: calc(-1 * var(--cora-space-2)); /* hug the control below it */
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-semibold);
+}
+
+/* Heading + guidance introducing the disputed-Answer citation checkboxes. The
+   heading titles the group; the guidance is muted supporting text that hugs it. */
+[data-cora-root] .cora-appeal .cora-appeal-cite-heading {
+  margin: 0;
+  font-size: var(--cora-font-size-base);
+}
+
+[data-cora-root] .cora-appeal .cora-appeal-cite-intro {
+  margin: calc(-1 * var(--cora-space-2)) 0 0;
+  color: var(--cora-color-text-muted);
+  font-size: var(--cora-font-size-sm);
+}
+
+/* Choice rows (cite checkboxes, Agree/Reject radios): inline control + text.
+   Qualified with `label` so they out-rank the emphasised `> label` prompt rule
+   above and read as plain, regular-weight options rather than field captions. */
+[data-cora-root] .cora-appeal label.cora-appeal-cite,
+[data-cora-root] .cora-appeal-review label.cora-appeal-review-agree-label,
+[data-cora-root] .cora-appeal-review label.cora-appeal-review-reject-label {
+  display: flex;
+  align-items: center;
+  gap: var(--cora-space-2);
+  margin-bottom: 0;
+  font-size: inherit;
+  font-weight: var(--cora-font-weight-regular);
+}
+
+/* Keep Agree and Reject together as one pair rather than a full form gap apart. */
+[data-cora-root] .cora-appeal-review label.cora-appeal-review-reject-label {
+  margin-top: calc(-1 * var(--cora-space-2));
+}
+
+/* Text controls fill the card and pick up the shared focus treatment. */
+[data-cora-root] .cora-appeal .cora-appeal-rationale,
+[data-cora-root] .cora-appeal-review .cora-appeal-review-rationale-input,
+[data-cora-root] .cora-appeal-review .cora-appeal-review-outcome-select,
+[data-cora-root] .cora-appeal-review .cora-appeal-review-amend-justification {
+  font: inherit;
+  width: 100%;
+  padding: var(--cora-space-2) var(--cora-space-3);
+  color: inherit;
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  transition: border-color var(--cora-duration-fast) var(--cora-easing-standard);
+}
+
+[data-cora-root] .cora-appeal .cora-appeal-rationale,
+[data-cora-root] .cora-appeal-review .cora-appeal-review-rationale-input,
+[data-cora-root] .cora-appeal-review .cora-appeal-review-amend-justification {
+  min-height: 6rem;
+  resize: vertical;
+}
+
+[data-cora-root] .cora-appeal .cora-appeal-rationale:focus,
+[data-cora-root] .cora-appeal-review .cora-appeal-review-rationale-input:focus,
+[data-cora-root] .cora-appeal-review .cora-appeal-review-outcome-select:focus,
+[data-cora-root]
+  .cora-appeal-review
+  .cora-appeal-review-amend-justification:focus {
+  outline: none;
+  border-color: var(--cora-color-accent);
+  box-shadow: var(--cora-focus-ring);
+}
+
+[data-cora-root] .cora-appeal .cora-appeal-error,
+[data-cora-root] .cora-appeal-review .cora-appeal-review-error {
+  margin: 0;
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-danger);
+}
+
+/* Keep the CTA to its own width rather than stretching across the grid. */
+[data-cora-root] .cora-appeal .cora-appeal-submit,
+[data-cora-root] .cora-appeal-review .cora-appeal-review-submit {
+  justify-self: start;
+}
+
+/* Empty / already-open notices: muted, italic, matching the other Sections. */
+[data-cora-root] .cora-appeal .cora-appeal-empty,
+[data-cora-root] .cora-appeal .cora-appeal-open-note,
+[data-cora-root] .cora-appeal-review .cora-appeal-review-empty {
+  margin: 0;
+  color: var(--cora-color-text-muted);
+  font-style: italic;
+}
+
+/* ── Conversation toggle button ──────────────────────────────────────────── */
+
+[data-cora-root] .cora-conversation-toggle-btn {
+  font-size: var(--cora-font-size-sm);
+  padding: var(--cora-space-1) var(--cora-space-3);
+  background: var(--cora-color-surface-2);
+  border-color: var(--cora-color-border);
+  color: var(--cora-color-on-surface);
+  margin-left: var(--cora-space-4);
+  vertical-align: middle;
+}
+
+[data-cora-root] .cora-conversation-toggle-btn:hover {
+  background: var(--cora-color-border);
+}
+
+[data-cora-root] .cora-conversation-toggle-btn[aria-expanded='true'] {
+  background: var(--cora-color-accent-muted);
+  border-color: var(--cora-color-accent);
+  color: var(--cora-color-accent);
+}
+
+/* ── Conversation panel — popover mode ───────────────────────────────────── */
+/* Floating panel; sits above the content on the right side of the viewport. */
+
+[data-cora-root]
+  .cora-case-review[data-conversation-mode='popover']
+  > .cora-case-review__conversation:not([hidden]) {
+  position: fixed;
+  top: var(--cora-space-5);
+  right: var(--cora-space-4);
+  bottom: var(--cora-space-4);
+  width: 28rem;
+  max-width: calc(100vw - var(--cora-space-5) * 2);
+  overflow-y: auto;
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-lg);
+  box-shadow: var(--cora-shadow-lg);
+  padding: var(--cora-space-4);
+  z-index: 200;
+}
+
+/* ── Conversation panel — sidebar mode ───────────────────────────────────── */
+/* Full-height panel anchored to the right viewport edge; more "attached" feel
+   than the floating popover. Content is not pushed — sidebar overlaps at
+   narrower viewports. A layout-restructuring pass (CSS grid on .cora-case-review)
+   can add true push behaviour if the sidebar wins the A/B. */
+
+[data-cora-root]
+  .cora-case-review[data-conversation-mode='sidebar']
+  > .cora-case-review__conversation:not([hidden]) {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 36rem;
+  max-width: calc(100vw - var(--cora-space-5) * 2);
+  overflow-y: auto;
+  background: var(--cora-color-surface);
+  border-left: 2px solid var(--cora-color-border);
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.06);
+  padding: var(--cora-space-5) var(--cora-space-4);
+  z-index: 200;
+}
+
+/* ── Complete button ─────────────────────────────────────────────────────── */
+
+.cora-complete-btn {
+  margin-top: var(--cora-space-5);
+  background: var(--cora-color-success);
+  border-color: var(--cora-color-success);
+}
+
+.cora-complete-btn:hover {
+  background: #00512f;
+  border-color: #00512f;
+}
+
+/* Gated rather than absent: the Reviewer sees the button they cannot press yet,
+   with the reason beneath it (#499). */
+.cora-complete-btn:disabled,
+.cora-complete-btn:disabled:hover {
+  background: var(--cora-color-border-strong);
+  border-color: var(--cora-color-border-strong);
+  cursor: not-allowed;
+}
+
+.cora-completion-reason {
+  margin: var(--cora-space-2) 0 0;
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-danger);
+}
+
+/* ── Voiding a Case ──────────────────────────────────────────────────────── */
+
+/* Deliberately quieter than the Complete button: voiding is the way out, not
+   the goal, so it reads as secondary until its panel is open. */
+[data-cora-root] .cora-void {
+  margin-top: var(--cora-space-4);
+}
+
+[data-cora-root] .cora-void-btn {
+  background: transparent;
+  border-color: var(--cora-color-border-strong);
+  color: var(--cora-color-text-muted);
+}
+
+[data-cora-root] .cora-void-panel {
+  margin-top: var(--cora-space-3);
+  padding: var(--cora-space-4);
+  border: 1px solid var(--cora-color-danger);
+  background: var(--cora-color-danger-bg);
+}
+
+[data-cora-root] .cora-void-consequence {
+  margin: 0 0 var(--cora-space-3);
+  color: var(--cora-color-danger);
+}
+
+[data-cora-root] .cora-void-reason {
+  display: block;
+  margin-top: var(--cora-space-2);
+}
+
+[data-cora-root] .cora-void-confirm {
+  margin-top: var(--cora-space-3);
+  background: var(--cora-color-danger);
+  border-color: var(--cora-color-danger);
+  color: var(--cora-color-text-on-accent);
+}
+
+[data-cora-root] .cora-void-banner {
+  display: flex;
+  align-items: baseline;
+  gap: var(--cora-space-3);
+  margin-top: var(--cora-space-3);
+  padding: var(--cora-space-3) var(--cora-space-4);
+  border-left: 4px solid var(--cora-color-border-strong);
+  background: var(--cora-color-surface-2);
+}
+
+[data-cora-root] .cora-void-pill {
+  padding: 0 var(--cora-space-2);
+  border-radius: var(--cora-radius-pill);
+  background: var(--cora-color-border-strong);
+  color: var(--cora-color-surface);
+  font-size: var(--cora-font-size-sm);
+  text-transform: uppercase;
+}
+
+[data-cora-root] .cora-data-table .cora-void-volume-row--total td {
+  background: var(--cora-color-surface-2);
+  border-top: 2px solid var(--cora-color-border-strong);
+  font-weight: var(--cora-font-weight-bold);
+}
+
+/* ── Section progress sidebar ────────────────────────────────────────────── */
+
+[data-cora-root] section:has(.cora-group-progress) {
+  display: grid;
+  grid-template-columns: 1fr var(--cora-progress-rail-width);
+  grid-template-rows: auto 1fr;
+  gap: 0 var(--cora-space-5);
+  align-items: start;
+}
+
+[data-cora-root] section:has(.cora-group-progress) > h2 {
+  grid-column: 1 / -1;
+}
+
+[data-cora-root] .cora-group-progress {
+  display: block;
+  position: sticky;
+  top: var(--cora-space-5);
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  padding: var(--cora-space-3);
+}
+
+.cora-group-progress-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--cora-space-2) var(--cora-space-3);
+  border-radius: var(--cora-radius-sm);
+  cursor: pointer;
+  font-size: var(--cora-font-size-sm);
+  margin-bottom: var(--cora-space-1);
+  transition: background var(--cora-duration-fast) var(--cora-easing-standard);
+}
+
+.cora-group-progress-row:hover {
+  background: var(--cora-color-surface-2);
+}
+
+.cora-group-progress-row.complete {
+  color: var(--cora-color-success);
+}
+
+/* Otherwise the last row's margin stacks onto the panel's bottom padding. */
+.cora-group-progress-row:last-child {
+  margin-bottom: 0;
+}
+
+.cora-group-progress-label {
+  font-weight: var(--cora-font-weight-medium);
+}
+
+.cora-group-progress-count {
+  font-variant-numeric: tabular-nums;
+  color: var(--cora-color-text-muted);
+}
+
+.cora-group-progress-row.complete .cora-group-progress-count {
+  color: var(--cora-color-success);
+}
+
+/* Scoped under [data-cora-root] to beat the global button reset (0,1,1), whose
+   `white-space: nowrap` + `inline-flex` would clip this full-width label. */
+[data-cora-root] .cora-jump-unanswered-btn {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  margin-bottom: var(--cora-space-3);
+  padding: var(--cora-space-2);
+  font-size: var(--cora-font-size-xs);
+  text-align: center;
+  white-space: normal;
+}
+
+/* ── KPI tiles ───────────────────────────────────────────────────────────── */
+
+.cora-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: var(--cora-space-3);
+  margin: 0 0 var(--cora-space-5);
+}
+
+.cora-kpi-tile {
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  padding: var(--cora-space-4) var(--cora-space-5);
+  box-shadow: var(--cora-shadow-sm);
+}
+
+.cora-kpi-label {
+  font-size: var(--cora-font-size-xs);
+  font-weight: var(--cora-font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--cora-tracking-wider);
+  color: var(--cora-color-text-muted);
+  margin: 0 0 var(--cora-space-1);
+}
+
+.cora-kpi-value {
+  font-family: var(--cora-font-display);
+  font-size: var(--cora-font-size-3xl);
+  font-weight: var(--cora-font-weight-black);
+  line-height: var(--cora-line-height-tight);
+  letter-spacing: var(--cora-tracking-tight);
+  color: var(--cora-color-on-surface);
+  margin: 0;
+}
+
+.cora-kpi-delta {
+  font-size: var(--cora-font-size-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--cora-color-text-muted);
+  margin: var(--cora-space-1) 0 0;
+}
+
+.cora-kpi-delta-up {
+  color: var(--cora-color-success);
+}
+
+.cora-kpi-delta-down {
+  color: var(--cora-color-danger);
+}
+
+.cora-kpi-tile-danger .cora-kpi-value {
+  color: var(--cora-color-danger);
+}
+
+/* ── App navigation bar ──────────────────────────────────────────────────── */
+
+/* The nav bar's own element is the classed div `AppNav()` returns — there is no
+   `cora-app-nav` host, so the surface/border/sticky declarations live here with
+   the layout ones (#536). z-index 100 is the existing stack position: below the
+   save-status banner (110) and the toast host, above route content. */
+[data-cora-root] .cora-app-nav-bar {
+  display: flex;
+  align-items: stretch;
+  height: var(--cora-nav-height);
+  padding: 0 var(--cora-space-4);
+  background: var(--cora-color-surface);
+  border-bottom: 1px solid var(--cora-color-border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+[data-cora-root] .cora-app-nav-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--cora-space-2);
+  font-family: var(--cora-font-display);
+  font-size: var(--cora-font-size-md);
+  font-weight: var(--cora-font-weight-bold);
+  color: var(--cora-color-on-surface);
+  text-decoration: none;
+  margin-right: var(--cora-space-5);
+  letter-spacing: var(--cora-tracking-wide);
+  flex-shrink: 0;
+}
+
+[data-cora-root] .cora-app-nav-brand:hover {
+  color: var(--cora-color-on-surface);
+  text-decoration: none;
+}
+
+[data-cora-root] .cora-app-nav-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  background: var(--cora-color-accent);
+  color: var(--cora-color-text-on-accent);
+  font-size: var(--cora-font-size-xs);
+  font-weight: var(--cora-font-weight-black);
+  border-radius: var(--cora-radius-sm);
+  flex-shrink: 0;
+}
+
+[data-cora-root] .cora-app-nav-items {
+  display: flex;
+  align-items: stretch;
+}
+
+[data-cora-root] .cora-app-nav-item {
+  display: flex;
+  align-items: center;
+  padding: 0 var(--cora-space-4);
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-medium);
+  color: var(--cora-color-text-muted);
+  text-decoration: none;
+  border-bottom: 3px solid transparent;
+  transition:
+    color var(--cora-duration-fast) var(--cora-easing-standard),
+    border-color var(--cora-duration-fast) var(--cora-easing-standard);
+}
+
+[data-cora-root] .cora-app-nav-item:hover {
+  color: var(--cora-color-on-surface);
+  text-decoration: none;
+}
+
+[data-cora-root] .cora-app-nav-item--active,
+[data-cora-root] .cora-app-nav-item[aria-current='page'] {
+  color: var(--cora-color-accent);
+  border-bottom-color: var(--cora-color-accent);
+  font-weight: var(--cora-font-weight-semibold);
+}
+
+/* ── Roadmap ────────────────────────────────────────────────────────────── */
+
+[data-cora-root] .cora-roadmap {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - var(--cora-nav-height));
+  max-width: var(--cora-content-max-width);
+  margin: 0 auto;
+  padding: var(--cora-space-5) var(--cora-space-4) var(--cora-space-6);
+}
+
+[data-cora-root] .cora-roadmap-header {
+  flex: 0 0 auto;
+}
+
+[data-cora-root] .cora-roadmap-header > p {
+  margin: 0 0 var(--cora-space-4);
+  color: var(--cora-color-text-muted);
+}
+
+[data-cora-root] .cora-roadmap-columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(16rem, 1fr));
+  gap: var(--cora-space-4);
+  min-height: 0;
+  overflow-x: auto;
+}
+
+[data-cora-root] .cora-roadmap-column {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: var(--cora-space-3);
+  background: var(--cora-color-surface-2);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-lg);
+}
+
+[data-cora-root] .cora-roadmap-column-heading {
+  flex: 0 0 auto;
+  margin: 0 0 var(--cora-space-3);
+  font-size: var(--cora-font-size-sm);
+  letter-spacing: var(--cora-tracking-wide);
+}
+
+[data-cora-root] .cora-roadmap-column-cards {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--cora-space-3);
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: var(--cora-space-1);
+  scrollbar-gutter: stable;
+}
+
+[data-cora-root] .cora-roadmap-card {
+  padding: var(--cora-space-4);
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  box-shadow: var(--cora-shadow-sm);
+}
+
+[data-cora-root] .cora-roadmap-card-title {
+  margin: 0 0 var(--cora-space-2);
+  color: var(--cora-color-on-surface);
+}
+
+[data-cora-root] .cora-roadmap-card-description {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+[data-cora-root] .cora-roadmap-more {
+  padding: var(--cora-space-1) 0;
+  background: transparent;
+  border: 0;
+  color: var(--cora-color-accent);
+  font-size: var(--cora-font-size-sm);
+  text-decoration: underline;
+}
+
+[data-cora-root] .cora-roadmap-card-meta {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--cora-space-1) var(--cora-space-2);
+  margin: var(--cora-space-3) 0 0;
+  font-size: var(--cora-font-size-sm);
+}
+
+[data-cora-root] .cora-roadmap-card-meta dt {
+  color: var(--cora-color-text-muted);
+}
+
+[data-cora-root] .cora-roadmap-card-meta dd {
+  margin: 0;
+  font-weight: var(--cora-font-weight-semibold);
+}
+
+[data-cora-root] .cora-roadmap-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cora-space-1);
+  margin-top: var(--cora-space-3);
+}
+
+[data-cora-root] .cora-roadmap-label {
+  padding: var(--cora-space-1) var(--cora-space-2);
+  color: var(--cora-color-on-surface);
+  background: var(--cora-color-accent-muted);
+  border-radius: var(--cora-radius-pill);
+  font-size: var(--cora-font-size-xs);
+  font-weight: var(--cora-font-weight-semibold);
+}
+
+[data-cora-root] .cora-roadmap-empty {
+  margin: 0;
+  color: var(--cora-color-text-muted);
+  font-style: italic;
+}
+
+@media (max-width: 52rem) {
+  [data-cora-root] .cora-roadmap {
+    padding-inline: var(--cora-space-3);
+  }
+
+  [data-cora-root] .cora-roadmap-columns {
+    grid-template-columns: repeat(3, minmax(15rem, 78vw));
+  }
+}
+
+/* ── People picker ───────────────────────────────────────────────────────── */
+
+/* The containing block for the absolutely positioned results list below —
+   matched by class, because `PeoplePicker()` returns a plain div and there is
+   no `cora-people-picker` element to match (#536). */
+.cora-people-picker {
+  position: relative;
+  display: block;
+}
+
+.cora-people-picker-input {
+  font: inherit;
+  width: 100%;
+  padding: var(--cora-space-2) var(--cora-space-3);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  background: var(--cora-color-surface);
+  color: inherit;
+  transition: border-color var(--cora-duration-fast) var(--cora-easing-standard);
+}
+
+.cora-people-picker-input:focus {
+  outline: none;
+  border-color: var(--cora-color-accent);
+  box-shadow: var(--cora-focus-ring);
+}
+
+.cora-people-picker-results {
+  position: absolute;
+  z-index: 10;
+  left: 0;
+  right: 0;
+  margin: var(--cora-space-1) 0 0;
+  padding: var(--cora-space-1);
+  list-style: none;
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  box-shadow: var(--cora-shadow-sm);
+}
+
+.cora-people-picker-results[hidden] {
+  display: none;
+}
+
+.cora-people-picker-option {
+  padding: var(--cora-space-2) var(--cora-space-3);
+  border-radius: var(--cora-radius-sm);
+  cursor: pointer;
+  color: var(--cora-color-on-surface);
+}
+
+.cora-people-picker-option:hover,
+.cora-people-picker-option:focus-visible {
+  background: var(--cora-color-surface-2);
+  outline: none;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Tab strip — the `.cora-tabs*` classes the Case Review page renders. The
+   `cora-tabs` element primitive was deleted as dead code in #494; its
+   element-type rule went with it in #536.
+   ───────────────────────────────────────────────────────────────────────── */
+.cora-tabs-list {
+  display: flex;
+  flex: 1;
+  gap: var(--cora-space-1);
+  border-bottom: 1px solid var(--cora-color-border);
+}
+
+/* The save-status banner pins bottom-right, above the conversation panel and
+   below the toast host — 110 is that existing stack, not a fresh number
+   (#514). These declarations were inline on the element until the retired
+   `cora-status-banner` host's rule could be replaced by its class. */
+.cora-case-review__save-status {
+  position: fixed;
+  bottom: var(--cora-space-4);
+  right: var(--cora-space-4);
+  z-index: 110;
+}
+
+.cora-case-review__tab-strip {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--cora-color-border);
+}
+
+.cora-case-review__tab-strip .cora-tabs-list {
+  border-bottom: 0;
+}
+
+.cora-case-review__hold-control {
+  display: flex;
+  align-items: center;
+  padding-left: var(--cora-space-3);
+}
+
+[data-cora-root] .cora-case-review__hold-toggle {
+  appearance: none;
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-sm);
+  background: transparent;
+  color: var(--cora-color-text-muted);
+  padding: var(--cora-space-1) var(--cora-space-3);
+  font: inherit;
+  font-weight: var(--cora-font-weight-semibold);
+  cursor: pointer;
+}
+
+[data-cora-root] .cora-case-review__hold-toggle[aria-pressed='true'] {
+  border-color: var(--cora-color-warning);
+  background: var(--cora-color-warning-bg);
+  color: var(--cora-color-on-surface);
+}
+
+[data-cora-root] .cora-case-review__hold-toggle:focus-visible {
+  outline: var(--cora-focus-outline);
+  outline-offset: var(--cora-focus-offset);
+}
+
+/* Scoped under [data-cora-root] so these win over the global `[data-cora-root]
+   button` reset (0,1,1), which would otherwise paint each tab as a solid accent
+   pill — and render the selected tab's accent text on an accent fill. */
+[data-cora-root] .cora-tabs-tab {
+  appearance: none;
+  border: none;
+  background: transparent;
+  margin: 0;
+  padding: var(--cora-space-2) var(--cora-space-4);
+  font-family: var(--cora-font-display);
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-semibold);
+  letter-spacing: var(--cora-tracking-wide);
+  text-transform: uppercase;
+  color: var(--cora-color-text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  margin-bottom: -1px;
+  transition:
+    color var(--cora-duration-fast) var(--cora-easing-standard),
+    border-color var(--cora-duration-fast) var(--cora-easing-standard);
+}
+
+[data-cora-root] .cora-tabs-tab:hover {
+  color: var(--cora-color-on-surface);
+  background: transparent;
+  border-color: transparent;
+}
+
+[data-cora-root] .cora-tabs-tab[aria-selected='true'] {
+  color: var(--cora-color-accent);
+  border-bottom-color: var(--cora-color-accent);
+}
+
+[data-cora-root] .cora-tabs-tab:focus-visible {
+  outline: var(--cora-focus-outline);
+  outline-offset: calc(-1 * var(--cora-focus-offset));
+  border-radius: var(--cora-radius-sm);
+  box-shadow: none;
+}
+
+.cora-tabs-panel {
+  padding: var(--cora-space-4) 0;
+}
+
+.cora-tabs-panel[hidden] {
+  display: none;
+}
+
+.cora-tabs-panel:focus-visible {
+  outline: var(--cora-focus-outline);
+  outline-offset: var(--cora-focus-offset);
+}
+
+/* ── UAT environment banner (ADR-0033) ───────────────────────────────────
+   Fixed badge mounted by src/setup/uat-banner.js when the host page declares
+   a non-prod environment. Deliberately loud: nobody should mistake which
+   environment they are editing. Never rendered on prod. */
+
+.cora-uat-banner {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  padding: var(--cora-space-1, 4px) var(--cora-space-4, 16px);
+  background: var(--cora-color-warning);
+  color: var(--cora-color-accent-on);
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
+  border-radius: 0 0 var(--cora-radius-sm, 4px) var(--cora-radius-sm, 4px);
+  pointer-events: none;
+}
+
+/* ── Remediation tab — question-level tracking (#499) ────────────────────
+   One card per Question carrying remediation. The reviewing side gets the
+   resolution controls; the Responsible Party side gets the same breakdown and
+   a call to action pointing at the Conversation. */
+
+.cora-remediation-tracking-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: var(--cora-space-3);
+}
+
+.cora-remediation-tracking-item {
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  box-shadow: var(--cora-shadow-sm);
+  padding: var(--cora-space-3) var(--cora-space-4);
+}
+
+.cora-tracking-question {
+  font-weight: var(--cora-font-weight-medium);
+  margin: 0 0 var(--cora-space-2);
+}
+
+.cora-tracking-actions {
+  margin: 0 0 var(--cora-space-2);
+  padding-left: var(--cora-space-4);
+}
+
+.cora-tracking-action {
+  color: var(--cora-color-text-muted);
+}
+
+.cora-tracking-status,
+.cora-tracking-details {
+  margin: 0;
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+}
+
+.cora-tracking-controls {
+  display: grid;
+  gap: var(--cora-space-2);
+  margin-top: var(--cora-space-2);
+}
+
+[data-cora-root] .cora-tracking-status-select,
+[data-cora-root] .cora-tracking-details-input {
+  font: inherit;
+  width: 100%;
+  padding: var(--cora-space-2) var(--cora-space-3);
+  color: inherit;
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  transition: border-color var(--cora-duration-fast) var(--cora-easing-standard);
+}
+
+[data-cora-root] .cora-tracking-status-select {
+  cursor: pointer;
+}
+
+[data-cora-root] textarea.cora-tracking-details-input {
+  min-height: 4rem;
+  resize: vertical;
+}
+
+[data-cora-root] .cora-tracking-status-select:focus,
+[data-cora-root] .cora-tracking-details-input:focus {
+  outline: none;
+  border-color: var(--cora-color-accent);
+}
+
+.cora-tracking-details-required,
+.cora-remediation-gate {
+  margin: var(--cora-space-3) 0 0;
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-danger);
+}
+
+.cora-remediation-conversation-prompt {
+  margin-top: var(--cora-space-3);
+  padding: var(--cora-space-3) var(--cora-space-4);
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  display: grid;
+  gap: var(--cora-space-2);
+  justify-items: start;
+}
+
+.cora-remediation-conversation-unavailable {
+  margin: 0;
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+}
+
+/* Case search — the filter form and its bounded-result notice. */
+
+.cora-case-search-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--cora-space-3);
+  margin-bottom: var(--cora-space-4);
+  padding: var(--cora-space-3) var(--cora-space-4);
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+}
+
+.cora-case-search-field {
+  display: grid;
+  gap: var(--cora-space-1);
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+}
+
+.cora-case-search-cap {
+  margin: 0 0 var(--cora-space-3);
+  padding: var(--cora-space-2) var(--cora-space-3);
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-warning);
+  background: var(--cora-color-warning-bg);
+  border-radius: var(--cora-radius-sm);
+}
+
+.cora-case-search-error {
+  margin: 0;
+  padding: var(--cora-space-2) var(--cora-space-3);
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-danger);
+  background: var(--cora-color-danger-bg);
+  border-radius: var(--cora-radius-sm);
+}

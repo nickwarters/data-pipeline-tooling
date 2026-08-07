@@ -19,6 +19,14 @@ through clean domain abstractions (a `CasePool` of `Case`s) instead of raw
 - **Cross-platform** — the deployment target is **Windows**, with **macOS** as
   the development environment. Paths are `pathlib`, processing is pure Python,
   and dependencies are first-class on both (see [`../CLAUDE.md`](../CLAUDE.md)).
+- **The frontend** — this guide covers the pipeline half of the system only. The
+  Case Review Platform frontend is the other half, and keeps its documentation
+  with its code: start at
+  [`../platform_frontend/docs/`](../platform_frontend/docs/), with its own
+  [`CONTEXT.md`](../platform_frontend/CONTEXT.md) glossary and
+  [`adr/`](../platform_frontend/docs/adr/) decision records. The two projects
+  share a repository, not a toolchain — see
+  [`../CLAUDE.md`](../CLAUDE.md) for what runs where.
 
 ---
 
@@ -163,7 +171,7 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 | Primitive | What it is / when to use it |
 |-----------|------------------------------|
 | **`Dataset`** | The opaque, bulk in-memory **tabular carrier** — pandas behind the seam, swappable later. Tiny public surface (`.columns`, `len()`); pandas never leaks past it. ([Python-only processing, dumb store, opaque Dataset carrier](adr/0002-python-processing-opaque-dataset-carrier.md)) |
-| **`Reader`** | `read() -> Dataset`. One per source shape: `CsvReader`, `GlobCsvReader`, `ExcelReader`, `SqliteReader`, and the stubbed-remote `SasReader` / `SharePointReader`. Swap the Reader to ingest the same feed from a different source. A Reader that touched a file or table reports it on a `data_locations` attribute during `read()`, which the read node drains into the step's run-log record. → [adding-a-feed.md](adding-a-feed.md) |
+| **`Reader`** | `read() -> Dataset`. One per source shape: `CsvReader`, `GlobCsvReader`, `ExcelReader`, `SqliteReader`, and the stubbed-remote `SasReader` / `SharePointReader` (a whole-list snapshot) / `SharePointModifiedReader` (only the items changed in one caller-supplied `Modified` window, stamped with observation metadata — it cannot see a hard delete). Where that window *comes from* is the separate `SharePointCheckpointStore` (`tools.integrations.sharepoint_checkpoint`): the durable per-list `Modified` watermark under `<base>/_checkpoints/sharepoint.db`, plus the rule `end = server_now - safety_lag`, `start = watermark - overlap` — a run commits it as its last act, and an empty window is `None`, not an error. Swap the Reader to ingest the same feed from a different source. A Reader that touched a file or table reports it on a `data_locations` attribute during `read()`, which the read node drains into the step's run-log record. → [adding-a-feed.md](adding-a-feed.md) |
 | **`ChunkReader`** | `chunks(size) -> Iterator[Dataset]`. The **streaming dual** of `Reader` for a source too big to hold whole — yields *bounded* Datasets (default 10,000 rows), so the in-memory contract holds per chunk. `ChunkedCsvReader` (local CSV) and `SasFileReader` (an **already-landed** `.sas7bdat`/xport file, gzip read on the fly — distinct from the remote `SasReader`: no script, no remote run, no copy). Wrap any of them in `KeyFilterChunkReader(inner, key_column, allowed_keys)` to keep only rows whose key is in an id allow-list (semi-join, keys type-normalised) — or `PredicateChunkReader` for an arbitrary per-chunk filter — applied **before accumulation** so a 100M-row source lands just the ~100K rows wanted, with bounded memory; both expose `rows_scanned` / `rows_kept` and forward the source's `data_locations`. Wire one into a pipeline with `Pipeline.read_chunks(chunk_reader, chunk_size=...)`: the sub-graph below it is driven once per chunk, so a source too big to hold whole still gets the validators, quarantine, dry-run and stable step addresses, and each step still records exactly one run-log record with its counts summed. `tools.observability.stream_step` remains the low-level fallback for a bare read→filter→write loop that needs no DAG. → [streaming-large-sources.md](streaming-large-sources.md) |
 | **`Writer`** | `write(dataset) -> None`. The dual of Reader. Owns **both** target location and **load strategy**. File Deliverables use `CsvWriter`, `ExcelWriter`, or `JsonWriter`; SharePoint list Deliverables use the stubbed `SharePointWriter`; SQLite tables use `SqliteTruncateReloadWriter` or `AccumulateByRunWriter`; `StdoutWriter` is a console sink for *seeing* a result (e.g. an explainer trace) rather than persisting it — and, persisting nothing, reports no `data_locations`. Every other Writer reports the target it wrote, drained by the write node into the run-log record. → [gold-accumulation.md](gold-accumulation.md) |
 | **`RetryPolicy` / `RetryingReader` / `RetryingWriter`** | Targeted retry for **transient I/O-edge failures** (remote access, SharePoint/SAS fetch, SQLite busy). An allowlist of exception types is retried; schema-validation and configuration errors abort immediately. Scoped to the `read()`/`write()` seam, never around validation. → [retry.md](retry.md) |
@@ -580,9 +588,10 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 |-----|--------|
 | [`public-api.md`](public-api.md) | The public API: the four facades (`framework.core` / `framework.io` / `framework.transform` / `framework.run`) and the `tools.*` siblings application code may also import, the internal-module boundary, and the packaging non-goal. |
 | [`core-primitives.md`](core-primitives.md) | The consolidated framework primitives reference with worked examples and build status per slice. |
-| [`adding-a-feed.md`](adding-a-feed.md) | Every Reader, and the stubbed remote (SAS / SharePoint) seams. |
+| [`adding-a-feed.md`](adding-a-feed.md) | Every Reader, the stubbed remote (SAS / SharePoint) seams, the SharePoint `Modified` checkpoint (`SharePointCheckpointStore`) that computes the next polling window, and the worked incremental feed that wires the two halves together. |
 | [`schema-enforcement.md`](schema-enforcement.md) | `Schema` / `SchemaValidator` / `SchemaCoercion`, value-level rules, composing the schema boundary onto a pipeline. |
 | [`data-dictionary-template.md`](data-dictionary-template.md) | The Confluence-ready template for documenting what every table/Feed and each of its fields means — the prose companion to `schema.py`. |
+| [`data-dictionary-sharepoint-cases.md`](data-dictionary-sharepoint-cases.md) | The template filled in for the `sharepoint_cases` feed: the raw observation and the Case version, why neither stores when we saw the row, and the two provisioning prerequisites (an index on `Modified`, and the site/GUID placeholders) that stand between it and a tenant. |
 | [`gold-accumulation.md`](gold-accumulation.md) | Gold's accumulate-by-run semantics, idempotent re-run, reading "current". |
 | [`processors.md`](processors.md) | The Selection transforms (`JoinWith`, per-group sampling) and the Ingest / fan-out transforms (`SelectColumns`, `Unpivot`, `DeriveKey`, `LatestPerKey`). |
 | [`selection.md`](selection.md) | The full CaseType / Variation → CasePool → SelectionPool flow + explainability. |

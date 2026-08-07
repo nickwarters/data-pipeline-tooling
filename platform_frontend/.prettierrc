@@ -1,0 +1,11 @@
+{
+  "semi": true,
+  "singleQuote": true,
+  "trailingComma": "es5",
+  "overrides": [
+    {
+      "files": "case-types/banks/*.txt",
+      "options": { "parser": "json" }
+    }
+  ]
+}
