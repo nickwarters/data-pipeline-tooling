@@ -664,7 +664,8 @@ they know nothing about Cases — and they follow `Unpivot`'s conventions: the
 declared `id_vars` are repeated onto every output row, an empty/null/absent blob
 contributes zero rows (or null columns, for the flatten) rather than an error,
 and output order is deterministic — input row order, then the blob's own
-key/element order.
+key/element order. A literal JSON `null` is one of those absences, not a wrong
+shape: an upstream snapshot writes it for an object it does not have.
 
 `Parse` is the neighbour, not a rival: it decodes a packed text column *in
 place*, leaving one structured value per row. These three take the next step and
@@ -704,7 +705,9 @@ Each key of the object becomes a row. Pass **exactly one** of:
   goes non-object part-way down. Only the **top-level** blob is held to a
   declared shape; these transforms are as permissive about a blob's inner shape
   as `Unpivot` is about a column's contents. Where a map's values vary in shape,
-  `value_into` is the mode that carries them whole.
+  `value_into` is the mode that carries them whole. The `.` is always a path
+  separator and has no escape, so a subfield whose own name contains a dot is
+  not reachable by a path — read it with `value_into` instead.
 - `value_into` — the whole map value lands in that one column. For maps of
   scalars, or of polymorphic values that no fixed set of columns would fit.
 

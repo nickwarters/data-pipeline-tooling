@@ -426,6 +426,39 @@ def test_a_pandas_null_blob_is_absent_rather_than_malformed():
     assert pd.isna(result["amended_outcome"].iloc[0])
 
 
+def test_a_literal_json_null_is_a_missing_blob_rather_than_a_wrong_shape():
+    # An upstream snapshot writes `null` for an object it does not have, so the
+    # text "null" is the same absence as an empty cell — not a shape breach.
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({"case_ref": ["c1"], "answers": ["null"], "log": ["null"]})
+    )
+    exploded = ExplodeJsonMap(
+        column="answers",
+        key_into="question_id",
+        id_vars=["case_ref"],
+        fields={"value": "answer_value"},
+    )(dataset).to_pandas()
+    assert len(exploded) == 0
+    listed = ExplodeJsonList(
+        column="log", ordinal_into="seq", id_vars=["case_ref"], fields={"body": "body"}
+    )(dataset).to_pandas()
+    assert len(listed) == 0
+    flattened = FlattenJsonObject(column="answers", fields={"value": "answer_value"})(
+        dataset
+    ).to_pandas()
+    assert pd.isna(flattened["answer_value"].iloc[0])
+
+
+def test_a_blob_that_is_not_json_at_all_names_the_column_and_the_row():
+    # A numpy array in the column is not a null, a string or a JSON shape. It
+    # must arrive as a located data error, not as a bare pandas ValueError.
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({"case_ref": ["c1"], "answers": [pd.array([1, 2])]})
+    )
+    with pytest.raises(JsonShapeError, match="row 0"):
+        FlattenJsonObject(column="answers", fields={"value": "v"})(dataset)
+
+
 def test_a_missing_column_names_itself_and_the_available_columns():
     # The house rule the other column processors follow: a mis-typed column is a
     # ValueError naming what is available, not a bare KeyError from pandas.
@@ -551,8 +584,9 @@ def test_a_key_that_is_not_text_carries_no_prefix_rather_than_crashing():
 def test_a_flatten_field_may_replace_the_source_column_in_place(drop):
     # A field target named for the source column replaces the blob with the
     # value lifted out of it, as `JoinColumns` writes into a column it consumes.
-    # The blob must survive as its own replacement under *either* `drop`: it is
-    # written and then dropped, or written and then kept, and both lose it.
+    # `drop=True` is the case the drop guard exists for — without it the column
+    # is written and then deleted. `drop=False` is here to hold the two paths to
+    # the same answer, not because it could regress on its own.
     dataset = Dataset.from_pandas(
         pd.DataFrame({"case_ref": ["c1"], "amendedOutcome": ['{"outcome": "Upheld"}']})
     )

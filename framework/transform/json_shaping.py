@@ -70,10 +70,14 @@ def _decode(value: Any, *, where: str, expected: type) -> Any:
     """Decode one row's blob, or ``None`` when the row carries no blob at all.
 
     An absent/null/blank blob is the ordinary "nothing here" case and is the
-    caller's zero-rows path. Text that is not JSON, or JSON of the wrong shape,
-    is a feed defect: it raises, naming the column and the row's position.
+    caller's zero-rows path — including a literal JSON ``null``, which an
+    upstream snapshot writes for an object it does not have. Text that is not
+    JSON, or JSON of the wrong shape, is a feed defect: it raises, naming the
+    column and the row's position.
     """
-    if value is None or (not isinstance(value, (dict, list, str)) and pd.isna(value)):
+    # `is True`, not truthiness: `pd.isna` answers element-wise for a sequence,
+    # so anything but a scalar null returns an array here rather than a verdict.
+    if pd.isna(value) is True:
         return None
     if isinstance(value, str):
         if not value.strip():
@@ -82,6 +86,8 @@ def _decode(value: Any, *, where: str, expected: type) -> Any:
             value = json.loads(value)
         except ValueError as error:
             raise JsonShapeError(f"{where} holds malformed JSON: {error}") from error
+        if value is None:
+            return None
     if not isinstance(value, expected):
         shape = "object" if expected is dict else "array"
         raise JsonShapeError(
