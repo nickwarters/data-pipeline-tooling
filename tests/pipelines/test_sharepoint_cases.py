@@ -235,13 +235,26 @@ def test_a_person_column_that_is_neither_an_object_nor_null_is_refused():
         raw_builder(observations(client), RecordingWriter()).run()
 
 
+def test_a_person_with_no_display_name_keeps_the_identity_the_read_returned():
+    # A directory display name is optional; the claims login is not. Refusing the
+    # row for a missing Title would abort a poll over a shape the list really holds.
+    client = FakeListClient(
+        items(item(ResponsibleParty={"Name": "i:0#.w|CONTOSO\\b.okafor"}))
+    )
+
+    [row] = landed(client)
+
+    assert row["ResponsibleParty/Name"] == "i:0#.w|CONTOSO\\b.okafor"
+    assert row["ResponsibleParty/Title"] is None
+
+
 def test_an_unexpanded_person_is_refused_rather_than_read_as_nobody():
     # A lookup the read failed to expand still answers with an object, so taking
     # any object at face value would report a broken $expand as an empty role.
     deferred = {"__deferred": {"uri": "https://sp.example.com/_api/Web/Lists(1)"}}
     client = FakeListClient(items(item(ResponsibleParty=deferred)))
 
-    with pytest.raises(SharePointFeedError, match="unexpanded lookup"):
+    with pytest.raises(SharePointFeedError, match="was not expanded"):
         raw_builder(observations(client), RecordingWriter()).run()
 
 

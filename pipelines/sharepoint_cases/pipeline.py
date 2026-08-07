@@ -264,16 +264,17 @@ def _person_subfield(
 ) -> object:
     """One sub-field of one expanded person, or ``None`` where nobody holds it."""
     if isinstance(value, dict):
-        # An unexpanded lookup still answers with an object -- {"__deferred": ...}
-        # -- so accepting any dict would read a broken $expand as five empty roles
-        # rather than as the failure it is.
-        if subfield not in value:
+        # An unexpanded lookup still answers with an object, so accepting any
+        # object would read a broken $expand as an empty role rather than as the
+        # failure it is. Identity is the tell: an expanded person always carries
+        # ``Name``, whereas a display name is genuinely optional.
+        if "Name" not in value:
             raise SharePointFeedError(
                 f"SharePoint list {LIST_NAME!r}, item {item_id}: column {person!r} "
-                f"holds an object without {subfield!r}, which is what an "
-                "unexpanded lookup answers with. Check the read still expands it."
+                "holds an object with no 'Name', so it was not expanded. Check the "
+                "read still expands it."
             )
-        return value[subfield]
+        return value.get(subfield)
     if value is None or value is pd.NA or (isinstance(value, float) and pd.isna(value)):
         return None
     raise SharePointFeedError(
