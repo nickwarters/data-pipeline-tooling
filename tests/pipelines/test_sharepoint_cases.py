@@ -16,7 +16,7 @@ import datetime as dt
 import pandas as pd
 import pytest
 
-from framework.core import ValidationError
+from framework.core import ErrorCategory, ValidationError
 from framework.io import AppendOnlyConflictError
 from framework.run import RunContext, RunLog
 from pipelines.sharepoint_cases.pipeline import (
@@ -31,6 +31,7 @@ from pipelines.sharepoint_cases.pipeline import (
     SITE,
     SOURCE_COLUMNS,
     LocalJsonListClient,
+    NoClientError,
     StorableObservations,
     main,
     raw_builder,
@@ -562,6 +563,17 @@ def test_running_with_no_client_refuses_as_an_operator_failure(tmp_path, capsys)
 
     assert exit_code == 1
     assert "--sample" in capsys.readouterr().err
+    assert not (tmp_path / FEED_NAME).exists()
+
+
+def test_the_path_addressed_route_refuses_as_a_wiring_failure(tmp_path):
+    # How the operator CLI and the orchestrator both reach a feed: run(context),
+    # with no way to pass a client. That must abort as a caught, categorised
+    # failure rather than as a stack trace the operator has to read.
+    with pytest.raises(NoClientError) as refused:
+        run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME))
+
+    assert refused.value.category == ErrorCategory.CONFIG
     assert not (tmp_path / FEED_NAME).exists()
 
 

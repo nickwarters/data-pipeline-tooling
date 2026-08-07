@@ -205,9 +205,11 @@ per-column mapping to keep in step with the list.
 There are **no multi-value columns on this list** — no Lookup, no multi Choice,
 no multi User. All five person columns hold a single user, and the read expands
 each so it answers with its selected sub-fields rather than the numeric id it
-otherwise returns. An object arriving without a `Name` was not expanded, and is
-refused rather than read as an empty role. A missing `Title` is not an error:
-the claims login always comes back, a directory display name need not.
+otherwise returns. The columns are provisioned "Person or Group" but hold only
+people here, so an expanded value carries a claims login: an object arriving
+without a `Name` was never expanded, and is refused rather than read as an empty
+role. A missing `Title` is not an error — a directory display name is optional,
+and only the Responsible Party's is selected at all.
 
 An expanded person arrives **nested on the property** —
 `{"AssignedReviewer": {"Name": …}}` — or as a plain `null` where nobody holds the

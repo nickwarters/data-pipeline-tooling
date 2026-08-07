@@ -796,7 +796,11 @@ every client to do it — the client's contract stays "return the items as
 SharePoint returned them", which is the only contract a client author could
 satisfy without reading this feed's source. A person value that is neither an
 object nor null fails with a `SharePointFeedError` naming the list, item and
-column.
+column, and so does an object carrying no `Name`: these columns hold only people
+here, an expanded person carries a claims login, so a `Name`-less object was
+never expanded and reading it as an empty role would hide a broken read. A
+missing `Title` is *not* an error — only the Responsible Party's display name is
+selected at all, and a directory display name is optional even then.
 
 **2. A quiet window runs the same hops as a busy one**, which costs one cast.
 `SchemaCoercion` repairs the types a storage round-trip loses — dates and
@@ -859,6 +863,21 @@ refuse rather than quietly ingest five fake Cases:
 ```sh
 python -m pipelines.sharepoint_cases.pipeline --base-dir /tmp/demo --sample
 ```
+
+**Needing a client does not cost the feed its ordinary addressing.** `run` takes
+one so a test can pass a fake and `--sample` can pass the fixture replayer, and
+an unattended run — the operator CLI, the orchestrator, both of which reach a
+feed by calling `run(context)` — asks `_resolve_client` for the organisation's:
+
+```sh
+python -m cli run pipelines/sharepoint_cases --base-dir /tmp/demo
+```
+
+There is no organisational client to hand back yet, so that form refuses today
+with a `NoClientError`, categorised `CONFIG` because the fix is in the wiring.
+Both entry points therefore fail the same way, as a caught, categorised failure
+rather than a stack trace. Wiring a real client is a change in one function; it
+is what scheduling this feed waits on, not anything in the dataflow.
 
 The two tables it lands, field by field, are documented in
 [`data-dictionary-sharepoint-cases.md`](data-dictionary-sharepoint-cases.md).

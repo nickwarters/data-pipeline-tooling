@@ -16,16 +16,17 @@ polling watermark: the checkpoint vouches for rows having been published, and
 gold publication is not this feed's to do.
 
 Reaching the list needs a client. ``run`` takes one so a test can hand it a fake
-and ``--sample`` can hand it the bundled fixture pages, and resolves one itself
-when none is passed -- so the feed is addressable by its location on disk, and
-schedulable, like any other::
+and ``--sample`` can hand it the bundled fixture pages; an unattended run has
+none passed to it and asks ``_resolve_client`` for the organisation's. The feed
+is therefore addressable by its location on disk like any other::
 
     python -m cli run pipelines/sharepoint_cases --base-dir BASE_DIR
     python -m pipelines.sharepoint_cases.pipeline --base-dir BASE_DIR --sample
 
 Both run from the repo root so the import-only ``framework`` package resolves on
-``sys.path``. Until an organisational client exists to resolve, the unattended
-form refuses rather than pretend to have reached a tenant.
+``sys.path``. There is no organisational client to hand back yet, so the first
+form refuses today rather than pretend to have reached a tenant; scheduling this
+feed waits on that client, not on anything here.
 """
 
 from __future__ import annotations
@@ -274,10 +275,12 @@ def _person_subfield(
 ) -> object:
     """One sub-field of one expanded person, or ``None`` where nobody holds it."""
     if isinstance(value, dict):
-        # An unexpanded lookup still answers with an object, so accepting any
-        # object would read a broken $expand as an empty role rather than as the
-        # failure it is. Identity is the tell: an expanded person always carries
-        # ``Name``, whereas a display name is genuinely optional.
+        # These columns are provisioned "Person or Group" but hold only people
+        # here, and an expanded person carries a claims login. So an object with
+        # no ``Name`` key at all was never expanded -- a metadata mode answering
+        # with a deferred-reference envelope, say -- and reading it as an empty
+        # role would turn a broken read into five roles nobody holds. A display
+        # name, by contrast, is genuinely optional.
         if "Name" not in value:
             raise SharePointFeedError(
                 f"SharePoint list {LIST_NAME!r}, item {item_id}: column {person!r} "
@@ -540,16 +543,18 @@ class NoClientError(PipelineError):
 def _resolve_client(client: CaseListClient | None) -> CaseListClient:
     """The client to poll with: the caller's, or the organisation's.
 
-    Where an unattended run acquires its client. Nothing here reaches a tenant
-    yet, so it refuses rather than pretend to have -- and this is the one place
-    that changes once an organisational client exists to hand back.
+    Where an unattended run acquires its client, and the one place that changes
+    once there is an organisational one to hand back. There is none yet, so a
+    run with nothing passed in refuses rather than pretend to have reached a
+    tenant.
     """
     if client is None:
         raise NoClientError(
-            "No SharePoint client was supplied: pass client=<the organisational "
-            "client> (fetch_items(...) plus a server_time() returning the list "
-            "server's clock), or --sample to replay the bundled fixture pages "
-            "offline."
+            "No SharePoint client was supplied, and there is no organisational "
+            "one to fall back on yet. Wire one into _resolve_client (fetch_items"
+            "(...) plus a server_time() returning the list server's clock), pass "
+            "client= when calling run(), or run the module with --sample to "
+            "replay the bundled fixture pages offline."
         )
     return client
 
