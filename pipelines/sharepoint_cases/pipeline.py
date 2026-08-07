@@ -15,14 +15,17 @@ It deliberately **stops at silver**, and it deliberately does **not** commit the
 polling watermark: the checkpoint vouches for rows having been published, and
 gold publication is not this feed's to do.
 
-Run the module directly, from the repo root so the import-only ``framework``
-package resolves on ``sys.path``::
+Reaching the list needs a client. ``run`` takes one so a test can hand it a fake
+and ``--sample`` can hand it the bundled fixture pages, and resolves one itself
+when none is passed -- so the feed is addressable by its location on disk, and
+schedulable, like any other::
 
+    python -m cli run pipelines/sharepoint_cases --base-dir BASE_DIR
     python -m pipelines.sharepoint_cases.pipeline --base-dir BASE_DIR --sample
 
-Unlike a file-sourced feed, this one cannot be addressed by its location on disk:
-reaching a tenant needs a client passed in, and the path-addressed route calls
-``run(context)`` with nothing else to give it.
+Both run from the repo root so the import-only ``framework`` package resolves on
+``sys.path``. Until an organisational client exists to resolve, the unattended
+form refuses rather than pretend to have reached a tenant.
 """
 
 from __future__ import annotations
@@ -39,7 +42,14 @@ from uuid import UUID
 
 import pandas as pd
 
-from framework.core import Dataset, PipelineError, Reader, Writer, format_failure
+from framework.core import (
+    Dataset,
+    ErrorCategory,
+    PipelineError,
+    Reader,
+    Writer,
+    format_failure,
+)
 from framework.io import AppendOnly, DatasetReader
 from framework.run import Pipeline, RunContext, RunLog
 from framework.transform import SelectColumns
@@ -438,6 +448,7 @@ def run(
     sooner than the safety lag, which is ordinary operation rather than a
     failure.
     """
+    client = _resolve_client(client)
     med = medallion(StoreRegistry(context.base_dir), FEED_NAME)
     source = SharePointSource(SITE, LIST_ID)
     checkpoints = SharePointCheckpointStore(context.base_dir)
@@ -445,7 +456,9 @@ def run(
     watermark = checkpoints.committed_watermark(source)
     window = checkpoints.window(
         source,
-        server_now=_server_time(client),
+        # The list evaluates the window's predicate, so the list's clock bounds
+        # it. A skewed local one would silently widen or narrow the window.
+        server_now=client.server_time(),
         overlap=OVERLAP,
         safety_lag=SAFETY_LAG,
     )
@@ -518,21 +531,27 @@ def _silver_source(batch: Dataset) -> Dataset:
     return Dataset.from_pandas(frame)
 
 
-def _server_time(client: CaseListClient | None) -> dt.datetime:
-    """SharePoint's own clock, never this box's.
+class NoClientError(PipelineError):
+    """The run reached the list with no client to reach it through."""
 
-    The window bounds a predicate the *list* evaluates, so a skewed local clock
-    would silently widen or narrow it. There is no local fallback for that
-    reason.
+    category = ErrorCategory.CONFIG
+
+
+def _resolve_client(client: CaseListClient | None) -> CaseListClient:
+    """The client to poll with: the caller's, or the organisation's.
+
+    Where an unattended run acquires its client. Nothing here reaches a tenant
+    yet, so it refuses rather than pretend to have -- and this is the one place
+    that changes once an organisational client exists to hand back.
     """
     if client is None:
-        raise NotImplementedError(
+        raise NoClientError(
             "No SharePoint client was supplied: pass client=<the organisational "
             "client> (fetch_items(...) plus a server_time() returning the list "
             "server's clock), or --sample to replay the bundled fixture pages "
             "offline."
         )
-    return client.server_time()
+    return client
 
 
 def main(argv: list[str]) -> int:
@@ -590,11 +609,6 @@ def main(argv: list[str]) -> int:
         result = runner.run("", FEED_NAME, base_dir=base_dir)
     except PipelineError as exc:
         print(format_failure(exc), file=sys.stderr)
-        return 1
-    except NotImplementedError as exc:
-        # Running with no client at all is an operator forgetting one, not a
-        # bug: the message says what to pass, so it is worth more than a stack.
-        print(str(exc), file=sys.stderr)
         return 1
 
     if result is None:
