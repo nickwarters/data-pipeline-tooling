@@ -1,9 +1,9 @@
 # Data dictionary — `sharepoint_cases`
 
 The filled-in entry for the `sharepoint_cases` feed, following
-[`data-dictionary-template.md`](data-dictionary-template.md). Five tables: the
-faithful raw observation, the typed Case version, and the three gold tables
-reduced from the version history — the current Case and two aggregates. The
+[`data-dictionary-template.md`](data-dictionary-template.md). Six tables: the
+faithful raw observation, the typed Case version, and the four gold tables
+reduced from the version history — the current Case and three aggregates. The
 Python contract is
 [`pipelines/sharepoint_cases/schema.py`](../pipelines/sharepoint_cases/schema.py);
 this page is its prose companion.
@@ -258,22 +258,23 @@ guessed at here would quarantine real data.
   no rule here, because a rule this feed cannot justify is a rule that will
   eventually reject good data.
 
-## Gold — the current Case and two aggregates
+## Gold — the current Case and three aggregates
 
-Silver accumulates *observations*; gold answers *what is true now*. Three tables,
+Silver accumulates *observations*; gold answers *what is true now*. Four tables,
 all rebuilt whole with `Refresh()` on every poll from the entire silver history,
 in [`pipelines/sharepoint_cases/gold.py`](../pipelines/sharepoint_cases/gold.py).
 They are published **before** the polling watermark is committed, so a failure
-anywhere leaves the watermark where it was and the next run rebuilds all three.
+anywhere leaves the watermark where it was and the next run rebuilds all four.
 
 | Table | Declared grain | Measure |
 |-------|----------------|---------|
 | `case_current` | one row per `case_id` | the Case, as it currently stands |
 | `case_counts_current` | `assigned_reviewer_name` × `assigned_reviewer_manager_name` × `status` | `case_count` |
 | `case_age_buckets_current` | `age_bucket` × `status` | `case_count` |
+| `case_throughput_daily` | `terminal_date` × `terminal_status` | `case_count` |
 
 Only `case_current` carries a live grain gate (`UniqueValidator("case_id")`); the
-two aggregates get none, for the reason set out in `case_current_builder`'s
+three aggregates get none, for the reason set out in `case_current_builder`'s
 docstring. Their grain is declared here and in each builder's docstring instead.
 
 ### `as_of_utc`, on every table
@@ -281,8 +282,8 @@ docstring. Their grain is declared here and in each builder's docstring instead.
 `as_of_utc` is the **candidate SharePoint window end** — the instant this run is
 about to commit as its watermark — as ISO-8601 UTC text. Never `utcnow()`: a
 re-drive of the same window must produce identical gold. Where a *calendar date*
-is derived from it (the age arithmetic) the instant is converted to the **local**
-date first, per
+is derived from it (`terminal_date`, the age arithmetic) the instant is converted
+to the **local** date first, per
 [`tools/observability/timestamps.py`](../tools/observability/timestamps.py).
 
 ### `case_current`
@@ -379,3 +380,31 @@ rather than clamped to zero where nobody will. Every current Case lands in
 exactly one bucket, so this table's total reconciles exactly with
 `case_counts_current`'s. The reviewer dimensions are deliberately absent — they
 are one join away in `case_current`.
+
+### `case_throughput_daily`
+
+| Attribute | Value |
+|-----------|-------|
+| **Grain** | `terminal_date` × `terminal_status` |
+| **Columns** | `terminal_date`, `terminal_status`, `case_count`, `as_of_utc` |
+
+Cases that **first entered** a terminal state (`Completed`, `Void`) on a local
+calendar date. That event is derivable rather than reconstructed, because the
+source writes it: in `platform_frontend/src/lib/case-machine.js`, `completedAt`
+has exactly two writers and both refuse an already-terminal Case, no path moves a
+Case back to `In-progress`, and `voidedAt` is the same shape. So there is one
+transition into a terminal state per Case and its stamp is write-once. The count
+is taken from the *current* row, one per Case, so overlapping re-reads cannot
+inflate it.
+
+Two caveats, both real:
+
+- The invariant "terminal status implies a stamp" is **enforced nowhere**, and a
+  list row is editable by hand in the SharePoint web UI. A terminal Case with no
+  stamp is counted under the literal `(unstamped)` rather than dropped or given a
+  NULL date, so the table still totals the number of Cases currently in a
+  terminal status.
+- It is the *source's* stamp under `Refresh()`. A hand-edited or backdated stamp
+  therefore **changes a historical count on the next poll**. That is the honest
+  reading of a source that owns the event; a frozen copy would report a number
+  the source no longer agrees with.

@@ -50,7 +50,7 @@ pipelines/orders` imports `pipelines.orders.pipeline` and executes
   a `TODO` to build the assembly, because *what* gold means is per-feed. It is
   the one hop with no shared recipe. For a worked example of a real one, see
   `pipelines/sharepoint_cases/gold.py`: a current-state reduce with a declared
-  grain, plus two aggregates, all refreshed whole on every run.
+  grain, plus three aggregates, all refreshed whole on every run.
 
 ### Recipe-first authoring, and how to diverge
 
@@ -772,7 +772,7 @@ per hop composed from the shared recipes, driven by `run(context)` — and the
 first two hops are deliberately thin. Landing the list's rows as immutable
 versions is one job and interpreting them is another: raw and silver do no
 derivation and no parsing, and everything that reads meaning into a Case happens
-in the third hop (`gold.py`, three tables refreshed whole on every poll — see the
+in the third hop (`gold.py`, four tables refreshed whole on every poll — see the
 [data dictionary](data-dictionary-sharepoint-cases.md)).
 
 **1. The read is narrowed to what raw stores.** `StorableObservations` is a
@@ -837,7 +837,7 @@ and in the returned `ingestion_batch_id` instead.
 
 **5. The watermark is committed last, after gold.** Advancing it vouches for the
 window having been *published*, not merely fetched — so the commit is the final
-statement of `run`, below the raw hop, the silver hop and every gold table.
+statement of `run`, below the raw hop, the silver hop and all four gold tables.
 A failure anywhere above leaves the watermark where it was, and the next run
 re-polls the same window and converges. `run` still returns a
 `SharePointIngestResult` carrying the window, the batch id and the row counts.

@@ -1,30 +1,31 @@
-"""Gold for the ``sharepoint_cases`` feed: the current Case, and two aggregates.
+"""Gold for the ``sharepoint_cases`` feed: the current Case, and three aggregates.
 
 Silver is an append-only history of *observations* -- one row per (list item,
 version) the poll ever saw, with overlapping windows re-presenting rows that did
 not change. Gold is the other shape: **one row per Case as it stands now**, and
-two counts reduced from it. Every table is rebuilt whole with ``Refresh()`` on
+three counts reduced from it. Every table is rebuilt whole with ``Refresh()`` on
 every poll, so a re-drive converges rather than accumulating.
 
-Three tables, and their declared grain:
+Four tables, and their declared grain:
 
 ===========================  =================================================
 ``case_current``             one row per ``case_id`` -- the latest observation
 ``case_counts_current``      reviewer x that reviewer's manager x ``status``
 ``case_age_buckets_current`` ``age_bucket`` x ``status``
+``case_throughput_daily``    ``terminal_date`` x ``terminal_status``
 ===========================  =================================================
 
 Only the first has a live grain gate; see :func:`case_current_builder` for why
-the two aggregates get none. Every grain is declared, in each builder's
+the three aggregates get none. Every grain is declared, in each builder's
 docstring and in the data dictionary.
 
 **One instant decides everything.** ``as_of`` is the candidate SharePoint window
 end -- the value the run is about to commit as its watermark -- and never
 ``utcnow()``: a re-drive of the same window must produce byte-identical gold.
 Every table carries it as ``as_of_utc``. Where a *calendar date* is needed
-(the age arithmetic) the UTC instant is converted to the **local** date through
-``tools.observability.timestamps``, which is where this repository settles
-instants-are-UTC / dates-are-local.
+(``terminal_date``, the age arithmetic) the UTC instant is converted to the
+**local** date through ``tools.observability.timestamps``, which is where this
+repository settles instants-are-UTC / dates-are-local.
 """
 
 from __future__ import annotations
@@ -46,19 +47,25 @@ from tools.observability.timestamps import local_date
 from .schema import FEED_NAME, LIST_NAME
 
 # The silver table gold reduces, and the current-state table every aggregate is
-# then reduced from. ``GOLD_TABLES`` -- every gold table, in publication order --
-# is derived from the aggregate list at the foot of this module, so it cannot
-# drift from what :func:`publish_gold` actually writes.
+# then reduced from. ``GOLD_TABLES`` -- all four, in publication order -- is
+# derived from the aggregate list at the foot of this module, so it cannot drift
+# from what :func:`publish_gold` actually writes.
 SILVER_TABLE = "case_version"
 CURRENT_TABLE = "case_current"
 
 CASE_ID_COLUMN = "case_id"
 AS_OF_COLUMN = "as_of_utc"
 
-# A reporting fill, not a source value. It is a literal key rather than NULL so
+# A Case whose review is over, and the source-written stamp that says when it
+# ended. See :func:`case_throughput_daily_builder` for why these two stamps are
+# the business event and not an approximation of it.
+TERMINAL_STATUSES = {"Completed": "completed_at", "Void": "voided_at"}
+
+# Reporting fills, not source values. Both are literal keys rather than NULL so
 # the grain of an aggregate has no hole in it: a NULL group key is a hole a
 # reader may silently drop, losing rows from a total.
 UNASSIGNED = "(unassigned)"
+UNSTAMPED = "(unstamped)"
 
 # The grain of ``case_counts_current``, in the order it groups and sorts by. The
 # Assigned Reviewer leads: the question this table answers is "who is holding
@@ -259,6 +266,53 @@ def _age_buckets(dataset: Dataset, *, as_of: dt.datetime) -> Dataset:
     return Dataset.from_pandas(counted.reset_index(drop=True))
 
 
+def _throughput(dataset: Dataset) -> Dataset:
+    """Count current Cases by the local date their terminal stamp falls on."""
+    frame = dataset.to_pandas()
+    terminal = frame[frame["status"].isin(TERMINAL_STATUSES.keys())]
+    if terminal.empty:
+        # Declared rather than derived, so a poll with nothing terminal in it
+        # still refreshes the table in the shape a populated one has.
+        return Dataset.from_pandas(
+            pd.DataFrame(
+                {
+                    "terminal_date": pd.Series(dtype="object"),
+                    "terminal_status": pd.Series(dtype="object"),
+                    "case_count": pd.Series(dtype="int64"),
+                }
+            )
+        )
+    # One parse per terminal stamp column, not one per row: each row then takes
+    # the stamp column its own status names.
+    stamps = pd.Series(pd.NaT, index=terminal.index, dtype="datetime64[ns, UTC]")
+    for status, column in TERMINAL_STATUSES.items():
+        of_status = terminal["status"] == status
+        stamps[of_status] = pd.to_datetime(
+            terminal.loc[of_status, column],
+            utc=True,
+            format="ISO8601",
+            errors="coerce",
+        )
+    # The instant -> local calendar date step stays per value: which zone is
+    # local is the ``tools.observability.timestamps`` seam and it resolves per
+    # instant, which no vectorised ``tz_convert`` expresses.
+    dates = [
+        UNSTAMPED if pd.isna(stamp) else local_date(stamp).isoformat()
+        for stamp in stamps
+    ]
+    counted = (
+        terminal.assign(
+            terminal_date=pd.Series(dates, index=terminal.index, dtype="object"),
+            terminal_status=terminal["status"],
+        )
+        .groupby(["terminal_date", "terminal_status"])
+        .size()
+        .reset_index(name="case_count")
+        .sort_values(["terminal_date", "terminal_status"], kind="stable")
+    )
+    return Dataset.from_pandas(counted.reset_index(drop=True))
+
+
 # --- the builders -----------------------------------------------------------
 
 
@@ -280,7 +334,7 @@ def case_current_builder(
     kept anyway, and only here, as a **tripwire** -- the one place in this
     feed's gold where the grain is produced by a rule rather than by a
     ``groupby``, so the one place a future change to that rule could get it
-    wrong. The two aggregate hops get no such gate, because there the check
+    wrong. The three aggregate hops get no such gate, because there the check
     would be satisfied by construction with no rule to guard.
 
     Every silver column is republished, including the ``answers`` /
@@ -322,7 +376,7 @@ def _aggregate_hop(
 ) -> Pipeline:
     """The wiring every aggregate hop shares: read, count, stamp, refresh.
 
-    The aggregates differ only in what they count, so only the table they
+    The three aggregates differ only in what they count, so only the table they
     publish, the transform that counts and the step's name are theirs. Each
     keeps its own builder, because the grain and the reasoning behind it are the
     part worth reading.
@@ -413,11 +467,53 @@ def case_age_buckets_current_builder(
     )
 
 
+def case_throughput_daily_builder(
+    reader: Reader,
+    writer: Writer,
+    *,
+    as_of: dt.datetime,
+    run_log: RunLog | None = None,
+) -> Pipeline:
+    """Build the throughput hop. **Grain: ``terminal_date`` x ``terminal_status``.**
+
+    Measures Cases that *first entered* a terminal state on a local calendar
+    date. That event is derivable here rather than reconstructed, because the
+    source writes it: in the review platform's Case machine, ``completedAt`` has
+    exactly two writers and both refuse an already-terminal Case, no path moves
+    a Case back to ``In-progress``, and ``voidedAt`` is the same shape. So there
+    is one transition into a terminal state per Case and its stamp is
+    write-once -- which makes this a source-written business event rather than an
+    artefact of when we happened to poll. Overlapping re-reads cannot inflate it:
+    the count is taken from the *current* row, one per Case.
+
+    Two caveats, both real:
+
+    * The invariant "terminal status implies a stamp" is enforced nowhere, and a
+      list row is editable in the SharePoint web UI. A terminal Case with no
+      stamp is counted under the literal ``"(unstamped)"`` rather than dropped or
+      given a NULL date, so the table still adds up to the number of Cases
+      currently in a terminal status.
+    * It is the *source's* stamp under ``Refresh()``. A hand-edited or backdated
+      stamp therefore changes a historical count on the next poll. That is the
+      honest reading of a source that owns the event; a frozen copy would report
+      a number the source no longer agrees with.
+    """
+    return _aggregate_hop(
+        reader,
+        writer,
+        table="case_throughput_daily",
+        transform=_throughput,
+        step="count-by-terminal-date",
+        as_of=as_of,
+        run_log=run_log,
+    )
+
+
 # --- publication ------------------------------------------------------------
 
 
 def _aggregates() -> list[tuple[str, Callable[..., Pipeline]]]:
-    """The two aggregates in publication order: each table and its builder.
+    """The three aggregates in publication order: each table and its builder.
 
     Resolved per call rather than bound into a module constant, so a test that
     substitutes a builder on this module is still the builder that runs.
@@ -425,11 +521,13 @@ def _aggregates() -> list[tuple[str, Callable[..., Pipeline]]]:
     return [
         ("case_counts_current", case_counts_current_builder),
         ("case_age_buckets_current", case_age_buckets_current_builder),
+        ("case_throughput_daily", case_throughput_daily_builder),
     ]
 
 
-# Every gold table, in publication order. Derived from the pair list rather than
-# written out beside it, so the declared set and the published set are one thing.
+# All four gold tables, in publication order. Derived from the pair list rather
+# than written out beside it, so the declared set and the published set are one
+# thing.
 GOLD_TABLES = (CURRENT_TABLE, *(table for table, _ in _aggregates()))
 
 
@@ -447,14 +545,14 @@ def publish_gold(
     describe: bool = False,
     run_log: RunLog | None = None,
 ) -> None:
-    """Rebuild every gold table from the accumulated silver history.
+    """Rebuild all four gold tables from the accumulated silver history.
 
-    ``case_current`` is published first and its resulting dataset feeds the
+    ``case_current`` is published first and its resulting dataset feeds the three
     aggregates through a :class:`~framework.io.DatasetReader`, so silver is read
     once and every aggregate counts exactly the rows the current table holds. The
     aggregates commit independently, in order; a failure part-way leaves the
     earlier ones refreshed, which is safe because the caller has not advanced the
-    watermark and the next run rebuilds them all from the same history.
+    watermark and the next run rebuilds all four from the same history.
 
     Every hop runs as a bare ``p.run()``, exactly as the raw and silver hops
     above it do, and so inherits the **ambient** run context the runner makes
