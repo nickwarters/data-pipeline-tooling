@@ -101,7 +101,8 @@ commit-is-last, and where the checkpoint file lives — is at
 ## 6. Backup and concurrency
 
 - Two places hold system-of-record state, and they must be backed up and restored
-  **together**: `<base>/<feed>/{raw,silver,gold}.db` and
+  **together**: the whole `<base>/<feed>/` directory (`quarantine.db` alongside
+  `{raw,silver,gold}.db` — rejected observations cannot be re-fetched either) and
   `<base>/_checkpoints/sharepoint.db`. Restoring data without the checkpoint, or
   the checkpoint without the data, forks the feed.
 - One local process, one operator at a time. There is no distributed lock; a

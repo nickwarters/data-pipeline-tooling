@@ -18,7 +18,7 @@ separate places:
 | Gap | Where | Effect today |
 | --- | --- | --- |
 | No organisational client | `_resolve_client` in `pipelines/sharepoint_cases/pipeline.py` | An unattended run raises `NoClientError` (`config` category) |
-| `SITE` / `LIST_ID` are placeholders | same file, near the top | Nothing to point a client at |
+| `SITE` / `LIST_ID` are placeholders | same file, near the top | No site to point a client at; no identity to key the watermark on |
 | `Modified` is not indexed on the list | the tenant, not this repository | Works while the list is small; degrades past 5,000 rows |
 
 The feed is scheduled with `enabled=True` despite that. This is deliberate: a
@@ -58,10 +58,11 @@ Neither can be copied from the review application: it derives its site from the
 page it is served from and addresses lists by title, so the GUID exists nowhere
 in this repository or the frontend.
 
-**Take care over the GUID.** The watermark is keyed on `site|list_id`, so a wrong
-GUID does not fail — it silently addresses a different feed's place in the source
-and looks exactly like a first load. This is the one value in the whole sequence
-where a mistake is quiet.
+**Take care over the GUID.** It never reaches the fetch — the list is addressed
+by title — so a wrong one does not fail, and does not fetch the wrong rows
+either. It keys the watermark, so a wrong GUID misfiles the feed's place in the
+source and looks exactly like a first load. This is the one value in the whole
+sequence where a mistake is quiet; Rollback covers what to do about it.
 
 While you are in the list's settings, index `Modified`. It can only be indexed
 while the list is under the 5,000-row List View Threshold, so this gets harder,
@@ -108,11 +109,15 @@ Run it yourself, once, deliberately. Not through the scheduler.
 python -m cli run pipelines/sharepoint_cases --env prod --dry-run
 ```
 
-Under a dry run every hop's writes are previewed and **the watermark is not
+Under a dry run each hop's writes are previewed and **the watermark is not
 committed** — the checkpoint is not a pipeline step, so it is guarded explicitly
 rather than inheriting the ambient skip. This is the real rehearsal: it reaches
 the tenant, exercises the client, and leaves no trace. Check the columns, dtypes
 and row counts it prints against what you expect the list to hold.
+
+Expect raw and silver only. Gold reduces the accumulated silver history, and on a
+fresh directory the silver write was previewed rather than performed, so there is
+nothing to reduce and no gold steps are previewed. That is correct, not a fault.
 
 Then commit for real:
 
@@ -138,9 +143,10 @@ means stage 1's GUID is now baked into the feed's history — see Rollback.
 
 Two places hold system-of-record state and must be backed up **together**:
 
-- `<base>/sharepoint_cases/{raw,silver,gold}.db` — accumulated history that
-  cannot be re-fetched, because a `Modified` window only returns what the list
-  holds now.
+- `<base>/sharepoint_cases/` — the whole directory, not just
+  `{raw,silver,gold}.db`: `quarantine.db` holds rejected observations that are
+  equally un-re-fetchable. None of it can be recovered from the list, because a
+  `Modified` window only returns what the list holds now.
 - `<base>/_checkpoints/sharepoint.db` — the feed's place in the source.
 
 Restoring one without the other forks the feed. Get this in place before the
@@ -181,24 +187,31 @@ Do not proceed past stage 4 unless all of these hold:
 - [ ] No credential appears in a command line, a parameter, or a committed file.
 - [ ] `PIPELINE_DATA_DIR_PROD` set and resolving.
 - [ ] The dry run at stage 4 produced the columns and row counts you expected.
-- [ ] A backup covers the medallion **and** the checkpoint.
+- [ ] A backup covers the feed's whole directory **and** the checkpoint.
 
 ## Rollback
 
 Honest about what is and is not reversible.
 
-**Reversible.** Stages 0–4's dry run leave nothing behind. Unpointing the
-scheduler at stage 6 stops the feed immediately and cleanly; the accumulated data
-and watermark simply sit there, and a later run resumes from the watermark and
-covers the gap in one wider window.
+**Reversible.** Everything through stage 4's dry run leaves nothing behind.
+Unpointing the scheduler at stage 6 stops the feed immediately and cleanly; the
+accumulated data and watermark simply sit there, and a later run resumes from the
+watermark and covers the gap in one wider window.
 
-**Not cleanly reversible: the first committing run.** It seeds the watermark
-under the `site|list_id` key and writes append-only history. If the GUID turns
-out to be wrong, the feed has accumulated observations against the wrong list and
-its watermark points into that list's timeline. There is no in-place correction —
-raw and silver are append-only by design. The recovery is to stop, take a copy
-for evidence, and start the feed's medallion and checkpoint fresh with the right
-GUID.
+**Not cleanly reversible: the first run without `--dry-run`** — whether or not it
+succeeds. Each hop commits as it goes and only the checkpoint is held back to
+last, so a run that fails between the raw write and the commit has already landed
+append-only rows with no watermark seeded. Raw and silver are append-only by
+design, so there is no in-place correction of what they hold.
+
+**A wrong `LIST_ID` is not that failure.** The list is addressed **by title** —
+the reader is built with `LIST_NAME`, and `fetch_items` takes a list name — so
+the GUID never reaches the fetch. Its only jobs are keying the watermark and
+stamping batch provenance. A wrong GUID therefore ingests the *right* list's rows
+and files the watermark under the wrong identity: the medallion is sound, and
+only the checkpoint is misfiled. Correct the GUID and the feed simply sees an
+unknown key and does one more first load; `AppendOnly` no-ops every observation
+it has already stored. **Do not wipe the medallion for this** — it is good data.
 
 This is why stage 4 is run by hand and verified before stage 6 exists.
 
