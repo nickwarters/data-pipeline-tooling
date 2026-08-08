@@ -192,7 +192,9 @@ test('CaptureGroups renders a person field as a people picker, not a text box', 
   const root = rootOf(
     CaptureGroups(
       personProps({
-        peopleSearch: { attributedTo: { query: 'Ja', people: [PERSON] } },
+        peopleSearch: {
+          attributedTo: { query: 'Ja', people: [PERSON], status: 'success' },
+        },
         onPersonQuery: (/** @type {any} */ key, /** @type {any} */ query) =>
           queries.push([key, query]),
         onCapture: (/** @type {any} */ key, /** @type {any} */ value) =>
@@ -212,6 +214,39 @@ test('CaptureGroups renders a person field as a people picker, not a text box', 
 
   fireEvent(getByRole(root, 'option', { name: /Jane Smith/ }), 'click');
   assert.deepEqual(captured, [['attributedTo', PERSON]]);
+});
+
+test('CaptureGroups never offers a person the directory has not resolved', () => {
+  // The picker used to offer the typed text as an account whenever it had no
+  // matches — which included the debounce window, the request itself, and a
+  // request that failed outright.
+  for (const status of /** @type {const} */ (['loading', 'error'])) {
+    const root = rootOf(
+      CaptureGroups(
+        personProps({
+          peopleSearch: {
+            attributedTo: { query: 'someone', people: [], status },
+          },
+        })
+      )
+    );
+    assert.deepEqual(queryAllByRole(root, 'option'), [], status);
+  }
+
+  const answered = rootOf(
+    CaptureGroups(
+      personProps({
+        peopleSearch: {
+          attributedTo: { query: 'someone', people: [], status: 'success' },
+        },
+      })
+    )
+  );
+  assert.deepEqual(queryAllByRole(answered, 'option'), []);
+  assert.equal(
+    answered.querySelector('.cora-people-picker-status')?.textContent ?? null,
+    'No matches'
+  );
 });
 
 test('CaptureGroups collapses a chosen person to their name plus a clear control', () => {

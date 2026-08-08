@@ -252,7 +252,7 @@ test('state: route state owns loading, save status, and selected tab under route
     voidPending: false,
     captureCollapsed: {},
     captureSearch: {},
-    responsiblePartySearch: { query: '', people: [] },
+    responsiblePartySearch: { query: '', people: [], status: 'idle' },
     saveStatus: 'saved',
     snapshot: null,
   });
@@ -374,8 +374,11 @@ test('state: capture person search is held per failed Question and per field', (
     type: 'case/capture-search-results',
     questionId: 'q1',
     fieldKey: 'attributedTo',
-    query: 'Jane',
-    people: [{ loginName: 'jsmith', displayName: 'Jane Smith' }],
+    search: {
+      query: 'Jane',
+      people: [{ loginName: 'jsmith', displayName: 'Jane Smith' }],
+      status: 'success',
+    },
   });
 
   assert.deepEqual(state.routes.caseReview.captureSearch, {
@@ -383,8 +386,9 @@ test('state: capture person search is held per failed Question and per field', (
       attributedTo: {
         query: 'Jane',
         people: [{ loginName: 'jsmith', displayName: 'Jane Smith' }],
+        status: 'success',
       },
-      reviewedBy: { query: 'Alex', people: [] },
+      reviewedBy: { query: 'Alex', people: [], status: 'idle' },
     },
   });
 
@@ -393,15 +397,18 @@ test('state: capture person search is held per failed Question and per field', (
     { questionId: 'q1', fieldKey: 'unknown', query: 'Jane' },
     { questionId: 'q2', fieldKey: 'attributedTo', query: 'Jane' },
   ]) {
-    assert.equal(
-      caseReviewReducer(state, {
-        type: 'case/capture-search-results',
-        ...stale,
-        people: [],
-      }),
-      state,
-      'results the Reviewer has typed past are dropped'
-    );
+    for (const status of /** @type {const} */ (['success', 'error'])) {
+      assert.equal(
+        caseReviewReducer(state, {
+          type: 'case/capture-search-results',
+          questionId: stale.questionId,
+          fieldKey: stale.fieldKey,
+          search: { query: stale.query, people: [], status },
+        }),
+        state,
+        'an outcome the Reviewer has typed past is dropped'
+      );
+    }
   }
 
   const cleared = caseReviewReducer(state, {
@@ -410,7 +417,7 @@ test('state: capture person search is held per failed Question and per field', (
     fieldKey: 'attributedTo',
   });
   assert.deepEqual(cleared.routes.caseReview.captureSearch, {
-    q1: { reviewedBy: { query: 'Alex', people: [] } },
+    q1: { reviewedBy: { query: 'Alex', people: [], status: 'idle' } },
   });
   for (const absent of [
     { questionId: 'q1', fieldKey: 'attributedTo' },
@@ -630,27 +637,33 @@ test('state: the Case-level Responsible Party search is one query, not one per Q
   assert.deepEqual(state.routes.caseReview.responsiblePartySearch, {
     query: 'Jane',
     people: [],
+    status: 'idle',
   });
 
   const found = caseReviewReducer(state, {
     type: 'case/responsible-party-search-results',
-    query: 'Jane',
-    people: [{ loginName: 'jsmith', displayName: 'Jane Smith' }],
+    search: {
+      query: 'Jane',
+      people: [{ loginName: 'jsmith', displayName: 'Jane Smith' }],
+      status: 'success',
+    },
   });
   assert.deepEqual(found.routes.caseReview.responsiblePartySearch, {
     query: 'Jane',
     people: [{ loginName: 'jsmith', displayName: 'Jane Smith' }],
+    status: 'success',
   });
 
-  assert.equal(
-    caseReviewReducer(found, {
-      type: 'case/responsible-party-search-results',
-      query: 'Jan',
-      people: [],
-    }),
-    found,
-    'results for a query the Reviewer has typed past must not re-render'
-  );
+  for (const status of /** @type {const} */ (['success', 'error'])) {
+    assert.equal(
+      caseReviewReducer(found, {
+        type: 'case/responsible-party-search-results',
+        search: { query: 'Jan', people: [], status },
+      }),
+      found,
+      'an outcome for a query the Reviewer has typed past must not re-render'
+    );
+  }
 
   const typedAgain = caseReviewReducer(found, {
     type: 'case/responsible-party-search-input',
@@ -659,6 +672,7 @@ test('state: the Case-level Responsible Party search is one query, not one per Q
   assert.deepEqual(typedAgain.routes.caseReview.responsiblePartySearch, {
     query: 'Janet',
     people: [],
+    status: 'idle',
   });
 
   const cleared = caseReviewReducer(typedAgain, {
@@ -667,6 +681,7 @@ test('state: the Case-level Responsible Party search is one query, not one per Q
   assert.deepEqual(cleared.routes.caseReview.responsiblePartySearch, {
     query: '',
     people: [],
+    status: 'idle',
   });
   assert.equal(
     caseReviewReducer(cleared, {
@@ -674,6 +689,20 @@ test('state: the Case-level Responsible Party search is one query, not one per Q
     }),
     cleared,
     'clearing a search that is already empty must not re-render'
+  );
+
+  // A failed search holds no people and, once the box is emptied, no query
+  // either — so without the status the clear would read as already-cleared and
+  // the failure message would stay on screen.
+  const failed = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/responsible-party-search-results',
+    search: { query: '', people: [], status: 'error' },
+  });
+  assert.equal(
+    caseReviewReducer(failed, { type: 'case/responsible-party-search-cleared' })
+      .routes.caseReview.responsiblePartySearch.status,
+    'idle',
+    'clearing an errored empty search returns it to idle'
   );
 });
 
@@ -781,6 +810,7 @@ test('route: the Responsible Party search is debounced and its choice is persist
   assert.deepEqual(route.state.routes.caseReview.responsiblePartySearch, {
     query: '',
     people: [],
+    status: 'idle',
   });
   t.mock.timers.tick(1);
   await Promise.resolve();
@@ -806,6 +836,176 @@ test('route: disposal drops a pending Responsible Party search', (t) => {
   t.mock.timers.tick(200);
 
   assert.deepEqual(searches, []);
+});
+
+/**
+ * What the picker says beneath the box: `null` when it makes no claim.
+ * @param {any} container
+ */
+function pickerStatusText(container) {
+  return (
+    container.querySelector('.cora-people-picker-status')?.textContent ?? null
+  );
+}
+
+/** @param {any} container */
+function pickerOptionCount(container) {
+  return queryAllByRole(container, 'option').length;
+}
+
+test('route: a capture search still in flight says so and offers nothing', (t) => {
+  // The free-text fallback used to appear here — during the debounce window and
+  // the request itself — so the Reviewer could commit an unresolved account
+  // before the directory had answered at all.
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const route = renderCaptureSearchRoute(() => new Promise(() => {}));
+  const input = getByRole(route.container, 'combobox', {
+    name: 'Search people for Attributed to',
+  });
+  input.value = 'Jane';
+  fireEvent(input, 'input');
+
+  assert.equal(
+    route.state.routes.caseReview.captureSearch.q1.attributedTo.status,
+    'loading'
+  );
+  assert.equal(pickerOptionCount(route.container), 0);
+  assert.equal(pickerStatusText(route.container), 'Searching…');
+
+  t.mock.timers.tick(200);
+  assert.equal(pickerStatusText(route.container), 'Searching…');
+  route.dispose();
+});
+
+test('route: a capture search the directory answers with nobody says no matches', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const route = renderCaptureSearchRoute(async () => []);
+  const input = getByRole(route.container, 'combobox', {
+    name: 'Search people for Attributed to',
+  });
+  input.value = 'Jane';
+  fireEvent(input, 'input');
+  t.mock.timers.tick(200);
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.equal(
+    route.state.routes.caseReview.captureSearch.q1.attributedTo.status,
+    'success'
+  );
+  assert.equal(pickerOptionCount(route.container), 0);
+  assert.equal(pickerStatusText(route.container), 'No matches');
+  route.dispose();
+});
+
+test('route: a capture search that fails is named as a failure and offers nothing', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const route = renderCaptureSearchRoute(async () => {
+    throw new Error('HTTP Error: 400');
+  });
+  const input = getByRole(route.container, 'combobox', {
+    name: 'Search people for Attributed to',
+  });
+  input.value = 'Jane';
+  fireEvent(input, 'input');
+  t.mock.timers.tick(200);
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.equal(
+    route.state.routes.caseReview.captureSearch.q1.attributedTo.status,
+    'error'
+  );
+  assert.equal(pickerOptionCount(route.container), 0);
+  assert.equal(
+    pickerStatusText(route.container),
+    'Directory search is unavailable'
+  );
+  route.dispose();
+});
+
+test('route: a failure for a query the Reviewer has typed past leaves the open search alone', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  /** @type {Array<{ query: string, reject: (reason: any) => void }>} */
+  const pending = [];
+  const route = renderCaptureSearchRoute(
+    (query) =>
+      new Promise((_resolve, reject) => pending.push({ query, reject }))
+  );
+  const field = () =>
+    getByRole(route.container, 'combobox', {
+      name: 'Search people for Attributed to',
+    });
+
+  const first = field();
+  first.value = 'Ja';
+  fireEvent(first, 'input');
+  t.mock.timers.tick(200);
+
+  const second = field();
+  second.value = 'Jane';
+  fireEvent(second, 'input');
+
+  pending[0].reject(new Error('HTTP Error: 400'));
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.equal(
+    route.state.routes.caseReview.captureSearch.q1.attributedTo.status,
+    'loading',
+    'the search the Reviewer is waiting on is untouched'
+  );
+  assert.equal(pickerStatusText(route.container), 'Searching…');
+  route.dispose();
+});
+
+test('route: a failure arriving after the mount ends changes nothing', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  /** @type {Array<(reason: any) => void>} */
+  const rejecters = [];
+  const route = renderCaptureSearchRoute(
+    () => new Promise((_resolve, reject) => rejecters.push(reject))
+  );
+  const input = getByRole(route.container, 'combobox', {
+    name: 'Search people for Attributed to',
+  });
+  input.value = 'Jane';
+  fireEvent(input, 'input');
+  t.mock.timers.tick(200);
+  const before = route.state;
+
+  route.dispose();
+  rejecters[0](new Error('HTTP Error: 400'));
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.equal(route.state, before);
+});
+
+test('route: a failed Responsible Party search is named as a failure and offers nothing', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const route = renderResponsiblePartyRoute(async () => {
+    throw new Error('HTTP Error: 400');
+  });
+  const input = getByRole(route.container, 'combobox', {
+    name: 'Search people for Responsible Party',
+  });
+  input.value = 'Jane';
+  fireEvent(input, 'input');
+  t.mock.timers.tick(200);
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.equal(
+    route.state.routes.caseReview.responsiblePartySearch.status,
+    'error'
+  );
+  assert.equal(pickerOptionCount(route.container), 0);
+  assert.equal(
+    pickerStatusText(route.container),
+    'Directory search is unavailable'
+  );
+  route.dispose();
 });
 
 test('state: tab selection is store-owned and rejects hidden Sections', () => {

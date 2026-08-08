@@ -367,6 +367,10 @@ export class HttpSharePointClient {
    * site are still found. Each result's claims `Key` is reduced to a bare
    * account before returning.
    *
+   * A payload this method cannot read is reported, never swallowed as "no
+   * matches": the two are indistinguishable on screen, and the second one hides
+   * a broken request behind an empty directory.
+   *
    * @param {string} query
    * @returns {Promise<PersonResult[]>}
    */
@@ -377,11 +381,11 @@ export class HttpSharePointClient {
     const url = this._absolute(
       '/_api/SP.UI.ApplicationPages.ClientPeoplePickerWebServiceInterface.clientPeoplePickerSearchUser'
     );
+    // No `__metadata` type annotation on `queryParams`: that is an odata=verbose
+    // construct, and this client sends and accepts odata=nometadata throughout.
+    // SharePoint rejects the mismatch outright rather than ignoring it.
     const body = JSON.stringify({
       queryParams: {
-        __metadata: {
-          type: 'SP.UI.ApplicationPages.ClientPeoplePickerQueryParameters',
-        },
         AllowEmailAddresses: true,
         AllowMultipleEntities: false,
         MaximumEntitySuggestions: 50,
@@ -392,10 +396,7 @@ export class HttpSharePointClient {
     });
 
     const json = await this._write(url, 'POST', {}, body);
-    const raw =
-      json?.value ?? /** @type {any} */ (json?.d)?.ClientPeoplePickerSearchUser;
-    const entities = typeof raw === 'string' ? JSON.parse(raw) : [];
-    return entities.map(personFromEntity);
+    return peoplePickerEntities(json, url).map(personFromEntity);
   }
 
   /**
@@ -955,6 +956,41 @@ function buildFilterExpr(filter) {
     }
   }
   return conds.join(' and ');
+}
+
+/**
+ * The people-picker entity array, whichever envelope the farm wrapped it in:
+ * the nometadata `value` or the verbose `d.ClientPeoplePickerSearchUser`, both
+ * of which carry a JSON string. An empty string is a farm saying "nobody".
+ *
+ * Anything else throws, naming the endpoint and the payload's top-level keys.
+ * The keys alone are the diagnosis — which envelope came back — and the values
+ * are directory records that must not reach a log or a screenshot.
+ *
+ * @param {any} json the whole response
+ * @param {string} url
+ * @returns {any[]}
+ */
+function peoplePickerEntities(json, url) {
+  const raw =
+    json?.value ?? /** @type {any} */ (json?.d)?.ClientPeoplePickerSearchUser;
+  /** @returns {Error} */
+  const unreadable = () =>
+    new Error(
+      `Unrecognised people-picker response from ${url}: payload keys ${JSON.stringify(
+        Object.keys(json ?? {})
+      )}`
+    );
+  if (typeof raw !== 'string') throw unreadable();
+  if (raw.trim() === '') return [];
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw unreadable();
+  }
+  if (!Array.isArray(parsed)) throw unreadable();
+  return parsed;
 }
 
 /**

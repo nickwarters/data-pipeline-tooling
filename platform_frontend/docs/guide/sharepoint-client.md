@@ -15,6 +15,7 @@ just the function and the `client` it was handed.
 // listCases(filter) → Promise<CaseRow[]>
 // getCurrentUser() → Promise<CurrentUser>
 // getCurrentUserGroups() → Promise<string[]>
+// searchPeople(query) → Promise<PersonResult[]>
 
 // Switch to mock mode: ?mock=1 in the URL
 // Add a new method: typedef → HttpSharePointClient → MockSharePointClient → fixture
@@ -27,6 +28,22 @@ just the function and the `client` it was handed.
 Every REST consumer in the framework codes against the `SharePointClient` typedef defined in `src/sharepoint-client.js`. Both `HttpSharePointClient` (real HTTP) and `MockSharePointClient` (in-memory fixture) implement it identically. Components receive a `client` property; they never know or care which implementation is behind it.
 
 This is what makes the mock-first dev loop work: the same component code runs against real SharePoint in production and against fixture data in development and tests.
+
+### `searchPeople(query)`
+
+The directory type-ahead behind every people picker. A blank or whitespace-only
+query short-circuits to `[]` without a request. Otherwise it POSTs to the
+people-picker endpoint across all principal sources, so it finds users who have
+never been added to this site, and reduces each result's claims `Key` to a bare
+account name.
+
+It **rejects** on a response whose payload it cannot read as an entity list,
+naming the endpoint and the payload's top-level keys — keys only, never values,
+which are directory records. Returning `[]` there would be indistinguishable on
+screen from a directory that genuinely matched nobody, which is exactly how a
+broken request went unnoticed once. Callers are expected to have a failure path:
+`createDebouncedPeopleSearch` turns a rejection into an `error` search state and
+the picker says the search is unavailable.
 
 ---
 

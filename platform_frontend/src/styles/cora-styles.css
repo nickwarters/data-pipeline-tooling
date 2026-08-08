@@ -2768,6 +2768,15 @@
   outline: none;
 }
 
+/* In normal flow beneath the box, unlike the results list: it appears exactly
+   when there are no results to overlay, so nothing needs to float above the
+   content below. */
+.cora-people-picker-status {
+  margin: var(--cora-space-1) 0 0;
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+}
+
 /* ─────────────────────────────────────────────────────────────────────────
    Tab strip — the `.cora-tabs*` classes the Case Review page renders. The
    `cora-tabs` element primitive was deleted as dead code in #494; its
