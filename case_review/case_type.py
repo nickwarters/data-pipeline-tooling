@@ -1,20 +1,25 @@
-"""``CaseType`` / ``Variation`` — declarative case-review domain objects.
-
-A **Case Type** is a first-class classification of Cases that determines its
-fields, its Variations, and, over time, its ingest/selection/processing
-configuration. It is an explicit object imported directly by case-review
-pipelines, not a framework primitive and not an entry in a global registry.
+"""``Variation`` — a declarative case-review domain object — and the retiring
+``CaseType`` wrapper.
 
 A **Variation** is a specialization within a Case Type that inherits its config
 and overrides only what differs, most commonly the review platform's Question
-Bank reference (``question_bank_id``).
+Bank reference (``question_bank_id``). It is an explicit object imported
+directly by case-review pipelines, not a framework primitive and not an entry in
+a global registry.
 
-A Case Type also owns its **identity contract**: its ``name``, which is the
-namespace Cases are keyed in, and the ``natural_key`` columns that identify one
-within it. Both are hashed together to mint the deterministic ``case_id``. The
-Callers source the namespace and natural key for the Case builder and every
-Detail-Table builder from this same declaration, so a Case and its Detail rows
-derive the same ``case_id`` independently with no cross-pipeline join.
+A Case Type's **identity contract** is no longer held here. A feed declares it
+explicitly beside its row schema, as a ``NAMESPACE`` string and a
+``NATURAL_KEY`` tuple; gold builders take those values as arguments. Callers
+source the namespace and natural key for the Case builder and every Detail-Table
+builder from that one declaration, so a Case and its Detail rows derive the same
+``case_id`` independently with no cross-pipeline join. Changing either value
+re-keys history. See
+[ADR-0009](../docs/adr/0009-case-identity-and-gold-grain.md).
+
+``CaseType`` below is the retiring wrapper over that contract. The demo feeds no
+longer use it — ``tests/integration/test_public_api.py`` holds the migrated
+surfaces to that — and the ``--case-type`` scaffold template is the one
+remaining caller, migrated in a later slice of the retirement.
 """
 
 from __future__ import annotations
@@ -33,6 +38,9 @@ class Variation:
 @dataclass(frozen=True)
 class CaseType:
     """A Case Type: its schema and identity contract, with its Variations.
+
+    **Retiring.** New feeds declare ``NAMESPACE`` / ``NATURAL_KEY`` beside their
+    row schema instead; see the module docstring.
 
     ``natural_key`` is the feed's stable identifying column(s), and ``name`` is
     the namespace they are keyed in, so the same natural key identifies a

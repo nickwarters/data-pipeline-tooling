@@ -1,10 +1,10 @@
-# The Selection flow — CaseType / Variation, CasePool, SelectionPool
+# The Selection flow — Case Type declarations, CasePool, SelectionPool
 
 The domain capstone ties the primitives the earlier slices built into the
 full per-Case-Type path the framework exists to make routine: a source feed is
 **ingested** into a Case Type's medallion, surfaced as a **CasePool**, then
 **Selection** narrows it into the **SelectionPool** written to gold. This doc
-covers the declarative domain objects (`CaseType` / `Variation`), the `CasePool`
+covers the declarative Case Type data (schema, identity, and `Variation`), the `CasePool`
 that reads the current ingested gold, and the Selection pipeline that produces
 the SelectionPool. For the domain language behind the terms, see
 [`../CONTEXT.md`](../CONTEXT.md); for the processors Selection composes, see
@@ -27,19 +27,19 @@ the SelectionPool. For the domain language behind the terms, see
 ingested `gold`: the **CasePool**. The separate **Selection** pipeline lands the
 **SelectionPool** in its own gold table, stamped by run.
 
-## `CaseType` / `Variation` — the declarative domain objects
+## Case Type declarations / `Variation`
 
 A **Case Type** is a first-class classification of Cases that determines its
 fields, its Variations, and — over time — its ingest/selection/processing
-(CONTEXT.md). It is an **explicit declarative object imported directly**, not an
-entry in a global domain registry. The minimal `PipelineRunner` registry is only
-for dispatching named domain Pipelines such as `cases/ingest` and
-`cases/selection`.
+(CONTEXT.md). A feed keeps the row schema, identity values, and Variations
+together as **explicit module data**, not an entry in a global domain registry.
+The minimal `PipelineRunner` registry is only for dispatching named domain
+Pipelines such as `cases/ingest` and `cases/selection`.
 
 ```python
 from dataclasses import dataclass
 from datetime import date
-from case_review.case_type import CaseType, Variation
+from case_review.case_type import Variation
 
 @dataclass
 class ActivityCase:          # the Case Type's schema (its columns + types)
@@ -48,18 +48,20 @@ class ActivityCase:          # the Case Type's schema (its columns + types)
     activity_date: date
     amount: int
 
-CASES = CaseType(
-    name="cases",            # the subject: medallion directory + table name;
-                             #   also seeds the case_id namespace
-    schema=ActivityCase,     # enforced at the silver/gold boundaries
-    natural_key=("case_ref",),  # identifies a Case; hashed to the deterministic case_id
-    variations=(
-        Variation(id="v1", question_bank_id="qb-100"),
-        Variation(id="v2", question_bank_id="qb-200"),
-    ),
+NAMESPACE = "cases"            # medallion directory, table, case_id namespace
+NATURAL_KEY = ("case_ref",)    # identifies a Case
+VARIATIONS = (
+    Variation(id="v1", question_bank_id="qb-100"),
+    Variation(id="v2", question_bank_id="qb-200"),
 )
 
-CASES.variation("v1").question_bank_id   # -> "qb-100"
+def variation_by_id(variation_id):
+    for variation in VARIATIONS:
+        if variation.id == variation_id:
+            return variation
+    raise KeyError(f"{NAMESPACE} Case Type has no Variation {variation_id!r}")
+
+variation_by_id("v1").question_bank_id   # -> "qb-100"
 ```
 
 A **Variation** is a specialization within a Case Type that inherits its config
@@ -67,10 +69,11 @@ and overrides only what differs — most commonly the **Question Bank**
 (`question_bank_id`). One Case Type has many Variations (A ~3; B ~100), so they
 are data, not code. The case-review domain stores only the **reference** id,
 never the bank's content (owned by the review platform — CONTEXT.md); Selection
-stamps that id onto the chosen Cases. `CaseType.variation(id)` resolves a Variation and
-raises `KeyError` with a located message on an unknown id, so a mis-config
-surfaces where it is asked for rather than as a silent miss downstream. Further
-overrides (ingest, selection criteria, divergent processing) are deferred.
+stamps that id onto the chosen Cases. Selection resolves a Variation by its
+declared `id` and raises `KeyError` with a located message on an unknown id, so a
+misconfiguration surfaces where it is asked for rather than as a silent miss
+downstream. Further overrides (ingest, selection criteria, divergent processing)
+are deferred.
 
 ## `CasePool` — the domain population, behind intention-revealing reads
 
@@ -79,8 +82,8 @@ raw `pandas.read_*` calls (CONTEXT.md). It is scoped **per Case Type**,
 constructed from that type's gold table name and schema, its **gold** `Store`
 (to read its current Cases), and a `WorkingDayCalendar` (the availability
 arithmetic — see [`working-day-calendar.md`](working-day-calendar.md)). In this
-API, `CasePool` accepts the table name and schema explicitly; the caller may
-source those values from its `CaseType`:
+API, `CasePool` accepts the table name and schema explicitly; the caller sources
+those values from the feed's declarations:
 
 ```python
 from case_review.case_pool import CasePool
@@ -88,8 +91,8 @@ from tools.store import StoreRegistry
 from tools.calendar import WorkingDayCalendar
 from tools.medallion import medallion
 
-med = medallion(StoreRegistry("/share"), CASES.name)
-pool = CasePool(CASES.name, CASES.schema, med.gold, WorkingDayCalendar())
+med = medallion(StoreRegistry("/share"), NAMESPACE)
+pool = CasePool(NAMESPACE, ActivityCase, med.gold, WorkingDayCalendar())
 available = pool.fetch_available_cases(
     as_of=date(2026, 5, 29),
     activity_column="activity_date",
@@ -146,7 +149,7 @@ def priority_score(row: Mapping[str, Any]) -> int:
     return row["amount"] * 2
 
 
-variation = CASES.variation("v1")
+variation = variation_by_id("v1")
 p = Pipeline("selection")
 r = p.read(DatasetReader(available), name="read")
 scored = p.transform(Score("priority_score", priority_score), r, name="score")

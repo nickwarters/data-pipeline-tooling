@@ -18,18 +18,31 @@ inheriting policy.
 
 from __future__ import annotations
 
+import shutil
 from dataclasses import fields
+from pathlib import Path
 
 import pytest
 
+from framework.run import RunContext
 from pipelines.case_selection.pipeline import SUBJECT as CASE_SELECTION_SUBJECT
 from pipelines.case_selection.pipeline import raw_builder as cs_raw_builder
 from pipelines.case_selection.pipeline import silver_builder as cs_silver_builder
 from pipelines.case_selection.schema import CaseReviewRow, SalesRow
-from tests.framework_testing import RecordingWriter, given_rows
+from pipelines.complaints_a.schema import ComplaintsARow
+from pipelines.complaints_b.schema import ComplaintsBRow
+from pipelines.complaints_c.schema import ComplaintsCRow
+from tests.framework_testing import RecordingWriter, given_rows, read_rows
+from tools.medallion import medallion
 from tools.recipes import raw_to_silver, source_to_raw
+from tools.store import StoreRegistry
 
 COMPLAINTS_FEEDS = ["complaints_a", "complaints_b", "complaints_c"]
+COMPLAINTS_SCHEMAS = {
+    "complaints_a": ComplaintsARow,
+    "complaints_b": ComplaintsBRow,
+    "complaints_c": ComplaintsCRow,
+}
 
 
 def _feed(name: str):
@@ -64,11 +77,36 @@ def test_complaints_silver_hop_is_the_recipe(feed_name):
         == raw_to_silver(
             reader,
             writer,
-            schema=module.CASE_TYPE.schema,
+            schema=COMPLAINTS_SCHEMAS[feed_name],
             reject_writer=rejects,
             name=f"{module.FEED_NAME}:silver",
         ).describe()
     )
+
+
+@pytest.mark.parametrize("feed_name", COMPLAINTS_FEEDS)
+def test_complaints_operational_paths_do_not_follow_identity_namespace(
+    feed_name, monkeypatch, tmp_path
+):
+    module = _feed(feed_name)
+    landing = tmp_path / "landing_zone"
+    landing.mkdir()
+    sample = (
+        Path(__file__).parent.parent.parent
+        / "pipelines"
+        / feed_name
+        / "sample_data"
+        / f"{feed_name}.csv"
+    )
+    shutil.copy(sample, landing / f"{feed_name}.csv")
+
+    monkeypatch.setattr(module, "NAMESPACE", f"changed_{feed_name}")
+    module.run(RunContext(base_dir=tmp_path, pipeline=module.FEED_NAME))
+
+    med = medallion(StoreRegistry(tmp_path), module.FEED_NAME)
+    assert read_rows(med.raw, module.FEED_NAME)
+    assert read_rows(med.silver, module.FEED_NAME)
+    assert not (tmp_path / f"changed_{feed_name}").exists()
 
 
 @pytest.mark.parametrize("schema", [SalesRow, CaseReviewRow])

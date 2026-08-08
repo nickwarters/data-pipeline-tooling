@@ -15,6 +15,9 @@ from typing import Annotated
 
 from framework.core import Range
 
+NAMESPACE = "complaints_a"
+NATURAL_KEY = ("record_id",)
+
 
 @dataclass
 class ComplaintsARow:

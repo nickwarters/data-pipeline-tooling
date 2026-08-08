@@ -32,7 +32,8 @@ from framework.core import PipelineError, format_failure
 from framework.io import AccumulateByRun, DatasetReader
 from framework.run import FreshnessRequirement, Pipeline, RunContext
 from framework.transform import Filter, Score, Sort, Stamp
-from pipelines.ingest.pipeline import AS_OF, CASES
+from pipelines.ingest.pipeline import AS_OF
+from pipelines.ingest.schema import NAMESPACE, VARIATIONS, ActivityCase
 from tools.calendar import WorkingDayCalendar
 from tools.environments import known_environments, resolve_base_dir
 from tools.medallion import medallion
@@ -60,6 +61,14 @@ def priority_score(row: Mapping[str, Any]) -> int:
     return row["amount"] * 2
 
 
+def variation_by_id(variation_id: str):
+    """Return a declared Variation, with a located error for an unknown id."""
+    for variation in VARIATIONS:
+        if variation.id == variation_id:
+            return variation
+    raise KeyError(f"{NAMESPACE} Case Type has no Variation {variation_id!r}")
+
+
 def _working_day_calendar(context: RunContext) -> WorkingDayCalendar:
     """Return the calendar the availability window is measured against.
 
@@ -79,16 +88,16 @@ def _working_day_calendar(context: RunContext) -> WorkingDayCalendar:
 
 
 def run(context: RunContext):
-    med = medallion(StoreRegistry(context.base_dir), CASES.name)
+    med = medallion(StoreRegistry(context.base_dir), NAMESPACE)
     strategy = AccumulateByRun.from_context(context)
 
     # Named, pure rule functions stay independently testable while Filter/Score
     # provide the framework wiring and trace metadata.
-    pool = CasePool(CASES.name, CASES.schema, med.gold, _working_day_calendar(context))
+    pool = CasePool(NAMESPACE, ActivityCase, med.gold, _working_day_calendar(context))
     available = pool.fetch_available_cases(
         as_of=context.run_date, activity_column="activity_date", within_working_days=5
     )
-    variation = CASES.variation("v1")
+    variation = variation_by_id("v1")
     p = Pipeline("selection")
     r = p.read(DatasetReader(available), name="read")
     sc = p.transform(Score("priority_score", priority_score), r, name="score")

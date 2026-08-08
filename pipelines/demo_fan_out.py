@@ -29,7 +29,6 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
-from case_review.case_type import CaseType
 from case_review.gold import detail_ingest_silver_to_gold, ingest_silver_to_gold
 from framework.core import SchemaValidator
 from framework.io import AccumulateByRun, CsvReader
@@ -51,22 +50,18 @@ class CaseSchema:
     amount: int
 
 
-SUBJECT = "wide_cases"
+NAMESPACE = "wide_cases"
+NATURAL_KEY = ("case_ref",)
 RUN_ID = "2026-05-29"
-
-# One Case Type owns the identity contract for this wide feed; both pipelines
-# read its namespace + natural key, so they derive the same case_id without a
-# cross-pipeline join.
-WIDE_CASES = CaseType(name=SUBJECT, schema=CaseSchema, natural_key=("case_ref",))
 
 
 def main(target_dir: str) -> None:
     sample = Path(__file__).parent / "sample_data" / "wide_cases.csv"
-    med = medallion(StoreRegistry(target_dir), SUBJECT)
+    med = medallion(StoreRegistry(target_dir), NAMESPACE)
 
-    p = Pipeline(SUBJECT)
+    p = Pipeline(NAMESPACE)
     r = p.read(CsvReader(sample), name="read")
-    p.write(med.raw.writer(SUBJECT, AccumulateByRun(RUN_ID, RUN_ID)), r, name="write")
+    p.write(med.raw.writer(NAMESPACE, AccumulateByRun(RUN_ID, RUN_ID)), r, name="write")
     p.run()
 
     # Shared normalisation: the feed uses `case_ref_no`; both pipelines rename
@@ -74,7 +69,7 @@ def main(target_dir: str) -> None:
     normalise = Rename({"case_ref_no": "case_ref"})
 
     p_cases = Pipeline("cases")
-    r_cases = p_cases.read(med.raw.reader(SUBJECT), name="read")
+    r_cases = p_cases.read(med.raw.reader(NAMESPACE), name="read")
     f_cases = p_cases.transform(
         Filter(lambda row, rid=RUN_ID: row["logical_run_id"] == rid),
         r_cases,
@@ -97,14 +92,14 @@ def main(target_dir: str) -> None:
 
     ingest_silver_to_gold(
         med,
-        WIDE_CASES.name,
-        WIDE_CASES.natural_key,
-        WIDE_CASES.schema,
+        NAMESPACE,
+        NATURAL_KEY,
+        CaseSchema,
         "cases",
     ).run()
 
     p_prods = Pipeline("case_products")
-    r_prods = p_prods.read(med.raw.reader(SUBJECT), name="read")
+    r_prods = p_prods.read(med.raw.reader(NAMESPACE), name="read")
     f_prods = p_prods.transform(
         Filter(lambda row, rid=RUN_ID: row["logical_run_id"] == rid),
         r_prods,
@@ -125,9 +120,9 @@ def main(target_dir: str) -> None:
     # product rows carry matching case_ids without joining back to Cases gold.
     detail_ingest_silver_to_gold(
         med,
-        WIDE_CASES.name,
-        WIDE_CASES.natural_key,
-        WIDE_CASES.schema,
+        NAMESPACE,
+        NATURAL_KEY,
+        CaseSchema,
         "case_products",
         unpivot=Unpivot(
             id_vars=["case_id"],

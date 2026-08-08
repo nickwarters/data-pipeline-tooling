@@ -15,6 +15,9 @@ from typing import Annotated
 
 from framework.core import OneOf
 
+NAMESPACE = "complaints_b"
+NATURAL_KEY = ("record_id",)
+
 
 @dataclass
 class ComplaintsBRow:

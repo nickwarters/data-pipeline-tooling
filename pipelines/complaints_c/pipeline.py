@@ -10,7 +10,7 @@ from tools.medallion import medallion
 from tools.recipes import raw_to_silver, source_to_raw
 from tools.store import StoreRegistry
 
-from .case_type import CASE_TYPE
+from .schema import NAMESPACE, ComplaintsCRow
 
 FEED_NAME = "complaints_c"
 UPSTREAMS = ()
@@ -54,7 +54,7 @@ def silver_builder(
     return raw_to_silver(
         reader,
         writer,
-        schema=CASE_TYPE.schema,
+        schema=ComplaintsCRow,
         reject_writer=reject_writer,
         name=f"{FEED_NAME}:silver",
         run_log=run_log,
@@ -91,10 +91,10 @@ def main(argv: list[str]) -> int:
 
     runner = PipelineRunner()
     runner.register(
-        subject=CASE_TYPE.name, pipeline=FEED_NAME, handler=run, freshness=UPSTREAMS
+        subject=NAMESPACE, pipeline=FEED_NAME, handler=run, freshness=UPSTREAMS
     )
     try:
-        runner.run(CASE_TYPE.name, FEED_NAME, base_dir=base_dir)
+        runner.run(NAMESPACE, FEED_NAME, base_dir=base_dir)
     except PipelineError as exc:
         print(format_failure(exc), file=sys.stderr)
         return 1

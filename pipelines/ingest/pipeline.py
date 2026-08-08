@@ -20,11 +20,9 @@ from __future__ import annotations
 
 import argparse
 import sys
-from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
-from case_review.case_type import CaseType, Variation
 from case_review.gold import ingest_silver_to_gold
 from framework.core import PipelineError, SchemaValidator, format_failure
 from framework.io import AccumulateByRun, CsvReader
@@ -34,37 +32,14 @@ from tools.environments import known_environments, resolve_base_dir
 from tools.medallion import medallion
 from tools.store import StoreRegistry
 
+from .schema import NAMESPACE, NATURAL_KEY, ActivityCase
+
 SAMPLE_CSV = Path(__file__).parent / "sample_data" / "activity_cases.csv"
 
 # Fixed so the working-day window aligns with the bundled feed (Fri 2026-05-29);
 # doubles as the Ingest logical_run_id / load_date idempotency key for the demo.
 AS_OF = date(2026, 5, 29)
 
-
-@dataclass
-class ActivityCase:
-    """The demo Case Type's schema: an activity-dated, advised, valued Case."""
-
-    case_ref: str
-    adviser: str
-    activity_date: date
-    amount: int
-
-
-# The Case Type bundles its schema and identity contract with its Variations --
-# declarative and imported directly. ``natural_key`` is the stable identifying
-# column; the Case Type's name is the namespace, so case_id
-# derivation is owned in one place. The downstream ``selection`` pipeline imports
-# this same CASES so the two halves share one identity definition.
-CASES = CaseType(
-    name="cases",
-    schema=ActivityCase,
-    natural_key=("case_ref",),
-    variations=(
-        Variation(id="v1", question_bank_id="qb-100"),
-        Variation(id="v2", question_bank_id="qb-200"),
-    ),
-)
 
 # This pipeline has no upstream — it is the source of the CasePool.
 UPSTREAMS = ()
@@ -77,16 +52,16 @@ def run(context: RunContext):
     business run a re-drive replaces) and its execution id, derived from the
     shared RunContext so ``--logical-run-id`` flows straight through.
     """
-    med = medallion(StoreRegistry(context.base_dir), CASES.name)
+    med = medallion(StoreRegistry(context.base_dir), NAMESPACE)
     strategy = AccumulateByRun.from_context(context)
 
-    p = Pipeline("cases")
+    p = Pipeline(NAMESPACE)
     r = p.read(CsvReader(SAMPLE_CSV), name="read")
-    p.write(med.raw.writer("cases", strategy), r, name="write")
+    p.write(med.raw.writer(NAMESPACE, strategy), r, name="write")
     p.run()
 
-    p_silver = Pipeline("cases")
-    r_silver = p_silver.read(med.raw.reader("cases"), name="read")
+    p_silver = Pipeline(NAMESPACE)
+    r_silver = p_silver.read(med.raw.reader(NAMESPACE), name="read")
     current = r_silver
     if isinstance(strategy, AccumulateByRun):
         logical_run_id = strategy.logical_run_id
@@ -95,14 +70,14 @@ def run(context: RunContext):
             current,
             name="filter-by-run-id",
         )
-    coerced = p_silver.transform(SchemaCoercion(CASES.schema), current, name="coerce")
+    coerced = p_silver.transform(SchemaCoercion(ActivityCase), current, name="coerce")
     validated = p_silver.validate(
-        SchemaValidator(CASES.schema), coerced, name="post-validate"
+        SchemaValidator(ActivityCase), coerced, name="post-validate"
     )
-    p_silver.write(med.silver.writer("cases", strategy), validated, name="write")
+    p_silver.write(med.silver.writer(NAMESPACE, strategy), validated, name="write")
     p_silver.run()
 
-    return ingest_silver_to_gold(med, CASES.name, CASES.natural_key, CASES.schema).run()
+    return ingest_silver_to_gold(med, NAMESPACE, NATURAL_KEY, ActivityCase).run()
 
 
 def main(argv: list[str]) -> int:
