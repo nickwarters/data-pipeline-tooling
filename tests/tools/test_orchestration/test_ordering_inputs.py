@@ -1,9 +1,9 @@
 """The three ordering inputs on ``ScheduledPipeline``, parsed and validated.
 
-The values arrive from hand-written schedule modules, so they are checked at
-construction and stored parsed. Nothing downstream re-parses them, and nothing
-downstream sees a half-valid one: a malformed time fails where it is written,
-naming the offending value.
+The times arrive from hand-written schedule modules as strings, so they are
+parsed at construction and stored parsed. Nothing downstream re-parses them,
+and nothing downstream sees a half-valid one: a malformed time fails where it
+is written, naming the offending value.
 """
 
 import datetime as dt
@@ -52,7 +52,9 @@ def test_an_already_parsed_time_passes_through_unchanged():
     assert _item(due_time=moment).due_time is moment
 
 
-@pytest.mark.parametrize("value", ["9:5", "24:00", "09:60", ""])
+@pytest.mark.parametrize(
+    "value", ["9:5", "24:00", "09:60", "", "0900", "09:30:00", "09:30+01:00"]
+)
 def test_a_malformed_time_is_rejected_naming_the_value(value):
     with pytest.raises(ValueError, match="due_time") as caught:
         _item(due_time=value)

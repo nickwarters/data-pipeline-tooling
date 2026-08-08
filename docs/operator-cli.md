@@ -377,7 +377,7 @@ run — that stays the freshness rule's question alone.
 
 Both times are zero-padded 24-hour strings and are parsed when the item is
 constructed; `"9:5"`, `"24:00"` and `"0900"` all fail at start-up, naming the
-value. `priority` must be an `int` — `"3"` is refused rather than coerced.
+value.
 
 ```python
 from tools.orchestration import PipelineSet, Schedule, ScheduledPipeline
@@ -512,7 +512,7 @@ the widest value so the output stays readable regardless of pipeline name length
 > feed that is harmless and is exactly what makes repeated same-day operation
 > safe; the divergence between the two is tracked in issue #404, which **remains
 > open**. Run ordering does not narrow it: the pass reads run history to decide
-> whether a passed deadline still presses, and for nothing else. "Has it run
+> whether a deadline still presses, and for nothing else. "Has it run
 > today" never gates execution.
 
 The **order** of the rows above is not a separate promise to keep — the plan and

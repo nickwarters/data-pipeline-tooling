@@ -363,9 +363,13 @@ def _time_of_day(value: object, field: str) -> dt.time | None:
     if value is None or isinstance(value, dt.time):
         return value
     message = f'{field} must be a zero-padded 24-hour "HH:MM" time, got {value!r}'
+    # fromisoformat alone accepts "0900", "T09:30" and offsets like "09:30+01:00";
+    # a tz-aware time then fails to compare against the naive clock at sort time.
+    if not isinstance(value, str) or len(value) != 5 or value[2] != ":":
+        raise ValueError(message)
     try:
-        return dt.time.fromisoformat(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
+        return dt.time.fromisoformat(value)
+    except ValueError:
         raise ValueError(message) from None
 
 
@@ -1506,8 +1510,7 @@ def _earliest_run_reason(item: ScheduledPipeline) -> str:
 
     Only reached for an item the gate held back, so ``earliest_run`` is set.
     """
-    assert item.earliest_run is not None
-    return f"before earliest_run {item.earliest_run.strftime('%H:%M')}"
+    return f"before earliest_run {item.earliest_run:%H:%M}"
 
 
 def _deadline_note(ordered: OrderedItem) -> str:
