@@ -1415,18 +1415,20 @@ A `CaseType` (`case_review.case_type`) bundles a Case Type's `schema`, its
 identity contract, and its `variations`, imported directly — no global CaseType
 config registry. The identity contract is the `natural_key` (the
 column(s) that identify a Case) plus a `namespace` property derived from `name`;
-the gold builders read both off the Case Type to mint the deterministic
-`case_id`. `CaseType.variation(id)` resolves a `Variation` (its `question_bank_id`
-+ later overrides) and raises a located `KeyError` on an unknown id. Declarative
-data, not code (one Case Type has many Variations — `CONTEXT.md`).
+callers currently pass both explicitly to the gold builders to mint the
+deterministic `case_id`. `CaseType.variation(id)` resolves a `Variation` (its
+`question_bank_id` + later overrides) and raises a located `KeyError` on an
+unknown id. Declarative data, not code (one Case Type has many Variations —
+`CONTEXT.md`).
 
 ### `CasePool` — the domain population, behind named reads
-`CasePool(case_type, store, calendar)` (`case_review.case_pool`) is the
-per-Case-Type population of Cases read from the **ingested silver**. Its headline
-retrieval is the *concept* of fetching **available cases** — e.g.
+`CasePool(table, schema, store, calendar)` (`case_review.case_pool`) is the
+per-Case-Type population of Cases read from the current **ingested gold** table.
+Callers currently pass the table and schema from their existing `CaseType`. Its
+headline retrieval is the *concept* of fetching **available cases** — e.g.
 `fetch_available_cases(as_of, activity_column=…, within_working_days=…)` narrows
-to a `WorkingDayCalendar` window in Python, repairing silver's
-text-stored dates first, and returns a bulk-tier `Dataset`. Fully typed `Case`
+to a `WorkingDayCalendar` window in Python, repairing SQLite's text-stored dates
+first, and returns a bulk-tier `Dataset`. Fully typed `Case`
 objects are the typed-on-demand edge at the domain layer.
 
 ### `DatasetReader` — bridge an in-memory Dataset into the builder

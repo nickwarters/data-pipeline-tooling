@@ -76,9 +76,11 @@ overrides (ingest, selection criteria, divergent processing) are deferred.
 
 The `CasePool` is the clean domain abstraction the platform exposes *instead of*
 raw `pandas.read_*` calls (CONTEXT.md). It is scoped **per Case Type**,
-constructed from that type's `CaseType` (for its schema), its **gold** `Store` (to read
-its current Cases), and a `WorkingDayCalendar` (the availability arithmetic — see
-[`working-day-calendar.md`](working-day-calendar.md)):
+constructed from that type's gold table name and schema, its **gold** `Store`
+(to read its current Cases), and a `WorkingDayCalendar` (the availability
+arithmetic — see [`working-day-calendar.md`](working-day-calendar.md)). In this
+retirement slice the caller passes the table name and schema from its existing
+`CaseType`; the declaration itself moves in the next slice:
 
 ```python
 from case_review.case_pool import CasePool
@@ -87,7 +89,7 @@ from tools.calendar import WorkingDayCalendar
 from tools.medallion import medallion
 
 med = medallion(StoreRegistry("/share"), CASES.name)
-pool = CasePool(CASES, med.gold, WorkingDayCalendar())
+pool = CasePool(CASES.name, CASES.schema, med.gold, WorkingDayCalendar())
 available = pool.fetch_available_cases(
     as_of=date(2026, 5, 29),
     activity_column="activity_date",
@@ -101,9 +103,9 @@ activity dated within the last N working days on or before `as_of` (CONTEXT.md).
 
 The retrieval:
 
-1. reads the Case Type's **silver** through the `Store`;
+1. reads the Case Type's current **gold** table through the `Store`;
 2. repairs the round-trip-lossy date column toward the schema's types
-   (`SchemaCoercion` — silver stores dates as text), so the window comparison is
+   (`SchemaCoercion` — SQLite stores dates as text), so the window comparison is
    date-vs-date;
 3. narrows to the working-day window in **Python**, never SQL.
 

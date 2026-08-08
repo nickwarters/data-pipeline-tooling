@@ -84,7 +84,7 @@ def run(context: RunContext):
 
     # Named, pure rule functions stay independently testable while Filter/Score
     # provide the framework wiring and trace metadata.
-    pool = CasePool(CASES, med.gold, _working_day_calendar(context))
+    pool = CasePool(CASES.name, CASES.schema, med.gold, _working_day_calendar(context))
     available = pool.fetch_available_cases(
         as_of=context.run_date, activity_column="activity_date", within_working_days=5
     )

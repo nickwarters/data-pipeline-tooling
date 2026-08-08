@@ -58,7 +58,7 @@ def test_selection_narrows_the_casepool_into_a_stamped_selection_pool(tmp_path):
         ),
     )
     case_type = _case_type()
-    pool = CasePool(case_type, gold, WorkingDayCalendar())
+    pool = CasePool(case_type.name, case_type.schema, gold, WorkingDayCalendar())
     variation = case_type.variation("v2")
 
     available = pool.fetch_available_cases(

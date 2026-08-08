@@ -196,7 +196,7 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 | **`RunLog` / `RunRegistry`** | `RunLog` emits one JSON record per step (+ a run summary) to a `.log` file — the observability seam. `RunRegistry` ingests that JSONL into a queryable run-history store. The record's field set is declared once, as data, in `tools.observability.record_schema` (`RUN_RECORD_FIELDS`): the log record, the registry DDL, its additive column migration, the `INSERT`, the decode and the console line are all derived from it, so adding a field is one entry. `data_locations` — the file(s)/table(s) a read or write step actually touched, as `{namespace, name}` entries — is stored and logged but declares no console form, so it never reaches the human line. → [run-log-format.md](run-log-format.md) ([fail-fast atomic runs, independently-committed artifacts, structured JSONL observability](adr/0005-fail-fast-atomic-runs-and-observability.md)) |
 | **`RunContext` / `PipelineRunner` / `Requirement`** | The thin domain runner: register handlers by `(subject, pipeline)`, receive a context carrying execution/logical identity, dates, explicit run params, RunLog, and RunRegistry, and block stale downstream runs with `Requirement.succeeded(RunAddress.for_pipeline(...)).same_day()` or task-level `within_days(...)` predicates. `FreshnessRequirement` remains compatible. → [core-primitives.md](core-primitives.md) |
 | **`CaseType` / `Variation`** | Case-review application/domain objects in `case_review.case_type`, not framework primitives: a Case Type bundles its `schema`, its identity contract (`natural_key` + a `namespace` derived from `name`), and its `variations`, imported directly (no global CaseType config registry). A Variation overrides only what differs — most often the `question_bank_id`. → [selection.md](selection.md) |
-| **`CasePool`** | Case-review application/domain helper in `case_review.case_pool`: the per-Case-Type population read from ingested silver, surfaced through intention-revealing retrievals (e.g. `fetch_available_cases(...)`) instead of raw `read_*`. → [selection.md](selection.md) |
+| **`CasePool`** | Case-review application/domain helper in `case_review.case_pool`: the per-Case-Type population read from current ingested gold, given its table name and schema, and surfaced through intention-revealing retrievals (e.g. `fetch_available_cases(...)`) instead of raw `read_*`. → [selection.md](selection.md) |
 | **`WorkingDayCalendar`** | A config-seeded **pure utility** for availability arithmetic ("the last 20 working days"). The config is a YAML calendar file (`holidays` + `weekend`) loaded by `WorkingDayCalendar.from_yaml`, which is what `python -m cli orchestrate --calendar` passes and what `python -m cli run --param calendar=<file>` passes for an availability window. Touches no Dataset/Store/engine; not a Feed. → [working-day-calendar.md](working-day-calendar.md) |
 
 Two cross-cutting flows extend the pipeline: **quarantine** routes value-rule
@@ -260,7 +260,7 @@ schema enforced (compose `SchemaCoercion` to repair storage-lossy types, then
 `SchemaValidator` to validate, before the silver write). See the *Add a new Feed*
 how-to.
 
-**4. Read it through the CasePool** — the clean domain abstraction over silver:
+**4. Read it through the CasePool** — the clean domain abstraction over current gold:
 
 ```python
 from case_review.case_pool import CasePool
@@ -269,7 +269,7 @@ from tools.calendar import WorkingDayCalendar
 from tools.medallion import medallion
 
 med = medallion(StoreRegistry("/share"), CASES.name)
-pool = CasePool(CASES, med.gold, WorkingDayCalendar())
+pool = CasePool(CASES.name, CASES.schema, med.gold, WorkingDayCalendar())
 available = pool.fetch_available_cases(
     as_of=date(2026, 5, 29), activity_column="activity_date", within_working_days=5,
 )
