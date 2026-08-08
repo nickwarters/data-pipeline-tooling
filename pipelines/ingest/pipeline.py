@@ -102,7 +102,7 @@ def run(context: RunContext):
     p_silver.write(med.silver.writer("cases", strategy), validated, name="write")
     p_silver.run()
 
-    return ingest_silver_to_gold(med, CASES).run()
+    return ingest_silver_to_gold(med, CASES.name, CASES.natural_key, CASES.schema).run()
 
 
 def main(argv: list[str]) -> int:

@@ -5,8 +5,8 @@ full per-Case-Type path the framework exists to make routine: a source feed is
 **ingested** into a Case Type's medallion, surfaced as a **CasePool**, then
 **Selection** narrows it into the **SelectionPool** written to gold. This doc
 covers the declarative domain objects (`CaseType` / `Variation`), the `CasePool`
-that reads the ingested silver, and the Selection pipeline that produces the
-SelectionPool. For the domain language behind the terms, see
+that reads the current ingested gold, and the Selection pipeline that produces
+the SelectionPool. For the domain language behind the terms, see
 [`../CONTEXT.md`](../CONTEXT.md); for the processors Selection composes, see
 [`processors.md`](processors.md).
 
@@ -15,17 +15,17 @@ SelectionPool. For the domain language behind the terms, see
 ```
   Ingest (per Case Type)            Selection (per Case Type)
   ┌───────────────────────┐        ┌──────────────────────────────────┐
-  feed → raw → silver  ───────▶  CasePool ─▶ filter/score/sort/stamp ─▶ gold
-            (the CasePool)      (available cases)         (the SelectionPool)
+  feed → raw → silver → gold ─▶ CasePool ─▶ filter/score/sort/stamp ─▶ gold
+                     (current)   (available cases)         (the SelectionPool)
   └───────────────────────┘        └──────────────────────────────────┘
 ```
 
-**Ingest** lands a feed into `raw` (schema-light) and refines it into `silver`
-with the Case Type's schema enforced (`SchemaCoercion` + `SchemaValidator`
-composed onto the hop — see [`schema-enforcement.md`](schema-enforcement.md)). That validated **silver is the
-CasePool**: the current-state population of Cases. Sources are current-state
-snapshots, so raw and silver are full-refreshed each run; the
-accumulating layer is gold, where the **SelectionPool** lands stamped by run.
+**Ingest** lands a feed into `raw` (schema-light), refines it into accumulated
+`silver` with the Case Type's schema enforced (`SchemaCoercion` +
+`SchemaValidator` composed onto the hop — see
+[`schema-enforcement.md`](schema-enforcement.md)), then reduces it into current
+ingested `gold`: the **CasePool**. The separate **Selection** pipeline lands the
+**SelectionPool** in its own gold table, stamped by run.
 
 ## `CaseType` / `Variation` — the declarative domain objects
 
@@ -76,9 +76,11 @@ overrides (ingest, selection criteria, divergent processing) are deferred.
 
 The `CasePool` is the clean domain abstraction the platform exposes *instead of*
 raw `pandas.read_*` calls (CONTEXT.md). It is scoped **per Case Type**,
-constructed from that type's `CaseType` (for its schema), its **gold** `Store` (to read
-its current Cases), and a `WorkingDayCalendar` (the availability arithmetic — see
-[`working-day-calendar.md`](working-day-calendar.md)):
+constructed from that type's gold table name and schema, its **gold** `Store`
+(to read its current Cases), and a `WorkingDayCalendar` (the availability
+arithmetic — see [`working-day-calendar.md`](working-day-calendar.md)). In this
+API, `CasePool` accepts the table name and schema explicitly; the caller may
+source those values from its `CaseType`:
 
 ```python
 from case_review.case_pool import CasePool
@@ -87,7 +89,7 @@ from tools.calendar import WorkingDayCalendar
 from tools.medallion import medallion
 
 med = medallion(StoreRegistry("/share"), CASES.name)
-pool = CasePool(CASES, med.gold, WorkingDayCalendar())
+pool = CasePool(CASES.name, CASES.schema, med.gold, WorkingDayCalendar())
 available = pool.fetch_available_cases(
     as_of=date(2026, 5, 29),
     activity_column="activity_date",
@@ -101,9 +103,9 @@ activity dated within the last N working days on or before `as_of` (CONTEXT.md).
 
 The retrieval:
 
-1. reads the Case Type's **silver** through the `Store`;
+1. reads the Case Type's current **gold** table through the `Store`;
 2. repairs the round-trip-lossy date column toward the schema's types
-   (`SchemaCoercion` — silver stores dates as text), so the window comparison is
+   (`SchemaCoercion` — SQLite stores dates as text), so the window comparison is
    date-vs-date;
 3. narrows to the working-day window in **Python**, never SQL.
 
@@ -255,7 +257,7 @@ separate concern, deferred to a follow-up.
 
 The whole path for one Case Type is two path-addressed pipelines:
 [`../pipelines/ingest/pipeline.py`](../pipelines/ingest/pipeline.py) (CSV feed ->
-`raw` -> `silver` (the CasePool) -> `gold`) and
+`raw` -> `silver` -> `gold` (the CasePool)) and
 [`../pipelines/selection/pipeline.py`](../pipelines/selection/pipeline.py) (the
 available cases -> the `gold` SelectionPool). Run them in order from the repo
 root:

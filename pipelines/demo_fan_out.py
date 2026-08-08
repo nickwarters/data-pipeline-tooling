@@ -95,7 +95,13 @@ def main(target_dir: str) -> None:
     )
     p_cases.run()
 
-    ingest_silver_to_gold(med, WIDE_CASES, "cases").run()
+    ingest_silver_to_gold(
+        med,
+        WIDE_CASES.name,
+        WIDE_CASES.natural_key,
+        WIDE_CASES.schema,
+        "cases",
+    ).run()
 
     p_prods = Pipeline("case_products")
     r_prods = p_prods.read(med.raw.reader(SUBJECT), name="read")
@@ -115,11 +121,13 @@ def main(target_dir: str) -> None:
     )
     p_prods.run()
 
-    # The same Case Type is used here, so product rows carry case_ids that match
-    # the Cases gold table without joining back to it.
+    # Pass the same declared namespace and natural key as the Cases builder, so
+    # product rows carry matching case_ids without joining back to Cases gold.
     detail_ingest_silver_to_gold(
         med,
-        WIDE_CASES,
+        WIDE_CASES.name,
+        WIDE_CASES.natural_key,
+        WIDE_CASES.schema,
         "case_products",
         unpivot=Unpivot(
             id_vars=["case_id"],

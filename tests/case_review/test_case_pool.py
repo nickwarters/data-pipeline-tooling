@@ -3,22 +3,12 @@ from datetime import date
 import pandas as pd
 
 from case_review.case_pool import CasePool
-from case_review.case_type import CaseType, Variation
 from framework.core.dataset import Dataset
 from framework.io.strategy import Refresh
 from tests._schema_fixtures import ActivityCase
 from tools.calendar import WorkingDayCalendar
 from tools.medallion import medallion
 from tools.store import StoreRegistry
-
-
-def _case_type() -> CaseType:
-    return CaseType(
-        name="cases",
-        schema=ActivityCase,
-        natural_key=("case_ref",),
-        variations=(Variation(id="v1", question_bank_id="qb-100"),),
-    )
 
 
 def _land_gold_cases(gold, frame: pd.DataFrame) -> None:
@@ -32,9 +22,9 @@ def test_fetch_available_cases_keeps_only_cases_inside_the_working_day_window(
     tmp_path,
 ):
     # "Available cases" are the eligible candidates: activity dated within the
-    # last N working days of as_of (CONTEXT.md). The CasePool reads the ingested
-    # silver and narrows to that window using the WorkingDayCalendar — the domain
-    # retrieval Selection calls instead of a raw read.
+    # last N working days of as_of (CONTEXT.md). The CasePool reads the current
+    # ingested gold and narrows to that window using the WorkingDayCalendar —
+    # the domain retrieval Selection calls instead of a raw read.
     gold = medallion(StoreRegistry(tmp_path), "cases").gold
     _land_gold_cases(
         gold,
@@ -53,7 +43,7 @@ def test_fetch_available_cases_keeps_only_cases_inside_the_working_day_window(
             }
         ),
     )
-    pool = CasePool(_case_type(), gold, WorkingDayCalendar())
+    pool = CasePool("cases", ActivityCase, gold, WorkingDayCalendar())
 
     available = pool.fetch_available_cases(
         as_of=date(2026, 5, 29),
@@ -81,7 +71,7 @@ def test_fetch_available_cases_returns_an_empty_pool_when_none_are_eligible(
             }
         ),
     )
-    pool = CasePool(_case_type(), gold, WorkingDayCalendar())
+    pool = CasePool("cases", ActivityCase, gold, WorkingDayCalendar())
 
     available = pool.fetch_available_cases(
         as_of=date(2026, 5, 29),
