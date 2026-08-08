@@ -379,38 +379,28 @@ Both times are zero-padded 24-hour strings and are parsed when the item is
 constructed; `"9:5"`, `"24:00"` and `"0900"` all fail at start-up, naming the
 value.
 
-```python
-from tools.orchestration import PipelineSet, Schedule, ScheduledPipeline
-from framework.run import FreshnessRequirement
+The worked example is runnable: `pipelines/ordering_demo/` declares one set of
+six tiny pipelines that differ only in these fields. Each reads a couple of rows
+already in memory, validates them, and prints them — no data file is written, so
+it is safe to run anywhere, repeatedly.
 
-
-def build_pipeline_sets():
-    return (
-        PipelineSet(
-            "claims",
-            (
-                # No deadline of its own: it inherits claims_selection's 09:00.
-                ScheduledPipeline("pipelines/claims_ingest", Schedule.daily()),
-                ScheduledPipeline(
-                    "pipelines/claims_selection",
-                    Schedule.daily(),
-                    depends_on=(FreshnessRequirement("claims_ingest"),),
-                    due_time="09:00",
-                ),
-                # Cheap, no deadline, but jump the other deadline-free work.
-                ScheduledPipeline(
-                    "pipelines/claims_reference", Schedule.daily(), priority=10
-                ),
-                # The source file does not land before the evening.
-                ScheduledPipeline(
-                    "pipelines/claims_recon",
-                    Schedule.daily(),
-                    earliest_run="18:00",
-                ),
-            ),
-        ),
-    )
+```sh
+python -m cli orchestrate --app pipelines.ordering_demo.schedules \
+    --calendar pipelines/ordering_demo/calendar.yml \
+    --base-dir /tmp/ordering-demo --once
 ```
+
+The schedules are in `pipelines/ordering_demo/schedules.py`, which computes its
+deadlines relative to the clock at the moment it is called, so the demo tells the
+same story whenever it is run. In the output, look for: `steady` running **before**
+`report` even though `report` carries the deadline (dependency order dominates,
+and `steady` inherits that deadline); `urgent`, at `priority=100` with no
+deadline, running after every overdue item but ahead of the other deadline-free
+work; `later` never invoked, recorded `skipped  before earliest_run HH:MM`; and
+`tomorrow`, not due today, reported last. The bundled calendar makes every day a
+working day so the demo has due work at a weekend too. Each item's docstring says
+what it demonstrates; the package docstring in
+`pipelines/ordering_demo/__init__.py` is the full guide.
 
 The order is derived on **every pass**, from the candidates, the wall clock, and
 which items already succeeded today. The whole rule, in order:

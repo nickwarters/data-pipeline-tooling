@@ -354,6 +354,14 @@ follows the scaffold layout under `pipelines/comprehensive_examples/`, with
 separate `schema.py`, `rules.py`, `processors.py`, `pipeline.py`, and
 `sample_data/` files.
 
+For a worked **run-ordering** example, run
+`python -m cli orchestrate --app pipelines.ordering_demo.schedules --calendar
+pipelines/ordering_demo/calendar.yml --base-dir /tmp/ordering-demo --once`. Six
+tiny pipelines under `pipelines/ordering_demo/` differ only in their `due_time`,
+`earliest_run`, `priority` and `depends_on`, so the sequence they are attempted
+in is the whole point; they read rows already in memory and print them, writing
+no data file. See [the operator CLI](operator-cli.md#run-order-within-a-set).
+
 For a worked **selection** example — two source feeds (all sales + all case
 reviews) narrowed to one Case to check per adviser by a real multi-rule policy
 (recency, highest risk, rolling-year quotas, cooldowns) — see

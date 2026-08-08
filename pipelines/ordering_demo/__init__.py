@@ -1,0 +1,43 @@
+"""A runnable demonstration of how orchestration orders due work within a set.
+
+Six tiny pipelines that differ only in the ordering fields they declare. Each
+reads a couple of made-up rows already in memory, validates them against a
+throwaway schema, and prints them to the console — nothing is written to a data
+file, so the demo can be run anywhere, repeatedly, with only the framework's own
+run metadata landing under the base directory.
+
+Run the whole set::
+
+    python -m cli orchestrate --app pipelines.ordering_demo.schedules \\
+        --calendar pipelines/ordering_demo/calendar.yml \\
+        --base-dir /tmp/ordering-demo --once
+
+The bundled calendar makes every day a working day, so the demo has due work on
+a Saturday too; omit it and a weekend run has nothing to order.
+
+What each item demonstrates, and what to look for in the output:
+
+``steady``
+    Due today with no deadline of its own. ``report`` depends on it, so it
+    *inherits* ``report``'s deadline and is ordered under the same pressure —
+    and it is attempted **before** ``report``, because dependency order
+    dominates every deadline and priority.
+``overdue``
+    Due today with a deadline an hour in the past. It interleaves with the two
+    above by how overdue each one is.
+``urgent``
+    Due today with ``priority=100`` and no deadline. It sorts after every
+    overdue item — priority never outranks a deadline — but ahead of the rest of
+    the deadline-free due work.
+``later``
+    Due today but gated by an ``earliest_run`` an hour in the future. It is
+    never invoked this pass and is recorded ``skipped``, with the window named
+    in its reason.
+``tomorrow``
+    Not due today at all. Work that is not due is reported after the day's work,
+    whatever the others declare.
+
+The relative times are computed when ``build_pipeline_sets()`` is called, so the
+story holds whenever the demo is run. The rule itself is documented in
+``docs/operator-cli.md`` under "Run order within a set".
+"""
