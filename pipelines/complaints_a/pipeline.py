@@ -12,6 +12,7 @@ from tools.store import StoreRegistry
 
 from .schema import NAMESPACE, ComplaintsARow
 
+FEED_NAME = "complaints_a"
 UPSTREAMS = ()
 
 
@@ -34,7 +35,7 @@ def raw_builder(
         reader,
         writer,
         expected_columns=SOURCE_COLUMNS,
-        name=f"{NAMESPACE}:raw",
+        name=f"{FEED_NAME}:raw",
         run_log=run_log,
     )
 
@@ -55,33 +56,33 @@ def silver_builder(
         writer,
         schema=ComplaintsARow,
         reject_writer=reject_writer,
-        name=f"{NAMESPACE}:silver",
+        name=f"{FEED_NAME}:silver",
         run_log=run_log,
     )
 
 
 def run(context: RunContext) -> Dataset:
     """Wire the real readers and writers for the environment and execute."""
-    med = medallion(StoreRegistry(context.base_dir), NAMESPACE)
+    med = medallion(StoreRegistry(context.base_dir), FEED_NAME)
     strategy = AccumulateByRun.from_context(context)
 
     # In reality, this CSV is fetched from the SAS server.
     # To fetch once for all three pipelines, we would orchestrate a fetch step upstream,
     # and this pipeline would simply use CsvReader on the landed file.
     landing_dir = Path(context.base_dir) / "landing_zone"
-    feed_csv = landing_dir / f"{NAMESPACE}.csv"
+    feed_csv = landing_dir / f"{FEED_NAME}.csv"
 
     # 1. Run Raw
     raw_pipeline = raw_builder(
-        reader=CsvReader(feed_csv), writer=med.raw.writer(NAMESPACE, strategy)
+        reader=CsvReader(feed_csv), writer=med.raw.writer(FEED_NAME, strategy)
     )
     raw_pipeline.run()
 
     # 2. Run Silver
     silver_pipeline = silver_builder(
-        reader=med.raw.reader(NAMESPACE),
-        writer=med.silver.writer(NAMESPACE, strategy),
-        reject_writer=med.silver.quarantine_writer(NAMESPACE),
+        reader=med.raw.reader(FEED_NAME),
+        writer=med.silver.writer(FEED_NAME, strategy),
+        reject_writer=med.silver.quarantine_writer(FEED_NAME),
     )
     silver = silver_pipeline.run()
 
@@ -94,10 +95,10 @@ def main(argv: list[str]) -> int:
 
     runner = PipelineRunner()
     runner.register(
-        subject=NAMESPACE, pipeline=NAMESPACE, handler=run, freshness=UPSTREAMS
+        subject=NAMESPACE, pipeline=FEED_NAME, handler=run, freshness=UPSTREAMS
     )
     try:
-        runner.run(NAMESPACE, NAMESPACE, base_dir=base_dir)
+        runner.run(NAMESPACE, FEED_NAME, base_dir=base_dir)
     except PipelineError as exc:
         print(format_failure(exc), file=sys.stderr)
         return 1

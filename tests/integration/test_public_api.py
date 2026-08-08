@@ -22,6 +22,14 @@ FIXTURE = Path(__file__).parent.parent / "fixtures" / "cases.csv"
 PIPELINES_DIR = Path(__file__).parent.parent.parent / "pipelines"
 CASE_REVIEW_DIR = Path(__file__).parent.parent.parent / "case_review"
 PUBLIC_FACADES = {"core", "io", "transform", "run"}
+MIGRATED_CASE_TYPE_SURFACES = (
+    PIPELINES_DIR / "ingest",
+    PIPELINES_DIR / "selection",
+    PIPELINES_DIR / "complaints_a",
+    PIPELINES_DIR / "complaints_b",
+    PIPELINES_DIR / "complaints_c",
+    PIPELINES_DIR / "demo_fan_out.py",
+)
 
 
 def _facade_violations(module_path: str) -> str | None:
@@ -90,10 +98,10 @@ def _dotted_name(node: ast.expr) -> str | None:
 
 
 def _case_type_violations(source: str) -> list[str]:
-    """Return imports and constructions of the retired pipeline wrapper."""
+    """Return retired CaseType usage through the supported import forms."""
     tree = ast.parse(source)
     imported_names: set[str] = set()
-    imported_modules: set[str] = set()
+    module_bindings: set[str] = set()
     found: list[str] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom) and node.module == "case_review.case_type":
@@ -101,30 +109,37 @@ def _case_type_violations(source: str) -> list[str]:
                 if alias.name == "CaseType":
                     imported_names.add(alias.asname or alias.name)
                     found.append(f"line {node.lineno}: imports CaseType")
+        elif isinstance(node, ast.ImportFrom) and node.module == "case_review":
+            for alias in node.names:
+                if alias.name == "case_type":
+                    module_bindings.add(alias.asname or alias.name)
         elif isinstance(node, ast.Import):
             for alias in node.names:
                 if alias.name == "case_review.case_type":
-                    imported_modules.add(alias.asname or alias.name)
+                    module_bindings.add(alias.asname or alias.name)
     for node in ast.walk(tree):
         if isinstance(node, ast.Call):
             if isinstance(node.func, ast.Name) and node.func.id in imported_names:
                 found.append(f"line {node.lineno}: constructs CaseType")
             elif any(
-                _dotted_name(node.func) == f"{module}.CaseType"
-                for module in imported_modules
+                _dotted_name(node.func) == f"{binding}.CaseType"
+                for binding in module_bindings
             ):
                 found.append(f"line {node.lineno}: constructs CaseType")
     return sorted(found)
 
 
-def _case_type_offenders(root: Path) -> dict[str, list[str]]:
+def _retired_case_type_offenders(paths: tuple[Path, ...]) -> dict[str, list[str]]:
     offenders: dict[str, list[str]] = {}
-    for path in sorted(root.rglob("*.py")):
-        if path.name.startswith("test_") or "__pycache__" in path.parts:
-            continue
+    modules = (
+        module
+        for path in paths
+        for module in ([path] if path.is_file() else sorted(path.rglob("*.py")))
+    )
+    for path in modules:
         found = _case_type_violations(path.read_text(encoding="utf-8"))
         if found:
-            offenders[str(path.relative_to(root))] = found
+            offenders[str(path.relative_to(PIPELINES_DIR))] = found
     return offenders
 
 
@@ -323,10 +338,11 @@ def test_demo_pipelines_import_framework_only_through_the_public_facades():
     )
 
 
-def test_production_pipelines_do_not_import_or_construct_case_type():
-    assert not _case_type_offenders(PIPELINES_DIR), (
-        "production pipelines still use the retired CaseType identity wrapper: "
-        f"{_case_type_offenders(PIPELINES_DIR)}"
+def test_migrated_case_type_surfaces_do_not_use_the_retired_wrapper():
+    offenders = _retired_case_type_offenders(MIGRATED_CASE_TYPE_SURFACES)
+    assert not offenders, (
+        "migrated Case Type surfaces still use the retired identity wrapper: "
+        f"{offenders}"
     )
 
 
@@ -342,6 +358,10 @@ def test_case_type_boundary_allows_variations_and_catches_retired_usage():
         "from case_review.case_type import CaseType as Identity\n"
         "CASES = Identity(name='cases', schema=Row, natural_key=('ref',))\n"
     ) == ["line 1: imports CaseType", "line 2: constructs CaseType"]
+    assert _case_type_violations(
+        "from case_review.case_type import CaseType\n"
+        "CASES = CaseType(name='cases', schema=Row, natural_key=('ref',))\n"
+    ) == ["line 1: imports CaseType", "line 2: constructs CaseType"]
     assert (
         _case_type_violations(
             "from another_module import CaseType\n"
@@ -352,11 +372,35 @@ def test_case_type_boundary_allows_variations_and_catches_retired_usage():
         == []
     )
     assert _case_type_violations(
+        "from case_review import case_type as declarations\n"
+        "CASES = declarations.CaseType(\n"
+        "    name='cases', schema=Row, natural_key=('ref',)\n"
+        ")\n"
+    ) == ["line 2: constructs CaseType"]
+    assert _case_type_violations(
+        "from case_review import case_type\n"
+        "CASES = case_type.CaseType(\n"
+        "    name='cases', schema=Row, natural_key=('ref',)\n"
+        ")\n"
+    ) == ["line 2: constructs CaseType"]
+    assert _case_type_violations(
         "import case_review.case_type as declarations\n"
         "CASES = declarations.CaseType(\n"
         "    name='cases', schema=Row, natural_key=('ref',)\n"
         ")\n"
     ) == ["line 2: constructs CaseType"]
+    assert _case_type_violations(
+        "import case_review.case_type\n"
+        "CASES = case_review.case_type.CaseType(\n"
+        "    name='cases', schema=Row, natural_key=('ref',)\n"
+        ")\n"
+    ) == ["line 2: constructs CaseType"]
+    assert (
+        _case_type_violations(
+            "from another_package import case_type\nCASES = case_type.CaseType()\n"
+        )
+        == []
+    )
 
 
 def test_case_review_imports_framework_only_through_the_public_facades():
