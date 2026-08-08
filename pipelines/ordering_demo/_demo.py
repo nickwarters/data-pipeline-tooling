@@ -1,6 +1,6 @@
 """The one read -> validate -> print body every item in the demo runs.
 
-Six near-identical pipelines would be six copies of the same four lines, so the
+Near-identical pipelines would each be a copy of the same four lines, so the
 body lives here and each ``pipeline.py`` supplies only its name and its rows.
 The source is an in-memory :class:`~framework.core.Dataset` and the sink is
 :class:`~framework.io.StdoutWriter`, so a demo run touches no data file at all —

@@ -1,4 +1,4 @@
-"""The run-ordering demo: six real pipelines, and the order they are attempted in.
+"""The run-ordering demo: real pipelines, and the order they are attempted in.
 
 Two questions are asked here. Do the demo pipelines actually run, printing their
 rows and writing no data file? And does the set they are declared in still
@@ -19,9 +19,18 @@ from framework.run import load_pipeline, run_pipeline
 from tools.calendar import WorkingDayCalendar
 from tools.orchestration import Orchestrator, RunCandidate, order_run_candidates
 
-# Declared order. steady sits below the report that depends on it, so the
-# derived order is demonstrably not this one.
-DEMO_ITEMS = ("overdue", "later", "urgent", "report", "steady", "tomorrow")
+# Declared order. steady sits below the report that depends on it and
+# very_overdue sits last of all, so the derived order is demonstrably not this
+# one.
+DEMO_ITEMS = (
+    "overdue",
+    "later",
+    "urgent",
+    "report",
+    "steady",
+    "tomorrow",
+    "very_overdue",
+)
 
 # A Tuesday afternoon, far from any date boundary: the ordinary case the demo is
 # written for. Tomorrow is a Wednesday (weekday ordinal 2).
@@ -89,7 +98,7 @@ def test_a_demo_run_writes_no_data_file(name, tmp_path):
 # ── the schedules ─────────────────────────────────────────────────────────────
 
 
-def test_the_set_declares_the_six_demo_items(fixed_clock):
+def test_the_set_declares_every_demo_item(fixed_clock):
     fixed_clock(NOON_TUESDAY)
 
     sets = schedules.build_pipeline_sets()
@@ -162,8 +171,11 @@ def test_the_derived_order_demonstrates_the_rule(fixed_clock):
     )
 
     assert [item.candidate.item.name for item in ordered] == [
-        # Overdue work first. steady inherits report's deadline, so all three
-        # press equally and declared order settles them — except that steady is
+        # Most overdue first, whatever the declared order: very_overdue is
+        # declared last and its deadline is the tightest in the pool.
+        "very_overdue",
+        # Then the three sharing a deadline an hour old — steady inherits
+        # report's, so declared order settles them, except that steady is
         # declared *after* report and still precedes it, because dependency
         # order outranks every time input.
         "overdue",
@@ -204,6 +216,7 @@ def test_the_plan_reports_the_same_order_with_later_gated(fixed_clock, tmp_path)
     )
 
     assert [item.pipeline for item in plan.items] == [
+        "very_overdue",
         "overdue",
         "steady",
         "report",

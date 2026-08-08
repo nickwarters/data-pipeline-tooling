@@ -380,7 +380,7 @@ constructed; `"9:5"`, `"24:00"` and `"0900"` all fail at start-up, naming the
 value.
 
 The worked example is runnable: `pipelines/ordering_demo/` declares one set of
-six tiny pipelines that differ only in these fields. Each reads a couple of rows
+seven tiny pipelines that differ only in these fields. Each reads a couple of rows
 already in memory, validates them, and prints them — no data file is written, so
 it is safe to run anywhere, repeatedly.
 
@@ -392,7 +392,8 @@ python -m cli orchestrate --app pipelines.ordering_demo.schedules \
 
 The schedules are in `pipelines/ordering_demo/schedules.py`, which computes its
 deadlines relative to the clock at the moment it is called, so the demo tells the
-same story whenever it is run. In the output, look for: `steady` running **before**
+same story whenever it is run. In the output, look for: `very_overdue`, declared
+last and two hours past its deadline, attempted **first**; `steady` running **before**
 `report` even though `report` carries the deadline and `steady` is declared last
 of the two (dependency order dominates, and `steady` inherits that deadline);
 `urgent`, at `priority=100` with no

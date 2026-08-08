@@ -1,4 +1,4 @@
-"""The demo's schedules: one set whose six items differ only in their ordering.
+"""The demo's schedules: one set whose items differ only in their ordering.
 
 The module an operator names on the command line::
 
@@ -29,6 +29,7 @@ def build_pipeline_sets():
     """The demo's single :class:`PipelineSet`, timed against the local clock."""
     now = local_now()
     an_hour_ago = _clamped(now - _HOUR, now.date(), edge=dt.time(0, 0))
+    two_hours_ago = _clamped(now - 2 * _HOUR, now.date(), edge=dt.time(0, 0))
     in_an_hour = _clamped(now + _HOUR, now.date(), edge=dt.time(23, 59))
 
     return (
@@ -65,6 +66,13 @@ def build_pipeline_sets():
                 ScheduledPipeline(
                     "pipelines/ordering_demo/tomorrow",
                     _tomorrow_only(now.date()),
+                ),
+                # Declared last and attempted first: the tightest deadline in
+                # the pool, held back by no dependency.
+                ScheduledPipeline(
+                    "pipelines/ordering_demo/very_overdue",
+                    Schedule.daily(),
+                    due_time=two_hours_ago,
                 ),
             ),
         ),

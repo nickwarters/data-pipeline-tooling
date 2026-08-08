@@ -25,6 +25,10 @@ What each item demonstrates, and what to look for in the output:
 ``overdue``
     Due today with a deadline an hour in the past. It interleaves with the two
     above by how overdue each one is.
+``very_overdue``
+    Due today with a deadline two hours in the past, and declared **last** in
+    the set. It is attempted first regardless: nothing in the pool presses
+    harder, and no dependency holds it back.
 ``urgent``
     Due today with ``priority=100`` and no deadline. It sorts after every
     overdue item — priority never outranks a deadline — but ahead of the rest of
