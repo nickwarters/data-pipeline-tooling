@@ -103,6 +103,49 @@ def test_schema_validator_rejects_int_where_float_declared():
         SchemaValidator(Measurement).validate(Dataset.from_pandas(frame))
 
 
+def test_schema_validator_accepts_a_zero_row_frame_whatever_its_dtypes():
+    # A column with no rows has no value to breach a declared type, and nothing
+    # types it: a quiet source's empty window arrives object-typed (and
+    # `reindex` invents a column as float64). Dtype is a claim about values, so
+    # with no values there is nothing to check and the frame passes.
+    frame = pd.DataFrame(
+        {
+            "count": pd.Series([], dtype="object"),
+            "score": pd.Series([], dtype="object"),
+        }
+    )
+
+    SchemaValidator(Measurement).validate(Dataset.from_pandas(frame))
+
+
+def test_schema_validator_accepts_a_zero_row_column_reindex_invented_as_float():
+    # The other way an empty column gets the wrong type: `DataFrame.reindex`
+    # fills a column it had to invent with NaN, and so types it float64 —
+    # including where the schema declares `str`. That is the shape a feed
+    # declaring an empty window's columns hands to the gate, and it passes for
+    # the same reason: no rows, nothing to check.
+    frame = pd.DataFrame({"opened": pd.Series([], dtype="datetime64[ns]")}).reindex(
+        columns=["case_ref", "opened", "active"]
+    )
+    # The premise the test rests on, not the claim it makes: `case_ref` is
+    # declared `str` and arrives float64, because reindex had to invent it.
+    assert frame["case_ref"].dtype == "float64"
+
+    SchemaValidator(CaseA).validate(Dataset.from_pandas(frame))
+
+
+def test_schema_validator_still_reports_a_missing_column_on_a_zero_row_frame():
+    # Only the *value* claims stand down when there are no rows. A declared
+    # column that is absent is a breach of shape, and a shape is real whether or
+    # not anything filled it — an empty frame arriving without a column has lost
+    # it, not merely emptied it. Guards the short-circuit against being widened
+    # past the presence check.
+    frame = pd.DataFrame({"count": pd.Series([], dtype="int64")})
+
+    with pytest.raises(ValidationError, match="missing column 'score'"):
+        SchemaValidator(Measurement).validate(Dataset.from_pandas(frame))
+
+
 def test_schema_validator_resolves_postponed_string_annotations():
     # Real schemas live in modules with `from __future__ import annotations`, so
     # their field types arrive as strings. The validator must resolve them to

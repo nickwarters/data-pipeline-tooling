@@ -5,9 +5,11 @@ The *coerce* half of the schema adapter, and the write-side companion of
 :class:`~framework.core.schema.SchemaValidator`: where the validator *checks*
 dtypes, this *repairs* the representation raw loses to storage, casting the
 round-trip-lossy declared types (``date`` / ``datetime`` / ``bool``) ahead of the
-validator. It lives in ``framework.transform`` because it reshapes a column's
-values rather than gating them; it shares the dataclass-annotation reading with
-the validator via :mod:`framework._internal.schema`.
+validator — and, on a **zero-row** frame, every declared type, because there is
+then no value to carry one. It lives in ``framework.transform`` because it
+reshapes a column's values rather than gating them; it shares the
+dataclass-annotation reading with the validator via
+:mod:`framework._internal.schema`.
 
 It is **engine-confined**: it reaches the backing frame via ``to_pandas()``
 exactly as a Reader/Writer/processor does.
@@ -43,6 +45,17 @@ _BOOL_ENCODINGS: dict[str, bool] = {
 }
 
 
+# The dtype each round-trip-safe declared type takes on a zero-row frame, where
+# there is no value to carry it. These are chosen for the storage affinity they
+# create — TEXT / INTEGER / REAL — since fixing the created table's column types
+# is the whole reason an empty frame is typed at all. A declared type absent from
+# this table is left alone: an unsupported type is a schema configuration error,
+# and SchemaValidator reports it at build time naming the field, which is a
+# better answer than a KeyError from here on the one frame that reaches this
+# branch.
+_EMPTY_DTYPES: dict[type, str] = {str: "object", int: "int64", float: "float64"}
+
+
 class SchemaCoercion:
     """Cast a dataset's round-trip-lossy columns to a Case Type schema's types.
 
@@ -52,6 +65,11 @@ class SchemaCoercion:
     Only the types that don't survive a SQLite round-trip are cast — ``date`` /
     ``datetime`` (which land as text); ``str`` / ``int`` / ``float`` survive
     storage and pass through untouched, so the validator stays their gate.
+
+    That last sentence holds *while there are rows to carry a type*. On a
+    zero-row frame every declared column is typed instead, because the dtypes of
+    an empty write are what fix a created table's column affinity — see the
+    comment on ``_EMPTY_DTYPES``.
     """
 
     def __init__(self, schema: type) -> None:
@@ -67,6 +85,16 @@ class SchemaCoercion:
                 frame[name] = self._to_datetime(frame[name], name)
             elif declared is bool:
                 frame[name] = self._to_bool(frame[name], name)
+            elif frame.empty and declared in _EMPTY_DTYPES:
+                # No row to carry the type and no value to infer one from, so a
+                # quiet window's column arrives object-typed (float64 where
+                # `reindex` had to invent it). The validator lets that past —
+                # there is nothing to check — but the dtype still reaches
+                # storage, and an empty write is what *creates* the table, fixing
+                # the column's affinity for the life of the feed. Round-trip-safe
+                # types are left alone only while there are rows to make them
+                # true; with none, declaring them here is the whole repair.
+                frame[name] = frame[name].astype(_EMPTY_DTYPES[declared])
         return Dataset.from_pandas(frame)
 
     def _to_datetime(self, series: "pd.Series", name: str) -> "pd.Series":

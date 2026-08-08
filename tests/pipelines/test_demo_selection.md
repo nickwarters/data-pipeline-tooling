@@ -10,10 +10,11 @@ from tools.store import StoreRegistry
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def _run(pipeline: str, base_dir: Path) -> int:
-    return operator.main(
-        ["run", pipeline, "--base-dir", str(base_dir), "--run-date", "2026-05-29"]
-    )
+def _run(pipeline: str, base_dir: Path, *params: str) -> int:
+    args = ["run", pipeline, "--base-dir", str(base_dir), "--run-date", "2026-05-29"]
+    for param in params:
+        args += ["--param", param]
+    return operator.main(args)
 
 
 def test_demo_selection_rules_are_independently_testable():
@@ -66,6 +67,30 @@ def test_demo_runs_the_full_source_to_selection_path(tmp_path, capsys):
     captured = capsys.readouterr()
     assert "SelectionPool" in captured.out
     assert "trace" in captured.out
+
+
+def test_a_seeded_calendar_widens_the_availability_window(tmp_path):
+    # The window is five *working* days back from 2026-05-29, so it normally
+    # reaches 05-25 and considers c1/c2/c3. Seeding 05-22 through 05-28 as
+    # holidays pushes it back to 05-18, which brings c4 into scope and drops
+    # c2/c3 out — the same calendar file `orchestrate --calendar` reads.
+    calendar = tmp_path / "calendar.yml"
+    calendar.write_text(
+        "holidays: [2026-05-22, 2026-05-25, 2026-05-26, 2026-05-27, 2026-05-28]\n",
+        encoding="utf-8",
+    )
+    assert _run("pipelines/ingest", tmp_path) == 0
+    assert _run("pipelines/selection", tmp_path, f"calendar={calendar}") == 0
+
+    gold = medallion(StoreRegistry(tmp_path), "cases").gold
+    assert [r["case_ref"] for r in read_rows(gold, "selection_pool")] == ["c1", "c4"]
+    assert {r["case_ref"] for r in read_rows(gold, "selection_trace")} == {"c1", "c4"}
+
+
+def test_an_unreadable_calendar_param_fails_without_a_traceback(tmp_path, capsys):
+    assert _run("pipelines/ingest", tmp_path) == 0
+    assert _run("pipelines/selection", tmp_path, "calendar=nope.yml") == 1
+    assert "no calendar file at" in capsys.readouterr().err
 
 
 def test_demo_pipelines_are_runnable_as_modules(tmp_path):

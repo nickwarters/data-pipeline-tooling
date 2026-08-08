@@ -26,7 +26,7 @@ from typing import Annotated
 import pandas as pd
 import pytest
 
-from framework.core import Range
+from framework.core import Range, SchemaValidator
 from framework.core.dataset import Dataset
 from framework.core.validators import (
     RowCountValidator,
@@ -141,6 +141,36 @@ def test_every_chunk_flows_through_the_transform_and_reaches_the_writer():
     assert len(landed) == 25
     assert [row["doubled"] for row in landed[:3]] == [0, 20, 40]
     # Three chunks of 10/10/5, each written as it streamed.
+    assert len(writer.written) == 3
+
+
+def test_an_empty_chunk_passes_the_schema_gate_and_still_reaches_the_writer():
+    """A quiet window mid-stream is not a breach — it is a chunk with no rows.
+
+    A source that hands back nothing for a window types its columns as nothing
+    can: ``object``. The schema gate has no value to check, so the chunk flows
+    through the same hops as a populated one rather than aborting the drive.
+    """
+
+    class QuietWindowReader:
+        """Yields a populated chunk, then a quiet one, then another populated."""
+
+        def chunks(self, size: int = 10_000):
+            yield Dataset.from_pandas(pd.DataFrame(_rows(2)))
+            yield Dataset.from_pandas(pd.DataFrame({"id": [], "val": []}, dtype=object))
+            yield Dataset.from_pandas(pd.DataFrame(_rows(2, start=2)))
+
+        def describe(self) -> str:
+            return "QuietWindowReader()"
+
+    writer = CapturingWriter()
+    p = Pipeline("big", run_log=RecordingRunLog())
+    source = p.read_chunks(QuietWindowReader(), name="read", chunk_size=10)
+    p.validate(SchemaValidator(SmallId), source, name="schema")
+    p.write(writer, source, name="write")
+    p.run()
+
+    assert len(writer.rows()) == 4
     assert len(writer.written) == 3
 
 

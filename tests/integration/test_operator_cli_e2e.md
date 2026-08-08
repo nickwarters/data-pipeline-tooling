@@ -86,4 +86,29 @@ def test_cli_runs_real_ingest_then_selection_end_to_end(tmp_path):
     assert selection.returncode == 0, selection.stderr
     assert "SelectionPool" in selection.stdout
 
+
+def test_orchestrate_imports_the_real_application_schedule(tmp_path):
+    """`--app case_review.schedules` resolves and decides, on a non-due date.
+
+    Deliberately a weekend: a due-day pass would assert on `NoClientError` today,
+    and would attempt a real network call once an organisational client is wired.
+    The due-day invocation is covered hermetically in
+    `tests/case_review/test_schedules.py`.
+    """
+    result = _cli(
+        "orchestrate",
+        "--app",
+        "case_review.schedules",
+        "--base-dir",
+        str(tmp_path),
+        "--run-date",
+        "2026-08-08",  # a Saturday
+        "--once",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "sharepoint_cases" in result.stdout
+    assert "skipped" in result.stdout
+    assert (tmp_path / "_orchestration" / "runs.db").exists()
+
 ```

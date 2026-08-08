@@ -939,6 +939,29 @@ def test_a_quiet_window_writes_cleanly_and_a_later_one_still_appends(tmp_path):
     assert len(read_rows(med.silver, "case_version")) == 1
 
 
+def test_a_quiet_first_window_still_types_the_columns_it_creates(tmp_path):
+    # The steady-state poll is a quiet one, so a feed's *first* run is quite
+    # likely to be empty -- and an empty write is what creates the silver table,
+    # fixing each column's SQLite affinity for the life of the feed. A zero-row
+    # frame carrying object columns would create `id` as TEXT and store every
+    # later integer id as text, silently, for as long as nobody compared types.
+    # So the id a quiet-first feed lands must be the id a busy-first one lands.
+    quiet_first = FakeListClient(pd.DataFrame(), items(item()), advance=NEXT_POLL)
+    busy_first = FakeListClient(items(item()), pd.DataFrame(), advance=NEXT_POLL)
+
+    landed = []
+    for order, client in (("quiet", quiet_first), ("busy", busy_first)):
+        base = tmp_path / order
+        context = RunContext(base_dir=base, pipeline=FEED_NAME)
+        run(context, client=client)
+        run(context, client=client)
+        med = medallion(StoreRegistry(base), FEED_NAME)
+        landed.append(read_rows(med.silver, "case_version")[0]["id"])
+
+    assert landed[0] == landed[1]
+    assert isinstance(landed[0], int)
+
+
 def test_a_quiet_window_still_runs_and_records_every_hop(tmp_path):
     # A quiet poll is not a different pipeline: an operator reading the run log
     # still sees all six hops, against every table, with zero rows.

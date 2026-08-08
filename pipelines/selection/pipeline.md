@@ -15,6 +15,10 @@ It declares ``ingest`` as a freshness upstream, so::
     python -m cli run pipelines/selection --base-dir /tmp/demo --run-date 2026-05-29
 
 checks for recent successful ``ingest`` history before Selection runs.
+
+The availability window is counted in working days, so a ``calendar`` run
+parameter — ``--param calendar=/config/calendar.yml``, the same file
+``orchestrate`` takes — seeds the holidays it skips.
 """
 
 from __future__ import annotations
@@ -57,13 +61,31 @@ def priority_score(row: Mapping[str, Any]) -> int:
     return row["amount"] * 2
 
 
+def _working_day_calendar(context: RunContext) -> WorkingDayCalendar:
+    """Return the calendar the availability window is measured against.
+
+    A bank holiday should widen the window the same way it defers a scheduled
+    run, so the ``calendar`` run parameter names the same file
+    ``python -m cli orchestrate --calendar`` reads. Without it the window counts
+    weekends only. The file's own ``ValueError`` becomes a ``PipelineError`` so a
+    mistyped path prints like any other run failure instead of a traceback.
+    """
+    path = context.params.get("calendar")
+    if not path:
+        return WorkingDayCalendar()
+    try:
+        return WorkingDayCalendar.from_yaml(path)
+    except ValueError as exc:
+        raise PipelineError(str(exc)) from exc
+
+
 def run(context: RunContext):
     med = medallion(StoreRegistry(context.base_dir), CASES.name)
     strategy = AccumulateByRun.from_context(context)
 
     # Named, pure rule functions stay independently testable while Filter/Score
     # provide the framework wiring and trace metadata.
-    pool = CasePool(CASES, med.gold, WorkingDayCalendar())
+    pool = CasePool(CASES, med.gold, _working_day_calendar(context))
     available = pool.fetch_available_cases(
         as_of=context.run_date, activity_column="activity_date", within_working_days=5
     )

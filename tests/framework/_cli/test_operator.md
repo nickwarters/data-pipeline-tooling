@@ -168,6 +168,117 @@ def test_orchestrate_runs_path_addressed_pipelines(tmp_path):
     assert (tmp_path / "_orchestration" / "runs.db").exists()
 
 
+def test_orchestrate_skips_a_pipeline_on_a_calendar_seeded_holiday(tmp_path):
+    # The contrast with the test above: same app, same run date -- a Friday, so
+    # only the seeded holiday can explain the skip -- but a --calendar file that
+    # names it. The absent raw.db is what makes this end-to-end rather than a
+    # string assertion. The printed reason names the *weekday*, because that is
+    # what Weekdays.not_due_detail judges.
+    calendar = tmp_path / "calendar.yml"
+    calendar.write_text("holidays:\n  - 2026-05-29\n", encoding="utf-8")
+
+    result = _cli(
+        "orchestrate",
+        "--app",
+        "cliapp",
+        "--base-dir",
+        str(tmp_path),
+        "--run-date",
+        "2026-05-29",
+        "--calendar",
+        str(calendar),
+        "--once",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "fixture  _source  skipped" in result.stdout
+    assert not (tmp_path / "fixture" / "raw.db").exists()
+
+
+def test_orchestrate_missing_calendar_file_reports_clear_error(tmp_path):
+    result = _cli(
+        "orchestrate",
+        "--app",
+        "cliapp",
+        "--base-dir",
+        str(tmp_path),
+        "--run-date",
+        "2026-05-29",
+        "--calendar",
+        str(tmp_path / "absent.yml"),
+        "--once",
+    )
+
+    assert result.returncode != 0
+    assert "no calendar file" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_orchestrate_malformed_calendar_file_reports_clear_error(tmp_path):
+    calendar = tmp_path / "calendar.yml"
+    calendar.write_text("holidays: [not-a-date]\n", encoding="utf-8")
+
+    result = _cli(
+        "orchestrate",
+        "--app",
+        "cliapp",
+        "--base-dir",
+        str(tmp_path),
+        "--run-date",
+        "2026-05-29",
+        "--calendar",
+        str(calendar),
+        "--once",
+    )
+
+    assert result.returncode != 0
+    assert "holidays[0]" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def _orchestrate_monthly(base_dir, run_date, calendar=None):
+    """One orchestrate pass over the month-walk fixture app, in its own base dir.
+
+    Each pass gets a fresh base directory so an earlier pass's run history can
+    never be what satisfies a later one.
+    """
+    base_dir.mkdir(parents=True, exist_ok=True)
+    extra = ("--calendar", str(calendar)) if calendar is not None else ()
+    return _cli(
+        "orchestrate",
+        "--app",
+        "clicalapp",
+        "--base-dir",
+        str(base_dir),
+        "--run-date",
+        run_date,
+        *extra,
+        "--once",
+    )
+
+
+def test_seeded_calendar_shifts_the_nth_working_day_of_month(tmp_path):
+    # June 2026: the 1st is a Monday and so the month's first working day.
+    calendar = tmp_path / "calendar.yml"
+    calendar.write_text("holidays:\n  - 2026-06-01\n", encoding="utf-8")
+
+    default = _orchestrate_monthly(tmp_path / "a", "2026-06-01")
+    assert default.returncode == 0, default.stderr
+    assert "monthly_nth  _source  succeeded" in default.stdout
+
+    on_the_holiday = _orchestrate_monthly(tmp_path / "b", "2026-06-01", calendar)
+    assert on_the_holiday.returncode == 0, on_the_holiday.stderr
+    assert "monthly_nth  _source  skipped" in on_the_holiday.stdout
+    assert not (tmp_path / "b" / "fixture" / "raw.db").exists()
+
+    # The point of the third pass: with the 1st seeded as a holiday, Tuesday the
+    # 2nd *is* the month's first working day. The month walk counts against the
+    # seeded calendar, not merely the is_working_day gate.
+    day_after = _orchestrate_monthly(tmp_path / "c", "2026-06-02", calendar)
+    assert day_after.returncode == 0, day_after.stderr
+    assert "monthly_nth  _source  succeeded" in day_after.stdout
+
+
 def test_dry_run_previews_without_writing_artifacts(tmp_path):
     result = _cli(
         "run",

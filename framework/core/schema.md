@@ -104,9 +104,18 @@ class SchemaValidator:
         present = set(frame.columns)
         problems: list[str] = []
         ill_typed: set[str] = set()
+        # A dtype (and a null, and a value) is a claim about values, and a
+        # zero-row column has none: nothing types it, so a quiet source's empty
+        # window arrives object-typed, and a column `reindex` had to invent
+        # arrives float64. Checking those would report a breach no value
+        # committed. Column *presence* is still checked — the declared shape is
+        # real even when the rows are not.
+        checks_values = not frame.empty
         for name, declared in self._expected:
             if name not in present:
                 problems.append(f"missing column {name!r}")
+                continue
+            if not checks_values:
                 continue
             check, label = _DTYPE_CHECKS[declared]
             actual = frame[name].dtype
