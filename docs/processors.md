@@ -577,14 +577,16 @@ coerced = p.transform(SchemaCoercion(CaseSchema), projected, name="coerce")
 validated = p.validate(SchemaValidator(CaseSchema), coerced, name="post-validate")
 p.write(med.silver.writer("cases", AccumulateByRun(RUN_ID, RUN_ID)), validated, name="write")
 p.run()
-# CASES is the feed's CaseType — it owns the identity contract (namespace +
-# natural_key), so both builders below derive the same case_id.
+# The caller passes the same declared namespace + natural_key to both builders,
+# so they derive the same case_id.
 # Cases gold: DeriveKey → LatestPerKey → UniqueValidator → current-only gold
-ingest_silver_to_gold(med, CASES, "cases").run()
+ingest_silver_to_gold(
+    med, CASES.name, CASES.natural_key, CASES.schema, "cases"
+).run()
 
-# Products Detail Table gold: DeriveKey (same CaseType → same key) → Unpivot wide→long
+# Products Detail Table gold: DeriveKey (same identity → same key) → Unpivot wide→long
 detail_ingest_silver_to_gold(
-    store, CASES, "case_products",
+    med, CASES.name, CASES.natural_key, CASES.schema, "case_products",
     unpivot=Unpivot(id_vars=["case_id"], value_vars=PRODUCT_COLS,
                     var_name="product_slot", value_name="product_name"),
 ).run()

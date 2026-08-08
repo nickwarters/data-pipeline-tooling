@@ -64,7 +64,9 @@ def test_detail_silver_to_gold_produces_one_row_per_product(tmp_path):
 
     detail_ingest_silver_to_gold(
         med,
-        _WIDE_CASES,
+        _WIDE_CASES.name,
+        _WIDE_CASES.natural_key,
+        _WIDE_CASES.schema,
         "products",
         unpivot=Unpivot(
             id_vars=["case_id"],
@@ -107,11 +109,19 @@ def test_detail_case_id_matches_case_id_derived_independently(tmp_path):
         )
     )
 
-    ingest_silver_to_gold(med, _WIDE_CASES, "cases").run()
+    ingest_silver_to_gold(
+        med,
+        _WIDE_CASES.name,
+        _WIDE_CASES.natural_key,
+        _WIDE_CASES.schema,
+        "cases",
+    ).run()
 
     detail_ingest_silver_to_gold(
         med,
-        _WIDE_CASES,
+        _WIDE_CASES.name,
+        _WIDE_CASES.natural_key,
+        _WIDE_CASES.schema,
         "products",
         unpivot=Unpivot(
             id_vars=["case_id"],
@@ -153,7 +163,13 @@ def test_fan_out_two_pipelines_over_shared_raw_produce_cases_and_detail(tmp_path
     )
     p_cases.run()
 
-    ingest_silver_to_gold(med, _WIDE_CASES, "cases").run()
+    ingest_silver_to_gold(
+        med,
+        _WIDE_CASES.name,
+        _WIDE_CASES.natural_key,
+        _WIDE_CASES.schema,
+        "cases",
+    ).run()
 
     p_products = Pipeline("products")
     r_products = p_products.read(med.raw.reader("wide_cases"), name="read")
@@ -173,7 +189,9 @@ def test_fan_out_two_pipelines_over_shared_raw_produce_cases_and_detail(tmp_path
 
     detail_ingest_silver_to_gold(
         med,
-        _WIDE_CASES,
+        _WIDE_CASES.name,
+        _WIDE_CASES.natural_key,
+        _WIDE_CASES.schema,
         "products",
         unpivot=Unpivot(
             id_vars=["case_id"],

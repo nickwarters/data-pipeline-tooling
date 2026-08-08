@@ -117,12 +117,14 @@ def run(context: RunContext) -> Dataset:
 
     # --- gold is yours to assemble ------------------------------------------
     # How accumulated silver becomes gold is unique per Case Type, so the
-    # scaffold stops at silver. When you're ready, add a gold step reading
-    # the same Case Type so its case_id derives consistently with any Detail
-    # Tables:
+    # scaffold stops at silver. When you're ready, add a gold step passing the
+    # same declared namespace and natural key used by any Detail Tables, so
+    # their case_ids derive consistently:
     #
     #     from case_review.gold import ingest_silver_to_gold
-    #     ingest_silver_to_gold(med, CASE_TYPE).run()   # single-feed current gold
+    #     ingest_silver_to_gold(
+    #         med, CASE_TYPE.name, CASE_TYPE.natural_key, CASE_TYPE.schema
+    #     ).run()  # single-feed current gold
     # ------------------------------------------------------------------------
     return silver
 

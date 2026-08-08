@@ -1,19 +1,18 @@
 """Case-review gold helpers composed from generic framework transforms.
 
-These read a Case Type's **identity contract** (its ``name`` and
-``natural_key``) straight off the :class:`~case_review.case_type.CaseType` and
-feed it to :class:`~framework.transform.DeriveKey`, which knows only a
-namespace, a list of natural-key columns and the column to stamp the derived
-digest into — nothing about Cases. Naming that column ``case_id`` is this
-layer's business, not the framework's. The Case builder and each Detail-Table
-builder take the *same* Case Type, so a Case and its Detail rows derive the same
-deterministic ``case_id`` independently — the parent/child link is structural,
-not two call sites that must be kept in step.
+These take a caller's **identity contract** (its ``namespace`` and
+``natural_key``) and feed it to :class:`~framework.transform.DeriveKey`, which
+knows only a namespace, a list of natural-key columns and the column to stamp
+the derived digest into — nothing about Cases. Naming that column ``case_id``
+is this layer's business, not the framework's. The Case builder and each
+Detail-Table builder must be handed the *same* namespace and natural key so a
+Case and its Detail rows derive the same deterministic ``case_id`` independently.
+In this retirement slice callers pass their existing declaration explicitly;
+the one-declaration responsibility moves fully to the caller in slice 2.
 """
 
 from __future__ import annotations
 
-from case_review.case_type import CaseType
 from framework.core import UniqueValidator
 from framework.io import Refresh
 from framework.run import Pipeline, RunLog
@@ -28,7 +27,9 @@ CASE_ID_COLUMN = "case_id"
 
 def ingest_silver_to_gold(
     medallion: Medallion,
-    case_type: CaseType,
+    namespace: str,
+    natural_key: tuple[str, ...],
+    schema: type,
     table: str | None = None,
     *,
     name: str | None = None,
@@ -36,18 +37,18 @@ def ingest_silver_to_gold(
 ) -> Pipeline:
     """Reduce accumulated case silver to one current gold row per Case.
 
-    Identity (``name`` / ``natural_key``) comes from ``case_type``; the
-    silver/gold ``table`` defaults to the Case Type's ``name``.
+    The silver/gold ``table`` defaults to ``namespace``. ``schema`` travels
+    with the caller's declared contract but is not inspected by this reduction.
     """
-    table_name = table or case_type.name
+    table_name = table or namespace
     p = Pipeline(name or table_name, run_log=run_log)
     r = p.read(medallion.silver.reader(table_name), name="read")
 
     keyed = p.transform(
         DeriveKey(
             into=CASE_ID_COLUMN,
-            namespace=case_type.name,
-            natural_key=list(case_type.natural_key),
+            namespace=namespace,
+            natural_key=list(natural_key),
         ),
         r,
         name="derive-key",
@@ -64,7 +65,9 @@ def ingest_silver_to_gold(
 
 def detail_ingest_silver_to_gold(
     medallion: Medallion,
-    case_type: CaseType,
+    namespace: str,
+    natural_key: tuple[str, ...],
+    schema: type,
     table: str,
     *,
     unpivot: Unpivot,
@@ -73,9 +76,10 @@ def detail_ingest_silver_to_gold(
 ) -> Pipeline:
     """Reduce accumulated detail silver to current gold rows linked by case id.
 
-    Takes the *same* ``case_type`` as its Case table, so the Detail Table's
-    ``case_id`` derives identically. ``table`` is the Detail Table's own name
-    (distinct from the Case table).
+    Pass the *same* ``namespace`` and ``natural_key`` as the Case builder so the
+    Detail Table's ``case_id`` derives identically. ``table`` is the Detail
+    Table's own name (distinct from the Case table); ``schema`` travels with the
+    caller's declared contract but is not inspected by this reduction.
     """
     p = Pipeline(name or table, run_log=run_log)
     r = p.read(medallion.silver.reader(table), name="read")
@@ -83,8 +87,8 @@ def detail_ingest_silver_to_gold(
     keyed = p.transform(
         DeriveKey(
             into=CASE_ID_COLUMN,
-            namespace=case_type.name,
-            natural_key=list(case_type.natural_key),
+            namespace=namespace,
+            natural_key=list(natural_key),
         ),
         r,
         name="derive-key",
