@@ -39,7 +39,7 @@ Pipelines such as `cases/ingest` and `cases/selection`.
 ```python
 from dataclasses import dataclass
 from datetime import date
-from case_review.case_type import Variation
+from case_review.variation import Variation
 
 @dataclass
 class ActivityCase:          # the Case Type's schema (its columns + types)

@@ -242,7 +242,7 @@ the *reference* id; the bank's content is the review platform's). One Case Type
 has many Variations, so they are data.
 
 ```python
-from case_review.case_type import Variation
+from case_review.variation import Variation
 
 NAMESPACE = "cases"              # medallion dir, table, and case_id namespace
 NATURAL_KEY = ("case_ref",)      # identifies a Case

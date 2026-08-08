@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 
-from case_review.case_type import Variation
+from case_review.variation import Variation
 
 NAMESPACE = "cases"
 NATURAL_KEY = ("case_ref",)
