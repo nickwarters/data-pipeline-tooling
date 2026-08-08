@@ -92,10 +92,13 @@ export function createDebouncedPeopleSearch({ client, isActive, onState }) {
         key,
         setTimeout(() => {
           timers.delete(key);
-          // The mount lifetime is the only thing checked here. Whether this
-          // outcome is still the one being waited for is the reducer's own
-          // guard: it drops one whose query is not the query in state, so a
-          // pending-query latch alongside it would only restate that condition.
+          // The mount lifetime is the only thing checked here; whether the
+          // outcome is still wanted is the reducer's guard, which drops one
+          // whose query is not the query in state. That compares text, not
+          // requests, so two in flight for the same text are indistinguishable
+          // and a late one can restate the status for a query still current.
+          // The next keystroke corrects it, which is cheaper than the request
+          // token it would take to tell them apart.
           void client.searchPeople(trimmed).then(
             (people) => {
               if (isActive())
