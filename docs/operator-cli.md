@@ -363,6 +363,81 @@ downstream dependants are marked `blocked`, while independent pipelines in the
 same set and all other `PipelineSet`s continue. Blocked decisions include the
 stale, missing, or failed upstream reason in `<base>/_orchestration/runs.db`.
 
+### Run order within a set
+
+A `ScheduledPipeline` may declare three optional ordering inputs. They influence
+only the **sequence** runnable items are attempted in, never whether an item may
+run — that stays the freshness rule's question alone.
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `due_time` | `"HH:MM"` | The time of day this should be finished by. The closer to, or further past, the deadline, the earlier it is attempted. |
+| `earliest_run` | `"HH:MM"` | Do not attempt before this time of day. |
+| `priority` | `int` | Higher wins. A tie-breaker only, with no time meaning. |
+
+Both times are zero-padded 24-hour strings and are parsed when the item is
+constructed; `"9:5"`, `"24:00"` and `"0900"` all fail at start-up, naming the
+value.
+
+The worked example is runnable: `pipelines/ordering_demo/schedules.py` declares
+one set of seven tiny `pipelines/demo_*/` pipelines that differ only in these
+fields. Each reads a couple of rows already in memory, validates them, and prints
+them — no data file is written, so it is safe to run anywhere, repeatedly. The
+seven are flat siblings rather than nested under the demo package, because a
+pipeline is known by the leaf of its path.
+
+```sh
+python -m cli orchestrate --app pipelines.ordering_demo.schedules \
+    --calendar pipelines/ordering_demo/calendar.yml \
+    --base-dir /tmp/ordering-demo --once
+```
+
+The schedules are in `pipelines/ordering_demo/schedules.py`, which computes its
+deadlines relative to the clock at the moment it is called, so the demo tells the
+same story whenever it is run. In the output, look for: `demo_very_overdue`,
+declared last and two hours past its deadline, attempted **first**; `demo_steady`
+running **before** `demo_report` even though `demo_report` carries the deadline
+and `demo_steady` is declared last of the two (dependency order dominates, and
+`demo_steady` inherits that deadline); `demo_urgent`, at `priority=100` with no
+deadline, running after every overdue item but ahead of the other deadline-free
+work; `demo_later` never invoked, recorded `skipped  before earliest_run HH:MM`;
+and `demo_tomorrow`, not due today, reported last. The bundled calendar makes
+every day a working day so the demo has due work at a weekend too. Each item's
+docstring says
+what it demonstrates; the package docstring in
+`pipelines/ordering_demo/__init__.py` is the full guide.
+
+The order is derived on **every pass**, from the candidates, the wall clock, and
+which items already succeeded today. The whole rule, in order:
+
+1. **Dependencies dominate.** No deadline and no priority can move an item ahead
+   of an upstream in the same set that is also due this pass.
+2. **A deadline inherits up the `depends_on` graph.** An item with no `due_time`
+   takes the tightest deadline of whatever depends on it, transitively, so
+   `claims_ingest` above is run in time for `claims_selection`. Only items due
+   today contribute.
+3. **Deadline pressure.** Overdue items first, most overdue first; then items
+   with a deadline still ahead, soonest first; then everything else. An item
+   that already succeeded today exerts no deadline pressure at all.
+4. **`priority`**, higher first, breaking a tie between equal deadlines.
+5. **Declared order**, breaking everything else. A set declaring none of these
+   fields therefore keeps exactly its existing order.
+
+Items that are not due work at all — disabled, or whose schedule is not due — are
+reported after the day's work, in declared order.
+
+An item before its `earliest_run` is recorded `skipped` with the window in its
+reason (`before earliest_run 18:00`). The gate is evaluated per pass and
+**nothing sleeps waiting for it**: a `--loop` orchestration whose remaining work
+is all gated will settle for the day before the window opens. Run a later
+`--once` (or a later cron-driven `--loop`) for that work. `due_time` is likewise
+a time on the run date only — there is no next-day deadline, so `00:30` read at
+`23:50` is maximally overdue for that date. The reasoning is
+[ADR-0017](adr/0017-run-order-is-derived-per-pass-not-declared.md).
+
+The YAML overrides file cannot yet set these three fields; that gap is tracked
+in issue #429.
+
 Each output line is `run_date  set_name  pipeline  status`, where `pipeline` is
 the scheduled item's leaf name, followed by the decision's reason when it has
 one:
@@ -400,7 +475,7 @@ pipeline's projected status:
 | Status | Meaning |
 |--------|---------|
 | `ready` | schedule is due and all freshness requirements are met |
-| `skipped` | schedule is not due on that date |
+| `skipped` | schedule is not due on that date, or the current time is before the item's `earliest_run` |
 | `disabled` | item has `enabled=False` |
 | `already-satisfied` | pipeline already succeeded on the run date |
 | `blocked` | a declared upstream is stale or missing |
@@ -413,11 +488,14 @@ print(result)
 ```
 
 ```
-2026-06-23  claims  claims_ingest         ready              schedule daily is due
-2026-06-23  claims  claims_quality_check  skipped            schedule monday,wednesday is not due on tuesday
-2026-06-23  claims  claims_month_open     already-satisfied  already succeeded on 2026-06-23
+2026-06-23  claims  claims_ingest         ready              schedule daily is due; due by 09:00 (inherited from claims_reporting)
 2026-06-23  claims  claims_reporting      blocked            upstream claims_ingest is stale: ...
+2026-06-23  claims  claims_month_open     already-satisfied  already succeeded on 2026-06-23
+2026-06-23  claims  claims_quality_check  skipped            schedule monday,wednesday is not due on tuesday
 ```
+
+Rows are in the order the pass would attempt them, and a `ready` item's reason
+carries the deadline in force — including which dependent it was inherited from.
 
 `str(result)` renders an aligned table using only stdlib; columns are sized to
 the widest value so the output stays readable regardless of pipeline name length.
@@ -427,7 +505,16 @@ the widest value so the output stays readable regardless of pipeline name length
 > date; a `--once` pass does not — its "already ran" guard is local to the single
 > pass, so the next `--once` **will re-run** that pipeline. For an idempotent
 > feed that is harmless and is exactly what makes repeated same-day operation
-> safe; the divergence between the two is tracked in issue #404.
+> safe; the divergence between the two is tracked in issue #404, which **remains
+> open**. Run ordering does not narrow it: the pass reads run history to decide
+> whether a deadline still presses, and for nothing else. "Has it run
+> today" never gates execution.
+
+The **order** of the rows above is not a separate promise to keep — the plan and
+the pass read one derivation. Both iterate the sequence
+`order_run_candidates` returns for each set, so a preview cannot claim an order
+the pass would not follow. Which items are eligible this pass (`earliest_run`)
+comes from that same call, so a gated item reads identically in both.
 
 A `blocked` reason here is produced by the *same* freshness rule the run itself
 applies — `evaluate_requirement` in `framework.run.freshness`, of which the

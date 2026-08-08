@@ -1054,6 +1054,25 @@ set and every other `PipelineSet` continue. `run_until_complete(...)` performs a
 bounded Python polling loop over the same run date; it does not retry failed
 items from the same invocation.
 
+A `ScheduledPipeline` may also carry three optional **ordering inputs**:
+`due_time` and `earliest_run`,
+both zero-padded 24-hour `"HH:MM"` strings parsed and validated at construction,
+and an integer `priority`. They influence only the sequence in which runnable
+items are attempted within their set; freshness remains the sole answer to
+whether an item may run at all.
+
+The order is **derived on every pass**, never declared or stored, by the pure
+`order_run_candidates(candidates, now=...)`. Why it is derived rather than
+declared is [ADR-0017](adr/0017-run-order-is-derived-per-pass-not-declared.md);
+the rule itself, with a worked example, is in
+[the operator CLI guide](operator-cli.md).
+
+One derivation, two presentations: `Orchestrator._ordered_pass` is the only place
+either loop gets its item sequence, so `plan()` and `run_due_once()` cannot
+order — or gate — the same day's work differently. It is the same shape as the
+freshness rule below, for the same reason: a preview whose promise is *this is
+what will happen* must not be a second implementation of it.
+
 Whether an item counted as *due work* is data on the decision, not something read
 back out of its message: `OrchestrationDecision.was_due` is `False` for disabled
 and not-due items and `True` for everything else, and it is what the polling loop

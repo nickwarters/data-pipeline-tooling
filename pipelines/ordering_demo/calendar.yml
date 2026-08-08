@@ -1,0 +1,4 @@
+# Every day is a working day, so the demo tells the same story on a Saturday as
+# on a Tuesday. A real application's calendar keeps its weekend and holidays.
+weekend: []
+holidays: []

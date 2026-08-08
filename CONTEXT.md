@@ -343,7 +343,48 @@ the separate `was_due` flag, and that flag — not the message text — is what 
 polling loop uses to decide the day has settled. Failures are isolated: a
 failed scheduled item blocks
 its downstream dependants for that orchestrator run, but independent items and
-other PipelineSets continue.
+other PipelineSets continue. Within a set, the **Run order** is derived per pass
+from the Deadlines, Earliest run windows and Priorities declared on the items —
+one derivation both the pass and `plan()` read.
+
+**Run order**:
+The sequence in which a pass attempts the runnable items of one `PipelineSet`.
+_Here_: **derived on every pass** — a pure function of the candidates, the
+wall-clock time of day, and which items already succeeded today — never declared,
+stored, or turned into a wake-up schedule. Dependency order dominates every time
+input; within that it is deadline pressure, then Priority, then declared order.
+`PipelineSet`s stay the outer boundary in declared order; there is no cross-set
+ordering. Ordering never decides whether something may run — that is the
+Freshness rule's question alone. See
+[run order is derived per pass](docs/adr/0017-run-order-is-derived-per-pass-not-declared.md).
+
+**Deadline** (`due_time`):
+The time of day a scheduled item should be finished by. _Here_: an optional
+`"HH:MM"` on `ScheduledPipeline`, always a time on the **run date** — there is
+no next-day deadline.
+
+**Inherited deadline**:
+The Deadline an item answers to on a dependent's behalf. _Here_: an item with no
+Deadline of its own takes the tightest Deadline of whatever depends on it,
+transitively, so an upstream is run in time for the dependent that has the
+Deadline. Only items due today contribute one.
+
+**Overdue**:
+A due item whose effective Deadline has passed and which has not yet succeeded
+today. _Here_: overdue items are attempted first, most overdue first. An item
+that already succeeded today exerts no Deadline pressure at all — whether an item
+has run today is read for that question **only**, and never to decide whether it
+may run.
+
+**Earliest run** (`earliest_run`):
+An optional `"HH:MM"` before which an item is not attempted. _Here_: a per-pass
+**eligibility gate, never a sleep** — a gated item is recorded `skipped` naming
+the window, and a `--loop` may settle for the day before the window opens.
+
+**Priority**:
+An integer tie-breaker between items with equal deadline pressure, higher first.
+_Here_: no time semantics of its own, and it never reorders items that are not
+going to run.
 
 **Freshness rule**:
 The single predicate deciding whether a declared upstream is current enough for a
