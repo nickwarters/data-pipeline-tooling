@@ -1,7 +1,7 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { installDom, findByClass } from './_dom-stub.js';
+import { installDom, findByClass, walk } from './_dom-stub.js';
 import { makeCaseRow } from './helpers/fixtures.js';
 
 installDom();
@@ -49,6 +49,12 @@ const OUTCOME_OPTIONS = [
   { id: 'fail', wording: 'Fail', severity: 100 },
 ];
 
+const REASONS = [
+  { key: 'qa-check', label: 'QA Check' },
+  { key: 'tm-check', label: 'TM Check' },
+  { key: 'appeal', label: 'Appeal' },
+];
+
 /** @param {any} el @returns {string} */
 function allText(el) {
   let out = el.textContent ? el.textContent + ' ' : '';
@@ -63,6 +69,7 @@ function renderAmendOutcome(overrides = {}, queue = makeQueue()) {
     caseRow: /** @type {CaseRow | null} */ (null),
     access: /** @type {'edit'|'read-only'|'hidden'} */ ('read-only'),
     outcomeOptions: /** @type {any[]} */ ([]),
+    reasons: /** @type {any[]} */ (REASONS),
     ...overrides,
   };
   const el = document.createElement('main');
@@ -70,11 +77,12 @@ function renderAmendOutcome(overrides = {}, queue = makeQueue()) {
     el.replaceChildren(
       ...AmendOutcomeSection({
         ...props,
-        onAmend: ({ outcome, justification }) => {
+        onAmend: ({ outcome, reason, justification }) => {
           if (!props.caseRow) return;
           const result = amendOutcome({
             caseRow: props.caseRow,
             outcome,
+            reason,
             justification,
             amendedBy: 'controls-1',
             amendedAt: '2026-06-12T00:00:00Z',
@@ -208,6 +216,7 @@ test('CORAAmendOutcome: read-only access renders the existing amendment record',
 test('CORAAmendOutcome: amending writes the record and re-stamps the effective columns in one field set', () => {
   const { el, queue } = makeEditable();
   findByClass(el, 'cora-amend-outcome-select').value = 'pass';
+  findByClass(el, 'cora-amend-outcome-reason').value = 'appeal';
   findByClass(el, 'cora-amend-outcome-justification').value =
     '  Corrected after appeal.  ';
   findByClass(el, 'cora-amend-outcome-submit')._listeners['click'][0]();
@@ -218,6 +227,7 @@ test('CORAAmendOutcome: amending writes the record and re-stamps the effective c
   assert.deepEqual(fields, {
     amendedOutcome: {
       outcome: 'pass',
+      reason: 'appeal',
       justification: 'Corrected after appeal.',
       amendedBy: 'controls-1',
       amendedAt: '2026-06-12T00:00:00Z',
@@ -231,6 +241,7 @@ test('CORAAmendOutcome: amending writes the record and re-stamps the effective c
 test('CORAAmendOutcome: amending mutates the Case row locally so the view reflects it', () => {
   const { el, props } = makeEditable();
   findByClass(el, 'cora-amend-outcome-select').value = 'refer';
+  findByClass(el, 'cora-amend-outcome-reason').value = 'tm-check';
   findByClass(el, 'cora-amend-outcome-justification').value = 'Borderline';
   findByClass(el, 'cora-amend-outcome-submit')._listeners['click'][0]();
 
@@ -251,6 +262,7 @@ test('CORAAmendOutcome: amending mutates the Case row locally so the view reflec
 test('CORAAmendOutcome: a missing justification blocks the write and reveals an error', () => {
   const { el, queue } = makeEditable();
   findByClass(el, 'cora-amend-outcome-select').value = 'pass';
+  findByClass(el, 'cora-amend-outcome-reason').value = 'qa-check';
   findByClass(el, 'cora-amend-outcome-justification').value = '   ';
   findByClass(el, 'cora-amend-outcome-submit')._listeners['click'][0]();
   assert.equal(queue.enqueued.length, 0, 'nothing persisted');
@@ -260,6 +272,7 @@ test('CORAAmendOutcome: a missing justification blocks the write and reveals an 
 test('CORAAmendOutcome: a missing outcome blocks the write and reveals an error', () => {
   const { el, queue } = makeEditable();
   findByClass(el, 'cora-amend-outcome-select').value = '';
+  findByClass(el, 'cora-amend-outcome-reason').value = 'qa-check';
   findByClass(el, 'cora-amend-outcome-justification').value = 'has a reason';
   findByClass(el, 'cora-amend-outcome-submit')._listeners['click'][0]();
   assert.equal(queue.enqueued.length, 0);
@@ -271,6 +284,7 @@ test('CORAAmendOutcome: a null outcome selection is treated as empty', () => {
   findByClass(el, 'cora-amend-outcome-select').value = /** @type {any} */ (
     null
   );
+  findByClass(el, 'cora-amend-outcome-reason').value = 'qa-check';
   findByClass(el, 'cora-amend-outcome-justification').value = 'has a reason';
   findByClass(el, 'cora-amend-outcome-submit')._listeners['click'][0]();
   assert.equal(queue.enqueued.length, 0);
@@ -279,6 +293,7 @@ test('CORAAmendOutcome: a null outcome selection is treated as empty', () => {
 test('CORAAmendOutcome: a null justification value is treated as empty', () => {
   const { el, queue } = makeEditable();
   findByClass(el, 'cora-amend-outcome-select').value = 'pass';
+  findByClass(el, 'cora-amend-outcome-reason').value = 'qa-check';
   findByClass(el, 'cora-amend-outcome-justification').value =
     /** @type {any} */ (null);
   findByClass(el, 'cora-amend-outcome-submit')._listeners['click'][0]();
@@ -307,8 +322,173 @@ test('CORAAmendOutcome: amending with no Case row does not throw', () => {
     outcomeOptions: OUTCOME_OPTIONS,
   });
   findByClass(el, 'cora-amend-outcome-select').value = 'pass';
+  findByClass(el, 'cora-amend-outcome-reason').value = 'qa-check';
   findByClass(el, 'cora-amend-outcome-justification').value = 'orphan';
   assert.doesNotThrow(() => {
     findByClass(el, 'cora-amend-outcome-submit')._listeners['click'][0]();
   });
+});
+
+// --- Reason ---
+
+test('CORAAmendOutcome: the form offers the Case Type reasons', () => {
+  const { el } = makeEditable();
+  const reason = findByClass(el, 'cora-amend-outcome-reason');
+  assert.ok(reason, 'reason select rendered');
+  assert.deepEqual(
+    reason._children.map((/** @type {any} */ option) => option.value),
+    ['', 'qa-check', 'tm-check', 'appeal']
+  );
+  assert.deepEqual(
+    reason._children.map((/** @type {any} */ option) => option.textContent),
+    ['Select a reason…', 'QA Check', 'TM Check', 'Appeal']
+  );
+});
+
+test('CORAAmendOutcome: a Case Type extension is offered after the shared reasons', () => {
+  const { el } = renderAmendOutcome({
+    caseRow: makeCase(),
+    access: 'edit',
+    outcomeOptions: OUTCOME_OPTIONS,
+    reasons: [...REASONS, { key: 'data-correction', label: 'Data correction' }],
+  });
+  assert.deepEqual(
+    findByClass(el, 'cora-amend-outcome-reason')._children.map(
+      (/** @type {any} */ option) => option.value
+    ),
+    ['', 'qa-check', 'tm-check', 'appeal', 'data-correction']
+  );
+});
+
+test('CORAAmendOutcome: the justification box is labelled Justification', () => {
+  const { el } = makeEditable();
+  const form = findByClass(el, 'cora-amend-outcome-form');
+  /** @type {string[]} */
+  const labels = [];
+  walk(form, (/** @type {any} */ n) => {
+    if (n.tagName === 'LABEL') labels.push(n.textContent);
+  });
+  assert.deepEqual(labels, ['New Outcome', 'Reason', 'Justification']);
+});
+
+test('CORAAmendOutcome: a missing reason blocks the write and reveals an error', () => {
+  const { el, queue } = makeEditable();
+  findByClass(el, 'cora-amend-outcome-select').value = 'pass';
+  findByClass(el, 'cora-amend-outcome-reason').value = '';
+  findByClass(el, 'cora-amend-outcome-justification').value = 'Corrected';
+  findByClass(el, 'cora-amend-outcome-submit')._listeners['click'][0]();
+  assert.equal(queue.enqueued.length, 0, 'nothing persisted');
+  assert.equal(findByClass(el, 'cora-amend-outcome-error').hidden, false);
+});
+
+test('CORAAmendOutcome: a null reason value is treated as empty', () => {
+  const { el, queue } = makeEditable();
+  findByClass(el, 'cora-amend-outcome-select').value = 'pass';
+  findByClass(el, 'cora-amend-outcome-reason').value = /** @type {any} */ (
+    null
+  );
+  findByClass(el, 'cora-amend-outcome-justification').value = 'Corrected';
+  findByClass(el, 'cora-amend-outcome-submit')._listeners['click'][0]();
+  assert.equal(queue.enqueued.length, 0);
+});
+
+test('CORAAmendOutcome: the edit form pre-fills the reason from an existing amendment', () => {
+  const { el } = makeEditable({
+    amendedOutcome: {
+      outcome: 'refer',
+      reason: 'tm-check',
+      justification: 'first pass',
+      amendedBy: 'controls-0',
+      amendedAt: '2026-06-11T00:00:00Z',
+    },
+  });
+  assert.equal(findByClass(el, 'cora-amend-outcome-reason').value, 'tm-check');
+});
+
+test('CORAAmendOutcome: the record names the reason by its label', () => {
+  const { el } = renderAmendOutcome({
+    caseRow: makeCase({
+      amendedOutcome: {
+        outcome: 'pass',
+        reason: 'qa-check',
+        justification: 'Reviewer misread the transcript.',
+        amendedBy: 'controls-1',
+        amendedAt: '2026-06-12T00:00:00Z',
+      },
+    }),
+    outcomeOptions: OUTCOME_OPTIONS,
+  });
+  assert.equal(
+    findByClass(el, 'cora-amend-outcome-record-reason').textContent,
+    'Reason: QA Check'
+  );
+});
+
+test('CORAAmendOutcome: the record labels a reason this Case Type declared, not just the shared three', () => {
+  const { el } = renderAmendOutcome({
+    caseRow: makeCase({
+      amendedOutcome: {
+        outcome: 'pass',
+        reason: 'data-correction',
+        justification: 'Wrong policy number.',
+        amendedBy: 'controls-1',
+        amendedAt: '2026-06-12T00:00:00Z',
+      },
+    }),
+    outcomeOptions: OUTCOME_OPTIONS,
+    reasons: [...REASONS, { key: 'data-correction', label: 'Data correction' }],
+  });
+  assert.equal(
+    findByClass(el, 'cora-amend-outcome-record-reason').textContent,
+    'Reason: Data correction'
+  );
+});
+
+test('CORAAmendOutcome: a reason the Case Type no longer offers renders as its raw key', () => {
+  const { el } = renderAmendOutcome({
+    caseRow: makeCase({
+      amendedOutcome: {
+        outcome: 'pass',
+        reason: 'retired-reason',
+        justification: 'Wrong policy number.',
+        amendedBy: 'controls-1',
+        amendedAt: '2026-06-12T00:00:00Z',
+      },
+    }),
+    outcomeOptions: OUTCOME_OPTIONS,
+  });
+  assert.equal(
+    findByClass(el, 'cora-amend-outcome-record-reason').textContent,
+    'Reason: retired-reason'
+  );
+});
+
+test('CORAAmendOutcome: an amendment authored before reasons existed renders without a reason line', () => {
+  const { el } = renderAmendOutcome({
+    caseRow: makeCase({
+      amendedOutcome: {
+        outcome: 'pass',
+        justification: 'Reviewer misread the transcript.',
+        amendedBy: 'controls-1',
+        amendedAt: '2026-06-12T00:00:00Z',
+      },
+    }),
+    outcomeOptions: OUTCOME_OPTIONS,
+  });
+  assert.equal(
+    findByClass(el, 'cora-amend-outcome-record-reason'),
+    null,
+    'no empty reason line'
+  );
+  const record = findByClass(el, 'cora-amend-outcome-record');
+  assert.equal(
+    findByClass(record, 'cora-amend-outcome-record-justification').textContent,
+    'Reviewer misread the transcript.'
+  );
+  assert.ok(
+    findByClass(record, 'cora-amend-outcome-record-audit').textContent.includes(
+      'controls-1'
+    ),
+    'the audit line still renders'
+  );
 });

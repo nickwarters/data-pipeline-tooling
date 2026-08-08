@@ -225,6 +225,8 @@ src/
   lib/                          # framework-level primitives (no domain knowledge)
     abort.js                    # isAbortError/ignoreAbortError: an aborted read is navigation, not a failure (#545)
     add-working-days.js
+    amendment-reasons.js        # AMENDMENT_REASONS: the shared Amendment Reason vocabulary a
+                                #   Case Type may extend (extraAmendmentReasons) but not re-key
     boot-error-panel.js         # cora-boot-error: the "boot did not finish" panel, shared by app.js and app-chrome's fatal-nav path (#575)
     capture-engine.js
     case-loader.js              # loads a Case Review page and hands it over once via toStoreSnapshot() (was case-review-view-model.js, #555)

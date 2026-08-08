@@ -63,7 +63,9 @@ so the system can be read and changed in one place; they share a commit gate,
   `tools/observability/timestamps.py`. Then `case_review/` (the
   case-review *application* — domain types
   like `CaseType`/`CasePool` and its gold helpers, which live outside the
-  framework), `pipelines/` (scripts), `tests/` (pytest, with author test helpers
+  framework; it also owns the application's orchestration schedules,
+  `case_review/schedules.py`, which `orchestrate --app` names),
+  `pipelines/` (scripts), `tests/` (pytest, with author test helpers
   in `tests/framework_testing/`), `docs/` (architecture, ADRs).
 - **Test layout:** `tests/` mirrors the source shape — `tests/framework/`
   (itself split into `core/`, `io/`, `transform/`, `run/`,
@@ -199,7 +201,9 @@ framework never statically depends on `pipelines/`. `orchestrate` addresses
 pipelines the **same** way — each `ScheduledPipeline` names a `pipelines/<name>`
 path, run at its scheduled time by the same rule (no handler registry) — and
 takes a required `--app` naming an application's schedules module that exposes
-`build_pipeline_sets()`.
+`build_pipeline_sets()`, plus an optional `--calendar <file>` naming a YAML
+calendar file (`holidays` + `weekend`) that seeds the `WorkingDayCalendar` every
+schedule judges against (omitted, it is weekends-only).
 
 Scaffold a new feed with `python -m cli scaffold <feed>`: it renders the
 feed code as a `pipelines/<feed>/` subpackage (schema, pipeline, sample fixture)
@@ -227,6 +231,40 @@ Type's identity contract (`case_type.py`) and refines source → raw → silver,
 **stopping at silver** — how silver is assembled into gold is per-Case-Type and
 an open decision (snapshot-vs-join), so it's left as a commented seam. See
 [`docs/adding-a-feed.md`](docs/adding-a-feed.md).
+
+## GitHub ticket labels
+
+When creating a GitHub issue, labelling is part of creating the ticket, not a
+later triage task. Inspect the repository's current labels first, then apply all
+four independent classifications below:
+
+- **Size — exactly one:** `size: S`, `size: M`, or `size: L`. Use `S` for a
+  localised change with a narrow test/doc surface, `M` for work spanning several
+  files or layers, and `L` for a cross-cutting change, migration, or substantial
+  design seam. Split work that is materially larger than `L` rather than hiding
+  it behind a new oversized estimate.
+- **Priority — exactly one:** `priority: low`, `priority: medium`, or
+  `priority: high`, based on urgency and impact rather than implementation size.
+- **Execution mode — exactly one:** `AFK` when an agent can implement and verify
+  the ticket from repository context and normal tooling without waiting for a
+  person; `HITL` when progress needs a product/domain decision, live-environment
+  evidence or access, credentials, external coordination, or manual approval.
+  Supplemental labels such as `needs-product-decision` or `ready-for-agent` do
+  not replace this choice.
+- **Area — one or more:** apply every relevant available `area: ...` label. The
+  current taxonomy includes `area: data-contract`, `area: question-bank`,
+  `area: remediation`, `area: rendering`, `area: reporting`, and
+  `area: sharepoint-adapter`; do not force a ticket into only one area when it
+  genuinely crosses boundaries.
+
+Reuse the exact existing label whenever it fits. If the current labels do not
+cover a genuinely needed classification, create a new label following the
+existing naming convention (for example `area: orchestration`) with a concise
+description and a colour consistent with the taxonomy; do not silently omit the
+classification or create a near-duplicate spelling. After creating the issue,
+read it back and verify the size, priority, execution-mode, and area labels were
+all applied. The template's `needs-triage` label is additive and does not satisfy
+any of these four axes.
 
 ## Core constraint: cross-platform (Windows-first, macOS-compatible)
 

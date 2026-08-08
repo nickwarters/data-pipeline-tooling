@@ -17,6 +17,10 @@ They fall into three workload families:
 - **Bounded-subset & decoding** — `TopNPerGroup`, `Sample`, `SamplePerGroup`,
   and `Parse`: reduce a population to a bounded, reproducible subset
   or decode a packed text column.
+- **JSON blob reshaping** — `ExplodeJsonMap`, `ExplodeJsonList`,
+  `FlattenJsonObject` (in `framework.transform.json_shaping`): walk a JSON blob
+  held in one column into rows or columns, where `Unpivot` reshapes wide
+  columns.
 
 For the *why*, see
 [Python-only processing, dumb store, opaque Dataset carrier](adr/0002-python-processing-opaque-dataset-carrier.md),
@@ -651,6 +655,122 @@ replacing it in place — a JSON text column becomes structured Python values
 ready for a downstream reshape; any parser works (`datetime.fromisoformat`, a
 custom record parser). A missing column raises `ValueError`, consistent with the
 other column processors.
+
+## JSON blob reshaping — `ExplodeJsonMap`, `ExplodeJsonList`, `FlattenJsonObject`
+
+`Unpivot` reshapes wide *columns*; these three walk a JSON *blob* held in one
+column. They live in `framework.transform.json_shaping` and are **domain-free** —
+they know nothing about Cases — and they follow `Unpivot`'s conventions: the
+declared `id_vars` are repeated onto every output row, an empty/null/absent blob
+contributes zero rows (or null columns, for the flatten) rather than an error,
+and output order is deterministic — input row order, then the blob's own
+key/element order. A literal JSON `null` is one of those absences, not a wrong
+shape: an upstream snapshot writes it for an object it does not have.
+
+`Parse` is the neighbour, not a rival: it decodes a packed text column *in
+place*, leaving one structured value per row. These three take the next step and
+turn that structure into rows or columns. They accept either form of input — a
+JSON text column, or one already decoded into `dict`/`list` values — so a `Parse`
+upstream is optional.
+
+Malformed JSON, or JSON of the wrong shape for the transform reading it, raises
+`JsonShapeError` (a `PipelineError`, category `data`) naming the column and the
+row's 0-based position **within the batch the transform was handed** — under a
+chunked read (`.read_chunks`) that is the chunk, not the whole source. It is a
+fail-fast error, not a quarantine route: what a hop does about a bad blob stays
+the caller's choice.
+
+### `ExplodeJsonMap` — one row per key of a JSON object
+
+```python
+from framework.transform import ExplodeJsonMap
+
+ExplodeJsonMap(
+    column="answers",                  # the JSON-object column to explode
+    key_into="question_id",            # where each map key lands
+    id_vars=["case_type", "source_item_id"],   # repeated onto every output row
+    fields={                           # subfield path -> output column
+        "value": "answer_value",
+        "remediationStatus.status": "remediation_status",   # dotted path reaches a 1:1 nest
+    },
+    exclude_key_prefix="general:",     # ...or include_key_prefix, to partition the blob
+)
+```
+
+Each key of the object becomes a row. Pass **exactly one** of:
+
+- `fields` — `{subfield path: output column}`. A dotted path reaches into a 1:1
+  nest; a field that is not there to lift lands null, whatever the reason — the
+  key is absent, the value is a scalar with no subfields at all, or the path
+  goes non-object part-way down. Only the **top-level** blob is held to a
+  declared shape; these transforms are as permissive about a blob's inner shape
+  as `Unpivot` is about a column's contents. Where a map's values vary in shape,
+  `value_into` is the mode that carries them whole. The `.` is always a path
+  separator and has no escape, so a subfield whose own name contains a dot is
+  not reachable by a path — read it with `value_into` instead.
+- `value_into` — the whole map value lands in that one column. For maps of
+  scalars, or of polymorphic values that no fixed set of columns would fit.
+
+One rule governs both: a value lands as itself if it is a scalar, and as JSON
+text if it is not. A live `dict` in a column is not writable — it would fail at
+the Writer, naming neither the column nor the row.
+
+Wiring mistakes are refused at construction with a `ValueError`: passing both
+`fields` and `value_into` or neither, `strip_key_prefix` with no
+`include_key_prefix` to strip, and any output column named twice (two fields
+into one column, or a field over an `id_var` — pandas would drop one silently).
+A column named in `column` or `id_vars` that is absent at run time raises
+`ValueError` naming the available columns, as the other column processors do —
+as does a column name that appears twice in the dataset, which would otherwise
+read back as a frame rather than a column.
+
+`include_key_prefix` / `exclude_key_prefix` partition one blob between sibling
+pipelines by a key convention (`general:*`), so each writes only the rows it
+owns; `strip_key_prefix=True` stores the included key without its prefix. A
+non-text key — only reachable from pre-decoded input, since JSON keys are text —
+carries no prefix, so an include filter drops it and an exclude filter keeps it.
+
+### `ExplodeJsonList` — one row per element of a JSON array
+
+```python
+from framework.transform import ExplodeJsonList
+
+ExplodeJsonList(
+    column="conversation",
+    ordinal_into="seq",                # stable 0-based position within the array
+    id_vars=["case_id"],
+    fields={"author.name": "author", "timestamp": "posted_at", "body": "body"},
+)
+```
+
+Each element becomes a row carrying its 0-based position in `ordinal_into` — the
+array's order is the record, so it is stamped rather than left to be recovered.
+The ordinal is an integer column whether or not this run exploded anything, so
+the affinity it is written under does not move between runs.
+`fields` lifts subfields exactly as for the map explode.
+
+### `FlattenJsonObject` — a 0-or-1 object onto its own row
+
+```python
+from framework.transform import FlattenJsonObject
+
+FlattenJsonObject(
+    column="amendedOutcome",
+    fields={"outcome": "amended_outcome", "amendedBy.name": "amended_by"},
+    drop=True,                         # consume the source column (the default)
+)
+```
+
+For a column holding **at most one** object per row — an amendment on the Case
+row, a resolution on an appeal. Row count is unchanged: a null or absent object
+leaves the declared columns null rather than dropping the row. `drop=False`
+keeps the blob alongside the columns lifted out of it.
+
+A field target may name the **source column itself**: the lifted value replaces
+the blob in place and the column is not dropped from under it, exactly as
+`JoinColumns` writes into one of the columns it consumes. A target naming
+*another* existing column overwrites it, which is how a flatten refreshes a
+column it has landed before.
 
 ## Not yet (follow-on tickets)
 

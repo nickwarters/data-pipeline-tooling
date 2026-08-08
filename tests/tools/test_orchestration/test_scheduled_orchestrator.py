@@ -84,6 +84,16 @@ def test_schedule_matching_uses_working_day_calendar():
     assert not ManualOnly().is_due(dt.date(2026, 6, 12), calendar)
 
 
+def test_last_working_day_of_month_counts_against_a_seeded_holiday():
+    # June 2026 ends on Tuesday the 30th; seeding it makes Monday the 29th the
+    # month's last working day. This schedule walks the month forward from the
+    # run date, the opposite direction to the nth-working-day walk.
+    calendar = WorkingDayCalendar(holidays={dt.date(2026, 6, 30)})
+
+    assert not LastWorkingDayOfMonth().is_due(dt.date(2026, 6, 30), calendar)
+    assert LastWorkingDayOfMonth().is_due(dt.date(2026, 6, 29), calendar)
+
+
 def test_downstream_waits_until_declared_upstreams_are_fresh(tmp_path):
     calls: list[str] = []
     orchestrator = Orchestrator(

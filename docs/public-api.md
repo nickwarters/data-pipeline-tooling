@@ -79,8 +79,8 @@ the implementation modules living alongside it:
 - `framework/io/` — `readers`, `writers`, `strategy`, `sql`. (Where a feed
   *lands* — `Store` / `StoreRegistry` — moved out to `tools.store`.)
 - `framework/transform/` — the dataset-reshaping primitives: `processors`,
-  `coercion` (`SchemaCoercion` — the *coerce* half of the schema adapter),
-  `quarantine`.
+  `json_shaping` (the JSON blob explodes/flatten), `coercion` (`SchemaCoercion`
+  — the *coerce* half of the schema adapter), `quarantine`.
 - `framework/run/` — `builder`, `execution`, `address`,
   `trace`, `runner`, `run_context`, `dry_run` (the preview report behind
   `dry_run_pipeline`). It also re-exports the observability seam
@@ -161,7 +161,9 @@ Moving data across the boundary. (Where it *lands* — the namespace `Store` /
 | `Processor` | The mid-pipeline transform seam — `Callable[..., Dataset]`: one or more `Dataset`s in (one per wired upstream node), exactly one out. |
 | `Filter`, `Score`, `VectorizedFilter`, `VectorizedDerive`, `Stamp`, `Sort`, `Rename`, `JoinColumns`, `JoinDependency`, `JoinWith`, `AntiJoinWith`, `LatestPerKey`, `SelectColumns`, `DropColumns`, `Unpivot`, `DeriveKey` | The concrete Selection / Ingest / fan-out transforms. |
 | `TopNPerGroup`, `Sample`, `SamplePerGroup`, `Parse` | The bounded-subset reductions — top-`n` per group and the seeded, reproducible draws (pure functions of input + a fixed seed) — plus `Parse`, which decodes a packed text column through a callable. These existed in `framework.transform.processors` but were for a time **absent from the facade**; the omission is silent (unlike a missing Reader, an unexported processor raises nothing), and it caused a duplicate copy of them to grow in `tools/analytics/`. That fork is retired and this facade is now their only supported import. |
-| `SchemaCoercion` | The *coerce* half of the schema adapter: casts round-trip-lossy columns (`date` / `datetime` / `bool`) to the declared types — a reshape, so it lives here, not with the schema check. |
+| `ExplodeJsonMap`, `ExplodeJsonList`, `FlattenJsonObject` | The JSON blob reshapers: walk a JSON object/array held in one column into rows, or a 0-or-1 object into columns on the same row. `Unpivot`'s siblings for a blob rather than wide columns. |
+| `JsonShapeError` | Raised by the three JSON reshapers on malformed JSON, or JSON of the wrong shape, naming the column and the row. |
+| `SchemaCoercion` | The *coerce* half of the schema adapter: casts round-trip-lossy columns (`date` / `datetime` / `bool`) to the declared types — plus every declared column when the frame has no rows — a reshape, so it lives here, not with the schema check. |
 | `CoercionError` | Raised by `SchemaCoercion` on an uncastable value. |
 | `SchemaValueRulePartitioner` | The quarantine partitioner that routes value-rule / row-check rejects aside while preserving good rows for the main path. Usually reached through `Pipeline.quarantine(...)`, but exported for advanced schema/quarantine wiring. |
 

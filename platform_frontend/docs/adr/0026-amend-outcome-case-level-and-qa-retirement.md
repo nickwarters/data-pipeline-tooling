@@ -88,6 +88,12 @@ A post-completion outcome change is a **single case-level record** on the Case r
 > wrong verdict need not wait for the Case to complete. Controls remains the only
 > role that sees the tab, at every status.
 
+> _Refined post-acceptance:_ the amendment record gains an optional `reason` key
+> alongside the mandatory justification, chosen from a shared vocabulary of three
+> (_QA Check_, _TM Check_, _Appeal_) that a Case Type may **extend** via
+> `extraAmendmentReasons`. It is optional because pre-existing amendments and
+> appeal-derived ones carry none.
+
 ### What is removed
 
 - The **`qaReviewer`** capability and `QA-Reviewers` group ([ADR-0022] already omits it).

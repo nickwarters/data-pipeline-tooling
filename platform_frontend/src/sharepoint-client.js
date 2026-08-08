@@ -131,8 +131,15 @@
  * rather than mined from SharePoint version history. The **Current Outcome** is
  * `amendedOutcome?.outcome ?? outcomeAtCompletion`.
  *
+ * `reason` is the key of an Amendment Reason (never its label — labels are
+ * display copy and get reworded). It is optional only so amendments authored
+ * before the field existed still parse; every amendment authored through the
+ * Amend Outcome Section carries one. An appeal-derived amendment carries none
+ * either: `fromAppealId` already records where it came from.
+ *
  * @typedef {{
  * outcome: string,
+ * reason?: string,
  * justification: string,
  * amendedBy: string,
  * amendedAt: string,
@@ -542,6 +549,10 @@
  * offers all of them, and storage validates against the whole vocabulary either
  * way, because the manager report groups reasons across Case Types.
  *
+ * `extraAmendmentReasons` moves the other way: it *adds* to the shared
+ * Amendment Reasons in `lib/amendment-reasons.js` rather than narrowing them,
+ * which is why the key is named for the direction it travels in.
+ *
  * @typedef {{
  * questions: QuestionDefinition[],
  * computeOutcome: (answers: Record<string, Answer>) => OutcomeResult,
@@ -563,6 +574,7 @@
  * maxInProgressCases?: number,
  * remediationStatuses?: RemediationStatusValue[],
  * voidReasons?: string[],
+ * extraAmendmentReasons?: import('./lib/amendment-reasons.js').AmendmentReason[],
  * captureGroups?: CaptureGroup[],
  * generalQuestions?: GeneralQuestionField[],
  * generalQuestionsPlacement?: 'before' | 'after',

@@ -669,7 +669,10 @@ Two families of concrete processor ship now.
 casting only the round-trip-lossy declared types — `date`/`datetime` (landed as
 text) and `bool` (`TRUE`/`FALSE` text or `1`/`0`). `str`/`int`/`float` survive a
 SQLite round-trip, so they pass through untouched and stay the validator's gate;
-undeclared columns are left alone. A value it cannot cast (an unparseable date,
+undeclared columns are left alone. The one exception is a **zero-row** frame,
+where every declared column is typed — there is no value to carry the type, and
+the dtypes of an empty write are what fix a created table's column affinity (see
+[schema enforcement](schema-enforcement.md#a-zero-row-frame-satisfies-any-declared-schema)). A value it cannot cast (an unparseable date,
 an unknown boolean encoding) raises a **`CoercionError`** with one located
 message naming the column. The raw→silver hop composes it ahead of the
 `SchemaValidator`, so the per-run order is **read → coerce (transform) →

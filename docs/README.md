@@ -100,7 +100,12 @@ Every Pipeline reuses the **same** three-layer medallion. A **subject**
 SQLite databases `<subject>/{raw,silver,gold}.db` on a network share, isolated
 from every other subject's files for blast-radius containment and independent
 onboarding ([SQLite per-subject medallion store on a network share,
-single-writer](adr/0001-sqlite-per-subject-medallion-store.md)).
+single-writer](adr/0001-sqlite-per-subject-medallion-store.md)). A subject is not
+always one Case Type: the **Sync** store is a single subject, `cora_cases`,
+holding every Case Type discriminated by a `case_type` column, because its lists
+are provisioned from one template and cross-Case-Type reporting would otherwise
+need an `ATTACH` forever ([one Sync subject for every Case
+Type](adr/0016-one-sync-subject-for-every-case-type.md)).
 The medallion is an **application-level profile** (`tools.medallion`), not
 framework vocabulary: the framework stores an opaque `namespace` → file,
 and `medallion(registry, subject)` exposes the `.raw` / `.silver` / `.gold`
@@ -115,7 +120,8 @@ namespace Stores. Each layer Store mints `writer(table, strategy)` /
 
 Case-review meanings are layered on top by the application code: Ingest may make
 gold the current CasePool, Selection may make gold an accumulating SelectionPool,
-and Sync may make gold review-platform history. Those meanings are common
+and Sync makes gold the current state of every Case in the review platform (its
+history lives in the accumulated silver below it). Those meanings are common
 case-review profiles, not framework guarantees. Common boundaries still apply by
 convention: silver is often the schema boundary
 ([graduated schema enforcement](adr/0006-graduated-schema-enforcement.md)) and
@@ -178,7 +184,7 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 | **`Store` / `StoreRegistry`** (`tools.store`) | A Store binds one **namespace** (a logical database → file) to `writer(table, strategy)` / `reader(table)` creation; `StoreRegistry(root).store(namespace)` mints those from shared root/configuration, and `StoreRegistry.register(name, reader\|writer)` → `reader(name)` / `writer(name)` keeps named components a pipeline refers to by name. The raw/silver/gold medallion is the `tools.medallion` profile over it (`<subject>/{raw,silver,gold}.db`). Holds no business logic and makes no load decision. **Application infrastructure in the sibling `tools` package, not `framework.io`**. ([SQLite per-subject medallion store on a network share, single-writer](adr/0001-sqlite-per-subject-medallion-store.md)) |
 | **`Validator`** | `validate(dataset) -> None`, **raises** on breach. `ColumnValidator`, `RowCountValidator` (engine-agnostic), `VolumeAnomalyValidator` (trips when a run's volume deviates from its recent-history baseline — catches truncated source exports), `SchemaDriftValidator` (warns at the raw boundary when a feed's columns drift from the prior run's landed set — catches owner-controlled source schema change). Severity (`error`/`warn`) is set where it's attached. |
 | **`Schema` / `SchemaValidator`** | A Case Type **dataclass** whose annotations *are* the column, dtype, nullability, and value-rule contract; the validator is the dataclass→validator adapter, enforced at silver (and optionally gold). Nullability/value rules extend the same dataclass via `Annotated`; cross-field **row checks** attach via the `@row_checks(...)` class decorator. → [schema-enforcement.md](schema-enforcement.md) ([graduated schema enforcement: raw light, silver & gold validated](adr/0006-graduated-schema-enforcement.md)) |
-| **`Processor`** | a callable `(dataset) -> Dataset`, run mid-pipeline via a named `.task(...)` (`.transform(...)` remains compatible). `SchemaCoercion` (repair storage-lossy types); the Selection transforms `Filter` / `Score` / `VectorizedFilter` / `VectorizedDerive` / `Sort` / `Rename` / `Stamp`, the explicit-dependency cross-feed `JoinWith` / `AntiJoinWith`; the column-shaping `JoinColumns`; and the Ingest / fan-out transforms `SelectColumns` / `DropColumns` / `Unpivot` / `DeriveKey` / `LatestPerKey`. → [processors.md](processors.md) |
+| **`Processor`** | a callable `(dataset) -> Dataset`, run mid-pipeline via a named `.task(...)` (`.transform(...)` remains compatible). `SchemaCoercion` (repair storage-lossy types); the Selection transforms `Filter` / `Score` / `VectorizedFilter` / `VectorizedDerive` / `Sort` / `Rename` / `Stamp`, the explicit-dependency cross-feed `JoinWith` / `AntiJoinWith`; the column-shaping `JoinColumns`; and the Ingest / fan-out transforms `SelectColumns` / `DropColumns` / `Unpivot` / `DeriveKey` / `LatestPerKey`; the JSON blob reshapers `ExplodeJsonMap` / `ExplodeJsonList` / `FlattenJsonObject`. → [processors.md](processors.md) |
 | **Pipeline tasks** | A `Pipeline` is wired from named **tasks**, each returning a node the next consumes: `.read(reader)`, `.task(name, processor)`, `.validate(validator)`, `.write(writer)`, `.profile(...)`, and `.explain(...)`. Order and any fan-in / fan-out are explicit in how nodes are wired — validation, processing, and explicit checkpoint writes land exactly where you place them. |
 | **`Profile`** (data profiling) | A read-only task `p.profile(profiler, node)` that records per-column **null rate / distinct count / min-max / bounded top-N** on the run log so a feed's *shape* is trended across runs (the statistical sibling of the row-count volume guardrail). The computation is an injected `tools.observability.profile.DataProfiler` (the framework's `DatasetProfiler` port — `tools` is never imported down into `framework`); it bounds cost via `top_n` / a column allow-list and, with a baseline, warns (or fails via `ProfileError`) when a column's null rate drifts from its recent-history baseline — catching a column that quietly slides 5% → 60% null. → [core-primitives.md](core-primitives.md) |
 | **`Pipeline`** (builder) | The deferred DAG builder: `p = Pipeline(name)`, then wire tasks — `r = p.read(reader, name=...)`, `v = p.task("normalise", processor, r)` or `p.validate(..., r, name=...)`, `p.write(writer, v, name=...)`. It builds one ordered plan; call `.describe()` to inspect it without executing, then `.run(context=…)` to execute fail-fast and atomic with RunLog observability. ([the deferred DAG composition model](adr/0003-deferred-dag-composition.md)) |
@@ -191,7 +197,7 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 | **`RunContext` / `PipelineRunner` / `Requirement`** | The thin domain runner: register handlers by `(subject, pipeline)`, receive a context carrying execution/logical identity, dates, explicit run params, RunLog, and RunRegistry, and block stale downstream runs with `Requirement.succeeded(RunAddress.for_pipeline(...)).same_day()` or task-level `within_days(...)` predicates. `FreshnessRequirement` remains compatible. → [core-primitives.md](core-primitives.md) |
 | **`CaseType` / `Variation`** | Case-review application/domain objects in `case_review.case_type`, not framework primitives: a Case Type bundles its `schema`, its identity contract (`natural_key` + a `namespace` derived from `name`), and its `variations`, imported directly (no global CaseType config registry). A Variation overrides only what differs — most often the `question_bank_id`. → [selection.md](selection.md) |
 | **`CasePool`** | Case-review application/domain helper in `case_review.case_pool`: the per-Case-Type population read from ingested silver, surfaced through intention-revealing retrievals (e.g. `fetch_available_cases(...)`) instead of raw `read_*`. → [selection.md](selection.md) |
-| **`WorkingDayCalendar`** | A config-seeded **pure utility** for availability arithmetic ("the last 20 working days"). Touches no Dataset/Store/engine; not a Feed. → [working-day-calendar.md](working-day-calendar.md) |
+| **`WorkingDayCalendar`** | A config-seeded **pure utility** for availability arithmetic ("the last 20 working days"). The config is a YAML calendar file (`holidays` + `weekend`) loaded by `WorkingDayCalendar.from_yaml`, which is what `python -m cli orchestrate --calendar` passes and what `python -m cli run --param calendar=<file>` passes for an availability window. Touches no Dataset/Store/engine; not a Feed. → [working-day-calendar.md](working-day-calendar.md) |
 
 Two cross-cutting flows extend the pipeline: **quarantine** routes value-rule
 rejects aside (keeping good rows — [opt-in row-level quarantine for value-rule
@@ -332,7 +338,10 @@ Swapping the Reader is the only change needed to ingest the same feed from a
 different source type. A wide feed (one Case table + Detail Tables) is fanned out
 into N single-table pipelines over the shared raw table — see [case identity and
 the gold grain](adr/0009-case-identity-and-gold-grain.md) and
-`pipelines/demo_fan_out.py`.
+`pipelines/demo_fan_out.py`. When such a feed *polls* and each observation
+carries the whole Case, its Detail Tables reduce to gold by the parent's winning
+observation, not by their own grain — [Detail Tables reduce to the parent's
+latest observation](adr/0015-detail-tables-reduce-to-the-parents-latest-observation.md).
 
 For a fuller authoring example, run
 `python -m pipelines.comprehensive_examples /tmp/comprehensive-demo`. It lands
@@ -538,6 +547,13 @@ python -m cli runs --base-dir /data --pipeline ingest --limit 5
 python -m cli log ingest --base-dir /data --pipeline-run-id 5f8ff8c7
 ```
 
+`orchestrate` runs the scheduled due work instead of one named pipeline. In this
+repository the `--app` module is `case_review.schedules`:
+
+```sh
+python -m cli orchestrate --app case_review.schedules --base-dir /data --once
+```
+
 `run` addresses a pipeline by **its location on disk**: `pipelines/ingest` maps
 to the module `pipelines.ingest.pipeline`, imported at runtime, whose
 `run(context)` callable the framework executes after checking its declared
@@ -592,14 +608,16 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 | [`schema-enforcement.md`](schema-enforcement.md) | `Schema` / `SchemaValidator` / `SchemaCoercion`, value-level rules, composing the schema boundary onto a pipeline. |
 | [`data-dictionary-template.md`](data-dictionary-template.md) | The Confluence-ready template for documenting what every table/Feed and each of its fields means — the prose companion to `schema.py`. |
 | [`data-dictionary-sharepoint-cases.md`](data-dictionary-sharepoint-cases.md) | The template filled in for the `sharepoint_cases` feed: the raw observation, the Case version, and the four gold tables with their declared grains; why raw and silver do not store when we saw the row; and the two provisioning prerequisites (an index on `Modified`, and the site/GUID placeholders) that stand between it and a tenant. |
+| [`sharepoint-rest-ingest.md`](sharepoint-rest-ingest.md) | The operator runbook for that feed: scheduling it, re-driving it, and what REST polling cannot tell you. |
+| [`sharepoint-cases-going-live.md`](sharepoint-cases-going-live.md) | The one-time path from the feed as it stands to one an external scheduler drives. |
 | [`gold-accumulation.md`](gold-accumulation.md) | Gold's accumulate-by-run semantics, idempotent re-run, reading "current" — and the two shapes of current-only reduce (`LatestPerKey` by `load_date`, vs a Polling Feed's source-version ordering). |
-| [`processors.md`](processors.md) | The Selection transforms (`JoinWith`, per-group sampling) and the Ingest / fan-out transforms (`SelectColumns`, `Unpivot`, `DeriveKey`, `LatestPerKey`). |
+| [`processors.md`](processors.md) | The Selection transforms (`JoinWith`, per-group sampling), the Ingest / fan-out transforms (`SelectColumns`, `Unpivot`, `DeriveKey`, `LatestPerKey`), and the JSON blob reshapers (`ExplodeJsonMap`, `ExplodeJsonList`, `FlattenJsonObject`). |
 | [`selection.md`](selection.md) | The full CaseType / Variation → CasePool → SelectionPool flow + explainability. |
-| [`working-day-calendar.md`](working-day-calendar.md) | Availability arithmetic. |
+| [`working-day-calendar.md`](working-day-calendar.md) | Availability arithmetic, and the YAML calendar file that seeds its holidays and weekend rule (`WorkingDayCalendar.from_yaml`, `orchestrate --calendar`). |
 | [`run-log-format.md`](run-log-format.md) | The JSONL record schema and the run registry. |
 | [`streaming-large-sources.md`](streaming-large-sources.md) | Streaming a source too big to hold whole: `Pipeline.read_chunks` driving the DAG once per chunk, chunk-level row filtering (id allow-list / predicate), which pairings are refused at wiring time and why, and `stream_step` as the low-level fallback. |
 | [`retry.md`](retry.md) | Targeted retry at the reader/writer edges — `RetryPolicy`, where to use it and where not. |
-| [`operator-cli.md`](operator-cli.md) | The operator CLI (`run` / `status` / `runs` / `log`) with example commands and output. |
+| [`operator-cli.md`](operator-cli.md) | The operator CLI (`run` / `orchestrate` / `status` / `runs` / `log` / `scaffold`) with example commands and output. |
 | [`resolving-a-failed-run.md`](resolving-a-failed-run.md) | The operator loop from a failed run — investigate (`status`/`log`), diagnose, resolve, and re-drive idempotently. |
 | [`escape-hatch-store.md`](escape-hatch-store.md) | Iterating against a flat scratch db (and a pre-baked SQL query) outside the medallion / namespace Store, and migrating back. |
 | [`testing-helpers.md`](testing-helpers.md) | `tests.framework_testing` — the test-only helpers for testing concrete pipelines (`given_rows`, `RecordingWriter`, `read_rows`, `RecordingRunLog`, `read_run_log`). |

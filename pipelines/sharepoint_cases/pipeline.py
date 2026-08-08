@@ -32,8 +32,9 @@ is therefore addressable by its location on disk like any other::
 
 Both run from the repo root so the import-only ``framework`` package resolves on
 ``sys.path``. There is no organisational client to hand back yet, so the first
-form refuses today rather than pretend to have reached a tenant; scheduling this
-feed waits on that client, not on anything here.
+form refuses today rather than pretend to have reached a tenant; the feed is
+scheduled on working days by ``case_review.schedules``, so it is the successful
+*run* that waits on that client, not the scheduling.
 """
 
 from __future__ import annotations
@@ -203,12 +204,6 @@ def snake_case(name: str) -> str:
 
 # Source name -> canonical name, for every column raw stores.
 RENAME = {column: snake_case(column) for column in RAW_FEED_COLUMNS}
-
-
-# A zero-row batch has no rows to type these and ``SchemaCoercion`` repairs only
-# what a storage round-trip loses -- dates and booleans -- so it does not reach
-# ``int``. In source names, because the cast lands before the rename.
-SILVER_INTEGER_COLUMNS = ("Id",)
 
 
 @dataclass(frozen=True)
@@ -497,7 +492,7 @@ def run(
     # in neither plan nor run log -- the recipe owns the hop's shape, and
     # reshaping its input is the caller's side of that bargain.
     silver_p = silver_builder(
-        reader=DatasetReader(_silver_source(batch)),
+        reader=DatasetReader(SelectColumns(tuple(RENAME))(batch)),
         writer=med.silver.writer("case_version", AppendOnly("source_observation_id")),
         reject_writer=med.silver.quarantine_writer("case_version"),
         run_log=context.run_log,
@@ -533,23 +528,6 @@ def run(
         raw_rows=len(batch),
         silver_rows=silver_rows,
     )
-
-
-def _silver_source(batch: Dataset) -> Dataset:
-    """The batch narrowed to the columns silver declares, typed even when empty.
-
-    The cast is for the quiet window. ``SchemaCoercion`` repairs only the types a
-    storage round-trip loses -- dates and booleans -- and leaves ``int`` alone,
-    so a zero-row batch reaches the silver gate with its integer columns still
-    object-typed and no row to give them a type. Casting them here is what lets a
-    quiet poll run the same hops, and emit the same run-log steps, as a busy one.
-    Only when empty: casting a populated batch would hide a genuine dtype breach
-    the gate exists to catch.
-    """
-    frame = SelectColumns(tuple(RENAME))(batch).to_pandas()
-    if frame.empty:
-        frame = frame.astype(dict.fromkeys(SILVER_INTEGER_COLUMNS, "int64"))
-    return Dataset.from_pandas(frame)
 
 
 class NoClientError(PipelineError):
