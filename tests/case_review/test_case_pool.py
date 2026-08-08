@@ -22,9 +22,9 @@ def test_fetch_available_cases_keeps_only_cases_inside_the_working_day_window(
     tmp_path,
 ):
     # "Available cases" are the eligible candidates: activity dated within the
-    # last N working days of as_of (CONTEXT.md). The CasePool reads the ingested
-    # silver and narrows to that window using the WorkingDayCalendar — the domain
-    # retrieval Selection calls instead of a raw read.
+    # last N working days of as_of (CONTEXT.md). The CasePool reads the current
+    # ingested gold and narrows to that window using the WorkingDayCalendar —
+    # the domain retrieval Selection calls instead of a raw read.
     gold = medallion(StoreRegistry(tmp_path), "cases").gold
     _land_gold_cases(
         gold,

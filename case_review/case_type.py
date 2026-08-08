@@ -12,9 +12,9 @@ Bank reference (``question_bank_id``).
 A Case Type also owns its **identity contract**: its ``name``, which is the
 namespace Cases are keyed in, and the ``natural_key`` columns that identify one
 within it. Both are hashed together to mint the deterministic ``case_id``. The
-Case builder and each Detail-Table builder read this one contract off the Case
-Type, so a Case and its Detail rows derive the same ``case_id`` independently
-with no cross-pipeline join.
+Callers source the namespace and natural key for the Case builder and every
+Detail-Table builder from this same declaration, so a Case and its Detail rows
+derive the same ``case_id`` independently with no cross-pipeline join.
 """
 
 from __future__ import annotations

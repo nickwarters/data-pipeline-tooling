@@ -7,8 +7,8 @@ the derived digest into — nothing about Cases. Naming that column ``case_id``
 is this layer's business, not the framework's. The Case builder and each
 Detail-Table builder must be handed the *same* namespace and natural key so a
 Case and its Detail rows derive the same deterministic ``case_id`` independently.
-In this retirement slice callers pass their existing declaration explicitly;
-the one-declaration responsibility moves fully to the caller in slice 2.
+Gold builders accept the namespace, natural key and schema explicitly; callers
+must source those identity values from the same declaration.
 """
 
 from __future__ import annotations

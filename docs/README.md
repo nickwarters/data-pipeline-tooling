@@ -141,11 +141,11 @@ gold is often the consumption/grain boundary
 A **Feed** is read by a **Reader** into a **Dataset** (the opaque tabular
 carrier), composed into a **Pipeline** builder, optionally **coerced** /
 **validated** / **processed**, and handed to a **Writer** the **Store** mints for
-the target layer. The **CasePool** then reads the ingested silver and surfaces
-**Cases** through intention-revealing retrievals; the **Selection** pipeline
-narrows them into the **SelectionPool**. Every `.run()` is fail-fast and atomic,
-and emits a structured **RunLog**. Repeated independent runs can choose their
-own orchestration policy: `ForEach` is fail-fast by default, or explicit
+the target layer. The **CasePool** then reads the current ingested gold and
+surfaces **Cases** through intention-revealing retrievals; the **Selection**
+pipeline narrows them into the **SelectionPool**. Every `.run()` is fail-fast and
+atomic, and emits a structured **RunLog**. Repeated independent runs can choose
+their own orchestration policy: `ForEach` is fail-fast by default, or explicit
 best-effort when later items should continue after one item fails. Scheduled
 work uses `Orchestrator` over path-addressed pipelines: it evaluates the day's
 due `PipelineSet`s, runs each due item by its `pipelines/<name>` path, enforces

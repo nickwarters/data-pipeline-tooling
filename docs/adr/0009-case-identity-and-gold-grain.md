@@ -66,10 +66,10 @@ columns it needs — not by a multi-output node or a splitting transform.
   all history.
 - The identity contract is **owned by the `CaseType`** (`case_review.case_type`):
   the `natural_key` is a declared field and the Case Type's `name` is the
-  namespace. In the current retirement slice, callers pass the same namespace
-  and natural key explicitly to the Case builder and each Detail builder, so the
-  parent/child link remains deterministic. The one-declaration responsibility
-  moves fully to the caller in the next slice.
+  namespace. Gold builders accept the namespace, natural key, and schema
+  explicitly; callers must source the Case builder and every Detail builder's
+  identity values from the same declaration so the parent/child link remains
+  deterministic.
 - The key columns are hashed **by name**, in a canonical JSON payload, not
   joined into one string. A joined key is forgeable: `("SMITH",
   "2024-01-15|EXTRA")` and `("SMITH|2024-01-15", "EXTRA")` produce the same

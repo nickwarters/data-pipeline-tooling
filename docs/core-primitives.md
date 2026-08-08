@@ -1405,18 +1405,21 @@ config and boundary semantics in
 
 Above the generic framework primitives sits the thin **case-review application
 layer**: the declarative Case Type objects and the `CasePool` that reads the
-ingested silver, surfaced through intention-revealing retrievals instead of raw
-`pandas.read_*` calls. These helpers live in the `case_review` package; new
-case-review concepts belong there (or in pipeline support modules), not under
-`framework/`. The full flow lives in [`selection.md`](selection.md); in brief:
+current ingested gold, surfaced through intention-revealing retrievals instead
+of raw `pandas.read_*` calls. These helpers live in the `case_review` package;
+new case-review concepts belong there (or in pipeline support modules), not
+under `framework/`. The full flow lives in [`selection.md`](selection.md); in
+brief:
 
 ### `CaseType` / `Variation` — the declarative domain objects
 A `CaseType` (`case_review.case_type`) bundles a Case Type's `schema`, its
 identity contract, and its `variations`, imported directly — no global CaseType
 config registry. The identity contract is the `natural_key` (the
 column(s) that identify a Case) plus a `namespace` property derived from `name`;
-callers currently pass both explicitly to the gold builders to mint the
-deterministic `case_id`. `CaseType.variation(id)` resolves a `Variation` (its
+gold builders accept the namespace, natural key, and schema explicitly, and
+callers must source the Case and every Detail Table's identity values from the
+same declaration to mint a consistent deterministic `case_id`.
+`CaseType.variation(id)` resolves a `Variation` (its
 `question_bank_id` + later overrides) and raises a located `KeyError` on an
 unknown id. Declarative data, not code (one Case Type has many Variations —
 `CONTEXT.md`).
@@ -1424,7 +1427,8 @@ unknown id. Declarative data, not code (one Case Type has many Variations —
 ### `CasePool` — the domain population, behind named reads
 `CasePool(table, schema, store, calendar)` (`case_review.case_pool`) is the
 per-Case-Type population of Cases read from the current **ingested gold** table.
-Callers currently pass the table and schema from their existing `CaseType`. Its
+Callers pass the table name and schema explicitly; they may source those values
+from a `CaseType`. Its
 headline retrieval is the *concept* of fetching **available cases** — e.g.
 `fetch_available_cases(as_of, activity_column=…, within_working_days=…)` narrows
 to a `WorkingDayCalendar` window in Python, repairing SQLite's text-stored dates
