@@ -1,0 +1,209 @@
+name: Engineering change
+description: Report a bug, propose a feature, or describe a scoped maintenance change
+title: ""
+labels:
+  - needs-triage
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to make this work actionable.
+
+        Keep the sections relevant to the issue type and write **Not applicable** where an optional section does not apply. Search for duplicates first, link any related work, and never include credentials, personal data, request digests, or other secrets.
+
+  - type: dropdown
+    id: issue_type
+    attributes:
+      label: Issue type
+      description: Choose the description that best fits the requested outcome.
+      options:
+        - Bug
+        - Feature
+        - Maintenance or technical debt
+        - Documentation
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or desired outcome
+      description: State what is wrong or what capability is needed. Lead with the user or operator-visible outcome.
+      placeholder: |
+        What happens today, or what is missing?
+        What should be true when this issue is complete?
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Why this matters
+      description: Describe who is affected, how often, and the operational, product, data, security, or maintenance cost.
+      placeholder: Include severity, frequency, affected environments or workflows, and any known workaround.
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ## Bug evidence
+
+        Complete the next two sections for bugs. For other issue types, enter **Not applicable**.
+
+  - type: textarea
+    id: minimum_reproduction
+    attributes:
+      label: Minimum reproducible example (bugs)
+      description: Give the smallest deterministic setup and sequence that demonstrates the defect.
+      placeholder: |
+        Environment/version:
+        Preconditions or fixture:
+
+        1. Run or open ...
+        2. Provide ...
+        3. Observe ...
+
+        Actual result:
+        Expected result:
+        Reproduction rate:
+    validations:
+      required: false
+
+  - type: textarea
+    id: diagnosis
+    attributes:
+      label: Diagnosis and evidence (bugs)
+      description: Explain the likely cause and confidence level. Separate proven facts from hypotheses and name what still needs verifying.
+      placeholder: |
+        Proven from code, logs, tests, or a captured request:
+        Likely cause:
+        Alternative explanations:
+        Evidence still needed:
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        ## Proposed change
+
+  - type: textarea
+    id: proposed_behavior
+    attributes:
+      label: Proposed behavior (features)
+      description: For a feature, describe the user-facing behavior, constraints, and important design decisions. For other issue types, enter Not applicable.
+      placeholder: Describe the new workflow or contract from the caller's point of view, including edge cases.
+    validations:
+      required: false
+
+  - type: textarea
+    id: suggested_solutions
+    attributes:
+      label: Suggested solutions or design options
+      description: Suggest one or more implementation shapes for bugs or features. Record trade-offs, rejected options, and open design questions rather than presenting guesses as settled decisions.
+      placeholder: |
+        Recommended shape:
+        Alternatives considered:
+        Trade-offs or open questions:
+    validations:
+      required: true
+
+  - type: textarea
+    id: example_code
+    attributes:
+      label: Example code, API, command, or data shape
+      description: Show a concise before/after, failing example, desired call site, request/response, schema, CLI invocation, or pseudocode. Redact sensitive values.
+      render: text
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        ## Delivery boundary
+
+  - type: textarea
+    id: in_scope
+    attributes:
+      label: In-scope files and responsibilities
+      description: Name the expected source, test, documentation, configuration, migration, or infrastructure areas and what each owns. Use repository-relative paths where possible.
+      placeholder: |
+        - `path/to/source`: behavior to change
+        - `path/to/tests`: coverage to add
+        - `path/to/docs`: contract to update
+    validations:
+      required: true
+
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Out-of-scope files and responsibilities
+      description: State adjacent work this issue must not absorb. Link follow-up issues where they already exist.
+      placeholder: |
+        - `path/or/subsystem`: why it is deliberately excluded
+        - Data migration or deployment activity that needs a separate ticket
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance criteria
+      description: Write observable, testable outcomes. Include regression behavior, failure paths, and documentation where relevant.
+      placeholder: |
+        - [ ] The user-visible outcome is ...
+        - [ ] The regression case fails before the change and passes after it
+        - [ ] Errors and edge cases behave as ...
+        - [ ] Affected documentation is updated
+    validations:
+      required: true
+
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation plan
+      description: List the focused tests, full suites, lint/type checks, live or UAT checks, fixtures, and cross-platform checks needed to prove completion.
+      placeholder: |
+        Automated:
+        Manual/live:
+        Cross-platform or environment-specific:
+    validations:
+      required: true
+
+  - type: textarea
+    id: risks_dependencies
+    attributes:
+      label: Risks, dependencies, and rollout notes
+      description: Capture compatibility, migration, security/privacy, observability, sequencing, feature-switch, deployment, rollback, or external-team concerns.
+      placeholder: Include blockers, related issues/PRs, rollout order, and how a bad change would be detected or reversed.
+    validations:
+      required: false
+
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: Link related issues, PRs, ADRs, documentation, screenshots, traces, or authoritative external sources.
+      placeholder: |
+        - Related: #123
+        - ADR or guide: `docs/...`
+        - External reference: https://...
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: readiness
+    attributes:
+      label: Submission checklist
+      options:
+        - label: I searched open and closed issues for duplicates and linked related work.
+          required: true
+        - label: I separated verified evidence from hypotheses and open questions.
+          required: true
+        - label: I removed or redacted credentials, personal data, tokens, request digests, and other secrets.
+          required: true
+        - label: The scope and acceptance criteria are specific enough for another contributor to implement and verify.
+          required: true
