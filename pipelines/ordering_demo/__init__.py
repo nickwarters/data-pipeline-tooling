@@ -20,8 +20,8 @@ What each item demonstrates, and what to look for in the output:
 ``steady``
     Due today with no deadline of its own. ``report`` depends on it, so it
     *inherits* ``report``'s deadline and is ordered under the same pressure —
-    and it is attempted **before** ``report``, because dependency order
-    dominates every deadline and priority.
+    and it is attempted **before** ``report`` despite being declared after it,
+    because dependency order dominates every deadline and priority.
 ``overdue``
     Due today with a deadline an hour in the past. It interleaves with the two
     above by how overdue each one is.

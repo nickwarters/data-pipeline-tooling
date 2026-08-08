@@ -19,7 +19,9 @@ from framework.run import load_pipeline, run_pipeline
 from tools.calendar import WorkingDayCalendar
 from tools.orchestration import Orchestrator, RunCandidate, order_run_candidates
 
-DEMO_ITEMS = ("steady", "overdue", "later", "urgent", "report", "tomorrow")
+# Declared order. steady sits below the report that depends on it, so the
+# derived order is demonstrably not this one.
+DEMO_ITEMS = ("overdue", "later", "urgent", "report", "steady", "tomorrow")
 
 # A Tuesday afternoon, far from any date boundary: the ordinary case the demo is
 # written for. Tomorrow is a Wednesday (weekday ordinal 2).
@@ -160,10 +162,12 @@ def test_the_derived_order_demonstrates_the_rule(fixed_clock):
     )
 
     assert [item.candidate.item.name for item in ordered] == [
-        # Overdue work first: steady inherits report's deadline, and dependency
-        # order then keeps it ahead of report.
-        "steady",
+        # Overdue work first. steady inherits report's deadline, so all three
+        # press equally and declared order settles them — except that steady is
+        # declared *after* report and still precedes it, because dependency
+        # order outranks every time input.
         "overdue",
+        "steady",
         "report",
         # Priority sorts behind every deadline, ahead of deadline-free work.
         "urgent",
@@ -200,8 +204,8 @@ def test_the_plan_reports_the_same_order_with_later_gated(fixed_clock, tmp_path)
     )
 
     assert [item.pipeline for item in plan.items] == [
-        "steady",
         "overdue",
+        "steady",
         "report",
         "urgent",
         "later",

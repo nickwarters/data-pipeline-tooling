@@ -393,8 +393,9 @@ python -m cli orchestrate --app pipelines.ordering_demo.schedules \
 The schedules are in `pipelines/ordering_demo/schedules.py`, which computes its
 deadlines relative to the clock at the moment it is called, so the demo tells the
 same story whenever it is run. In the output, look for: `steady` running **before**
-`report` even though `report` carries the deadline (dependency order dominates,
-and `steady` inherits that deadline); `urgent`, at `priority=100` with no
+`report` even though `report` carries the deadline and `steady` is declared last
+of the two (dependency order dominates, and `steady` inherits that deadline);
+`urgent`, at `priority=100` with no
 deadline, running after every overdue item but ahead of the other deadline-free
 work; `later` never invoked, recorded `skipped  before earliest_run HH:MM`; and
 `tomorrow`, not due today, reported last. The bundled calendar makes every day a

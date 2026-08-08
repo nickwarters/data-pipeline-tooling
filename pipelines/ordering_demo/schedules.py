@@ -35,12 +35,6 @@ def build_pipeline_sets():
         PipelineSet(
             "ordering_demo",
             (
-                # No deadline of its own: it inherits report's, so it is ordered
-                # under the same pressure as the item waiting on it.
-                ScheduledPipeline(
-                    "pipelines/ordering_demo/steady",
-                    Schedule.daily(),
-                ),
                 ScheduledPipeline(
                     "pipelines/ordering_demo/overdue",
                     Schedule.daily(),
@@ -61,6 +55,12 @@ def build_pipeline_sets():
                     Schedule.daily(),
                     depends_on=(FreshnessRequirement("steady"),),
                     due_time=an_hour_ago,
+                ),
+                # No deadline of its own: it inherits report's, so it is ordered
+                # under the same pressure as the item waiting on it.
+                ScheduledPipeline(
+                    "pipelines/ordering_demo/steady",
+                    Schedule.daily(),
                 ),
                 ScheduledPipeline(
                     "pipelines/ordering_demo/tomorrow",
