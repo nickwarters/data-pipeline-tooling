@@ -79,6 +79,63 @@ plus a `server_time()` returning **the list server's** clock.
 evaluates, so a skewed local clock would silently widen or narrow it rather than
 fail. Do not substitute the local clock.
 
+### Implementing `server_time()`
+
+Read the `Date` response header from a small, authenticated, non-cached REST
+request to the same SharePoint site. That header is an HTTP date representing
+when the server originated the response; it is the clock this method needs. Do
+not use `/_api/web/RegionalSettings/TimeZone`: that describes how the site
+displays local dates, not SharePoint's current instant.
+
+The exact request belongs to the organisational client's existing session and
+transport. In outline only (adapt the response/error API to that transport):
+
+```python
+import datetime as dt
+from dateutil.parser import parse as parse_http_date
+
+
+def server_time(self) -> dt.datetime:
+    response = self._session.get(
+        f"{self._site}/_api/web?$select=Id",
+        headers={"Cache-Control": "no-cache"},
+    )
+    response.raise_for_status()
+
+    value = response.headers.get("Date")
+    if value is None:
+        raise SharePointClientError("SharePoint response has no Date header")
+
+    try:
+        moment = parse_http_date(value, fuzzy=False)
+    except (TypeError, ValueError, OverflowError) as error:
+        raise SharePointClientError(
+            f"SharePoint returned an invalid HTTP Date header: {value!r}"
+        ) from error
+    if moment.tzinfo is None:
+        raise SharePointClientError(
+            f"SharePoint returned an HTTP Date without a time zone: {value!r}"
+        )
+    return moment.astimezone(dt.timezone.utc)
+```
+
+Use the approved `python-dateutil` dependency for this parsing; its import
+package is named `dateutil`. Alias `dateutil.parser.parse` to
+`parse_http_date` so the protocol role is explicit, and keep `fuzzy=False` so
+unrelated text is not silently accepted. Do not use `isoparse`: an HTTP `Date`
+header is an RFC-style date, not ISO 8601. When the live client is implemented,
+add and pin `python-dateutil` directly in `requirements.txt`; do not rely on it
+being installed transitively by pandas.
+
+Treat a missing or malformed header as a client failure rather than silently
+falling back to `datetime.now()`. Also ensure the response was not served stale
+from a cache: request revalidation as above and inspect any `Age` header in the
+live environment. If the organisational proxy can still return a cached
+response, the client must either account for that age according to HTTP cache
+semantics or reject it. The header has whole-second precision and is captured
+just before the response travels back to the client; that small conservative
+delay is expected and is well inside the feed's 30-second safety lag.
+
 The client returns items as SharePoint returned them and owes the feed no
 reshaping — an expanded person arrives as the nested `{"Name": ...}` object the
 API answers with. Flattening is the feed's own doing.
@@ -185,7 +242,9 @@ Do not proceed past stage 4 unless all of these hold:
 - [ ] `Modified` indexed, or the list is comfortably under 5,000 rows and someone
       owns watching that.
 - [ ] `_resolve_client` returns a real client whose `server_time()` reads the
-      list server's clock.
+      list server's clock; a live request has confirmed that the site's REST
+      response supplies a fresh, parseable `Date` header rather than a cached
+      one.
 - [ ] No credential appears in a command line, a parameter, or a committed file.
 - [ ] `PIPELINE_DATA_DIR_PROD` set and resolving.
 - [ ] The dry run at stage 4 produced the columns and row counts you expected.
