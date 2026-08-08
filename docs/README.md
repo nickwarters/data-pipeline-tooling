@@ -356,8 +356,8 @@ separate `schema.py`, `rules.py`, `processors.py`, `pipeline.py`, and
 
 For a worked **run-ordering** example, run
 `python -m cli orchestrate --app pipelines.ordering_demo.schedules --calendar
-pipelines/ordering_demo/calendar.yml --base-dir /tmp/ordering-demo --once`. Six
-tiny pipelines under `pipelines/ordering_demo/` differ only in their `due_time`,
+pipelines/ordering_demo/calendar.yml --base-dir /tmp/ordering-demo --once`. Seven
+tiny `pipelines/demo_*/` pipelines differ only in their `due_time`,
 `earliest_run`, `priority` and `depends_on`, so the sequence they are attempted
 in is the whole point; they read rows already in memory and print them, writing
 no data file. See [the operator CLI](operator-cli.md#run-order-within-a-set).

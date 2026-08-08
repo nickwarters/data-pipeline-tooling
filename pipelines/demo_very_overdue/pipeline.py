@@ -5,15 +5,14 @@ harder, and no dependency holds it back.
 
 Run it on its own with::
 
-    python -m cli run pipelines/ordering_demo/very_overdue --base-dir /tmp/ordering-demo
+    python -m cli run pipelines/demo_very_overdue --base-dir /tmp/ordering-demo
 """
 
 from __future__ import annotations
 
 from framework.core import Dataset
 from framework.run import RunContext
-
-from .._demo import run_demo
+from pipelines.ordering_demo._demo import run_demo
 
 ROWS = (
     ("C-600", "delacroix", 915),
@@ -22,4 +21,4 @@ ROWS = (
 
 
 def run(context: RunContext) -> Dataset:
-    return run_demo("very_overdue", ROWS)
+    return run_demo("demo_very_overdue", ROWS)

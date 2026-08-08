@@ -19,17 +19,17 @@ from framework.run import load_pipeline, run_pipeline
 from tools.calendar import WorkingDayCalendar
 from tools.orchestration import Orchestrator, RunCandidate, order_run_candidates
 
-# Declared order. steady sits below the report that depends on it and
-# very_overdue sits last of all, so the derived order is demonstrably not this
-# one.
+# Declared order. demo_steady sits below the demo_report that depends on it
+# and demo_very_overdue sits last of all, so the derived order is
+# demonstrably not this one.
 DEMO_ITEMS = (
-    "overdue",
-    "later",
-    "urgent",
-    "report",
-    "steady",
-    "tomorrow",
-    "very_overdue",
+    "demo_overdue",
+    "demo_later",
+    "demo_urgent",
+    "demo_report",
+    "demo_steady",
+    "demo_tomorrow",
+    "demo_very_overdue",
 )
 
 # A Tuesday afternoon, far from any date boundary: the ordinary case the demo is
@@ -72,20 +72,20 @@ def _candidates(sets, run_date: dt.date):
 
 @pytest.mark.parametrize("name", DEMO_ITEMS)
 def test_each_demo_pipeline_runs_and_prints_its_rows(name, tmp_path, capsys):
-    loaded = load_pipeline(f"pipelines/ordering_demo/{name}")
+    loaded = load_pipeline(f"pipelines/{name}")
     assert loaded.name == name
 
     run_pipeline(loaded.run, loaded.name, tmp_path)
 
     printed = capsys.readouterr().out
-    module = importlib.import_module(f"pipelines.ordering_demo.{name}.pipeline")
+    module = importlib.import_module(f"pipelines.{name}.pipeline")
     assert f"[{name}]" in printed
     assert module.ROWS[0][0] in printed
 
 
 @pytest.mark.parametrize("name", DEMO_ITEMS)
 def test_a_demo_run_writes_no_data_file(name, tmp_path):
-    loaded = load_pipeline(f"pipelines/ordering_demo/{name}")
+    loaded = load_pipeline(f"pipelines/{name}")
 
     run_pipeline(loaded.run, loaded.name, tmp_path)
 
@@ -106,7 +106,7 @@ def test_the_set_declares_every_demo_item(fixed_clock):
     assert len(sets) == 1
     assert [item.name for item in sets[0].pipelines] == list(DEMO_ITEMS)
     assert [item.path for item in sets[0].pipelines] == [
-        f"pipelines/ordering_demo/{name}" for name in DEMO_ITEMS
+        f"pipelines/{name}" for name in DEMO_ITEMS
     ]
 
 
@@ -115,12 +115,12 @@ def test_the_relative_times_are_computed_against_the_clock(fixed_clock):
 
     items = _items(schedules.build_pipeline_sets())
 
-    assert items["steady"].due_time is None
-    assert items["overdue"].due_time == dt.time(13, 30)
-    assert items["report"].due_time == dt.time(13, 30)
-    assert items["later"].earliest_run == dt.time(15, 30)
-    assert items["urgent"].priority == 100
-    assert items["urgent"].due_time is None
+    assert items["demo_steady"].due_time is None
+    assert items["demo_overdue"].due_time == dt.time(13, 30)
+    assert items["demo_report"].due_time == dt.time(13, 30)
+    assert items["demo_later"].earliest_run == dt.time(15, 30)
+    assert items["demo_urgent"].priority == 100
+    assert items["demo_urgent"].due_time is None
 
 
 def test_report_depends_on_steady(fixed_clock):
@@ -128,15 +128,17 @@ def test_report_depends_on_steady(fixed_clock):
 
     items = _items(schedules.build_pipeline_sets())
 
-    assert [dep.upstream_pipeline for dep in items["report"].depends_on] == ["steady"]
-    assert items["steady"].depends_on == ()
+    assert [dep.upstream_pipeline for dep in items["demo_report"].depends_on] == [
+        "demo_steady"
+    ]
+    assert items["demo_steady"].depends_on == ()
 
 
 def test_tomorrow_is_due_tomorrow_and_not_today(fixed_clock):
     fixed_clock(NOON_TUESDAY)
     today = NOON_TUESDAY.date()
 
-    item = _items(schedules.build_pipeline_sets())["tomorrow"]
+    item = _items(schedules.build_pipeline_sets())["demo_tomorrow"]
 
     assert item.enabled
     assert not item.schedule.is_due(today, EVERY_DAY)
@@ -148,7 +150,7 @@ def test_a_deadline_an_hour_before_midnight_clamps_rather_than_wrapping(fixed_cl
 
     items = _items(schedules.build_pipeline_sets())
 
-    assert items["overdue"].due_time == dt.time(0, 0)
+    assert items["demo_overdue"].due_time == dt.time(0, 0)
 
 
 def test_a_window_an_hour_after_midnight_clamps_rather_than_wrapping(fixed_clock):
@@ -156,7 +158,7 @@ def test_a_window_an_hour_after_midnight_clamps_rather_than_wrapping(fixed_clock
 
     items = _items(schedules.build_pipeline_sets())
 
-    assert items["later"].earliest_run == dt.time(23, 59)
+    assert items["demo_later"].earliest_run == dt.time(23, 59)
 
 
 # ── the order the demo exists to demonstrate ──────────────────────────────────
@@ -171,21 +173,21 @@ def test_the_derived_order_demonstrates_the_rule(fixed_clock):
     )
 
     assert [item.candidate.item.name for item in ordered] == [
-        # Most overdue first, whatever the declared order: very_overdue is
-        # declared last and its deadline is the tightest in the pool.
-        "very_overdue",
-        # Then the three sharing a deadline an hour old — steady inherits
-        # report's, so declared order settles them, except that steady is
-        # declared *after* report and still precedes it, because dependency
-        # order outranks every time input.
-        "overdue",
-        "steady",
-        "report",
+        # Most overdue first, whatever the declared order: demo_very_overdue
+        # is declared last and its deadline is the tightest in the pool.
+        "demo_very_overdue",
+        # Then the three sharing a deadline an hour old — demo_steady
+        # inherits demo_report's, so declared order settles them, except
+        # that demo_steady is declared *after* demo_report and still
+        # precedes it, because dependency order outranks every time input.
+        "demo_overdue",
+        "demo_steady",
+        "demo_report",
         # Priority sorts behind every deadline, ahead of deadline-free work.
-        "urgent",
-        "later",
+        "demo_urgent",
+        "demo_later",
         # Not due today at all.
-        "tomorrow",
+        "demo_tomorrow",
     ]
 
 
@@ -200,11 +202,11 @@ def test_steady_inherits_reports_deadline_and_later_alone_is_gated(fixed_clock):
         )
     }
 
-    assert ordered["steady"].due_time == dt.time(13, 30)
-    assert ordered["steady"].inherited_from == "report"
-    assert ordered["steady"].overdue
-    assert not ordered["later"].eligible
-    assert all(name == "later" or ordered[name].eligible for name in DEMO_ITEMS)
+    assert ordered["demo_steady"].due_time == dt.time(13, 30)
+    assert ordered["demo_steady"].inherited_from == "demo_report"
+    assert ordered["demo_steady"].overdue
+    assert not ordered["demo_later"].eligible
+    assert all(name == "demo_later" or ordered[name].eligible for name in DEMO_ITEMS)
 
 
 def test_the_plan_reports_the_same_order_with_later_gated(fixed_clock, tmp_path):
@@ -216,18 +218,18 @@ def test_the_plan_reports_the_same_order_with_later_gated(fixed_clock, tmp_path)
     )
 
     assert [item.pipeline for item in plan.items] == [
-        "very_overdue",
-        "overdue",
-        "steady",
-        "report",
-        "urgent",
-        "later",
-        "tomorrow",
+        "demo_very_overdue",
+        "demo_overdue",
+        "demo_steady",
+        "demo_report",
+        "demo_urgent",
+        "demo_later",
+        "demo_tomorrow",
     ]
     by_name = {item.pipeline: item for item in plan.items}
-    assert by_name["steady"].status == "ready"
-    assert "inherited from report" in by_name["steady"].reason
-    assert by_name["later"].status == "skipped"
-    assert by_name["later"].reason == "before earliest_run 15:30"
-    assert by_name["tomorrow"].status == "skipped"
-    assert "is not due on tuesday" in by_name["tomorrow"].reason
+    assert by_name["demo_steady"].status == "ready"
+    assert "inherited from demo_report" in by_name["demo_steady"].reason
+    assert by_name["demo_later"].status == "skipped"
+    assert by_name["demo_later"].reason == "before earliest_run 15:30"
+    assert by_name["demo_tomorrow"].status == "skipped"
+    assert "is not due on tuesday" in by_name["demo_tomorrow"].reason

@@ -379,10 +379,12 @@ Both times are zero-padded 24-hour strings and are parsed when the item is
 constructed; `"9:5"`, `"24:00"` and `"0900"` all fail at start-up, naming the
 value.
 
-The worked example is runnable: `pipelines/ordering_demo/` declares one set of
-seven tiny pipelines that differ only in these fields. Each reads a couple of rows
-already in memory, validates them, and prints them — no data file is written, so
-it is safe to run anywhere, repeatedly.
+The worked example is runnable: `pipelines/ordering_demo/schedules.py` declares
+one set of seven tiny `pipelines/demo_*/` pipelines that differ only in these
+fields. Each reads a couple of rows already in memory, validates them, and prints
+them — no data file is written, so it is safe to run anywhere, repeatedly. The
+seven are flat siblings rather than nested under the demo package, because a
+pipeline is known by the leaf of its path.
 
 ```sh
 python -m cli orchestrate --app pipelines.ordering_demo.schedules \
@@ -392,15 +394,16 @@ python -m cli orchestrate --app pipelines.ordering_demo.schedules \
 
 The schedules are in `pipelines/ordering_demo/schedules.py`, which computes its
 deadlines relative to the clock at the moment it is called, so the demo tells the
-same story whenever it is run. In the output, look for: `very_overdue`, declared
-last and two hours past its deadline, attempted **first**; `steady` running **before**
-`report` even though `report` carries the deadline and `steady` is declared last
-of the two (dependency order dominates, and `steady` inherits that deadline);
-`urgent`, at `priority=100` with no
+same story whenever it is run. In the output, look for: `demo_very_overdue`,
+declared last and two hours past its deadline, attempted **first**; `demo_steady`
+running **before** `demo_report` even though `demo_report` carries the deadline
+and `demo_steady` is declared last of the two (dependency order dominates, and
+`demo_steady` inherits that deadline); `demo_urgent`, at `priority=100` with no
 deadline, running after every overdue item but ahead of the other deadline-free
-work; `later` never invoked, recorded `skipped  before earliest_run HH:MM`; and
-`tomorrow`, not due today, reported last. The bundled calendar makes every day a
-working day so the demo has due work at a weekend too. Each item's docstring says
+work; `demo_later` never invoked, recorded `skipped  before earliest_run HH:MM`;
+and `demo_tomorrow`, not due today, reported last. The bundled calendar makes
+every day a working day so the demo has due work at a weekend too. Each item's
+docstring says
 what it demonstrates; the package docstring in
 `pipelines/ordering_demo/__init__.py` is the full guide.
 

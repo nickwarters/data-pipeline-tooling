@@ -37,40 +37,40 @@ def build_pipeline_sets():
             "ordering_demo",
             (
                 ScheduledPipeline(
-                    "pipelines/ordering_demo/overdue",
+                    "pipelines/demo_overdue",
                     Schedule.daily(),
                     due_time=an_hour_ago,
                 ),
                 ScheduledPipeline(
-                    "pipelines/ordering_demo/later",
+                    "pipelines/demo_later",
                     Schedule.daily(),
                     earliest_run=in_an_hour,
                 ),
                 ScheduledPipeline(
-                    "pipelines/ordering_demo/urgent",
+                    "pipelines/demo_urgent",
                     Schedule.daily(),
                     priority=100,
                 ),
                 ScheduledPipeline(
-                    "pipelines/ordering_demo/report",
+                    "pipelines/demo_report",
                     Schedule.daily(),
-                    depends_on=(FreshnessRequirement("steady"),),
+                    depends_on=(FreshnessRequirement("demo_steady"),),
                     due_time=an_hour_ago,
                 ),
                 # No deadline of its own: it inherits report's, so it is ordered
                 # under the same pressure as the item waiting on it.
                 ScheduledPipeline(
-                    "pipelines/ordering_demo/steady",
+                    "pipelines/demo_steady",
                     Schedule.daily(),
                 ),
                 ScheduledPipeline(
-                    "pipelines/ordering_demo/tomorrow",
+                    "pipelines/demo_tomorrow",
                     _tomorrow_only(now.date()),
                 ),
                 # Declared last and attempted first: the tightest deadline in
                 # the pool, held back by no dependency.
                 ScheduledPipeline(
-                    "pipelines/ordering_demo/very_overdue",
+                    "pipelines/demo_very_overdue",
                     Schedule.daily(),
                     due_time=two_hours_ago,
                 ),
