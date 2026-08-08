@@ -14,8 +14,8 @@ import importlib
 
 import pytest
 
+import pipelines.ordering_demo.schedules as schedules
 from framework.run import load_pipeline, run_pipeline
-from pipelines.ordering_demo import schedules
 from tools.calendar import WorkingDayCalendar
 from tools.orchestration import Orchestrator, RunCandidate, order_run_candidates
 
