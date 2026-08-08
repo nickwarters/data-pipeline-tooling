@@ -2616,8 +2616,11 @@ Agent did not check the fraud alert flag before discussing account balance.</tex
                 Type a name (try <code>smith</code>, <code>jones</code>, or
                 <code>wei</code>) to search the mock directory. Selecting a
                 result calls the <code>onSelect</code> prop with the bare
-                account name. With no matches, a free-text fallback offers the
-                typed text as a raw account. The picker is a pure view
+                account name — the only way a value is ever produced, since
+                typed text is never offered as an account. The
+                <code>status</code> prop is what the line beneath the box
+                reports: searching, no matches, or a directory that could not
+                be reached. The picker is a pure view
                 function — state lives outside it and every keystroke re-renders
                 through <code>render()</code>, which is what keeps the caret in
                 place.
@@ -2730,10 +2733,7 @@ Agent did not check the fraud alert flag before discussing account balance.</tex
     <script type="module">
       import { MockSharePointClient } from '../src/services/mock-sharepoint-client.js';
       import { people } from './fixtures/people.js';
-      import {
-        PeoplePicker,
-        searchPeople,
-      } from '../src/components/base/cora-people-picker.js';
+      import { PeoplePicker } from '../src/components/base/cora-people-picker.js';
       import { render } from '../src/core/render.js';
 
       const client = new MockSharePointClient({ personas: {}, people });
@@ -2743,7 +2743,12 @@ Agent did not check the fraud alert flag before discussing account balance.</tex
       // PeoplePicker is a pure view (#536), so the demo owns the state the way
       // a route store would and re-renders through render() — which is what
       // keeps the caret in place across a keystroke.
-      const state = { inputValue: '', query: '', results: [] };
+      const state = {
+        inputValue: '',
+        query: '',
+        results: [],
+        status: 'idle',
+      };
       let timer = null;
 
       function renderPicker() {
@@ -2752,7 +2757,7 @@ Agent did not check the fraud alert flag before discussing account balance.</tex
           PeoplePicker({
             placeholder: 'Search people…',
             people: state.results,
-            query: state.query,
+            status: state.status,
             inputValue: state.inputValue,
             onQueryInput,
             onSelect,
@@ -2762,21 +2767,31 @@ Agent did not check the fraud alert flag before discussing account balance.</tex
 
       function onQueryInput(value) {
         state.inputValue = value;
-        renderPicker();
         clearTimeout(timer);
+        if (value.trim() === '') {
+          state.results = [];
+          state.query = '';
+          state.status = 'idle';
+          renderPicker();
+          return;
+        }
+        state.query = value;
+        state.results = [];
+        state.status = 'loading';
+        renderPicker();
         // Snappier than the production default for an interactive demo.
         timer = setTimeout(() => {
-          searchPeople(
-            {
-              client,
-              renderResults(results, query) {
-                state.results = results;
-                state.query = query;
-                renderPicker();
-              },
-            },
-            value
-          );
+          client
+            .searchPeople(value.trim())
+            .then((results) => {
+              state.results = results;
+              state.status = 'success';
+            })
+            .catch(() => {
+              state.results = [];
+              state.status = 'error';
+            })
+            .then(renderPicker);
         }, 120);
       }
 
@@ -2785,6 +2800,7 @@ Agent did not check the fraud alert flag before discussing account balance.</tex
         state.inputValue = person.displayName;
         state.results = [];
         state.query = '';
+        state.status = 'idle';
         renderPicker();
         out.textContent = `selected → { loginName: "${person.loginName}", displayName: "${person.displayName}" }`;
       }

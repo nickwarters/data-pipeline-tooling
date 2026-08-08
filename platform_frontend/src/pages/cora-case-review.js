@@ -38,6 +38,7 @@ import { voidControl, voidPatch } from './cora-case-review/void-actions.js';
 import { voidReasonLabel } from '../lib/void-reasons.js';
 
 /** @typedef {import('../services/save-queue.js').SaveStatus} SaveStatus */
+/** @typedef {import('../lib/people-search.js').PeopleSearchState} PeopleSearchState */
 
 /**
  * @typedef {Object} CaseReviewSnapshot
@@ -78,11 +79,11 @@ import { voidReasonLabel } from '../lib/void-reasons.js';
  * @property {string} voidReason The Void Reason key chosen in the open panel.
  * @property {boolean} voidPending
  * @property {Record<string, Map<string, boolean>>} captureCollapsed
- * @property {Record<string, Record<string, { query: string, people: import('../sharepoint-client.js').PersonResult[] }>>} captureSearch
+ * @property {Record<string, Record<string, PeopleSearchState>>} captureSearch
  *   Per failed Answer, per `person` Issue Capture Field: the open people search.
  *   Nested rather than keyed by a joined string so a panel can hand one
  *   Answer's searches straight to its capture view.
- * @property {{ query: string, people: import('../sharepoint-client.js').PersonResult[] }} responsiblePartySearch
+ * @property {PeopleSearchState} responsiblePartySearch
  *   One search, not one per Question: the Responsible Party is a Case-level
  *   field, so there is only ever one of these boxes open.
  * @property {CaseReviewSnapshot | null} snapshot
@@ -112,7 +113,7 @@ export function createInitialCaseReviewState(chrome) {
         voidPending: false,
         captureCollapsed: {},
         captureSearch: {},
-        responsiblePartySearch: { query: '', people: [] },
+        responsiblePartySearch: { query: '', people: [], status: 'idle' },
         snapshot: null,
       },
     },
@@ -164,7 +165,7 @@ function selectAdjacentTab(event, tabs, activeTab, dispatch) {
  *
  * @param {CaseReviewRouteState['captureSearch']} captureSearch
  * @param {{ questionId: string, fieldKey: string }} target
- * @param {{ query: string, people: import('../sharepoint-client.js').PersonResult[] } | null} entry
+ * @param {PeopleSearchState | null} entry
  * @returns {CaseReviewRouteState['captureSearch']}
  */
 function withCaptureSearch(captureSearch, target, entry) {
@@ -266,18 +267,21 @@ export function caseReviewReducer(state, action) {
       captureSearch: withCaptureSearch(route.captureSearch, action, {
         query: action.query,
         people: [],
+        status: 'idle',
       }),
     });
   }
   if (action.type === 'case/capture-search-results') {
     const current = route.captureSearch[action.questionId]?.[action.fieldKey];
-    // Identity guard: results for a query the Reviewer has typed past.
-    if (!current || current.query !== action.query) return state;
+    // Identity guard: an outcome for a query the Reviewer has typed past, or
+    // for a field whose picker is no longer open.
+    if (!current || current.query !== action.search.query) return state;
     return patchRoute(state, 'caseReview', {
-      captureSearch: withCaptureSearch(route.captureSearch, action, {
-        query: action.query,
-        people: action.people,
-      }),
+      captureSearch: withCaptureSearch(
+        route.captureSearch,
+        action,
+        action.search
+      ),
     });
   }
   if (action.type === 'case/capture-search-cleared') {
@@ -290,22 +294,33 @@ export function caseReviewReducer(state, action) {
   }
   if (action.type === 'case/responsible-party-search-input') {
     return patchRoute(state, 'caseReview', {
-      responsiblePartySearch: { query: action.query, people: [] },
+      responsiblePartySearch: {
+        query: action.query,
+        people: [],
+        status: 'idle',
+      },
     });
   }
   if (action.type === 'case/responsible-party-search-results') {
-    // Identity guard: results for a query the Reviewer has typed past.
-    if (route.responsiblePartySearch.query !== action.query) return state;
+    // Identity guard: an outcome for a query the Reviewer has typed past.
+    if (route.responsiblePartySearch.query !== action.search.query)
+      return state;
     return patchRoute(state, 'caseReview', {
-      responsiblePartySearch: { query: action.query, people: action.people },
+      responsiblePartySearch: action.search,
     });
   }
   if (action.type === 'case/responsible-party-search-cleared') {
-    // Identity guard: clearing a search that is not open.
+    // Identity guard: clearing a search that is not open. A failed search holds
+    // no people either, so the status has to be part of that question.
     const current = route.responsiblePartySearch;
-    if (current.query === '' && current.people.length === 0) return state;
+    if (
+      current.query === '' &&
+      current.people.length === 0 &&
+      current.status === 'idle'
+    )
+      return state;
     return patchRoute(state, 'caseReview', {
-      responsiblePartySearch: { query: '', people: [] },
+      responsiblePartySearch: { query: '', people: [], status: 'idle' },
     });
   }
   // The Case-level Responsible Party, chosen on the Issues tab. Optimistic and
@@ -548,26 +563,19 @@ export function createRouteSlice(params, context) {
   const capturePeopleSearch = createDebouncedPeopleSearch({
     client: context.client,
     isActive: () => isSliceActive(),
-    onResults: (key, query, people) => {
-      const separator = key.indexOf(':');
+    onState: (key, search) => {
       dispatch({
         type: 'case/capture-search-results',
-        questionId: key.slice(0, separator),
-        fieldKey: key.slice(separator + 1),
-        query,
-        people,
+        ...splitCaptureSearchKey(key),
+        search,
       });
     },
   });
   const responsiblePartyPeopleSearch = createDebouncedPeopleSearch({
     client: context.client,
     isActive: () => isSliceActive(),
-    onResults: (key, query, people) => {
-      dispatch({
-        type: 'case/responsible-party-search-results',
-        query,
-        people,
-      });
+    onState: (_key, search) => {
+      dispatch({ type: 'case/responsible-party-search-results', search });
     },
   });
   let requestedOnHold = false;
@@ -588,6 +596,15 @@ export function createRouteSlice(params, context) {
     return `${questionId}:${fieldKey}`;
   }
 
+  /** @param {string} key @returns {{ questionId: string, fieldKey: string }} */
+  function splitCaptureSearchKey(key) {
+    const separator = key.indexOf(':');
+    return {
+      questionId: key.slice(0, separator),
+      fieldKey: key.slice(separator + 1),
+    };
+  }
+
   /** @param {string} questionId @param {string} fieldKey */
   function clearCaptureSearch(questionId, fieldKey) {
     capturePeopleSearch.clear(captureSearchKey(questionId, fieldKey));
@@ -596,6 +613,9 @@ export function createRouteSlice(params, context) {
 
   /** @param {string} questionId @param {string} fieldKey @param {string} query */
   function requestCaptureSearch(questionId, fieldKey, query) {
+    // Order matters: `request` reports the search as loading synchronously, and
+    // the reducer drops any report whose query is not the one in state — so the
+    // new query has to be seated first or the loading report is thrown away.
     dispatch({
       type: 'case/capture-search-input',
       questionId,
@@ -612,6 +632,7 @@ export function createRouteSlice(params, context) {
 
   /** @param {string} query */
   function requestResponsiblePartySearch(query) {
+    // Seat the query before requesting: see `requestCaptureSearch`.
     dispatch({ type: 'case/responsible-party-search-input', query });
     responsiblePartyPeopleSearch.request(RESPONSIBLE_PARTY_SEARCH_KEY, query);
   }

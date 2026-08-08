@@ -22,7 +22,7 @@ captureGroups: [
 ]
 ```
 
-- **Closed field-type set:** `text | textarea | select | radio | person | actions`. No `number` / `date` / extra multi-select — nothing workshopped needs them, and each drags in its own validation/storage. `select` covers Yes/No. `person` renders the people picker; `actions` renders the existing remediation multi-select/free-text widget unchanged.
+- **Closed field-type set:** `text | textarea | select | radio | person | actions`. No `number` / `date` / extra multi-select — nothing workshopped needs them, and each drags in its own validation/storage. `select` covers Yes/No. `person` renders the people picker — its value comes from the directory search and only from there, so there is no free-text account entry and a search that is in flight or that failed offers nothing to select, saying which of the two it is instead; `actions` renders the existing remediation multi-select/free-text widget unchanged.
 - **Field keys are unique within a Case Type** (so `showWhen` references and storage keys are unambiguous).
 - **Groups are presentation only** — label, default `collapsed` state, field order. Grouping is **not** part of storage, so an Owner can move a field between groups without migrating data.
 - **`showWhen` is intra-group:** a field may condition on a _sibling_ field's value on the same Answer (e.g. reveal the `person` field only when `originatorType === 'Distribution'`; reveal `actions` only when `remediationRequired === 'Yes'`). Conditioning a group on the _parent question_ is deliberately **out of scope** for now.

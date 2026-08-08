@@ -10,6 +10,11 @@ unchanged, but they now describe a `person` **Issue Capture Field** stored in
 `Answer.capture` — the dedicated `attributedParty` Answer property and the
 `attributeFailures` Case Type flag below are both gone from the code.
 
+Amended: the free-text raw-account fallback recorded in the `searchPeople`
+bullet below no longer holds. A `person` value is directory-resolved or absent —
+the picker offers the directory's matches and nothing else, and reports a search
+that is in flight or that failed rather than falling back to the typed text.
+
 ## Context
 
 Management asked to record, against an individual failure, the single person
@@ -52,8 +57,9 @@ methods, both mocked for `?mock=1`):
 - **`searchPeople(query)`** — backs the standalone `cora-people-picker` type-ahead.
   Wraps the people-picker REST endpoint, querying the directory/claims provider
   (so it finds users not yet added to the site), and strips each result's `Key`
-  to a bare account before returning `{ loginName, displayName, email? }`. A
-  free-text raw-account fallback is offered when search returns nothing.
+  to a bare account before returning `{ loginName, displayName, email? }`.
+  ~~A free-text raw-account fallback is offered when search returns nothing.~~
+  (struck — see the Status amendment above)
 - **`resolveUsers(accountNames[])`** — at page load, resolves the bare accounts
   on a Case to authoritative display names via the User Profile read
   `GetPropertiesFor`. Dedupes unique accounts and batches/parallelises the calls.

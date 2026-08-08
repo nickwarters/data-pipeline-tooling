@@ -39,6 +39,22 @@ every requested account; an unresolved profile or absent Manager property is
 on a fixture person, which is private metadata and never appears in
 `searchPeople` results.
 
+### `searchPeople(query)`
+
+The directory type-ahead behind every people picker. A blank or whitespace-only
+query short-circuits to `[]` without a request. Otherwise it POSTs to the
+people-picker endpoint across all principal sources, so it finds users who have
+never been added to this site, and reduces each result's claims `Key` to a bare
+account name.
+
+It **rejects** on a response whose payload it cannot read as an entity list,
+naming the endpoint and the payload's top-level keys — keys only, never values,
+which are directory records. Returning `[]` there would be indistinguishable on
+screen from a directory that genuinely matched nobody, which is exactly how a
+broken request went unnoticed once. Callers are expected to have a failure path:
+`createDebouncedPeopleSearch` turns a rejection into an `error` search state and
+the picker says the search is unavailable.
+
 ---
 
 ## Running in mock mode

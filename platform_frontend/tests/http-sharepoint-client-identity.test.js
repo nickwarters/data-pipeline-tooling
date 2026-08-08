@@ -115,6 +115,16 @@ test('HttpSharePointClient: searchPeople POSTs to the people-picker endpoint, qu
     'queries all sources incl. the directory'
   );
   assert.equal(sent.queryParams.PrincipalType, 1, 'users only');
+  assert.equal(sent.queryParams.AllowEmailAddresses, true);
+  assert.equal(sent.queryParams.AllowMultipleEntities, false);
+  assert.equal(sent.queryParams.MaximumEntitySuggestions, 50);
+  // `__metadata` is an odata=verbose annotation and this client sends
+  // odata=nometadata; the pair is rejected outright rather than ignored.
+  assert.equal(
+    '__metadata' in sent.queryParams,
+    false,
+    'no verbose type annotation on a nometadata body'
+  );
 });
 
 test('HttpSharePointClient: searchPeople reads the verbose d.ClientPeoplePickerSearchUser envelope', async () => {
@@ -146,7 +156,13 @@ test('HttpSharePointClient: searchPeople reads the verbose d.ClientPeoplePickerS
   ]);
 });
 
-test('HttpSharePointClient: searchPeople returns [] when the response carries no recognised payload', async () => {
+/**
+ * A client whose people-picker POST answers 200 with exactly this body, for
+ * asking what the reader makes of a given envelope.
+ *
+ * @param {unknown} payload
+ */
+function peoplePickerPayloadClient(payload) {
   const { fetch } = makeFetch([
     {
       when: (c) => c.url.endsWith('/_api/contextinfo'),
@@ -154,15 +170,61 @@ test('HttpSharePointClient: searchPeople returns [] when the response carries no
     },
     {
       when: (c) => c.method === 'POST',
-      respond: () => new Response(JSON.stringify({}), { status: 200 }),
+      respond: () => new Response(JSON.stringify(payload), { status: 200 }),
     },
   ]);
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
+  return new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+}
 
-  assert.deepEqual(await client.searchPeople('x'), []);
+test('HttpSharePointClient: searchPeople rejects when the response carries no recognised payload', async () => {
+  await assert.rejects(
+    () => peoplePickerPayloadClient({}).searchPeople('x'),
+    /Unrecognised people-picker response from .*clientPeoplePickerSearchUser: payload keys \[\]/
+  );
+});
+
+test('HttpSharePointClient: an unreadable payload is reported by its keys, never its values', async () => {
+  await assert.rejects(
+    () =>
+      peoplePickerPayloadClient({
+        error: { message: 'jsmith@contoso.com is not resolvable' },
+      }).searchPeople('x'),
+    (/** @type {Error} */ error) => {
+      assert.match(error.message, /payload keys \["error"\]/);
+      assert.doesNotMatch(error.message, /jsmith/);
+      return true;
+    }
+  );
+});
+
+test('HttpSharePointClient: searchPeople reads an empty payload string as nobody matched', async () => {
+  // A farm answering "no matches" with an empty string is not a broken
+  // envelope, and must not be reported to the Reviewer as an unavailable
+  // directory.
+  assert.deepEqual(
+    await peoplePickerPayloadClient({ value: '' }).searchPeople('x'),
+    []
+  );
+});
+
+test('HttpSharePointClient: searchPeople rejects on a payload string that is not an entity array', async () => {
+  await assert.rejects(
+    () =>
+      peoplePickerPayloadClient({ value: '{"odata.error":1}' }).searchPeople(
+        'x'
+      ),
+    /Unrecognised people-picker response/
+  );
+});
+
+test('HttpSharePointClient: searchPeople rejects on a payload string that is not JSON at all', async () => {
+  await assert.rejects(
+    () =>
+      peoplePickerPayloadClient({
+        value: '<html>Access denied</html>',
+      }).searchPeople('x'),
+    /Unrecognised people-picker response/
+  );
 });
 
 test('HttpSharePointClient: searchPeople short-circuits a blank query without calling fetch', async () => {

@@ -1,62 +1,46 @@
 // @ts-check
 import { h } from '../../lib/html.js';
+import { EmptyState, LoadingState } from '../../lib/empty-state.js';
 
-/** @typedef {import('../../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../../sharepoint-client.js').PersonResult} PersonResult */
+/** @typedef {import('../../lib/people-search.js').PeopleSearchStatus} PeopleSearchStatus */
 
 /**
  * @typedef {object} PeoplePickerProps
  * @property {string} placeholder
  * @property {PersonResult[]} people
- * @property {string} query
+ * @property {PeopleSearchStatus} status How far the search behind `people` got.
  * @property {string} inputValue
  * @property {(value: string) => void} onQueryInput
  * @property {(person: { loginName: string, displayName: string }) => void} onSelect
  * @property {string} [ariaLabel] The control's accessible name. Defaults to a
  *   generic one, which suits a picker whose surroundings already say what it
  *   fills; a caller supplies its own when the name has to carry that itself.
- * @property {boolean} [allowRawAccount] Whether an unmatched query may be taken
- *   as an account name. Defaults to true.
  */
 
 /**
- * Build the result option nodes for a query: one per match, or a single
- * raw-account fallback when a non-empty query returns nothing.
+ * What the picker says beneath the box when it has no matches to show: whether
+ * the directory is still being asked, answered with nothing, or could not be
+ * reached at all. Silence for all three is what let a failing search read as an
+ * empty directory.
  *
- * A caller may withhold that fallback. It is a convenience for the common case,
- * where a wrong account is visible and correctable on the spot; a field whose
- * value carries a permission, or that the page stops offering once the Case
- * moves on, cannot afford an unresolved string it can never take back.
- *
- * @param {PersonResult[]} people
- * @param {string} query
- * @param {(person: { loginName: string, displayName: string }) => void} onSelect
- * @param {boolean} [allowRawAccount]
- * @returns {HTMLElement[]}
+ * @param {PeoplePickerProps} props
+ * @returns {HTMLElement | null}
  */
-export function peoplePickerOptions(
-  people,
-  query,
-  onSelect,
-  allowRawAccount = true
-) {
-  const items = people.map((p) =>
-    peoplePickerOption(
-      { loginName: p.loginName, displayName: p.displayName },
-      `${p.displayName} — ${p.loginName}`,
-      onSelect
-    )
-  );
-  if (allowRawAccount && people.length === 0 && query !== '') {
-    items.push(
-      peoplePickerOption(
-        { loginName: query, displayName: query },
-        `Use “${query}” as account`,
-        onSelect
-      )
-    );
+function peoplePickerStatus(props) {
+  const className = 'cora-people-picker-status';
+  if (props.status === 'loading') {
+    return LoadingState('Searching', { className });
   }
-  return items;
+  if (props.status === 'error') {
+    return EmptyState('Directory search is unavailable', {
+      className,
+    });
+  }
+  if (props.status === 'success' && props.people.length === 0) {
+    return EmptyState('No matches', { className });
+  }
+  return null;
 }
 
 /**
@@ -66,15 +50,22 @@ export function peoplePickerOptions(
  * loose pair let that containing block go missing whenever the caller spread
  * them into a statically positioned parent.
  *
+ * The options are the directory's matches and nothing else: a person is chosen
+ * from the directory or not at all. Offering the typed text as an account
+ * produced a value nothing had resolved — indistinguishable, once stored, from
+ * a real one — and it appeared precisely when the directory had answered with
+ * nothing, including while a search was still in flight or had failed outright.
+ *
  * @param {PeoplePickerProps} props
  * @returns {HTMLElement}
  */
 export function PeoplePicker(props) {
-  const items = peoplePickerOptions(
-    props.people,
-    props.query,
-    props.onSelect,
-    props.allowRawAccount ?? true
+  const items = props.people.map((p) =>
+    peoplePickerOption(
+      { loginName: p.loginName, displayName: p.displayName },
+      `${p.displayName} — ${p.loginName}`,
+      props.onSelect
+    )
   );
 
   const inputEl = h('input', {
@@ -99,7 +90,15 @@ export function PeoplePicker(props) {
     ...items
   );
 
-  return h('div', { className: 'cora-people-picker' }, inputEl, resultsEl);
+  const statusEl = peoplePickerStatus(props);
+
+  return h(
+    'div',
+    { className: 'cora-people-picker' },
+    inputEl,
+    resultsEl,
+    statusEl
+  );
 }
 
 /**
@@ -118,19 +117,4 @@ function peoplePickerOption(person, label, onSelect) {
     },
     label
   );
-}
-
-/**
- * @param {{ client: SharePointClient | null, renderResults(people: PersonResult[], query: string): void }} context
- * @param {string} query
- * @returns {Promise<void>}
- */
-export async function searchPeople(context, query) {
-  const q = query.trim();
-  if (q === '' || !context.client) {
-    context.renderResults([], '');
-    return;
-  }
-  const people = await context.client.searchPeople(q);
-  context.renderResults(people, q);
 }
