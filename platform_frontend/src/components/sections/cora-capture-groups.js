@@ -11,9 +11,8 @@ import {
 /** @typedef {import('../../sharepoint-client.js').CaptureGroup} CaptureGroup */
 /** @typedef {import('../../sharepoint-client.js').CaptureField} CaptureField */
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
-/** @typedef {import('../../sharepoint-client.js').PersonResult} PersonResult */
 /** @typedef {import('../../evaluators/issue-capture.js').CaptureValue} CaptureValue */
-/** @typedef {{ query: string, people: PersonResult[] }} FieldSearch */
+/** @typedef {import('../../lib/people-search.js').PeopleSearchState} PeopleSearchState */
 
 /**
  * A group's collapse state: an ephemeral per-group override (never persisted)
@@ -52,7 +51,7 @@ function isCollapsed(collapsed, group) {
  * canCapture: boolean,
  * namePrefix: string,
  * collapsed: Map<string, boolean>,
- * peopleSearch: Record<string, FieldSearch>,
+ * peopleSearch: Record<string, PeopleSearchState>,
  * onToggle: (groupKey: string, collapsed: boolean) => void,
  * onCapture: (fieldKey: string, value: CaptureValue | null) => void,
  * onPersonQuery: (fieldKey: string, query: string) => void,
@@ -192,11 +191,15 @@ function personControl(field, props) {
     );
   }
 
-  const search = props.peopleSearch[field.key] ?? { query: '', people: [] };
+  const search = props.peopleSearch[field.key] ?? {
+    query: '',
+    people: [],
+    status: 'idle',
+  };
   return PeoplePicker({
     placeholder: 'Search people…',
     people: search.people,
-    query: search.query,
+    status: search.status,
     inputValue: search.query,
     ariaLabel: `Search people for ${field.label}`,
     onQueryInput: (query) => props.onPersonQuery(field.key, query),

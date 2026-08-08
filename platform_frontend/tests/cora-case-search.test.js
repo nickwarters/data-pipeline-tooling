@@ -545,94 +545,181 @@ test('case search: a client-less mount degrades rather than failing the route', 
   assert.doesNotThrow(() => slice.start?.(startTools(ctx, [])));
 });
 
-test('case search: the Reviewer field resolves accounts through the directory and offers no raw fallback', async (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
+/**
+ * Drive the page's Reviewer picker the way a user does: render the view through
+ * the slice (so the debounced search behind `onQueryInput` is the real one),
+ * type, and fold every action the store received back into the state.
+ *
+ * @param {{ searchPeople: (query: string) => Promise<any[]> }} directory
+ */
+function reviewerPicker(directory) {
   /** @type {any[]} */
   const actions = [];
-  /** @type {Promise<any>[]} */
-  const directoryCalls = [];
-  const ctx = context({
-    client: {
-      searchPeople: () => {
-        const pending = Promise.resolve([
-          { loginName: 'rev-a', displayName: 'Reviewer A' },
-        ]);
-        directoryCalls.push(pending);
-        return pending;
-      },
-    },
-  });
+  const ctx = context({ client: directory });
   const slice = createRouteSlice({ queryString: '' }, ctx, {});
   const cleanup = slice.start?.(startTools(ctx, actions));
+  let state = slice.initialState;
 
-  const picker = viewOf(slice, slice.initialState).querySelector(
-    '.cora-people-picker'
-  );
-  assert.ok(picker);
-  picker.querySelector('input')._fire('input', { target: { value: 'rev' } });
+  /** Re-render from the current state and return the picker's root. */
+  const render = () => {
+    const view = viewOf(slice, state, {
+      dispatch: (/** @type {any} */ action) => {
+        actions.push(action);
+        apply();
+      },
+    });
+    return view.querySelector('.cora-people-picker');
+  };
+  const apply = () => {
+    for (const action of actions.splice(0))
+      state = slice.reducer(state, action);
+  };
+
+  return {
+    cleanup,
+    apply,
+    get state() {
+      return state;
+    },
+    /** @param {string} value */
+    type(value) {
+      render().querySelector('input')._fire('input', { target: { value } });
+      apply();
+    },
+    /** @param {any} action */
+    dispatch(action) {
+      state = slice.reducer(state, action);
+    },
+    options() {
+      return [...render().querySelectorAll('.cora-people-picker-option')].map(
+        (option) => option.textContent
+      );
+    },
+    statusText() {
+      return (
+        render().querySelector('.cora-people-picker-status')?.textContent ??
+        null
+      );
+    },
+    select() {
+      getByRole(render(), 'option', { name: /Reviewer A/ }).dispatchEvent(
+        /** @type {any} */ ({ type: 'click' })
+      );
+      apply();
+    },
+  };
+}
+
+const REVIEWER_A = { loginName: 'rev-a', displayName: 'Reviewer A' };
+
+test('case search: the Reviewer field resolves accounts through the directory and offers nothing else', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  /** @type {Promise<any>[]} */
+  const directoryCalls = [];
+  const picker = reviewerPicker({
+    searchPeople: () => {
+      const pending = Promise.resolve([REVIEWER_A]);
+      directoryCalls.push(pending);
+      return pending;
+    },
+  });
+
+  picker.type('rev');
+  assert.equal(picker.state.routes.caseSearch.reviewerSearch.status, 'loading');
+  assert.deepEqual(picker.options(), []);
+  assert.equal(picker.statusText(), 'Searching…');
 
   // Advance the debounce explicitly, then await the directory call itself —
   // the effect's own `then` was attached before this one, so it has already run.
   t.mock.timers.tick(200);
   await Promise.all(directoryCalls);
   await flush();
+  picker.apply();
 
-  assert.ok(
-    actions.some((action) => action.type === 'search/reviewer-results'),
-    'the debounced directory search reports back into the store'
-  );
+  assert.equal(picker.state.routes.caseSearch.reviewerSearch.status, 'success');
+  assert.deepEqual(picker.options(), ['Reviewer A — rev-a']);
+  assert.equal(picker.statusText(), null);
 
-  const withResults = actions.reduce(
-    (state, action) => slice.reducer(state, action),
-    slice.initialState
-  );
-  const options = [
-    ...viewOf(slice, withResults).querySelectorAll(
-      '.cora-people-picker-option'
-    ),
-  ].map((option) => option.textContent);
-  assert.deepEqual(options, ['Reviewer A — rev-a']);
-
-  // An unresolvable account would make the whole query reject, so the
-  // raw-account escape hatch is deliberately withheld.
-  const noMatches = slice.reducer(withResults, {
+  // An unresolvable account would make the whole query reject, so typed text is
+  // never offered as one.
+  picker.dispatch({
     type: 'search/reviewer-results',
-    query: 'nobody',
-    people: [],
+    search: { query: 'rev', people: [], status: 'success' },
   });
-  assert.equal(
-    viewOf(slice, noMatches).querySelector('.cora-people-picker-option'),
-    null
-  );
+  assert.deepEqual(picker.options(), []);
+  assert.equal(picker.statusText(), 'No matches');
 
-  cleanup?.();
+  picker.cleanup?.();
 });
 
-test('case search: choosing a person from the directory fills the Reviewer filter', () => {
-  /** @type {any[]} */
-  const actions = [];
-  const ctx = context();
-  const slice = createRouteSlice({ queryString: '' }, ctx, {});
-  slice.start?.(startTools(ctx, actions));
+test('case search: a Reviewer search that fails says so instead of reading as an empty directory', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  /** @type {Promise<any>[]} */
+  const directoryCalls = [];
+  const picker = reviewerPicker({
+    searchPeople: () => {
+      const pending = Promise.reject(new Error('HTTP Error: 400'));
+      directoryCalls.push(pending);
+      return pending;
+    },
+  });
 
-  const withResults = slice.reducer(slice.initialState, {
+  picker.type('rev');
+  t.mock.timers.tick(200);
+  await Promise.allSettled(directoryCalls);
+  await flush();
+  picker.apply();
+
+  assert.equal(picker.state.routes.caseSearch.reviewerSearch.status, 'error');
+  assert.deepEqual(picker.options(), []);
+  assert.equal(picker.statusText(), 'Directory search is unavailable');
+  picker.cleanup?.();
+});
+
+test('case search: an outcome for a query the user has typed past is dropped', () => {
+  const picker = reviewerPicker({ searchPeople: async () => [] });
+
+  picker.dispatch({ type: 'search/reviewer-query', query: 'reviewer b' });
+  const before = picker.state;
+  picker.dispatch({
     type: 'search/reviewer-results',
-    query: 'rev',
-    people: [{ loginName: 'rev-a', displayName: 'Reviewer A' }],
+    search: { query: 'rev', people: [REVIEWER_A], status: 'success' },
   });
-  const view = viewOf(slice, withResults, {
-    dispatch: (/** @type {any} */ action) => actions.push(action),
-  });
-  actions.length = 0;
-  getByRole(view, 'option', { name: 'Reviewer A — rev-a' }).dispatchEvent(
-    /** @type {any} */ ({ type: 'click' })
-  );
 
-  const chosen = actions.reduce(
-    (state, action) => slice.reducer(state, action),
-    withResults
+  assert.equal(picker.state, before, 'a stale success must not latch matches');
+  picker.cleanup?.();
+});
+
+test('case search: choosing a person fills the Reviewer filter and stops the picker talking', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  /** @type {string[]} */
+  const searches = [];
+  const picker = reviewerPicker({
+    searchPeople: async (query) => {
+      searches.push(query);
+      return [REVIEWER_A];
+    },
+  });
+
+  picker.type('rev');
+  picker.dispatch({
+    type: 'search/reviewer-results',
+    search: { query: 'rev', people: [REVIEWER_A], status: 'success' },
+  });
+  picker.select();
+
+  assert.equal(
+    picker.state.routes.caseSearch.filters.assignedReviewer,
+    'rev-a'
   );
-  assert.equal(chosen.routes.caseSearch.filters.assignedReviewer, 'rev-a');
+  // Neither a status line under the person just chosen, nor a request still on
+  // its way to replace them.
+  assert.equal(picker.state.routes.caseSearch.reviewerSearch.status, 'idle');
+  assert.equal(picker.statusText(), null);
+  t.mock.timers.tick(200);
+  await flush();
+  assert.deepEqual(searches, []);
+  picker.cleanup?.();
 });
 
 test('case search view: renders the labelled filter form on its own', () => {
@@ -696,5 +783,5 @@ test('case search: editing a field updates only that filter, and typing unresolv
     reportableAfter: '2026-07-01',
     reportableBefore: '',
   });
-  assert.equal(next.routes.caseSearch.reviewerQuery, 'somebody else');
+  assert.equal(next.routes.caseSearch.reviewerSearch.query, 'somebody else');
 });

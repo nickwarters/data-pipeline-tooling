@@ -27,7 +27,7 @@ const TABLE = 'search';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').ListCasesFilter} ListCasesFilter */
-/** @typedef {import('../sharepoint-client.js').PersonResult} PersonResult */
+/** @typedef {import('../lib/people-search.js').PeopleSearchState} PeopleSearchState */
 /** @typedef {import('../views/data-table.js').TableSort} TableSort */
 
 /**
@@ -52,11 +52,13 @@ const FILTER_KEYS = [
   'reportableBefore',
 ];
 
+/** The page has one people picker, so its debounce holds one entry. */
+const REVIEWER_SEARCH_KEY = 'assignedReviewer';
+
 /**
  * @typedef {Object} CaseSearchRouteState
  * @property {SearchFilters} filters
- * @property {string} reviewerQuery
- * @property {PersonResult[]} reviewerPeople
+ * @property {PeopleSearchState} reviewerSearch
  * @property {CaseRow[] | null} rows
  * @property {boolean} capped
  * @property {string | null} error
@@ -140,26 +142,27 @@ const filterChanged = (key, value) => ({
 
 /**
  * @param {CaseSearchRouteState} route
- * @param {{ dispatch: (action: any) => any, onReviewerQuery?: (query: string) => void }} tools
+ * @param {{ dispatch: (action: any) => any, onReviewerQuery?: (query: string) => void, onReviewerSelected?: () => void }} tools
  * @returns {HTMLElement}
  */
 function reviewerPickerView(route, tools) {
   return PeoplePicker({
     placeholder: 'Search for a Reviewer',
     ariaLabel: 'Assigned Reviewer',
-    people: route.reviewerPeople,
-    query: route.reviewerQuery,
-    inputValue: route.reviewerQuery,
-    // An account this directory cannot resolve makes the whole query reject, so
-    // the raw-account escape hatch the other pickers offer would only ever
-    // produce a search that cannot run.
-    allowRawAccount: false,
+    people: route.reviewerSearch.people,
+    status: route.reviewerSearch.status,
+    inputValue: route.reviewerSearch.query,
     onQueryInput: (query) => {
+      // Order matters: the search reports itself as loading synchronously, and
+      // the reducer drops any report whose query is not the one in state — so
+      // the new query has to be seated first or that report is thrown away.
       tools.dispatch({ type: 'search/reviewer-query', query });
       tools.onReviewerQuery?.(query);
     },
-    onSelect: (person) =>
-      tools.dispatch({ type: 'search/reviewer-selected', person }),
+    onSelect: (person) => {
+      tools.onReviewerSelected?.();
+      tools.dispatch({ type: 'search/reviewer-selected', person });
+    },
   });
 }
 
@@ -217,7 +220,7 @@ function caseTypeSelectView(route, tools) {
 
 /**
  * @param {CaseSearchRouteState} route
- * @param {{ dispatch: (action: any) => any, onReviewerQuery?: (query: string) => void, onSubmit?: () => void }} tools
+ * @param {{ dispatch: (action: any) => any, onReviewerQuery?: (query: string) => void, onReviewerSelected?: () => void, onSubmit?: () => void }} tools
  * @returns {HTMLElement}
  */
 function filtersView(route, tools) {
@@ -322,7 +325,7 @@ function resultsView(route, tools) {
 
 /**
  * @param {CaseSearchState} state
- * @param {{ dispatch: (action: any) => any, onReviewerQuery?: (query: string) => void, onSubmit?: () => void }} tools
+ * @param {{ dispatch: (action: any) => any, onReviewerQuery?: (query: string) => void, onReviewerSelected?: () => void, onSubmit?: () => void }} tools
  * @returns {HTMLElement}
  */
 export function caseSearchView(state, tools) {
@@ -363,8 +366,8 @@ export function createRouteSlice(
   const peopleSearch = createDebouncedPeopleSearch({
     client: context.client,
     isActive: () => isSliceActive(),
-    onResults: (_key, query, people) =>
-      dispatch({ type: 'search/reviewer-results', query, people }),
+    onState: (_key, search) =>
+      dispatch({ type: 'search/reviewer-results', search }),
   });
 
   /** @type {CaseSearchState} */
@@ -373,8 +376,11 @@ export function createRouteSlice(
     routes: {
       caseSearch: {
         filters,
-        reviewerQuery: filters.assignedReviewer,
-        reviewerPeople: [],
+        reviewerSearch: {
+          query: filters.assignedReviewer,
+          people: [],
+          status: 'idle',
+        },
         rows: null,
         capped: false,
         error: null,
@@ -400,19 +406,28 @@ export function createRouteSlice(
         // Typing past a chosen person unresolves the filter: only a directory
         // match may fill it.
         return patchRoute(state, 'caseSearch', {
-          reviewerQuery: action.query,
+          reviewerSearch: { query: action.query, people: [], status: 'idle' },
           filters: { ...route.filters, assignedReviewer: '' },
         });
       }
       if (action.type === 'search/reviewer-results') {
+        // Identity guard: an outcome for a query the user has typed past, which
+        // would otherwise latch matches for a name no longer in the box.
+        if (route.reviewerSearch.query !== action.search.query) return state;
         return patchRoute(state, 'caseSearch', {
-          reviewerPeople: action.people,
+          reviewerSearch: action.search,
         });
       }
       if (action.type === 'search/reviewer-selected') {
+        // Back to `idle`, not to the status of the search that offered this
+        // person: the box now holds a chosen account, and "No matches" beneath
+        // it would be describing a search nobody is waiting on.
         return patchRoute(state, 'caseSearch', {
-          reviewerQuery: action.person.loginName,
-          reviewerPeople: [],
+          reviewerSearch: {
+            query: action.person.loginName,
+            people: [],
+            status: 'idle',
+          },
           filters: {
             ...route.filters,
             assignedReviewer: action.person.loginName,
@@ -437,7 +452,8 @@ export function createRouteSlice(
       caseSearchView(state, {
         ...tools,
         onReviewerQuery: (query) =>
-          peopleSearch.request('assignedReviewer', query),
+          peopleSearch.request(REVIEWER_SEARCH_KEY, query),
+        onReviewerSelected: () => peopleSearch.clear(REVIEWER_SEARCH_KEY),
         onSubmit: () => navigateTo(searchHash(state.routes.caseSearch.filters)),
       }),
     start(tools) {

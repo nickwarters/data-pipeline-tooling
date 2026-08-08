@@ -29,7 +29,7 @@ export class CORARemediationSection extends HTMLElement {
     /** @type {import('../../src/sharepoint-client.js').CaptureGroup[]} */
     this.captureGroups = [];
     this.canEditIssues = false;
-    /** @type {Record<string, Record<string, { query: string, people: any[] }>>} */
+    /** @type {Record<string, Record<string, import('../../src/lib/people-search.js').PeopleSearchState>>} */
     this.captureSearch = {};
   }
 
@@ -77,7 +77,7 @@ export class CORARemediationSection extends HTMLElement {
       captureGroups: this.captureGroups,
       captureCollapsed: {},
       captureSearch: this.captureSearch,
-      responsiblePartySearch: { query: '', people: [] },
+      responsiblePartySearch: { query: '', people: [], status: 'idle' },
       canEditIssues: this.canEditIssues,
       dispatchResponsibleParty() {},
       dispatchResponsiblePartySearch() {},
