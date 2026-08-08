@@ -8,7 +8,7 @@ A `PipelineSet`'s run order is **derived on every pass**, as a pure function of
 (the candidate items, the wall-clock time of day, which items already succeeded
 today). It is not declared by the author, not stored anywhere, and not a
 wake-up schedule: the three ordering inputs on `ScheduledPipeline` —
-`due_time` (also spelled `deadline`), `earliest_run`, and `priority` — are read
+`due_time`, `earliest_run`, and `priority` — are read
 at run time and nothing ever sleeps until a time arrives.
 
 **Dependency order dominates every time input.** The order is produced by a

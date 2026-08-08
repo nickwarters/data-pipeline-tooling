@@ -1055,7 +1055,7 @@ bounded Python polling loop over the same run date; it does not retry failed
 items from the same invocation.
 
 A `ScheduledPipeline` may also carry three optional **ordering inputs**:
-`due_time` (accepted at the constructor as `deadline` too) and `earliest_run`,
+`due_time` and `earliest_run`,
 both zero-padded 24-hour `"HH:MM"` strings parsed and validated at construction,
 and an integer `priority`. They influence only the sequence in which runnable
 items are attempted within their set; freshness remains the sole answer to

@@ -539,15 +539,7 @@ class ScheduledPipeline:
         due_time: str | dt.time | None = None,
         earliest_run: str | dt.time | None = None,
         priority: int = 0,
-        deadline: str | dt.time | None = None,
     ) -> None:
-        if deadline is not None:
-            if due_time is not None:
-                raise ValueError(
-                    "ScheduledPipeline takes due_time or deadline, not both; "
-                    "they name the same field"
-                )
-            due_time = deadline
         object.__setattr__(self, "path", path)
         object.__setattr__(self, "schedule", schedule)
         object.__setattr__(self, "depends_on", tuple(depends_on))

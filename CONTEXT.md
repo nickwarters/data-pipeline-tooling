@@ -360,8 +360,8 @@ Freshness rule's question alone. See
 
 **Deadline** (`due_time`):
 The time of day a scheduled item should be finished by. _Here_: an optional
-`"HH:MM"` on `ScheduledPipeline` (the constructor also accepts the spelling
-`deadline`), always a time on the **run date** — there is no next-day deadline.
+`"HH:MM"` on `ScheduledPipeline`, always a time on the **run date** — there is
+no next-day deadline.
 
 **Inherited deadline**:
 The Deadline an item answers to on a dependent's behalf. _Here_: an item with no

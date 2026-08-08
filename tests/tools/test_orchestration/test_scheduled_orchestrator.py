@@ -512,7 +512,7 @@ def test_invocation_order_follows_deadline_pressure(tmp_path):
                 "cases",
                 (
                     ScheduledPipeline(
-                        "pipelines/afternoon", Weekdays(), deadline="16:00"
+                        "pipelines/afternoon", Weekdays(), due_time="16:00"
                     ),
                     ScheduledPipeline(
                         "pipelines/morning", Weekdays(), due_time="09:00"
@@ -543,7 +543,7 @@ def test_a_pipeline_set_is_the_outer_boundary_and_never_reordered(tmp_path):
             PipelineSet("first", (ScheduledPipeline("pipelines/relaxed", Weekdays()),)),
             PipelineSet(
                 "second",
-                (ScheduledPipeline("pipelines/overdue", Weekdays(), deadline="06:00"),),
+                (ScheduledPipeline("pipelines/overdue", Weekdays(), due_time="06:00"),),
             ),
         ),
         WorkingDayCalendar(),

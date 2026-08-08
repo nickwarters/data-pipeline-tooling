@@ -77,21 +77,6 @@ def test_priority_defaults_to_zero_and_accepts_negatives():
     assert _item(priority=-5).priority == -5
 
 
-# ── the `deadline` spelling ───────────────────────────────────────────────────
-
-
-def test_deadline_is_normalised_into_due_time_at_the_boundary():
-    item = _item(deadline="09:30")
-
-    assert item.due_time == dt.time(9, 30)
-    assert not hasattr(item, "deadline")
-
-
-def test_declaring_both_spellings_is_rejected():
-    with pytest.raises(ValueError, match="due_time or deadline"):
-        _item(due_time="09:30", deadline="10:00")
-
-
 # ── overrides preserve the ordering inputs ────────────────────────────────────
 
 

@@ -371,7 +371,7 @@ run — that stays the freshness rule's question alone.
 
 | Field | Type | Meaning |
 |-------|------|---------|
-| `due_time` (also spelled `deadline`) | `"HH:MM"` | The time of day this should be finished by. The closer to, or further past, the deadline, the earlier it is attempted. |
+| `due_time` | `"HH:MM"` | The time of day this should be finished by. The closer to, or further past, the deadline, the earlier it is attempted. |
 | `earliest_run` | `"HH:MM"` | Do not attempt before this time of day. |
 | `priority` | `int` | Higher wins. A tie-breaker only, with no time meaning. |
 
