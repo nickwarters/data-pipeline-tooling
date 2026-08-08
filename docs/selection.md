@@ -257,7 +257,7 @@ separate concern, deferred to a follow-up.
 
 The whole path for one Case Type is two path-addressed pipelines:
 [`../pipelines/ingest/pipeline.py`](../pipelines/ingest/pipeline.py) (CSV feed ->
-`raw` -> `silver` (the CasePool) -> `gold`) and
+`raw` -> `silver` -> `gold` (the CasePool)) and
 [`../pipelines/selection/pipeline.py`](../pipelines/selection/pipeline.py) (the
 available cases -> the `gold` SelectionPool). Run them in order from the repo
 root:

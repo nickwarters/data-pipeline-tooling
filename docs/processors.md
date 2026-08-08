@@ -362,7 +362,7 @@ dependency supplies membership, not additional columns.
 
 ## Worked example — filter one feed, join another's silver
 
-A Selection-shaped pipeline: read one subject's silver CasePool, narrow it in
+A Selection-shaped pipeline: read one subject's silver Dataset, narrow it in
 Python, and join another subject's silver Reference Data via an explicit
 read-only dependency.
 
