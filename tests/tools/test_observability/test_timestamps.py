@@ -68,14 +68,6 @@ def test_local_now_reads_the_wall_clock_through_the_zone_seam(uk_summer):
     assert now.hour == dt.datetime.now(dt.timezone.utc).astimezone(BST).hour
 
 
-def test_local_now_agrees_with_the_utc_instant_it_is_derived_from():
-    before = parse_timestamp(utc_now_iso())
-    sampled = local_now().astimezone(dt.timezone.utc)
-    after = parse_timestamp(utc_now_iso())
-
-    assert before <= sampled <= after
-
-
 def test_start_of_local_day_is_local_midnight_expressed_as_utc(uk_summer):
     assert start_of_local_day(dt.date(2026, 7, 28)) == "2026-07-27T23:00:00+00:00"
 

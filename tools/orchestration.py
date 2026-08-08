@@ -9,11 +9,12 @@ import warnings
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any, ClassVar, Generic, Protocol, TypeVar
+from typing import TYPE_CHECKING, Any, ClassVar, Generic, Protocol, TypeVar
 
 from framework._internal.connection import connect
 from framework.core.dataset import Dataset
 from framework.core.errors import ErrorCategory, PipelineError
+from framework.run.address import RunAddress
 from framework.run.builder import Pipeline
 from framework.run.run_context import RunContext
 from framework.run.runner import (
@@ -35,6 +36,9 @@ from tools.observability.record_schema import (
 )
 from tools.observability.run_store import RunStore
 from tools.observability.timestamps import local_now, utc_now_iso
+
+if TYPE_CHECKING:
+    from tools.observability.run_registry import RunRegistry
 
 _WEEKDAY_NAMES = [
     "monday",
@@ -354,17 +358,13 @@ def _time_of_day(value: object, field: str) -> dt.time | None:
 
     An already-parsed :class:`datetime.time` is returned unchanged, so a value
     that has been through here once round-trips (``dataclasses.replace`` re-runs
-    the constructor). The format is exact rather than lenient: ``strptime``
-    alone would read ``"9:5"`` as 09:05, and an ordering input silently read as
-    the wrong minute is worse than one that refuses to start.
+    the constructor).
     """
     if value is None or isinstance(value, dt.time):
         return value
     message = f'{field} must be a zero-padded 24-hour "HH:MM" time, got {value!r}'
-    if not isinstance(value, str) or len(value) != 5 or value[2] != ":":
-        raise ValueError(message)
     try:
-        return dt.datetime.strptime(value, "%H:%M").time()
+        return dt.time.fromisoformat(value)  # type: ignore[arg-type]
     except (TypeError, ValueError):
         raise ValueError(message) from None
 
@@ -544,11 +544,6 @@ class ScheduledPipeline:
                     "they name the same field"
                 )
             due_time = deadline
-        # A bool is an int subclass, and True as a priority is a mistake rather
-        # than the number 1. Coercion is refused for the same reason: int("3")
-        # would pass and int(3.7) would truncate.
-        if isinstance(priority, bool) or not isinstance(priority, int):
-            raise ValueError(f"priority must be an int, got {priority!r}")
         object.__setattr__(self, "path", path)
         object.__setattr__(self, "schedule", schedule)
         object.__setattr__(self, "depends_on", tuple(depends_on))
@@ -582,14 +577,11 @@ class RunCandidate:
     """One scheduled item as the ordering sees it, with the facts already gathered.
 
     Everything the ordering needs is supplied by the caller, so the derivation
-    itself reads no clock, no calendar and no store. ``enabled`` and
-    ``due_today`` are carried separately because the presentation sites must be
-    able to tell a *disabled* item from a merely *not due* one.
+    itself reads no clock, no calendar and no store.
     """
 
     set_name: str
     item: ScheduledPipeline
-    enabled: bool
     due_today: bool
     ran_today: bool
 
@@ -713,11 +705,9 @@ def _order_key(ordered: OrderedItem, now: dt.time) -> tuple[int, int, int]:
     if not candidate.due_today:
         return (2, 0, 0)
     rank = -candidate.item.priority
-    if ordered.due_time is None:
-        return (1, 0, rank)
-    # A deadline that has passed on an item which already succeeded today exerts
-    # no further pressure.
-    if now >= ordered.due_time and candidate.ran_today:
+    # An item that already succeeded today exerts no deadline pressure: its
+    # deadline has been met, whether or not the clock has passed it.
+    if ordered.due_time is None or candidate.ran_today:
         return (1, 0, rank)
     return (0, _minutes(ordered.due_time) - _minutes(now), rank)
 
@@ -1013,11 +1003,12 @@ class Orchestrator:
         day = run_date or dt.date.today()
         moment = now if now is not None else local_now().time()
         pass_run_id = orchestration_run_id or uuid.uuid4().hex
-        store = OrchestrationStore(RunStore(root).orchestration_path)
+        run_store = RunStore(root)
+        store = OrchestrationStore(run_store.orchestration_path)
         decisions: list[OrchestrationDecision] = []
         terminal: dict[str, str] = {}
 
-        run_registry = RunStore(root).catch_up()
+        run_registry = run_store.catch_up()
         set_failed: dict[str, set[str]] = {}
         for ordered in self._ordered_pass(run_registry, day, moment):
             item = ordered.candidate.item
@@ -1110,7 +1101,7 @@ class Orchestrator:
 
     def _ordered_pass(
         self,
-        run_registry: object,
+        run_registry: RunRegistry,
         run_date: dt.date,
         now: dt.time,
     ) -> tuple[OrderedItem, ...]:
@@ -1121,21 +1112,18 @@ class Orchestrator:
         registry is read once per item and used twice: for whether a deadline
         still bites, and for the plan's ``already-satisfied`` projection.
         """
-        from framework.run.address import RunAddress
-
         ordered: list[OrderedItem] = []
         for pipeline_set in self._sets:
             candidates: list[RunCandidate] = []
             for scheduled in pipeline_set.pipelines:
                 item = self._apply_override(pipeline_set.name, scheduled)
-                enabled = item.enabled
                 candidates.append(
                     RunCandidate(
                         set_name=pipeline_set.name,
                         item=item,
-                        enabled=enabled,
                         due_today=(
-                            enabled and item.schedule.is_due(run_date, self._calendar)
+                            item.enabled
+                            and item.schedule.is_due(run_date, self._calendar)
                         ),
                         ran_today=run_registry.latest_success(
                             RunAddress.for_pipeline(item.name), on=run_date
@@ -1150,17 +1138,13 @@ class Orchestrator:
         self,
         ordered: OrderedItem,
         run_date: dt.date,
-        run_registry: object,
+        run_registry: RunRegistry,
     ) -> PlanItem:
-        from tools.observability.run_registry import RunRegistry
-
-        assert isinstance(run_registry, RunRegistry)
-
         candidate = ordered.candidate
         set_name = candidate.set_name
         item = candidate.item
 
-        if not candidate.enabled:
+        if not item.enabled:
             return PlanItem(
                 run_date=run_date,
                 set_name=set_name,
@@ -1244,7 +1228,7 @@ class Orchestrator:
         set_name = candidate.set_name
         item = candidate.item
         key = _item_key(set_name, item, run_date)
-        if not candidate.enabled:
+        if not item.enabled:
             return _decision(
                 orchestration_run_id,
                 key,
@@ -1518,9 +1502,12 @@ def _latest_pipeline_run_id(base_dir: Path, label: str) -> str | None:
 
 
 def _earliest_run_reason(item: ScheduledPipeline) -> str:
-    """Why a gated item is being passed over, naming the window that gates it."""
-    earliest = item.earliest_run
-    return f"before earliest_run {earliest.strftime('%H:%M')}" if earliest else ""
+    """Why a gated item is being passed over, naming the window that gates it.
+
+    Only reached for an item the gate held back, so ``earliest_run`` is set.
+    """
+    assert item.earliest_run is not None
+    return f"before earliest_run {item.earliest_run.strftime('%H:%M')}"
 
 
 def _deadline_note(ordered: OrderedItem) -> str:

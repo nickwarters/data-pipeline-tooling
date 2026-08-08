@@ -35,7 +35,6 @@ def _candidate(
             enabled=enabled,
             **item_kwargs,
         ),
-        enabled=enabled,
         due_today=due_today,
         ran_today=ran_today,
     )
@@ -83,6 +82,16 @@ def test_a_passed_deadline_stops_pressing_once_the_item_has_run_today():
         _candidate("waiting", due_time="16:00"),
         now="09:00",
     ) == ["waiting", "done"]
+
+
+def test_a_deadline_still_ahead_stops_pressing_once_the_item_has_run_today():
+    # The deadline has been met, so it exerts no pressure at all — not merely
+    # once the clock passes it.
+    assert _order(
+        _candidate("done_at_9", due_time="09:00", ran_today=True),
+        _candidate("todo_at_10", due_time="10:00"),
+        now="08:00",
+    ) == ["todo_at_10", "done_at_9"]
 
 
 def test_items_without_a_deadline_follow_those_with_one_in_declared_order():

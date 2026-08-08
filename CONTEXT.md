@@ -371,10 +371,10 @@ Deadline. Only items due today contribute one.
 
 **Overdue**:
 A due item whose effective Deadline has passed and which has not yet succeeded
-today. _Here_: overdue items are attempted first, most overdue first. A Deadline
-that has passed on an item which already succeeded today exerts no pressure —
-whether an item has run today is read for that question **only**, and never to
-decide whether it may run.
+today. _Here_: overdue items are attempted first, most overdue first. An item
+that already succeeded today exerts no Deadline pressure at all — whether an item
+has run today is read for that question **only**, and never to decide whether it
+may run.
 
 **Earliest run** (`earliest_run`):
 An optional `"HH:MM"` before which an item is not attempted. _Here_: a per-pass

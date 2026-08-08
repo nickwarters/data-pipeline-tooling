@@ -2,7 +2,7 @@
 
 The preview's promise is *this is what will happen*. Two loops each deciding
 their own order is exactly how that promise rots — the plan/run divergence on
-``already-satisfied`` (issue #404) started the same way — so both now iterate the
+``already-satisfied`` started the same way — so both now iterate the
 single sequence ``_ordered_pass`` returns, and this test holds them to it with a
 fixture that exercises every ordering input at once.
 """

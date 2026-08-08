@@ -531,6 +531,32 @@ def test_invocation_order_follows_deadline_pressure(tmp_path):
     assert calls == ["morning", "afternoon"]
 
 
+def test_a_pipeline_set_is_the_outer_boundary_and_never_reordered(tmp_path):
+    """Deadline pressure orders work *within* a set; it cannot cross sets.
+
+    The second set's item is overdue and the first set's has no deadline at all,
+    so a single pooled ordering would seat it first. Sets run in declared order.
+    """
+    calls: list[str] = []
+    orchestrator = Orchestrator(
+        (
+            PipelineSet("first", (ScheduledPipeline("pipelines/relaxed", Weekdays()),)),
+            PipelineSet(
+                "second",
+                (ScheduledPipeline("pipelines/overdue", Weekdays(), deadline="06:00"),),
+            ),
+        ),
+        WorkingDayCalendar(),
+        invoker=_FakeInvoker(calls),
+    )
+
+    orchestrator.run_due_once(
+        tmp_path, run_date=dt.date(2026, 6, 12), now=dt.time(9, 0)
+    )
+
+    assert calls == ["relaxed", "overdue"]
+
+
 def test_an_upstream_runs_before_a_downstream_that_carries_a_tighter_deadline(tmp_path):
     calls: list[str] = []
     orchestrator = Orchestrator(

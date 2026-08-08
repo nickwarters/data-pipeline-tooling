@@ -26,8 +26,7 @@ push its deadline onto an upstream.
 
 Ordering is a question about *now*, and the answer changes between two passes of
 the same day: an item is more urgent at 08:55 than it was at 06:00, and a
-deadline that has already passed stops exerting pressure the moment the item
-succeeds. A declared order cannot express that, and a stored one would be a
+deadline stops exerting pressure the moment the item succeeds. A declared order cannot express that, and a stored one would be a
 second source of truth to keep in step with the schedules. Deriving it costs
 nothing — the pass already reads the schedules and the run registry — and it is a
 pure function, so it can be tested without a clock, a store, or a pipeline.
@@ -35,8 +34,8 @@ pure function, so it can be tested without a clock, a store, or a pipeline.
 Time inputs must not become a second runnability predicate. Freshness
 (`framework/run/freshness.py`) is the sole answer to "may this run at all";
 ordering only chooses the sequence in which runnable items are attempted. That
-separation is why the derivation reads run history for *overdue-ness only* — "has
-it run today" decides whether a passed deadline still applies, and never whether
+separation is why the derivation reads run history for *deadline pressure only* —
+"has it run today" decides whether a deadline still applies, and never whether
 the item executes.
 
 And dependency dominance has to be a selection rather than a sort, because

@@ -422,8 +422,8 @@ which items already succeeded today. The whole rule, in order:
    `claims_ingest` above is run in time for `claims_selection`. Only items due
    today contribute.
 3. **Deadline pressure.** Overdue items first, most overdue first; then items
-   with a deadline still ahead, soonest first; then everything else. A deadline
-   that has passed on an item which already succeeded today stops pressing.
+   with a deadline still ahead, soonest first; then everything else. An item
+   that already succeeded today exerts no deadline pressure at all.
 4. **`priority`**, higher first, breaking a tie between equal deadlines.
 5. **Declared order**, breaking everything else. A set declaring none of these
    fields therefore keeps exactly its existing order.
