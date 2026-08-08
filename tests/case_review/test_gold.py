@@ -1,6 +1,5 @@
 import pandas as pd
 
-from case_review.case_type import CaseType
 from case_review.gold import ingest_silver_to_gold
 from framework._internal.identity import sha256_json
 from framework.core.dataset import Dataset
@@ -9,9 +8,11 @@ from tests._schema_fixtures import LandedCase
 from tools.medallion import Medallion, medallion
 from tools.store import StoreRegistry
 
-# The Case Type owns identity: its name is the namespace and case_ref the
-# natural key, which is the whole of what a case_id is minted from.
-_CASES = CaseType(name="cases", schema=LandedCase, natural_key=("case_ref",))
+# The feed declares the whole identity contract explicitly: namespace, natural
+# key, and schema are the inputs from which gold mints a case_id.
+_NAMESPACE = "cases"
+_NATURAL_KEY = ("case_ref",)
+_SCHEMA = LandedCase
 
 
 def _land_silver(
@@ -41,7 +42,7 @@ def test_ingest_silver_to_gold_reduces_to_one_row_per_case(tmp_path):
         strategy=AccumulateByRun("2026-05-29", "2026-05-29"),
     )
 
-    ingest_silver_to_gold(med, _CASES.name, _CASES.natural_key, _CASES.schema).run()
+    ingest_silver_to_gold(med, _NAMESPACE, _NATURAL_KEY, _SCHEMA).run()
 
     landed = med.gold.reader("cases").read().to_pandas()
     assert len(landed) == 2
@@ -66,7 +67,7 @@ def test_ingest_silver_to_gold_keeps_latest_version_of_a_changed_case(tmp_path):
         strategy=AccumulateByRun("2026-05-30", "2026-05-30"),
     )
 
-    ingest_silver_to_gold(med, _CASES.name, _CASES.natural_key, _CASES.schema).run()
+    ingest_silver_to_gold(med, _NAMESPACE, _NATURAL_KEY, _SCHEMA).run()
 
     silver = med.silver.reader("cases").read().to_pandas()
     gold = med.gold.reader("cases").read().to_pandas()
@@ -86,8 +87,8 @@ def test_ingest_silver_to_gold_idempotent_re_run_leaves_gold_unchanged(tmp_path)
         strategy=AccumulateByRun("2026-05-29", "2026-05-29"),
     )
 
-    ingest_silver_to_gold(med, _CASES.name, _CASES.natural_key, _CASES.schema).run()
-    ingest_silver_to_gold(med, _CASES.name, _CASES.natural_key, _CASES.schema).run()
+    ingest_silver_to_gold(med, _NAMESPACE, _NATURAL_KEY, _SCHEMA).run()
+    ingest_silver_to_gold(med, _NAMESPACE, _NATURAL_KEY, _SCHEMA).run()
 
     gold = med.gold.reader("cases").read().to_pandas()
     assert len(gold) == 1
@@ -104,7 +105,7 @@ def test_ingest_silver_to_gold_new_snapshot_updates_gold_to_current(tmp_path):
         pd.DataFrame({"case_ref": ["c1"], "score": [10], "load_date": ["2026-05-29"]}),
         strategy=AccumulateByRun("2026-05-29", "2026-05-29"),
     )
-    ingest_silver_to_gold(med, _CASES.name, _CASES.natural_key, _CASES.schema).run()
+    ingest_silver_to_gold(med, _NAMESPACE, _NATURAL_KEY, _SCHEMA).run()
     assert med.gold.reader("cases").read().to_pandas()["score"].iloc[0] == 10
 
     _land_silver(
@@ -113,7 +114,7 @@ def test_ingest_silver_to_gold_new_snapshot_updates_gold_to_current(tmp_path):
         pd.DataFrame({"case_ref": ["c1"], "score": [42], "load_date": ["2026-05-30"]}),
         strategy=AccumulateByRun("2026-05-30", "2026-05-30"),
     )
-    ingest_silver_to_gold(med, _CASES.name, _CASES.natural_key, _CASES.schema).run()
+    ingest_silver_to_gold(med, _NAMESPACE, _NATURAL_KEY, _SCHEMA).run()
 
     gold = med.gold.reader("cases").read().to_pandas()
     assert len(gold) == 1
@@ -131,10 +132,10 @@ def test_ingest_silver_to_gold_deterministic_case_id(tmp_path):
         strategy=AccumulateByRun("2026-05-29", "2026-05-29"),
     )
 
-    ingest_silver_to_gold(med, _CASES.name, _CASES.natural_key, _CASES.schema).run()
+    ingest_silver_to_gold(med, _NAMESPACE, _NATURAL_KEY, _SCHEMA).run()
     first_id = med.gold.reader("cases").read().to_pandas()["case_id"].iloc[0]
 
-    ingest_silver_to_gold(med, _CASES.name, _CASES.natural_key, _CASES.schema).run()
+    ingest_silver_to_gold(med, _NAMESPACE, _NATURAL_KEY, _SCHEMA).run()
     second_id = med.gold.reader("cases").read().to_pandas()["case_id"].iloc[0]
 
     assert first_id == second_id

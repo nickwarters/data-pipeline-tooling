@@ -3,7 +3,7 @@ from datetime import date
 import pandas as pd
 
 from case_review.case_pool import CasePool
-from case_review.case_type import CaseType, Variation
+from case_review.variation import Variation, variation_by_id
 from framework.core.dataset import Dataset
 from framework.io.readers import DatasetReader
 from framework.io.strategy import AccumulateByRun, Refresh
@@ -14,17 +14,12 @@ from tools.calendar import WorkingDayCalendar
 from tools.medallion import medallion
 from tools.store import StoreRegistry
 
-
-def _case_type() -> CaseType:
-    return CaseType(
-        name="cases",
-        schema=ActivityCase,
-        natural_key=("case_ref",),
-        variations=(
-            Variation(id="v1", question_bank_id="qb-100"),
-            Variation(id="v2", question_bank_id="qb-200"),
-        ),
-    )
+_NAMESPACE = "cases"
+_SCHEMA = ActivityCase
+_VARIATIONS = (
+    Variation(id="v1", question_bank_id="qb-100"),
+    Variation(id="v2", question_bank_id="qb-200"),
+)
 
 
 def _land_gold_cases(gold, frame: pd.DataFrame) -> None:
@@ -57,9 +52,8 @@ def test_selection_narrows_the_casepool_into_a_stamped_selection_pool(tmp_path):
             }
         ),
     )
-    case_type = _case_type()
-    pool = CasePool(case_type.name, case_type.schema, gold, WorkingDayCalendar())
-    variation = case_type.variation("v2")
+    pool = CasePool(_NAMESPACE, _SCHEMA, gold, WorkingDayCalendar())
+    variation = variation_by_id(_VARIATIONS, "v2")
 
     available = pool.fetch_available_cases(
         as_of=date(2026, 5, 29),

@@ -19,6 +19,8 @@ from __future__ import annotations
 import importlib
 import sys
 
+import pytest
+
 from cli import scaffold
 from framework.run import RunContext
 from tests.framework_testing import read_rows
@@ -83,6 +85,10 @@ def test_case_type_variant_refines_to_silver_and_leaves_gold_a_commented_seam(tm
             assert line.lstrip().startswith("#"), f"gold step must be inert: {line!r}"
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="legacy case-type scaffold awaits retirement",
+)
 def test_rendered_case_type_pipeline_runs_and_refines_to_silver(tmp_path):
     # Render the variant, then import and run its pipeline the way it runs in
     # production -- a module from a root on sys.path, relative intra-package

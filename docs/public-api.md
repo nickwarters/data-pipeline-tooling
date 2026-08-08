@@ -293,10 +293,11 @@ stable, but it carries no runtime role.
 
 ## The case-review application layer is separate
 
-`case_review` (`CaseType`, `Variation`, `CasePool`, `ingest_silver_to_gold`, …)
-is the application/domain layer that sits **on top of** the framework, not part
-of its public API. New case-review concepts belong in `case_review` (or pipeline
-support modules), not under `framework/` — see
+`case_review` (`case_review.variation.Variation`, `variation_by_id`, `CasePool`,
+`ingest_silver_to_gold`, …) is the application/domain layer that sits **on top
+of** the framework, not part of its public API. Case Type identity is explicit
+feed module data rather than a `CaseType` wrapper. New case-review concepts
+belong in `case_review` (or pipeline support modules), not under `framework/` — see
 [`test_framework_boundary.py`](../tests/integration/test_framework_boundary.py) and
 [selection.md](selection.md).
 
