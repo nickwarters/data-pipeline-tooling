@@ -34,6 +34,7 @@ import datetime as dt
 
 __all__ = [
     "local_date",
+    "local_now",
     "local_timezone",
     "parse_timestamp",
     "start_of_local_day",
@@ -55,6 +56,17 @@ def local_timezone() -> dt.tzinfo | None:
     the one in force right now.
     """
     return None
+
+
+def local_now() -> dt.datetime:
+    """The current local wall clock, read through the same zone seam as the dates.
+
+    "Is it past 09:00 yet?" is a local wall-clock question, so it belongs to the
+    local half of the rule stated above rather than to the UTC instant half. It
+    lives here so nothing elsewhere spells its own ``datetime.now(...)`` and
+    quietly answers it in a different zone.
+    """
+    return dt.datetime.now(local_timezone())
 
 
 def parse_timestamp(value: str) -> dt.datetime:

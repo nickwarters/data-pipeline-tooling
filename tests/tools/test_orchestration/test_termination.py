@@ -170,6 +170,42 @@ def test_a_loop_stops_as_soon_as_every_due_item_has_settled(tmp_path):
     assert statuses == {"ingest": ("succeeded", True), "manual": ("skipped", False)}
 
 
+def test_a_pass_whose_only_due_item_is_gated_still_settles(tmp_path, monkeypatch):
+    # earliest_run is an eligibility gate, never a sleep: the gated item records
+    # a terminal skipped, so the day's work settles and the loop stops rather
+    # than polling until the window opens. The clock is substituted rather than
+    # frozen by an argument, because each pass must re-read it.
+    import tools.orchestration as orchestration
+
+    monkeypatch.setattr(
+        orchestration,
+        "local_now",
+        lambda: dt.datetime.combine(RUN_DATE, dt.time(9, 0)),
+    )
+    orchestrator = Orchestrator(
+        (
+            PipelineSet(
+                "cases",
+                (
+                    ScheduledPipeline(
+                        "pipelines/nightly", Weekdays(), earliest_run="23:00"
+                    ),
+                ),
+            ),
+        ),
+        WorkingDayCalendar(),
+        invoker=_NoopInvoker(),
+    )
+
+    results = orchestrator.run_until_complete(
+        tmp_path, run_date=RUN_DATE, poll_seconds=0, max_idle_polls=3
+    )
+
+    assert len(results) == 1
+    decision = results[0].decisions[0]
+    assert (decision.status, decision.was_due) == ("skipped", True)
+
+
 def test_the_decision_store_records_whether_an_item_was_due(tmp_path):
     from tools.orchestration import OrchestrationStore
 

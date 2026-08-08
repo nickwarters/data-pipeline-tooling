@@ -18,6 +18,7 @@ import pytest
 from tools.observability import timestamps
 from tools.observability.timestamps import (
     local_date,
+    local_now,
     parse_timestamp,
     start_of_local_day,
     utc_now_iso,
@@ -56,6 +57,23 @@ def test_local_date_of_a_late_evening_utc_stamp_is_the_next_day(uk_summer):
 
 def test_local_date_of_a_daytime_stamp_is_unchanged(uk_summer):
     assert local_date("2026-07-27T09:00:00+00:00") == dt.date(2026, 7, 27)
+
+
+def test_local_now_reads_the_wall_clock_through_the_zone_seam(uk_summer):
+    # The wall clock a time-of-day comparison asks about, in the same zone the
+    # calendar dates use — not the box's, and not UTC.
+    now = local_now()
+
+    assert now.utcoffset() == dt.timedelta(hours=1)
+    assert now.hour == dt.datetime.now(dt.timezone.utc).astimezone(BST).hour
+
+
+def test_local_now_agrees_with_the_utc_instant_it_is_derived_from():
+    before = parse_timestamp(utc_now_iso())
+    sampled = local_now().astimezone(dt.timezone.utc)
+    after = parse_timestamp(utc_now_iso())
+
+    assert before <= sampled <= after
 
 
 def test_start_of_local_day_is_local_midnight_expressed_as_utc(uk_summer):

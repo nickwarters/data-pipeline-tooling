@@ -4,7 +4,7 @@ import datetime as dt
 import json
 from pathlib import Path
 
-from framework.run import Requirement, RunAddress
+from framework.run import FreshnessRequirement, Requirement, RunAddress
 from tools.calendar import WorkingDayCalendar
 from tools.observability import timestamps
 from tools.orchestration import (
@@ -297,6 +297,86 @@ def test_plan_result_str_empty():
     output = str(result)
     assert "no scheduled items" in output
     assert _DUE_DATE.isoformat() in output
+
+
+# ── the plan's row order is the order the pass would attempt ──────────────────
+
+
+def test_plan_rows_are_ordered_by_deadline_pressure(tmp_path):
+    orchestrator, _ = _orchestrator(
+        PipelineSet(
+            "claims",
+            (
+                ScheduledPipeline("pipelines/afternoon", Weekdays(), due_time="16:00"),
+                ScheduledPipeline("pipelines/overdue", Weekdays(), due_time="08:00"),
+                ScheduledPipeline("pipelines/no_deadline", Weekdays()),
+            ),
+        ),
+    )
+
+    result = orchestrator.plan(tmp_path, run_date=_DUE_DATE, now=dt.time(9, 0))
+
+    assert [item.pipeline for item in result.items] == [
+        "overdue",
+        "afternoon",
+        "no_deadline",
+    ]
+
+
+def test_plan_names_the_deadline_and_whether_it_has_passed(tmp_path):
+    orchestrator, _ = _orchestrator(
+        PipelineSet(
+            "claims",
+            (ScheduledPipeline("pipelines/ingest", Weekdays(), due_time="08:00"),),
+        ),
+    )
+
+    item = orchestrator.plan(tmp_path, run_date=_DUE_DATE, now=dt.time(9, 0)).items[0]
+
+    assert item.status == "ready"
+    assert "overdue since 08:00" in item.reason
+
+
+def test_plan_names_where_an_inherited_deadline_came_from(tmp_path):
+    orchestrator, _ = _orchestrator(
+        PipelineSet(
+            "claims",
+            (
+                ScheduledPipeline("pipelines/ingest", Weekdays()),
+                ScheduledPipeline(
+                    "pipelines/reporting",
+                    Weekdays(),
+                    depends_on=(FreshnessRequirement("ingest"),),
+                    due_time="09:00",
+                ),
+            ),
+        ),
+    )
+
+    items = {
+        item.pipeline: item
+        for item in orchestrator.plan(
+            tmp_path, run_date=_DUE_DATE, now=dt.time(7, 0)
+        ).items
+    }
+
+    assert "due by 09:00 (inherited from reporting)" in items["ingest"].reason
+    assert "inherited" not in items["reporting"].reason
+
+
+def test_plan_reports_a_gated_item_as_skipped_naming_the_window(tmp_path):
+    orchestrator, calls = _orchestrator(
+        PipelineSet(
+            "claims",
+            (ScheduledPipeline("pipelines/nightly", Weekdays(), earliest_run="23:00"),),
+        ),
+    )
+
+    item = orchestrator.plan(tmp_path, run_date=_DUE_DATE, now=dt.time(9, 0)).items[0]
+
+    assert calls == []
+    assert item.status == "skipped"
+    assert item.reason == "before earliest_run 23:00"
 
 
 # ── the plan preview reads the same clock rule the runner does ────────────────

@@ -404,9 +404,11 @@ pipelines:
     )
     result = orchestrator.run_due_once(tmp_path, run_date=dt.date(2026, 6, 12))
 
-    assert [decision.status for decision in result.decisions] == [
-        "skipped",
-        "succeeded",
+    # The disabled item is not due work, so it is decided after the due one —
+    # ordering seats work that is going to run ahead of work that is not.
+    assert [(d.pipeline, d.status) for d in result.decisions] == [
+        ("selection", "succeeded"),
+        ("ingest", "skipped"),
     ]
     assert calls == ["selection"]
 
@@ -497,6 +499,148 @@ pipelines:
         Orchestrator.from_yaml(
             sets, WorkingDayCalendar(), overrides, invoker=_FakeInvoker([])
         )
+
+
+# ── ordering decides the sequence, never the runnability ──────────────────────
+
+
+def test_invocation_order_follows_deadline_pressure(tmp_path):
+    calls: list[str] = []
+    orchestrator = Orchestrator(
+        (
+            PipelineSet(
+                "cases",
+                (
+                    ScheduledPipeline(
+                        "pipelines/afternoon", Weekdays(), deadline="16:00"
+                    ),
+                    ScheduledPipeline(
+                        "pipelines/morning", Weekdays(), due_time="09:00"
+                    ),
+                ),
+            ),
+        ),
+        WorkingDayCalendar(),
+        invoker=_FakeInvoker(calls),
+    )
+
+    orchestrator.run_due_once(
+        tmp_path, run_date=dt.date(2026, 6, 12), now=dt.time(7, 0)
+    )
+
+    assert calls == ["morning", "afternoon"]
+
+
+def test_an_upstream_runs_before_a_downstream_that_carries_a_tighter_deadline(tmp_path):
+    calls: list[str] = []
+    orchestrator = Orchestrator(
+        (
+            PipelineSet(
+                "cases",
+                (
+                    ScheduledPipeline(
+                        "pipelines/selection",
+                        Weekdays(),
+                        depends_on=(FreshnessRequirement("ingest"),),
+                        due_time="09:00",
+                        priority=9,
+                    ),
+                    ScheduledPipeline("pipelines/ingest", Weekdays()),
+                ),
+            ),
+        ),
+        WorkingDayCalendar(),
+        invoker=_FakeInvoker(calls),
+    )
+
+    result = orchestrator.run_due_once(
+        tmp_path, run_date=dt.date(2026, 6, 12), now=dt.time(7, 0)
+    )
+
+    assert calls == ["ingest", "selection"]
+    assert [d.status for d in result.decisions] == ["succeeded", "succeeded"]
+
+
+def test_a_gated_item_is_skipped_with_its_window_and_never_invoked(tmp_path):
+    calls: list[str] = []
+    orchestrator = Orchestrator(
+        (
+            PipelineSet(
+                "cases",
+                (
+                    ScheduledPipeline(
+                        "pipelines/nightly", Weekdays(), earliest_run="23:00"
+                    ),
+                ),
+            ),
+        ),
+        WorkingDayCalendar(),
+        invoker=_FakeInvoker(calls),
+    )
+
+    result = orchestrator.run_due_once(
+        tmp_path, run_date=dt.date(2026, 6, 12), now=dt.time(9, 0)
+    )
+
+    assert calls == []
+    assert result.decisions[0].status == "skipped"
+    assert result.decisions[0].reason == "before earliest_run 23:00"
+    # Still due work for the day, so the loop keeps its promise about settling.
+    assert result.decisions[0].was_due is True
+
+
+def test_the_dependent_of_a_gated_upstream_is_blocked_by_freshness_not_by_the_gate(
+    tmp_path,
+):
+    """The gate orders; freshness decides. The two must not be confused.
+
+    ``earliest_run`` holds its own item back for the pass. Its dependent is
+    still evaluated, and what stops it is the ordinary freshness rule finding no
+    same-day upstream success — the same verdict it would reach if the upstream
+    had simply not run yet.
+    """
+    calls: list[str] = []
+    # Yesterday's success, so the same-day requirement has history to judge and
+    # finds it stale rather than falling through its first-run allowance.
+    _record_run(
+        tmp_path / "_runs" / "ingest.log",
+        pipeline="ingest",
+        timestamp="2026-06-11T09:00:00+00:00",
+    )
+    orchestrator = Orchestrator(
+        (
+            PipelineSet(
+                "cases",
+                (
+                    ScheduledPipeline(
+                        "pipelines/ingest", Weekdays(), earliest_run="23:00"
+                    ),
+                    ScheduledPipeline(
+                        "pipelines/selection",
+                        Weekdays(),
+                        depends_on=(
+                            Requirement.succeeded(
+                                RunAddress.for_pipeline("ingest")
+                            ).same_day(),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+        WorkingDayCalendar(),
+        invoker=_FakeInvoker(calls),
+    )
+
+    result = orchestrator.run_due_once(
+        tmp_path, run_date=dt.date(2026, 6, 12), now=dt.time(9, 0)
+    )
+
+    assert calls == []
+    statuses = {d.pipeline: d.status for d in result.decisions}
+    assert statuses == {"ingest": "skipped", "selection": "blocked"}
+    assert (
+        "ingest" in dict((d.pipeline, d.reason) for d in result.decisions)["selection"]
+    )
 
 
 def test_orchestration_store_records_decisions_separately(tmp_path):

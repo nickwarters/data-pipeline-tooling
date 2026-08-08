@@ -34,7 +34,7 @@ from tools.observability.record_schema import (
     select_columns,
 )
 from tools.observability.run_store import RunStore
-from tools.observability.timestamps import utc_now_iso
+from tools.observability.timestamps import local_now, utc_now_iso
 
 _WEEKDAY_NAMES = [
     "monday",
@@ -349,6 +349,26 @@ def _weekday_ordinal(name: str) -> int:
         ) from None
 
 
+def _time_of_day(value: object, field: str) -> dt.time | None:
+    """Parse a zero-padded 24-hour ``"HH:MM"`` time of day; ``None`` passes through.
+
+    An already-parsed :class:`datetime.time` is returned unchanged, so a value
+    that has been through here once round-trips (``dataclasses.replace`` re-runs
+    the constructor). The format is exact rather than lenient: ``strptime``
+    alone would read ``"9:5"`` as 09:05, and an ordering input silently read as
+    the wrong minute is worse than one that refuses to start.
+    """
+    if value is None or isinstance(value, dt.time):
+        return value
+    message = f'{field} must be a zero-padded 24-hour "HH:MM" time, got {value!r}'
+    if not isinstance(value, str) or len(value) != 5 or value[2] != ":":
+        raise ValueError(message)
+    try:
+        return dt.datetime.strptime(value, "%H:%M").time()
+    except (TypeError, ValueError):
+        raise ValueError(message) from None
+
+
 @dataclass(frozen=True)
 class Weekdays(Schedule):
     """Run on working days according to the supplied calendar."""
@@ -491,12 +511,20 @@ class ScheduledPipeline:
     address the operator CLI's ``run`` command uses. Its leaf is the run-history
     label the pipeline records under, exposed as :attr:`name`, so ``depends_on``
     requirements target upstreams by that same leaf name.
+
+    ``due_time``, ``earliest_run`` and ``priority`` are the ordering inputs. They
+    influence only the *sequence* runnable items are attempted in within the set,
+    never whether an item may run — that stays the freshness rule's question
+    alone. All three are stored parsed, so nothing downstream re-parses them.
     """
 
     path: str
     schedule: Schedule
     depends_on: tuple[RunRequirement, ...] = ()
     enabled: bool = True
+    due_time: dt.time | None = None
+    earliest_run: dt.time | None = None
+    priority: int = 0
 
     def __init__(
         self,
@@ -504,11 +532,32 @@ class ScheduledPipeline:
         schedule: Schedule,
         depends_on: Iterable[RunRequirement] = (),
         enabled: bool = True,
+        due_time: str | dt.time | None = None,
+        earliest_run: str | dt.time | None = None,
+        priority: int = 0,
+        deadline: str | dt.time | None = None,
     ) -> None:
+        if deadline is not None:
+            if due_time is not None:
+                raise ValueError(
+                    "ScheduledPipeline takes due_time or deadline, not both; "
+                    "they name the same field"
+                )
+            due_time = deadline
+        # A bool is an int subclass, and True as a priority is a mistake rather
+        # than the number 1. Coercion is refused for the same reason: int("3")
+        # would pass and int(3.7) would truncate.
+        if isinstance(priority, bool) or not isinstance(priority, int):
+            raise ValueError(f"priority must be an int, got {priority!r}")
         object.__setattr__(self, "path", path)
         object.__setattr__(self, "schedule", schedule)
         object.__setattr__(self, "depends_on", tuple(depends_on))
         object.__setattr__(self, "enabled", enabled)
+        object.__setattr__(self, "due_time", _time_of_day(due_time, "due_time"))
+        object.__setattr__(
+            self, "earliest_run", _time_of_day(earliest_run, "earliest_run")
+        )
+        object.__setattr__(self, "priority", priority)
 
     @property
     def name(self) -> str:
@@ -526,6 +575,182 @@ class PipelineSet:
     def __init__(self, name: str, pipelines: Iterable[ScheduledPipeline]) -> None:
         object.__setattr__(self, "name", name)
         object.__setattr__(self, "pipelines", tuple(pipelines))
+
+
+@dataclass(frozen=True)
+class RunCandidate:
+    """One scheduled item as the ordering sees it, with the facts already gathered.
+
+    Everything the ordering needs is supplied by the caller, so the derivation
+    itself reads no clock, no calendar and no store. ``enabled`` and
+    ``due_today`` are carried separately because the presentation sites must be
+    able to tell a *disabled* item from a merely *not due* one.
+    """
+
+    set_name: str
+    item: ScheduledPipeline
+    enabled: bool
+    due_today: bool
+    ran_today: bool
+
+
+@dataclass(frozen=True)
+class OrderedItem:
+    """A candidate in its derived run position, with the reasoning behind it."""
+
+    candidate: RunCandidate
+    #: The deadline in force, after inheriting from dependents.
+    due_time: dt.time | None
+    #: The dependent whose deadline was inherited; ``None`` if the item's own won.
+    inherited_from: str | None
+    overdue: bool
+    #: ``False`` only when ``earliest_run`` gates the item for this pass.
+    eligible: bool
+
+
+def order_run_candidates(
+    candidates: Iterable[RunCandidate], *, now: dt.time
+) -> tuple[OrderedItem, ...]:
+    """Derive the order one set's candidates should be attempted in, this pass.
+
+    A pure function of the candidates and the wall-clock time of day: ``now`` is
+    a :class:`datetime.time` deliberately, so no timezone or daylight-saving
+    arithmetic can happen in here. The calendar-date half of the question is
+    already answered by each candidate's ``ran_today``.
+
+    Deadline pressure orders the work, but dependency order dominates it, so the
+    sort is followed by a topological selection that never emits a dependent
+    before an in-pool upstream that is also due.
+    """
+    pool = tuple(candidates)
+    deadlines = _effective_deadlines(pool)
+    ordered = []
+    for candidate, (due_time, inherited_from) in zip(pool, deadlines):
+        overdue = (
+            candidate.due_today
+            and due_time is not None
+            and now >= due_time
+            and not candidate.ran_today
+        )
+        earliest = candidate.item.earliest_run
+        ordered.append(
+            OrderedItem(
+                candidate=candidate,
+                due_time=due_time,
+                inherited_from=inherited_from,
+                overdue=overdue,
+                eligible=earliest is None or now >= earliest,
+            )
+        )
+    by_pressure = sorted(ordered, key=lambda item: _order_key(item, now))
+    return _dependencies_first(by_pressure)
+
+
+def _effective_deadlines(
+    pool: tuple[RunCandidate, ...],
+) -> list[tuple[dt.time | None, str | None]]:
+    """Each candidate's deadline once inherited from its dependents, transitively.
+
+    An upstream with no deadline of its own answers to the tightest deadline of
+    whatever depends on it — otherwise the item carrying the deadline would be
+    ordered first and then blocked waiting for an unhurried upstream. Only items
+    that are due today contribute an edge: a disabled or not-due dependent is not
+    running, so its deadline must not press on anything.
+    """
+    positions: dict[str, list[int]] = {}
+    for index, candidate in enumerate(pool):
+        positions.setdefault(candidate.item.name, []).append(index)
+    dependents: list[list[int]] = [[] for _ in pool]
+    for index, candidate in enumerate(pool):
+        if not candidate.due_today:
+            continue
+        for dependency in candidate.item.depends_on:
+            key = _dependency_pipeline_key(dependency)
+            for upstream in positions.get(key, ()):
+                dependents[upstream].append(index)
+
+    resolved: dict[int, tuple[dt.time | None, str | None]] = {}
+    in_progress: set[int] = set()
+
+    def effective(index: int) -> tuple[dt.time | None, str | None]:
+        if index in resolved:
+            return resolved[index]
+        if index in in_progress:
+            # A back edge contributes nothing rather than recursing: depends_on
+            # is not cycle-checked anywhere, and a hang here would be worse than
+            # an odd order.
+            return (None, None)
+        in_progress.add(index)
+        best = pool[index].item.due_time
+        source: str | None = None
+        for dependent in dependents[index]:
+            inherited, _ = effective(dependent)
+            if inherited is not None and (best is None or inherited < best):
+                best = inherited
+                source = pool[dependent].item.name
+        in_progress.discard(index)
+        resolved[index] = (best, source)
+        return resolved[index]
+
+    return [effective(index) for index in range(len(pool))]
+
+
+def _minutes(value: dt.time) -> int:
+    return value.hour * 60 + value.minute
+
+
+def _order_key(ordered: OrderedItem, now: dt.time) -> tuple[int, int, int]:
+    """The sort key: deadline pressure first, then priority, then declared order.
+
+    The middle element of the deadline group is *signed* minutes remaining, so
+    every overdue item sorts ahead of every non-overdue one, most overdue first,
+    and the rest sort soonest-first — one continuous key rather than a special
+    case for lateness. Items that are not due today are keyed identically so the
+    stable sort leaves them in declared order: letting ``priority`` reorder work
+    that is not going to run would silently shuffle the plan's table.
+    """
+    candidate = ordered.candidate
+    if not candidate.due_today:
+        return (2, 0, 0)
+    rank = -candidate.item.priority
+    if ordered.due_time is None:
+        return (1, 0, rank)
+    # A deadline that has passed on an item which already succeeded today exerts
+    # no further pressure.
+    if now >= ordered.due_time and candidate.ran_today:
+        return (1, 0, rank)
+    return (0, _minutes(ordered.due_time) - _minutes(now), rank)
+
+
+def _dependencies_first(ordered: list[OrderedItem]) -> tuple[OrderedItem, ...]:
+    """Re-seat the key order so no dependent precedes an in-pool due upstream.
+
+    Inheritance gives an upstream its dependent's deadline, so the two arrive
+    here with the same pressure and the dependent's ``priority`` could otherwise
+    put it first — where it would come straight back as ``blocked``. Items that
+    are not due today are not blockers. A dependency cycle cannot be ordered, so
+    the remainder is flushed in key order rather than looped over.
+    """
+    due_names = {
+        item.candidate.item.name for item in ordered if item.candidate.due_today
+    }
+    remaining = list(ordered)
+    emitted: set[str] = set()
+    result: list[OrderedItem] = []
+    while remaining:
+        for index, item in enumerate(remaining):
+            upstreams = {
+                _dependency_pipeline_key(dependency)
+                for dependency in item.candidate.item.depends_on
+            } & due_names
+            if upstreams <= emitted:
+                result.append(remaining.pop(index))
+                emitted.add(item.candidate.item.name)
+                break
+        else:
+            result.extend(remaining)
+            break
+    return tuple(result)
 
 
 @dataclass(frozen=True)
@@ -782,34 +1007,36 @@ class Orchestrator:
         *,
         run_date: dt.date | None = None,
         orchestration_run_id: str | None = None,
+        now: dt.time | None = None,
     ) -> OrchestrationPassResult:
         root = Path(base_dir)
         day = run_date or dt.date.today()
+        moment = now if now is not None else local_now().time()
         pass_run_id = orchestration_run_id or uuid.uuid4().hex
         store = OrchestrationStore(RunStore(root).orchestration_path)
         decisions: list[OrchestrationDecision] = []
         terminal: dict[str, str] = {}
 
-        for pipeline_set in self._sets:
-            set_failed: set[str] = set()
-            for scheduled in pipeline_set.pipelines:
-                item = self._apply_override(pipeline_set.name, scheduled)
-                decision = self._decide_item(
-                    root,
-                    day,
-                    pass_run_id,
-                    pipeline_set.name,
-                    item,
-                    terminal,
-                    set_failed,
-                )
-                decisions.append(decision)
-                store.record(decision)
-                if decision.status == "failed":
-                    terminal[item.name] = "failed"
-                    set_failed.add(item.name)
-                elif decision.status in {"succeeded", "blocked"}:
-                    terminal[item.name] = decision.status
+        run_registry = RunStore(root).catch_up()
+        set_failed: dict[str, set[str]] = {}
+        for ordered in self._ordered_pass(run_registry, day, moment):
+            item = ordered.candidate.item
+            failed_in_set = set_failed.setdefault(ordered.candidate.set_name, set())
+            decision = self._decide_item(
+                root,
+                day,
+                pass_run_id,
+                ordered,
+                terminal,
+                failed_in_set,
+            )
+            decisions.append(decision)
+            store.record(decision)
+            if decision.status == "failed":
+                terminal[item.name] = "failed"
+                failed_in_set.add(item.name)
+            elif decision.status in {"succeeded", "blocked"}:
+                terminal[item.name] = decision.status
 
         return OrchestrationPassResult(pass_run_id, tuple(decisions))
 
@@ -845,6 +1072,7 @@ class Orchestrator:
         base_dir: str | Path,
         *,
         run_date: dt.date | None = None,
+        now: dt.time | None = None,
     ) -> PlanResult:
         """Return a read-only projection of what would run, be skipped, or be blocked.
 
@@ -854,33 +1082,73 @@ class Orchestrator:
         ``ScheduledPipeline`` in order:
 
         * ``disabled`` — item has ``enabled=False``
-        * ``skipped`` — schedule is not due on ``run_date``
+        * ``skipped`` — schedule is not due on ``run_date``, or ``earliest_run``
+          gates it for this pass
         * ``already-satisfied`` — pipeline already succeeded on ``run_date``
         * ``blocked`` — a declared freshness/requirement dependency is not met
         * ``ready`` — all checks pass
+
+        Items appear in the order the pass would attempt them, derived by
+        :func:`order_run_candidates` from the very same call the pass makes.
 
         The returned :class:`PlanResult` formats as an aligned table via
         ``str(result)``.
         """
         root = Path(base_dir)
         day = run_date or dt.date.today()
+        moment = now if now is not None else local_now().time()
 
         # Sweep the registry once before evaluating any item.
         run_registry = RunStore(root).catch_up()
 
-        items: list[PlanItem] = []
-        for pipeline_set in self._sets:
-            for scheduled in pipeline_set.pipelines:
-                item = self._apply_override(pipeline_set.name, scheduled)
-                plan_item = self._plan_item(pipeline_set.name, item, day, run_registry)
-                items.append(plan_item)
+        items = [
+            self._plan_item(ordered, day, run_registry)
+            for ordered in self._ordered_pass(run_registry, day, moment)
+        ]
 
         return PlanResult(run_date=day, items=tuple(items))
 
+    def _ordered_pass(
+        self,
+        run_registry: object,
+        run_date: dt.date,
+        now: dt.time,
+    ) -> tuple[OrderedItem, ...]:
+        """The item sequence for one pass — the only source either loop reads.
+
+        `PipelineSet`s stay the outer boundary, in declared order; ordering
+        happens strictly within each one. Gathering the facts here means the run
+        registry is read once per item and used twice: for whether a deadline
+        still bites, and for the plan's ``already-satisfied`` projection.
+        """
+        from framework.run.address import RunAddress
+
+        ordered: list[OrderedItem] = []
+        for pipeline_set in self._sets:
+            candidates: list[RunCandidate] = []
+            for scheduled in pipeline_set.pipelines:
+                item = self._apply_override(pipeline_set.name, scheduled)
+                enabled = item.enabled
+                candidates.append(
+                    RunCandidate(
+                        set_name=pipeline_set.name,
+                        item=item,
+                        enabled=enabled,
+                        due_today=(
+                            enabled and item.schedule.is_due(run_date, self._calendar)
+                        ),
+                        ran_today=run_registry.latest_success(
+                            RunAddress.for_pipeline(item.name), on=run_date
+                        )
+                        is not None,
+                    )
+                )
+            ordered.extend(order_run_candidates(candidates, now=now))
+        return tuple(ordered)
+
     def _plan_item(
         self,
-        set_name: str,
-        item: ScheduledPipeline,
+        ordered: OrderedItem,
         run_date: dt.date,
         run_registry: object,
     ) -> PlanItem:
@@ -888,7 +1156,11 @@ class Orchestrator:
 
         assert isinstance(run_registry, RunRegistry)
 
-        if not item.enabled:
+        candidate = ordered.candidate
+        set_name = candidate.set_name
+        item = candidate.item
+
+        if not candidate.enabled:
             return PlanItem(
                 run_date=run_date,
                 set_name=set_name,
@@ -897,7 +1169,7 @@ class Orchestrator:
                 reason="disabled",
             )
 
-        if not item.schedule.is_due(run_date, self._calendar):
+        if not candidate.due_today:
             return PlanItem(
                 run_date=run_date,
                 set_name=set_name,
@@ -906,11 +1178,16 @@ class Orchestrator:
                 reason=item.schedule.not_due_reason(run_date),
             )
 
-        # Check if it already succeeded today.
-        from framework.run.address import RunAddress
+        if not ordered.eligible:
+            return PlanItem(
+                run_date=run_date,
+                set_name=set_name,
+                pipeline=item.name,
+                status="skipped",
+                reason=_earliest_run_reason(item),
+            )
 
-        address = RunAddress.for_pipeline(item.name)
-        if run_registry.latest_success(address, on=run_date) is not None:
+        if candidate.ran_today:
             return PlanItem(
                 run_date=run_date,
                 set_name=set_name,
@@ -948,7 +1225,10 @@ class Orchestrator:
             set_name=set_name,
             pipeline=item.name,
             status="ready",
-            reason=f"schedule {item.schedule.schedule_label()} is due",
+            reason=(
+                f"schedule {item.schedule.schedule_label()} is due"
+                f"{_deadline_note(ordered)}"
+            ),
         )
 
     def _decide_item(
@@ -956,13 +1236,15 @@ class Orchestrator:
         base_dir: Path,
         run_date: dt.date,
         orchestration_run_id: str,
-        set_name: str,
-        item: ScheduledPipeline,
+        ordered: OrderedItem,
         terminal: dict[str, str],
         set_failed: set[str],
     ) -> OrchestrationDecision:
+        candidate = ordered.candidate
+        set_name = candidate.set_name
+        item = candidate.item
         key = _item_key(set_name, item, run_date)
-        if not item.enabled:
+        if not candidate.enabled:
             return _decision(
                 orchestration_run_id,
                 key,
@@ -973,7 +1255,7 @@ class Orchestrator:
                 "disabled",
                 was_due=False,
             )
-        if not item.schedule.is_due(run_date, self._calendar):
+        if not candidate.due_today:
             return _decision(
                 orchestration_run_id,
                 key,
@@ -983,6 +1265,19 @@ class Orchestrator:
                 "skipped",
                 item.schedule.not_due_reason(run_date),
                 was_due=False,
+            )
+        if not ordered.eligible:
+            # A terminal status, not a "come back later": the loop counts a pass
+            # idle by what ran, with no per-item already-ran guard, so a
+            # non-terminal one would re-invoke every due item on every poll.
+            return _decision(
+                orchestration_run_id,
+                key,
+                set_name,
+                item,
+                run_date,
+                "skipped",
+                _earliest_run_reason(item),
             )
         blocked_by = self._blocked_dependency(item, set_failed)
         if blocked_by is not None:
@@ -1220,6 +1515,28 @@ def _latest_pipeline_run_id(base_dir: Path, label: str) -> str | None:
     registry = RunStore(base_dir).registry()
     runs = registry.query_runs(pipeline=label)
     return runs[-1]["pipeline_run_id"] if runs else None
+
+
+def _earliest_run_reason(item: ScheduledPipeline) -> str:
+    """Why a gated item is being passed over, naming the window that gates it."""
+    earliest = item.earliest_run
+    return f"before earliest_run {earliest.strftime('%H:%M')}" if earliest else ""
+
+
+def _deadline_note(ordered: OrderedItem) -> str:
+    """The deadline clause appended to a ready item's reason, if it has one.
+
+    Deadline, overdue-ness and inheritance ride in the existing prose rather than
+    in new ``PlanItem`` fields: the reason is written for an operator, and the
+    order itself is already visible as the sequence of rows.
+    """
+    if ordered.due_time is None:
+        return ""
+    when = ordered.due_time.strftime("%H:%M")
+    note = f"overdue since {when}" if ordered.overdue else f"due by {when}"
+    if ordered.inherited_from is not None:
+        note += f" (inherited from {ordered.inherited_from})"
+    return f"; {note}"
 
 
 def _item_key(set_name: str, item: ScheduledPipeline, run_date: dt.date) -> str:
