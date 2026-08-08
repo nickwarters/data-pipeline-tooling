@@ -238,7 +238,9 @@ src/
     html.js                     # h()/svg() plain-function view primitives
     navigate.js                 # navigateTo/redirectTo: the only writers of location.hash (#519)
     people-search.js            # debounced, mount-lifetime-checked directory search shared by every
-                                #   people picker (was pages/cora-case-review/)
+                                #   people picker; reports every outcome (idle/loading/success/error)
+                                #   through one callback, and owns the PeopleSearchState shape
+                                #   every picker holds (was pages/cora-case-review/)
     question-order.js           # generic question/category ordering helpers (was question-bank/)
     response-options.js         # single source of truth for response options + the NA_VALUE literal (#391)
     route-error-panel.js        # shared route-failure panel, used by router.js and core/store-route.js (#437)
@@ -265,7 +267,8 @@ src/
 
   components/                   # reusable pure views, layered by dependency
     base/                       # leaf primitives — compose no other view
-      cora-people-picker.js        # pure People Picker renderer and search helpers
+      cora-people-picker.js        # pure People Picker renderer: the directory's matches plus a
+                                  #   status line; nothing else is ever selectable
       cora-group-progress.js      # pure per-Question-Group progress strip
       cora-status-banner.js       # the save-status surface (saving/reconnecting/conflict),
                                   #   rendered in the Case Review page chrome

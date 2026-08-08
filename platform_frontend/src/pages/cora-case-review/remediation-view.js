@@ -12,6 +12,7 @@ import { normaliseConfiguredActions } from '../../evaluators/configured-outcome.
 /** @typedef {import('../../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
 /** @typedef {{ loginName: string, displayName: string }} Party */
+/** @typedef {import('../../lib/people-search.js').PeopleSearchState} PeopleSearchState */
 
 /**
  * @typedef {object} RemediationSectionProps
@@ -20,10 +21,10 @@ import { normaliseConfiguredActions } from '../../evaluators/configured-outcome.
  * @property {Party | null} responsibleParty
  * @property {import('../../sharepoint-client.js').CaptureGroup[]} captureGroups
  * @property {Record<string, Map<string, boolean>>} captureCollapsed
- * @property {Record<string, Record<string, { query: string, people: import('../../sharepoint-client.js').PersonResult[] }>>} captureSearch
+ * @property {Record<string, Record<string, PeopleSearchState>>} captureSearch
  *   Per failed Answer, the open people search of each of its `person` Issue
  *   Capture Fields.
- * @property {{ query: string, people: import('../../sharepoint-client.js').PersonResult[] }} responsiblePartySearch
+ * @property {PeopleSearchState} responsiblePartySearch
  * @property {boolean} canEditIssues
  *   Whether the viewer may edit what this tab records — the capture fields, the
  *   remediation decision and its actions, and the Responsible Party. One flag,
@@ -144,13 +145,9 @@ export function ResponsiblePartyField(props) {
     PeoplePicker({
       placeholder: 'Search people…',
       people: props.responsiblePartySearch.people,
-      query: props.responsiblePartySearch.query,
+      status: props.responsiblePartySearch.status,
       inputValue: props.responsiblePartySearch.query,
       ariaLabel: 'Search people for Responsible Party',
-      // This value resolves a Role and gates completion, and the field is
-      // read-only once the actions are sent, so a mistyped account would be
-      // unrecoverable from here.
-      allowRawAccount: false,
       onQueryInput: (query) => props.dispatchResponsiblePartySearch(query),
       onSelect: (party) => props.dispatchResponsibleParty(party),
     })

@@ -40,7 +40,7 @@ function props(overrides = {}) {
     responsibleParty: null,
     captureGroups: [],
     captureCollapsed: {},
-    responsiblePartySearch: { query: '', people: [] },
+    responsiblePartySearch: { query: '', people: [], status: 'idle' },
     canEditIssues: false,
     dispatchCapture() {},
     dispatchCaptureToggle() {},
@@ -167,7 +167,11 @@ test('choosing a search result hands the whole Party to the route', () => {
     props({
       canEditIssues: true,
       responsibleParty: { loginName: 'old', displayName: 'Old Owner' },
-      responsiblePartySearch: { query: 'Jane', people: [person] },
+      responsiblePartySearch: {
+        query: 'Jane',
+        people: [person],
+        status: 'success',
+      },
       dispatchResponsibleParty: (party) => chosen.push(party),
     })
   );
@@ -181,15 +185,38 @@ test('choosing a search result hands the whole Party to the route', () => {
   assert.deepEqual(chosen, [person]);
 });
 
-test('a Responsible Party search that finds nobody offers no raw account', () => {
+test('a Responsible Party search that finds nobody offers no account, and says so', () => {
   // This one field resolves a Role and gates completion, and it is read-only
   // once the actions are sent, so a typo would be unrecoverable from the page.
   const node = ResponsiblePartyField(
     props({
       canEditIssues: true,
-      responsiblePartySearch: { query: 'nobody', people: [] },
+      responsiblePartySearch: {
+        query: 'nobody',
+        people: [],
+        status: 'success',
+      },
     })
   );
   const root = host(node ? [node] : []);
   assert.deepEqual(queryAllByRole(root, 'option'), []);
+  assert.equal(
+    root.querySelector('.cora-people-picker-status')?.textContent ?? null,
+    'No matches'
+  );
+});
+
+test('a Responsible Party search that failed names the failure and offers nothing', () => {
+  const node = ResponsiblePartyField(
+    props({
+      canEditIssues: true,
+      responsiblePartySearch: { query: 'nobody', people: [], status: 'error' },
+    })
+  );
+  const root = host(node ? [node] : []);
+  assert.deepEqual(queryAllByRole(root, 'option'), []);
+  assert.equal(
+    root.querySelector('.cora-people-picker-status')?.textContent ?? null,
+    'Directory search is unavailable'
+  );
 });
