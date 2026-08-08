@@ -1411,24 +1411,21 @@ new case-review concepts belong there (or in pipeline support modules), not
 under `framework/`. The full flow lives in [`selection.md`](selection.md); in
 brief:
 
-### `CaseType` / `Variation` — the declarative domain objects
-A `CaseType` (`case_review.case_type`) bundles a Case Type's `schema`, its
-identity contract, and its `variations`, imported directly — no global CaseType
-config registry. The identity contract is the `natural_key` (the
-column(s) that identify a Case) plus a `namespace` property derived from `name`;
-gold builders accept the namespace, natural key, and schema explicitly, and
-callers must source the Case and every Detail Table's identity values from the
-same declaration to mint a consistent deterministic `case_id`.
-`CaseType.variation(id)` resolves a `Variation` (its
-`question_bank_id` + later overrides) and raises a located `KeyError` on an
-unknown id. Declarative data, not code (one Case Type has many Variations —
-`CONTEXT.md`).
+### Case Type declarations / `Variation`
+A feed declares a Case Type's row schema, `NAMESPACE`, `NATURAL_KEY`, and
+`VARIATIONS` together as module data — no global CaseType config registry. Gold
+builders accept the namespace, natural key, and schema explicitly, and callers
+must source the Case and every Detail Table's identity values from that same
+declaration to mint a consistent deterministic `case_id`. Selection resolves a
+`Variation` by its `id` and raises a located `KeyError` on an unknown id. A
+Variation carries its `question_bank_id` and later overrides. Declarative data,
+not code (one Case Type has many Variations — `CONTEXT.md`).
 
 ### `CasePool` — the domain population, behind named reads
 `CasePool(table, schema, store, calendar)` (`case_review.case_pool`) is the
 per-Case-Type population of Cases read from the current **ingested gold** table.
-Callers pass the table name and schema explicitly; they may source those values
-from a `CaseType`. Its
+Callers pass the table name and schema explicitly, sourced from the feed's
+declarations. Its
 headline retrieval is the *concept* of fetching **available cases** — e.g.
 `fetch_available_cases(as_of, activity_column=…, within_working_days=…)` narrows
 to a `WorkingDayCalendar` window in Python, repairing SQLite's text-stored dates

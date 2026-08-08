@@ -1,7 +1,13 @@
 from pathlib import Path
 
+import pytest
+
 from cli import operator
-from pipelines.selection.pipeline import high_value_case, priority_score
+from pipelines.selection.pipeline import (
+    high_value_case,
+    priority_score,
+    variation_by_id,
+)
 from tests.framework_testing import read_rows
 from tools.medallion import medallion
 from tools.store import StoreRegistry
@@ -25,25 +31,43 @@ def test_demo_selection_rules_are_independently_testable():
     assert priority_score({"amount": 100}) == 200
 
 
+def test_demo_variation_lookup_reports_an_unknown_id():
+    with pytest.raises(KeyError, match="cases Case Type has no Variation 'missing'"):
+        variation_by_id("missing")
+
+
 def test_demo_runs_the_full_source_to_selection_path(tmp_path, capsys):
     # The capstone demo is now two path-addressed pipelines: ingest (CSV -> raw
     # -> silver -> the gold CasePool) then selection (the available cases ->
     # the gold SelectionPool). Running them in order through the framework's
     # `run` exercises the whole flow, freshness gate included.
     assert _run("pipelines/ingest", tmp_path) == 0
-    assert _run("pipelines/selection", tmp_path) == 0
 
-    # Ingest landed the medallion's raw + silver, and Selection wrote gold.
+    # Ingest landed the medallion's raw, silver, and identity-stable gold.
     cases_dir = tmp_path / "cases"
     assert (cases_dir / "raw.db").exists()
     assert (cases_dir / "silver.db").exists()
     assert (cases_dir / "gold.db").exists()
+    gold = medallion(StoreRegistry(tmp_path), "cases").gold
+    cases = read_rows(gold, "cases")
+    assert {row["case_ref"]: row["case_id"] for row in cases} == {
+        "c1": "8dc403aa2bd789514e4fd7f99d5a580c8136512daecbdb22f8baf57aeefb9713",
+        "c2": "e35cf73c7cb458109de1ba78352fb1a7c2918471d9673d2637818f7bbbd3a30f",
+        "c3": "be545771d08a85cfaca0b47f1eb342ffd5cb942c80ab5ddca9e0cbd13c716e5a",
+        "c4": "342deebb46899c2d5fac7bc934f4c1346667f7a8c2cdc3fa2fe7e5e233395b8b",
+        "c5": "571a7c2d87025959d8f5b8d25461b02bd21867b7b1619fba2fe951b68275e7f6",
+    }
+
+    assert _run("pipelines/selection", tmp_path) == 0
 
     # The SelectionPool holds only the available, high-value cases, ranked by a
     # named priority score, each stamped with the chosen Variation's bank.
-    gold = medallion(StoreRegistry(tmp_path), "cases").gold
     selection_pool = read_rows(gold, "selection_pool")
     assert [r["case_ref"] for r in selection_pool] == ["c1", "c2"]
+    assert {r["case_ref"]: r["case_id"] for r in selection_pool} == {
+        "c1": "8dc403aa2bd789514e4fd7f99d5a580c8136512daecbdb22f8baf57aeefb9713",
+        "c2": "e35cf73c7cb458109de1ba78352fb1a7c2918471d9673d2637818f7bbbd3a30f",
+    }
     assert [r["priority_score"] for r in selection_pool] == [1000, 240]
     assert {r["question_bank_id"] for r in selection_pool} == {"qb-100"}
     # Stamped with the pipeline-name logical run id derived from the RunContext,

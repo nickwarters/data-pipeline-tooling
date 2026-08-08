@@ -26,10 +26,18 @@ from pipelines.case_selection.pipeline import SUBJECT as CASE_SELECTION_SUBJECT
 from pipelines.case_selection.pipeline import raw_builder as cs_raw_builder
 from pipelines.case_selection.pipeline import silver_builder as cs_silver_builder
 from pipelines.case_selection.schema import CaseReviewRow, SalesRow
+from pipelines.complaints_a.schema import ComplaintsARow
+from pipelines.complaints_b.schema import ComplaintsBRow
+from pipelines.complaints_c.schema import ComplaintsCRow
 from tests.framework_testing import RecordingWriter, given_rows
 from tools.recipes import raw_to_silver, source_to_raw
 
 COMPLAINTS_FEEDS = ["complaints_a", "complaints_b", "complaints_c"]
+COMPLAINTS_SCHEMAS = {
+    "complaints_a": ComplaintsARow,
+    "complaints_b": ComplaintsBRow,
+    "complaints_c": ComplaintsCRow,
+}
 
 
 def _feed(name: str):
@@ -49,7 +57,7 @@ def test_complaints_raw_hop_is_the_recipe(feed_name):
             reader,
             writer,
             expected_columns=module.SOURCE_COLUMNS,
-            name=f"{module.FEED_NAME}:raw",
+            name=f"{module.NAMESPACE}:raw",
         ).describe()
     )
 
@@ -64,9 +72,9 @@ def test_complaints_silver_hop_is_the_recipe(feed_name):
         == raw_to_silver(
             reader,
             writer,
-            schema=module.CASE_TYPE.schema,
+            schema=COMPLAINTS_SCHEMAS[feed_name],
             reject_writer=rejects,
-            name=f"{module.FEED_NAME}:silver",
+            name=f"{module.NAMESPACE}:silver",
         ).describe()
     )
 

@@ -10,9 +10,8 @@ from tools.medallion import medallion
 from tools.recipes import raw_to_silver, source_to_raw
 from tools.store import StoreRegistry
 
-from .case_type import CASE_TYPE
+from .schema import NAMESPACE, ComplaintsCRow
 
-FEED_NAME = "complaints_c"
 UPSTREAMS = ()
 
 
@@ -35,7 +34,7 @@ def raw_builder(
         reader,
         writer,
         expected_columns=SOURCE_COLUMNS,
-        name=f"{FEED_NAME}:raw",
+        name=f"{NAMESPACE}:raw",
         run_log=run_log,
     )
 
@@ -54,31 +53,31 @@ def silver_builder(
     return raw_to_silver(
         reader,
         writer,
-        schema=CASE_TYPE.schema,
+        schema=ComplaintsCRow,
         reject_writer=reject_writer,
-        name=f"{FEED_NAME}:silver",
+        name=f"{NAMESPACE}:silver",
         run_log=run_log,
     )
 
 
 def run(context: RunContext) -> Dataset:
     """Wire the real readers and writers for the environment and execute."""
-    med = medallion(StoreRegistry(context.base_dir), FEED_NAME)
+    med = medallion(StoreRegistry(context.base_dir), NAMESPACE)
     strategy = AccumulateByRun.from_context(context)
 
     # Fetched by the SAS script
     landing_dir = Path(context.base_dir) / "landing_zone"
-    feed_csv = landing_dir / f"{FEED_NAME}.csv"
+    feed_csv = landing_dir / f"{NAMESPACE}.csv"
 
     raw_pipeline = raw_builder(
-        reader=CsvReader(feed_csv), writer=med.raw.writer(FEED_NAME, strategy)
+        reader=CsvReader(feed_csv), writer=med.raw.writer(NAMESPACE, strategy)
     )
     raw_pipeline.run()
 
     silver_pipeline = silver_builder(
-        reader=med.raw.reader(FEED_NAME),
-        writer=med.silver.writer(FEED_NAME, strategy),
-        reject_writer=med.silver.quarantine_writer(FEED_NAME),
+        reader=med.raw.reader(NAMESPACE),
+        writer=med.silver.writer(NAMESPACE, strategy),
+        reject_writer=med.silver.quarantine_writer(NAMESPACE),
     )
     silver = silver_pipeline.run()
 
@@ -91,10 +90,10 @@ def main(argv: list[str]) -> int:
 
     runner = PipelineRunner()
     runner.register(
-        subject=CASE_TYPE.name, pipeline=FEED_NAME, handler=run, freshness=UPSTREAMS
+        subject=NAMESPACE, pipeline=NAMESPACE, handler=run, freshness=UPSTREAMS
     )
     try:
-        runner.run(CASE_TYPE.name, FEED_NAME, base_dir=base_dir)
+        runner.run(NAMESPACE, NAMESPACE, base_dir=base_dir)
     except PipelineError as exc:
         print(format_failure(exc), file=sys.stderr)
         return 1

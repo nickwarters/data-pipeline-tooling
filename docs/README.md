@@ -183,7 +183,7 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 | **`RetryPolicy` / `RetryingReader` / `RetryingWriter`** | Targeted retry for **transient I/O-edge failures** (remote access, SharePoint/SAS fetch, SQLite busy). An allowlist of exception types is retried; schema-validation and configuration errors abort immediately. Scoped to the `read()`/`write()` seam, never around validation. → [retry.md](retry.md) |
 | **`Store` / `StoreRegistry`** (`tools.store`) | A Store binds one **namespace** (a logical database → file) to `writer(table, strategy)` / `reader(table)` creation; `StoreRegistry(root).store(namespace)` mints those from shared root/configuration, and `StoreRegistry.register(name, reader\|writer)` → `reader(name)` / `writer(name)` keeps named components a pipeline refers to by name. The raw/silver/gold medallion is the `tools.medallion` profile over it (`<subject>/{raw,silver,gold}.db`). Holds no business logic and makes no load decision. **Application infrastructure in the sibling `tools` package, not `framework.io`**. ([SQLite per-subject medallion store on a network share, single-writer](adr/0001-sqlite-per-subject-medallion-store.md)) |
 | **`Validator`** | `validate(dataset) -> None`, **raises** on breach. `ColumnValidator`, `RowCountValidator` (engine-agnostic), `VolumeAnomalyValidator` (trips when a run's volume deviates from its recent-history baseline — catches truncated source exports), `SchemaDriftValidator` (warns at the raw boundary when a feed's columns drift from the prior run's landed set — catches owner-controlled source schema change). Severity (`error`/`warn`) is set where it's attached. |
-| **`Schema` / `SchemaValidator`** | A Case Type **dataclass** whose annotations *are* the column, dtype, nullability, and value-rule contract; the validator is the dataclass→validator adapter, enforced at silver (and optionally gold). Nullability/value rules extend the same dataclass via `Annotated`; cross-field **row checks** attach via the `@row_checks(...)` class decorator. → [schema-enforcement.md](schema-enforcement.md) ([graduated schema enforcement: raw light, silver & gold validated](adr/0006-graduated-schema-enforcement.md)) |
+| **`Schema` / `SchemaValidator`** | A row-schema **dataclass** whose annotations *are* the column, dtype, nullability, and value-rule contract; the validator is the dataclass→validator adapter, enforced at silver (and optionally gold). Nullability/value rules extend the same dataclass via `Annotated`; cross-field **row checks** attach via the `@row_checks(...)` class decorator. → [schema-enforcement.md](schema-enforcement.md) ([graduated schema enforcement: raw light, silver & gold validated](adr/0006-graduated-schema-enforcement.md)) |
 | **`Processor`** | a callable `(dataset) -> Dataset`, run mid-pipeline via a named `.task(...)` (`.transform(...)` remains compatible). `SchemaCoercion` (repair storage-lossy types); the Selection transforms `Filter` / `Score` / `VectorizedFilter` / `VectorizedDerive` / `Sort` / `Rename` / `Stamp`, the explicit-dependency cross-feed `JoinWith` / `AntiJoinWith`; the column-shaping `JoinColumns`; and the Ingest / fan-out transforms `SelectColumns` / `DropColumns` / `Unpivot` / `DeriveKey` / `LatestPerKey`; the JSON blob reshapers `ExplodeJsonMap` / `ExplodeJsonList` / `FlattenJsonObject`. → [processors.md](processors.md) |
 | **Pipeline tasks** | A `Pipeline` is wired from named **tasks**, each returning a node the next consumes: `.read(reader)`, `.task(name, processor)`, `.validate(validator)`, `.write(writer)`, `.profile(...)`, and `.explain(...)`. Order and any fan-in / fan-out are explicit in how nodes are wired — validation, processing, and explicit checkpoint writes land exactly where you place them. |
 | **`Profile`** (data profiling) | A read-only task `p.profile(profiler, node)` that records per-column **null rate / distinct count / min-max / bounded top-N** on the run log so a feed's *shape* is trended across runs (the statistical sibling of the row-count volume guardrail). The computation is an injected `tools.observability.profile.DataProfiler` (the framework's `DatasetProfiler` port — `tools` is never imported down into `framework`); it bounds cost via `top_n` / a column allow-list and, with a baseline, warns (or fails via `ProfileError`) when a column's null rate drifts from its recent-history baseline — catching a column that quietly slides 5% → 60% null. → [core-primitives.md](core-primitives.md) |
@@ -195,7 +195,7 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 | **`PipelineError` / `format_failure`** | The base of the expected fail-fast failure family (`ValidationError`, `FreshnessError`, `UnknownPipelineError`, `RunAddressError`, `CoercionError`, `ForEachPipelineError` all subclass it) and the pure formatter that renders a caught one as a short, traceback-free block for `stderr`. At a run boundary — the operator CLI, a scaffolded `main()` — `except PipelineError` + `format_failure(exc)` turns a deliberate abort into a clear message; a genuine bug is not a `PipelineError` and keeps its trace. |
 | **`RunLog` / `RunRegistry`** | `RunLog` emits one JSON record per step (+ a run summary) to a `.log` file — the observability seam. `RunRegistry` ingests that JSONL into a queryable run-history store. The record's field set is declared once, as data, in `tools.observability.record_schema` (`RUN_RECORD_FIELDS`): the log record, the registry DDL, its additive column migration, the `INSERT`, the decode and the console line are all derived from it, so adding a field is one entry. `data_locations` — the file(s)/table(s) a read or write step actually touched, as `{namespace, name}` entries — is stored and logged but declares no console form, so it never reaches the human line. → [run-log-format.md](run-log-format.md) ([fail-fast atomic runs, independently-committed artifacts, structured JSONL observability](adr/0005-fail-fast-atomic-runs-and-observability.md)) |
 | **`RunContext` / `PipelineRunner` / `Requirement`** | The thin domain runner: register handlers by `(subject, pipeline)`, receive a context carrying execution/logical identity, dates, explicit run params, RunLog, and RunRegistry, and block stale downstream runs with `Requirement.succeeded(RunAddress.for_pipeline(...)).same_day()` or task-level `within_days(...)` predicates. `FreshnessRequirement` remains compatible. → [core-primitives.md](core-primitives.md) |
-| **`CaseType` / `Variation`** | Case-review application/domain objects in `case_review.case_type`, not framework primitives: a Case Type bundles its `schema`, its identity contract (`natural_key` + a `namespace` derived from `name`), and its `variations`, imported directly (no global CaseType config registry). A Variation overrides only what differs — most often the `question_bank_id`. → [selection.md](selection.md) |
+| **Case Type declarations / `Variation`** | Case-review application/domain data, not framework primitives: a feed declares its row schema, `NAMESPACE`, `NATURAL_KEY`, and `VARIATIONS` together in `schema.py`. A Variation overrides only what differs — most often the `question_bank_id`. → [selection.md](selection.md) |
 | **`CasePool`** | Case-review application/domain helper in `case_review.case_pool`: the per-Case-Type population read from current ingested gold, given its table name and schema, and surfaced through intention-revealing retrievals (e.g. `fetch_available_cases(...)`) instead of raw `read_*`. → [selection.md](selection.md) |
 | **`WorkingDayCalendar`** | A config-seeded **pure utility** for availability arithmetic ("the last 20 working days"). The config is a YAML calendar file (`holidays` + `weekend`) loaded by `WorkingDayCalendar.from_yaml`, which is what `python -m cli orchestrate --calendar` passes and what `python -m cli run --param calendar=<file>` passes for an availability window. Touches no Dataset/Store/engine; not a Feed. → [working-day-calendar.md](working-day-calendar.md) |
 
@@ -235,23 +235,20 @@ class ActivityCase:
     amount: int
 ```
 
-**2. Declare the Case Type + its Variations** — a Variation inherits the type's
-config and overrides only what differs, most often the `question_bank_id` (the
-case-review domain stores only the *reference* id; the bank's content is the
-review platform's). One Case Type has many Variations, so they are data.
+**2. Declare its identity + Variations** — put the namespace, natural key, row
+schema, and Variations together in `schema.py`. A Variation overrides only what
+differs, most often the `question_bank_id` (the case-review domain stores only
+the *reference* id; the bank's content is the review platform's). One Case Type
+has many Variations, so they are data.
 
 ```python
-from case_review.case_type import CaseType, Variation
+from case_review.case_type import Variation
 
-CASES = CaseType(
-    name="cases",                 # the subject: medallion dir + table name;
-                                  #   also seeds the case_id namespace
-    schema=ActivityCase,          # enforced at silver/gold boundaries
-    natural_key=("case_ref",),    # identifies a Case → the deterministic case_id
-    variations=(
-        Variation(id="v1", question_bank_id="qb-100"),
-        Variation(id="v2", question_bank_id="qb-200"),
-    ),
+NAMESPACE = "cases"              # medallion dir, table, and case_id namespace
+NATURAL_KEY = ("case_ref",)      # identifies a Case
+VARIATIONS = (
+    Variation(id="v1", question_bank_id="qb-100"),
+    Variation(id="v2", question_bank_id="qb-200"),
 )
 ```
 
@@ -268,8 +265,8 @@ from tools.store import StoreRegistry
 from tools.calendar import WorkingDayCalendar
 from tools.medallion import medallion
 
-med = medallion(StoreRegistry("/share"), CASES.name)
-pool = CasePool(CASES.name, CASES.schema, med.gold, WorkingDayCalendar())
+med = medallion(StoreRegistry("/share"), NAMESPACE)
+pool = CasePool(NAMESPACE, ActivityCase, med.gold, WorkingDayCalendar())
 available = pool.fetch_available_cases(
     as_of=date(2026, 5, 29), activity_column="activity_date", within_working_days=5,
 )
@@ -301,8 +298,12 @@ silver (stopping at silver — gold assembly is the author's call); see
 [`adding-a-feed.md`](adding-a-feed.md):
 
 ```sh
-python -m cli scaffold --case-type claims  # + case_type.py; source -> raw -> silver
+python -m cli scaffold --case-type claims  # source -> raw -> silver
 ```
+
+The current scaffold still emits the older `case_type.py` wrapper; move its
+identity values into `schema.py` while customising the generated feed. See the
+transition note in [`adding-a-feed.md`](adding-a-feed.md).
 
 ```python
 from framework.io import ExcelReader, Refresh
@@ -449,7 +450,14 @@ def priority_score(row: Mapping[str, Any]) -> int:
     return row["amount"] * 2
 
 
-variation = CASES.variation("v1")
+def variation_by_id(variation_id):
+    for variation in VARIATIONS:
+        if variation.id == variation_id:
+            return variation
+    raise KeyError(f"{NAMESPACE} Case Type has no Variation {variation_id!r}")
+
+
+variation = variation_by_id("v1")
 registry = StoreRegistry("/share")
 reference = JoinDependency(
     "advisers", medallion(registry, "advisers").silver.reader("advisers")
@@ -458,7 +466,7 @@ already_reviewed = JoinDependency(
     "already-reviewed", medallion(registry, "reviews").silver.reader("review_outcomes")
 )
 strategy = AccumulateByRun.from_context(context)
-med = medallion(registry, CASES.name)
+med = medallion(registry, NAMESPACE)
 
 p = Pipeline("selection")
 r = p.read(DatasetReader(available), name="read")
@@ -620,7 +628,7 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 | [`sharepoint-cases-going-live.md`](sharepoint-cases-going-live.md) | The one-time path from the feed as it stands to one an external scheduler drives. |
 | [`gold-accumulation.md`](gold-accumulation.md) | Gold's accumulate-by-run semantics, idempotent re-run, reading "current" — and the two shapes of current-only reduce (`LatestPerKey` by `load_date`, vs a Polling Feed's source-version ordering). |
 | [`processors.md`](processors.md) | The Selection transforms (`JoinWith`, per-group sampling), the Ingest / fan-out transforms (`SelectColumns`, `Unpivot`, `DeriveKey`, `LatestPerKey`), and the JSON blob reshapers (`ExplodeJsonMap`, `ExplodeJsonList`, `FlattenJsonObject`). |
-| [`selection.md`](selection.md) | The full CaseType / Variation → CasePool → SelectionPool flow + explainability. |
+| [`selection.md`](selection.md) | The full Case Type declarations / Variation → CasePool → SelectionPool flow + explainability. |
 | [`working-day-calendar.md`](working-day-calendar.md) | Availability arithmetic, and the YAML calendar file that seeds its holidays and weekend rule (`WorkingDayCalendar.from_yaml`, `orchestrate --calendar`). |
 | [`run-log-format.md`](run-log-format.md) | The JSONL record schema and the run registry. |
 | [`streaming-large-sources.md`](streaming-large-sources.md) | Streaming a source too big to hold whole: `Pipeline.read_chunks` driving the DAG once per chunk, chunk-level row filtering (id allow-list / predicate), which pairings are refused at wiring time and why, and `stream_step` as the low-level fallback. |

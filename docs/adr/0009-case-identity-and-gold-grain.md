@@ -64,12 +64,11 @@ columns it needs — not by a multi-output node or a splitting transform.
   SelectionPool, Deliverables, Reporting joins. Its derivation (the namespace and
   the natural-key columns) is therefore a **stable contract**: changing it re-keys
   all history.
-- The identity contract is **owned by the `CaseType`** (`case_review.case_type`):
-  the `natural_key` is a declared field and the Case Type's `name` is the
-  namespace. Gold builders accept the namespace, natural key, and schema
-  explicitly; callers must source the Case builder and every Detail builder's
-  identity values from the same declaration so the parent/child link remains
-  deterministic.
+- The identity contract is declared explicitly beside the feed schema as
+  `NAMESPACE` and `NATURAL_KEY`. Gold builders accept the namespace, natural
+  key, and schema explicitly; callers must source the Case builder and every
+  Detail builder's identity values from that same declaration so the
+  parent/child link remains deterministic.
 - The key columns are hashed **by name**, in a canonical JSON payload, not
   joined into one string. A joined key is forgeable: `("SMITH",
   "2024-01-15|EXTRA")` and `("SMITH|2024-01-15", "EXTRA")` produce the same

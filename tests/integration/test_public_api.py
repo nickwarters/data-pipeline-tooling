@@ -80,6 +80,54 @@ def _facade_offenders(root: Path) -> dict[str, list[str]]:
     return offenders
 
 
+def _dotted_name(node: ast.expr) -> str | None:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        parent = _dotted_name(node.value)
+        return f"{parent}.{node.attr}" if parent else None
+    return None
+
+
+def _case_type_violations(source: str) -> list[str]:
+    """Return imports and constructions of the retired pipeline wrapper."""
+    tree = ast.parse(source)
+    imported_names: set[str] = set()
+    imported_modules: set[str] = set()
+    found: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module == "case_review.case_type":
+            for alias in node.names:
+                if alias.name == "CaseType":
+                    imported_names.add(alias.asname or alias.name)
+                    found.append(f"line {node.lineno}: imports CaseType")
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "case_review.case_type":
+                    imported_modules.add(alias.asname or alias.name)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name) and node.func.id in imported_names:
+                found.append(f"line {node.lineno}: constructs CaseType")
+            elif any(
+                _dotted_name(node.func) == f"{module}.CaseType"
+                for module in imported_modules
+            ):
+                found.append(f"line {node.lineno}: constructs CaseType")
+    return sorted(found)
+
+
+def _case_type_offenders(root: Path) -> dict[str, list[str]]:
+    offenders: dict[str, list[str]] = {}
+    for path in sorted(root.rglob("*.py")):
+        if path.name.startswith("test_") or "__pycache__" in path.parts:
+            continue
+        found = _case_type_violations(path.read_text(encoding="utf-8"))
+        if found:
+            offenders[str(path.relative_to(root))] = found
+    return offenders
+
+
 def test_package_root_exposes_only_public_facade_modules():
     import framework
 
@@ -273,6 +321,42 @@ def test_demo_pipelines_import_framework_only_through_the_public_facades():
     assert not _facade_offenders(PIPELINES_DIR), (
         f"pipelines bypassing the public facades: {_facade_offenders(PIPELINES_DIR)}"
     )
+
+
+def test_production_pipelines_do_not_import_or_construct_case_type():
+    assert not _case_type_offenders(PIPELINES_DIR), (
+        "production pipelines still use the retired CaseType identity wrapper: "
+        f"{_case_type_offenders(PIPELINES_DIR)}"
+    )
+
+
+def test_case_type_boundary_allows_variations_and_catches_retired_usage():
+    assert (
+        _case_type_violations(
+            "from case_review.case_type import Variation\n"
+            "VARIATIONS = (Variation(id='v1', question_bank_id='qb-100'),)\n"
+        )
+        == []
+    )
+    assert _case_type_violations(
+        "from case_review.case_type import CaseType as Identity\n"
+        "CASES = Identity(name='cases', schema=Row, natural_key=('ref',))\n"
+    ) == ["line 1: imports CaseType", "line 2: constructs CaseType"]
+    assert (
+        _case_type_violations(
+            "from another_module import CaseType\n"
+            "fixture = CaseType()\n"
+            "class LocalCaseType: pass\n"
+            "local = LocalCaseType()\n"
+        )
+        == []
+    )
+    assert _case_type_violations(
+        "import case_review.case_type as declarations\n"
+        "CASES = declarations.CaseType(\n"
+        "    name='cases', schema=Row, natural_key=('ref',)\n"
+        ")\n"
+    ) == ["line 2: constructs CaseType"]
 
 
 def test_case_review_imports_framework_only_through_the_public_facades():

@@ -7,7 +7,6 @@ sharing one normalisation Processor, and landing current-state gold via Refresh.
 
 import pandas as pd
 
-from case_review.case_type import CaseType
 from case_review.gold import detail_ingest_silver_to_gold, ingest_silver_to_gold
 from framework.core.dataset import Dataset
 from framework.io.strategy import AccumulateByRun, Refresh
@@ -17,9 +16,8 @@ from tests._schema_fixtures import LandedCase
 from tools.medallion import medallion
 from tools.store import StoreRegistry
 
-# One Case Type owns identity for the wide feed; the Cases and Detail builders
-# both read it, so case_id matches with no cross-pipeline join.
-_WIDE_CASES = CaseType(name="wide_cases", schema=LandedCase, natural_key=("case_ref",))
+NAMESPACE = "wide_cases"
+NATURAL_KEY = ("case_ref",)
 
 PRODUCT_COLS = [f"product_{i}" for i in range(1, 4)]  # keep small for tests
 
@@ -64,9 +62,9 @@ def test_detail_silver_to_gold_produces_one_row_per_product(tmp_path):
 
     detail_ingest_silver_to_gold(
         med,
-        _WIDE_CASES.name,
-        _WIDE_CASES.natural_key,
-        _WIDE_CASES.schema,
+        NAMESPACE,
+        NATURAL_KEY,
+        LandedCase,
         "products",
         unpivot=Unpivot(
             id_vars=["case_id"],
@@ -111,17 +109,17 @@ def test_detail_case_id_matches_case_id_derived_independently(tmp_path):
 
     ingest_silver_to_gold(
         med,
-        _WIDE_CASES.name,
-        _WIDE_CASES.natural_key,
-        _WIDE_CASES.schema,
+        NAMESPACE,
+        NATURAL_KEY,
+        LandedCase,
         "cases",
     ).run()
 
     detail_ingest_silver_to_gold(
         med,
-        _WIDE_CASES.name,
-        _WIDE_CASES.natural_key,
-        _WIDE_CASES.schema,
+        NAMESPACE,
+        NATURAL_KEY,
+        LandedCase,
         "products",
         unpivot=Unpivot(
             id_vars=["case_id"],
@@ -165,9 +163,9 @@ def test_fan_out_two_pipelines_over_shared_raw_produce_cases_and_detail(tmp_path
 
     ingest_silver_to_gold(
         med,
-        _WIDE_CASES.name,
-        _WIDE_CASES.natural_key,
-        _WIDE_CASES.schema,
+        NAMESPACE,
+        NATURAL_KEY,
+        LandedCase,
         "cases",
     ).run()
 
@@ -189,9 +187,9 @@ def test_fan_out_two_pipelines_over_shared_raw_produce_cases_and_detail(tmp_path
 
     detail_ingest_silver_to_gold(
         med,
-        _WIDE_CASES.name,
-        _WIDE_CASES.natural_key,
-        _WIDE_CASES.schema,
+        NAMESPACE,
+        NATURAL_KEY,
+        LandedCase,
         "products",
         unpivot=Unpivot(
             id_vars=["case_id"],
@@ -227,6 +225,12 @@ def test_demo_fan_out_runs_end_to_end(tmp_path):
 
     assert len(cases) == 4
     assert set(cases.columns) >= {"case_id", "case_ref"}
+    assert dict(zip(cases["case_ref"], cases["case_id"], strict=True)) == {
+        "c1": "a50dd19f719f14dc4add1a21d7020c3bca4caa8f1bec3209e4893f92f8a28e82",
+        "c2": "750874b8f6bffc46a9ed88fc560a9bc6d3bbd39d7ffbc43ed76740980454a5f5",
+        "c3": "196d25c1d186fe79f0d2d1cb5c1725d88059c9e81b3b7766aae9760e22536bd6",
+        "c4": "61a6fb907584ce93f038a6c8959194d8ccc476ab4e02be0b3c5a0d77a4968d13",
+    }
     # c1:2 + c2:1 + c3:3 + c4:1 = 7 non-empty product slots across 4 cases
     assert len(products) == 7
     assert set(products.columns) >= {"case_id", "product_slot", "product_name"}

@@ -15,7 +15,7 @@ import pytest
 
 from framework.core import ValidationError
 from framework.run import RunContext
-from pipelines.complaints_a.pipeline import FEED_NAME, raw_builder, run, silver_builder
+from pipelines.complaints_a.pipeline import NAMESPACE, raw_builder, run, silver_builder
 from tests.framework_testing import (
     RecordingRunLog,
     RecordingWriter,
@@ -37,18 +37,18 @@ def test_bundled_sample_feed_refines_through_to_silver(tmp_path):
         / "complaints_a"
         / "sample_data"
     )
-    shutil.copy(sample_dir / f"{FEED_NAME}.csv", landing / f"{FEED_NAME}.csv")
+    shutil.copy(sample_dir / f"{NAMESPACE}.csv", landing / f"{NAMESPACE}.csv")
 
-    run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME))
+    run(RunContext(base_dir=tmp_path, pipeline=NAMESPACE))
 
-    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    med = medallion(StoreRegistry(tmp_path), NAMESPACE)
 
     # 2 good rows + 2 quarantined rows = 4 raw rows
-    raw = read_rows(med.raw, FEED_NAME)
+    raw = read_rows(med.raw, NAMESPACE)
     assert len(raw) == 4
 
     # 2 rows breach value rules and are quarantined, 2 rows pass
-    silver = read_rows(med.silver, FEED_NAME)
+    silver = read_rows(med.silver, NAMESPACE)
     assert len(silver) == 2
 
 

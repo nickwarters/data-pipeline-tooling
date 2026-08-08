@@ -408,7 +408,7 @@ the Selection Pipeline would accumulate into gold as the SelectionPool (via an
 `AccumulateByRun` gold write — see [gold-accumulation.md](gold-accumulation.md)).
 
 The domain capstone composes these processors into a Case Type's
-full Selection flow — `CaseType`/`Variation` + `CasePool` → `SelectionPool`,
+full Selection flow — declarations/`Variation` + `CasePool` → `SelectionPool`,
 stamping the Variation's `question_bank_id` onto the chosen Cases. See
 [`selection.md`](selection.md).
 
@@ -581,12 +581,12 @@ p.run()
 # so they derive the same case_id.
 # Cases gold: DeriveKey → LatestPerKey → UniqueValidator → current-only gold
 ingest_silver_to_gold(
-    med, CASES.name, CASES.natural_key, CASES.schema, "cases"
+    med, NAMESPACE, NATURAL_KEY, CaseSchema, "cases"
 ).run()
 
 # Products Detail Table gold: DeriveKey (same identity → same key) → Unpivot wide→long
 detail_ingest_silver_to_gold(
-    med, CASES.name, CASES.natural_key, CASES.schema, "case_products",
+    med, NAMESPACE, NATURAL_KEY, CaseSchema, "case_products",
     unpivot=Unpivot(id_vars=["case_id"], value_vars=PRODUCT_COLS,
                     var_name="product_slot", value_name="product_name"),
 ).run()
