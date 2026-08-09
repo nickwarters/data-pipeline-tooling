@@ -96,6 +96,8 @@ const CASE_SELECT =
 const CASE_EXPAND =
   '$expand=AssignedReviewer,ResponsibleParty,AssignedReviewerManager,ResponsiblePartyManager,VoidedBy';
 
+/** @typedef {{ Key?: unknown, Value?: unknown }} UserProfileProperty */
+
 /**
  * @param {unknown} body
  * @returns {{ displayName: string | null, manager: string | null }}
@@ -103,11 +105,16 @@ const CASE_EXPAND =
 function profileFromProperties(body) {
   const profile = /** @type {any} */ (body);
   const displayName = profile?.DisplayName;
-  const managerProperty = Array.isArray(profile?.UserProfileProperties)
-    ? profile.UserProfileProperties.find(
-        (property) => property?.Key === 'Manager'
-      )
-    : undefined;
+  const rawProperties = profile?.UserProfileProperties;
+  /** @type {UserProfileProperty[]} */
+  const properties = Array.isArray(rawProperties)
+    ? rawProperties
+    : Array.isArray(rawProperties?.results)
+      ? rawProperties.results
+      : [];
+  const managerProperty = properties.find(
+    (property) => property.Key === 'Manager'
+  );
   const rawManager = managerProperty?.Value;
   const manager =
     typeof rawManager === 'string' && rawManager !== ''
@@ -153,6 +160,10 @@ export class HttpSharePointClient {
      * @type {Map<string, number>}
      */
     this._userIds = new Map();
+    /**
+     * @type {Map<string, Promise<{ displayName: string | null, manager: string | null }>>}
+     */
+    this._profileReads = new Map();
   }
 
   // --- SharePointClient interface ------------------------------------------
@@ -476,6 +487,25 @@ export class HttpSharePointClient {
    * @returns {Promise<{ displayName: string | null, manager: string | null }>}
    */
   async _resolveUserProfile(account) {
+    const pending = this._profileReads.get(account);
+    if (pending) return pending;
+
+    const profileRead = this._readUserProfile(account);
+    this._profileReads.set(account, profileRead);
+    try {
+      return await profileRead;
+    } finally {
+      if (this._profileReads.get(account) === profileRead) {
+        this._profileReads.delete(account);
+      }
+    }
+  }
+
+  /**
+   * @param {string} account
+   * @returns {Promise<{ displayName: string | null, manager: string | null }>}
+   */
+  async _readUserProfile(account) {
     const login = toClaimsLogin(account);
     const url = this._absolute(
       `/_api/SP.UserProfiles.PeopleManager/GetPropertiesFor(accountName=@v)?@v='${encodeURIComponent(login)}'`

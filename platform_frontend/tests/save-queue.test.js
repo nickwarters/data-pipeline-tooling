@@ -117,6 +117,9 @@ function makeClient({ patchResponses = [], getCaseRow } = {}) {
     async resolveUsers() {
       return {};
     },
+    async resolveManagers() {
+      return {};
+    },
     async getExportHash() {
       return null;
     },

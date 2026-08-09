@@ -292,8 +292,7 @@ test('HttpSharePointClient: resolveManagers reads each unique profile once and e
     {
       when: (c) =>
         c.url.includes('GetPropertiesFor') && c.url.includes('jsmith'),
-      respond: () =>
-        profileResponse('John Smith', 'i:0#.w|CONTOSO\\MManager'),
+      respond: () => profileResponse('John Smith', 'i:0#.w|CONTOSO\\MManager'),
     },
     {
       when: (c) =>
@@ -306,11 +305,7 @@ test('HttpSharePointClient: resolveManagers reads each unique profile once and e
     fetchImpl: fetch,
   });
 
-  const resolved = await client.resolveManagers([
-    'jsmith',
-    'jsmith',
-    'bjones',
-  ]);
+  const resolved = await client.resolveManagers(['jsmith', 'jsmith', 'bjones']);
 
   assert.deepEqual(resolved, { jsmith: 'mmanager', bjones: 'boss' });
   assert.equal(
@@ -358,6 +353,78 @@ test('HttpSharePointClient: resolveManagers maps a malformed Manager property to
   });
 
   assert.deepEqual(await client.resolveManagers(['jsmith']), { jsmith: null });
+});
+
+test('HttpSharePointClient: resolveManagers reads Manager from the verbose profile envelope', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.url.includes('GetPropertiesFor'),
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            DisplayName: 'John Smith',
+            UserProfileProperties: {
+              results: [{ Key: 'Manager', Value: 'CONTOSO\\MManager' }],
+            },
+          }),
+          { status: 200 }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  assert.deepEqual(await client.resolveManagers(['jsmith']), {
+    jsmith: 'mmanager',
+  });
+});
+
+test('HttpSharePointClient: concurrent user and manager resolution shares a profile read', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.url.includes('GetPropertiesFor'),
+      respond: () => profileResponse('John Smith', 'CONTOSO\\MManager'),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const [users, managers] = await Promise.all([
+    client.resolveUsers(['jsmith']),
+    client.resolveManagers(['jsmith']),
+  ]);
+
+  assert.deepEqual(users, { jsmith: 'John Smith' });
+  assert.deepEqual(managers, { jsmith: 'mmanager' });
+  assert.equal(
+    calls.filter((c) => c.url.includes('GetPropertiesFor')).length,
+    1
+  );
+});
+
+test('HttpSharePointClient: profile resolution reads again after an in-flight request settles', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.url.includes('GetPropertiesFor'),
+      respond: () => profileResponse('John Smith', 'CONTOSO\\MManager'),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  await client.resolveUsers(['jsmith']);
+  await client.resolveManagers(['jsmith']);
+
+  assert.equal(
+    calls.filter((c) => c.url.includes('GetPropertiesFor')).length,
+    2
+  );
 });
 
 // --- getExportHash ---
