@@ -8,7 +8,7 @@ Before doing any non-trivial work in this repo, read:
 
 1. **[CONTEXT.md](./CONTEXT.md)** — domain language. Use these terms exactly when discussing or coding (`Case Type`, `Question Definition`, `Applicable Question`, `Answer`, `Remediation Action`, `Reviewer`, `Responsible Party`, `Case Type Owner`, `Conversation`, `Outcome`).
 2. **[docs/guide/add-a-page.md](./docs/guide/add-a-page.md)** — the one-page
-   authoring path: state → `h()`, actions, effects, route entry, and tests.
+   authoring path: state → `h()`/`svg()`, actions, effects, route entry, and tests.
 3. **[docs/adr/](./docs/adr/)** — 48 architecture decisions, numbered
    (`0001`–`0048`). Read the status before relying on an older decision, and do
    not deviate from an accepted ADR without surfacing the deviation explicitly.
@@ -22,7 +22,7 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
 - **SPA shell, hash routing, page independence**. One `.aspx` host page, one Content Editor, one `app.js`. The route table in `setup/register-routes.js` is the one place that names a page module, and it holds each one as a static `import` on the entry's `page` key (ADR-0042). `#/question-bank` is the single exception and keeps its `load` thunk: largest subsystem in the app, only a Maintainer opens it, and the thunk is the seam `AppContext.loadQuestionBankEditor` swaps. So the boot graph now does depend on every page but that one — a page that throws while its module is _evaluated_ is fatal to boot. What is contained is unchanged from there on. If a page module fails to load (broken, missing), the router (`lib/router.js`) catches it inside an async `navigate()`, logs it, and renders a plain-DOM `cora-route-error` panel into the route container; the nav lives outside that container and stays usable, so one broken page cannot break another or the boot. A navigation sequence token discards a stale mount that resolves after the user has already navigated on; `core/store-route.js` holds the matching token, so a page module that resolves late creates no slice and writes nothing. Registration is likewise isolated: `registerRoutes()` catches per entry, so one route failing to register costs only its own route. **Case Type modules are contained the same way (#493):** `loadCaseTypeSources()` in `setup/resolve-eligible-case-types.js` catches per slug, so a Case Type module that throws when it is evaluated is logged and DROPPED — it yields no `CaseTypeSource`, therefore appears in no `caseSources`/`journeyCaseSources`/allocation source in any partial form (containment can only narrow access, never widen it) — and every other Case Type still boots. Because a silently vanishing Case Type is indistinguishable from "no Cases assigned", boot names the dropped Case Types once in a non-blocking `cora-banner cora-banner-warning` notice (`setup/case-type-unavailable-banner.js`), mounted beside the UAT badge; nothing else in the app is hidden or gated by it. **Removal recipe — deleting a page is:** delete the page file (`src/pages/<page>.js`) + its entry in the `routeTable()` in `setup/register-routes.js` + its nav link. Still three steps; what changed is that forgetting the second one now fails `tsc`, `npm run verify` and boot loudly, where it used to cost one route quietly at runtime. `tests/component-layering-contract.test.js` enforces the layering: no file outside `src/pages/` may name a page module at all, static or dynamic, except the route table — and the route table's one dynamic page specifier must be the Question Bank editor. **The rest of boot is one static graph (#575).** Only two deferrals remain: the route table's Question Bank page thunk and the per-slug Case Type importer thunks. The nav in `setup/app-chrome.js` is static, and its failure is fatal. Everything else `src/app.js` needs is a header import, because a module whose failure kills boot gained nothing from being lazy except a serial chain of round trips. Boot's last line of defence is `boot().catch(renderBootError)` — `src/lib/boot-error-panel.js` renders a `cora-boot-error` alert panel, the same one `app-chrome.js` uses for its fatal-nav path, so a failed boot is visible instead of console-only. Its honest limit: a module in the static graph that throws while being _evaluated_ does so before that catch is registered, so the panel covers boot's body, not boot's module graph; covering that would need a fallback element in the host page that a successful boot clears, which is not done. The same contract test is the ratchet — `src/app.js` must contain no `import(` and must wire `renderBootError`.
 - **Store-driven pure views in light DOM.** Each application route owns state
   shaped as `{ chrome, routes }`. Pages export `createRouteSlice()` with initial
-  state, a reducer, and a pure `state → h()` view. Event callbacks dispatch
+  state, a reducer, and a pure `state → h()`/`svg()` view. Event callbacks dispatch
   `domain/event` actions; async work and persistence live in effects. The
   `createStoreRoute()` adapter creates the store and memo cache, commits through
   keyed `render()`, contains route failures, and cleans up on navigation. It also
@@ -63,12 +63,12 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
   throwing on `on[A-Z]` and on `class`: the mistake is caught where it is made,
   rather than by a repo-wide scan after the fact.
   **`view` produces, `render` commits (ADR-0039).** A _view_ is pure, returns an
-  `h()` tree and touches nothing — `slice.view()`, `*View()`, `*-view.js`, the
+  `h()`/`svg()` tree and touches nothing — `slice.view()`, `*View()`, `*-view.js`, the
   thunk passed to `memo()`. _Render_ means committing a tree into a live
   container, and `core/render.js` (`tools.render(container, tree)`) is the only
   thing that does it. Never name a producer `render`; the store's callback is
   `onStateChange` precisely because the store does not touch the DOM.
-- **Light DOM and CSS isolation.** `h()` creates safe DOM nodes, keyed `render()`
+- **Light DOM and CSS isolation.** `h()` and `svg()` create safe DOM nodes, keyed `render()`
   preserves focus/caret/scroll across renders, and the `cora-` CSS prefix remains
   the SharePoint-isolation boundary. See the current
   [state/action/render explainer](./docs/component-anatomy-explainer.html).
@@ -235,7 +235,7 @@ src/
     case-statuses.js            # CASE_STATUS: the persisted Case lifecycle values — do not change them
     empty-state.js              # EmptyState/LoadingState: the shared "nothing here yet" and
                                 #   in-flight placeholders, one spelling of each
-    html.js                     # h() plain-function view primitive
+    html.js                     # h()/svg() plain-function view primitives
     navigate.js                 # navigateTo/redirectTo: the only writers of location.hash (#519)
     people-search.js            # debounced, mount-lifetime-checked directory search shared by every
                                 #   people picker (was pages/cora-case-review/)
@@ -252,7 +252,7 @@ src/
   core/                         # store-driven view runtime (ADR-0034)
                                 #   see docs/guide/store-actions-and-effects.md for the contract
     chrome-state.js             # shared current-user/permissions store slice
-    render.js                   # keyed DOM reconciler: commits an h() tree into a live container,
+    render.js                   # keyed DOM reconciler: commits an h()/svg() tree into a live container,
                                 #   patching in place (focus/caret/scroll survive) — CORE-2 (#404),
                                 #   named morph() until ADR-0039
     store.js                    # single route-local store: dispatch/reducer, coalesced

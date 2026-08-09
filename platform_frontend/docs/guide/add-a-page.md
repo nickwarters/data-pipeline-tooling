@@ -1,7 +1,8 @@
 # Add a store-driven page
 
 This is the shortest path from a new hash to a working CORA page. The whole
-authoring model is: **write a function from state to `h()`; dispatch actions**.
+authoring model is: **write a function from state to an `h()`/`svg()` tree;
+dispatch actions**.
 The route adapter owns the store, rendering, listener cleanup, and teardown.
 
 ## 1. Describe the state and actions
@@ -20,7 +21,7 @@ DOM control produced it.
 
 ## 2. Write the pure view
 
-A view is synchronous and deterministic: state in, an `h()` tree out. Event
+A view is synchronous and deterministic: state in, an `h()`/`svg()` tree out. Event
 callbacks dispatch actions. A view never fetches, saves, awaits, subscribes,
 mutates state, or owns cleanup.
 
@@ -54,14 +55,18 @@ export function greetingView(state, { dispatch }) {
 }
 ```
 
-Use `h()` for text and attributes; never put user data into `innerHTML`. Keep
-the `cora-` class prefix so SharePoint styles cannot leak across the boundary.
+Use `h()` for HTML elements and `svg()` for SVG elements; both builders support
+the same child and prop conventions. The prop-naming rules below apply to
+`svg()` too where the prop reaches an element. Never put user data into
+`innerHTML`. Keep the `cora-` class prefix so SharePoint styles cannot leak
+across the boundary.
 
-**Prop naming.** DOM events handed to `h()` are lowercase (`onclick`, `oninput`,
-`onchange`, `onkeydown`) and the class prop is `className` — never `class`.
+**Prop naming.** DOM events handed to `h()` or `svg()` are lowercase
+(`onclick`, `oninput`, `onchange`, `onkeydown`) and the class prop is `className`
+— never `class`.
 camelCase `on[A-Z]` names are reserved for component callback props (`onAnswer`,
 `onSort`, `onCommit`): a view function reads those off its own props object, so
-they never reach an element. Handing either spelling to `h()` throws
+they never reach an element. Handing either spelling to `h()` or `svg()` throws
 immediately, naming the prop and the correct form — so a mistake surfaces at the
 call site that made it, not as a listener that never fires.
 

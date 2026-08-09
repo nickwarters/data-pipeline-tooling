@@ -43,7 +43,7 @@ const _baseCreate = _doc.createElement.bind(_doc);
 _doc.createElement = (/** @type {string} */ tag) =>
   tag === 'select' ? new StubSelect() : _baseCreate(tag);
 
-const { h, unsafeHTML, applyProp, removeProp, getProps, setProps } =
+const { h, svg, unsafeHTML, applyProp, removeProp, getProps, setProps } =
   await import('../src/lib/html.js');
 
 // ===== TESTS =====
@@ -154,11 +154,84 @@ test('h: lowercase on* props still become listeners', () => {
   assert.equal(calls, 1);
 });
 
+test('svg: creates SVG elements and keeps nested SVG elements in the namespace', () => {
+  const root = /** @type {any} */ (
+    svg('svg', { viewBox: '0 0 10 10' }, svg('g', {}, svg('rect')))
+  );
+  const group = /** @type {any} */ (root.childNodes[0]);
+  const rect = /** @type {any} */ (group.childNodes[0]);
+  assert.equal(root.namespaceURI, 'http://www.w3.org/2000/svg');
+  assert.equal(group.namespaceURI, root.namespaceURI);
+  assert.equal(rect.namespaceURI, root.namespaceURI);
+  assert.equal(root.getAttribute('viewBox'), '0 0 10 10');
+});
+
+test('svg: geometry, presentation, key, and className props are attributes', () => {
+  const rect = /** @type {any} */ (
+    svg('rect', {
+      x: 1,
+      width: 10,
+      cx: 2,
+      fill: 'red',
+      key: 'bar',
+      className: 'chart-bar',
+    })
+  );
+  assert.equal(rect.getAttribute('x'), '1');
+  assert.equal(rect.getAttribute('width'), '10');
+  assert.equal(rect.getAttribute('cx'), '2');
+  assert.equal(rect.getAttribute('fill'), 'red');
+  assert.equal(rect.getAttribute('key'), 'bar');
+  assert.equal(rect.getAttribute('class'), 'chart-bar');
+  assert.deepEqual(rect._propertyWrites, []);
+});
+
+test('svg: listeners install, replace, and remove through the prop helpers', () => {
+  let firstCalls = 0;
+  let secondCalls = 0;
+  const first = () => (firstCalls += 1);
+  const second = () => (secondCalls += 1);
+  const circle = /** @type {any} */ (svg('circle', { onclick: first }));
+
+  circle.dispatchEvent(
+    new /** @type {any} */ (globalThis).CustomEvent('click')
+  );
+  removeProp(circle, 'onclick', first);
+  applyProp(circle, 'onclick', second);
+  circle.dispatchEvent(
+    new /** @type {any} */ (globalThis).CustomEvent('click')
+  );
+  removeProp(circle, 'onclick', second);
+  circle.dispatchEvent(
+    new /** @type {any} */ (globalThis).CustomEvent('click')
+  );
+
+  assert.equal(firstCalls, 1);
+  assert.equal(secondCalls, 1);
+});
+
+test('svg: removeProp removes an SVG attribute', () => {
+  const rect = /** @type {any} */ (
+    svg('rect', { width: 10, className: 'bar' })
+  );
+  removeProp(rect, 'width', 10);
+  removeProp(rect, 'className', 'bar');
+  assert.equal(rect.getAttribute('width'), null);
+  assert.equal(rect.getAttribute('class'), null);
+});
+
+test('svg: records authored props for reconciliation', () => {
+  const props = { x: 1, className: 'bar' };
+  const rect = svg('rect', props);
+  props.x = 2;
+  assert.deepEqual(getProps(rect), { x: 1, className: 'bar' });
+});
+
 // ===== RECONCILER SUPPORT: getProps / setProps / applyProp / removeProp =====
 //
-// These back render() (src/core/render.js): h() records the props it built an
-// element with, and applyProp/removeProp are the single source of truth for how
-// one prop maps onto the DOM (used at build time and when a prop changes).
+// These back render() (src/core/render.js): h() and svg() record the props they
+// built an element with, and applyProp/removeProp are the single source of truth
+// for how one prop maps onto the DOM (used at build time and when a prop changes).
 
 test('getProps: returns the props h() built a node with', () => {
   const el = h('div', { 'aria-label': 'x', className: 'c' });

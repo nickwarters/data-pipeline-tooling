@@ -8,8 +8,9 @@
 // technique is the one morphdom and Idiomorph implement, and searching
 // "DOM morphing" is still the way to read up on it.
 //
-// A view is a pure function `state -> h() tree` (see src/lib/html.js). Because
-// h() builds *real* DOM nodes, a re-render produces a fresh detached tree.
+// A view is a pure function `state -> h()/svg() tree` (see src/lib/html.js).
+// Because the builders create *real* DOM nodes, a re-render produces a fresh
+// detached tree.
 // render() patches the live subtree to match that fresh tree, mutating existing
 // nodes in place instead of replacing them — so input focus, caret/selection,
 // and scroll position survive a render with **no** snapshot/restore machinery.
@@ -18,11 +19,12 @@
 //   - Keyed identity. A node carries a `key` attribute; keyed
 //     children are matched across renders by key, so a reorder *moves* the same
 //     DOM node rather than rebuilding it. Unkeyed children match by position.
-//   - Controlled form props. `value`/`checked` are applied as properties and
+//   - Controlled form props. HTML `value`/`checked` are applied as properties
 //     only when the *authored* value actually changed — an unrelated re-render
-//     never clobbers what a user is mid-way through typing.
-//   - Prop diffing off recorded props. h() records the props it built each node
-//     with (html.js getProps); render() diffs previous vs next authored props,
+//     never clobbers what a user is mid-way through typing. SVG props use the
+//     ordinary attribute path.
+//   - Prop diffing off recorded props. h()/svg() record the props they built
+//     each node with (html.js getProps); render() diffs previous vs next authored props,
 //     which is the only portable way to know which listener to remove or which
 //     attribute to drop (the live DOM does not expose either).
 //   - O(1) reference skip. If the new vnode is the *same object* as the live
@@ -35,7 +37,13 @@
 // Hard rules honoured: no third-party code, no innerHTML for user data (all
 // mutation is via DOM node APIs and html.js's applyProp/removeProp).
 
-import { applyProp, removeProp, getProps, setProps } from '../lib/html.js';
+import {
+  SVG_NAMESPACE,
+  applyProp,
+  removeProp,
+  getProps,
+  setProps,
+} from '../lib/html.js';
 
 /**
  * Instrumentation counters, mutated in place when a stats object is passed to
@@ -58,9 +66,10 @@ function bump(stats, key) {
 }
 
 /**
- * The tag/kind of a node: `'#text'` for text nodes, the uppercase tag name for
- * elements. `nodeName` is defined on every node in both the real DOM and the
- * test stub, so it classifies both uniformly.
+ * The tag/kind of a node: `'#text'` for text nodes, or the builder's
+ * namespace-sensitive element name. `nodeName` is defined on every node in
+ * both the real DOM and the test stub, so HTML/SVG namespace changes do not
+ * compare as the same element.
  * @param {any} node
  * @returns {string}
  */
@@ -106,20 +115,19 @@ function sameType(a, b) {
 
 /**
  * Diff the authored props of a kept element against the new element's props and
- * apply the difference in place. `value`/`checked` are handled separately as
- * controlled form props (see {@link patchFormProp}).
+ * apply the difference in place. HTML `value`/`checked` are handled
+ * separately as controlled form props (see {@link patchFormProp}); SVG uses the
+ * ordinary prop helpers for those names.
  * @param {any} oldEl
  * @param {any} newEl
  */
 function patchProps(oldEl, newEl) {
   const oldProps = getProps(oldEl) || {};
   const newProps = getProps(newEl) || {};
+  const isHtml = oldEl.namespaceURI !== SVG_NAMESPACE;
   const keys = new Set([...Object.keys(oldProps), ...Object.keys(newProps)]);
   for (const key of keys) {
-    // value/checked are controlled form properties, reconciled below against
-    // the *authored* value so an unrelated re-render can't clobber an in-flight
-    // edit. They are only ever authored on form controls in this codebase.
-    if (key === 'value' || key === 'checked') continue;
+    if (isHtml && (key === 'value' || key === 'checked')) continue;
     let ov = oldProps[key];
     if (ov == null) ov = undefined;
     let nv = newProps[key];
@@ -128,8 +136,10 @@ function patchProps(oldEl, newEl) {
     if (ov !== undefined) removeProp(oldEl, key, ov);
     if (nv !== undefined) applyProp(oldEl, key, nv);
   }
-  patchFormProp(oldEl, oldProps, newProps, 'value');
-  patchFormProp(oldEl, oldProps, newProps, 'checked');
+  if (isHtml) {
+    patchFormProp(oldEl, oldProps, newProps, 'value');
+    patchFormProp(oldEl, oldProps, newProps, 'checked');
+  }
   setProps(oldEl, newProps);
 }
 

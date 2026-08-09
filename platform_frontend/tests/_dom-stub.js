@@ -4,6 +4,9 @@ import { isolateBrowserGlobals } from './helpers/browser-globals.js';
 /** @type {Set<() => void>} */
 const domMutationObservers = new Set();
 
+const HTML_NAMESPACE = 'http://www.w3.org/1999/xhtml';
+const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
+
 function notifyDomMutation() {
   for (const observer of [...domMutationObservers]) observer();
 }
@@ -23,7 +26,8 @@ function notifyDomMutation() {
  */
 
 export class StubEl {
-  constructor(tag = '') {
+  constructor(tag = '', namespaceURI = HTML_NAMESPACE) {
+    this.namespaceURI = namespaceURI;
     this.tagName = tag.toUpperCase();
     /** Raw tag name as passed to `document.createElement`. */
     this._tagName = tag;
@@ -269,6 +273,61 @@ export class StubEl {
   }
 }
 
+/** Strict DOM-property probes make accidental SVG property paths observable. */
+export class StubSvgEl extends StubEl {
+  constructor(tag = '') {
+    super(tag, SVG_NAMESPACE);
+    this.tagName = tag;
+    this._tagName = tag;
+    /** @type {Array<[string, any]>} */
+    this._propertyWrites = [];
+
+    /** @type {string[]} */
+    const propertyNames = [
+      'className',
+      'value',
+      'checked',
+      'disabled',
+      'readOnly',
+      'hidden',
+      'id',
+      'role',
+      'tabIndex',
+      'href',
+      'title',
+      'name',
+      'type',
+      'placeholder',
+      'style',
+      'x',
+      'y',
+      'width',
+      'height',
+      'cx',
+      'cy',
+      'r',
+      'rx',
+      'ry',
+      'pathLength',
+      'transform',
+      'fill',
+      'stroke',
+    ];
+    const self = /** @type {any} */ (this);
+    for (const key of propertyNames) {
+      const currentValue = self[key];
+      Object.defineProperty(this, key, {
+        configurable: true,
+        get: () => currentValue,
+        set: (/** @type {any} */ value) => {
+          this._propertyWrites.push([key, value]);
+          throw new TypeError('SVG property is read-only');
+        },
+      });
+    }
+  }
+}
+
 /**
  * StubEl variant that mimics custom-element upgrade: inserting a child calls
  * its `connectedCallback()`, so registered components render when a parent
@@ -484,6 +543,11 @@ export function installDom() {
       el.tagName = tag.toUpperCase();
       el._tagName = tag;
       return el;
+    },
+    /** @param {string} namespaceURI @param {string} tag */
+    createElementNS(namespaceURI, tag) {
+      if (namespaceURI === SVG_NAMESPACE) return new StubSvgEl(tag);
+      return new StubEl(tag, namespaceURI);
     },
     createTextNode(/** @type {string} */ s) {
       const n = new StubEl('#text');
