@@ -9,10 +9,8 @@ installDom();
 const { createRouteSlice, teamStatsView } =
   await import('../src/pages/cora-team-stats.js');
 
-/** @param {any} [client] */
-function context(client = {}) {
+function context() {
   return /** @type {any} */ ({
-    client,
     chrome: makeChrome(),
   });
 }
@@ -42,15 +40,7 @@ test('team stats slice: keeps shared chrome, empty route state, and reducer iden
 });
 
 test('team stats slice: has no start effect or client loading', () => {
-  const client = {
-    listCases() {
-      throw new Error('client loading is not part of this page');
-    },
-    requestCases() {
-      throw new Error('client requests are not part of this page');
-    },
-  };
-  const slice = createRouteSlice({}, context(client));
+  const slice = createRouteSlice({}, context());
 
   assert.equal(/** @type {any} */ (slice).start, undefined);
 });

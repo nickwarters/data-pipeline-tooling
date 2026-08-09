@@ -36,7 +36,7 @@ phantom `#/reports/reviewer-team` is struck from CONTEXT.md rather than kept as
 an aspiration.
 
 The accepted page decision describes the finished consumer. The initial route
-delivery may ship `#/team-stats` as a Reviewer Manager-gated static shell with
+delivery ships `#/team-stats` as a Reviewer Manager-gated static shell with
 an empty “No data yet.” state while its prerequisites are outstanding. The
 actual Report Feed and live-tail page remains blocked on the existing follow-ups
 #478, #471, and #472; this staged shell does not change the two-page decision or
