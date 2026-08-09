@@ -157,8 +157,9 @@ composes with whatever else the viewer is on the Case.
 
 It is resolved **from the Case row**, `assignedReviewerManager === userId`,
 exactly as `responsiblePartyManager` is, and _not_ from the platform-wide
-`Reviewer Managers` group. That field already exists on every Case row and
-already drives the `#/reports/reviewer-team` report, so scoping costs nothing and
+`Reviewer Managers` group. That field already exists on every Case row and is the
+planned reporting-snapshot input for the hierarchy-attributed `#/team-stats`
+Report Feed; no `#/reports/reviewer-team` route ever existed, so scoping costs nothing and
 keeps the Role in line with every other non-assigned role in `resolveRoles`:
 each is scoped by something Case-specific. Resolving it from the group would have
 made a Reviewer Manager a platform-wide reader of every Case of every Case Type —

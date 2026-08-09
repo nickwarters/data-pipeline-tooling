@@ -79,6 +79,9 @@ export function AppNav({ capabilities, hash }) {
   if (isReviewer) {
     itemsEl.appendChild(AppNavItem('My Stats', '#/my-stats', navItems));
   }
+  if (isReviewerManager) {
+    itemsEl.appendChild(AppNavItem('Team Stats', '#/team-stats', navItems));
+  }
   if (isOwner) {
     itemsEl.appendChild(
       AppNavItem('Question Bank', '#/question-bank', navItems)

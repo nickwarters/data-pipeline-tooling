@@ -81,6 +81,12 @@ file means no report is available; `?mock=1` loads the canonical development
 fixture. The page currently preserves its empty view while report rendering and
 the live tail are added separately.
 
+### Team Stats page
+
+`#/team-stats` is a Reviewer Manager-only empty shell. It currently shows “No
+data yet.” The Report Feed and live-tail feature is intentionally staged in the
+existing follow-ups #478, #471, and #472.
+
 ### Case Review Page
 
 This is the main page used by reviewers to review the cases. Cases have a few section, all should be configurable.

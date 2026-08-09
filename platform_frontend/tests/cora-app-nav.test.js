@@ -106,6 +106,55 @@ test('AppNav: My Stats is visible to Reviewers, including dual-role users', () =
   );
 });
 
+test('AppNav: only Reviewer Managers see Team Stats, and it is active on that route', () => {
+  const manager = AppNav({
+    capabilities: /** @type {any} */ (
+      capabilities({ isReviewerManager: true })
+    ),
+    hash: '#/team-stats',
+  }).node;
+  assert.ok(findLink(manager, '#/team-stats'));
+  assert.equal(
+    findLink(manager, '#/team-stats')?.getAttribute('aria-current'),
+    'page'
+  );
+
+  const reviewer = AppNav({
+    capabilities: /** @type {any} */ (capabilities({ isReviewer: true })),
+    hash: '#/team-stats',
+  }).node;
+  assert.equal(findLink(reviewer, '#/team-stats'), null);
+});
+
+test('AppNav: dual-role manager order keeps My Stats, Team Stats, Question Bank, then My Team', () => {
+  const { node } = AppNav({
+    capabilities: /** @type {any} */ (
+      capabilities({
+        isReviewer: true,
+        isReviewerManager: true,
+        ownedCaseTypes: ['complaints'],
+      })
+    ),
+    hash: '#/',
+  });
+
+  const links = Array.from(
+    node.querySelectorAll('a'),
+    (link) => link.href
+  ).filter((href) =>
+    ['#/my-stats', '#/team-stats', '#/question-bank', '#/my-team'].includes(
+      href
+    )
+  );
+
+  assert.deepEqual(links, [
+    '#/my-stats',
+    '#/team-stats',
+    '#/question-bank',
+    '#/my-team',
+  ]);
+});
+
 test('AppNav: only Controls see Search, and Controls reach the rest of the app', () => {
   const controls = AppNav({
     capabilities: /** @type {any} */ (

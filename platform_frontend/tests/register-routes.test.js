@@ -77,6 +77,7 @@ test('registerRoutes: registers the complete public route contract, in order', (
     '#/',
     '#/dashboard',
     '#/my-stats',
+    '#/team-stats',
     '#/conversation/:caseType/:id',
     '#/conversation/:id',
     '#/question-bank',
@@ -177,6 +178,17 @@ test('my stats route: is statically registered after Dashboard and before Roadma
   assert.ok(names.indexOf('my-stats') < names.indexOf('roadmap'));
 });
 
+test('team stats route: is statically registered immediately after My Stats', () => {
+  const table = routeTable(makeContext());
+  const names = Object.keys(table);
+  const teamStats = table['team-stats'];
+
+  assert.deepEqual(teamStats.paths, ['#/team-stats']);
+  assert.ok(teamStats.page);
+  assert.equal(teamStats.load, undefined);
+  assert.equal(names.indexOf('team-stats'), names.indexOf('my-stats') + 1);
+});
+
 test('route table: the Question Bank editor is the only page still fetched on demand', () => {
   const entries = Object.entries(routeTable(makeContext()));
   const deferred = entries
@@ -235,7 +247,12 @@ test('route table: only the eligibility-gated routes guard their mount', () => {
     .filter(([, entry]) => entry.guard)
     .map(([name]) => name);
 
-  assert.deepEqual(gated, ['my-stats', 'journey-cases', 'search']);
+  assert.deepEqual(gated, [
+    'my-stats',
+    'team-stats',
+    'journey-cases',
+    'search',
+  ]);
 });
 
 test('my stats guard: rejects and redirects a manager who is not a Reviewer', () => {
@@ -259,6 +276,36 @@ test('my stats guard: admits Reviewer-only and dual-role users', () => {
     assert.equal(guard?.(), true);
     assert.deepEqual(replacedUrls, []);
   }
+});
+
+test('team stats guard: admits a manager without the Reviewer capability', () => {
+  replacedUrls.length = 0;
+  const { guard } = routeTable(
+    makeContext([], { isReviewer: false, isReviewerManager: true })
+  )['team-stats'];
+
+  assert.equal(guard?.(), true);
+  assert.deepEqual(replacedUrls, []);
+});
+
+test('team stats guard: redirects a Reviewer who is not a manager', () => {
+  replacedUrls.length = 0;
+  const { guard } = routeTable(
+    makeContext([], { isReviewer: true, isReviewerManager: false })
+  )['team-stats'];
+
+  assert.equal(guard?.(), false);
+  assert.deepEqual(replacedUrls, ['/SitePages/app.aspx#/']);
+});
+
+test('team stats guard: admits a user with both Reviewer roles', () => {
+  replacedUrls.length = 0;
+  const { guard } = routeTable(
+    makeContext([], { isReviewer: true, isReviewerManager: true })
+  )['team-stats'];
+
+  assert.equal(guard?.(), true);
+  assert.deepEqual(replacedUrls, []);
 });
 
 test('my stats guard: follows resolveCapabilities for Reviewer group combinations', () => {
