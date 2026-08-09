@@ -5,7 +5,7 @@ import { installDom } from './_dom-stub.js';
 
 installDom();
 
-const { h } = await import('../src/lib/html.js');
+const { h, svg } = await import('../src/lib/html.js');
 const { render } = await import('../src/core/render.js');
 
 /** A fresh detached container to reconcile into. */
@@ -26,6 +26,17 @@ test('render: first render mounts the tree into an empty container', () => {
   assert.equal(root.childNodes.length, 1);
   assert.equal(root.childNodes[0].tagName, 'P');
   assert.equal(root.childNodes[0].textContent, 'hello');
+});
+
+test('render: changing namespace replaces a same-tag node', () => {
+  const root = container();
+  render(root, h('div', {}, h('circle', { key: 'same' })));
+  const htmlCircle = root.childNodes[0].childNodes[0];
+
+  render(root, h('div', {}, svg('circle', { key: 'same' })));
+  const svgCircle = root.childNodes[0].childNodes[0];
+  assert.notEqual(svgCircle, htmlCircle);
+  assert.equal(svgCircle.namespaceURI, 'http://www.w3.org/2000/svg');
 });
 
 test('render: null/false clears the container', () => {
@@ -126,6 +137,80 @@ test('render: attributes are added, changed, and removed', () => {
 
   render(root, h('div', {}, h('p', {}, 'x')));
   assert.equal(p.getAttribute('aria-label'), null);
+});
+
+test('render: patches SVG attributes and listeners in place', () => {
+  const root = container();
+  let firstCalls = 0;
+  let secondCalls = 0;
+  const first = () => (firstCalls += 1);
+  const second = () => (secondCalls += 1);
+
+  render(
+    root,
+    h(
+      'div',
+      {},
+      svg(
+        'svg',
+        { key: 'chart', className: 'one', onclick: first },
+        svg('rect', { key: 'bar', width: 10, fill: 'red' })
+      )
+    )
+  );
+  const chart = root.childNodes[0].childNodes[0];
+  const bar = chart.childNodes[0];
+
+  render(
+    root,
+    h(
+      'div',
+      {},
+      svg(
+        'svg',
+        { key: 'chart', className: 'two', onclick: second },
+        svg('rect', { key: 'bar', width: 20, fill: 'blue' })
+      )
+    )
+  );
+  assert.equal(root.childNodes[0].childNodes[0], chart);
+  assert.equal(chart.childNodes[0], bar);
+  assert.equal(chart.getAttribute('class'), 'two');
+  assert.equal(bar.getAttribute('width'), '20');
+  assert.equal(bar.getAttribute('fill'), 'blue');
+  chart.dispatchEvent(new G.CustomEvent('click'));
+  assert.equal(firstCalls, 0);
+  assert.equal(secondCalls, 1);
+
+  render(
+    root,
+    h('div', {}, svg('svg', { key: 'chart' }, svg('rect', { key: 'bar' })))
+  );
+  assert.equal(root.childNodes[0].childNodes[0], chart);
+  assert.equal(chart.getAttribute('class'), null);
+  assert.equal(bar.getAttribute('width'), null);
+  chart.dispatchEvent(new G.CustomEvent('click'));
+  assert.equal(secondCalls, 1);
+});
+
+test('render: SVG value and checked stay attributes through changes and removal', () => {
+  const root = container();
+  render(
+    root,
+    svg('svg', {}, svg('rect', { key: 'bar', value: 'first', checked: true }))
+  );
+  const bar = root.childNodes[0].childNodes[0];
+
+  render(
+    root,
+    svg('svg', {}, svg('rect', { key: 'bar', value: 'second', checked: false }))
+  );
+  assert.equal(bar.getAttribute('value'), 'second');
+  assert.equal(bar.getAttribute('checked'), 'false');
+
+  render(root, svg('svg', {}, svg('rect', { key: 'bar' })));
+  assert.equal(bar.getAttribute('value'), null);
+  assert.equal(bar.getAttribute('checked'), null);
 });
 
 test('render: a boolean property is patched and cleared', () => {

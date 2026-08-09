@@ -2,6 +2,8 @@
 /** @typedef {{ __unsafeHTML: string }} UnsafeHTML */
 /** @typedef {Node | UnsafeHTML | string | number | null | false | Array<Node | UnsafeHTML | string | number | null | false>} VNode */
 
+const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
+
 /**
  * Explicit raw HTML escape hatch for narrowly reviewed markup such as syntax
  * highlighting. Prefer DOM nodes and text children for ordinary UI.
@@ -13,19 +15,84 @@ export function unsafeHTML(html) {
 }
 
 /**
- * Records the raw props object each `h()`-built element was created with, so
- * `render()` (src/core/render.js) can diff the *authored* props of the previous
+ * Append view children using the same text and explicit raw-markup handling
+ * for both HTML and SVG builders.
+ * @param {any} el
+ * @param {VNode[]} children
+ */
+function appendChildren(el, children) {
+  const append = (/** @type {any} */ child) => {
+    if (child == null || child === false) return;
+    if (Array.isArray(child)) {
+      for (const c of child) append(c);
+    } else if (
+      child &&
+      typeof child === 'object' &&
+      typeof child.__unsafeHTML === 'string'
+    ) {
+      el.innerHTML = child.__unsafeHTML;
+    } else if (child && typeof child === 'object' && 'appendChild' in child) {
+      el.appendChild(/** @type {Node} */ (child));
+    } else {
+      if (document.createTextNode) {
+        el.appendChild(document.createTextNode(String(child)));
+      } else {
+        const textStub = document.createElement('text');
+        textStub.textContent = String(child);
+        el.appendChild(textStub);
+      }
+    }
+  };
+
+  if (
+    children.length === 1 &&
+    (typeof children[0] === 'string' || typeof children[0] === 'number')
+  ) {
+    el.textContent = String(children[0]);
+  } else {
+    append(children);
+  }
+}
+
+/**
+ * Keep render()'s controlled-form path attribute-backed for SVG nodes. SVG
+ * does not have HTML form properties, but render() still owns these two keys.
+ * @param {any} el
+ */
+function defineSvgFormProps(el) {
+  Object.defineProperties(el, {
+    value: {
+      configurable: true,
+      get: () => el.getAttribute('value') ?? '',
+      set: (/** @type {any} */ value) => {
+        el.setAttribute('value', String(value));
+      },
+    },
+    checked: {
+      configurable: true,
+      get: () => el.getAttribute('checked') === 'true',
+      set: (/** @type {any} */ value) => {
+        el.setAttribute('checked', String(Boolean(value)));
+      },
+    },
+  });
+}
+
+/**
+ * Records the raw props object each view-builder-built element was created with,
+ * so `render()` (src/core/render.js) can diff the *authored* props of the previous
  * and next trees rather than trying to read them back out of the live DOM
  * (attribute enumeration and attached listeners are not portably
- * introspectable). This is bookkeeping only — it does not change how `h()` is
- * called.
+ * introspectable). This is bookkeeping only — it does not change how `h()` or
+ * `svg()` is called.
  * @type {WeakMap<object, Record<string, any>>}
  */
 const NODE_PROPS = new WeakMap();
 
 /**
- * The props `h()` recorded for an element, or `undefined` for a node `h()`
- * never built (e.g. a text node, or an element from raw `createElement`).
+ * The props a view builder recorded for an element, or `undefined` for a node
+ * no view builder built (e.g. a text node, or an element from raw
+ * `createElement`).
  * @param {object} el
  * @returns {Record<string, any> | undefined}
  */
@@ -40,6 +107,12 @@ export function getProps(el) {
  * @param {Record<string, any>} props
  */
 export function setProps(el, props) {
+  // The controlled-form path writes these two keys directly; absent SVG props
+  // still need their attributes removed after that path runs.
+  if (el.namespaceURI === SVG_NAMESPACE) {
+    if (props.value == null) el.removeAttribute('value');
+    if (props.checked == null) el.removeAttribute('checked');
+  }
   NODE_PROPS.set(el, props);
 }
 
@@ -68,8 +141,9 @@ export function setProps(el, props) {
 /**
  * Apply one authored prop to an element, mapping it to the right DOM channel
  * (event listener, className, value/other property, or a plain attribute).
- * This is the single source of truth for that mapping: `h()` uses it at build
- * time and `render()` reuses it when a prop changes, so the two can never drift.
+ * This is the single source of truth for that mapping: `h()` and `svg()` use it
+ * at build time and `render()` reuses it when a prop changes, so the two can
+ * never drift.
  * `value` is applied directly here; `h()` defers *when* it calls this (see
  * below), not *how*.
  * @param {any} el
@@ -92,6 +166,8 @@ export function applyProp(el, key, value) {
   }
   if (key.startsWith('on') && typeof value === 'function') {
     el.addEventListener(key.slice(2).toLowerCase(), value);
+  } else if (el.namespaceURI === SVG_NAMESPACE) {
+    el.setAttribute(key === 'className' ? 'class' : key, String(value));
   } else if (key === 'className') {
     el.className = value;
   } else if (key === 'value' && 'value' in el) {
@@ -118,6 +194,8 @@ export function removeProp(el, key, prevValue) {
   if (key === 'innerHTML') return;
   if (key.startsWith('on') && typeof prevValue === 'function') {
     el.removeEventListener(key.slice(2).toLowerCase(), prevValue);
+  } else if (el.namespaceURI === SVG_NAMESPACE) {
+    el.removeAttribute(key === 'className' ? 'class' : key);
   } else if (key === 'className') {
     el.className = '';
   } else if (key === 'value' && 'value' in el) {
@@ -171,37 +249,7 @@ export function h(tag, props = {}, ...children) {
     applyProp(el, k, v);
   }
 
-  const append = (/** @type {any} */ child) => {
-    if (child == null || child === false) return;
-    if (Array.isArray(child)) {
-      for (const c of child) append(c);
-    } else if (
-      child &&
-      typeof child === 'object' &&
-      typeof child.__unsafeHTML === 'string'
-    ) {
-      el.innerHTML = child.__unsafeHTML;
-    } else if (child && typeof child === 'object' && 'appendChild' in child) {
-      el.appendChild(/** @type {Node} */ (child));
-    } else {
-      if (document.createTextNode) {
-        el.appendChild(document.createTextNode(String(child)));
-      } else {
-        const textStub = document.createElement('text');
-        textStub.textContent = String(child);
-        el.appendChild(textStub);
-      }
-    }
-  };
-
-  if (
-    children.length === 1 &&
-    (typeof children[0] === 'string' || typeof children[0] === 'number')
-  ) {
-    el.textContent = String(children[0]);
-  } else {
-    append(children);
-  }
+  appendChildren(el, children);
 
   // Apply `value` last so `<select>` matches against options that now exist.
   if (hasDeferredValue) {
@@ -211,5 +259,26 @@ export function h(tag, props = {}, ...children) {
   // Record the authored props so render() can diff them on the next render.
   NODE_PROPS.set(el, { ...props });
 
+  return el;
+}
+
+/**
+ * Build an SVG element in the SVG namespace.
+ * @param {string} tag
+ * @param {Record<string, any>} [props]
+ * @param {...VNode} children
+ * @returns {SVGElement}
+ */
+export function svg(tag, props = {}, ...children) {
+  const el = document.createElementNS(SVG_NAMESPACE, tag);
+  defineSvgFormProps(el);
+
+  for (const [k, v] of Object.entries(props)) {
+    if (v == null) continue;
+    applyProp(el, k, v);
+  }
+
+  appendChildren(el, children);
+  NODE_PROPS.set(el, { ...props });
   return el;
 }

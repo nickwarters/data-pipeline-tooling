@@ -7,7 +7,7 @@ you are changing.
 
 | Guide                                                       | What it covers                                                            |
 | ----------------------------------------------------------- | ------------------------------------------------------------------------- |
-| [Add a store-driven page](add-a-page.md)                    | One-page path: state → `h()`, actions, effects, route entry, tests        |
+| [Add a store-driven page](add-a-page.md)                    | One-page path: state → `h()`/`svg()`, actions, effects, route entry, tests |
 | [Store, actions, and effects](store-actions-and-effects.md) | Permanent contracts and ownership boundaries                              |
 | [Router integration](router.md)                             | Route independence, page resolution, registration, and cleanup            |
 | [SaveQueue](save-queue.md)                                  | Debounced, ETag-guarded persistence                                       |

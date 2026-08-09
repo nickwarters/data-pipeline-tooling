@@ -4,6 +4,9 @@ import { isolateBrowserGlobals } from './helpers/browser-globals.js';
 /** @type {Set<() => void>} */
 const domMutationObservers = new Set();
 
+const HTML_NAMESPACE = 'http://www.w3.org/1999/xhtml';
+const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
+
 function notifyDomMutation() {
   for (const observer of [...domMutationObservers]) observer();
 }
@@ -23,7 +26,8 @@ function notifyDomMutation() {
  */
 
 export class StubEl {
-  constructor(tag = '') {
+  constructor(tag = '', namespaceURI = HTML_NAMESPACE) {
+    this.namespaceURI = namespaceURI;
     this.tagName = tag.toUpperCase();
     /** Raw tag name as passed to `document.createElement`. */
     this._tagName = tag;
@@ -269,6 +273,41 @@ export class StubEl {
   }
 }
 
+/** Strict geometry/class probes make accidental property paths observable. */
+export class StubSvgEl extends StubEl {
+  constructor(tag = '') {
+    super(tag, SVG_NAMESPACE);
+    this.tagName = tag;
+    this._tagName = tag;
+    /** @type {Array<[string, any]>} */
+    this._propertyWrites = [];
+
+    /** @type {string} */
+    let className = '';
+    Object.defineProperty(this, 'className', {
+      configurable: true,
+      get: () => className,
+      set: (/** @type {any} */ value) => {
+        this._propertyWrites.push(['className', value]);
+        throw new TypeError('SVG className is read-only');
+      },
+    });
+
+    /** @type {Record<string, any>} */
+    const geometry = {};
+    for (const key of ['x', 'y', 'width', 'height', 'cx', 'cy', 'r']) {
+      Object.defineProperty(this, key, {
+        configurable: true,
+        get: () => geometry[key],
+        set: (/** @type {any} */ value) => {
+          this._propertyWrites.push([key, value]);
+          throw new TypeError(`SVG ${key} is read-only`);
+        },
+      });
+    }
+  }
+}
+
 /**
  * StubEl variant that mimics custom-element upgrade: inserting a child calls
  * its `connectedCallback()`, so registered components render when a parent
@@ -484,6 +523,11 @@ export function installDom() {
       el.tagName = tag.toUpperCase();
       el._tagName = tag;
       return el;
+    },
+    /** @param {string} namespaceURI @param {string} tag */
+    createElementNS(namespaceURI, tag) {
+      if (namespaceURI === SVG_NAMESPACE) return new StubSvgEl(tag);
+      return new StubEl(tag, namespaceURI);
     },
     createTextNode(/** @type {string} */ s) {
       const n = new StubEl('#text');
