@@ -5,7 +5,9 @@ Date: 2026-08-09
 ## Status
 
 Accepted. Consumes the Report Feed defined by the data pipeline's
-[ADR-0018](../../../docs/adr/0018-report-feeds-published-locally-delivered-outside-the-framework.md).
+[ADR-0018](../../../docs/adr/0018-report-feeds-published-locally-delivered-outside-the-framework.md),
+with the shared envelope captured by the canonical
+[`123456.txt`](../../dev/fixtures/my-stats/123456.txt) fixture.
 
 ## Context
 
