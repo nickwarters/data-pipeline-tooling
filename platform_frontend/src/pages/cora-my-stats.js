@@ -32,7 +32,7 @@ export function myStatsView(_state) {
  * @param {{ loadReportFeed?: typeof loadReportFeed }} [dependencies]
  * @returns {{
  *   initialState: MyStatsState,
- *   reducer: (state: MyStatsState, action: unknown) => MyStatsState,
+ *   reducer: (state: MyStatsState, action: any) => MyStatsState,
  *   view: (state: MyStatsState) => HTMLElement,
  *   start: (tools: { dispatch: (action: unknown) => void, context: import('../setup/register-routes.js').AppContext, isActive: () => boolean, signal: AbortSignal }) => void,
  * }}
@@ -48,17 +48,9 @@ export function createRouteSlice(
       routes: { myStats: { reportFeed: null } },
     },
     reducer(state, action) {
-      if (
-        typeof action === 'object' &&
-        action !== null &&
-        /** @type {{ type?: unknown }} */ (action).type === 'report-feed/loaded'
-      ) {
-        const reportFeedAction =
-          /** @type {{ reportFeed: import('../services/report-feed-loader.js').ReportFeedEnvelope | null }} */ (
-            action
-          );
+      if (action.type === 'report-feed/loaded') {
         return patchRoute(state, 'myStats', {
-          reportFeed: reportFeedAction.reportFeed,
+          reportFeed: action.reportFeed,
         });
       }
       return state;

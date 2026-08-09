@@ -1,6 +1,8 @@
 // @ts-check
+import { existsSync } from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { fileURLToPath } from 'node:url';
 
 import { loadReportFeed } from '../src/services/report-feed-loader.js';
 
@@ -21,7 +23,7 @@ function response(status, body = envelope) {
   });
 }
 
-test('Report Feed loader reduces claims account, lower-cases its filename, scopes it to the site, and forwards the signal', async () => {
+test('Report Feed loader lower-cases its filename, scopes it to the site, and forwards the signal', async () => {
   const controller = new AbortController();
   const globals = /** @type {Record<string, unknown>} */ (globalThis);
   /** @type {string | undefined} */
@@ -31,7 +33,7 @@ test('Report Feed loader reduces claims account, lower-cases its filename, scope
 
   globals._spPageContextInfo = { webServerRelativeUrl: '/sites/cora' };
   try {
-    const result = await loadReportFeed('i:0#.w|CONTOSO\\MiXeD', {
+    const result = await loadReportFeed('MiXeD', {
       fetch: async (url, options) => {
         requestedUrl = String(url);
         requestedOptions = options;
@@ -109,6 +111,17 @@ test('Report Feed loader rejects malformed JSON', async () => {
   );
 });
 
+test('Report Feed loader rejects an unsupported schema version', async () => {
+  await assert.rejects(
+    loadReportFeed('reviewer', {
+      fetch: async () => response(200, { schema_version: 2 }),
+      hostWebUrl: '/sites/cora',
+      search: '',
+    }),
+    /Unsupported Report Feed schema version/
+  );
+});
+
 test('Report Feed loader propagates an aborted fetch', async () => {
   const abort = Object.assign(new Error('navigation'), { name: 'AbortError' });
 
@@ -128,7 +141,7 @@ test('Report Feed loader selects the canonical mock fixture regardless of accoun
   /** @type {string | undefined} */
   let requestedUrl;
 
-  await loadReportFeed('i:0#.w|CONTOSO\\SomeoneElse', {
+  await loadReportFeed('SomeoneElse', {
     fetch: async (url) => {
       requestedUrl = String(url);
       return response(200);
@@ -137,6 +150,12 @@ test('Report Feed loader selects the canonical mock fixture regardless of accoun
     search: '?mock=1',
   });
 
-  assert.match(requestedUrl ?? '', /dev\/fixtures\/my-stats\/123456\.txt$/);
-  assert.ok(!requestedUrl?.includes('someoneelse'));
+  if (!requestedUrl) throw new Error('the mock fetch did not receive a URL');
+  assert.equal(
+    fileURLToPath(requestedUrl),
+    fileURLToPath(
+      new URL('../dev/fixtures/my-stats/123456.txt', import.meta.url)
+    )
+  );
+  assert.ok(existsSync(fileURLToPath(requestedUrl)));
 });
