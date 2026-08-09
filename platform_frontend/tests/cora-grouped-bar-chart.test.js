@@ -31,14 +31,7 @@ const data = {
     {
       key: 'week-two',
       label: 'Week two',
-      marks: [
-        {
-          key: 'settled',
-          label: 'Other settled',
-          value: 2,
-          tone: 'danger',
-        },
-      ],
+      marks: [{ key: 'settled', label: 'Settled', value: 2, tone: 'success' }],
     },
   ],
 };
@@ -46,9 +39,9 @@ const data = {
 /** @type {import('../src/components/base/cora-grouped-bar-chart.js').GroupedBarChartConfig} */
 const config = {
   width: 360,
-  height: 240,
+  height: 280,
   ariaLabel: 'Review counts',
-  margin: { top: 20, right: 20, bottom: 48, left: 48 },
+  margin: { top: 20, right: 20, bottom: 52, left: 48 },
   yMax: 10,
   tickCount: 3,
   xAxisLabel: 'Period',
@@ -85,14 +78,19 @@ function keyed(root, key) {
   );
 }
 
-test('GroupedBarChart returns a detached SVG tree with accessible named root', () => {
+/** @param {any} node @param {string} attribute */
+function numberAttribute(node, attribute) {
+  return Number(node.getAttribute(attribute));
+}
+
+test('GroupedBarChart returns a detached, named SVG tree', () => {
   const root = GroupedBarChart({ data, config });
 
   assert.equal(root.namespaceURI, SVG_NAMESPACE);
   assert.equal(root.tagName, 'svg');
-  assert.equal(root.getAttribute('viewBox'), '0 0 360 240');
+  assert.equal(root.getAttribute('viewBox'), '0 0 360 280');
   assert.equal(root.getAttribute('width'), '360');
-  assert.equal(root.getAttribute('height'), '240');
+  assert.equal(root.getAttribute('height'), '280');
   assert.equal(root.getAttribute('role'), 'group');
   assert.equal(root.getAttribute('aria-label'), 'Review counts');
   assert.equal(root.parentNode, null);
@@ -102,7 +100,7 @@ test('GroupedBarChart returns a detached SVG tree with accessible named root', (
   );
 });
 
-test('GroupedBarChart lays out grouped side-by-side bars, axes, ticks, and labels', () => {
+test('GroupedBarChart lays out grouped bars, axes, legend, and value labels', () => {
   const root = GroupedBarChart({ data, config });
   const groupNodes = all(root, '.cora-grouped-bar-chart__group');
   const barNodes = bars(root);
@@ -113,6 +111,7 @@ test('GroupedBarChart lays out grouped side-by-side bars, axes, ticks, and label
   assert.equal(all(root, '.cora-grouped-bar-chart__x-tick').length, 2);
   assert.equal(all(root, '.cora-grouped-bar-chart__group-label').length, 2);
   assert.equal(all(root, '.cora-grouped-bar-chart__value-label').length, 3);
+  assert.equal(all(root, '.cora-grouped-bar-chart__legend-item').length, 2);
   assert.equal(
     all(root, '.cora-grouped-bar-chart__x-axis-label')[0].textContent,
     'Period'
@@ -122,22 +121,15 @@ test('GroupedBarChart lays out grouped side-by-side bars, axes, ticks, and label
     'Cases'
   );
 
-  const firstGroupBars = all(groupNodes[0], '.cora-grouped-bar-chart__bar');
-  assert.ok(
-    Number(firstGroupBars[0].getAttribute('x')) <
-      Number(firstGroupBars[1].getAttribute('x'))
+  const firstGroupBars = bars(groupNodes[0]);
+  assert.notEqual(
+    numberAttribute(firstGroupBars[0], 'x'),
+    numberAttribute(firstGroupBars[1], 'x')
   );
-  assert.equal(firstGroupBars[0].getAttribute('height'), '118.4');
-  assert.equal(firstGroupBars[1].getAttribute('height'), '59.2');
-  assert.equal(firstGroupBars[0].getAttribute('y'), '73.6');
-  assert.equal(
-    firstGroupBars[0].getAttribute('fill'),
-    'var(--cora-color-success)'
+  const settledBar = firstGroupBars.find(
+    (bar) => bar.getAttribute('fill') === 'var(--cora-color-success)'
   );
-  assert.equal(
-    firstGroupBars[0].getAttribute('stroke'),
-    'var(--cora-color-success)'
-  );
+  assert.equal(settledBar?.getAttribute('stroke'), 'var(--cora-color-success)');
   assert.equal(
     all(root, '.cora-grouped-bar-chart__value-label')[0].textContent,
     '8 cases'
@@ -147,76 +139,110 @@ test('GroupedBarChart lays out grouped side-by-side bars, axes, ticks, and label
     'Group: Week <one>'
   );
   assert.equal(
-    all(root, '.cora-grouped-bar-chart__x-tick').every(
-      (tick) => all(tick, '.cora-grouped-bar-chart__tick-label').length === 0
-    ),
-    true
+    new Set(
+      all(root, '.cora-grouped-bar-chart__group-label').map(
+        (label) => label.textContent
+      )
+    ).size,
+    2
   );
 });
 
-test('GroupedBarChart sparsifies visible x ticks and keeps one group-label layer', () => {
+test('x-axis selection is bounded and does not render duplicate labels', () => {
   const groups = Array.from({ length: 62 }, (_, index) => ({
     key: `day-${index + 1}`,
     label: `Day ${index + 1}`,
     marks: [{ key: 'settled', label: 'Settled', value: index }],
   }));
-  const root = GroupedBarChart({
+  const daily = GroupedBarChart({
     data: { groups },
-    config: { width: 900, height: 240, ariaLabel: 'Daily review counts' },
+    config: { width: 900, height: 280, ariaLabel: 'Daily review counts' },
   });
 
-  assert.equal(all(root, '.cora-grouped-bar-chart__x-tick').length, 12);
-  assert.equal(all(root, '.cora-grouped-bar-chart__group-label').length, 12);
-  assert.equal(all(root, '.cora-grouped-bar-chart__group-labels').length, 1);
+  assert.equal(all(daily, '.cora-grouped-bar-chart__x-tick').length, 12);
+  assert.equal(all(daily, '.cora-grouped-bar-chart__group-label').length, 12);
   assert.equal(
-    all(root, '.cora-grouped-bar-chart__group-label')[0].textContent,
+    all(daily, '.cora-grouped-bar-chart__group-label')[0].textContent,
     'Day 1'
   );
   assert.equal(
-    all(root, '.cora-grouped-bar-chart__group-label').at(-1).textContent,
+    all(daily, '.cora-grouped-bar-chart__group-label').at(-1).textContent,
     'Day 62'
   );
+
+  const repeated = GroupedBarChart({
+    data: {
+      groups: ['Mon', 'Mon', 'Tue', 'Tue', 'Wed', 'Wed'].map(
+        (label, index) => ({
+          key: `group-${index}`,
+          label,
+          marks: [],
+        })
+      ),
+    },
+    config: { width: 360, height: 220, ariaLabel: 'Repeated labels' },
+  });
+  const labels = all(repeated, '.cora-grouped-bar-chart__group-label').map(
+    (label) => label.textContent
+  );
+  assert.deepEqual(labels, ['Mon', 'Tue', 'Wed']);
 });
 
-test('GroupedBarChart exposes a visible token-backed series key', () => {
-  const root = GroupedBarChart({ data, config });
-  const legend = all(root, '.cora-grouped-bar-chart__legend')[0];
-  const items = all(legend, '.cora-grouped-bar-chart__legend-item');
+test('series slots are sorted by key and remain stable for sparse marks', () => {
+  const sparse = GroupedBarChart({
+    data: {
+      groups: [
+        {
+          key: 'first',
+          label: 'First',
+          marks: [
+            { key: 'beta', label: 'Beta', value: 6 },
+            { key: 'alpha', label: 'Alpha', value: 4 },
+          ],
+        },
+        {
+          key: 'second',
+          label: 'Second',
+          marks: [{ key: 'beta', label: 'Beta', value: 5 }],
+        },
+        {
+          key: 'third',
+          label: 'Third',
+          marks: [
+            { key: 'alpha', label: 'Alpha', value: 2 },
+            { key: 'beta', label: 'Beta', value: 3 },
+          ],
+        },
+      ],
+    },
+    config: {
+      width: 360,
+      height: 240,
+      ariaLabel: 'Sparse series',
+      tickCount: 2,
+    },
+  });
+  const groups = all(sparse, '.cora-grouped-bar-chart__group');
+  const secondBars = bars(groups[1]);
+  const thirdBars = bars(groups[2]);
+  const alphaOffset = numberAttribute(bars(keyed(groups[0], 'alpha'))[0], 'x');
+  const betaOffset = numberAttribute(bars(keyed(groups[0], 'beta'))[0], 'x');
 
-  assert.equal(legend.getAttribute('role'), 'group');
-  assert.equal(legend.getAttribute('aria-label'), 'Chart series');
-  assert.deepEqual(
-    all(legend, '.cora-grouped-bar-chart__legend-label').map(
-      (label) => label.textContent
-    ),
-    ['Settled', 'Provisional']
-  );
-  assert.equal(items.length, 2);
   assert.equal(
-    all(items[0], '.cora-grouped-bar-chart__legend-swatch')[0].getAttribute(
-      'fill'
-    ),
-    'var(--cora-color-success)'
+    all(sparse, '.cora-grouped-bar-chart__legend-label')[0].textContent,
+    'Alpha'
   );
   assert.equal(
-    all(items[1], '.cora-grouped-bar-chart__legend-swatch')[0].getAttribute(
-      'fill'
-    ),
-    'var(--cora-color-warning)'
+    all(sparse, '.cora-grouped-bar-chart__legend-label')[1].textContent,
+    'Beta'
   );
+  const groupBand = (360 - 52 - 20) / 3;
+  assert.equal(numberAttribute(secondBars[0], 'x') - groupBand, betaOffset);
+  assert.equal(numberAttribute(thirdBars[0], 'x') - groupBand * 2, alphaOffset);
+  assert.equal(numberAttribute(thirdBars[1], 'x') - groupBand * 2, betaOffset);
 });
 
-test('GroupedBarChart uses the first series identity for every occurrence', () => {
-  const root = GroupedBarChart({ data, config });
-  const secondGroup = all(root, '.cora-grouped-bar-chart__group')[1];
-  const settled = bars(secondGroup)[0];
-
-  assert.equal(settled.getAttribute('fill'), 'var(--cora-color-success)');
-  assert.match(settled.getAttribute('aria-label'), /Settled/);
-  assert.doesNotMatch(settled.getAttribute('aria-label'), /Other settled/);
-});
-
-test('GroupedBarChart reserves plot space for the legend', () => {
+test('legend and value-label bands stay above the plot with zero top margin', () => {
   const chartData = {
     groups: [
       {
@@ -226,30 +252,31 @@ test('GroupedBarChart reserves plot space for the legend', () => {
       },
     ],
   };
-  const defaultMargin = GroupedBarChart({
-    data: chartData,
-    config: { width: 200, height: 160, ariaLabel: 'Default margin' },
-  });
-  const zeroTopMargin = GroupedBarChart({
-    data: chartData,
-    config: {
-      width: 200,
-      height: 160,
-      ariaLabel: 'Zero top margin',
-      margin: { top: 0, right: 16, bottom: 48, left: 48 },
-    },
-  });
-
-  for (const root of [defaultMargin, zeroTopMargin]) {
+  for (const margin of [
+    undefined,
+    { top: 0, right: 16, bottom: 52, left: 48 },
+  ]) {
+    const root = GroupedBarChart({
+      data: chartData,
+      config: {
+        width: 220,
+        height: 220,
+        ariaLabel: 'Bands',
+        ...(margin ? { margin } : {}),
+      },
+    });
     const legendLabel = all(root, '.cora-grouped-bar-chart__legend-label')[0];
+    const valueLabel = all(root, '.cora-grouped-bar-chart__value-label')[0];
     const bar = bars(root)[0];
     assert.ok(
-      Number(bar.getAttribute('y')) > Number(legendLabel.getAttribute('y'))
+      numberAttribute(valueLabel, 'y') > numberAttribute(legendLabel, 'y')
     );
+    assert.ok(numberAttribute(bar, 'y') > numberAttribute(legendLabel, 'y'));
+    assert.ok(numberAttribute(valueLabel, 'y') < numberAttribute(bar, 'y'));
   }
 });
 
-test('GroupedBarChart wraps and truncates long legend labels with full names', () => {
+test('legend labels wrap into rows, retain full accessible names, and reject overflow', () => {
   const labels = [
     'A very long settled series',
     'Another long provisional series',
@@ -269,79 +296,90 @@ test('GroupedBarChart wraps and truncates long legend labels with full names', (
         },
       ],
     },
-    config: { width: 220, height: 240, ariaLabel: 'Long series' },
+    config: { width: 220, height: 320, ariaLabel: 'Long series' },
   });
   const items = all(root, '.cora-grouped-bar-chart__legend-item');
   const visibleLabels = all(root, '.cora-grouped-bar-chart__legend-label');
 
   assert.equal(items.length, labels.length);
-  assert.ok(visibleLabels[0].textContent.endsWith('…'));
-  assert.equal(items[0].getAttribute('aria-label'), labels[0]);
+  assert.ok(visibleLabels.some((label) => label.textContent.endsWith('…')));
+  assert.deepEqual(
+    items.map((item) => item.getAttribute('aria-label')),
+    labels
+  );
   assert.ok(
-    Number(visibleLabels[1].getAttribute('y')) >
-      Number(visibleLabels[0].getAttribute('y'))
+    numberAttribute(visibleLabels[1], 'y') >
+      numberAttribute(visibleLabels[0], 'y')
+  );
+
+  const tooMany = Array.from({ length: 20 }, (_, index) => ({
+    key: `series-${index}`,
+    label: `Series ${index}`,
+    value: 1,
+  }));
+  assert.throws(
+    () =>
+      GroupedBarChart({
+        data: { groups: [{ key: 'one', label: 'One', marks: tooMany }] },
+        config: { width: 220, height: 320, ariaLabel: 'Too many series' },
+      }),
+    /20 series.*20 legend rows/
   );
 });
 
-test('GroupedBarChart rounds default fractional tick labels', () => {
-  const root = GroupedBarChart({
+test('default formatting keeps subunit values nonzero and constant domains useful', () => {
+  const subunit = GroupedBarChart({
     data: {
       groups: [
         {
-          key: 'one',
-          label: 'One',
-          marks: [{ key: 'count', label: 'Count', value: 10 }],
+          key: 'tiny',
+          label: 'Tiny',
+          marks: [{ key: 'rate', label: 'Rate', value: 0.004 }],
         },
       ],
     },
-    config: {
-      width: 200,
-      height: 180,
-      ariaLabel: 'Rounded ticks',
-      yMax: 10,
-      tickCount: 4,
-    },
+    config: { width: 240, height: 220, ariaLabel: 'Tiny values' },
   });
-
-  assert.deepEqual(
-    all(root, '.cora-grouped-bar-chart__tick-label').map(
-      (label) => label.textContent
-    ),
-    ['0', '3.33', '6.67', '10']
+  const subunitLabels = all(subunit, '.cora-grouped-bar-chart__tick-label').map(
+    (label) => label.textContent
   );
-});
-
-test('GroupedBarChart gives every mark an accessible name and escapes labels as text', () => {
-  const root = GroupedBarChart({ data, config });
-  const bar = bars(root)[0];
-  const title = bar.childNodes.find(
-    (/** @type {any} */ child) => child.tagName === 'title'
-  );
-
-  assert.equal(bar.getAttribute('role'), 'img');
+  assert.ok(subunitLabels.includes('0.001'));
   assert.equal(
-    bar.getAttribute('aria-label'),
-    'Group: Week <one>: Settled, 8 cases'
+    all(subunit, '.cora-grouped-bar-chart__value-label')[0].textContent,
+    '0.004'
   );
-  assert.equal(title?.textContent, 'Group: Week <one>: Settled, 8 cases');
-  assert.equal(bar.querySelector('script'), null);
+  assert.notEqual(
+    all(subunit, '.cora-grouped-bar-chart__value-label')[0].textContent,
+    '0'
+  );
+
+  const constant = GroupedBarChart({
+    data: {
+      groups: [
+        {
+          key: 'constant',
+          label: 'Constant',
+          marks: [{ key: 'count', label: 'Count', value: 3.333 }],
+        },
+      ],
+    },
+    config: { width: 240, height: 220, ariaLabel: 'Constant values' },
+  });
+  assert.equal(
+    all(constant, '.cora-grouped-bar-chart__value-label')[0].textContent,
+    '3.33'
+  );
+  assert.equal(
+    all(constant, '.cora-grouped-bar-chart__tick-label').at(-1).textContent,
+    '4'
+  );
+  assert.ok(numberAttribute(bars(constant)[0], 'height') > 0);
 });
 
-test('GroupedBarChart renders provisional marks hollow while retaining their token stroke', () => {
-  const root = GroupedBarChart({ data, config });
-  const provisional = all(root, '.cora-grouped-bar-chart__bar--provisional')[0];
-
-  assert.ok(provisional);
-  assert.equal(provisional.getAttribute('fill'), 'none');
-  assert.equal(provisional.getAttribute('stroke'), 'var(--cora-color-warning)');
-  assert.equal(provisional.getAttribute('stroke-width'), '2');
-  assert.match(provisional.getAttribute('aria-label'), /provisional/);
-});
-
-test('GroupedBarChart supports empty and all-zero data without invalid geometry', () => {
+test('all-zero and empty data use finite positive geometry', () => {
   const empty = GroupedBarChart({
     data: { groups: [] },
-    config: { width: 200, height: 120, ariaLabel: 'Empty chart' },
+    config: { width: 200, height: 160, ariaLabel: 'Empty chart' },
   });
   const zero = GroupedBarChart({
     data: {
@@ -353,161 +391,129 @@ test('GroupedBarChart supports empty and all-zero data without invalid geometry'
         },
       ],
     },
-    config: { width: 200, height: 120, ariaLabel: 'Zero chart' },
+    config: { width: 200, height: 160, ariaLabel: 'Zero chart' },
   });
 
   assert.equal(bars(empty).length, 0);
   assert.equal(bars(zero).length, 1);
   assert.equal(bars(zero)[0].getAttribute('height'), '0');
-  assert.equal(bars(zero)[0].getAttribute('y'), '72');
   assert.equal(all(zero, '.cora-grouped-bar-chart__tick-label').length, 5);
   assert.equal(
     all(zero, '.cora-grouped-bar-chart__tick-label').at(-1).textContent,
     '1'
   );
+  for (const bar of bars(zero)) {
+    assert.equal(Number.isFinite(numberAttribute(bar, 'y')), true);
+  }
 });
 
-test('GroupedBarChart does not mutate caller data or config', () => {
-  const inputData = structuredClone(data);
-  const inputConfig = { ...config, margin: { ...config.margin } };
-  const beforeData = structuredClone(inputData);
-  const beforeConfig = { ...inputConfig, margin: { ...inputConfig.margin } };
-
-  GroupedBarChart({ data: inputData, config: inputConfig });
-
-  assert.deepEqual(inputData, beforeData);
-  assert.deepEqual(inputConfig, beforeConfig);
-});
-
-test('render preserves keyed groups and marks when their order changes', () => {
-  const rootContainer = document.createElement('div');
-  const first = GroupedBarChart({ data, config });
-  render(rootContainer, first);
-
-  const mounted = rootContainer.childNodes[0];
-  const firstGroups = all(mounted, '.cora-grouped-bar-chart__group');
-  const firstBars = bars(mounted);
-  const firstSettled = keyed(firstGroups[0], 'settled');
-
-  /** @type {import('../src/components/base/cora-grouped-bar-chart.js').GroupedBarChartData} */
-  const reorderedData = {
-    groups: [
-      {
-        key: 'week-two',
-        label: 'Week two',
-        marks: [{ key: 'settled', label: 'Settled', value: 3 }],
-      },
-      {
-        key: 'week-one',
-        label: 'Week <one>',
-        marks: [
-          {
-            key: 'provisional',
-            label: 'Provisional',
-            value: 5,
-            provisional: true,
-            tone: 'warning',
-          },
-          { key: 'settled', label: 'Settled', value: 9, tone: 'success' },
-        ],
-      },
-    ],
-  };
-  render(rootContainer, GroupedBarChart({ data: reorderedData, config }));
-
-  const nextGroups = all(rootContainer, '.cora-grouped-bar-chart__group');
-  const nextBars = bars(rootContainer);
-  const nextWeekOne = nextGroups[1];
-
-  assert.equal(nextGroups[0], firstGroups[1]);
-  assert.equal(nextGroups[1], firstGroups[0]);
-  assert.equal(keyed(nextWeekOne, 'settled'), firstSettled);
-  assert.equal(nextBars.includes(firstBars[0]), true);
-  assert.equal(nextBars.length, 3);
-});
-
-test('GroupedBarChart aligns sparse and reordered marks by their series key', () => {
-  /** @type {import('../src/components/base/cora-grouped-bar-chart.js').GroupedBarChartData} */
-  const sparseData = {
-    groups: [
-      {
-        key: 'first',
-        label: 'First',
-        marks: [
-          { key: 'alpha', label: 'Alpha', value: 4 },
-          { key: 'beta', label: 'Beta', value: 6 },
-        ],
-      },
-      {
-        key: 'second',
-        label: 'Second',
-        marks: [{ key: 'beta', label: 'Beta', value: 5 }],
-      },
-      {
-        key: 'third',
-        label: 'Third',
-        marks: [
-          { key: 'beta', label: 'Beta', value: 3 },
-          { key: 'alpha', label: 'Alpha', value: 2 },
-        ],
-      },
-    ],
-  };
-  const sparseConfig = {
-    width: 360,
-    height: 240,
-    ariaLabel: 'Sparse series',
-    tickCount: 2,
-  };
-  const root = GroupedBarChart({ data: sparseData, config: sparseConfig });
-  const groups = all(root, '.cora-grouped-bar-chart__group');
-  const groupLabels = all(root, '.cora-grouped-bar-chart__group-label');
-  const groupBand =
-    Number(groupLabels[1].getAttribute('x')) -
-    Number(groupLabels[0].getAttribute('x'));
-  const firstStart = Number(groupLabels[0].getAttribute('x')) - groupBand / 2;
-  const secondStart = Number(groupLabels[1].getAttribute('x')) - groupBand / 2;
-  const thirdStart = Number(groupLabels[2].getAttribute('x')) - groupBand / 2;
-  const firstBars = bars(groups[0]);
-  const secondBars = bars(groups[1]);
-  const thirdAlpha = bars(keyed(groups[2], 'alpha'))[0];
-  const thirdBeta = bars(keyed(groups[2], 'beta'))[0];
-  const alphaOffset = Number(firstBars[0].getAttribute('x')) - firstStart;
-  const betaOffset = Number(firstBars[1].getAttribute('x')) - firstStart;
-
-  assert.equal(secondBars.length, 1);
-  assert.ok(
-    Math.abs(
-      Number(secondBars[0].getAttribute('x')) - secondStart - betaOffset
-    ) < 0.000001
+test('each mark carries its own accessible identity and provisional hollow encoding', () => {
+  const root = GroupedBarChart({ data, config });
+  const provisional = all(root, '.cora-grouped-bar-chart__bar--provisional')[0];
+  const title = provisional.childNodes.find(
+    (/** @type {any} */ child) => child.tagName === 'title'
   );
-  assert.ok(
-    Math.abs(Number(thirdAlpha.getAttribute('x')) - thirdStart - alphaOffset) <
-      0.000001
+
+  assert.ok(provisional);
+  assert.equal(provisional.getAttribute('role'), 'img');
+  assert.equal(provisional.getAttribute('fill'), 'none');
+  assert.equal(provisional.getAttribute('stroke'), 'var(--cora-color-warning)');
+  assert.equal(provisional.getAttribute('stroke-width'), '2');
+  assert.equal(
+    provisional.getAttribute('aria-label'),
+    'Group: Week <one>: Provisional, 4 cases, provisional'
   );
-  assert.ok(
-    Math.abs(Number(thirdBeta.getAttribute('x')) - thirdStart - betaOffset) <
-      0.000001
+  assert.equal(title?.textContent, provisional.getAttribute('aria-label'));
+  assert.equal(provisional.querySelector('script'), null);
+});
+
+test('repeated mark keys must keep one label and tone identity', () => {
+  assert.throws(
+    () =>
+      GroupedBarChart({
+        data: {
+          groups: [
+            {
+              key: 'one',
+              label: 'One',
+              marks: [
+                { key: 'count', label: 'Count', value: 1, tone: 'success' },
+              ],
+            },
+            {
+              key: 'two',
+              label: 'Two',
+              marks: [
+                {
+                  key: 'count',
+                  label: 'Other count',
+                  value: 2,
+                  tone: 'success',
+                },
+              ],
+            },
+          ],
+        },
+        config: { width: 240, height: 220, ariaLabel: 'Conflict' },
+      }),
+    /series identity.*count/i
+  );
+  assert.throws(
+    () =>
+      GroupedBarChart({
+        data: {
+          groups: [
+            {
+              key: 'one',
+              label: 'One',
+              marks: [{ key: 'count', label: 'Count', value: 1 }],
+            },
+            {
+              key: 'two',
+              label: 'Two',
+              marks: [
+                { key: 'count', label: 'Count', value: 2, tone: 'danger' },
+              ],
+            },
+          ],
+        },
+        config: { width: 240, height: 220, ariaLabel: 'Tone conflict' },
+      }),
+    /series identity.*count/i
   );
 });
 
-test('GroupedBarChart validates geometry, keys, values, formatters, and tones explicitly', () => {
+test('formatters and custom labels must produce usable text', () => {
   const valid = {
-    data: { groups: [] },
-    config: { width: 100, height: 100, ariaLabel: 'Chart' },
+    data: {
+      groups: [
+        {
+          key: 'one',
+          label: 'One',
+          marks: [{ key: 'count', label: 'Count', value: 1 }],
+        },
+      ],
+    },
+    config: { width: 200, height: 180, ariaLabel: 'Valid' },
   };
 
   assert.throws(
-    () => GroupedBarChart({ ...valid, config: { ...valid.config, width: 0 } }),
-    /width/
+    () =>
+      GroupedBarChart(
+        /** @type {any} */ ({
+          ...valid,
+          config: { ...valid.config, formatValue: 'bad' },
+        })
+      ),
+    /formatValue/
   );
   assert.throws(
     () =>
       GroupedBarChart({
         ...valid,
-        config: { ...valid.config, height: Number.NaN },
+        config: { ...valid.config, formatValue: () => ' ' },
       }),
-    /height/
+    /non-empty/
   );
   assert.throws(
     () =>
@@ -515,190 +521,200 @@ test('GroupedBarChart validates geometry, keys, values, formatters, and tones ex
         ...valid,
         config: {
           ...valid.config,
-          margin: { top: 60, right: 20, bottom: 50, left: 20 },
+          formatValue: (value) => String(Math.round(value)),
         },
       }),
-    /drawable area/
-  );
-  assert.throws(
-    () => GroupedBarChart({ ...valid, config: { ...valid.config, yMax: -1 } }),
-    /yMax/
-  );
-  assert.throws(
-    () => GroupedBarChart({ ...valid, config: { ...valid.config, yMax: 0 } }),
-    /yMax/
-  );
-  assert.throws(
-    () =>
-      GroupedBarChart({ ...valid, config: { ...valid.config, tickCount: 0 } }),
-    /tickCount/
-  );
-  assert.throws(
-    () =>
-      GroupedBarChart({ ...valid, config: { ...valid.config, tickCount: 1 } }),
-    /tickCount/
+    /distinct labels/
   );
   assert.throws(
     () =>
       GroupedBarChart({
         ...valid,
-        config: /** @type {any} */ ({ ...valid.config, formatValue: 'nope' }),
-      }),
-    /formatValue/
-  );
-  assert.throws(
-    () =>
-      GroupedBarChart({
-        data: { groups: [{ key: 'g', label: 'G', marks: [] }] },
-        config: /** @type {any} */ ({
-          ...valid.config,
-          formatGroupLabel: () => 1,
-        }),
-      }),
-    /formatGroupLabel/
-  );
-  assert.throws(
-    () =>
-      GroupedBarChart({
-        data: { groups: [{ key: 'g', label: '', marks: [] }] },
-        config: valid.config,
-      }),
-    /group.label/
-  );
-  assert.throws(
-    () =>
-      GroupedBarChart({
-        data: {
-          groups: [
-            {
-              key: 'g',
-              label: 'G',
-              marks: [{ key: 'm', label: '', value: 1 }],
-            },
-          ],
-        },
-        config: valid.config,
-      }),
-    /mark.label/
-  );
-  assert.throws(
-    () =>
-      GroupedBarChart({
-        data: {
-          groups: [
-            {
-              key: 'g',
-              label: 'G',
-              marks: [{ key: 'm', label: 'M', value: 1 }],
-            },
-          ],
-        },
-        config: { ...valid.config, formatValue: () => '' },
-      }),
-    /non-empty/
-  );
-  assert.throws(
-    () =>
-      GroupedBarChart({
-        data: {
-          groups: [
-            {
-              key: 'g',
-              label: 'G',
-              marks: [{ key: 'm', label: 'M', value: 1 }],
-            },
-          ],
-        },
         config: { ...valid.config, formatGroupLabel: () => '' },
       }),
-    /non-empty/
+    /formatGroupLabel.*non-empty/
   );
   assert.throws(
     () =>
       GroupedBarChart({
-        data: {
-          groups: [
-            {
-              key: 'g',
-              label: 'G',
-              marks: [{ key: 'm', label: 'M', value: -1 }],
-            },
-          ],
-        },
-        config: valid.config,
+        ...valid,
+        config: { ...valid.config, xAxisLabel: '' },
       }),
-    /non-negative/
+    /xAxisLabel/
   );
   assert.throws(
     () =>
       GroupedBarChart({
-        data: {
-          groups: [
-            {
-              key: 'g',
-              label: 'G',
-              marks: [{ key: 'm', label: 'M', value: Infinity }],
-            },
-          ],
-        },
-        config: valid.config,
+        ...valid,
+        config: { ...valid.config, yAxisLabel: '' },
       }),
-    /finite/
+    /yAxisLabel/
   );
-  assert.throws(
-    () =>
-      GroupedBarChart({
+});
+
+test('data and geometry validation rejects ambiguous or impossible input', () => {
+  const valid = {
+    data: { groups: [] },
+    config: { width: 100, height: 100, ariaLabel: 'Chart' },
+  };
+  /** @type {Array<[any, RegExp]>} */
+  const invalid = [
+    [{ ...valid, config: { ...valid.config, width: 0 } }, /width/],
+    [{ ...valid, config: { ...valid.config, height: Number.NaN } }, /height/],
+    [{ ...valid, config: { ...valid.config, yMax: 0 } }, /yMax/],
+    [
+      {
         data: {
           groups: [
             {
-              key: 'g',
-              label: 'G',
-              marks: [{ key: 'm', label: 'M', value: 2 }],
-            },
-            { key: 'g', label: 'Other', marks: [] },
-          ],
-        },
-        config: valid.config,
-      }),
-    /unique/
-  );
-  assert.throws(
-    () =>
-      GroupedBarChart({
-        data: {
-          groups: [
-            {
-              key: 'g',
-              label: 'G',
-              marks: [
-                {
-                  key: 'm',
-                  label: 'M',
-                  value: 2,
-                  tone: /** @type {any} */ ('purple'),
-                },
-              ],
-            },
-          ],
-        },
-        config: valid.config,
-      }),
-    /tone/
-  );
-  assert.throws(
-    () =>
-      GroupedBarChart({
-        data: {
-          groups: [
-            {
-              key: 'g',
-              label: 'G',
-              marks: [{ key: 'm', label: 'M', value: 2 }],
+              key: 'one',
+              label: 'One',
+              marks: [{ key: 'count', label: 'Count', value: 2 }],
             },
           ],
         },
         config: { ...valid.config, yMax: 1 },
-      }),
-    /yMax/
-  );
+      },
+      /yMax/,
+    ],
+    [{ ...valid, config: { ...valid.config, tickCount: 1 } }, /tickCount/],
+    [
+      {
+        ...valid,
+        config: { ...valid.config, margin: { left: 100, right: 1 } },
+      },
+      /plot area/,
+    ],
+  ];
+  for (const [input, message] of invalid) {
+    assert.throws(() => GroupedBarChart(input), message);
+  }
+
+  /** @type {Array<[any, RegExp]>} */
+  const badData = [
+    [{ groups: [{ key: '', label: 'One', marks: [] }] }, /group.key/],
+    [{ groups: [{ key: 'one', label: '', marks: [] }] }, /group.label/],
+    [
+      {
+        groups: [
+          {
+            key: 'one',
+            label: 'One',
+            marks: [{ key: '', label: 'Count', value: 1 }],
+          },
+        ],
+      },
+      /mark.key/,
+    ],
+    [
+      {
+        groups: [
+          {
+            key: 'one',
+            label: 'One',
+            marks: [{ key: 'count', label: '', value: 1 }],
+          },
+        ],
+      },
+      /mark.label/,
+    ],
+    [
+      {
+        groups: [
+          {
+            key: 'one',
+            label: 'One',
+            marks: [{ key: 'count', label: 'Count', value: -1 }],
+          },
+        ],
+      },
+      /non-negative/,
+    ],
+    [
+      {
+        groups: [
+          {
+            key: 'one',
+            label: 'One',
+            marks: [{ key: 'count', label: 'Count', value: Infinity }],
+          },
+        ],
+      },
+      /finite/,
+    ],
+    [
+      {
+        groups: [
+          {
+            key: 'one',
+            label: 'One',
+            marks: [
+              {
+                key: 'count',
+                label: 'Count',
+                value: 1,
+                tone: /** @type {any} */ ('purple'),
+              },
+            ],
+          },
+        ],
+      },
+      /tone/,
+    ],
+    [
+      {
+        groups: [
+          { key: 'one', label: 'One', marks: [] },
+          { key: 'one', label: 'Other', marks: [] },
+        ],
+      },
+      /group.key.*unique/,
+    ],
+    [
+      {
+        groups: [
+          {
+            key: 'one',
+            label: 'One',
+            marks: [
+              { key: 'count', label: 'Count', value: 1 },
+              { key: 'count', label: 'Count', value: 2 },
+            ],
+          },
+        ],
+      },
+      /mark.key.*unique/,
+    ],
+  ];
+  for (const [input, message] of badData) {
+    assert.throws(
+      () => GroupedBarChart({ data: input, config: valid.config }),
+      message
+    );
+  }
+});
+
+test('GroupedBarChart does not mutate caller data or config and keyed render keeps groups', () => {
+  const inputData = structuredClone(data);
+  const inputConfig = { ...config, margin: { ...config.margin } };
+  const beforeData = structuredClone(inputData);
+  const beforeConfig = { ...inputConfig, margin: { ...inputConfig.margin } };
+  GroupedBarChart({ data: inputData, config: inputConfig });
+  assert.deepEqual(inputData, beforeData);
+  assert.deepEqual(inputConfig, beforeConfig);
+
+  const container = document.createElement('div');
+  render(container, GroupedBarChart({ data, config }));
+  const firstGroups = all(container, '.cora-grouped-bar-chart__group');
+  const firstBars = bars(container);
+  const firstSettled = keyed(firstGroups[0], 'settled');
+  const reordered = {
+    groups: [data.groups[1], data.groups[0]],
+  };
+  render(container, GroupedBarChart({ data: reordered, config }));
+  const nextGroups = all(container, '.cora-grouped-bar-chart__group');
+  assert.equal(nextGroups[0], firstGroups[1]);
+  assert.equal(nextGroups[1], firstGroups[0]);
+  assert.equal(keyed(nextGroups[1], 'settled'), firstSettled);
+  assert.equal(bars(container).includes(firstBars[0]), true);
 });

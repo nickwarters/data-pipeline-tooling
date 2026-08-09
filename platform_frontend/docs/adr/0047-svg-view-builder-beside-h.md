@@ -57,8 +57,8 @@ attribute helpers so build-time and reconciliation-time mapping stay identical.
 It takes externally supplied grouped data and configuration and returns a
 detached, keyed SVG tree. The implementation is deliberately grouped bars
 only: it does not load data or implement line charts, stacked bars, or custom
-tooltips. It includes a plain generated series key and sparsifies large x-axis
-label sets.
+tooltips. It validates the data contract, gives repeated mark keys stable
+key-sorted series slots, and sparsifies large x-axis label sets.
 
 **Tooltips are deferred to #451.** The component does not add an HTML overlay;
 the follow-up owns the HTML-over-SVG interaction and its positioning.
@@ -106,12 +106,22 @@ leaves `h()` alone.
   by construction; SVG needs `role`, `<title>` or `aria-label` per mark. That
   cost is real and is the main thing lost against the CSS/DOM alternative.
 - **Series identity is key-based.** Marks with the same key share a horizontal
-  slot across groups, including when a group omits or reorders marks. The first
-  occurrence supplies the generated visible series key's label and tone.
+  slot across groups, including when a group omits or reorders marks. Slots are
+  sorted by key for deterministic output. A repeated key whose label or
+  effective tone disagrees throws instead of silently choosing one occurrence.
 - **Large group sets stay readable.** The x-axis keeps a single semantic group
-  label layer and samples at most twelve visible labels while retaining the
-  endpoints.
+  label layer, samples at most twelve visible labels while retaining the
+  endpoints, and omits duplicate labels.
+- **The legend and value labels have reserved bands.** Wrapped legend rows and
+  the mark-value band are included in layout before the plot starts, including
+  with `margin.top: 0`; a narrow or overfull chart fails with a message about
+  its data shape and available geometry.
+- **Domains and labels stay useful.** Derived y domains are positive for empty,
+  zero, and constant data. The default formatter uses significant figures so
+  nonzero subunit values remain visible; invalid or duplicate formatted tick
+  labels are rejected.
 - **Hollow marks are caller-owned provenance.** `GroupedBarChart` renders
   `provisional: true` as hollow and all other marks solid; my-stats will use
   that seam for the settled-versus-live provenance in ADR-0048 without
-  treating hollow as zero or excluded.
+  treating hollow as zero or excluded. The provisional class is a semantic
+  marker only and has no live CSS rule.
