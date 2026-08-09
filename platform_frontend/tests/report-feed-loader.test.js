@@ -23,7 +23,7 @@ function response(status, body = envelope) {
   });
 }
 
-test('Report Feed loader lower-cases its filename, scopes it to the site, and forwards the signal', async () => {
+test('Report Feed loader lower-cases and encodes its filename, scopes it to the site, and forwards the signal', async () => {
   const controller = new AbortController();
   const globals = /** @type {Record<string, unknown>} */ (globalThis);
   /** @type {string | undefined} */
@@ -33,7 +33,7 @@ test('Report Feed loader lower-cases its filename, scopes it to the site, and fo
 
   globals._spPageContextInfo = { webServerRelativeUrl: '/sites/cora' };
   try {
-    const result = await loadReportFeed('MiXeD', {
+    const result = await loadReportFeed('Mi XeD', {
       fetch: async (url, options) => {
         requestedUrl = String(url);
         requestedOptions = options;
@@ -45,7 +45,7 @@ test('Report Feed loader lower-cases its filename, scopes it to the site, and fo
 
     assert.equal(
       requestedUrl,
-      '/sites/cora/Shared%20Documents/cora_report_feeds/my-stats/mixed.txt'
+      '/sites/cora/Shared%20Documents/cora_report_feeds/my-stats/mi%20xed.txt'
     );
     assert.equal(requestedOptions?.signal, controller.signal);
     assert.equal(result, envelope);

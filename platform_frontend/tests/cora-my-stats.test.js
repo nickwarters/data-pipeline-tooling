@@ -70,8 +70,10 @@ test('my stats slice: loads the signed-in account with the mount signal', async 
   /** @type {AbortSignal | undefined} */
   let signal;
   const sliceContext = context();
-  const toolsContext = context();
-  toolsContext.chrome.currentUser.id = 'someone-else';
+  const toolsContext = {
+    ...context(),
+    chrome: makeChrome({ currentUser: { id: 'someone-else' } }),
+  };
   const slice = createRouteSlice({}, sliceContext, {
     loadReportFeed: async (loadedAccount, options) => {
       account = loadedAccount;
