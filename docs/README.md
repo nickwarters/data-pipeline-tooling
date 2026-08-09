@@ -195,7 +195,7 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 | **`PipelineError` / `format_failure`** | The base of the expected fail-fast failure family (`ValidationError`, `FreshnessError`, `UnknownPipelineError`, `RunAddressError`, `CoercionError`, `ForEachPipelineError` all subclass it) and the pure formatter that renders a caught one as a short, traceback-free block for `stderr`. At a run boundary — the operator CLI, a scaffolded `main()` — `except PipelineError` + `format_failure(exc)` turns a deliberate abort into a clear message; a genuine bug is not a `PipelineError` and keeps its trace. |
 | **`RunLog` / `RunRegistry`** | `RunLog` emits one JSON record per step (+ a run summary) to a `.log` file — the observability seam. `RunRegistry` ingests that JSONL into a queryable run-history store. The record's field set is declared once, as data, in `tools.observability.record_schema` (`RUN_RECORD_FIELDS`): the log record, the registry DDL, its additive column migration, the `INSERT`, the decode and the console line are all derived from it, so adding a field is one entry. `data_locations` — the file(s)/table(s) a read or write step actually touched, as `{namespace, name}` entries — is stored and logged but declares no console form, so it never reaches the human line. → [run-log-format.md](run-log-format.md) ([fail-fast atomic runs, independently-committed artifacts, structured JSONL observability](adr/0005-fail-fast-atomic-runs-and-observability.md)) |
 | **`RunContext` / `PipelineRunner` / `Requirement`** | The thin domain runner: register handlers by `(subject, pipeline)`, receive a context carrying execution/logical identity, dates, explicit run params, RunLog, and RunRegistry, and block stale downstream runs with `Requirement.succeeded(RunAddress.for_pipeline(...)).same_day()` or task-level `within_days(...)` predicates. `FreshnessRequirement` remains compatible. → [core-primitives.md](core-primitives.md) |
-| **Case Type declarations / `Variation`** | Case-review application/domain data, not framework primitives: a feed declares its row schema, `NAMESPACE`, `NATURAL_KEY`, and `VARIATIONS` together in `schema.py`. A Variation overrides only what differs — most often the `question_bank_id`. → [selection.md](selection.md) |
+| **Case Type declarations / `Variation`** | Case-review application/domain data, not framework primitives: a feed declares its row schema, `NAMESPACE`, `NATURAL_KEY`, and `VARIATIONS` together in `schema.py`; there is no `CaseType` wrapper. `Variation` and `variation_by_id` live in `case_review.variation`. A Variation overrides only what differs — most often the `question_bank_id`. → [selection.md](selection.md) |
 | **`CasePool`** | Case-review application/domain helper in `case_review.case_pool`: the per-Case-Type population read from current ingested gold, given its table name and schema, and surfaced through intention-revealing retrievals (e.g. `fetch_available_cases(...)`) instead of raw `read_*`. → [selection.md](selection.md) |
 | **`WorkingDayCalendar`** | A config-seeded **pure utility** for availability arithmetic ("the last 20 working days"). The config is a YAML calendar file (`holidays` + `weekend`) loaded by `WorkingDayCalendar.from_yaml`, which is what `python -m cli orchestrate --calendar` passes and what `python -m cli run --param calendar=<file>` passes for an availability window. Touches no Dataset/Store/engine; not a Feed. → [working-day-calendar.md](working-day-calendar.md) |
 
@@ -242,7 +242,7 @@ the *reference* id; the bank's content is the review platform's). One Case Type
 has many Variations, so they are data.
 
 ```python
-from case_review.case_type import Variation
+from case_review.variation import Variation
 
 NAMESPACE = "cases"              # medallion dir, table, and case_id namespace
 NATURAL_KEY = ("case_ref",)      # identifies a Case
@@ -301,9 +301,8 @@ silver (stopping at silver — gold assembly is the author's call); see
 python -m cli scaffold --case-type claims  # source -> raw -> silver
 ```
 
-The current scaffold still emits the older `case_type.py` wrapper; move its
-identity values into `schema.py` while customising the generated feed. See the
-transition note in [`adding-a-feed.md`](adding-a-feed.md).
+The generated `schema.py` declares `NAMESPACE` and `NATURAL_KEY` beside its row
+schema; there is no `CaseType` wrapper.
 
 ```python
 from framework.io import ExcelReader, Refresh
@@ -427,6 +426,7 @@ and the processor reference [`processors.md`](processors.md).
 ```python
 from typing import Any, Mapping
 
+from case_review.variation import variation_by_id
 from framework.io import AccumulateByRun, DatasetReader
 from tools.store import StoreRegistry
 from framework.run import Pipeline
@@ -450,14 +450,8 @@ def priority_score(row: Mapping[str, Any]) -> int:
     return row["amount"] * 2
 
 
-def variation_by_id(variation_id):
-    for variation in VARIATIONS:
-        if variation.id == variation_id:
-            return variation
-    raise KeyError(f"{NAMESPACE} Case Type has no Variation {variation_id!r}")
-
-
-variation = variation_by_id("v1")
+# Unknown ids raise KeyError("No Variation with id '<id>'").
+variation = variation_by_id(VARIATIONS, "v1")
 registry = StoreRegistry("/share")
 reference = JoinDependency(
     "advisers", medallion(registry, "advisers").silver.reader("advisers")

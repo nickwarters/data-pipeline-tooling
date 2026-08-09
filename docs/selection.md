@@ -33,13 +33,15 @@ A **Case Type** is a first-class classification of Cases that determines its
 fields, its Variations, and — over time — its ingest/selection/processing
 (CONTEXT.md). A feed keeps the row schema, identity values, and Variations
 together as **explicit module data**, not an entry in a global domain registry.
+There is no `CaseType` wrapper: `Variation` and the tuple lookup
+`variation_by_id` live in the canonical `case_review.variation` module.
 The minimal `PipelineRunner` registry is only for dispatching named domain
 Pipelines such as `cases/ingest` and `cases/selection`.
 
 ```python
 from dataclasses import dataclass
 from datetime import date
-from case_review.case_type import Variation
+from case_review.variation import Variation, variation_by_id
 
 @dataclass
 class ActivityCase:          # the Case Type's schema (its columns + types)
@@ -55,13 +57,7 @@ VARIATIONS = (
     Variation(id="v2", question_bank_id="qb-200"),
 )
 
-def variation_by_id(variation_id):
-    for variation in VARIATIONS:
-        if variation.id == variation_id:
-            return variation
-    raise KeyError(f"{NAMESPACE} Case Type has no Variation {variation_id!r}")
-
-variation_by_id("v1").question_bank_id   # -> "qb-100"
+variation_by_id(VARIATIONS, "v1").question_bank_id   # -> "qb-100"
 ```
 
 A **Variation** is a specialization within a Case Type that inherits its config
@@ -70,10 +66,10 @@ and overrides only what differs — most commonly the **Question Bank**
 are data, not code. The case-review domain stores only the **reference** id,
 never the bank's content (owned by the review platform — CONTEXT.md); Selection
 stamps that id onto the chosen Cases. Selection resolves a Variation by its
-declared `id` and raises `KeyError` with a located message on an unknown id, so a
-misconfiguration surfaces where it is asked for rather than as a silent miss
-downstream. Further overrides (ingest, selection criteria, divergent processing)
-are deferred.
+declared `id` and raises `KeyError("No Variation with id '<id>'")` on an unknown
+id, so a misconfiguration surfaces where it is asked for rather than as a silent
+miss downstream. Further overrides (ingest, selection criteria, divergent
+processing) are deferred.
 
 ## `CasePool` — the domain population, behind intention-revealing reads
 
@@ -136,6 +132,7 @@ round-trip:
 ```python
 from typing import Any, Mapping
 
+from case_review.variation import variation_by_id
 from framework.io import AccumulateByRun, DatasetReader
 from framework.run import Pipeline
 from framework.transform import Filter, Score, Sort, Stamp
@@ -149,7 +146,7 @@ def priority_score(row: Mapping[str, Any]) -> int:
     return row["amount"] * 2
 
 
-variation = variation_by_id("v1")
+variation = variation_by_id(VARIATIONS, "v1")
 p = Pipeline("selection")
 r = p.read(DatasetReader(available), name="read")
 scored = p.transform(Score("priority_score", priority_score), r, name="score")

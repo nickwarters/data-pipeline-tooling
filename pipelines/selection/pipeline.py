@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from case_review.case_pool import CasePool
+from case_review.variation import variation_by_id
 from framework.core import PipelineError, format_failure
 from framework.io import AccumulateByRun, DatasetReader
 from framework.run import FreshnessRequirement, Pipeline, RunContext
@@ -61,14 +62,6 @@ def priority_score(row: Mapping[str, Any]) -> int:
     return row["amount"] * 2
 
 
-def variation_by_id(variation_id: str):
-    """Return a declared Variation, with a located error for an unknown id."""
-    for variation in VARIATIONS:
-        if variation.id == variation_id:
-            return variation
-    raise KeyError(f"{NAMESPACE} Case Type has no Variation {variation_id!r}")
-
-
 def _working_day_calendar(context: RunContext) -> WorkingDayCalendar:
     """Return the calendar the availability window is measured against.
 
@@ -97,7 +90,7 @@ def run(context: RunContext):
     available = pool.fetch_available_cases(
         as_of=context.run_date, activity_column="activity_date", within_working_days=5
     )
-    variation = variation_by_id("v1")
+    variation = variation_by_id(VARIATIONS, "v1")
     p = Pipeline("selection")
     r = p.read(DatasetReader(available), name="read")
     sc = p.transform(Score("priority_score", priority_score), r, name="score")

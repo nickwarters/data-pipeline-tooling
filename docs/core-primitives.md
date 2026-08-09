@@ -1404,7 +1404,7 @@ config and boundary semantics in
 ## The case-review application/domain layer
 
 Above the generic framework primitives sits the thin **case-review application
-layer**: the declarative Case Type objects and the `CasePool` that reads the
+layer**: the declarative Case Type data and the `CasePool` that reads the
 current ingested gold, surfaced through intention-revealing retrievals instead
 of raw `pandas.read_*` calls. These helpers live in the `case_review` package;
 new case-review concepts belong there (or in pipeline support modules), not
@@ -1413,13 +1413,14 @@ brief:
 
 ### Case Type declarations / `Variation`
 A feed declares a Case Type's row schema, `NAMESPACE`, `NATURAL_KEY`, and
-`VARIATIONS` together as module data — no global CaseType config registry. Gold
-builders accept the namespace, natural key, and schema explicitly, and callers
+`VARIATIONS` together as module data — no `CaseType` wrapper or global config
+registry. Gold builders accept the namespace, natural key, and schema explicitly, and callers
 must source the Case and every Detail Table's identity values from that same
-declaration to mint a consistent deterministic `case_id`. Selection resolves a
-`Variation` by its `id` and raises a located `KeyError` on an unknown id. A
-Variation carries its `question_bank_id` and later overrides. Declarative data,
-not code (one Case Type has many Variations — `CONTEXT.md`).
+declaration to mint a consistent deterministic `case_id`. Selection calls
+`case_review.variation.variation_by_id(VARIATIONS, id)` and receives
+`KeyError("No Variation with id '<id>'")` on an unknown id. A `Variation` carries
+its `question_bank_id` and later overrides. Declarative data, not code (one Case
+Type has many Variations — `CONTEXT.md`).
 
 ### `CasePool` — the domain population, behind named reads
 `CasePool(table, schema, store, calendar)` (`case_review.case_pool`) is the

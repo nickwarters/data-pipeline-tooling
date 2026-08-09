@@ -23,16 +23,14 @@ from tests.framework_testing import (
 from tools.medallion import medallion
 from tools.store import StoreRegistry
 
-from .case_type import CASE_TYPE
 from .pipeline import FEED_NAME, raw_builder, run, silver_builder
-from .schema import MyfeedRow
+from .schema import NAMESPACE, NATURAL_KEY, MyfeedRow
 
 
 def test_case_type_declares_its_identity_contract():
-    assert CASE_TYPE.schema is MyfeedRow
+    assert NAMESPACE == "myfeed"
     declared = {f.name for f in fields(MyfeedRow)}
-    assert set(CASE_TYPE.natural_key) <= declared
-    assert CASE_TYPE.name
+    assert set(NATURAL_KEY) <= declared
 
 
 def test_source_lands_in_raw_then_conforms_to_silver(tmp_path):

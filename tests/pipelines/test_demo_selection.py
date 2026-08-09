@@ -2,12 +2,10 @@ from pathlib import Path
 
 import pytest
 
+from case_review.variation import variation_by_id
 from cli import operator
-from pipelines.selection.pipeline import (
-    high_value_case,
-    priority_score,
-    variation_by_id,
-)
+from pipelines.ingest.schema import VARIATIONS
+from pipelines.selection.pipeline import high_value_case, priority_score
 from tests.framework_testing import read_rows
 from tools.medallion import medallion
 from tools.store import StoreRegistry
@@ -32,8 +30,8 @@ def test_demo_selection_rules_are_independently_testable():
 
 
 def test_demo_variation_lookup_reports_an_unknown_id():
-    with pytest.raises(KeyError, match="cases Case Type has no Variation 'missing'"):
-        variation_by_id("missing")
+    with pytest.raises(KeyError, match="No Variation with id 'missing'"):
+        variation_by_id(VARIATIONS, "missing")
 
 
 def test_demo_runs_the_full_source_to_selection_path(tmp_path, capsys):

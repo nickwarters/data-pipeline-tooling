@@ -3,7 +3,8 @@
 The case-review-flavoured sibling of the generic feed template: a worked
 starting point for a feed whose rows are Cases. Where the generic template is
 source -> raw and deliberately case-review-agnostic, this one declares the Case
-Type's identity contract and refines the feed through source -> raw -> silver.
+Type's ``NAMESPACE`` and ``NATURAL_KEY`` beside its row schema and refines the
+feed through source -> raw -> silver.
 
 It stops at silver on purpose. How accumulated silver is reduced/assembled into
 gold (single-feed current reduce, multi-feed join, Detail Tables) is unique per
