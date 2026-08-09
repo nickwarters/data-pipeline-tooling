@@ -43,6 +43,12 @@ web's document library. `?mock=1` selects the development fixture instead. The
 current view intentionally remains an empty shell while report rendering is
 added separately.
 
+The `#/team-stats` route is also a static page import, guarded solely by
+`context.chrome.permissions.isReviewerManager`. A non-manager is redirected to
+`#/` before the page slice mounts. This check is UX-only; SharePoint ACLs remain
+the security boundary: Case-list ACLs protect live Case data, while the Report
+Feed document-library ACL protects the settled-history file.
+
 ## How the router works
 
 `Router` in `src/lib/router.js` listens for `hashchange`, matches the hash

@@ -316,6 +316,7 @@ src/
                                   #   cross-Case-Type lookup, standard Case columns
     cora-dashboard.js             # store-driven dashboard slice + descriptor-selected panels (GRID-3/4)
     cora-my-stats.js               # store-driven Reviewer Report Feed load; rendering remains an empty shell
+    cora-team-stats.js             # store-driven Reviewer Manager-only empty shell
     dashboard/
       action-centre-view.js       # pure reason-descriptor view + bounded load actions (ADR-0030 flags unchanged)
       controls-view.js            # pure generic-table Appeals panel + paged load action

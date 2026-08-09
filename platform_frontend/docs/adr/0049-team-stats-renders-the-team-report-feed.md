@@ -35,6 +35,13 @@ Report Feed, with a live tail for the days the file cannot yet cover. The
 phantom `#/reports/reviewer-team` is struck from CONTEXT.md rather than kept as
 an aspiration.
 
+The accepted page decision describes the finished consumer. The initial route
+delivery may ship `#/team-stats` as a Reviewer Manager-gated static shell with
+an empty “No data yet.” state while its prerequisites are outstanding. The
+actual Report Feed and live-tail page remains blocked on the existing follow-ups
+#478, #471, and #472; this staged shell does not change the two-page decision or
+the live-present role of `#/my-team`.
+
 ### The tail is filtered by `AssignedReviewerManager`
 
 The tail mirrors `#/my-team`'s existing fetch — `AssignedReviewerManagerId eq
@@ -45,8 +52,8 @@ This is the decision that most needs its reasoning preserved, because it is
 **unsound on its own** and sound only in combination. The solid bars are
 attributed by the Staff Hierarchy; the hollow bars by the Case row. Two
 org-chart sources drawn adjacent would make a recent mover appear in one and not
-the other, and would spend ADR-0048's rule 2 — *"solid versus hollow encodes
-provenance, and nothing else"* — on a second, unstated meaning.
+the other, and would spend ADR-0048's rule 2 — _"solid versus hollow encodes
+provenance, and nothing else"_ — on a second, unstated meaning.
 
 What makes it sound is that **the Case row's `assignedReviewerManager` converges
 on the Staff Hierarchy**, in two steps that are worth keeping distinct. The
@@ -98,7 +105,7 @@ a whole, with the same denominator and the same stated inaccuracy as
 `#/my-stats`, and **Active reviewer-days** beside it as the roster-immune
 figure.
 
-Per-*head* rate was rejected despite being the more useful number. It needs a
+Per-_head_ rate was rejected despite being the more useful number. It needs a
 headcount, and attribution by current hierarchy applies today's roster to 13
 months of history — so it is wrong for any range spanning a joiner or leaver,
 which is exactly when a manager would reach for it.

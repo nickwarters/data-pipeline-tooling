@@ -5,6 +5,7 @@ import { redirectTo } from '../lib/navigate.js';
 import * as homePage from '../pages/home.js';
 import * as dashboardPage from '../pages/cora-dashboard.js';
 import * as myStatsPage from '../pages/cora-my-stats.js';
+import * as teamStatsPage from '../pages/cora-team-stats.js';
 import * as conversationPage from '../pages/cora-conversation-view.js';
 import * as caseReviewPage from '../pages/cora-case-review.js';
 import * as teamCasesPage from '../pages/cora-team-cases.js';
@@ -79,6 +80,15 @@ export function routeTable(context) {
       page: myStatsPage,
       guard: () => {
         if (context.chrome.permissions.isReviewer) return true;
+        redirectTo('#/');
+        return false;
+      },
+    },
+    'team-stats': {
+      paths: ['#/team-stats'],
+      page: teamStatsPage,
+      guard: () => {
+        if (context.chrome.permissions.isReviewerManager) return true;
         redirectTo('#/');
         return false;
       },
