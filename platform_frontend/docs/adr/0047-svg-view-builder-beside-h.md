@@ -13,10 +13,10 @@ supports both `h()` and `svg()`; only the element namespace widens.
 ## Context
 
 The my-stats page needs a chart. There are no third-party runtime dependencies
-and there never will be (ADR-0001), so the chart is ours to draw. The
-requirement is bar charts today, line and stacked bars anticipated, hover
-tooltips showing a formatted value, and a look that reads as part of the app
-rather than bolted on.
+and there never will be (ADR-0001), so the chart is ours to draw. The current
+consumer needs grouped bars with axes, value labels, and formatted values;
+line charts and stacked bars are anticipated, while tooltip behavior is a
+separate follow-up.
 
 **The blocker is not the missing library — it is the view primitive.** `h()`
 builds elements with `document.createElement(tag)`. An `<svg>` produced that way
@@ -53,8 +53,15 @@ produce and compares `nodeName`. Its controlled-form optimisation remains
 HTML-only: SVG `value` and `checked` props go through the ordinary
 attribute helpers so build-time and reconciliation-time mapping stay identical.
 
-**The tooltip is HTML, not SVG `<text>`**, positioned over the chart, so it gets
-ordinary CSS wrapping, padding and shadow.
+**`GroupedBarChart` lives in `src/components/base/cora-grouped-bar-chart.js`.**
+It takes externally supplied grouped data and configuration and returns a
+detached, keyed SVG tree. The implementation is deliberately grouped bars
+only: it does not load data or implement line charts, stacked bars, or custom
+tooltips. It includes a plain generated series key and sparsifies large x-axis
+label sets.
+
+**Tooltips are deferred to #451.** The component does not add an HTML overlay;
+the follow-up owns the HTML-over-SVG interaction and its positioning.
 
 ### Rejected
 
@@ -98,3 +105,13 @@ leaves `h()` alone.
 - **Accessibility is now explicit work.** HTML bars would have been accessible
   by construction; SVG needs `role`, `<title>` or `aria-label` per mark. That
   cost is real and is the main thing lost against the CSS/DOM alternative.
+- **Series identity is key-based.** Marks with the same key share a horizontal
+  slot across groups, including when a group omits or reorders marks. The first
+  occurrence supplies the generated visible series key's label and tone.
+- **Large group sets stay readable.** The x-axis keeps a single semantic group
+  label layer and samples at most twelve visible labels while retaining the
+  endpoints.
+- **Hollow marks are caller-owned provenance.** `GroupedBarChart` renders
+  `provisional: true` as hollow and all other marks solid; my-stats will use
+  that seam for the settled-versus-live provenance in ADR-0048 without
+  treating hollow as zero or excluded.

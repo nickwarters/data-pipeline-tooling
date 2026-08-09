@@ -3052,3 +3052,76 @@
   background: var(--cora-color-danger-bg);
   border-radius: var(--cora-radius-sm);
 }
+
+/* Grouped SVG charts keep their presentation on existing design tokens. */
+[data-cora-root] .cora-grouped-bar-chart {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+[data-cora-root] .cora-grouped-bar-chart__bar {
+  fill: var(--cora-color-accent);
+  stroke: var(--cora-color-accent);
+  vector-effect: non-scaling-stroke;
+}
+
+[data-cora-root] .cora-grouped-bar-chart__bar--success {
+  fill: var(--cora-color-success);
+  stroke: var(--cora-color-success);
+}
+
+[data-cora-root] .cora-grouped-bar-chart__bar--warning {
+  fill: var(--cora-color-warning);
+  stroke: var(--cora-color-warning);
+}
+
+[data-cora-root] .cora-grouped-bar-chart__bar--danger {
+  fill: var(--cora-color-danger);
+  stroke: var(--cora-color-danger);
+}
+
+[data-cora-root] .cora-grouped-bar-chart__bar--info {
+  fill: var(--cora-color-info);
+  stroke: var(--cora-color-info);
+}
+
+[data-cora-root] .cora-grouped-bar-chart__bar--provisional {
+  fill: none;
+}
+
+[data-cora-root] .cora-grouped-bar-chart__legend-swatch {
+  vector-effect: non-scaling-stroke;
+}
+
+[data-cora-root] .cora-grouped-bar-chart__axis-line,
+[data-cora-root] .cora-grouped-bar-chart__tick-line {
+  fill: none;
+  stroke: var(--cora-color-border-strong);
+  vector-effect: non-scaling-stroke;
+}
+
+[data-cora-root]
+  :where(
+    .cora-grouped-bar-chart__tick-label,
+    .cora-grouped-bar-chart__group-label,
+    .cora-grouped-bar-chart__value-label,
+    .cora-grouped-bar-chart__legend-label,
+    .cora-grouped-bar-chart__x-axis-label,
+    .cora-grouped-bar-chart__y-axis-label
+  ) {
+  fill: var(--cora-color-text-muted);
+  font-family: var(--cora-font-body);
+  font-size: var(--cora-font-size-xs);
+}
+
+[data-cora-root]
+  :where(
+    .cora-grouped-bar-chart__group-label,
+    .cora-grouped-bar-chart__x-axis-label,
+    .cora-grouped-bar-chart__y-axis-label
+  ) {
+  fill: var(--cora-color-on-surface);
+  font-weight: var(--cora-font-weight-semibold);
+}

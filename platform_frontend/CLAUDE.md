@@ -270,6 +270,7 @@ src/
       cora-people-picker.js        # pure People Picker renderer: the directory's matches plus a
                                   #   status line; nothing else is ever selectable
       cora-group-progress.js      # pure per-Question-Group progress strip
+      cora-grouped-bar-chart.js   # pure grouped SVG chart with keyed accessible bars
       cora-status-banner.js       # the save-status surface (saving/reconnecting/conflict),
                                   #   rendered in the Case Review page chrome
       cora-toast.js
@@ -318,7 +319,7 @@ src/
     cora-case-search.js           # store-driven #/search slice: URL-held filters, one bounded
                                   #   cross-Case-Type lookup, standard Case columns
     cora-dashboard.js             # store-driven dashboard slice + descriptor-selected panels (GRID-3/4)
-    cora-my-stats.js               # store-driven Reviewer Report Feed load; rendering remains an empty shell
+    cora-my-stats.js               # store-driven Reviewer Report Feed load plus optional grouped chart view model
     cora-team-stats.js             # store-driven Reviewer Manager-only empty shell
     dashboard/
       action-centre-view.js       # pure reason-descriptor view + bounded load actions (ADR-0030 flags unchanged)

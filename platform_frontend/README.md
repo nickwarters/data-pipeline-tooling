@@ -78,8 +78,10 @@ Reviewers should be able to request the next available case to be assigned to th
 Feed from `Shared Documents/cora_report_feeds/my-stats/{bare-account}.txt`.
 The account filename is lower-cased after claims/domain reduction. A missing
 file means no report is available; `?mock=1` loads the canonical development
-fixture. The page currently preserves its empty view while report rendering and
-the live tail are added separately.
+fixture. A separate mapper can provide the route's optional grouped chart view
+model; the page then renders the reusable SVG grouped-bar chart. Solid marks
+represent settled values and hollow provisional marks preserve Report Feed
+provenance. The page keeps “No data yet.” until that view model is present.
 
 ### Team Stats page
 
