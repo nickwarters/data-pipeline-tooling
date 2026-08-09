@@ -270,6 +270,8 @@ Eligible to be assigned **Cases** and produce **Answers**. Group membership
 alone does not grant edit access to any particular Case — that's the **Assigned
 Reviewer**. The reviewing side has a base role (**Reviewer**) and an elevated role
 (**Case Type Owner**), mirroring the frontline side (**Adviser** → **Journey Owner**).
+Reviewers can reach the empty `#/my-stats` surface; it is not available to a
+**Reviewer Manager** who lacks the Reviewer capability.
 _Avoid_: Assessor, evaluator
 
 **Assigned Reviewer**:

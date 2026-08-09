@@ -72,6 +72,11 @@ Case Type Owners should be able to see the amount of cases of their particualr t
 
 Reviewers should be able to request the next available case to be assigned to them. Depending on what the user is able to review (based on different case types and properties) the next available case should be assigned to them and be visible in the outstanding cases list. Different case types are stored in different lists.
 
+### My Stats page
+
+`#/my-stats` is a Reviewer-only empty shell. It currently shows “No data yet.”;
+Report Feed and live-tail loading are not part of this change.
+
 ### Case Review Page
 
 This is the main page used by reviewers to review the cases. Cases have a few section, all should be configurable.

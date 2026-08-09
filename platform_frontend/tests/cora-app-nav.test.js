@@ -79,6 +79,33 @@ test('AppNav: only Reviewer Managers see My Team', () => {
   }
 });
 
+test('AppNav: My Stats is visible to Reviewers, including dual-role users', () => {
+  const reviewer = AppNav({
+    capabilities: /** @type {any} */ (capabilities({ isReviewer: true })),
+    hash: '#/',
+  }).node;
+  assert.ok(findLink(reviewer, '#/my-stats'));
+
+  const manager = AppNav({
+    capabilities: /** @type {any} */ (
+      capabilities({ isReviewerManager: true })
+    ),
+    hash: '#/',
+  }).node;
+  assert.equal(findLink(manager, '#/my-stats'), null);
+
+  const both = AppNav({
+    capabilities: /** @type {any} */ (
+      capabilities({ isReviewer: true, isReviewerManager: true })
+    ),
+    hash: '#/my-stats',
+  }).node;
+  assert.equal(
+    findLink(both, '#/my-stats')?.getAttribute('aria-current'),
+    'page'
+  );
+});
+
 test('AppNav: only Controls see Search, and Controls reach the rest of the app', () => {
   const controls = AppNav({
     capabilities: /** @type {any} */ (
