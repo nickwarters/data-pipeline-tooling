@@ -6,6 +6,10 @@
     {
       "files": "case-types/banks/*.txt",
       "options": { "parser": "json" }
+    },
+    {
+      "files": "dev/fixtures/my-stats/*.txt",
+      "options": { "parser": "json" }
     }
   ]
 }

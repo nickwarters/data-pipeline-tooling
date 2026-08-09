@@ -29,6 +29,15 @@ repos:
         exclude: ^platform_frontend/
         pass_filenames: false
 
+      # The canonical my-stats fixture is owned by both projects, so changing
+      # it runs the pipeline-side contract test without broadening root pytest.
+      - id: pytest-my-stats-fixture
+        name: pytest (my-stats fixture contract)
+        entry: python -m pytest tests/integration/test_my_stats_fixture.py -q
+        language: system
+        files: ^platform_frontend/dev/fixtures/my-stats/.+\.txt$
+        pass_filenames: false
+
   # The frontend framework under platform_frontend/ is a separate project with
   # its own toolchain. It enforced these checks through .husky/pre-commit ->
   # lint-staged, which stopped firing the moment it was nested: git reads hooks
@@ -43,8 +52,8 @@ repos:
   - repo: local
     hooks:
       # Mirrors lint-staged: eslint --fix then prettier --write over JS/TS, and
-      # prettier alone over the JSON/CSS/Markdown and the Question Bank .txt
-      # artifacts (.prettierrc gives those the json parser).
+      # prettier alone over JSON/CSS/Markdown and the two explicitly JSON .txt
+      # artifact directories (.prettierrc gives those the json parser).
       - id: eslint-frontend
         name: eslint (platform_frontend)
         entry: npm --prefix platform_frontend exec -- eslint --fix
@@ -55,7 +64,7 @@ repos:
         name: prettier (platform_frontend)
         entry: npm --prefix platform_frontend exec -- prettier --write
         language: system
-        files: ^platform_frontend/(.+\.(js|ts|json|css|md)|case-types/banks/.+\.txt)$
+        files: ^platform_frontend/(.+\.(js|ts|json|css|md)|case-types/banks/.+\.txt|dev/fixtures/my-stats/.+\.txt)$
 
       # Beyond what lint-staged did, these mirror this repo's own convention that
       # a commit runs the tests for what it touches. pytest covers the whole
@@ -72,5 +81,5 @@ repos:
         name: node --test (platform_frontend)
         entry: npm --prefix platform_frontend test
         language: system
-        files: ^platform_frontend/.+\.(js|ts)$
+        files: ^platform_frontend/(.+\.(js|ts)|dev/fixtures/my-stats/.+\.txt)$
         pass_filenames: false

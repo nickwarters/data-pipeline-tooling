@@ -43,7 +43,13 @@ touched.
 One file per Reviewer, keyed by the lower-cased bare account name (see
 **Reviewer** in [`../../CONTEXT.md`](../../CONTEXT.md)), holding **JSON stored in
 a `.txt` file** — SharePoint SE is unreliable serving `.json`, the same reason
-the review platform's Question Bank artifacts are `.txt`.
+the review platform's Question Bank artifacts are `.txt`. The canonical shared
+mock and contract artifact is
+[`123456.txt`](../../platform_frontend/dev/fixtures/my-stats/123456.txt). Its
+second `case_type` is a placeholder showing that rows are keyed per date and
+Case Type; it does not name a real Case Type.
+
+The envelope below is abridged; the linked fixture carries richer sample rows.
 
 ```json
 {
@@ -70,6 +76,8 @@ Three properties are load-bearing:
 - **The file is rewritten whole every run**, and carries 13 months (the current
   partial month plus twelve complete ones) regardless of what any consumer
   currently displays. Widening a view later is then a consumer change alone.
+  Because rows are sparse, that coverage window is not visible in the artifact:
+  the earliest activity row does not reveal the earliest date covered.
 
 ## Consequences
 

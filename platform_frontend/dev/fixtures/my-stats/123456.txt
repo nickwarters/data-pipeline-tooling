@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "reviewer_account": "123456",
+  "generated_at": "2026-08-09T04:15:00+00:00",
+  "complete_through": "2026-08-08",
+  "rows": [
+    { "date": "2026-08-07", "case_type": "complaints", "count": 4 },
+    { "date": "2026-07-29", "case_type": "example-case-type", "count": 2 },
+    { "date": "2026-06-12", "case_type": "complaints", "count": 1 }
+  ]
+}
