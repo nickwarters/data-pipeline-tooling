@@ -124,4 +124,4 @@ account ids when the lookup fails. Names stay out of the artifact.
   Inherited from ADR-0048's position that these files are not a security
   boundary and the library ACL is — but the payload is other people's data now,
   not the reader's own, which raises the ACL from a formality to a requirement
-  on the delivery job.
+  on the Forwarder (the data pipeline's delivery process — see its `CONTEXT.md`).
