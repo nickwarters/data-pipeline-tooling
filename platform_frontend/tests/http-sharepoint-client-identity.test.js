@@ -381,6 +381,37 @@ test('HttpSharePointClient: resolveManagers reads Manager from the verbose profi
   });
 });
 
+test('HttpSharePointClient: profile resolution ignores null User Profile properties', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.url.includes('GetPropertiesFor'),
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            DisplayName: 'John Smith',
+            UserProfileProperties: [
+              null,
+              { Key: 'Manager', Value: 'CONTOSO\\MManager' },
+            ],
+          }),
+          { status: 200 }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const [users, managers] = await Promise.all([
+    client.resolveUsers(['jsmith']),
+    client.resolveManagers(['jsmith']),
+  ]);
+
+  assert.deepEqual(users, { jsmith: 'John Smith' });
+  assert.deepEqual(managers, { jsmith: 'mmanager' });
+});
+
 test('HttpSharePointClient: concurrent user and manager resolution shares a profile read', async () => {
   const { fetch, calls } = makeFetch([
     {

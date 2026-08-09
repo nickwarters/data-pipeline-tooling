@@ -113,7 +113,7 @@ function profileFromProperties(body) {
       ? rawProperties.results
       : [];
   const managerProperty = properties.find(
-    (property) => property.Key === 'Manager'
+    (property) => property?.Key === 'Manager'
   );
   const rawManager = managerProperty?.Value;
   const manager =
