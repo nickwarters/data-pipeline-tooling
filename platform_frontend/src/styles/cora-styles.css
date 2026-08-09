@@ -3062,33 +3062,7 @@
 }
 
 [data-cora-root] .cora-grouped-bar-chart__bar {
-  fill: var(--cora-color-accent);
-  stroke: var(--cora-color-accent);
   vector-effect: non-scaling-stroke;
-}
-
-[data-cora-root] .cora-grouped-bar-chart__bar--success {
-  fill: var(--cora-color-success);
-  stroke: var(--cora-color-success);
-}
-
-[data-cora-root] .cora-grouped-bar-chart__bar--warning {
-  fill: var(--cora-color-warning);
-  stroke: var(--cora-color-warning);
-}
-
-[data-cora-root] .cora-grouped-bar-chart__bar--danger {
-  fill: var(--cora-color-danger);
-  stroke: var(--cora-color-danger);
-}
-
-[data-cora-root] .cora-grouped-bar-chart__bar--info {
-  fill: var(--cora-color-info);
-  stroke: var(--cora-color-info);
-}
-
-[data-cora-root] .cora-grouped-bar-chart__bar--provisional {
-  fill: none;
 }
 
 [data-cora-root] .cora-grouped-bar-chart__legend-swatch {
