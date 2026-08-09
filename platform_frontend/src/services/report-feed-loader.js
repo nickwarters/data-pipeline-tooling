@@ -1,12 +1,4 @@
 // @ts-check
-import { resolveHostWebUrl } from './create-sharepoint-client.js';
-
-const REPORT_FEED_DIRECTORY = '/Shared%20Documents/cora_report_feeds/my-stats';
-const MOCK_REPORT_FEED_URL = new URL(
-  '../../dev/fixtures/my-stats/123456.txt',
-  import.meta.url
-);
-
 /**
  * Report Feeds are JSON stored in `.txt` files because the document library's
  * handling of `.json` is unreliable. A missing artifact means that the
@@ -14,6 +6,14 @@ const MOCK_REPORT_FEED_URL = new URL(
  * than a failed read. Production files live in the document library outside
  * the deployed code tree; the mock URL is only fetched when mock mode is on.
  */
+
+import { resolveHostWebUrl } from './create-sharepoint-client.js';
+
+const REPORT_FEED_DIRECTORY = '/Shared%20Documents/cora_report_feeds/my-stats';
+const MOCK_REPORT_FEED_URL = new URL(
+  '../../dev/fixtures/my-stats/123456.txt',
+  import.meta.url
+);
 
 /**
  * @typedef {{
@@ -26,7 +26,7 @@ const MOCK_REPORT_FEED_URL = new URL(
  */
 
 /**
- * @param {string} bareAccount
+ * @param {string} bareAccount account id already reduced by the SharePoint client boundary
  * @param {{
  *   fetch?: typeof globalThis.fetch,
  *   search?: string,
@@ -56,6 +56,8 @@ export async function loadReportFeed(
     throw new Error(`Report Feed request failed with HTTP ${response.status}`);
   }
   const envelope = await response.json();
+  // The loader gates the supported version; the rendering slice owns
+  // validation of the version-specific fields when it consumes the envelope.
   if (envelope?.schema_version !== 1) {
     throw new Error('Unsupported Report Feed schema version');
   }
