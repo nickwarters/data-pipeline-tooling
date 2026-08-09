@@ -62,8 +62,8 @@ so the system can be read and changed in one place; they share a commit gate,
   local-calendar-date rule every freshness check reads is settled once in
   `tools/observability/timestamps.py`. Then `case_review/` (the
   case-review *application* — domain types
-  like `CaseType`/`CasePool` and its gold helpers, which live outside the
-  framework; it also owns the application's orchestration schedules,
+  Case Type declarations, `CasePool`, and its gold helpers, which live outside
+  the framework; it also owns the application's orchestration schedules,
   `case_review/schedules.py`, which `orchestrate --app` names),
   `pipelines/` (scripts), `tests/` (pytest, with author test helpers
   in `tests/framework_testing/`), `docs/` (architecture, ADRs).
@@ -227,7 +227,7 @@ clean identifier (spaces/punctuation/capitals) the source names are emitted as a
 faithful; silver renames to the schema's canonical shape). Add `--case-type`
 for the Case Type ingest variant: a case-review-flavoured slice from
 `cli/scaffold_templates/case_type/` that additionally declares the Case
-Type's identity contract (`case_type.py`) and refines source → raw → silver,
+Type's `NAMESPACE` and `NATURAL_KEY` beside its row schema and refines source → raw → silver,
 **stopping at silver** — how silver is assembled into gold is per-Case-Type and
 an open decision (snapshot-vs-join), so it's left as a commented seam. See
 [`docs/adding-a-feed.md`](docs/adding-a-feed.md).

@@ -1,8 +1,8 @@
 """Case Type ingest for the ``myfeed`` feed: source -> raw -> silver.
 
 Unlike the generic feed scaffold, this feed's rows are Cases: it declares the
-identity contract in ``case_type.py`` and refines the feed through source -> raw
-(a faithful, accumulated copy) -> silver (schema coerced + validated).
+identity contract beside the row schema and refines the feed through source ->
+raw (a faithful, accumulated copy) -> silver (schema coerced + validated).
 
 It deliberately **stops at silver**. How accumulated silver is reduced/assembled
 into gold — a single-feed current reduce, a multi-feed join enriching one Case
@@ -42,8 +42,7 @@ from tools.medallion import medallion
 from tools.recipes import raw_to_silver, source_to_raw
 from tools.store import StoreRegistry
 
-from .case_type import CASE_TYPE
-from .schema import MyfeedRow
+from .schema import NAMESPACE, NATURAL_KEY, MyfeedRow  # noqa: F401
 
 FEED_NAME = "myfeed"
 SAMPLE_CSV = Path(__file__).parent / "sample_data" / "myfeed.csv"
@@ -89,7 +88,7 @@ def silver_builder(
     return raw_to_silver(
         reader,
         writer,
-        schema=CASE_TYPE.schema,
+        schema=MyfeedRow,
         reject_writer=reject_writer,
         name=f"{FEED_NAME}:silver",
         run_log=run_log,
@@ -98,7 +97,7 @@ def silver_builder(
 
 def run(context: RunContext) -> Dataset:
     """Refine the feed source -> raw -> silver under the run context; return silver."""
-    med = medallion(StoreRegistry(context.base_dir), FEED_NAME)
+    med = medallion(StoreRegistry(context.base_dir), NAMESPACE)
     strategy = AccumulateByRun.from_context(context)
 
     # Fetched by the SAS script or orchestrator
@@ -123,7 +122,7 @@ def run(context: RunContext) -> Dataset:
     #
     #     from case_review.gold import ingest_silver_to_gold
     #     ingest_silver_to_gold(
-    #         med, CASE_TYPE.name, CASE_TYPE.natural_key, CASE_TYPE.schema
+    #         med, NAMESPACE, NATURAL_KEY, MyfeedRow
     #     ).run()  # single-feed current gold
     # ------------------------------------------------------------------------
     return silver
@@ -165,10 +164,10 @@ def main(argv: list[str]) -> int:
 
     runner = PipelineRunner()
     runner.register(
-        subject=CASE_TYPE.name, pipeline=FEED_NAME, handler=handler, freshness=UPSTREAMS
+        subject=NAMESPACE, pipeline=FEED_NAME, handler=handler, freshness=UPSTREAMS
     )
     try:
-        silver = runner.run(CASE_TYPE.name, FEED_NAME, base_dir=base_dir)
+        silver = runner.run(NAMESPACE, FEED_NAME, base_dir=base_dir)
     except PipelineError as exc:
         print(format_failure(exc), file=sys.stderr)
         return 1
@@ -176,7 +175,7 @@ def main(argv: list[str]) -> int:
     rows = len(silver) if isinstance(silver, Dataset) else 0
     print(
         f"Refined {rows} rows source -> raw -> silver for Case Type "
-        f"'{CASE_TYPE.name}' under {Path(base_dir) / FEED_NAME} "
+        f"'{NAMESPACE}' under {Path(base_dir) / NAMESPACE} "
         "(layers raw, silver); add your gold step next (see pipeline.py)."
     )
     return 0

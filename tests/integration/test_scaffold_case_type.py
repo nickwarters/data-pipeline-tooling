@@ -3,10 +3,9 @@
 The generic scaffold is framework-only and tested under
 ``tests/framework/_cli/``. The
 ``--case-type`` variant is different in kind: it renders a case-review-flavoured
-slice that declares a Case Type's identity contract and reaches the real
-``case_review`` package, so its tests span the framework/application boundary and
-live here in ``tests/integration/`` rather than coupling the framework scaffold
-test to ``case_review``.
+slice that declares a Case Type's identity contract, so its tests span the
+framework/application boundary and live here in ``tests/integration/`` rather
+than coupling the framework scaffold test to the application contract.
 
 The variant is additive over the generic feed: it declares the Case Type's
 identity contract and refines source -> raw -> silver (the settled ingest spine),
@@ -19,8 +18,6 @@ from __future__ import annotations
 import importlib
 import sys
 
-import pytest
-
 from cli import scaffold
 from framework.run import RunContext
 from tests.framework_testing import read_rows
@@ -28,14 +25,13 @@ from tools.medallion import medallion
 from tools.store import StoreRegistry
 
 
-def test_case_type_variant_lays_down_the_feed_with_its_case_type(tmp_path):
+def test_case_type_variant_lays_down_the_feed_with_its_identity(tmp_path):
     created = scaffold.render("orders", tmp_path, case_type=True)
 
     feed_dir = tmp_path / "pipelines" / "orders"
     expected = {
         feed_dir / "__init__.py",
         feed_dir / "schema.py",
-        feed_dir / "case_type.py",
         feed_dir / "pipeline.py",
         feed_dir / "sample_data" / "orders.csv",
         tmp_path / "tests" / "pipelines" / "test_orders.py",
@@ -56,14 +52,10 @@ def test_case_type_variant_substitutes_the_identity_contract(tmp_path):
         assert "Myfeed" not in text, path
 
     schema = (feed_dir / "schema.py").read_text(encoding="utf-8")
-    case_type = (feed_dir / "case_type.py").read_text(encoding="utf-8")
     assert "class OrdersRow" in schema
-    # The Case Type declares the identity contract off the rendered schema.
-    assert "from case_review.case_type import CaseType" in case_type
-    assert "from .schema import OrdersRow" in case_type
-    assert 'name="orders"' in case_type
-    assert "schema=OrdersRow" in case_type
-    assert "natural_key=" in case_type
+    assert 'NAMESPACE = "orders"' in schema
+    assert 'NATURAL_KEY = ("record_id",)' in schema
+    assert not (feed_dir / "case_type.py").exists()
 
 
 def test_case_type_variant_refines_to_silver_and_leaves_gold_a_commented_seam(tmp_path):
@@ -85,10 +77,6 @@ def test_case_type_variant_refines_to_silver_and_leaves_gold_a_commented_seam(tm
             assert line.lstrip().startswith("#"), f"gold step must be inert: {line!r}"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="legacy case-type scaffold awaits retirement",
-)
 def test_rendered_case_type_pipeline_runs_and_refines_to_silver(tmp_path):
     # Render the variant, then import and run its pipeline the way it runs in
     # production -- a module from a root on sys.path, relative intra-package
@@ -124,15 +112,22 @@ def test_cli_case_type_flag_renders_the_variant(tmp_path, capsys, monkeypatch):
 
     assert exit_code == 0
     feed_dir = tmp_path / "pipelines" / "orders"
-    # The distinguishing artifact of the variant: the declared identity contract.
-    assert (feed_dir / "case_type.py").exists()
+    # The distinguishing artifact of the variant: identity beside its schema.
+    schema = (feed_dir / "schema.py").read_text(encoding="utf-8")
+    assert 'NAMESPACE = "orders"' in schema
+    assert 'NATURAL_KEY = ("record_id",)' in schema
+    assert not (feed_dir / "case_type.py").exists()
     assert (tmp_path / "tests" / "pipelines" / "test_orders.py").exists()
     assert "created" in capsys.readouterr().out
 
 
 def test_cli_without_case_type_flag_stays_the_generic_feed(tmp_path, monkeypatch):
     # The variant is additive: the plain scaffold stays source -> raw, no Case
-    # Type, no case_type.py.
+    # Type, no identity declarations.
     monkeypatch.setattr(scaffold, "_REPO_ROOT", tmp_path)
     assert scaffold.main(["orders"]) == 0
-    assert not (tmp_path / "pipelines" / "orders" / "case_type.py").exists()
+    feed_dir = tmp_path / "pipelines" / "orders"
+    assert not (feed_dir / "case_type.py").exists()
+    schema = (feed_dir / "schema.py").read_text(encoding="utf-8")
+    assert "NAMESPACE" not in schema
+    assert "NATURAL_KEY" not in schema

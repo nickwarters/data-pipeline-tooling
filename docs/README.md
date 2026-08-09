@@ -301,9 +301,8 @@ silver (stopping at silver — gold assembly is the author's call); see
 python -m cli scaffold --case-type claims  # source -> raw -> silver
 ```
 
-The current scaffold still emits the older `case_type.py` wrapper; move its
-identity values into `schema.py` while customising the generated feed. See the
-transition note in [`adding-a-feed.md`](adding-a-feed.md).
+The generated `schema.py` declares `NAMESPACE` and `NATURAL_KEY` beside its row
+schema; there is no `CaseType` wrapper.
 
 ```python
 from framework.io import ExcelReader, Refresh

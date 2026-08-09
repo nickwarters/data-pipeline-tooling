@@ -384,9 +384,9 @@ def render(
     it defaults to this repo (``_REPO_ROOT``), and tests pass a temporary one.
 
     ``case_type`` selects the case-review-flavoured template that declares the
-    Case Type's identity contract (``case_type.py``) and refines source -> raw
-    -> silver, stopping at silver. The default renders the generic source -> raw
-    feed.
+    Case Type's ``NAMESPACE`` and ``NATURAL_KEY`` beside its row schema and
+    refines source -> raw -> silver, stopping at silver. The default renders the
+    generic source -> raw feed.
 
     ``feed_file`` seeds the scaffold from a real sample CSV (header -> schema
     fields, contents -> bundled sample, first rows -> the test's sample rows). It
@@ -462,8 +462,8 @@ def _add_arguments(parser: argparse.ArgumentParser) -> None:
         "--case-type",
         action="store_true",
         help=(
-            "render the Case Type ingest variant: declares the Case "
-            "Type's identity contract and refines source -> raw -> silver, "
+            "render the Case Type ingest variant: declares NAMESPACE and "
+            "NATURAL_KEY beside its schema and refines source -> raw -> silver, "
             "stopping at silver (gold is yours to assemble)"
         ),
     )

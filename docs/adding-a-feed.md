@@ -204,22 +204,7 @@ python -m cli scaffold --case-type claims   # -> pipelines/claims/ + tests/pipel
 ```
 
 It renders, from `cli/scaffold_templates/case_type/`, a case-review-flavoured
-slice. The command currently emits this literal tree:
-
-```
-pipelines/claims/
-  __init__.py
-  schema.py            # @dataclass ClaimsRow only
-  case_type.py         # generated CaseType wrapper
-  pipeline.py          # source -> raw -> silver; gold left as a commented seam
-  sample_data/claims.csv
-tests/pipelines/
-  test_claims.py
-```
-
-The template is temporarily behind the preferred declaration shape. As part of
-customising the generated feed, move the identity values beside the schema and
-delete `case_type.py`. The canonical post-customisation result is:
+slice with this literal tree:
 
 ```
 pipelines/claims/
