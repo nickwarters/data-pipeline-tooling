@@ -44,6 +44,7 @@ test('my stats slice: keeps shared chrome and starts with no Report Feed', () =>
   );
 });
 
+/** @type {import('../src/services/report-feed-loader.js').ReportFeedEnvelope} */
 const envelope = {
   schema_version: 1,
   reviewer_account: 'reviewer-1',
@@ -68,8 +69,10 @@ test('my stats slice: loads the signed-in account with the mount signal', async 
   let account;
   /** @type {AbortSignal | undefined} */
   let signal;
-  const tools = startTools();
-  const slice = createRouteSlice({}, context(), {
+  const sliceContext = context();
+  const toolsContext = context();
+  toolsContext.chrome.currentUser.id = 'someone-else';
+  const slice = createRouteSlice({}, sliceContext, {
     loadReportFeed: async (loadedAccount, options) => {
       account = loadedAccount;
       signal = options?.signal;
@@ -77,6 +80,7 @@ test('my stats slice: loads the signed-in account with the mount signal', async 
     },
   });
 
+  const tools = startTools({ context: toolsContext });
   slice.start(tools);
   await Promise.resolve();
 
