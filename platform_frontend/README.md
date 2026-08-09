@@ -74,8 +74,12 @@ Reviewers should be able to request the next available case to be assigned to th
 
 ### My Stats page
 
-`#/my-stats` is a Reviewer-only empty shell. It currently shows “No data yet.”;
-Report Feed and live-tail loading are not part of this change.
+`#/my-stats` is a Reviewer-only shell that loads the signed-in Reviewer's Report
+Feed from `Shared Documents/cora_report_feeds/my-stats/{bare-account}.txt`.
+The account filename is lower-cased after claims/domain reduction. A missing
+file means no report is available; `?mock=1` loads the canonical development
+fixture. The page currently preserves its empty view while report rendering and
+the live tail are added separately.
 
 ### Case Review Page
 

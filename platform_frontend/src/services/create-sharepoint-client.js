@@ -78,7 +78,7 @@ export async function createSharePointClient(
  * @param {unknown} [ctx] defaults to the host page's `_spPageContextInfo`.
  * @returns {string}
  */
-function resolveHostWebUrl(
+export function resolveHostWebUrl(
   ctx = /** @type {Record<string, unknown>} */ (globalThis)._spPageContextInfo
 ) {
   const info = /** @type {Record<string, unknown> | undefined} */ (ctx);

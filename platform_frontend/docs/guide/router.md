@@ -38,6 +38,11 @@ redirected to `#/` before the page slice mounts. This is a UX-only redirect;
 SharePoint list permissions remain the access boundary, and
 `isReviewerManager` alone does not grant this route.
 
+On mount, the page loads the signed-in Reviewer's Report Feed from the host
+web's document library. `?mock=1` selects the development fixture instead. The
+current view intentionally remains an empty shell while report rendering is
+added separately.
+
 ## How the router works
 
 `Router` in `src/lib/router.js` listens for `hashchange`, matches the hash

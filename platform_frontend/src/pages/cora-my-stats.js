@@ -1,13 +1,16 @@
 // @ts-check
 import { h } from '../lib/html.js';
 import { EmptyState } from '../lib/empty-state.js';
+import { patchRoute } from '../core/route-state.js';
+import { ignoreAbortError } from '../lib/abort.js';
+import { loadReportFeed } from '../services/report-feed-loader.js';
 
 /** @typedef {import('../core/chrome-state.js').ChromeState} ChromeState */
 
 /**
  * @typedef {Object} MyStatsState
  * @property {ChromeState} chrome
- * @property {{ myStats: Record<string, never> }} routes
+ * @property {{ myStats: { reportFeed: import('../services/report-feed-loader.js').ReportFeedEnvelope | null } }} routes
  */
 
 /**
@@ -26,19 +29,49 @@ export function myStatsView(_state) {
 /**
  * @param {Record<string, string>} _params
  * @param {import('../setup/register-routes.js').AppContext} context
+ * @param {{ loadReportFeed?: typeof loadReportFeed }} [dependencies]
  * @returns {{
  *   initialState: MyStatsState,
  *   reducer: (state: MyStatsState, action: unknown) => MyStatsState,
  *   view: (state: MyStatsState) => HTMLElement,
+ *   start: (tools: { dispatch: (action: unknown) => void, context: import('../setup/register-routes.js').AppContext, isActive: () => boolean, signal: AbortSignal }) => void,
  * }}
  */
-export function createRouteSlice(_params, context) {
+export function createRouteSlice(
+  _params,
+  context,
+  { loadReportFeed: load = loadReportFeed } = {}
+) {
   return {
     initialState: {
       chrome: context.chrome,
-      routes: { myStats: {} },
+      routes: { myStats: { reportFeed: null } },
     },
-    reducer: (state) => state,
+    reducer(state, action) {
+      if (
+        typeof action === 'object' &&
+        action !== null &&
+        /** @type {{ type?: unknown }} */ (action).type === 'report-feed/loaded'
+      ) {
+        const reportFeedAction =
+          /** @type {{ reportFeed: import('../services/report-feed-loader.js').ReportFeedEnvelope | null }} */ (
+            action
+          );
+        return patchRoute(state, 'myStats', {
+          reportFeed: reportFeedAction.reportFeed,
+        });
+      }
+      return state;
+    },
     view: myStatsView,
+    start(tools) {
+      void load(tools.context.chrome.currentUser.id, { signal: tools.signal })
+        .then((reportFeed) => {
+          if (tools.isActive()) {
+            tools.dispatch({ type: 'report-feed/loaded', reportFeed });
+          }
+        })
+        .catch(ignoreAbortError);
+    },
   };
 }

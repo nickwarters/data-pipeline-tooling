@@ -23,6 +23,7 @@ const utcInstantPattern =
 /** @param {unknown} value */
 function assertIsoDate(value) {
   assert.equal(typeof value, 'string');
+  if (typeof value !== 'string') throw new TypeError('expected an ISO date');
   assert.match(value, datePattern);
   const parsed = new Date(`${value}T00:00:00Z`);
   assert.equal(parsed.toISOString().slice(0, 10), value);
@@ -31,6 +32,7 @@ function assertIsoDate(value) {
 /** @param {unknown} value */
 function assertUtcInstant(value) {
   assert.equal(typeof value, 'string');
+  if (typeof value !== 'string') throw new TypeError('expected a UTC instant');
   const match = utcInstantPattern.exec(value);
   assert.ok(match);
   const parsed = new Date(value);
@@ -51,7 +53,10 @@ test('my-stats fixture matches the shared Report Feed envelope', async () => {
 
   const account = path.basename(fixture, '.txt');
   assert.equal(payload.reviewer_account, account);
-  assert.equal(payload.reviewer_account, payload.reviewer_account.toLowerCase());
+  assert.equal(
+    payload.reviewer_account,
+    payload.reviewer_account.toLowerCase()
+  );
   assert.match(payload.reviewer_account, /^[a-z0-9._-]+$/);
 
   assertUtcInstant(payload.generated_at);
