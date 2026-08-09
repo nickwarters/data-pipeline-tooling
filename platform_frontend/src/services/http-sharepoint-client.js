@@ -96,6 +96,32 @@ const CASE_SELECT =
 const CASE_EXPAND =
   '$expand=AssignedReviewer,ResponsibleParty,AssignedReviewerManager,ResponsiblePartyManager,VoidedBy';
 
+/**
+ * @param {unknown} body
+ * @returns {{ displayName: string | null, manager: string | null }}
+ */
+function profileFromProperties(body) {
+  const profile = /** @type {any} */ (body);
+  const displayName = profile?.DisplayName;
+  const managerProperty = Array.isArray(profile?.UserProfileProperties)
+    ? profile.UserProfileProperties.find(
+        (property) => property?.Key === 'Manager'
+      )
+    : undefined;
+  const rawManager = managerProperty?.Value;
+  const manager =
+    typeof rawManager === 'string' && rawManager !== ''
+      ? toBareAccount(rawManager).toLowerCase()
+      : '';
+  return {
+    displayName:
+      typeof displayName === 'string' && displayName !== ''
+        ? displayName
+        : null,
+    manager: manager === '' ? null : manager,
+  };
+}
+
 export class HttpSharePointClient {
   /** @param {HttpSharePointClientOptions} [opts] */
   constructor(opts = {}) {
@@ -413,8 +439,33 @@ export class HttpSharePointClient {
     const unique = [...new Set(accountNames)];
     const entries = await Promise.all(
       unique.map(async (account) => {
-        const displayName = await this._resolveOneUser(account);
-        return /** @type {[string, string | null]} */ ([account, displayName]);
+        const profile = await this._resolveUserProfile(account);
+        return /** @type {[string, string | null]} */ ([
+          account,
+          profile.displayName,
+        ]);
+      })
+    );
+    return Object.fromEntries(entries);
+  }
+
+  /**
+   * Resolve stored bare account names to their current User Profile manager.
+   * Values are canonical lower-cased bare account names. Each unique account
+   * is read once; absent, malformed, and failed profile reads map to `null`.
+   *
+   * @param {string[]} accountNames
+   * @returns {Promise<Record<string, string | null>>}
+   */
+  async resolveManagers(accountNames) {
+    const unique = [...new Set(accountNames)];
+    const entries = await Promise.all(
+      unique.map(async (account) => {
+        const profile = await this._resolveUserProfile(account);
+        return /** @type {[string, string | null]} */ ([
+          account,
+          profile.manager,
+        ]);
       })
     );
     return Object.fromEntries(entries);
@@ -422,19 +473,18 @@ export class HttpSharePointClient {
 
   /**
    * @param {string} account
-   * @returns {Promise<string | null>}
+   * @returns {Promise<{ displayName: string | null, manager: string | null }>}
    */
-  async _resolveOneUser(account) {
+  async _resolveUserProfile(account) {
     const login = toClaimsLogin(account);
     const url = this._absolute(
       `/_api/SP.UserProfiles.PeopleManager/GetPropertiesFor(accountName=@v)?@v='${encodeURIComponent(login)}'`
     );
     try {
       const body = await this._read(url);
-      const name = body?.DisplayName;
-      return typeof name === 'string' && name !== '' ? name : null;
-    } catch (err) {
-      return null;
+      return profileFromProperties(body);
+    } catch {
+      return { displayName: null, manager: null };
     }
   }
 

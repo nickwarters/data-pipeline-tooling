@@ -326,35 +326,32 @@ of Cases whose stored manager differs from the resolved one.
 - The long tail of untouched Cases is knowingly left stale until Reportable. We
   are choosing a bounded reporting error over a scheduled writer.
 
-**Implied follow-up work** (to be raised as separate tickets; not done here)
+`SharePointClient.resolveManagers` now exposes the User Profile Manager property
+through the same `GetPropertiesFor` read used for display-name resolution. The
+remaining follow-up work is:
 
 1. **Write the reviewer's manager alongside the reviewer.** The self-allocation
    claim in `src/pages/cora-dashboard.js` PATCHes `assignedReviewer` alone; it
    must also set `assignedReviewerManager`. Any future reassignment surface
    carries the same obligation.
-2. **Add manager resolution to the `SharePointClient` interface** — a
-   `resolveManagers(accountNames)` alongside `resolveUsers`, reading the User
-   Profile `Manager` property from the `GetPropertiesFor` call
-   `_resolveOneUser` already makes; mirrored in `MockSharePointClient` with a
-   manager edge in `dev/fixtures/people.js`.
-3. **Implement repair-on-touch and the freeze.** Refresh
+2. **Implement repair-on-touch and the freeze.** Refresh
    `assignedReviewerManager` (and the recorded `responsiblePartyManager`) while
    the Case is `In-progress` when the resolved value differs; stamp
    `assignedReviewerManager` in `CaseMachine._reportableSnapshot` and never
    rewrite it after.
-4. **Switch `resolveRoles` to live resolution** for the
+3. **Switch `resolveRoles` to live resolution** for the
    `responsiblePartyManager` Role, with explicit fail-closed behaviour when the
    lookup fails, and tests covering the reorg case (former manager loses
    Conversation `edit`, incoming manager gains it, messages unchanged).
-5. **If a Responsible Party Manager report is built**, it needs a
+4. **If a Responsible Party Manager report is built**, it needs a
    `responsiblePartyManager` predicate in `ListCasesFilter` and a
    `ResponsiblePartyManager eq '…'` condition in `buildFilterExpr` — neither
    exists today — and it inherits the reporting-snapshot semantics above, not the
    live-resolution ones.
-6. **Decide what `capabilities.isResponsiblePartyManager` is for.** It currently
+5. **Decide what `capabilities.isResponsiblePartyManager` is for.** It currently
    affects only the derivation of `isVisitor`. Once the Role resolves live it may
    be purely an Axis-2 list-access grant (ADR-0022) rather than a capability.
-7. **Drift visibility, if the residual proves material.** The comparison this ADR
+6. **Drift visibility, if the residual proves material.** The comparison this ADR
    makes at load — stored value versus resolved value — is exactly a drift
    signal; counting it is a small, separable piece of work, and it is the part of
    the rejected sync job worth keeping.

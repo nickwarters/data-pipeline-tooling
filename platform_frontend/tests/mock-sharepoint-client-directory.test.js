@@ -117,3 +117,15 @@ test('MockSharePointClient: resolveUsers returns an empty map for an empty list'
   const client = makePeopleClient();
   assert.deepEqual(await client.resolveUsers([]), {});
 });
+
+test('MockSharePointClient: resolveManagers follows the fixture edge and returns canonical bare accounts', async () => {
+  const client = makePeopleClient();
+  assert.deepEqual(await client.resolveManagers(['jsmith']), {
+    jsmith: 'mmanager',
+  });
+});
+
+test('MockSharePointClient: resolveManagers returns null for an absent manager edge', async () => {
+  const client = makePeopleClient();
+  assert.deepEqual(await client.resolveManagers(['bjones']), { bjones: null });
+});

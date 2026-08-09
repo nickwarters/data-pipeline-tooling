@@ -1,5 +1,6 @@
 // @ts-check
 import { isOverdue } from '../evaluators/overdue-evaluator.js';
+import { toBareAccount } from './account-name.js';
 import { withAssignmentStamp } from './assignment-stamp.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
@@ -11,13 +12,14 @@ import { withAssignmentStamp } from './assignment-stamp.js';
 /** @typedef {import('../sharepoint-client.js').RoadmapItem} RoadmapItem */
 
 /** @typedef {import('../sharepoint-client.js').VersionedExport} VersionedExport */
+/** @typedef {PersonResult & { manager?: string }} DirectoryPerson */
 
 export class MockSharePointClient {
   /**
    * @param {{
    * personas: Record<string, { groups: string[], userId?: string, displayName?: string }>,
    * persona?: string,
-   * people?: PersonResult[],
+   * people?: DirectoryPerson[],
    * exportHashes?: Record<string, string>,
    * versionedExports?: Record<string, VersionedExport>,
    * lists?: Record<string, CaseRow[]>,
@@ -325,7 +327,11 @@ export class MockSharePointClient {
           p.displayName.toLowerCase().includes(q) ||
           p.loginName.toLowerCase().includes(q)
       )
-      .map((p) => ({ ...p }));
+      .map(({ loginName, displayName, email }) =>
+        email === undefined
+          ? { loginName, displayName }
+          : { loginName, displayName, email }
+      );
   }
 
   /**
@@ -348,6 +354,31 @@ export class MockSharePointClient {
       out[account] = person ? person.displayName : null;
     }
     return out;
+  }
+
+  /**
+   * Resolve bare account names to the fixture directory's current manager.
+   * Values are canonical lower-cased bare account names; an absent directory
+   * entry or manager edge resolves to `null`.
+   *
+   * @param {string[]} accountNames
+   * @returns {Promise<Record<string, string | null>>}
+   */
+  async resolveManagers(accountNames) {
+    const entries = [...new Set(accountNames)].map((account) => {
+      const manager = this._people.find(
+        (person) => person.loginName === account
+      )?.manager;
+      const normalized =
+        typeof manager === 'string' && manager !== ''
+          ? toBareAccount(manager).toLowerCase()
+          : '';
+      return /** @type {[string, string | null]} */ ([
+        account,
+        normalized === '' ? null : normalized,
+      ]);
+    });
+    return Object.fromEntries(entries);
   }
 
   /** @returns {Promise<import('../sharepoint-client.js').CurrentUser>} */

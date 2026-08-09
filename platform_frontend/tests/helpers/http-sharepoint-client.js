@@ -69,12 +69,22 @@ export function digestResponse(digest) {
   });
 }
 
-/** @param {string} displayName */
-export function profileResponse(displayName) {
-  return new Response(JSON.stringify({ DisplayName: displayName }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
+/**
+ * @param {string} displayName
+ * @param {string} [manager]
+ */
+export function profileResponse(displayName, manager) {
+  return new Response(
+    JSON.stringify({
+      DisplayName: displayName,
+      UserProfileProperties:
+        manager === undefined ? [] : [{ Key: 'Manager', Value: manager }],
+    }),
+    {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }
+  );
 }
 
 /**
