@@ -32,6 +32,43 @@ test('my stats view: renders an accessible heading and the empty state copy', ()
   assert.equal(empty.textContent, 'No data yet.');
 });
 
+test('my stats view: renders supplied chart data and omits the fallback', () => {
+  const view = myStatsView(
+    /** @type {any} */ ({
+      chrome: makeChrome(),
+      routes: {
+        myStats: {
+          chart: {
+            data: {
+              groups: [
+                {
+                  key: 'week-one',
+                  label: 'Week one',
+                  marks: [{ key: 'settled', label: 'Settled', value: 4 }],
+                },
+              ],
+            },
+            config: {
+              width: 240,
+              height: 160,
+              ariaLabel: 'Review counts',
+            },
+          },
+        },
+      },
+    })
+  );
+
+  assert.equal(view.querySelector('.cora-my-stats-empty'), null);
+  const chart = /** @type {any} */ (
+    Array.from(view.childNodes).find(
+      (/** @type {any} node */ node) => node.tagName === 'svg'
+    )
+  );
+  assert.ok(chart);
+  assert.equal(chart.getAttribute('aria-label'), 'Review counts');
+});
+
 test('my stats slice: keeps shared chrome and starts with no Report Feed', () => {
   const chrome = makeChrome();
   const slice = createRouteSlice({}, { ...context(), chrome });
@@ -42,6 +79,34 @@ test('my stats slice: keeps shared chrome and starts with no Report Feed', () =>
     slice.reducer(slice.initialState, { type: 'ignored' }),
     slice.initialState
   );
+});
+
+test('my stats slice: accepts a chart view model without mapping the Report Feed', () => {
+  const slice = createRouteSlice({}, context());
+  const chart = {
+    data: {
+      groups: [
+        {
+          key: 'week-one',
+          label: 'Week one',
+          marks: [{ key: 'settled', label: 'Settled', value: 4 }],
+        },
+      ],
+    },
+    config: {
+      width: 240,
+      height: 160,
+      ariaLabel: 'Review counts',
+    },
+  };
+
+  const next = slice.reducer(slice.initialState, {
+    type: 'my-stats/chart-loaded',
+    chart,
+  });
+
+  assert.equal(next.routes.myStats.chart, chart);
+  assert.equal(next.routes.myStats.reportFeed, null);
 });
 
 /** @type {import('../src/services/report-feed-loader.js').ReportFeedEnvelope} */

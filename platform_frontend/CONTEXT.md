@@ -273,8 +273,11 @@ Reviewer**. The reviewing side has a base role (**Reviewer**) and an elevated ro
 Reviewers can reach `#/my-stats`, which loads their Report Feed by lower-cased
 bare account from the SharePoint document library; it is not available to a
 **Reviewer Manager** who lacks the Reviewer capability. A missing feed is an
-empty report, and the current view remains an empty shell until rendering is
-added.
+empty report, and the view keeps `No data yet.` until a separate mapper supplies
+the optional grouped chart view model. The page does not load a second data path
+or map the Report Feed itself. Settled marks are solid and provisional marks are
+hollow, preserving Report Feed provenance rather than treating hollow as zero or
+excluded.
 _Avoid_: Assessor, evaluator
 
 **Assigned Reviewer**:
