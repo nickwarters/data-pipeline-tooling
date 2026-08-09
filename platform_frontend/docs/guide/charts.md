@@ -26,7 +26,7 @@ Data uses one key per group and one key per mark within that group:
         },
       ],
     },
-  ];
+  ],
 }
 ```
 
@@ -58,6 +58,10 @@ callbacks must return non-empty strings and a value formatter must produce
 distinct y-axis tick labels. The default value formatter uses three significant
 figures, so nonzero subunit values such as `0.004` do not become `0`, while
 values such as `3.333` remain readable.
+
+The left and bottom margins are clamped to safe minimums when axis labels would
+otherwise be clipped by the SVG viewBox. A zero top margin remains valid; the
+legend and value-label bands are reserved above the plot independently.
 
 The chart generates one legend item per series, with the full series name in
 the item's `aria-label` and `<title>`. X-axis group labels and ticks are evenly
