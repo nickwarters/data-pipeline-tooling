@@ -95,7 +95,7 @@ def silver_builder(
     )
 
 
-def run(context: RunContext) -> Dataset:
+def run(context: RunContext, *, describe: bool = False) -> Dataset:
     """Refine the feed source -> raw -> silver under the run context; return silver."""
     med = medallion(StoreRegistry(context.base_dir), NAMESPACE)
     strategy = AccumulateByRun.from_context(context)
@@ -104,6 +104,8 @@ def run(context: RunContext) -> Dataset:
     raw_pipeline = raw_builder(
         reader=CsvReader(SAMPLE_CSV), writer=med.raw.writer(FEED_NAME, strategy)
     )
+    if describe:
+        print(raw_pipeline.describe())
     raw_pipeline.run()
 
     silver_pipeline = silver_builder(
@@ -112,6 +114,8 @@ def run(context: RunContext) -> Dataset:
         reject_writer=med.silver.quarantine_writer(FEED_NAME),
         run_log=context.run_log,
     )
+    if describe:
+        print(silver_pipeline.describe())
     silver = silver_pipeline.run()
 
     # --- gold is yours to assemble ------------------------------------------

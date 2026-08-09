@@ -19,7 +19,6 @@ import importlib
 import sys
 
 from cli import scaffold
-from framework.run import RunContext
 from tests.framework_testing import read_rows
 from tools.medallion import medallion
 from tools.store import StoreRegistry
@@ -89,8 +88,8 @@ def test_rendered_case_type_pipeline_runs_and_refines_to_silver(tmp_path):
     try:
         pipeline = importlib.import_module("widgets.pipeline")
         importlib.reload(pipeline)
-        silver = pipeline.run(
-            RunContext(base_dir=tmp_path / "data", pipeline="widgets")
+        exit_code = pipeline.main(
+            ["prog", "--base-dir", str(tmp_path / "data"), "--describe"]
         )
     finally:
         sys.path.remove(str(repo / "pipelines"))
@@ -101,8 +100,9 @@ def test_rendered_case_type_pipeline_runs_and_refines_to_silver(tmp_path):
     med = medallion(StoreRegistry(tmp_path / "data"), "widgets")
     raw = read_rows(med.raw, "widgets")
     silver_rows = read_rows(med.silver, "widgets")
+    assert exit_code == 0
     assert len(raw) > 0
-    assert len(silver_rows) == len(silver) > 0
+    assert len(silver_rows) == len(raw)
 
 
 def test_cli_case_type_flag_renders_the_variant(tmp_path, capsys, monkeypatch):
