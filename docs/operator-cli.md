@@ -21,10 +21,12 @@ python -m cli <command> ...
 ```
 
 All commands take the **base directory** of the run store — the same path you
-pass to `run`. Four categories live underneath it, each with one owner in code:
+pass to `run`. Four categories live underneath it, each with one owner in code.
+The medallion row is followed by the three run-metadata paths:
 
 | Path | What |
 |------|------|
+| `<base>/<subject>/{raw,silver,gold}.db` | medallion data, owned by `tools.store` |
 | `<base>/_runs/<pipeline>.log` | the JSONL run logs, one per subject / path-addressed pipeline |
 | `<base>/_registry/runs.db` | the queryable run registry those logs are ingested into |
 | `<base>/_orchestration/runs.db` | the scheduled-work decision log |
@@ -67,7 +69,8 @@ root from `shared.constants`: `data` is the dev default and
 `~/pipelines_prod` is the production default. `PIPELINE_DATA_DIR_PROD` and
 `PIPELINE_DATA_DIR_DEV` override them. Overrides can be machine-specific paths
 such as a Windows UNC share or a local macOS directory, and relative defaults
-resolve from the current working directory.
+resolve from the current working directory. A configured value may use `~`,
+which is expanded to the current user's home directory.
 
 ```sh
 python -m cli run pipelines/ingest --env prod              # base_dir from PIPELINE_DATA_DIR_PROD or ~/pipelines_prod
@@ -76,9 +79,12 @@ python -m cli run pipelines/ingest --base-dir /explicit/path  # an explicit path
 ```
 
 `--env` defaults to the `PIPELINE_ENV` OS variable, then to `dev`. An explicit
-`--base-dir` always wins. An unknown environment exits non-zero with an
-actionable message rather than a traceback. The same `--base-dir` / `--env`
-choice applies to every command (`run`, `orchestrate`, `runs`, `status`, `log`).
+`--base-dir` always wins. If `prod` uses the committed `~/pipelines_prod`
+fallback, the resolver writes a one-line warning to stderr; configure
+`PIPELINE_DATA_DIR_PROD` for a machine-specific production root. An unknown
+environment exits non-zero with an actionable message rather than a traceback.
+The same `--base-dir` / `--env` choice applies to every command (`run`,
+`orchestrate`, `runs`, `status`, `log`).
 
 `run` addresses a pipeline by **its location on disk**: `pipelines/orders` maps
 to the module `pipelines.orders.pipeline`, imported *at runtime*, whose

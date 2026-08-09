@@ -589,6 +589,25 @@ def test_run_uses_prod_environment_override_without_traceback(tmp_path):
     assert (tmp_path / "prod" / "_runs" / "_source.log").exists()
 
 
+def test_run_reports_unknown_env_without_traceback(monkeypatch, capsys):
+    from types import SimpleNamespace
+
+    from cli import operator
+
+    monkeypatch.setattr(
+        operator,
+        "load_pipeline",
+        lambda path: SimpleNamespace(
+            name=path, run=lambda _context: None, upstreams=()
+        ),
+    )
+
+    assert operator.main(["run", "pipelines/fixture", "--env", "staging"]) == 1
+    stderr = capsys.readouterr().err
+    assert "unknown environment 'staging'" in stderr
+    assert "Traceback" not in stderr
+
+
 def test_status_and_log_resolve_base_dir_from_env(tmp_path):
     # Populate a registry under the env-resolved root, then query it via --env.
     env = {

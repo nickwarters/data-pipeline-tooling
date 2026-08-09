@@ -14,12 +14,17 @@ variable, when set, supplies a machine-specific absolute path -- a UNC share on
 Windows, a local directory on macOS -- without changing source. Relative
 defaults are resolved from the current working directory.
 
+The production default is intentionally visible: when ``prod`` uses its
+committed fallback, a one-line warning is written to stderr so an operator can
+distinguish it from an explicitly configured production root.
+
 To add an environment, add a row to :data:`_ENVIRONMENTS` (and document it).
 """
 
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -74,7 +79,14 @@ def resolve_base_dir(env: str | None = None) -> Path:
         raise ValueError(f"unknown environment {name!r}; known environments: {known}")
     configured = os.environ.get(spec.path_var)
     if configured:
-        return Path(configured)
-    if spec.fallback.is_absolute():
-        return spec.fallback
-    return Path.cwd() / spec.fallback
+        return Path(configured).expanduser()
+    fallback = (
+        spec.fallback if spec.fallback.is_absolute() else Path.cwd() / spec.fallback
+    )
+    if name == "prod":
+        print(
+            f"warning: {spec.path_var} is unset; using committed production root "
+            f"{fallback}; set {spec.path_var} to override it",
+            file=sys.stderr,
+        )
+    return fallback

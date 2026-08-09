@@ -156,7 +156,10 @@ python -m cli status --env prod
 
 The committed production fallback is `~/pipelines_prod`; set
 `PIPELINE_DATA_DIR_PROD` when the live machine uses another root. Confirm it
-resolves to the intended location before you put data in it.
+resolves to the intended location before you put data in it. If the variable is
+unset, the resolver emits a warning to stderr so a run cannot silently hide
+that it used the fallback; the go/no-go checklist below still requires the
+explicit production variable for a live machine.
 
 ## Stage 4 — the first live run, by hand
 

@@ -103,7 +103,7 @@ Three properties are load-bearing:
   with no owner drifts. `tools/deliverables.py` is that owner;
   `shared.constants` declares the dev/prod roots while
   `tools.environments` applies the environment-variable-over-default
-  precedence, and
+  precedence and warns when production uses its committed fallback, and
   `REPORT_FEEDS_DESTINATION` is the canonical
   `"cora_report_feeds"` destination rather than a spelling repeated in a
   pipeline, a delivery job and a runbook.
