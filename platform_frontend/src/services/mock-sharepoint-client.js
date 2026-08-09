@@ -343,17 +343,14 @@ export class MockSharePointClient {
    * @returns {Promise<Record<string, string | null>>}
    */
   async resolveUsers(accountNames) {
-    /** @type {Record<string, string | null>} */
-    const out = {};
-    for (const account of accountNames) {
-      // Own-key check, not `in`: an account name that collides with an
-      // Object.prototype member (e.g. "toString") must still be assigned,
-      // matching HttpSharePointClient's Set-based dedupe.
-      if (Object.prototype.hasOwnProperty.call(out, account)) continue;
+    const entries = [...new Set(accountNames)].map((account) => {
       const person = this._people.find((p) => p.loginName === account);
-      out[account] = person ? person.displayName : null;
-    }
-    return out;
+      return /** @type {[string, string | null]} */ ([
+        account,
+        person ? person.displayName : null,
+      ]);
+    });
+    return Object.fromEntries(entries);
   }
 
   /**

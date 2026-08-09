@@ -480,16 +480,13 @@ for (const [name, makeClient] of clients) {
       assert.equal(result['ghost-account'], null);
     });
 
-    test('resolveUsers: an account name that collides with an Object.prototype key still resolves to a present null key', async () => {
-      // Divergence found by this ticket: MockSharePointClient previously
-      // guarded its dedupe with `account in out`, which is true for
-      // Object.prototype members (e.g. "toString", "constructor") even
-      // before that key is ever assigned — so an unlucky account name would
-      // silently skip the assignment and leave the key "missing" (reading
-      // it returned the inherited function, not `null`). Fixed in this
-      // ticket by checking `Object.prototype.hasOwnProperty.call` instead.
+    test('resolveUsers: Object.prototype keys resolve to present null keys', async () => {
       const client = makeClient({ cases: seedCases(), people: seedPeople() });
-      const result = await client.resolveUsers(['toString', 'constructor']);
+      const result = await client.resolveUsers([
+        'toString',
+        'constructor',
+        '__proto__',
+      ]);
       assert.ok(
         Object.prototype.hasOwnProperty.call(result, 'toString'),
         '"toString" must be a present own key'
@@ -500,6 +497,11 @@ for (const [name, makeClient] of clients) {
         '"constructor" must be a present own key'
       );
       assert.equal(result['constructor'], null);
+      assert.ok(
+        Object.prototype.hasOwnProperty.call(result, '__proto__'),
+        '"__proto__" must be a present own key'
+      );
+      assert.equal(result.__proto__, null);
     });
 
     test('resolveManagers: returns canonical bare manager accounts and present null keys', async () => {
