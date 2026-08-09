@@ -31,7 +31,10 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   and the cross-cutting `retry` / `calendar` / `medallion` / `recipes` /
   `deliverables` /
   `environments` / orchestration / observability utilities in the top-level
-  `tools/` package — both siblings of `framework/`, not facades. The run-record
+  `tools/` package — both siblings of `framework/`, not facades. `shared/`
+  contains application-wide declarations such as environment roots, kept
+  separate from the resolver in `tools/` so other application code can reuse
+  the constants without importing operational behaviour. The run-record
   schema is declared **once, as data**, in
   `tools/observability/record_schema.py` (`RUN_RECORD_FIELDS`): the JSONL record,
   the registry's DDL, its additive column migration, the `INSERT`, the row decode
@@ -54,7 +57,8 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   `_cli/`, `testing/` to mirror the framework sub-packages and the `cli/` entry
   point; an implementation file covered by several test files gets a
   `test_<impl>/` package, e.g. `tests/framework/io/test_readers/`),
-  `tests/case_review/`, `tests/pipelines/`, `tests/tools/`, `tests/scripts/`,
+  `tests/case_review/`, `tests/pipelines/`, `tests/tools/`, `tests/shared/`,
+  `tests/scripts/`,
   plus `tests/integration/` for tests that span trees (e.g. the public-API and
   framework/domain boundary tests).
   Shared helpers (`tests/_schema_fixtures.py`, `tests/fixtures/`) sit at the

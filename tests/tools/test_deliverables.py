@@ -6,7 +6,6 @@ from tools.deliverables import (
     REPORT_FEEDS_DESTINATION,
     get_deliverable_path,
     get_deliverable_root,
-    get_destination_root,
 )
 
 
@@ -16,7 +15,7 @@ def test_deliverable_root_accepts_string_and_pathlike_base_dirs(tmp_path):
 
 
 def test_destination_and_nested_deliverable_paths_have_expected_layout(tmp_path):
-    assert get_destination_root(tmp_path, REPORT_FEEDS_DESTINATION) == (
+    assert get_deliverable_path(tmp_path, REPORT_FEEDS_DESTINATION) == (
         tmp_path / "deliverables" / "cora_report_feeds"
     )
     assert get_deliverable_path(
@@ -37,6 +36,13 @@ def test_deliverable_helpers_return_paths_without_creating_directories(tmp_path)
     assert not (tmp_path / "deliverables").exists()
 
 
+def test_windows_separators_are_normalized_to_host_paths(tmp_path):
+    assert (
+        get_deliverable_path(tmp_path, "reports", r"sub\dir\report.txt")
+        == tmp_path / "deliverables" / "reports" / "sub" / "dir" / "report.txt"
+    )
+
+
 @pytest.mark.parametrize(
     "invalid",
     [
@@ -53,7 +59,7 @@ def test_deliverable_helpers_return_paths_without_creating_directories(tmp_path)
 )
 def test_destination_rejects_invalid_relative_paths(tmp_path, invalid):
     with pytest.raises(ValueError, match="relative|traversal"):
-        get_destination_root(tmp_path, invalid)
+        get_deliverable_path(tmp_path, invalid)
 
 
 def test_sub_path_parts_reject_invalid_relative_paths(tmp_path):
@@ -63,11 +69,11 @@ def test_sub_path_parts_reject_invalid_relative_paths(tmp_path):
 
 @pytest.mark.parametrize("invalid", ["", ".", Path(".")])
 def test_sub_path_parts_reject_empty_or_dot_paths(tmp_path, invalid):
-    with pytest.raises(ValueError, match="sub-path part"):
+    with pytest.raises(ValueError, match="sub-path part.*empty"):
         get_deliverable_path(tmp_path, "reports", invalid)
 
 
 @pytest.mark.parametrize("invalid", ["", ".", Path(".")])
 def test_destination_rejects_empty_or_dot_paths(tmp_path, invalid):
-    with pytest.raises(ValueError, match="destination"):
-        get_destination_root(tmp_path, invalid)
+    with pytest.raises(ValueError, match="destination.*empty"):
+        get_deliverable_path(tmp_path, invalid)

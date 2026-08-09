@@ -49,8 +49,8 @@ top-level modules:
 
 | Import | What |
 |--------|------|
-| `shared.constants` — `DEV_ROOT`, `PROD_ROOT` | Shared root declarations (`data` and `~/pipelines_prod`). These constants do not read the environment; `tools.environments` applies the per-environment OS-variable overrides. |
-| `tools.deliverables` — `REPORT_FEEDS_DESTINATION`, `get_deliverable_root`, `get_destination_root`, `get_deliverable_path` | Build validated paths under `<base_dir>/deliverables/<destination>/…`; helpers only compose paths and do not create directories. |
+| `shared.constants` — `DEV_ROOT`, `PROD_ROOT` | Shared root declarations (`data` and `~/pipelines_prod`). These constants do not read the environment; `tools.environments` applies the per-environment OS-variable overrides, expands a leading `~`, and warns when production uses its committed fallback. |
+| `tools.deliverables` — `REPORT_FEEDS_DESTINATION`, `get_deliverable_root`, `get_deliverable_path` | Build validated paths under `<base_dir>/deliverables/<destination>/…`; helpers only compose paths and do not create directories. `get_deliverable_path` returns the destination root when no sub-path parts are supplied. |
 
 For interactive discovery, `import framework` exposes only those facade modules:
 

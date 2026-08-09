@@ -25,7 +25,8 @@ through clean domain abstractions (a `CasePool` of `Case`s) instead of raw
   `tools.deliverables` owns the deliverable outbox at
   `<base_dir>/deliverables/<destination>/…`. `shared.constants` declares the
   dev default `data` and production default `~/pipelines_prod`;
-  `tools.environments` lets the per-environment OS variables override them.
+  `tools.environments` lets the per-environment OS variables override them and
+  warns when production falls back to its committed default.
 - **The frontend** — this guide covers the pipeline half of the system only. The
   Case Review Platform frontend is the other half, and keeps its documentation
   with its code: start at
