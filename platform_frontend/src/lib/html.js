@@ -2,7 +2,7 @@
 /** @typedef {{ __unsafeHTML: string }} UnsafeHTML */
 /** @typedef {Node | UnsafeHTML | string | number | null | false | Array<Node | UnsafeHTML | string | number | null | false>} VNode */
 
-const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
+export const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 
 /**
  * Explicit raw HTML escape hatch for narrowly reviewed markup such as syntax
@@ -55,30 +55,6 @@ function appendChildren(el, children) {
 }
 
 /**
- * Keep render()'s controlled-form path attribute-backed for SVG nodes. SVG
- * does not have HTML form properties, but render() still owns these two keys.
- * @param {any} el
- */
-function defineSvgFormProps(el) {
-  Object.defineProperties(el, {
-    value: {
-      configurable: true,
-      get: () => el.getAttribute('value') ?? '',
-      set: (/** @type {any} */ value) => {
-        el.setAttribute('value', String(value));
-      },
-    },
-    checked: {
-      configurable: true,
-      get: () => el.getAttribute('checked') === 'true',
-      set: (/** @type {any} */ value) => {
-        el.setAttribute('checked', String(Boolean(value)));
-      },
-    },
-  });
-}
-
-/**
  * Records the raw props object each view-builder-built element was created with,
  * so `render()` (src/core/render.js) can diff the *authored* props of the previous
  * and next trees rather than trying to read them back out of the live DOM
@@ -107,12 +83,6 @@ export function getProps(el) {
  * @param {Record<string, any>} props
  */
 export function setProps(el, props) {
-  // The controlled-form path writes these two keys directly; absent SVG props
-  // still need their attributes removed after that path runs.
-  if (el.namespaceURI === SVG_NAMESPACE) {
-    if (props.value == null) el.removeAttribute('value');
-    if (props.checked == null) el.removeAttribute('checked');
-  }
   NODE_PROPS.set(el, props);
 }
 
@@ -268,10 +238,12 @@ export function h(tag, props = {}, ...children) {
  * @param {Record<string, any>} [props]
  * @param {...VNode} children
  * @returns {SVGElement}
+ *
+ * SVG attributes are passed to setAttribute; legacy namespaced attributes such
+ * as xlink:href are not expanded through setAttributeNS.
  */
 export function svg(tag, props = {}, ...children) {
   const el = document.createElementNS(SVG_NAMESPACE, tag);
-  defineSvgFormProps(el);
 
   for (const [k, v] of Object.entries(props)) {
     if (v == null) continue;

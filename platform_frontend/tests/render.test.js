@@ -195,22 +195,29 @@ test('render: patches SVG attributes and listeners in place', () => {
 
 test('render: SVG value and checked stay attributes through changes and removal', () => {
   const root = container();
-  render(
-    root,
-    svg('svg', {}, svg('rect', { key: 'bar', value: 'first', checked: true }))
-  );
+  render(root, svg('svg', {}, svg('rect', { key: 'bar' })));
   const bar = root.childNodes[0].childNodes[0];
 
   render(
     root,
-    svg('svg', {}, svg('rect', { key: 'bar', value: 'second', checked: false }))
+    svg('svg', {}, svg('rect', { key: 'bar', value: '', checked: false }))
+  );
+  assert.equal(bar.getAttribute('value'), '');
+  assert.equal(bar.getAttribute('checked'), 'false');
+  assert.deepEqual(bar._propertyWrites, []);
+
+  render(
+    root,
+    svg('svg', {}, svg('rect', { key: 'bar', value: 'second', checked: true }))
   );
   assert.equal(bar.getAttribute('value'), 'second');
-  assert.equal(bar.getAttribute('checked'), 'false');
+  assert.equal(bar.getAttribute('checked'), 'true');
+  assert.deepEqual(bar._propertyWrites, []);
 
   render(root, svg('svg', {}, svg('rect', { key: 'bar' })));
   assert.equal(bar.getAttribute('value'), null);
   assert.equal(bar.getAttribute('checked'), null);
+  assert.deepEqual(bar._propertyWrites, []);
 });
 
 test('render: a boolean property is patched and cleared', () => {

@@ -155,9 +155,11 @@ test('h: lowercase on* props still become listeners', () => {
 });
 
 test('svg: creates SVG elements and keeps nested SVG elements in the namespace', () => {
-  const root = svg('svg', { viewBox: '0 0 10 10' }, svg('g', {}, svg('rect')));
-  const group = root.childNodes[0];
-  const rect = group.childNodes[0];
+  const root = /** @type {any} */ (
+    svg('svg', { viewBox: '0 0 10 10' }, svg('g', {}, svg('rect')))
+  );
+  const group = /** @type {any} */ (root.childNodes[0]);
+  const rect = /** @type {any} */ (group.childNodes[0]);
   assert.equal(root.namespaceURI, 'http://www.w3.org/2000/svg');
   assert.equal(group.namespaceURI, root.namespaceURI);
   assert.equal(rect.namespaceURI, root.namespaceURI);
@@ -191,19 +193,27 @@ test('svg: listeners install, replace, and remove through the prop helpers', () 
   const second = () => (secondCalls += 1);
   const circle = /** @type {any} */ (svg('circle', { onclick: first }));
 
-  circle.dispatchEvent(new /** @type {any} */ (globalThis).CustomEvent('click'));
+  circle.dispatchEvent(
+    new /** @type {any} */ (globalThis).CustomEvent('click')
+  );
   removeProp(circle, 'onclick', first);
   applyProp(circle, 'onclick', second);
-  circle.dispatchEvent(new /** @type {any} */ (globalThis).CustomEvent('click'));
+  circle.dispatchEvent(
+    new /** @type {any} */ (globalThis).CustomEvent('click')
+  );
   removeProp(circle, 'onclick', second);
-  circle.dispatchEvent(new /** @type {any} */ (globalThis).CustomEvent('click'));
+  circle.dispatchEvent(
+    new /** @type {any} */ (globalThis).CustomEvent('click')
+  );
 
   assert.equal(firstCalls, 1);
   assert.equal(secondCalls, 1);
 });
 
 test('svg: removeProp removes an SVG attribute', () => {
-  const rect = /** @type {any} */ (svg('rect', { width: 10, className: 'bar' }));
+  const rect = /** @type {any} */ (
+    svg('rect', { width: 10, className: 'bar' })
+  );
   removeProp(rect, 'width', 10);
   removeProp(rect, 'className', 'bar');
   assert.equal(rect.getAttribute('width'), null);

@@ -6,10 +6,9 @@ Date: 2026-08-09
 
 Accepted — extends
 [ADR-0034](./0034-store-driven-views-supersede-component-owned-state.md) and
-[ADR-0039](./0039-view-produces-render-commits.md), whose "a view is pure and
-returns an `h()` tree" contract is preserved exactly: a chart view is still
-pure, still returns a tree, and is still committed by `core/render.js`. Only the
-element namespace widens.
+[ADR-0039](./0039-view-produces-render-commits.md): a view is still pure,
+returns a tree, and is still committed by `core/render.js`. The tree now
+supports both `h()` and `svg()`; only the element namespace widens.
 
 ## Context
 
@@ -49,9 +48,10 @@ including `className` → `setAttribute('class', …)`. This has to live in the 
 helpers rather than only in the builder, because `core/render.js` calls them
 when patching a node between renders.
 
-**`core/render.js` is unchanged.** It never creates elements — it adopts the
-nodes the builder produced and compares `nodeName`, which is consistent when
-both sides come from the same builder.
+**`core/render.js` never creates elements.** It adopts the nodes the builders
+produce and compares `nodeName`. Its controlled-form optimisation remains
+HTML-only: SVG `value` and `checked` props go through the ordinary
+attribute helpers so build-time and reconciliation-time mapping stay identical.
 
 **The tooltip is HTML, not SVG `<text>`**, positioned over the chart, so it gets
 ordinary CSS wrapping, padding and shadow.
@@ -89,6 +89,9 @@ leaves `h()` alone.
   properties. Without it the property branch can silently return, and the
   failure mode — a chart that renders but ignores a dimension — is much harder
   to spot than a throw.
+- **The controlled-form optimisation is HTML-only.** SVG `value` and
+  `checked` are ordinary attributes, so the reconciler's form-property path
+  does not apply to namespaced nodes.
 - **Charts theme for free.** `fill` and `stroke` read `cora-design-tokens.css`
   custom properties directly, so the chart inherits the palette rather than
   declaring its own.

@@ -273,7 +273,7 @@ export class StubEl {
   }
 }
 
-/** Strict geometry/class probes make accidental property paths observable. */
+/** Strict DOM-property probes make accidental SVG property paths observable. */
 export class StubSvgEl extends StubEl {
   constructor(tag = '') {
     super(tag, SVG_NAMESPACE);
@@ -282,26 +282,46 @@ export class StubSvgEl extends StubEl {
     /** @type {Array<[string, any]>} */
     this._propertyWrites = [];
 
-    /** @type {string} */
-    let className = '';
-    Object.defineProperty(this, 'className', {
-      configurable: true,
-      get: () => className,
-      set: (/** @type {any} */ value) => {
-        this._propertyWrites.push(['className', value]);
-        throw new TypeError('SVG className is read-only');
-      },
-    });
-
-    /** @type {Record<string, any>} */
-    const geometry = {};
-    for (const key of ['x', 'y', 'width', 'height', 'cx', 'cy', 'r']) {
+    /** @type {string[]} */
+    const propertyNames = [
+      'className',
+      'value',
+      'checked',
+      'disabled',
+      'readOnly',
+      'hidden',
+      'id',
+      'role',
+      'tabIndex',
+      'href',
+      'title',
+      'name',
+      'type',
+      'placeholder',
+      'style',
+      'x',
+      'y',
+      'width',
+      'height',
+      'cx',
+      'cy',
+      'r',
+      'rx',
+      'ry',
+      'pathLength',
+      'transform',
+      'fill',
+      'stroke',
+    ];
+    const self = /** @type {any} */ (this);
+    for (const key of propertyNames) {
+      const currentValue = self[key];
       Object.defineProperty(this, key, {
         configurable: true,
-        get: () => geometry[key],
+        get: () => currentValue,
         set: (/** @type {any} */ value) => {
           this._propertyWrites.push([key, value]);
-          throw new TypeError(`SVG ${key} is read-only`);
+          throw new TypeError('SVG property is read-only');
         },
       });
     }

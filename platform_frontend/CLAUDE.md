@@ -8,7 +8,7 @@ Before doing any non-trivial work in this repo, read:
 
 1. **[CONTEXT.md](./CONTEXT.md)** — domain language. Use these terms exactly when discussing or coding (`Case Type`, `Question Definition`, `Applicable Question`, `Answer`, `Remediation Action`, `Reviewer`, `Responsible Party`, `Case Type Owner`, `Conversation`, `Outcome`).
 2. **[docs/guide/add-a-page.md](./docs/guide/add-a-page.md)** — the one-page
-   authoring path: state → `h()`, actions, effects, route entry, and tests.
+   authoring path: state → `h()`/`svg()`, actions, effects, route entry, and tests.
 3. **[docs/adr/](./docs/adr/)** — 48 architecture decisions, numbered
    (`0001`–`0048`). Read the status before relying on an older decision, and do
    not deviate from an accepted ADR without surfacing the deviation explicitly.
@@ -252,7 +252,7 @@ src/
   core/                         # store-driven view runtime (ADR-0034)
                                 #   see docs/guide/store-actions-and-effects.md for the contract
     chrome-state.js             # shared current-user/permissions store slice
-    render.js                   # keyed DOM reconciler: commits an h() tree into a live container,
+    render.js                   # keyed DOM reconciler: commits an h()/svg() tree into a live container,
                                 #   patching in place (focus/caret/scroll survive) — CORE-2 (#404),
                                 #   named morph() until ADR-0039
     store.js                    # single route-local store: dispatch/reducer, coalesced
