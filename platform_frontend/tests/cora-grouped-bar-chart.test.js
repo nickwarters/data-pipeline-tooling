@@ -276,6 +276,45 @@ test('legend and value-label bands stay above the plot with zero top margin', ()
   }
 });
 
+test('zero axis margins are raised enough to keep labels inside the viewBox', () => {
+  const root = GroupedBarChart({
+    data: {
+      groups: [
+        {
+          key: 'one',
+          label: 'One',
+          marks: [{ key: 'count', label: 'Count', value: 10 }],
+        },
+      ],
+    },
+    config: {
+      width: 220,
+      height: 220,
+      ariaLabel: 'Safe margins',
+      margin: { top: 0, right: 0, bottom: 0, left: 0 },
+      xAxisLabel: 'Period',
+      yAxisLabel: 'Count',
+    },
+  });
+
+  assert.ok(
+    numberAttribute(
+      all(root, '.cora-grouped-bar-chart__group-label')[0],
+      'y'
+    ) <= 220
+  );
+  assert.ok(
+    numberAttribute(
+      all(root, '.cora-grouped-bar-chart__x-axis-label')[0],
+      'y'
+    ) <= 220
+  );
+  assert.ok(
+    numberAttribute(all(root, '.cora-grouped-bar-chart__tick-label')[0], 'x') >=
+      0
+  );
+});
+
 test('legend labels wrap into rows, retain full accessible names, and reject overflow', () => {
   const labels = [
     'A very long settled series',
@@ -374,6 +413,32 @@ test('default formatting keeps subunit values nonzero and constant domains usefu
     '4'
   );
   assert.ok(numberAttribute(bars(constant)[0], 'height') > 0);
+});
+
+test('finite extreme values keep the derived domain and SVG geometry finite', () => {
+  const root = GroupedBarChart({
+    data: {
+      groups: [
+        {
+          key: 'extreme',
+          label: 'Extreme',
+          marks: [{ key: 'count', label: 'Count', value: Number.MAX_VALUE }],
+        },
+      ],
+    },
+    config: { width: 240, height: 220, ariaLabel: 'Extreme values' },
+  });
+
+  const numericAttributes = [
+    ...all(root, '.cora-grouped-bar-chart__bar'),
+    ...all(root, '.cora-grouped-bar-chart__y-tick'),
+  ].flatMap((node) =>
+    ['x', 'y', 'width', 'height'].flatMap((attribute) => {
+      const value = node.getAttribute(attribute);
+      return value === null ? [] : [Number(value)];
+    })
+  );
+  assert.ok(numericAttributes.every(Number.isFinite));
 });
 
 test('all-zero and empty data use finite positive geometry', () => {

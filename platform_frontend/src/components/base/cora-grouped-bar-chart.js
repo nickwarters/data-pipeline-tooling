@@ -84,6 +84,9 @@ const LEGEND_BOTTOM_PADDING = 4;
 const VALUE_LABEL_BAND_HEIGHT = 20;
 const VALUE_LABEL_GAP = 6;
 const LEGEND_LABEL_CHAR_WIDTH = 7;
+const MIN_LEFT_MARGIN = 24;
+const MIN_BOTTOM_MARGIN = 24;
+const MIN_BOTTOM_MARGIN_WITH_AXIS_LABEL = 44;
 
 /** @param {unknown} value @param {string} name @returns {Record<string, any>} */
 function requireObject(value, name) {
@@ -183,8 +186,8 @@ function validateData(input) {
   return { data: /** @type {GroupedBarChartData} */ (data), maxValue };
 }
 
-/** @param {unknown} input @returns {ResolvedMargin} */
-function resolveMargin(input) {
+/** @param {unknown} input @param {boolean} hasXAxisLabel @returns {ResolvedMargin} */
+function resolveMargin(input, hasXAxisLabel) {
   const margin =
     input === undefined ? {} : requireObject(input, 'config.margin');
   /** @param {'top' | 'right' | 'bottom' | 'left'} side */
@@ -192,6 +195,13 @@ function resolveMargin(input) {
     const value = margin[side];
     if (value === undefined) return DEFAULT_MARGIN[side];
     requireNonNegativeNumber(value, `config.margin.${side}`);
+    if (side === 'left') return Math.max(value, MIN_LEFT_MARGIN);
+    if (side === 'bottom') {
+      const minimum = hasXAxisLabel
+        ? MIN_BOTTOM_MARGIN_WITH_AXIS_LABEL
+        : MIN_BOTTOM_MARGIN;
+      return Math.max(value, minimum);
+    }
     return value;
   };
   return {
@@ -239,7 +249,8 @@ function resolveYMax(maxValue, configured, tickCount) {
   }
   if (maxValue === 0) return 1;
   const step = niceStep(maxValue / (tickCount - 1));
-  return Math.max(maxValue, step * (tickCount - 1));
+  const candidate = step * (tickCount - 1);
+  return Number.isFinite(candidate) ? Math.max(maxValue, candidate) : maxValue;
 }
 
 /** @param {GroupedBarChartConfig} input @param {number} maxValue @returns {ResolvedConfig} */
@@ -249,7 +260,6 @@ function resolveConfig(input, maxValue) {
   requirePositiveNumber(config.height, 'config.height');
   requireString(config.ariaLabel, 'config.ariaLabel', true);
 
-  const margin = resolveMargin(config.margin);
   const tickCount = config.tickCount === undefined ? 5 : config.tickCount;
   if (!Number.isInteger(tickCount) || tickCount < 2) {
     throw new RangeError('config.tickCount must be an integer of at least two');
@@ -272,6 +282,7 @@ function resolveConfig(input, maxValue) {
   ) {
     throw new TypeError('config.formatGroupLabel must be a function');
   }
+  const margin = resolveMargin(config.margin, config.xAxisLabel !== undefined);
 
   return {
     width: config.width,
@@ -721,7 +732,7 @@ export function GroupedBarChart(props) {
   );
   const tickValues = Array.from(
     { length: config.tickCount },
-    (_, index) => (config.yMax * index) / (config.tickCount - 1)
+    (_, index) => config.yMax * (index / (config.tickCount - 1))
   );
   const tickLabels = tickValues.map((value) =>
     formatValue(config.formatValue, value, undefined, undefined)
