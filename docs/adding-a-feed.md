@@ -131,7 +131,9 @@ python -m pytest tests/pipelines/test_orders.py  # the generated test passes as-
 Both `--base-dir` and `--env` resolve the medallion root the same way the
 operator CLI does (see [operator-cli.md](operator-cli.md)): an explicit
 `--base-dir` wins, otherwise `--env` (or `$PIPELINE_ENV`) selects an environment
-from `tools.environments`, defaulting to `dev` → `./data`.
+from `tools.environments`, defaulting to `dev` → the committed `data` root.
+`shared.constants` supplies the `data` and `~/pipelines_prod` defaults;
+`PIPELINE_DATA_DIR_DEV` and `PIPELINE_DATA_DIR_PROD` override them.
 
 `--dry-run` is the local-development inner loop: it runs the feed end to end
 against real data but **lands nothing**, printing per-step columns, dtypes, row
@@ -707,9 +709,11 @@ hide that a run had lost its place. The `ingestion_batch_id` is opaque provenanc
 handed in by the caller, not derived here.
 
 The state lives at **`<base>/_checkpoints/sharepoint.db`** — beside `_runs/`,
-not inside it. A base directory now holds three kinds of thing: the medallion
+not inside it. A base directory now holds four kinds of thing: the medallion
 **rows** (`tools.store`), the **run metadata** (`tools.observability.run_store`),
-and this **source control state**. They are separate because their lifecycles
+the **deliverable outbox** (`tools.deliverables` at
+`<base_dir>/deliverables/<destination>/…`), and this **source control state**.
+They are separate because their lifecycles
 are: pruning run logs must not lose a feed's place, and re-landing silver must
 not either.
 

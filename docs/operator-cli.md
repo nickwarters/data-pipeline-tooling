@@ -21,18 +21,19 @@ python -m cli <command> ...
 ```
 
 All commands take the **base directory** of the run store — the same path you
-pass to `run`. The layout underneath it has one owner in code, `RunStore`
-(`tools/observability/run_store.py`), and nothing else spells the
-fragments out:
+pass to `run`. Four categories live underneath it, each with one owner in code:
 
 | Path | What |
 |------|------|
 | `<base>/_runs/<pipeline>.log` | the JSONL run logs, one per subject / path-addressed pipeline |
 | `<base>/_registry/runs.db` | the queryable run registry those logs are ingested into |
 | `<base>/_orchestration/runs.db` | the scheduled-work decision log |
+| `<base>/deliverables/<destination>/…` | the local deliverable outbox, owned by `tools.deliverables` |
+| `<base>/_checkpoints/sharepoint.db` | source control state, owned by `tools.integrations.sharepoint_checkpoint` |
 
-A base directory holds one further category the CLI does not read: source
-**control state** under `<base>/_checkpoints/`
+The three run-metadata rows are owned by `RunStore`; the deliverable row is
+owned by `tools.deliverables`; and the source **control state** row is owned by
+`SharePointCheckpointStore`
 ([adding-a-feed.md](adding-a-feed.md#sharepointcheckpointstorebase_dir--where-the-polling-got-to)).
 
 `status` / `runs` / `log` read from there. `orchestrate`
@@ -62,20 +63,20 @@ at a root directly, or omit it and let `--env` resolve it from a named
 environment — `prod`, `dev`, and so on. Which physical root each environment maps
 to is an operational concern, not the framework's, so the mapping lives in the
 sibling utility [`tools.environments`](public-api.md): each environment reads its
-root from an OS environment variable (`PIPELINE_DATA_DIR_PROD`,
-`PIPELINE_DATA_DIR_DEV`, …), so a machine-specific path — a UNC share on Windows,
-a local directory on macOS — never has to be committed to source. `dev` falls
-back to `./data` so a fresh clone runs out of the box.
+root from `shared.constants`: `data` is the dev default and
+`~/pipelines_prod` is the production default. `PIPELINE_DATA_DIR_PROD` and
+`PIPELINE_DATA_DIR_DEV` override them. Overrides can be machine-specific paths
+such as a Windows UNC share or a local macOS directory, and relative defaults
+resolve from the current working directory.
 
 ```sh
-python -m cli run pipelines/ingest --env prod              # base_dir from PIPELINE_DATA_DIR_PROD
+python -m cli run pipelines/ingest --env prod              # base_dir from PIPELINE_DATA_DIR_PROD or ~/pipelines_prod
 python -m cli run pipelines/ingest --env dev               # base_dir from PIPELINE_DATA_DIR_DEV or ./data
 python -m cli run pipelines/ingest --base-dir /explicit/path  # an explicit path still wins
 ```
 
 `--env` defaults to the `PIPELINE_ENV` OS variable, then to `dev`. An explicit
-`--base-dir` always wins. An unknown environment, or a known one whose variable
-is unset and that has no fallback (e.g. `prod`), exits non-zero with an
+`--base-dir` always wins. An unknown environment exits non-zero with an
 actionable message rather than a traceback. The same `--base-dir` / `--env`
 choice applies to every command (`run`, `orchestrate`, `runs`, `status`, `log`).
 

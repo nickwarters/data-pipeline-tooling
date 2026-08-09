@@ -2,14 +2,15 @@
 
 The mapping is an operational concern that lives outside the framework, so these
 tests pin the precedence (explicit arg -> ``PIPELINE_ENV`` -> default), the
-per-env OS variable override, the dev fallback that keeps a fresh clone runnable,
-and the actionable errors for an unknown or unconfigured environment.
+per-env OS variable override, the dev/prod fallbacks, and the actionable error
+for an unknown environment.
 """
 
 from pathlib import Path
 
 import pytest
 
+from shared.constants import DEV_ROOT, PROD_ROOT
 from tools.environments import (
     DEFAULT_ENV,
     known_environments,
@@ -20,7 +21,7 @@ from tools.environments import (
 def test_dev_falls_back_to_cwd_data(tmp_path, monkeypatch):
     monkeypatch.delenv("PIPELINE_DATA_DIR_DEV", raising=False)
     monkeypatch.chdir(tmp_path)
-    assert resolve_base_dir("dev") == tmp_path / "data"
+    assert resolve_base_dir("dev") == tmp_path / DEV_ROOT
 
 
 def test_default_env_is_used_when_nothing_is_passed(tmp_path, monkeypatch):
@@ -28,7 +29,7 @@ def test_default_env_is_used_when_nothing_is_passed(tmp_path, monkeypatch):
     monkeypatch.delenv("PIPELINE_DATA_DIR_DEV", raising=False)
     monkeypatch.chdir(tmp_path)
     assert DEFAULT_ENV == "dev"
-    assert resolve_base_dir() == tmp_path / "data"
+    assert resolve_base_dir() == tmp_path / DEV_ROOT
 
 
 def test_pipeline_env_variable_selects_the_environment(tmp_path, monkeypatch):
@@ -41,7 +42,7 @@ def test_explicit_arg_overrides_pipeline_env(tmp_path, monkeypatch):
     monkeypatch.setenv("PIPELINE_ENV", "prod")
     monkeypatch.delenv("PIPELINE_DATA_DIR_DEV", raising=False)
     monkeypatch.chdir(tmp_path)
-    assert resolve_base_dir("dev") == tmp_path / "data"
+    assert resolve_base_dir("dev") == tmp_path / DEV_ROOT
 
 
 def test_per_env_variable_overrides_the_fallback(tmp_path, monkeypatch):
@@ -62,11 +63,9 @@ def test_unknown_environment_raises_with_the_known_names(monkeypatch):
     assert "dev" in message and "prod" in message
 
 
-def test_known_env_without_a_configured_path_raises(monkeypatch):
+def test_prod_falls_back_to_home_pipelines_prod(monkeypatch):
     monkeypatch.delenv("PIPELINE_DATA_DIR_PROD", raising=False)
-    with pytest.raises(ValueError) as excinfo:
-        resolve_base_dir("prod")
-    assert "PIPELINE_DATA_DIR_PROD" in str(excinfo.value)
+    assert resolve_base_dir("prod") == PROD_ROOT
 
 
 def test_known_environments_lists_the_registered_names():

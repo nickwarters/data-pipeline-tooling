@@ -29,6 +29,7 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   helpers with no public name)). The `python -m cli` entry point (`scaffold`
   plus the operator commands; see below) lives in the top-level `cli/` package,
   and the cross-cutting `retry` / `calendar` / `medallion` / `recipes` /
+  `deliverables` /
   `environments` / orchestration / observability utilities in the top-level
   `tools/` package — both siblings of `framework/`, not facades. The run-record
   schema is declared **once, as data**, in
@@ -69,7 +70,8 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   `framework.io` / `framework.transform` / `framework.run`, not the modules
   behind them (those are internal layout); the cross-cutting `tools.*` helpers
   (`tools.retry` / `tools.calendar` / `tools.orchestration` /
-  `tools.observability` / `tools.environments` / `tools.recipes`) are a sibling
+  `tools.observability` / `tools.environments` / `tools.recipes` /
+  `tools.deliverables`) are a sibling
   utility package, not a facade. The facades are the stable contract;
   [`docs/public-api.md`](docs/public-api.md) lists the surface, the internal
   modules, and the packaging non-goal. `tests/integration/test_public_api.py`

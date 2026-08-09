@@ -19,6 +19,13 @@ through clean domain abstractions (a `CasePool` of `Case`s) instead of raw
 - **Cross-platform** — the deployment target is **Windows**, with **macOS** as
   the development environment. Paths are `pathlib`, processing is pure Python,
   and dependencies are first-class on both (see [`../CLAUDE.md`](../CLAUDE.md)).
+- **Base-directory ownership** — `tools.store` owns medallion data,
+  `tools.observability.run_store` owns run metadata,
+  `tools.integrations.sharepoint_checkpoint` owns source control state, and
+  `tools.deliverables` owns the deliverable outbox at
+  `<base_dir>/deliverables/<destination>/…`. `shared.constants` declares the
+  dev default `data` and production default `~/pipelines_prod`;
+  `tools.environments` lets the per-environment OS variables override them.
 - **The frontend** — this guide covers the pipeline half of the system only. The
   Case Review Platform frontend is the other half, and keeps its documentation
   with its code: start at
@@ -379,15 +386,32 @@ and load strategy.
 ```python
 from framework.io import CsvReader, CsvWriter, JsonWriter, Refresh
 from framework.run import Pipeline
+from tools.deliverables import REPORT_FEEDS_DESTINATION, get_deliverable_path
+from tools.environments import resolve_base_dir
 
+base_dir = resolve_base_dir("dev")
 p = Pipeline("report")
 rows = p.read(CsvReader("report_rows.csv"), name="read")
-p.write(CsvWriter("deliverables/report.csv", Refresh()), rows, name="write")
+p.write(
+    CsvWriter(
+        get_deliverable_path(base_dir, REPORT_FEEDS_DESTINATION, "report.csv"),
+        Refresh(),
+    ),
+    rows,
+    name="write",
+)
 p.run()
 
 pj = Pipeline("report-json")
 rows = pj.read(CsvReader("report_rows.csv"), name="read")
-pj.write(JsonWriter("deliverables/report.json", Refresh()), rows, name="write")
+pj.write(
+    JsonWriter(
+        get_deliverable_path(base_dir, REPORT_FEEDS_DESTINATION, "report.json"),
+        Refresh(),
+    ),
+    rows,
+    name="write",
+)
 pj.run()
 ```
 
