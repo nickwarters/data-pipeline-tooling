@@ -22,6 +22,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { isolateBrowserGlobals } from './helpers/browser-globals.js';
 import { makePermissions } from './helpers/fixtures.js';
+import { resolveCapabilities } from '../src/services/permissions.js';
 
 isolateBrowserGlobals();
 
@@ -75,6 +76,7 @@ test('registerRoutes: registers the complete public route contract, in order', (
   assert.deepEqual(patterns, [
     '#/',
     '#/dashboard',
+    '#/my-stats',
     '#/conversation/:caseType/:id',
     '#/conversation/:id',
     '#/question-bank',
@@ -163,6 +165,18 @@ test('route table: every page module resolves and exposes createRouteSlice', asy
   }
 });
 
+test('my stats route: is statically registered after Dashboard and before Roadmap', () => {
+  const table = routeTable(makeContext());
+  const names = Object.keys(table);
+  const myStats = table['my-stats'];
+
+  assert.deepEqual(myStats.paths, ['#/my-stats']);
+  assert.ok(myStats.page);
+  assert.equal(myStats.load, undefined);
+  assert.ok(names.indexOf('dashboard') < names.indexOf('my-stats'));
+  assert.ok(names.indexOf('my-stats') < names.indexOf('roadmap'));
+});
+
 test('route table: the Question Bank editor is the only page still fetched on demand', () => {
   const entries = Object.entries(routeTable(makeContext()));
   const deferred = entries
@@ -221,7 +235,50 @@ test('route table: only the eligibility-gated routes guard their mount', () => {
     .filter(([, entry]) => entry.guard)
     .map(([name]) => name);
 
-  assert.deepEqual(gated, ['journey-cases', 'search']);
+  assert.deepEqual(gated, ['my-stats', 'journey-cases', 'search']);
+});
+
+test('my stats guard: rejects and redirects a manager who is not a Reviewer', () => {
+  replacedUrls.length = 0;
+  const { guard } = routeTable(
+    makeContext([], { isReviewer: false, isReviewerManager: true })
+  )['my-stats'];
+
+  assert.equal(guard?.(), false);
+  assert.deepEqual(replacedUrls, ['/SitePages/app.aspx#/']);
+});
+
+test('my stats guard: admits Reviewer-only and dual-role users', () => {
+  for (const permissions of [
+    { isReviewer: true, isReviewerManager: false },
+    { isReviewer: true, isReviewerManager: true },
+  ]) {
+    replacedUrls.length = 0;
+    const { guard } = routeTable(makeContext([], permissions))['my-stats'];
+
+    assert.equal(guard?.(), true);
+    assert.deepEqual(replacedUrls, []);
+  }
+});
+
+test('my stats guard: follows resolveCapabilities for Reviewer group combinations', () => {
+  for (const groups of [
+    ['Reviewers'],
+    ['Reviewers - Complaints'],
+    ['Reviewer Managers'],
+    ['Reviewers', 'Reviewer Managers'],
+  ]) {
+    const permissions = resolveCapabilities(groups);
+    const { guard } = routeTable(makeContext([], permissions))['my-stats'];
+    replacedUrls.length = 0;
+
+    assert.equal(guard?.(), permissions.isReviewer, groups.join(' + '));
+    assert.deepEqual(
+      replacedUrls,
+      permissions.isReviewer ? [] : ['/SitePages/app.aspx#/'],
+      groups.join(' + ')
+    );
+  }
 });
 
 test('search guard: admits a user whose capabilities permit a cross-Case-Type lookup', () => {

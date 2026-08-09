@@ -76,6 +76,9 @@ export function AppNav({ capabilities, hash }) {
     itemsEl.appendChild(AppNavItem('Dashboard', '#/dashboard', navItems));
     itemsEl.appendChild(AppNavItem('Roadmap', '#/roadmap', navItems));
   }
+  if (isReviewer) {
+    itemsEl.appendChild(AppNavItem('My Stats', '#/my-stats', navItems));
+  }
   if (isOwner) {
     itemsEl.appendChild(
       AppNavItem('Question Bank', '#/question-bank', navItems)

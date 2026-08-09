@@ -315,6 +315,7 @@ src/
     cora-case-search.js           # store-driven #/search slice: URL-held filters, one bounded
                                   #   cross-Case-Type lookup, standard Case columns
     cora-dashboard.js             # store-driven dashboard slice + descriptor-selected panels (GRID-3/4)
+    cora-my-stats.js               # store-driven Reviewer-only empty shell
     dashboard/
       action-centre-view.js       # pure reason-descriptor view + bounded load actions (ADR-0030 flags unchanged)
       controls-view.js            # pure generic-table Appeals panel + paged load action

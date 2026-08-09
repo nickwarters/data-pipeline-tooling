@@ -32,6 +32,12 @@ store or effect runs for an ineligible user, but the module is already in memory
 array and a module reference, so registration itself runs no page code; the
 page's `createRouteSlice()` is called on first navigation to it.
 
+The `#/my-stats` route is a static page import guarded by
+`context.chrome.permissions.isReviewer`. A user without that capability is
+redirected to `#/` before the page slice mounts. This is a UX-only redirect;
+SharePoint list permissions remain the access boundary, and
+`isReviewerManager` alone does not grant this route.
+
 ## How the router works
 
 `Router` in `src/lib/router.js` listens for `hashchange`, matches the hash
