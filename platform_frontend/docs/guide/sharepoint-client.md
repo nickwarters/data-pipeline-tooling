@@ -15,6 +15,9 @@ just the function and the `client` it was handed.
 // listCases(filter) → Promise<CaseRow[]>
 // getCurrentUser() → Promise<CurrentUser>
 // getCurrentUserGroups() → Promise<string[]>
+// searchPeople(query) → Promise<PersonResult[]>
+// resolveUsers(accountNames) → Promise<Record<string, string | null>>
+// resolveManagers(accountNames) → Promise<Record<string, string | null>>
 
 // Switch to mock mode: ?mock=1 in the URL
 // Add a new method: typedef → HttpSharePointClient → MockSharePointClient → fixture
@@ -27,6 +30,14 @@ just the function and the `client` it was handed.
 Every REST consumer in the framework codes against the `SharePointClient` typedef defined in `src/sharepoint-client.js`. Both `HttpSharePointClient` (real HTTP) and `MockSharePointClient` (in-memory fixture) implement it identically. Components receive a `client` property; they never know or care which implementation is behind it.
 
 This is what makes the mock-first dev loop work: the same component code runs against real SharePoint in production and against fixture data in development and tests.
+
+`resolveUsers` returns authoritative display names. `resolveManagers` reads the
+same User Profile Service `GetPropertiesFor` response and returns each profile's
+Manager as a lower-cased bare account name. Both methods return an own key for
+every requested account; an unresolved profile or absent Manager property is
+`null`. The mock directory models the same edge with an optional `manager` field
+on a fixture person, which is private metadata and never appears in
+`searchPeople` results.
 
 ---
 
@@ -134,7 +145,10 @@ async getMyNewThing(arg) {
 }
 ```
 
-Seed `this._myThings` from a fixture array passed via the constructor.
+Seed `this._myThings` from a fixture array passed via the constructor. Keep
+fixture-only metadata private to the mock implementation: directory people may
+have a `manager` edge used by `resolveManagers`, while `searchPeople` still
+returns only `PersonResult` fields.
 
 ### 4. Add fixture data
 

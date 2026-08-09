@@ -71,12 +71,13 @@ export function completedCase(id, completedAt) {
   });
 }
 
-/** @type {Array<{ loginName: string, displayName: string, email?: string }>} */
+/** @type {Array<{ loginName: string, displayName: string, email?: string, manager?: string }>} */
 export const PEOPLE = [
   {
     loginName: 'jsmith',
     displayName: 'John Smith',
     email: 'jsmith@contoso.com',
+    manager: 'i:0#.w|CONTOSO\\MManager',
   },
   {
     loginName: 'asmith',
@@ -86,7 +87,7 @@ export const PEOPLE = [
   { loginName: 'bjones', displayName: 'Bola Jones' },
 ];
 
-/** @param {Array<{ loginName: string, displayName: string, email?: string }>} [people] */
+/** @param {Array<{ loginName: string, displayName: string, email?: string, manager?: string }>} [people] */
 export function makePeopleClient(people = PEOPLE) {
   return new MockSharePointClient({
     lists: { [LIST]: CASES },

@@ -9,7 +9,7 @@
  * the picker can find them and a mock write resolves to the same display name a
  * real read would carry back on the row.
  *
- * @type {Array<{ loginName: string, displayName: string, email?: string }>}
+ * @type {Array<{ loginName: string, displayName: string, email?: string, manager?: string }>}
  */
 export const people = [
   {
@@ -41,6 +41,12 @@ export const people = [
     loginName: 'user-rp',
     displayName: 'Jordan RP',
     email: 'jordan.rp@contoso.com',
+    manager: 'user-rp-manager',
+  },
+  {
+    loginName: 'user-rp-manager',
+    displayName: 'Priya RP Manager',
+    email: 'priya.rp.manager@contoso.com',
   },
   {
     loginName: 'user-agent-a',

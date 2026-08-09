@@ -25,6 +25,7 @@ import { toClaimsLogin } from '../src/services/account-name.js';
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../src/sharepoint-client.js').PersonResult} PersonResult */
+/** @typedef {PersonResult & { manager?: string }} DirectoryPerson */
 
 const WEB_URL = 'https://sp.example.com/sites/casereview';
 
@@ -75,9 +76,21 @@ function seedCases() {
   ];
 }
 
-/** @returns {PersonResult[]} */
+/** @returns {DirectoryPerson[]} */
 function seedPeople() {
-  return [{ loginName: 'user-1', displayName: 'Reviewer One' }];
+  return [
+    {
+      loginName: 'user-1',
+      displayName: 'Reviewer One',
+      manager: 'i:0#.w|CONTOSO\\Manager-One',
+    },
+    {
+      loginName: 'user-2',
+      displayName: 'Reviewer Two',
+      manager: 'OTHERDOMAIN\\Second.Manager',
+    },
+    { loginName: 'user-3', displayName: 'Reviewer Three' },
+  ];
 }
 
 // --- fake SharePoint REST backend for the HTTP side ---------------------
@@ -155,7 +168,7 @@ function readHeader(init, name) {
  * construct MockSharePointClient, so both implementations can be driven
  * through identical scenarios.
  *
- * @param {{ cases?: CaseRow[], people?: PersonResult[], exportHashes?: Record<string,string>, versionedExports?: Record<string, unknown> }} seed
+ * @param {{ cases?: CaseRow[], people?: DirectoryPerson[], exportHashes?: Record<string,string>, versionedExports?: Record<string, unknown> }} seed
  */
 function makeSpBackend(seed) {
   const store = new Map((seed.cases ?? []).map((c) => [c.id, { ...c }]));
@@ -206,9 +219,16 @@ function makeSpBackend(seed) {
       const bare = login.slice(login.lastIndexOf('\\') + 1);
       const person = people.get(bare);
       if (!person) return new Response('not found', { status: 404 });
-      return new Response(JSON.stringify({ DisplayName: person.displayName }), {
-        status: 200,
-      });
+      return new Response(
+        JSON.stringify({
+          DisplayName: person.displayName,
+          UserProfileProperties:
+            person.manager === undefined
+              ? []
+              : [{ Key: 'Manager', Value: person.manager }],
+        }),
+        { status: 200 }
+      );
     }
 
     const exportMatch = url.match(/case-types\/([^./]+)\.json$/);
@@ -315,7 +335,7 @@ function decodeFilterExpr(url) {
 // --- the two implementations under test ---------------------------------
 
 /**
- * @typedef {{ cases?: CaseRow[], people?: PersonResult[], exportHashes?: Record<string,string>, versionedExports?: Record<string, unknown> }} Seed
+ * @typedef {{ cases?: CaseRow[], people?: DirectoryPerson[], exportHashes?: Record<string,string>, versionedExports?: Record<string, unknown> }} Seed
  */
 
 // Every Case lives in a named per-Case-Type list store on both
@@ -480,6 +500,34 @@ for (const [name, makeClient] of clients) {
         '"constructor" must be a present own key'
       );
       assert.equal(result['constructor'], null);
+    });
+
+    test('resolveManagers: returns canonical bare manager accounts and present null keys', async () => {
+      const client = makeClient({ cases: seedCases(), people: seedPeople() });
+      const result = await client.resolveManagers([
+        'user-1',
+        'user-2',
+        'user-3',
+        'ghost-account',
+      ]);
+      assert.equal(result['user-1'], 'manager-one');
+      assert.equal(result['user-2'], 'second.manager');
+      assert.equal(result['user-3'], null);
+      assert.ok(
+        Object.prototype.hasOwnProperty.call(result, 'ghost-account'),
+        'failed lookup must be a present key, not omitted'
+      );
+      assert.equal(result['ghost-account'], null);
+    });
+
+    test('resolveManagers: an Object.prototype key, including __proto__, resolves to a present null key', async () => {
+      const client = makeClient({ cases: seedCases(), people: seedPeople() });
+      const result = await client.resolveManagers(['__proto__']);
+      assert.ok(
+        Object.prototype.hasOwnProperty.call(result, '__proto__'),
+        '"__proto__" must be a present own key'
+      );
+      assert.equal(result.__proto__, null);
     });
 
     test('getExportHash: missing export resolves to null, never throws', async () => {

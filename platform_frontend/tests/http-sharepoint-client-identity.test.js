@@ -287,6 +287,79 @@ test('HttpSharePointClient: resolveUsers returns an empty map without any read f
   assert.equal(calls.length, 0);
 });
 
+test('HttpSharePointClient: resolveManagers reads each unique profile once and extracts its Manager property without another endpoint', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) =>
+        c.url.includes('GetPropertiesFor') && c.url.includes('jsmith'),
+      respond: () =>
+        profileResponse('John Smith', 'i:0#.w|CONTOSO\\MManager'),
+    },
+    {
+      when: (c) =>
+        c.url.includes('GetPropertiesFor') && c.url.includes('bjones'),
+      respond: () => profileResponse('Bola Jones', 'OTHERDOMAIN\\BOSS'),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const resolved = await client.resolveManagers([
+    'jsmith',
+    'jsmith',
+    'bjones',
+  ]);
+
+  assert.deepEqual(resolved, { jsmith: 'mmanager', bjones: 'boss' });
+  assert.equal(
+    calls.filter((c) => c.url.includes('GetPropertiesFor')).length,
+    2,
+    'one profile read per unique account'
+  );
+  assert.equal(calls.length, 2, 'does not call a manager-specific endpoint');
+});
+
+test('HttpSharePointClient: resolveManagers returns a present null key when its profile read fails', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.url.includes('GetPropertiesFor'),
+      respond: () => new Response('nope', { status: 500 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const result = await client.resolveManagers(['ghost']);
+  assert.ok(Object.prototype.hasOwnProperty.call(result, 'ghost'));
+  assert.equal(result.ghost, null);
+});
+
+test('HttpSharePointClient: resolveManagers maps a malformed Manager property to null', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.url.includes('GetPropertiesFor'),
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            DisplayName: 'John Smith',
+            UserProfileProperties: [{ Key: 'Manager', Value: null }],
+          }),
+          { status: 200 }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  assert.deepEqual(await client.resolveManagers(['jsmith']), { jsmith: null });
+});
+
 // --- getExportHash ---
 
 test('HttpSharePointClient: getCurrentUserGroups falls back from Title to LoginName to empty string', async () => {

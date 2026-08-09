@@ -433,7 +433,9 @@
 
 /**
  * Every REST consumer codes against this interface. Both MockSharePointClient
- * and HttpSharePointClient satisfy it identically.
+ * and HttpSharePointClient satisfy it identically. `resolveManagers` returns
+ * canonical lower-cased bare account names; unresolved or absent managers are
+ * `null`.
  *
  * @typedef {{
  * getCase: (id: string, opts?: CaseReadOptions) => Promise<CaseRow|null>,
@@ -445,6 +447,7 @@
  * listRoadmapItems: () => Promise<RoadmapItem[]>,
  * searchPeople: (query: string) => Promise<PersonResult[]>,
  * resolveUsers: (accountNames: string[]) => Promise<Record<string, string | null>>,
+ * resolveManagers: (accountNames: string[]) => Promise<Record<string, string | null>>,
  * getExportHash: (slug: string) => Promise<string | null>,
  * getVersionedExport: (slug: string, hash: string) => Promise<VersionedExport | null>
  * }} SharePointClient
