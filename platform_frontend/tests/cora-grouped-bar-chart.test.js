@@ -31,7 +31,14 @@ const data = {
     {
       key: 'week-two',
       label: 'Week two',
-      marks: [{ key: 'settled', label: 'Settled', value: 2 }],
+      marks: [
+        {
+          key: 'settled',
+          label: 'Other settled',
+          value: 2,
+          tone: 'danger',
+        },
+      ],
     },
   ],
 };
@@ -120,9 +127,9 @@ test('GroupedBarChart lays out grouped side-by-side bars, axes, ticks, and label
     Number(firstGroupBars[0].getAttribute('x')) <
       Number(firstGroupBars[1].getAttribute('x'))
   );
-  assert.equal(firstGroupBars[0].getAttribute('height'), '137.6');
-  assert.equal(firstGroupBars[1].getAttribute('height'), '68.8');
-  assert.equal(firstGroupBars[0].getAttribute('y'), '54.4');
+  assert.equal(firstGroupBars[0].getAttribute('height'), '118.4');
+  assert.equal(firstGroupBars[1].getAttribute('height'), '59.2');
+  assert.equal(firstGroupBars[0].getAttribute('y'), '73.6');
   assert.equal(
     firstGroupBars[0].getAttribute('fill'),
     'var(--cora-color-success)'
@@ -196,6 +203,111 @@ test('GroupedBarChart exposes a visible token-backed series key', () => {
       'fill'
     ),
     'var(--cora-color-warning)'
+  );
+});
+
+test('GroupedBarChart uses the first series identity for every occurrence', () => {
+  const root = GroupedBarChart({ data, config });
+  const secondGroup = all(root, '.cora-grouped-bar-chart__group')[1];
+  const settled = bars(secondGroup)[0];
+
+  assert.equal(settled.getAttribute('fill'), 'var(--cora-color-success)');
+  assert.match(settled.getAttribute('aria-label'), /Settled/);
+  assert.doesNotMatch(settled.getAttribute('aria-label'), /Other settled/);
+});
+
+test('GroupedBarChart reserves plot space for the legend', () => {
+  const chartData = {
+    groups: [
+      {
+        key: 'one',
+        label: 'One',
+        marks: [{ key: 'count', label: 'Count', value: 10 }],
+      },
+    ],
+  };
+  const defaultMargin = GroupedBarChart({
+    data: chartData,
+    config: { width: 200, height: 160, ariaLabel: 'Default margin' },
+  });
+  const zeroTopMargin = GroupedBarChart({
+    data: chartData,
+    config: {
+      width: 200,
+      height: 160,
+      ariaLabel: 'Zero top margin',
+      margin: { top: 0, right: 16, bottom: 48, left: 48 },
+    },
+  });
+
+  for (const root of [defaultMargin, zeroTopMargin]) {
+    const legendLabel = all(root, '.cora-grouped-bar-chart__legend-label')[0];
+    const bar = bars(root)[0];
+    assert.ok(
+      Number(bar.getAttribute('y')) > Number(legendLabel.getAttribute('y'))
+    );
+  }
+});
+
+test('GroupedBarChart wraps and truncates long legend labels with full names', () => {
+  const labels = [
+    'A very long settled series',
+    'Another long provisional series',
+    'A third long series',
+  ];
+  const root = GroupedBarChart({
+    data: {
+      groups: [
+        {
+          key: 'one',
+          label: 'One',
+          marks: labels.map((label, index) => ({
+            key: `series-${index}`,
+            label,
+            value: index + 1,
+          })),
+        },
+      ],
+    },
+    config: { width: 220, height: 240, ariaLabel: 'Long series' },
+  });
+  const items = all(root, '.cora-grouped-bar-chart__legend-item');
+  const visibleLabels = all(root, '.cora-grouped-bar-chart__legend-label');
+
+  assert.equal(items.length, labels.length);
+  assert.ok(visibleLabels[0].textContent.endsWith('…'));
+  assert.equal(items[0].getAttribute('aria-label'), labels[0]);
+  assert.ok(
+    Number(visibleLabels[1].getAttribute('y')) >
+      Number(visibleLabels[0].getAttribute('y'))
+  );
+});
+
+test('GroupedBarChart rounds default fractional tick labels', () => {
+  const root = GroupedBarChart({
+    data: {
+      groups: [
+        {
+          key: 'one',
+          label: 'One',
+          marks: [{ key: 'count', label: 'Count', value: 10 }],
+        },
+      ],
+    },
+    config: {
+      width: 200,
+      height: 180,
+      ariaLabel: 'Rounded ticks',
+      yMax: 10,
+      tickCount: 4,
+    },
+  });
+
+  assert.deepEqual(
+    all(root, '.cora-grouped-bar-chart__tick-label').map(
+      (label) => label.textContent
+    ),
+    ['0', '3.33', '6.67', '10']
   );
 });
 
@@ -444,6 +556,62 @@ test('GroupedBarChart validates geometry, keys, values, formatters, and tones ex
         }),
       }),
     /formatGroupLabel/
+  );
+  assert.throws(
+    () =>
+      GroupedBarChart({
+        data: { groups: [{ key: 'g', label: '', marks: [] }] },
+        config: valid.config,
+      }),
+    /group.label/
+  );
+  assert.throws(
+    () =>
+      GroupedBarChart({
+        data: {
+          groups: [
+            {
+              key: 'g',
+              label: 'G',
+              marks: [{ key: 'm', label: '', value: 1 }],
+            },
+          ],
+        },
+        config: valid.config,
+      }),
+    /mark.label/
+  );
+  assert.throws(
+    () =>
+      GroupedBarChart({
+        data: {
+          groups: [
+            {
+              key: 'g',
+              label: 'G',
+              marks: [{ key: 'm', label: 'M', value: 1 }],
+            },
+          ],
+        },
+        config: { ...valid.config, formatValue: () => '' },
+      }),
+    /non-empty/
+  );
+  assert.throws(
+    () =>
+      GroupedBarChart({
+        data: {
+          groups: [
+            {
+              key: 'g',
+              label: 'G',
+              marks: [{ key: 'm', label: 'M', value: 1 }],
+            },
+          ],
+        },
+        config: { ...valid.config, formatGroupLabel: () => '' },
+      }),
+    /non-empty/
   );
   assert.throws(
     () =>

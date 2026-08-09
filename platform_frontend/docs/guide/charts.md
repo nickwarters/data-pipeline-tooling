@@ -32,8 +32,10 @@ Data uses one key per group and one key per mark within that group:
 
 Mark keys identify series across groups. A group may omit a mark or list its
 marks in a different order; the chart keeps that mark in the same horizontal
-series slot wherever it appears. The first occurrence of a mark key supplies
-the generated legend label and tone.
+series slot wherever it appears. Group and mark labels must be non-empty. The
+first occurrence of a mark key supplies the canonical legend label and tone;
+every occurrence uses that same identity so the legend cannot contradict a
+bar.
 
 `value` must be finite and non-negative. `tone` is optional and uses an
 existing design-token tone: `accent`, `success`, `warning`, `danger`, or
@@ -48,12 +50,16 @@ values, formatters, or geometry throw explicitly. An explicit `yMax` must be
 positive and cover every value; derived all-zero data uses a positive fallback
 domain. `tickCount` defaults to five and must be at least two. Text and labels
 are passed as SVG text nodes and attributes, so user-provided labels are not
-interpreted as markup.
+interpreted as markup. Formatter callbacks must return non-empty strings; the
+default value formatter rounds to two decimal places.
 
 The chart generates a plain visible series key from the mark keys, labels, and
 design-token tones. X-axis group labels and ticks are evenly sampled when
 there are more than twelve groups, retaining the first and last group, so
-large daily inputs remain readable.
+large daily inputs remain readable. The legend wraps to rows based on
+available width and truncates only the visible label when needed; each legend
+item keeps the full series name in its accessible label. Legend rows reserve
+space above the plot, including when the caller supplies a zero top margin.
 
 The returned root is named with `role="group"`, preserving the descendant mark
 semantics. Each bar has its own stable key, `role="img"`, `aria-label`, and

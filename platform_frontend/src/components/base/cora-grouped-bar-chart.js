@@ -10,7 +10,7 @@ import { svg } from '../../lib/html.js';
  *
  * @typedef {Object} GroupedBarChartMark
  * @property {string} key
- * @property {string} label
+ * @property {string} label Non-empty display name.
  * @property {number} value
  * @property {boolean} [provisional]
  * @property {GroupedBarChartTone} [tone]
@@ -21,7 +21,7 @@ import { svg } from '../../lib/html.js';
  *
  * @typedef {Object} GroupedBarChartGroup
  * @property {string} key
- * @property {string} label
+ * @property {string} label Non-empty display name.
  * @property {GroupedBarChartMark[]} marks
  */
 
@@ -36,13 +36,14 @@ import { svg } from '../../lib/html.js';
 
 /**
  * Format a numeric value for ticks, labels, and mark names. The mark and group
- * arguments are absent for axis ticks.
+ * arguments are absent for axis ticks. The result must be non-empty.
  *
  * @typedef {(value: number, mark?: GroupedBarChartMark, group?: GroupedBarChartGroup) => string} GroupedBarChartValueFormatter
  */
 
 /**
- * Format a group label for the x-axis and mark accessible names.
+ * Format a group label for the x-axis and mark accessible names. The result
+ * must be non-empty.
  *
  * @typedef {(label: string, group: GroupedBarChartGroup) => string} GroupedBarChartGroupLabelFormatter
  */
@@ -53,7 +54,8 @@ import { svg } from '../../lib/html.js';
  * must be finite, positive, and at least the largest mark value. Invalid
  * structure or geometry throws `TypeError` or `RangeError`; values are never
  * silently discarded. The chart generates a bounded x-axis label set and a
- * plain visible series key from the first occurrence of each mark key.
+ * plain visible series key from the first occurrence of each mark key. The
+ * legend occupies its own rows above the plot.
  *
  * @typedef {Object} GroupedBarChartConfig
  * @property {number} width
@@ -101,6 +103,10 @@ const TONE_TOKENS = Object.freeze({
 });
 
 const MAX_VISIBLE_X_TICKS = 12;
+const LEGEND_ITEM_MIN_WIDTH = 128;
+const LEGEND_ROW_HEIGHT = 20;
+const LEGEND_HEIGHT_PADDING = 4;
+const LEGEND_LABEL_CHAR_WIDTH = 7;
 
 /** @typedef {{ key: string, label: string, tone: GroupedBarChartTone }} GroupedBarChartSeries */
 
@@ -160,7 +166,7 @@ function validateData(input) {
   for (const groupInput of data.groups) {
     const group = requireObject(groupInput, 'group');
     requireString(group.key, 'group.key', true);
-    requireString(group.label, 'group.label');
+    requireString(group.label, 'group.label', true);
     if (groupKeys.has(group.key)) {
       throw new TypeError(`group.key values must be unique: ${group.key}`);
     }
@@ -173,14 +179,13 @@ function validateData(input) {
     for (const markInput of group.marks) {
       const mark = requireObject(markInput, 'mark');
       requireString(mark.key, 'mark.key', true);
-      requireString(mark.label, 'mark.label');
+      requireString(mark.label, 'mark.label', true);
       if (markKeys.has(mark.key)) {
         throw new TypeError(
           `mark.key values must be unique within group ${group.key}: ${mark.key}`
         );
       }
       markKeys.add(mark.key);
-      requireFiniteNumber(mark.value, `mark.value for ${mark.key}`);
       requireNonNegativeNumber(mark.value, `mark.value for ${mark.key}`);
       if (
         mark.provisional !== undefined &&
@@ -224,7 +229,7 @@ function resolveMargin(input) {
 
 /** @param {number} value @returns {string} */
 function defaultFormatValue(value) {
-  return String(value);
+  return String(Number(value.toFixed(2)));
 }
 
 /** @param {string} label @returns {string} */
@@ -262,24 +267,50 @@ function visibleXTickIndexes(groupCount) {
  * supplies the compact legend's label and tone.
  *
  * @param {GroupedBarChartGroup[]} groups
- * @returns {{ slots: GroupedBarChartSeries[], indexes: Map<string, number> }}
+ * @returns {{ slots: GroupedBarChartSeries[], byKey: Map<string, { index: number, series: GroupedBarChartSeries }> }}
  */
 function resolveSeriesSlots(groups) {
   /** @type {GroupedBarChartSeries[]} */
   const slots = [];
-  const indexes = new Map();
+  const byKey = new Map();
   for (const group of groups) {
     for (const mark of group.marks) {
-      if (indexes.has(mark.key)) continue;
-      indexes.set(mark.key, slots.length);
-      slots.push({
+      if (byKey.has(mark.key)) continue;
+      const series = {
         key: mark.key,
         label: mark.label,
         tone: mark.tone ?? 'accent',
-      });
+      };
+      slots.push(series);
+      byKey.set(mark.key, { index: slots.length - 1, series });
     }
   }
-  return { slots, indexes };
+  return { slots, byKey };
+}
+
+/** @param {number} seriesCount @param {number} plotWidth */
+function resolveLegendLayout(seriesCount, plotWidth) {
+  if (seriesCount === 0) {
+    return { columns: 0, itemWidth: 0, height: 0 };
+  }
+  const columns = Math.max(1, Math.floor(plotWidth / LEGEND_ITEM_MIN_WIDTH));
+  const rows = Math.ceil(seriesCount / columns);
+  return {
+    columns,
+    itemWidth: plotWidth / columns,
+    height: rows * LEGEND_ROW_HEIGHT + LEGEND_HEIGHT_PADDING,
+  };
+}
+
+/** @param {string} label @param {number} itemWidth */
+function visibleLegendLabel(label, itemWidth) {
+  const maxCharacters = Math.max(
+    1,
+    Math.floor((itemWidth - 14) / LEGEND_LABEL_CHAR_WIDTH)
+  );
+  if (label.length <= maxCharacters) return label;
+  if (maxCharacters === 1) return '…';
+  return `${label.slice(0, maxCharacters - 1)}…`;
 }
 
 /**
@@ -294,12 +325,6 @@ function resolveConfig(input, maxValue) {
   requireString(config.ariaLabel, 'config.ariaLabel', true);
 
   const margin = resolveMargin(config.margin);
-  const plotWidth = config.width - margin.left - margin.right;
-  const plotHeight = config.height - margin.top - margin.bottom;
-  if (plotWidth <= 0 || plotHeight <= 0) {
-    throw new RangeError('config margins must leave a positive drawable area');
-  }
-
   let yMax;
   if (config.yMax === undefined) {
     yMax = maxValue > 0 ? maxValue : 1;
@@ -358,8 +383,8 @@ function resolveConfig(input, maxValue) {
  */
 function formatValue(formatter, value, mark, group) {
   const result = formatter(value, mark, group);
-  if (typeof result !== 'string') {
-    throw new TypeError('config.formatValue must return a string');
+  if (typeof result !== 'string' || result.trim() === '') {
+    throw new TypeError('config.formatValue must return a non-empty string');
   }
   return result;
 }
@@ -371,21 +396,21 @@ function formatValue(formatter, value, mark, group) {
  */
 function formatGroupLabel(formatter, group) {
   const result = formatter(group.label, group);
-  if (typeof result !== 'string') {
-    throw new TypeError('config.formatGroupLabel must return a string');
+  if (typeof result !== 'string' || result.trim() === '') {
+    throw new TypeError(
+      'config.formatGroupLabel must return a non-empty string'
+    );
   }
   return result;
 }
 
 /** @param {number} value @param {number} yMax @param {number} top @param {number} height */
 function barY(value, yMax, top, height) {
-  if (yMax === 0) return geometry(top + height);
   return geometry(top + height - (value / yMax) * height);
 }
 
 /** @param {number} value @param {number} yMax @param {number} height */
 function barHeight(value, yMax, height) {
-  if (yMax === 0) return 0;
   return geometry((value / yMax) * height);
 }
 
@@ -399,6 +424,7 @@ function geometry(value) {
  * rectangle carries the mark's SVG image semantics and title.
  *
  * @param {GroupedBarChartMark} mark
+ * @param {GroupedBarChartSeries} series
  * @param {string} groupLabel
  * @param {string} valueLabel
  * @param {number} x
@@ -407,18 +433,17 @@ function geometry(value) {
  * @param {number} height
  * @returns {SVGElement}
  */
-function markView(mark, groupLabel, valueLabel, x, y, width, height) {
-  const tone = mark.tone === undefined ? 'accent' : mark.tone;
-  const token = TONE_TOKENS[tone];
+function markView(mark, series, groupLabel, valueLabel, x, y, width, height) {
+  const token = TONE_TOKENS[series.tone];
   const provisional = mark.provisional === true;
-  const description = `${groupLabel}: ${mark.label}, ${valueLabel}${provisional ? ', provisional' : ''}`;
+  const description = `${groupLabel}: ${series.label}, ${valueLabel}${provisional ? ', provisional' : ''}`;
   return svg(
     'g',
     { className: 'cora-grouped-bar-chart__mark', key: mark.key },
     svg(
       'rect',
       {
-        className: `cora-grouped-bar-chart__bar cora-grouped-bar-chart__bar--${tone}${provisional ? ' cora-grouped-bar-chart__bar--provisional' : ''}`,
+        className: `cora-grouped-bar-chart__bar${provisional ? ' cora-grouped-bar-chart__bar--provisional' : ''}`,
         key: 'bar',
         x,
         y,
@@ -468,14 +493,22 @@ export function GroupedBarChart(props) {
   for (const group of data.groups) {
     for (const mark of group.marks) maxValue = Math.max(maxValue, mark.value);
   }
-  const { slots: seriesSlots, indexes: seriesSlotIndexes } = resolveSeriesSlots(
+  const { slots: seriesSlots, byKey: seriesSlotsByKey } = resolveSeriesSlots(
     data.groups
   );
   const resolved = resolveConfig(config, maxValue);
   const { width, height, margin, yMax } = resolved;
   const plotWidth = width - margin.left - margin.right;
-  const plotHeight = height - margin.top - margin.bottom;
-  const baseline = margin.top + plotHeight;
+  if (plotWidth <= 0) {
+    throw new RangeError('config margins must leave a positive drawable area');
+  }
+  const legendLayout = resolveLegendLayout(seriesSlots.length, plotWidth);
+  const plotTop = margin.top + legendLayout.height;
+  const plotHeight = height - margin.bottom - plotTop;
+  if (plotHeight <= 0) {
+    throw new RangeError('config margins must leave a positive drawable area');
+  }
+  const baseline = plotTop + plotHeight;
   const groupBand =
     data.groups.length > 0 ? plotWidth / data.groups.length : plotWidth;
   const seriesCount = seriesSlots.length;
@@ -521,13 +554,16 @@ export function GroupedBarChart(props) {
             mark,
             group
           );
-          const slotIndex = seriesSlotIndexes.get(mark.key);
-          if (slotIndex === undefined) return null;
-          const x = markStart + slotIndex * (barWidth + markGap);
-          const y = barY(mark.value, yMax, margin.top, plotHeight);
+          const slot =
+            /** @type {{ index: number, series: GroupedBarChartSeries }} */ (
+              seriesSlotsByKey.get(mark.key)
+            );
+          const x = markStart + slot.index * (barWidth + markGap);
+          const y = barY(mark.value, yMax, plotTop, plotHeight);
           const markHeight = barHeight(mark.value, yMax, plotHeight);
           return markView(
             mark,
+            slot.series,
             groupLabels[groupIndex],
             valueLabel,
             x,
@@ -610,13 +646,13 @@ export function GroupedBarChart(props) {
       className: 'cora-grouped-bar-chart__axis-line',
       key: 'line',
       x1: margin.left,
-      y1: margin.top,
+      y1: plotTop,
       x2: margin.left,
       y2: baseline,
       stroke: 'var(--cora-color-border-strong)',
     }),
     tickValues.map((value, index) => {
-      const y = barY(value, yMax, margin.top, plotHeight);
+      const y = barY(value, yMax, plotTop, plotHeight);
       return svg(
         'g',
         { className: 'cora-grouped-bar-chart__y-tick', key: `tick-${index}` },
@@ -650,8 +686,8 @@ export function GroupedBarChart(props) {
             className: 'cora-grouped-bar-chart__y-axis-label',
             key: 'label',
             x: 14,
-            y: margin.top + plotHeight / 2,
-            transform: `rotate(-90 14 ${margin.top + plotHeight / 2})`,
+            y: plotTop + plotHeight / 2,
+            transform: `rotate(-90 14 ${plotTop + plotHeight / 2})`,
             'text-anchor': 'middle',
           },
           resolved.yAxisLabel
@@ -670,21 +706,24 @@ export function GroupedBarChart(props) {
             'aria-label': 'Chart series',
           },
           seriesSlots.map((series, seriesIndex) => {
-            const itemWidth = plotWidth / seriesSlots.length;
-            const x = margin.left + seriesIndex * itemWidth;
+            const column = seriesIndex % legendLayout.columns;
+            const row = Math.floor(seriesIndex / legendLayout.columns);
+            const x = margin.left + column * legendLayout.itemWidth;
             const token = TONE_TOKENS[series.tone];
-            const swatchY = Math.max(2, margin.top - 16);
+            const rowTop = margin.top + row * LEGEND_ROW_HEIGHT;
             return svg(
               'g',
               {
                 className: 'cora-grouped-bar-chart__legend-item',
                 key: series.key,
+                role: 'group',
+                'aria-label': series.label,
               },
               svg('rect', {
                 className: 'cora-grouped-bar-chart__legend-swatch',
                 key: 'swatch',
                 x,
-                y: swatchY,
+                y: rowTop + 2,
                 width: 10,
                 height: 10,
                 fill: token,
@@ -696,9 +735,9 @@ export function GroupedBarChart(props) {
                   className: 'cora-grouped-bar-chart__legend-label',
                   key: 'label',
                   x: x + 14,
-                  y: swatchY + 9,
+                  y: rowTop + 11,
                 },
-                series.label
+                visibleLegendLabel(series.label, legendLayout.itemWidth)
               )
             );
           })
