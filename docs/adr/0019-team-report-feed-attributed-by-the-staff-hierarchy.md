@@ -38,7 +38,7 @@ The manager's file is also a genuine disclosure step-up over the Reviewer's: it
 holds named individuals' historical volumes at a URL whose only key is a staff
 number. ADR-0018 accepted that per-Reviewer files are not a security boundary
 and the library ACL is; that acceptance is *reused* here rather than re-derived,
-and it makes the `cora_report_feeds` ACL a real question for the delivery job
+and it makes the `cora_report_feeds` ACL a real question for the **Forwarder**
 rather than a formality.
 
 ## Attribution: the Staff Hierarchy, not the Case row

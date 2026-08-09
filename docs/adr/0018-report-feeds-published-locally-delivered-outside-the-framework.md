@@ -23,12 +23,21 @@ data, and a retry policy for that failure. Today the only outbound push in the
 tree (`SharePointWriter`) is stubbed, so nothing has yet paid that cost — this
 decision is made *before* the first real one rather than after four of them.
 
-**Every destination would otherwise grow its own Writer.** SharePoint document
-library, SharePoint list, SAS writeback, a share for another team: four Writers,
-four auth stories, four sets of tests that cannot run without the real system.
-"Move these files there" is **one** mechanism that serves all of them, and it is
-not a data-pipeline concern — it is file movement, and it need not use this
-framework at all.
+**Delivery is irreducibly per-destination, so concentrate it rather than scatter
+it.** A document library takes the file as-is; a list needs the file parsed into
+items; SAS needs a copy *and* a script run against it; another team needs a plain
+move. That is four handlers, four auth stories, and four sets of tests that
+cannot run without the real system — and they exist under either design. The
+choice is *where* they live: scattered across N pipelines, each box credentialed
+for every destination and each external failure mode leaking into a data run, or
+concentrated in one long-running process whose whole job is external systems.
+Concentrated wins, and that process need not use this framework at all.
+
+*(This paragraph originally read "'move these files there' is one mechanism that
+serves all of them — it is file movement." That was written before anyone had
+described what SAS writeback involves. The decision is unchanged; the reason was
+wrong, and a design built on the old wording would under-build the delivery
+side.)*
 
 **Least privilege.** The delivery job needs read access to a directory of files
 to ship. If pipelines delivered, every pipeline box would need write credentials
