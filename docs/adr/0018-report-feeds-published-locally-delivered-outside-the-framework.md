@@ -100,9 +100,13 @@ Three properties are load-bearing:
 - **The deliverables root is a fourth category in a base directory**, beside the
   rows the `StoreRegistry` lays out, the runs the **Run store** records, and the
   source checkpoints. It gets an owner for the same reason those did: a layout
-  with no owner drifts. `tools/deliverables.py` is that owner, so
-  `"cora_report_feeds"` is spelled once rather than in a pipeline, a delivery
-  job and a runbook.
+  with no owner drifts. `tools/deliverables.py` is that owner;
+  `shared.constants` declares the dev/prod roots while
+  `tools.environments` applies the environment-variable-over-default
+  precedence, and
+  `REPORT_FEEDS_DESTINATION` is the canonical
+  `"cora_report_feeds"` destination rather than a spelling repeated in a
+  pipeline, a delivery job and a runbook.
 - **A Report Feed is not deployed code**, which is what keeps it clear of the
   review platform's "deployed bytes are source bytes" rule. It must never be
   written under the front end's deployed tree (`Style Library/CODE/CORA`): that

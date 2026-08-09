@@ -569,14 +569,14 @@ def test_explicit_base_dir_overrides_env(tmp_path):
     assert not (tmp_path / "from_env").exists()
 
 
-def test_run_reports_unconfigured_env_without_traceback():
+def test_run_uses_prod_environment_override_without_traceback(tmp_path):
     env = {
         **os.environ,
         "PYTHONPATH": os.pathsep.join(
             [str(FIXTURES), os.environ.get("PYTHONPATH", "")]
         ),
+        "PIPELINE_DATA_DIR_PROD": str(tmp_path / "prod"),
     }
-    env.pop("PIPELINE_DATA_DIR_PROD", None)
     result = subprocess.run(
         [sys.executable, "-m", "cli", "run", "clipipelines/_source", "--env", "prod"],
         capture_output=True,
@@ -585,9 +585,8 @@ def test_run_reports_unconfigured_env_without_traceback():
         env=env,
     )
 
-    assert result.returncode == 1
-    assert "PIPELINE_DATA_DIR_PROD" in result.stderr
-    assert "Traceback" not in result.stderr
+    assert result.returncode == 0, result.stderr
+    assert (tmp_path / "prod" / "_runs" / "_source.log").exists()
 
 
 def test_status_and_log_resolve_base_dir_from_env(tmp_path):

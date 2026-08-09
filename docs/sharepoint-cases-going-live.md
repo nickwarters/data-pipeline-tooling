@@ -154,9 +154,9 @@ it by name rather than by path:
 python -m cli status --env prod
 ```
 
-`prod` has no fallback — it raises a clear error until the variable is set, by
-design, so a production run can never quietly land in `./data`. Confirm the root
-resolves before you put data in it.
+The committed production fallback is `~/pipelines_prod`; set
+`PIPELINE_DATA_DIR_PROD` when the live machine uses another root. Confirm it
+resolves to the intended location before you put data in it.
 
 ## Stage 4 — the first live run, by hand
 

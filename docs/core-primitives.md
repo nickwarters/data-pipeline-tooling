@@ -905,6 +905,9 @@ Those two are not the whole of a base directory: a third category, source
 **control state**, sits under `<base_dir>/_checkpoints/` — today the SharePoint
 `Modified` watermarks owned by `SharePointCheckpointStore`
 ([adding-a-feed.md](adding-a-feed.md#sharepointcheckpointstorebase_dir--where-the-polling-got-to)).
+The fourth category is the deliverable outbox at
+`<base_dir>/deliverables/<destination>/…`, whose path owner is
+`tools.deliverables`.
 It is beside the run metadata rather than inside it because their lifecycles
 differ: pruning run logs must not lose a feed's place in its source.
 
