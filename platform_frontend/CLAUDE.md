@@ -272,6 +272,7 @@ src/
                                   #   status line; nothing else is ever selectable
       cora-group-progress.js      # pure per-Question-Group progress strip
       cora-grouped-bar-chart.js   # pure grouped SVG chart with keyed accessible bars
+      cora-proportion-bars.js     # pure semantic proportional rows with accessible progress bars
       cora-status-banner.js       # the save-status surface (saving/reconnecting/conflict),
                                   #   rendered in the Case Review page chrome
       cora-toast.js
@@ -321,7 +322,7 @@ src/
                                   #   cross-Case-Type lookup, standard Case columns
     cora-dashboard.js             # store-driven dashboard slice + descriptor-selected panels (GRID-3/4)
     cora-my-stats.js               # store-driven Reviewer Report Feed load, browser-calendar range state,
-                                   #   selection, and optional grouped chart view model (no picker yet)
+                                   #   selection, feed-backed Case Type panel, and optional grouped chart view model
     cora-team-stats.js             # store-driven Reviewer Manager-only empty shell
     dashboard/
       action-centre-view.js       # pure reason-descriptor view + bounded load actions (ADR-0030 flags unchanged)
@@ -405,6 +406,7 @@ src/
     general-questions.js         # General Question answer-key namespace + load-time config gates (#472)
     summary-model.js
     stats-range-model.js          # pure browser-local My Stats comparison ranges and day/month buckets
+    stats-case-type-model.js      # pure Report Feed Case Type totals, manifest labels, and range proportions
     team-workload-model.js       # per-Reviewer workload rows for the My Team page
     void-volume-model.js         # per-Reviewer voided-Case rows over a 30-day window, grouped
                                  #   by who voided, for the My Team page's second table

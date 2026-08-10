@@ -42,9 +42,19 @@ On mount, the page loads the signed-in Reviewer's Report Feed from the host
 web's document library. `?mock=1` selects the development fixture instead. The
 route slice also snapshots the browser-local calendar once, deriving its four
 range descriptors and default `week` selection without consulting the clock in
-the reducer. It still mounts the same feed-loading shell; the current view does
-not render range controls and intentionally remains empty until a chart view
-model is supplied separately.
+the reducer. The view derives the Case Type proportion panel from the loaded
+feed, the selected descriptor, and the existing route state. Feed dates are
+compared inclusively as ISO date-only strings through the descriptor's
+yesterday `end`, so today is not included; registered Case Type slugs get their
+display names from `case-types/manifest.js`. A feed with no matching counts
+keeps the panel and shows `No data for this range.`.
+
+The optional grouped chart still arrives through the existing
+`my-stats/chart-loaded` action and `chart` route field. With both children the
+panel is placed left of the chart; with only one child that content is rendered
+without the two-column wrapper. The route still owns chart tooltip setup and
+cleanup. This slice does not turn the feed into chart data or compute a live
+tail, and its Case Type totals therefore describe the feed only.
 
 The `#/team-stats` route is also a static page import, guarded solely by
 `context.chrome.permissions.isReviewerManager`. A non-manager is redirected to

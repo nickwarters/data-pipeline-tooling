@@ -3060,6 +3060,92 @@
   border-radius: var(--cora-radius-sm);
 }
 
+/* ── My Stats Case Type proportions ─────────────────────────────────────── */
+
+[data-cora-root] .cora-my-stats-top-row {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: var(--cora-space-5);
+  align-items: start;
+}
+
+[data-cora-root] .cora-my-stats-top-row > * {
+  min-width: 0;
+}
+
+[data-cora-root] .cora-my-stats-case-type-panel {
+  min-width: 0;
+  padding: var(--cora-space-4);
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  box-shadow: var(--cora-shadow-sm);
+}
+
+[data-cora-root] .cora-my-stats-case-type-panel > h2 {
+  margin: 0 0 var(--cora-space-4);
+}
+
+[data-cora-root] .cora-proportion-bars {
+  display: grid;
+  gap: var(--cora-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-cora-root] .cora-proportion-bars-row {
+  display: grid;
+  gap: var(--cora-space-1);
+}
+
+[data-cora-root] .cora-proportion-bars-row-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: var(--cora-space-2);
+  align-items: baseline;
+  font-size: var(--cora-font-size-sm);
+}
+
+[data-cora-root] .cora-proportion-bars-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: var(--cora-font-weight-medium);
+}
+
+[data-cora-root] .cora-proportion-bars-count,
+[data-cora-root] .cora-proportion-bars-percentage {
+  font-variant-numeric: tabular-nums;
+  color: var(--cora-color-text-muted);
+}
+
+[data-cora-root] .cora-proportion-bars-track {
+  height: var(--cora-space-3);
+  overflow: hidden;
+  background: var(--cora-color-surface-2);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-pill);
+}
+
+[data-cora-root] .cora-proportion-bars-bar {
+  height: 100%;
+  background: var(--cora-color-accent);
+  border-radius: inherit;
+  transition: width var(--cora-duration-base) var(--cora-easing-standard);
+}
+
+[data-cora-root] .cora-proportion-bars-empty {
+  color: var(--cora-color-text-muted);
+  font-size: var(--cora-font-size-sm);
+  font-style: italic;
+}
+
+@media (max-width: 52rem) {
+  [data-cora-root] .cora-my-stats-top-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Grouped SVG charts keep their presentation on existing design tokens. */
 [data-cora-root] .cora-grouped-bar-chart {
   display: block;

@@ -273,23 +273,32 @@ Reviewer**. The reviewing side has a base role (**Reviewer**) and an elevated ro
 Reviewers can reach `#/my-stats`, which loads their Report Feed by lower-cased
 bare account from the SharePoint document library; it is not available to a
 **Reviewer Manager** who lacks the Reviewer capability. A missing feed is an
-empty report, and the view keeps `No data yet.` until a separate mapper supplies
-the optional grouped chart view model. On route creation the page snapshots the
+empty report, while a loaded feed renders a Case Type proportion panel for the
+selected range. The evaluator compares ISO date-only strings inclusively from
+the range start through browser-local yesterday, so today is excluded; duplicate
+sparse rows are aggregated and zero totals are omitted. Case Type slugs are
+presentation-resolved through `case-types/manifest.js`, and an unknown slug is
+humanized rather than shown raw. On route creation the page snapshots the
 browser-local calendar into four comparison ranges: the previous complete
 Monday–Sunday week plus this week through today, the previous complete month
 plus this month through today, three complete months plus the current month,
 and twelve complete months plus the current month. Day-grain ranges use daily
 buckets and the longer ranges use monthly buckets; totals end at browser-local
 yesterday while the current display bucket extends through today. The page owns
-this range state and defaults to Week, but does not yet render the picker. It
-does not load a second data path or map the Report Feed itself. Settled marks are
-solid and provisional marks are hollow, preserving Report Feed provenance rather
-than treating hollow as zero or excluded. The pure SVG chart builder exposes
-each mark's full description, including its formatted value and provisional
-status, as metadata; after the chart is committed, the my-stats route mounts
-one HTML-over-SVG tooltip under the app root. The same keyboard-focusable mark
-supports pointer hover and keyboard focus, with Escape dismissing the tooltip,
-while `role="img"` and `aria-label` remain on the mark and the per-mark SVG
+this range state and defaults to Week, but does not yet render the picker.
+
+The optional grouped chart still arrives through `my-stats/chart-loaded` and
+keeps its existing route state and HTML-over-SVG tooltip lifecycle. When both
+are present the panel is left of the chart; either may render alone. The page
+does not load a second data path, map the Report Feed into chart values, or
+compute live work for the panel. Settled marks are solid and provisional marks
+are hollow, preserving Report Feed provenance rather than treating hollow as
+zero or excluded. The pure SVG chart builder exposes each mark's full
+description, including its formatted value and provisional status, as metadata;
+after the chart is committed, the my-stats route mounts one HTML-over-SVG
+tooltip under the app root. The same keyboard-focusable mark supports pointer
+hover and keyboard focus, with Escape dismissing the tooltip, while
+`role="img"` and `aria-label` remain on the mark and the per-mark SVG
 `<title>` is omitted. Legend titles remain.
 _Avoid_: Assessor, evaluator
 

@@ -69,9 +69,18 @@ yesterday. Previous monthly buckets end on their calendar month end, while the
 current monthly bucket ends today. Day keys are `YYYY-MM-DD`, month keys are
 `YYYY-MM`, and the current labels state `(today)` or `(current month)`.
 
-This decision currently lands only the pure range descriptors and selected
-range in route state. It does not render range controls or connect the ranges
-to the Report Feed, chart mapping, totals, or live-tail calculation yet.
+The first feed-backed slice now connects the existing selected range to a pure
+Case Type breakdown panel. It compares each feed row's ISO date string
+inclusively with the descriptor's `start` and `end`, aggregates duplicate
+`case_type` rows, excludes non-positive totals, and resolves display names from
+the frontend Case Type manifest. Because `end` is yesterday, the panel's totals
+are feed-only settled history and do not include live work. Unknown slugs are
+humanized for presentation without adding a manifest entry.
+
+The page still does not render range controls. The optional grouped chart remains
+a separate `chart` route-state seam loaded by `my-stats/chart-loaded`; the panel
+does not map feed data into that chart, and the live-tail calculation described
+by this ADR remains deferred. The existing chart tooltip lifecycle is unchanged.
 
 ### Why the live read is affordable
 
