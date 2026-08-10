@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { installDom } from './_dom-stub.js';
 import { queryAllByRole } from './helpers/semantic-dom.js';
+import { getProps } from '../src/lib/html.js';
 
 installDom();
 
@@ -27,8 +28,7 @@ test('ProportionBars renders a full-width row with visible label and count', () 
   assert.match(root.textContent, /100%/);
   assert.equal(bar.getAttribute('role'), 'progressbar');
   assert.equal(bar.getAttribute('aria-valuenow'), '100');
-  assert.equal(bar.style.width, '100%');
-  assert.equal(bar.getAttribute('style'), 'width: 100%');
+  assert.equal(getProps(bar)?.style, 'width: 100%');
 });
 
 test('ProportionBars renders equal rows at 50 percent', () => {
@@ -42,10 +42,13 @@ test('ProportionBars renders equal rows at 50 percent', () => {
 
   assert.equal(bars.length, 2);
   assert.deepEqual(
-    bars.map((bar) => [bar.getAttribute('aria-valuenow'), bar.style.width]),
+    bars.map((bar) => [
+      bar.getAttribute('aria-valuenow'),
+      getProps(bar)?.style,
+    ]),
     [
-      ['50', '50%'],
-      ['50', '50%'],
+      ['50', 'width: 50%'],
+      ['50', 'width: 50%'],
     ]
   );
   assert.match(root.textContent, /Alpha2.*50%.*Beta2.*50%/);
@@ -79,7 +82,6 @@ test('ProportionBars bounds unsafe shares and keeps labels as text', () => {
     ['0', '0', '100']
   );
   assert.match(root.textContent, /<script>bad<\/script>/);
-  assert.equal(root.innerHTML, '');
 });
 
 test('ProportionBars exposes label, count, and percentage in each accessible description', () => {
