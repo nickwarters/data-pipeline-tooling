@@ -3105,3 +3105,30 @@
   fill: var(--cora-color-on-surface);
   font-weight: var(--cora-font-weight-semibold);
 }
+
+[data-cora-root] .cora-chart-tooltip {
+  position: fixed;
+  z-index: 120;
+  display: block;
+  max-width: min(24rem, calc(100vw - (var(--cora-space-4) * 2)));
+  padding: var(--cora-space-2) var(--cora-space-3);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  color: var(--cora-color-on-surface);
+  background: var(--cora-color-surface-overlay);
+  box-shadow: var(--cora-shadow-md);
+  font-size: var(--cora-font-size-sm);
+  line-height: var(--cora-line-height-snug);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+
+[data-cora-root] .cora-chart-tooltip[hidden] {
+  display: none;
+}
+
+[data-cora-root] .cora-grouped-bar-chart__bar:focus-visible {
+  outline: var(--cora-focus-outline);
+  outline-offset: var(--cora-focus-offset);
+}

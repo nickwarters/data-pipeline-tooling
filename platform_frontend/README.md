@@ -84,7 +84,11 @@ represent settled values and hollow provisional marks preserve Report Feed
 provenance. The route now snapshots the four browser-calendar ranges (Week,
 Month, 3 months, and 12 months) and owns the selected range, defaulting to
 Week. This is state groundwork only: no range picker is rendered yet, and the
-page keeps “No data yet.” until a chart view model is present.
+page keeps “No data yet.” until a chart view model is present. The pure chart
+builder exposes each mark's full description, including its formatted value and
+provisional status, as SVG metadata, while the route mounts an HTML-over-SVG
+tooltip under the app root after commit. The same keyboard-focusable mark
+supports pointer hover and keyboard focus; Escape dismisses the tooltip.
 
 ### Team Stats page
 

@@ -284,7 +284,13 @@ yesterday while the current display bucket extends through today. The page owns
 this range state and defaults to Week, but does not yet render the picker. It
 does not load a second data path or map the Report Feed itself. Settled marks are
 solid and provisional marks are hollow, preserving Report Feed provenance rather
-than treating hollow as zero or excluded.
+than treating hollow as zero or excluded. The pure SVG chart builder exposes
+each mark's full description, including its formatted value and provisional
+status, as metadata; after the chart is committed, the my-stats route mounts
+one HTML-over-SVG tooltip under the app root. The same keyboard-focusable mark
+supports pointer hover and keyboard focus, with Escape dismissing the tooltip,
+while `role="img"` and `aria-label` remain on the mark and the per-mark SVG
+`<title>` is omitted. Legend titles remain.
 _Avoid_: Assessor, evaluator
 
 **Assigned Reviewer**:
