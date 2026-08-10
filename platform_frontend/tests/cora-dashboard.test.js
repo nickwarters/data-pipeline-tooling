@@ -50,8 +50,31 @@ function context(permissions) {
   });
 }
 
-async function settleAllocation() {
-  for (let i = 0; i < 12; i += 1) await Promise.resolve();
+/**
+ * A claimable Case as the allocation claim's own re-read returns it: still
+ * unassigned, still under review, and carrying the ETag a single-item read
+ * supplies. Only that read produces one, so this is what every allocation stub
+ * must answer with for the claim to get as far as its PATCH.
+ *
+ * @param {string} id
+ * @param {string} etag
+ */
+function claimableRow(id, etag) {
+  return { id, assignedReviewer: '', status: CASE_STATUS.IN_PROGRESS, etag };
+}
+
+/**
+ * Drain microtasks until the allocation flow reaches the state under assertion;
+ * the button discards the claim's promise, so there is nothing to await. A
+ * predicate that never holds drains to the cap and fails on the assertion after
+ * it rather than hanging.
+ *
+ * @param {() => boolean} reached
+ */
+async function settleAllocation(reached) {
+  for (let turn = 0; turn < 500 && !reached(); turn += 1) {
+    await Promise.resolve();
+  }
 }
 
 /**
@@ -67,6 +90,9 @@ async function runSingleCandidateAllocation(resolveManagers) {
     async resolveManagers(/** @type {string[]} */ accountNames) {
       managerLookups += 1;
       return resolveManagers(accountNames);
+    },
+    async getCase(/** @type {string} */ id) {
+      return claimableRow(id, '"fresh-candidate"');
     },
     async patchCase(/** @type {any[]} */ ...args) {
       patches.push(args);
@@ -106,7 +132,7 @@ async function runSingleCandidateAllocation(resolveManagers) {
     }),
     'click'
   );
-  await settleAllocation();
+  await settleAllocation(() => patches.length > 0);
   return { patches, managerLookups };
 }
 
@@ -518,6 +544,9 @@ test('dashboard allocation claims a candidate and refreshes reviewer rows throug
   /** @type {any[]} */
   const patches = [];
   ctx.client = /** @type {any} */ ({
+    async getCase(/** @type {string} */ id) {
+      return claimableRow(id, '"re-read-8"');
+    },
     async patchCase(/** @type {any[]} */ ...args) {
       patches.push(args);
       return { ok: true };
@@ -555,15 +584,20 @@ test('dashboard allocation claims a candidate and refreshes reviewer rows throug
   view
     .querySelector('.cora-allocation-btn')
     ?.dispatchEvent(/** @type {any} */ ({ type: 'click' }));
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
+  // The mount already loaded the reviewer's rows once, so the claim's own
+  // refresh is the second load — waiting on the first would clear the barrier
+  // before the claim had run at all.
+  await settleAllocation(
+    () =>
+      actions.filter((action) => action.type === 'reviewer-cases/loaded')
+        .length >= 2
+  );
 
   assert.deepEqual(patches, [
     [
       'oldest',
       { assignedReviewer: 'u1', assignedReviewerManager: null },
-      '"4"',
+      '"re-read-8"',
       { listName: 'Cases-Complaints' },
     ],
   ]);
@@ -572,6 +606,194 @@ test('dashboard allocation claims a candidate and refreshes reviewer rows throug
       (action) =>
         action.type === 'reviewer-cases/loaded' &&
         action.cases[0].id === 'refreshed'
+    )
+  );
+});
+
+test('dashboard allocation claims with the etag from a re-read, not the empty etag a list row carries', async () => {
+  const ctx = context(capabilities({ isReviewer: true }));
+  // The shape a live collection read hands back: the client asks SharePoint for
+  // JSON without metadata annotations, so no listed row carries an ETag at all.
+  const listedRow = {
+    id: 'oldest',
+    assignedReviewer: '',
+    status: CASE_STATUS.IN_PROGRESS,
+    etag: '',
+  };
+  /** @type {any[]} */
+  const patches = [];
+  /** @type {any[]} */
+  const reads = [];
+  ctx.client = /** @type {any} */ ({
+    countCases: async () => 0,
+    listCases: async () => [listedRow],
+    async getCase(/** @type {string} */ id, /** @type {any} */ opts) {
+      reads.push([id, opts]);
+      return { ...listedRow, etag: '"7"' };
+    },
+    async patchCase(/** @type {any[]} */ ...args) {
+      patches.push(args);
+      return { ok: true, status: 200 };
+    },
+    resolveManagers: async () => ({ u1: null }),
+  });
+  // The real availability loader runs here on purpose: the empty ETag is
+  // produced by the listing path itself, so a stubbed loader would hide it.
+  const slice = createRouteSlice(
+    {},
+    ctx,
+    /** @type {any} */ ({
+      loadKpis: async () => [],
+      listAcrossSources: async () => [],
+    })
+  );
+  const tools = /** @type {any} */ ({
+    context: ctx,
+    params: {},
+    dispatch: () => {},
+    listen: () => {},
+    isActive: () => true,
+  });
+  slice.start(tools);
+  fireEvent(
+    getByRole(slice.view(slice.initialState, tools), 'button', {
+      name: 'Request next Case',
+    }),
+    'click'
+  );
+  await settleAllocation(() => patches.length > 0);
+
+  assert.deepEqual(reads, [['oldest', { listName: 'Cases-Complaints' }]]);
+  assert.equal(patches.length, 1);
+  assert.equal(patches[0][2], '"7"');
+  assert.notEqual(patches[0][2], '');
+});
+
+test('dashboard allocation skips a candidate another Reviewer claimed between the list read and the claim', async () => {
+  const ctx = context(capabilities({ isReviewer: true }));
+  /** @type {any[]} */
+  const patches = [];
+  ctx.client = /** @type {any} */ ({
+    async getCase(/** @type {string} */ id) {
+      return id === 'taken'
+        ? {
+            id,
+            assignedReviewer: 'someone-else',
+            status: CASE_STATUS.IN_PROGRESS,
+            etag: '"8"',
+          }
+        : claimableRow(id, '"9"');
+    },
+    async patchCase(/** @type {any[]} */ ...args) {
+      patches.push(args);
+      return { ok: true, status: 200 };
+    },
+  });
+  const candidate = (/** @type {string} */ id) => ({
+    id,
+    etag: '',
+    _listOptions: { listName: 'Cases-Complaints' },
+  });
+  const slice = createRouteSlice(
+    {},
+    ctx,
+    /** @type {any} */ ({
+      loadKpis: async () => [],
+      listAcrossSources: async () => [],
+      loadAllocationAvailability: async () => ({
+        candidates: [candidate('taken'), candidate('free')],
+        isAtCapacity: false,
+      }),
+    })
+  );
+  const tools = /** @type {any} */ ({
+    context: ctx,
+    params: {},
+    dispatch: () => {},
+    listen: () => {},
+    isActive: () => true,
+  });
+  slice.start(tools);
+  fireEvent(
+    getByRole(slice.view(slice.initialState, tools), 'button', {
+      name: 'Request next Case',
+    }),
+    'click'
+  );
+  await settleAllocation(() => patches.length > 0);
+
+  assert.equal(patches.length, 1);
+  assert.equal(patches[0][0], 'free');
+  assert.equal(patches[0][2], '"9"');
+});
+
+test('dashboard allocation skips a candidate whose re-read shows it deleted, no longer under review, or unversioned', async () => {
+  const ctx = context(capabilities({ isReviewer: true }));
+  let patches = 0;
+  ctx.client = /** @type {any} */ ({
+    async getCase(/** @type {string} */ id) {
+      if (id === 'deleted') return null;
+      if (id === 'finished') {
+        return {
+          id,
+          assignedReviewer: '',
+          status: CASE_STATUS.COMPLETED,
+          etag: '"5"',
+        };
+      }
+      return claimableRow(id, '');
+    },
+    async patchCase() {
+      patches += 1;
+      return { ok: true, status: 200 };
+    },
+  });
+  const candidate = (/** @type {string} */ id) => ({
+    id,
+    etag: '',
+    _listOptions: { listName: 'Cases-Complaints' },
+  });
+  /** @type {any[]} */
+  const actions = [];
+  const slice = createRouteSlice(
+    {},
+    ctx,
+    /** @type {any} */ ({
+      loadKpis: async () => [],
+      listAcrossSources: async () => [],
+      loadAllocationAvailability: async () => ({
+        candidates: [
+          candidate('deleted'),
+          candidate('finished'),
+          candidate('unversioned'),
+        ],
+        isAtCapacity: false,
+      }),
+    })
+  );
+  const tools = /** @type {any} */ ({
+    context: ctx,
+    params: {},
+    dispatch: (/** @type {any} */ action) => actions.push(action),
+    listen: () => {},
+    isActive: () => true,
+  });
+  slice.start(tools);
+  fireEvent(
+    getByRole(slice.view(slice.initialState, tools), 'button', {
+      name: 'Request next Case',
+    }),
+    'click'
+  );
+  await settleAllocation(() =>
+    actions.some((action) => action.type === 'allocation/availability-changed')
+  );
+
+  assert.equal(patches, 0);
+  assert.ok(
+    actions.some(
+      (action) =>
+        action.type === 'allocation/availability-changed' && action.isEmpty
     )
   );
 });
@@ -586,6 +808,9 @@ test('dashboard allocation preserves the manager when a stale candidate returns 
       managerLookups += 1;
       assert.deepEqual(accountNames, ['u1']);
       return { u1: 'manager-1' };
+    },
+    async getCase(/** @type {string} */ id) {
+      return claimableRow(id, `"fresh-${id}"`);
     },
     async patchCase(/** @type {any[]} */ ...args) {
       patches.push(args);
@@ -633,18 +858,20 @@ test('dashboard allocation preserves the manager when a stale candidate returns 
     }),
     'click'
   );
-  await settleAllocation();
+  await settleAllocation(() => patches.length === 2);
 
   assert.deepEqual(
-    patches.map(([id, fields]) => [id, fields]),
+    patches.map(([id, fields, etag]) => [id, fields, etag]),
     [
       [
         'stale',
         { assignedReviewer: 'u1', assignedReviewerManager: 'manager-1' },
+        '"fresh-stale"',
       ],
       [
         'available',
         { assignedReviewer: 'u1', assignedReviewerManager: 'manager-1' },
+        '"fresh-available"',
       ],
     ]
   );
@@ -668,6 +895,9 @@ test('dashboard allocation retries a non-412 manager write once with null and ke
     async resolveManagers() {
       managerLookups += 1;
       return { u1: 'manager-1' };
+    },
+    async getCase(/** @type {string} */ id) {
+      return claimableRow(id, `"fresh-${id}"`);
     },
     async patchCase(/** @type {any[]} */ ...args) {
       patches.push(args);
@@ -715,7 +945,7 @@ test('dashboard allocation retries a non-412 manager write once with null and ke
     }),
     'click'
   );
-  await settleAllocation();
+  await settleAllocation(() => patches.length === 3);
 
   assert.deepEqual(
     patches.map(([id, fields]) => [id, fields]),
@@ -727,6 +957,12 @@ test('dashboard allocation retries a non-412 manager write once with null and ke
       ['first', { assignedReviewer: 'u1', assignedReviewerManager: null }],
       ['second', { assignedReviewer: 'u1', assignedReviewerManager: null }],
     ]
+  );
+  // The manager retry is a second attempt at the same Case, so it re-sends the
+  // ETag the one re-read produced rather than reading the row again.
+  assert.deepEqual(
+    patches.map(([, , etag]) => etag),
+    ['"fresh-first"', '"fresh-first"', '"fresh-second"']
   );
   assert.equal(managerLookups, 1);
 });
@@ -767,10 +1003,16 @@ test('dashboard allocation does not resolve a manager at capacity or with no can
           : { candidates: [], isAtCapacity: false },
     })
   );
+  // Each request ends by publishing what it found, so the publish count is how
+  // a test knows the previous request finished and the next click will be taken
+  // rather than coalesced into it.
+  let published = 0;
   const tools = /** @type {any} */ ({
     context: ctx,
     params: {},
-    dispatch: () => {},
+    dispatch: (/** @type {any} */ action) => {
+      if (action.type === 'allocation/availability-changed') published += 1;
+    },
     listen: () => {},
     isActive: () => true,
   });
@@ -779,9 +1021,9 @@ test('dashboard allocation does not resolve a manager at capacity or with no can
     name: 'Request next Case',
   });
   fireEvent(button, 'click');
-  await settleAllocation();
+  await settleAllocation(() => published === 1);
   fireEvent(button, 'click');
-  await settleAllocation();
+  await settleAllocation(() => published === 2);
 
   assert.equal(availabilityChecks, 2);
   assert.equal(managerLookups, 0);
@@ -823,6 +1065,9 @@ test('dashboard allocation writes null manager when manager lookup rejects', asy
 test('dashboard allocation exhausts stale candidates and renders the resulting empty state', async () => {
   const ctx = context(capabilities({ isReviewer: true }));
   ctx.client = /** @type {any} */ ({
+    async getCase(/** @type {string} */ id) {
+      return claimableRow(id, '"fresh-stale"');
+    },
     async patchCase() {
       return { ok: false, status: 412 };
     },
@@ -859,9 +1104,9 @@ test('dashboard allocation exhausts stale candidates and renders the resulting e
     .view(slice.initialState, tools)
     .querySelector('.cora-allocation-btn')
     ?.dispatchEvent(/** @type {any} */ ({ type: 'click' }));
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
+  await settleAllocation(() =>
+    actions.some((action) => action.type === 'allocation/availability-changed')
+  );
 
   const exhausted = actions.find(
     (action) => action.type === 'allocation/availability-changed'
@@ -884,6 +1129,9 @@ test('dashboard allocation action is inert before start and after route disposal
   });
   let patches = 0;
   ctx.client = /** @type {any} */ ({
+    async getCase(/** @type {string} */ id) {
+      return claimableRow(id, '"fresh-late"');
+    },
     async patchCase() {
       patches += 1;
       return { ok: true };
@@ -929,7 +1177,9 @@ test('dashboard allocation action is inert before start and after route disposal
     isAtCapacity: false,
   });
   await availability;
-  await settleAllocation();
+  await settleAllocation(() =>
+    actions.some((action) => action.type === 'allocation/availability-changed')
+  );
 
   assert.equal(patches, 1);
   assert.equal(
@@ -946,6 +1196,9 @@ test('dashboard allocation does not publish exhausted state after route disposal
     resolveAvailability = resolve;
   });
   ctx.client = /** @type {any} */ ({
+    async getCase(/** @type {string} */ id) {
+      return claimableRow(id, '"fresh-late-stale"');
+    },
     async patchCase() {
       return { ok: false };
     },
@@ -985,8 +1238,9 @@ test('dashboard allocation does not publish exhausted state after route disposal
     isAtCapacity: false,
   });
   await availability;
-  await Promise.resolve();
-  await Promise.resolve();
+  await settleAllocation(() =>
+    actions.some((action) => action.type === 'allocation/availability-changed')
+  );
 
   assert.equal(
     actions.some((action) => action.type === 'allocation/availability-changed'),
@@ -998,6 +1252,9 @@ test('dashboard allocation immediately publishes capacity after the claim that r
   const ctx = context(capabilities({ isReviewer: true }));
   let patches = 0;
   ctx.client = /** @type {any} */ ({
+    async getCase(/** @type {string} */ id) {
+      return claimableRow(id, '"fresh-third"');
+    },
     async patchCase() {
       patches += 1;
       return { ok: true };

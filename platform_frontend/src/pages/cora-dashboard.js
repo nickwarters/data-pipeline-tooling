@@ -83,6 +83,30 @@ async function allocationManagerFor(client, reviewerId) {
   }
 }
 
+/**
+ * The ETag the claim's `If-Match` must carry, re-read from the candidate row.
+ *
+ * A listed row carries an empty ETag — the client asks for collections without
+ * metadata annotations — and sending that would have SharePoint reject the
+ * write, so only a single-item read can supply one. Because that read returns
+ * the *current* ETag, `If-Match` no longer guards the listing-to-claim window
+ * at all: a Case someone else just claimed would hand back a matching ETag and
+ * the PATCH would clobber them. The claimability checks below are what close
+ * that window.
+ *
+ * @param {import('../sharepoint-client.js').SharePointClient} client
+ * @param {import('../components/sections/cora-allocation.js').AllocationCandidate} candidate
+ * @returns {Promise<string | null>} the ETag, or null when the Case is no longer claimable
+ */
+async function claimableEtagFor(client, candidate) {
+  const row = await client.getCase(candidate.id, candidate._listOptions);
+  if (!row) return null;
+  if (row.assignedReviewer !== '') return null;
+  if (row.status !== CASE_STATUS.IN_PROGRESS) return null;
+  if (!row.etag) return null;
+  return row.etag;
+}
+
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../views/data-table.js').TableSort} TableSort */
 /** @typedef {import('../evaluators/kpi-strip-model.js').KpiLane} KpiLane */
@@ -319,8 +343,8 @@ export function createRouteSlice(
   // panel fans out one request per Case source, so navigating away
   // mid-load is exactly where cancellation pays. Null until `start()` binds it
   // — and it stays null when the mount has no client at all. Deliberately not
-  // used by the allocation claim's own read/write/read cycle below: that
-  // belongs to the write.
+  // used by the allocation claim's own bracketed availability/claim cycle
+  // below: that belongs to the write.
   /** @type {null | import('../sharepoint-client.js').SharePointClient} */
   let readClient = null;
   let allocationRequestActive = false;
@@ -462,8 +486,9 @@ export function createRouteSlice(
     async requestNextCase() {
       const tools = effectTools;
       // Deliberately the raw client: this flow writes, and neither the claim
-      // PATCH nor the availability reads that bracket it may be cancelled
-      // half-way by navigation. Only that bracketed read/write/read
+      // PATCH, the per-candidate re-read that supplies its `If-Match`, nor the
+      // availability reads that bracket them may be cancelled half-way by
+      // navigation — the re-read belongs to the write. Only that bracketed
       // cycle is protected — the `refreshReviewerCases()` below is an ordinary
       // cancellable read and uses the signalled client like any other.
       const client = tools?.context.client;
@@ -487,13 +512,15 @@ export function createRouteSlice(
         const currentUserId = tools.context.chrome.currentUser.id;
         let managerAccount = await allocationManagerFor(client, currentUserId);
         for (const candidate of availability.candidates) {
+          const etag = await claimableEtagFor(client, candidate);
+          if (etag === null) continue;
           let result = await client.patchCase(
             candidate.id,
             {
               assignedReviewer: currentUserId,
               assignedReviewerManager: managerAccount,
             },
-            candidate.etag,
+            etag,
             candidate._listOptions
           );
           if (!result.ok && result.status !== 412 && managerAccount !== null) {
@@ -504,7 +531,7 @@ export function createRouteSlice(
                 assignedReviewer: currentUserId,
                 assignedReviewerManager: null,
               },
-              candidate.etag,
+              etag,
               candidate._listOptions
             );
           }

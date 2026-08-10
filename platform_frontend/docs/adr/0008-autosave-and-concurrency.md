@@ -18,7 +18,7 @@ The framework auto-saves Case mutations through a single `SaveQueue` primitive �
 
 ### Concurrency
 
-**ETag-based optimistic.** Every fetch captures the row's ETag; every PATCH sends `If-Match`. On 412:
+**ETag-based optimistic.** Every fetch captures the row's ETag; every PATCH sends `If-Match`. That holds for single-item reads only — a collection read under the client's `odata=nometadata` Accept header carries no ETag on any row, so a flow that writes a row it found by listing (self-allocation's claim) re-reads that one row to obtain the ETag its `If-Match` needs. On 412:
 
 - If only non-conflicting fields changed remotely (e.g., Conversation), silently re-fetch, merge, retry our PATCH with the new ETag.
 - If `Answers` changed remotely, surface a non-disruptive "case was edited elsewhere — reload" banner. Don't auto-overwrite the reviewer's edits.
