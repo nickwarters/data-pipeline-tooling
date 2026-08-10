@@ -149,6 +149,47 @@ test('HttpSharePointClient: getCase parses Answers/Conversation JSON blobs and c
   assert.equal(row?.assignedReviewer, 'user-1');
 });
 
+test('HttpSharePointClient: listCases rows carry an empty etag', async () => {
+  // A collection response the way SharePoint answers this client: the reads ask
+  // for JSON without metadata annotations, so there is no per-item `odata.etag`
+  // — and no response-level `ETag` header either, since the payload is many
+  // rows rather than one. A caller that needs an `If-Match` has to read the
+  // single row for it.
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            value: [
+              {
+                Id: 'case-1',
+                Title: 'One',
+                Status: 'In-progress',
+                CaseType: 'example-review',
+                AssignedReviewerId: 'u1',
+                ResponsiblePartyId: 'u2',
+                Answers: '{}',
+                Conversation: '[]',
+                Notes: '',
+                CompletedAt: null,
+              },
+            ],
+          }),
+          { status: 200 }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const rows = await client.listCases({}, { listName: 'Cases-ExampleReview' });
+
+  assert.equal(rows[0].etag, '');
+});
+
 test('HttpSharePointClient: getCase can target a supplied SharePoint list', async () => {
   const { fetch, calls } = makeFetch([
     {
