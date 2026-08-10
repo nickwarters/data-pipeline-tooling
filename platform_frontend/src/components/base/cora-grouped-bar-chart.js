@@ -430,7 +430,7 @@ function requireDistinctTickLabels(labels) {
   for (const label of labels) {
     if (seen.has(label)) {
       throw new TypeError(
-        'config.formatValue must produce distinct labels for y-axis ticks'
+        'config.tickCount/config.yMax and config.formatValue must produce distinct labels for y-axis ticks; use fewer ticks or a more precise formatter'
       );
     }
     seen.add(label);
@@ -484,7 +484,6 @@ function markView(mark, series, groupLabel, valueLabel, x, y, width, height) {
         x: x + width / 2,
         y: y - VALUE_LABEL_GAP,
         'text-anchor': 'middle',
-        fill: 'var(--cora-color-text-muted)',
         'aria-hidden': 'true',
       },
       valueLabel
@@ -534,7 +533,6 @@ function legendView(series, margin, layout) {
             key: 'label',
             x: x + 14,
             y: labelY,
-            fill: 'var(--cora-color-text-muted)',
           },
           visibleLegendLabel(item.label, layout.itemWidth)
         )
@@ -584,7 +582,6 @@ function xAxisView(groups, groupLabels, config, baseline, plotWidth) {
             x,
             y: baseline + 18,
             'text-anchor': 'middle',
-            fill: 'var(--cora-color-text-muted)',
           },
           groupLabels[groupIndex]
         )
@@ -600,7 +597,6 @@ function xAxisView(groups, groupLabels, config, baseline, plotWidth) {
             x: config.margin.left + plotWidth / 2,
             y: config.height - 8,
             'text-anchor': 'middle',
-            fill: 'var(--cora-color-text-muted)',
           },
           config.xAxisLabel
         )
@@ -634,13 +630,12 @@ function yAxisView(
         'g',
         { className: 'cora-grouped-bar-chart__y-tick', key: `tick-${index}` },
         svg('line', {
-          className: 'cora-grouped-bar-chart__tick-line',
+          className: 'cora-grouped-bar-chart__grid-line',
           key: 'line',
           x1: config.margin.left,
           y1: y,
           x2: config.width - config.margin.right,
           y2: y,
-          stroke: 'var(--cora-color-border)',
         }),
         svg(
           'text',
@@ -650,7 +645,6 @@ function yAxisView(
             x: config.margin.left - 8,
             y: y + 4,
             'text-anchor': 'end',
-            fill: 'var(--cora-color-text-muted)',
           },
           tickLabels[index]
         )
@@ -667,7 +661,6 @@ function yAxisView(
             y: plotTop + plotHeight / 2,
             transform: `rotate(-90 14 ${plotTop + plotHeight / 2})`,
             'text-anchor': 'middle',
-            fill: 'var(--cora-color-text-muted)',
           },
           config.yAxisLabel
         )
@@ -791,9 +784,9 @@ export function GroupedBarChart(props) {
         'aria-label': config.ariaLabel,
       },
       legendView(slots, config.margin, legend),
+      yAxisView(config, tickValues, tickLabels, plotTop, plotHeight, baseline),
       barsLayer,
-      xAxisView(data.groups, groupLabels, config, baseline, plotWidth),
-      yAxisView(config, tickValues, tickLabels, plotTop, plotHeight, baseline)
+      xAxisView(data.groups, groupLabels, config, baseline, plotWidth)
     )
   );
 }

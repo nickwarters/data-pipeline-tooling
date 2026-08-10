@@ -3076,6 +3076,12 @@
   vector-effect: non-scaling-stroke;
 }
 
+[data-cora-root] .cora-grouped-bar-chart__grid-line {
+  fill: none;
+  stroke: var(--cora-color-border);
+  vector-effect: non-scaling-stroke;
+}
+
 [data-cora-root]
   :where(
     .cora-grouped-bar-chart__tick-label,
