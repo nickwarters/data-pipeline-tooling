@@ -12,8 +12,10 @@ Conversation's participants). Itself amended by
 because this ADR gave the **Responsible Party Manager** Role `edit` on the
 Conversation, the Role is no longer resolved from the denormalised
 `responsiblePartyManager` field but live from the directory. `reviewerManager`
-is unaffected and keeps resolving from `assignedReviewerManager`, which ADR-0038
-redefines as a snapshot frozen at Reportable. The two-Section split,
+is unaffected and keeps resolving from the allocation-time
+`assignedReviewerManager` cache/query input. That field is not frozen into a
+Reportable or planned reporting snapshot; settled history remains Staff
+Hierarchy authoritative. The two-Section split,
 the single case-level `remediationDueDate` and the reportable-freeze lifecycle
 that ADR-0024 established are unchanged. Extended by
 [ADR-0043](./0043-explicit-remediation-required-decision.md), which applies the
@@ -158,9 +160,11 @@ composes with whatever else the viewer is on the Case.
 It is resolved **from the Case row**, `assignedReviewerManager === userId`,
 exactly as `responsiblePartyManager` is, and _not_ from the platform-wide
 `Reviewer Managers` group. That field already exists on every Case row and is the
-planned reporting-snapshot input for the hierarchy-attributed `#/team-stats`
-Report Feed; no `#/reports/reviewer-team` route ever existed, so scoping costs nothing and
-keeps the Role in line with every other non-assigned role in `resolveRoles`:
+allocation-time operational cache/query input for the live team reads and this
+scoped Role, while settled `#/team-stats` history remains Staff Hierarchy
+authoritative. It is not a planned Reportable snapshot, and no
+`#/reports/reviewer-team` route ever existed, so scoping costs nothing and keeps
+the Role in line with every other non-assigned role in `resolveRoles`:
 each is scoped by something Case-specific. Resolving it from the group would have
 made a Reviewer Manager a platform-wide reader of every Case of every Case Type —
 a second unscoped Role beside `controls`, which ADR-0022 decided deliberately and

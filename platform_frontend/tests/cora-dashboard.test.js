@@ -50,6 +50,66 @@ function context(permissions) {
   });
 }
 
+async function settleAllocation() {
+  for (let i = 0; i < 12; i += 1) await Promise.resolve();
+}
+
+/**
+ * @param {(accountNames: string[]) => Promise<any>} resolveManagers
+ * @returns {Promise<{ patches: any[], managerLookups: number }>}
+ */
+async function runSingleCandidateAllocation(resolveManagers) {
+  const ctx = context(capabilities({ isReviewer: true }));
+  /** @type {any[]} */
+  const patches = [];
+  let managerLookups = 0;
+  ctx.client = /** @type {any} */ ({
+    async resolveManagers(/** @type {string[]} */ accountNames) {
+      managerLookups += 1;
+      return resolveManagers(accountNames);
+    },
+    async patchCase(/** @type {any[]} */ ...args) {
+      patches.push(args);
+      return { ok: true, status: 200 };
+    },
+  });
+  const slice = createRouteSlice(
+    {},
+    ctx,
+    /** @type {any} */ ({
+      loadKpis: async () => [],
+      listAcrossSources: async () => [],
+      loadAllocationAvailability: async () => ({
+        candidates: [
+          {
+            id: 'candidate',
+            assignedReviewerManager: 'stale-manager',
+            etag: '"1"',
+            _listOptions: { listName: 'Cases-Complaints' },
+          },
+        ],
+        isAtCapacity: false,
+      }),
+    })
+  );
+  const tools = /** @type {any} */ ({
+    context: ctx,
+    params: {},
+    dispatch: () => {},
+    listen: () => {},
+    isActive: () => true,
+  });
+  slice.start(tools);
+  fireEvent(
+    getByRole(slice.view(slice.initialState, tools), 'button', {
+      name: 'Request next Case',
+    }),
+    'click'
+  );
+  await settleAllocation();
+  return { patches, managerLookups };
+}
+
 // Appeals are switched off in this build, so the Controls appeals fan-out does
 // not go out and no `appeals/loaded` action is dispatched — asserted below by
 // the action list, and directly in `appeals-feature-switch.test.js`. When the
@@ -502,7 +562,7 @@ test('dashboard allocation claims a candidate and refreshes reviewer rows throug
   assert.deepEqual(patches, [
     [
       'oldest',
-      { assignedReviewer: 'u1' },
+      { assignedReviewer: 'u1', assignedReviewerManager: null },
       '"4"',
       { listName: 'Cases-Complaints' },
     ],
@@ -516,14 +576,22 @@ test('dashboard allocation claims a candidate and refreshes reviewer rows throug
   );
 });
 
-test('dashboard allocation retries a stale candidate before claiming the next Case', async () => {
+test('dashboard allocation preserves the manager when a stale candidate returns 412', async () => {
   const ctx = context(capabilities({ isReviewer: true }));
-  /** @type {string[]} */
+  /** @type {any[]} */
   const patches = [];
+  let managerLookups = 0;
   ctx.client = /** @type {any} */ ({
-    async patchCase(/** @type {string} */ id) {
-      patches.push(id);
-      return { ok: id === 'available' };
+    async resolveManagers(/** @type {string[]} */ accountNames) {
+      managerLookups += 1;
+      assert.deepEqual(accountNames, ['u1']);
+      return { u1: 'manager-1' };
+    },
+    async patchCase(/** @type {any[]} */ ...args) {
+      patches.push(args);
+      return args[0] === 'available'
+        ? { ok: true, status: 200 }
+        : { ok: false, status: 412 };
     },
   });
   /** @type {any[]} */
@@ -565,11 +633,22 @@ test('dashboard allocation retries a stale candidate before claiming the next Ca
     }),
     'click'
   );
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
+  await settleAllocation();
 
-  assert.deepEqual(patches, ['stale', 'available']);
+  assert.deepEqual(
+    patches.map(([id, fields]) => [id, fields]),
+    [
+      [
+        'stale',
+        { assignedReviewer: 'u1', assignedReviewerManager: 'manager-1' },
+      ],
+      [
+        'available',
+        { assignedReviewer: 'u1', assignedReviewerManager: 'manager-1' },
+      ],
+    ]
+  );
+  assert.equal(managerLookups, 1);
   assert.equal(
     actions.some(
       (action) =>
@@ -579,11 +658,173 @@ test('dashboard allocation retries a stale candidate before claiming the next Ca
   );
 });
 
+test('dashboard allocation retries a non-412 manager write once with null and keeps it null', async () => {
+  const ctx = context(capabilities({ isReviewer: true }));
+  /** @type {any[]} */
+  const patches = [];
+  let managerLookups = 0;
+  let availabilityChecks = 0;
+  ctx.client = /** @type {any} */ ({
+    async resolveManagers() {
+      managerLookups += 1;
+      return { u1: 'manager-1' };
+    },
+    async patchCase(/** @type {any[]} */ ...args) {
+      patches.push(args);
+      if (
+        args[0] === 'first' &&
+        args[1].assignedReviewerManager === 'manager-1'
+      ) {
+        return { ok: false, status: 403 };
+      }
+      if (args[0] === 'first') return { ok: false, status: 500 };
+      return { ok: true, status: 200 };
+    },
+  });
+  const candidate = (/** @type {string} */ id) => ({
+    id,
+    etag: `"${id}"`,
+    _listOptions: { listName: 'Cases-Complaints' },
+  });
+  const slice = createRouteSlice(
+    {},
+    ctx,
+    /** @type {any} */ ({
+      loadKpis: async () => [],
+      listAcrossSources: async () => [],
+      loadAllocationAvailability: async () =>
+        availabilityChecks++ === 0
+          ? {
+              candidates: [candidate('first'), candidate('second')],
+              isAtCapacity: false,
+            }
+          : { candidates: [], isAtCapacity: false },
+    })
+  );
+  const tools = /** @type {any} */ ({
+    context: ctx,
+    params: {},
+    dispatch: () => {},
+    listen: () => {},
+    isActive: () => true,
+  });
+  slice.start(tools);
+  fireEvent(
+    getByRole(slice.view(slice.initialState, tools), 'button', {
+      name: 'Request next Case',
+    }),
+    'click'
+  );
+  await settleAllocation();
+
+  assert.deepEqual(
+    patches.map(([id, fields]) => [id, fields]),
+    [
+      [
+        'first',
+        { assignedReviewer: 'u1', assignedReviewerManager: 'manager-1' },
+      ],
+      ['first', { assignedReviewer: 'u1', assignedReviewerManager: null }],
+      ['second', { assignedReviewer: 'u1', assignedReviewerManager: null }],
+    ]
+  );
+  assert.equal(managerLookups, 1);
+});
+
+test('dashboard allocation does not resolve a manager at capacity or with no candidates', async () => {
+  const ctx = context(capabilities({ isReviewer: true }));
+  let availabilityChecks = 0;
+  let managerLookups = 0;
+  let patches = 0;
+  ctx.client = /** @type {any} */ ({
+    async resolveManagers() {
+      managerLookups += 1;
+      throw new Error('manager lookup should not run');
+    },
+    async patchCase() {
+      patches += 1;
+      return { ok: true, status: 200 };
+    },
+  });
+  const slice = createRouteSlice(
+    {},
+    ctx,
+    /** @type {any} */ ({
+      loadKpis: async () => [],
+      listAcrossSources: async () => [],
+      loadAllocationAvailability: async () =>
+        availabilityChecks++ === 0
+          ? {
+              candidates: [
+                {
+                  id: 'capacity-candidate',
+                  etag: '"1"',
+                  _listOptions: { listName: 'Cases-Complaints' },
+                },
+              ],
+              isAtCapacity: true,
+            }
+          : { candidates: [], isAtCapacity: false },
+    })
+  );
+  const tools = /** @type {any} */ ({
+    context: ctx,
+    params: {},
+    dispatch: () => {},
+    listen: () => {},
+    isActive: () => true,
+  });
+  slice.start(tools);
+  const button = getByRole(slice.view(slice.initialState, tools), 'button', {
+    name: 'Request next Case',
+  });
+  fireEvent(button, 'click');
+  await settleAllocation();
+  fireEvent(button, 'click');
+  await settleAllocation();
+
+  assert.equal(availabilityChecks, 2);
+  assert.equal(managerLookups, 0);
+  assert.equal(patches, 0);
+});
+
+/** @type {Array<[string, (accountNames: string[]) => Promise<any>]>} */
+const managerLookupCases = [
+  ['null result', async () => ({ u1: null })],
+  ['missing result', async () => ({})],
+  ['unusable result', async () => ({ u1: '   ' })],
+];
+
+for (const [label, resolveManagers] of managerLookupCases) {
+  test(`dashboard allocation writes null manager for a ${label}`, async () => {
+    const { patches, managerLookups } =
+      await runSingleCandidateAllocation(resolveManagers);
+    assert.equal(managerLookups, 1);
+    assert.deepEqual(patches[0][1], {
+      assignedReviewer: 'u1',
+      assignedReviewerManager: null,
+    });
+  });
+}
+
+test('dashboard allocation writes null manager when manager lookup rejects', async () => {
+  const { patches, managerLookups } = await runSingleCandidateAllocation(
+    async () => {
+      throw new Error('directory unavailable');
+    }
+  );
+  assert.equal(managerLookups, 1);
+  assert.deepEqual(patches[0][1], {
+    assignedReviewer: 'u1',
+    assignedReviewerManager: null,
+  });
+});
+
 test('dashboard allocation exhausts stale candidates and renders the resulting empty state', async () => {
   const ctx = context(capabilities({ isReviewer: true }));
   ctx.client = /** @type {any} */ ({
     async patchCase() {
-      return { ok: false };
+      return { ok: false, status: 412 };
     },
   });
   /** @type {any[]} */
@@ -688,8 +929,7 @@ test('dashboard allocation action is inert before start and after route disposal
     isAtCapacity: false,
   });
   await availability;
-  await Promise.resolve();
-  await Promise.resolve();
+  await settleAllocation();
 
   assert.equal(patches, 1);
   assert.equal(
