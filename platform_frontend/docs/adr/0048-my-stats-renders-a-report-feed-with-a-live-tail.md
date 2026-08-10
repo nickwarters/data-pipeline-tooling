@@ -50,6 +50,20 @@ Rules 2 and 3 are separate on purpose. A day that is finished but unpublished
 and a day still in progress are both hollow, and only one of them is excluded —
 one visual state meaning both would make the page lie about one of them.
 
+A fourth rule was added when the tail was built, and it is the one that keeps
+the other three affordable:
+
+4. **The tail is bounded by the calendar, not by the file.** `complete_through`
+   says where the tail should start; a small fixed window says how far back it
+   is ever allowed to start. Without the second half, a Reviewer whose file is
+   missing or stale asks for every Case they have ever finished, one full page
+   at a time — which is the reporting-by-list-query this decision exists to
+   avoid, arrived at by accident. And **with no file at all, no tail is read**:
+   there is no boundary to compute from, and "nobody has published a report for
+   you" is a different sentence from "you did nothing", exactly as zero and
+   not-yet-known are different values for a single day. The page says the
+   former, and issues no list read at all.
+
 The page owns four fixed browser-calendar windows. Each includes complete
 previous period(s) and the current partial period so every selection has a
 comparison:
@@ -69,18 +83,22 @@ yesterday. Previous monthly buckets end on their calendar month end, while the
 current monthly bucket ends today. Day keys are `YYYY-MM-DD`, month keys are
 `YYYY-MM`, and the current labels state `(today)` or `(current month)`.
 
-The first feed-backed slice now connects the existing selected range to a pure
-Case Type breakdown panel. It compares each feed row's ISO date string
-inclusively with the descriptor's `start` and `end`, aggregates duplicate
-`case_type` rows, excludes non-positive totals, and resolves display names from
-the frontend Case Type manifest. Because `end` is yesterday, the panel's totals
-are feed-only settled history and do not include live work. Unknown slugs are
-humanized for presentation without adding a manifest entry.
+The selected range drives a pure Case Type breakdown panel. It compares each
+feed row's ISO date string inclusively with the descriptor's `start` and `end`,
+aggregates duplicate `case_type` rows, excludes non-positive totals, and
+resolves display names from the frontend Case Type manifest. Because `end` is
+yesterday, the panel's totals are feed-only settled history and do not include
+live work. Unknown slugs are humanized for presentation without adding a
+manifest entry.
 
-The page still does not render range controls. The optional grouped chart remains
-a separate `chart` route-state seam loaded by `my-stats/chart-loaded`; the panel
-does not map feed data into that chart, and the live-tail calculation described
-by this ADR remains deferred. The existing chart tooltip lifecycle is unchanged.
+The chart and the figures beneath it are two readings of **one** derivation.
+The page merges the file and the tail into one count per calendar day, once,
+and hands that to both; a second derivation would be a second chance for them
+to disagree, over numbers a Reviewer can see side by side. The figures are the
+total (excluding today), the average per working day, the count of active days,
+and the busiest day with its count. The page does not yet render range
+controls: the four descriptors and the selection exist, and Week is what is
+shown.
 
 ### Why the live read is affordable
 
@@ -90,7 +108,28 @@ by this ADR remains deferred. The existing chart tooltip lifecycle is unchanged.
 - It is **one request per Case Type**, not per day: fetch the tail rows once and
   bucket them in the browser. This is the fan-out `services/across-sources.js`
   already performs.
-- It is bounded by construction — a few days of one Reviewer's own work.
+- It is bounded **because the page bounds it**, which is the part that has to be
+  written down. "A few days of one Reviewer's own work" is what a healthy file
+  makes it; it is not what an absent or stale file makes it. A missing artifact
+  is an expected empty read rather than an error, so with no file there is no
+  `complete_through` — and a tail that fell back to the range start would ask
+  for thirteen months of Cases, unpaged, with the full `$select=*` projection
+  and five person expands on every row. There is no Report Feed producer in the
+  repository yet, so that is not the unlucky case: today it is the only case.
+  Hence the clamp, and hence no read at all without a file.
+
+  The clamp is ten calendar days counting today, derived from how stale a
+  _healthy_ file can honestly be. The pipeline runs Monday to Friday covering
+  through the previous day, so the structural worst case is Friday's artifact
+  still being freshest on Monday — complete through Thursday, four days to
+  compute. A bank holiday either side of a weekend stretches that to six (the
+  Easter pattern: Good Friday and Easter Monday both non-running). Ten leaves
+  slack for a failed run without the window ever growing with the size of the
+  backlog.
+
+  Beyond ten days the tail is deliberately **short rather than large**, and the
+  page says so in a line under the figures. An unbounded read is the failure
+  this decision was written to prevent; an admitted gap is not.
 
 ## Consequences
 
@@ -105,11 +144,29 @@ by this ADR remains deferred. The existing chart tooltip lifecycle is unchanged.
   mysterious.
 - **`listCases` over-fetches for this use.** Its projection is fixed (`*` plus
   the person expands), so the tail read drags back every column including the
-  `answers` and `conversation` blobs. Bounded and acceptable at a few days of
-  one person's Cases; a narrow projection is the fix if it bites.
+  `answers` and `conversation` blobs. Acceptable only because the clamp caps the
+  window at ten days of one person's Cases — it is that projection which makes
+  an unbounded window expensive rather than merely long. A narrow projection is
+  the fix if it bites.
 - **The live tail is a separate slice and the page must work without it.** If
   the list read fails, the page still renders the file rather than failing the
-  route — an aborted read is navigation, never a route error.
+  route — an aborted read is navigation, never a route error. It does say so,
+  quietly: a failed tail, or a file too stale for the clamp to reach, puts one
+  muted line under the figures. Silence there would leave a Reviewer reading an
+  understated week with no way to tell. The line never replaces or hides the
+  settled half, which is the whole point of keeping the two halves separate.
+- **The counts are browser-local, and that conversion is the fragile part.**
+  `ReportableAt` is an instant; "which day did I finish it" is a calendar
+  question, and the calendar is the Reviewer's own. The conversion lives in one
+  place, the date filter's bounds are the local start of each day so the query
+  and the bucketing agree, and its tests pin their own zones rather than
+  inheriting the machine's — a conversion that is only wrong for part of the
+  day, in some zones, otherwise passes by luck.
+- **The producing pipeline is still to be written.** `tools/deliverables.py`
+  names the destination and nothing writes to it, so every Reviewer sees the
+  no-report state in production today. That is the honest rendering of the
+  current state of the system rather than a defect in this page, and it is why
+  the no-file path had to be a designed state rather than an edge case.
 - **The page is UX-gated on `isReviewer`; the library ACL is the boundary.**
   Per-Reviewer files are not a security boundary: anyone who can read one can
   read another by guessing an account id, which is trivial when it is a staff

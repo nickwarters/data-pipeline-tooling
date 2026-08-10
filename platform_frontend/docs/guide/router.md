@@ -42,19 +42,27 @@ On mount, the page loads the signed-in Reviewer's Report Feed from the host
 web's document library. `?mock=1` selects the development fixture instead. The
 route slice also snapshots the browser-local calendar once, deriving its four
 range descriptors and default `week` selection without consulting the clock in
-the reducer. The view derives the Case Type proportion panel from the loaded
-feed, the selected descriptor, and the existing route state. Feed dates are
-compared inclusively as ISO date-only strings through the descriptor's
-yesterday `end`, so today is not included; registered Case Type slugs get their
-display names from `case-types/manifest.js`. A feed with no matching counts
-keeps the panel and shows `No data for this range.`.
+the reducer.
 
-The optional grouped chart still arrives through the existing
-`my-stats/chart-loaded` action and `chart` route field. With both children the
-panel is placed left of the chart; with only one child that content is rendered
-without the two-column wrapper. The route still owns chart tooltip setup and
-cleanup. This slice does not turn the feed into chart data or compute a live
-tail, and its Case Type totals therefore describe the feed only.
+The slice tracks the report as `loading`, `loaded` or `failed`, because
+`reportFeed: null` alone cannot tell "not fetched yet" from "nothing published".
+A loaded report is followed by one second read: the live tail, one bounded
+request per Case Type list, covering only the days after the report's
+`complete_through` and never more than ten calendar days. No report means no
+tail read at all, and the page says a report has not been published yet.
+
+The mount lifetime is bound **once**, in `start()`, with
+`withAbortSignal(context.client, tools.signal)`; the tail fetcher below it takes
+the wrapped client and knows nothing about cancellation. The Report Feed is not
+a client read — it is a document-library `fetch` — and carries the same signal
+through its own options bag. An aborted read of either is navigation and
+dispatches nothing.
+
+The view derives one report from the feed and the tail, and renders it three
+ways: the Case Type proportion panel and the grouped chart in a two-column row,
+and the headline figures full width beneath them. There is no chart action and
+no separate `chart` route field — the chart is derived, not delivered. The
+route still owns chart tooltip setup and cleanup.
 
 The `#/team-stats` route is also a static page import, guarded solely by
 `context.chrome.permissions.isReviewerManager`. A non-manager is redirected to

@@ -272,34 +272,60 @@ Reviewer**. The reviewing side has a base role (**Reviewer**) and an elevated ro
 (**Case Type Owner**), mirroring the frontline side (**Adviser** → **Journey Owner**).
 Reviewers can reach `#/my-stats`, which loads their Report Feed by lower-cased
 bare account from the SharePoint document library; it is not available to a
-**Reviewer Manager** who lacks the Reviewer capability. A missing feed is an
-empty report, while a loaded feed renders a Case Type proportion panel for the
-selected range. The evaluator compares ISO date-only strings inclusively from
-the range start through browser-local yesterday, so today is excluded; duplicate
-sparse rows are aggregated and zero totals are omitted. Case Type slugs are
-presentation-resolved through `case-types/manifest.js`, and an unknown slug is
-humanized rather than shown raw. On route creation the page snapshots the
-browser-local calendar into four comparison ranges: the previous complete
-Monday–Sunday week plus this week through today, the previous complete month
-plus this month through today, three complete months plus the current month,
-and twelve complete months plus the current month. Day-grain ranges use daily
-buckets and the longer ranges use monthly buckets; totals end at browser-local
-yesterday while the current display bucket extends through today. The page owns
-this range state and defaults to Week, but does not yet render the picker.
+**Reviewer Manager** who lacks the Reviewer capability.
 
-The optional grouped chart still arrives through `my-stats/chart-loaded` and
-keeps its existing route state and HTML-over-SVG tooltip lifecycle. When both
-are present the panel is left of the chart; either may render alone. The page
-does not load a second data path, map the Report Feed into chart values, or
-compute live work for the panel. Settled marks are solid and provisional marks
-are hollow, preserving Report Feed provenance rather than treating hollow as
-zero or excluded. The pure SVG chart builder exposes each mark's full
-description, including its formatted value and provisional status, as metadata;
-after the chart is committed, the my-stats route mounts one HTML-over-SVG
-tooltip under the app root. The same keyboard-focusable mark supports pointer
-hover and keyboard focus, with Escape dismissing the tooltip, while
-`role="img"` and `aria-label` remain on the mark and the per-mark SVG
-`<title>` is omitted. Legend titles remain.
+A **missing feed is not an empty report**. The page distinguishes the two and
+says "No report has been published for you yet." — and reads no Case lists at
+all, because with nothing published there is no boundary to compute a
+**Live Tail** from. A loaded feed with no rows in the selected range keeps the
+Case Type panel and says "No data for this range." instead. No pipeline
+publishes these files yet, so the first state is what production shows today.
+
+**Live Tail**: the days a Reviewer's Report Feed cannot cover yet, counted in
+the browser from their own **Case** lists rather than from the file. It begins
+the day after the feed's `complete_through` and is clamped to at most ten
+calendar days back, so it never grows with the size of a Reviewer's history.
+Its rows are the Reviewer's **Reportable** Cases — `Actions In Progress` or
+`Completed`, so a **Void Case** that once reached the milestone is not counted
+as reviewed work — bucketed onto browser-local calendar dates from their
+`reportableAt` instant. The file wins for every day it covers; the tail answers
+only for the days after it. Marks from the file are solid and marks from the
+tail are hollow, which encodes **provenance and nothing else**: a day that is
+finished but unpublished is real work and counts, and a day still in progress
+is also hollow but excluded from the totals. A failed tail, or a feed older
+than the clamp, is stated in one muted line and never hides the published half.
+
+On route creation the page snapshots the browser-local calendar into four
+comparison ranges: the previous complete Monday–Sunday week plus this week
+through today, the previous complete month plus this month through today, three
+complete months plus the current month, and twelve complete months plus the
+current month. Day-grain ranges use daily buckets and the longer ranges use
+monthly buckets; totals end at browser-local yesterday while the current
+display bucket extends through today. The page owns this range state and
+defaults to Week, but does not yet render the picker.
+
+The feed and the tail are merged into one count per calendar day **once**, and
+that single derivation feeds both the grouped chart and the four **headline
+figures** beneath it: **Total** (excluding today, carried by the asterisk
+`* excludes today`), **avg per working day** (Mon–Fri minus
+`ENGLAND_WALES_HOLIDAYS` — never shortened to "avg/day", since the two differ
+by about a third), **active days** (days with at least one reportable Case, the
+leave-immune figure), and **busiest day** with its count. The average's
+numerator counts every day including weekends while its divisor counts working
+days only, and leave is invisible to it: a stated inaccuracy, consistent for
+everyone and exact for nobody.
+
+Beside them the Case Type proportion panel resolves feed slugs to display names
+through `case-types/manifest.js`, humanizing an unknown slug rather than
+showing it raw, and reads the feed alone through browser-local yesterday.
+
+The pure SVG chart builder exposes each mark's full description, including its
+formatted value and provisional status, as metadata; after the chart is
+committed, the my-stats route mounts one HTML-over-SVG tooltip under the app
+root. The same keyboard-focusable mark supports pointer hover and keyboard
+focus, with Escape dismissing the tooltip, while `role="img"` and `aria-label`
+remain on the mark and the per-mark SVG `<title>` is omitted. Legend titles
+remain.
 _Avoid_: Assessor, evaluator
 
 **Assigned Reviewer**:

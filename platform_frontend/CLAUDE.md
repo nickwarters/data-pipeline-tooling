@@ -237,6 +237,8 @@ src/
     empty-state.js              # EmptyState/LoadingState: the shared "nothing here yet" and
                                 #   in-flight placeholders, one spelling of each
     html.js                     # h()/svg() plain-function view primitives
+    local-calendar.js           # THE crossing between an instant and a browser-local calendar
+                                #   date: toLocalDateKey/startOfLocalDay plus date-key arithmetic
     navigate.js                 # navigateTo/redirectTo: the only writers of location.hash (#519)
     people-search.js            # debounced, mount-lifetime-checked directory search shared by every
                                 #   people picker; reports every outcome (idle/loading/success/error)
@@ -322,7 +324,12 @@ src/
                                   #   cross-Case-Type lookup, standard Case columns
     cora-dashboard.js             # store-driven dashboard slice + descriptor-selected panels (GRID-3/4)
     cora-my-stats.js               # store-driven Reviewer Report Feed load, browser-calendar range state,
-                                   #   selection, feed-backed Case Type panel, and optional grouped chart view model
+                                   #   the clamped live-tail read, and one derivation feeding the chart,
+                                   #   the Case Type panel and the headline figures
+    my-stats/
+      headline-strip-view.js      # pure four-figure strip (total, avg per working day, active days,
+                                  #   busiest day); deliberately not the dashboard's KPI strip
+      stats-chart-view.js         # pure report -> grouped bar chart, solid published vs hollow live
     cora-team-stats.js             # store-driven Reviewer Manager-only empty shell
     dashboard/
       action-centre-view.js       # pure reason-descriptor view + bounded load actions (ADR-0030 flags unchanged)
@@ -382,6 +389,8 @@ src/
     create-sharepoint-client.js
     http-sharepoint-client.js
     journey-cases-fetcher.js
+    live-tail-fetcher.js          # the clamped read of the days the Report Feed cannot cover yet
+                                  #   (LIVE_TAIL_MAX_DAYS); signal-unaware, the page binds the lifetime
     mock-sharepoint-client.js
     permissions.js
     report-feed-loader.js         # document-library Report Feed read; ?mock=1 selects the canonical dev fixture
@@ -407,6 +416,8 @@ src/
     summary-model.js
     stats-range-model.js          # pure browser-local My Stats comparison ranges and day/month buckets
     stats-case-type-model.js      # pure Report Feed Case Type totals, manifest labels, and range proportions
+    stats-report-model.js         # THE single My Stats derivation: published days and live days merged
+                                  #   at complete_through, then the chart buckets and the four figures
     team-workload-model.js       # per-Reviewer workload rows for the My Team page
     void-volume-model.js         # per-Reviewer voided-Case rows over a 30-day window, grouped
                                  #   by who voided, for the My Team page's second table

@@ -99,32 +99,52 @@ when it was opened by pointer hover.
 
 ## My Stats
 
-The my-stats route keeps one Report Feed loader and stores its envelope under
-`routes.myStats.reportFeed`. `buildStatsCaseTypeBreakdown()` in
+The my-stats route reads two things and derives everything from them **once**.
+
+The first is the Reviewer's Report Feed. The second is a live read of the days
+the feed cannot cover yet — the tail — issued only when a feed exists and
+clamped by `LIVE_TAIL_MAX_DAYS` in
+[`src/services/live-tail-fetcher.js`](../../src/services/live-tail-fetcher.js)
+so it can never reach further back than ten calendar days. With no feed
+published there is no boundary to compute from, so no list read is issued at
+all and the page says a report has not been published rather than showing an
+empty one.
+
+`buildStatsReport()` in
+[`src/evaluators/stats-report-model.js`](../../src/evaluators/stats-report-model.js)
+merges the two. `complete_through` is the whole boundary: a date at or before it
+is answered by the file, a date after it by the live read, so neither can claim
+the same day. The result carries one bucket per range bucket, each with a
+`settled` and a `provisional` total (`null` where that provenance has no days),
+and the four headline figures over the totals window.
+
+That one report feeds both readings. `statsChartView()` in
+[`src/pages/my-stats/stats-chart-view.js`](../../src/pages/my-stats/stats-chart-view.js)
+maps buckets to groups, drawing a solid `Settled` mark and a hollow
+`Provisional` one and omitting either where the bucket has no days of that
+provenance — a daily bucket therefore draws one bar, and the current monthly
+bucket can draw both. The y-axis domain is rounded up to a multiple of four so
+counts get whole-number ticks. `headlineStripView()` in
+[`src/pages/my-stats/headline-strip-view.js`](../../src/pages/my-stats/headline-strip-view.js)
+renders the same report's figures beneath the chart row: total (asterisked,
+`* excludes today`), average per working day with its divisor, active days, and
+the busiest day with its count. The average is never labelled "avg/day". A
+failed tail, or a feed older than the clamp, adds one muted line under the
+figures; it never hides the settled half.
+
+`buildStatsCaseTypeBreakdown()` in
 [`src/evaluators/stats-case-type-model.js`](../../src/evaluators/stats-case-type-model.js)
-selects feed rows for the existing selected range and builds the Case Type
-totals and proportions. It compares the feed's ISO date strings directly with
-the descriptor's inclusive `start` and `end`; because `end` is yesterday,
-today's work is excluded. Duplicate sparse rows are folded by `case_type`, and
-only positive totals are shown. The evaluator resolves registered slugs through
-`case-types/manifest.js`'s `displayNameFor()`; an unknown slug gets presentation
-copy only, never a raw slug in visible or accessible text.
-
-The pure [`ProportionBars`](../../src/components/base/cora-proportion-bars.js)
-view renders that resolved shape as a semantic list. Each row shows its Case
-Type label and count, and exposes a bounded `role="progressbar"` with a
-percentage width and accessible label. The my-stats page places the panel alone
-when it is the only available feed-backed content, or in the left `1fr` column
-of `cora-my-stats-top-row` beside the chart's right `2fr` column when both are
-present. A feed with no selected-range counts shows `No data for this range.`;
-an absent feed and chart still show the page-level `No data yet.`.
-
-A separate mapping seam can still dispatch
-`{ type: 'my-stats/chart-loaded', chart: { data, config } }`; the route keeps
-that `chart` state and the existing tooltip ownership unchanged. The current
-Case Type panel does not map feed rows into the chart, compute a live tail, or
-include live work in its totals. Those provenance and live-tail connections
-remain separate deferred work.
+still owns the Case Type panel to the left of the chart. It compares the feed's
+ISO date strings directly with the descriptor's inclusive `start` and `end`;
+because `end` is yesterday, today's work is excluded. Duplicate sparse rows are
+folded by `case_type`, and only positive totals are shown. The evaluator
+resolves registered slugs through `case-types/manifest.js`'s `displayNameFor()`;
+an unknown slug gets presentation copy only, never a raw slug in visible or
+accessible text. The pure
+[`ProportionBars`](../../src/components/base/cora-proportion-bars.js) view
+renders that shape as a semantic list, each row exposing a bounded
+`role="progressbar"`. A feed with no counts in the range shows
+`No data for this range.`.
 
 The page also snapshots four pure range descriptors on slice creation and owns
 the selected range, defaulting to `week`. The ordered keys are `week`, `month`,
@@ -133,17 +153,17 @@ ranges use monthly buckets. Each descriptor carries its label and grain,
 inclusive `start`, browser-local yesterday as the inclusive totals `end`,
 browser-local `today` as the display endpoint, and ordered inclusive buckets.
 Daily buckets use `YYYY-MM-DD` keys and monthly buckets use `YYYY-MM` keys.
-The final bucket reaches today even though totals stop at yesterday.
+The final bucket reaches today even though totals stop at yesterday. No range
+picker is rendered yet.
 
-The page still does not render a range picker. Range selection is existing route
-state used by the Case Type evaluator; the chart remains data-only and does not
-fetch or map the Report Feed, own range selection, or compute a live tail. The
-loader behavior and provenance rules remain governed by
+Dates are the subtle part. `ReportableAt` is an instant and every key on this
+page is a browser-local calendar date; the one crossing between them is
+[`src/lib/local-calendar.js`](../../src/lib/local-calendar.js), and the tail's
+query bounds are the local start of the first day and of tomorrow so the filter
+and the bucketing agree about where a day begins.
+
+The loader behaviour, the provenance rules and the clamp are governed by
 [ADR-0048](../adr/0048-my-stats-renders-a-report-feed-with-a-live-tail.md).
-
-When that feed is connected, solid marks retain ADR-0048's settled/feed
-provenance and hollow provisional marks retain its live-tail provenance. Hollow
-does not mean excluded or zero.
 
 Line charts, stacked bars, custom tooltip markup, and data loading are out of
 this component's contract. The route owns the HTML-over-SVG tooltip controller
