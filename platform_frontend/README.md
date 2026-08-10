@@ -81,7 +81,10 @@ file means no report is available; `?mock=1` loads the canonical development
 fixture. A separate mapper can provide the route's optional grouped chart view
 model; the page then renders the reusable SVG grouped-bar chart. Solid marks
 represent settled values and hollow provisional marks preserve Report Feed
-provenance. The page keeps “No data yet.” until that view model is present.
+provenance. The route now snapshots the four browser-calendar ranges (Week,
+Month, 3 months, and 12 months) and owns the selected range, defaulting to
+Week. This is state groundwork only: no range picker is rendered yet, and the
+page keeps “No data yet.” until a chart view model is present.
 
 ### Team Stats page
 

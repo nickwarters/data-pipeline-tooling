@@ -40,8 +40,11 @@ SharePoint list permissions remain the access boundary, and
 
 On mount, the page loads the signed-in Reviewer's Report Feed from the host
 web's document library. `?mock=1` selects the development fixture instead. The
-current view intentionally remains an empty shell while report rendering is
-added separately.
+route slice also snapshots the browser-local calendar once, deriving its four
+range descriptors and default `week` selection without consulting the clock in
+the reducer. It still mounts the same feed-loading shell; the current view does
+not render range controls and intentionally remains empty until a chart view
+model is supplied separately.
 
 The `#/team-stats` route is also a static page import, guarded solely by
 `context.chrome.permissions.isReviewerManager`. A non-manager is redirected to

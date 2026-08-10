@@ -319,7 +319,8 @@ src/
     cora-case-search.js           # store-driven #/search slice: URL-held filters, one bounded
                                   #   cross-Case-Type lookup, standard Case columns
     cora-dashboard.js             # store-driven dashboard slice + descriptor-selected panels (GRID-3/4)
-    cora-my-stats.js               # store-driven Reviewer Report Feed load plus optional grouped chart view model
+    cora-my-stats.js               # store-driven Reviewer Report Feed load, browser-calendar range state,
+                                   #   selection, and optional grouped chart view model (no picker yet)
     cora-team-stats.js             # store-driven Reviewer Manager-only empty shell
     dashboard/
       action-centre-view.js       # pure reason-descriptor view + bounded load actions (ADR-0030 flags unchanged)
@@ -402,6 +403,7 @@ src/
     question-group-progress.js   # per-Question-Group answered/total (was section-progress.js, #390)
     general-questions.js         # General Question answer-key namespace + load-time config gates (#472)
     summary-model.js
+    stats-range-model.js          # pure browser-local My Stats comparison ranges and day/month buckets
     team-workload-model.js       # per-Reviewer workload rows for the My Team page
     void-volume-model.js         # per-Reviewer voided-Case rows over a 30-day window, grouped
                                  #   by who voided, for the My Team page's second table

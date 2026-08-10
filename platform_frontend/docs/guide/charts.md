@@ -84,9 +84,21 @@ The my-stats route keeps one Report Feed loader and stores its envelope under
 `routes.myStats.reportFeed`. A separate mapping seam can dispatch
 `{ type: 'my-stats/chart-loaded', chart: { data, config } }`; when that optional
 view model is present, the page renders the grouped chart, otherwise it retains
-`EmptyState('No data yet.')`. The chart itself does not fetch or map the Report
-Feed, choose a date range, or compute a live tail. The loader behavior and
-provenance rules remain governed by
+`EmptyState('No data yet.')`.
+
+The page also snapshots four pure range descriptors on slice creation and owns
+the selected range, defaulting to `week`. The ordered keys are `week`, `month`,
+`3-months`, and `12-months`: Week and Month use daily buckets; the longer
+ranges use monthly buckets. Each descriptor carries its label and grain,
+inclusive `start`, browser-local yesterday as the inclusive totals `end`,
+browser-local `today` as the display endpoint, and ordered inclusive buckets.
+Daily buckets use `YYYY-MM-DD` keys and monthly buckets use `YYYY-MM` keys.
+The final bucket reaches today even though totals stop at yesterday.
+
+This is state groundwork only; the page does not yet render a picker or map the
+range descriptors and Report Feed into chart values. The chart remains
+data-only: it does not fetch or map the Report Feed, own range selection, or
+compute a live tail. The loader behavior and provenance rules remain governed by
 [ADR-0048](../adr/0048-my-stats-renders-a-report-feed-with-a-live-tail.md).
 
 When that feed is connected, solid marks retain ADR-0048's settled/feed
