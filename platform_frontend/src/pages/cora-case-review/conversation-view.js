@@ -46,23 +46,27 @@ export function conversationView(props) {
 
 /** @param {(body: string) => void|Promise<void>} onSend */
 function conversationCompose(onSend) {
-  /** @type {HTMLTextAreaElement} */
-  let textarea;
   return h(
     'div',
     { className: 'cora-conversation-compose' },
-    (textarea = /** @type {HTMLTextAreaElement} */ (
-      h('textarea', {
-        className: 'cora-conversation-input',
-        'aria-label': 'Message to Responsible Party',
-      })
-    )),
+    h('textarea', {
+      className: 'cora-conversation-input',
+      'aria-label': 'Message to Responsible Party',
+    }),
     h(
       'button',
       {
         className: 'cora-conversation-send',
         'aria-label': 'Send message',
-        onclick: async () => {
+        onclick: async (/** @type {Event | undefined} */ event) => {
+          const button = /** @type {HTMLElement | null} */ (
+            event?.currentTarget ?? event?.target ?? null
+          );
+          const compose = button?.closest('.cora-conversation-compose');
+          const textarea = /** @type {HTMLTextAreaElement | null} */ (
+            compose?.querySelector('.cora-conversation-input')
+          );
+          if (!textarea) return;
           const body = (textarea.value ?? '').trim();
           if (!body) return;
           textarea.value = '';
