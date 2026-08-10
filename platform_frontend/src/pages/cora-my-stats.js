@@ -6,6 +6,8 @@ import { patchRoute } from '../core/route-state.js';
 import { ignoreAbortError } from '../lib/abort.js';
 import { loadReportFeed } from '../services/report-feed-loader.js';
 import { buildStatsRanges } from '../evaluators/stats-range-model.js';
+import { buildStatsCaseTypeBreakdown } from '../evaluators/stats-case-type-model.js';
+import { ProportionBars } from '../components/base/cora-proportion-bars.js';
 import { mountGroupedBarChartTooltip } from '../lib/chart-tooltip.js';
 
 /** @typedef {import('../core/chrome-state.js').ChromeState} ChromeState */
@@ -16,6 +18,29 @@ import { mountGroupedBarChartTooltip } from '../lib/chart-tooltip.js';
 /** @typedef {import('../evaluators/stats-range-model.js').StatsRangeKey} StatsRangeKey */
 
 /** @typedef {{ data: GroupedBarChartData, config: GroupedBarChartConfig }} MyStatsChart */
+
+/**
+ * @param {MyStatsRouteState} route
+ * @returns {HTMLElement|null}
+ */
+function caseTypePanel(route) {
+  const range = route.ranges?.find(({ key }) => key === route.selectedRange);
+  if (!route.reportFeed || !range) return null;
+
+  const breakdown = buildStatsCaseTypeBreakdown(route.reportFeed.rows, range);
+  return h(
+    'section',
+    {
+      className: 'cora-my-stats-case-type-panel',
+      'aria-labelledby': 'cora-my-stats-case-type-heading',
+    },
+    h('h2', { id: 'cora-my-stats-case-type-heading' }, 'Case Type'),
+    ProportionBars({
+      rows: breakdown.rows,
+      emptyStateText: 'No data for this range.',
+    })
+  );
+}
 
 /**
  * @typedef {Object} MyStatsRouteState
@@ -36,14 +61,34 @@ import { mountGroupedBarChartTooltip } from '../lib/chart-tooltip.js';
  * @returns {HTMLElement}
  */
 export function myStatsView(state) {
-  const chart = state.routes.myStats.chart;
+  const route = state.routes.myStats;
+  const chart = route.chart;
+  const chartView = chart ? GroupedBarChart(chart) : null;
+  const panel = caseTypePanel(route);
+  let content;
+
+  if (panel && chartView) {
+    content = h(
+      'div',
+      { className: 'cora-my-stats-top-row' },
+      panel,
+      chartView
+    );
+  } else if (panel) {
+    content = panel;
+  } else if (chartView) {
+    content = chartView;
+  } else {
+    content = EmptyState('No data yet.', {
+      className: 'cora-my-stats-empty',
+    });
+  }
+
   return h(
     'main',
     { className: 'cora-my-stats' },
     h('h1', {}, 'My Stats'),
-    chart
-      ? GroupedBarChart(chart)
-      : EmptyState('No data yet.', { className: 'cora-my-stats-empty' })
+    content
   );
 }
 

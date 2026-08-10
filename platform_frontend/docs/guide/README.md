@@ -17,7 +17,7 @@ you are changing.
 | [Feature switches](feature-switches.md)                     | Hard-coded on/off constants, and how a feature is enabled by deleting one  |
 | [Testing](testing.md)                                       | Public seams, semantic DOM tests, and repository gates                     |
 | [In-memory flow runner](in-memory-flow-runner.md)           | Browser-free end-to-end domain and persistence journeys                    |
-| [Charts](charts.md)                                         | Pure grouped SVG charts, data contract, accessibility, and styling         |
+| [Charts](charts.md)                                         | Grouped SVG charts plus the feed-backed My Stats Case Type proportions     |
 
 ## Prerequisites
 

@@ -1,4 +1,5 @@
 // @ts-check
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
@@ -12,6 +13,10 @@ const { buildStatsRanges } =
   await import('../src/evaluators/stats-range-model.js');
 
 const FIXED_NOW = new Date(2026, 7, 10, 12);
+const CORA_STYLES = readFileSync(
+  new URL('../src/styles/cora-styles.css', import.meta.url),
+  'utf8'
+);
 
 /** @param {Record<string, unknown>} [overrides] */
 function dependencies(overrides = {}) {
@@ -49,6 +54,9 @@ test('my stats view: renders supplied chart data and omits the fallback', () => 
       chrome: makeChrome(),
       routes: {
         myStats: {
+          reportFeed: null,
+          ranges: buildStatsRanges(FIXED_NOW),
+          selectedRange: 'week',
           chart: {
             data: {
               groups: [
@@ -292,6 +300,184 @@ const envelope = {
   complete_through: '2026-08-08',
   rows: [],
 };
+
+/** @type {import('../src/services/report-feed-loader.js').ReportFeedEnvelope} */
+const countedEnvelope = {
+  ...envelope,
+  rows: [
+    { date: '2026-08-07', case_type: 'complaints', count: 4 },
+    { date: '2026-08-08', case_type: 'example-case-type', count: 4 },
+    { date: '2026-08-10', case_type: 'complaints', count: 100 },
+  ],
+};
+
+/** @param {Partial<any>} [overrides] */
+function viewState(overrides = {}) {
+  return /** @type {any} */ ({
+    chrome: makeChrome(),
+    routes: {
+      myStats: {
+        reportFeed: null,
+        ranges: buildStatsRanges(FIXED_NOW),
+        selectedRange: 'week',
+        ...overrides,
+      },
+    },
+  });
+}
+
+test('my stats view: a loaded feed with no selected-range counts has a panel empty state', () => {
+  const view = myStatsView(viewState({ reportFeed: envelope }));
+
+  assert.ok(view.querySelector('.cora-my-stats-case-type-panel'));
+  assert.equal(
+    view.querySelector('.cora-proportion-bars-empty')?.textContent,
+    'No data for this range.'
+  );
+  assert.equal(view.querySelector('.cora-my-stats-empty'), null);
+  assert.equal(view.querySelector('.cora-my-stats-top-row'), null);
+});
+
+test('my stats view: feed counts render manifest labels, humanized unknown labels, counts, and shares', () => {
+  const view = myStatsView(viewState({ reportFeed: countedEnvelope }));
+  const panel = view.querySelector('.cora-my-stats-case-type-panel');
+  const rows = panel?.querySelectorAll('.cora-proportion-bars-row') ?? [];
+  const bars = panel?.querySelectorAll('[role="progressbar"]') ?? [];
+
+  assert.ok(panel);
+  assert.equal(rows.length, 2);
+  assert.match(panel.textContent, /Complaints/);
+  assert.match(panel.textContent, /Example Case Type/);
+  assert.match(panel.textContent, /4/);
+  assert.equal(panel.textContent.includes('example-case-type'), false);
+  assert.equal(
+    /** @type {HTMLElement | undefined} */ (bars[0])?.style.width,
+    '50%'
+  );
+  assert.equal(
+    /** @type {HTMLElement | undefined} */ (bars[1])?.style.width,
+    '50%'
+  );
+  assert.equal(bars[0]?.getAttribute('aria-valuenow'), '50');
+  assert.equal(bars[1]?.getAttribute('aria-valuenow'), '50');
+  assert.equal(view.querySelector('.cora-my-stats-empty'), null);
+});
+
+test('my stats view: selected range changes recompute the feed-backed panel', () => {
+  const slice = createRouteSlice({}, context(), dependencies());
+  const loaded = slice.reducer(slice.initialState, {
+    type: 'report-feed/loaded',
+    reportFeed: {
+      ...envelope,
+      rows: [
+        { date: '2026-07-29', case_type: 'example-case-type', count: 2 },
+        { date: '2026-08-07', case_type: 'complaints', count: 4 },
+      ],
+    },
+  });
+  const selected = slice.reducer(loaded, {
+    type: 'my-stats/range-selected',
+    range: 'month',
+  });
+  const view = myStatsView(selected);
+
+  assert.equal(selected.routes.myStats.selectedRange, 'month');
+  assert.match(view.textContent, /Complaints/);
+  assert.match(view.textContent, /Example Case Type/);
+  assert.deepEqual(
+    Array.from(view.querySelectorAll('[role="progressbar"]')).map(
+      (bar) => Math.round(Number(bar.getAttribute('aria-valuenow')) * 100) / 100
+    ),
+    [66.67, 33.33]
+  );
+});
+
+test('my stats view: a feed without a chart renders the panel alone', () => {
+  const view = myStatsView(viewState({ reportFeed: countedEnvelope }));
+  const children = Array.from(view.childNodes);
+
+  assert.equal(view.querySelector('.cora-my-stats-top-row'), null);
+  assert.equal(
+    /** @type {HTMLElement | undefined} */ (children[1])?.className,
+    'cora-my-stats-case-type-panel'
+  );
+  assert.equal(view.querySelector('svg.cora-grouped-bar-chart'), null);
+});
+
+test('my stats view: feed and chart render in panel-then-chart order', () => {
+  const view = myStatsView(
+    viewState({
+      reportFeed: countedEnvelope,
+      chart: {
+        data: {
+          groups: [
+            {
+              key: 'week-one',
+              label: 'Week one',
+              marks: [{ key: 'settled', label: 'Settled', value: 4 }],
+            },
+          ],
+        },
+        config: { width: 240, height: 160, ariaLabel: 'Review counts' },
+      },
+    })
+  );
+  const topRow = view.querySelector('.cora-my-stats-top-row');
+
+  assert.ok(topRow);
+  assert.equal(
+    /** @type {HTMLElement | undefined} */ (topRow.childNodes[0])?.className,
+    'cora-my-stats-case-type-panel'
+  );
+  assert.equal(
+    /** @type {HTMLElement | undefined} */ (topRow.childNodes[1])?.tagName,
+    'svg'
+  );
+});
+
+test('my stats view: chart without a feed keeps the existing direct chart child', () => {
+  const view = myStatsView(
+    viewState({
+      chart: {
+        data: {
+          groups: [
+            {
+              key: 'week-one',
+              label: 'Week one',
+              marks: [{ key: 'settled', label: 'Settled', value: 4 }],
+            },
+          ],
+        },
+        config: { width: 240, height: 160, ariaLabel: 'Review counts' },
+      },
+    })
+  );
+
+  assert.equal(view.querySelector('.cora-my-stats-top-row'), null);
+  assert.equal(
+    /** @type {HTMLElement | undefined} */ (view.childNodes[1])?.tagName,
+    'svg'
+  );
+  assert.equal(view.querySelector('.cora-my-stats-case-type-panel'), null);
+});
+
+test('my stats layout: uses the two-column ratio only for the composed row and stacks responsively', () => {
+  const desktopRule = CORA_STYLES.match(
+    /\[data-cora-root\]\s+\.cora-my-stats-top-row\s*\{([^}]*)\}/
+  )?.[1];
+
+  assert.ok(desktopRule);
+  assert.match(desktopRule, /display:\s*grid/);
+  assert.match(desktopRule, /grid-template-columns:\s*1fr\s+2fr/);
+  assert.doesNotMatch(
+    CORA_STYLES,
+    /\.cora-my-stats-case-type-panel\s*\{[^}]*grid-template-columns/
+  );
+  assert.match(
+    CORA_STYLES,
+    /@media\s*\(max-width:\s*52rem\)[\s\S]*?\.cora-my-stats-top-row\s*\{[\s\S]*?grid-template-columns:\s*1fr/
+  );
+});
 
 /** @param {Partial<any>} [overrides] */
 function startTools(overrides = {}) {

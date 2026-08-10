@@ -78,17 +78,26 @@ Reviewers should be able to request the next available case to be assigned to th
 Feed from `Shared Documents/cora_report_feeds/my-stats/{bare-account}.txt`.
 The account filename is lower-cased after claims/domain reduction. A missing
 file means no report is available; `?mock=1` loads the canonical development
-fixture. A separate mapper can provide the route's optional grouped chart view
-model; the page then renders the reusable SVG grouped-bar chart. Solid marks
-represent settled values and hollow provisional marks preserve Report Feed
-provenance. The route now snapshots the four browser-calendar ranges (Week,
-Month, 3 months, and 12 months) and owns the selected range, defaulting to
-Week. This is state groundwork only: no range picker is rendered yet, and the
-page keeps “No data yet.” until a chart view model is present. The pure chart
+fixture. A loaded feed now also renders a Case Type proportion panel for the
+selected browser-calendar range. Feed dates are compared inclusively from the
+range start through yesterday, so today's rows are excluded; duplicate rows
+are aggregated, and only positive totals are shown. Slugs are resolved to
+display names through `case-types/manifest.js`, with unknown slugs humanized
+for presentation rather than exposed as raw identifiers. A missing feed and
+chart show “No data yet.”; a feed with no counts in the selected range keeps the
+panel and shows “No data for this range.”.
+
+The route still snapshots the four browser-calendar ranges (Week, Month, 3
+months, and 12 months) and owns the selected range, defaulting to Week. No
+range picker is rendered yet. A separate mapper can provide the existing
+`my-stats/chart-loaded` grouped chart view model; when present, the panel sits
+left of the chart, while chart-only rendering remains unchanged. The pure chart
 builder exposes each mark's full description, including its formatted value and
 provisional status, as SVG metadata, while the route mounts an HTML-over-SVG
 tooltip under the app root after commit. The same keyboard-focusable mark
-supports pointer hover and keyboard focus; Escape dismisses the tooltip.
+supports pointer hover and keyboard focus; Escape dismisses the tooltip. The
+Case Type panel reads only the feed: live-tail computation and feed-to-chart
+mapping remain separate deferred work.
 
 ### Team Stats page
 
