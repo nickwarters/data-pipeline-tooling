@@ -14,6 +14,7 @@ import {
   mergeWorstFirstWindow,
 } from '../src/services/action-centre-model.js';
 import { makeCaseRow, makePermissions } from './helpers/fixtures.js';
+import { CASE_STATUS } from '../src/lib/case-statuses.js';
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../src/services/permissions.js').Capabilities} Capabilities */
@@ -231,6 +232,112 @@ test('waitingInfo: singular day is not pluralised', () => {
     NOW
   );
   assert.equal(info.label, 'raised 1 day ago');
+});
+
+test('waitingInfo: an Actions In Progress row in Awaiting Frontline is judged against its remediationDueDate, not the cadence', () => {
+  const info = waitingInfo(
+    caseRow({
+      status: CASE_STATUS.ACTIONS_IN_PROGRESS,
+      awaitingSince: '2026-06-26T00:00:00Z', // 8 days ago, past the 7-day cadence
+      remediationDueDate: '2026-07-10',
+    }),
+    reason('awaitingFrontline'),
+    NOW
+  );
+  assert.equal(info.breached, false);
+  assert.equal(info.label, 'due in 6 days');
+  assert.equal(info.days, 8);
+});
+
+test('waitingInfo: an Actions In Progress row past its remediationDueDate is breached', () => {
+  const info = waitingInfo(
+    caseRow({
+      status: CASE_STATUS.ACTIONS_IN_PROGRESS,
+      awaitingSince: '2026-06-26T00:00:00Z',
+      remediationDueDate: '2026-07-01',
+    }),
+    reason('awaitingFrontline'),
+    NOW
+  );
+  assert.equal(info.breached, true);
+  assert.equal(info.label, '3 days over');
+});
+
+test('waitingInfo: an Actions In Progress row due today is not breached', () => {
+  const info = waitingInfo(
+    caseRow({
+      status: CASE_STATUS.ACTIONS_IN_PROGRESS,
+      awaitingSince: '2026-06-26T00:00:00Z',
+      remediationDueDate: '2026-07-04',
+    }),
+    reason('awaitingFrontline'),
+    NOW
+  );
+  assert.equal(info.breached, false);
+  assert.equal(info.label, 'due today');
+});
+
+test('waitingInfo: the remediationDueDate label is not pluralised for a single day', () => {
+  assert.equal(
+    waitingInfo(
+      caseRow({
+        status: CASE_STATUS.ACTIONS_IN_PROGRESS,
+        awaitingSince: '2026-06-26T00:00:00Z',
+        remediationDueDate: '2026-07-05',
+      }),
+      reason('awaitingFrontline'),
+      NOW
+    ).label,
+    'due in 1 day'
+  );
+  assert.equal(
+    waitingInfo(
+      caseRow({
+        status: CASE_STATUS.ACTIONS_IN_PROGRESS,
+        awaitingSince: '2026-06-26T00:00:00Z',
+        remediationDueDate: '2026-07-03',
+      }),
+      reason('awaitingFrontline'),
+      NOW
+    ).label,
+    '1 day over'
+  );
+});
+
+test('waitingInfo: an Actions In Progress row with no remediationDueDate falls back to the cadence rule', () => {
+  const info = waitingInfo(
+    caseRow({
+      status: CASE_STATUS.ACTIONS_IN_PROGRESS,
+      awaitingSince: '2026-06-26T00:00:00Z', // 8 days ago
+    }),
+    reason('awaitingFrontline'),
+    NOW
+  );
+  assert.equal(info.breached, true);
+  assert.equal(info.label, '8 days no reply');
+});
+
+test('waitingInfo: a Conversation-flagged row keeps the 7-day cadence', () => {
+  const breached = waitingInfo(
+    caseRow({
+      status: CASE_STATUS.IN_PROGRESS,
+      awaitingSince: '2026-06-27T00:00:00Z', // 7 days ago
+    }),
+    reason('awaitingFrontline'),
+    NOW
+  );
+  assert.equal(breached.breached, true);
+  assert.equal(breached.label, '7 days no reply');
+
+  const within = waitingInfo(
+    caseRow({
+      status: CASE_STATUS.IN_PROGRESS,
+      awaitingSince: '2026-06-28T00:00:00Z', // 6 days ago
+    }),
+    reason('awaitingFrontline'),
+    NOW
+  );
+  assert.equal(within.breached, false);
 });
 
 test('waitingLabel: awaiting frontline, review required, and appeals phrasing', () => {

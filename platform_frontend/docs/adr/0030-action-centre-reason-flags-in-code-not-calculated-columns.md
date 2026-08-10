@@ -118,6 +118,26 @@ as a reply — buys accuracy by teaching the flag a second vocabulary, and every
 clears on completion. What cadence the group should use for a Case in this state is a
 separate open question, not settled here.
 
+### Amendment — issue #514, 2026-08-10
+
+**The open cadence question from the previous amendment is now settled.** An
+`Actions In Progress` Case in the Awaiting Frontline group is judged against the
+`remediationDueDate` already stamped on the row at Send Actions — `waitingInfo`
+branches on status and reads the stored date, wording the chip "due in N days" /
+"due today" / "N days over".
+
+The alternative — passing the Case Type's remediation SLA through the existing
+`slaDays` seam — was rejected because it re-derives a deadline from a
+calendar-day cadence when a working-day date is already stored; the two can
+disagree across a bank holiday, and the stored date is the one the Remediation
+tab shows.
+
+**Consequences:** the per-Case-Type `actionCentreSlaDays` override does not
+apply to these rows (the stored date already encodes the Case Type's
+remediation SLA), Conversation-flagged rows keep the 7-day "no reply" cadence
+unchanged, and splitting the group into a separate remediation worklist
+remains open as a product question but is not needed for correctness.
+
 ## Context
 
 The dashboard Action Centre groups a Reviewer/Controls/Owner worklist by

@@ -45,6 +45,7 @@
  */
 
 import { APPEALS_ENABLED } from '../config/features.js';
+import { CASE_STATUS } from '../lib/case-statuses.js';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -110,6 +111,9 @@ export const ACTION_CENTRE_REASONS = [
     clockField: 'awaitingSince',
     flagField: 'awaitingResponsibleParty',
     filter: { awaitingResponsibleParty: true },
+    // The 7-day cadence and "no reply" wording apply to Conversation-flagged
+    // rows. An `Actions In Progress` row is judged and worded from its
+    // stored `remediationDueDate` instead — see `waitingInfo`.
     defaultSlaDays: 7,
     reviewerScoped: true,
     tailOnly: false,
@@ -325,11 +329,51 @@ function daysWaiting(caseRow, reason, now = new Date()) {
 }
 
 /**
+ * The waiting chip for an `Actions In Progress` Case in the Awaiting
+ * Frontline group: judged against the working-day `remediationDueDate`
+ * stamped on the row at Send Actions, not the reason's age-versus-cadence
+ * rule. The stored date is read, never re-derived from a cadence, so this
+ * chip and the Remediation tab can never disagree across a bank holiday.
+ * `days` stays the days waiting on the reason's own clock, so the age is
+ * still reported; only the wording and the breach judgement move to the
+ * due date.
+ *
+ * @param {CaseRow} caseRow
+ * @param {Reason} reason
+ * @param {Date} now
+ * @returns {{ days: number, label: string, breached: boolean }}
+ */
+function dueDateInfo(caseRow, reason, now) {
+  const due = new Date(
+    `${String(caseRow.remediationDueDate).slice(0, 10)}T00:00:00.000Z`
+  );
+  const overDays = Math.floor((now.getTime() - due.getTime()) / MS_PER_DAY);
+  const label =
+    overDays > 0
+      ? `${dayCount(overDays)} over`
+      : overDays === 0
+        ? 'due today'
+        : `due in ${dayCount(-overDays)}`;
+  return {
+    days: daysWaiting(caseRow, reason, now),
+    label,
+    breached: overDays > 0,
+  };
+}
+
+/**
  * The "waiting" chip for a Case in a reason group: its age, the reason-specific
  * label, and whether it has breached the SLA (drives the urgent styling and the
  * "Needs action now" emphasis). `slaDays` defaults to the reason's own
  * framework cadence; a caller that knows the Case's Case Type passes that Case
  * Type's cadence instead, and an absent one falls back here.
+ *
+ * An `Actions In Progress` Case in the Awaiting Frontline group is the one
+ * exception: it is judged against its stored `remediationDueDate` instead of
+ * this age-versus-cadence rule — the `slaDays` override does not apply to
+ * those rows, because the stored date already encodes the Case Type's
+ * remediation SLA in working days. Every other row keeps the cadence rule
+ * below.
  *
  * @param {CaseRow} caseRow
  * @param {Reason} reason
@@ -343,6 +387,13 @@ export function waitingInfo(
   now = new Date(),
   slaDays = reason.defaultSlaDays
 ) {
+  if (
+    reason.id === 'awaitingFrontline' &&
+    caseRow.status === CASE_STATUS.ACTIONS_IN_PROGRESS &&
+    caseRow.remediationDueDate
+  ) {
+    return dueDateInfo(caseRow, reason, now);
+  }
   const days = daysWaiting(caseRow, reason, now);
   return {
     days,
