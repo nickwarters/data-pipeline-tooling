@@ -137,7 +137,7 @@ test('chart tooltip uses one text-only overlay for hover and focus', () => {
   fireEvent(marks[0], 'pointerout');
   assert.equal(tooltip.hidden, true);
 
-  fireEvent(marks[0], 'focusin');
+  fireEvent(marks[0], 'pointerover');
   const escape = fireEvent(document, 'keydown', { key: 'Escape' });
   assert.equal(escape.defaultPrevented, true);
   assert.equal(tooltip.hidden, true);

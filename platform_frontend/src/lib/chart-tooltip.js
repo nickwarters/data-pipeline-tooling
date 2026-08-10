@@ -2,7 +2,7 @@
 
 const MARK_SELECTOR = '[data-cora-chart-mark="true"]';
 const MARK_ATTRIBUTE = 'data-cora-chart-mark';
-const MARK_VALUE_ATTRIBUTE = 'data-cora-chart-value';
+const MARK_DESCRIPTION_ATTRIBUTE = 'data-cora-chart-description';
 const TOOLTIP_CLASS = 'cora-chart-tooltip';
 const TOOLTIP_GAP = 8;
 const VIEWPORT_GUTTER = 8;
@@ -31,8 +31,10 @@ function isLiveMark(mark, svg) {
 
 /** @param {any} mark @returns {string|null} */
 function markDescription(mark) {
-  const value = mark?.getAttribute?.(MARK_VALUE_ATTRIBUTE);
-  return value === null || value === undefined ? null : String(value);
+  const description = mark?.getAttribute?.(MARK_DESCRIPTION_ATTRIBUTE);
+  return description === null || description === undefined
+    ? null
+    : String(description);
 }
 
 /** @param {any} mark @param {string} id */

@@ -412,13 +412,15 @@ function matches(n, sel) {
   const classParts = sel.split('.');
   if (classParts.length > 1) {
     const [tag, ...classes] = classParts;
-    return (
-      (!tag || tag === '*' || n.tagName.toLowerCase() === tag.toLowerCase()) &&
-      hasClasses(classes)
-    );
+    return (!tag || tag === '*' || matchesTag(n, tag)) && hasClasses(classes);
   }
-  if (sel.startsWith('.')) return hasClasses([sel.slice(1)]);
-  return sel === '*' || n.tagName.toLowerCase() === sel.toLowerCase();
+  return sel === '*' ? n.tagName !== '#text' : matchesTag(n, sel);
+}
+
+/** @param {StubEl} n @param {string} sel */
+function matchesTag(n, sel) {
+  if (n.namespaceURI === SVG_NAMESPACE) return n.tagName === sel;
+  return n.tagName.toLowerCase() === sel.toLowerCase();
 }
 
 /**

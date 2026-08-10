@@ -77,7 +77,7 @@ The returned root is named with `role="group"`. Each bar has its own stable
 key, `role="img"`, and `aria-label` containing its group, series, formatted
 value, and provisional status where applicable. Each mark rectangle also has
 `tabindex="0"` and the stable `data-cora-chart-mark="true"` hook with its full
-description in `data-cora-chart-value`. The per-mark SVG `<title>` is not
+description in `data-cora-chart-description`. The per-mark SVG `<title>` is not
 emitted: the HTML overlay replaces that native hover affordance while the
 mark's accessible name remains its `aria-label`. Legend `<title>` elements are
 retained. Group and mark keys let `core/render.js` move existing SVG nodes when

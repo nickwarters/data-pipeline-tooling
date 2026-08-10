@@ -62,7 +62,7 @@ key-sorted series slots, and sparsifies large x-axis label sets.
 
 The pure SVG builder exposes each mark's full description, including its
 formatted value and provisional status, as data metadata on the focusable
-rectangle (`data-cora-chart-mark` and `data-cora-chart-value`). The my-stats
+rectangle (`data-cora-chart-mark` and `data-cora-chart-description`). The my-stats
 route uses its custom render seam to mount one HTML `[role="tooltip"]` under
 the app root after the SVG is committed. The controller delegates pointer and
 keyboard focus events from the SVG, keeps the focused mark ahead of a hovered
