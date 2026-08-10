@@ -78,6 +78,24 @@ test('Case Type breakdown returns an empty shape when no positive rows match', (
   });
 });
 
+test('Case Type breakdown returns the empty shape when rows is not an array', () => {
+  assert.deepEqual(
+    buildStatsCaseTypeBreakdown(/** @type {any} */ (undefined), week),
+    { rows: [], total: 0 }
+  );
+  assert.deepEqual(
+    buildStatsCaseTypeBreakdown(/** @type {any} */ (null), week),
+    {
+      rows: [],
+      total: 0,
+    }
+  );
+  assert.deepEqual(
+    buildStatsCaseTypeBreakdown(/** @type {any} */ ({ rows: [] }), week),
+    { rows: [], total: 0 }
+  );
+});
+
 test('Case Type breakdown calculates one-type and equal two-type shares', () => {
   const one = buildStatsCaseTypeBreakdown(
     [row('2026-08-04', 'complaints', 7)],

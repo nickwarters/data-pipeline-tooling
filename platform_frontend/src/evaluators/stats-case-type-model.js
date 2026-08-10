@@ -67,6 +67,8 @@ function labelFor(slug) {
  * @returns {StatsCaseTypeBreakdown}
  */
 export function buildStatsCaseTypeBreakdown(rows, range) {
+  if (!Array.isArray(rows)) return emptyBreakdown();
+
   /** @type {Map<string, number>} */
   const totalsBySlug = new Map();
 

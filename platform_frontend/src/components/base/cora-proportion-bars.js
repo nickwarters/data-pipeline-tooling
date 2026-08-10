@@ -38,7 +38,7 @@ function proportionRow({ key, label, count, share }) {
   const width = `${percentage}%`;
   const bar = h('div', {
     className: 'cora-proportion-bars-bar',
-    key: `${key}-${width}`,
+    style: `width: ${width}`,
     role: 'progressbar',
     'aria-valuemin': 0,
     'aria-valuemax': 100,
@@ -46,12 +46,6 @@ function proportionRow({ key, label, count, share }) {
     'aria-label': description,
     'aria-valuetext': description,
   });
-
-  // h() deliberately keeps inline style handling out of its generic prop
-  // contract. The detached bar owns this one visual value before it is handed
-  // to the renderer.
-  bar.setAttribute('style', `width: ${width}`);
-  if (bar.style && typeof bar.style === 'object') bar.style.width = width;
 
   return h(
     'li',

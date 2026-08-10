@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
 import { makeChrome } from './helpers/fixtures.js';
+import { getProps } from '../src/lib/html.js';
 
 installDom();
 
@@ -351,16 +352,69 @@ test('my stats view: feed counts render manifest labels, humanized unknown label
   assert.match(panel.textContent, /4/);
   assert.equal(panel.textContent.includes('example-case-type'), false);
   assert.equal(
-    /** @type {HTMLElement | undefined} */ (bars[0])?.style.width,
-    '50%'
+    getProps(/** @type {HTMLElement} */ (bars[0]))?.style,
+    'width: 50%'
   );
   assert.equal(
-    /** @type {HTMLElement | undefined} */ (bars[1])?.style.width,
-    '50%'
+    getProps(/** @type {HTMLElement} */ (bars[1]))?.style,
+    'width: 50%'
   );
   assert.equal(bars[0]?.getAttribute('aria-valuenow'), '50');
   assert.equal(bars[1]?.getAttribute('aria-valuenow'), '50');
   assert.equal(view.querySelector('.cora-my-stats-empty'), null);
+});
+
+test('my stats route render owns the chart tooltip lifecycle with a loaded feed and chart side by side', () => {
+  const routeContext = context();
+  const slice = createRouteSlice(
+    {},
+    routeContext,
+    dependencies({ loadReportFeed: async () => null })
+  );
+  const container = document.createElement('main');
+  const tools = /** @type {any} */ ({
+    render,
+    context: routeContext,
+  });
+
+  const feedLoaded = slice.reducer(slice.initialState, {
+    type: 'report-feed/loaded',
+    reportFeed: countedEnvelope,
+  });
+  const state = slice.reducer(feedLoaded, {
+    type: 'my-stats/chart-loaded',
+    chart: {
+      data: {
+        groups: [
+          {
+            key: 'week-one',
+            label: 'Week one',
+            marks: [{ key: 'settled', label: 'Settled', value: 4 }],
+          },
+        ],
+      },
+      config: { width: 240, height: 160, ariaLabel: 'Review counts' },
+    },
+  });
+
+  slice.render(container, state, tools);
+
+  assert.ok(container.querySelector('.cora-my-stats-top-row'));
+  assert.ok(container.querySelector('svg.cora-grouped-bar-chart'));
+  assert.equal(routeContext.appEl.querySelectorAll('div').length, 1);
+
+  slice.render(container, state, tools);
+  assert.ok(container.querySelector('svg.cora-grouped-bar-chart'));
+  assert.equal(routeContext.appEl.querySelectorAll('div').length, 1);
+
+  const dispose = slice.start({
+    context: routeContext,
+    signal: new AbortController().signal,
+    isActive: () => true,
+    dispatch() {},
+  });
+  dispose();
+  assert.equal(routeContext.appEl.querySelectorAll('div').length, 0);
 });
 
 test('my stats view: selected range changes recompute the feed-backed panel', () => {
