@@ -8,8 +8,8 @@ A **Reviewer Manager**'s view is not a wider **Reviewer** view. It gets its own
 **Report Feed** — `teams/{manager}.txt` beside `my-stats/{account}.txt` —
 grained at `date × case_type × reviewer_account`, reduced from the *same* gold
 aggregate as the per-Reviewer files, and attributed to a manager through the
-**Staff Hierarchy** rather than through the Case row's frozen
-`assigned_reviewer_manager_name`.
+**Staff Hierarchy** rather than through the Case row's allocation-time
+`assigned_reviewer_manager` cache.
 
 Extends [ADR-0018](0018-report-feeds-published-locally-delivered-outside-the-framework.md),
 which defined the Report Feed envelope and its local-publication rule; the
@@ -17,7 +17,9 @@ consumer side is
 [ADR-0049](../../platform_frontend/docs/adr/0049-team-stats-renders-the-team-report-feed.md).
 It deliberately departs from the reporting half of the review platform's
 [ADR-0038](../../platform_frontend/docs/adr/0038-manager-fields-split-reporting-snapshot-vs-live-access-role.md);
-that departure is the substance of the second half of this decision.
+that departure is the substance of the second half of this decision. The
+platform may stamp an allocation-time `assignedReviewerManager` cache for its
+bounded live tail, but that row value is not the authority for settled history.
 
 ## Why a second artifact rather than a column
 
@@ -50,14 +52,17 @@ reverse lookup as unbounded — and the Sync store lands only what the Case list
 holds. So the choice is between that table and the Case row's
 `assigned_reviewer_manager_name`, and the row loses on two counts.
 
-It is **not written**. Nothing in the review platform's `src/` sets the field
-today; ADR-0038's follow-ups 1–3 are unbuilt. Every Case would attribute to the
-literal `(unassigned)` fill.
+It is **not the authority for this report**. The review platform now writes an
+allocation-time `assignedReviewerManager` cache from its User Profile manager
+lookup when a Reviewer claims a Case, but that cache is operational input for
+bounded live queries. It can be explicitly `null` when the lookup is absent or
+fails, and it is not frozen into a Reportable or planned reporting snapshot.
+Settled history continues to join through the Staff Hierarchy.
 
-It is **unrecoverable for history**. Even once written, the field freezes at
-Reportable, so every Case already Reportable before that lands is permanently
-unattributable — the org chart of that period is not reconstructible from
-anything we hold.
+The Case row is therefore **not a historical fallback**. A Case already
+Reportable, or one whose allocation lookup failed, remains attributable here
+only when the Staff Hierarchy supplies the relevant relationship; the cache's
+empty value does not become an `(unassigned)` history bucket.
 
 Joining costs nothing: `login_name` is already the canonical Reviewer key from
 `CONTEXT.md` — the lower-cased bare account — so the join is a case-fold, not a
@@ -96,11 +101,11 @@ flagged exception with that destination attached.
   narrower name written when Selection was the only consumer. Collapsed to one
   term for one reason: two org-chart sources in one system drift, and a reader
   who assumes they agree will be wrong.
-- **The Case row's manager field is expected to be written from this same
-  table.** Not in this decision's scope, but the consumer page renders both the
-  hierarchy-attributed history and a live tail filtered by the Case row field.
-  One source is what stops those two halves drawing a manager's team two
-  different ways on one chart.
+- **The Case row's manager field is a live-tail cache, not a second history
+  authority.** The allocation surface writes a point-in-time User Profile
+  manager so the browser can serve the bounded live tail. The settled bars
+  still come from this Staff Hierarchy, and any future reconciliation of the
+  cache is conditional work rather than part of this feed decision.
 - **The envelope gains no roster array.** An earlier design carried the team
   roster in the file so the page could tail without the Case row field; the
   consumer decision went the other way, so the envelope stays as ADR-0018

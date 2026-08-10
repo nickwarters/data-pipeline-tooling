@@ -16,11 +16,13 @@ export const people = [
     loginName: 'user-reviewer',
     displayName: 'Alex Reviewer',
     email: 'alex.reviewer@contoso.com',
+    manager: 'user-rm',
   },
   {
     loginName: 'user-reviewer-2',
     displayName: 'Zara Reviewer',
     email: 'zara.reviewer@contoso.com',
+    manager: 'user-rm',
   },
   {
     loginName: 'areviewer',

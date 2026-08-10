@@ -187,9 +187,11 @@
  *
  * `assignedReviewerManager` and `responsiblePartyManager` denormalise two
  * org-chart edges onto the row and are **not** equivalent:
- * `assignedReviewerManager` is a reporting snapshot — the query key behind
- * `#/team-cases` and `#/my-team`, frozen at Reportable — while
- * `responsiblePartyManager` is a written record whose Section access Role is to
+ * `assignedReviewerManager` is an allocation-time operational cache and query
+ * input behind `#/team-cases` and `#/my-team`; it is not frozen into a
+ * Reportable or planned reporting snapshot. Settled history remains Staff
+ * Hierarchy authoritative. `responsiblePartyManager` is a written record whose
+ * Section access Role is to
  * be resolved live from the directory, since that Role carries `edit` on the
  * Conversation.
  *

@@ -494,14 +494,15 @@ export function resolveRoles(caseRow, userId, capabilities) {
     roles.push('otherReviewer');
   }
   // "Reviewer X is managed by Reviewer Manager Y" is denormalised onto the Case
-  // row (CONTEXT.md), so the role resolves from that field rather than the
-  // platform-wide group: a manager reads the Cases of the Reviewers they manage,
-  // not every Case of every Case Type.
+  // row (CONTEXT.md) as the allocation-time cache/query input, so the role
+  // resolves from that field rather than the platform-wide group: a manager
+  // reads the Cases of the Reviewers they manage, not every Case of every Case
+  // Type. The field is not the authority for settled reporting; that remains
+  // the Staff Hierarchy.
   //
-  // The field is a reporting snapshot, frozen at Reportable, and resolving a
-  // read-only Role from it is deliberate — unlike the Responsible Party Manager
-  // below, which is to resolve live from the directory because that Role
-  // carries `edit` on the Conversation.
+  // Resolving this read-only Role from the allocation cache is deliberate —
+  // unlike the Responsible Party Manager below, which is to resolve live from
+  // the directory because that Role carries `edit` on the Conversation.
   if (caseRow.assignedReviewerManager === userId) {
     roles.push('reviewerManager');
   }

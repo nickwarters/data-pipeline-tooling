@@ -628,7 +628,8 @@ test('HttpSharePointClient: patchCase writes status, answers and conversation to
  * A fake backing a Responsible Party write: the digest, an EnsureUser that
  * answers with `ensured`, the PATCH itself, and the confirmation re-read.
  *
- * @param {Response | null} ensured the EnsureUser response, or null to fail it
+ * @param {Response | (() => Response) | null} ensured the EnsureUser response,
+ *   or null to fail it
  */
 function personWriteFetch(ensured) {
   return makeFetch([
@@ -638,7 +639,9 @@ function personWriteFetch(ensured) {
     },
     {
       when: (c) => c.url.endsWith('/_api/web/ensureuser'),
-      respond: () => ensured ?? new Response('no such user', { status: 500 }),
+      respond: () =>
+        (typeof ensured === 'function' ? ensured() : ensured) ??
+        new Response('no such user', { status: 500 }),
     },
     {
       when: (c) => c.method === 'PATCH',
@@ -863,6 +866,39 @@ test('HttpSharePointClient: writing the Assigned Reviewer resolves the account t
   );
 });
 
+test('HttpSharePointClient: allocation writes Reviewer and manager as Person ids in one PATCH', async () => {
+  let nextPersonId = 14;
+  const { fetch, calls } = personWriteFetch(() =>
+    ensureUserResponse(nextPersonId++)
+  );
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+    now: frozenNow,
+  });
+
+  const result = await client.patchCase(
+    'case-1',
+    { assignedReviewer: 'jsmith', assignedReviewerManager: 'manager-1' },
+    '"v1"',
+    { listName: 'Cases-ExampleReview' }
+  );
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(
+    calls
+      .filter((call) => call.url.endsWith('/_api/web/ensureuser'))
+      .map((call) => JSON.parse(String(call.body)).logonName),
+    ['i:0#.w|CONTOSO\\jsmith', 'i:0#.w|CONTOSO\\manager-1']
+  );
+  assert.equal(calls.filter((call) => call.method === 'PATCH').length, 1);
+  assert.deepEqual(patchBody(calls), {
+    AssignedReviewerId: 14,
+    AssignedReviewerManagerId: 15,
+    AssignedAt: FROZEN_ASSIGNMENT,
+  });
+});
+
 test('HttpSharePointClient: clearing the Assigned Reviewer writes null, not an empty account', async () => {
   const { fetch, calls } = personWriteFetch(ensureUserResponse(14));
   const client = new HttpSharePointClient({
@@ -883,6 +919,33 @@ test('HttpSharePointClient: clearing the Assigned Reviewer writes null, not an e
     String(calls.find((c) => c.method === 'PATCH')?.body)
   );
   assert.equal(body.AssignedReviewerId, null);
+});
+
+test('HttpSharePointClient: allocation with a null manager omits manager EnsureUser and writes explicit null', async () => {
+  const { fetch, calls } = personWriteFetch(ensureUserResponse(14));
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+    now: frozenNow,
+  });
+
+  const result = await client.patchCase(
+    'case-1',
+    { assignedReviewer: 'jsmith', assignedReviewerManager: null },
+    '"v1"',
+    { listName: 'Cases-ExampleReview' }
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(
+    calls.filter((call) => call.url.endsWith('/_api/web/ensureuser')).length,
+    1
+  );
+  assert.deepEqual(patchBody(calls), {
+    AssignedReviewerId: 14,
+    AssignedReviewerManagerId: null,
+    AssignedAt: FROZEN_ASSIGNMENT,
+  });
 });
 
 const FROZEN_ASSIGNMENT = '2026-08-01T09:30:00.000Z';

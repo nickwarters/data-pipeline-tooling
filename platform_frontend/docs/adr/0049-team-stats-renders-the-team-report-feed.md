@@ -10,7 +10,8 @@ and the manager-side twin of
 [ADR-0048](./0048-my-stats-renders-a-report-feed-with-a-live-tail.md). Corrects
 one sentence of [ADR-0038](./0038-manager-fields-split-reporting-snapshot-vs-live-access-role.md)'s
 reporting half by naming the Staff Hierarchy, not the User Profile Service, as
-the intended writer of `assignedReviewerManager`.
+the authority for settled history; the User Profile Service only populates the
+platform's allocation-time cache.
 
 ## Context
 
@@ -55,27 +56,25 @@ org-chart sources drawn adjacent would make a recent mover appear in one and not
 the other, and would spend ADR-0048's rule 2 — _"solid versus hollow encodes
 provenance, and nothing else"_ — on a second, unstated meaning.
 
-What makes it sound is that **the Case row's `assignedReviewerManager` converges
-on the Staff Hierarchy**, in two steps that are worth keeping distinct. The
-allocation surface stamps it from the **User Profile Service** in the same PATCH
-that names the Reviewer — the lookup a browser can actually perform. A daily
-reconciliation then rewrites any row whose manager disagrees with
-`current_hierarchy`, which is the authority.
+What makes it sound is that **the Case row's `assignedReviewerManager` is
+populated at allocation time**, while the two sources remain distinct. The
+allocation surface resolves the current Reviewer's manager from the **User
+Profile Service** and stamps it in the same PATCH that names the Reviewer — the
+lookup a browser can actually perform. That value is an operational cache for
+the bounded live tail and may be explicitly `null` when the lookup is absent or
+fails; it is not frozen into a Reportable or planned reporting snapshot.
 
-So drift is **bounded, not eliminated**, and the bound is the reconciliation
-interval. Where AD and the hierarchy disagree about one Reviewer, that
-Reviewer's Cases can be attributed one way in the hollow bars and another in the
-solid ones for at most a day. That is a stated inaccuracy of the same species as
-ADR-0048's working-day average — consistent for everyone, exact for nobody — and
-it is a different thing entirely from the unbounded version, where a Case
-allocated under one manager keeps that attribution until it is Reportable.
+The solid bars remain attributed by the Staff Hierarchy, which is the authority
+for settled history. The hollow bars are filtered by the Case-row cache, so a
+legacy row or a failed allocation lookup can leave the live tail empty without
+changing the settled attribution. A future reconciliation could compare the
+cache with `current_hierarchy` if measured drift justifies it, but no such
+repair is current behavior.
 
-Neither step is in this decision's scope and neither is built. Until the stamp
-exists the hollow bars are empty while the solid ones are not, which on this
-page looks like a team that stopped working on Friday. The page is therefore not
-shippable before the stamp, and this ADR is the record of why — a future reader
-finding the two-source split and "fixing" it by re-attributing the tail would be
-undoing the thing that holds the chart together.
+The allocation stamp is now part of the platform surface. The staged page still
+awaits the existing Report Feed and live-tail follow-ups #478, #471, and #472;
+this ADR does not make a reconciliation job a prerequisite or invite a future
+reader to re-attribute settled history through the Case row.
 
 The rejected alternative — carry the roster in the envelope and tail with
 `anyOf` over it — needs no unbuilt write and keeps one definition of team by
@@ -116,10 +115,10 @@ account ids when the lookup fails. Names stay out of the artifact.
 
 ## Consequences
 
-- **The page is blocked on a write in another layer.** Not on its own
-  rendering, and not on the pipeline: on `assignedReviewerManager` being
-  written from the Staff Hierarchy. Shipping before that yields a chart whose
-  recent days are permanently empty.
+- **The live tail depends on an operational cache.** Allocation writes
+  `assignedReviewerManager` from the User Profile lookup, but unresolved or
+  legacy rows can still be absent from the hollow bars. This does not change
+  the Staff Hierarchy attribution of settled history.
 - **Two manager pages will invite consolidation.** They answer different
   questions from different sources on different cadences, and merging them
   recreates the bundled sentence this decision unbundled.

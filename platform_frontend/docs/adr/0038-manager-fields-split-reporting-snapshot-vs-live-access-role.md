@@ -1,4 +1,4 @@
-# 38. The two manager fields split: `assignedReviewerManager` is a reporting snapshot, `responsiblePartyManager` is resolved live
+# 38. The two manager fields split: `assignedReviewerManager` is an allocation cache, `responsiblePartyManager` is resolved live
 
 Date: 2026-07-26
 
@@ -11,11 +11,13 @@ Accepted — amends [ADR-0011](./0011-section-level-role-based-access.md) and
 [ADR-0022](./0022-two-axis-role-model.md)'s amendment (Responsible
 Party Manager reads are not, in fact, query-filtered by the Case row field
 today). [ADR-0012](./0012-outcome-snapshot-at-completion-for-reporting.md)'s
-freeze rationale is extended to one more column, unchanged in substance.
+freeze rationale remains applicable to the Outcome/reporting columns; this ADR
+does not extend it to the allocation cache.
 
-This ADR is a decision about **semantics and mechanism**. It changes no code by
-itself; the work it implies is listed in Consequences and is deliberately not
-done here (#501).
+This ADR is a decision about **semantics and mechanism**. The allocation-time
+Reviewer-manager stamp is now implemented; repair-on-touch, reconciliation and
+any Reportable freeze remain conditional future work, not behavior promised by
+this ADR.
 
 ## Context
 
@@ -74,29 +76,31 @@ row means a _former_ manager keeps posting rights on a live thread and the
 current one has none. That is categorically different from a wrong report row,
 and it is new — before ADR-0037 the Role was read-only everywhere it appeared.
 
-### The app manufactures drift on its own
+### Allocation records an operational cache
 
 This is not only an HR-reorg problem. The self-allocation claim in
-`src/pages/cora-dashboard.js` PATCHes:
+`src/pages/cora-dashboard.js` now resolves the current Reviewer's manager and
+PATCHes both fields together:
 
 ```js
 {
-  assignedReviewer: tools.context.chrome.currentUser.id;
+  assignedReviewer: tools.context.chrome.currentUser.id,
+  assignedReviewerManager: resolvedManagerOrNull
 }
 ```
 
-— the Reviewer and nothing else. The moment a Reviewer picks up an unassigned
-Case, the Case's `assignedReviewerManager` is whatever the row was created with,
-which for an unallocated Case is nothing meaningful. No writer anywhere in
-`src/` sets either manager field. The first drift is introduced by the app on
-its own first write, before any org chart moves.
+The lookup is an allocation-time operational cache for the bounded live team
+query and the row-scoped Reviewer Manager Role. A failed or unusable lookup
+writes explicit `null`, so stale candidate data is never carried into a claim.
+The cache is not the authority for settled history: the Staff Hierarchy remains
+the source for the planned Report Feed.
 
 ### No detection
 
-There is no reconciliation pass, no drift report, and no signal anywhere in the
-app. Each report is internally consistent, so neither the outgoing nor the
-incoming manager sees a discrepancy: the Case simply stays in one queue and
-never appears in the other.
+There is no repair-on-touch or reconciliation pass, no drift report, and no
+signal anywhere in the app. Existing rows can therefore remain empty or stale;
+the allocation stamp fixes the app's own claim path but does not rewrite the
+long tail.
 
 ### The plan of record, and why it needs writing down
 
@@ -132,9 +136,10 @@ explain to the user whose access it decides.
    list to provision, plus a new hand-maintained artifact that drifts from the
    directory exactly as the Case row does. It moves the staleness rather than
    removing it.
-4. **Hybrid: denormalise, but repair on touch.** Keep the field for query speed,
-   treat it as a cache, refresh it whenever the app already writes the row,
-   reconcile the long tail on a schedule. Strong for the reporting field. On its
+4. **Hybrid: denormalise, with future repair on touch.** Keep the field for
+   query speed and treat it as a cache. A future change could refresh it when
+   the app already writes the row and, if measured drift justifies it,
+   reconcile the long tail on a schedule. That is not current behavior. On its
    own it is weak for the access-control field: a Case nobody touches is exactly
    the Case where a stale posting right survives longest, and "touch" is a
    Reviewer-side event while the drifting relationship is frontline-side.
@@ -156,37 +161,31 @@ reporting field) and 2 (for the access-control field).
 |               | `assignedReviewerManager`                                             | `responsiblePartyManager`                           |
 | ------------- | --------------------------------------------------------------------- | --------------------------------------------------- |
 | Purpose       | Reporting / query key                                                 | Section access Role                                 |
-| Semantics     | **Historical**: current while `In-progress`, frozen at **Reportable** | **Current**: always resolved live                   |
-| Authority     | The Case row column                                                   | The directory, at page load                         |
-| Mechanism     | Denormalised cache, repaired on touch                                 | Read-time resolution                                |
-| Stored column | Authoritative                                                         | Retained as a written record, **not** authoritative |
+| Semantics     | **Operational**: allocation-time cache/query input                   | **Current**: always resolved live                   |
+| Authority     | Case row for live queries; Staff Hierarchy for settled history        | The directory, at page load                         |
+| Mechanism     | Allocation-time lookup and same-PATCH stamp                           | Read-time resolution                                |
+| Stored column | Operational input, not a frozen reporting snapshot                   | Retained as a written record, **not** authoritative |
 
-### `assignedReviewerManager` — a reporting snapshot, repaired on touch
+### `assignedReviewerManager` — an allocation-time cache, with future repair conditional
 
 The column stays, the `$filter` stays, and `#/team-cases` / `#/my-team` keep
 their one-query-per-list shape. What changes is that the field acquires a
-**defined meaning and a defined freeze point**, and the app becomes its writer:
+defined operational meaning, and the allocation surface becomes its writer:
 
-- **While the Case is `In-progress`, the field means "who manages the Assigned
-  Reviewer now".** The app writes it in the same PATCH that writes
-  `assignedReviewer` — starting with the self-allocation claim in
-  `cora-dashboard.js`, which today writes the reviewer alone — and refreshes it
-  when the Case is opened and the resolved manager differs from the stored one.
-  The resolution is a single forward lookup for one user, on the User Profile
-  Service `GetPropertiesFor` call the client already makes in `resolveUsers`
-  (`src/services/http-sharepoint-client.js`). It is bounded and it is on a page
-  the app is loading anyway.
-- **At the Reportable milestone the field freezes**, stamped by
-  `CaseMachine._reportableSnapshot` (`src/lib/case-machine.js`) alongside
-  `outcomeAtCompletion`, `hadRemediation` and `questionBankVersion`, and is never
-  rewritten afterwards.
-- **The long tail is accepted, not solved.** A Case that is touched by nobody
-  between a reorg and its Reportable milestone freezes with a stale manager. That
-  residual is what the scheduled job was buying, and it is a _reporting_ error of
-  bounded size on a shrinking window. We do not build the job now. If the
-  residual proves material in practice, a bounded reconciliation is a separate
-  decision with real numbers behind it rather than a speculative second
-  deployable.
+- **At allocation, the field means "the manager resolved for the Assigned
+  Reviewer at claim time".** The app writes it in the same PATCH that writes
+  `assignedReviewer`, starting with the self-allocation claim in
+  `cora-dashboard.js`. The lookup is one per allocation request, reused across
+  candidate attempts; a missing, rejected or unusable result writes explicit
+  `null`, and a manager-side write failure can fall back to the same null write.
+- **There is no Reportable freeze.** The field remains an operational cache for
+  bounded live queries and the row-scoped Reviewer Manager Role. Settled history
+  and the planned Report Feed remain Staff Hierarchy authoritative; the Case row
+  is not a historical reporting snapshot.
+- **Repair-on-touch and reconciliation are future, conditional work.** Existing
+  rows, rows allocated before this stamp, and rows whose lookup failed may be
+  empty or stale. A future repair or reconciliation policy would require a
+  separate decision based on observed drift; none is built or implied here.
 
 ### `responsiblePartyManager` — the Role is resolved live; the column is a record
 
@@ -208,37 +207,33 @@ Three things make this cheap here and not in the reports:
   sets it before Send Actions and it cannot change after. So the identity whose
   manager we resolve is stable; only the manager edge moves.
 
-The stored column is **retained and written** — set when the Responsible Party is
-set, refreshed on the same repair-on-touch rule — because it is the audit record
-of who was recorded as manager, and because it is the query key a future
-Responsible Party Manager report will need. It simply stops deciding access. If
-that report is built, the column is governed by the reporting half of this ADR,
-not the access-control half.
+The stored column is **retained as a record** and may be written by a future
+Responsible Party assignment or repair policy, because it is the audit record of
+who was recorded as manager and could be the query key a future Responsible
+Party Manager report needs. No repair-on-touch policy is current behavior. The
+column simply stops deciding access. If that report is built, its semantics need
+their own decision rather than being inferred from this access-control rule.
 
 Consistent with [ADR-0010](./0010-auth-and-permissions.md), none of this is a
 security boundary: SharePoint list ACLs are. Live resolution makes the UI _honest_
 about who may post; it does not authorise anything.
 
 `assignedReviewerManager` continues to resolve the `reviewerManager` Role from
-the row, as ADR-0037 decided. That Role is `read-only` everywhere it appears, so
-the snapshot semantics are the correct ones for it too: a manager reads the Cases
-their team worked, including the ones their team worked before the reorg.
+the row, as ADR-0037 decided. That Role is `read-only` everywhere it appears,
+so the allocation cache is a bounded live-query/access input; it does not turn
+the row into settled reporting history. The Staff Hierarchy remains the
+authority for that history.
 
 ### Question 1 — historical or current? Different answers per field
 
 **This is the crux, and the two fields genuinely differ.**
 
-**`assignedReviewerManager`: historical, frozen at Reportable.** A completed Case
-belongs, permanently, to the manager who owned the Reviewer while the work was
-done. Re-attributing it to a new manager would make last month's completed-volume
-report change shape this month — precisely the failure ADR-0012 exists to
-prevent, and for the same reason: a management report should say what was true at
-the time, not the result of replaying today's org chart against yesterday's work.
-Freezing at **Reportable** rather than `Completed` follows ADR-0023 and ADR-0012's
-amendment, so all of a Case's historical stamps share one milestone. Before that
-milestone the field must be _current_, because the live-queue half of the same
-report (outstanding, overdue, workload) is a statement about who is accountable
-**now**.
+**`assignedReviewerManager`: operational, populated at allocation.** The row
+records the manager resolved when the Reviewer claimed the Case so bounded live
+team queries and the row-scoped Reviewer Manager Role have a usable input. It is
+not frozen at **Reportable**, and it is not the authority for settled history:
+the Staff Hierarchy owns that attribution. Reconciliation or other repair is a
+future, conditional choice rather than current behavior.
 
 **`responsiblePartyManager`: current, always, with no historical form.** A
 permission is a claim about the present tense. A frozen permission is a former
@@ -283,8 +278,9 @@ not by code. **No.**
   `evaluateAccess`, and `remediationAudience` resolves reviewer-side-wins. A user
   holding both gets a defined, safe result.
 - Under this ADR the two relationships no longer share a mechanism at all, so
-  "both" stops being a single coherent anomaly class: one side is a frozen column
-  on a Case row, the other is a live directory edge.
+  "both" stops being a single coherent anomaly class: one side is an
+  allocation-time cache column on a Case row, the other is a live directory
+  edge.
 - The app has no roster to check it against. `isReviewerManager` comes from
   membership of the `Reviewer Managers` SharePoint group (`permissions.js`);
   checking the invariant means crawling group membership for every user named in
@@ -302,14 +298,14 @@ of Cases whose stored manager differs from the resolved one.
 - The access-control field becomes correct by construction. A stale row can no
   longer grant a former manager posting rights, and no scheduled process stands
   between a reorg and the permission it changes.
-- The reporting field keeps its one-`$filter`-per-list query shape; ADR-0031's
-  bounded-query model is untouched.
+- The allocation field keeps its one-`$filter`-per-list query shape; ADR-0031's
+  bounded-query model is untouched, while settled reporting remains hierarchy-
+  attributed.
 - Both fields acquire a stated meaning. "Who is this Case's reviewer manager?"
-  now has one answer that depends on the Case's status, and it is written down.
+  has an operational allocation value for live reads, while the settled-history
+  answer comes from the Staff Hierarchy.
 - No second deployable, no new SharePoint list, no new auth surface, no ETag race
   against `SaveQueue`.
-- Historical reporting gains the same freeze guarantee the Outcome already has,
-  at the same milestone.
 
 **Negative**
 
@@ -320,28 +316,29 @@ of Cases whose stored manager differs from the resolved one.
   _permission_. It must degrade honestly: if the manager lookup fails, the Role
   is not granted (fail closed) rather than falling back to the stale column,
   which would reintroduce exactly the defect being fixed.
-- Repair-on-touch means the app writes the Case row for a reason unrelated to the
-  Reviewer's work, so an opened-and-abandoned Case can produce a version-history
-  entry. Cheap, but not invisible.
-- The long tail of untouched Cases is knowingly left stale until Reportable. We
-  are choosing a bounded reporting error over a scheduled writer.
+- A future repair-on-touch would write the Case row for a reason unrelated to the
+  Reviewer's work, so an opened-and-abandoned Case could produce a version-history
+  entry. That trade-off is not chosen by this change.
+- The long tail of untouched or previously allocated Cases can remain empty or
+  stale. Reconciliation is conditional future work, not a scheduled writer the
+  current app promises.
 
 **Implied follow-up work** (to be raised as separate tickets; not done here)
 
-1. **Write the reviewer's manager alongside the reviewer.** The self-allocation
-   claim in `src/pages/cora-dashboard.js` PATCHes `assignedReviewer` alone; it
-   must also set `assignedReviewerManager`. Any future reassignment surface
-   carries the same obligation.
+1. ~~**Write the reviewer's manager alongside the reviewer.**~~ The
+   self-allocation claim now resolves the manager once per allocation request
+   and writes `assignedReviewerManager` in the same PATCH, failing closed to
+   explicit `null`; any future reassignment surface carries the same obligation.
 2. ~~**Add manager resolution to the `SharePointClient` interface** — a
    `resolveManagers(accountNames)` alongside `resolveUsers`, reading the User
    Profile `Manager` property from the `GetPropertiesFor` call used for profile
    resolution; mirrored in `MockSharePointClient` with a manager edge in
    `dev/fixtures/people.js`.~~ Done in #489.
-3. **Implement repair-on-touch and the freeze.** Refresh
-   `assignedReviewerManager` (and the recorded `responsiblePartyManager`) while
-   the Case is `In-progress` when the resolved value differs; stamp
-   `assignedReviewerManager` in `CaseMachine._reportableSnapshot` and never
-   rewrite it after.
+3. **Consider repair-on-touch or reconciliation, conditionally.** Measure
+   whether the allocation cache's empty/stale tail warrants a future repair
+   policy. Do not stamp `assignedReviewerManager` in
+   `CaseMachine._reportableSnapshot`: settled reporting remains Staff Hierarchy
+   authoritative.
 4. **Switch `resolveRoles` to live resolution** for the
    `responsiblePartyManager` Role, with explicit fail-closed behaviour when the
    lookup fails, and tests covering the reorg case (former manager loses
@@ -349,12 +346,12 @@ of Cases whose stored manager differs from the resolved one.
 5. **If a Responsible Party Manager report is built**, it needs a
    `responsiblePartyManager` predicate in `ListCasesFilter` and a
    `ResponsiblePartyManager eq '…'` condition in `buildFilterExpr` — neither
-   exists today — and it inherits the reporting-snapshot semantics above, not the
-   live-resolution ones.
+   exists today — and would need its own explicit reporting semantics rather
+   than inheriting either this cache or the live-resolution rule.
 6. **Decide what `capabilities.isResponsiblePartyManager` is for.** It currently
    affects only the derivation of `isVisitor`. Once the Role resolves live it may
    be purely an Axis-2 list-access grant (ADR-0022) rather than a capability.
-7. **Drift visibility, if the residual proves material.** The comparison this ADR
-   makes at load — stored value versus resolved value — is exactly a drift
-   signal; counting it is a small, separable piece of work, and it is the part of
-   the rejected sync job worth keeping.
+7. **Drift visibility, if the residual proves material.** A future comparison of
+   the allocation cache with the Staff Hierarchy could count drift, but it is a
+   separate, conditional piece of work rather than a current reconciliation
+   signal.

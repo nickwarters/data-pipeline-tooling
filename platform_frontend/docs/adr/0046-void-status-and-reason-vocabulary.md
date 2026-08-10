@@ -133,10 +133,12 @@ column already uses.
   gave three. Converting the guard to an allow-list (so an empty or
   unrecognised status also sheds the clock) is a semantics change in its own
   right and is deliberately not part of this decision — it is tracked as #365.
-- **The manager report inherits the empty-team failure mode.** It is scoped by
-  `assignedReviewerManager`, and nothing writes that field ([ADR-0038]), so a
-  manager whose team's rows carry no value sees an empty table — exactly as
-  `#/my-team` and `#/team-cases` already do. Stated, not fixed here.
+- **Live manager reads inherit the allocation-cache failure mode.** They are
+  scoped by `assignedReviewerManager`; allocation now stamps the field when the
+  manager lookup succeeds and writes explicit `null` when it does not. Existing
+  or unresolved rows can therefore still be absent from `#/my-team` and
+  `#/team-cases`. Settled manager history is attributed by the Staff Hierarchy,
+  not this operational field.
 - **`transitionToVoid` does not clear `assignedReviewer`.** A voided Case stays
   attributed to the Reviewer who held it, which is what makes the report
   answerable; it also means a voided Case still names a Reviewer in every table

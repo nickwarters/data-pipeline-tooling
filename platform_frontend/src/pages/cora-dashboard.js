@@ -61,6 +61,28 @@ const OUTSTANDING_STATUSES = [
   CASE_STATUS.ACTIONS_IN_PROGRESS,
 ];
 
+/**
+ * Resolve the manager used by the allocation write. A missing or unusable
+ * result is the same as an unresolved manager: the caller must write an
+ * explicit null rather than inherit anything from the candidate row.
+ *
+ * @param {import('../sharepoint-client.js').SharePointClient} client
+ * @param {string} reviewerId
+ * @returns {Promise<string | null>}
+ */
+async function allocationManagerFor(client, reviewerId) {
+  if (typeof client.resolveManagers !== 'function') return null;
+  try {
+    const managers = await client.resolveManagers([reviewerId]);
+    const manager = managers?.[reviewerId];
+    return typeof manager === 'string' && manager.trim() !== ''
+      ? manager
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../views/data-table.js').TableSort} TableSort */
 /** @typedef {import('../evaluators/kpi-strip-model.js').KpiLane} KpiLane */
@@ -457,20 +479,42 @@ export function createRouteSlice(
           publishAllocationAvailability(availability);
           return;
         }
+        if (availability.candidates.length === 0) {
+          publishAllocationAvailability(availability);
+          return;
+        }
+
+        const currentUserId = tools.context.chrome.currentUser.id;
+        let managerAccount = await allocationManagerFor(client, currentUserId);
         for (const candidate of availability.candidates) {
-          const result = await client.patchCase(
+          let result = await client.patchCase(
             candidate.id,
-            { assignedReviewer: tools.context.chrome.currentUser.id },
+            {
+              assignedReviewer: currentUserId,
+              assignedReviewerManager: managerAccount,
+            },
             candidate.etag,
             candidate._listOptions
           );
+          if (!result.ok && result.status !== 412 && managerAccount !== null) {
+            managerAccount = null;
+            result = await client.patchCase(
+              candidate.id,
+              {
+                assignedReviewer: currentUserId,
+                assignedReviewerManager: null,
+              },
+              candidate.etag,
+              candidate._listOptions
+            );
+          }
           if (result.ok) {
             if (!effectsActive()) return;
             const [nextAvailability] = await Promise.all([
               loadAllocationAvailability({
                 client,
                 allocationSources: tools.context.allocationSources,
-                currentUserId: tools.context.chrome.currentUser.id,
+                currentUserId,
               }),
               refreshReviewerCases(),
             ]);
