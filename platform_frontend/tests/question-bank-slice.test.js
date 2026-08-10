@@ -1890,61 +1890,75 @@ test('bank editor: the BankList dispatch carries a card edit', () => {
   );
 });
 
-test('the simulator sample load reads through the mount-lifetime signal', async () => {
-  /** @type {any} */
-  let readOptions = null;
-  const controller = new AbortController();
-  const search = /** @type {any} */ (globalThis).location.search;
-  /** @type {any} */ (globalThis).location.search = '?simulate=1';
-  try {
-    const ctx = /** @type {any} */ ({
-      ...context(),
-      client: {
-        listCases: async (
-          /** @type {any} */ _filter,
-          /** @type {any} */ opts = {}
-        ) => {
-          readOptions = opts;
-          return [];
-        },
-      },
-      caseSources: [
-        { slug: 'example', listName: 'Example Cases', displayName: 'Example' },
-      ],
+test(
+  'the simulator sample load reads through the mount-lifetime signal',
+  { timeout: 5000 },
+  async () => {
+    /** @type {any} */
+    let readOptions = null;
+    /** @type {(value?: unknown) => void} */
+    let release = () => {};
+    const read = new Promise((resolve) => {
+      release = resolve;
     });
-    const slice = createRouteSlice({}, ctx, {
-      loadBanks: async () => ({ banks: liveBanks, failures: [] }),
-    });
-    let state = slice.initialState;
-    slice.start(
-      /** @type {any} */ ({
-        dispatch: (/** @type {any} */ action) => {
-          state = slice.reducer(state, action);
-          return state;
+    const controller = new AbortController();
+    const search = /** @type {any} */ (globalThis).location.search;
+    /** @type {any} */ (globalThis).location.search = '?simulate=1';
+    // This test injects no sample loader: the real dynamic-import path that
+    // wraps the client for this page's sample fan-out is the subject.
+    try {
+      const ctx = /** @type {any} */ ({
+        ...context(),
+        client: {
+          listCases: async (
+            /** @type {any} */ _filter,
+            /** @type {any} */ opts = {}
+          ) => {
+            readOptions = opts;
+            release();
+            return [];
+          },
         },
-        listen: () => {},
-        isActive: () => !controller.signal.aborted,
-        signal: controller.signal,
-      })
-    );
-    // The real path resolves a dynamic import before it reads, so drain more
-    // than one microtask turn.
-    for (let i = 0; i < 20; i += 1) await flush();
-  } finally {
-    /** @type {any} */ (globalThis).location.search = search;
-  }
+        caseSources: [
+          {
+            slug: 'example',
+            listName: 'Example Cases',
+            displayName: 'Example',
+          },
+        ],
+      });
+      const slice = createRouteSlice({}, ctx, {
+        loadBanks: async () => ({ banks: liveBanks, failures: [] }),
+      });
+      let state = slice.initialState;
+      slice.start(
+        /** @type {any} */ ({
+          dispatch: (/** @type {any} */ action) => {
+            state = slice.reducer(state, action);
+            return state;
+          },
+          listen: () => {},
+          isActive: () => !controller.signal.aborted,
+          signal: controller.signal,
+        })
+      );
+      await read;
+    } finally {
+      /** @type {any} */ (globalThis).location.search = search;
+    }
 
-  assert.equal(
-    readOptions?.signal,
-    controller.signal,
-    'the sample fan-out carries the mount lifetime'
-  );
-  assert.equal(
-    readOptions?.listName,
-    'Example Cases',
-    'and still scopes each read to its own Case list'
-  );
-});
+    assert.equal(
+      readOptions?.signal,
+      controller.signal,
+      'the sample fan-out carries the mount lifetime'
+    );
+    assert.equal(
+      readOptions?.listName,
+      'Example Cases',
+      'and still scopes each read to its own Case list'
+    );
+  }
+);
 
 /**
  * Two banks, both seated and both clean — the starting point for every
