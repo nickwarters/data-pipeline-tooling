@@ -9,43 +9,28 @@ const VIEWPORT_GUTTER = 8;
 
 let nextTooltipId = 0;
 
-/** @type {WeakMap<object, GroupedBarChartTooltipController>} */
-const mountedTooltips = new WeakMap();
-
 /**
  * @typedef {Object} GroupedBarChartTooltipController
  * @property {() => void} refresh
  * @property {() => void} dispose
  */
 
-/** @param {any} node @param {any} ancestor @returns {boolean} */
-function contains(ancestor, node) {
-  let current = node;
-  while (current) {
-    if (current === ancestor) return true;
-    current = current.parentNode;
-  }
-  return false;
-}
-
 /** @param {any} target @param {any} svg @returns {any|null} */
 function markFromTarget(target, svg) {
   if (!target || typeof target.closest !== 'function') return null;
   const mark = target.closest(MARK_SELECTOR);
-  return mark && contains(svg, mark) ? mark : null;
+  return mark && svg.contains(mark) ? mark : null;
 }
 
 /** @param {any} mark @param {any} svg @returns {boolean} */
 function isLiveMark(mark, svg) {
   return Boolean(
-    mark &&
-    mark.getAttribute?.(MARK_ATTRIBUTE) === 'true' &&
-    contains(svg, mark)
+    mark && mark.getAttribute?.(MARK_ATTRIBUTE) === 'true' && svg.contains(mark)
   );
 }
 
 /** @param {any} mark @returns {string|null} */
-function markValue(mark) {
+function markDescription(mark) {
   const value = mark?.getAttribute?.(MARK_VALUE_ATTRIBUTE);
   return value === null || value === undefined ? null : String(value);
 }
@@ -97,12 +82,6 @@ export function mountGroupedBarChartTooltip(svg, options) {
     throw new TypeError('mountGroupedBarChartTooltip expects a host element');
   }
 
-  const existing = mountedTooltips.get(svg);
-  if (existing) {
-    existing.refresh();
-    return existing;
-  }
-
   const documentObject = options.document ?? globalThis.document;
   const view = options.view ?? globalThis.window;
   const host = options.host;
@@ -111,7 +90,6 @@ export function mountGroupedBarChartTooltip(svg, options) {
   tooltip.className = TOOLTIP_CLASS;
   tooltip.setAttribute('id', tooltipId);
   tooltip.setAttribute('role', 'tooltip');
-  tooltip.setAttribute('hidden', '');
   tooltip.hidden = true;
   host.appendChild(tooltip);
 
@@ -125,6 +103,15 @@ export function mountGroupedBarChartTooltip(svg, options) {
   let describedMarkPreviousValue = null;
   let dismissed = false;
   let disposed = false;
+  let keyListenerActive = false;
+
+  /** @param {boolean} active */
+  function setKeyListener(active) {
+    if (active === keyListenerActive) return;
+    if (active) documentObject?.addEventListener?.('keydown', keyDown);
+    else documentObject?.removeEventListener?.('keydown', keyDown);
+    keyListenerActive = active;
+  }
 
   function releaseDescription() {
     if (!describedMark) return;
@@ -135,8 +122,8 @@ export function mountGroupedBarChartTooltip(svg, options) {
 
   function hide() {
     releaseDescription();
+    setKeyListener(false);
     tooltip.hidden = true;
-    tooltip.setAttribute('hidden', '');
   }
 
   /** @param {any} mark */
@@ -154,16 +141,16 @@ export function mountGroupedBarChartTooltip(svg, options) {
     if (!isLiveMark(focusedMark, svg)) focusedMark = null;
 
     const mark = dismissed ? null : (focusedMark ?? hoveredMark);
-    const value = markValue(mark);
-    if (!mark || value === null) {
+    const description = markDescription(mark);
+    if (!mark || description === null) {
       hide();
       return;
     }
 
     choose(mark);
-    tooltip.textContent = value;
+    tooltip.textContent = description;
     tooltip.hidden = false;
-    tooltip.removeAttribute('hidden');
+    setKeyListener(true);
 
     const markRect = mark.getBoundingClientRect?.();
     const tooltipRect = tooltip.getBoundingClientRect?.();
@@ -217,7 +204,7 @@ export function mountGroupedBarChartTooltip(svg, options) {
   /** @param {any} event */
   function pointerOut(event) {
     const mark = markFromTarget(event.target, svg);
-    if (!mark || contains(mark, event.relatedTarget)) return;
+    if (!mark || mark.contains(event.relatedTarget)) return;
     if (hoveredMark === mark) hoveredMark = null;
     refresh();
   }
@@ -234,7 +221,7 @@ export function mountGroupedBarChartTooltip(svg, options) {
   /** @param {any} event */
   function focusOut(event) {
     const mark = markFromTarget(event.target, svg);
-    if (!mark || contains(mark, event.relatedTarget)) return;
+    if (!mark || mark.contains(event.relatedTarget)) return;
     if (focusedMark === mark) focusedMark = null;
     refresh();
   }
@@ -252,10 +239,8 @@ export function mountGroupedBarChartTooltip(svg, options) {
   svg.addEventListener('pointerout', pointerOut);
   svg.addEventListener('focusin', focusIn);
   svg.addEventListener('focusout', focusOut);
-  svg.addEventListener('keydown', keyDown);
   view?.addEventListener?.('resize', refresh);
   documentObject?.addEventListener?.('scroll', refresh, true);
-  host.addEventListener('scroll', refresh, true);
 
   const controller = {
     refresh,
@@ -266,15 +251,12 @@ export function mountGroupedBarChartTooltip(svg, options) {
       svg.removeEventListener('pointerout', pointerOut);
       svg.removeEventListener('focusin', focusIn);
       svg.removeEventListener('focusout', focusOut);
-      svg.removeEventListener('keydown', keyDown);
       view?.removeEventListener?.('resize', refresh);
       documentObject?.removeEventListener?.('scroll', refresh, true);
-      host.removeEventListener('scroll', refresh, true);
+      setKeyListener(false);
       releaseDescription();
       if (tooltip.parentNode) tooltip.parentNode.removeChild(tooltip);
-      mountedTooltips.delete(svg);
     },
   };
-  mountedTooltips.set(svg, controller);
   return controller;
 }

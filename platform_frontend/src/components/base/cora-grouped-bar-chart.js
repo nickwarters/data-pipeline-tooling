@@ -472,9 +472,8 @@ function markView(mark, series, groupLabel, valueLabel, x, y, width, height) {
       role: 'img',
       'aria-label': description,
       'data-cora-chart-mark': 'true',
-      'data-cora-chart-value': valueLabel,
+      'data-cora-chart-value': description,
       tabindex: '0',
-      focusable: true,
     }),
     svg(
       'text',

@@ -250,6 +250,10 @@ test('my stats route render owns the chart tooltip lifecycle', () => {
     (/** @type {any} */ node) => node.tagName === 'svg'
   );
   assert.ok(firstChart);
+  assert.strictEqual(
+    container.querySelector('svg.cora-grouped-bar-chart'),
+    firstChart
+  );
   assert.equal(routeContext.appEl.querySelectorAll('div').length, 1);
   slice.render(container, chartState, tools);
   assert.equal(routeContext.appEl.querySelectorAll('div').length, 1);

@@ -115,12 +115,12 @@ test('chart tooltip uses one text-only overlay for hover and focus', () => {
   assert.equal(tooltip.hidden, true);
 
   fireEvent(marks[0], 'pointerover');
-  assert.equal(tooltip.textContent, '8');
+  assert.equal(tooltip.textContent, 'Week one: Settled, 8');
   assert.equal(tooltip.hidden, false);
   assert.equal(marks[0].getAttribute('aria-describedby'), tooltip.id);
 
   fireEvent(marks[1], 'pointerover');
-  assert.equal(tooltip.textContent, '4');
+  assert.equal(tooltip.textContent, 'Week one: Provisional, 4');
   assert.equal(marks[0].getAttribute('aria-describedby'), null);
   assert.equal(marks[1].getAttribute('aria-describedby'), tooltip.id);
 
@@ -128,7 +128,7 @@ test('chart tooltip uses one text-only overlay for hover and focus', () => {
   fireEvent(marks[0], 'pointerover');
   assert.equal(
     tooltip.textContent,
-    '4',
+    'Week one: Provisional, 4',
     'focused marks take priority over hovered marks'
   );
   assert.equal(marks[1].getAttribute('aria-describedby'), tooltip.id);
@@ -138,7 +138,7 @@ test('chart tooltip uses one text-only overlay for hover and focus', () => {
   assert.equal(tooltip.hidden, true);
 
   fireEvent(marks[0], 'focusin');
-  const escape = fireEvent(marks[0], 'keydown', { key: 'Escape' });
+  const escape = fireEvent(document, 'keydown', { key: 'Escape' });
   assert.equal(escape.defaultPrevented, true);
   assert.equal(tooltip.hidden, true);
   assert.equal(marks[0].getAttribute('aria-describedby'), null);
@@ -148,22 +148,25 @@ test('chart tooltip uses one text-only overlay for hover and focus', () => {
   fireEvent(marks[0], 'pointerover');
   assert.equal(tooltip.hidden, false);
   assert.equal(chart.parentNode, host);
+  controller.dispose();
 });
 
-test('chart tooltip keeps hostile formatted values as text', () => {
+test('chart tooltip keeps hostile descriptions as text', () => {
   const hostile = '<img src=x onerror=alert(1)>';
-  const { marks, tooltip } = fixture({
+  const { marks, tooltip, controller } = fixture({
     formatValue: (value, mark) => (mark ? hostile : String(value)),
   });
 
   fireEvent(marks[0], 'pointerover');
-  assert.equal(tooltip.textContent, hostile);
+  assert.equal(tooltip.textContent, `Week one: Settled, ${hostile}`);
   assert.equal(tooltip.innerHTML, '');
   assert.equal(tooltip.querySelector('script'), null);
+  controller.dispose();
 });
 
 test('chart tooltip positions above, falls below, clamps, and refreshes on scroll', () => {
-  const { marks, tooltip, view, host, documentObject, tooltipBox } = fixture();
+  const { marks, tooltip, view, documentObject, tooltipBox, controller } =
+    fixture();
   const mark = marks[0];
 
   setBox(mark, { left: 100, top: 120, width: 20, height: 40 });
@@ -179,27 +182,19 @@ test('chart tooltip positions above, falls below, clamps, and refreshes on scrol
   assert.equal(tooltip.style.top, '38px');
 
   setBox(mark, { left: 310, top: 100, width: 10, height: 10 });
-  fireEvent(host, 'scroll', { bubbles: false });
+  documentObject._fire('scroll', { type: 'scroll' });
   assert.equal(tooltip.style.left, '212px');
 
   setBox(mark, { left: 200, top: 100, width: 10, height: 10 });
   documentObject._fire('scroll', { type: 'scroll' });
   assert.equal(tooltip.style.left, '155px');
+  controller.dispose();
 });
 
-test('chart tooltip does not double-mount and disposal restores the chart', () => {
+test('chart tooltip disposal restores the chart and is idempotent', () => {
   const fixtureState = fixture();
   const chart = /** @type {any} */ (fixtureState.chart);
   const { host, marks, controller } = fixtureState;
-  const duplicate = mountGroupedBarChartTooltip(chart, {
-    host,
-    document: fixtureState.documentObject,
-    view: /** @type {any} */ (fixtureState.view),
-  });
-
-  assert.strictEqual(duplicate, controller);
-  assert.equal(host.querySelectorAll('div').length, 1);
-  assert.equal(chart._listeners.pointerover.length, 1);
 
   fireEvent(marks[0], 'focusin');
   const tooltip = fixtureState.tooltip;

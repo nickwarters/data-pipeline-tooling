@@ -3065,6 +3065,10 @@
   vector-effect: non-scaling-stroke;
 }
 
+[data-cora-root] .cora-grouped-bar-chart__value-label {
+  pointer-events: none;
+}
+
 [data-cora-root] .cora-grouped-bar-chart__legend-swatch {
   vector-effect: non-scaling-stroke;
 }

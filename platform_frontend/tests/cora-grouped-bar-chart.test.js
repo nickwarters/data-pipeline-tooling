@@ -502,9 +502,11 @@ test('each mark carries its own accessible identity and provisional hollow encod
   assert.ok(provisional);
   assert.equal(provisional.getAttribute('role'), 'img');
   assert.equal(provisional.getAttribute('data-cora-chart-mark'), 'true');
-  assert.equal(provisional.getAttribute('data-cora-chart-value'), '4 cases');
+  assert.equal(
+    provisional.getAttribute('data-cora-chart-value'),
+    'Group: Week <one>: Provisional, 4 cases, provisional'
+  );
   assert.equal(provisional.getAttribute('tabindex'), '0');
-  assert.equal(provisional.getAttribute('focusable'), 'true');
   assert.equal(provisional.getAttribute('fill'), 'none');
   assert.equal(provisional.getAttribute('stroke'), 'var(--cora-color-warning)');
   assert.equal(provisional.getAttribute('stroke-width'), '2');

@@ -60,13 +60,14 @@ only: it does not load data or implement line charts, stacked bars, or custom
 tooltips. It validates the data contract, gives repeated mark keys stable
 key-sorted series slots, and sparsifies large x-axis label sets.
 
-The pure SVG builder exposes each formatted mark value as data metadata on the
-focusable rectangle (`data-cora-chart-mark` and `data-cora-chart-value`). The
-my-stats route uses its custom render seam to mount one HTML
-`[role="tooltip"]` under the app root after the SVG is committed. The
-controller delegates pointer and keyboard focus events from the SVG, keeps the
-focused mark ahead of a hovered mark, positions the overlay over the chart,
-and dismisses it with Escape. It owns the temporary `aria-describedby` link
+The pure SVG builder exposes each mark's full description, including its
+formatted value and provisional status, as data metadata on the focusable
+rectangle (`data-cora-chart-mark` and `data-cora-chart-value`). The my-stats
+route uses its custom render seam to mount one HTML `[role="tooltip"]` under
+the app root after the SVG is committed. The controller delegates pointer and
+keyboard focus events from the SVG, keeps the focused mark ahead of a hovered
+mark, positions the overlay over the chart, and dismisses it with Escape from
+the document while it is open. It owns the temporary `aria-describedby` link
 and removes the overlay and listeners when the route unmounts.
 
 ### Rejected
@@ -111,8 +112,9 @@ leaves `h()` alone.
 - **Accessibility is now explicit work.** HTML bars would have been accessible
   by construction; SVG keeps `role="img"` and `aria-label` on each focusable
   mark rectangle. The per-mark SVG `<title>` is superseded by the HTML
-  tooltip, while legend titles remain. Keyboard focus reaches the same mark
-  target as pointer hover, and Escape dismisses the tooltip.
+  tooltip, which exposes the full mark description, while legend titles remain.
+  Keyboard focus reaches the same mark target as pointer hover, and Escape
+  dismisses the tooltip even when it was opened by pointer hover.
 - **Series identity is key-based.** Marks with the same key share a horizontal
   slot across groups, including when a group omits or reorders marks. Slots are
   sorted by key for deterministic output. A repeated key whose label or
