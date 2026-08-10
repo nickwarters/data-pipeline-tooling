@@ -858,6 +858,81 @@ test('a refused completion leaves the runner-owned Case Row untouched', async ()
   );
 });
 
+// Both Awaiting Frontline tests below ask the same question of the same group:
+// how many Cases the reason filter finds for this Reviewer.
+const awaitingReason = ACTION_CENTRE_REASONS.find(
+  (reason) => reason.id === 'awaitingFrontline'
+);
+assert.ok(awaitingReason);
+/** @param {ReturnType<typeof createInMemoryFlowRunner>} runner */
+const countAwaiting = (runner) =>
+  runner.client.countCases(activeFilter(awaitingReason, 'user-reviewer'), {
+    listName: 'Cases-ExampleReview',
+  });
+
+// Send Actions is itself a hand-off to the Responsible Party, so it must put
+// the Case in the Awaiting Frontline group without waiting for anyone to post a
+// Message. Driven end to end — the real completion action, the real client and
+// the real reason filter — because the flag only matters if the query finds it.
+test('Send Actions puts the Case in the Awaiting Frontline group until it is closed', async () => {
+  const runner = createInMemoryFlowRunner({
+    lists: {
+      'Cases-ExampleReview': [
+        {
+          ...CASE_ROW,
+          answers: {
+            'q-needs': {
+              value: 'No',
+              capture: {
+                sentActions: [
+                  { id: 'sent-1', text: 'Coach agent', status: 'pending' },
+                ],
+              },
+            },
+          },
+        },
+      ],
+    },
+  });
+  assert.equal(await countAwaiting(runner), 0);
+
+  await runner.run([
+    { type: 'loadCasePage', caseId: 'case-flow-1', caseType: 'example-review' },
+    { type: 'answer', questionId: 'q-welcome', value: 'Yes' },
+    { type: 'answer', questionId: 'q-channel', value: 'Phone' },
+    { type: 'answer', questionId: 'q-products', value: ['Account'] },
+    {
+      type: 'captureIssue',
+      questionId: 'q-needs',
+      fieldKey: 'rootCause',
+      value: 'Reviewer missed the evidence.',
+    },
+    { type: 'setRemediationRequired', questionId: 'q-needs', required: 'yes' },
+    {
+      type: 'freeFormRemediation',
+      questionId: 'q-needs',
+      value: 'Coach the reviewer.',
+    },
+    { type: 'clickCompleteCase' },
+  ]);
+
+  assert.equal(await countAwaiting(runner), 1);
+  const sent = runner.snapshot().lists['Cases-ExampleReview'][0];
+  assert.equal(sent.status, 'Actions In Progress');
+  assert.equal(sent.awaitingSince, sent.reportableAt);
+
+  await runner.run([
+    { type: 'loadCasePage', caseId: 'case-flow-1', caseType: 'example-review' },
+    { type: 'setRemediationStatus', questionId: 'q-needs', status: 'complete' },
+    { type: 'clickCompleteCase' },
+  ]);
+
+  assert.equal(await countAwaiting(runner), 0);
+  const closed = runner.snapshot().lists['Cases-ExampleReview'][0];
+  assert.equal(closed.status, 'Completed');
+  assert.equal(closed.awaitingResponsibleParty, false);
+});
+
 // The Awaiting Frontline group is a query, not a rendering: a Case only
 // reaches it if the transition wrote the flag the query reads. This drives the
 // real store's posting effect, the real client and the real reason filter, so
@@ -877,16 +952,7 @@ test('a Reviewer’s Message puts the Case in the Awaiting Frontline group, and 
       ],
     },
   });
-  const awaiting = ACTION_CENTRE_REASONS.find(
-    (reason) => reason.id === 'awaitingFrontline'
-  );
-  assert.ok(awaiting);
-  const count = () =>
-    runner.client.countCases(activeFilter(awaiting, 'user-reviewer'), {
-      listName: 'Cases-ExampleReview',
-    });
-
-  assert.equal(await count(), 0);
+  assert.equal(await countAwaiting(runner), 0);
 
   await runner.run([
     {
@@ -897,7 +963,7 @@ test('a Reviewer’s Message puts the Case in the Awaiting Frontline group, and 
     { type: 'postMessage', body: 'Please send the call recording.' },
   ]);
 
-  assert.equal(await count(), 1);
+  assert.equal(await countAwaiting(runner), 1);
   const asked = runner.snapshot().lists['Cases-ExampleReview'][0];
   // The clock is the message's own authored time, not the moment the write
   // reached the list.
@@ -914,7 +980,7 @@ test('a Reviewer’s Message puts the Case in the Awaiting Frontline group, and 
     { type: 'postMessage', body: 'Recording attached.' },
   ]);
 
-  assert.equal(await count(), 0);
+  assert.equal(await countAwaiting(runner), 0);
   const replied = runner.snapshot().lists['Cases-ExampleReview'][0];
   assert.equal(replied.awaitingResponsibleParty, false);
   assert.equal(replied.awaitingSince, null);

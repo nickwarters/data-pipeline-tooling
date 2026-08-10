@@ -53,10 +53,11 @@ module says so, and it is the one place to change if that stops being enough.
   a Reviewer to classify their own message, which buys precision with friction on every
   post; an occasional over-count that any reply — or completing the Case — clears is the
   better trade. Accepted, not overlooked.
-- **The flag has an exit.** `CaseMachine`'s two `Completed` transitions clear the pair. A
-  closed Case waits on nobody, and without that clearing a Case whose frontline replied by
-  phone would age in its Reviewer's group indefinitely, because the reason filter carries
-  no status predicate.
+- **The flag has an exit.** `CaseMachine`'s `transitionToCompleted`,
+  `transitionToFinalComplete` and `transitionToVoid` clear the pair. A closed Case waits
+  on nobody, and without that clearing a Case whose frontline replied by phone would age
+  in its Reviewer's group indefinitely, because the reason filter carries no status
+  predicate.
 - **`HasOpenAppeal` / `AppealRaisedAt`.** `raiseAppeal` and `resolveAppeal` put the pair
   in the field bag beside the `appeals` blob it is derived from. Both resolution branches
   now write one atomic multi-field PATCH — the agreed branch already had to, so the
@@ -91,6 +92,31 @@ asserted to agree on it.
 Net: two of the four state flags are written by the app, one reason is retired, and one is
 honestly labelled as pending. Nothing about the "no calculated columns, no scheduled job,
 no Power Automate" decision changes.
+
+### Amendment — issue #513, 2026-08-10
+
+**The Awaiting Frontline pair now has two writers.** Alongside
+`postConversationMessage`, `CaseMachine.transitionToActionsInProgress` — the **Send
+Actions** transition — sets the pair via `awaitingFrontlineSent(reportableAt)`. It clocks
+from `reportableAt`: the hand-off and the reportable milestone are one event, so reading
+the clock twice would give that event two timestamps. This is the rule stated above for
+every clock, applied to the new writer.
+
+**"Send to Frontline" means the Send Actions transition** — the Case leaving `In-progress`
+for `Actions In Progress` with its Remediation Actions handed to the Responsible Party —
+not posting a Conversation Message to them, which is the pair's other writer. The
+Decision below already named the term; the transition it names has existed since the
+lifecycle was built, and only its flag write was missing.
+
+**The clearing asymmetry is knowingly accepted.** After Send Actions the flag has exactly
+three exits: a Conversation post from the Responsible Party or their Manager, completion,
+or void. A Responsible Party who works the Remediation tab and never posts therefore
+leaves the Case ageing in Awaiting Frontline, labelled "N days no reply", while the
+Remediation tab shows active progress. We accept that here on the same grounds the amendment above accepts a coarser
+rule for the Conversation writer: the precise alternative — treating remediation activity
+as a reply — buys accuracy by teaching the flag a second vocabulary, and every path still
+clears on completion. What cadence the group should use for a Case in this state is a
+separate open question, not settled here.
 
 ## Context
 

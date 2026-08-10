@@ -17,6 +17,7 @@ import { cases as mockCases } from '../dev/fixtures/cases.js';
 import { personas } from '../dev/fixtures/personas.js';
 import { isRemediationResolved } from '../src/evaluators/remediation-status.js';
 import { openAppealFields } from '../src/services/action-centre-flags.js';
+import { CASE_STATUS } from '../src/lib/case-statuses.js';
 import { outstandingRemediation } from '../src/pages/responsible-party/view.js';
 
 test('the example-review fixtures exercise the three statuses a review passes through', () => {
@@ -172,9 +173,11 @@ test('every assigned mock Case carries the moment it was assigned', () => {
 });
 
 // A seeded flag has to be a state the product could have reached: the demo set
-// is the first thing anyone sees, and a row claiming to await a reply with
-// nothing in its thread — or an open Appeal with no Appeal — demos a state no
-// transition can produce. `reviewRequired` is exempt while nothing writes it.
+// is the first thing anyone sees, and an open Appeal with no Appeal — or an
+// awaiting clock reading an instant no writer could have stamped — demos a
+// state no transition can produce. Two writers set the awaiting pair, so its
+// clock is either the last Conversation message's own timestamp or the instant
+// the hand-off was stamped. `reviewRequired` is exempt while nothing writes it.
 test('every mock fixture row carries flags a transition could have written', () => {
   for (const row of mockCases) {
     const where = `fixture ${row.id}`;
@@ -196,10 +199,15 @@ test('every mock fixture row carries flags a transition could have written', () 
 
     const lastMessage = row.conversation.at(-1);
     if (row.awaitingResponsibleParty) {
-      assert.equal(
-        row.awaitingSince,
-        lastMessage?.timestamp,
-        `${where}: awaitingSince is not the last message's own timestamp`
+      const sentClock =
+        row.status === CASE_STATUS.ACTIONS_IN_PROGRESS
+          ? row.reportableAt
+          : null;
+      assert.ok(
+        row.awaitingSince &&
+          (row.awaitingSince === lastMessage?.timestamp ||
+            row.awaitingSince === sentClock),
+        `${where}: awaitingSince is neither the last message's own timestamp nor the Send Actions instant`
       );
     } else {
       assert.ok(

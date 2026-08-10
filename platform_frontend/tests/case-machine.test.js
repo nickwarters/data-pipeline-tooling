@@ -250,6 +250,8 @@ test('CaseMachine Send Actions stamps the reportable snapshot without completedA
     )
   );
   assert.equal(Object.hasOwn(fields, 'completedAt'), false);
+  assert.equal(fields.awaitingResponsibleParty, true);
+  assert.equal(fields.awaitingSince, fields.reportableAt);
   assert.equal(fields.outcomeAtCompletion, 'fail');
   assert.equal(fields.hadRemediation, true);
   assert.equal(fields.effectiveOutcome, 'fail');
@@ -369,6 +371,7 @@ test('CaseMachine stamps every lifecycle timestamp from the injected clock', () 
   // The SLA start moves with the clock; the working-day arithmetic behind it
   // does not (the holiday list stays frozen).
   assert.equal(sendActions.remediationDueDate, '2026-08-06');
+  assert.equal(sendActions.awaitingSince, '2026-07-23T09:30:00.000Z');
 
   const completed = machine('In-progress').transitionToCompleted(
     null,

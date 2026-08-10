@@ -28,7 +28,10 @@ import { CASE_STATUS } from './case-statuses.js';
 // The one definition of "this Case carries remediation": the Remediation
 // tab has ≥1 row. Deliberately catalogue-aware — see `hasTrackableRemediation`.
 import { hasTrackableRemediation } from '../evaluators/remediation-status.js';
-import { awaitingFrontlineCleared } from '../services/action-centre-flags.js';
+import {
+  awaitingFrontlineCleared,
+  awaitingFrontlineSent,
+} from '../services/action-centre-flags.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').CurrentUser} CurrentUser */
@@ -181,6 +184,10 @@ export class CaseMachine {
    * snapshot is stamped here, `reportableAt` is set, but `completedAt` is not
    * (the Case is not yet closed).
    *
+   * The Awaiting Frontline pair it starts needs no new clearing transition:
+   * `transitionToFinalComplete` and `transitionToVoid` are the only exits from
+   * `Actions In Progress`, and both already clear it.
+   *
    * @param {((answers: Record<string, Answer>) => import('../sharepoint-client.js').OutcomeResult) | null | undefined} computeOutcome
    * @param {Record<string, Answer>} [answers]
    * @param {string | null} [questionBankVersion]
@@ -202,6 +209,7 @@ export class CaseMachine {
         this.config.remediationSlaWorkingDays ?? REMEDIATION_SLA_WORKING_DAYS,
         ENGLAND_WALES_HOLIDAYS
       ),
+      ...awaitingFrontlineSent(reportableAt),
       ...this._reportableSnapshot(computeOutcome, answers, questionBankVersion),
     };
   }

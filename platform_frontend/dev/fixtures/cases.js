@@ -355,9 +355,10 @@ export const cases = [
     // `reportableAt`/`remediationDueDate` are stamped, and `completedAt` is
     // still null. One action has been worked and one is still outstanding, so
     // the adviser (`?asUser=responsible-party`) sees open work on #/my-cases
-    // and the Conversation carries an unread reviewer message. Field values
-    // mirror exactly what CaseMachine.transitionToActionsInProgress writes —
-    // see src/lib/case-machine.js.
+    // and the Conversation carries an unread reviewer message. One knowing
+    // divergence from what the Send Actions transition writes: the Awaiting
+    // Frontline pair it also sets is not seeded here, so no demo row shows an
+    // Actions In Progress Case in that Action Centre group.
     id: 'complaints-case-5',
     caseType: 'complaints',
     title: 'Complaint #5',

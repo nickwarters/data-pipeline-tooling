@@ -12,6 +12,7 @@ import assert from 'node:assert/strict';
 import {
   awaitingFrontlineAfterPost,
   awaitingFrontlineCleared,
+  awaitingFrontlineSent,
   openAppealFields,
 } from '../src/services/action-centre-flags.js';
 
@@ -60,6 +61,13 @@ test('a poster on neither side of the exchange changes neither half of the pair'
     awaitingFrontlineAfterPost([], message('2026-07-04T08:00:00.000Z')),
     {}
   );
+});
+
+test('the hand-off at Send Actions starts the Awaiting clock at the instant it is given', () => {
+  assert.deepEqual(awaitingFrontlineSent('2026-07-23T09:30:00.000Z'), {
+    awaitingResponsibleParty: true,
+    awaitingSince: '2026-07-23T09:30:00.000Z',
+  });
 });
 
 test('a Case that waits on nobody carries the cleared pair, not a cleared flag', () => {
