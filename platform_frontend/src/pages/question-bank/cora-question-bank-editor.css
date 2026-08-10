@@ -248,7 +248,7 @@
   font-size: var(--cora-font-size-2xs);
   letter-spacing: var(--cora-tracking-wider);
   text-transform: uppercase;
-  color: var(--cora-color-text-muted);
+  color: var(--cora-color-text-muted) !important;
   margin: 0 0 var(--cora-space-2);
   padding-bottom: var(--cora-space-1);
   border-bottom: 1px solid var(--cora-color-border);
@@ -503,7 +503,7 @@
   font-size: var(--cora-font-size-2xs);
   letter-spacing: var(--cora-tracking-wider);
   text-transform: uppercase;
-  color: var(--cora-color-text-muted);
+  color: var(--cora-color-text-muted) !important;
 }
 .cora-bank-editor .default-outcome-row {
   margin-bottom: var(--cora-space-3);
@@ -1399,7 +1399,7 @@
 .cora-bank-editor .rem-outcome-block h5 {
   margin: 0;
   font-size: var(--cora-font-size-xs);
-  color: var(--cora-color-text-muted);
+  color: var(--cora-color-text-muted) !important;
   font-weight: var(--cora-font-weight-semibold);
 }
 .cora-bank-editor .rem-outcome-select {
@@ -1798,7 +1798,7 @@
   font-family: var(--cora-font-display);
   font-weight: var(--cora-font-weight-bold);
   font-size: var(--cora-font-size-lg);
-  color: var(--cora-color-text-muted);
+  color: var(--cora-color-text-muted) !important;
   margin-bottom: var(--cora-space-2);
 }
 .cora-bank-editor .empty .mini-btn {

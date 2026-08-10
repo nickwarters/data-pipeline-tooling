@@ -14,6 +14,31 @@ npm run test:security # focused local security/domain contracts
 node --test --watch # re-run on file change
 ```
 
+## SharePoint heading verification
+
+`tests/sharepoint-breakout.test.js` is the source-level CSS contract for the
+SharePoint boundary. Every heading level used by the application (H1-H5), plus
+the defensive H6 rule, must declare its exact CORA token directly: H1, H2, H3,
+H5, and H6 use `var(--cora-color-on-surface) !important`; H4 retains
+`var(--cora-color-text-muted)`. The Question Bank's intentionally muted H3 and
+H5 selectors are asserted separately because they must outrank the base rules.
+
+The supported live browser is Edge Chromium. From `platform_frontend/`, run the
+source contract and normal gates, then prepare UAT with:
+
+```sh
+node --test tests/sharepoint-breakout.test.js
+python3 scripts/deploy_to_sharepoint.py \
+  --site-url https://sp.example.com/sites/cora --env uat --dry-run
+```
+
+The deploy script currently supports dry-run only; its actual SharePoint upload
+is manual. After hand-uploading the candidate runtime to the UAT target, open
+the UAT page in Edge Chromium without `?mock=1`, hard-reload it, and check the
+Outstanding Cases, Case Review, and Roadmap H1 headings plus representative H2,
+H3, and Question Bank H3/H5 headings. Confirm the computed colours use CORA
+tokens rather than SharePoint theme colours.
+
 ## Coverage Policy
 
 `npm run test:coverage` explicitly includes every JavaScript file under `src/`
