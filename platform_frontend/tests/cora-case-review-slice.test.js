@@ -839,13 +839,12 @@ test('route: disposal drops a pending Responsible Party search', (t) => {
 });
 
 /**
- * What the picker says beneath the box: `null` when it makes no claim.
+ * What the picker says beneath the box: an empty string when it makes no
+ * claim; the status line itself is always present.
  * @param {any} container
  */
 function pickerStatusText(container) {
-  return (
-    container.querySelector('.cora-people-picker-status')?.textContent ?? null
-  );
+  return container.querySelector('.cora-people-picker-status').textContent;
 }
 
 /** @param {any} container */

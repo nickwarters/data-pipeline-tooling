@@ -596,10 +596,7 @@ function reviewerPicker(directory) {
       );
     },
     statusText() {
-      return (
-        render().querySelector('.cora-people-picker-status')?.textContent ??
-        null
-      );
+      return render().querySelector('.cora-people-picker-status').textContent;
     },
     select() {
       getByRole(render(), 'option', { name: /Reviewer A/ }).dispatchEvent(
@@ -638,7 +635,7 @@ test('case search: the Reviewer field resolves accounts through the directory an
 
   assert.equal(picker.state.routes.caseSearch.reviewerSearch.status, 'success');
   assert.deepEqual(picker.options(), ['Reviewer A — rev-a']);
-  assert.equal(picker.statusText(), null);
+  assert.equal(picker.statusText(), '');
 
   // An unresolvable account would make the whole query reject, so typed text is
   // never offered as one.
@@ -712,10 +709,10 @@ test('case search: choosing a person fills the Reviewer filter and stops the pic
     picker.state.routes.caseSearch.filters.assignedReviewer,
     'rev-a'
   );
-  // Neither a status line under the person just chosen, nor a request still on
-  // its way to replace them.
+  // Neither a status message under the person just chosen, nor a request still
+  // on its way to replace them.
   assert.equal(picker.state.routes.caseSearch.reviewerSearch.status, 'idle');
-  assert.equal(picker.statusText(), null);
+  assert.equal(picker.statusText(), '');
   t.mock.timers.tick(200);
   await flush();
   assert.deepEqual(searches, []);
