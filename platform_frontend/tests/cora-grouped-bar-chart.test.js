@@ -112,6 +112,19 @@ test('GroupedBarChart lays out grouped bars, axes, legend, and value labels', ()
   assert.equal(all(root, '.cora-grouped-bar-chart__group-label').length, 2);
   assert.equal(all(root, '.cora-grouped-bar-chart__value-label').length, 3);
   assert.equal(all(root, '.cora-grouped-bar-chart__legend-item').length, 2);
+  assert.equal(all(root, '.cora-grouped-bar-chart__grid-line').length, 3);
+  assert.equal(all(root, '.cora-grouped-bar-chart__tick-line').length, 2);
+  assert.deepEqual(
+    Array.from(root.childNodes, (/** @type {any} */ child) =>
+      child.getAttribute('class')
+    ),
+    [
+      'cora-grouped-bar-chart__legend',
+      'cora-grouped-bar-chart__y-axis',
+      'cora-grouped-bar-chart__bars',
+      'cora-grouped-bar-chart__x-axis',
+    ]
+  );
   assert.equal(
     all(root, '.cora-grouped-bar-chart__x-axis-label')[0].textContent,
     'Period'
@@ -589,7 +602,7 @@ test('formatters and custom labels must produce usable text', () => {
           formatValue: (value) => String(Math.round(value)),
         },
       }),
-    /distinct labels/
+    /tickCount.*yMax.*distinct labels/
   );
   assert.throws(
     () =>
