@@ -31,28 +31,39 @@ def _orchestrator(calendar: WorkingDayCalendar) -> tuple[Orchestrator, list[str]
     return orchestrator, invoker.calls
 
 
-def test_the_schedule_registers_exactly_the_sharepoint_pipeline_daily():
+def test_the_schedule_registers_sync_then_reviewer_activity_daily():
     sets = build_pipeline_sets()
 
     assert [pipeline_set.name for pipeline_set in sets] == ["case_management"]
-    (item,) = sets[0].pipelines
-    assert item.path == "pipelines/sharepoint_cases"
-    assert item.name == "sharepoint_cases"
-    assert item.schedule == Schedule.daily()
+    sharepoint, reviewer_activity = sets[0].pipelines
+    assert sharepoint.path == "pipelines/sharepoint_cases"
+    assert sharepoint.name == "sharepoint_cases"
+    assert sharepoint.schedule == Schedule.daily()
+    assert reviewer_activity.path == "pipelines/reviewer_activity"
+    assert reviewer_activity.name == "reviewer_activity"
+    assert reviewer_activity.schedule == Schedule.daily()
+    assert reviewer_activity.depends_on
+    assert reviewer_activity.depends_on[0].upstream_pipeline == "sharepoint_cases"
     # The path is only an address until something resolves it: a typo would pass
     # every assertion above and fail only in production.
-    assert callable(load_pipeline(item.path).run)
+    assert callable(load_pipeline(sharepoint.path).run)
+    assert callable(load_pipeline(reviewer_activity.path).run)
 
 
-def test_a_working_day_pass_invokes_the_sharepoint_pipeline(tmp_path):
+def test_a_working_day_pass_invokes_sync_then_reviewer_activity(tmp_path):
     orchestrator, calls = _orchestrator(WorkingDayCalendar())
 
     result = orchestrator.run_due_once(tmp_path, run_date=dt.date(2026, 8, 5))
 
-    assert calls == ["pipelines/sharepoint_cases"]
-    (decision,) = result.decisions
-    assert decision.status == "succeeded"
-    assert decision.was_due is True
+    assert calls == [
+        "pipelines/sharepoint_cases",
+        "pipelines/reviewer_activity",
+    ]
+    assert [decision.status for decision in result.decisions] == [
+        "succeeded",
+        "succeeded",
+    ]
+    assert all(decision.was_due for decision in result.decisions)
 
 
 def test_a_weekend_or_configured_holiday_pass_skips_it(tmp_path):
@@ -62,9 +73,11 @@ def test_a_weekend_or_configured_holiday_pass_skips_it(tmp_path):
         result = orchestrator.run_due_once(tmp_path, run_date=weekend_day)
 
         assert calls == []
-        (decision,) = result.decisions
-        assert decision.status == "skipped"
-        assert decision.was_due is False
+        assert [decision.status for decision in result.decisions] == [
+            "skipped",
+            "skipped",
+        ]
+        assert all(not decision.was_due for decision in result.decisions)
 
     # A holiday skips only when the calendar was seeded with one. The operator
     # command seeds its calendar from `--calendar <file>` (proved end-to-end in
@@ -76,9 +89,11 @@ def test_a_weekend_or_configured_holiday_pass_skips_it(tmp_path):
     result = orchestrator.run_due_once(tmp_path, run_date=wednesday)
 
     assert calls == []
-    (decision,) = result.decisions
-    assert decision.status == "skipped"
-    assert decision.was_due is False
+    assert [decision.status for decision in result.decisions] == [
+        "skipped",
+        "skipped",
+    ]
+    assert all(not decision.was_due for decision in result.decisions)
 
 
 def test_two_operator_passes_on_one_weekday_are_safe(tmp_path):
@@ -95,10 +110,17 @@ def test_two_operator_passes_on_one_weekday_are_safe(tmp_path):
     first = orchestrator.run_due_once(tmp_path, run_date=wednesday)
     second = orchestrator.run_due_once(tmp_path, run_date=wednesday)
 
-    assert calls == ["pipelines/sharepoint_cases", "pipelines/sharepoint_cases"]
+    assert calls == [
+        "pipelines/sharepoint_cases",
+        "pipelines/reviewer_activity",
+        "pipelines/sharepoint_cases",
+        "pipelines/reviewer_activity",
+    ]
     for result in (first, second):
-        (decision,) = result.decisions
-        assert decision.status == "succeeded"
+        assert [decision.status for decision in result.decisions] == [
+            "succeeded",
+            "succeeded",
+        ]
 
     records = OrchestrationStore(tmp_path / "_orchestration" / "runs.db").records()
-    assert len(records) == 2
+    assert len(records) == 4
