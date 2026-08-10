@@ -10,8 +10,8 @@ from framework.core import Dataset, PipelineError, format_failure
 from framework.io import Refresh
 from framework.run import (
     FreshnessRequirement,
-    PipelineRunner,
     RunContext,
+    run_pipeline,
 )
 from tools.medallion import medallion
 from tools.store import StoreRegistry
@@ -53,18 +53,13 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv[1:])
     base_dir = Path(args.base_dir) if args.base_dir else Path.cwd() / "data"
 
-    def handler(context: RunContext) -> Dataset:
-        return run(context, describe=args.describe)
-
-    runner = PipelineRunner()
-    runner.register(
-        subject="",
-        pipeline=PIPELINE_NAME,
-        handler=handler,
-        freshness=UPSTREAMS,
-    )
     try:
-        runner.run("", PIPELINE_NAME, base_dir=base_dir)
+        run_pipeline(
+            lambda context: run(context, describe=args.describe),
+            PIPELINE_NAME,
+            base_dir=base_dir,
+            upstreams=UPSTREAMS,
+        )
     except PipelineError as exc:
         print(format_failure(exc), file=sys.stderr)
         return 1

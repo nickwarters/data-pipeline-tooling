@@ -109,11 +109,13 @@ SQLite databases `<subject>/{raw,silver,gold}.db` on a network share, isolated
 from every other subject's files for blast-radius containment and independent
 onboarding ([SQLite per-subject medallion store on a network share,
 single-writer](adr/0001-sqlite-per-subject-medallion-store.md)). A subject is not
-always one Case Type: the **Sync** store is a single subject, `cora_cases`,
-holding every Case Type discriminated by a `case_type` column, because its lists
-are provisioned from one template and cross-Case-Type reporting would otherwise
-need an `ATTACH` forever ([one Sync subject for every Case
-Type](adr/0016-one-sync-subject-for-every-case-type.md)).
+always one Case Type: the **Sync** store is intended to be a single subject,
+`cora_cases`, holding every Case Type discriminated by a `case_type` column,
+because its lists are provisioned from one template and cross-Case-Type
+reporting would otherwise need an `ATTACH` forever ([one Sync subject for every
+Case Type](adr/0016-one-sync-subject-for-every-case-type.md)). The current
+walking-skeleton feed still writes the existing `sharepoint_cases` subject;
+adopting `cora_cases` is a separate migration.
 The medallion is an **application-level profile** (`tools.medallion`), not
 framework vocabulary: the framework stores an opaque `namespace` → file,
 and `medallion(registry, subject)` exposes the `.raw` / `.silver` / `.gold`

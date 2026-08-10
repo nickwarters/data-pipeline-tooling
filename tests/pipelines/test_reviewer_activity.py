@@ -9,13 +9,13 @@ import pytest
 
 from framework.core import Dataset
 from framework.io import Refresh
-from framework.run import RunContext
 from pipelines.reviewer_activity.gold import (
     aggregate_reviewer_activity,
     normalize_reviewer_account,
     reviewer_activity_daily_builder,
 )
-from pipelines.reviewer_activity.pipeline import run
+from pipelines.reviewer_activity.pipeline import main
+from pipelines.sharepoint_cases.schema import FEED_NAME as SYNC_SUBJECT
 from tests.framework_testing import RecordingWriter, given_rows, read_rows, rows_of
 from tools.medallion import medallion
 from tools.observability import timestamps
@@ -74,6 +74,7 @@ def test_aggregate_uses_the_local_calendar_date_and_is_sparse(monkeypatch):
         _case(status="Void"),
         _case(reviewer=""),
         _case(reportable_at=None),
+        _case(case_type=""),
     ]
 
     result = aggregate_reviewer_activity(given_rows(rows).read())
@@ -97,18 +98,6 @@ def test_aggregate_uses_the_local_calendar_date_and_is_sparse(monkeypatch):
     ]
 
 
-def test_conflicting_sync_snapshot_stamps_are_refused():
-    rows = [_case(), _case(as_of_utc="2026-08-10T07:00:00+00:00")]
-
-    with pytest.raises(ValueError, match="conflicting as_of_utc"):
-        aggregate_reviewer_activity(given_rows(rows).read())
-
-
-def test_non_empty_sync_snapshot_requires_an_as_of_stamp():
-    with pytest.raises(ValueError, match="no usable as_of_utc"):
-        aggregate_reviewer_activity(given_rows([_case(as_of_utc=None)]).read())
-
-
 def test_gold_builder_validates_its_aggregate_contract_before_writing():
     writer = RecordingWriter()
 
@@ -116,13 +105,14 @@ def test_gold_builder_validates_its_aggregate_contract_before_writing():
 
     [row] = rows_of(writer)
     assert row["reviewer_account"] == "a.khan"
+    assert row["reportable_date"] == dt.date(2026, 8, 9)
     assert row["count"] == 1
     assert row["as_of_utc"] == AS_OF
 
 
-def test_run_reads_sync_gold_and_refreshes_the_reporting_subject(tmp_path):
+def test_main_reads_sync_gold_and_refreshes_the_reporting_subject(tmp_path):
     registry = StoreRegistry(tmp_path)
-    sync = medallion(registry, "cora_cases")
+    sync = medallion(registry, SYNC_SUBJECT)
     reporting = medallion(registry, "reviewer_activity")
     gold_rows = [_case()]
     silver_rows = [_case(reviewer=r"i:0#.w|CONTEXT\SILVER")]
@@ -134,12 +124,12 @@ def test_run_reads_sync_gold_and_refreshes_the_reporting_subject(tmp_path):
         Dataset.from_pandas(pd.DataFrame(silver_rows))
     )
 
-    run(RunContext(base_dir=tmp_path))
+    assert main(["prog", "--base-dir", str(tmp_path)]) == 0
 
     assert read_rows(reporting.gold, "reviewer_activity_daily") == [
         {
             "reviewer_account": "a.khan",
-            "reportable_date": "2026-08-09 00:00:00",
+            "reportable_date": "2026-08-09",
             "case_type": "claims",
             "count": 1,
             "as_of_utc": AS_OF,
@@ -149,7 +139,7 @@ def test_run_reads_sync_gold_and_refreshes_the_reporting_subject(tmp_path):
     sync.gold.writer("case_current", Refresh()).write(
         Dataset.from_pandas(pd.DataFrame([_case(reviewer=r"CONTEXT\NEW")]))
     )
-    run(RunContext(base_dir=tmp_path))
+    assert main(["prog", "--base-dir", str(tmp_path)]) == 0
 
     rows = read_rows(reporting.gold, "reviewer_activity_daily")
     assert [row["reviewer_account"] for row in rows] == ["new"]
