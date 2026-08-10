@@ -32,11 +32,13 @@ function props(overrides = {}) {
 }
 
 /** @param {HTMLElement} host */
+function statusLine(host) {
+  return /** @type {any} */ (host).querySelector('.cora-people-picker-status');
+}
+
+/** @param {HTMLElement} host */
 function statusText(host) {
-  const line = /** @type {any} */ (host).querySelector(
-    '.cora-people-picker-status'
-  );
-  return line?.textContent ?? null;
+  return statusLine(host).textContent;
 }
 
 test('PeoplePicker wraps input and results in one positioned control', () => {
@@ -88,7 +90,8 @@ test('PeoplePicker renders one selectable option per search result', () => {
   fireEvent(option, 'click');
   assert.deepEqual(selected, [PERSON]);
   assert.equal(getByRole(host, 'listbox').hidden, false);
-  assert.equal(statusText(host), null);
+  assert.equal(statusText(host), '');
+  assert.equal(statusLine(host).getAttribute('aria-hidden'), 'true');
 });
 
 test('no option is ever offered for an empty result set, whatever the status', () => {
@@ -113,23 +116,32 @@ test('a search in flight says so rather than reading as an empty directory', () 
   const host = PeoplePicker(
     props({ status: 'loading', inputValue: 'someone' })
   );
+  assert.ok(statusLine(host));
   assert.equal(statusText(host), 'Searching…');
+  assert.equal(statusLine(host).getAttribute('aria-hidden'), null);
 });
 
 test('a directory that answers with nothing is reported as no matches', () => {
   const host = PeoplePicker(
     props({ status: 'success', inputValue: 'someone' })
   );
+  assert.ok(statusLine(host));
   assert.equal(statusText(host), 'No matches');
+  assert.equal(statusLine(host).getAttribute('aria-hidden'), null);
 });
 
 test('a cleared box makes no claim about matches it never asked for', () => {
-  assert.equal(statusText(PeoplePicker(props({ status: 'idle' }))), null);
+  const host = PeoplePicker(props({ status: 'idle' }));
+  assert.ok(statusLine(host));
+  assert.equal(statusText(host), '');
+  assert.equal(statusLine(host).getAttribute('aria-hidden'), 'true');
 });
 
 test('a failed search is named as a failure, not as an empty directory', () => {
   const host = PeoplePicker(props({ status: 'error', inputValue: 'someone' }));
+  assert.ok(statusLine(host));
   assert.equal(statusText(host), 'Directory search is unavailable');
+  assert.equal(statusLine(host).getAttribute('aria-hidden'), null);
 });
 
 test('a picker names its input for the field it belongs to', () => {

@@ -19,13 +19,12 @@ import { EmptyState, LoadingState } from '../../lib/empty-state.js';
  */
 
 /**
- * What the picker says beneath the box when it has no matches to show: whether
- * the directory is still being asked, answered with nothing, or could not be
- * reached at all. Silence for all three is what let a failing search read as an
- * empty directory.
+ * What the picker says beneath the box: whether the directory is still being
+ * asked, answered with nothing, or could not be reached at all. The element is
+ * always present so its reserved line does not shift the controls below it.
  *
  * @param {PeoplePickerProps} props
- * @returns {HTMLElement | null}
+ * @returns {HTMLElement}
  */
 function peoplePickerStatus(props) {
   const className = 'cora-people-picker-status';
@@ -40,7 +39,10 @@ function peoplePickerStatus(props) {
   if (props.status === 'success' && props.people.length === 0) {
     return EmptyState('No matches', { className });
   }
-  return null;
+  return h('p', {
+    className,
+    'aria-hidden': 'true',
+  });
 }
 
 /**
