@@ -99,13 +99,59 @@ test('reset: links are repainted in our accent colour, not SharePoint blue', () 
   assert.match(body, /text-decoration:\s*none/);
 });
 
-test('reset: H2 headings keep the CORA surface colour over SharePoint theme styles', () => {
-  const body = ruleBody(styles, '[data-cora-root] h2 {');
-  assert.match(
-    body,
-    /color:\s*var\(--cora-color-on-surface\)\s*!important/,
-    'the concrete heading colour must win over SharePoint direct heading rules'
+test('reset: headings keep their CORA colours over SharePoint theme styles', () => {
+  for (const heading of ['h1', 'h2', 'h3']) {
+    const body = ruleBody(styles, `[data-cora-root] ${heading} {`);
+    assert.match(
+      body,
+      /color:\s*var\(--cora-color-on-surface\)\s*!important/,
+      `${heading} must use the concrete CORA surface colour`
+    );
+  }
+
+  const h5AndH6 = ruleBody(
+    styles,
+    '[data-cora-root] h5,\n[data-cora-root] h6 {'
   );
+  assert.match(
+    h5AndH6,
+    /color:\s*var\(--cora-color-on-surface\)\s*!important/,
+    'H5 and H6 must use the concrete CORA surface colour'
+  );
+
+  const h4 = ruleBody(styles, '[data-cora-root] h4 {');
+  assert.match(h4, /color:\s*var\(--cora-color-text-muted\)/);
+  assert.doesNotMatch(
+    h4,
+    /color:\s*var\(--cora-color-text-muted\)\s*!important/
+  );
+});
+
+test('Question Bank: intentional muted headings keep their colours over the base heading rules', () => {
+  for (const selector of [
+    '.cora-bank-editor .rail-section h3 {',
+    '.cora-bank-editor .outcome-options h3 {',
+    '.cora-bank-editor .empty h3 {',
+    '.cora-bank-editor .rem-outcome-block h5 {',
+  ]) {
+    const body = ruleBody(questionBankStyles, selector);
+    assert.match(
+      body,
+      /color:\s*var\(--cora-color-text-muted\)\s*!important/,
+      `${selector} must retain its muted colour over the base heading rule`
+    );
+  }
+});
+
+test('Question Bank: other heading colours remain on the CORA surface token', () => {
+  for (const selector of [
+    '.cora-bank-editor h1 {',
+    '.cora-bank-editor .editor-head h2 {',
+    '.cora-bank-editor .drawer-head h3 {',
+  ]) {
+    const body = ruleBody(questionBankStyles, selector);
+    assert.match(body, /color:\s*var\(--cora-color-on-surface\)/);
+  }
 });
 
 test('Question Bank: field selects use the theme surface rather than a native white fill', () => {

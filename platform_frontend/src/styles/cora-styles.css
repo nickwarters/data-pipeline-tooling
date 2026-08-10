@@ -168,6 +168,7 @@
   font-weight: var(--cora-font-weight-bold);
   line-height: var(--cora-line-height-tight);
   letter-spacing: var(--cora-tracking-tight);
+  color: var(--cora-color-on-surface) !important;
   margin: 0 0 var(--cora-space-3);
 }
 
@@ -187,6 +188,7 @@
 [data-cora-root] h3 {
   font-size: var(--cora-font-size-base);
   font-weight: var(--cora-font-weight-semibold);
+  color: var(--cora-color-on-surface) !important;
   margin: 0 0 var(--cora-space-2);
 }
 
@@ -197,6 +199,11 @@
   letter-spacing: var(--cora-tracking-wider);
   color: var(--cora-color-text-muted);
   margin: 0 0 var(--cora-space-2);
+}
+
+[data-cora-root] h5,
+[data-cora-root] h6 {
+  color: var(--cora-color-on-surface) !important;
 }
 
 [data-cora-root] p {
