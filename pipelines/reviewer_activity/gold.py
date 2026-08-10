@@ -2,20 +2,18 @@
 
 from __future__ import annotations
 
-import datetime as dt
-from collections.abc import Iterable
-
 import pandas as pd
 
 from framework.core import ColumnValidator, Dataset, Reader, SchemaValidator, Writer
 from framework.run import Pipeline, RunLog
+from pipelines.sharepoint_cases.schema import FEED_NAME
 from tools.observability.timestamps import local_date
 
 from .schema import ReviewerActivityDaily
 
 SUBJECT = "reviewer_activity"
 TABLE = "reviewer_activity_daily"
-SYNC_SUBJECT = "cora_cases"
+SYNC_SUBJECT = FEED_NAME
 SYNC_TABLE = "case_current"
 
 SOURCE_COLUMNS = (
@@ -50,43 +48,6 @@ def normalize_reviewer_account(value: object) -> str | None:
     return account or None
 
 
-def _source_as_of(values: Iterable[object]) -> str | None:
-    """Validate and return the one snapshot instant carried by the source."""
-    values = list(values)
-    if not values:
-        return None
-    present = []
-    for value in values:
-        if value is None:
-            continue
-        try:
-            if bool(pd.isna(value)):
-                continue
-        except (TypeError, ValueError):
-            pass
-        present.append(value)
-    if not present:
-        raise ValueError("case_current has no usable as_of_utc value")
-
-    normalized: list[str] = []
-    for value in present:
-        if isinstance(value, dt.datetime):
-            if value.tzinfo is None:
-                raise ValueError("case_current as_of_utc must be timezone-aware")
-            text = value.isoformat()
-        else:
-            text = str(value).strip()
-        parsed = pd.to_datetime(text, utc=True, errors="coerce")
-        if pd.isna(parsed):
-            raise ValueError(f"invalid case_current as_of_utc value: {value!r}")
-        normalized.append(text)
-
-    distinct = tuple(dict.fromkeys(normalized))
-    if len(distinct) != 1:
-        raise ValueError("case_current carries conflicting as_of_utc values")
-    return distinct[0]
-
-
 def _empty_result() -> pd.DataFrame:
     """Return the declared shape for a source with no reportable work."""
     return pd.DataFrame(
@@ -103,7 +64,6 @@ def _empty_result() -> pd.DataFrame:
 def aggregate_reviewer_activity(dataset: Dataset) -> Dataset:
     """Count non-void current Cases by reviewer, local date, and Case Type."""
     frame = dataset.to_pandas().copy()
-    as_of = _source_as_of(frame["as_of_utc"])
 
     eligible = frame.loc[frame["status"].ne("Void")].copy()
     eligible["reviewer_account"] = eligible["assigned_reviewer_name"].map(
@@ -113,9 +73,13 @@ def aggregate_reviewer_activity(dataset: Dataset) -> Dataset:
     eligible["reportable_date"] = reportable.map(
         lambda value: pd.NaT if pd.isna(value) else pd.Timestamp(local_date(value))
     )
-    eligible = eligible.dropna(
-        subset=["reviewer_account", "reportable_date", "case_type"]
-    )
+    case_types = eligible["case_type"].astype("string")
+    eligible = eligible.loc[
+        eligible["reviewer_account"].notna()
+        & eligible["reportable_date"].notna()
+        & case_types.notna()
+        & case_types.str.strip().ne("")
+    ]
 
     if eligible.empty:
         return Dataset.from_pandas(_empty_result())
@@ -130,6 +94,10 @@ def aggregate_reviewer_activity(dataset: Dataset) -> Dataset:
         .reset_index(name="count")
     )
     grouped["count"] = grouped["count"].astype("int64")
+    # Sync's Refresh-built current table stamps one literal as_of_utc on every
+    # row. Carry that contract through the reduction, stamping after the
+    # group-by like the sibling gold aggregates do.
+    as_of = eligible["as_of_utc"].iloc[0]
     grouped["as_of_utc"] = pd.Series(
         [as_of] * len(grouped), index=grouped.index, dtype="string"
     )
@@ -137,6 +105,15 @@ def aggregate_reviewer_activity(dataset: Dataset) -> Dataset:
         ["reviewer_account", "reportable_date", "case_type", "count", "as_of_utc"]
     ]
     return Dataset.from_pandas(result.reset_index(drop=True))
+
+
+def _serialize_reportable_date(dataset: Dataset) -> Dataset:
+    """Give SQLite a date-only value after the declared schema has passed."""
+    frame = dataset.to_pandas().copy()
+    frame["reportable_date"] = frame["reportable_date"].map(
+        lambda value: value.date() if pd.notna(value) else None
+    )
+    return Dataset.from_pandas(frame)
 
 
 def reviewer_activity_daily_builder(
@@ -162,5 +139,8 @@ def reviewer_activity_daily_builder(
         aggregated,
         name="validate-gold",
     )
-    p.write(writer, validated, name="write")
+    serialised = p.transform(
+        _serialize_reportable_date, validated, name="serialize-date"
+    )
+    p.write(writer, serialised, name="write")
     return p
