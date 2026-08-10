@@ -216,6 +216,9 @@ fixed delay or by guessing how many microtasks an implementation needs.
   to control a debounce or retry boundary precisely.
 - Use deferred promises to assert an intermediate state such as
   `reconnecting`, then release the operation and await its completion signal.
+- Never drain microtask turns to wait for a cold dynamic `import()` — module
+  loading is filesystem I/O, so no number of turns can cover it. Await a
+  deferred promise resolved from the stub the code under test calls.
 - Keep a real-timer assertion only for the timer adapter itself.
 
 ## Red-Green-Refactor
