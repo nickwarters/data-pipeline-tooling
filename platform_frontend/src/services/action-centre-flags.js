@@ -50,6 +50,21 @@ export function awaitingFrontlineAfterPost(roles, message) {
 }
 
 /**
+ * The Awaiting Frontline pair at Send Actions. Sending the Remediation Actions
+ * *is* the hand-off to the Responsible Party, so the Case starts awaiting them
+ * at that instant — without this it would sit outside the group until someone
+ * happened to post a Message. The instant is an argument rather than a fresh
+ * reading because this is one event: the hand-off and the reportable milestone
+ * are the same moment, so reading the clock twice would give it two timestamps.
+ *
+ * @param {string} at the instant the hand-off was stamped
+ * @returns {Partial<CaseRow>}
+ */
+export function awaitingFrontlineSent(at) {
+  return { awaitingResponsibleParty: true, awaitingSince: at };
+}
+
+/**
  * The Awaiting Frontline pair for a Case that is waiting on nobody. A completed
  * Case is not awaiting a reply, and without this the last Reviewer message
  * would leave it ageing in that group for ever.
