@@ -74,30 +74,38 @@ Reviewers should be able to request the next available case to be assigned to th
 
 ### My Stats page
 
-`#/my-stats` is a Reviewer-only shell that loads the signed-in Reviewer's Report
+`#/my-stats` is a Reviewer-only page that loads the signed-in Reviewer's Report
 Feed from `Shared Documents/cora_report_feeds/my-stats/{bare-account}.txt`.
-The account filename is lower-cased after claims/domain reduction. A missing
-file means no report is available; `?mock=1` loads the canonical development
-fixture. A loaded feed now also renders a Case Type proportion panel for the
-selected browser-calendar range. Feed dates are compared inclusively from the
-range start through yesterday, so today's rows are excluded; duplicate rows
-are aggregated, and only positive totals are shown. Slugs are resolved to
-display names through `case-types/manifest.js`, with unknown slugs humanized
-for presentation rather than exposed as raw identifiers. A missing feed and
-chart show “No data yet.”; a feed with no counts in the selected range keeps the
-panel and shows “No data for this range.”.
+The account filename is lower-cased after claims/domain reduction; `?mock=1`
+loads the canonical development fixture.
 
-The route still snapshots the four browser-calendar ranges (Week, Month, 3
-months, and 12 months) and owns the selected range, defaulting to Week. No
-range picker is rendered yet. A separate mapper can provide the existing
-`my-stats/chart-loaded` grouped chart view model; when present, the panel sits
-left of the chart, while chart-only rendering remains unchanged. The pure chart
-builder exposes each mark's full description, including its formatted value and
-provisional status, as SVG metadata, while the route mounts an HTML-over-SVG
-tooltip under the app root after commit. The same keyboard-focusable mark
-supports pointer hover and keyboard focus; Escape dismisses the tooltip. The
-Case Type panel reads only the feed: live-tail computation and feed-to-chart
-mapping remain separate deferred work.
+**With no file published, the page says so** — "No report has been published for
+you yet." — and reads no Case lists at all. That is a different statement from a
+published report with nothing in the selected range, which keeps the Case Type
+panel and shows "No data for this range.". No producing pipeline writes these
+files yet, so the no-report state is what production shows today.
+
+**With a file, the page tops it up.** The report is authoritative for every day
+up to its `complete_through`; the days after it are counted in the browser from
+the Reviewer's own Case lists, one bounded request per Case Type and never
+reaching back more than ten calendar days. Published days draw solid, live days
+hollow — provenance only, not "excluded". If that read fails, or the file is
+older than ten days, one muted line under the figures says so; the published
+half is never hidden.
+
+Beneath the chart row sit four figures, all derived from the same merged counts
+as the chart: **Total** (excluding today, carried by `* excludes today`),
+**Avg per working day** (Mon–Fri minus `ENGLAND_WALES_HOLIDAYS`, never
+shortened to "avg/day"), **Active days**, and **Busiest day** with its count.
+The average's numerator counts every day including weekends while its divisor
+counts working days only, and leave is invisible to it — a stated inaccuracy,
+which is why Active days sits beside it.
+
+The route snapshots the four browser-calendar ranges (Week, Month, 3 months,
+and 12 months) and owns the selected range, defaulting to Week. No range picker
+is rendered yet. The route mounts an HTML-over-SVG tooltip under the app root
+after commit; the same keyboard-focusable mark supports pointer hover and
+keyboard focus, and Escape dismisses the tooltip.
 
 ### Team Stats page
 

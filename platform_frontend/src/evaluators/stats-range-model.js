@@ -1,5 +1,7 @@
 // @ts-check
 
+import { toLocalDateKey } from '../lib/local-calendar.js';
+
 const MONTH_NAMES = [
   'January',
   'February',
@@ -14,7 +16,13 @@ const MONTH_NAMES = [
   'November',
   'December',
 ];
-const SHORT_MONTH_NAMES = [
+/**
+ * Abbreviated month names, shared with the figures beneath the chart so one
+ * date reads the same way wherever the page shows it.
+ *
+ * @type {readonly string[]}
+ */
+export const SHORT_MONTH_NAMES = [
   'Jan',
   'Feb',
   'Mar',
@@ -169,7 +177,13 @@ export function buildStatsRanges(now = new Date()) {
     throw new TypeError('now must be a valid Date');
   }
 
-  const today = calendarDate(now.getFullYear(), now.getMonth(), now.getDate());
+  // The one crossing from instant to calendar date on this page, borrowed from
+  // the shared rule rather than spelled again here. The guard above has already
+  // rejected anything that could come back without a date.
+  const [year, month, day] = /** @type {string} */ (toLocalDateKey(now))
+    .split('-')
+    .map(Number);
+  const today = calendarDate(year, month - 1, day);
   const end = addDays(today, -1);
   const common = { end: dateKey(end), today: dateKey(today) };
 
