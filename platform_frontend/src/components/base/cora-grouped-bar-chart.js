@@ -459,23 +459,22 @@ function markView(mark, series, groupLabel, valueLabel, x, y, width, height) {
   return svg(
     'g',
     { className: 'cora-grouped-bar-chart__mark', key: mark.key },
-    svg(
-      'rect',
-      {
-        className: `cora-grouped-bar-chart__bar${provisional ? ' cora-grouped-bar-chart__bar--provisional' : ''}`,
-        key: 'bar',
-        x,
-        y,
-        width,
-        height,
-        fill: provisional ? 'none' : token,
-        stroke: token,
-        'stroke-width': provisional ? 2 : 1,
-        role: 'img',
-        'aria-label': description,
-      },
-      svg('title', { key: 'title' }, description)
-    ),
+    svg('rect', {
+      className: `cora-grouped-bar-chart__bar${provisional ? ' cora-grouped-bar-chart__bar--provisional' : ''}`,
+      key: 'bar',
+      x,
+      y,
+      width,
+      height,
+      fill: provisional ? 'none' : token,
+      stroke: token,
+      'stroke-width': provisional ? 2 : 1,
+      role: 'img',
+      'aria-label': description,
+      'data-cora-chart-mark': 'true',
+      'data-cora-chart-description': description,
+      tabindex: '0',
+    }),
     svg(
       'text',
       {

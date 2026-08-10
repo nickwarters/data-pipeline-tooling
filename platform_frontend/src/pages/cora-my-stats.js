@@ -6,6 +6,7 @@ import { patchRoute } from '../core/route-state.js';
 import { ignoreAbortError } from '../lib/abort.js';
 import { loadReportFeed } from '../services/report-feed-loader.js';
 import { buildStatsRanges } from '../evaluators/stats-range-model.js';
+import { mountGroupedBarChartTooltip } from '../lib/chart-tooltip.js';
 
 /** @typedef {import('../core/chrome-state.js').ChromeState} ChromeState */
 /** @typedef {import('../components/base/cora-grouped-bar-chart.js').GroupedBarChartData} GroupedBarChartData */
@@ -53,8 +54,8 @@ export function myStatsView(state) {
  * @returns {{
  *   initialState: MyStatsState,
  *   reducer: (state: MyStatsState, action: any) => MyStatsState,
- *   view: (state: MyStatsState) => HTMLElement,
- *   start: (tools: { dispatch: (action: unknown) => void, context: import('../setup/register-routes.js').AppContext, isActive: () => boolean, signal: AbortSignal }) => void,
+ *   render: (container: Element, state: MyStatsState, tools: { render: (container: Element, view: Node) => void, context: import('../setup/register-routes.js').AppContext }) => void,
+ *   start: (tools: { dispatch: (action: unknown) => void, context: import('../setup/register-routes.js').AppContext, isActive: () => boolean, signal: AbortSignal }) => (() => void),
  * }}
  */
 export function createRouteSlice(
@@ -63,6 +64,11 @@ export function createRouteSlice(
   { loadReportFeed: load = loadReportFeed, now = () => new Date() } = {}
 ) {
   const ranges = buildStatsRanges(now());
+  /** @type {SVGSVGElement|null} */
+  let chartSvg = null;
+  /** @type {ReturnType<typeof mountGroupedBarChartTooltip>|null} */
+  let tooltipController = null;
+
   return {
     initialState: {
       chrome: context.chrome,
@@ -88,7 +94,24 @@ export function createRouteSlice(
       }
       return state;
     },
-    view: myStatsView,
+    render(container, state, tools) {
+      tools.render(container, myStatsView(state));
+
+      const chart = /** @type {SVGSVGElement|null} */ (
+        container.querySelector('svg.cora-grouped-bar-chart')
+      );
+      if (chart !== chartSvg) {
+        tooltipController?.dispose();
+        tooltipController = null;
+        chartSvg = chart;
+        if (chart) {
+          tooltipController = mountGroupedBarChartTooltip(chart, {
+            host: tools.context.appEl,
+          });
+        }
+      }
+      tooltipController?.refresh();
+    },
     start(tools) {
       void load(tools.context.chrome.currentUser.id, { signal: tools.signal })
         .then((reportFeed) => {
@@ -97,6 +120,11 @@ export function createRouteSlice(
           }
         })
         .catch(ignoreAbortError);
+      return () => {
+        tooltipController?.dispose();
+        tooltipController = null;
+        chartSvg = null;
+      };
     },
   };
 }

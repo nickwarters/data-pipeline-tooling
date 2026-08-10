@@ -488,12 +488,25 @@ test('all-zero and empty data use finite positive geometry', () => {
 test('each mark carries its own accessible identity and provisional hollow encoding', () => {
   const root = GroupedBarChart({ data, config });
   const provisional = all(root, '.cora-grouped-bar-chart__bar--provisional')[0];
-  const title = provisional.childNodes.find(
-    (/** @type {any} */ child) => child.tagName === 'title'
-  );
+  /** @type {any[]} */
+  const markTitles = [];
+  /** @type {any[]} */
+  const legendTitles = [];
+  walk(provisional, (node) => {
+    if (node.tagName === 'title') markTitles.push(node);
+  });
+  walk(/** @type {any} */ (root), (node) => {
+    if (node.tagName === 'title') legendTitles.push(node);
+  });
 
   assert.ok(provisional);
   assert.equal(provisional.getAttribute('role'), 'img');
+  assert.equal(provisional.getAttribute('data-cora-chart-mark'), 'true');
+  assert.equal(
+    provisional.getAttribute('data-cora-chart-description'),
+    'Group: Week <one>: Provisional, 4 cases, provisional'
+  );
+  assert.equal(provisional.getAttribute('tabindex'), '0');
   assert.equal(provisional.getAttribute('fill'), 'none');
   assert.equal(provisional.getAttribute('stroke'), 'var(--cora-color-warning)');
   assert.equal(provisional.getAttribute('stroke-width'), '2');
@@ -501,7 +514,12 @@ test('each mark carries its own accessible identity and provisional hollow encod
     provisional.getAttribute('aria-label'),
     'Group: Week <one>: Provisional, 4 cases, provisional'
   );
-  assert.equal(title?.textContent, provisional.getAttribute('aria-label'));
+  assert.equal(markTitles.length, 0);
+  assert.equal(legendTitles.length, 2);
+  assert.deepEqual(
+    legendTitles.map((title) => title.textContent),
+    ['Provisional', 'Settled']
+  );
   assert.equal(provisional.querySelector('script'), null);
 });
 

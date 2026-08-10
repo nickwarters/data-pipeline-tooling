@@ -14,9 +14,9 @@ supports both `h()` and `svg()`; only the element namespace widens.
 
 The my-stats page needs a chart. There are no third-party runtime dependencies
 and there never will be (ADR-0001), so the chart is ours to draw. The current
-consumer needs grouped bars with axes, value labels, and formatted values;
-line charts and stacked bars are anticipated, while tooltip behavior is a
-separate follow-up.
+consumer needs grouped bars with axes, value labels, formatted values, and an
+HTML tooltip layered over the SVG; line charts and stacked bars are
+anticipated.
 
 **The blocker is not the missing library — it is the view primitive.** `h()`
 builds elements with `document.createElement(tag)`. An `<svg>` produced that way
@@ -60,8 +60,15 @@ only: it does not load data or implement line charts, stacked bars, or custom
 tooltips. It validates the data contract, gives repeated mark keys stable
 key-sorted series slots, and sparsifies large x-axis label sets.
 
-**Tooltips are deferred to #451.** The component does not add an HTML overlay;
-the follow-up owns the HTML-over-SVG interaction and its positioning.
+The pure SVG builder exposes each mark's full description, including its
+formatted value and provisional status, as data metadata on the focusable
+rectangle (`data-cora-chart-mark` and `data-cora-chart-description`). The my-stats
+route uses its custom render seam to mount one HTML `[role="tooltip"]` under
+the app root after the SVG is committed. The controller delegates pointer and
+keyboard focus events from the SVG, keeps the focused mark ahead of a hovered
+mark, positions the overlay over the chart, and dismisses it with Escape from
+the document while it is open. It owns the temporary `aria-describedby` link
+and removes the overlay and listeners when the route unmounts.
 
 ### Rejected
 
@@ -103,8 +110,11 @@ leaves `h()` alone.
   custom properties directly, so the chart inherits the palette rather than
   declaring its own.
 - **Accessibility is now explicit work.** HTML bars would have been accessible
-  by construction; SVG needs `role`, `<title>` or `aria-label` per mark. That
-  cost is real and is the main thing lost against the CSS/DOM alternative.
+  by construction; SVG keeps `role="img"` and `aria-label` on each focusable
+  mark rectangle. The per-mark SVG `<title>` is superseded by the HTML
+  tooltip, which exposes the full mark description, while legend titles remain.
+  Keyboard focus reaches the same mark target as pointer hover, and Escape
+  dismisses the tooltip even when it was opened by pointer hover.
 - **Series identity is key-based.** Marks with the same key share a horizontal
   slot across groups, including when a group omits or reorders marks. Slots are
   sorted by key for deterministic output. A repeated key whose label or

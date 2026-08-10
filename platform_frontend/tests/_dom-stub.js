@@ -172,6 +172,15 @@ export class StubEl {
     notifyDomMutation();
     return c;
   }
+  /** @param {StubEl|null} node @returns {boolean} */
+  contains(node) {
+    let current = node;
+    while (current) {
+      if (current === this) return true;
+      current = current.parentNode;
+    }
+    return false;
+  }
   insertBefore(/** @type {StubEl} */ c, /** @type {StubEl|null} */ ref) {
     // Mirror the real DOM: inserting a node that already has a parent moves it
     // (detaches from its current position first) rather than duplicating it.
@@ -393,10 +402,25 @@ export function walk(root, fn) {
 function matches(n, sel) {
   const attrMatch = sel.match(/^\[([\w-]+)="([^"]*)"\]$/);
   if (attrMatch) return n.getAttribute(attrMatch[1]) === attrMatch[2];
-  if (sel.startsWith('.'))
-    return n.className.split(/\s+/).includes(sel.slice(1));
   if (sel.startsWith('#')) return n.id === sel.slice(1);
-  return n.tagName === sel.toUpperCase();
+  const classValue = n.getAttribute?.('class') ?? n.className ?? '';
+  /** @param {string[]} classes */
+  const hasClasses = (classes) =>
+    classes.every((className) =>
+      String(classValue).split(/\s+/).includes(className)
+    );
+  const classParts = sel.split('.');
+  if (classParts.length > 1) {
+    const [tag, ...classes] = classParts;
+    return (!tag || tag === '*' || matchesTag(n, tag)) && hasClasses(classes);
+  }
+  return sel === '*' ? n.tagName !== '#text' : matchesTag(n, sel);
+}
+
+/** @param {StubEl} n @param {string} sel */
+function matchesTag(n, sel) {
+  if (n.namespaceURI === SVG_NAMESPACE) return n.tagName === sel;
+  return n.tagName.toLowerCase() === sel.toLowerCase();
 }
 
 /**

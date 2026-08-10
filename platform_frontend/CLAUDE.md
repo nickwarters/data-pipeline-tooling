@@ -233,6 +233,7 @@ src/
     case-machine.js
     case-route-links.js
     case-statuses.js            # CASE_STATUS: the persisted Case lifecycle values — do not change them
+    chart-tooltip.js            # delegated HTML-over-SVG tooltip controller for grouped chart marks
     empty-state.js              # EmptyState/LoadingState: the shared "nothing here yet" and
                                 #   in-flight placeholders, one spelling of each
     html.js                     # h()/svg() plain-function view primitives

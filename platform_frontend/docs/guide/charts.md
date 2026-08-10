@@ -74,9 +74,28 @@ including when the caller supplies a zero top margin, so value labels cannot
 land in the legend.
 
 The returned root is named with `role="group"`. Each bar has its own stable
-key, `role="img"`, `aria-label`, and `<title>` containing its group, series,
-formatted value, and provisional status where applicable. Group and mark keys
-let `core/render.js` move existing SVG nodes when the caller reorders data.
+key, `role="img"`, and `aria-label` containing its group, series, formatted
+value, and provisional status where applicable. Each mark rectangle also has
+`tabindex="0"` and the stable `data-cora-chart-mark="true"` hook with its full
+description in `data-cora-chart-description`. The per-mark SVG `<title>` is not
+emitted: the HTML overlay replaces that native hover affordance while the
+mark's accessible name remains its `aria-label`. Legend `<title>` elements are
+retained. Group and mark keys let `core/render.js` move existing SVG nodes when
+the caller reorders data.
+
+## Tooltip
+
+The pure chart builder does not touch `document`, `window`, or install event
+listeners. When the committed chart appears on `#/my-stats`, the route mounts
+one HTML `div[role="tooltip"]` under `context.appEl`, outside the reconciled
+route container and SVG. Pointer hover and keyboard focus use the same mark
+rectangle; a focused mark takes priority over a hovered mark. The overlay
+contains the full mark description as text, wraps through CSS, uses a fixed
+position above the mark with a below fallback, clamps horizontally to the
+viewport, and refreshes on resize and document scrolling. Its temporary
+`aria-describedby` ownership is removed when the mark changes, the chart
+disappears, or the route unmounts. Escape dismisses the current tooltip even
+when it was opened by pointer hover.
 
 ## My Stats
 
@@ -105,6 +124,6 @@ When that feed is connected, solid marks retain ADR-0048's settled/feed
 provenance and hollow provisional marks retain its live-tail provenance. Hollow
 does not mean excluded or zero.
 
-Line charts, stacked bars, custom tooltips, and data loading are out of this
-component's contract. HTML-over-SVG tooltip behavior is deferred to the
-existing [tooltip work](https://github.com/nickwarters/data-pipeline-tooling/issues/451).
+Line charts, stacked bars, custom tooltip markup, and data loading are out of
+this component's contract. The route owns the HTML-over-SVG tooltip controller
+around the pure chart builder.

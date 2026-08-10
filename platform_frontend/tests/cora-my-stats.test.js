@@ -17,12 +17,14 @@ const FIXED_NOW = new Date(2026, 7, 10, 12);
 function dependencies(overrides = {}) {
   return { now: () => new Date(FIXED_NOW), ...overrides };
 }
+const { render } = await import('../src/core/render.js');
 
 /** @param {any} [client] */
 function context(client = {}) {
   return /** @type {any} */ ({
     client,
     chrome: makeChrome(),
+    appEl: document.createElement('div'),
   });
 }
 
@@ -208,6 +210,78 @@ test('my stats slice: snapshots the clock once and reducers reuse its ranges', (
   assert.equal(calls, 1);
   assert.equal(selected.routes.myStats.ranges, ranges);
   assert.equal(ignored.routes.myStats.ranges, ranges);
+});
+
+test('my stats route render owns the chart tooltip lifecycle', () => {
+  const routeContext = context();
+  const slice = createRouteSlice({}, routeContext, {
+    loadReportFeed: async () => null,
+  });
+  const container = document.createElement('main');
+  const tools = /** @type {any} */ ({
+    render,
+    context: routeContext,
+  });
+
+  slice.render(container, slice.initialState, tools);
+  assert.equal(routeContext.appEl.querySelectorAll('div').length, 0);
+
+  const chartState = slice.reducer(slice.initialState, {
+    type: 'my-stats/chart-loaded',
+    chart: {
+      data: {
+        groups: [
+          {
+            key: 'week-one',
+            label: 'Week one',
+            marks: [{ key: 'settled', label: 'Settled', value: 4 }],
+          },
+        ],
+      },
+      config: { width: 240, height: 160, ariaLabel: 'Review counts' },
+    },
+  });
+
+  slice.render(container, chartState, tools);
+  const firstPage = /** @type {any[]} */ (
+    /** @type {unknown} */ (container.childNodes)
+  ).find((/** @type {any} */ node) => node.tagName === 'MAIN');
+  const firstChart = firstPage?.childNodes.find(
+    (/** @type {any} */ node) => node.tagName === 'svg'
+  );
+  assert.ok(firstChart);
+  assert.strictEqual(
+    container.querySelector('svg.cora-grouped-bar-chart'),
+    firstChart
+  );
+  assert.equal(routeContext.appEl.querySelectorAll('div').length, 1);
+  slice.render(container, chartState, tools);
+  assert.equal(routeContext.appEl.querySelectorAll('div').length, 1);
+
+  container.replaceChildren();
+  slice.render(container, chartState, tools);
+  const secondPage = /** @type {any[]} */ (
+    /** @type {unknown} */ (container.childNodes)
+  ).find((/** @type {any} */ node) => node.tagName === 'MAIN');
+  const secondChart = secondPage?.childNodes.find(
+    (/** @type {any} */ node) => node.tagName === 'svg'
+  );
+  assert.ok(secondChart);
+  assert.notEqual(secondChart, firstChart);
+  assert.equal(
+    /** @type {any} */ (firstChart)._listeners.pointerover.length,
+    0
+  );
+  assert.equal(routeContext.appEl.querySelectorAll('div').length, 1);
+
+  const dispose = slice.start({
+    context: routeContext,
+    signal: new AbortController().signal,
+    isActive: () => true,
+    dispatch() {},
+  });
+  dispose();
+  assert.equal(routeContext.appEl.querySelectorAll('div').length, 0);
 });
 
 /** @type {import('../src/services/report-feed-loader.js').ReportFeedEnvelope} */
