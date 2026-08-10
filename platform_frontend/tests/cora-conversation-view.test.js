@@ -59,6 +59,40 @@ test('conversation view renders messages and gates composition by access', () =>
   assert.equal(readOnly.querySelector('textarea'), null);
 });
 
+test('conversation Send reads and clears the live textarea after a rerender', () => {
+  /** @type {any} */
+  const container = document.createElement('main');
+  /** @type {HTMLTextAreaElement | null} */
+  let liveTextarea = null;
+  /** @type {string[]} */
+  const sent = [];
+  const props = {
+    messages: [],
+    access: /** @type {const} */ ('edit'),
+    heading: 'Conversation',
+    onSend: (body) => {
+      assert.equal(liveTextarea?.value, '');
+      sent.push(body);
+    },
+  };
+
+  render(container, conversationView(props));
+  liveTextarea = container.querySelector('.cora-conversation-input');
+  assert.ok(liveTextarea);
+
+  render(container, conversationView(props));
+  assert.strictEqual(
+    container.querySelector('.cora-conversation-input'),
+    liveTextarea
+  );
+
+  liveTextarea.value = '  Follow up with the responsible party  ';
+  fireEvent(container.querySelector('.cora-conversation-send'), 'click');
+
+  assert.deepEqual(sent, ['Follow up with the responsible party']);
+  assert.equal(liveTextarea.value, '');
+});
+
 test('posting preserves JSON-blob PATCH, ETag, list routing, and queue refresh', async () => {
   /** @type {any[]} */
   const calls = [];
