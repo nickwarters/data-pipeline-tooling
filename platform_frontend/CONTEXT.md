@@ -274,10 +274,17 @@ Reviewers can reach `#/my-stats`, which loads their Report Feed by lower-cased
 bare account from the SharePoint document library; it is not available to a
 **Reviewer Manager** who lacks the Reviewer capability. A missing feed is an
 empty report, and the view keeps `No data yet.` until a separate mapper supplies
-the optional grouped chart view model. The page does not load a second data path
-or map the Report Feed itself. Settled marks are solid and provisional marks are
-hollow, preserving Report Feed provenance rather than treating hollow as zero or
-excluded.
+the optional grouped chart view model. On route creation the page snapshots the
+browser-local calendar into four comparison ranges: the previous complete
+Monday–Sunday week plus this week through today, the previous complete month
+plus this month through today, three complete months plus the current month,
+and twelve complete months plus the current month. Day-grain ranges use daily
+buckets and the longer ranges use monthly buckets; totals end at browser-local
+yesterday while the current display bucket extends through today. The page owns
+this range state and defaults to Week, but does not yet render the picker. It
+does not load a second data path or map the Report Feed itself. Settled marks are
+solid and provisional marks are hollow, preserving Report Feed provenance rather
+than treating hollow as zero or excluded.
 _Avoid_: Assessor, evaluator
 
 **Assigned Reviewer**:

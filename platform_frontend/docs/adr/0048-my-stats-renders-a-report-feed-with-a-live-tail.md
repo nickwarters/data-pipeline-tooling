@@ -50,6 +50,29 @@ Rules 2 and 3 are separate on purpose. A day that is finished but unpublished
 and a day still in progress are both hollow, and only one of them is excluded —
 one visual state meaning both would make the page lie about one of them.
 
+The page owns four fixed browser-calendar windows. Each includes complete
+previous period(s) and the current partial period so every selection has a
+comparison:
+
+| Range     | Window                                                          | Grain |
+| --------- | --------------------------------------------------------------- | ----- |
+| Week      | previous complete Monday–Sunday plus current Monday–today       | day   |
+| Month     | previous complete calendar month plus current month–today       | day   |
+| 3 months  | three complete months before this month plus the current month  | month |
+| 12 months | twelve complete months before this month plus the current month | month |
+
+The browser snapshots its local calendar date when the route slice is created.
+In every descriptor, `end` is browser-local yesterday and is the inclusive
+totals cutoff; `today` is the inclusive display endpoint. The final daily or
+monthly bucket therefore extends through today even though totals stop at
+yesterday. Previous monthly buckets end on their calendar month end, while the
+current monthly bucket ends today. Day keys are `YYYY-MM-DD`, month keys are
+`YYYY-MM`, and the current labels state `(today)` or `(current month)`.
+
+This decision currently lands only the pure range descriptors and selected
+range in route state. It does not render range controls or connect the ranges
+to the Report Feed, chart mapping, totals, or live-tail calculation yet.
+
 ### Why the live read is affordable
 
 - `AssignedReviewer` and `ReportableAt` are both **indexed** on every

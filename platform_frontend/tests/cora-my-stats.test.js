@@ -8,6 +8,15 @@ installDom();
 
 const { createRouteSlice, myStatsView } =
   await import('../src/pages/cora-my-stats.js');
+const { buildStatsRanges } =
+  await import('../src/evaluators/stats-range-model.js');
+
+const FIXED_NOW = new Date(2026, 7, 10, 12);
+
+/** @param {Record<string, unknown>} [overrides] */
+function dependencies(overrides = {}) {
+  return { now: () => new Date(FIXED_NOW), ...overrides };
+}
 
 /** @param {any} [client] */
 function context(client = {}) {
@@ -71,10 +80,14 @@ test('my stats view: renders supplied chart data and omits the fallback', () => 
 
 test('my stats slice: keeps shared chrome and starts with no Report Feed', () => {
   const chrome = makeChrome();
-  const slice = createRouteSlice({}, { ...context(), chrome });
+  const slice = createRouteSlice({}, { ...context(), chrome }, dependencies());
 
   assert.equal(slice.initialState.chrome, chrome);
-  assert.deepEqual(slice.initialState.routes.myStats, { reportFeed: null });
+  assert.deepEqual(slice.initialState.routes.myStats, {
+    reportFeed: null,
+    ranges: buildStatsRanges(FIXED_NOW),
+    selectedRange: 'week',
+  });
   assert.equal(
     slice.reducer(slice.initialState, { type: 'ignored' }),
     slice.initialState
@@ -82,7 +95,7 @@ test('my stats slice: keeps shared chrome and starts with no Report Feed', () =>
 });
 
 test('my stats slice: accepts a chart view model without mapping the Report Feed', () => {
-  const slice = createRouteSlice({}, context());
+  const slice = createRouteSlice({}, context(), dependencies());
   const chart = {
     data: {
       groups: [
@@ -107,6 +120,94 @@ test('my stats slice: accepts a chart view model without mapping the Report Feed
 
   assert.equal(next.routes.myStats.chart, chart);
   assert.equal(next.routes.myStats.reportFeed, null);
+});
+
+test('my stats slice: accepts every range in the snapshot', () => {
+  const slice = createRouteSlice({}, context(), dependencies());
+
+  for (const range of ['week', 'month', '3-months', '12-months']) {
+    const next = slice.reducer(slice.initialState, {
+      type: 'my-stats/range-selected',
+      range,
+    });
+    assert.equal(next.routes.myStats.selectedRange, range);
+  }
+});
+
+test('my stats slice: ignores a range outside the snapshot', () => {
+  const slice = createRouteSlice({}, context(), dependencies());
+
+  assert.equal(
+    slice.reducer(slice.initialState, {
+      type: 'my-stats/range-selected',
+      range: 'quarter',
+    }),
+    slice.initialState
+  );
+});
+
+test('my stats slice: range selection preserves all other state', () => {
+  const chrome = makeChrome();
+  const slice = createRouteSlice({}, { ...context(), chrome }, dependencies());
+  const chart = {
+    data: {
+      groups: [
+        {
+          key: 'week-one',
+          label: 'Week one',
+          marks: [{ key: 'settled', label: 'Settled', value: 4 }],
+        },
+      ],
+    },
+    config: { width: 240, height: 160, ariaLabel: 'Review counts' },
+  };
+  const state = /** @type {any} */ ({
+    ...slice.initialState,
+    routes: {
+      ...slice.initialState.routes,
+      myStats: {
+        ...slice.initialState.routes.myStats,
+        reportFeed: envelope,
+        chart,
+        futureField: 'preserved',
+      },
+      sibling: { value: 1 },
+    },
+  });
+
+  const next = slice.reducer(state, {
+    type: 'my-stats/range-selected',
+    range: 'month',
+  });
+  const preserved = /** @type {any} */ (next);
+
+  assert.equal(next.chrome, chrome);
+  assert.equal(next.routes.myStats.reportFeed, envelope);
+  assert.equal(next.routes.myStats.chart, chart);
+  assert.equal(next.routes.myStats.ranges, state.routes.myStats.ranges);
+  assert.equal(preserved.routes.myStats.futureField, 'preserved');
+  assert.equal(preserved.routes.sibling, state.routes.sibling);
+});
+
+test('my stats slice: snapshots the clock once and reducers reuse its ranges', () => {
+  let calls = 0;
+  const slice = createRouteSlice({}, context(), {
+    now: () => {
+      calls += 1;
+      return new Date(FIXED_NOW);
+    },
+  });
+  const ranges = slice.initialState.routes.myStats.ranges;
+
+  const selected = slice.reducer(slice.initialState, {
+    type: 'my-stats/range-selected',
+    range: '12-months',
+  });
+  const ignored = slice.reducer(selected, { type: 'ignored' });
+
+  assert.equal(calls, 1);
+  assert.equal(selected.routes.myStats.ranges, ranges);
+  assert.equal(ignored.routes.myStats.ranges, ranges);
 });
 
 /** @type {import('../src/services/report-feed-loader.js').ReportFeedEnvelope} */
@@ -140,6 +241,7 @@ test('my stats slice: loads the signed-in account with the mount signal', async 
     chrome: makeChrome({ currentUser: { id: 'someone-else' } }),
   };
   const slice = createRouteSlice({}, sliceContext, {
+    now: dependencies().now,
     loadReportFeed: async (loadedAccount, options) => {
       account = loadedAccount;
       signal = options?.signal;
@@ -159,6 +261,7 @@ test('my stats slice: dispatches a loaded Report Feed envelope', async () => {
   /** @type {unknown[]} */
   const dispatched = [];
   const slice = createRouteSlice({}, context(), {
+    now: dependencies().now,
     loadReportFeed: async () => envelope,
   });
 
@@ -183,6 +286,7 @@ test('my stats slice: dispatches null when no Report Feed exists', async () => {
   /** @type {unknown[]} */
   const dispatched = [];
   const slice = createRouteSlice({}, context(), {
+    now: dependencies().now,
     loadReportFeed: async () => null,
   });
 
@@ -212,6 +316,7 @@ test('my stats slice: suppresses a late Report Feed result after unmount', async
   /** @type {unknown[]} */
   const dispatched = [];
   const slice = createRouteSlice({}, context(), {
+    now: dependencies().now,
     loadReportFeed: () => loading,
   });
   const tools = startTools({
@@ -232,6 +337,7 @@ test('my stats slice: treats an aborted Report Feed load as navigation', async (
   /** @type {unknown[]} */
   const dispatched = [];
   const slice = createRouteSlice({}, context(), {
+    now: dependencies().now,
     loadReportFeed: async () => {
       throw abort;
     },
