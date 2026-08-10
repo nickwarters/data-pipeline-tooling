@@ -1001,9 +1001,6 @@ function buildFilterExpr(filter) {
       `AwaitingResponsibleParty eq ${filter.awaitingResponsibleParty ? 1 : 0}`
     );
   }
-  if (filter.reviewRequired !== undefined) {
-    conds.push(`ReviewRequired eq ${filter.reviewRequired ? 1 : 0}`);
-  }
   if (filter.onHold !== undefined) {
     conds.push(`OnHold eq ${filter.onHold ? 1 : 0}`);
   }

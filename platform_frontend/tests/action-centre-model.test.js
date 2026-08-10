@@ -55,27 +55,27 @@ const NOW = new Date('2026-07-04T00:00:00Z');
 test('ACTION_CENTRE_REASONS: fixed priority order, labels, roles, tones', () => {
   assert.deepEqual(
     ACTION_CENTRE_REASONS.map((r) => r.id),
-    ['overdue', 'awaitingFrontline', 'reviewRequired', 'appeals']
+    ['overdue', 'awaitingFrontline', 'appeals']
   );
   assert.deepEqual(
     ACTION_CENTRE_REASONS.map((r) => r.label),
-    ['Overdue', 'Awaiting Frontline', 'Review Required', 'Appeals to work']
+    ['Overdue', 'Awaiting Frontline', 'Appeals to work']
   );
   assert.deepEqual(
     ACTION_CENTRE_REASONS.map((r) => r.role),
-    ['Reviewer', 'Reviewer', 'Reviewer', 'Controls']
+    ['Reviewer', 'Reviewer', 'Controls']
   );
   assert.deepEqual(
     ACTION_CENTRE_REASONS.map((r) => r.tone),
-    ['overdue', 'awaiting', 'review', 'appeal']
+    ['overdue', 'awaiting', 'appeal']
   );
 });
 
-test('reasonsForCapabilities: reviewer sees the three reviewer reasons', () => {
+test('reasonsForCapabilities: reviewer sees the two reviewer reasons', () => {
   const ids = reasonsForCapabilities(caps({ isReviewer: true })).map(
     (r) => r.id
   );
-  assert.deepEqual(ids, ['overdue', 'awaitingFrontline', 'reviewRequired']);
+  assert.deepEqual(ids, ['overdue', 'awaitingFrontline']);
 });
 
 // Appeals are switched off in this build, so the reason stays in the table —
@@ -106,34 +106,28 @@ test('reasonsForCapabilities: multi-role user sees the union', () => {
   ).map((r) => r.id);
   // 'appeals' is absent only because the feature switch is off; restore it to
   // the tail of this list when the switch goes.
-  assert.deepEqual(ids, ['overdue', 'awaitingFrontline', 'reviewRequired']);
+  assert.deepEqual(ids, ['overdue', 'awaitingFrontline']);
 });
 
 test('reasonsForCapabilities: a visitor sees no reasons', () => {
   assert.deepEqual(reasonsForCapabilities(caps({ isVisitor: true })), []);
 });
 
-test('visibleReasons: "Needs action now" hides the tail-only Review Required', () => {
+test('visibleReasons: with no tail-only reason in the table, both toggle states show the same reasons', () => {
   const reasons = reasonsForCapabilities(caps({ isReviewer: true }));
   assert.deepEqual(
     visibleReasons(reasons, true).map((r) => r.id),
-    ['overdue', 'awaitingFrontline'],
-    'the within-SLA backlog is hidden'
+    ['overdue', 'awaitingFrontline']
   );
   assert.deepEqual(
     visibleReasons(reasons, false).map((r) => r.id),
-    ['overdue', 'awaitingFrontline', 'reviewRequired'],
-    'All reveals Review Required'
+    ['overdue', 'awaitingFrontline']
   );
 });
 
 test('activeFilter: reviewer reasons are scoped to the current reviewer', () => {
   assert.deepEqual(activeFilter(reason('overdue'), 'u1'), {
     overdue: true,
-    assignedReviewer: 'u1',
-  });
-  assert.deepEqual(activeFilter(reason('reviewRequired'), 'u1'), {
-    reviewRequired: true,
     assignedReviewer: 'u1',
   });
 });
@@ -159,8 +153,8 @@ test('worstFirstOrder: oldest on the reason clock first', () => {
     orderBy: 'dueDate',
     orderDir: 'asc',
   });
-  assert.deepEqual(worstFirstOrder(reason('reviewRequired')), {
-    orderBy: 'created',
+  assert.deepEqual(worstFirstOrder(reason('awaitingFrontline')), {
+    orderBy: 'awaitingSince',
     orderDir: 'asc',
   });
 });
@@ -340,7 +334,7 @@ test('waitingInfo: a Conversation-flagged row keeps the 7-day cadence', () => {
   assert.equal(within.breached, false);
 });
 
-test('waitingLabel: awaiting frontline, review required, and appeals phrasing', () => {
+test('waitingLabel: awaiting frontline and appeals phrasing', () => {
   assert.equal(
     waitingInfo(
       caseRow({ awaitingSince: '2026-06-22T00:00:00Z' }),
@@ -348,14 +342,6 @@ test('waitingLabel: awaiting frontline, review required, and appeals phrasing', 
       NOW
     ).label,
     '12 days no reply'
-  );
-  assert.equal(
-    waitingInfo(
-      caseRow({ created: '2026-06-30T00:00:00Z' }),
-      reason('reviewRequired'),
-      NOW
-    ).label,
-    '4 days open'
   );
   assert.equal(
     waitingInfo(
@@ -397,12 +383,12 @@ test('subLine: reviewer sub-line with no assignee shows only the RP', () => {
 test('secondaryReasons: reads the hoisted flags in priority order', () => {
   const c = caseRow({
     overdue: true,
-    reviewRequired: true,
+    awaitingResponsibleParty: true,
     hasOpenAppeal: true,
   });
   assert.deepEqual(
     secondaryReasons(c, 'overdue').map((r) => r.id),
-    ['reviewRequired', 'appeals']
+    ['awaitingFrontline', 'appeals']
   );
   assert.deepEqual(secondaryReasons(caseRow(), 'overdue'), []);
 });

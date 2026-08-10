@@ -123,7 +123,7 @@ test('MockSharePointClient: countCases with anyOf ORs sub-filters, deduped acros
         // Qualifies for two reasons — must be counted once by an OR-count.
         reasonCase('multi', {
           awaitingResponsibleParty: true,
-          reviewRequired: true,
+          onHold: true,
         }),
         reasonCase('await-only', { awaitingResponsibleParty: true }),
         reasonCase('none', {}),
@@ -134,7 +134,7 @@ test('MockSharePointClient: countCases with anyOf ORs sub-filters, deduped acros
 
   const orCount = await client.countCases(
     {
-      anyOf: [{ awaitingResponsibleParty: true }, { reviewRequired: true }],
+      anyOf: [{ awaitingResponsibleParty: true }, { onHold: true }],
     },
     { listName: LIST }
   );
@@ -144,22 +144,32 @@ test('MockSharePointClient: countCases with anyOf ORs sub-filters, deduped acros
     (await client.countCases(
       { awaitingResponsibleParty: true },
       { listName: LIST }
-    )) +
-    (await client.countCases({ reviewRequired: true }, { listName: LIST }));
+    )) + (await client.countCases({ onHold: true }, { listName: LIST }));
   assert.equal(sumOfGroups, 3, 'summing groups double-counts the overlap');
 });
 
 test('MockSharePointClient: anyOf combines with a base filter (AND of base, OR of anyOf)', async () => {
-  const client = makeReasonClient();
-  const completedAppealsOrReviewRequired = await client.countCases(
+  const client = new MockSharePointClient({
+    lists: {
+      [LIST]: [
+        reasonCase('appeal-1', {
+          status: 'Completed',
+          hasOpenAppeal: true,
+        }),
+        reasonCase('hold-1', { onHold: true }),
+      ],
+    },
+    personas: PERSONAS,
+  });
+  const completedAppealsOrOnHold = await client.countCases(
     {
       status: 'Completed',
-      anyOf: [{ hasOpenAppeal: true }, { reviewRequired: true }],
+      anyOf: [{ hasOpenAppeal: true }, { onHold: true }],
     },
     { listName: LIST }
   );
-  // Only appeal-1 is Completed; review-1 is In-progress, excluded by the base.
-  assert.equal(completedAppealsOrReviewRequired, 1);
+  // Only appeal-1 is Completed; hold-1 is In-progress, excluded by the base.
+  assert.equal(completedAppealsOrOnHold, 1);
 });
 
 // --- Indexed flag column writes ---

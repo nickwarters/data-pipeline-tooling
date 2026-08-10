@@ -659,7 +659,6 @@ test('HttpSharePointClient: countCases maps the reason flags to indexed boolean 
   await client.countCases(
     {
       awaitingResponsibleParty: true,
-      reviewRequired: true,
       hasOpenAppeal: false,
     },
     { listName: 'Cases-ExampleReview' }
@@ -667,7 +666,6 @@ test('HttpSharePointClient: countCases maps the reason flags to indexed boolean 
 
   const url = decodeURIComponent(calls[0].url);
   assert.ok(url.includes('AwaitingResponsibleParty eq 1'));
-  assert.ok(url.includes('ReviewRequired eq 1'));
   assert.ok(url.includes('HasOpenAppeal eq 0'));
 });
 
@@ -1056,7 +1054,6 @@ test('HttpSharePointClient: countCases with every reason flag false renders ever
   await client.countCases(
     {
       awaitingResponsibleParty: false,
-      reviewRequired: false,
       hasOpenAppeal: true,
       outcomeOverridden: false,
     },
@@ -1065,7 +1062,6 @@ test('HttpSharePointClient: countCases with every reason flag false renders ever
 
   const url = decodeURIComponent(calls[0].url);
   assert.ok(url.includes('AwaitingResponsibleParty eq 0'));
-  assert.ok(url.includes('ReviewRequired eq 0'));
   assert.ok(url.includes('HasOpenAppeal eq 1'));
   assert.ok(url.includes('OutcomeOverridden eq 0'));
 });

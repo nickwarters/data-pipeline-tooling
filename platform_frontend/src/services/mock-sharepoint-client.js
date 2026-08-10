@@ -195,11 +195,6 @@ export class MockSharePointClient {
         Boolean(c.awaitingResponsibleParty) !== filter.awaitingResponsibleParty
       )
         return false;
-      if (
-        filter.reviewRequired !== undefined &&
-        Boolean(c.reviewRequired) !== filter.reviewRequired
-      )
-        return false;
       if (filter.onHold !== undefined && Boolean(c.onHold) !== filter.onHold)
         return false;
       if (

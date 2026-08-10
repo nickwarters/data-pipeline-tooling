@@ -23,7 +23,7 @@ so getting it right up front is the whole game.
 
 - **Index these columns on the empty list, up front.** See
   [Indexed columns](#indexed-columns) below.
-- **Max 20 indexes per list.** We currently index 15, so there is headroom, but
+- **Max 20 indexes per list.** We currently index 14, so there is headroom, but
   the ceiling is real — do not index blindly.
 - **Compound (two-column) indexes** are available if a future live query needs a
   two-column narrowing; they count against the same 20-index budget.
@@ -110,7 +110,7 @@ lead with an indexed predicate.
 | `AppealRaisedAt`                                        | Date and Time                                                         |         | Clock paired with `HasOpenAppeal`; app-written.                                                                                                                                                                                    |
 | `AwaitingResponsibleParty`                              | Yes/No                                                                |  **✓**  | Action Centre reason flag; app-written on Conversation posts and at Send Actions, cleared on close and void.                                                                                                                       |
 | `AwaitingSince`                                         | Date and Time                                                         |         | Clock paired with `AwaitingResponsibleParty`; app-written.                                                                                                                                                                         |
-| `ReviewRequired`                                        | Yes/No                                                                |  **✓**  | Action Centre reason flag; nothing writes it yet (issue #699).                                                                                                                                                                     |
+| `ReviewRequired`                                        | Yes/No                                                                |         | Retired Action Centre reason flag (issue #515); no longer read or written by the app, kept only because live rows still carry stored values.                                                                                       |
 | `OnHold`                                                | Yes/No                                                                |  **✓**  | Reviewer hold state; indexed for allocation capacity counts.                                                                                                                                                                       |
 | `PlacedOnHoldAt`                                        | Date and Time                                                         |         | Cleared automatically when leaving `In-progress`.                                                                                                                                                                                  |
 | `VoidedAt`                                              | Date and Time                                                         |  **✓**  | Stamped when a Case is voided; app-written. Leads the void report's date window, so it must be indexed on the empty list.                                                                                                          |
@@ -160,17 +160,17 @@ list is past the threshold.
 
 ## Indexed columns
 
-The 15 columns to index on the empty `Cases-{slug}` list — the
+The 14 columns to index on the empty `Cases-{slug}` list — the
 lifecycle/date columns, the Action Centre reason flags that live reads lead
 with, the two columns Case search leads with, and the one the data pipeline
 polls on:
 
 `Status`, `DueDate`, `CompletedAt`, `AssignedReviewer`, `ResponsibleParty`,
 `AssignedReviewerManager`, `ResponsiblePartyManager`, `HasOpenAppeal`,
-`AwaitingResponsibleParty`, `ReviewRequired`, `OnHold`, `Title`,
+`AwaitingResponsibleParty`, `OnHold`, `Title`,
 `ReportableAt`, `VoidedAt`, `Modified`.
 
-15 of a maximum 20 indexes per list. Add any promoted detail column (above) to
+14 of a maximum 20 indexes per list. Add any promoted detail column (above) to
 this set only if a live query will lead with it, and keep the total ≤ 20.
 
 `Modified` is a SharePoint built-in, so it needs no creating — but it does need

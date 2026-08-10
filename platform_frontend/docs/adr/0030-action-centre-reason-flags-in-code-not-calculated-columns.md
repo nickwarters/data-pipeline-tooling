@@ -138,6 +138,31 @@ remediation SLA), Conversation-flagged rows keep the 7-day "no reply" cadence
 unchanged, and splitting the group into a separate remediation worklist
 remains open as a product question but is not needed for correctness.
 
+### Amendment — issue #515, 2026-08-10
+
+**The Review Required reason is retired.** The amendment above (issue #691) left it
+standing as "empty in production" pending a submit-for-review transition, with
+issue #699 tracking that transition's build. That claim has proved false on live: the
+group is populated, by `ReviewRequired` values the app never wrote. The most
+plausible explanation is a Yes/No column provisioned with a default of Yes — to be
+confirmed against the live list — but whichever it is, the group matched Cases on an
+accident of provisioning, not on anything the app's own transitions produced, and was
+never a worklist.
+
+**What is removed** is the reason entry itself, the `reviewRequired` branch of both
+clients' filters, the `ListCasesFilter` field, the demo fixture rows that existed only
+to show the group, and the `review` tone styles. **What deliberately stays** is the
+`ReviewRequired` column and both halves of its row serialisation — stored live values
+remain until the column's default is fixed and the already-stamped rows are dealt
+with, an operational task recorded on the ticket — along with the `CaseRow` field
+those halves map to, and the `tailOnly`/`visibleReasons` seam, which now has no
+tail-only reason to hide.
+
+**A real submit-for-review feature remains a live possibility**, but it is a new
+decision with its own transition and its own flag pairing, not a resurrection of this
+one — the ticket issue #699 previously referenced for building that transition is
+superseded by this amendment.
+
 ## Context
 
 The dashboard Action Centre groups a Reviewer/Controls/Owner worklist by

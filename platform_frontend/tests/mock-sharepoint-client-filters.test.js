@@ -552,36 +552,7 @@ test('MockSharePointClient: countCases returns the count of matching cases', asy
     await client.countCases({ hasOpenAppeal: true }, { listName: LIST }),
     1
   );
-  assert.equal(
-    await client.countCases({ reviewRequired: true }, { listName: LIST }),
-    1
-  );
-  assert.equal(await client.countCases({}, { listName: LIST }), 5);
-});
-
-test('MockSharePointClient: filters by the reviewRequired flag', async () => {
-  const client = new MockSharePointClient({
-    lists: {
-      [LIST]: [
-        reasonCase('rr-1', { reviewRequired: true }),
-        reasonCase('rr-2', { reviewRequired: true }),
-        reasonCase('plain', {}),
-      ],
-    },
-    personas: PERSONAS,
-  });
-  assert.equal(
-    await client.countCases({ reviewRequired: true }, { listName: LIST }),
-    2
-  );
-  const rows = await client.listCases(
-    { reviewRequired: false },
-    { listName: LIST }
-  );
-  assert.deepEqual(
-    rows.map((c) => c.id),
-    ['plain']
-  );
+  assert.equal(await client.countCases({}, { listName: LIST }), 4);
 });
 
 test('MockSharePointClient: countCases with a listName that has no configured store counts zero', async () => {
@@ -598,7 +569,7 @@ test('MockSharePointClient: filters treat a missing reason flag as false', async
     { awaitingResponsibleParty: false },
     { listName: LIST }
   );
-  assert.equal(notAwaiting.length, 3);
+  assert.equal(notAwaiting.length, 2);
   assert.ok(!notAwaiting.some((c) => c.id.startsWith('await')));
 });
 

@@ -195,6 +195,12 @@
  * be resolved live from the directory, since that Role carries `edit` on the
  * Conversation.
  *
+ * `reviewRequired` is read and written on the row but no longer drives any
+ * app behaviour: nothing sets it and nothing filters on it. It stays on the
+ * row shape because live list rows still carry stored values from before the
+ * flag was retired, and cleaning those up is a separate, outside-the-repo
+ * task.
+ *
  * @typedef {{
  * id: string,
  * caseType: string,
@@ -357,7 +363,7 @@
  * to its internal column before emitting `$orderby`. Only a key that client maps
  * is sortable — an unmapped one throws there rather than reaching SharePoint.
  *
- * @typedef {{ status?: string, assignedReviewer?: string, caseType?: string, responsibleParty?: string, overdue?: boolean, awaitingResponsibleParty?: boolean, reviewRequired?: boolean, onHold?: boolean, hasOpenAppeal?: boolean, assignedReviewerManager?: string, effectiveOutcome?: string, outcomeOverridden?: boolean, completedAfter?: string, completedBefore?: string, reportableAfter?: string, reportableBefore?: string, voidedAfter?: string, voidedBefore?: string, titlePrefix?: string, anyOf?: ListCasesFilter[] }} ListCasesFilter
+ * @typedef {{ status?: string, assignedReviewer?: string, caseType?: string, responsibleParty?: string, overdue?: boolean, awaitingResponsibleParty?: boolean, onHold?: boolean, hasOpenAppeal?: boolean, assignedReviewerManager?: string, effectiveOutcome?: string, outcomeOverridden?: boolean, completedAfter?: string, completedBefore?: string, reportableAfter?: string, reportableBefore?: string, voidedAfter?: string, voidedBefore?: string, titlePrefix?: string, anyOf?: ListCasesFilter[] }} ListCasesFilter
  * @typedef {{ listName?: string, top?: number, skip?: number, orderBy?: string, orderDir?: 'asc' | 'desc' }} CaseListOptions
  */
 
@@ -514,7 +520,7 @@
 /**
  * How long a Case may sit in each Action Centre reason group before its
  * "waiting" chip reads as breached, in whole days, keyed by reason id
- * (`overdue`, `awaitingFrontline`, `reviewRequired`, `appeals`).
+ * (`overdue`, `awaitingFrontline`, `appeals`).
  *
  * Deliberately **partial**: a Case Type names only the reasons whose cadence
  * differs from the framework's, and every other reason keeps the default that

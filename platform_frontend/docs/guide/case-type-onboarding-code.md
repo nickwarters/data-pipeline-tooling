@@ -271,9 +271,10 @@ What each field does, and how to choose its value:
   - **`actionCentreSlaDays`** — how long a Case may sit in each Action Centre
     reason group before its waiting chip reads as breached, e.g.
     `{ awaitingFrontline: 14 }`. Partial: name only the reasons you differ on.
-    The reason ids are `overdue`, `awaitingFrontline`, `reviewRequired` and
+    The reason ids are `overdue`, `awaitingFrontline` and
     `appeals`; `npm run verify` rejects any other key. (`reopened` was removed
-    by issue #691 — no transition ever wrote its flag.)
+    by issue #691, and `reviewRequired` by issue #515 — neither had a
+    transition that ever wrote its flag.)
   - **`breachWindowHours`** — how far ahead the dashboard's Owner "At risk" tile
     looks for a Case about to breach its due date. Positive integer; default 24.
     The tile's sub-reason label states the window it applied, so it stays honest.

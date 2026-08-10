@@ -106,7 +106,6 @@ function toListItem(row) {
     EffectiveOutcome: row.effectiveOutcome ?? null,
     OutcomeOverridden: row.outcomeOverridden ? 1 : 0,
     AwaitingResponsibleParty: row.awaitingResponsibleParty ? 1 : 0,
-    ReviewRequired: row.reviewRequired ? 1 : 0,
     OnHold: row.onHold ? 1 : 0,
     HasOpenAppeal: row.hasOpenAppeal ? 1 : 0,
   };
@@ -268,12 +267,6 @@ const SCENARIOS = [
     expected: ['waiting'],
   },
   {
-    name: 'reviewRequired',
-    filter: { reviewRequired: true },
-    rows: [caseRow('flagged', { reviewRequired: true }), caseRow('clear')],
-    expected: ['flagged'],
-  },
-  {
     name: 'onHold',
     filter: { onHold: true },
     rows: [caseRow('parked', { onHold: true }), caseRow('running')],
@@ -329,10 +322,10 @@ const SCENARIOS = [
   },
   {
     name: 'anyOf',
-    filter: { anyOf: [{ onHold: true }, { reviewRequired: true }] },
+    filter: { anyOf: [{ onHold: true }, { hasOpenAppeal: true }] },
     rows: [
       caseRow('parked', { onHold: true }),
-      caseRow('queued', { reviewRequired: true }),
+      caseRow('queued', { hasOpenAppeal: true }),
       caseRow('plain'),
     ],
     expected: ['parked', 'queued'],

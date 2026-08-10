@@ -499,9 +499,7 @@ export const cases = [
   // Carry the hoisted reason flags/clocks the app's own write path produces, so
   // the ?asUser=action-centre persona sees every reason group populated. The
   // reviewer reasons are assigned to user-reviewer (the persona's id); Appeals
-  // is role-scoped, not reviewer-scoped. `reviewRequired` is the one flag
-  // seeded without a transition behind it — nothing writes it yet — so the
-  // group is demoable before that transition is built.
+  // is role-scoped, not reviewer-scoped.
   {
     id: 'ac-overdue-1',
     caseType: 'complaints',
@@ -573,42 +571,6 @@ export const cases = [
     created: _fiveDaysAgo.toISOString(),
     assignedAt: _fiveDaysAgo.toISOString(),
     etag: 'etag-ac-aw2',
-  },
-  {
-    id: 'ac-review-1',
-    caseType: 'complaints',
-    title: 'Affordability recheck',
-    status: 'In-progress',
-    assignedReviewer: 'user-reviewer',
-    responsibleParty: 'user-agent-a',
-    responsiblePartyDisplayName: 'Frankie Agent',
-    answers: {},
-    conversation: [],
-    notes: '',
-    completedAt: null,
-    dueDate: _nextWeek.toISOString(),
-    reviewRequired: true,
-    created: _fourDaysAgo.toISOString(),
-    assignedAt: _fourDaysAgo.toISOString(),
-    etag: 'etag-ac-rr1',
-  },
-  {
-    id: 'ac-review-2',
-    caseType: 'complaints',
-    title: 'Income evidence',
-    status: 'In-progress',
-    assignedReviewer: 'user-reviewer',
-    responsibleParty: 'user-agent-b',
-    responsiblePartyDisplayName: 'Rowan Agent',
-    answers: {},
-    conversation: [],
-    notes: '',
-    completedAt: null,
-    dueDate: _nextWeek.toISOString(),
-    reviewRequired: true,
-    created: _twoDaysAgo.toISOString(),
-    assignedAt: _twoDaysAgo.toISOString(),
-    etag: 'etag-ac-rr2',
   },
   {
     id: 'ac-appeal-1',

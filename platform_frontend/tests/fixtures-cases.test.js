@@ -177,7 +177,7 @@ test('every assigned mock Case carries the moment it was assigned', () => {
 // awaiting clock reading an instant no writer could have stamped — demos a
 // state no transition can produce. Two writers set the awaiting pair, so its
 // clock is either the last Conversation message's own timestamp or the instant
-// the hand-off was stamped. `reviewRequired` is exempt while nothing writes it.
+// the hand-off was stamped.
 test('every mock fixture row carries flags a transition could have written', () => {
   for (const row of mockCases) {
     const where = `fixture ${row.id}`;

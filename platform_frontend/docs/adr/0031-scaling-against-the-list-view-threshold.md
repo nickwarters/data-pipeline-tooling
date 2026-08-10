@@ -60,6 +60,9 @@ columns:
 
 `Reopened` left this set when its read surface was removed (issue #691); no
 existing list needs the index dropped, but a new one no longer needs it added.
+`ReviewRequired` left the same way when its reason was retired (issue #515):
+no existing list needs the index dropped, but a new one no longer needs it
+added.
 
 `Title` and `ReportableAt` were added to this set by [ADR-0045] (Case search): `Title`
 holds the Case Reference and is matched by anchored prefix, and `ReportableAt` is the

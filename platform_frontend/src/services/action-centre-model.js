@@ -3,7 +3,7 @@
  * Reason model for the dashboard **Action Centre** worklist.
  *
  * The Action Centre merges the per-role dashboard tables (Overdue, Awaiting
- * Frontline, Review Required, Appeals to work, …) into one
+ * Frontline, Appeals to work, …) into one
  * urgency-ranked, reason-grouped list. This module is the pure, data-only core:
  * an ordered table of **reasons**, plus the helpers that turn a Case row into
  * its reason chip, role tag, "waiting" age and sub-line. It performs no I/O —
@@ -17,8 +17,9 @@
  *
  * Reviewer reasons are **scoped to the current reviewer** (`reviewerScoped`), so
  * a reviewer's worklist shows only their own assigned Cases; Controls/Owner
- * reasons stay unscoped. The `tailOnly` reasons (Review Required) are the
- * within-SLA backlog and are hidden by the "Needs action now" toggle.
+ * reasons stay unscoped. The `tailOnly` seam hides a within-SLA backlog reason
+ * from the "Needs action now" toggle; no current reason is tail-only, and the
+ * mechanism stays in place for the next backlog-shaped reason.
  *
  * @typedef {import('../sharepoint-client.js').CaseRow} CaseRow
  * @typedef {import('../sharepoint-client.js').ListCasesFilter} ListCasesFilter
@@ -31,9 +32,9 @@
  * id: string,
  * label: string,
  * role: string,
- * tone: 'overdue' | 'awaiting' | 'review' | 'appeal',
- * clockField: 'dueDate' | 'awaitingSince' | 'created' | 'appealRaisedAt',
- * flagField: 'overdue' | 'awaitingResponsibleParty' | 'reviewRequired' | 'hasOpenAppeal',
+ * tone: 'overdue' | 'awaiting' | 'appeal',
+ * clockField: 'dueDate' | 'awaitingSince' | 'appealRaisedAt',
+ * flagField: 'overdue' | 'awaitingResponsibleParty' | 'hasOpenAppeal',
  * filter: ListCasesFilter,
  * defaultSlaDays: number,
  * reviewerScoped: boolean,
@@ -78,7 +79,7 @@ function assigneeSubLine(caseRow) {
 
 /**
  * The reason table, in fixed priority order (Overdue → Awaiting Frontline →
- * Review Required → Appeals). Group ordering is this fixed priority;
+ * Appeals). Group ordering is this fixed priority;
  * the primary reason of a multi-reason case is the earliest match here.
  *
  * `defaultSlaDays` is the framework cadence for a reason — what a Case Type
@@ -119,30 +120,6 @@ export const ACTION_CENTRE_REASONS = [
     tailOnly: false,
     requires: (c) => c.isReviewer,
     waitingLabel: (days) => `${dayCount(days)} no reply`,
-    subLine: assigneeSubLine,
-  },
-  {
-    id: 'reviewRequired',
-    label: 'Review Required',
-    role: 'Reviewer',
-    tone: 'review',
-    clockField: 'created',
-    flagField: 'reviewRequired',
-    filter: { reviewRequired: true },
-    defaultSlaDays: 14,
-    reviewerScoped: true,
-    // The within-SLA backlog: the reviewer's remaining in-flight Cases that
-    // aren't overdue or awaiting a reply. Hidden until the "All" toggle.
-    //
-    // Nothing in this app sets the flag this group queries. No lifecycle
-    // transition submits a Case for review — there is no such step and no
-    // status for it — so the group is empty in production, and every part of
-    // it below (the clock, the cadence, the wording) describes a state no
-    // Case reaches. Filling it needs a real "submit for review" transition
-    // that writes ReviewRequired, or the reason retired.
-    tailOnly: true,
-    requires: (c) => c.isReviewer,
-    waitingLabel: (days) => `${dayCount(days)} open`,
     subLine: assigneeSubLine,
   },
   {
@@ -189,8 +166,8 @@ export function reasonsForCapabilities(capabilities) {
 }
 
 /**
- * The reasons visible under the current toggle. "Needs action now" hides the
- * `tailOnly` within-SLA backlog (Review Required); "All" shows everything.
+ * The reasons visible under the current toggle. "Needs action now" hides any
+ * `tailOnly` within-SLA backlog reason; "All" shows everything.
  *
  * @param {Reason[]} reasons
  * @param {boolean} needsActionNow
