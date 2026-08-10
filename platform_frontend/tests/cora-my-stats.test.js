@@ -197,11 +197,9 @@ test('my stats view: the panel, the chart and the figures are all rendered', () 
 
   const topRow = view.querySelector('.cora-my-stats-top-row');
   assert.ok(topRow);
-  assert.equal(
-    topRow.childNodes[0]?.className,
-    'cora-my-stats-case-type-panel'
-  );
-  assert.equal(topRow.childNodes[1]?.tagName, 'svg');
+  const topRowChildren = /** @type {any[]} */ (Array.from(topRow.childNodes));
+  assert.equal(topRowChildren[0]?.className, 'cora-my-stats-case-type-panel');
+  assert.equal(topRowChildren[1]?.tagName, 'svg');
   assert.ok(view.querySelector('.cora-my-stats-headline'));
 });
 
@@ -265,7 +263,7 @@ test('my stats view: a failed live read is noted without hiding the published ha
   );
 
   assert.match(
-    view.querySelector('.cora-my-stats-tail-note')?.textContent,
+    view.querySelector('.cora-my-stats-tail-note')?.textContent ?? '',
     /could not be counted just now/
   );
   assert.ok(view.querySelector('.cora-my-stats-headline'));
@@ -282,7 +280,7 @@ test('my stats view: a report older than the clamp says which days are missing',
   );
 
   assert.match(
-    view.querySelector('.cora-my-stats-tail-note')?.textContent,
+    view.querySelector('.cora-my-stats-tail-note')?.textContent ?? '',
     /Only the last 10 days of unpublished work are counted here/
   );
 });
