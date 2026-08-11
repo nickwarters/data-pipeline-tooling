@@ -22,9 +22,7 @@ def build_pipeline_sets():
                 ScheduledPipeline("pipelines/sharepoint_cases", Schedule.daily()),
                 ScheduledPipeline(
                     "pipelines/reviewer_activity",
-                    Schedule.on_weekdays(
-                        "monday", "tuesday", "wednesday", "thursday", "friday"
-                    ),
+                    Schedule.daily(),
                     depends_on=(FreshnessRequirement("sharepoint_cases"),),
                 ),
             ),

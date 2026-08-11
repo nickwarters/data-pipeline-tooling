@@ -250,15 +250,16 @@ A `--app` that names a module which cannot be imported, or which exposes no
 `build_pipeline_sets()`, is a configuration error: it exits non-zero with the
 same clean, traceback-free message every other CLI failure prints.
 
-The real `case_review` app schedules `sharepoint_cases` daily, followed by
-`reviewer_activity` Monday through Friday. The schedule dependency and the
-reviewer pipeline's `UPSTREAMS` declaration both apply the Sync freshness check
-before normal publication. Known stale Sync history blocks normal publication;
-when no successful Sync history exists, the current first-run policy allows the
-run with a warning. After Friday's run, the Monday live tail may continue using
-the Friday artifact, whose `complete_through` is Thursday, until the next
-scheduled working-day run completes. Republishing an already-committed artifact
-remains an explicit `publish_only` retry.
+The real `case_review` app schedules both `sharepoint_cases` and
+`reviewer_activity` on working days (Monday-Friday by default). The
+`reviewer_activity` schedule dependency and its pipeline `UPSTREAMS`
+declaration both apply the Sync freshness check before normal publication.
+Known stale Sync history blocks normal publication; when no successful Sync
+history exists, the current first-run policy allows the run with a warning.
+Because both schedules use the same working-day calendar, the Monday live tail
+may continue using Friday's artifact, whose `complete_through` is Thursday,
+until the next scheduled working-day run completes. Republishing an
+already-committed artifact remains an explicit `publish_only` retry.
 
 ### Seeding the working-day calendar — `--calendar`
 
