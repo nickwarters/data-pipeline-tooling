@@ -72,6 +72,8 @@ Case Type Owners should be able to see the amount of cases of their particualr t
 
 Reviewers should be able to request the next available case to be assigned to them. Depending on what the user is able to review (based on different case types and properties) the next available case should be assigned to them and be visible in the outstanding cases list. Different case types are stored in different lists.
 
+The dashboard re-reads each listed candidate immediately before its claim to obtain a fresh ETag and confirm that it is still claimable. A rejected candidate re-read is skipped so later candidates can still be tried; when every candidate re-read rejects, the first read error is logged and the existing availability state is kept so the next request can retry.
+
 ### My Stats page
 
 `#/my-stats` is a Reviewer-only page that loads the signed-in Reviewer's Report
