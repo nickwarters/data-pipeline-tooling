@@ -380,13 +380,19 @@ test('state: capture person search is held per failed Question and per field', (
       status: 'success',
     },
   });
+  state = caseReviewReducer(state, {
+    type: 'case/capture-search-input',
+    questionId: 'q1',
+    fieldKey: 'attributedTo',
+    query: 'Janet',
+  });
 
   assert.deepEqual(state.routes.caseReview.captureSearch, {
     q1: {
       attributedTo: {
-        query: 'Jane',
+        query: 'Janet',
         people: [{ loginName: 'jsmith', displayName: 'Jane Smith' }],
-        status: 'success',
+        status: 'idle',
       },
       reviewedBy: { query: 'Alex', people: [], status: 'idle' },
     },
@@ -671,11 +677,21 @@ test('state: the Case-level Responsible Party search is one query, not one per Q
   });
   assert.deepEqual(typedAgain.routes.caseReview.responsiblePartySearch, {
     query: 'Janet',
+    people: [{ loginName: 'jsmith', displayName: 'Jane Smith' }],
+    status: 'idle',
+  });
+
+  const blank = caseReviewReducer(typedAgain, {
+    type: 'case/responsible-party-search-input',
+    query: '  ',
+  });
+  assert.deepEqual(blank.routes.caseReview.responsiblePartySearch, {
+    query: '  ',
     people: [],
     status: 'idle',
   });
 
-  const cleared = caseReviewReducer(typedAgain, {
+  const cleared = caseReviewReducer(blank, {
     type: 'case/responsible-party-search-cleared',
   });
   assert.deepEqual(cleared.routes.caseReview.responsiblePartySearch, {
@@ -791,10 +807,19 @@ test('route: the Responsible Party search is debounced and its choice is persist
     route.state.routes.caseReview.responsiblePartySearch.query,
     'Jane'
   );
+  assert.equal(
+    route.state.routes.caseReview.responsiblePartySearch.status,
+    'idle'
+  );
 
   t.mock.timers.tick(199);
   assert.deepEqual(searches, []);
   t.mock.timers.tick(1);
+  assert.equal(
+    route.state.routes.caseReview.responsiblePartySearch.status,
+    'loading'
+  );
+  assert.equal(pickerStatusText(route.container), 'Searching…');
   await Promise.resolve();
   await Promise.resolve();
   assert.deepEqual(searches, ['Jane']);
@@ -853,9 +878,8 @@ function pickerOptionCount(container) {
 }
 
 test('route: a capture search still in flight says so and offers nothing', (t) => {
-  // The free-text fallback used to appear here — during the debounce window and
-  // the request itself — so the Reviewer could commit an unresolved account
-  // before the directory had answered at all.
+  // Only directory results are selectable, and loading makes that boundary
+  // explicit once the debounced request has started.
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const route = renderCaptureSearchRoute(() => new Promise(() => {}));
   const input = getByRole(route.container, 'combobox', {
@@ -866,12 +890,16 @@ test('route: a capture search still in flight says so and offers nothing', (t) =
 
   assert.equal(
     route.state.routes.caseReview.captureSearch.q1.attributedTo.status,
-    'loading'
+    'idle'
   );
   assert.equal(pickerOptionCount(route.container), 0);
-  assert.equal(pickerStatusText(route.container), 'Searching…');
+  assert.equal(pickerStatusText(route.container), '');
 
   t.mock.timers.tick(200);
+  assert.equal(
+    route.state.routes.caseReview.captureSearch.q1.attributedTo.status,
+    'loading'
+  );
   assert.equal(pickerStatusText(route.container), 'Searching…');
   route.dispose();
 });
@@ -944,6 +972,13 @@ test('route: a failure for a query the Reviewer has typed past leaves the open s
   const second = field();
   second.value = 'Jane';
   fireEvent(second, 'input');
+
+  assert.equal(
+    route.state.routes.caseReview.captureSearch.q1.attributedTo.status,
+    'idle',
+    'a retyped query waits through its debounce before showing loading'
+  );
+  t.mock.timers.tick(200);
 
   pending[0].reject(new Error('HTTP Error: 400'));
   await Promise.resolve();

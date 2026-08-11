@@ -153,9 +153,6 @@ function reviewerPickerView(route, tools) {
     status: route.reviewerSearch.status,
     inputValue: route.reviewerSearch.query,
     onQueryInput: (query) => {
-      // Order matters: the search reports itself as loading synchronously, and
-      // the reducer drops any report whose query is not the one in state — so
-      // the new query has to be seated first or that report is thrown away.
       tools.dispatch({ type: 'search/reviewer-query', query });
       tools.onReviewerQuery?.(query);
     },
@@ -405,8 +402,14 @@ export function createRouteSlice(
       if (action.type === 'search/reviewer-query') {
         // Typing past a chosen person unresolves the filter: only a directory
         // match may fill it.
+        // Prior matches remain visible/selectable for up to 200ms; retaining
+        // real directory people avoids flicker until the new search starts.
         return patchRoute(state, 'caseSearch', {
-          reviewerSearch: { query: action.query, people: [], status: 'idle' },
+          reviewerSearch: {
+            query: action.query,
+            people: action.query.trim() ? route.reviewerSearch.people : [],
+            status: 'idle',
+          },
           filters: { ...route.filters, assignedReviewer: '' },
         });
       }
