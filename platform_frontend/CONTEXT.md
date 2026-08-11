@@ -278,7 +278,7 @@ A **missing feed is not an empty report**. The page distinguishes the two and
 says "No report has been published for you yet." — and reads no Case lists at
 all, because with nothing published there is no boundary to compute a
 **Live Tail** from. A loaded feed with no rows in the selected range keeps the
-Case Type panel and says "No data for this range." instead. No pipeline
+grain-matched Case Type breakdown table and shows zero-valued rows instead. No pipeline
 publishes these files yet, so the first state is what production shows today.
 
 **Live Tail**: the days a Reviewer's Report Feed cannot cover yet, counted in
@@ -304,8 +304,9 @@ monthly buckets; totals end at browser-local yesterday while the current
 display bucket extends through today. The page owns this range state, defaults
 to Week, and renders labelled controls that dispatch `my-stats/range-selected`.
 
-The feed and the tail are merged into one count per calendar day **once**, and
-that single derivation feeds both the grouped chart and the four **headline
+The feed and the typed tail are merged into one count per calendar day and Case
+Type **once**, and that single derivation feeds the grouped chart, the full-width
+breakdown table, and the four **headline
 figures** beneath it: **Total** (excluding today, carried by the asterisk
 `* excludes today`), **avg per working day** (Mon–Fri minus
 `ENGLAND_WALES_HOLIDAYS` — never shortened to "avg/day", since the two differ
@@ -315,9 +316,13 @@ numerator counts every day including weekends while its divisor counts working
 days only, and leave is invisible to it: a stated inaccuracy, consistent for
 everyone and exact for nobody.
 
-Beside them the Case Type proportion panel resolves feed slugs to display names
-through `case-types/manifest.js`, humanizing an unknown slug rather than
-showing it raw, and reads the feed alone through browser-local yesterday.
+Immediately beneath the headline strip, the full-width Case Type breakdown
+table uses the report's buckets verbatim. Week and Month therefore have daily
+rows, while 3 months and 12 months have monthly rows; labels include `(today)`
+and `(current month)`. Its deterministic global Case Type columns contain a
+count and percentage pair for every bucket, including zero cells, and each row's
+total equals the chart bucket total. Display names come from
+`case-types/manifest.js`; an unknown slug is humanised for safe presentation.
 
 The pure SVG chart builder exposes each mark's full description, including its
 formatted value and provisional status, as metadata; after the chart is

@@ -5,27 +5,6 @@ import {
   UnknownCaseTypeError,
 } from '../../case-types/manifest.js';
 
-/** @typedef {import('../services/report-feed-loader.js').ReportFeedEnvelope['rows'][number]} ReportFeedRow */
-
-/**
- * @typedef {Object} StatsCaseTypeRow
- * @property {string} key - The stable Case Type slug from the feed.
- * @property {string} label - The display name shown to the user.
- * @property {number} count
- * @property {number} share - The unrounded proportion of the total.
- */
-
-/**
- * @typedef {Object} StatsCaseTypeBreakdown
- * @property {StatsCaseTypeRow[]} rows
- * @property {number} total
- */
-
-/** @returns {StatsCaseTypeBreakdown} */
-function emptyBreakdown() {
-  return { rows: [], total: 0 };
-}
-
 /**
  * Turn an unregistered feed slug into presentation copy without exposing the
  * persisted identifier as visible or accessible text.
@@ -44,10 +23,12 @@ function humanizeUnknownSlug(slug) {
 }
 
 /**
+ * Resolve a persisted Case Type slug to the display name used by My Stats.
+ *
  * @param {string} slug
  * @returns {string}
  */
-function labelFor(slug) {
+export function caseTypeLabelFor(slug) {
   try {
     return displayNameFor(slug);
   } catch (error) {
@@ -57,52 +38,14 @@ function labelFor(slug) {
 }
 
 /**
- * Build the Case Type totals for one inclusive, date-only range.
+ * Sort Case Type columns deterministically for every report bucket.
  *
- * Feed dates and range boundaries are ISO date strings, so lexical comparison
- * preserves calendar order without introducing a timezone or monthly bucket.
- *
- * @param {ReportFeedRow[]} rows
- * @param {{ start: string, end: string }} range
- * @returns {StatsCaseTypeBreakdown}
+ * @param {{ key: string, label: string }[]} columns
+ * @returns {{ key: string, label: string }[]}
  */
-export function buildStatsCaseTypeBreakdown(rows, range) {
-  if (!Array.isArray(rows)) return emptyBreakdown();
-
-  /** @type {Map<string, number>} */
-  const totalsBySlug = new Map();
-
-  for (const row of rows) {
-    if (
-      typeof row?.date !== 'string' ||
-      row.date < range.start ||
-      row.date > range.end ||
-      typeof row.case_type !== 'string' ||
-      row.case_type.length === 0 ||
-      typeof row.count !== 'number' ||
-      !Number.isFinite(row.count)
-    ) {
-      continue;
-    }
-
-    totalsBySlug.set(
-      row.case_type,
-      (totalsBySlug.get(row.case_type) ?? 0) + row.count
-    );
-  }
-
-  const positiveRows = [...totalsBySlug.entries()]
-    .filter(([, count]) => count > 0)
-    .map(([key, count]) => ({ key, label: labelFor(key), count }));
-  const total = positiveRows.reduce((sum, row) => sum + row.count, 0);
-
-  if (!Number.isFinite(total) || total <= 0) return emptyBreakdown();
-
-  const breakdownRows = positiveRows
-    .sort(
-      (a, b) => a.label.localeCompare(b.label) || a.key.localeCompare(b.key)
-    )
-    .map((row) => ({ ...row, share: row.count / total }));
-
-  return { rows: breakdownRows, total };
+export function sortCaseTypeColumns(columns) {
+  const compare = (left, right) => (left < right ? -1 : left > right ? 1 : 0);
+  return [...columns].sort(
+    (a, b) => compare(a.label, b.label) || compare(a.key, b.key)
+  );
 }

@@ -4,27 +4,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildStatsReport,
-  countCasesByLocalDate,
+  countCasesByLocalDateAndType,
 } from '../src/evaluators/stats-report-model.js';
 import { buildStatsRanges } from '../src/evaluators/stats-range-model.js';
 import { shiftDateKey } from '../src/lib/local-calendar.js';
-
-/**
- * @template T
- * @param {string} zone
- * @param {() => T} run
- * @returns {T}
- */
-function inTimeZone(zone, run) {
-  const previous = process.env.TZ;
-  process.env.TZ = zone;
-  try {
-    return run();
-  } finally {
-    if (previous === undefined) delete process.env.TZ;
-    else process.env.TZ = previous;
-  }
-}
 
 /** @param {string} from @param {string} to @returns {string[]} */
 function dateKeys(from, to) {
@@ -67,7 +50,10 @@ test('buildStatsReport: the report answers for its own days and the live read an
     range: dailyRange('2026-08-03', '2026-08-10'),
     completeThrough: '2026-08-07',
     feedRows: [feedRow('2026-08-03', 2), feedRow('2026-08-07', 5)],
-    liveCounts: { '2026-08-08': 1, '2026-08-10': 3 },
+    liveTypedCounts: {
+      '2026-08-08': { complaints: 1 },
+      '2026-08-10': { complaints: 3 },
+    },
   });
 
   assert.deepEqual(
@@ -96,7 +82,10 @@ test('buildStatsReport: the file wins for every day it covers, whatever the live
     feedRows: [feedRow('2026-08-07', 5)],
     // A live row landing inside the published window is the disagreement the
     // boundary exists to settle, and the published number is the one that wins.
-    liveCounts: { '2026-08-07': 99, '2026-08-08': 1 },
+    liveTypedCounts: {
+      '2026-08-07': { complaints: 99 },
+      '2026-08-08': { complaints: 1 },
+    },
   });
 
   assert.deepEqual(
@@ -112,7 +101,7 @@ test('buildStatsReport: a published row past the boundary is not counted twice',
     // The producer should not emit this row at all; if it does, the live read
     // already owns that day and the two must not be summed.
     feedRows: [feedRow('2026-08-07', 5), feedRow('2026-08-08', 40)],
-    liveCounts: { '2026-08-08': 1 },
+    liveTypedCounts: { '2026-08-08': { complaints: 1 } },
   });
 
   assert.deepEqual(
@@ -126,7 +115,7 @@ test('buildStatsReport: with no published boundary every day is counted live', (
     range: dailyRange('2026-08-08', '2026-08-09'),
     completeThrough: null,
     feedRows: [feedRow('2026-08-08', 40)],
-    liveCounts: { '2026-08-08': 1 },
+    liveTypedCounts: { '2026-08-08': { complaints: 1 } },
   });
 
   assert.deepEqual(
@@ -175,7 +164,10 @@ test('buildStatsReport: the total stops at yesterday', () => {
     range: dailyRange('2026-08-03', '2026-08-10'),
     completeThrough: '2026-08-07',
     feedRows: [feedRow('2026-08-03', 2), feedRow('2026-08-07', 5)],
-    liveCounts: { '2026-08-09': 4, '2026-08-10': 300 },
+    liveTypedCounts: {
+      '2026-08-09': { complaints: 4 },
+      '2026-08-10': { complaints: 300 },
+    },
   });
 
   assert.equal(report.headline.total, 11);
@@ -225,7 +217,10 @@ test('buildStatsReport: active days count days with work, from either provenance
     range: dailyRange('2026-08-03', '2026-08-10'),
     completeThrough: '2026-08-07',
     feedRows: [feedRow('2026-08-03', 2), feedRow('2026-08-05', 0)],
-    liveCounts: { '2026-08-08': 1, '2026-08-10': 9 },
+    liveTypedCounts: {
+      '2026-08-08': { complaints: 1 },
+      '2026-08-10': { complaints: 9 },
+    },
   });
 
   // 3 Aug published and 8 Aug live; 5 Aug is a published zero and today's nine
@@ -271,7 +266,10 @@ test('buildStatsReport: a monthly bucket can hold both provenances at once', () 
     range: threeMonths,
     completeThrough: '2026-08-07',
     feedRows: [feedRow('2026-06-15', 4), feedRow('2026-08-03', 6)],
-    liveCounts: { '2026-08-08': 2, '2026-08-10': 1 },
+    liveTypedCounts: {
+      '2026-08-08': { complaints: 2 },
+      '2026-08-10': { complaints: 1 },
+    },
   });
   const august = report.buckets[report.buckets.length - 1];
 
@@ -296,42 +294,58 @@ test('buildStatsReport: the range travels with the report so one derivation feed
   assert.equal(buildStatsReport({ range }).range, range);
 });
 
-test('countCasesByLocalDate: an instant is counted on the Reviewer’s own day', () => {
-  const rows = /** @type {any} */ ([
-    { id: '1', reportableAt: '2026-08-10T23:30:00.000Z' },
-    { id: '2', reportableAt: '2026-08-10T00:30:00.000Z' },
-    { id: '3', reportableAt: new Date('2026-08-10T23:45:00.000Z') },
-  ]);
+test('buildStatsReport: typed feed and live counts share global columns and bucket percentages', () => {
+  const report = buildStatsReport({
+    range: dailyRange('2026-08-08', '2026-08-10'),
+    completeThrough: '2026-08-08',
+    feedRows: [
+      feedRow('2026-08-08', 2),
+      { date: '2026-08-08', case_type: 'example-case-type', count: 1 },
+    ],
+    liveTypedCounts: {
+      '2026-08-09': { 'example-case-type': 1 },
+      '2026-08-10': { complaints: 3 },
+    },
+  });
 
   assert.deepEqual(
-    inTimeZone('Asia/Tokyo', () => countCasesByLocalDate(rows)),
-    { '2026-08-11': 2, '2026-08-10': 1 }
+    report.caseTypes.map(({ key }) => key),
+    ['complaints', 'example-case-type']
+  );
+  assert.equal(report.buckets[0].total, 3);
+  assert.deepEqual(
+    report.buckets[0].caseTypes.map(({ key, count, percentage }) => [
+      key,
+      count,
+      percentage,
+    ]),
+    [
+      ['complaints', 2, (2 / 3) * 100],
+      ['example-case-type', 1, (1 / 3) * 100],
+    ]
   );
   assert.deepEqual(
-    inTimeZone('America/Los_Angeles', () => countCasesByLocalDate(rows)),
-    { '2026-08-10': 2, '2026-08-09': 1 }
+    report.buckets[1].caseTypes.map(({ count, percentage }) => [
+      count,
+      percentage,
+    ]),
+    [
+      [0, 0],
+      [1, 100],
+    ]
   );
-  assert.deepEqual(
-    inTimeZone('Pacific/Kiritimati', () => countCasesByLocalDate(rows)),
-    { '2026-08-11': 2, '2026-08-10': 1 }
-  );
-  assert.deepEqual(
-    inTimeZone('Pacific/Midway', () => countCasesByLocalDate(rows)),
-    { '2026-08-10': 2, '2026-08-09': 1 }
-  );
+  assert.equal(report.buckets[2].total, 3);
 });
 
-test('countCasesByLocalDate: a row that cannot be placed on a day is left out', () => {
-  const rows = /** @type {any} */ ([
-    { id: '1' },
-    { id: '2', reportableAt: null },
-    { id: '3', reportableAt: '' },
-    null,
-  ]);
-
+test('countCasesByLocalDateAndType preserves the live Case Type dimension', () => {
   assert.deepEqual(
-    inTimeZone('Europe/London', () => countCasesByLocalDate(rows)),
-    {}
+    countCasesByLocalDateAndType([
+      { reportableAt: '2026-08-10T09:00:00Z', caseType: 'complaints' },
+      { reportableAt: '2026-08-10T10:00:00Z', caseType: 'complaints' },
+      { reportableAt: '2026-08-10T11:00:00Z', caseType: 'example-case-type' },
+    ]),
+    {
+      '2026-08-10': { complaints: 2, 'example-case-type': 1 },
+    }
   );
-  assert.deepEqual(countCasesByLocalDate(/** @type {any} */ (undefined)), {});
 });

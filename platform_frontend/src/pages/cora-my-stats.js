@@ -6,10 +6,9 @@ import { isAbortError } from '../lib/abort.js';
 import { loadReportFeed } from '../services/report-feed-loader.js';
 import { withAbortSignal } from '../services/abortable-client.js';
 import { buildStatsRanges } from '../evaluators/stats-range-model.js';
-import { buildStatsCaseTypeBreakdown } from '../evaluators/stats-case-type-model.js';
 import {
   buildStatsReport,
-  countCasesByLocalDate,
+  countCasesByLocalDateAndType,
 } from '../evaluators/stats-report-model.js';
 import {
   fetchLiveTailCases,
@@ -17,10 +16,10 @@ import {
   LIVE_TAIL_MAX_DAYS,
 } from '../services/live-tail-fetcher.js';
 import { isDateKey, shiftDateKey } from '../lib/local-calendar.js';
-import { ProportionBars } from '../components/base/cora-proportion-bars.js';
 import { mountGroupedBarChartTooltip } from '../lib/chart-tooltip.js';
 import { headlineStripView } from './my-stats/headline-strip-view.js';
 import { statsChartView } from './my-stats/stats-chart-view.js';
+import { statsBreakdownTableView } from './my-stats/stats-breakdown-table-view.js';
 
 /** @typedef {import('../core/chrome-state.js').ChromeState} ChromeState */
 /** @typedef {import('../services/report-feed-loader.js').ReportFeedEnvelope} ReportFeedEnvelope */
@@ -39,7 +38,7 @@ import { statsChartView } from './my-stats/stats-chart-view.js';
  * @typedef {Object} MyStatsTailState
  * @property {'idle' | 'loading' | 'loaded' | 'failed'} status
  * @property {string | null} from
- * @property {Record<string, number>} days browser-local date key to count
+ * @property {Record<string, Record<string, number>>} typedCounts
  */
 
 /**
@@ -61,27 +60,6 @@ import { statsChartView } from './my-stats/stats-chart-view.js';
  * @property {ChromeState} chrome
  * @property {{ myStats: MyStatsRouteState }} routes
  */
-
-/**
- * @param {ReportFeedEnvelope} reportFeed
- * @param {StatsRangeDescriptor} range
- * @returns {HTMLElement}
- */
-function caseTypePanel(reportFeed, range) {
-  const breakdown = buildStatsCaseTypeBreakdown(reportFeed.rows, range);
-  return h(
-    'section',
-    {
-      className: 'cora-my-stats-case-type-panel',
-      'aria-labelledby': 'cora-my-stats-case-type-heading',
-    },
-    h('h2', { id: 'cora-my-stats-case-type-heading' }, 'Case Type'),
-    ProportionBars({
-      rows: breakdown.rows,
-      emptyStateText: 'No data for this range.',
-    })
-  );
-}
 
 /**
  * A quiet line under the figures when the page knows its recent days are
@@ -187,7 +165,7 @@ function bodyView(route, dispatch) {
     range,
     completeThrough,
     feedRows: route.reportFeed.rows,
-    liveCounts: route.tail.days,
+    liveTypedCounts: route.tail.typedCounts,
   });
 
   return [
@@ -197,12 +175,12 @@ function bodyView(route, dispatch) {
       h(
         'div',
         { className: 'cora-my-stats-controls-column' },
-        rangeControlsView(route, dispatch),
-        caseTypePanel(route.reportFeed, range)
+        rangeControlsView(route, dispatch)
       ),
       statsChartView(report)
     ),
     headlineStripView(report.headline),
+    statsBreakdownTableView(report),
     tailNoticeView(
       route.tail,
       // With no usable boundary every day on the page is unpublished, so the
@@ -275,7 +253,11 @@ export function createRouteSlice(
   function loadTail(tools, client, completeThrough) {
     const tailWindow = liveTailWindow(completeThrough, todayKey);
     if (tailWindow === null) {
-      tools.dispatch({ type: 'my-stats/tail-loaded', from: null, days: {} });
+      tools.dispatch({
+        type: 'my-stats/tail-loaded',
+        from: null,
+        typedCounts: {},
+      });
       return;
     }
     tools.dispatch({ type: 'my-stats/tail-requested' });
@@ -294,10 +276,11 @@ export function createRouteSlice(
       .then(
         (rows) => {
           if (!tools.isActive()) return;
+          const typedCounts = countCasesByLocalDateAndType(rows);
           tools.dispatch({
             type: 'my-stats/tail-loaded',
             from: tailWindow.from,
-            days: countCasesByLocalDate(rows),
+            typedCounts,
           });
         },
         (error) => {
@@ -316,7 +299,7 @@ export function createRouteSlice(
           reportFeed: null,
           ranges,
           selectedRange: 'week',
-          tail: { status: 'idle', from: null, days: {} },
+          tail: { status: 'idle', from: null, typedCounts: {} },
         },
       },
     },
@@ -332,17 +315,21 @@ export function createRouteSlice(
       }
       if (action.type === 'my-stats/tail-requested') {
         return patchRoute(state, 'myStats', {
-          tail: { status: 'loading', from: null, days: {} },
+          tail: { status: 'loading', from: null, typedCounts: {} },
         });
       }
       if (action.type === 'my-stats/tail-loaded') {
         return patchRoute(state, 'myStats', {
-          tail: { status: 'loaded', from: action.from, days: action.days },
+          tail: {
+            status: 'loaded',
+            from: action.from,
+            typedCounts: action.typedCounts,
+          },
         });
       }
       if (action.type === 'my-stats/tail-failed') {
         return patchRoute(state, 'myStats', {
-          tail: { status: 'failed', from: null, days: {} },
+          tail: { status: 'failed', from: null, typedCounts: {} },
         });
       }
       if (action.type === 'my-stats/range-selected') {

@@ -6,6 +6,10 @@ import {
   toLocalDateKey,
   weekdayOfDateKey,
 } from '../lib/local-calendar.js';
+import {
+  caseTypeLabelFor,
+  sortCaseTypeColumns,
+} from './stats-case-type-model.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../evaluators/stats-range-model.js').StatsRangeDescriptor} StatsRangeDescriptor */
@@ -21,6 +25,7 @@ import {
  * @property {string} date `YYYY-MM-DD`, browser-local
  * @property {number} count
  * @property {boolean} settled
+ * @property {Map<string, number>} typeCounts
  */
 
 /**
@@ -35,6 +40,22 @@ import {
  * @property {string} label
  * @property {number | null} settled
  * @property {number | null} provisional
+ * @property {number} total
+ * @property {StatsCaseTypeCell[]} caseTypes
+ */
+
+/**
+ * @typedef {Object} StatsCaseTypeColumn
+ * @property {string} key
+ * @property {string} label
+ */
+
+/**
+ * @typedef {Object} StatsCaseTypeCell
+ * @property {string} key
+ * @property {string} label
+ * @property {number} count
+ * @property {number} percentage 0-100, unrounded
  */
 
 /**
@@ -55,49 +76,87 @@ import {
  * @typedef {Object} StatsReport
  * @property {StatsRangeDescriptor} range
  * @property {StatsReportBucket[]} buckets
+ * @property {StatsCaseTypeColumn[]} caseTypes
  * @property {StatsHeadline} headline
  */
 
 /**
- * Count live Case rows into browser-local calendar days.
- *
- * The rows are whatever the live read returned; a row with no usable
- * `reportableAt` instant cannot be placed on a day and is left out rather than
- * guessed at.
+ * Count live Case rows by browser-local date and Case Type.
  *
  * @param {CaseRow[]} rows
- * @returns {Record<string, number>} browser-local date key to count
+ * @returns {Record<string, Record<string, number>>}
  */
-export function countCasesByLocalDate(rows) {
-  /** @type {Record<string, number>} */
+export function countCasesByLocalDateAndType(rows) {
+  /** @type {Record<string, Record<string, number>>} */
   const counts = {};
   for (const row of rows ?? []) {
-    const dateKey = toLocalDateKey(row?.reportableAt);
-    if (dateKey === null) continue;
-    counts[dateKey] = (counts[dateKey] ?? 0) + 1;
+    const date = toLocalDateKey(row?.reportableAt);
+    if (date === null || typeof row?.caseType !== 'string' || !row.caseType)
+      continue;
+    counts[date] ??= {};
+    counts[date][row.caseType] = (counts[date][row.caseType] ?? 0) + 1;
   }
   return counts;
 }
 
 /**
  * @param {ReportFeedRow[]} rows
- * @returns {Map<string, number>}
+ * @returns {Map<string, Map<string, number>>}
  */
-function feedTotalsByDate(rows) {
-  /** @type {Map<string, number>} */
-  const totals = new Map();
-  if (!Array.isArray(rows)) return totals;
+function feedCountsByDate(rows) {
+  /** @type {Map<string, Map<string, number>>} */
+  const counts = new Map();
+  if (!Array.isArray(rows)) return counts;
   for (const row of rows) {
     if (
       typeof row?.date !== 'string' ||
+      typeof row.case_type !== 'string' ||
+      !row.case_type ||
       typeof row.count !== 'number' ||
       !Number.isFinite(row.count)
     ) {
       continue;
     }
-    totals.set(row.date, (totals.get(row.date) ?? 0) + row.count);
+    const byType = counts.get(row.date) ?? new Map();
+    byType.set(row.case_type, (byType.get(row.case_type) ?? 0) + row.count);
+    counts.set(row.date, byType);
   }
-  return totals;
+  return counts;
+}
+
+/**
+ * @param {Record<string, Record<string, number>>} counts
+ * @returns {Map<string, Map<string, number>>}
+ */
+function typedCountsMap(counts) {
+  /** @type {Map<string, Map<string, number>>} */
+  const result = new Map();
+  if (!counts || typeof counts !== 'object') return result;
+  for (const [date, byType] of Object.entries(counts)) {
+    if (!byType || typeof byType !== 'object') continue;
+    const typed = new Map();
+    for (const [caseType, count] of Object.entries(byType)) {
+      if (typeof count === 'number' && Number.isFinite(count))
+        typed.set(caseType, count);
+    }
+    result.set(date, typed);
+  }
+  return result;
+}
+
+/** @param {Map<string, number>} counts @returns {number} */
+function sumTypeCounts(counts) {
+  let total = 0;
+  for (const count of counts.values()) total += count;
+  return total;
+}
+
+/**
+ * @param {Map<string, number>} counts
+ * @returns {Map<string, number>}
+ */
+function copyTypeCounts(counts) {
+  return new Map(counts);
 }
 
 /**
@@ -129,7 +188,7 @@ function dateKeysBetween(from, to) {
  *   range: StatsRangeDescriptor,
  *   completeThrough?: string | null,
  *   feedRows?: ReportFeedRow[],
- *   liveCounts?: Record<string, number>,
+ *   liveTypedCounts?: Record<string, Record<string, number>>,
  *   holidays?: readonly string[],
  * }} input
  * @returns {StatsReport}
@@ -138,10 +197,11 @@ export function buildStatsReport({
   range,
   completeThrough = null,
   feedRows = [],
-  liveCounts = {},
+  liveTypedCounts = {},
   holidays = ENGLAND_WALES_HOLIDAYS,
 }) {
-  const settledTotals = feedTotalsByDate(feedRows);
+  const settledCounts = feedCountsByDate(feedRows);
+  const provisionalCounts = typedCountsMap(liveTypedCounts);
   /** @param {string} dateKey */
   const isSettled = (dateKey) =>
     typeof completeThrough === 'string' && dateKey <= completeThrough;
@@ -153,26 +213,68 @@ export function buildStatsReport({
   const days = new Map();
   for (const date of dateKeysBetween(range.start, range.today)) {
     const settled = isSettled(date);
-    const count = (settled ? settledTotals.get(date) : liveCounts[date]) ?? 0;
-    days.set(date, { date, count, settled });
+    const typeCounts = settled
+      ? (settledCounts.get(date) ?? new Map())
+      : (provisionalCounts.get(date) ?? new Map());
+    days.set(date, {
+      date,
+      count: sumTypeCounts(typeCounts),
+      settled,
+      typeCounts: copyTypeCounts(typeCounts),
+    });
   }
   /** @param {string} date @returns {StatsDay} */
   const dayOf = (date) => /** @type {StatsDay} */ (days.get(date));
 
+  /** @type {Set<string>} */
+  const caseTypeKeys = new Set();
+  for (const day of days.values()) {
+    for (const key of day.typeCounts.keys()) caseTypeKeys.add(key);
+  }
+  const caseTypes = sortCaseTypeColumns(
+    [...caseTypeKeys].map((key) => ({
+      key,
+      label: caseTypeLabelFor(key),
+    }))
+  );
+
+  const buckets = range.buckets.map((bucket) => {
+    /** @type {number | null} */
+    let settled = null;
+    /** @type {number | null} */
+    let provisional = null;
+    const typeTotals = new Map();
+    for (const date of dateKeysBetween(bucket.start, bucket.end)) {
+      const day = dayOf(date);
+      if (day.settled) settled = (settled ?? 0) + day.count;
+      else provisional = (provisional ?? 0) + day.count;
+      for (const [key, count] of day.typeCounts) {
+        typeTotals.set(key, (typeTotals.get(key) ?? 0) + count);
+      }
+    }
+    const total = (settled ?? 0) + (provisional ?? 0);
+    return {
+      key: bucket.key,
+      label: bucket.label,
+      settled,
+      provisional,
+      total,
+      caseTypes: caseTypes.map(({ key, label }) => {
+        const count = typeTotals.get(key) ?? 0;
+        return {
+          key,
+          label,
+          count,
+          percentage: total > 0 ? (count / total) * 100 : 0,
+        };
+      }),
+    };
+  });
+
   return {
     range,
-    buckets: range.buckets.map((bucket) => {
-      /** @type {number | null} */
-      let settled = null;
-      /** @type {number | null} */
-      let provisional = null;
-      for (const date of dateKeysBetween(bucket.start, bucket.end)) {
-        const day = dayOf(date);
-        if (day.settled) settled = (settled ?? 0) + day.count;
-        else provisional = (provisional ?? 0) + day.count;
-      }
-      return { key: bucket.key, label: bucket.label, settled, provisional };
-    }),
+    buckets,
+    caseTypes,
     headline: buildHeadline(
       dateKeysBetween(range.start, range.end).map(dayOf),
       holidays

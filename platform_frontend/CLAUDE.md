@@ -274,7 +274,6 @@ src/
                                   #   status line; nothing else is ever selectable
       cora-group-progress.js      # pure per-Question-Group progress strip
       cora-grouped-bar-chart.js   # pure grouped SVG chart with keyed accessible bars
-      cora-proportion-bars.js     # pure semantic proportional rows with accessible progress bars
       cora-status-banner.js       # the save-status surface (saving/reconnecting/conflict),
                                   #   rendered in the Case Review page chrome
       cora-toast.js
@@ -324,12 +323,13 @@ src/
                                   #   cross-Case-Type lookup, standard Case columns
     cora-dashboard.js             # store-driven dashboard slice + descriptor-selected panels (GRID-3/4)
     cora-my-stats.js               # store-driven Reviewer Report Feed load, browser-calendar range state and controls,
-                                   #   the clamped live-tail read, and one derivation feeding the chart,
-                                   #   the Case Type panel and the headline figures
+                                   #   the clamped typed live-tail read, and one derivation feeding the chart,
+                                   #   the Case Type breakdown table and the headline figures
     my-stats/
       headline-strip-view.js      # pure four-figure strip (total, avg per working day, active days,
                                   #   busiest day); deliberately not the dashboard's KPI strip
       stats-chart-view.js         # pure report -> grouped bar chart, solid published vs hollow live
+      stats-breakdown-table-view.js # pure report -> grain-matched Case Type count/percentage table
     cora-team-stats.js             # store-driven Reviewer Manager-only empty shell
     dashboard/
       action-centre-view.js       # pure reason-descriptor view + bounded load actions (ADR-0030 flags unchanged)
@@ -415,8 +415,8 @@ src/
     general-questions.js         # General Question answer-key namespace + load-time config gates (#472)
     summary-model.js
     stats-range-model.js          # pure browser-local My Stats comparison ranges and day/month buckets
-    stats-case-type-model.js      # pure Report Feed Case Type totals, manifest labels, and range proportions
-    stats-report-model.js         # THE single My Stats derivation: published days and live days merged
+    stats-case-type-model.js      # pure Case Type manifest labels and deterministic column ordering
+    stats-report-model.js         # THE single My Stats derivation: typed published/live days merged
                                   #   at complete_through, then the chart buckets and the four figures
     team-workload-model.js       # per-Reviewer workload rows for the My Team page
     void-volume-model.js         # per-Reviewer voided-Case rows over a 30-day window, grouped

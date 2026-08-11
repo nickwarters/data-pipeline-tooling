@@ -3050,7 +3050,7 @@
   border-radius: var(--cora-radius-sm);
 }
 
-/* ── My Stats Case Type proportions ─────────────────────────────────────── */
+/* ── My Stats ───────────────────────────────────────────────────────────── */
 
 [data-cora-root] .cora-my-stats-top-row {
   display: grid;
@@ -3091,73 +3091,6 @@
   color: var(--cora-color-text-on-accent);
   background: var(--cora-color-accent);
   border-color: var(--cora-color-accent);
-}
-
-[data-cora-root] .cora-my-stats-case-type-panel {
-  min-width: 0;
-  padding: var(--cora-space-4);
-  background: var(--cora-color-surface);
-  border: 1px solid var(--cora-color-border);
-  border-radius: var(--cora-radius-md);
-  box-shadow: var(--cora-shadow-sm);
-}
-
-[data-cora-root] .cora-my-stats-case-type-panel > h2 {
-  margin: 0 0 var(--cora-space-4);
-}
-
-[data-cora-root] .cora-proportion-bars {
-  display: grid;
-  gap: var(--cora-space-3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-[data-cora-root] .cora-proportion-bars-row {
-  display: grid;
-  gap: var(--cora-space-1);
-}
-
-[data-cora-root] .cora-proportion-bars-row-heading {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: var(--cora-space-2);
-  align-items: baseline;
-  font-size: var(--cora-font-size-sm);
-}
-
-[data-cora-root] .cora-proportion-bars-label {
-  min-width: 0;
-  overflow-wrap: anywhere;
-  font-weight: var(--cora-font-weight-medium);
-}
-
-[data-cora-root] .cora-proportion-bars-count,
-[data-cora-root] .cora-proportion-bars-percentage {
-  font-variant-numeric: tabular-nums;
-  color: var(--cora-color-text-muted);
-}
-
-[data-cora-root] .cora-proportion-bars-track {
-  height: var(--cora-space-3);
-  overflow: hidden;
-  background: var(--cora-color-surface-2);
-  border: 1px solid var(--cora-color-border);
-  border-radius: var(--cora-radius-pill);
-}
-
-[data-cora-root] .cora-proportion-bars-bar {
-  height: 100%;
-  background: var(--cora-color-accent);
-  border-radius: inherit;
-  transition: width var(--cora-duration-base) var(--cora-easing-standard);
-}
-
-[data-cora-root] .cora-proportion-bars-empty {
-  color: var(--cora-color-text-muted);
-  font-size: var(--cora-font-size-sm);
-  font-style: italic;
 }
 
 /* ── My Stats headline figures ──────────────────────────────────────────── */
@@ -3207,6 +3140,66 @@
 [data-cora-root] .cora-my-stats-headline__note,
 [data-cora-root] .cora-my-stats-tail-note {
   margin: var(--cora-space-3) 0 0;
+}
+
+[data-cora-root] .cora-my-stats-breakdown {
+  width: 100%;
+  margin-top: var(--cora-space-5);
+}
+
+[data-cora-root] .cora-my-stats-breakdown > h2 {
+  margin: 0 0 var(--cora-space-3);
+}
+
+[data-cora-root] .cora-my-stats-breakdown-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  box-shadow: var(--cora-shadow-sm);
+}
+
+[data-cora-root] .cora-my-stats-breakdown-table {
+  width: 100%;
+  min-width: 38rem;
+  border-collapse: collapse;
+}
+
+[data-cora-root] .cora-my-stats-breakdown-table caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+[data-cora-root] .cora-my-stats-breakdown-table th,
+[data-cora-root] .cora-my-stats-breakdown-table td {
+  padding: var(--cora-space-3) var(--cora-space-4);
+  border-bottom: 1px solid var(--cora-color-border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+[data-cora-root] .cora-my-stats-breakdown-table thead th {
+  color: var(--cora-color-text-muted);
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-medium);
+  white-space: nowrap;
+}
+
+[data-cora-root] .cora-my-stats-breakdown-table tbody tr:last-child th,
+[data-cora-root] .cora-my-stats-breakdown-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+[data-cora-root] .cora-my-stats-breakdown-table .is-numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 [data-cora-root] .cora-my-stats-error {
