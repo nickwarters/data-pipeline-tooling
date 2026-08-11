@@ -1,6 +1,4 @@
 // @ts-check
-import { HttpSharePointClient } from '../../src/services/http-sharepoint-client.js';
-
 /** @typedef {{ method: string, url: string, headers: Record<string, string>, body: string|null }} CapturedCall */
 
 /**
@@ -132,27 +130,6 @@ export function peopleFilterFetch(ids, items) {
         (() => new Response(JSON.stringify({ value: [] }), { status: 200 })),
     },
   ]);
-}
-
-/**
- * Read a minimal Case row and return its derived overdue value.
- * @param {{ Status?: string, DueDate?: string }} fields
- * @returns {Promise<boolean | undefined>}
- */
-export async function overdueFor(fields) {
-  const { fetch } = makeFetch([
-    {
-      when: (call) => call.method === 'GET',
-      respond: () =>
-        new Response(JSON.stringify({ Id: 'c', ...fields }), { status: 200 }),
-    },
-  ]);
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
-  const row = await client.getCase('c', { listName: 'Cases-ExampleReview' });
-  return row?.overdue;
 }
 
 export const WEB_URL = 'https://sp.example.com/sites/casereview';
