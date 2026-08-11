@@ -47,9 +47,10 @@ the reducer.
 The slice tracks the report as `loading`, `loaded` or `failed`, because
 `reportFeed: null` alone cannot tell "not fetched yet" from "nothing published".
 A loaded report is followed by one second read: the live tail, one bounded
-request per Case Type list, covering only the days after the report's
-`complete_through` and never more than ten calendar days. No report means no
-tail read at all, and the page says a report has not been published yet.
+`listCases` call per Case Type list, covering only the days after the report's
+`complete_through` and never more than ten calendar days. The unpaged call may
+follow pagination links into multiple HTTP requests. No report means no tail
+read at all, and the page says a report has not been published yet.
 
 The mount lifetime is bound **once**, in `start()`, with
 `withAbortSignal(context.client, tools.signal)`; the tail fetcher below it takes

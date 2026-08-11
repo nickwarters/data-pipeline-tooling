@@ -8,6 +8,11 @@ import {
   LIVE_TAIL_MAX_DAYS,
 } from '../src/services/live-tail-fetcher.js';
 import { startOfLocalDay } from '../src/lib/local-calendar.js';
+import { HttpSharePointClient } from '../src/services/http-sharepoint-client.js';
+import {
+  WEB_URL,
+  peopleFilterFetch,
+} from './helpers/http-sharepoint-client.js';
 
 /**
  * @template T
@@ -99,7 +104,7 @@ test('liveTailWindow: the window covers exactly the days it names, in any zone',
   }
 });
 
-test('fetchLiveTailCases: one scoped, bounded request per Case Type list', async () => {
+test('fetchLiveTailCases: one scoped, bounded listCases call per Case Type list', async () => {
   /** @type {any[]} */
   const calls = [];
   const client = /** @type {any} */ ({
@@ -135,16 +140,48 @@ test('fetchLiveTailCases: one scoped, bounded request per Case Type list', async
   );
   assert.deepEqual(calls[0].options, { listName: 'Cases-complaints' });
   assert.deepEqual(calls[0].filter, {
-    caseType: 'complaints',
     assignedReviewer: 'reviewer-1',
     reportableAfter: '2026-08-07T23:00:00.000Z',
     reportableBefore: '2026-08-10T23:00:00.000Z',
     anyOf: [{ status: 'Actions In Progress' }, { status: 'Completed' }],
   });
-  assert.equal(calls[1].filter.caseType, 'conduct');
   // No page size: the window is the bound, and a `top` here would quietly
   // undercount a busy week rather than fail.
   assert.equal(calls[0].options.top, undefined);
   // No signal either — the caller binds the mount lifetime to the client.
   assert.equal(calls[0].options.signal, undefined);
+});
+
+test('fetchLiveTailCases: emits the indexed tail filter on the explicit list', async () => {
+  const { fetch, calls } = peopleFilterFetch({ 'reviewer-1': 42 });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  await fetchLiveTailCases(
+    client,
+    'reviewer-1',
+    [{ slug: 'complaints', listName: 'Cases-Complaints' }],
+    {
+      reportableAfter: '2026-08-07T23:00:00.000Z',
+      reportableBefore: '2026-08-10T23:00:00.000Z',
+    }
+  );
+
+  const listCall = calls.find((call) => call.url.includes('/items?'));
+  assert.ok(listCall);
+  const url = new URL(listCall.url);
+  assert.equal(
+    url.pathname,
+    "/sites/casereview/_api/web/lists/getbytitle('Cases-Complaints')/items"
+  );
+  assert.equal(
+    url.searchParams.get('$filter'),
+    "ReportableAt ge '2026-08-07T23:00:00.000Z' and ReportableAt lt '2026-08-10T23:00:00.000Z' and AssignedReviewerId eq 42 and ((Status eq 'Actions In Progress') or (Status eq 'Completed'))"
+  );
+  assert.equal(url.searchParams.has('$top'), false);
+  // One unpaged listCases call can follow odata.nextLink into multiple HTTP
+  // requests; this test pins the call's filter and leaves pagination to the
+  // client read contract.
 });
