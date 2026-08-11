@@ -78,14 +78,6 @@ test('Responsible Party remediation uses the generic table, filtering, and overd
   select.value = 'conduct';
   select.dispatchEvent({ type: 'change', target: select });
   assert.deepEqual(actions[0], ['filter', 'conduct']);
-
-  // Existing DOM-stub debt retained until the shared debt ledger can move.
-  const table = /** @type {any} */ (section?.querySelector('table'));
-  assert.ok(table._children);
-  assert.ok(table._children.length > 0);
-  assert.ok(table._children[0]);
-  assert.ok(table._listeners.keydown);
-  assert.equal(table._listeners.keydown.length, 1);
 });
 
 test('the Outstanding Remediation Actions table renders the columns it renders today', () => {

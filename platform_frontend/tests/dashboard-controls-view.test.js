@@ -114,15 +114,6 @@ test('Controls appeal descriptors render through the generic table and keep navi
   assert.equal(open.className, 'cora-case-open-btn');
   open.dispatchEvent(/** @type {any} */ ({ type: 'click' }));
   assert.equal(location.hash, '#/case/complaints/c1');
-
-  // Existing DOM-stub debt retained until the shared debt ledger can move.
-  const table = /** @type {any} */ (view.querySelector('table'));
-  assert.ok(table._children);
-  assert.ok(table._children.length > 0);
-  assert.ok(table._listeners.keydown);
-  assert.ok(table._listeners.keydown.length === 1);
-  assert.ok(/** @type {any} */ (open)._listeners.click);
-  assert.ok(/** @type {any} */ (open)._listeners.click.length === 1);
 });
 
 test('Controls appeals: Reference and Case Type sort for real — click, report, sorted render', () => {

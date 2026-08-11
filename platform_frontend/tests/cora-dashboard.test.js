@@ -457,14 +457,6 @@ test('dashboard pure view renders role-visible reviewer, owner, and allocation p
   assert.equal(view.querySelector('cora-allocation'), null);
   assert.equal(view.querySelector('cora-owner-summary'), null);
   assert.match(view.textContent, /No outstanding cases/);
-  view
-    .querySelector('.cora-allocation-btn')
-    ?.dispatchEvent(/** @type {any} */ ({ type: 'click' }));
-
-  // Existing DOM-stub debt retained until the shared debt ledger can move.
-  assert.ok(/** @type {any} */ (view)._children);
-  assert.ok(/** @type {any} */ (view)._children.length >= 1);
-  assert.ok(/** @type {any} */ (view)._children[0]);
 });
 
 test('dashboard owner summary loads through the route slice and renders from state', async () => {

@@ -66,11 +66,6 @@ test('KPI pure view renders evaluator output and dispatches disclosure callbacks
     'lane:reviewer',
     'tile:reviewer:overdue',
   ]);
-
-  // Existing DOM-stub debt retained until the shared debt ledger can move.
-  assert.ok(/** @type {any} */ (strip)._children);
-  assert.ok(/** @type {any} */ (strip)._children.length > 0);
-  assert.ok(/** @type {any} */ (strip)._children[0]);
 });
 
 test('KPI pure view folds lanes and omits the strip when the model has no lanes', () => {

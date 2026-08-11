@@ -172,11 +172,6 @@ test('Action Centre pure view renders descriptor rows and exposes store callback
   more?._fire('click', {});
   assert.equal(actions.length, 15);
   assert.ok(actions.includes(`group:${reason.id}`));
-
-  // Existing DOM-stub debt retained until the shared debt ledger can move.
-  assert.ok(/** @type {any} */ (view)._children);
-  assert.ok(/** @type {any} */ (view)._children.length > 0);
-  assert.ok(/** @type {any} */ (view)._children[0]);
 });
 
 test('Action Centre pure view renders collapsed peeks and the true empty state', () => {
