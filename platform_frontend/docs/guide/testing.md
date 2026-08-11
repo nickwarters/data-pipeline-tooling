@@ -23,6 +23,10 @@ H5, and H6 use `var(--cora-color-on-surface) !important`; H4 retains
 `var(--cora-color-text-muted)`. The Question Bank's intentionally muted H3 and
 H5 selectors are asserted separately because they must outrank the base rules.
 
+The same source-level CSS contract protects the compatibility-sensitive
+declaration ordering for the People Picker status reservation: the token
+fallback must remain immediately before `min-height: 1lh`.
+
 The supported live browser is Edge Chromium. From `platform_frontend/`, run the
 source contract and normal gates, then prepare UAT with:
 
