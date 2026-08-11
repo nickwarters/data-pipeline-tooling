@@ -84,15 +84,18 @@ loads the canonical development fixture.
 **With no file published, the page says so** — "No report has been published for
 you yet." — and reads no Case lists at all. That is a different statement from a
 published report with nothing in the selected range, which keeps the breakdown
-table and shows zero-valued rows. No producing pipeline writes these
-files yet, so the no-report state is what production shows today.
+table and shows zero-valued rows. The reviewer activity pipeline produces
+these Report Feeds in the local deliverables outbox; delivery to the SharePoint
+document library remains a separate step. The no-report state is therefore
+what the page shows until that delivery has happened.
 
 **With a file, the page tops it up.** The report is authoritative for every day
 up to its `complete_through`; the days after it are counted in the browser from
-the Reviewer's own Case lists, one bounded request per Case Type and never
-reaching back more than ten calendar days. Published days draw solid, live days
-hollow — provenance only, not "excluded". If that read fails, or the file is
-older than ten days, one muted line under the figures says so; the published
+the Reviewer's own Case lists, one bounded `listCases` call per Case Type and
+never reaching back more than ten calendar days. The unpaged call may follow
+pagination links into multiple HTTP requests. Published days draw solid, live
+days hollow — provenance only, not "excluded". If that read fails, or the file
+is older than ten days, one muted line under the figures says so; the published
 half is never hidden.
 
 Beneath the chart row sit four figures, all derived from the same merged counts

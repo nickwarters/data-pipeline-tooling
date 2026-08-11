@@ -75,7 +75,8 @@ export function liveTailWindow(completeThrough, todayKey) {
 
 /**
  * Read the Reviewer's own reportable Cases inside that window, one scoped
- * request per Case Type list.
+ * `listCases` call per Case Type list. The unpaged call may follow pagination
+ * links into multiple HTTP requests when the list needs it.
  *
  * The predicate leads with the indexed `ReportableAt` range and the indexed
  * Assigned Reviewer, so the server does the narrowing. The status pair is what
@@ -84,9 +85,9 @@ export function liveTailWindow(completeThrough, todayKey) {
  * be counted as any.
  *
  * No `top`: a page size here would silently undercount a busy week, and the
- * window is already the bound. The caller binds the mount lifetime to the
- * client before handing it over, so nothing in this file knows about
- * cancellation.
+ * window is already the bound. The client follows any pagination links for
+ * this one call. The caller binds the mount lifetime to the client before
+ * handing it over, so nothing in this file knows about cancellation.
  *
  * @param {SharePointClient} client
  * @param {string} reviewerId
@@ -96,7 +97,6 @@ export function liveTailWindow(completeThrough, todayKey) {
  */
 export function fetchLiveTailCases(client, reviewerId, sources, tailWindow) {
   return listCasesPerSource(client, sources, (source) => ({
-    caseType: source.slug,
     assignedReviewer: reviewerId,
     reportableAfter: tailWindow.reportableAfter,
     reportableBefore: tailWindow.reportableBefore,

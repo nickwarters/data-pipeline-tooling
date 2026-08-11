@@ -114,9 +114,10 @@ for the four descriptors. Selecting a button dispatches
 - `AssignedReviewer` and `ReportableAt` are both **indexed** on every
   `Cases-{slug}` list, so the filter is server-side and safe against the List
   View Threshold.
-- It is **one request per Case Type**, not per day: fetch the tail rows once and
-  bucket them in the browser. This is the fan-out `services/across-sources.js`
-  already performs.
+- It is **one `listCases` call per Case Type**, not per day: fetch the tail rows
+  once and bucket them in the browser. The unpaged call may follow pagination
+  links into multiple HTTP requests. This is the fan-out
+  `services/across-sources.js` already performs.
 - It is bounded **because the page bounds it**, which is the part that has to be
   written down. "A few days of one Reviewer's own work" is what a healthy file
   makes it; it is not what an absent or stale file makes it. A missing artifact
