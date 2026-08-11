@@ -565,8 +565,9 @@ test('route: a person capture field searches, records the person, and closes its
  * followed all the way to the PATCH.
  *
  * @param {(query: string) => Promise<any[]>} searchPeople
+ * @param {string} [responsibleParty]
  */
-function renderResponsiblePartyRoute(searchPeople) {
+function renderResponsiblePartyRoute(searchPeople, responsibleParty = '') {
   const editableSnapshot = snapshot();
   // The picker only appears once a failure has been decided as needing
   // remediation, so the Case is put in that state before the tab is opened.
@@ -576,7 +577,7 @@ function renderResponsiblePartyRoute(searchPeople) {
   };
   editableSnapshot.caseRow = {
     ...editableSnapshot.caseRow,
-    responsibleParty: '',
+    responsibleParty,
   };
   editableSnapshot.machine = {
     canEditIssues: true,
@@ -608,11 +609,14 @@ function renderResponsiblePartyRoute(searchPeople) {
   );
   const container = document.createElement('main');
   let active = true;
+  /** @type {any[]} */
+  const actions = [];
   /** @type {any} */
   let tools;
   tools = {
     render,
     dispatch(/** @type {any} */ action) {
+      actions.push(action);
       state = slice.reducer(state, action);
       slice.render(container, state, tools);
     },
@@ -624,6 +628,7 @@ function renderResponsiblePartyRoute(searchPeople) {
   return {
     container,
     patches,
+    actions,
     dispose() {
       active = false;
       teardown?.();
@@ -764,6 +769,51 @@ test('state: setting the Responsible Party advances the Case Row and leaves the 
   );
 });
 
+test('state: clearing the Responsible Party removes its display name and preserves the snapshot machine', () => {
+  const loaded = snapshot();
+  loaded.caseRow = {
+    ...loaded.caseRow,
+    responsibleParty: 'jsmith',
+    responsiblePartyDisplayName: 'John Smith',
+  };
+  loaded.machine = { canEditIssues: true, marker: 'same machine' };
+  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: loaded,
+  });
+
+  const cleared = caseReviewReducer(state, {
+    type: 'case/responsible-party-cleared',
+  });
+  assert.equal(
+    cleared.routes.caseReview.snapshot?.caseRow?.responsibleParty,
+    ''
+  );
+  assert.equal(
+    cleared.routes.caseReview.snapshot?.caseRow?.responsiblePartyDisplayName,
+    undefined
+  );
+  assert.equal(cleared.routes.caseReview.snapshot?.machine, loaded.machine);
+  assert.equal(
+    caseReviewReducer(cleared, { type: 'case/responsible-party-cleared' }),
+    cleared,
+    'clearing an absent party is a no-op'
+  );
+
+  loaded.machine = { canEditIssues: false };
+  const readOnlyState = caseReviewReducer(
+    createInitialCaseReviewState(chrome),
+    { type: 'case/load-finished', snapshot: loaded }
+  );
+  assert.equal(
+    caseReviewReducer(readOnlyState, {
+      type: 'case/responsible-party-cleared',
+    }),
+    readOnlyState,
+    'read-only Cases do not clear their stored party'
+  );
+});
+
 test('the reducer ignores a case/field-edited naming the Responsible Party', () => {
   // The field has its own action and its own writer precisely because the
   // generic plain-text writer would be the wrong path for a value that resolves
@@ -841,6 +891,199 @@ test('route: the Responsible Party search is debounced and its choice is persist
   await Promise.resolve();
   await Promise.resolve();
   assert.deepEqual(route.patches, [{ responsibleParty: 'jsmith' }]);
+  route.dispose();
+});
+
+test('route: withdrawing the last remediation decision clears the party and resets its search', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  /** @type {(people: any[]) => void} */
+  let resolveSearch = () => {};
+  const route = renderResponsiblePartyRoute(
+    () => new Promise((resolve) => (resolveSearch = resolve)),
+    'jsmith'
+  );
+  const panel = queryAllByRole(route.container, 'tabpanel').find(
+    (candidate) => candidate.id === 'case-panel-issues'
+  );
+  assert.ok(panel);
+
+  const input = getByRole(panel, 'combobox', {
+    name: 'Search people for Responsible Party',
+  });
+  input.value = 'Jane';
+  fireEvent(input, 'input');
+  t.mock.timers.tick(200);
+  assert.equal(
+    route.state.routes.caseReview.responsiblePartySearch.status,
+    'loading'
+  );
+
+  fireEvent(getByRole(panel, 'radio', { name: 'No' }), 'change');
+  assert.equal(
+    route.state.routes.caseReview.snapshot?.caseRow?.responsibleParty,
+    ''
+  );
+  assert.equal(
+    route.state.routes.caseReview.snapshot?.caseRow
+      ?.responsiblePartyDisplayName,
+    undefined
+  );
+  assert.deepEqual(route.state.routes.caseReview.responsiblePartySearch, {
+    query: '',
+    people: [],
+    status: 'idle',
+  });
+  assert.deepEqual(
+    route.actions.filter(
+      (action) => action.type === 'case/responsible-party-cleared'
+    ),
+    [{ type: 'case/responsible-party-cleared' }]
+  );
+  t.mock.timers.tick(1);
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(
+    route.patches.some(
+      (fields) => fields.answers?.q1?.remediationRequired === 'no'
+    ),
+    true,
+    'the Answer edit is queued'
+  );
+  assert.equal(
+    route.patches.some((fields) => fields.responsibleParty === ''),
+    true,
+    'the Responsible Party clear is queued'
+  );
+
+  resolveSearch([{ loginName: 'jsmith', displayName: 'Jane Smith' }]);
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.deepEqual(route.state.routes.caseReview.responsiblePartySearch, {
+    query: '',
+    people: [],
+    status: 'idle',
+  });
+
+  const yesPanel = queryAllByRole(route.container, 'tabpanel').find(
+    (candidate) => candidate.id === 'case-panel-issues'
+  );
+  fireEvent(getByRole(yesPanel, 'radio', { name: 'Yes' }), 'change');
+  assert.equal(
+    route.state.routes.caseReview.snapshot?.caseRow?.responsibleParty,
+    ''
+  );
+  assert.equal(
+    getByRole(yesPanel, 'combobox', {
+      name: 'Search people for Responsible Party',
+    }).value,
+    ''
+  );
+  route.dispose();
+});
+
+test('route: withdrawing remediation with no stored party resets active and late search without queuing a clear', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  /** @type {(people: any[]) => void} */
+  let resolveSearch = () => {};
+  const route = renderResponsiblePartyRoute(
+    () => new Promise((resolve) => (resolveSearch = resolve)),
+    ''
+  );
+  const panel = queryAllByRole(route.container, 'tabpanel').find(
+    (candidate) => candidate.id === 'case-panel-issues'
+  );
+
+  const input = getByRole(panel, 'combobox', {
+    name: 'Search people for Responsible Party',
+  });
+  input.value = 'Jane';
+  fireEvent(input, 'input');
+  t.mock.timers.tick(200);
+  assert.equal(
+    route.state.routes.caseReview.responsiblePartySearch.status,
+    'loading'
+  );
+
+  fireEvent(getByRole(panel, 'radio', { name: 'No' }), 'change');
+  assert.deepEqual(route.state.routes.caseReview.responsiblePartySearch, {
+    query: '',
+    people: [],
+    status: 'idle',
+  });
+  assert.deepEqual(
+    route.actions.filter(
+      (action) => action.type === 'case/responsible-party-cleared'
+    ),
+    []
+  );
+  resolveSearch([{ loginName: 'jsmith', displayName: 'Jane Smith' }]);
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.deepEqual(route.state.routes.caseReview.responsiblePartySearch, {
+    query: '',
+    people: [],
+    status: 'idle',
+  });
+
+  const yesPanel = queryAllByRole(route.container, 'tabpanel').find(
+    (candidate) => candidate.id === 'case-panel-issues'
+  );
+  fireEvent(getByRole(yesPanel, 'radio', { name: 'Yes' }), 'change');
+  assert.equal(
+    getByRole(yesPanel, 'combobox', {
+      name: 'Search people for Responsible Party',
+    }).value,
+    ''
+  );
+  t.mock.timers.tick(1);
+  assert.equal(
+    route.patches.some((fields) => Object.hasOwn(fields, 'responsibleParty')),
+    false
+  );
+  route.dispose();
+});
+
+test('route: selecting a party before an Answer becomes passing still clears it', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const route = renderResponsiblePartyRoute(
+    async () => [{ loginName: 'jsmith', displayName: 'Jane Smith' }],
+    ''
+  );
+
+  const issuesPanel = queryAllByRole(route.container, 'tabpanel').find(
+    (candidate) => candidate.id === 'case-panel-issues'
+  );
+  const input = getByRole(issuesPanel, 'combobox', {
+    name: 'Search people for Responsible Party',
+  });
+  input.value = 'Jane';
+  fireEvent(input, 'input');
+  t.mock.timers.tick(200);
+  await Promise.resolve();
+  await Promise.resolve();
+  fireEvent(getByRole(issuesPanel, 'option', { name: /Jane Smith/ }), 'click');
+  assert.equal(
+    route.state.routes.caseReview.snapshot?.caseRow?.responsibleParty,
+    'jsmith'
+  );
+
+  fireEvent(getByRole(route.container, 'tab', { name: 'Review' }), 'click');
+  fireEvent(answerOption(route.container, 'q1', 'Yes'), 'change');
+
+  assert.equal(
+    route.state.routes.caseReview.snapshot?.answers.q1?.value,
+    'Yes'
+  );
+  assert.equal(
+    route.state.routes.caseReview.snapshot?.caseRow?.responsibleParty,
+    ''
+  );
+  assert.deepEqual(
+    route.actions.filter(
+      (action) => action.type === 'case/responsible-party-cleared'
+    ),
+    [{ type: 'case/responsible-party-cleared' }]
+  );
   route.dispose();
 });
 
@@ -2910,6 +3153,31 @@ test('Responsible Party effect: its own action and its own field write', () => {
   ]);
 });
 
+test('Responsible Party clear effect: dispatches its action and queues an empty account', () => {
+  /** @type {any[]} */
+  const queued = [];
+  /** @type {any[]} */
+  const dispatched = [];
+  const save = createCaseReviewSaveEffect({
+    saveQueue: /** @type {any} */ ({
+      enqueue: (
+        /** @type {string} */ id,
+        /** @type {string} */ field,
+        /** @type {any} */ value
+      ) => queued.push({ id, field, value }),
+    }),
+    caseId: () => 'c1',
+    dispatch: (action) => dispatched.push(action),
+  });
+
+  save.responsiblePartyCleared();
+
+  assert.deepEqual(queued, [
+    { id: 'c1', field: 'responsibleParty', value: '' },
+  ]);
+  assert.deepEqual(dispatched, [{ type: 'case/responsible-party-cleared' }]);
+});
+
 test('Notes effect: `fieldEdited` takes only the plain-text Case fields — a type, not a convention', () => {
   /**
    * `fieldEdited` is the one *generic* Case Row writer: its reducer branch
@@ -3993,7 +4261,8 @@ test('route: the Remediation Required decision writes through the single Answer 
     fireEvent(radio(1), 'change');
     await saveQueue.whenIdle();
     await flush();
-    assert.deepEqual(patches.at(-1)?.answers?.['q-needs'], {
+    const answerPatch = [...patches].reverse().find((fields) => fields.answers);
+    assert.deepEqual(answerPatch?.answers?.['q-needs'], {
       value: 'No',
       remediationRequired: 'no',
     });

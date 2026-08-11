@@ -96,20 +96,31 @@ test('the Responsible Party field follows the remediation decision', () => {
   );
 });
 
-test('an already-named Responsible Party stays visible if the decision is withdrawn', () => {
-  // The stored value still drives reporting, the Responsible Party dashboard
-  // and Section access, so hiding it would hide a fact about the Case.
+test('an editable stored Responsible Party disappears when remediation is withdrawn', () => {
+  assert.equal(
+    ResponsiblePartyField(
+      props({
+        answers: {},
+        canEditIssues: true,
+        responsibleParty: { loginName: 'jsmith', displayName: 'Jane Smith' },
+      })
+    ),
+    null
+  );
+});
+
+test('a read-only stored Responsible Party remains visible when remediation is withdrawn', () => {
   const node = ResponsiblePartyField(
     props({
       answers: {},
-      canEditIssues: true,
+      canEditIssues: false,
       responsibleParty: { loginName: 'jsmith', displayName: 'Jane Smith' },
     })
   );
   const root = host(node ? [node] : []);
   assert.equal(
-    findByClass(root, 'cora-responsible-party-current').textContent,
-    'Jane Smith'
+    findByClass(root, 'cora-responsible-party-value').textContent,
+    'Responsible Party: Jane Smith'
   );
 });
 

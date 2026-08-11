@@ -345,12 +345,13 @@ per-failure, not per-Case). The **Assigned Reviewer** _sets_ the Responsible Par
 at the bottom of the **Issues** Section, before **Send Actions**; it cannot be changed
 after send. The field only appears — and is only required — once at least one failed
 **Answer**'s "Is remediation required?" decision is `yes`: with nothing to send there is
-nobody to send it to (#677). A Responsible Party already named persists if that decision
-is later withdrawn, and stays visible to the **Assigned Reviewer**. The accepted
-consequence is that a Case needing no remediation now completes with no Responsible Party
-at all, so it carries none in the Case tables' Responsible Party column, appears under
-nobody on the Responsible Party dashboard, and grants nobody the `responsibleParty`
-Section-access role. Once actions are sent the Responsible Party gains `read-only`
+nobody to send it to (#677). Before **Send Actions**, withdrawing the last such decision
+clears any stored Responsible Party and removes the value from the Case tables' Responsible
+Party column, the Responsible Party dashboard, and the `responsibleParty` Section-access
+role. The editable Issues view therefore shows no recipient until remediation is required
+again; once actions are sent, the stored party remains the read-only record of who receives
+them. A Case needing no remediation now completes with no Responsible Party at all. Once
+actions are sent the Responsible Party gains `read-only`
 **Summary**, `read-only` **Remediation** and `edit` **Conversation** access (the only
 three Sections they see), and does the remediation work off-system, communicating via
 the Conversation.

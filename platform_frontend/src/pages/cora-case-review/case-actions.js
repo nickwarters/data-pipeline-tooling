@@ -23,7 +23,7 @@
  * these. Access resolution grants the Responsible Party Role by matching that
  * field against the current user, so it is read by exactly the same frozen
  * matrix `status` and `assignedReviewer` are — hence `responsiblePartyChanged`,
- * its own action, and its own reducer branch that says in one place what a
+ * its own action, and its own reducer branches that say in one place what a
  * mid-session change does and does not move.
  *
  * @typedef {'notes' | 'caseJustification'} PlainTextCaseField
@@ -46,6 +46,7 @@
  *     | {type: 'case/field-edited', field: PlainTextCaseField, value: string}
  *     | {type: 'case/on-hold-changed', onHold: boolean, placedOnHoldAt: string | null}
  *     | {type: 'case/responsible-party-changed', loginName: string, displayName: string}
+ *     | {type: 'case/responsible-party-cleared'}
  *   ) => unknown,
  *   now?: () => Date,
  * }} input
@@ -92,6 +93,10 @@ export function createCaseReviewSaveEffect({
         displayName,
       });
       saveQueue.enqueue(caseId(), 'responsibleParty', loginName);
+    },
+    responsiblePartyCleared() {
+      dispatch({ type: 'case/responsible-party-cleared' });
+      saveQueue.enqueue(caseId(), 'responsibleParty', '');
     },
     /** @param {boolean} onHold */
     onHoldChanged(onHold) {
