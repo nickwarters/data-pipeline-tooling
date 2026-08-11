@@ -153,8 +153,9 @@ ranges use monthly buckets. Each descriptor carries its label and grain,
 inclusive `start`, browser-local yesterday as the inclusive totals `end`,
 browser-local `today` as the display endpoint, and ordered inclusive buckets.
 Daily buckets use `YYYY-MM-DD` keys and monthly buckets use `YYYY-MM` keys.
-The final bucket reaches today even though totals stop at yesterday. No range
-picker is rendered yet.
+The final bucket reaches today even though totals stop at yesterday. The left
+column renders a labelled range control group; its buttons dispatch
+`my-stats/range-selected` and expose the active range with `aria-pressed`.
 
 Dates are the subtle part. `ReportableAt` is an instant and every key on this
 page is a browser-local calendar date; the one crossing between them is

@@ -113,9 +113,42 @@ function tailNoticeView(tail, firstUnpublishedDate) {
 
 /**
  * @param {MyStatsRouteState} route
+ * @param {(action: { type: 'my-stats/range-selected', range: StatsRangeKey }) => void} dispatch
+ * @returns {HTMLElement}
+ */
+function rangeControlsView(route, dispatch) {
+  return h(
+    'div',
+    {
+      className: 'cora-my-stats-range-controls',
+      role: 'group',
+      'aria-label': 'Stats range',
+    },
+    route.ranges.map((range) =>
+      h(
+        'button',
+        {
+          className: 'cora-my-stats-range-button',
+          type: 'button',
+          'aria-pressed': range.key === route.selectedRange,
+          onclick: () =>
+            dispatch({
+              type: 'my-stats/range-selected',
+              range: range.key,
+            }),
+        },
+        range.label
+      )
+    )
+  );
+}
+
+/**
+ * @param {MyStatsRouteState} route
+ * @param {(action: { type: 'my-stats/range-selected', range: StatsRangeKey }) => void} dispatch
  * @returns {HTMLElement | (HTMLElement | null)[]}
  */
-function bodyView(route) {
+function bodyView(route, dispatch) {
   if (route.feedStatus === 'loading')
     return LoadingState('Loading your report');
   if (route.feedStatus === 'failed') {
@@ -161,7 +194,12 @@ function bodyView(route) {
     h(
       'div',
       { className: 'cora-my-stats-top-row' },
-      caseTypePanel(route.reportFeed, range),
+      h(
+        'div',
+        { className: 'cora-my-stats-controls-column' },
+        rangeControlsView(route, dispatch),
+        caseTypePanel(route.reportFeed, range)
+      ),
       statsChartView(report)
     ),
     headlineStripView(report.headline),
@@ -176,9 +214,10 @@ function bodyView(route) {
 
 /**
  * @param {MyStatsState} state
+ * @param {(action: { type: 'my-stats/range-selected', range: StatsRangeKey }) => void} [dispatch]
  * @returns {HTMLElement}
  */
-export function myStatsView(state) {
+export function myStatsView(state, dispatch = () => {}) {
   const route = state.routes.myStats;
   return h(
     'main',
@@ -189,7 +228,7 @@ export function myStatsView(state) {
       ),
     },
     h('h1', {}, 'My Stats'),
-    bodyView(route)
+    bodyView(route, dispatch)
   );
 }
 
@@ -204,7 +243,7 @@ export function myStatsView(state) {
  * @returns {{
  *   initialState: MyStatsState,
  *   reducer: (state: MyStatsState, action: any) => MyStatsState,
- *   render: (container: Element, state: MyStatsState, tools: { render: (container: Element, view: Node) => void, context: import('../setup/register-routes.js').AppContext }) => void,
+ *   render: (container: Element, state: MyStatsState, tools: { render: (container: Element, view: Node) => void, dispatch: (action: any) => void, context: import('../setup/register-routes.js').AppContext }) => void,
  *   start: (tools: { dispatch: (action: unknown) => void, context: import('../setup/register-routes.js').AppContext, isActive: () => boolean, signal: AbortSignal }) => (() => void),
  * }}
  */
@@ -316,7 +355,7 @@ export function createRouteSlice(
       return state;
     },
     render(container, state, tools) {
-      tools.render(container, myStatsView(state));
+      tools.render(container, myStatsView(state, tools.dispatch));
 
       const chart = /** @type {SVGSVGElement|null} */ (
         container.querySelector('svg.cora-grouped-bar-chart')

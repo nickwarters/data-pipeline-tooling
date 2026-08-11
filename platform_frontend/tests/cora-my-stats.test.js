@@ -198,9 +198,32 @@ test('my stats view: the panel, the chart and the figures are all rendered', () 
   const topRow = view.querySelector('.cora-my-stats-top-row');
   assert.ok(topRow);
   const topRowChildren = /** @type {any[]} */ (Array.from(topRow.childNodes));
-  assert.equal(topRowChildren[0]?.className, 'cora-my-stats-case-type-panel');
+  assert.equal(topRowChildren[0]?.className, 'cora-my-stats-controls-column');
+  assert.ok(topRowChildren[0]?.querySelector('.cora-my-stats-case-type-panel'));
   assert.equal(topRowChildren[1]?.tagName, 'svg');
   assert.ok(view.querySelector('.cora-my-stats-headline'));
+});
+
+test('my stats view: range controls expose selection and dispatch changes', () => {
+  /** @type {any[]} */
+  const actions = [];
+  const view = myStatsView(viewState(), (action) => actions.push(action));
+  const controls = view.querySelector('.cora-my-stats-range-controls');
+  const buttons = controls?.querySelectorAll('button') ?? [];
+
+  assert.equal(controls?.getAttribute('role'), 'group');
+  assert.equal(controls?.getAttribute('aria-label'), 'Stats range');
+  assert.deepEqual(
+    Array.from(buttons, (button) => button.textContent),
+    ['Week', 'Month', '3 months', '12 months']
+  );
+  assert.equal(buttons[0]?.getAttribute('aria-pressed'), 'true');
+  assert.equal(buttons[1]?.getAttribute('aria-pressed'), 'false');
+
+  buttons[2]?.dispatchEvent(/** @type {any} */ ({ type: 'click' }));
+  assert.deepEqual(actions, [
+    { type: 'my-stats/range-selected', range: '3-months' },
+  ]);
 });
 
 test('my stats view: published days and live days reach the chart and the figures together', () => {
@@ -307,6 +330,11 @@ test('my stats layout: the composed row and the figures both stack responsively'
   assert.ok(desktopRule);
   assert.match(desktopRule, /display:\s*grid/);
   assert.match(desktopRule, /grid-template-columns:\s*1fr\s+2fr/);
+  assert.match(
+    CORA_STYLES,
+    /\.cora-my-stats-range-button\[aria-pressed='true'\]/
+  );
+  assert.match(CORA_STYLES, /\.cora-my-stats-controls-column\s*\{/);
   assert.match(
     CORA_STYLES,
     /\[data-cora-root\]\s+\.cora-my-stats-headline__figures\s*\{[^}]*grid-template-columns:\s*repeat\(4,/

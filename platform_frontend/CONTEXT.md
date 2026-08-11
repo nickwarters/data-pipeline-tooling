@@ -301,8 +301,8 @@ through today, the previous complete month plus this month through today, three
 complete months plus the current month, and twelve complete months plus the
 current month. Day-grain ranges use daily buckets and the longer ranges use
 monthly buckets; totals end at browser-local yesterday while the current
-display bucket extends through today. The page owns this range state and
-defaults to Week, but does not yet render the picker.
+display bucket extends through today. The page owns this range state, defaults
+to Week, and renders labelled controls that dispatch `my-stats/range-selected`.
 
 The feed and the tail are merged into one count per calendar day **once**, and
 that single derivation feeds both the grouped chart and the four **headline
