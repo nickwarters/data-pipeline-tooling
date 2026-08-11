@@ -3059,6 +3059,36 @@
   min-width: 0;
 }
 
+[data-cora-root] .cora-my-stats-controls-column {
+  display: grid;
+  gap: var(--cora-space-4);
+  min-width: 0;
+}
+
+[data-cora-root] .cora-my-stats-range-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cora-space-2);
+}
+
+[data-cora-root] .cora-my-stats-range-button {
+  color: var(--cora-color-on-surface);
+  background: transparent;
+  border-color: var(--cora-color-border-strong);
+}
+
+[data-cora-root] .cora-my-stats-range-button:hover {
+  color: var(--cora-color-on-surface);
+  background: var(--cora-color-surface-2);
+  border-color: var(--cora-color-border-strong);
+}
+
+[data-cora-root] .cora-my-stats-range-button[aria-pressed='true'] {
+  color: var(--cora-color-text-on-accent);
+  background: var(--cora-color-accent);
+  border-color: var(--cora-color-accent);
+}
+
 [data-cora-root] .cora-my-stats-case-type-panel {
   min-width: 0;
   padding: var(--cora-space-4);

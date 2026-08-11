@@ -102,10 +102,12 @@ counts working days only, and leave is invisible to it — a stated inaccuracy,
 which is why Active days sits beside it.
 
 The route snapshots the four browser-calendar ranges (Week, Month, 3 months,
-and 12 months) and owns the selected range, defaulting to Week. No range picker
-is rendered yet. The route mounts an HTML-over-SVG tooltip under the app root
-after commit; the same keyboard-focusable mark supports pointer hover and
-keyboard focus, and Escape dismisses the tooltip.
+and 12 months) and owns the selected range, defaulting to Week. A labelled
+range control group dispatches the selected range; Week and Month render daily
+bars, while 3 months and 12 months render monthly bars. The route mounts an
+HTML-over-SVG tooltip under the app root after commit; the same
+keyboard-focusable mark supports pointer hover and keyboard focus, and Escape
+dismisses the tooltip.
 
 ### Team Stats page
 

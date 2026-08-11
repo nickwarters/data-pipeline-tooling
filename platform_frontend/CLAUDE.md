@@ -323,7 +323,7 @@ src/
     cora-case-search.js           # store-driven #/search slice: URL-held filters, one bounded
                                   #   cross-Case-Type lookup, standard Case columns
     cora-dashboard.js             # store-driven dashboard slice + descriptor-selected panels (GRID-3/4)
-    cora-my-stats.js               # store-driven Reviewer Report Feed load, browser-calendar range state,
+    cora-my-stats.js               # store-driven Reviewer Report Feed load, browser-calendar range state and controls,
                                    #   the clamped live-tail read, and one derivation feeding the chart,
                                    #   the Case Type panel and the headline figures
     my-stats/

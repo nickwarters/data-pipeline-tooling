@@ -60,9 +60,10 @@ dispatches nothing.
 
 The view derives one report from the feed and the tail, and renders it three
 ways: the Case Type proportion panel and the grouped chart in a two-column row,
-and the headline figures full width beneath them. There is no chart action and
-no separate `chart` route field — the chart is derived, not delivered. The
-route still owns chart tooltip setup and cleanup.
+and the headline figures full width beneath them. The left column also renders
+the four range controls; they dispatch `my-stats/range-selected` while the
+chart remains derived rather than delivered. There is no separate `chart` route
+field. The route still owns chart tooltip setup and cleanup.
 
 The `#/team-stats` route is also a static page import, guarded solely by
 `context.chrome.permissions.isReviewerManager`. A non-manager is redirected to

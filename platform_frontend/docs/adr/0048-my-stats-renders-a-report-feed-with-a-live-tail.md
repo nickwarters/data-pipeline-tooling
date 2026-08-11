@@ -96,9 +96,10 @@ The page merges the file and the tail into one count per calendar day, once,
 and hands that to both; a second derivation would be a second chance for them
 to disagree, over numbers a Reviewer can see side by side. The figures are the
 total (excluding today), the average per working day, the count of active days,
-and the busiest day with its count. The page does not yet render range
-controls: the four descriptors and the selection exist, and Week is what is
-shown.
+and the busiest day with its count. The page renders a labelled control group
+for the four descriptors. Selecting a button dispatches
+`my-stats/range-selected`; the selected button exposes its state with
+`aria-pressed`, and the chart and figures derive from that range.
 
 ### Why the live read is affordable
 
