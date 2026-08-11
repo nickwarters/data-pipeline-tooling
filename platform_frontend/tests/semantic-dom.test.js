@@ -10,6 +10,7 @@ import {
   queryAllByRole,
   queryAllByTag,
   queryByRole,
+  tableHeaders,
 } from './helpers/semantic-dom.js';
 
 installDom();
@@ -83,6 +84,34 @@ test('semantic DOM helpers query table structure by role and tag', () => {
   assert.equal(getByTag(root, 'tbody').tagName, 'TBODY');
   assert.equal(queryAllByTag(root, 'span').length, 1);
   assert.equal(getByText(root, 'Case A').tagName, 'SPAN');
+});
+
+test('tableHeaders reports semantic heading state without CSS hooks', () => {
+  const root = /** @type {any} */ (
+    h(
+      'table',
+      {},
+      h(
+        'thead',
+        {},
+        h(
+          'tr',
+          {},
+          h(
+            'th',
+            { className: 'arbitrary-css-hook', 'aria-sort': 'ascending' },
+            h('button', {}, 'Reference')
+          ),
+          h('th', { className: 'another-css-hook' }, 'Actions')
+        )
+      )
+    )
+  );
+
+  assert.deepEqual(tableHeaders(root), [
+    ['Reference', 'ascending', true],
+    ['Actions', 'none', false],
+  ]);
 });
 
 test('semantic DOM helpers use title as a fallback name', () => {

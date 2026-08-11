@@ -117,10 +117,10 @@ test('the Outstanding Remediation Actions table renders the columns it renders t
   //     data-table.js derives `aria-sort` and interactivity independently.
   //   - Action required stays plain text, as it has no sortable meaning.
   assert.deepEqual(tableHeaders(section), [
-    ['Reference', 'cora-col-reference', 'none', true],
-    ['Case Type', 'cora-col-caseType', 'none', true],
-    ['Remediation due', 'cora-col-remediationDueDate', 'ascending', true],
-    ['Action required', 'cora-col-action', 'none', false],
+    ['Reference', 'none', true],
+    ['Case Type', 'none', true],
+    ['Remediation due', 'ascending', true],
+    ['Action required', 'none', false],
   ]);
 
   // No column renders a link: the Reference column carries no `href`, unlike

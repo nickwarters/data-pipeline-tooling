@@ -97,13 +97,13 @@ test('Controls appeal descriptors render through the generic table and keep navi
   // Reference and Case Type are interactive here as on every other Case table;
   // `Raised` keeps the table's default sort, unmoved.
   assert.deepEqual(tableHeaders(view), [
-    ['Reference', 'cora-col-reference', 'none', true],
-    ['Case Type', 'cora-col-caseType', 'none', true],
-    ['Responsible Party', 'cora-col-responsibleParty', 'none', false],
-    ['Appellant', 'cora-col-appellant', 'none', false],
-    ['Raised', 'cora-col-raised', 'ascending', true],
-    ['Appellant rationale', 'cora-col-rationale', 'none', false],
-    ['Actions', 'cora-col-actions', 'none', false],
+    ['Reference', 'none', true],
+    ['Case Type', 'none', true],
+    ['Responsible Party', 'none', false],
+    ['Appellant', 'none', false],
+    ['Raised', 'ascending', true],
+    ['Appellant rationale', 'none', false],
+    ['Actions', 'none', false],
   ]);
 
   fireEvent(getByRole(view, 'button', { name: 'Raised' }), 'click');
