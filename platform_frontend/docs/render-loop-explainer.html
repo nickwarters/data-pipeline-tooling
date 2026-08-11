@@ -1,0 +1,1988 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>The Render Loop — Interactive Explorer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@300;400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      :root {
+        --bg: #101010;
+        --surface: #1d1d1d;
+        --border: #404040;
+        --signal: #d4820a;
+        --signal-glow: rgba(212, 130, 10, 0.22);
+        --computed: #4d9eff;
+        --computed-glow: rgba(77, 158, 255, 0.18);
+        --effect: #e31e22;
+        --effect-glow: rgba(227, 30, 34, 0.18);
+        --text: #f3f3f3;
+        --muted: #9b9b9b;
+        --saved: #00a368;
+      }
+
+      html,
+      body {
+        height: 100%;
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
+        overflow-x: hidden;
+      }
+
+      body::before {
+        content: '';
+        position: fixed;
+        inset: 0;
+        background-image: radial-gradient(circle, #212121 1px, transparent 1px);
+        background-size: 28px 28px;
+        opacity: 0.4;
+        pointer-events: none;
+        z-index: 0;
+      }
+
+      header {
+        position: relative;
+        z-index: 10;
+        padding: 40px 48px 24px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      header h1 {
+        font-family: 'Bebas Neue', Impact, Haettenschweiler, sans-serif;
+        font-size: clamp(2.5rem, 6vw, 5rem);
+        letter-spacing: 0.06em;
+        line-height: 1;
+        color: var(--text);
+      }
+
+      header p {
+        margin-top: 8px;
+        font-size: 0.78rem;
+        color: var(--muted);
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .legend {
+        display: flex;
+        gap: 24px;
+        margin-top: 20px;
+        flex-wrap: wrap;
+      }
+      .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.7rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .legend-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+
+      main {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .scene {
+        position: relative;
+        padding: 48px;
+        border-bottom: 1px solid var(--border);
+      }
+      .scene-label {
+        font-family: 'Bebas Neue', Impact, Haettenschweiler, sans-serif;
+        font-size: 0.85rem;
+        letter-spacing: 0.2em;
+        color: var(--muted);
+        text-transform: uppercase;
+        margin-bottom: 6px;
+      }
+      .scene-title {
+        font-family: 'Bebas Neue', Impact, Haettenschweiler, sans-serif;
+        font-size: 1.8rem;
+        letter-spacing: 0.05em;
+        color: var(--text);
+        margin-bottom: 28px;
+      }
+      .scene-intro {
+        font-size: 0.75rem;
+        line-height: 1.75;
+        color: var(--muted);
+        margin-bottom: 28px;
+        max-width: 780px;
+      }
+      .scene-intro code {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        padding: 1px 5px;
+        font-size: 0.85em;
+      }
+      .scene-intro + .scene-intro {
+        margin-top: -14px;
+      }
+      .scene-intro a {
+        color: var(--computed);
+      }
+
+      /* ── CONCEPT CARDS ──────────────────────────────────────── */
+      .concepts {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 20px;
+        padding: 48px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .concept-card {
+        background: var(--surface);
+        border-radius: 8px;
+        padding: 28px;
+        position: relative;
+        overflow: hidden;
+      }
+      .concept-card::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 2px;
+      }
+      .c-view::after {
+        background: var(--computed);
+      }
+      .c-store::after {
+        background: var(--signal);
+      }
+      .c-commit::after {
+        background: var(--effect);
+      }
+
+      .concept-icon {
+        font-size: 1.6rem;
+        margin-bottom: 12px;
+        display: block;
+      }
+      .concept-name {
+        font-family: 'Bebas Neue', Impact, Haettenschweiler, sans-serif;
+        font-size: 1.5rem;
+        letter-spacing: 0.05em;
+        margin-bottom: 8px;
+      }
+      .c-view .concept-name {
+        color: var(--computed);
+      }
+      .c-store .concept-name {
+        color: var(--signal);
+      }
+      .c-commit .concept-name {
+        color: var(--effect);
+      }
+      .concept-desc {
+        font-size: 0.73rem;
+        line-height: 1.7;
+        color: var(--muted);
+        margin-bottom: 14px;
+      }
+      .concept-desc + .concept-desc {
+        margin-top: -6px;
+      }
+      .concept-desc code {
+        color: var(--text);
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        padding: 0 4px;
+      }
+      .concept-api {
+        font-size: 0.66rem;
+        color: var(--text);
+        background: var(--bg);
+        border-radius: 4px;
+        padding: 10px 12px;
+        border: 1px solid var(--border);
+        line-height: 1.7;
+        white-space: pre;
+        overflow-x: auto;
+      }
+
+      .kw {
+        color: var(--signal);
+      }
+      .fn {
+        color: var(--computed);
+      }
+      .ef {
+        color: var(--effect);
+      }
+      .cmt {
+        color: #767676;
+        font-style: italic;
+      }
+      .str {
+        color: #00c47f;
+      }
+
+      /* ── SHARED PANEL FURNITURE ─────────────────────────────── */
+      .loop-stage {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1.15fr;
+        gap: 16px;
+      }
+      .loop-col {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 16px;
+        min-width: 0;
+      }
+      .loop-col-label {
+        font-size: 0.58rem;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 12px;
+        border-bottom: 1px dashed var(--border);
+        padding-bottom: 8px;
+      }
+
+      .stat-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+        margin-top: 10px;
+      }
+      .stat-cell {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 8px 10px;
+      }
+      .stat-cell-label {
+        font-size: 0.56rem;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 4px;
+      }
+      .stat-cell-value {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--text);
+      }
+      .stat-cell.wide {
+        grid-column: 1 / -1;
+      }
+
+      .state-pre {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 10px 12px;
+        font-size: 0.68rem;
+        line-height: 1.6;
+        color: var(--text);
+        white-space: pre-wrap;
+        word-break: break-word;
+        min-height: 90px;
+      }
+
+      .loop-log {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 8px 10px;
+        height: 220px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column-reverse;
+        gap: 4px;
+      }
+      .loop-log::-webkit-scrollbar {
+        width: 3px;
+      }
+      .loop-log::-webkit-scrollbar-thumb {
+        background: var(--border);
+      }
+      .log-entry {
+        font-size: 0.65rem;
+        display: flex;
+        gap: 8px;
+        align-items: baseline;
+        animation: fade-up 0.2s ease;
+      }
+      @keyframes fade-up {
+        from {
+          opacity: 0;
+          transform: translateY(3px);
+        }
+        to {
+          opacity: 1;
+        }
+      }
+      .log-kind {
+        flex-shrink: 0;
+        font-weight: 700;
+        min-width: 52px;
+      }
+      .log-kind.k-dispatch {
+        color: var(--signal);
+      }
+      .log-kind.k-commit {
+        color: var(--effect);
+      }
+      .log-kind.k-turn {
+        color: var(--saved);
+      }
+      .log-msg {
+        color: var(--text);
+      }
+
+      .dom-surface {
+        background: var(--bg);
+        border: 1px dashed var(--border);
+        border-radius: 6px;
+        padding: 14px;
+        min-height: 90px;
+      }
+      .dom-surface-label {
+        display: block;
+        font-size: 0.6rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 8px;
+      }
+      .dom-surface-input {
+        width: 100%;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        color: var(--text);
+        font-family: inherit;
+        font-size: 0.8rem;
+        padding: 8px 10px;
+        outline: none;
+      }
+      .dom-surface-input:focus {
+        border-color: var(--computed);
+      }
+      .dom-surface-badge {
+        margin-top: 10px;
+        font-size: 0.68rem;
+        color: var(--computed);
+        background: rgba(77, 158, 255, 0.08);
+        border: 1px solid rgba(77, 158, 255, 0.3);
+        border-radius: 4px;
+        display: inline-block;
+        padding: 4px 9px;
+      }
+
+      .loop-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 22px;
+        align-items: center;
+      }
+      .loop-btn {
+        background: transparent;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        color: var(--text);
+        font-family: inherit;
+        font-size: 0.72rem;
+        padding: 8px 14px;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+      .loop-btn:hover {
+        border-color: var(--computed);
+        color: var(--computed);
+      }
+      .loop-toggle {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 0.7rem;
+        color: var(--muted);
+        cursor: pointer;
+        user-select: none;
+      }
+      .loop-toggle input {
+        accent-color: var(--computed);
+        width: 14px;
+        height: 14px;
+      }
+
+      /* ── SCENE 02: KEYED ROW LIST ───────────────────────────── */
+      .stageb-layout {
+        display: grid;
+        grid-template-columns: 1.4fr 1fr;
+        gap: 20px;
+      }
+      .stageb-rows {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .stageb-row {
+        position: relative;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 10px 12px 10px 68px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        min-height: 20px;
+      }
+      .stageb-row::before {
+        content: 'node ' attr(data-node-id);
+        position: absolute;
+        left: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 0.56rem;
+        letter-spacing: 0.06em;
+        color: var(--saved);
+        background: rgba(0, 163, 104, 0.1);
+        border: 1px solid rgba(0, 163, 104, 0.35);
+        border-radius: 10px;
+        padding: 2px 6px;
+        white-space: nowrap;
+      }
+      .stageb-row-label {
+        font-size: 0.76rem;
+        color: var(--text);
+        font-weight: 600;
+      }
+      .stageb-row-meta {
+        font-size: 0.62rem;
+        color: var(--muted);
+      }
+      .stageb-row-input {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        color: var(--text);
+        font-family: inherit;
+        font-size: 0.7rem;
+        padding: 5px 8px;
+        outline: none;
+        width: 46%;
+      }
+      .stageb-row-input:focus {
+        border-color: var(--computed);
+      }
+      .stageb-row.memoised {
+        border-color: rgba(212, 130, 10, 0.5);
+        box-shadow: 0 0 0 1px rgba(212, 130, 10, 0.15);
+      }
+      .stageb-row.memoised::after {
+        content: 'memoised';
+        position: absolute;
+        right: 10px;
+        top: -8px;
+        font-size: 0.52rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--signal);
+        background: var(--bg);
+        border: 1px solid rgba(212, 130, 10, 0.5);
+        border-radius: 8px;
+        padding: 1px 6px;
+      }
+
+      /* ── SCENE 04: MOUNT / TEARDOWN ─────────────────────────── */
+      .lifecycle-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+        margin-bottom: 32px;
+      }
+      .lifecycle-list {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 20px 20px 20px 40px;
+        font-size: 0.72rem;
+        line-height: 2;
+        color: var(--text);
+      }
+      .lifecycle-list-label {
+        font-size: 0.6rem;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 10px;
+        margin-left: -20px;
+      }
+      .lifecycle-list li::marker {
+        color: var(--computed);
+        font-weight: 700;
+      }
+      .lifecycle-list.teardown li::marker {
+        color: var(--effect);
+      }
+
+      .mount-diagram {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        gap: 14px;
+        align-items: center;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 28px;
+      }
+      .mount-panel {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 12px 14px;
+      }
+      .mount-panel-label {
+        font-size: 0.56rem;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 8px;
+      }
+      .mount-node {
+        font-size: 0.68rem;
+        padding: 6px 8px;
+        border-radius: 4px;
+        margin-bottom: 6px;
+        border: 1px solid var(--border);
+      }
+      .mount-node.kept {
+        border-color: rgba(0, 163, 104, 0.5);
+        color: var(--saved);
+        background: rgba(0, 163, 104, 0.06);
+      }
+      .mount-node.discarded {
+        border-color: rgba(227, 30, 34, 0.5);
+        color: var(--effect);
+        background: rgba(227, 30, 34, 0.06);
+        text-decoration: line-through;
+        opacity: 0.8;
+      }
+      .mount-arrow {
+        font-family: 'Bebas Neue', Impact, Haettenschweiler, sans-serif;
+        font-size: 1.6rem;
+        color: var(--muted);
+        text-align: center;
+      }
+
+      .fact-list {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .fact {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--computed);
+        border-radius: 6px;
+        padding: 14px 18px;
+      }
+      .fact-title {
+        font-size: 0.74rem;
+        font-weight: 700;
+        color: var(--text);
+        margin-bottom: 6px;
+      }
+      .fact-body {
+        font-size: 0.71rem;
+        line-height: 1.75;
+        color: var(--muted);
+      }
+      .fact-body code {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        padding: 1px 5px;
+        color: var(--text);
+      }
+      .fact-quote {
+        margin-top: 10px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 10px 12px;
+        font-size: 0.66rem;
+        line-height: 1.7;
+        white-space: pre;
+        overflow-x: auto;
+        color: var(--muted);
+      }
+
+      .concept-desc code,
+      .fact-body code {
+        font-family: inherit;
+      }
+
+      footer {
+        padding: 32px 48px;
+        text-align: center;
+        font-size: 0.65rem;
+        letter-spacing: 0.1em;
+        color: var(--muted);
+      }
+      footer a {
+        color: var(--computed);
+        text-decoration: none;
+      }
+      footer a:hover {
+        text-decoration: underline;
+      }
+      footer .footer-links {
+        margin-top: 10px;
+        display: flex;
+        gap: 16px;
+        justify-content: center;
+        flex-wrap: wrap;
+        text-transform: none;
+        letter-spacing: 0.02em;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .log-entry {
+          animation: none;
+        }
+      }
+
+      @media (max-width: 820px) {
+        header {
+          padding: 28px 20px 20px;
+        }
+        .scene {
+          padding: 24px;
+        }
+        .concepts {
+          padding: 24px;
+        }
+        .loop-stage {
+          grid-template-columns: 1fr;
+        }
+        .stageb-layout {
+          grid-template-columns: 1fr;
+        }
+        .lifecycle-grid {
+          grid-template-columns: 1fr;
+        }
+        .mount-diagram {
+          grid-template-columns: 1fr;
+        }
+        .mount-arrow {
+          transform: rotate(90deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>The Render Loop</h1>
+      <p>
+        dispatch · reducer · view · h()/svg() · render — src/core/ +
+        src/lib/html.js
+      </p>
+      <div class="legend">
+        <div class="legend-item">
+          <div class="legend-dot" style="background: var(--signal)"></div>
+          State &amp; store
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background: var(--computed)"></div>
+          View / h() tree
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background: var(--effect)"></div>
+          render() commit
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background: var(--saved)"></div>
+          Effects &amp; mount lifetime
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <!-- ══ CONCEPT CARDS ══════════════════════════════════════════ -->
+      <section class="concepts">
+        <div class="concept-card c-view">
+          <span class="concept-icon">◧</span>
+          <div class="concept-name">h() / svg() build real DOM</div>
+          <p class="concept-desc">
+            <code>h(tag, props, ...children)</code> calls
+            <code>document.createElement</code> and returns a real element —
+            there is no virtual DOM. The "new tree" a view produces every render
+            is a detached real DOM tree. <code>svg()</code> uses
+            <code>createElementNS(SVG_NAMESPACE, tag)</code> (ADR-0047): an
+            <code>&lt;svg&gt;</code> built with plain
+            <code>createElement</code> is an <code>HTMLUnknownElement</code> and
+            draws nothing.
+          </p>
+          <p class="concept-desc">
+            Both record their authored props in a module-level
+            <code>WeakMap</code> (<code>NODE_PROPS</code>,
+            <code>getProps</code>/<code>setProps</code>), so
+            <code>render()</code> can diff <em>authored</em> props next time —
+            the live DOM exposes neither its attached listeners nor a portable
+            attribute enumeration. <code>applyProp</code> is the single mapping
+            table used at build time <em>and</em> reconcile time, so the two
+            cannot drift.
+          </p>
+          <p class="concept-desc">
+            It throws on <code>innerHTML</code>, on any
+            <code>/^on[A-Z]/</code> prop, and on <code>class</code> — but the
+            real precondition matters: <code>h()</code>/<code>svg()</code> skip
+            a prop whose value is <code>null</code>/<code>undefined</code>
+            <em>before</em> <code>applyProp</code> runs, so those throws only
+            fire for a non-nullish value. <code>onAnswer: undefined</code> is
+            <strong>not</strong> caught.
+          </p>
+          <pre
+            class="concept-api"
+          ><span class="cmt">// applyProp's mapping table</span>
+<span class="kw">on</span>* + <span class="kw">function</span>  → addEventListener
+<span class="fn">SVG</span> namespace   → setAttribute (className → class)
+className       → el.className
+value           → property
+key <span class="kw">in</span> el       → property
+else            → setAttribute
+
+<span class="cmt">// two easy-to-miss real behaviours</span>
+<span class="str">&lt;button&gt;</span> with no type → type=<span class="str">"button"</span> (SharePoint's page-wide &lt;form&gt;)
+value applied <span class="ef">last</span>, after children (&lt;select&gt;.value set before its &lt;option&gt;s is silently discarded)</pre>
+        </div>
+
+        <div class="concept-card c-store">
+          <span class="concept-icon">◍</span>
+          <div class="concept-name">The store owns state and scheduling</div>
+          <p class="concept-desc">
+            <code
+              >createStore({ initialState, reducer, onStateChange, schedule =
+              queueMicrotask })</code
+            >. <code>dispatch(action)</code> runs the reducer synchronously and
+            returns the new state, then <em>schedules</em> a notify.
+            Notification is deferred and coalesced by a
+            <code>notifyScheduled</code> latch: N dispatches in one turn produce
+            exactly one <code>onStateChange</code> call, with the latest state.
+          </p>
+          <p class="concept-desc">
+            <code>flush()</code> notifies synchronously — the shape the first
+            mount needs — but it does <strong>not</strong> clear
+            <code>notifyScheduled</code>: a dispatch made just before a flush
+            still fires a second notify on the microtask.
+          </p>
+          <p class="concept-desc">
+            The callback is <code>onStateChange</code>, not <code>render</code>,
+            on purpose (ADR-0039) — the module is DOM-agnostic.
+            <code>dispatch</code> schedules <strong>unconditionally</strong>:
+            there is no equality check in <code>store.js</code>. A reducer
+            returning the same object reference still notifies and still runs
+            the view — what identity buys is that every <code>memo()</code> deps
+            comparison hits and every prop diff finds nothing, so the
+            <em>commit</em> touches no DOM.
+          </p>
+          <pre
+            class="concept-api"
+          ><span class="kw">function</span> <span class="fn">scheduleNotify</span>() {
+  <span class="kw">if</span> (notifyScheduled || disposed) <span class="kw">return</span>;
+  notifyScheduled = <span class="ef">true</span>;
+  schedule(() => {
+    notifyScheduled = <span class="ef">false</span>; <span class="cmt">// cleared before the call</span>
+    <span class="kw">if</span> (!disposed) onStateChange(state);
+  });
+}</pre>
+        </div>
+
+        <div class="concept-card c-commit">
+          <span class="concept-icon">◫</span>
+          <div class="concept-name">render() commits, and only render()</div>
+          <p class="concept-desc">
+            <code>render(parent, tree, stats)</code> patches
+            <code>parent</code>'s children in place and returns
+            <code>RenderStats</code>; slices reach it as
+            <code>tools.render(container, tree)</code>. A
+            <strong>render commit</strong> is one
+            <code>render(container, tree)</code> call — one
+            <code>onStateChange</code> turn (ADR-0039: view produces, render
+            commits).
+          </p>
+          <p class="concept-desc">
+            <code>normalizeRoot</code> accepts a node, an array, a
+            <code>DocumentFragment</code>, or
+            <code>null</code>/<code>false</code>, and throws
+            <code
+              >TypeError('render(): view returned a string; wrap it in an
+              element')</code
+            >. It never creates elements; it adopts builder-produced nodes and
+            compares <code>nodeName</code>, which is why an HTML→SVG namespace
+            change never compares equal.
+          </p>
+          <pre
+            class="concept-api"
+          ><span class="cmt">// core/render.js header</span>
+<span class="cmt">// Vocabulary: a **view** produces a tree of nodes and touches</span>
+<span class="cmt">// nothing; **render** commits a tree into a live container. This file is the</span>
+<span class="cmt">// one primitive that does the committing. It was called `morph()` once — the</span>
+<span class="cmt">// technique is the one morphdom and Idiomorph implement, and searching</span>
+<span class="cmt">// "DOM morphing" is still the way to read up on it.</span></pre>
+        </div>
+      </section>
+
+      <!-- ══ SCENE 01 — ONE TURN OF THE LOOP ══════════════════════════ -->
+      <section class="scene">
+        <div class="scene-label">Scene 01</div>
+        <div class="scene-title">One Turn of the Loop</div>
+        <p class="scene-intro">
+          <strong>dispatch</strong> → the reducer returns synchronously → notify
+          is coalesced onto a microtask → the view runs →
+          <code>render()</code> commits → DOM. This scene is about the
+          <em>timing</em> of that turn only — for state shape,
+          <code>patchRoute</code>/<code>setRoute</code>,
+          <code>domain/event</code> action naming, and view purity, see the
+          <a href="component-anatomy-explainer.html">page anatomy explainer</a>.
+          One real anchor, from <code>src/pages/roadmap.js</code>'s
+          <code>roadmapReducer</code>:
+        </p>
+        <pre
+          class="concept-api"
+          style="max-width: 780px; margin-bottom: 28px"
+        ><span class="cmt">// src/pages/roadmap.js — a card's "more…" button</span>
+onclick: () => dispatch({ type: <span class="str">'roadmap/description-toggled'</span>, itemId: item.id, }),</pre>
+
+        <div class="loop-controls">
+          <button class="loop-btn" id="stage-a-dispatch3">
+            dispatch × 3 in one turn
+          </button>
+          <label class="loop-toggle">
+            <input type="checkbox" id="stage-a-replace-toggle" />
+            commit with container.replaceChildren() instead
+          </label>
+        </div>
+
+        <div class="loop-stage">
+          <div class="loop-col">
+            <div class="loop-col-label">State</div>
+            <pre class="state-pre" id="stage-a-state"></pre>
+            <div class="stat-grid">
+              <div class="stat-cell">
+                <div class="stat-cell-label">dispatch() calls</div>
+                <div class="stat-cell-value" id="stage-a-dispatch-count">0</div>
+              </div>
+              <div class="stat-cell">
+                <div class="stat-cell-label">onStateChange commits</div>
+                <div class="stat-cell-value" id="stage-a-commit-count">0</div>
+              </div>
+            </div>
+          </div>
+          <div class="loop-col">
+            <div class="loop-col-label">Action log</div>
+            <div class="loop-log" id="stage-a-log"></div>
+          </div>
+          <div class="loop-col">
+            <div class="loop-col-label">Live DOM</div>
+            <div class="dom-surface">
+              <span class="dom-surface-label"
+                >Click into the field, type, place your caret mid-word — then
+                press the button above</span
+              >
+              <div id="stage-a-root"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ SCENE 02 — HOW render() RECONCILES ═══════════════════════ -->
+      <section class="scene">
+        <div class="scene-label">Scene 02</div>
+        <div class="scene-title">How render() Reconciles</div>
+        <p class="scene-intro">
+          Not a full replace.
+          <code>patchChildren(parent, newChildren, stats)</code> matches
+          survivors, removes the rest, and re-places with the fewest moves.
+          Match rule <code>sameType(a, b)</code>: same <code>nodeName</code>,
+          and for elements the same key. <code>keyOf(node)</code> is
+          <code>node.getAttribute('key')</code> behind an
+          <code>isText</code> guard — authors pass <code>{ key }</code> to
+          <code>h()</code> and it lands as an <em>attribute</em> (because
+          <code>'key' in el</code> is false), which means keys are stringified:
+          <code>key: 3</code> and <code>key: '3'</code> are the same key. A
+          <code>data-key</code>
+          alias was deliberately removed — one spelling on purpose.
+        </p>
+        <p class="scene-intro">
+          Keyed children match through an <code>oldByKey</code> map; unkeyed
+          children match by position through a single advancing
+          <code>unkeyedPtr</code>, and a positional candidate whose type
+          mismatches is removed and rebuilt.
+        </p>
+        <p class="scene-intro">
+          Kept nodes are <strong>mutated, not replaced</strong> —
+          <code>patch()</code> sets <code>textContent</code> for text nodes and,
+          for elements, runs <code>patchProps</code> then recurses — so focus,
+          caret, selection and scroll survive with no snapshot/restore
+          machinery. <code>patchProps</code> unions the key sets of
+          <code>getProps(oldEl)</code> and <code>getProps(newEl)</code>,
+          normalises <code>null</code> to <code>undefined</code> first (so
+          <code>'x' → null</code> is a removal, not a no-op), skips unchanged
+          values (<code>ov === nv</code>, why a referentially stable handler is
+          never re-bound), calls <code>removeProp</code> then
+          <code>applyProp</code>, then <code>setProps(oldEl, newProps)</code>
+          so the next diff compares against what is now live.
+          <code>patchFormProp</code> (HTML only) reconciles
+          <code>value</code>/<code>checked</code> by comparing
+          <em>authored</em> values: unchanged intent leaves the live value
+          completely alone, so an unrelated re-render never clobbers an
+          in-flight edit. <code>placeChildren</code> walks right-to-left and
+          skips every index in
+          <code>longestIncreasingSubsequence(source)</code>, so nodes already in
+          relative order are never touched.
+        </p>
+        <p class="scene-intro">
+          The honest limit: <code>getProps</code> returns
+          <code>undefined</code> for nodes <code>h()</code> did not build, so
+          patching over foreign DOM applies the new props but never removes that
+          node's existing attributes.
+        </p>
+
+        <div class="loop-controls">
+          <button class="loop-btn" id="stageb-shuffle">Shuffle</button>
+          <button class="loop-btn" id="stageb-insert-top">Insert at top</button>
+          <button class="loop-btn" id="stageb-remove-middle">
+            Remove middle
+          </button>
+          <label class="loop-toggle">
+            <input type="checkbox" id="stageb-keys-toggle" checked />
+            <span id="stageb-keys-label">keys: on</span>
+          </label>
+          <label class="loop-toggle">
+            <input type="checkbox" id="stageb-memo-toggle" />
+            memoise row 3
+          </label>
+        </div>
+
+        <div class="stageb-layout">
+          <div class="stageb-rows" id="stageb-root"></div>
+          <div class="loop-col">
+            <div class="loop-col-label">RenderStats — from this commit</div>
+            <div class="stat-grid">
+              <div class="stat-cell">
+                <div class="stat-cell-label">visited</div>
+                <div class="stat-cell-value" id="stageb-stat-visited">0</div>
+              </div>
+              <div class="stat-cell">
+                <div class="stat-cell-label">patchedElements</div>
+                <div class="stat-cell-value" id="stageb-stat-patched">0</div>
+              </div>
+              <div class="stat-cell">
+                <div class="stat-cell-label">createdNodes</div>
+                <div class="stat-cell-value" id="stageb-stat-created">0</div>
+              </div>
+              <div class="stat-cell">
+                <div class="stat-cell-label">removedNodes</div>
+                <div class="stat-cell-value" id="stageb-stat-removed">0</div>
+              </div>
+              <div class="stat-cell wide">
+                <div class="stat-cell-label">movedNodes</div>
+                <div class="stat-cell-value" id="stageb-stat-moved">0</div>
+              </div>
+              <div class="stat-cell wide">
+                <div class="stat-cell-label">
+                  row 3's viewFn ran, cumulative (see Scene 03)
+                </div>
+                <div class="stat-cell-value" id="stageb-stat-viewruns">0</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ SCENE 03 — MEMO ════════════════════════════════════════ -->
+      <section class="scene">
+        <div class="scene-label">Scene 03</div>
+        <div class="scene-title">
+          memo, the Reference Skip, and the Mount Lifetime
+        </div>
+        <p class="scene-intro">
+          <code>createMemo()</code> returns a callable
+          <code>memo(key, deps, viewFn)</code> plus <code>clear()</code>,
+          <code>delete(key)</code> and a <code>size</code> getter over a
+          <code>Map</code>. A hit needs equal deps length and
+          <code>Object.is</code> on each position. What it memoises is the
+          <strong>node object itself</strong> — which, having been committed,
+          <em>is</em> the live DOM node — so <code>patch()</code>'s
+          short-circuit <code>if (oldNode === newNode) return oldNode;</code>
+          skips the whole subtree: memo and the reconciler are one mechanism
+          split across two files. That is exactly what the "memoise row 3"
+          toggle above does — try it, then Shuffle: row 3's
+          <code>viewFn ran</code> counter stops incrementing and
+          <code>stats.visited</code> drops, because <code>patch()</code>
+          returned on the reference check before it ever reached row 3's
+          children.
+        </p>
+        <p class="scene-intro">
+          The cache is per mount, created by <code>createStoreRoute</code> and
+          cleared in teardown, which is what stops keys colliding between routes
+          and releases detached subtrees and their handlers. Sharp edge: the
+          cache is unbounded within a mount and keyed by an author-chosen key,
+          so two views sharing a key collide silently.
+        </p>
+        <p class="scene-intro">
+          Real call site —
+          <code>src/pages/question-bank/cora-bank-list.js</code> memoises each
+          Question Definition card on <code>question.id</code>:
+        </p>
+        <pre class="concept-api" style="max-width: 780px; margin-bottom: 28px">
+props.memo(
+  question.id,
+  [
+    question,
+    bank.outcomeOptions,
+    bank.labels,
+    baselineQuestion,
+    filters.questionGroup,
+    conditional,
+    questionTopology,
+  ],
+  view
+)</pre
+        >
+        <p class="scene-intro">
+          Why it is <strong>mandatory</strong> rather than an optimisation:
+          ADR-0034, live Case Types reaching ~500 Question Definitions, and the
+          measured result in <code>docs/palimpsest-performance-gate.md</code> —
+          steady-state keystroke p95 <strong>0.30 ms</strong> against a ~5 ms
+          tripwire.
+        </p>
+      </section>
+
+      <!-- ══ SCENE 04 — MOUNT, NAVIGATION, TEARDOWN ═══════════════════ -->
+      <section class="scene">
+        <div class="scene-label">Scene 04</div>
+        <div class="scene-title">Mount, Navigation, Teardown</div>
+        <p class="scene-intro">
+          <code>routeTable(context)</code> in
+          <code>src/setup/register-routes.js</code> is the only place naming a
+          page module, held as static imports on <code>page</code> (ADR-0042),
+          with <code>#/question-bank</code> the single remaining
+          <code>load</code> thunk.
+          <code
+            >registerStoreRoute(router, { paths, page, load, context, guard
+            })</code
+          >
+          builds one <code>createStoreRoute()</code> adapter registered on every
+          pattern in <code>paths</code>; <code>createStoreRoute</code> throws
+          when <code>Boolean(page) === Boolean(load)</code>.
+        </p>
+
+        <div class="lifecycle-grid">
+          <div class="lifecycle-list">
+            <div class="lifecycle-list-label">Mount order</div>
+            <ol>
+              <li><code>++mountSequence</code></li>
+              <li>resolve module (<code>page ?? await load()</code>)</li>
+              <li>
+                stale-token bail (<code
+                  >if (token !== mountSequence) return;</code
+                >)
+              </li>
+              <li><code>createRouteSlice(params, context)</code></li>
+              <li><code>createMemo()</code></li>
+              <li><code>new AbortController()</code></li>
+              <li>
+                build <code>tools</code> (<code
+                  >dispatch, memo, render, params, context, isActive, signal,
+                  listen</code
+                >)
+              </li>
+              <li><code>createStore(...)</code></li>
+              <li>
+                <code>store.flush()</code> — the first commit, synchronous, so
+                the first paint lands before effects
+              </li>
+              <li><code>mounted = true</code></li>
+              <li><code>slice.start?.(tools)</code></li>
+            </ol>
+          </div>
+          <div class="lifecycle-list teardown">
+            <div class="lifecycle-list-label">Teardown order</div>
+            <ol>
+              <li><code>listen()</code> registrations removed</li>
+              <li>the cleanup returned by <code>start()</code></li>
+              <li><code>controller.abort()</code></li>
+              <li><code>store.dispose()</code></li>
+              <li><code>memo.clear()</code></li>
+            </ol>
+            <p
+              style="margin-top: 14px; font-size: 0.68rem; color: var(--muted)"
+            >
+              <code>unmount()</code> also bumps <code>mountSequence</code>,
+              which is what stops a lazily-imported page that resolves after the
+              user navigated on from creating a store or attaching listeners.
+            </p>
+          </div>
+        </div>
+
+        <p class="scene-intro">
+          Error containment differs either side of <code>mounted</code>: before
+          it, a render throw propagates out of <code>mount()</code>, the adapter
+          disposes and rethrows, and the router's catch renders
+          <code>createRouteErrorPanel()</code>; after it, commits run on a
+          coalesced microtask with no try/catch on the path, so
+          <code>onStateChange</code> contains it itself (log, dispose,
+          <code>container.replaceChildren(createRouteErrorPanel())</code>).
+          Effects: <code>start(tools)</code> may return a cleanup; every
+          post-<code>await</code> dispatch is guarded with
+          <code>tools.isActive()</code>;
+          <code>withAbortSignal(client, tools.signal)</code> binds reads to the
+          mount lifetime and <code>ignoreAbortError</code> keeps an abort from
+          becoming a toast; writes are never bound — <code>SaveQueue</code>
+          holds the raw client.
+        </p>
+
+        <div class="fact-list">
+          <div class="fact">
+            <div class="fact-title">
+              The router does not clear the container between pages
+            </div>
+            <div class="fact-body">
+              Neither <code>Router.navigate</code> nor
+              <code>createStoreRoute.unmount</code> clears it, so the next
+              page's first commit reconciles against the previous page's
+              leftover DOM. The consequence is the real lesson: matching root
+              elements are patched in place, so the reconciler mutates the OLD
+              node and discards the NEW one, and any reference a page cached to
+              a freshly built node is left detached. Live workaround,
+              <code>src/pages/cora-case-review.js:724</code>:
+            </div>
+            <pre
+              class="fact-quote"
+            ><span class="cmt">// The router leaves the previous route's DOM in the container; rendering</span>
+<span class="cmt">// over it would patch those foreign nodes in place and leave this shell's</span>
+<span class="cmt">// cached part references detached. A fresh mount replaces the content</span>
+<span class="cmt">// outright so every later per-part render targets in-document nodes.</span>
+container.replaceChildren(root);</pre>
+            <div class="fact-body" style="margin-top: 8px">
+              This is not only-on-error-paths use:
+              <code>container.replaceChildren(...)</code> also appears on the
+              two failure paths above — this is a third, deliberate use, for a
+              healthy mount.
+            </div>
+          </div>
+
+          <div class="mount-diagram">
+            <div class="mount-panel">
+              <div class="mount-panel-label">
+                Before — page A's leftover DOM
+              </div>
+              <div class="mount-node kept">&lt;div class="cora-page-a"&gt;</div>
+            </div>
+            <div class="mount-arrow">→</div>
+            <div class="mount-panel">
+              <div class="mount-panel-label">
+                After render(container, pageB.view()) — same tag, no key
+              </div>
+              <div class="mount-node kept">
+                &lt;div class="cora-page-b"&gt; — KEPT, patched with page B's
+                props/children
+              </div>
+              <div class="mount-node discarded">
+                &lt;div class="cora-page-b"&gt; — DISCARDED, its content was
+                only ever a template
+              </div>
+            </div>
+          </div>
+
+          <div class="fact">
+            <div class="fact-title">An unmatched hash returns early</div>
+            <div class="fact-body">
+              <code>Router.navigate</code> returns before the unmount when
+              nothing matches, so an unknown hash leaves the previous page
+              mounted with its effects still running.
+            </div>
+          </div>
+
+          <div class="fact">
+            <div class="fact-title">A slice may own its own commit</div>
+            <div class="fact-body">
+              <code>slice.render(container, state, tools)</code> wins over
+              <code>slice.view</code> when present;
+              <code>src/pages/cora-my-stats.js</code> uses it to commit and then
+              mount the HTML-over-SVG tooltip controller against the freshly
+              committed chart. A slice with neither throws
+              <code
+                >TypeError('Store route slice must define view() or
+                render()')</code
+              >.
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      The Render Loop — dispatch · reducer · view · h()/svg() · render — Case
+      Review Frontend Framework
+      <div class="footer-links">
+        <a href="guide/add-a-page.md">Add a page</a>
+        <a href="guide/store-actions-and-effects.md">Store, actions, effects</a>
+        <a href="adr/0039-view-produces-render-commits.md">ADR-0039</a>
+        <a href="component-anatomy-explainer.html">Page anatomy explainer</a>
+      </div>
+    </footer>
+
+    <script>
+      /* ════════════════════════════════════════════════════════════════
+       * This block is a hand-copy of the real runtime, transcribed so the
+       * page can run from file:// with no build step (an ES module import
+       * of ../src/core/render.js is blocked cross-origin from a file: URL).
+       * It mirrors, as closely as a standalone script can:
+       *   - src/lib/html.js       (NODE_PROPS, getProps/setProps, applyProp,
+       *                             removeProp, h — svg() is not transcribed)
+       *   - src/core/store.js     (createStore)
+       *   - src/core/memo.js      (createMemo)
+       *   - src/core/render.js    (render, patch, patchChildren,
+       *                             placeChildren, longestIncreasingSubsequence,
+       *                             sameType, keyOf, normalizeRoot, patchProps,
+       *                             patchFormProp)
+       * This is a copy, not the source of truth — the two sibling explainers
+       * drifted from their sources over time, which is the failure this
+       * comment exists to flag to the next editor. If you change the real
+       * files, update this block too, and re-check every quoted excerpt
+       * elsewhere on this page.
+       * ════════════════════════════════════════════════════════════════ */
+      'use strict';
+
+      var SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
+
+      // ── src/lib/html.js ──────────────────────────────────────────
+      var NODE_PROPS = new WeakMap();
+
+      function getProps(el) {
+        return NODE_PROPS.get(el);
+      }
+      function setProps(el, props) {
+        NODE_PROPS.set(el, props);
+      }
+
+      function applyProp(el, key, value) {
+        if (key === 'innerHTML') {
+          throw new Error(
+            'h() does not accept innerHTML; use unsafeHTML() explicitly'
+          );
+        }
+        if (/^on[A-Z]/.test(key)) {
+          throw new Error(
+            'h() does not accept the component callback prop "' +
+              key +
+              '"; DOM events are lowercase (' +
+              key.toLowerCase() +
+              ')'
+          );
+        }
+        if (key === 'class') {
+          throw new Error(
+            'h() does not accept "class"; the class prop is className'
+          );
+        }
+        if (key.indexOf('on') === 0 && typeof value === 'function') {
+          el.addEventListener(key.slice(2).toLowerCase(), value);
+        } else if (el.namespaceURI === SVG_NAMESPACE) {
+          el.setAttribute(key === 'className' ? 'class' : key, String(value));
+        } else if (key === 'className') {
+          el.className = value;
+        } else if (key === 'value' && 'value' in el) {
+          el.value = value;
+        } else if (key in el) {
+          el[key] = value;
+        } else {
+          el.setAttribute(key, String(value));
+        }
+      }
+
+      function removeProp(el, key, prevValue) {
+        if (key === 'innerHTML') return;
+        if (key.indexOf('on') === 0 && typeof prevValue === 'function') {
+          el.removeEventListener(key.slice(2).toLowerCase(), prevValue);
+        } else if (el.namespaceURI === SVG_NAMESPACE) {
+          el.removeAttribute(key === 'className' ? 'class' : key);
+        } else if (key === 'className') {
+          el.className = '';
+        } else if (key === 'value' && 'value' in el) {
+          el.value = '';
+        } else if (key in el) {
+          el[key] =
+            typeof prevValue === 'boolean'
+              ? false
+              : typeof prevValue === 'number'
+                ? 0
+                : '';
+        } else {
+          el.removeAttribute(key);
+        }
+      }
+
+      // Simplified from the real appendChildren: the unsafeHTML() escape
+      // hatch (which sets el.innerHTML) is omitted — this transcript never
+      // calls it, and this page's own script does not use innerHTML.
+      function appendChildren(el, children) {
+        function append(child) {
+          if (child === null || child === undefined || child === false) return;
+          if (Array.isArray(child)) {
+            for (var i = 0; i < child.length; i++) append(child[i]);
+          } else if (
+            child &&
+            typeof child === 'object' &&
+            'appendChild' in child
+          ) {
+            el.appendChild(child);
+          } else {
+            el.appendChild(document.createTextNode(String(child)));
+          }
+        }
+        if (
+          children.length === 1 &&
+          (typeof children[0] === 'string' || typeof children[0] === 'number')
+        ) {
+          el.textContent = String(children[0]);
+        } else {
+          append(children);
+        }
+      }
+
+      function h(tag, props) {
+        props = props || {};
+        var children = Array.prototype.slice.call(arguments, 2);
+        var el = document.createElement(tag);
+
+        // SharePoint hosts the app in a page-wide <form>; an un-typed
+        // <button> defaults to type="submit" and triggers a postback.
+        if (tag.toLowerCase() === 'button' && props.type == null) {
+          el.setAttribute('type', 'button');
+        }
+
+        var deferredValue;
+        var hasDeferredValue = false;
+        for (var k in props) {
+          if (!Object.prototype.hasOwnProperty.call(props, k)) continue;
+          var v = props[k];
+          if (v === null || v === undefined) continue;
+          if (k === 'value' && 'value' in el) {
+            deferredValue = v;
+            hasDeferredValue = true;
+            continue;
+          }
+          applyProp(el, k, v);
+        }
+
+        appendChildren(el, children);
+
+        // Applied last so <select> matches against options that now exist.
+        if (hasDeferredValue) applyProp(el, 'value', deferredValue);
+
+        NODE_PROPS.set(el, Object.assign({}, props));
+        return el;
+      }
+
+      // ── src/core/store.js ────────────────────────────────────────
+      function createStore(options) {
+        var state = options.initialState;
+        var reducer = options.reducer;
+        var onStateChange = options.onStateChange;
+        var schedule = options.schedule || queueMicrotask;
+        var notifyScheduled = false;
+        var disposed = false;
+
+        function scheduleNotify() {
+          if (notifyScheduled || disposed) return;
+          notifyScheduled = true;
+          schedule(function () {
+            notifyScheduled = false;
+            if (!disposed) onStateChange(state);
+          });
+        }
+
+        return {
+          getState: function () {
+            return state;
+          },
+          dispatch: function (action) {
+            state = reducer(state, action);
+            scheduleNotify();
+            return state;
+          },
+          flush: function () {
+            onStateChange(state);
+          },
+          dispose: function () {
+            disposed = true;
+          },
+        };
+      }
+
+      // ── src/core/memo.js ─────────────────────────────────────────
+      function createMemo() {
+        var cache = new Map();
+        function memo(key, deps, viewFn) {
+          var entry = cache.get(key);
+          if (
+            entry &&
+            entry.deps.length === deps.length &&
+            deps.every(function (dep, index) {
+              return Object.is(dep, entry.deps[index]);
+            })
+          ) {
+            return entry.value;
+          }
+          var value = viewFn();
+          cache.set(key, {
+            deps: Array.prototype.slice.call(deps),
+            value: value,
+          });
+          return value;
+        }
+        memo.clear = function () {
+          cache.clear();
+        };
+        memo.delete = function (key) {
+          return cache.delete(key);
+        };
+        Object.defineProperty(memo, 'size', {
+          get: function () {
+            return cache.size;
+          },
+        });
+        return memo;
+      }
+
+      // ── src/core/render.js ───────────────────────────────────────
+      function bump(stats, key) {
+        stats[key] = (stats[key] || 0) + 1;
+      }
+      function tagOf(node) {
+        return node.nodeName;
+      }
+      function isText(node) {
+        return tagOf(node) === '#text';
+      }
+      function keyOf(node) {
+        if (isText(node)) return null;
+        return node.getAttribute('key');
+      }
+      function sameType(a, b) {
+        var ta = tagOf(a);
+        if (ta !== tagOf(b)) return false;
+        if (ta === '#text') return true;
+        return keyOf(a) === keyOf(b);
+      }
+
+      function patchProps(oldEl, newEl) {
+        var oldProps = getProps(oldEl) || {};
+        var newProps = getProps(newEl) || {};
+        var isHtml = oldEl.namespaceURI !== SVG_NAMESPACE;
+        var keys = new Set(Object.keys(oldProps).concat(Object.keys(newProps)));
+        keys.forEach(function (key) {
+          if (isHtml && (key === 'value' || key === 'checked')) return;
+          var ov = oldProps[key];
+          if (ov === null || ov === undefined) ov = undefined;
+          var nv = newProps[key];
+          if (nv === null || nv === undefined) nv = undefined;
+          if (ov === nv) return; // unchanged, incl. a referentially-stable handler
+          if (ov !== undefined) removeProp(oldEl, key, ov);
+          if (nv !== undefined) applyProp(oldEl, key, nv);
+        });
+        if (isHtml) {
+          patchFormProp(oldEl, oldProps, newProps, 'value');
+          patchFormProp(oldEl, oldProps, newProps, 'checked');
+        }
+        setProps(oldEl, newProps);
+      }
+
+      function patchFormProp(oldEl, oldProps, newProps, name) {
+        var has = newProps[name] !== null && newProps[name] !== undefined;
+        var had = oldProps[name] !== null && oldProps[name] !== undefined;
+        if (!has && !had) return;
+        if (!has) {
+          if (name === 'checked') oldEl.checked = false;
+          else oldEl.value = '';
+          return;
+        }
+        if (name === 'checked') {
+          var nb = !!newProps.checked;
+          var ob = had ? !!oldProps.checked : undefined;
+          if (nb === ob) return;
+          if (oldEl.checked !== nb) oldEl.checked = nb;
+        } else {
+          var nv = newProps.value;
+          var ov = had ? oldProps.value : undefined;
+          if (nv === ov) return; // intended value unchanged → keep the user's edit
+          if (oldEl.value !== String(nv)) oldEl.value = nv;
+        }
+      }
+
+      function patch(oldNode, newNode, stats) {
+        bump(stats, 'visited');
+        // Reference-equal skip: what memo() returns for an unchanged
+        // subtree. We do not descend — the O(1) fast path memo() relies on.
+        if (oldNode === newNode) return oldNode;
+        if (isText(oldNode)) {
+          if (oldNode.textContent !== newNode.textContent) {
+            oldNode.textContent = newNode.textContent;
+          }
+          return oldNode;
+        }
+        bump(stats, 'patchedElements');
+        patchProps(oldNode, newNode);
+        patchChildren(
+          oldNode,
+          Array.prototype.slice.call(newNode.childNodes),
+          stats
+        );
+        return oldNode;
+      }
+
+      function patchChildren(parent, newChildren, stats) {
+        var oldNodes = Array.prototype.slice.call(parent.childNodes);
+        var oldIndex = new Map(
+          oldNodes.map(function (node, index) {
+            return [node, index];
+          })
+        );
+
+        var oldByKey = new Map();
+        var unkeyedOld = [];
+        oldNodes.forEach(function (o) {
+          var k = keyOf(o);
+          if (k !== null) oldByKey.set(k, o);
+          else unkeyedOld.push(o);
+        });
+
+        var used = new Set();
+        var result = new Array(newChildren.length);
+        var source = new Array(newChildren.length);
+        var unkeyedPtr = 0;
+
+        for (var i = 0; i < newChildren.length; i++) {
+          var nv = newChildren[i];
+          var k = keyOf(nv);
+          var match = null;
+          if (k !== null) {
+            var cand = oldByKey.get(k);
+            if (cand && !used.has(cand) && sameType(cand, nv)) match = cand;
+          } else if (unkeyedPtr < unkeyedOld.length) {
+            var cand2 = unkeyedOld[unkeyedPtr++];
+            if (sameType(cand2, nv)) match = cand2;
+            // else: positional type mismatch → cand2 is removed below, nv is fresh.
+          }
+          if (match) {
+            used.add(match);
+            result[i] = patch(match, nv, stats);
+            source[i] = oldIndex.get(match);
+          } else {
+            result[i] = nv;
+            source[i] = -1;
+          }
+        }
+
+        oldNodes.forEach(function (o) {
+          if (!used.has(o)) {
+            parent.removeChild(o);
+            bump(stats, 'removedNodes');
+          }
+        });
+
+        placeChildren(parent, result, source, stats);
+      }
+
+      function placeChildren(parent, result, source, stats) {
+        var stable = longestIncreasingSubsequence(source);
+        for (var i = result.length - 1; i >= 0; i--) {
+          var node = result[i];
+          var ref = i + 1 < result.length ? result[i + 1] : null;
+          if (source[i] === -1) {
+            parent.insertBefore(node, ref);
+            bump(stats, 'createdNodes');
+          } else if (!stable.has(i)) {
+            parent.insertBefore(node, ref);
+            bump(stats, 'movedNodes');
+          }
+          // else: part of the stable run — already in the right place.
+        }
+      }
+
+      function longestIncreasingSubsequence(source) {
+        var positions = [];
+        var values = [];
+        for (var i = 0; i < source.length; i++) {
+          if (source[i] !== -1) {
+            positions.push(i);
+            values.push(source[i]);
+          }
+        }
+        var keep = new Set();
+        var n = values.length;
+        if (n === 0) return keep;
+        var piles = [];
+        var tops = [];
+        var prev = new Array(n).fill(-1);
+        for (var j = 0; j < n; j++) {
+          var v = values[j];
+          var lo = 0;
+          var hi = piles.length;
+          while (lo < hi) {
+            var mid = (lo + hi) >> 1;
+            if (tops[mid] < v) lo = mid + 1;
+            else hi = mid;
+          }
+          if (lo > 0) prev[j] = piles[lo - 1];
+          piles[lo] = j;
+          tops[lo] = v;
+        }
+        var k = piles[piles.length - 1];
+        while (k !== -1) {
+          keep.add(positions[k]);
+          k = prev[k];
+        }
+        return keep;
+      }
+
+      function normalizeRoot(tree) {
+        if (tree === null || tree === undefined || tree === false) return [];
+        if (typeof tree === 'string') {
+          throw new TypeError(
+            'render(): view returned a string; wrap it in an element'
+          );
+        }
+        if (Array.isArray(tree)) {
+          var out = [];
+          tree.forEach(function (t) {
+            out.push.apply(out, normalizeRoot(t));
+          });
+          return out;
+        }
+        if (tree.nodeName === '#document-fragment') {
+          return Array.prototype.slice.call(tree.childNodes);
+        }
+        return [tree];
+      }
+
+      function render(parent, tree, stats) {
+        var s = stats || {};
+        patchChildren(parent, normalizeRoot(tree), s);
+        return s;
+      }
+
+      /* ══ STAGE A — ONE TURN OF THE LOOP (Scene 01) ═══════════════════ */
+      (function () {
+        var root = document.getElementById('stage-a-root');
+        var stateEl = document.getElementById('stage-a-state');
+        var logEl = document.getElementById('stage-a-log');
+        var dispatchCountEl = document.getElementById('stage-a-dispatch-count');
+        var commitCountEl = document.getElementById('stage-a-commit-count');
+        var replaceToggle = document.getElementById('stage-a-replace-toggle');
+
+        var dispatchCount = 0;
+        var commitCount = 0;
+        var stateIds = new WeakMap();
+        var nextStateId = 1;
+        function idOf(state) {
+          if (!stateIds.has(state)) stateIds.set(state, nextStateId++);
+          return stateIds.get(state);
+        }
+
+        function reducer(state, action) {
+          if (action.type === 'stageA/text-changed') {
+            return { text: action.value, counter: state.counter };
+          }
+          if (action.type === 'stageA/counter-bumped') {
+            return { text: state.text, counter: state.counter + 1 };
+          }
+          return state;
+        }
+
+        function view(state) {
+          return h(
+            'div',
+            {},
+            h(
+              'label',
+              { className: 'dom-surface-label', for: 'stage-a-input' },
+              'text'
+            ),
+            h('input', {
+              id: 'stage-a-input',
+              key: 'stage-a-input',
+              className: 'dom-surface-input',
+              value: state.text,
+              placeholder: 'type something…',
+              oninput: function (e) {
+                dispatchAction({
+                  type: 'stageA/text-changed',
+                  value: e.target.value,
+                });
+              },
+            }),
+            h(
+              'div',
+              { key: 'stage-a-badge', className: 'dom-surface-badge' },
+              'counter: ' + state.counter
+            )
+          );
+        }
+
+        function logLine(kind, cls, msg) {
+          var el = document.createElement('div');
+          el.className = 'log-entry';
+          var kindEl = document.createElement('span');
+          kindEl.className = 'log-kind ' + cls;
+          kindEl.textContent = kind;
+          var msgEl = document.createElement('span');
+          msgEl.className = 'log-msg';
+          msgEl.textContent = msg;
+          el.appendChild(kindEl);
+          el.appendChild(msgEl);
+          logEl.appendChild(el);
+          while (logEl.children.length > 40)
+            logEl.removeChild(logEl.firstChild);
+          logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        function renderState(state) {
+          stateEl.textContent = JSON.stringify(
+            { text: state.text, counter: state.counter, stateId: idOf(state) },
+            null,
+            2
+          );
+        }
+
+        var store = createStore({
+          initialState: { text: '', counter: 0 },
+          reducer: reducer,
+          onStateChange: function (state) {
+            commitCount++;
+            commitCountEl.textContent = String(commitCount);
+            logLine(
+              'commit',
+              'k-commit',
+              'onStateChange → commit #' +
+                commitCount +
+                ' (state#' +
+                idOf(state) +
+                ')'
+            );
+            if (replaceToggle.checked) {
+              root.replaceChildren(view(state));
+            } else {
+              render(root, view(state));
+            }
+            renderState(state);
+          },
+        });
+
+        function dispatchAction(action) {
+          var next = store.dispatch(action);
+          dispatchCount++;
+          dispatchCountEl.textContent = String(dispatchCount);
+          logLine(
+            'dispatch',
+            'k-dispatch',
+            action.type + ' → state#' + idOf(next)
+          );
+        }
+
+        store.flush();
+        renderState(store.getState());
+
+        document
+          .getElementById('stage-a-dispatch3')
+          .addEventListener('click', function () {
+            var dBefore = dispatchCount;
+            var cBefore = commitCount;
+            for (var i = 0; i < 3; i++) {
+              dispatchAction({ type: 'stageA/counter-bumped' });
+            }
+            Promise.resolve().then(function () {
+              logLine(
+                'turn',
+                'k-turn',
+                dispatchCount -
+                  dBefore +
+                  ' dispatch() calls this turn → ' +
+                  (commitCount - cBefore) +
+                  ' commit'
+              );
+            });
+          });
+      })();
+
+      /* ══ STAGE B — KEYED RECONCILIATION + MEMO (Scene 02) ════════════ */
+      (function () {
+        var stageBRoot = document.getElementById('stageb-root');
+        var memo = createMemo();
+        var MEMO_TARGET_ID = 3;
+
+        var items = [
+          { id: 1, label: 'Row 1' },
+          { id: 2, label: 'Row 2' },
+          { id: 3, label: 'Row 3' },
+          { id: 4, label: 'Row 4' },
+          { id: 5, label: 'Row 5', hasInput: true },
+          { id: 6, label: 'Row 6' },
+        ];
+        var nextItemId = 7;
+        var nodeSerial = 1;
+        var row3ViewRuns = 0;
+
+        var keysOn = true;
+        var memoOn = false;
+
+        function buildRow(item, keyed) {
+          function build() {
+            if (item.id === MEMO_TARGET_ID) row3ViewRuns++;
+            var props = { className: 'stageb-row' };
+            if (keyed) props.key = item.id;
+            if (memoOn && item.id === MEMO_TARGET_ID) {
+              props.className += ' memoised';
+            }
+            return h(
+              'div',
+              props,
+              h('span', { className: 'stageb-row-label' }, item.label),
+              item.hasInput
+                ? h('input', {
+                    className: 'stageb-row-input',
+                    placeholder: 'focus me, then Shuffle',
+                  })
+                : h(
+                    'span',
+                    { className: 'stageb-row-meta' },
+                    'logical id ' + item.id
+                  )
+            );
+          }
+          if (memoOn && item.id === MEMO_TARGET_ID) {
+            return memo(MEMO_TARGET_ID, [item.label, keyed], build);
+          }
+          return build();
+        }
+
+        function stampNodeIds() {
+          Array.prototype.forEach.call(stageBRoot.children, function (el) {
+            if (!el.dataset.nodeId) {
+              el.dataset.nodeId = String(nodeSerial++);
+            }
+          });
+        }
+
+        function printStats(stats) {
+          document.getElementById('stageb-stat-visited').textContent = String(
+            stats.visited || 0
+          );
+          document.getElementById('stageb-stat-patched').textContent = String(
+            stats.patchedElements || 0
+          );
+          document.getElementById('stageb-stat-created').textContent = String(
+            stats.createdNodes || 0
+          );
+          document.getElementById('stageb-stat-removed').textContent = String(
+            stats.removedNodes || 0
+          );
+          document.getElementById('stageb-stat-moved').textContent = String(
+            stats.movedNodes || 0
+          );
+          document.getElementById('stageb-stat-viewruns').textContent =
+            String(row3ViewRuns);
+        }
+
+        function commit() {
+          var stats = {};
+          var tree = items.map(function (item) {
+            return buildRow(item, keysOn);
+          });
+          render(stageBRoot, tree, stats);
+          stampNodeIds();
+          printStats(stats);
+        }
+
+        document
+          .getElementById('stageb-shuffle')
+          .addEventListener('click', function () {
+            for (var i = items.length - 1; i > 0; i--) {
+              var j = Math.floor(Math.random() * (i + 1));
+              var tmp = items[i];
+              items[i] = items[j];
+              items[j] = tmp;
+            }
+            commit();
+          });
+        document
+          .getElementById('stageb-insert-top')
+          .addEventListener('click', function () {
+            items.unshift({ id: nextItemId, label: 'Row ' + nextItemId });
+            nextItemId++;
+            commit();
+          });
+        document
+          .getElementById('stageb-remove-middle')
+          .addEventListener('click', function () {
+            if (items.length > 1) {
+              items.splice(Math.floor(items.length / 2), 1);
+              commit();
+            }
+          });
+        document
+          .getElementById('stageb-keys-toggle')
+          .addEventListener('change', function (e) {
+            keysOn = e.target.checked;
+            document.getElementById('stageb-keys-label').textContent =
+              'keys: ' + (keysOn ? 'on' : 'off');
+            commit();
+          });
+        document
+          .getElementById('stageb-memo-toggle')
+          .addEventListener('change', function (e) {
+            memoOn = e.target.checked;
+            memo.clear();
+            stageBRoot.replaceChildren();
+            commit();
+          });
+
+        commit();
+      })();
+    </script>
+  </body>
+</html>

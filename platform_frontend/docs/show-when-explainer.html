@@ -833,7 +833,8 @@
     <header>
       <h1>Applicability Graph</h1>
       <p>
-        showWhen · evaluate() · detectCycles() — src/applicability-evaluator.js
+        showWhen · evaluate() · detectCycles() —
+        src/evaluators/applicability-evaluator.js
       </p>
       <div class="legend">
         <div class="legend-item">
@@ -1120,7 +1121,7 @@
     </footer>
 
     <script>
-      /* ══ EVALUATOR LOGIC (copied verbatim from src/applicability-evaluator.js) ═════ */
+      /* ══ EVALUATOR LOGIC (copied verbatim from src/evaluators/applicability-evaluator.js) ═════ */
 
       function evalOp(op, answer) {
         const value = answer && answer.value !== undefined ? answer.value : '';

@@ -19,6 +19,18 @@ you are changing.
 | [In-memory flow runner](in-memory-flow-runner.md)           | Browser-free end-to-end domain and persistence journeys                      |
 | [Charts](charts.md)                                         | Grouped SVG charts plus the My Stats grain-matched Case Type breakdown table |
 
+## Explainers
+
+Self-contained, interactive HTML pages — no server or build, open straight from
+the repository in a browser.
+
+| Explainer                                                    | What it shows                                                                                                  |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| [The Render Loop](../render-loop-explainer.html)             | Runtime mechanics: dispatch → reducer → view → `render()` commit, and how the keyed reconciler patches the DOM |
+| [State → view → action](../component-anatomy-explainer.html) | The shape of a page: the four exports, the route-table entry, the pre-ship checklist                           |
+| [Applicability Graph](../show-when-explainer.html)           | `showWhen`, `evaluate()`, and cycle detection over a Case Type's Question catalogue                            |
+| [SaveQueue](../save-queue-explainer.html)                    | Debounce, ETag concurrency, and retry/conflict handling for autosave                                           |
+
 ## Prerequisites
 
 - Read [CONTEXT.md](../../CONTEXT.md) for domain language (`Case`, `Case Type`,
