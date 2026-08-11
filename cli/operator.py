@@ -173,15 +173,6 @@ def _run(args: argparse.Namespace) -> int:
     if base_dir is None:
         return 1
     params = dict(args.params)
-    if args.publish_only:
-        if args.pipeline.rstrip("/") != "pipelines/reviewer_activity":
-            print(
-                "--publish-only is only supported for pipelines/reviewer_activity",
-                file=sys.stderr,
-            )
-            return 2
-        params["publish_only"] = "true"
-    publish_only = args.publish_only
     if args.dry_run:
         report = dry_run_pipeline(
             loaded.run,
@@ -202,7 +193,7 @@ def _run(args: argparse.Namespace) -> int:
             loaded.run,
             loaded.name,
             base_dir,
-            upstreams=() if publish_only else loaded.upstreams,
+            upstreams=() if args.skip_freshness else loaded.upstreams,
             run_date=args.run_date,
             logical_run_id=args.logical_run_id,
             params=params,
@@ -366,9 +357,9 @@ def register(sub) -> None:
     )
     run.add_argument("--freshness-days", type=int, default=0)
     run.add_argument(
-        "--publish-only",
+        "--skip-freshness",
         action="store_true",
-        help="republish reviewer_activity Report Feeds from committed gold",
+        help="skip declared upstream freshness checks for an explicit re-drive",
     )
     run.add_argument(
         "--param",

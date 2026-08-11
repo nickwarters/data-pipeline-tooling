@@ -479,13 +479,13 @@ def test_run_stale_upstream_reports_clear_error(tmp_path):
     assert "Traceback" not in result.stderr
 
 
-def test_publish_only_bypasses_loaded_upstreams_but_normal_run_keeps_them(
+def test_skip_freshness_is_generic_and_params_keep_their_pipeline_meaning(
     tmp_path, monkeypatch
 ):
     import cli.operator as operator
 
     loaded = SimpleNamespace(
-        name="reviewer_activity", run=lambda context: None, upstreams=("fresh",)
+        name="_downstream", run=lambda context: None, upstreams=("fresh",)
     )
     captured = []
     monkeypatch.setattr(operator, "load_pipeline", lambda path: loaded)
@@ -496,24 +496,23 @@ def test_publish_only_bypasses_loaded_upstreams_but_normal_run_keeps_them(
     )
 
     args = SimpleNamespace(
-        pipeline="pipelines/reviewer_activity",
+        pipeline="clipipelines/_downstream",
         base_dir=str(tmp_path),
         env=None,
         dry_run=False,
-        params=[],
-        publish_only=True,
+        params=[("publish_only", "true")],
+        skip_freshness=False,
         run_date=None,
         logical_run_id=None,
         freshness_days=0,
     )
     assert operator._run(args) == 0
-    assert captured[-1]["upstreams"] == ()
+    assert captured[-1]["upstreams"] == ("fresh",)
     assert captured[-1]["params"] == {"publish_only": "true"}
 
-    args.publish_only = False
-    args.params = [("publish_only", "true")]
+    args.skip_freshness = True
     assert operator._run(args) == 0
-    assert captured[-1]["upstreams"] == ("fresh",)
+    assert captured[-1]["upstreams"] == ()
     assert captured[-1]["params"] == {"publish_only": "true"}
 
 
@@ -582,13 +581,15 @@ def test_reviewer_publish_only_malformed_gold_is_a_clean_cli_failure(
             "pipelines/reviewer_activity",
             "--base-dir",
             str(tmp_path),
-            "--publish-only",
+            "--skip-freshness",
+            "--param",
+            "publish_only=true",
         ]
     )
 
     error = capsys.readouterr().err
     assert code == 1
-    assert "invalid count" in error
+    assert "expected int" in error
     assert "Traceback" not in error
 
 

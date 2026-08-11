@@ -3,33 +3,26 @@
 from __future__ import annotations
 
 import datetime as dt
-import functools
 import json
-import numbers
 import os
-import shutil
 import tempfile
 from pathlib import Path, PureWindowsPath
 
 import pandas as pd
 
-from framework.core import Dataset, Reader, ValidationError
+from framework.core import Dataset, Reader, SchemaValidator, ValidationError
 from framework.run import Pipeline, RunLog
+from framework.transform import SchemaCoercion
 from tools.deliverables import REPORT_FEEDS_DESTINATION, get_deliverable_path
 from tools.observability import timestamps
+
+from .schema import ReviewerActivityDaily
 
 REPORT_FEED_SCHEMA_VERSION = 1
 REPORT_FEED_RETENTION_MONTHS = 13
 REPORT_FEED_DESTINATION = "my-stats"
 
-_AGGREGATE_COLUMNS = {
-    "reviewer_account",
-    "reportable_date",
-    "case_type",
-    "count",
-    "as_of_utc",
-}
-_PREPARED_COLUMNS = {"reviewer_account", "date", "case_type", "count"}
+_PREPARED_COLUMNS = {"reviewer_account", "date", "case_type", "count", "as_of_utc"}
 _WINDOWS_DEVICE_NAMES = {
     "con",
     "prn",
@@ -40,44 +33,49 @@ _WINDOWS_DEVICE_NAMES = {
 }
 
 
+def empty_report_dataset() -> Dataset:
+    """Return the no-op result for a dry-run publication request."""
+    return Dataset.from_pandas(pd.DataFrame())
+
+
 def _shift_month(day: dt.date, months: int) -> dt.date:
     month_index = day.year * 12 + day.month - 1 + months
     year, month_zero_based = divmod(month_index, 12)
     return dt.date(year, month_zero_based + 1, 1)
 
 
-def report_window(complete_through: dt.date) -> tuple[dt.date, dt.date]:
+def _report_window(complete_through: dt.date) -> tuple[dt.date, dt.date]:
     """Return the inclusive 13-month Report Feed window."""
     start = _shift_month(complete_through, -(REPORT_FEED_RETENTION_MONTHS - 1))
     return start, complete_through
 
 
-def complete_through_from(dataset: Dataset) -> dt.date | None:
-    """Return the aggregate snapshot's local calendar date."""
+def _complete_through_from(dataset: Dataset) -> dt.date | None:
+    """Return the last complete local calendar day in the aggregate snapshot."""
     frame = dataset.to_pandas()
-    _require_columns(frame)
+    if "as_of_utc" not in frame.columns:
+        raise ValidationError("reviewer activity aggregate is missing 'as_of_utc'")
     values = frame["as_of_utc"].dropna().astype(str).unique()
     if len(values) == 0:
         return None
     if len(values) != 1:
-        raise ValueError("reviewer activity aggregate has multiple as_of_utc values")
-    return timestamps.local_date(values[0])
+        raise ValidationError(
+            "reviewer activity aggregate has multiple as_of_utc values"
+        )
+    try:
+        return timestamps.local_date(values[0]) - dt.timedelta(days=1)
+    except ValueError as exc:
+        raise ValidationError(
+            "reviewer activity aggregate has an invalid as_of_utc value"
+        ) from exc
 
 
-class ReviewerActivityAggregateValidator:
-    """Validate the committed aggregate before publication reshapes it."""
+class ReportFeedContractValidator:
+    """Validate publication-specific constraints beyond the declared schema."""
 
     def validate(self, dataset: Dataset) -> None:
         frame = dataset.to_pandas()
-        try:
-            _require_columns(frame)
-        except ValueError as exc:
-            raise ValidationError(str(exc)) from exc
-        if frame.empty:
-            return
-        if frame[list(_AGGREGATE_COLUMNS)].isna().any().any():
-            raise ValidationError("reviewer activity aggregate contains null values")
-        if frame["case_type"].astype(str).str.strip().eq("").any():
+        if frame["case_type"].astype("string").str.strip().eq("").any():
             raise ValidationError(
                 "reviewer activity aggregate contains a blank case type"
             )
@@ -86,57 +84,23 @@ class ReviewerActivityAggregateValidator:
                 _safe_account(account)
             except ValueError as exc:
                 raise ValidationError(str(exc)) from exc
-        dates = pd.to_datetime(frame["reportable_date"], errors="coerce")
-        if dates.isna().any():
-            raise ValidationError(
-                "reviewer activity aggregate contains an invalid date"
-            )
-        counts = pd.to_numeric(frame["count"], errors="coerce")
-        if counts.isna().any() or counts.mod(1).ne(0).any() or counts.le(0).any():
-            raise ValidationError(
-                "reviewer activity aggregate contains an invalid count"
-            )
-        try:
-            complete_through_from(dataset)
-        except ValueError as exc:
-            raise ValidationError(str(exc)) from exc
+        _complete_through_from(dataset)
 
 
-def prepare_report_rows(
-    dataset: Dataset,
-    complete_through: dt.date | None = None,
-) -> Dataset:
-    """Select sparse aggregate rows covered by the Report Feed contract."""
-    ReviewerActivityAggregateValidator().validate(dataset)
+def _prepare_report_rows(dataset: Dataset) -> Dataset:
+    """Normalize the committed aggregate for the file Writer."""
     frame = dataset.to_pandas().copy()
-    if frame.empty:
-        return Dataset.from_pandas(
-            pd.DataFrame(columns=["reviewer_account", "date", "case_type", "count"])
-        )
-
-    complete_through = complete_through or complete_through_from(dataset)
-    if complete_through is None:
-        return Dataset.from_pandas(
-            pd.DataFrame(columns=["reviewer_account", "date", "case_type", "count"])
-        )
-    start, end = report_window(complete_through)
     frame["reviewer_account"] = (
         frame["reviewer_account"].astype("string").str.strip().str.lower()
     )
-    dates = pd.to_datetime(frame["reportable_date"]).dt.date
-    keep = dates.ge(start) & dates.le(end)
-    selected = pd.DataFrame(
-        {
-            "reviewer_account": frame.loc[keep, "reviewer_account"].astype(str),
-            "date": dates.loc[keep].map(dt.date.isoformat),
-            "case_type": frame.loc[keep, "case_type"].astype(str),
-            "count": frame.loc[keep, "count"].astype("int64"),
-        }
+    frame["date"] = pd.to_datetime(frame["reportable_date"]).dt.date.map(
+        dt.date.isoformat
     )
-    selected = selected.sort_values(
-        ["reviewer_account", "date", "case_type"], kind="stable"
+    return Dataset.from_pandas(
+        frame[
+            ["reviewer_account", "date", "case_type", "count", "as_of_utc"]
+        ].reset_index(drop=True)
     )
-    return Dataset.from_pandas(selected.reset_index(drop=True))
 
 
 class ReportFeedWriter:
@@ -147,89 +111,65 @@ class ReportFeedWriter:
         base_dir: str | os.PathLike[str],
         *,
         generated_at: str,
-        complete_through: dt.date | None = None,
     ) -> None:
         self._base_dir = Path(base_dir)
         self._generated_at = generated_at
-        self._complete_through = complete_through
-        self._reviewer_accounts: tuple[str, ...] | None = None
         self.data_locations: list[dict[str, str]] = []
-
-    def configure(
-        self,
-        reviewer_accounts: tuple[str, ...],
-        complete_through: dt.date | None,
-    ) -> None:
-        self._reviewer_accounts = reviewer_accounts
-        self._complete_through = complete_through
 
     def write(self, dataset: Dataset) -> None:
         frame = dataset.to_pandas()
-        _validate_prepared_rows(frame)
-        self.data_locations = []
-        if self._reviewer_accounts is None:
+        missing = _PREPARED_COLUMNS.difference(frame.columns)
+        if missing:
             raise ValueError(
-                "ReportFeedWriter must be configured by its preparation step"
+                "Report Feed preparation is missing columns: "
+                + ", ".join(sorted(missing))
             )
-        if not self._reviewer_accounts:
+        self.data_locations = []
+        complete_through = _complete_through_from(dataset)
+        if complete_through is None:
             return
-        if self._complete_through is None:
-            raise ValueError("Report Feed has no complete_through date")
 
-        staged: list[tuple[Path, Path]] = []
         try:
-            for account in self._reviewer_accounts:
-                rows = frame.loc[frame["reviewer_account"].eq(account)]
-                payload = {
-                    "schema_version": REPORT_FEED_SCHEMA_VERSION,
-                    "reviewer_account": account,
-                    "generated_at": self._generated_at,
-                    "complete_through": self._complete_through.isoformat(),
-                    "rows": [
-                        {
-                            "date": row["date"],
-                            "case_type": row["case_type"],
-                            "count": row["count"].item()
-                            if hasattr(row["count"], "item")
-                            else row["count"],
-                        }
-                        for row in rows.to_dict(orient="records")
-                    ],
-                }
-                path = get_deliverable_path(
-                    self._base_dir,
-                    REPORT_FEEDS_DESTINATION,
-                    REPORT_FEED_DESTINATION,
-                    f"{account}.txt",
-                )
-                path.parent.mkdir(parents=True, exist_ok=True)
-                staged.append((path, _stage_payload(path, payload)))
-            _publish_staged(staged)
-        finally:
-            for _, temporary in staged:
+            accounts = sorted(
+                {_safe_account(value) for value in frame["reviewer_account"]}
+            )
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
+        start, end = _report_window(complete_through)
+        dates = pd.to_datetime(frame["date"], errors="raise").dt.date
+        for account in accounts:
+            rows = frame.loc[
+                frame["reviewer_account"].eq(account) & dates.ge(start) & dates.le(end)
+            ].sort_values(["date", "case_type"], kind="stable")
+            payload = {
+                "schema_version": REPORT_FEED_SCHEMA_VERSION,
+                "reviewer_account": account,
+                "generated_at": self._generated_at,
+                "complete_through": complete_through.isoformat(),
+                "rows": [
+                    {
+                        "date": row["date"],
+                        "case_type": row["case_type"],
+                        "count": row["count"].item()
+                        if hasattr(row["count"], "item")
+                        else row["count"],
+                    }
+                    for row in rows.to_dict(orient="records")
+                ],
+            }
+            path = get_deliverable_path(
+                self._base_dir,
+                REPORT_FEEDS_DESTINATION,
+                REPORT_FEED_DESTINATION,
+                f"{account}.txt",
+            )
+            path.parent.mkdir(parents=True, exist_ok=True)
+            temporary = _stage_payload(path, payload)
+            try:
+                os.replace(temporary, path)
+            finally:
                 temporary.unlink(missing_ok=True)
-        self.data_locations = [
-            {"namespace": "file", "name": str(path)} for path, _ in staged
-        ]
-
-
-ReviewerReportFeedWriter = ReportFeedWriter
-
-
-def prepare_report_feed_rows(
-    dataset: Dataset,
-    *,
-    writer: ReportFeedWriter,
-) -> Dataset:
-    """Prepare rows and configure the one Writer with the reviewer universe."""
-    ReviewerActivityAggregateValidator().validate(dataset)
-    frame = dataset.to_pandas()
-    accounts = tuple(
-        sorted({_safe_account(value) for value in frame["reviewer_account"].tolist()})
-    )
-    complete_through = complete_through_from(dataset)
-    writer.configure(accounts, complete_through)
-    return prepare_report_rows(dataset, complete_through)
+            self.data_locations.append({"namespace": "file", "name": str(path)})
 
 
 def reviewer_report_feed_builder(
@@ -241,48 +181,20 @@ def reviewer_report_feed_builder(
     """Build the one-read, validate, prepare, one-Writer publication pipeline."""
     pipeline = Pipeline("reviewer_activity:report-feed", run_log=run_log)
     source = pipeline.read(reader, name="read-gold")
-    validated = pipeline.validate(
-        ReviewerActivityAggregateValidator(), source, name="validate-gold"
+    coerced = pipeline.transform(
+        SchemaCoercion(ReviewerActivityDaily), source, name="coerce-gold"
+    )
+    schema_validated = pipeline.validate(
+        SchemaValidator(ReviewerActivityDaily), coerced, name="validate-gold"
+    )
+    contract_validated = pipeline.validate(
+        ReportFeedContractValidator(), schema_validated, name="validate-report-feed"
     )
     prepared = pipeline.transform(
-        functools.partial(prepare_report_feed_rows, writer=writer),
-        validated,
-        name="prepare-report-feeds",
+        _prepare_report_rows, contract_validated, name="prepare"
     )
     pipeline.write(writer, prepared, name="write-report-feeds")
     return pipeline
-
-
-def _require_columns(frame: pd.DataFrame) -> None:
-    missing = _AGGREGATE_COLUMNS.difference(frame.columns)
-    if missing:
-        raise ValueError(
-            "reviewer activity aggregate is missing columns: "
-            + ", ".join(sorted(missing))
-        )
-
-
-def _validate_prepared_rows(frame: pd.DataFrame) -> None:
-    if set(frame.columns) != _PREPARED_COLUMNS:
-        raise ValueError("Report Feed preparation produced an unexpected shape")
-    if frame.empty:
-        return
-    if frame.isna().any().any():
-        raise ValueError("Report Feed preparation produced null values")
-    for account in frame["reviewer_account"]:
-        _safe_account(account)
-    for value in frame["date"]:
-        if (
-            not isinstance(value, str)
-            or dt.date.fromisoformat(value).isoformat() != value
-        ):
-            raise ValueError("Report Feed preparation produced an invalid date")
-    if not frame["case_type"].map(lambda value: isinstance(value, str)).all():
-        raise ValueError("Report Feed preparation produced a non-string case type")
-    if not frame["count"].map(lambda value: isinstance(value, numbers.Integral)).all():
-        raise ValueError("Report Feed preparation produced a non-integer count")
-    if frame["count"].le(0).any():
-        raise ValueError("Report Feed preparation produced a non-positive count")
 
 
 def _stage_payload(path: Path, payload: dict) -> Path:
@@ -305,39 +217,6 @@ def _stage_payload(path: Path, payload: dict) -> Path:
         if temporary_path is not None:
             temporary_path.unlink(missing_ok=True)
         raise
-
-
-def _publish_staged(staged: list[tuple[Path, Path]]) -> None:
-    backups: dict[Path, Path | None] = {}
-    replaced: list[Path] = []
-    try:
-        for path, _ in staged:
-            if path.exists():
-                descriptor, backup_name = tempfile.mkstemp(
-                    dir=path.parent, prefix=f".{path.name}.", suffix=".bak"
-                )
-                os.close(descriptor)
-                backup = Path(backup_name)
-                backups[path] = backup
-                shutil.copy2(path, backup)
-            else:
-                backups[path] = None
-        for path, temporary in staged:
-            os.replace(temporary, path)
-            replaced.append(path)
-    except Exception:
-        for path in reversed(replaced):
-            backup = backups[path]
-            if backup is None:
-                path.unlink(missing_ok=True)
-            else:
-                os.replace(backup, path)
-                backups[path] = None
-        raise
-    finally:
-        for backup in backups.values():
-            if backup is not None:
-                backup.unlink(missing_ok=True)
 
 
 def _safe_account(value: object) -> str:

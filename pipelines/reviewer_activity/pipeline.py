@@ -25,7 +25,11 @@ from .gold import (
     TABLE,
     reviewer_activity_daily_builder,
 )
-from .report_feed import ReportFeedWriter, reviewer_report_feed_builder
+from .report_feed import (
+    ReportFeedWriter,
+    empty_report_dataset,
+    reviewer_report_feed_builder,
+)
 
 PIPELINE_NAME = "reviewer_activity"
 UPSTREAMS = (FreshnessRequirement("sharepoint_cases"),)
@@ -72,10 +76,14 @@ def publish_report_feeds(context: RunContext, *, describe: bool = False) -> Data
 def run(context: RunContext, *, describe: bool = False) -> Dataset:
     """Refresh the aggregate, then publish Report Feeds from committed gold."""
     if context.params.get("publish_only", "").lower() in {"1", "true", "yes"}:
+        if context.dry_run:
+            return empty_report_dataset()
         return publish_report_feeds(context, describe=describe)
 
     aggregate = build_reviewer_activity_daily_pipeline(context, describe=describe)
-    aggregate.run(context)
+    aggregate_result = aggregate.run(context)
+    if context.dry_run:
+        return aggregate_result
     return publish_report_feeds(context, describe=describe)
 
 

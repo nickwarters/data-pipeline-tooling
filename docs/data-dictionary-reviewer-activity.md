@@ -65,9 +65,10 @@ keys are exactly `schema_version`, `reviewer_account`, `generated_at`,
 rows remain sparse, with no synthetic zero rows.
 
 The feed retains the current partial month and the twelve complete months before
-it. `complete_through` is the local calendar date of the aggregate's
-`as_of_utc` instant, while `generated_at` is the UTC instant at which the
-publication batch ran. Files are rewritten as whole files on republish. A
+it. `complete_through` is the last complete local calendar date before the
+aggregate's `as_of_utc` instant, while `generated_at` is the UTC instant at
+which the publication batch ran. Files are rewritten as whole files on
+republish. A
 Reviewer with no rows in the retained window still receives an empty `rows`
 array, and files for Reviewers absent from a later aggregate are left in place.
 The publisher stops at the local outbox; it has no upload or SharePoint
@@ -75,6 +76,6 @@ dependency. A failed publication can be retried from the already-committed gold
 table.
 
 The operator retry command is
-`python -m cli run pipelines/reviewer_activity --base-dir DIR --publish-only`.
-It bypasses the Sync freshness check for this retry; normal runs remain
-freshness-guarded.
+`python -m cli run pipelines/reviewer_activity --base-dir DIR --skip-freshness
+--param publish_only=true`. It bypasses the Sync freshness check for this
+retry; normal runs remain freshness-guarded.

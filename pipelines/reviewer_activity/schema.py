@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Annotated
 
-from framework.core import NonNull, Range
+from framework.core import Length, NonNull, Range
 
 
 @dataclass
@@ -15,6 +15,6 @@ class ReviewerActivityDaily:
 
     reviewer_account: Annotated[str, NonNull()]
     reportable_date: Annotated[date, NonNull()]
-    case_type: Annotated[str, NonNull()]
+    case_type: Annotated[str, NonNull(), Length(minimum=1)]
     count: Annotated[int, NonNull(), Range(minimum=1)]
     as_of_utc: Annotated[str, NonNull()]

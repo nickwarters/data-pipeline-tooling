@@ -116,7 +116,8 @@ for the four descriptors. Selecting a button dispatches
   `complete_through` — and a tail that fell back to the range start would ask
   for thirteen months of Cases, unpaged, with the full `$select=*` projection
   and five person expands on every row. The reviewer activity Reporting
-  pipeline now produces the local file; external delivery remains separate.
+  pipeline now produces the local file, complete through the last full local
+  day before its snapshot; external delivery remains separate.
   Hence the clamp, and hence no read at all without a file.
 
   The clamp is ten calendar days counting today, derived from how stale a
