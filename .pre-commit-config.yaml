@@ -73,7 +73,7 @@ repos:
         name: prettier (platform_frontend)
         entry: npm --prefix platform_frontend exec -- prettier --write
         language: system
-        files: ^platform_frontend/(.+\.(js|ts|json|css|md)|case-types/banks/.+\.txt|dev/fixtures/my-stats/.+\.txt)$
+        files: ^platform_frontend/(.+\.(js|ts|json|css|md)|case-types/banks/.+\.txt|dev/fixtures/my-stats/.+\.txt|docs/.+\.html)$
 
       # Beyond what lint-staged did, these mirror this repo's own convention that
       # a commit runs the tests for what it touches. pytest covers the whole

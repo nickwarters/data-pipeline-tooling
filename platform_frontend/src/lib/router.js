@@ -1,7 +1,9 @@
 // @ts-check
-// A route handler is a plain `{ mount, unmount }` pair. `mount` composes
-// function components and calls `container.replaceChildren(...)`; the router
-// never owns a custom element per route.
+// A route handler is a plain `{ mount, unmount }` pair. `mount` resolves a
+// page module and hands off to its adapter (see `core/store-route.js`), which
+// commits the route's view through the keyed `render()` reconciler rather than
+// replacing the container's children; the router never owns a custom element
+// per route.
 import { createRouteErrorPanel } from './route-error-panel.js';
 
 /**
