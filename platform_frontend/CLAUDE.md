@@ -44,7 +44,8 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
   stops being true.
 - **Case Review Sections are data plus a panel renderer.** `lib/section-registry.js`
   (ADR-0032) says which Sections exist and in what order; `pages/cora-case-review/section-panels.js`
-  says how each one's panel is filled, keyed by Section id — the render loop in
+  says how each one's panel is filled, keyed by Section id — including the
+  Summary-owned completion control and Case Details-owned Void control — the render loop in
   `cora-case-review.js` never branches on the id. **Adding a Section recipe:** an
   entry in `SECTION_REGISTRY` + its `MATRIX` access row in `services/section-access.js`
   - its `DEFAULT_SECTION_LABELS` `{ tab, heading }` pair + a `SECTION_PANELS` renderer. `tsc` demands
@@ -296,7 +297,7 @@ src/
     cora-case-review.js        # store slice + pure tab shell
     cora-case-review/          # store actions/effects and pure Section views
       answer-actions.js        # the pure Answer mutations; the store is the single owner (#510)
-      section-panels.js        # SECTION_PANELS: one panel renderer per tab Section, keyed by id (#512)
+      section-panels.js        # SECTION_PANELS: one panel renderer per tab Section, keyed by id (#512); owns tab action placement
       details-view.js          # config-driven, read-only Case Details pure view (mirrors current Section behaviour)
       case-actions.js          # Answer dispatch -> unchanged SaveQueue; save status dispatch bridge
       group-outcome-view.js    # pure Group Outcome control, the Questions one Group Outcome writes to,
@@ -307,10 +308,10 @@ src/
       notes-view.js            # CASE-3 pure Notes and Case Justification view; SaveQueue remains the writer
       summary-view.js          # CASE-4 pure configured Summary view
       outcome-view.js          # CASE-4 configured Outcome view
-      completion-actions.js    # CASE-4 CaseMachine-guarded completion actions; completeCase is
+      completion-actions.js    # CASE-4 CaseMachine-guarded completion state + pure Summary control; completeCase is
                                #   the shared "persist the transition and leave" write, called by
                                #   both completion and voiding
-      void-actions.js          # the Reviewer's Void control and the patch behind it
+      void-actions.js          # pure Case Details Void control and the patch behind it
       remediation-view.js      # CASE-5 pure Issues and Remediation Actions view
       remediation-tracking-view.js # pure question-level Remediation tab, reviewer + responsible-party renderings (#499)
       appeal-actions.js        # CASE-6 immutable Appeal/resolution/amendment state transitions

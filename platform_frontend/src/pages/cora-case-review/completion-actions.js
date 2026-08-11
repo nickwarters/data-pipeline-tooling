@@ -8,6 +8,7 @@ import {
   remediationDecided,
 } from '../../evaluators/remediation-status.js';
 import { navigateTo } from '../../lib/navigate.js';
+import { h } from '../../lib/html.js';
 
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
@@ -35,7 +36,7 @@ export function readyToClose(input) {
   );
 }
 
-/** The gate's wording, shown wherever the completion control appears. */
+/** The gate's wording, shown beside the Summary completion control. */
 const REMEDIATION_GATE_REASON =
   'Record an outcome for every remediation on the Remediation tab — with the details or justification required — before this Case can be completed.';
 
@@ -76,9 +77,7 @@ function missingResponsibleParty(input) {
  * offer it.
  *
  * While remediation is outstanding the Assigned Reviewer sees the button
- * **disabled with its reason** rather than not at all: hiding it left the gate
- * legible only to a Reviewer who happened to open the Remediation tab, and from
- * every other tab the feature simply looked absent. An unnamed Responsible
+ * **disabled with its reason** rather than not at all. An unnamed Responsible
  * Party is the same kind of gate and is shown the same way, rather than leaving
  * a Reviewer who has answered everything with no button and no reason. A viewer
  * without the permission half still sees nothing — the disabled button is the
@@ -141,6 +140,37 @@ export function completionControl(input) {
             ? RESPONSIBLE_PARTY_REASON
             : null,
   };
+}
+
+/**
+ * Render the completion control for the Summary Section.
+ *
+ * @param {{
+ *   control: ReturnType<typeof completionControl>,
+ *   pending: boolean,
+ *   onComplete: () => void | Promise<unknown>,
+ * }} input
+ * @returns {HTMLElement | null}
+ */
+export function completionControlView({ control, pending, onComplete }) {
+  if (!control.visible) return null;
+  return h(
+    'div',
+    { className: 'cora-completion', key: 'completion' },
+    h(
+      'button',
+      {
+        className: 'cora-complete-btn',
+        disabled: pending || control.disabled,
+        title: control.reason ?? '',
+        onclick: onComplete,
+      },
+      control.label
+    ),
+    ...(control.reason
+      ? [h('p', { className: 'cora-completion-reason' }, control.reason)]
+      : [])
+  );
 }
 
 /**

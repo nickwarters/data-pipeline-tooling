@@ -2043,6 +2043,39 @@ test('view: Summary applies empty config defaults and incomplete snapshots stay 
   assert.doesNotThrow(() => renderShippedState(incompleteState));
 });
 
+test('view: completion belongs only to Summary and Void belongs only to Case Details', () => {
+  const loadedSnapshot = {
+    ...snapshot(),
+    allAnswered: true,
+    machine: /** @type {any} */ ({
+      canComplete: true,
+      canVoid: true,
+      mayResolveRemediation: false,
+      catalogue: [],
+      transitionToCompleted: () => ({ status: 'Completed' }),
+      transitionToVoid: (/** @type {string} */ reasonKey) => ({
+        status: 'Void',
+        voidReason: reasonKey,
+      }),
+    }),
+  };
+  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: loadedSnapshot,
+  });
+  const { container } = renderShippedState(state);
+  const summary = container.querySelector('#case-panel-summary');
+  const details = container.querySelector('#case-panel-details');
+
+  assert.equal(container.querySelector('.cora-case-review__completion'), null);
+  assert.equal(container.querySelectorAll('.cora-complete-btn').length, 1);
+  assert.equal(container.querySelectorAll('.cora-void-btn').length, 1);
+  assert.equal(summary?.querySelectorAll('.cora-complete-btn').length, 1);
+  assert.equal(summary?.querySelector('.cora-void'), null);
+  assert.equal(details?.querySelectorAll('.cora-void-btn').length, 1);
+  assert.equal(details?.querySelector('.cora-complete-btn'), null);
+});
+
 test('view: Issues renders failed Answers directly from route state', () => {
   const answers = {
     q1: {
@@ -2628,6 +2661,58 @@ test('action: a completion resolving after the mount is disposed dispatches noth
   );
 });
 
+test('action: a void resolving after the mount is disposed dispatches nothing', async () => {
+  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: voidableSnapshot({ status: 'Void' }),
+  });
+  /** @type {() => void} */
+  let release = () => {};
+  const inFlight = new Promise((resolve) => {
+    release = () => resolve(undefined);
+  });
+  const view = renderShippedState(state, {
+    saveQueue: {
+      async flushCase() {
+        return true;
+      },
+      getEtag: () => 'e1',
+    },
+    client: {
+      async patchCase() {
+        await inFlight;
+        return { ok: true, status: 200 };
+      },
+    },
+  });
+
+  fireEvent(
+    getByRole(view.container, 'button', { name: 'Void Case…' }),
+    'click'
+  );
+  const select = getByRole(view.container, 'combobox', {
+    name: 'Reason for voiding',
+  });
+  select.value = 'raised-in-error';
+  fireEvent(select, 'change');
+  fireEvent(
+    getByRole(view.container, 'button', { name: 'Void Case' }),
+    'click'
+  );
+  await flush();
+
+  view.deactivate();
+  const dispatched = view.actions.length;
+  release();
+  await flush();
+
+  assert.equal(view.actions.length, dispatched);
+  assert.equal(
+    view.state.routes.caseReview.snapshot.caseRow.status,
+    'In-progress'
+  );
+});
+
 test('action: a missing CaseMachine transition cannot dispatch completion', async () => {
   const loadedSnapshot = {
     ...snapshot(),
@@ -2706,7 +2791,7 @@ test('view: the completion button is disabled with its reason while remediation 
     getByRole(view.container, 'button', { name: 'Complete Case' })
   );
   assert.equal(button.disabled, true);
-  // The reason travels with the button, so the gate is legible from any tab.
+  // The reason travels with the button, so the gate is legible on Summary.
   assert.match(
     view.container.textContent ?? '',
     /before this Case can be completed/

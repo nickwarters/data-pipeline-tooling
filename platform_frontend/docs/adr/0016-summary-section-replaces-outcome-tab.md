@@ -12,7 +12,7 @@ The case-review tab row is **Case Details · Review · Issues · Summary · Reme
 
 ## What Summary is
 
-A first-class **Section** that is **never `edit`** — only `read-only` or `hidden`. It rolls up onto one page: the **Case Details** fields, pass/fail counts per question category, **Remediation Action** counts, each _failed_ **Answer** with its actions, key dates, and the **Current Outcome**. Responsible Parties do not see Summary while the Case is `In-progress`; they see it read-only once the Case is reportable. Case Types may omit it via the Section config.
+A first-class **Section** that is **never `edit`** — only `read-only` or `hidden`. It rolls up onto one page: the **Case Details** fields, pass/fail counts per question category, **Remediation Action** counts, each _failed_ **Answer** with its actions, key dates, and the **Current Outcome**. Responsible Parties do not see Summary while the Case is `In-progress`; they see it read-only once the Case is reportable. Case Types may configure other Sections, but an explicit Section config must include Summary because Summary owns the completion control.
 
 ## Configuration: per-Section `showInSummary`
 
@@ -36,7 +36,7 @@ This keeps the Summary faithful to the bank version used for the review without 
 
 ## Consequences
 
-- The **Complete Case** button stays in persistent chrome; Summary carries no action.
+- The **Complete Case** button is owned by the Summary Section. The **Void Case** control is owned by Case Details; neither lifecycle control remains in persistent page chrome.
 - **Conversation** remains a Section but not a tab — still a floating overlay.
 - `cora-outcome` survives as a component rendered _inside_ Summary; the Outcome Section/tab and its dedicated matrix row are removed.
 - ADR-0011 and ADR-0014 are amended (see their "superseded in part" notes).

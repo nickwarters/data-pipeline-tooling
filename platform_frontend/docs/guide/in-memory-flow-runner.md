@@ -101,7 +101,7 @@ If `personas` is omitted, the runner provides a minimal `reviewer` persona with
 - `setRemediationStatus`: `remediationResolved` — the question-level
   Remediation resolution (#499).
 - `clickCompleteCase`: runs the same completion transition used by the page's
-  bottom button.
+  Summary control.
 - `flush`: explicitly drains pending saves for the currently loaded case.
 
 Every mutating action flushes the `SaveQueue` before the next action, so the

@@ -1,13 +1,18 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { installDom, findByClass } from './_dom-stub.js';
+import { fireEvent } from './helpers/semantic-dom.js';
 import { CaseMachine } from '../src/lib/case-machine.js';
 import {
   voidControl,
+  voidControlView,
   voidPatch,
 } from '../src/pages/cora-case-review/void-actions.js';
 import { VOID_REASONS } from '../src/lib/void-reasons.js';
 import { makeCaseRow, makePermissions } from './helpers/fixtures.js';
+
+installDom();
 
 // Capability: the Reviewer's Void control and the patch behind it.
 
@@ -37,6 +42,66 @@ function machineFor(status, viewer = 'u1') {
   });
   return new CaseMachine(caseRow, { id: viewer }, CAPABILITIES, CONFIG);
 }
+
+test('voidControlView preserves the disclosure markup and callback props', () => {
+  let toggled = 0;
+  let selected = '';
+  let confirmed = 0;
+  const control = voidControl({
+    machine: machineFor('In-progress'),
+    config: CONFIG,
+    reasonKey: 'duplicate',
+  });
+  const node = voidControlView({
+    control,
+    disclosureOpen: true,
+    pending: false,
+    onToggle: () => {
+      toggled += 1;
+    },
+    onReasonSelected: (reasonKey) => {
+      selected = reasonKey;
+    },
+    onConfirm: () => {
+      confirmed += 1;
+    },
+  });
+  const root = findByClass({ _children: [node] }, 'cora-void');
+  const disclosure = root.querySelector('.cora-void-btn');
+  assert.equal(disclosure.getAttribute('aria-expanded'), 'true');
+  assert.equal(
+    root.querySelector('.cora-void-consequence').textContent,
+    'Voiding closes this Case for good. It records no Outcome, it cannot be reopened, and the Conversation stops accepting messages.'
+  );
+  fireEvent(disclosure, 'click');
+  const select = root.querySelector('.cora-void-reason');
+  assert.deepEqual(
+    Array.from(select.querySelectorAll('option')).map((option) => option.value),
+    ['', ...VOID_REASONS.map((reason) => reason.key)]
+  );
+  select.value = 'withdrawn';
+  fireEvent(select, 'change');
+  assert.equal(root.querySelector('.cora-void-confirm').disabled, false);
+  fireEvent(root.querySelector('.cora-void-confirm'), 'click');
+  assert.equal(toggled, 1);
+  assert.equal(selected, 'withdrawn');
+  assert.equal(confirmed, 1);
+
+  const pending = voidControlView({
+    control,
+    disclosureOpen: true,
+    pending: true,
+    onToggle: () => {},
+    onReasonSelected: () => {},
+    onConfirm: () => {},
+  });
+  assert.equal(
+    findByClass({ _children: [pending] }, 'cora-void').querySelector(
+      '.cora-void-confirm'
+    ).disabled,
+    true
+  );
+});
 
 test('voidControl: hidden for a viewer who cannot void the Case', () => {
   assert.equal(

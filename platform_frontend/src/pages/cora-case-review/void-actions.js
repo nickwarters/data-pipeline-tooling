@@ -1,6 +1,7 @@
 // @ts-check
 
 import { voidReasonsFor } from '../../lib/void-reasons.js';
+import { h } from '../../lib/html.js';
 
 /** @typedef {import('../../lib/case-machine.js').CaseMachine} CaseMachine */
 /** @typedef {import('../../sharepoint-client.js').CaseTypeConfig} CaseTypeConfig */
@@ -31,6 +32,82 @@ export function voidControl(input) {
     reasons,
     reason,
   };
+}
+
+/**
+ * Render the Void disclosure and confirmation control for the Case Details
+ * Section.
+ *
+ * @param {{
+ *   control: ReturnType<typeof voidControl>,
+ *   disclosureOpen: boolean,
+ *   pending: boolean,
+ *   onToggle: () => void,
+ *   onReasonSelected: (reasonKey: string) => void,
+ *   onConfirm: () => void | Promise<unknown>,
+ * }} input
+ * @returns {HTMLElement | null}
+ */
+export function voidControlView({
+  control,
+  disclosureOpen,
+  pending,
+  onToggle,
+  onReasonSelected,
+  onConfirm,
+}) {
+  if (!control.visible) return null;
+  return h(
+    'div',
+    { className: 'cora-void', key: 'void' },
+    h(
+      'button',
+      {
+        className: 'cora-void-btn',
+        'aria-expanded': String(disclosureOpen),
+        onclick: onToggle,
+      },
+      'Void Case…'
+    ),
+    disclosureOpen
+      ? h(
+          'div',
+          { className: 'cora-void-panel' },
+          h(
+            'p',
+            { className: 'cora-void-consequence' },
+            'Voiding closes this Case for good. It records no Outcome, it cannot be reopened, and the Conversation stops accepting messages.'
+          ),
+          h(
+            'label',
+            {},
+            'Reason for voiding',
+            h(
+              'select',
+              {
+                className: 'cora-void-reason',
+                value: control.reason,
+                onchange: (/** @type {any} */ event) =>
+                  onReasonSelected(event.target.value),
+              },
+              h('option', { value: '' }, '— Select a reason —'),
+              ...control.reasons.map((reason) =>
+                h('option', { value: reason.key }, reason.label)
+              )
+            )
+          ),
+          h(
+            'button',
+            {
+              className: 'cora-void-confirm',
+              disabled: pending || control.disabled,
+              onclick: onConfirm,
+            },
+            'Void Case'
+          )
+        )
+      : null
+  );
 }
 
 /**

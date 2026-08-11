@@ -52,6 +52,11 @@ import { RemediationSection } from './remediation-view.js';
 import { RemediationTracking } from './remediation-tracking-view.js';
 import { remediationAudience } from '../../services/section-access.js';
 import { resolveGeneralQuestionsPlacement } from '../../evaluators/general-questions.js';
+import {
+  completionControl,
+  completionControlView,
+} from './completion-actions.js';
+import { voidControl, voidControlView } from './void-actions.js';
 
 /**
  * Everything a panel renderer is allowed to read. Assembled once per render by
@@ -95,6 +100,10 @@ import { resolveGeneralQuestionsPlacement } from '../../evaluators/general-quest
  *   The whole effect object, not a hand-written shape — these three are the
  *   persisted Appeal and Amended Outcome state transitions, so their argument
  *   shapes are worth keeping under `tsc`.
+ * @property {() => void | Promise<unknown>} onComplete
+ *   The page-owned completion effect, including persistence and navigation.
+ * @property {() => void | Promise<unknown>} onVoid
+ *   The page-owned Void effect, including persistence and navigation.
  */
 
 /**
@@ -148,12 +157,28 @@ function questionsPanel(snapshot, questionsView, onAnswer, onGroupOutcome) {
  * @type {Partial<Record<import('../../lib/section-registry.js').Section, PanelView>>}
  */
 export const SECTION_PANELS = {
-  details: ({ snapshot, caseRow, config }) =>
-    caseDetailsView(
+  details: ({ snapshot, caseRow, config, route, dispatch, actions }) => {
+    const control = voidControl({
+      machine: snapshot.machine,
+      config,
+      reasonKey: route.voidReason,
+    });
+    const details = caseDetailsView(
       caseRow,
       config.detailFields ?? [],
       snapshot.sectionLabels.details.heading
-    ),
+    );
+    const voidView = voidControlView({
+      control,
+      disclosureOpen: route.voidPanelOpen,
+      pending: route.voidPending,
+      onToggle: () => dispatch({ type: 'case/void-panel-toggled' }),
+      onReasonSelected: (reasonKey) =>
+        dispatch({ type: 'case/void-reason-selected', reasonKey }),
+      onConfirm: actions.onVoid,
+    });
+    return voidView ? [details, voidView] : [details];
+  },
 
   questions: ({ snapshot, actions }) =>
     questionsPanel(
@@ -274,8 +299,16 @@ export const SECTION_PANELS = {
       },
     }),
 
-  summary: ({ snapshot, caseRow, config }) =>
-    h(
+  summary: ({ snapshot, caseRow, config, route, actions }) => {
+    const control = completionControl({
+      machine: snapshot.machine,
+      caseRow,
+      catalogue: snapshot.catalogue,
+      answers: snapshot.answers,
+      allAnswered: snapshot.allAnswered,
+      captureGroups: config.captureGroups ?? [],
+    });
+    const summary = h(
       'div',
       { className: 'cora-summary' },
       summaryView({
@@ -295,7 +328,14 @@ export const SECTION_PANELS = {
         // Summary's remediation roll-up carries each resolution's details.
         audience: remediationAudience(snapshot.machine?.roles ?? []),
       })
-    ),
+    );
+    const completion = completionControlView({
+      control,
+      pending: route.completionPending,
+      onComplete: actions.onComplete,
+    });
+    return completion ? [summary, completion] : [summary];
+  },
 
   appealRequest: ({ snapshot, caseRow, actions }) =>
     h(
