@@ -341,7 +341,10 @@ test('my stats layout: the composed row and the figures both stack responsively'
 
   assert.ok(desktopRule);
   assert.match(desktopRule, /display:\s*grid/);
-  assert.match(desktopRule, /grid-template-columns:\s*1fr\s+2fr/);
+  assert.match(
+    desktopRule,
+    /grid-template-columns:\s*max-content\s+minmax\(0,\s*1fr\)/
+  );
   assert.match(
     CORA_STYLES,
     /\.cora-my-stats-range-button\[aria-pressed='true'\]/

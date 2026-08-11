@@ -5,12 +5,8 @@ import { h } from '../../lib/html.js';
 /** @typedef {import('../../evaluators/stats-report-model.js').StatsReport} StatsReport */
 
 /** @param {number} value @returns {string} */
-function countText(value) {
-  return String(value);
-}
-
-/** @param {number} value @returns {string} */
 function percentageText(value) {
+  if (value > 0 && value < 1) return '<1%';
   return `${Math.round(value)}%`;
 }
 
@@ -35,7 +31,6 @@ export function statsBreakdownTableView(report) {
         'table',
         {
           className: 'cora-my-stats-breakdown-table',
-          'aria-describedby': 'cora-my-stats-breakdown-heading',
         },
         h('caption', {}, `${report.range.label} Case Type breakdown`),
         h(
@@ -45,16 +40,29 @@ export function statsBreakdownTableView(report) {
             'tr',
             {},
             h('th', { scope: 'col' }, 'Period'),
-            h('th', { scope: 'col', className: 'is-numeric' }, 'Total'),
+            h(
+              'th',
+              {
+                scope: 'col',
+                className: 'cora-my-stats-breakdown-table__numeric',
+              },
+              'Total'
+            ),
             report.caseTypes.flatMap(({ key, label }) => [
               h(
                 'th',
-                { scope: 'col', className: 'is-numeric' },
+                {
+                  scope: 'col',
+                  className: 'cora-my-stats-breakdown-table__numeric',
+                },
                 `${label} count`
               ),
               h(
                 'th',
-                { scope: 'col', className: 'is-numeric' },
+                {
+                  scope: 'col',
+                  className: 'cora-my-stats-breakdown-table__numeric',
+                },
                 `${label} percentage`
               ),
             ])
@@ -68,12 +76,20 @@ export function statsBreakdownTableView(report) {
               'tr',
               { key: bucket.key },
               h('th', { scope: 'row' }, bucket.label),
-              h('td', { className: 'is-numeric' }, countText(bucket.total)),
+              h(
+                'td',
+                { className: 'cora-my-stats-breakdown-table__numeric' },
+                String(bucket.total)
+              ),
               bucket.caseTypes.flatMap((cell) => [
-                h('td', { className: 'is-numeric' }, countText(cell.count)),
                 h(
                   'td',
-                  { className: 'is-numeric' },
+                  { className: 'cora-my-stats-breakdown-table__numeric' },
+                  String(cell.count)
+                ),
+                h(
+                  'td',
+                  { className: 'cora-my-stats-breakdown-table__numeric' },
                   percentageText(cell.percentage)
                 ),
               ])

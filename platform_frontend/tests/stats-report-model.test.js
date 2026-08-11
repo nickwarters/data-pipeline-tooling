@@ -9,6 +9,23 @@ import {
 import { buildStatsRanges } from '../src/evaluators/stats-range-model.js';
 import { shiftDateKey } from '../src/lib/local-calendar.js';
 
+/**
+ * @template T
+ * @param {string} zone
+ * @param {() => T} run
+ * @returns {T}
+ */
+function inTimeZone(zone, run) {
+  const previous = process.env.TZ;
+  process.env.TZ = zone;
+  try {
+    return run();
+  } finally {
+    if (previous === undefined) delete process.env.TZ;
+    else process.env.TZ = previous;
+  }
+}
+
 /** @param {string} from @param {string} to @returns {string[]} */
 function dateKeys(from, to) {
   /** @type {string[]} */
@@ -289,9 +306,64 @@ test('buildStatsReport: a monthly bucket can hold both provenances at once', () 
   );
 });
 
-test('buildStatsReport: the range travels with the report so one derivation feeds both readings', () => {
+test('buildStatsReport: the range travels with the report so one derivation feeds all readings', () => {
   const range = dailyRange('2026-08-09', '2026-08-10');
   assert.equal(buildStatsReport({ range }).range, range);
+});
+
+test('countCasesByLocalDateAndType: an instant is counted on the Reviewer’s own day', () => {
+  const rows = /** @type {any} */ ([
+    {
+      id: '1',
+      reportableAt: '2026-08-10T23:30:00.000Z',
+      caseType: 'complaints',
+    },
+    {
+      id: '2',
+      reportableAt: '2026-08-10T00:30:00.000Z',
+      caseType: 'complaints',
+    },
+    {
+      id: '3',
+      reportableAt: new Date('2026-08-10T23:45:00.000Z'),
+      caseType: 'complaints',
+    },
+  ]);
+
+  assert.deepEqual(
+    inTimeZone('Asia/Tokyo', () => countCasesByLocalDateAndType(rows)),
+    { '2026-08-11': { complaints: 2 }, '2026-08-10': { complaints: 1 } }
+  );
+  assert.deepEqual(
+    inTimeZone('America/Los_Angeles', () => countCasesByLocalDateAndType(rows)),
+    { '2026-08-10': { complaints: 2 }, '2026-08-09': { complaints: 1 } }
+  );
+  assert.deepEqual(
+    inTimeZone('Pacific/Kiritimati', () => countCasesByLocalDateAndType(rows)),
+    { '2026-08-11': { complaints: 2 }, '2026-08-10': { complaints: 1 } }
+  );
+  assert.deepEqual(
+    inTimeZone('Pacific/Midway', () => countCasesByLocalDateAndType(rows)),
+    { '2026-08-10': { complaints: 2 }, '2026-08-09': { complaints: 1 } }
+  );
+});
+
+test('countCasesByLocalDateAndType: a row that cannot be placed on a day is left out', () => {
+  const rows = /** @type {any} */ ([
+    { id: '1' },
+    { id: '2', reportableAt: null },
+    { id: '3', reportableAt: '' },
+    null,
+  ]);
+
+  assert.deepEqual(
+    inTimeZone('Europe/London', () => countCasesByLocalDateAndType(rows)),
+    {}
+  );
+  assert.deepEqual(
+    countCasesByLocalDateAndType(/** @type {any} */ (undefined)),
+    {}
+  );
 });
 
 test('buildStatsReport: typed feed and live counts share global columns and bucket percentages', () => {
@@ -340,9 +412,12 @@ test('buildStatsReport: typed feed and live counts share global columns and buck
 test('countCasesByLocalDateAndType preserves the live Case Type dimension', () => {
   assert.deepEqual(
     countCasesByLocalDateAndType([
-      { reportableAt: '2026-08-10T09:00:00Z', caseType: 'complaints' },
-      { reportableAt: '2026-08-10T10:00:00Z', caseType: 'complaints' },
-      { reportableAt: '2026-08-10T11:00:00Z', caseType: 'example-case-type' },
+      { reportableAt: new Date(2026, 7, 10, 9), caseType: 'complaints' },
+      { reportableAt: new Date(2026, 7, 10, 10), caseType: 'complaints' },
+      {
+        reportableAt: new Date(2026, 7, 10, 11),
+        caseType: 'example-case-type',
+      },
     ]),
     {
       '2026-08-10': { complaints: 2, 'example-case-type': 1 },

@@ -83,10 +83,11 @@ the write slips.
 
 ### The chart is a distribution, not a ranking
 
-Bars group by **Reviewer**, ordered by name and never by volume, with Case Type
-proportion bars and a `Reviewer × Case Type` breakdown table beneath, as on
-`#/my-stats`. `#448`'s chart takes a data interface, so this is a different
-series rather than a different component.
+Bars group by **Reviewer**, ordered by name and never by volume, with a
+`Reviewer × Case Type` breakdown table beneath, as on `#/my-stats`. The table
+is the retained cross-Case-Type presentation; `ProportionBars` was retired when
+the My Stats page moved to its grain-matched table. `#448`'s chart takes a data
+interface, so this is a different series rather than a different component.
 
 Grouping by Reviewer is the information a manager opens the page for; ordering
 by volume would make it a league table of named colleagues, and volume is not

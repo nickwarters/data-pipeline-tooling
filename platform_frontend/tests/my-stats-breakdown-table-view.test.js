@@ -29,8 +29,8 @@ test('breakdown table follows daily report buckets and exposes accessible header
   const table = statsBreakdownTableView(report).querySelector('table');
   assert.ok(table);
   assert.equal(
-    table.getAttribute('aria-describedby'),
-    'cora-my-stats-breakdown-heading'
+    table.querySelector('caption')?.textContent,
+    'Week Case Type breakdown'
   );
   const head = table.querySelector('thead');
   const body = table.querySelector('tbody');

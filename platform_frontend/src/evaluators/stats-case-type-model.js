@@ -44,6 +44,7 @@ export function caseTypeLabelFor(slug) {
  * @returns {{ key: string, label: string }[]}
  */
 export function sortCaseTypeColumns(columns) {
+  // Raw comparison keeps the column order stable across browser locales.
   const compare = (left, right) => (left < right ? -1 : left > right ? 1 : 0);
   return [...columns].sort(
     (a, b) => compare(a.label, b.label) || compare(a.key, b.key)

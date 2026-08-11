@@ -159,7 +159,7 @@ function bodyView(route, dispatch) {
     ? route.reportFeed.complete_through
     : null;
 
-  // Derived once. The chart and the figures are two readings of the same
+  // Derived once. The chart, figures, and table are three readings of the same
   // numbers, and a second derivation is how they would come to disagree.
   const report = buildStatsReport({
     range,
