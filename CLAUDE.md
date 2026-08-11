@@ -199,12 +199,12 @@ and an `exclude:` on the hook. The root pytest hook additionally excludes
 `forwarder/`; its dedicated Forwarder pytest hook is scoped to that project.
 The frontend's Python is a JavaScript project's helper scripts and is not held
 to this project's style. In return, `.pre-commit-config.yaml` carries four hooks
-scoped to `platform_frontend/` and one pytest hook scoped to `forwarder/` —
-`eslint --fix` and `prettier --write` (what its `.husky/pre-commit` +
-`lint-staged` ran before nesting silenced them, since git reads hooks only from
-the repository root), plus its `pytest` and `node --test` suites. Adding a check
-for one project means scoping it to that project; an unscoped hook will reach
-into the other. The one deliberate cross-project exception is the canonical
+scoped to `platform_frontend/` — `eslint --fix` and `prettier --write` (what its
+`.husky/pre-commit` + `lint-staged` ran before nesting silenced them, since git
+reads hooks only from the repository root), plus its `pytest` and `node --test`
+suites — and one pytest hook scoped to `forwarder/`. Adding a check for one
+project means scoping it to that project; an unscoped hook will reach into the
+others. The one deliberate cross-project exception is the canonical
 `platform_frontend/dev/fixtures/my-stats/*.txt` Report Feed fixture: its narrow
 hook runs the pipeline contract test, while the frontend Prettier and Node hooks
 also include that exact directory. The existing root `pytest` hook remains
