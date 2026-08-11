@@ -38,6 +38,22 @@ function ruleBody(css, selector) {
   return css.slice(open + 1, close);
 }
 
+test('People Picker status: the reserved line has a token fallback before lh', () => {
+  const selector = '.cora-people-picker-status {';
+  const body = ruleBody(styles, selector);
+  const minHeightDeclarations = body.match(/min-height\s*:/g) ?? [];
+
+  assert.equal(
+    minHeightDeclarations.length,
+    2,
+    'status reservation must have exactly a fallback and an lh declaration'
+  );
+  assert.match(
+    body,
+    /min-height:\s*calc\(var\(--cora-font-size-sm\) \* var\(--cora-line-height-base\)\);\s*min-height:\s*1lh;/
+  );
+});
+
 test('breakout: #app is promoted to a fixed full-viewport layer', () => {
   const body = ruleBody(styles, '#app[data-cora-root] {');
   assert.match(

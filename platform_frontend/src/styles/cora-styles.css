@@ -2765,6 +2765,10 @@
    keeps the content below from shifting as search status changes. */
 .cora-people-picker-status {
   margin: var(--cora-space-1) 0 0;
+  /* Reserve the empty status line so the controls below stay stable. Browsers
+     that do not support `lh` silently drop it, so the token fallback comes
+     immediately before it. */
+  min-height: calc(var(--cora-font-size-sm) * var(--cora-line-height-base));
   min-height: 1lh;
   font-size: var(--cora-font-size-sm);
   color: var(--cora-color-text-muted);
