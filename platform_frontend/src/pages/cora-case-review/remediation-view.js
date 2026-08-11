@@ -87,10 +87,9 @@ export function RemediationSection(props) {
  * It is asked for only once some failed Answer says remediation *is* required:
  * with nothing to send there is nobody to send it to, and asking anyway left
  * the completion control disabled against a reason no Reviewer could act on.
- * An already-stored Party is shown regardless of that decision — it still feeds
- * reporting, the Responsible Party dashboard and Section access, so withdrawing
- * the decision must not make the recorded fact illegible. Nothing clears it: a
- * SharePoint person column is not emptied by writing an empty string.
+ * Withdrawing the last such decision clears the stored Party before Send
+ * Actions, so the editable view follows the current Answers rather than a
+ * stale recipient.
  *
  * Editable on the same permission as the Remediation Actions above it — the
  * Assigned Reviewer, while the Case is still pre-reportable — because naming
@@ -116,11 +115,7 @@ export function ResponsiblePartyField(props) {
       : null;
   }
 
-  // After the read-only branch: what has already been sent is a record of what
-  // happened, not a prompt, so it is shown whatever the current decision says.
-  if (!current && !anyRemediationRequired(props.catalogue, props.answers)) {
-    return null;
-  }
+  if (!anyRemediationRequired(props.catalogue, props.answers)) return null;
 
   /** @type {Node[]} */
   const children = [

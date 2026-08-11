@@ -11,6 +11,7 @@ import {
   allApplicableAnswered,
   evaluate,
 } from '../evaluators/applicability-evaluator.js';
+import { anyRemediationRequired } from '../evaluators/remediation-status.js';
 import { tabEntries } from '../lib/section-registry.js';
 import {
   createCaseReviewSaveEffect,
@@ -358,6 +359,22 @@ export function caseReviewReducer(state, action) {
       },
     });
   }
+  if (
+    action.type === 'case/responsible-party-cleared' &&
+    route.snapshot?.caseRow
+  ) {
+    if (
+      !route.snapshot.machine?.canEditIssues ||
+      !route.snapshot.caseRow.responsibleParty
+    ) {
+      return state;
+    }
+    const { responsiblePartyDisplayName: _dropDisplayName, ...caseRow } =
+      route.snapshot.caseRow;
+    return patchSnapshot(state, {
+      caseRow: { ...caseRow, responsibleParty: '' },
+    });
+  }
   if (action.type === 'case/conversation-toggled') {
     if (
       route.snapshot?.access.conversation === 'hidden' ||
@@ -649,6 +666,8 @@ export function createRouteSlice(params, context) {
    * @type {Record<string, import('../sharepoint-client.js').Answer>}
    */
   let currentAnswers = {};
+  /** @type {string} */
+  let currentResponsibleParty = '';
 
   /**
    * The page's only Answer writer. Every mutation is a pure action returning
@@ -771,11 +790,12 @@ export function createRouteSlice(params, context) {
     // here because a load, refresh or conflict resolution reaches the store
     // without passing through `editAnswers`.
     currentAnswers = snapshot.answers;
+    currentResponsibleParty = caseRow.responsibleParty;
     loadedCaseId = caseRow.id;
 
     /** @param {string} questionId @param {string | string[]} value */
     const onAnswer = (questionId, value) =>
-      editAnswers(
+      editAnswersForRoute(
         answerEdited({
           answers: currentAnswers,
           catalogue: snapshot.catalogue,
@@ -796,7 +816,7 @@ export function createRouteSlice(params, context) {
      * @param {import('../evaluators/issue-capture.js').CaptureValue | null} value
      */
     const captureEdited = (questionId, fieldKey, value) => {
-      editAnswers(
+      editAnswersForRoute(
         issueCaptured({
           answers: currentAnswers,
           captureGroups: config.captureGroups ?? [],
@@ -809,9 +829,35 @@ export function createRouteSlice(params, context) {
       clearCaptureSearch(questionId, fieldKey);
     };
 
+    const clearResponsibleParty = () => {
+      if (!snapshot.machine?.canEditIssues) return;
+      clearResponsiblePartySearch();
+      if (!currentResponsibleParty) return;
+      currentResponsibleParty = '';
+      save.responsiblePartyCleared();
+    };
+
+    /**
+     * Persist an Answer edit and clear a recipient when the last remediation
+     * decision disappears from the live, applicable Answers.
+     *
+     * @param {Record<string, import('../sharepoint-client.js').Answer> | null} next
+     */
+    const editAnswersForRoute = (next) => {
+      if (next === null) return;
+      const hadRemediation = anyRemediationRequired(
+        snapshot.catalogue,
+        currentAnswers
+      );
+      const hasRemediation = anyRemediationRequired(snapshot.catalogue, next);
+      editAnswers(next);
+      if (hadRemediation && !hasRemediation) clearResponsibleParty();
+    };
+
     /** @param {{ loginName: string, displayName: string }} party */
     const selectResponsibleParty = (party) => {
       if (!snapshot.machine?.canEditIssues) return;
+      currentResponsibleParty = party.loginName;
       save.responsiblePartyChanged(party.loginName, party.displayName);
       clearResponsiblePartySearch();
     };
@@ -905,7 +951,7 @@ export function createRouteSlice(params, context) {
     const panelActions = {
       questionsView,
       currentAnswers: () => currentAnswers,
-      editAnswers,
+      editAnswers: editAnswersForRoute,
       onAnswer,
       captureEdited,
       requestCaptureSearch,
