@@ -1,0 +1,968 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Test Tightness Audit — platform_frontend</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: light;
+    --page:        #f9f9f7;
+    --surface:     #fcfcfb;
+    --ink:         #0b0b0b;
+    --ink-2:       #52514e;
+    --muted:       #898781;
+    --grid:        #e1e0d9;
+    --baseline:    #c3c2b7;
+    --ring:        rgba(11,11,11,0.10);
+    --series-1:    #2a78d6;  /* blue  — exact-value      */
+    --series-2:    #eb6834;  /* orange                    */
+    --series-3:    #1baf7a;  /* aqua  — pattern/behaviour */
+    --status-good:     #0ca30c;
+    --status-warn:     #fab219;
+    --status-serious:  #ec835a;
+    --status-critical: #d03b3b;
+    --good-text:   #006300;
+    --warn-text:   #7a5200;
+    --serious-text:#8f3c1c;
+    --crit-text:   #a02222;
+    --accent:      #d03b3b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page:        #0d0d0d;
+      --surface:     #1a1a19;
+      --ink:         #ffffff;
+      --ink-2:       #c3c2b7;
+      --muted:       #898781;
+      --grid:        #2c2c2a;
+      --baseline:    #383835;
+      --ring:        rgba(255,255,255,0.10);
+      --series-1:    #3987e5;
+      --series-2:    #d95926;
+      --series-3:    #199e70;
+      --good-text:   #0ca30c;
+      --warn-text:   #fab219;
+      --serious-text:#ec835a;
+      --crit-text:   #e66767;
+      --accent:      #e66767;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page:        #0d0d0d;
+    --surface:     #1a1a19;
+    --ink:         #ffffff;
+    --ink-2:       #c3c2b7;
+    --muted:       #898781;
+    --grid:        #2c2c2a;
+    --baseline:    #383835;
+    --ring:        rgba(255,255,255,0.10);
+    --series-1:    #3987e5;
+    --series-2:    #d95926;
+    --series-3:    #199e70;
+    --good-text:   #0ca30c;
+    --warn-text:   #fab219;
+    --serious-text:#ec835a;
+    --crit-text:   #e66767;
+    --accent:      #e66767;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 16px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 0 28px 120px; }
+
+  /* ---------- masthead ---------- */
+  header.masthead {
+    padding: 64px 0 36px;
+    border-bottom: 3px solid var(--ink);
+    position: relative;
+  }
+  .kicker {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px; letter-spacing: .18em; text-transform: uppercase;
+    color: var(--accent); margin: 0 0 14px;
+  }
+  h1 {
+    font-family: "Fraunces", Georgia, serif;
+    font-weight: 600; font-size: clamp(38px, 6vw, 58px);
+    line-height: 1.04; letter-spacing: -0.015em; margin: 0 0 18px;
+  }
+  h1 em { font-style: italic; font-weight: 300; }
+  .standfirst { font-size: 19px; color: var(--ink-2); max-width: 46em; margin: 0; }
+  .meta-row {
+    display: flex; flex-wrap: wrap; gap: 10px 22px; margin-top: 26px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px; color: var(--muted);
+  }
+  .theme-toggle {
+    position: absolute; top: 26px; right: 0;
+    font: 500 12px "IBM Plex Mono", monospace;
+    background: none; border: 1px solid var(--baseline); color: var(--ink-2);
+    border-radius: 999px; padding: 6px 14px; cursor: pointer;
+  }
+  .theme-toggle:hover { border-color: var(--ink); color: var(--ink); }
+
+  /* ---------- sections ---------- */
+  section { margin-top: 72px; }
+  .secnum {
+    font-family: "Fraunces", Georgia, serif; font-style: italic; font-weight: 300;
+    font-size: 15px; color: var(--accent); letter-spacing: .04em;
+  }
+  h2 {
+    font-family: "Fraunces", Georgia, serif; font-weight: 600;
+    font-size: 31px; line-height: 1.15; letter-spacing: -0.01em;
+    margin: 4px 0 18px;
+  }
+  h3 { font-size: 17px; font-weight: 600; margin: 34px 0 10px; }
+  p  { max-width: 46em; }
+  p.lede { font-size: 17.5px; }
+  a { color: inherit; }
+  code, .file {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .86em;
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
+    border-radius: 4px; padding: 1px 5px;
+    white-space: nowrap;
+  }
+  .file { white-space: normal; }
+  strong { font-weight: 600; }
+  hr.rule { border: 0; border-top: 1px solid var(--grid); margin: 40px 0; }
+
+  /* ---------- verdict banner ---------- */
+  .verdict {
+    background: var(--surface);
+    border: 1px solid var(--ring);
+    border-left: 5px solid var(--accent);
+    border-radius: 10px;
+    padding: 26px 30px;
+    margin-top: 40px;
+  }
+  .verdict h2 { font-size: 24px; margin-top: 0; }
+  .verdict p:last-child { margin-bottom: 0; }
+
+  /* ---------- stat tiles ---------- */
+  .tiles {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 34px 0 6px;
+  }
+  @media (max-width: 720px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
+  .tile {
+    background: var(--surface); border: 1px solid var(--ring); border-radius: 10px;
+    padding: 18px 20px 15px;
+  }
+  .tile .num {
+    font-family: "Fraunces", Georgia, serif; font-weight: 600;
+    font-size: 34px; line-height: 1.05; letter-spacing: -0.01em;
+  }
+  .tile .num small { font-size: 19px; font-weight: 500; color: var(--ink-2); }
+  .tile .lbl { font-size: 13px; color: var(--ink-2); margin-top: 6px; line-height: 1.4; }
+  .tile.hot .num { color: var(--crit-text); }
+
+  /* ---------- figures / charts ---------- */
+  figure.viz {
+    margin: 30px 0; background: var(--surface);
+    border: 1px solid var(--ring); border-radius: 12px;
+    padding: 24px 26px 18px;
+  }
+  figure.viz .viz-title { font-weight: 600; font-size: 15.5px; margin: 0 0 2px; font-family: "IBM Plex Sans", system-ui, sans-serif; }
+  figure.viz .viz-sub   { font-size: 13px; color: var(--muted); margin: 0 0 16px; }
+  figure.viz svg { display: block; width: 100%; height: auto; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  figcaption.note { font-size: 13px; color: var(--ink-2); margin-top: 14px; line-height: 1.55; max-width: 56em; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 20px; margin: 0 0 14px; font-size: 13px; color: var(--ink-2); }
+  .legend .key { display: inline-flex; align-items: center; gap: 7px; }
+  .legend .swatch { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+
+  svg text { fill: var(--ink-2); font-size: 12.5px; }
+  svg .lbl-strong { fill: var(--ink); font-weight: 600; }
+  svg .lbl-mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11.5px; }
+  svg .lbl-val { fill: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+  svg .axisline { stroke: var(--baseline); stroke-width: 1; }
+  svg .gridline { stroke: var(--grid); stroke-width: 1; }
+  svg .bar { rx: 0; }
+  svg [data-tip] { cursor: default; }
+  svg [data-tip]:hover { filter: brightness(1.08); }
+
+  #tooltip {
+    position: fixed; z-index: 50; pointer-events: none;
+    background: var(--ink); color: var(--page);
+    font: 500 12.5px/1.45 "IBM Plex Sans", system-ui, sans-serif;
+    border-radius: 7px; padding: 8px 11px; max-width: 300px;
+    opacity: 0; transform: translateY(4px); transition: opacity .12s ease;
+    box-shadow: 0 4px 18px rgba(0,0,0,.25);
+  }
+  #tooltip.show { opacity: 1; }
+
+  /* ---------- chips ---------- */
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    font: 600 12px "IBM Plex Sans", system-ui, sans-serif;
+    border-radius: 999px; padding: 2.5px 11px; white-space: nowrap;
+  }
+  .chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; }
+  .chip.keep     { color: var(--good-text);    background: color-mix(in srgb, var(--status-good) 13%, transparent); }
+  .chip.keep::before     { background: var(--status-good); }
+  .chip.loosen   { color: var(--warn-text);    background: color-mix(in srgb, var(--status-warn) 16%, transparent); }
+  .chip.loosen::before   { background: var(--status-warn); }
+  .chip.consol   { color: var(--serious-text); background: color-mix(in srgb, var(--status-serious) 15%, transparent); }
+  .chip.consol::before   { background: var(--status-serious); }
+  .chip.delete   { color: var(--crit-text);    background: color-mix(in srgb, var(--status-critical) 12%, transparent); }
+  .chip.delete::before   { background: var(--status-critical); }
+
+  /* ---------- tables ---------- */
+  table { width: 100%; border-collapse: collapse; margin: 22px 0; font-size: 14px; }
+  th {
+    text-align: left; font-size: 11.5px; letter-spacing: .09em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600; padding: 0 14px 10px 0;
+    border-bottom: 2px solid var(--ink);
+  }
+  td { padding: 11px 14px 11px 0; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; padding-right: 0; }
+  tr:hover td { background: color-mix(in srgb, var(--ink) 2.5%, transparent); }
+
+  /* ---------- protect cards ---------- */
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 26px 0; }
+  @media (max-width: 720px) { .cards { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--surface); border: 1px solid var(--ring); border-radius: 10px;
+    border-top: 3px solid var(--status-good); padding: 16px 19px;
+  }
+  .card h4 { margin: 0 0 6px; font-size: 14.5px; }
+  .card p { font-size: 13.5px; color: var(--ink-2); margin: 0; }
+
+  /* ---------- pull quote ---------- */
+  .pull {
+    font-family: "Fraunces", Georgia, serif; font-style: italic; font-weight: 300;
+    font-size: 24px; line-height: 1.4; color: var(--ink);
+    border-left: 3px solid var(--accent);
+    padding: 4px 0 4px 26px; margin: 44px 0; max-width: 34em;
+  }
+
+  footer {
+    margin-top: 90px; padding-top: 24px; border-top: 1px solid var(--grid);
+    font-size: 13px; color: var(--muted);
+  }
+</style>
+</head>
+<body>
+<div id="tooltip" role="status" aria-hidden="true"></div>
+<div class="wrap">
+
+<header class="masthead">
+  <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">◐ theme</button>
+  <p class="kicker">Engineering audit · platform_frontend</p>
+  <h1>How tight is too tight?<br><em>An audit of 187 test files</em></h1>
+  <p class="standfirst">A ruthless pass over the Case Review Platform frontend test suite: which tests pin genuine
+  contracts, which are change-detectors that tax every edit, and where ~4,000 lines can go without losing a
+  single defect-catching assertion.</p>
+  <div class="meta-row">
+    <span>2026-08-11</span>
+    <span>187 test files · 61,923 lines · ~2,458 cases</span>
+    <span>node --test · no build step</span>
+    <span>4 parallel analysts + churn mining</span>
+  </div>
+</header>
+
+<!-- ══════════════════════════ VERDICT ══════════════════════════ -->
+<div class="verdict">
+  <h2>The verdict in three sentences</h2>
+  <p>The suite is <strong>strongly bimodal</strong>: the pure-logic half (~100 files, 20k lines) is some of the most
+  disciplined test code you will find anywhere — project-then-compare deep-equals, regex-over-exact error messages,
+  self-testing lint detectors — while the maintainability overhead concentrates in <strong>about 15 files and six
+  repeating patterns</strong>: class-selector view tests, business content pinned as code, coverage-driven white-box
+  tests, mock-client triple-coverage, stub boilerplate, and exact product copy.</p>
+  <p>The churn data proves it isn't hypothetical: <strong>92% of source commits this year also had to touch tests, and
+  86% of that churn was editing <em>existing</em> tests</strong> — and the three highest-churn test files are precisely the
+  ones this audit flags. Roughly <strong>4,000 lines are deletable or consolidatable with no coverage loss</strong>
+  (~1,500 of them pure deletions), and one one-line helper fix de-brittles every table test in the repo.</p>
+</div>
+
+<div class="tiles">
+  <div class="tile"><div class="num">2.15<small>:1</small></div><div class="lbl">test lines per source line (61,923 vs 28,755)</div></div>
+  <div class="tile hot"><div class="num">92<small>%</small></div><div class="lbl">of src-touching commits since Jan also touched tests (47 of 51)</div></div>
+  <div class="tile hot"><div class="num">86<small>%</small></div><div class="lbl">of test churn was <em>modifying existing</em> tests (118 M vs 19 A) — the brittleness signature</div></div>
+  <div class="tile"><div class="num">~4,000</div><div class="lbl">lines removable or consolidatable with no coverage loss</div></div>
+  <div class="tile"><div class="num">~1,500</div><div class="lbl">of those are pure deletions — tests that cannot fail for any real defect</div></div>
+  <div class="tile"><div class="num">1<small> line</small></div><div class="lbl">highest-leverage fix: drop <code>className</code> from the <code>tableHeaders()</code> tuple</div></div>
+</div>
+
+<!-- ══════════════════════════ §1 SHAPE ══════════════════════════ -->
+<section id="shape">
+  <span class="secnum">§ 1</span>
+  <h2>The shape of the suite</h2>
+  <p class="lede">Brittleness is not evenly distributed. Grouping the analyzed files into five territories and flagging
+  the lines each analyst marked as overhead shows where the tax actually lives.</p>
+
+  <figure class="viz">
+    <p class="viz-title">Lines flagged as maintainability overhead, by territory</p>
+    <p class="viz-sub">Flagged segments drawn from the left so small amounts stay comparable · lines of test code</p>
+    <div class="legend">
+      <span class="key"><span class="swatch" style="background:var(--status-critical)"></span>delete — cannot catch a real defect</span>
+      <span class="key"><span class="swatch" style="background:var(--status-warn)"></span>loosen / consolidate / restructure</span>
+      <span class="key"><span class="swatch" style="background:var(--baseline)"></span>sound as written</span>
+    </div>
+    <svg viewBox="0 0 720 236" role="img" aria-label="Stacked horizontal bars: flagged versus sound lines in five test territories">
+      <!-- gridlines at 5k,10k,15k,20k : scale 500px / 20443 lines, x0=205 -->
+      <line class="gridline" x1="327.3" y1="4" x2="327.3" y2="196"/>
+      <line class="gridline" x1="449.6" y1="4" x2="449.6" y2="196"/>
+      <line class="gridline" x1="571.9" y1="4" x2="571.9" y2="196"/>
+      <line class="gridline" x1="694.2" y1="4" x2="694.2" y2="196"/>
+      <text x="327.3" y="216" text-anchor="middle">5k</text>
+      <text x="449.6" y="216" text-anchor="middle">10k</text>
+      <text x="571.9" y="216" text-anchor="middle">15k</text>
+      <text x="694.2" y="216" text-anchor="middle">20k</text>
+
+      <!-- Row 1: Pure logic & state 20,443 : del 20 -> 2, loosen 1630 -> 39.9, sound -> 458 -->
+      <text x="196" y="19" text-anchor="end" class="lbl-strong">Pure logic &amp; state</text>
+      <text x="196" y="33" text-anchor="end" style="font-size:11px">100 files</text>
+      <rect data-tip="Pure logic — delete: ~20 lines (chrome-state.test.js, smoke test #1)" x="205" y="8" width="2" height="22" fill="var(--status-critical)"/>
+      <rect data-tip="Pure logic — loosen/consolidate: ~1,630 lines (section-labels copy pin, fixture-shape trio, mega deep-equals)" x="209" y="8" width="39.9" height="22" fill="var(--status-warn)"/>
+      <rect data-tip="Pure logic — sound: ~18,790 lines. The best-disciplined half of the suite." x="250.9" y="8" width="455" height="22" fill="var(--baseline)"/>
+
+      <!-- Row 2: View slices 13,528 : del 160->3.9, loosen 590->14.4, sound 12778->312.6 -->
+      <text x="196" y="59" text-anchor="end" class="lbl-strong">View slices (cora-*)</text>
+      <text x="196" y="73" text-anchor="end" style="font-size:11px">12 major files</text>
+      <rect data-tip="Views — delete: ~160 lines (DOM-stub debt blocks, CSS-source regex test, selector-warning tests, heading-order tests)" x="205" y="48" width="4" height="22" fill="var(--status-critical)"/>
+      <rect data-tip="Views — loosen: ~590 lines (findByClass→getByRole conversion, copy constants, _listeners→fireEvent)" x="211" y="48" width="14.4" height="22" fill="var(--status-warn)"/>
+      <rect data-tip="Views — sound: ~12,780 lines, incl. the model files cora-my-team and the allocation block" x="227.4" y="48" width="312.6" height="22" fill="var(--baseline)"/>
+
+      <!-- Row 3: Client & protocol 8,970 : del 600->14.7, loosen 1400->34.2, sound->170.5 -->
+      <text x="196" y="99" text-anchor="end" class="lbl-strong">Client &amp; protocol</text>
+      <text x="196" y="113" text-anchor="end" style="font-size:11px">14 files</text>
+      <rect data-tip="Client — delete: ~600 lines (mock-client triple-coverage, private-method tests, duplicated overdue/interface tests)" x="205" y="88" width="14.7" height="22" fill="var(--status-critical)"/>
+      <rect data-tip="Client — consolidate: ~1,400 lines of repeated stub boilerplate + table-drivable person-column tests" x="221.7" y="88" width="34.2" height="22" fill="var(--status-warn)"/>
+      <rect data-tip="Client — sound: ~6,970 lines of genuine SharePoint protocol contract" x="257.9" y="88" width="170.5" height="22" fill="var(--baseline)"/>
+
+      <!-- Row 4: Config & content 8,862 : del 250->6.1, loosen 825->20.2, sound->190.5 -->
+      <text x="196" y="139" text-anchor="end" class="lbl-strong">Config &amp; content</text>
+      <text x="196" y="153" text-anchor="end" style="font-size:11px">19 files</text>
+      <rect data-tip="Config — delete: ~250 lines (app-fullbleed tautology, complaints content pins, doc prose greps)" x="205" y="128" width="6.1" height="22" fill="var(--status-critical)"/>
+      <rect data-tip="Config — restructure: ~825 lines (coverage-shaped mega-tests in question-bank-editors, over-fragmented compile tests)" x="213.1" y="128" width="20.2" height="22" fill="var(--status-warn)"/>
+      <rect data-tip="Config — sound: ~7,790 lines, incl. the exemplary verify-* invariant suites" x="235.3" y="128" width="190.5" height="22" fill="var(--baseline)"/>
+
+      <!-- Row 5: Security suite 3,194 -->
+      <text x="196" y="179" text-anchor="end" class="lbl-strong">Security suite</text>
+      <text x="196" y="193" text-anchor="end" style="font-size:11px">9 files</text>
+      <rect data-tip="Security — 0 lines flagged. Exhaustive matrix tests are deliberate: the project mandates exact contracts here." x="205" y="168" width="78.1" height="22" fill="var(--baseline)"/>
+      <text x="291" y="184" style="font-size:11.5px">0 flagged — deliberately tight</text>
+
+      <line class="axisline" x1="205" y1="4" x2="205" y2="200"/>
+    </svg>
+    <figcaption class="note">Five territories from four independent analysis passes. The remaining ~33 small
+    <code>cora-*</code> files (~6k lines) were sampled via cross-file pattern search rather than read line-by-line;
+    the patterns found there (e.g. <code>_listeners</code> invocation in <code>cora-appeal</code> ×8) match the
+    flagged view files, so the view territory's numbers are a floor, not a ceiling.</figcaption>
+  </figure>
+
+  <p>Two territories deserve their reputation defended. The <strong>security suite</strong>
+  (<span class="file">section-access-*</span>, <span class="file">permissions</span>, <span class="file">configured-outcome</span>)
+  pins the complete role-by-section access matrix cell by cell — and that is correct: the project's own test discipline
+  mandates exact external contracts for security and outcome code, and the declarative <code>assertGrid</code> helper keeps
+  the exhaustiveness readable. The <strong>pure-logic half</strong> has already internalised every habit this report
+  recommends: 352 assertions carry explanatory messages, error asserts use short regexes (exactly one exact-message
+  assert in 20,443 lines), and whole-object deep-equals are projected onto named fields first.</p>
+</section>
+
+<!-- ══════════════════════════ §2 CHURN ══════════════════════════ -->
+<section id="churn">
+  <span class="secnum">§ 2</span>
+  <h2>The churn evidence</h2>
+  <p class="lede">If tight tests were cheap, source commits wouldn't drag test edits behind them. They do — and the
+  drag concentrates exactly where the audit found the brittle patterns.</p>
+
+  <figure class="viz">
+    <p class="viz-title">Test files most often edited alongside source changes</p>
+    <p class="viz-sub">Commits touching each file since 2026-01-01 · git log --name-only</p>
+    <svg viewBox="0 0 720 318" role="img" aria-label="Bar chart of test-file churn: cora-my-stats leads with 13 commits">
+      <!-- scale: 460px / 13 commits, x0=225 -->
+      <line class="gridline" x1="401.9" y1="4" x2="401.9" y2="290"/>
+      <line class="gridline" x1="578.8" y1="4" x2="578.8" y2="290"/>
+      <text x="401.9" y="308" text-anchor="middle">5</text>
+      <text x="578.8" y="308" text-anchor="middle">10</text>
+
+      <text x="216" y="22" text-anchor="end" class="lbl-mono">cora-my-stats</text>
+      <rect data-tip="cora-my-stats.test.js — 13 commits. 33 class-selector queries, 0 role queries, exact copy equality incl. the ellipsis character, plus a regex over the CSS source text." x="225" y="8" width="460" height="18" fill="var(--status-critical)"/>
+      <text x="691" y="22" class="lbl-val">13</text>
+
+      <text x="216" y="50" text-anchor="end" class="lbl-mono">cora-case-review-slice</text>
+      <rect data-tip="cora-case-review-slice.test.js — 7 commits. 4,786 lines; mostly the model view-test file, but its sheer size makes every feature touch land here." x="225" y="36" width="247.7" height="18" fill="var(--series-1)"/>
+      <text x="479" y="50" class="lbl-val">7</text>
+
+      <text x="216" y="78" text-anchor="end" class="lbl-mono">cora-grouped-bar-chart</text>
+      <rect data-tip="cora-grouped-bar-chart.test.js — 6 commits. ~80% of assertions address .cora-grouped-bar-chart__* classes; exact viewBox and paint-order pins." x="225" y="64" width="212.3" height="18" fill="var(--status-critical)"/>
+      <text x="444" y="78" class="lbl-val">6</text>
+
+      <text x="216" y="106" text-anchor="end" class="lbl-mono">http-client-reads</text>
+      <rect data-tip="http-sharepoint-client-reads.test.js — 4 commits. 32% boilerplate; six isOverdue duplicates of overdue-evaluator.test.js." x="225" y="92" width="141.5" height="18" fill="var(--series-1)"/>
+      <text x="373" y="106" class="lbl-val">4</text>
+
+      <text x="216" y="134" text-anchor="end" class="lbl-mono">http-client-identity</text>
+      <rect data-tip="http-sharepoint-client-identity.test.js — 4 commits. One over-strict error-template assert; users/managers test pairs duplicated." x="225" y="120" width="141.5" height="18" fill="var(--series-1)"/>
+      <text x="373" y="134" class="lbl-val">4</text>
+
+      <text x="216" y="162" text-anchor="end" class="lbl-mono">cora-dashboard</text>
+      <rect data-tip="cora-dashboard.test.js — 4 commits. Bimodal: the allocation-protocol block is the best test code in the suite; the view block pins copy and class names." x="225" y="148" width="141.5" height="18" fill="var(--series-1)"/>
+      <text x="373" y="162" class="lbl-val">4</text>
+
+      <text x="216" y="190" text-anchor="end" class="lbl-mono">case-machine</text>
+      <rect data-tip="case-machine.test.js — 4 commits. Healthy churn: lifecycle transitions genuinely changed." x="225" y="176" width="141.5" height="18" fill="var(--series-1)"/>
+      <text x="373" y="190" class="lbl-val">4</text>
+
+      <text x="216" y="218" text-anchor="end" class="lbl-mono">stats-report-model</text>
+      <rect data-tip="stats-report-model.test.js — 3 commits. Model evolution; assertions are projected and healthy." x="225" y="204" width="106.2" height="18" fill="var(--series-1)"/>
+      <text x="338" y="218" class="lbl-val">3</text>
+
+      <text x="216" y="246" text-anchor="end" class="lbl-mono">section-access-lifecycle</text>
+      <rect data-tip="section-access-lifecycle.test.js — 3 commits. Deliberately exact security matrix; churn tracks real policy changes." x="225" y="232" width="106.2" height="18" fill="var(--series-1)"/>
+      <text x="338" y="246" class="lbl-val">3</text>
+
+      <text x="216" y="274" text-anchor="end" class="lbl-mono">http-client-writes</text>
+      <rect data-tip="http-sharepoint-client-writes.test.js — 3 commits. Exact-body PATCH asserts are the contract; three near-identical person-column trios are not." x="225" y="260" width="106.2" height="18" fill="var(--series-1)"/>
+      <text x="338" y="274" class="lbl-val">3</text>
+
+      <line class="axisline" x1="225" y1="4" x2="225" y2="292"/>
+    </svg>
+    <figcaption class="note">Red bars mark files where this audit independently found dense structural coupling —
+    the churn leader (<code>cora-my-stats</code>: 13 commits, 33 class-selector queries, zero role queries) and third place
+    (<code>cora-grouped-bar-chart</code>: ~80% class-coupled by necessity) are exactly the files the pattern analysis flagged.
+    Blue churn is largely healthy: real behaviour changed.</figcaption>
+  </figure>
+
+  <figure class="viz">
+    <p class="viz-title">How the suite asserts: exact values dominate 12:1</p>
+    <p class="viz-sub">All 5,983 assertion calls across tests/*.test.js, by method</p>
+    <div class="legend">
+      <span class="key"><span class="swatch" style="background:var(--series-1)"></span>exact-value comparison</span>
+      <span class="key"><span class="swatch" style="background:var(--series-3)"></span>pattern / behavioural</span>
+      <span class="key"><span class="swatch" style="background:var(--baseline)"></span>boolean / other</span>
+    </div>
+    <svg viewBox="0 0 720 300" role="img" aria-label="Bar chart of assertion methods: assert.equal 3309, deepEqual 1292, ok 673, match 373, remainder small">
+      <!-- scale: 460 / 3309, x0=225 -->
+      <text x="216" y="21" text-anchor="end" class="lbl-mono">assert.equal</text>
+      <rect data-tip="assert.equal — 3,309 calls. Fine for wire values and ids; brittle when the operand is product copy or a class string." x="225" y="7" width="460" height="17" fill="var(--series-1)"/>
+      <text x="678" y="21" text-anchor="end" style="fill:#ffffff; font-weight:600; font-variant-numeric:tabular-nums">3,309</text>
+
+      <text x="216" y="48" text-anchor="end" class="lbl-mono">assert.deepEqual</text>
+      <rect data-tip="assert.deepEqual — 1,292 calls. Mostly the healthy project-then-compare idiom; ~10 sites pin whole objects incl. 20 copy strings at once (section-labels)." x="225" y="34" width="179.6" height="17" fill="var(--series-1)"/>
+      <text x="411" y="48" class="lbl-val">1,292</text>
+
+      <text x="216" y="75" text-anchor="end" class="lbl-mono">assert.ok</text>
+      <rect data-tip="assert.ok — 673 calls." x="225" y="61" width="93.6" height="17" fill="var(--baseline)"/>
+      <text x="325" y="75" class="lbl-val">673</text>
+
+      <text x="216" y="102" text-anchor="end" class="lbl-mono">assert.match</text>
+      <rect data-tip="assert.match — 373 calls. The flexible idiom; the case-review-slice file uses it well, cora-summary uses it on label-glued-to-value strings." x="225" y="88" width="51.9" height="17" fill="var(--series-3)"/>
+      <text x="283" y="102" class="lbl-val">373</text>
+
+      <text x="216" y="129" text-anchor="end" class="lbl-mono">assert.notEqual</text>
+      <rect data-tip="assert.notEqual — 83 calls." x="225" y="115" width="11.5" height="17" fill="var(--series-1)"/>
+      <text x="243" y="129" class="lbl-val">83</text>
+
+      <text x="216" y="156" text-anchor="end" class="lbl-mono">assert.strictEqual</text>
+      <rect data-tip="assert.strictEqual — 62 calls." x="225" y="142" width="8.6" height="17" fill="var(--series-1)"/>
+      <text x="240" y="156" class="lbl-val">62</text>
+
+      <text x="216" y="183" text-anchor="end" class="lbl-mono">assert.throws</text>
+      <rect data-tip="assert.throws — 56 calls; all use short regex fragments, the right level." x="225" y="169" width="7.8" height="17" fill="var(--series-3)"/>
+      <text x="239" y="183" class="lbl-val">56</text>
+
+      <text x="216" y="210" text-anchor="end" class="lbl-mono">assert.doesNotMatch</text>
+      <rect data-tip="assert.doesNotMatch — 45 calls; several are the sharpest tests in the suite (PII must not reach logs; a gate's wording must not mention the later gate)." x="225" y="196" width="6.3" height="17" fill="var(--series-3)"/>
+      <text x="237" y="210" class="lbl-val">45</text>
+
+      <text x="216" y="237" text-anchor="end" class="lbl-mono">assert.rejects</text>
+      <rect data-tip="assert.rejects — 44 calls." x="225" y="223" width="6.1" height="17" fill="var(--series-3)"/>
+      <text x="237" y="237" class="lbl-val">44</text>
+
+      <text x="216" y="264" text-anchor="end" class="lbl-mono">other</text>
+      <rect data-tip="deepStrictEqual 12 · doesNotThrow 26 · fail 5" x="225" y="250" width="6" height="17" fill="var(--baseline)"/>
+      <text x="237" y="264" class="lbl-val">46</text>
+
+      <line class="axisline" x1="225" y1="3" x2="225" y2="270"/>
+    </svg>
+    <figcaption class="note">Exact equality is not inherently wrong — a persisted SharePoint status value or a PATCH
+    body <em>should</em> be pinned exactly. The problem is exact equality applied to the wrong operands: product copy
+    (409 <code>textContent</code> references, 84 asserted with <code>equal</code>), CSS class names (145
+    <code>className</code> references, 162 class-based <code>querySelector</code>s), and predicate <em>ordering</em>
+    inside OData filter strings.</figcaption>
+  </figure>
+</section>
+
+<!-- ══════════════════════════ §3 DIAGNOSIS ══════════════════════════ -->
+<section id="diagnosis">
+  <span class="secnum">§ 3</span>
+  <h2>Diagnosis: six patterns that manufacture overhead</h2>
+  <p class="lede">Almost all the flagged lines trace back to six recurring habits. Each has a mechanical fix — none
+  requires weakening a real assertion.</p>
+
+  <table>
+    <thead><tr><th style="width:34%">Pattern</th><th>Where it concentrates</th><th class="num">~Lines</th></tr></thead>
+    <tbody>
+      <tr><td><strong>1 · Stub boilerplate</strong> — <code>new HttpSharePointClient({…})</code> and full Case-row
+        literals repeated 20–40× per file; helpers exist but arrived late</td>
+        <td class="file">http-client-{queries, reads, writes, protocol}, case-loader</td><td class="num">~1,425</td></tr>
+      <tr><td><strong>2 · Coverage-shaped tests</strong> — tests named after private methods and <code>??</code> branches
+        (<code>_handle412 with null getCase…</code>), assertion messages quoting source expressions, four tests asserting only
+        <code>status === 'saved'</code>; plus 675 lines of mega-tests named after coverage regions</td>
+        <td class="file">save-queue ×6, question-bank-editors ×4, mock-client-directory ×3, http-protocol ×3</td><td class="num">~875</td></tr>
+      <tr><td><strong>3 · Mock client triple-coverage</strong> — ~17 filter fields tested in the mock's own suite <em>and</em>
+        the parity suite (which triangulates them against two independent oracles) <em>and</em> flow-runner scenarios</td>
+        <td class="file">mock-sharepoint-client-{filters, directory, exports}</td><td class="num">~500</td></tr>
+      <tr><td><strong>4 · Class-selector addressing</strong> — <code>findByClass</code>/<code>querySelector('.cora-*')</code>
+        as the primary query idiom where <code>getByRole</code> exists; two queried classes don't exist in the CSS at all;
+        11 sites invoke handlers via the stub's private <code>_listeners</code> registry</td>
+        <td class="file">cora-amend-outcome (66 sites), cora-my-stats (33), cora-remediation-tracking (29), cora-summary (22)</td><td class="num">~650</td></tr>
+      <tr><td><strong>5 · Business content pinned as code</strong> — the exact inventory of 49 question IDs, exact group
+        count, exact option wordings and <code>showWhen</code> values of a GUI-edited SharePoint artifact; grows forever
+        under the never-delete-questions rule</td>
+        <td class="file">complaints.test.js (~13 tests), resolve-eligible-case-types ×2</td><td class="num">~130</td></tr>
+      <tr><td><strong>6 · Exact product copy</strong> — headings, empty states, and label-glued-to-value regexes
+        (<code>/Customer nameAda Lovelace/</code>) that also encode text-node adjacency</td>
+        <td class="file">cora-summary (~20), cora-my-stats (~12), section-labels (20 strings in one deepEqual)</td><td class="num">~270</td></tr>
+    </tbody>
+  </table>
+
+  <h3>The core distinction: change-detector vs invariant</h3>
+  <p>The single most useful lens from this audit. A test that hardcodes the <em>current contents</em> of config breaks on
+  every legitimate edit; a test that loops an invariant over <em>whatever exists</em> gets stronger with every edit.
+  The repo contains excellent examples of both — sometimes in adjacent files.</p>
+
+  <figure class="viz">
+    <p class="viz-title">Two ways to test the same thing</p>
+    <p class="viz-sub">Left: complaints.test.js pins the inventory · Right: how verify-config and case-type-eligibility-consistency do it</p>
+    <svg viewBox="0 0 720 268" role="img" aria-label="Diagram contrasting a change-detector test that fails when content grows with an invariant test whose coverage grows">
+      <!-- left panel -->
+      <rect x="8" y="8" width="340" height="252" rx="10" fill="none" stroke="var(--ring)"/>
+      <text x="28" y="36" class="lbl-strong" style="font-size:14px">Change-detector</text>
+      <circle cx="322" cy="31" r="7" fill="var(--status-critical)"/>
+      <rect x="28" y="52" width="300" height="64" rx="6" fill="color-mix(in srgb, var(--status-critical) 7%, transparent)" stroke="var(--ring)"/>
+      <text x="42" y="75" class="lbl-mono">assert.deepEqual(ids, ['q-cmp-0001',</text>
+      <text x="42" y="92" class="lbl-mono">  'q-cmp-0002', … 'q-cmp-0049'])</text>
+      <text x="42" y="109" style="font-size:11px" >the full inventory, hand-maintained</text>
+      <path d="M178 124 L178 148" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
+      <text x="188" y="141" style="font-size:12px">Owner adds question 50 in the GUI</text>
+      <rect x="28" y="156" width="300" height="42" rx="6" fill="none" stroke="var(--status-critical)" stroke-width="1.5"/>
+      <text x="42" y="182" class="lbl-strong" style="fill:var(--crit-text)">✕ test fails — no defect exists</text>
+      <text x="28" y="226" style="font-size:12px">Every content edit is a test edit.</text>
+      <text x="28" y="243" style="font-size:12px">Questions are never deleted, so the list only grows.</text>
+
+      <!-- right panel -->
+      <rect x="372" y="8" width="340" height="252" rx="10" fill="none" stroke="var(--ring)"/>
+      <text x="392" y="36" class="lbl-strong" style="font-size:14px">Invariant</text>
+      <circle cx="686" cy="31" r="7" fill="var(--status-good)"/>
+      <rect x="392" y="52" width="300" height="64" rx="6" fill="color-mix(in srgb, var(--status-good) 8%, transparent)" stroke="var(--ring)"/>
+      <text x="406" y="75" class="lbl-mono">for (const q of config.questions)</text>
+      <text x="406" y="92" class="lbl-mono">  assert.match(q.id, /^q-cmp-\d{4}$/)</text>
+      <text x="406" y="109" style="font-size:11px">the rule, over whatever exists</text>
+      <path d="M542 124 L542 148" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
+      <text x="552" y="141" style="font-size:12px">Owner adds question 50</text>
+      <rect x="392" y="156" width="300" height="42" rx="6" fill="none" stroke="var(--status-good)" stroke-width="1.5"/>
+      <text x="406" y="182" class="lbl-strong" style="fill:var(--good-text)">✓ passes — and now covers 50 items</text>
+      <text x="392" y="226" style="font-size:12px">Coverage grows with content. A malformed id,</text>
+      <text x="392" y="243" style="font-size:12px">dangling showWhen or dup key still fails loudly.</text>
+
+      <defs>
+        <marker id="arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M0 0 L8 4 L0 8 z" fill="var(--muted)"/>
+        </marker>
+      </defs>
+    </svg>
+    <figcaption class="note">The invariant form is already the house style elsewhere:
+    <code>verify-config.test.js</code> checks dangling <code>showWhen</code>, duplicate ids and unknown section keys
+    generically over <em>every</em> registered Case Type, and
+    <code>case-type-eligibility-consistency.test.js</code> loops <code>Object.keys(CASE_TYPE_IMPORTERS)</code> so a new
+    Case Type extends coverage instead of breaking a test. <code>complaints.test.js</code> predates that idiom and
+    ~13 of its tests should migrate to it.</figcaption>
+  </figure>
+
+  <h3>Where the white-box tests come from</h3>
+  <p>The coverage-driven tests aren't carelessness — they're an incentive playing out. The 95% line/branch/function
+  floor is a hard commit gate, and the cheapest way to reach an awkward <code>??</code> branch is a test that names it.
+  The project's own CLAUDE.md warns against exactly this (<em>"do not add white-box assertions solely to cover a
+  syntactic line"</em>), but the floor pays out either way, and four of the resulting tests in
+  <span class="file">save-queue.test.js</span> assert nothing beyond <code>status === 'saved'</code>.</p>
+
+  <figure class="viz">
+    <p class="viz-title">The coverage ratchet</p>
+    <p class="viz-sub">How a hard 95% floor converts refactors into test churn</p>
+    <svg viewBox="0 0 720 210" role="img" aria-label="Five-step loop: coverage floor leads to branch-reaching tests named after operators, which break on refactor with no defect, producing churn">
+      <defs>
+        <marker id="arr2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+          <path d="M0 0 L8 4 L0 8 z" fill="var(--muted)"/>
+        </marker>
+      </defs>
+      <!-- five boxes in a cycle -->
+      <rect x="12"  y="70" width="128" height="62" rx="9" fill="var(--surface)" stroke="var(--baseline)"/>
+      <text x="76" y="96" text-anchor="middle" class="lbl-strong" style="font-size:12.5px">95% branch floor</text>
+      <text x="76" y="113" text-anchor="middle" style="font-size:11px">hard commit gate</text>
+
+      <rect x="158" y="70" width="140" height="62" rx="9" fill="var(--surface)" stroke="var(--baseline)"/>
+      <text x="228" y="90" text-anchor="middle" class="lbl-strong" style="font-size:12.5px">test written to</text>
+      <text x="228" y="105" text-anchor="middle" class="lbl-strong" style="font-size:12.5px">reach the ?? branch</text>
+      <text x="228" y="121" text-anchor="middle" style="font-size:11px">cheapest path to green</text>
+
+      <rect x="316" y="70" width="146" height="62" rx="9" fill="var(--surface)" stroke="var(--baseline)"/>
+      <text x="389" y="90" text-anchor="middle" class="lbl-strong" style="font-size:12.5px">named after the</text>
+      <text x="389" y="105" text-anchor="middle" class="lbl-strong" style="font-size:12.5px">operator, not behaviour</text>
+      <text x="389" y="121" text-anchor="middle" class="lbl-mono" style="font-size:10px">'_handle412 with null …'</text>
+
+      <rect x="480" y="70" width="130" height="62" rx="9" fill="var(--surface)" stroke="var(--status-critical)"/>
+      <text x="545" y="90" text-anchor="middle" class="lbl-strong" style="font-size:12.5px">refactor renames /</text>
+      <text x="545" y="105" text-anchor="middle" class="lbl-strong" style="font-size:12.5px">restructures</text>
+      <text x="545" y="121" text-anchor="middle" style="font-size:11px">behaviour unchanged</text>
+
+      <rect x="628" y="70" width="84" height="62" rx="9" fill="color-mix(in srgb, var(--status-critical) 8%, transparent)" stroke="var(--status-critical)"/>
+      <text x="670" y="96" text-anchor="middle" class="lbl-strong" style="fill:var(--crit-text); font-size:12.5px">test breaks,</text>
+      <text x="670" y="113" text-anchor="middle" class="lbl-strong" style="fill:var(--crit-text); font-size:12.5px">no defect</text>
+
+      <path d="M140 101 L156 101" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr2)"/>
+      <path d="M298 101 L314 101" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr2)"/>
+      <path d="M462 101 L478 101" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr2)"/>
+      <path d="M610 101 L626 101" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr2)"/>
+      <!-- feedback arc back to box 1 -->
+      <path d="M670 134 C 670 186, 76 186, 76 134" fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arr2)"/>
+      <text x="373" y="196" text-anchor="middle" style="font-size:12px">edited-in-place to keep the gate green → 86% of all test churn is modification</text>
+    </svg>
+    <figcaption class="note">The fix is not lowering the floor — it's changing what satisfies it: fold branch-reaching
+    inputs into behavioural tests (e.g. <em>"a Case with no Answers round-trips a 412 without a false conflict"</em>),
+    and split the four 150–212-line mega-tests in <code>question-bank-editors.test.js</code> into
+    <code>t.test()</code> subtests so a failure names a behaviour instead of a coverage region.</figcaption>
+  </figure>
+
+  <h3>Value against cost, file by file</h3>
+  <figure class="viz">
+    <p class="viz-title">Defect-catching value vs maintenance cost</p>
+    <p class="viz-sub">Placement synthesised from the four analysis passes — position is judgement, not measurement</p>
+    <div class="legend">
+      <span class="key"><span class="swatch" style="background:var(--status-good)"></span>protect</span>
+      <span class="key"><span class="swatch" style="background:var(--status-warn)"></span>re-encode / loosen</span>
+      <span class="key"><span class="swatch" style="background:var(--status-critical)"></span>delete</span>
+    </div>
+    <svg viewBox="0 0 720 420" role="img" aria-label="Quadrant scatter: high-value low-cost files to protect, high-value high-cost files to re-encode, low-value high-cost files to delete">
+      <!-- quadrant field -->
+      <rect x="60" y="10" width="640" height="370" fill="none"/>
+      <line class="gridline" x1="380" y1="10" x2="380" y2="380"/>
+      <line class="gridline" x1="60" y1="195" x2="700" y2="195"/>
+      <line class="axisline" x1="60" y1="380" x2="700" y2="380" marker-end="url(#arr2)"/>
+      <line class="axisline" x1="60" y1="380" x2="60" y2="10" marker-end="url(#arr2)"/>
+      <text x="380" y="404" text-anchor="middle">maintenance cost — how often an innocent edit breaks it →</text>
+      <text x="18" y="195" transform="rotate(-90 18 195)" text-anchor="middle">defect-catching value →</text>
+
+      <text x="70" y="30" style="font-size:11px; opacity:.75">PROTECT — earn their tightness</text>
+      <text x="694" y="30" text-anchor="end" style="font-size:11px; opacity:.75">RE-ENCODE — right test, wrong door</text>
+      <text x="70" y="372" style="font-size:11px; opacity:.75">harmless</text>
+      <text x="694" y="372" text-anchor="end" style="font-size:11px; opacity:.75">DELETE — cost with no yield</text>
+
+      <!-- protect (green, top-left) -->
+      <g>
+        <circle cx="120" cy="48"  r="6.5" fill="var(--status-good)" stroke="var(--surface)" stroke-width="2" data-tip="list-cases-filter-parity — triangulates the mock against hand-written ids AND a tested OData evaluator; self-calibrating; anti-tautology guard built in."/>
+        <text x="132" y="52" style="font-size:11.5px">list-cases-filter-parity</text>
+        <circle cx="105" cy="82"  r="6.5" fill="var(--status-good)" stroke="var(--surface)" stroke-width="2" data-tip="local-calendar — five timezones pinned per-case, a guard on the guard, round-trip property tests."/>
+        <text x="117" y="86" style="font-size:11.5px">local-calendar</text>
+        <circle cx="140" cy="112" r="6.5" fill="var(--status-good)" stroke="var(--surface)" stroke-width="2" data-tip="section-access suite — exhaustive role×section matrix; project mandates exact contracts for security."/>
+        <text x="152" y="116" style="font-size:11.5px">section-access suite</text>
+        <circle cx="112" cy="142" r="6.5" fill="var(--status-good)" stroke="var(--surface)" stroke-width="2" data-tip="allocation block in cora-dashboard — optimistic-concurrency claim protocol via recorded client calls; zero DOM coupling."/>
+        <text x="124" y="146" style="font-size:11.5px">dashboard allocation block</text>
+        <circle cx="205" cy="70"  r="6.5" fill="var(--status-good)" stroke="var(--surface)" stroke-width="2" data-tip="render (keyed reconciler) — 80 structural assertions, all correct: node identity IS the contract."/>
+        <text x="217" y="74" style="font-size:11.5px">render reconciler</text>
+        <circle cx="185" cy="158" r="6.5" fill="var(--status-good)" stroke="var(--surface)" stroke-width="2" data-tip="completion-actions, save-queue concurrency core, abortable-client, verify-* invariant suites."/>
+        <text x="197" y="162" style="font-size:11.5px">completion / verify-* / save-queue core</text>
+      </g>
+
+      <!-- re-encode (amber, top-right) -->
+      <g>
+        <circle cx="520" cy="60"  r="6.5" fill="var(--status-warn)" stroke="var(--surface)" stroke-width="2" data-tip="cora-grouped-bar-chart — SVG has no roles, classes are the only addressing scheme; geometry-invariant tests are model quality. Accept the cost, split the 9-assert mega-test."/>
+        <text x="532" y="64" style="font-size:11.5px">cora-grouped-bar-chart</text>
+        <circle cx="615" cy="78"  r="6.5" fill="var(--status-warn)" stroke="var(--surface)" stroke-width="2" data-tip="19 contract/ratchet tests — source-grepping lint tests; high value, highest rename sensitivity; several test their own detectors. Keep as a distinct risk class."/>
+        <text x="603" y="82" text-anchor="end" style="font-size:11.5px">contract ratchets ×19</text>
+        <circle cx="475" cy="128" r="6.5" fill="var(--status-warn)" stroke="var(--surface)" stroke-width="2" data-tip="cora-amend-outcome — validation logic is right, but 11 handler invocations go through the stub's private _listeners registry and 66 class queries. Mechanical fireEvent/getByRole conversion."/>
+        <text x="487" y="132" style="font-size:11.5px">cora-amend-outcome</text>
+        <circle cx="545" cy="158" r="6.5" fill="var(--status-warn)" stroke="var(--surface)" stroke-width="2" data-tip="cora-summary — audience-gating trio is a security contract worth keeping; the other ~20 copy regexes encode text-node adjacency."/>
+        <text x="557" y="162" style="font-size:11.5px">cora-summary</text>
+        <circle cx="435" cy="95"  r="6.5" fill="var(--status-warn)" stroke="var(--surface)" stroke-width="2" data-tip="http-client-queries — real OData protocol contract + 6 predicate-ordering asserts and 280 lines of stub boilerplate."/>
+        <text x="447" y="99" style="font-size:11.5px">http-client-queries</text>
+      </g>
+
+      <!-- delete (red, bottom-right) -->
+      <g>
+        <circle cx="640" cy="255" r="6.5" fill="var(--status-critical)" stroke="var(--surface)" stroke-width="2" data-tip="complaints.test.js content pins — 49-id inventory, exact group count, exact option wordings of a GUI-edited artifact. The never-delete rule guarantees eternal growth."/>
+        <text x="652" y="259" text-anchor="end" style="font-size:11.5px" dx="-18">complaints content pins</text>
+        <circle cx="560" cy="290" r="6.5" fill="var(--status-critical)" stroke="var(--surface)" stroke-width="2" data-tip="app-fullbleed.test.js — the test registers its own handlers that add the class, then asserts the class was added. 92-line tautology; the real behaviour is covered in question-bank-slice."/>
+        <text x="572" y="294" style="font-size:11.5px">app-fullbleed (tautology)</text>
+        <circle cx="470" cy="320" r="6.5" fill="var(--status-critical)" stroke="var(--surface)" stroke-width="2" data-tip="mock-client directory/exports suites — branch-coverage receipts on a test double ('p?.userId ?? persona uses fallback…'); triple-covered elsewhere."/>
+        <text x="482" y="324" style="font-size:11.5px">mock-client micro-suites</text>
+        <circle cx="640" cy="352" r="6.5" fill="var(--status-critical)" stroke="var(--surface)" stroke-width="2" data-tip="cora-my-stats:337 — regex over the CSS source text; no rendering engine exists, so it asserts the CSS file says what it says."/>
+        <text x="628" y="356" text-anchor="end" style="font-size:11.5px">CSS-source regex test</text>
+        <circle cx="455" cy="280" r="6.5" fill="var(--status-critical)" stroke="var(--surface)" stroke-width="2" data-tip="DOM-stub debt blocks (_children/_listeners asserts, 6+ files) and conversation-view selector-warning tests — self-labelled debt; can only fail on the rename that also updates them."/>
+        <text x="467" y="284" style="font-size:11.5px">stub-debt blocks</text>
+      </g>
+
+      <!-- harmless (bottom-left) -->
+      <circle cx="115" cy="330" r="6.5" fill="var(--baseline)" stroke="var(--surface)" stroke-width="2" data-tip="smoke.test.js first test (1+1=2), chrome-state.test.js — cheap but unfalsifiable; fold or drop when convenient."/>
+      <text x="127" y="334" style="font-size:11.5px">smoke / chrome-state</text>
+    </svg>
+    <figcaption class="note">The top-right quadrant is the nuanced one: those tests defend real behaviour but through
+    the wrong encoding — the fix is re-addressing (role queries, exported constants, table-driving), not deletion.
+    Only the bottom-right quadrant is pure cost.</figcaption>
+  </figure>
+</section>
+
+<!-- ══════════════════════════ §4 DELETE LIST ══════════════════════════ -->
+<section id="deletions">
+  <span class="secnum">§ 4</span>
+  <h2>The delete list</h2>
+  <p class="lede">Tests that cannot fail for any real defect, or that re-test something a strictly stronger test
+  already owns. Removing all of these loses zero coverage.</p>
+
+  <table>
+    <thead><tr><th>Target</th><th>Why it earns deletion</th><th class="num">Lines</th></tr></thead>
+    <tbody>
+      <tr><td class="file">mock-sharepoint-client-filters — the 17 scalar/window/prefix filter tests</td>
+        <td>Triple-covered: <code>list-cases-filter-parity</code> tests the same predicate through the same public
+        <code>listCases</code>, triangulated against hand-written ids <em>and</em> a tested OData evaluator — it cannot pass
+        while both engines are wrong the same way; the mock-only test can. Keep list-scoping, 412 injection and the
+        derived-overdue pair.</td><td class="num">~380</td></tr>
+      <tr><td class="file">app-fullbleed.test.js — whole file</td>
+        <td>The test registers its own mount handler that adds the class, then asserts the class was added; the comment
+        admits it ("Simulate what app.js does"). The real behaviour is asserted through the actual slice in
+        <code>question-bank-slice.test.js:440</code>.</td><td class="num">92</td></tr>
+      <tr><td class="file">mock-sharepoint-client-directory — all but one test</td>
+        <td>Branch-coverage receipts on a test double, with assertion messages that quote the operators:
+        <code>'p?.userId ?? persona uses fallback when p is undefined'</code>. Six tests for an array
+        <code>filter()</code>. Keep only the <code>resolveManagers</code> normalisation test.</td><td class="num">~110</td></tr>
+      <tr><td class="file">http-client-reads — 5 of 6 isOverdue tests + 1 subsumed $expand test</td>
+        <td>1:1 duplicates of <code>overdue-evaluator.test.js</code> re-run through the client, which does exactly
+        <code>overdue: isOverdue(row)</code>. One "derived on read, not read from a column" test replaces all six.</td><td class="num">~90</td></tr>
+      <tr><td class="file">cora-conversation-view:96 and :126 — selector-warning tests</td>
+        <td>They break the view's internal <code>closest('.cora-conversation-compose')</code> lookup and assert the exact
+        console warning. The only edit that can fail production is a class rename — which requires editing these tests in
+        lockstep. Double-entry bookkeeping.</td><td class="num">~60</td></tr>
+      <tr><td class="file">mock-sharepoint-client-exports.test.js — whole file</td>
+        <td>Five tests for two one-line <code>?? null</code> methods that <code>case-loader.test.js</code> already drives
+        through real load paths where the behaviour actually matters.</td><td class="num">62</td></tr>
+      <tr><td class="file">complaints.test.js — the ~13 content-pin tests</td>
+        <td>The 49-question-id inventory, exact group count (7), exact <code>sections</code> key list, exact option
+        wordings and one question's exact <code>showWhen</code> — business config edited via GUI by a Case Type Owner,
+        pinned as code. The invariant forms (id-shape loop, round-trip republish check) already in the same file cover the
+        real defect classes.</td><td class="num">~100</td></tr>
+      <tr><td class="file">case-loader — the two "absence" tests</td>
+        <td>Assert that seven specifically-named methods <em>don't exist</em> — archaeology of a completed migration whose
+        rule is already enforced structurally by <code>component-layering-contract</code> and
+        <code>case-review-store-contract</code>.</td><td class="num">~30</td></tr>
+      <tr><td class="file">DOM-stub debt blocks (6+ files)</td>
+        <td><code>assert.ok(view._children.length &gt;= 1)</code> / <code>_listeners.keydown.length === 1</code> — asserts on
+        the hand-rolled stub's private fields, self-labelled "existing DOM-stub debt". Cannot fail unless the view renders
+        literally nothing.</td><td class="num">~45</td></tr>
+      <tr><td class="file">cora-my-stats:337 — CSS-source regex test</td>
+        <td>Regex-matches the stylesheet's source text for <code>grid-template-columns</code> under a media query. No
+        rendering engine exists in the harness: it asserts the CSS file says what the CSS file says, and any restyle fails
+        it.</td><td class="num">32</td></tr>
+      <tr><td class="file">http-protocol / exports — 3 private-method tests + 3 "assignable to interface" tests</td>
+        <td><code>_request</code> / <code>_refreshDigest</code> / <code>_absolute</code> invoked directly and named for the
+        private; the interface-assignability checks are enforced by <code>tsc --checkJs</code> already, three times
+        over.</td><td class="num">~70</td></tr>
+      <tr><td class="file">component-anatomy-explainer — 5 prose greps · doc-prose pins</td>
+        <td>Asserting a documentation page's wording (<code>/State in/</code>, <code>/DOM out/</code>). Keep the four real
+        invariants: no external URLs, examples obey the no-<code>innerHTML</code>/no-<code>fetch</code> rules, no revived
+        dead concepts.</td><td class="num">~47</td></tr>
+      <tr><td class="file">in-memory-flow-runner — harness self-tests</td>
+        <td>Object-identity assertions on the runner's own fields and a test that the harness's <em>getter</em> is
+        copy-on-read — testing the test harness inside a production behaviour suite.</td><td class="num">~100</td></tr>
+    </tbody>
+  </table>
+  <p><strong>Total: ~1,200 lines of pure deletion</strong> (plus ~300 more across smaller sites flagged in the analyses),
+  none of which can catch a defect the remaining suite misses.</p>
+</section>
+
+<!-- ══════════════════════════ §5 PROTECT ══════════════════════════ -->
+<section id="protect">
+  <span class="secnum">§ 5</span>
+  <h2>What is deliberately tight — and must stay</h2>
+  <p class="lede">Ruthlessness cuts both ways: several of the tightest tests in the repo are tight <em>because the
+  thing they pin is a real external contract</em>, and loosening them would be the defect. Any loosening pass should
+  treat these as off-limits.</p>
+
+  <div class="cards">
+    <div class="card"><h4><span class="file">list-cases-filter-parity.test.js</span></h4>
+      <p>The best test file in the suite. Every scenario must agree three ways — mock engine, hand-written expected ids,
+      and a real OData evaluator that is itself tested — with an anti-tautology guard rejecting scenarios that match
+      everything or nothing, and recorded divergences that still fail when a <em>new</em> one appears. It is the reason
+      ~500 lines of mock tests can go.</p></div>
+    <div class="card"><h4>The security suite</h4>
+      <p><span class="file">section-access-*</span>, <span class="file">permissions</span>,
+      <span class="file">configured-outcome</span>, <span class="file">html</span>. Exhaustive role-by-section matrices and
+      fail-closed defaults, asserted through public seams with declarative helpers. The project mandates exact contracts
+      here; the audit found nothing to loosen.</p></div>
+    <div class="card"><h4>The allocation block · <span class="file">cora-dashboard:553–1670</span></h4>
+      <p>Optimistic-concurrency claim protocol (etag re-read, 412 retry, capacity, coalescing, disposal) asserted via
+      recorded client calls and state — almost zero DOM coupling. The highest-value test code in the suite.</p></div>
+    <div class="card"><h4>The wire contracts</h4>
+      <p>Exact-body PATCH deep-equals in <span class="file">http-client-writes</span> (proves no stray column reaches a
+      field-level PATCH), the people-picker payload pins, digest/429 throttle protocol via injected sleep, and the
+      persisted <code>CASE_STATUS</code> values. Exact because the wire is exact.</p></div>
+    <div class="card"><h4><span class="file">render.test.js</span> — the keyed reconciler</h4>
+      <p>Eighty structural DOM assertions, all correct: "the same node was moved, not rebuilt" <em>is</em> the contract
+      that keeps focus, caret and scroll alive. Structural-on-purpose, like the node-identity tab-switch test in
+      <span class="file">cora-case-review-slice:4120</span>.</p></div>
+    <div class="card"><h4>The invariant suites &amp; ratchets</h4>
+      <p><span class="file">verify-config</span> / <span class="file">verify-dead-code</span> /
+      <span class="file">verify-build</span> test the checker on synthetic trees then run it over whatever exists — the
+      template §3 recommends. The 19 contract ratchets are rename-sensitive by design, and several test their own
+      detectors so they cannot rot into no-ops.</p></div>
+  </div>
+
+  <figure class="viz">
+    <p class="viz-title">Why the parity test makes the mock suites redundant</p>
+    <p class="viz-sub">list-cases-filter-parity.test.js — three oracles that must all agree, per scenario</p>
+    <svg viewBox="0 0 720 314" role="img" aria-label="Triangle diagram: mock predicate, hand-written expected ids, and OData evaluator must all agree on every filter scenario">
+      <defs>
+        <marker id="arr3" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M0 0 L8 4 L0 8 z" fill="var(--muted)"/>
+        </marker>
+      </defs>
+      <!-- triangle nodes -->
+      <rect x="270" y="16" width="180" height="52" rx="9" fill="var(--surface)" stroke="var(--series-1)" stroke-width="1.5"/>
+      <text x="360" y="38" text-anchor="middle" class="lbl-strong" style="font-size:13px">MockSharePointClient</text>
+      <text x="360" y="55" text-anchor="middle" style="font-size:11.5px">the JS predicate (dev loop)</text>
+
+      <rect x="52" y="196" width="200" height="52" rx="9" fill="var(--surface)" stroke="var(--series-3)" stroke-width="1.5"/>
+      <text x="152" y="218" text-anchor="middle" class="lbl-strong" style="font-size:13px">Hand-written expected ids</text>
+      <text x="152" y="235" text-anchor="middle" style="font-size:11.5px">a person decided the answer</text>
+
+      <rect x="468" y="196" width="200" height="52" rx="9" fill="var(--surface)" stroke="var(--series-2)" stroke-width="1.5"/>
+      <text x="568" y="218" text-anchor="middle" class="lbl-strong" style="font-size:13px">OData evaluator</text>
+      <text x="568" y="235" text-anchor="middle" style="font-size:11.5px">runs the real $filter string — itself tested</text>
+
+      <!-- edges -->
+      <line x1="290" y1="72" x2="185" y2="192" stroke="var(--muted)" stroke-width="1.5"/>
+      <line x1="430" y1="72" x2="535" y2="192" stroke="var(--muted)" stroke-width="1.5"/>
+      <line x1="256" y1="222" x2="464" y2="222" stroke="var(--muted)" stroke-width="1.5"/>
+      <text x="360" y="216" text-anchor="middle" style="font-size:11px">must agree</text>
+      <text x="196" y="128" text-anchor="middle" transform="rotate(49 196 128)" style="font-size:11px">must agree</text>
+      <text x="524" y="128" text-anchor="middle" transform="rotate(-49 524 128)" style="font-size:11px">must agree</text>
+
+      <text x="360" y="152" text-anchor="middle" class="lbl-strong" style="font-size:13px">20 scenarios · 17 filter fields</text>
+      <text x="360" y="170" text-anchor="middle" style="font-size:11.5px">+ a coverage scan proving every field has one</text>
+
+      <text x="360" y="284" text-anchor="middle" style="font-size:12px">Two engines can collude on a shared bug; three independent oracles cannot —</text>
+      <text x="360" y="301" text-anchor="middle" style="font-size:12px">a mock-only test asserts one corner of this triangle.</text>
+    </svg>
+  </figure>
+</section>
+
+<!-- ══════════════════════════ §6 RECOMMENDATIONS ══════════════════════════ -->
+<section id="recs">
+  <span class="secnum">§ 6</span>
+  <h2>Recommendations, ranked by leverage</h2>
+  <p class="lede">Ordered by lines de-brittled per line changed. The first three are mechanical; none weakens a real
+  assertion.</p>
+
+  <table>
+    <thead><tr><th style="width:44px">#</th><th>Action</th><th style="width:110px">Verdict class</th><th>Effect</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td><strong>Drop <code>className</code> from the <code>tableHeaders()</code> tuple</strong> in
+        <span class="file">tests/helpers/semantic-dom.js</span> — return <code>[text, aria-sort, interactive]</code>.</td>
+        <td><span class="chip loosen">loosen</span></td>
+        <td>One line; every table test in the repo stops pinning CSS class names by construction.</td></tr>
+      <tr><td>2</td><td><strong>Apply the delete list</strong> (§4).</td>
+        <td><span class="chip delete">delete</span></td>
+        <td>~1,200–1,500 lines gone, zero coverage lost, and the mock suites stop shadowing the parity test.</td></tr>
+      <tr><td>3</td><td><strong>Convert <span class="file">cora-amend-outcome</span> to <code>fireEvent</code> +
+        <code>getByRole</code></strong> — replace the 11 <code>findByClass(…)._listeners['click'][0]()</code> invocations and
+        ~15 class-presence checks; then repeat for <span class="file">cora-my-stats</span>,
+        <span class="file">cora-summary</span>, <span class="file">cora-remediation-tracking</span>. The helpers already
+        exist and <span class="file">cora-case-review-slice</span> shows the target idiom.</td>
+        <td><span class="chip loosen">loosen</span></td>
+        <td>~85% → ~15% estimated breakage under a CSS rename in the worst file; the validation logic underneath is
+        untouched.</td></tr>
+      <tr><td>4</td><td><strong>Export user-facing copy as named constants from the view modules</strong>
+        (<code>'No remediation actions sent.'</code>, <code>'Loading your report…'</code>, the section-label pairs…) and
+        import them in tests; loosen <span class="file">section-labels.test.js</span> to key-set + non-empty-shape.</td>
+        <td><span class="chip loosen">loosen</span></td>
+        <td>A copy edit becomes a one-line change instead of a multi-file test failure; kills the label-glued-to-value
+        regexes as a side effect.</td></tr>
+      <tr><td>5</td><td><strong>Add the missing client-test helpers</strong> — <code>caseRowResponse(overrides)</code>,
+        <code>emptyPageClient()</code>, <code>makeLoader(overrides)</code> — and table-drive the five person-column test
+        trios in <span class="file">http-client-writes/reads</span>.</td>
+        <td><span class="chip consol">consolidate</span></td>
+        <td>~1,400 lines of repeated stub setup collapse; new client tests start cheap instead of copy-pasted.</td></tr>
+      <tr><td>6</td><td><strong>Migrate Complaints-specific rules into <span class="file">scripts/verify-config.js</span></strong>
+        as generic per-Case-Type checks tested on synthetic fixtures — the mechanism already exists and runs as the deploy
+        pre-flight gate.</td>
+        <td><span class="chip consol">consolidate</span></td>
+        <td>Content edits stop breaking tests; the next Case Type is protected for free.</td></tr>
+      <tr><td>7</td><td><strong>Split the coverage-shaped mega-tests</strong> in
+        <span class="file">question-bank-editors</span> into <code>t.test()</code> subtests; fold the six white-box
+        <span class="file">save-queue</span> tests into behavioural ones; move the wall-clock perf gate in
+        <span class="file">question-bank-slice</span> behind an env flag.</td>
+        <td><span class="chip consol">restructure</span></td>
+        <td>Failures name behaviours instead of coverage regions; the 95% floor stays, the incentive artefact goes.</td></tr>
+      <tr><td>8</td><td><strong>Adopt two review conventions</strong>: (a) a test may not name a private method, operator, or
+        branch — name the behaviour that reaches it; (b) content/config assertions must be invariant-shaped (loop over
+        whatever exists) unless the value is persisted or on the wire.</td>
+        <td><span class="chip keep">policy</span></td>
+        <td>Stops the two biggest pattern factories at the source; both rules are one sentence in CLAUDE.md's test
+        discipline section.</td></tr>
+    </tbody>
+  </table>
+
+  <p class="pull">The goal is not fewer assertions — it is assertions whose only reason to fail is a defect.
+  This suite is already 80% of the way there; the last 20% is concentrated, named, and mostly mechanical.</p>
+</section>
+
+<footer>
+  <p><strong>Methodology.</strong> Four parallel analysis passes (view slices · client &amp; protocol · config &amp; meta ·
+  pure logic) reading ~150 of 187 test files in depth, cross-checked against source under <code>src/</code> and
+  <code>case-types/</code>; suite-wide pattern counts via grep; churn mined from <code>git log</code> since 2026-01-01
+  (51 src-touching commits). The ~33 smaller <code>cora-*</code> files were sampled by pattern rather than read fully.
+  Line estimates are approximate by design; verdicts follow the project's own test discipline (exact contracts for
+  security/protocol/outcome code; public behaviour elsewhere).</p>
+  <p>Generated 2026-08-11 · platform_frontend @ t3code/e2eaa79d</p>
+</footer>
+
+</div>
+<script>
+  // theme toggle: cycles explicit light/dark stamps; OS preference is the default
+  const btn = document.getElementById('themeToggle');
+  btn.addEventListener('click', () => {
+    const root = document.documentElement;
+    const cur = root.getAttribute('data-theme');
+    const osDark = matchMedia('(prefers-color-scheme: dark)').matches;
+    const next = cur ? (cur === 'dark' ? 'light' : 'dark') : (osDark ? 'light' : 'dark');
+    root.setAttribute('data-theme', next);
+  });
+
+  // delegated tooltip for [data-tip] marks
+  const tip = document.getElementById('tooltip');
+  let tipOn = false;
+  document.addEventListener('pointerover', (e) => {
+    const el = e.target.closest('[data-tip]');
+    if (!el) { if (tipOn) { tip.classList.remove('show'); tipOn = false; } return; }
+    tip.textContent = el.getAttribute('data-tip');
+    tip.classList.add('show'); tipOn = true;
+  });
+  document.addEventListener('pointermove', (e) => {
+    if (!tipOn) return;
+    const pad = 14, w = tip.offsetWidth, h = tip.offsetHeight;
+    let x = e.clientX + pad, y = e.clientY + pad;
+    if (x + w > innerWidth - 8)  x = e.clientX - w - pad;
+    if (y + h > innerHeight - 8) y = e.clientY - h - pad;
+    tip.style.left = x + 'px'; tip.style.top = y + 'px';
+  });
+  document.addEventListener('pointerout', (e) => {
+    if (!e.relatedTarget || !e.relatedTarget.closest?.('[data-tip]')) { tip.classList.remove('show'); tipOn = false; }
+  });
+</script>
+</body>
+</html>
