@@ -83,8 +83,8 @@ loads the canonical development fixture.
 
 **With no file published, the page says so** — "No report has been published for
 you yet." — and reads no Case lists at all. That is a different statement from a
-published report with nothing in the selected range, which keeps the Case Type
-panel and shows "No data for this range.". No producing pipeline writes these
+published report with nothing in the selected range, which keeps the breakdown
+table and shows zero-valued rows. No producing pipeline writes these
 files yet, so the no-report state is what production shows today.
 
 **With a file, the page tops it up.** The report is authoritative for every day
@@ -102,6 +102,12 @@ shortened to "avg/day"), **Active days**, and **Busiest day** with its count.
 The average's numerator counts every day including weekends while its divisor
 counts working days only, and leave is invisible to it — a stated inaccuracy,
 which is why Active days sits beside it.
+
+Immediately beneath the headline strip, a full-width Case Type breakdown table
+uses the same `StatsReport` buckets as the chart. Week and Month show daily
+rows; 3 months and 12 months show monthly rows. Its globally sorted Case Type
+columns include a count and percentage for every bucket, with labels such as
+`Aug 9 (today)` and `August (current month)`.
 
 The route snapshots the four browser-calendar ranges (Week, Month, 3 months,
 and 12 months) and owns the selected range, defaulting to Week. A labelled

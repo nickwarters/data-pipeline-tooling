@@ -81,7 +81,7 @@ function viewState(overrides = {}) {
         reportFeed: countedEnvelope,
         ranges: RANGES,
         selectedRange: 'week',
-        tail: { status: 'loaded', from: '2026-08-09', days: {} },
+        tail: { status: 'loaded', from: '2026-08-09', typedCounts: {} },
         ...overrides,
       },
     },
@@ -155,22 +155,19 @@ test('my stats view: an unpublished report is not an empty one', () => {
     view.querySelector('.cora-my-stats-no-report')?.textContent,
     'No report has been published for you yet.'
   );
-  // Distinguishable from a published report with nothing in the range, which
-  // keeps the panel and its own empty copy.
-  assert.equal(view.querySelector('.cora-my-stats-case-type-panel'), null);
+  // Distinguishable from a published report with nothing in the range.
+  assert.equal(view.querySelector('.cora-my-stats-breakdown-table'), null);
   assert.equal(markLabels(view).length, 0);
   assert.equal(view.getAttribute('aria-busy'), 'false');
 });
 
-test('my stats view: a published report with nothing in range keeps the panel', () => {
+test('my stats view: a published report with nothing in range keeps the table', () => {
   const view = myStatsView(viewState({ reportFeed: envelope }));
 
   assert.equal(view.querySelector('.cora-my-stats-no-report'), null);
-  assert.ok(view.querySelector('.cora-my-stats-case-type-panel'));
-  assert.equal(
-    view.querySelector('.cora-proportion-bars-empty')?.textContent,
-    'No data for this range.'
-  );
+  const table = view.querySelector('.cora-my-stats-breakdown-table');
+  assert.ok(table);
+  assert.equal(table.querySelector('tbody')?.childNodes.length, 8);
 });
 
 test('my stats view: a report that could not be read says so', () => {
@@ -192,16 +189,28 @@ test('my stats view: a selection with no matching range falls back rather than t
 
 // ── The page with a report ────────────────────────────────────────────────
 
-test('my stats view: the panel, the chart and the figures are all rendered', () => {
+test('my stats view: the table, chart and figures are all rendered', () => {
   const view = myStatsView(viewState());
 
   const topRow = view.querySelector('.cora-my-stats-top-row');
   assert.ok(topRow);
   const topRowChildren = /** @type {any[]} */ (Array.from(topRow.childNodes));
   assert.equal(topRowChildren[0]?.className, 'cora-my-stats-controls-column');
-  assert.ok(topRowChildren[0]?.querySelector('.cora-my-stats-case-type-panel'));
+  assert.equal(
+    topRowChildren[0]?.querySelector('.cora-my-stats-breakdown-table'),
+    null
+  );
   assert.equal(topRowChildren[1]?.tagName, 'svg');
   assert.ok(view.querySelector('.cora-my-stats-headline'));
+  assert.ok(view.querySelector('.cora-my-stats-breakdown-table'));
+  const mainChildren = /** @type {any[]} */ (Array.from(view.childNodes));
+  const headlineIndex = mainChildren.findIndex((node) =>
+    node.className?.includes('cora-my-stats-headline')
+  );
+  const tableIndex = mainChildren.findIndex((node) =>
+    node.className?.includes('cora-my-stats-breakdown')
+  );
+  assert.equal(tableIndex, headlineIndex + 1);
 });
 
 test('my stats view: range controls expose selection and dispatch changes', () => {
@@ -232,7 +241,10 @@ test('my stats view: published days and live days reach the chart and the figure
       tail: {
         status: 'loaded',
         from: '2026-08-09',
-        days: { '2026-08-09': 3, '2026-08-10': 50 },
+        typedCounts: {
+          '2026-08-09': { complaints: 3 },
+          '2026-08-10': { complaints: 50 },
+        },
       },
     })
   );
@@ -282,7 +294,7 @@ test('my stats view: an unreadable boundary settles nothing rather than claiming
 
 test('my stats view: a failed live read is noted without hiding the published half', () => {
   const view = myStatsView(
-    viewState({ tail: { status: 'failed', from: null, days: {} } })
+    viewState({ tail: { status: 'failed', from: null, typedCounts: {} } })
   );
 
   assert.match(
@@ -298,7 +310,7 @@ test('my stats view: a report older than the clamp says which days are missing',
   const view = myStatsView(
     viewState({
       reportFeed: { ...countedEnvelope, complete_through: '2026-06-30' },
-      tail: { status: 'loaded', from: '2026-08-01', days: {} },
+      tail: { status: 'loaded', from: '2026-08-01', typedCounts: {} },
     })
   );
 
@@ -316,7 +328,7 @@ test('my stats view: a live read that reached the report leaves no note', () => 
 
 test('my stats view: the page is busy while the live read is in flight', () => {
   const view = myStatsView(
-    viewState({ tail: { status: 'loading', from: null, days: {} } })
+    viewState({ tail: { status: 'loading', from: null, typedCounts: {} } })
   );
 
   assert.equal(view.getAttribute('aria-busy'), 'true');
@@ -361,7 +373,7 @@ test('my stats slice: keeps shared chrome and starts with nothing read', () => {
     reportFeed: null,
     ranges: RANGES,
     selectedRange: 'week',
-    tail: { status: 'idle', from: null, days: {} },
+    tail: { status: 'idle', from: null, typedCounts: {} },
   });
   assert.equal(
     slice.reducer(slice.initialState, { type: 'ignored' }),
@@ -402,25 +414,25 @@ test('my stats slice: the live read moves through its three states', () => {
   assert.deepEqual(requested.routes.myStats.tail, {
     status: 'loading',
     from: null,
-    days: {},
+    typedCounts: {},
   });
 
   const loaded = slice.reducer(requested, {
     type: 'my-stats/tail-loaded',
     from: '2026-08-09',
-    days: { '2026-08-09': 2 },
+    typedCounts: { '2026-08-09': { complaints: 2 } },
   });
   assert.deepEqual(loaded.routes.myStats.tail, {
     status: 'loaded',
     from: '2026-08-09',
-    days: { '2026-08-09': 2 },
+    typedCounts: { '2026-08-09': { complaints: 2 } },
   });
 
   const failed = slice.reducer(requested, { type: 'my-stats/tail-failed' });
   assert.deepEqual(failed.routes.myStats.tail, {
     status: 'failed',
     from: null,
-    days: {},
+    typedCounts: {},
   });
 });
 
@@ -598,9 +610,21 @@ test('my stats slice: a published report is topped up with its uncovered days', 
       ) => {
         window = requested;
         return [
-          { id: '1', reportableAt: new Date(2026, 7, 9, 10).toISOString() },
-          { id: '2', reportableAt: new Date(2026, 7, 9, 16).toISOString() },
-          { id: '3', reportableAt: new Date(2026, 7, 10, 9).toISOString() },
+          {
+            id: '1',
+            caseType: 'complaints',
+            reportableAt: new Date(2026, 7, 9, 10).toISOString(),
+          },
+          {
+            id: '2',
+            caseType: 'complaints',
+            reportableAt: new Date(2026, 7, 9, 16).toISOString(),
+          },
+          {
+            id: '3',
+            caseType: 'example-case-type',
+            reportableAt: new Date(2026, 7, 10, 9).toISOString(),
+          },
         ];
       },
     })
@@ -620,9 +644,32 @@ test('my stats slice: a published report is topped up with its uncovered days', 
     {
       type: 'my-stats/tail-loaded',
       from: '2026-08-09',
-      days: { '2026-08-09': 2, '2026-08-10': 1 },
+      typedCounts: {
+        '2026-08-09': { complaints: 2 },
+        '2026-08-10': { 'example-case-type': 1 },
+      },
     },
   ]);
+
+  const withFeed = slice.reducer(slice.initialState, {
+    type: 'report-feed/loaded',
+    reportFeed: envelope,
+  });
+  const withTail = slice.reducer(withFeed, dispatched[2]);
+  assert.deepEqual(withTail.routes.myStats.tail.typedCounts, {
+    '2026-08-09': { complaints: 2 },
+    '2026-08-10': { 'example-case-type': 1 },
+  });
+  const rendered = myStatsView(withTail);
+  assert.ok(
+    markLabels(rendered).some((label) =>
+      label.includes('Aug 9: Provisional, 2')
+    )
+  );
+  const table = rendered.querySelector('.cora-my-stats-breakdown-table');
+  const rows = Array.from(table?.querySelector('tbody')?.childNodes ?? []);
+  const liveRow = rows[6];
+  assert.equal(liveRow?.querySelectorAll('td')[0]?.textContent, '2');
 });
 
 test('my stats slice: a report already covering today asks for no rows', async () => {
@@ -655,7 +702,7 @@ test('my stats slice: a report already covering today asks for no rows', async (
   assert.deepEqual(dispatched[1], {
     type: 'my-stats/tail-loaded',
     from: null,
-    days: {},
+    typedCounts: {},
   });
 });
 

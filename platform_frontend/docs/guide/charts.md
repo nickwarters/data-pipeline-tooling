@@ -99,7 +99,8 @@ when it was opened by pointer hover.
 
 ## My Stats
 
-The my-stats route reads two things and derives everything from them **once**.
+The my-stats route reads two things and derives the chart, headline figures, and
+breakdown table from them **once**.
 
 The first is the Reviewer's Report Feed. The second is a live read of the days
 the feed cannot cover yet — the tail — issued only when a feed exists and
@@ -116,9 +117,12 @@ merges the two. `complete_through` is the whole boundary: a date at or before it
 is answered by the file, a date after it by the live read, so neither can claim
 the same day. The result carries one bucket per range bucket, each with a
 `settled` and a `provisional` total (`null` where that provenance has no days),
-and the four headline figures over the totals window.
+a combined `total`, and Case Type cells. It also carries one deterministic
+global Case Type column list, so every bucket has a zero cell for a type absent
+from that bucket. The four headline figures use the same day counts over the
+totals window.
 
-That one report feeds both readings. `statsChartView()` in
+That one report feeds all three readings. `statsChartView()` in
 [`src/pages/my-stats/stats-chart-view.js`](../../src/pages/my-stats/stats-chart-view.js)
 maps buckets to groups, drawing a solid `Settled` mark and a hollow
 `Provisional` one and omitting either where the bucket has no days of that
@@ -132,19 +136,19 @@ the busiest day with its count. The average is never labelled "avg/day". A
 failed tail, or a feed older than the clamp, adds one muted line under the
 figures; it never hides the settled half.
 
-`buildStatsCaseTypeBreakdown()` in
-[`src/evaluators/stats-case-type-model.js`](../../src/evaluators/stats-case-type-model.js)
-still owns the Case Type panel to the left of the chart. It compares the feed's
-ISO date strings directly with the descriptor's inclusive `start` and `end`;
-because `end` is yesterday, today's work is excluded. Duplicate sparse rows are
-folded by `case_type`, and only positive totals are shown. The evaluator
-resolves registered slugs through `case-types/manifest.js`'s `displayNameFor()`;
-an unknown slug gets presentation copy only, never a raw slug in visible or
-accessible text. The pure
-[`ProportionBars`](../../src/components/base/cora-proportion-bars.js) view
-renders that shape as a semantic list, each row exposing a bounded
-`role="progressbar"`. A feed with no counts in the range shows
-`No data for this range.`.
+`statsBreakdownTableView()` in
+[`src/pages/my-stats/stats-breakdown-table-view.js`](../../src/pages/my-stats/stats-breakdown-table-view.js)
+renders the report immediately beneath the headline strip. It uses the report's
+bucket labels verbatim, with one total column and one count/percentage pair for
+each globally sorted Case Type. The report's feed and typed live-tail rows are
+merged before both chart and table rendering, so a monthly bucket can combine
+settled and provisional work while its row total still equals the chart total.
+Manifest display names are resolved once in
+[`src/evaluators/stats-case-type-model.js`](../../src/evaluators/stats-case-type-model.js);
+unknown slugs receive safe presentation copy. The former selected-range,
+feed-only `buildStatsCaseTypeBreakdown()` and My Stats `caseTypePanel()` path
+are retired, and the dead `ProportionBars` component and its styles/tests were
+removed with it.
 
 The page also snapshots four pure range descriptors on slice creation and owns
 the selected range, defaulting to `week`. The ordered keys are `week`, `month`,

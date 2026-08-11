@@ -83,18 +83,26 @@ yesterday. Previous monthly buckets end on their calendar month end, while the
 current monthly bucket ends today. Day keys are `YYYY-MM-DD`, month keys are
 `YYYY-MM`, and the current labels state `(today)` or `(current month)`.
 
-The selected range drives a pure Case Type breakdown panel. It compares each
-feed row's ISO date string inclusively with the descriptor's `start` and `end`,
-aggregates duplicate `case_type` rows, excludes non-positive totals, and
-resolves display names from the frontend Case Type manifest. Because `end` is
-yesterday, the panel's totals are feed-only settled history and do not include
-live work. Unknown slugs are humanized for presentation without adding a
-manifest entry.
+The selected range drives the same `StatsReport` used by the chart. The report
+preserves the date × Case Type dimension from feed rows and typed live-tail
+rows, applies the settled/provisional boundary once, and derives each bucket's
+total, Case Type counts, and percentages together. It exposes one deterministic
+global Case Type column list, so a type absent from a bucket is represented by a
+zero cell. Display names come from the frontend Case Type manifest, and unknown
+slugs are humanized for presentation without adding a manifest entry.
 
-The chart and the figures beneath it are two readings of **one** derivation.
-The page merges the file and the tail into one count per calendar day, once,
-and hands that to both; a second derivation would be a second chance for them
-to disagree, over numbers a Reviewer can see side by side. The figures are the
+The page renders those buckets in a full-width accessible table immediately
+beneath the headline figures. The table uses the range bucket labels verbatim:
+Week and Month are daily, while 3 months and 12 months are monthly, including
+the `(today)` and `(current month)` suffixes. Its row totals are the same totals
+shown by the chart. The former selected-range feed-only Case Type panel and its
+now-dead proportional-bars component were removed.
+
+The chart, the figures beneath it, and the breakdown table are three readings
+of **one** derivation. The page merges the file and the typed tail into one
+count per calendar day and Case Type, once, and hands that report to all three;
+a second derivation would be a second chance for them to disagree, over numbers
+a Reviewer can see side by side. The figures are the
 total (excluding today), the average per working day, the count of active days,
 and the busiest day with its count. The page renders a labelled control group
 for the four descriptors. Selecting a button dispatches
