@@ -129,6 +129,10 @@ test('fetchLiveTailCases: one scoped, bounded request per Case Type list', async
     rows.map((row) => row.id),
     ['Cases-complaints-1', 'Cases-conduct-1']
   );
+  assert.deepEqual(
+    rows.map((row) => row.caseType),
+    ['complaints', 'conduct']
+  );
   assert.deepEqual(calls[0].options, { listName: 'Cases-complaints' });
   assert.deepEqual(calls[0].filter, {
     caseType: 'complaints',

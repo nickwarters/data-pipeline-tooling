@@ -83,6 +83,9 @@ import {
 /**
  * Count live Case rows by browser-local date and Case Type.
  *
+ * The live-tail fetcher stamps the authoritative source slug before rows reach
+ * this function, so every counted row remains represented in the table.
+ *
  * @param {CaseRow[]} rows
  * @returns {Record<string, Record<string, number>>}
  */
@@ -91,8 +94,7 @@ export function countCasesByLocalDateAndType(rows) {
   const counts = {};
   for (const row of rows ?? []) {
     const date = toLocalDateKey(row?.reportableAt);
-    if (date === null || typeof row?.caseType !== 'string' || !row.caseType)
-      continue;
+    if (date === null) continue;
     counts[date] ??= {};
     counts[date][row.caseType] = (counts[date][row.caseType] ?? 0) + 1;
   }
@@ -152,14 +154,6 @@ function sumTypeCounts(counts) {
 }
 
 /**
- * @param {Map<string, number>} counts
- * @returns {Map<string, number>}
- */
-function copyTypeCounts(counts) {
-  return new Map(counts);
-}
-
-/**
  * Every calendar date from `from` through `to`, inclusive.
  *
  * @param {string} from
@@ -208,7 +202,7 @@ export function buildStatsReport({
 
   // The display window, `start` through `today`, is the widest thing the page
   // shows. The buckets tile it exactly and the totals window is its leading
-  // part, so both readings below can look every date up and find it.
+  // part, so all three readings below can look every date up and find it.
   /** @type {Map<string, StatsDay>} */
   const days = new Map();
   for (const date of dateKeysBetween(range.start, range.today)) {
@@ -220,7 +214,7 @@ export function buildStatsReport({
       date,
       count: sumTypeCounts(typeCounts),
       settled,
-      typeCounts: copyTypeCounts(typeCounts),
+      typeCounts,
     });
   }
   /** @param {string} date @returns {StatsDay} */

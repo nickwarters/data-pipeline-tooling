@@ -1,5 +1,5 @@
 // @ts-check
-import { listCasesAcrossSources } from './across-sources.js';
+import { listCasesPerSource } from './across-sources.js';
 import { CASE_STATUS } from '../lib/case-statuses.js';
 import {
   isDateKey,
@@ -95,7 +95,7 @@ export function liveTailWindow(completeThrough, todayKey) {
  * @returns {Promise<CaseRow[]>}
  */
 export function fetchLiveTailCases(client, reviewerId, sources, tailWindow) {
-  return listCasesAcrossSources(client, sources, (source) => ({
+  return listCasesPerSource(client, sources, (source) => ({
     caseType: source.slug,
     assignedReviewer: reviewerId,
     reportableAfter: tailWindow.reportableAfter,
@@ -104,5 +104,9 @@ export function fetchLiveTailCases(client, reviewerId, sources, tailWindow) {
       { status: CASE_STATUS.ACTIONS_IN_PROGRESS },
       { status: CASE_STATUS.COMPLETED },
     ],
-  }));
+  })).then((perSource) =>
+    perSource.flatMap(({ source, rows }) =>
+      rows.map((row) => ({ ...row, caseType: source.slug }))
+    )
+  );
 }

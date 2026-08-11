@@ -3054,7 +3054,7 @@
 
 [data-cora-root] .cora-my-stats-top-row {
   display: grid;
-  grid-template-columns: 1fr 2fr;
+  grid-template-columns: max-content minmax(0, 1fr);
   gap: var(--cora-space-5);
   align-items: start;
 }
@@ -3064,8 +3064,6 @@
 }
 
 [data-cora-root] .cora-my-stats-controls-column {
-  display: grid;
-  gap: var(--cora-space-4);
   min-width: 0;
 }
 
@@ -3196,7 +3194,7 @@
   border-bottom: 0;
 }
 
-[data-cora-root] .cora-my-stats-breakdown-table .is-numeric {
+[data-cora-root] .cora-my-stats-breakdown-table__numeric {
   text-align: right;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
