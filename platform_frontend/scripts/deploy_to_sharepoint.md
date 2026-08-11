@@ -6,9 +6,19 @@ as verified as the commands someone ran first — which is why the script now ru
 the most important one itself.
 
 **Current reality:** `build_client()` raises `NotImplementedError`. Until a
-concrete `SharePointDeployClient` exists (auth handshake + REST transport), only
+concrete `SharePointDeployClient` exists (auth handshake + transport), only
 `--dry-run` runs against a real site, and the actual file upload is a hand-upload.
 Read the caveats at the bottom before doing one.
+
+The upload half of that seam is now shaped to the organisation's field client:
+`copy_or_move_local_file_to_sp(source_path, *, library_relative_path, dest_filename, raise_on_error, copy_or_move)`.
+The engine hands `upload_file()` a local file and a target-relative path, so
+implementing it is transcription — see the `build_client()` docstring for the
+literal call. It assumes `library_relative_path` is relative to the document
+library root, so the concrete client is what prefixes the target folder
+(`CODE/CORA`); if the real argument turns out to be server-relative, that
+assumption is the one line to change. The other four methods still need their
+own transport work.
 
 ## 1. Pre-conditions
 
@@ -101,8 +111,11 @@ diff are identical.
    but deterministic one.
 3. **Templated host pages last.** The host page is what puts a new tree in front
    of users, so it uploads after everything it can reach.
-4. **Deletes after every upload.** Unchanged behaviour.
-5. **Post-upload verification.** Every deployed file — not just the changed ones —
+4. **Staged uploads.** The transport creates files from local paths, so the bytes
+   to upload — rendered, not the placeholders still on disk — are written into a
+   temporary directory mirroring the target layout, removed when the run ends.
+5. **Deletes after every upload.** Unchanged behaviour.
+6. **Post-upload verification.** Every deployed file — not just the changed ones —
    is re-fetched from the target folder and compared by SHA-256 against the bytes
    that were uploaded (after token substitution, so the host page is compared
    against its rendered form). A residual in any class returns a non-zero exit.

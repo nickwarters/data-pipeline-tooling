@@ -128,6 +128,7 @@ class FakeClient:
     def __init__(self, files: dict[str, bytes] | None = None) -> None:
         self.files: dict[str, bytes] = dict(files or {})
         self.uploaded: list[str] = []
+        self.sources: list[tuple[str, Path]] = []
         self.deleted: list[str] = []
         self.folders: list[str] = []
         # Hooks: paths the target silently loses, serves back altered, refuses to
@@ -154,8 +155,12 @@ class FakeClient:
             raise OSError("checked out by another user")
         return self.files[path]
 
-    def upload_file(self, path: str, content: bytes) -> None:
+    def upload_file(self, source_path: Path, path: str) -> None:
+        # Read what we were handed rather than trusting it: a deploy that stages
+        # the wrong bytes, or no file at all, must fail here.
+        content = source_path.read_bytes()
         self.uploaded.append(path)
+        self.sources.append((path, source_path))
         if path in self.drop:
             self.files.pop(path, None)
             return
@@ -440,6 +445,24 @@ class OrderedUploadTest(DeployHarness):
             self.logged.rindex("src/a.js"),
             "the dry run prints the order it would upload in",
         )
+
+
+class UploadStagingTest(DeployHarness):
+    def test_same_named_files_in_different_folders_stage_separately(self) -> None:
+        self.write("src/a/x.js", "from a;")
+        self.write("src/b/x.js", "from b;")
+        self.write_graph({"src/a/x.js": [], "src/b/x.js": []})
+        client = FakeClient()
+
+        self.assertEqual(self.deploy(client), 0)
+
+        staged = dict(client.sources)
+        self.assertNotEqual(staged["src/a/x.js"], staged["src/b/x.js"])
+        self.assertEqual(client.files["src/a/x.js"], b"from a;")
+        self.assertEqual(client.files["src/b/x.js"], b"from b;")
+        for rel, source in client.sources:
+            self.assertEqual(source.name, rel.rsplit("/", 1)[-1])
+            self.assertFalse(source.exists())
 
 
 class PostUploadVerificationTest(DeployHarness):

@@ -16,12 +16,13 @@ bracket that sync, and each of the three is a refusal rather than a repair.
 
 See ``scripts/deploy_to_sharepoint.md`` for the runbook.
 
-Only the sync *policy* lives here. Every actual REST call — folder creation,
-listing, upload, delete — goes through the :class:`SharePointDeployClient`
-protocol, which is implemented separately (auth handshake, ``X-RequestDigest``,
-``_api/web/GetFolderByServerRelativeUrl(...)`` etc.). This keeps the diff logic
-pure and unit-testable, and lets the transport/auth choice (NTLM, Kerberos,
-app-only) be swapped without touching the plan.
+Only the sync *policy* lives here. Every call that touches the library — folder
+creation, listing, upload, delete — goes through the
+:class:`SharePointDeployClient` protocol, which is implemented separately (the
+auth handshake plus whatever surface the transport offers: a REST call it shapes
+itself, or a file-creation helper it is handed). This keeps the diff logic pure
+and unit-testable, and lets the transport/auth choice (NTLM, Kerberos, app-only)
+be swapped without touching the plan.
 
 Standard library only — no ``requests``, no third-party packages.
 """
@@ -33,6 +34,7 @@ import hashlib
 import json
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Callable, Iterable, Optional, Protocol, runtime_checkable
@@ -127,10 +129,15 @@ class SharePointDeployClient(Protocol):
     """The transport the deploy engine drives.
 
     An implementation owns the SharePoint site URL, the auth handshake, the
-    request digest, and the REST surface. All paths are POSIX and **relative to
-    the target folder** (``Style Library/CODE/CORA``); the implementation joins
-    them onto the library's server-relative URL. Implementations must never
-    resolve a path outside the target folder.
+    request digest, and the transport surface. Every **target-side** path is
+    POSIX and **relative to the target folder** (``Style Library/CODE/CORA``);
+    the implementation joins them onto the library's server-relative URL.
+    Implementations must never resolve a path outside the target folder.
+
+    The two halves of the content transfer are deliberately asymmetric:
+    :meth:`download_file` returns bytes while :meth:`upload_file` is handed a
+    local file. Only the upload half has a known transport signature to match,
+    and inventing one for the other half would be a guess.
     """
 
     def ensure_folder(self, folder: str) -> None:
@@ -159,11 +166,14 @@ class SharePointDeployClient(Protocol):
         """
         ...
 
-    def upload_file(self, path: str, content: bytes) -> None:
+    def upload_file(self, source_path: Path, path: str) -> None:
         """Create or overwrite the target-relative file at ``path``.
 
-        The engine guarantees the parent folder was passed to
-        :meth:`ensure_folder` first.
+        ``source_path`` is a :class:`pathlib.Path` to a local file whose bytes
+        are exactly the bytes to be served; the implementation owns joining
+        ``path`` onto the library. The engine guarantees the parent folder was
+        passed to :meth:`ensure_folder` first, and removes the local file when
+        the run ends — an implementation must not keep the path for later use.
         """
         ...
 
@@ -498,18 +508,35 @@ def execute_plan(
 
     Assumes ``plan`` is non-empty. Deletes run after every upload. Folders are
     created before their uploads; a failure propagates (fail loudly on partial
-    upload) rather than being swallowed.
+    upload) rather than being swallowed. Uploads are staged into a temporary
+    directory that is removed when the run ends, including a run that ends by
+    raising.
     """
     client.ensure_folder("")
     ensured: set[str] = {""}
 
-    for rel in order:
-        for folder in parent_folders(rel):
-            if folder not in ensured:
-                client.ensure_folder(folder)
-                ensured.add(folder)
-        client.upload_file(rel, local[rel].content)
-        log(f"  uploaded {rel}")
+    # Mirroring the target layout under the staging root keeps every upload on
+    # its own path — no iteration overwrites a file the transport may still
+    # hold open — and deploys the right name if a client omits ``dest_filename``.
+    with tempfile.TemporaryDirectory(
+        prefix="cora-deploy-",
+        # A leaked temp directory is the OS's problem; a cleanup error
+        # propagating out of this block would abort the run after every upload
+        # but before any delete — stale files left behind, and no verification
+        # pass to report them.
+        ignore_cleanup_errors=True,
+    ) as staging:
+        staging_root = Path(staging)
+        for rel in order:
+            for folder in parent_folders(rel):
+                if folder not in ensured:
+                    client.ensure_folder(folder)
+                    ensured.add(folder)
+            source = staging_root.joinpath(*PurePosixPath(rel).parts)
+            source.parent.mkdir(parents=True, exist_ok=True)
+            source.write_bytes(local[rel].content)
+            client.upload_file(source, rel)
+            log(f"  uploaded {rel}")
 
     for rel in plan.deletes:
         client.delete_file(rel)
@@ -684,14 +711,29 @@ def parse_args(argv: list[str]) -> DeployOptions:
 def build_client(opts: DeployOptions) -> SharePointDeployClient:
     """Construct the concrete client for ``opts``.
 
-    Implemented separately: wire up the SharePoint SE auth
-    handshake (browser NTLM/Kerberos) and REST transport here, then
-    delete this guard.
+    Implemented separately: wire up the SharePoint SE auth handshake (browser
+    NTLM/Kerberos) and the transport here, then delete this guard. Given
+    ``opts.target_folder`` (e.g. ``CODE/CORA``) and the engine's
+    target-relative ``path``, the field client's upload call is::
+
+        copy_or_move_local_file_to_sp(
+            source_path,
+            library_relative_path=str(
+                PurePosixPath(target_folder) / PurePosixPath(path).parent
+            ),
+            dest_filename=PurePosixPath(path).name,
+            raise_on_error=True,
+            copy_or_move="copy",
+        )
+
+    ``library_relative_path`` is taken to be relative to the document library
+    root, so the target folder is prefixed here; ``raise_on_error=True``
+    because :func:`execute_plan` requires a failure to propagate.
     """
     raise NotImplementedError(
-        "SharePointDeployClient is not implemented yet. Implement it (auth + REST "
-        "against Style Library/CODE/CORA) and construct it here, or run with "
-        "--dry-run to preview the plan."
+        "SharePointDeployClient is not implemented yet. Implement it (auth + a "
+        "transport against Style Library/CODE/CORA) and construct it here, or "
+        "run with --dry-run to preview the plan."
     )
 
 
