@@ -172,6 +172,16 @@ def _run(args: argparse.Namespace) -> int:
     base_dir = _base_dir_or_report(args)
     if base_dir is None:
         return 1
+    params = dict(args.params)
+    if args.publish_only:
+        if args.pipeline.rstrip("/") != "pipelines/reviewer_activity":
+            print(
+                "--publish-only is only supported for pipelines/reviewer_activity",
+                file=sys.stderr,
+            )
+            return 2
+        params["publish_only"] = "true"
+    publish_only = args.publish_only
     if args.dry_run:
         report = dry_run_pipeline(
             loaded.run,
@@ -179,7 +189,7 @@ def _run(args: argparse.Namespace) -> int:
             base_dir,
             run_date=args.run_date,
             logical_run_id=args.logical_run_id,
-            params=dict(args.params),
+            params=params,
             freshness_days=args.freshness_days,
         )
         print(report.render())
@@ -192,10 +202,10 @@ def _run(args: argparse.Namespace) -> int:
             loaded.run,
             loaded.name,
             base_dir,
-            upstreams=loaded.upstreams,
+            upstreams=() if publish_only else loaded.upstreams,
             run_date=args.run_date,
             logical_run_id=args.logical_run_id,
-            params=dict(args.params),
+            params=params,
             freshness_days=args.freshness_days,
         )
     except PipelineError as exc:
@@ -355,6 +365,11 @@ def register(sub) -> None:
         "rows (default: <pipeline>:<run-date>)",
     )
     run.add_argument("--freshness-days", type=int, default=0)
+    run.add_argument(
+        "--publish-only",
+        action="store_true",
+        help="republish reviewer_activity Report Feeds from committed gold",
+    )
     run.add_argument(
         "--param",
         dest="params",

@@ -103,7 +103,7 @@ store directly and need neither.)
 ```sh
 python -m cli run pipelines/<name> [--base-dir DIR] [--env ENV] \
     [--run-date YYYY-MM-DD] [--logical-run-id ID] [--freshness-days N] \
-    [--param KEY=VALUE ...] [--dry-run]
+    [--param KEY=VALUE ...] [--publish-only] [--dry-run]
 ```
 
 Imports `pipelines.<name>.pipeline` and runs its `run(context)` callable, after
@@ -215,6 +215,19 @@ def run(context: RunContext):
 Run parameters are recorded on the run summary in the JSONL run log for
 diagnosis; values whose keys look sensitive, such as `password`, `secret`,
 `token`, `credential`, or `key`, are redacted by default.
+
+### Republishing reviewer activity Report Feeds
+
+After a publication failure, republish from the already-committed aggregate
+without rerunning the Sync-dependent aggregate builder:
+
+```console
+python -m cli run pipelines/reviewer_activity --base-dir /data --publish-only
+```
+
+This targeted option passes `publish_only=true` and bypasses the normal
+`UPSTREAMS` freshness check. Normal reviewer activity runs remain
+freshness-guarded and continue to run the aggregate before publication.
 
 ## `orchestrate` — run scheduled due work
 

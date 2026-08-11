@@ -115,8 +115,8 @@ for the four descriptors. Selecting a button dispatches
   is an expected empty read rather than an error, so with no file there is no
   `complete_through` — and a tail that fell back to the range start would ask
   for thirteen months of Cases, unpaged, with the full `$select=*` projection
-  and five person expands on every row. There is no Report Feed producer in the
-  repository yet, so that is not the unlucky case: today it is the only case.
+  and five person expands on every row. The reviewer activity Reporting
+  pipeline now produces the local file; external delivery remains separate.
   Hence the clamp, and hence no read at all without a file.
 
   The clamp is ten calendar days counting today, derived from how stale a
@@ -163,11 +163,10 @@ for the four descriptors. Selecting a button dispatches
   and the bucketing agree, and its tests pin their own zones rather than
   inheriting the machine's — a conversion that is only wrong for part of the
   day, in some zones, otherwise passes by luck.
-- **The producing pipeline is still to be written.** `tools/deliverables.py`
-  names the destination and nothing writes to it, so every Reviewer sees the
-  no-report state in production today. That is the honest rendering of the
-  current state of the system rather than a defect in this page, and it is why
-  the no-file path had to be a designed state rather than an edge case.
+- The reviewer activity Reporting pipeline publishes the local Report Feed to
+  `deliverables/cora_report_feeds/my-stats/{account}.txt`. The page still treats
+  a missing file as an expected no-report state, because local publication and
+  external delivery are separate boundaries.
 - **The page is UX-gated on `isReviewer`; the library ACL is the boundary.**
   Per-Reviewer files are not a security boundary: anyone who can read one can
   read another by guessing an account id, which is trivial when it is a staff
