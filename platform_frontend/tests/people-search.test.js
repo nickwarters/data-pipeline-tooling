@@ -45,7 +45,7 @@ function makeSearch(options = {}) {
     search,
     searches,
     states,
-    /** Only the outcomes after the synchronous `loading`, which every test sees. */
+    /** Outcomes after the request has started and loading has been reported. */
     resolved() {
       return states.filter((entry) => entry.status !== 'loading');
     },
@@ -85,20 +85,23 @@ test('nothing is searched before the delay, and one search lands at it', async (
   ]);
 });
 
-test('request reports the search as loading the moment it schedules one', (t) => {
+test('overtaken queries report neither loading nor a client call', (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  const { search, states } = makeSearch();
+  const { search, searches, states, settle } = makeSearch();
 
+  search.request('q1', 'Ja');
+  t.mock.timers.tick(199);
   search.request('q1', 'Jane');
+  t.mock.timers.tick(199);
 
-  assert.deepEqual(states, [
-    { key: 'q1', query: 'Jane', people: [], status: 'loading' },
-  ]);
+  assert.deepEqual(searches, []);
+  assert.deepEqual(states, []);
+  return settle();
 });
 
-test('retyping inside the window searches only the last query', async (t) => {
+test('the surviving query reports loading once at the timer, then success', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  const { search, searches, settle } = makeSearch();
+  const { search, searches, states, settle } = makeSearch();
 
   search.request('q1', 'Ja');
   t.mock.timers.tick(150);
@@ -107,6 +110,15 @@ test('retyping inside the window searches only the last query', async (t) => {
   await settle();
 
   assert.deepEqual(searches, ['Jane']);
+  assert.deepEqual(states, [
+    { key: 'q1', query: 'Jane', people: [], status: 'loading' },
+    {
+      key: 'q1',
+      query: 'Jane',
+      people: [{ loginName: 'Jane' }],
+      status: 'success',
+    },
+  ]);
 });
 
 test('the client is sent the trimmed query, the caller is told the one it asked for', async (t) => {
@@ -155,7 +167,7 @@ test('a falsy client schedules nothing and reports the search as failed', async 
 // backstop against the defect this replaced.
 test('a failed search is reported as an error, not left as a pending load', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  const { search, resolved, settle } = makeSearch({
+  const { search, states, resolved, settle } = makeSearch({
     searchPeople: async () => {
       throw new Error('HTTP Error: 400');
     },
@@ -165,6 +177,10 @@ test('a failed search is reported as an error, not left as a pending load', asyn
   t.mock.timers.tick(200);
   await settle();
 
+  assert.deepEqual(states, [
+    { key: 'q1', query: '  Jane  ', people: [], status: 'loading' },
+    { key: 'q1', query: '  Jane  ', people: [], status: 'error' },
+  ]);
   assert.deepEqual(resolved(), [
     { key: 'q1', query: '  Jane  ', people: [], status: 'error' },
   ]);

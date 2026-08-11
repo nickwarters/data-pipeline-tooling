@@ -183,9 +183,15 @@ test('greeting: renders state and dispatches the clear action', () => {
 A people picker's state is always `PeopleSearchState` from
 `src/lib/people-search.js` — `{ query, people, status }`, where `status` is one
 of `idle | loading | success | error` — so a picker test covers all four
-statuses rather than only the matches. Nothing is selectable in any of them bar
-a `success` carrying people; `loading`, `error` and a `success` with none each
-render a status line, while `idle` and a `success` with matches render none.
+statuses rather than only the matches. Normally, nothing is selectable except
+a `success` carrying people; a nonblank query may retain prior directory
+matches while it waits in `idle` during the debounce; `loading`,
+`error` and a `success` with none each render a status line, while `idle` and a
+`success` with matches render none.
+The shared people search remains `idle` during its 200ms debounce; advance the
+timer before asserting `loading`, which is emitted when the request starts.
+Retyped queries should assert that an overtaken timer emits neither loading nor
+a client call.
 
 ## Route Tests
 

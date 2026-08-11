@@ -7,10 +7,11 @@
  * with it, so it belongs beside the other framework primitives rather than
  * inside any one page's subsystem.
  *
- * Every outcome is reported through one callback — scheduled, resolved, failed,
- * or nothing to search for — because a picker that is told only about successes
- * cannot tell an empty directory from a search that never ran. What each of
- * those looks like on screen is the page's decision, not this module's.
+ * Every search state is reported through one callback — loading when the
+ * debounced request starts, resolved, failed, or nothing to search for —
+ * because a picker that is told only about successes cannot tell an empty
+ * directory from a search that never ran. What each of those looks like on
+ * screen is the page's decision, not this module's.
  *
  * It knows nothing about actions. Dispatching stays in the page, where the
  * action vocabulary is greppable next to the reducer that reads it.
@@ -87,7 +88,6 @@ export function createDebouncedPeopleSearch({ client, isActive, onState }) {
         onState(key, { query, people: [], status: 'error' });
         return;
       }
-      onState(key, { query, people: [], status: 'loading' });
       timers.set(
         key,
         setTimeout(() => {
@@ -99,6 +99,7 @@ export function createDebouncedPeopleSearch({ client, isActive, onState }) {
           // and a late one can restate the status for a query still current.
           // The next keystroke corrects it, which is cheaper than the request
           // token it would take to tell them apart.
+          onState(key, { query, people: [], status: 'loading' });
           void client.searchPeople(trimmed).then(
             (people) => {
               if (isActive())

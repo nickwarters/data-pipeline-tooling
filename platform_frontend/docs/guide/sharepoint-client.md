@@ -47,6 +47,10 @@ people-picker endpoint across all principal sources, so it finds users who have
 never been added to this site, and reduces each result's claims `Key` to a bare
 account name.
 
+The shared debounced search reports `loading` when its 200ms timer starts the
+request, not when the query is scheduled. A query replaced during that window
+produces neither a loading state nor a directory request.
+
 It **rejects** on a response whose payload it cannot read as an entity list,
 naming the endpoint and the payload's top-level keys — keys only, never values,
 which are directory records. Returning `[]` there would be indistinguishable on

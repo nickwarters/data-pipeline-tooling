@@ -263,10 +263,13 @@ export function caseReviewReducer(state, action) {
     });
   }
   if (action.type === 'case/capture-search-input') {
+    const current = route.captureSearch[action.questionId]?.[action.fieldKey];
+    // Prior matches remain visible/selectable for up to 200ms; retaining real
+    // directory people avoids flicker until the new search starts.
     return patchRoute(state, 'caseReview', {
       captureSearch: withCaptureSearch(route.captureSearch, action, {
         query: action.query,
-        people: [],
+        people: action.query.trim() ? (current?.people ?? []) : [],
         status: 'idle',
       }),
     });
@@ -293,10 +296,12 @@ export function caseReviewReducer(state, action) {
     });
   }
   if (action.type === 'case/responsible-party-search-input') {
+    // Prior matches remain visible/selectable for up to 200ms; retaining real
+    // directory people avoids flicker until the new search starts.
     return patchRoute(state, 'caseReview', {
       responsiblePartySearch: {
         query: action.query,
-        people: [],
+        people: action.query.trim() ? route.responsiblePartySearch.people : [],
         status: 'idle',
       },
     });
@@ -613,9 +618,6 @@ export function createRouteSlice(params, context) {
 
   /** @param {string} questionId @param {string} fieldKey @param {string} query */
   function requestCaptureSearch(questionId, fieldKey, query) {
-    // Order matters: `request` reports the search as loading synchronously, and
-    // the reducer drops any report whose query is not the one in state — so the
-    // new query has to be seated first or the loading report is thrown away.
     dispatch({
       type: 'case/capture-search-input',
       questionId,
@@ -632,7 +634,6 @@ export function createRouteSlice(params, context) {
 
   /** @param {string} query */
   function requestResponsiblePartySearch(query) {
-    // Seat the query before requesting: see `requestCaptureSearch`.
     dispatch({ type: 'case/responsible-party-search-input', query });
     responsiblePartyPeopleSearch.request(RESPONSIBLE_PARTY_SEARCH_KEY, query);
   }

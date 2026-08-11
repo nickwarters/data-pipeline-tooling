@@ -622,13 +622,16 @@ test('case search: the Reviewer field resolves accounts through the directory an
   });
 
   picker.type('rev');
+  assert.equal(picker.state.routes.caseSearch.reviewerSearch.status, 'idle');
+  assert.deepEqual(picker.options(), []);
+  assert.equal(picker.statusText(), '');
+
+  // Loading starts when the debounce expires, before the directory call settles.
+  t.mock.timers.tick(200);
+  picker.apply();
   assert.equal(picker.state.routes.caseSearch.reviewerSearch.status, 'loading');
   assert.deepEqual(picker.options(), []);
   assert.equal(picker.statusText(), 'Searching…');
-
-  // Advance the debounce explicitly, then await the directory call itself —
-  // the effect's own `then` was attached before this one, so it has already run.
-  t.mock.timers.tick(200);
   await Promise.all(directoryCalls);
   await flush();
   picker.apply();
@@ -646,6 +649,35 @@ test('case search: the Reviewer field resolves accounts through the directory an
   assert.deepEqual(picker.options(), []);
   assert.equal(picker.statusText(), 'No matches');
 
+  picker.cleanup?.();
+});
+
+test('case search: the Reviewer keeps prior matches until the next search starts', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  /** @type {Promise<any>[]} */
+  const directoryCalls = [];
+  const picker = reviewerPicker({
+    searchPeople: () => {
+      const pending = Promise.resolve([REVIEWER_A]);
+      directoryCalls.push(pending);
+      return pending;
+    },
+  });
+
+  picker.type('rev');
+  t.mock.timers.tick(200);
+  await Promise.all(directoryCalls);
+  await flush();
+  picker.apply();
+
+  picker.type('reviewer');
+  assert.equal(picker.state.routes.caseSearch.reviewerSearch.status, 'idle');
+  assert.deepEqual(picker.options(), ['Reviewer A — rev-a']);
+
+  t.mock.timers.tick(200);
+  picker.apply();
+  assert.equal(picker.state.routes.caseSearch.reviewerSearch.status, 'loading');
+  assert.deepEqual(picker.options(), []);
   picker.cleanup?.();
 });
 
