@@ -8,7 +8,8 @@ import { CASE_STATUS } from '../lib/case-statuses.js';
 
 /**
  * Fan-out fetch across one or more Case Type lists, scoped by manager and by
- * the caller's optional Case Type filter. Each Case lives in exactly one list
+ * the caller's optional Case Type source selection. Each Case lives in exactly
+ * one list
  * (`source.listName`), so every `listCases` call carries an explicit
  * `{ listName }` and the per-list rows are merged client-side.
  *
@@ -23,10 +24,9 @@ export function fetchTeamCases(client, caseType, managerId, sources) {
     ? sources.filter((s) => s.slug === caseType)
     : sources;
 
-  return listCasesAcrossSources(client, targets, (target) => ({
-    caseType: target.slug,
+  return listCasesAcrossSources(client, targets, {
     assignedReviewerManager: managerId,
-  }));
+  });
 }
 
 /**
@@ -40,10 +40,9 @@ export function fetchTeamCases(client, caseType, managerId, sources) {
  * @returns {Promise<CaseRow[]>}
  */
 export function fetchTeamWorkloadCases(client, managerId, sources) {
-  return listCasesAcrossSources(client, sources, (source) => ({
-    caseType: source.slug,
+  return listCasesAcrossSources(client, sources, {
     assignedReviewerManager: managerId,
-  }));
+  });
 }
 
 /**
@@ -58,10 +57,9 @@ export function fetchTeamWorkloadCases(client, managerId, sources) {
  * @returns {Promise<CaseRow[]>}
  */
 export function fetchTeamVoidedCases(client, managerId, sources, since) {
-  return listCasesAcrossSources(client, sources, (source) => ({
-    caseType: source.slug,
+  return listCasesAcrossSources(client, sources, {
     assignedReviewerManager: managerId,
     status: CASE_STATUS.VOID,
     voidedAfter: since,
-  }));
+  });
 }

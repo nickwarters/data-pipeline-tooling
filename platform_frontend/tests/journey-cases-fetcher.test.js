@@ -10,8 +10,8 @@ const { fetchJourneyCases } =
 /** @typedef {import('../src/sharepoint-client.js').ListCasesFilter} ListCasesFilter */
 /** @typedef {import('../src/sharepoint-client.js').CaseListOptions} CaseListOptions */
 
-/** @param {Record<string, CaseRow[]>} [casesByType] */
-function makeClient(casesByType = {}) {
+/** @param {Record<string, CaseRow[]>} [casesByList] */
+function makeClient(casesByList = {}) {
   const calls =
     /** @type {{ filter: ListCasesFilter, opts: CaseListOptions | undefined }[]} */ ([]);
   return {
@@ -19,7 +19,7 @@ function makeClient(casesByType = {}) {
     /** @type {import('../src/sharepoint-client.js').SharePointClient['listCases']} */
     async listCases(filter, opts) {
       calls.push({ filter: { ...filter }, opts: opts ? { ...opts } : opts });
-      return (casesByType[filter.caseType ?? ''] ?? []).map(
+      return (casesByList[opts?.listName ?? ''] ?? []).map(
         /** @param {CaseRow} c */ (c) => ({ ...c })
       );
     },
@@ -49,35 +49,42 @@ const src = (slug, listName = `${slug}-list`) => ({
   displayName: slug,
 });
 
-test('fetchJourneyCases: one bounded $filter query per owned Case Type', async () => {
+test('fetchJourneyCases: one list-scoped read per owned Case Type', async () => {
   const client = makeClient();
   await fetchJourneyCases(/** @type {any} */ (client), [
     src('example-review'),
     src('complaints'),
   ]);
   assert.equal(client.calls.length, 2);
-  assert.ok(client.calls.some((c) => c.filter.caseType === 'example-review'));
-  assert.ok(client.calls.some((c) => c.filter.caseType === 'complaints'));
+  assert.deepEqual(
+    client.calls.map(({ filter, opts }) => ({
+      filter,
+      listName: opts?.listName,
+    })),
+    [
+      { filter: {}, listName: 'example-review-list' },
+      { filter: {}, listName: 'complaints-list' },
+    ]
+  );
 });
 
-test('fetchJourneyCases: scopes each query to its Case Type and list only', async () => {
+test('fetchJourneyCases: scopes each query to its list only', async () => {
   const client = makeClient();
   await fetchJourneyCases(/** @type {any} */ (client), [
     src('complaints', 'Complaints'),
   ]);
   assert.equal(client.calls.length, 1);
-  assert.deepEqual(Object.keys(client.calls[0].filter), ['caseType']);
-  assert.equal(client.calls[0].filter.caseType, 'complaints');
+  assert.deepEqual(client.calls[0].filter, {});
   assert.equal(client.calls[0].opts?.listName, 'Complaints');
 });
 
 test('fetchJourneyCases: merges rows across owned Case Types', async () => {
   const client = makeClient({
-    'example-review': [
+    'example-review-list': [
       row('c1', 'example-review'),
       row('c2', 'example-review'),
     ],
-    complaints: [row('c3', 'complaints')],
+    'complaints-list': [row('c3', 'complaints')],
   });
   const result = await fetchJourneyCases(/** @type {any} */ (client), [
     src('example-review'),

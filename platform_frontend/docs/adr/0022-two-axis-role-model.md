@@ -191,6 +191,17 @@ otherwise (#376); the mock is list-store-only (no default `_cases`), and fixture
 partitioning is total. The strictness flip is the enforcement mechanism: any call site
 that forgets a list fails loudly in tests rather than silently reading the wrong one.
 
+## Amendment (2026-08-11): `listName` is the Case Type scope
+
+The one-list-per-Case-Type decision has a direct client-contract consequence:
+`CaseListOptions.listName` is the Case Type scope for every read. `ListCasesFilter`
+therefore contains row predicates only and does not declare a redundant
+`caseType` field. `CaseRow.caseType` remains genuine returned data.
+
+Search and Team Cases may still carry a Case Type in their service or URL
+vocabulary when choosing which source lists to query. They resolve that choice
+to `listName` and pass only the shared row predicates to `SharePointClient`.
+
 ### Merge-order note (Action Centre / Controls)
 
 Per-list counts SUM (a Case lives in exactly one list); paged "worst-first" rows are

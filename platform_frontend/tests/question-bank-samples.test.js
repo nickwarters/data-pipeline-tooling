@@ -18,10 +18,18 @@ function source(slug, listName) {
 test('loadSampleCases: samples each requested source through listCases, carrying its listName', async () => {
   /** @type {Array<{ filter: any, opts: any }>} */
   const calls = [];
+  const slugByListName = /** @type {Record<string, string>} */ ({
+    'Cases-ExampleReview': 'example-review',
+    'Cases-Complaints': 'complaints',
+  });
   const client = /** @type {any} */ ({
     async listCases(/** @type {any} */ filter, /** @type {any} */ opts) {
       calls.push({ filter, opts });
-      return [row(`${filter.caseType}-1`, { 'q-a': { value: 'Yes' } })];
+      return [
+        row(`${slugByListName[opts.listName]}-1`, {
+          'q-a': { value: 'Yes' },
+        }),
+      ];
     },
   });
   const sampleCases = await loadSampleCases(client, [
@@ -30,7 +38,7 @@ test('loadSampleCases: samples each requested source through listCases, carrying
   ]);
   assert.deepEqual(
     calls.map((c) => c.filter),
-    [{ caseType: 'example-review' }, { caseType: 'complaints' }]
+    [{}, {}]
   );
   assert.deepEqual(
     calls.map((c) => c.opts.listName),
@@ -75,8 +83,8 @@ test('loadSampleCases: caps the sample at SAMPLE_CASE_LIMIT', async () => {
 
 test('loadSampleCases: a failing list leaves that slug with no samples', async () => {
   const client = /** @type {any} */ ({
-    async listCases(/** @type {any} */ filter) {
-      if (filter.caseType === 'complaints') throw new Error('403');
+    async listCases(/** @type {any} */ _filter, /** @type {any} */ opts) {
+      if (opts.listName === 'Cases-Complaints') throw new Error('403');
       return [row('case-1', {})];
     },
   });
@@ -92,8 +100,8 @@ test('loadSampleCases: defaults to no sources (and samples nothing) when none ar
   /** @type {string[]} */
   const asked = [];
   const client = /** @type {any} */ ({
-    async listCases(/** @type {any} */ filter) {
-      asked.push(filter.caseType);
+    async listCases(/** @type {any} */ _filter, /** @type {any} */ opts) {
+      asked.push(opts?.listName);
       return [];
     },
   });
@@ -102,12 +110,12 @@ test('loadSampleCases: defaults to no sources (and samples nothing) when none ar
 });
 
 test('loadSampleCases: multiple sources fan out independently, each keyed by its own slug', async () => {
-  /** @type {Record<string, string>} */
-  const listNameBySlug = {};
+  /** @type {string[]} */
+  const listNames = [];
   const client = /** @type {any} */ ({
-    async listCases(/** @type {any} */ filter, /** @type {any} */ opts) {
-      listNameBySlug[filter.caseType] = opts.listName;
-      return [row(`${filter.caseType}-1`, {})];
+    async listCases(/** @type {any} */ _filter, /** @type {any} */ opts) {
+      listNames.push(opts.listName);
+      return [row(`case-${opts.listName}`, {})];
     },
   });
   const sampleCases = await loadSampleCases(client, [
@@ -115,11 +123,11 @@ test('loadSampleCases: multiple sources fan out independently, each keyed by its
     source('stress-review', 'Cases-StressReview'),
     source('complaints', 'Cases-Complaints'),
   ]);
-  assert.deepEqual(listNameBySlug, {
-    'example-review': 'Cases-ExampleReview',
-    'stress-review': 'Cases-StressReview',
-    complaints: 'Cases-Complaints',
-  });
+  assert.deepEqual(listNames, [
+    'Cases-ExampleReview',
+    'Cases-StressReview',
+    'Cases-Complaints',
+  ]);
   assert.equal(sampleCases['example-review'].length, 1);
   assert.equal(sampleCases['stress-review'].length, 1);
   assert.equal(sampleCases['complaints'].length, 1);

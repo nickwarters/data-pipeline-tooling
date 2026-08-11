@@ -71,7 +71,7 @@ export async function loadOwnerSummaries({
       // so the outstanding/assigned/overdue derivation never fetches the
       // cumulative backlog.
       const inProgress = await client.listCases(
-        { caseType, status: CASE_STATUS.IN_PROGRESS },
+        { status: CASE_STATUS.IN_PROGRESS },
         { listName }
       );
 
@@ -79,7 +79,6 @@ export async function loadOwnerSummaries({
         slices.map((s) =>
           client.countCases(
             {
-              caseType,
               status: CASE_STATUS.COMPLETED,
               completedAfter: s.after,
               completedBefore: s.before,

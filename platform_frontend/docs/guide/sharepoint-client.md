@@ -12,7 +12,7 @@ just the function and the `client` it was handed.
 // The interface (src/sharepoint-client.js):
 // getCase(id) → Promise<CaseRow | null>
 // patchCase(id, fields, etag) → Promise<PatchResult>
-// listCases(filter) → Promise<CaseRow[]>
+// listCases(filter, { listName, top, skip, orderBy, orderDir }) → Promise<CaseRow[]>
 // getCurrentUser() → Promise<CurrentUser>
 // getCurrentUserGroups() → Promise<string[]>
 // searchPeople(query) → Promise<PersonResult[]>
@@ -105,6 +105,28 @@ The mock client operates entirely in memory. `patchCase` writes to its internal 
 The full shape (the `Effective*` reporting columns, `Appeals`, etc.) lives in `src/sharepoint-client.js`; the fields above are the storage-relevant subset. `status` widened to three values with the lifecycle change; `reportableAt` / `remediationDueDate` are stamped at Send Actions; `amendedOutcome` carries Controls' post-completion verdict and **replaces the removed `overrides[]` blob**. The client stamps `assignedAt` itself on every write that sets `assignedReviewer` (and clears it when the Reviewer is cleared), so no caller stamps it. See the [Case Type onboarding checklist](../case-type-onboarding.md) for the SharePoint columns behind each field.
 
 `answers` and `conversation` are stored as JSON blobs in the SharePoint list. `HttpSharePointClient` handles the serialisation/deserialisation; consumers always receive and send parsed JS objects.
+
+### Case list scope and row filters
+
+`CaseListOptions.listName` selects the Case Type's SharePoint list. A Case Type
+has one list, so every Case read supplies that option explicitly; it is the
+scope of the read, not a row predicate.
+
+`ListCasesFilter` contains only predicates on rows in that list, such as
+`status`, `assignedReviewer`, `completedAfter`, and `titlePrefix`. It has no
+`caseType` field. `CaseRow.caseType` remains returned row data and can be used
+for display, grouping, and downstream role decisions.
+
+```js
+const rows = await client.listCases(
+  { status: 'In-progress', titlePrefix: 'CR-1' },
+  { listName: 'Cases-Complaints' }
+);
+```
+
+Search and Team Cases may accept a `caseType` value in their own service or
+URL state to choose which source lists to query. Those services translate that
+selection into `listName`; they do not pass it as a `ListCasesFilter` field.
 
 ### `Answer`
 

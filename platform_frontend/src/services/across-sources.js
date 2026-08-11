@@ -19,7 +19,7 @@
 
 /**
  * A filter shared by every source, or a function deriving one per source
- * (e.g. `(source) => ({ caseType: source.slug })`).
+ * (e.g. `(source) => ({ titlePrefix: \`CR-\${source.listName}\` })`).
  * @template {{ listName: string }} S
  * @typedef {ListCasesFilter | ((source: S) => ListCasesFilter)} FilterOf
  */

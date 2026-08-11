@@ -98,22 +98,6 @@ test('MockSharePointClient: listCases filters by assignedReviewer', async () => 
   assert.equal(cases[0].id, 'case-3');
 });
 
-test('MockSharePointClient: listCases filters by caseType', async () => {
-  const client = makeClient();
-  const cases = await client.listCases(
-    { caseType: 'example-review' },
-    { listName: LIST }
-  );
-  assert.equal(cases.length, 3);
-
-  // A different caseType should return nothing
-  const none = await client.listCases(
-    { caseType: 'other-type' },
-    { listName: LIST }
-  );
-  assert.equal(none.length, 0);
-});
-
 test('MockSharePointClient: listCases filters by responsibleParty', async () => {
   const client = makeClient();
   const cases = await client.listCases(
@@ -122,19 +106,6 @@ test('MockSharePointClient: listCases filters by responsibleParty', async () => 
   );
   assert.equal(cases.length, 1);
   assert.equal(cases[0].id, 'case-1');
-});
-
-test('MockSharePointClient: listCases filters by both caseType and responsibleParty', async () => {
-  const client = makeClient();
-  const cases = await client.listCases(
-    {
-      caseType: 'example-review',
-      responsibleParty: 'user-3',
-    },
-    { listName: LIST }
-  );
-  assert.equal(cases.length, 1);
-  assert.equal(cases[0].id, 'case-2');
 });
 
 test('MockSharePointClient: listCases filters by effectiveOutcome server-side', async () => {

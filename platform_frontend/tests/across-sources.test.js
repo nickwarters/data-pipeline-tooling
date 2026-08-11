@@ -97,11 +97,11 @@ test('listCasesPerSource accepts a per-source filter function', async () => {
   const { client, listCalls } = makeClient({});
 
   await listCasesPerSource(client, [source('alpha'), source('beta')], (s) => ({
-    caseType: s.slug,
+    titlePrefix: s.slug,
   }));
 
-  assert.deepEqual(listCalls[0].filter, { caseType: 'alpha' });
-  assert.deepEqual(listCalls[1].filter, { caseType: 'beta' });
+  assert.deepEqual(listCalls[0].filter, { titlePrefix: 'alpha' });
+  assert.deepEqual(listCalls[1].filter, { titlePrefix: 'beta' });
 });
 
 test('listCasesPerSource merges extra list options under the per-source listName', async () => {
@@ -194,12 +194,12 @@ test('countCasesAcrossSources accepts a per-source filter function and sums zero
     client,
     [source('alpha')],
     (s) => ({
-      caseType: s.slug,
+      titlePrefix: s.slug,
     })
   );
 
   assert.equal(total, 4);
-  assert.deepEqual(countCalls[0].filter, { caseType: 'alpha' });
+  assert.deepEqual(countCalls[0].filter, { titlePrefix: 'alpha' });
   assert.equal(await countCasesAcrossSources(client, [], {}), 0);
 });
 

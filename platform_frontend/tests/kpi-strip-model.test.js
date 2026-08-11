@@ -56,8 +56,6 @@ function applyFilter(rows, filter) {
       c.assignedReviewer !== filter.assignedReviewer
     )
       return false;
-    if (filter.caseType !== undefined && c.caseType !== filter.caseType)
-      return false;
     if (
       filter.hasOpenAppeal !== undefined &&
       Boolean(c.hasOpenAppeal) !== filter.hasOpenAppeal
@@ -67,11 +65,16 @@ function applyFilter(rows, filter) {
   });
 }
 
+/** @param {CaseRow[]} rows @param {any} opts */
+function rowsForList(rows, opts) {
+  return rows.filter((row) => opts?.listName === `Cases-${row.caseType}`);
+}
+
 /**
- * A client that returns rows keyed by the filter + `{ listName }` opts it
- * receives. `listCases` and `countCases` share the same point-in-time
- * filtering so a count and its rows never drift. `handler` sees `(filter,
- * opts)` so per-list fan-out can be asserted / scoped by list.
+ * A client that returns rows from the `{ listName }` selected by its options.
+ * `listCases` and `countCases` share the same point-in-time filtering so a
+ * count and its rows never drift. `handler` sees `(filter, opts)` so per-list
+ * fan-out can be asserted and scoped by list.
  * @param {(filter: any, opts: any) => CaseRow[]} handler
  */
 function makeClient(handler) {
@@ -216,9 +219,7 @@ test('loadKpiModel: reviewer lane buckets cases into overdue / awaiting RP / in 
   ];
   const lanes = await loadKpiModel({
     client: /** @type {any} */ (
-      makeClient((f, opts) =>
-        rows.filter((r) => `Cases-${r.caseType}` === opts.listName)
-      )
+      makeClient((_filter, opts) => rowsForList(rows, opts))
     ),
     currentUserId: 'me',
     capabilities: defaultCapabilities({ isReviewer: true }),
@@ -245,9 +246,7 @@ test('loadKpiModel: reviewer overdue tile splits by Case Type, zero-suppressed a
   ];
   const lanes = await loadKpiModel({
     client: /** @type {any} */ (
-      makeClient((f, opts) =>
-        rows.filter((r) => `Cases-${r.caseType}` === opts.listName)
-      )
+      makeClient((_filter, opts) => rowsForList(rows, opts))
     ),
     currentUserId: 'me',
     capabilities: defaultCapabilities({ isReviewer: true }),
@@ -393,7 +392,7 @@ test('loadKpiModel: owner lane splits At risk into sub-reasons and defaults it e
   ];
   const lanes = await loadKpiModel({
     client: /** @type {any} */ (
-      makeClient((f) => rows.filter((r) => r.caseType === f.caseType))
+      makeClient((_filter, opts) => rowsForList(rows, opts))
     ),
     currentUserId: 'me',
     capabilities: defaultCapabilities({ ownedCaseTypes: ['lending'] }),
@@ -463,7 +462,7 @@ test('loadKpiModel: owner with multiple Case Types splits At risk by Case Type',
   ];
   const lanes = await loadKpiModel({
     client: /** @type {any} */ (
-      makeClient((f) => rows.filter((r) => r.caseType === f.caseType))
+      makeClient((_filter, opts) => rowsForList(rows, opts))
     ),
     currentUserId: 'me',
     capabilities: defaultCapabilities({
@@ -495,14 +494,8 @@ test('loadKpiModel: owner lane fetches only In-progress cases per owned Case Typ
     now: NOW,
   });
   assert.deepEqual(calls, [
-    [
-      { caseType: 'lending', status: 'In-progress' },
-      { listName: 'Cases-lending' },
-    ],
-    [
-      { caseType: 'mortgages', status: 'In-progress' },
-      { listName: 'Cases-mortgages' },
-    ],
+    [{ status: 'In-progress' }, { listName: 'Cases-lending' }],
+    [{ status: 'In-progress' }, { listName: 'Cases-mortgages' }],
   ]);
 });
 
@@ -520,7 +513,7 @@ test('loadKpiModel: owner lane ignores a server that leaks a non-In-progress row
   ];
   const lanes = await loadKpiModel({
     client: /** @type {any} */ (
-      makeClient((f) => rows.filter((r) => r.caseType === f.caseType))
+      makeClient((_filter, opts) => rowsForList(rows, opts))
     ),
     currentUserId: 'me',
     capabilities: defaultCapabilities({ ownedCaseTypes: ['lending'] }),
@@ -534,7 +527,7 @@ test('loadKpiModel: owner lane skips an owned slug with no matching source', asy
   const rows = [caseRow({ id: 'l1', caseType: 'lending', dueDate: PAST })];
   const lanes = await loadKpiModel({
     client: /** @type {any} */ (
-      makeClient((f) => rows.filter((r) => r.caseType === f.caseType))
+      makeClient((_filter, opts) => rowsForList(rows, opts))
     ),
     currentUserId: 'me',
     capabilities: defaultCapabilities({

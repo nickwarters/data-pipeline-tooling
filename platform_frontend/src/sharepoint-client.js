@@ -327,10 +327,12 @@
  */
 
 /**
- * A server-side Case query. Every scalar field is an ANDed
- * equality on an **indexed** Case column so a filtered count/`$top` stays
- * cheap past the 5000-item threshold: reason-defining data is hoisted onto
- * queryable columns, never mined from the `Answers`/`appeals` blobs.
+ * A server-side Case query. Case Type scope comes from the target list in
+ * `CaseListOptions.listName`; every field here is a row predicate. Every
+ * scalar field is an ANDed equality on an **indexed** Case column so a
+ * filtered count/`$top` stays cheap past the 5000-item threshold:
+ * reason-defining data is hoisted onto queryable columns, never mined from the
+ * `Answers`/`appeals` blobs.
  * `awaitingResponsibleParty` and `hasOpenAppeal` are the
  * Action Centre reason flags. `anyOf` is an OR-of-filters (each sub-filter is
  * itself ANDed, then the sub-filters are ORed) used for the server-deduped
@@ -363,7 +365,7 @@
  * to its internal column before emitting `$orderby`. Only a key that client maps
  * is sortable — an unmapped one throws there rather than reaching SharePoint.
  *
- * @typedef {{ status?: string, assignedReviewer?: string, caseType?: string, responsibleParty?: string, overdue?: boolean, awaitingResponsibleParty?: boolean, onHold?: boolean, hasOpenAppeal?: boolean, assignedReviewerManager?: string, effectiveOutcome?: string, outcomeOverridden?: boolean, completedAfter?: string, completedBefore?: string, reportableAfter?: string, reportableBefore?: string, voidedAfter?: string, voidedBefore?: string, titlePrefix?: string, anyOf?: ListCasesFilter[] }} ListCasesFilter
+ * @typedef {{ status?: string, assignedReviewer?: string, responsibleParty?: string, overdue?: boolean, awaitingResponsibleParty?: boolean, onHold?: boolean, hasOpenAppeal?: boolean, assignedReviewerManager?: string, effectiveOutcome?: string, outcomeOverridden?: boolean, completedAfter?: string, completedBefore?: string, reportableAfter?: string, reportableBefore?: string, voidedAfter?: string, voidedBefore?: string, titlePrefix?: string, anyOf?: ListCasesFilter[] }} ListCasesFilter
  * @typedef {{ listName?: string, top?: number, skip?: number, orderBy?: string, orderDir?: 'asc' | 'desc' }} CaseListOptions
  */
 

@@ -168,8 +168,6 @@ export class MockSharePointClient {
         c.assignedReviewer !== filter.assignedReviewer
       )
         return false;
-      if (filter.caseType !== undefined && c.caseType !== filter.caseType)
-        return false;
       if (
         filter.responsibleParty !== undefined &&
         c.responsibleParty !== filter.responsibleParty

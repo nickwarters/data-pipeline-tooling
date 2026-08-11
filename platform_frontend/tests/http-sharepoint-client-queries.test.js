@@ -532,7 +532,6 @@ test('HttpSharePointClient: countCases sums a bounded CompletedAt day-slice', as
 
   const n = await client.countCases(
     {
-      caseType: 'example-review',
       status: 'Completed',
       completedAfter: '2026-07-02T00:00:00.000Z',
       completedBefore: '2026-07-03T00:00:00.000Z',
