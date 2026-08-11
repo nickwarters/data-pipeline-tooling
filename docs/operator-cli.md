@@ -103,13 +103,14 @@ store directly and need neither.)
 ```sh
 python -m cli run pipelines/<name> [--base-dir DIR] [--env ENV] \
     [--run-date YYYY-MM-DD] [--logical-run-id ID] [--freshness-days N] \
-    [--param KEY=VALUE ...] [--dry-run]
+    [--param KEY=VALUE ...] [--skip-freshness] [--dry-run]
 ```
 
 Imports `pipelines.<name>.pipeline` and runs its `run(context)` callable, after
 checking any upstreams it declares via `UPSTREAMS`. The pipeline's run-history
 identity is its directory name (`<name>`). `--run-date` sets the run date
 (defaults to today); `--freshness-days` relaxes the upstream-freshness window.
+`--skip-freshness` bypasses declared upstream checks for an explicit re-drive.
 Exit code is `0` on success, non-zero on a clear error (see below).
 
 `run` **bypasses schedule due-ness entirely** — it does not consult any
@@ -215,6 +216,22 @@ def run(context: RunContext):
 Run parameters are recorded on the run summary in the JSONL run log for
 diagnosis; values whose keys look sensitive, such as `password`, `secret`,
 `token`, `credential`, or `key`, are redacted by default.
+
+### Republishing reviewer activity Report Feeds
+
+After a publication failure, republish from the already-committed aggregate
+without rerunning the Sync-dependent aggregate builder:
+
+```console
+python -m cli run pipelines/reviewer_activity --base-dir /data \
+    --skip-freshness --param publish_only=true
+```
+
+The feed-specific `publish_only=true` parameter selects publication from
+committed gold; the generic `--skip-freshness` option bypasses the normal
+`UPSTREAMS` check. Normal reviewer activity runs remain freshness-guarded and
+continue to run the aggregate before publication. The module entry point also
+supports `python -m pipelines.reviewer_activity.pipeline --publish-only`.
 
 ## `orchestrate` — run scheduled due work
 

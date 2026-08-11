@@ -73,8 +73,10 @@ The envelope below is abridged; the linked fixture carries richer sample rows.
 Three properties are load-bearing:
 
 - **`generated_at` is an instant (UTC); `complete_through` is a calendar date
-  (local).** They answer different questions — *when was this made* versus *what
-  is it complete through* — and only the second protects a number. A consumer
+  (local).** `complete_through` is the last complete local day before the
+  aggregate snapshot's instant, not the snapshot's partial day. They answer
+  different questions — *when was this made* versus *what is it complete
+  through* — and only the second protects a number. A consumer
   asked for "last week" against a file written on Friday must be able to tell
   that Friday, Saturday and Sunday are missing rather than zero. Keeping the two
   apart is the rule in `tools/observability/timestamps.py`, applied here.

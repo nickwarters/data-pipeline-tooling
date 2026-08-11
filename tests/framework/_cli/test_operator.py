@@ -15,6 +15,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURES = ROOT / "tests" / "fixtures"
@@ -478,6 +479,43 @@ def test_run_stale_upstream_reports_clear_error(tmp_path):
     assert "Traceback" not in result.stderr
 
 
+def test_skip_freshness_is_generic_and_params_keep_their_pipeline_meaning(
+    tmp_path, monkeypatch
+):
+    import cli.operator as operator
+
+    loaded = SimpleNamespace(
+        name="_downstream", run=lambda context: None, upstreams=("fresh",)
+    )
+    captured = []
+    monkeypatch.setattr(operator, "load_pipeline", lambda path: loaded)
+    monkeypatch.setattr(
+        operator,
+        "run_pipeline",
+        lambda *args, **kwargs: captured.append(kwargs),
+    )
+
+    args = SimpleNamespace(
+        pipeline="clipipelines/_downstream",
+        base_dir=str(tmp_path),
+        env=None,
+        dry_run=False,
+        params=[("publish_only", "true")],
+        skip_freshness=False,
+        run_date=None,
+        logical_run_id=None,
+        freshness_days=0,
+    )
+    assert operator._run(args) == 0
+    assert captured[-1]["upstreams"] == ("fresh",)
+    assert captured[-1]["params"] == {"publish_only": "true"}
+
+    args.skip_freshness = True
+    assert operator._run(args) == 0
+    assert captured[-1]["upstreams"] == ()
+    assert captured[-1]["params"] == {"publish_only": "true"}
+
+
 def test_run_validation_failure_reports_clear_error(tmp_path, monkeypatch, capsys):
     # A pipeline whose run(context) fails a data check raises ValidationError; the
     # operator should present the message and a non-zero exit, not a traceback.
@@ -500,6 +538,59 @@ def test_run_validation_failure_reports_clear_error(tmp_path, monkeypatch, capsy
 
     assert code == 1
     assert "below required minimum" in capsys.readouterr().err
+
+
+def test_reviewer_publish_only_malformed_gold_is_a_clean_cli_failure(
+    tmp_path, monkeypatch, capsys
+):
+    import pandas as pd
+
+    from cli import operator
+    from framework.core import Dataset
+    from framework.io import Refresh
+    from pipelines.reviewer_activity.pipeline import run
+    from tools.medallion import medallion
+    from tools.store import StoreRegistry
+
+    medallion(StoreRegistry(tmp_path), "reviewer_activity").gold.writer(
+        "reviewer_activity_daily", Refresh()
+    ).write(
+        Dataset.from_pandas(
+            pd.DataFrame(
+                [
+                    {
+                        "reviewer_account": "a.khan",
+                        "reportable_date": "2026-08-01",
+                        "case_type": "claims",
+                        "count": "not-an-int",
+                        "as_of_utc": "2026-08-01T00:00:00+00:00",
+                    }
+                ]
+            )
+        )
+    )
+    monkeypatch.setattr(
+        operator,
+        "load_pipeline",
+        lambda path: SimpleNamespace(name="reviewer_activity", run=run, upstreams=()),
+    )
+
+    code = operator.main(
+        [
+            "run",
+            "pipelines/reviewer_activity",
+            "--base-dir",
+            str(tmp_path),
+            "--skip-freshness",
+            "--param",
+            "publish_only=true",
+        ]
+    )
+
+    error = capsys.readouterr().err
+    assert code == 1
+    assert "expected int" in error
+    assert "Traceback" not in error
 
 
 def test_run_resolves_base_dir_from_env(tmp_path):

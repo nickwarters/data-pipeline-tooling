@@ -9,12 +9,13 @@ import pytest
 
 from framework.core import Dataset
 from framework.io import Refresh
+from framework.run import RunContext
 from pipelines.reviewer_activity.gold import (
     aggregate_reviewer_activity,
     normalize_reviewer_account,
     reviewer_activity_daily_builder,
 )
-from pipelines.reviewer_activity.pipeline import main
+from pipelines.reviewer_activity.pipeline import main, run
 from pipelines.sharepoint_cases.schema import FEED_NAME as SYNC_SUBJECT
 from tests.framework_testing import RecordingWriter, given_rows, read_rows, rows_of
 from tools.medallion import medallion
@@ -143,3 +144,17 @@ def test_main_reads_sync_gold_and_refreshes_the_reporting_subject(tmp_path):
 
     rows = read_rows(reporting.gold, "reviewer_activity_daily")
     assert [row["reviewer_account"] for row in rows] == ["new"]
+
+
+def test_dry_run_stops_before_reading_uncommitted_reviewer_activity_gold(tmp_path):
+    registry = StoreRegistry(tmp_path)
+    sync = medallion(registry, SYNC_SUBJECT)
+    sync.gold.writer("case_current", Refresh()).write(
+        Dataset.from_pandas(pd.DataFrame([_case()]))
+    )
+
+    result = run(RunContext(base_dir=tmp_path, dry_run=True))
+
+    assert len(result) == 1
+    assert not (tmp_path / "reviewer_activity" / "gold.db").exists()
+    assert not (tmp_path / "deliverables").exists()

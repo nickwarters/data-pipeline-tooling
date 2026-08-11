@@ -3,6 +3,11 @@ import re
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+import pandas as pd
+
+from framework.core import Dataset
+from pipelines.reviewer_activity.report_feed import ReportFeedWriter
+
 FIXTURE = (
     Path(__file__).parents[2]
     / "platform_frontend"
@@ -32,14 +37,11 @@ def _iso_date(value: object) -> date:
     return date.fromisoformat(value)
 
 
-def test_my_stats_fixture_freezes_the_report_feed_envelope():
-    payload = json.loads(FIXTURE.read_text(encoding="utf-8"))
-
+def _assert_envelope(payload: dict, account: str) -> None:
     assert set(payload) == ENVELOPE_KEYS
     assert payload["schema_version"] == 1
 
-    account = payload["reviewer_account"]
-    assert account == FIXTURE.stem
+    assert payload["reviewer_account"] == account
     assert account == account.lower()
     assert ACCOUNT_PATTERN.fullmatch(account)
 
@@ -63,3 +65,37 @@ def test_my_stats_fixture_freezes_the_report_feed_envelope():
         pair = (row["date"], row["case_type"])
         assert pair not in pairs
         pairs.add(pair)
+
+
+def test_my_stats_fixture_freezes_the_report_feed_envelope():
+    payload = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    _assert_envelope(payload, FIXTURE.stem)
+
+
+def test_report_feed_writer_output_satisfies_the_frozen_envelope(tmp_path):
+    writer = ReportFeedWriter(
+        tmp_path,
+        generated_at="2026-08-09T04:15:00+00:00",
+    )
+    writer.write(
+        Dataset.from_pandas(
+            pd.DataFrame(
+                [
+                    {
+                        "reviewer_account": "123456",
+                        "date": "2026-08-08",
+                        "case_type": "complaints",
+                        "count": 4,
+                        "as_of_utc": "2026-08-09T04:15:00+00:00",
+                    }
+                ]
+            )
+        )
+    )
+
+    payload = json.loads(
+        (tmp_path / "deliverables/cora_report_feeds/my-stats/123456.txt").read_text(
+            encoding="utf-8"
+        )
+    )
+    _assert_envelope(payload, "123456")

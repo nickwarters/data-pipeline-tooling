@@ -54,3 +54,28 @@ attached.
   row contract.
 - `as_of_utc` is carried from the Sync current-state snapshot. Sync stamps one
   snapshot instant on every current row before publishing its gold tables.
+
+## Part E — Reviewer Report Feed
+
+After the gold table commits, the same Reporting pipeline writes one local JSON
+envelope per Reviewer to
+`<base_dir>/deliverables/cora_report_feeds/my-stats/{account}.txt`. The envelope
+keys are exactly `schema_version`, `reviewer_account`, `generated_at`,
+`complete_through`, and `rows`. Each row has `date`, `case_type`, and `count`;
+rows remain sparse, with no synthetic zero rows.
+
+The feed retains the current partial month and the twelve complete months before
+it. `complete_through` is the last complete local calendar date before the
+aggregate's `as_of_utc` instant, while `generated_at` is the UTC instant at
+which the publication batch ran. Files are rewritten as whole files on
+republish. A
+Reviewer with no rows in the retained window still receives an empty `rows`
+array, and files for Reviewers absent from a later aggregate are left in place.
+The publisher stops at the local outbox; it has no upload or SharePoint
+dependency. A failed publication can be retried from the already-committed gold
+table.
+
+The operator retry command is
+`python -m cli run pipelines/reviewer_activity --base-dir DIR --skip-freshness
+--param publish_only=true`. It bypasses the Sync freshness check for this
+retry; normal runs remain freshness-guarded.
