@@ -31,7 +31,7 @@ def _orchestrator(calendar: WorkingDayCalendar) -> tuple[Orchestrator, list[str]
     return orchestrator, invoker.calls
 
 
-def test_the_schedule_registers_sync_then_reviewer_activity_daily():
+def test_the_schedule_registers_sync_then_reviewer_activity_weekdays():
     sets = build_pipeline_sets()
 
     assert [pipeline_set.name for pipeline_set in sets] == ["case_management"]
@@ -41,7 +41,9 @@ def test_the_schedule_registers_sync_then_reviewer_activity_daily():
     assert sharepoint.schedule == Schedule.daily()
     assert reviewer_activity.path == "pipelines/reviewer_activity"
     assert reviewer_activity.name == "reviewer_activity"
-    assert reviewer_activity.schedule == Schedule.daily()
+    assert reviewer_activity.schedule == Schedule.on_weekdays(
+        "monday", "tuesday", "wednesday", "thursday", "friday"
+    )
     assert reviewer_activity.depends_on
     assert reviewer_activity.depends_on[0].upstream_pipeline == "sharepoint_cases"
     # The path is only an address until something resolves it: a typo would pass
@@ -50,10 +52,21 @@ def test_the_schedule_registers_sync_then_reviewer_activity_daily():
     assert callable(load_pipeline(reviewer_activity.path).run)
 
 
+def test_reviewer_activity_is_due_on_weekdays_but_not_weekends_or_holidays():
+    schedule = build_pipeline_sets()[0].pipelines[1].schedule
+    holiday = dt.date(2026, 8, 10)
+    calendar = WorkingDayCalendar(holidays={holiday})
+
+    assert schedule.is_due(dt.date(2026, 8, 7), calendar)  # Friday
+    assert not schedule.is_due(dt.date(2026, 8, 8), calendar)  # Saturday
+    assert not schedule.is_due(dt.date(2026, 8, 9), calendar)  # Sunday
+    assert not schedule.is_due(holiday, calendar)  # configured holiday Monday
+
+
 def test_a_working_day_pass_invokes_sync_then_reviewer_activity(tmp_path):
     orchestrator, calls = _orchestrator(WorkingDayCalendar())
 
-    result = orchestrator.run_due_once(tmp_path, run_date=dt.date(2026, 8, 5))
+    result = orchestrator.run_due_once(tmp_path, run_date=dt.date(2026, 8, 7))
 
     assert calls == [
         "pipelines/sharepoint_cases",

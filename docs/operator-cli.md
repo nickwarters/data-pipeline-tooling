@@ -250,6 +250,16 @@ A `--app` that names a module which cannot be imported, or which exposes no
 `build_pipeline_sets()`, is a configuration error: it exits non-zero with the
 same clean, traceback-free message every other CLI failure prints.
 
+The real `case_review` app schedules `sharepoint_cases` daily, followed by
+`reviewer_activity` Monday through Friday. The schedule dependency and the
+reviewer pipeline's `UPSTREAMS` declaration both apply the Sync freshness check
+before normal publication. Known stale Sync history blocks normal publication;
+when no successful Sync history exists, the current first-run policy allows the
+run with a warning. After Friday's run, the Monday live tail may continue using
+the Friday artifact, whose `complete_through` is Thursday, until the next
+scheduled working-day run completes. Republishing an already-committed artifact
+remains an explicit `publish_only` retry.
+
 ### Seeding the working-day calendar — `--calendar`
 
 Every schedule judges its run date against a `WorkingDayCalendar`. `--calendar`
@@ -273,9 +283,10 @@ The full file format, the date-parsing rules and the error messages are in
 [working-day-calendar.md](working-day-calendar.md#from-a-calendar-file--workingdaycalendarfrom_yamlpath).
 
 The same file drives every schedule that consults the calendar — `Weekdays`,
-`DayOfMonth`, `NthWorkingDayOfMonth` and `LastWorkingDayOfMonth`. The month-walk
-schedules *count* their working days against it, so seeding the 1st of a month
-as a holiday makes `NthWorkingDayOfMonth(1)` due on the 2nd instead.
+`SpecificWeekdays`, `DayOfMonth`, `NthWorkingDayOfMonth` and
+`LastWorkingDayOfMonth`. The month-walk schedules *count* their working days
+against it, so seeding the 1st of a month as a holiday makes
+`NthWorkingDayOfMonth(1)` due on the 2nd instead.
 
 A skipped item's reason names the aspect of the date its schedule judged, not
 the calendar entry: a daily schedule skipping a Monday holiday prints
@@ -344,8 +355,9 @@ pipelines/
 Schedules are Python definitions owned by the pipeline code. The framework
 provides `Weekdays`, `SpecificWeekdays`, `DayOfMonth`,
 `NthWorkingDayOfMonth`, `LastWorkingDayOfMonth`, and `ManualOnly`. `Weekdays()`
-is the normal "daily" schedule; weekends and holidays are evaluated by
-`WorkingDayCalendar`, seeded by `--calendar`.
+is the normal "daily" schedule, while `SpecificWeekdays` selects named
+weekdays; both honor weekends and holidays from the `WorkingDayCalendar`,
+seeded by `--calendar`.
 
 For everyday authoring, prefer the friendly `Schedule.*` constructors over the
 implementation class names and weekday ordinals — they read as operator language

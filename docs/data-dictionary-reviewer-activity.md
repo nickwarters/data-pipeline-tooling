@@ -25,7 +25,7 @@ the builder is
 | **Reader** | `SqliteReader` over `sharepoint_cases/gold.db` |
 | **Load strategy** | `Refresh()` |
 | **Upstream dependencies** | `sharepoint_cases` Sync pipeline |
-| **Schedule / freshness** | daily, after a fresh Sync run |
+| **Schedule / freshness** | Monday-Friday; known stale Sync history blocks, while missing history is allowed with a first-run warning |
 | **Owner / data steward** | *<team>* |
 | **Source of truth doc** | [ADR-0018](adr/0018-report-feeds-published-locally-delivered-outside-the-framework.md) and [ADR-0019](adr/0019-team-report-feed-attributed-by-the-staff-hierarchy.md) |
 | **Last reviewed** | 2026-08-10 |
@@ -71,6 +71,13 @@ which the publication batch ran. Files are rewritten as whole files on
 republish. A
 Reviewer with no rows in the retained window still receives an empty `rows`
 array, and files for Reviewers absent from a later aggregate are left in place.
+The scheduled pipeline runs Monday through Friday with the Sync freshness
+check. Known stale Sync history blocks normal publication; when no successful
+Sync history exists, the current first-run policy allows the run with a
+warning. Over the weekend, and after Friday until the next scheduled
+working-day run completes, the live tail may keep using Friday's artifact,
+which is complete through Thursday. The `publish_only` retry is an explicit
+way to republish the already-committed gold.
 The publisher stops at the local outbox; it has no upload or SharePoint
 dependency. A failed publication can be retried from the already-committed gold
 table.
