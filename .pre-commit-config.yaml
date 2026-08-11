@@ -18,7 +18,8 @@ repos:
   # (activate the venv, or `pip install -r requirements-dev.txt`) so pytest and
   # its deps resolve cross-platform; `python -m pytest` avoids a hardcoded
   # `.venv/bin` path that would differ on Windows. The whole suite runs once
-  # (pass_filenames: false) whenever any Python file is staged.
+  # (pass_filenames: false) whenever a root-project Python file is staged;
+  # the frontend and Forwarder suites are scoped separately below.
   - repo: local
     hooks:
       - id: pytest
@@ -26,11 +27,19 @@ repos:
         entry: python -m pytest -q
         language: system
         types: [python]
-        exclude: ^platform_frontend/
+        exclude: ^(platform_frontend|forwarder)/
         pass_filenames: false
 
-      # The canonical my-stats fixture is owned by both projects, so changing
-      # it runs the pipeline-side contract test without broadening root pytest.
+      - id: pytest-forwarder
+        name: pytest (forwarder)
+        entry: python -m pytest forwarder/tests -q
+        language: system
+        files: ^forwarder/.+\.py$
+        pass_filenames: false
+
+      # The canonical my-stats fixture is shared by the pipeline and frontend,
+      # so changing it runs the pipeline-side contract test without broadening
+      # root pytest.
       - id: pytest-my-stats-fixture
         name: pytest (my-stats fixture contract)
         entry: python -m pytest tests/integration/test_my_stats_fixture.py -q
@@ -41,8 +50,8 @@ repos:
   # The frontend framework under platform_frontend/ is a separate project with
   # its own toolchain. It enforced these checks through .husky/pre-commit ->
   # lint-staged, which stopped firing the moment it was nested: git reads hooks
-  # only from the repository root. They run from here instead, so the two halves
-  # of the system share one commit gate.
+  # only from the repository root. They run from here instead, so the projects
+  # share one commit gate.
   #
   # `language: system` runs the binaries from platform_frontend/node_modules,
   # keeping its package.json the single source of truth for their versions.

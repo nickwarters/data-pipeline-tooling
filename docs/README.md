@@ -28,13 +28,18 @@ through clean domain abstractions (a `CasePool` of `Case`s) instead of raw
   `tools.environments` lets the per-environment OS variables override them and
   warns when production falls back to its committed default.
 - **The frontend** — this guide covers the pipeline half of the system only. The
-  Case Review Platform frontend is the other half, and keeps its documentation
-  with its code: start at
+  Case Review Platform frontend keeps its documentation with its code: start at
   [`../platform_frontend/docs/`](../platform_frontend/docs/), with its own
   [`CONTEXT.md`](../platform_frontend/CONTEXT.md) glossary and
-  [`adr/`](../platform_frontend/docs/adr/) decision records. The two projects
-  share a repository, not a toolchain — see
-  [`../CLAUDE.md`](../CLAUDE.md) for what runs where.
+  [`adr/`](../platform_frontend/docs/adr/) decision records.
+- **The Forwarder** — the separate delivery project keeps its local guidance at
+  [`../forwarder/CLAUDE.md`](../forwarder/CLAUDE.md), its glossary at
+  [`../forwarder/CONTEXT.md`](../forwarder/CONTEXT.md), and its decisions in
+  [`../forwarder/docs/adr/`](../forwarder/docs/adr/). This scaffold has no
+  runtime behavior and imports nothing from `framework/`.
+
+The three projects share a repository, not a toolchain or release — see
+[`../CLAUDE.md`](../CLAUDE.md) for what runs where.
 
 ---
 

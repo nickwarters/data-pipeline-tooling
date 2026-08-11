@@ -9,23 +9,29 @@ core primitives. Architecture is governed by the ADRs in `docs/adr/` and the
 domain language in `CONTEXT.md`; the core primitives are documented in
 [`docs/core-primitives.md`](docs/core-primitives.md).
 
-**This repository holds two projects.** Everything described below is the Python
-data pipeline tooling, which owns the repository root. The Case Review Platform
-frontend — vanilla JavaScript, no build step, deployed to SharePoint — lives
-entirely under [`platform_frontend/`](platform_frontend/) and is governed by its
-own [`CLAUDE.md`](platform_frontend/CLAUDE.md),
+**This repository holds three projects.** Everything described below is the
+Python data pipeline tooling, which owns the repository root. The Case Review
+Platform frontend — vanilla JavaScript, no build step, deployed to SharePoint —
+lives entirely under [`platform_frontend/`](platform_frontend/) and is governed
+by its own [`CLAUDE.md`](platform_frontend/CLAUDE.md),
 [`CONTEXT.md`](platform_frontend/CONTEXT.md) and
-[`docs/adr/`](platform_frontend/docs/adr/). They were merged into one repository
-so the system can be read and changed in one place; they share a commit gate,
-**not** a toolchain, a domain language, or a release. Two rules follow:
+[`docs/adr/`](platform_frontend/docs/adr/). The Forwarder — an import-only
+Python package shell for the separate delivery application — lives entirely
+under [`forwarder/`](forwarder/) and is governed by its own
+[`CLAUDE.md`](forwarder/CLAUDE.md), [`CONTEXT.md`](forwarder/CONTEXT.md) and
+[`docs/adr/`](forwarder/docs/adr/). They were merged into one repository so the
+system can be read and changed in one place; they share a commit gate, **not** a
+toolchain, a domain language, or a release. Two rules follow:
 
 - **Each project's documentation stays with its code.** The frontend's docs are
   under `platform_frontend/docs/`, not the root `docs/`. Its tests read that tree
   by path and its prettier configuration resolves through it, so moving those
-  docs breaks both. The root [`docs/README.md`](docs/README.md) links across.
+  docs breaks both. The Forwarder's local docs and ADRs stay under
+  `forwarder/`. The root [`docs/README.md`](docs/README.md) links across.
 - **Terms are per-project.** `Case Type` and `Case` in the frontend's CONTEXT.md
   are that application's vocabulary; do not assume they match this project's
-  `case_review/` domain types without checking both glossaries.
+  `case_review/` domain types without checking both glossaries. Forwarder terms
+  are defined in `forwarder/CONTEXT.md`.
 
 - **Language/runtime:** Python 3.12. The `framework/` package is **import-only**
   (on `sys.path`, never `pip install`ed); `pipelines/` holds runnable scripts.
@@ -165,6 +171,9 @@ python3 -m venv .venv
 npm ci --prefix platform_frontend                # install the frontend toolchain (once per clone)
 npm --prefix platform_frontend test              # frontend JS suite (node --test)
 .venv/bin/python -m pytest platform_frontend/tests  # frontend Python suite (deploy + scaffold scripts)
+.venv/bin/python -m pytest forwarder/tests -q     # Forwarder package suite
+.venv/bin/python -m ruff check forwarder          # Forwarder lint
+.venv/bin/python -m ruff format --check forwarder # Forwarder format check
 ```
 
 The two `once per clone` steps — `pre-commit install` and `npm ci --prefix
@@ -176,18 +185,21 @@ fails at commit time with a missing binary rather than a lint error.
 `ruff format` on staged files at commit time once `pre-commit install` has been
 run; a commit is blocked if `ruff check` reports an unfixable error (e.g. an
 unused variable or an over-long line), so fix it and re-stage. The hooks read the
-same `pyproject.toml` config, so they match a local `ruff` invocation. A third
-hook runs the **full `pytest` suite** whenever any Python file is staged (a
-`language: system` local hook, so it uses the active environment — activate the
-venv before committing); a failing test blocks the commit.
+same `pyproject.toml` config, so they match a local `ruff` invocation. The root
+pytest hook runs the **full root `pytest` suite** whenever a root pipeline
+Python file is staged (a `language: system` local hook, so it uses the active
+environment — activate the venv before committing); a failing test blocks the
+commit. Forwarder Python changes run the separate scoped Forwarder pytest hook.
 
-**The two projects are scoped apart, deliberately.** `ruff` and the root `pytest`
-hook both stop at `platform_frontend/`: `extend-exclude` plus `force-exclude` in
+**The three projects are scoped apart, deliberately.** `ruff` and the root
+`pytest` hook stop at `platform_frontend/`: `extend-exclude` plus `force-exclude` in
 `pyproject.toml` (the second matters because pre-commit passes staged filenames
 explicitly, which otherwise overrides `extend-exclude`), `testpaths` for pytest,
-and an `exclude:` on the hook. The frontend's Python is a JavaScript project's
-helper scripts and is not held to this project's style. In return,
-`.pre-commit-config.yaml` carries four hooks scoped to `platform_frontend/` —
+and an `exclude:` on the hook. The root pytest hook additionally excludes
+`forwarder/`; its dedicated Forwarder pytest hook is scoped to that project.
+The frontend's Python is a JavaScript project's helper scripts and is not held
+to this project's style. In return, `.pre-commit-config.yaml` carries four hooks
+scoped to `platform_frontend/` and one pytest hook scoped to `forwarder/` —
 `eslint --fix` and `prettier --write` (what its `.husky/pre-commit` +
 `lint-staged` ran before nesting silenced them, since git reads hooks only from
 the repository root), plus its `pytest` and `node --test` suites. Adding a check
@@ -196,7 +208,7 @@ into the other. The one deliberate cross-project exception is the canonical
 `platform_frontend/dev/fixtures/my-stats/*.txt` Report Feed fixture: its narrow
 hook runs the pipeline contract test, while the frontend Prettier and Node hooks
 also include that exact directory. The existing root `pytest` hook remains
-Python-only and continues to exclude the frontend tree.
+Python-only and excludes both the frontend and Forwarder trees.
 
 Run pipelines as **modules from the repo root** (`python -m pipelines.<name>`)
 so the import-only `framework` package resolves on `sys.path`. The framework
