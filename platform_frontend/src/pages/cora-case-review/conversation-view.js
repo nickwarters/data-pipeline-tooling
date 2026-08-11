@@ -63,10 +63,21 @@ function conversationCompose(onSend) {
             event?.currentTarget ?? event?.target ?? null
           );
           const compose = button?.closest('.cora-conversation-compose');
+          if (!compose) {
+            console.warn(
+              '[CORA] Conversation Send: missing .cora-conversation-compose'
+            );
+            return;
+          }
           const textarea = /** @type {HTMLTextAreaElement | null} */ (
-            compose?.querySelector('.cora-conversation-input')
+            compose.querySelector('.cora-conversation-input')
           );
-          if (!textarea) return;
+          if (!textarea) {
+            console.warn(
+              '[CORA] Conversation Send: missing .cora-conversation-input'
+            );
+            return;
+          }
           const body = (textarea.value ?? '').trim();
           if (!body) return;
           textarea.value = '';

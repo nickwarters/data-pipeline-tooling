@@ -146,6 +146,11 @@ The router-internal baseline is now zero and must remain zero. Use
 `initRouter()` and `routeRegistrationSpy()` from `tests/helpers/router.js` for
 real-navigation and registration-only tests respectively.
 
+Selector-backed controls should log a `[CORA]` warning naming the missing
+selector before returning without side effects. Test this contract by locating
+the control semantically, then deliberately renaming or removing its selector
+class to exercise the failure.
+
 ## Pure view and reducer tests
 
 Render the exported view from state, interact through semantic DOM helpers, and
