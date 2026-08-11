@@ -16,14 +16,15 @@ how its destination receives a file; handler behavior is not implemented in
 this slice.
 
 **Archive**:
-The destination-side location for a file after successful delivery. It is
-distinct from the pending deliverable outbox, whose canonical layout is
-defined by the root glossary's [Deliverable outbox](../CONTEXT.md#deliverable-outbox).
+The Forwarder-owned location in the base directory, beside the outbox, for a
+file after successful delivery. It is distinct from the pending deliverable
+outbox, whose canonical layout is defined by the root glossary's
+[Deliverable outbox](../CONTEXT.md#deliverable-outbox).
 
 **Dead letter**:
-The destination-side location for a file that has exhausted the Forwarder's
-future retry allowance. The mechanics for deciding or moving a dead letter
-are not implemented in this slice.
+The Forwarder-owned location in the base directory, beside the archive, for a
+file that has exhausted the Forwarder's retry allowance. The mechanics for
+deciding or moving a dead letter are not implemented in this slice.
 
 **Tick**:
 One planned pass of the Forwarder's long-running delivery loop. A Tick is a
