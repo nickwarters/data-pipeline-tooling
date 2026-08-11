@@ -96,6 +96,7 @@ _Avoid_: summary, rollup, cube, report (that is a **Deliverable**)
 The single instant a set of gold tables describes the world *as at*, stamped on every row as `as_of_utc`. For a **Polling Feed** it is the candidate window end the run is about to commit as its watermark — never "now": a re-drive of the same window must produce identical gold, and reading the clock inside the reduce would break that. It is an *instant* (UTC); where a **calendar date** is derived from it, the conversion to the local date is explicit, because instants are UTC and calendar dates are local.
 _Avoid_: run date (that is run metadata, and local), snapshot date, load_date (that is a batch-load stamp a Polling Feed does not carry)
 
+<a id="deliverable"></a>
 **Deliverable**:
 An outbound artifact a Pipeline produces for downstream consumption, in one of three concrete forms: a **file** (CSV/Excel/JSON), a **directly-readable view/table** the consumer reads, or **rows pushed to a platform-owned remote list** (a SharePoint Subscription Edition list — the canonical **Selection** Deliverable, one list per Case Type). The push form is an *active* write to a system the framework does not own, not a passive artifact left for collection; files are reserved for **Reporting** outputs. Emitted by a **Writer**: `CsvWriter`, `ExcelWriter`, and `JsonWriter` emit file Deliverables; SQLite Writers emit directly-readable tables; the stubbed `SharePointWriter` is the outbound dual of the **SharePoint Reader** (same source type, both directions).
 
@@ -104,6 +105,7 @@ An outbound artifact a Pipeline produces for downstream consumption, in one of t
 A **fourth form** joins the three above: a **file destined for a platform-owned document library** — the review platform reads it back over HTTP as an artifact rather than as list rows. It is how **Reporting** hands pre-computed figures to the review platform's UI, so the browser renders a number rather than deriving one. Three rules hold it in place. It is delivered to a **report-feed library of its own** (`Shared Documents/cora_report_feeds/…`), never the Style Library and never the front end's deployed tree (`Style Library/CODE/CORA`): that tree is code, its deploy **deletes any remote file with no counterpart in the repository**, so an artifact written there would vanish at the next deploy. Its content is **JSON stored in a `.txt` file**, for the same reason the Question Bank artifacts are — SharePoint SE is unreliable serving `.json`. And a **stale Report Feed is kept, never deleted**: it carries the date its figures are complete through, so an old one tells the truth about itself, where an absent one only says "broken". Being outside the deployed tree is also what keeps it clear of the front end's "deployed bytes are source bytes" rule: it is published data, not shipped code.
 _Avoid_: report, export, output feed (say **Report Feed** — see below)
 
+<a id="report-feed"></a>
 **Report Feed**:
 A **Deliverable** whose consumer is a report, or a UI that renders one. Named from the **consumer's** side, which is the whole point of the term: the same artifact is *outbound* to the pipeline that emits it and *inbound* to the SharePoint page that reads it, and both readings are honest. The qualifier carries the direction, so **`Feed` unqualified stays strictly inbound** and nothing in the ingest half of this glossary shifts. Say "the pipeline emits a Deliverable" when the subject is the pipeline, and "the page reads a Report Feed" when the subject is the consumer — they are the same bytes. The library `Shared Documents/cora_report_feeds/` is named on the consumer's side for the same reason.
 
@@ -266,6 +268,7 @@ registry" step a run or a plan takes before consulting history. Before it, the
 same three path fragments were spelled out in the runner, the orchestrator and
 the operator CLI; a layout with no owner drifts.
 
+<a id="deliverable-outbox"></a>
 **Deliverable outbox**:
 The owner of a base directory's local deliverable layout —
 `<base_dir>/deliverables/<destination>/…` — is `tools.deliverables`. Its
