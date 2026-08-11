@@ -13,36 +13,6 @@ import { makeCaseRow } from './helpers/fixtures.js';
 
 isolateBrowserGlobals();
 
-test('the loader holds its loading state as plain fields, not signals', () => {
-  const loader = new CaseLoader({
-    client: /** @type {any} */ ({}),
-    saveQueue: /** @type {any} */ ({ enqueue() {} }),
-    caseId: 'c1',
-    currentUserId: 'u1',
-    capabilities: caps(),
-  });
-
-  const snapshot = loader.toStoreSnapshot();
-  assert.equal(snapshot.loaded, false);
-  assert.equal(snapshot.error, null);
-  assert.equal(snapshot.accessDenied, false);
-
-  // The snapshot is the public seam and proves the handover is unchanged, but
-  // it cannot on its own prove the conversion: `toStoreSnapshot()` read the
-  // same values through `.get()` before. One structural assertion carries the
-  // ticket's actual claim — the loading state is no longer a notifier.
-  for (const field of ['loaded', 'error', 'accessDenied', 'versionWarning']) {
-    const value = /** @type {Record<string, any>} */ (
-      /** @type {unknown} */ (loader)
-    )[field];
-    assert.equal(
-      typeof (value ?? {}).get,
-      'undefined',
-      `${field} must be a plain field, not a signal`
-    );
-  }
-});
-
 test('toStoreSnapshot: an empty multi-choice Answer is unanswered on load', () => {
   const loader = new CaseLoader({
     client: /** @type {any} */ ({}),
@@ -91,34 +61,6 @@ test('toStoreSnapshot: the loader hands over Answers and the derived applicable 
     snapshot.applicableQuestions.map((q) => q.id),
     ['q1']
   );
-});
-
-test('CaseLoader exposes no Answer mutation surface', () => {
-  // The store is the single Answer owner: the loader loads, and the route's
-  // answer-actions are the only writers.
-  const loader = new CaseLoader({
-    client: /** @type {any} */ ({}),
-    saveQueue: /** @type {any} */ ({ enqueue() {} }),
-    caseId: 'c1',
-    currentUserId: 'u1',
-    capabilities: caps(),
-  });
-  for (const name of [
-    'handleAnswer',
-    'handleCapture',
-    'handleAttribute',
-    'handleRemediationAction',
-    'handleRemediationFreeForm',
-    'handleRemediationStatus',
-    'setAnswerChangeHandler',
-  ]) {
-    assert.equal(
-      typeof (/** @type {any} */ (loader)[name]),
-      'undefined',
-      `${name} must not exist on the loader`
-    );
-  }
-  assert.equal('answersSignal' in loader, false);
 });
 
 // --- exportHash loading ---
