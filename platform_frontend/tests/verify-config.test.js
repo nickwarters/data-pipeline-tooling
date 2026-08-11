@@ -210,13 +210,48 @@ test('checkCaseTypes fails a showWhen cycle', async () => {
 test('checkCaseTypes fails an unknown key in sections', async () => {
   const failures = await checkCaseTypes({
     caseTypes: [
-      demoEntry(demoConfig({ sections: { details: {}, mystery: {} } })),
+      demoEntry(
+        demoConfig({ sections: { summary: {}, details: {}, mystery: {} } })
+      ),
     ],
   });
 
   assert.equal(failures.length, 1);
   assert.match(failures[0].message, /mystery/);
   assert.match(failures[0].message, /sections/);
+});
+
+test('checkCaseTypes accepts omitted sections but requires summary when explicit', async () => {
+  assert.deepEqual(
+    await checkCaseTypes({ caseTypes: [demoEntry(demoConfig())] }),
+    []
+  );
+  for (const sections of [{}, { details: {} }]) {
+    const failures = await checkCaseTypes({
+      caseTypes: [demoEntry(demoConfig({ sections }))],
+    });
+    assert.equal(failures.length, 1);
+    assert.match(failures[0].message, /include the `summary` Section/);
+  }
+  assert.deepEqual(
+    await checkCaseTypes({
+      caseTypes: [demoEntry(demoConfig({ sections: { summary: {} } }))],
+    }),
+    []
+  );
+});
+
+test('checkCaseTypes rejects malformed explicit sections values', async () => {
+  for (const sections of [null, [], 'summary']) {
+    const failures = await checkCaseTypes({
+      caseTypes: [demoEntry(demoConfig({ sections }))],
+    });
+    assert.equal(failures.length, 1);
+    assert.match(
+      failures[0].message,
+      /must be an object containing a `summary` Section/
+    );
+  }
 });
 
 test('checkCaseTypes accepts declared review-cadence thresholds', async () => {
@@ -276,7 +311,10 @@ test('checkCaseTypes fails an unknown role in a showInSummary list', async () =>
     caseTypes: [
       demoEntry(
         demoConfig({
-          sections: { issues: { showInSummary: ['controls', 'auditor'] } },
+          sections: {
+            summary: {},
+            issues: { showInSummary: ['controls', 'auditor'] },
+          },
         })
       ),
     ],
@@ -293,6 +331,7 @@ test('checkCaseTypes accepts the boolean form of showInSummary', async () => {
       demoEntry(
         demoConfig({
           sections: {
+            summary: {},
             issues: { showInSummary: true },
             notes: { showInSummary: false },
           },

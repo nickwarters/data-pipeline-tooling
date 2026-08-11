@@ -2,16 +2,20 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { isolateBrowserGlobals } from './helpers/browser-globals.js';
+import { installDom, findByClass } from './_dom-stub.js';
+import { fireEvent } from './helpers/semantic-dom.js';
 import { CaseMachine } from '../src/lib/case-machine.js';
 import {
   completeCase,
   completionControl,
+  completionControlView,
   completionPatch,
   readyToClose,
 } from '../src/pages/cora-case-review/completion-actions.js';
 import { makeCaseRow, makePermissions } from './helpers/fixtures.js';
 
 isolateBrowserGlobals();
+installDom();
 /** @type {any} */ (globalThis).location = { hash: '' };
 
 const CASE_ROW = makeCaseRow({
@@ -57,6 +61,65 @@ function machine(catalogue = CATALOGUE) {
     catalogue,
   });
 }
+
+test('completionControlView renders the existing completion control markup and callback', () => {
+  let completed = 0;
+  const node = completionControlView({
+    control: {
+      visible: true,
+      disabled: false,
+      label: 'Complete Case',
+      reason: 'Finish the remaining work.',
+    },
+    pending: false,
+    onComplete: () => {
+      completed += 1;
+    },
+  });
+  const root = findByClass({ _children: [node] }, 'cora-completion');
+  const button = root.querySelector('.cora-complete-btn');
+  assert.equal(button.textContent, 'Complete Case');
+  assert.equal(button.disabled, false);
+  assert.equal(button.title, 'Finish the remaining work.');
+  assert.equal(
+    root.querySelector('.cora-completion-reason').textContent,
+    'Finish the remaining work.'
+  );
+  const pending = completionControlView({
+    control: {
+      visible: true,
+      disabled: false,
+      label: 'Complete Case',
+      reason: null,
+    },
+    pending: true,
+    onComplete: () => {},
+  });
+  assert.equal(
+    findByClass({ _children: [pending] }, 'cora-completion').querySelector(
+      '.cora-complete-btn'
+    ).disabled,
+    true
+  );
+  const disabled = completionControlView({
+    control: {
+      visible: true,
+      disabled: true,
+      label: 'Complete Case',
+      reason: 'Still blocked.',
+    },
+    pending: false,
+    onComplete: () => {},
+  });
+  assert.equal(
+    findByClass({ _children: [disabled] }, 'cora-completion').querySelector(
+      '.cora-complete-btn'
+    ).disabled,
+    true
+  );
+  fireEvent(button, 'click');
+  assert.equal(completed, 1);
+});
 
 test('completionPatch freezes outcome and effective columns in the lifecycle PATCH', () => {
   const answers = {

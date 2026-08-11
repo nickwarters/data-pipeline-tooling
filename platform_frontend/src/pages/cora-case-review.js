@@ -31,10 +31,9 @@ import {
 import { SECTION_PANELS } from './cora-case-review/section-panels.js';
 import {
   completeCase,
-  completionControl,
   completionPatch,
 } from './cora-case-review/completion-actions.js';
-import { voidControl, voidPatch } from './cora-case-review/void-actions.js';
+import { voidPatch } from './cora-case-review/void-actions.js';
 import { voidReasonLabel } from '../lib/void-reasons.js';
 
 /** @typedef {import('../services/save-queue.js').SaveStatus} SaveStatus */
@@ -592,7 +591,6 @@ export function createRouteSlice(params, context) {
    *   holdControl: HTMLElement,
    *   panels: Record<string, HTMLElement>,
    *   conversation: HTMLElement,
-   *   completion: HTMLElement,
    * }} */
   let shell = null;
 
@@ -665,8 +663,8 @@ export function createRouteSlice(params, context) {
     save.answersEdited(next);
   }
 
-  /** @param {Element} container @param {any} tools */
-  function ensureShell(container, tools) {
+  /** @param {Element} container */
+  function ensureShell(container) {
     if (shell) return shell;
     const status = h('div', { className: 'cora-case-review__save-status' });
     const header = h('header');
@@ -692,9 +690,6 @@ export function createRouteSlice(params, context) {
     const conversation = h('div', {
       className: 'cora-case-review__conversation',
     });
-    const completion = h('div', {
-      className: 'cora-case-review__completion',
-    });
     const root = h(
       'div',
       {
@@ -714,8 +709,7 @@ export function createRouteSlice(params, context) {
         ),
         ...Object.values(panels)
       ),
-      conversation,
-      completion
+      conversation
     );
     // The router leaves the previous route's DOM in the container; rendering
     // over it would patch those foreign nodes in place and leave this shell's
@@ -730,14 +724,13 @@ export function createRouteSlice(params, context) {
       holdControl,
       panels,
       conversation,
-      completion,
     };
     return shell;
   }
 
   /** @param {CaseReviewState} state @param {any} tools @param {Element} container */
   function renderRoute(state, tools, container) {
-    const parts = ensureShell(container, tools);
+    const parts = ensureShell(container);
     const route = state.routes.caseReview;
     const snapshot = route.snapshot;
     tools.render(parts.status, StatusBanner({ status: route.saveStatus }));
@@ -823,6 +816,87 @@ export function createRouteSlice(params, context) {
       clearResponsiblePartySearch();
     };
 
+    const onComplete = async () => {
+      const patchFields = completionPatch({
+        machine: snapshot.machine,
+        caseRow,
+        catalogue: snapshot.catalogue,
+        answers: snapshot.answers,
+        allAnswered: snapshot.allAnswered,
+        captureGroups: config.captureGroups ?? [],
+        computeOutcome: config.computeOutcome,
+        exportHash: snapshot.exportHash,
+      });
+      if (!patchFields) return;
+      tools.dispatch({
+        type: 'case/completion-pending',
+        pending: true,
+      });
+      try {
+        const persisted = await completeCase({
+          caseId: caseId(),
+          client: context.client,
+          saveQueue: context.saveQueue,
+          patchFields,
+          caseListOptions: snapshot.caseListOptions,
+        });
+        // Only the fields travel, never this closure's `snapshot` or `caseRow`:
+        // both are as of the last render, two network round-trips ago, so
+        // replaying either would revert a concurrent Answer or Conversation edit.
+        // The reducer patches whatever the store holds now.
+        if (persisted && tools.isActive()) {
+          tools.dispatch({
+            type: 'case/case-row-patched',
+            fields: patchFields,
+          });
+        }
+      } finally {
+        // Both dispatches are post-`await`, so both take the mount-lifetime
+        // guard — dispatching into a disposed mount still runs the reducer, and
+        // only the render is suppressed.
+        if (tools.isActive()) {
+          tools.dispatch({
+            type: 'case/completion-pending',
+            pending: false,
+          });
+        }
+      }
+    };
+
+    const onVoid = async () => {
+      const patchFields = voidPatch({
+        machine: snapshot.machine,
+        config,
+        reasonKey: route.voidReason,
+      });
+      if (!patchFields) return;
+      tools.dispatch({ type: 'case/void-pending', pending: true });
+      try {
+        const persisted = await completeCase({
+          caseId: caseId(),
+          client: context.client,
+          saveQueue: context.saveQueue,
+          patchFields,
+          caseListOptions: snapshot.caseListOptions,
+        });
+        // Only the fields travel, for the same reason completion sends only
+        // its own: the snapshot in this closure is two round-trips old.
+        if (persisted && tools.isActive()) {
+          tools.dispatch({
+            type: 'case/case-row-patched',
+            fields: patchFields,
+          });
+        }
+      } finally {
+        if (tools.isActive()) {
+          tools.dispatch({
+            type: 'case/void-pending',
+            pending: false,
+          });
+        }
+      }
+    };
+
     // The panel renderers' half of the contract. Rebuilt per render because
     // `onAnswer` and `captureEdited` close over this render's snapshot;
     // `currentAnswers` stays a getter so a memoised card's surviving callback
@@ -839,6 +913,8 @@ export function createRouteSlice(params, context) {
       requestResponsiblePartySearch,
       save,
       appeals,
+      onComplete,
+      onVoid,
     };
 
     tools.render(parts.header, [
@@ -964,213 +1040,6 @@ export function createRouteSlice(params, context) {
               });
             },
           })
-    );
-    const completion = completionControl({
-      machine: snapshot.machine,
-      caseRow,
-      catalogue: snapshot.catalogue,
-      answers: snapshot.answers,
-      allAnswered: snapshot.allAnswered,
-      captureGroups: config.captureGroups ?? [],
-    });
-    const voiding = voidControl({
-      machine: snapshot.machine,
-      config,
-      reasonKey: route.voidReason,
-    });
-    tools.render(parts.completion, [
-      completion.visible
-        ? h(
-            'div',
-            { className: 'cora-completion', key: 'completion' },
-            h(
-              'button',
-              {
-                className: 'cora-complete-btn',
-                disabled: route.completionPending || completion.disabled,
-                title: completion.reason ?? '',
-                onclick: async () => {
-                  const patchFields = completionPatch({
-                    machine: snapshot.machine,
-                    caseRow,
-                    catalogue: snapshot.catalogue,
-                    answers: snapshot.answers,
-                    allAnswered: snapshot.allAnswered,
-                    captureGroups: config.captureGroups ?? [],
-                    computeOutcome: config.computeOutcome,
-                    exportHash: snapshot.exportHash,
-                  });
-                  if (!patchFields) return;
-                  tools.dispatch({
-                    type: 'case/completion-pending',
-                    pending: true,
-                  });
-                  try {
-                    const persisted = await completeCase({
-                      caseId: caseId(),
-                      client: context.client,
-                      saveQueue: context.saveQueue,
-                      patchFields,
-                      caseListOptions: snapshot.caseListOptions,
-                    });
-                    // Only the fields travel, never this closure's `snapshot`
-                    // or `caseRow`: both are as of the last render, two network
-                    // round-trips ago, so replaying either would revert a
-                    // concurrent Answer or Conversation edit. The reducer
-                    // patches whatever the store holds now.
-                    if (persisted && tools.isActive()) {
-                      tools.dispatch({
-                        type: 'case/case-row-patched',
-                        fields: patchFields,
-                      });
-                    }
-                  } finally {
-                    // Both dispatches are post-`await`, so both take the
-                    // mount-lifetime guard — dispatching into a disposed mount
-                    // still runs the reducer, and only the render is suppressed.
-                    if (tools.isActive()) {
-                      tools.dispatch({
-                        type: 'case/completion-pending',
-                        pending: false,
-                      });
-                    }
-                  }
-                },
-              },
-              completion.label
-            ),
-            // The gate's reason travels with the button rather than living only
-            // on the Remediation tab, so it is legible from wherever the Reviewer
-            // is standing.
-            ...(completion.reason
-              ? [
-                  h(
-                    'p',
-                    { className: 'cora-completion-reason' },
-                    completion.reason
-                  ),
-                ]
-              : [])
-          )
-        : null,
-      voiding.visible
-        ? voidNode(route, voiding, tools, snapshot, config)
-        : null,
-    ]);
-  }
-
-  /**
-   * The actions the Void control dispatches, spelled out so a mistyped action
-   * type inside it is a compile error rather than a dispatch nothing handles.
-   *
-   * @typedef {{ type: 'case/void-panel-toggled' }
-   *   | { type: 'case/void-reason-selected', reasonKey: string }
-   *   | { type: 'case/void-pending', pending: boolean }
-   *   | { type: 'case/case-row-patched', fields: Partial<import('../sharepoint-client.js').CaseRow> }
-   * } VoidAction
-   */
-
-  /**
-   * The Void control: a disclosure button, then a panel naming the
-   * consequences, the reason list and the confirm. Two steps by design — a
-   * transition with no way back does not sit behind a single click.
-   *
-   * @param {CaseReviewRouteState} route
-   * @param {ReturnType<typeof voidControl>} control
-   * @param {{
-   *   dispatch: (action: VoidAction) => void,
-   *   isActive: () => boolean,
-   * }} tools
-   * @param {CaseReviewSnapshot} snapshot
-   * @param {import('../sharepoint-client.js').CaseTypeConfig} config
-   */
-  function voidNode(route, control, tools, snapshot, config) {
-    return h(
-      'div',
-      { className: 'cora-void', key: 'void' },
-      h(
-        'button',
-        {
-          className: 'cora-void-btn',
-          'aria-expanded': String(route.voidPanelOpen),
-          onclick: () => tools.dispatch({ type: 'case/void-panel-toggled' }),
-        },
-        'Void Case…'
-      ),
-      route.voidPanelOpen
-        ? h(
-            'div',
-            { className: 'cora-void-panel' },
-            h(
-              'p',
-              { className: 'cora-void-consequence' },
-              'Voiding closes this Case for good. It records no Outcome, it cannot be reopened, and the Conversation stops accepting messages.'
-            ),
-            h(
-              'label',
-              {},
-              'Reason for voiding',
-              h(
-                'select',
-                {
-                  className: 'cora-void-reason',
-                  value: control.reason,
-                  onchange: (/** @type {any} */ event) =>
-                    tools.dispatch({
-                      type: 'case/void-reason-selected',
-                      reasonKey: event.target.value,
-                    }),
-                },
-                h('option', { value: '' }, '— Select a reason —'),
-                ...control.reasons.map((reason) =>
-                  h('option', { value: reason.key }, reason.label)
-                )
-              )
-            ),
-            h(
-              'button',
-              {
-                className: 'cora-void-confirm',
-                disabled: route.voidPending || control.disabled,
-                onclick: async () => {
-                  const patchFields = voidPatch({
-                    machine: snapshot.machine,
-                    config,
-                    reasonKey: route.voidReason,
-                  });
-                  if (!patchFields) return;
-                  tools.dispatch({ type: 'case/void-pending', pending: true });
-                  try {
-                    const persisted = await completeCase({
-                      caseId: caseId(),
-                      client: context.client,
-                      saveQueue: context.saveQueue,
-                      patchFields,
-                      caseListOptions: snapshot.caseListOptions,
-                    });
-                    // Only the fields travel, for the same reason completion
-                    // sends only its own: the snapshot in this closure is two
-                    // round-trips old.
-                    if (persisted && tools.isActive()) {
-                      tools.dispatch({
-                        type: 'case/case-row-patched',
-                        fields: patchFields,
-                      });
-                    }
-                  } finally {
-                    if (tools.isActive()) {
-                      tools.dispatch({
-                        type: 'case/void-pending',
-                        pending: false,
-                      });
-                    }
-                  }
-                },
-              },
-              'Void Case'
-            )
-          )
-        : null
     );
   }
 

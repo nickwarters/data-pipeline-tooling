@@ -298,6 +298,12 @@ What each field does, and how to choose its value:
   is the current standard full set — start from it and remove what the type
   genuinely doesn't need.
 
+  An explicit `sections` object must retain `summary`, even when no other
+  Summary block is configured. Omitting `sections` is still valid and keeps the
+  default Section configuration. The **Send Actions** / **Complete Case**
+  control is placed on Summary, while the two-step **Void Case** control is
+  placed on Case Details; `showInSummary` does not move either action.
+
   `showInSummary` also takes a **list of roles** instead of a boolean, naming who
   the block is composed for rather than switching it on for everyone:
 

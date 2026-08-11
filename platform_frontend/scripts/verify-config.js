@@ -594,30 +594,50 @@ function checkSections(slug, file, config) {
     file,
     message,
   });
-  return Object.entries(
-    /** @type {Record<string, any>} */ (config?.sections ?? {})
-  ).flatMap(([key, value]) => {
-    if (!known.has(/** @type {any} */ (key))) {
-      return [
-        fail(
-          `Case Type "${slug}": unknown \`sections\` key "${key}" — no such Case Review Section`
-        ),
-      ];
-    }
-    // The role vocabulary is closed and code-owned, so a typo in a Summary role
-    // list would otherwise be silent: the block would simply be composed for
-    // nobody holding that name, which is exactly what an unnamed role looks like.
-    const showIn = value?.showInSummary;
-    return Array.isArray(showIn)
-      ? showIn
-          .filter((r) => !knownRoles.has(r))
-          .map((r) =>
-            fail(
-              `Case Type "${slug}": unknown role "${r}" in \`sections.${key}.showInSummary\``
+  const sections = config?.sections;
+  if (sections === undefined) return [];
+  if (
+    sections === null ||
+    typeof sections !== 'object' ||
+    Array.isArray(sections)
+  ) {
+    return [
+      fail(
+        `Case Type "${slug}": explicit \`sections\` must be an object containing a \`summary\` Section`
+      ),
+    ];
+  }
+  if (!Object.hasOwn(sections, 'summary')) {
+    return [
+      fail(
+        `Case Type "${slug}": explicit \`sections\` must include the \`summary\` Section`
+      ),
+    ];
+  }
+  return Object.entries(/** @type {Record<string, any>} */ (sections)).flatMap(
+    ([key, value]) => {
+      if (!known.has(/** @type {any} */ (key))) {
+        return [
+          fail(
+            `Case Type "${slug}": unknown \`sections\` key "${key}" — no such Case Review Section`
+          ),
+        ];
+      }
+      // The role vocabulary is closed and code-owned, so a typo in a Summary role
+      // list would otherwise be silent: the block would simply be composed for
+      // nobody holding that name, which is exactly what an unnamed role looks like.
+      const showIn = value?.showInSummary;
+      return Array.isArray(showIn)
+        ? showIn
+            .filter((r) => !knownRoles.has(r))
+            .map((r) =>
+              fail(
+                `Case Type "${slug}": unknown role "${r}" in \`sections.${key}.showInSummary\``
+              )
             )
-          )
-      : [];
-  });
+        : [];
+    }
+  );
 }
 
 /**

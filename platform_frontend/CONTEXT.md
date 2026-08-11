@@ -70,11 +70,10 @@ _Avoid_: Void code, cancellation reason
 **Case Status**:
 The lifecycle state on the Case row: **`In-progress`** → (**Send Actions** if any
 Remediation Actions exist) **`Actions In Progress`** → **`Completed`**, or `In-progress`
-→ (**Complete Case** when no actions) → `Completed`. One button at the bottom
-of **Summary** drives the transition, labelled **"Send Actions"** when actions exist and
+→ (**Complete Case** when no actions) → `Completed`. The completion control lives on the **Summary** tab and drives the transition, labelled **"Send Actions"** when actions exist and
 **"Complete Case"** otherwise. A third, terminal exit leaves either live status: **`Void`**
-(see **Void Case**), reached from the Void control beside that button and never returned
-from.
+(see **Void Case**), reached from the two-step Void control on **Case Details** and never
+returned from.
 _Avoid_: State (overloaded), phase
 
 **Reportable**:
@@ -135,6 +134,9 @@ Summary + Conversation).
 
 **Summary**:
 A read-only Section that rolls up the whole Case onto one page: the **Case Details** fields, pass/fail counts per **Question Group**, **Remediation Action** counts, each _failed_ **Answer** with its actions, key dates, and the computed **Outcome**. Composed from the other Sections by their per-Section `showInSummary`, either a flag or a list of the roles that block is composed for — a role list can only narrow, since the Section's access mode is checked first (**Notes** is excluded by default; **Case Details** is folded in, so the **Adviser**/Responsible Party needs no separate Details tab). Never editable — only `read-only` or `hidden`. **Responsible Party gating widened**: hidden while **`In-progress`**, visible `read-only` once the Case is **Reportable** (`Actions In Progress` _or_ `Completed`), so the Adviser can see the Summary while remediation is underway. Derivation is _hybrid_ and freezes at **Reportable**: live from current **Answers** while In-progress; once Reportable, the Outcome block reads the **Current Outcome** (`amendedOutcome?.outcome ?? outcomeAtCompletion`) while counts and the failed-Answer list recompute from the Case's frozen Answers, showing each action's `status`/`cancelReason` and the **Remediation Due Date**. **Outcome** is a block _within_ Summary, not its own Section or tab.
+The **Send Actions** / **Complete Case** control is owned by this tab; the **Void Case**
+control is owned by **Case Details**. When a Case Type explicitly supplies `sections`, its
+map must include `summary`; omitting `sections` keeps the default Section configuration.
 _Avoid_: Outcome (now a block inside Summary, not a standalone Section), Overview, Report
 
 ### Questions & answers

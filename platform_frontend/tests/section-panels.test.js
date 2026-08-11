@@ -5,6 +5,8 @@ import assert from 'node:assert/strict';
 import { installDom, findByClass } from './_dom-stub.js';
 import { fireEvent } from './helpers/semantic-dom.js';
 import { SECTION_REGISTRY, tabEntries } from '../src/lib/section-registry.js';
+import { resolveSectionLabels } from '../src/lib/section-labels.js';
+import { makeCaseRow, makeChrome } from './helpers/fixtures.js';
 
 installDom();
 
@@ -53,6 +55,110 @@ test('adding a tab Section without a panel breaks the correspondence', () => {
 
 test('conversation is not a panel — it is a floating overlay', () => {
   assert.equal('conversation' in SECTION_PANELS, false);
+});
+
+test('the panel map owns completion on Summary and Void on Case Details', () => {
+  const chrome = makeChrome({ currentUser: { id: 'u1' } });
+  const caseRow = makeCaseRow({
+    id: 'c1',
+    title: 'Case',
+    assignedReviewer: 'u1',
+    responsibleParty: 'u2',
+  });
+  /** @type {import('../src/sharepoint-client.js').CaseTypeConfig} */
+  const config = {
+    questions: [],
+    computeOutcome: () => ({ outcome: 'pass' }),
+    outcomeOptions: [],
+    defaultOutcomeId: 'pass',
+    captureGroups: [],
+    detailFields: [],
+  };
+  /** @type {import('../src/pages/cora-case-review.js').CaseReviewSnapshot} */
+  const snapshot = {
+    loaded: true,
+    error: null,
+    accessDenied: false,
+    caseRow,
+    currentUser: chrome.currentUser,
+    catalogue: [],
+    answers: {},
+    applicableQuestions: [],
+    allAnswered: true,
+    summarySections: [],
+    sectionLabels: resolveSectionLabels(null),
+    exportHash: null,
+    versionWarning: null,
+    access: {
+      details: 'read-only',
+      questions: 'edit',
+      issues: 'edit',
+      remediation: 'hidden',
+      summary: 'read-only',
+      notes: 'edit',
+      conversation: 'edit',
+      appealRequest: 'hidden',
+      appealReview: 'hidden',
+      amendOutcome: 'hidden',
+    },
+    machine: /** @type {any} */ ({
+      canComplete: true,
+      canVoid: true,
+      mayResolveRemediation: false,
+      catalogue: [],
+    }),
+    config,
+    caseListOptions: {},
+  };
+  /** @type {import('../src/pages/cora-case-review.js').CaseReviewRouteState} */
+  const route = {
+    activeTab: 'summary',
+    saveStatus: 'saved',
+    conversationHidden: true,
+    voidPanelOpen: false,
+    voidPending: false,
+    voidReason: '',
+    completionPending: false,
+    captureCollapsed: {},
+    captureSearch: {},
+    responsiblePartySearch: { query: '', people: [], status: 'idle' },
+    snapshot: null,
+  };
+  /** @type {import('../src/pages/cora-case-review/section-panels.js').PanelActions} */
+  const actions = {
+    questionsView: createQuestionPanelView(),
+    currentAnswers: () => ({}),
+    editAnswers: () => {},
+    onAnswer: () => {},
+    captureEdited: () => {},
+    requestCaptureSearch: () => {},
+    selectResponsibleParty: () => {},
+    requestResponsiblePartySearch: () => {},
+    save: { fieldEdited: () => {} },
+    appeals: /** @type {any} */ ({}),
+    onComplete: () => {},
+    onVoid: () => {},
+  };
+  /** @type {import('../src/pages/cora-case-review/section-panels.js').PanelContext} */
+  const context = {
+    snapshot,
+    caseRow,
+    config,
+    route,
+    dispatch: () => {},
+    actions,
+  };
+
+  const summaryPanel = SECTION_PANELS.summary;
+  const detailsPanel = SECTION_PANELS.details;
+  assert.ok(summaryPanel);
+  assert.ok(detailsPanel);
+  const summary = summaryPanel(context);
+  const details = detailsPanel(context);
+  assert.ok(findByClass({ _children: summary }, 'cora-completion'));
+  assert.equal(findByClass({ _children: summary }, 'cora-void'), null);
+  assert.ok(findByClass({ _children: details }, 'cora-void'));
+  assert.equal(findByClass({ _children: details }, 'cora-completion'), null);
 });
 
 test('the issues panel names the Responsible Party rather than showing their account', () => {
