@@ -26,7 +26,7 @@ import {
 const TABLE = 'search';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
-/** @typedef {import('../sharepoint-client.js').ListCasesFilter} ListCasesFilter */
+/** @typedef {import('../services/case-search.js').CaseSearchFilter} CaseSearchFilter */
 /** @typedef {import('../lib/people-search.js').PeopleSearchState} PeopleSearchState */
 /** @typedef {import('../views/data-table.js').TableSort} TableSort */
 
@@ -101,16 +101,17 @@ function searchHash(filters) {
 }
 
 /**
- * The filters as a Case query — the filled ones only. Written out field by
- * field rather than looped, because this is the seam where the page's own
- * vocabulary meets the client's: a renamed `ListCasesFilter` key has to fail
- * here, under `tsc`, and a loop over string keys would not.
+ * The filters as a search-service query — the filled ones only. Case Type is
+ * retained here for the service's source selection; the service removes it
+ * before calling `SharePointClient`. Written out field by field so a renamed
+ * search or client filter key fails here under `tsc`, rather than being hidden
+ * by a loop over string keys.
  *
  * @param {SearchFilters} filters
- * @returns {ListCasesFilter}
+ * @returns {CaseSearchFilter}
  */
 function toClientFilter(filters) {
-  /** @type {ListCasesFilter} */
+  /** @type {CaseSearchFilter} */
   const query = {};
   if (filters.titlePrefix) query.titlePrefix = filters.titlePrefix;
   if (filters.caseType) query.caseType = filters.caseType;

@@ -83,11 +83,9 @@ export async function getUnassignedCases({
 }) {
   if (!client) return [];
 
-  const perSource = await listCasesPerSource(
-    client,
-    allocationSources,
-    (source) => ({ status: CASE_STATUS.IN_PROGRESS, caseType: source.slug })
-  );
+  const perSource = await listCasesPerSource(client, allocationSources, {
+    status: CASE_STATUS.IN_PROGRESS,
+  });
   const candidates = perSource.flatMap(({ source, rows }) =>
     rows
       .filter((c) => c.assignedReviewer === '')

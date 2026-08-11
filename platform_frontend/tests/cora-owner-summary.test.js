@@ -58,12 +58,10 @@ test('loadOwnerSummaries derives bounded per-source ownership metrics', async ()
     },
   ]);
   assert.deepEqual(listCalls, [
-    [
-      { caseType: 'complaints', status: 'In-progress' },
-      { listName: 'Cases-Complaints' },
-    ],
+    [{ status: 'In-progress' }, { listName: 'Cases-Complaints' }],
   ]);
   assert.equal(countCalls.length, 8);
+  assert.ok(countCalls.every(([filter]) => !('caseType' in filter)));
   assert.ok(
     countCalls.every(([, options]) => options.listName === 'Cases-Complaints')
   );

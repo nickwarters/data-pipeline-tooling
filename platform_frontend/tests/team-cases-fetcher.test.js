@@ -10,8 +10,8 @@ const { fetchTeamCases, fetchTeamVoidedCases, fetchTeamWorkloadCases } =
 /** @typedef {import('../src/sharepoint-client.js').ListCasesFilter} ListCasesFilter */
 /** @typedef {import('../src/sharepoint-client.js').CaseListOptions} CaseListOptions */
 
-/** @param {Record<string, CaseRow[]>} [casesByType] */
-function makeClient(casesByType = {}) {
+/** @param {Record<string, CaseRow[]>} [casesByList] */
+function makeClient(casesByList = {}) {
   const calls =
     /** @type {{ filter: ListCasesFilter, opts: CaseListOptions | undefined }[]} */ ([]);
   return {
@@ -19,7 +19,7 @@ function makeClient(casesByType = {}) {
     /** @type {import('../src/sharepoint-client.js').SharePointClient['listCases']} */
     async listCases(filter, opts) {
       calls.push({ filter: { ...filter }, opts: opts ? { ...opts } : opts });
-      return (casesByType[filter.caseType ?? ''] ?? []).map(
+      return (casesByList[opts?.listName ?? ''] ?? []).map(
         /** @param {CaseRow} c */ (c) => ({ ...c })
       );
     },
@@ -55,9 +55,21 @@ test('fetchTeamCases: fans out to all eligible case types when caseType is null'
     src('product-sale-review'),
   ]);
   assert.equal(client.calls.length, 2);
-  assert.ok(client.calls.some((c) => c.filter.caseType === 'example-review'));
-  assert.ok(
-    client.calls.some((c) => c.filter.caseType === 'product-sale-review')
+  assert.deepEqual(
+    client.calls.map(({ filter, opts }) => ({
+      filter,
+      listName: opts?.listName,
+    })),
+    [
+      {
+        filter: { assignedReviewerManager: 'u1' },
+        listName: 'example-review-list',
+      },
+      {
+        filter: { assignedReviewerManager: 'u1' },
+        listName: 'product-sale-review-list',
+      },
+    ]
   );
 });
 
@@ -68,7 +80,10 @@ test('fetchTeamCases: queries only the specified caseType when set', async () =>
     src('product-sale-review'),
   ]);
   assert.equal(client.calls.length, 1);
-  assert.equal(client.calls[0].filter.caseType, 'example-review');
+  assert.deepEqual(client.calls[0], {
+    filter: { assignedReviewerManager: 'u1' },
+    opts: { listName: 'example-review-list' },
+  });
 });
 
 test('fetchTeamCases: scopes every list to the calling manager', async () => {
@@ -98,11 +113,11 @@ test('fetchTeamCases: passes an explicit { listName } for every listCases call',
 
 test('fetchTeamCases: merges results from multiple case type lists', async () => {
   const client = makeClient({
-    'example-review': [
+    'example-review-list': [
       row('c1', 'example-review'),
       row('c2', 'example-review'),
     ],
-    'product-sale-review': [row('c3', 'product-sale-review')],
+    'product-sale-review-list': [row('c3', 'product-sale-review')],
   });
   const result = await fetchTeamCases(/** @type {any} */ (client), null, 'u1', [
     src('example-review'),
@@ -139,8 +154,8 @@ test('fetchTeamCases: caseType matching no source yields no calls and empty resu
 
 test('fetchTeamWorkloadCases: reuses manager-scoped fan-out without Team Cases params', async () => {
   const client = makeClient({
-    complaints: [row('c1', 'complaints')],
-    conduct: [row('c2', 'conduct')],
+    'complaints-list': [row('c1', 'complaints')],
+    'conduct-list': [row('c2', 'conduct')],
   });
   const result = await fetchTeamWorkloadCases(
     /** @type {any} */ (client),
@@ -156,14 +171,12 @@ test('fetchTeamWorkloadCases: reuses manager-scoped fan-out without Team Cases p
     [
       {
         filter: {
-          caseType: 'complaints',
           assignedReviewerManager: 'manager-1',
         },
         listName: 'complaints-list',
       },
       {
         filter: {
-          caseType: 'conduct',
           assignedReviewerManager: 'manager-1',
         },
         listName: 'conduct-list',
@@ -178,8 +191,8 @@ test('fetchTeamWorkloadCases: reuses manager-scoped fan-out without Team Cases p
 
 test('fetchTeamVoidedCases: scopes each source by manager, Void status and the window', async () => {
   const client = makeClient({
-    complaints: [row('c1', 'complaints')],
-    conduct: [row('c2', 'conduct')],
+    'complaints-list': [row('c1', 'complaints')],
+    'conduct-list': [row('c2', 'conduct')],
   });
   const result = await fetchTeamVoidedCases(
     /** @type {any} */ (client),
@@ -196,7 +209,6 @@ test('fetchTeamVoidedCases: scopes each source by manager, Void status and the w
     [
       {
         filter: {
-          caseType: 'complaints',
           assignedReviewerManager: 'manager-1',
           status: 'Void',
           voidedAfter: '2026-06-24T00:00:00.000Z',
@@ -205,7 +217,6 @@ test('fetchTeamVoidedCases: scopes each source by manager, Void status and the w
       },
       {
         filter: {
-          caseType: 'conduct',
           assignedReviewerManager: 'manager-1',
           status: 'Void',
           voidedAfter: '2026-06-24T00:00:00.000Z',

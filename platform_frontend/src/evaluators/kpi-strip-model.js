@@ -297,19 +297,17 @@ async function buildControlsLane({ client, allCaseSources }) {
  */
 async function buildOwnerLane({ client, capabilities, allCaseSources, now }) {
   const owned = capabilities.ownedCaseTypes;
-  // Lead each read with the indexed Case Type + Status columns so the working
-  // set is bounded by In-progress work, never the whole (unbounded) Case Type
-  // history. The In-progress pool is what the tiles derive from. Each owned
-  // slug resolves to its own list via `allCaseSources`; an owned slug with no
-  // matching source (stale config) is skipped rather than fetched unscoped.
+  // Each owned slug resolves to its own list via `allCaseSources`, so the
+  // working set is list-scoped and bounded by the indexed Status column rather
+  // than the whole (unbounded) Case history. An owned slug with no matching
+  // source (stale config) is skipped rather than fetched unscoped.
   const ownedSources = owned.flatMap((caseType) => {
     const source = allCaseSources.find((s) => s.slug === caseType);
     return source ? [source] : [];
   });
-  const pool = await listCasesAcrossSources(client, ownedSources, (source) => ({
-    caseType: source.slug,
+  const pool = await listCasesAcrossSources(client, ownedSources, {
     status: CASE_STATUS.IN_PROGRESS,
-  }));
+  });
 
   // The at-risk window is per Case Type, so every test of "about to breach"
   // in this lane has to know which Case Type the row belongs to.

@@ -114,14 +114,23 @@ test('searchCases: passes the caller filters through and scopes each read to its
     SOURCES
   );
 
-  assert.deepEqual(calls[0].filter, {
-    titlePrefix: 'CR-1',
-    assignedReviewer: 'rev-a',
-    reportableAfter: '2026-07-01T00:00:00.000Z',
-    reportableBefore: '2026-07-08T00:00:00.000Z',
-    caseType: 'complaints',
-  });
-  assert.equal(calls[1].filter.caseType, 'example-review');
+  assert.deepEqual(
+    calls.map((call) => call.filter),
+    [
+      {
+        titlePrefix: 'CR-1',
+        assignedReviewer: 'rev-a',
+        reportableAfter: '2026-07-01T00:00:00.000Z',
+        reportableBefore: '2026-07-08T00:00:00.000Z',
+      },
+      {
+        titlePrefix: 'CR-1',
+        assignedReviewer: 'rev-a',
+        reportableAfter: '2026-07-01T00:00:00.000Z',
+        reportableBefore: '2026-07-08T00:00:00.000Z',
+      },
+    ]
+  );
 });
 
 test('searchCases: reads one row past the window so saturation is detectable', async () => {

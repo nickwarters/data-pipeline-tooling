@@ -126,8 +126,8 @@ test('getUnassignedCases reads only configured sources, filters assigned rows, a
     ]
   );
   assert.deepEqual(calls, [
-    [{ status: 'In-progress', caseType: 'a' }, { listName: 'Cases-A' }],
-    [{ status: 'In-progress', caseType: 'b' }, { listName: 'Cases-B' }],
+    [{ status: 'In-progress' }, { listName: 'Cases-A' }],
+    [{ status: 'In-progress' }, { listName: 'Cases-B' }],
   ]);
 });
 
@@ -188,7 +188,7 @@ test('getAllocationAvailability skips at-limit sources and counts only non-held 
     ],
   ]);
   assert.deepEqual(reads, [
-    [{ status: 'In-progress', caseType: 'b' }, { listName: 'Cases-B' }],
+    [{ status: 'In-progress' }, { listName: 'Cases-B' }],
   ]);
   assert.deepEqual(
     availability.candidates.map((candidate) => candidate.id),

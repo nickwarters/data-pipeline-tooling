@@ -14,6 +14,10 @@ import {
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../src/sharepoint-client.js').ListCasesFilter} ListCasesFilter */
 
+/** @type {ListCasesFilter} */
+// @ts-expect-error Case Type scope belongs to CaseListOptions.listName.
+const _invalidListCasesFilter = { caseType: 'complaints' };
+
 // Capability: the two Case-query engines answer the same question.
 //
 // `listCases` is served by two implementations — an in-memory predicate for the
@@ -44,18 +48,6 @@ const LONG_PAST = '2001-02-03T04:05:06.000Z';
 const MID_PAST = '2001-03-03T04:05:06.000Z';
 const LATE_PAST = '2001-04-03T04:05:06.000Z';
 const LONG_FUTURE = '2098-02-03T04:05:06.000Z';
-
-/**
- * Fields the two engines deliberately do not treat alike, each with the reason
- * it is recorded rather than fixed. Named here so a *new* divergence still
- * fails the scan below.
- */
-const RECORDED_DIVERGENCES = {
-  caseType:
-    'Every Case Type has its own SharePoint list, so the server-side query ' +
-    'scopes by list name and has no CaseType condition; the mock stores ' +
-    'several Case Types in one store and filters on the field.',
-};
 
 /**
  * @param {string} id
@@ -546,22 +538,12 @@ test('listCases parity: both engines handle the same filter fields, and every fi
   );
   const mockFields = filterFieldsIn(mockSource, '_predicate(filter) {');
 
-  const recorded = new Set(Object.keys(RECORDED_DIVERGENCES));
-  const onlyInMock = [...mockFields].filter(
-    (field) => !odataFields.has(field) && !recorded.has(field)
-  );
-  const onlyInOdata = [...odataFields].filter(
-    (field) => !mockFields.has(field) && !recorded.has(field)
-  );
+  const mockFieldList = [...mockFields].sort();
+  const odataFieldList = [...odataFields].sort();
   assert.deepEqual(
-    onlyInMock,
-    [],
-    'a field the mock filters on but the server-side query ignores'
-  );
-  assert.deepEqual(
-    onlyInOdata,
-    [],
-    'a field the server-side query filters on but the mock ignores'
+    mockFieldList,
+    odataFieldList,
+    'the mock and server-side query must handle identical filter fields'
   );
 
   /** @type {Set<string>} */
@@ -577,43 +559,8 @@ test('listCases parity: both engines handle the same filter fields, and every fi
   };
   for (const scenario of SCENARIOS) collect(scenario.filter);
 
-  const uncovered = [...mockFields, ...odataFields].filter(
-    (field) => !covered.has(field) && !recorded.has(field)
-  );
-  assert.deepEqual(
-    uncovered,
-    [],
-    'every filter field either has a parity scenario or is a recorded divergence'
-  );
-});
-
-// --- the divergences this suite records rather than repairs ---
-
-test('listCases: a Case Type filter is a mock-only concept — the server-side query scopes by list', async () => {
-  const { fetch, calls } = makeFetch([
-    {
-      when: (call) => call.method === 'GET',
-      respond: () =>
-        new Response(JSON.stringify({ value: [] }), { status: 200 }),
-    },
-  ]);
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
-  await client.listCases({ caseType: 'complaints' }, { listName: LIST });
-
-  const url = decodeURIComponent(calls[0].url);
-  assert.ok(!url.includes('CaseType'), RECORDED_DIVERGENCES.caseType);
-
-  // The mock, whose stores are not per-Case-Type in every test, does filter.
-  assert.deepEqual(
-    await mockMatches({ caseType: 'complaints' }, [
-      caseRow('here'),
-      caseRow('elsewhere', { caseType: 'other-review' }),
-    ]),
-    ['here']
-  );
+  const uncovered = mockFieldList.filter((field) => !covered.has(field));
+  assert.deepEqual(uncovered, [], 'every filter field has a parity scenario');
 });
 
 test('listCases: a Case placed on hold is still overdue once its due date passes', async () => {

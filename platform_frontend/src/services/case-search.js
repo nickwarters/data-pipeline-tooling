@@ -5,6 +5,7 @@ import { listCasesAcrossSources } from './across-sources.js';
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').ListCasesFilter} ListCasesFilter */
 /** @typedef {import('../setup/resolve-eligible-case-types.js').CaseSource} CaseSource */
+/** @typedef {ListCasesFilter & { caseType?: string }} CaseSearchFilter */
 
 /**
  * How many matches one search shows. A lookup is a lookup: a result set larger
@@ -17,12 +18,15 @@ export const SEARCH_PAGE_SIZE = 50;
 /**
  * Search for Cases across every Case source the viewer holds, or one of them.
  *
+ * `caseType`, when present, selects the source list; it is a search-service
+ * selector rather than a row predicate and is removed before the client read.
+ *
  * The fan-out is `listCasesAcrossSources`, so one failing list fails the whole
  * search. That is the right answer here above anywhere else: a lookup that
  * quietly omits a list reports "not found" for a Case that exists.
  *
  * @param {SharePointClient} client
- * @param {ListCasesFilter} filter
+ * @param {CaseSearchFilter} filter
  * @param {CaseSource[]} sources
  * @returns {Promise<{ rows: CaseRow[], capped: boolean }>}
  */
@@ -32,24 +36,16 @@ export function searchCases(client, filter, sources) {
     ? sources.filter((source) => source.slug === caseType)
     : sources;
 
-  return listCasesAcrossSources(
-    client,
-    targets,
-    // Each read names its own Case Type: the server scopes by list and ignores
-    // it, but the mock keeps several Case Types in one store and filters on the
-    // field, so omitting it over-returns in the dev loop only.
-    (source) => ({ ...shared, caseType: source.slug }),
-    {
-      // One row past the window per list. Because a Case's rank within its own
-      // list can never be better than its rank across every list combined, the
-      // true global top N all appear in some list's local top N + 1 — so the
-      // merged length exceeding N is exactly the condition "there are more
-      // matches than we are showing", however many lists there are.
-      top: SEARCH_PAGE_SIZE + 1,
-      orderBy: 'id',
-      orderDir: 'desc',
-    }
-  ).then((merged) => ({
+  return listCasesAcrossSources(client, targets, shared, {
+    // One row past the window per list. Because a Case's rank within its own
+    // list can never be better than its rank across every list combined, the
+    // true global top N all appear in some list's local top N + 1 — so the
+    // merged length exceeding N is exactly the condition "there are more
+    // matches than we are showing", however many lists there are.
+    top: SEARCH_PAGE_SIZE + 1,
+    orderBy: 'id',
+    orderDir: 'desc',
+  }).then((merged) => ({
     // Same key and direction as the per-list `$orderby` above, or the slice
     // would cut a window the per-list reads never guaranteed to be complete —
     // and the comparison must be numeric, because `Id` is a counter carried as

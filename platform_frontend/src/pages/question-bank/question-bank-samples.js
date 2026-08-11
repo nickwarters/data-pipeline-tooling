@@ -29,10 +29,7 @@ export async function loadSampleCases(client, sources = []) {
   const entries = await Promise.all(
     sources.map(async (source) => {
       try {
-        const rows = await client.listCases(
-          { caseType: source.slug },
-          { listName: source.listName }
-        );
+        const rows = await client.listCases({}, { listName: source.listName });
         return [
           source.slug,
           rows.slice(0, SAMPLE_CASE_LIMIT).map(toSampleCase),
