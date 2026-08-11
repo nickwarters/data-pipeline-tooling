@@ -77,6 +77,17 @@ async function settleAllocation(reached) {
   }
 }
 
+/** @returns {{ promise: Promise<void>, resolve: () => void }} */
+function deferred() {
+  /** @type {() => void} */
+  let resolvePromise = () => {};
+  /** @type {Promise<void>} */
+  const promise = new Promise((resolve) => {
+    resolvePromise = () => resolve();
+  });
+  return { promise, resolve: resolvePromise };
+}
+
 /**
  * @param {(accountNames: string[]) => Promise<any>} resolveManagers
  * @returns {Promise<{ patches: any[], managerLookups: number }>}
@@ -796,6 +807,266 @@ test('dashboard allocation skips a candidate whose re-read shows it deleted, no 
         action.type === 'allocation/availability-changed' && action.isEmpty
     )
   );
+});
+
+test('dashboard allocation continues after a candidate re-read rejects', async () => {
+  const ctx = context(capabilities({ isReviewer: true }));
+  const firstReadError = new Error('first candidate read failed');
+  const secondReadComplete = deferred();
+  const patchComplete = deferred();
+  /** @type {string[]} */
+  const reads = [];
+  /** @type {any[]} */
+  const patches = [];
+  let availabilityChecks = 0;
+  ctx.client = /** @type {any} */ ({
+    async getCase(/** @type {string} */ id) {
+      reads.push(id);
+      if (id === 'first') throw firstReadError;
+      secondReadComplete.resolve();
+      return claimableRow(id, '"fresh-second"');
+    },
+    async patchCase(/** @type {any[]} */ ...args) {
+      patches.push(args);
+      patchComplete.resolve();
+      return { ok: true, status: 200 };
+    },
+  });
+  const candidate = (/** @type {string} */ id) => ({
+    id,
+    etag: '"listed"',
+    _listOptions: { listName: 'Cases-Complaints' },
+  });
+  const slice = createRouteSlice(
+    {},
+    ctx,
+    /** @type {any} */ ({
+      loadKpis: async () => [],
+      listAcrossSources: async () => [],
+      loadAllocationAvailability: async () =>
+        availabilityChecks++ === 0
+          ? {
+              candidates: [candidate('first'), candidate('second')],
+              isAtCapacity: false,
+            }
+          : { candidates: [], isAtCapacity: false },
+    })
+  );
+  const tools = /** @type {any} */ ({
+    context: ctx,
+    params: {},
+    dispatch: () => {},
+    listen: () => {},
+    isActive: () => true,
+  });
+  slice.start(tools);
+  fireEvent(
+    getByRole(slice.view(slice.initialState, tools), 'button', {
+      name: 'Request next Case',
+    }),
+    'click'
+  );
+  await secondReadComplete.promise;
+  await patchComplete.promise;
+
+  assert.deepEqual(reads, ['first', 'second']);
+  assert.equal(patches.length, 1);
+  assert.equal(patches[0][0], 'second');
+  assert.equal(patches[0][2], '"fresh-second"');
+});
+
+test('dashboard allocation surfaces an all-candidate read failure without publishing empty availability', async () => {
+  const ctx = context(capabilities({ isReviewer: true }));
+  const firstReadError = new Error('first candidate read failed');
+  const secondReadError = new Error('second candidate read failed');
+  const readsComplete = deferred();
+  const errorLogged = deferred();
+  /** @type {string[]} */
+  const reads = [];
+  /** @type {any[]} */
+  const actions = [];
+  let patchCalls = 0;
+  /** @type {any[][]} */
+  const errorCalls = [];
+  /** @type {unknown[]} */
+  const unhandled = [];
+  const originalConsoleError = console.error;
+  const onUnhandledRejection = (/** @type {unknown} */ reason) => {
+    unhandled.push(reason);
+  };
+  console.error = (/** @type {any[]} */ ...args) => {
+    errorCalls.push(args);
+    errorLogged.resolve();
+  };
+  process.on('unhandledRejection', onUnhandledRejection);
+  try {
+    ctx.client = /** @type {any} */ ({
+      async getCase(/** @type {string} */ id) {
+        reads.push(id);
+        if (reads.length === 2) readsComplete.resolve();
+        throw id === 'first' ? firstReadError : secondReadError;
+      },
+      async patchCase() {
+        patchCalls += 1;
+        return { ok: false, status: 500 };
+      },
+    });
+    const slice = createRouteSlice(
+      {},
+      ctx,
+      /** @type {any} */ ({
+        loadKpis: async () => [],
+        listAcrossSources: async () => [],
+        loadAllocationAvailability: async () => ({
+          candidates: [
+            {
+              id: 'first',
+              etag: '"listed-first"',
+              _listOptions: { listName: 'Cases-Complaints' },
+            },
+            {
+              id: 'second',
+              etag: '"listed-second"',
+              _listOptions: { listName: 'Cases-Complaints' },
+            },
+          ],
+          isAtCapacity: false,
+        }),
+      })
+    );
+    const tools = /** @type {any} */ ({
+      context: ctx,
+      params: {},
+      dispatch: (/** @type {any} */ action) => actions.push(action),
+      listen: () => {},
+      isActive: () => true,
+    });
+    slice.start(tools);
+    const view = slice.view(slice.initialState, tools);
+    fireEvent(
+      getByRole(view, 'button', { name: 'Request next Case' }),
+      'click'
+    );
+    await readsComplete.promise;
+    await errorLogged.promise;
+
+    assert.deepEqual(reads, ['first', 'second']);
+    assert.equal(
+      actions.some(
+        (action) => action.type === 'allocation/availability-changed'
+      ),
+      false
+    );
+    assert.equal(patchCalls, 0);
+    assert.doesNotMatch(view.textContent, /No Cases available/);
+    assert.equal(errorCalls.length, 1);
+    assert.equal(errorCalls[0][0], '[CORA] dashboard allocation failed');
+    assert.equal(errorCalls[0][1], firstReadError);
+    assert.deepEqual(unhandled, []);
+  } finally {
+    process.off('unhandledRejection', onUnhandledRejection);
+    console.error = originalConsoleError;
+  }
+});
+
+test('dashboard allocation resets after all candidate reads fail so a later request can retry', async () => {
+  const ctx = context(capabilities({ isReviewer: true }));
+  const firstReadError = new Error('initial candidate reads failed');
+  const errorLogged = deferred();
+  const patchComplete = deferred();
+  const postClaimAvailabilityComplete = deferred();
+  /** @type {string[]} */
+  const reads = [];
+  /** @type {any[]} */
+  const patches = [];
+  let availabilityChecks = 0;
+  const originalConsoleError = console.error;
+  console.error = (/** @type {any[]} */ ...args) => {
+    if (args[1] === firstReadError) errorLogged.resolve();
+  };
+  try {
+    ctx.client = /** @type {any} */ ({
+      async getCase(/** @type {string} */ id) {
+        reads.push(id);
+        if (id === 'failed-first' || id === 'failed-second') {
+          throw firstReadError;
+        }
+        return claimableRow(id, '"fresh-retry"');
+      },
+      async patchCase(/** @type {any[]} */ ...args) {
+        patches.push(args);
+        patchComplete.resolve();
+        return { ok: true, status: 200 };
+      },
+    });
+    const slice = createRouteSlice(
+      {},
+      ctx,
+      /** @type {any} */ ({
+        loadKpis: async () => [],
+        listAcrossSources: async () => [],
+        loadAllocationAvailability: async () => {
+          const request = availabilityChecks++;
+          if (request === 0) {
+            return {
+              candidates: [
+                {
+                  id: 'failed-first',
+                  etag: '"listed-first"',
+                  _listOptions: { listName: 'Cases-Complaints' },
+                },
+                {
+                  id: 'failed-second',
+                  etag: '"listed-second"',
+                  _listOptions: { listName: 'Cases-Complaints' },
+                },
+              ],
+              isAtCapacity: false,
+            };
+          }
+          if (request === 1) {
+            return {
+              candidates: [
+                {
+                  id: 'retry',
+                  etag: '"listed-retry"',
+                  _listOptions: { listName: 'Cases-Complaints' },
+                },
+              ],
+              isAtCapacity: false,
+            };
+          }
+          postClaimAvailabilityComplete.resolve();
+          return { candidates: [], isAtCapacity: false };
+        },
+      })
+    );
+    const tools = /** @type {any} */ ({
+      context: ctx,
+      params: {},
+      dispatch: () => {},
+      listen: () => {},
+      isActive: () => true,
+    });
+    slice.start(tools);
+    const view = slice.view(slice.initialState, tools);
+    const button = getByRole(view, 'button', { name: 'Request next Case' });
+    fireEvent(button, 'click');
+    await errorLogged.promise;
+
+    fireEvent(button, 'click');
+    await patchComplete.promise;
+    await postClaimAvailabilityComplete.promise;
+
+    assert.deepEqual(reads, ['failed-first', 'failed-second', 'retry']);
+    assert.equal(availabilityChecks, 3);
+    assert.deepEqual(
+      patches.map(([id, , etag]) => [id, etag]),
+      [['retry', '"fresh-retry"']]
+    );
+  } finally {
+    console.error = originalConsoleError;
+  }
 });
 
 test('dashboard allocation preserves the manager when a stale candidate returns 412', async () => {

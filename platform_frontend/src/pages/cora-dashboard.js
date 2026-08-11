@@ -227,7 +227,7 @@ function actionCentreScopeState(state, value) {
  *     toggleGroup: (state: ReturnType<typeof initialActionCentreState>, reason: import('../services/action-centre-model.js').Reason) => void,
  *     showMore: (state: ReturnType<typeof initialActionCentreState>, reason: import('../services/action-centre-model.js').Reason) => void,
  *   },
- *   dashboardActions?: { requestNextCase: () => void },
+ *   dashboardActions?: { requestNextCase: () => Promise<void> },
  * }} tools
  */
 export function dashboardView(state, tools) {
@@ -264,7 +264,14 @@ export function dashboardView(state, tools) {
       Allocation({
         isEmpty: route.allocationEmpty,
         isAtCapacity: route.allocationAtCapacity,
-        onRequestNextCase: () => tools.dashboardActions?.requestNextCase?.(),
+        onRequestNextCase: () => {
+          const request = tools.dashboardActions?.requestNextCase?.();
+          if (request) {
+            void request.catch((error) =>
+              console.error('[CORA] dashboard allocation failed', error)
+            );
+          }
+        },
       }),
     responsibleParty: () =>
       responsiblePartyPanelView(route.responsibleParty, tools, {
@@ -511,8 +518,16 @@ export function createRouteSlice(
 
         const currentUserId = tools.context.chrome.currentUser.id;
         let managerAccount = await allocationManagerFor(client, currentUserId);
+        /** @type {unknown[]} */
+        const readErrors = [];
         for (const candidate of availability.candidates) {
-          const etag = await claimableEtagFor(client, candidate);
+          let etag;
+          try {
+            etag = await claimableEtagFor(client, candidate);
+          } catch (error) {
+            readErrors.push(error);
+            continue;
+          }
           if (etag === null) continue;
           let result = await client.patchCase(
             candidate.id,
@@ -548,6 +563,9 @@ export function createRouteSlice(
             publishAllocationAvailability(nextAvailability);
             return;
           }
+        }
+        if (readErrors.length === availability.candidates.length) {
+          throw readErrors[0];
         }
         publishAllocationAvailability({
           candidates: [],

@@ -23,6 +23,15 @@ The framework auto-saves Case mutations through a single `SaveQueue` primitive �
 - If only non-conflicting fields changed remotely (e.g., Conversation), silently re-fetch, merge, retry our PATCH with the new ETag.
 - If `Answers` changed remotely, surface a non-disruptive "case was edited elsewhere — reload" banner. Don't auto-overwrite the reviewer's edits.
 
+The Dashboard's self-allocation claim has a narrower read boundary. It re-reads
+each listed candidate immediately before its PATCH because the collection row has
+no ETag. A transport rejection from one candidate's re-read is recorded and that
+candidate is skipped so later candidates can be checked. A `null` or otherwise
+non-claimable re-read remains an ordinary skip. If every candidate re-read rejects,
+the first read error is surfaced and no empty availability state is published;
+the allocation guard is reset so a later request can retry. PATCH failures keep
+their existing semantics and are not absorbed by this per-candidate read boundary.
+
 ### Network failure
 
 **In-memory retry queue, exponential backoff** (1s, 2s, 4s, ... capped ~30s). UI indicator: `Saved` / `Saving…` / `Reconnecting…` / `Conflict — reload`. **No `localStorage` persistence in v1** — the complexity (per-case keys, eviction, stale merges) outweighs the rare benefit on a corporate intranet.
