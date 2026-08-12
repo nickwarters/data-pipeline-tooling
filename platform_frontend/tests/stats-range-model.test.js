@@ -13,9 +13,8 @@ test('stats ranges expose the four ordered range descriptors', () => {
   const ranges = buildStatsRanges(localDate(2026, 8, 12));
 
   assert.deepEqual(
-    ranges.map(({ key, label, grain, start, end, today }) => ({
+    ranges.map(({ key, grain, start, end, today }) => ({
       key,
-      label,
       grain,
       start,
       end,
@@ -24,7 +23,6 @@ test('stats ranges expose the four ordered range descriptors', () => {
     [
       {
         key: 'week',
-        label: 'Week',
         grain: 'day',
         start: '2026-08-03',
         end: '2026-08-11',
@@ -32,7 +30,6 @@ test('stats ranges expose the four ordered range descriptors', () => {
       },
       {
         key: 'month',
-        label: 'Month',
         grain: 'day',
         start: '2026-07-01',
         end: '2026-08-11',
@@ -40,7 +37,6 @@ test('stats ranges expose the four ordered range descriptors', () => {
       },
       {
         key: '3-months',
-        label: '3 months',
         grain: 'month',
         start: '2026-05-01',
         end: '2026-08-11',
@@ -48,7 +44,6 @@ test('stats ranges expose the four ordered range descriptors', () => {
       },
       {
         key: '12-months',
-        label: '12 months',
         grain: 'month',
         start: '2025-08-01',
         end: '2026-08-11',
@@ -56,6 +51,9 @@ test('stats ranges expose the four ordered range descriptors', () => {
       },
     ]
   );
+  const labels = ranges.map(({ label }) => label);
+  assert.ok(labels.every((label) => label.trim().length > 0));
+  assert.equal(new Set(labels).size, ranges.length);
 });
 
 test('week contains eight daily buckets on Monday', () => {

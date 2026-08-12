@@ -1,6 +1,8 @@
 // @ts-check
 import { h } from './html.js';
 
+export const NO_DATA_YET = 'No data yet.';
+
 /**
  * Standard empty-state element: a muted "nothing here yet" placeholder.
  *

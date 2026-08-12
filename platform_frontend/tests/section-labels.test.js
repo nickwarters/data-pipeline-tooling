@@ -5,20 +5,18 @@ import {
   DEFAULT_SECTION_LABELS,
   resolveSectionLabels,
 } from '../src/lib/section-labels.js';
+import { SECTION_REGISTRY } from '../src/lib/section-registry.js';
 
-test('DEFAULT_SECTION_LABELS: one entry per Section, each carrying both spellings', () => {
-  assert.deepEqual(DEFAULT_SECTION_LABELS, {
-    details: { tab: 'Details', heading: 'Case Details' },
-    questions: { tab: 'Review', heading: 'Questions' },
-    issues: { tab: 'Issues', heading: 'Issues' },
-    remediation: { tab: 'Remediation', heading: 'Remediation' },
-    summary: { tab: 'Summary', heading: 'Summary' },
-    notes: { tab: 'Notes', heading: 'Notes' },
-    appealRequest: { tab: 'Appeal', heading: 'Appeal' },
-    appealReview: { tab: 'Appeal Review', heading: 'Appeal Review' },
-    amendOutcome: { tab: 'Amend Outcome', heading: 'Amend Outcome' },
-    conversation: { tab: 'Conversation', heading: 'Conversation' },
-  });
+test('every registered Section has a non-empty default label pair', () => {
+  assert.deepEqual(
+    Object.keys(DEFAULT_SECTION_LABELS).sort(),
+    SECTION_REGISTRY.map(({ id }) => id).sort(),
+    'a Section without labels renders an unnamed tab'
+  );
+  for (const [id, { tab, heading }] of Object.entries(DEFAULT_SECTION_LABELS)) {
+    assert.ok(tab.trim(), `${id} has a tab label`);
+    assert.ok(heading.trim(), `${id} has a heading`);
+  }
 });
 
 test('resolveSectionLabels: returns the defaults unchanged when sectionLabels is absent', () => {

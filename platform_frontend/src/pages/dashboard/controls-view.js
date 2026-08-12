@@ -10,6 +10,8 @@ import {
 import { dataTableView } from '../../views/data-table.js';
 import { openAppealOf } from '../../evaluators/appeal-state.js';
 
+export const COPY = Object.freeze({ heading: 'Outstanding Appeals' });
+
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
 
 export const PAGE_SIZE = 50;
@@ -94,7 +96,7 @@ export function controlsAppealsView(cases, sort, onSort) {
   return h(
     'section',
     { className: 'cora-controls-appeals' },
-    h('h2', {}, 'Outstanding Appeals'),
+    h('h2', {}, COPY.heading),
     dataTableView({
       rows: cases,
       columns: appealColumns(),

@@ -6,7 +6,7 @@ import { makeChrome } from './helpers/fixtures.js';
 
 installDom();
 
-const { createRouteSlice, teamStatsView } =
+const { COPY, createRouteSlice, teamStatsView } =
   await import('../src/pages/cora-team-stats.js');
 
 function context() {
@@ -24,7 +24,7 @@ test('team stats view: renders an accessible heading and the empty state copy', 
   assert.equal(view.querySelector('h1')?.textContent, 'Team Stats');
   const empty = view.querySelector('.cora-team-stats-empty');
   assert.ok(empty);
-  assert.equal(empty.textContent, 'No data yet.');
+  assert.equal(empty.textContent, COPY.noDataYet);
 });
 
 test('team stats slice: keeps shared chrome, empty route state, and reducer identity', () => {

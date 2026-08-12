@@ -19,6 +19,8 @@ import {
   mergeWorstFirstWindow,
 } from '../../services/action-centre-model.js';
 
+export const COPY = Object.freeze({ heading: 'Action Centre' });
+
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../../services/action-centre-model.js').Reason} Reason */
 
@@ -297,7 +299,7 @@ export function ActionCentreView(state, handlers) {
     h(
       'div',
       { className: 'cora-ac-header' },
-      h('h2', { className: 'cora-ac-title' }, 'Action Centre'),
+      h('h2', { className: 'cora-ac-title' }, COPY.heading),
       h(
         'span',
         { className: 'cora-ac-subtitle' },
