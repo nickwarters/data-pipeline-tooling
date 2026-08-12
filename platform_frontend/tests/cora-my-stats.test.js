@@ -97,8 +97,10 @@ function markLabels(view) {
     name: /reportable cases by .*week/i,
   });
   return queryAllByRole(chart, 'img', {
-    name: /: (?:Settled|Provisional),/,
-  }).map((mark) => mark.getAttribute('aria-label'));
+    name: /Settled|Provisional/,
+  })
+    .map((mark) => mark.getAttribute('aria-label'))
+    .filter((label) => label !== 'Settled' && label !== 'Provisional');
 }
 
 /** @param {any} view @returns {Record<string, string>} */
@@ -143,7 +145,13 @@ test('my stats view: an unpublished report is not an empty one', () => {
 test('my stats view: a published report with nothing in range keeps the table', () => {
   const view = myStatsView(viewState({ reportFeed: envelope }));
 
-  assert.ok(getByRole(view, 'table', { name: /week case type breakdown/i }));
+  const table = getByRole(view, 'table', {
+    name: /week case type breakdown/i,
+  });
+  assert.ok(
+    queryAllByRole(table, 'row').length > 1,
+    'an empty range still renders Case Type rows, not an empty table'
+  );
   assert.ok(getByRole(view, 'group', { name: /reportable cases by .*week/i }));
 });
 
