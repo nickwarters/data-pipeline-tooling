@@ -1,6 +1,8 @@
 // @ts-check
 import { h } from '../lib/html.js';
-import { EmptyState } from '../lib/empty-state.js';
+import { EmptyState, NO_DATA_YET } from '../lib/empty-state.js';
+
+export const COPY = Object.freeze({ noDataYet: NO_DATA_YET });
 
 /** @typedef {import('../core/chrome-state.js').ChromeState} ChromeState */
 
@@ -19,7 +21,7 @@ export function teamStatsView(_state) {
     'main',
     { className: 'cora-team-stats' },
     h('h1', {}, 'Team Stats'),
-    EmptyState('No data yet.', { className: 'cora-team-stats-empty' })
+    EmptyState(COPY.noDataYet, { className: 'cora-team-stats-empty' })
   );
 }
 

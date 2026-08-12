@@ -8,6 +8,7 @@ installDom();
 
 const {
   ActionCentreView,
+  COPY,
   PAGE_SIZE,
   initialActionCentreState,
   loadActionCentreCounts,
@@ -132,7 +133,7 @@ test('Action Centre pure view renders descriptor rows and exposes store callback
     onShowMore: (item) => actions.push(`more:${item.id}`),
     onOpenCase: (item) => actions.push(`open:${item.id}`),
   });
-  assert.equal(view.querySelector('h2')?.textContent, 'Action Centre');
+  assert.equal(view.querySelector('h2')?.textContent, COPY.heading);
   assert.match(view.textContent, /2 cases · grouped by reason/);
   assert.equal(
     view.querySelector('a')?.getAttribute('href'),

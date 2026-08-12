@@ -8,8 +8,13 @@ import { makeCaseRow } from './helpers/fixtures.js';
 installDom();
 /** @type {any} */ (globalThis).location = { hash: '' };
 
-const { PAGE_SIZE, appealColumns, controlsAppealsView, fetchOpenAppeals } =
-  await import('../src/pages/dashboard/controls-view.js');
+const {
+  COPY,
+  PAGE_SIZE,
+  appealColumns,
+  controlsAppealsView,
+  fetchOpenAppeals,
+} = await import('../src/pages/dashboard/controls-view.js');
 
 /** @param {string} id @param {string} at */
 function row(id, at) {
@@ -79,7 +84,7 @@ test('Controls appeal descriptors render through the generic table and keep navi
     { key: 'raised', dir: 'asc' },
     (key) => sorts.push(key)
   );
-  assert.equal(view.querySelector('h2')?.textContent, 'Outstanding Appeals');
+  assert.equal(view.querySelector('h2')?.textContent, COPY.heading);
   assert.equal(view.querySelector('table')?.getAttribute('role'), 'grid');
   assert.deepEqual(
     appealColumns().map((column) => column.key),

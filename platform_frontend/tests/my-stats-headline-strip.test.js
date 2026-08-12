@@ -6,7 +6,7 @@ import { installDom } from './_dom-stub.js';
 
 installDom();
 
-const { headlineStripView } =
+const { COPY, headlineStripView } =
   await import('../src/pages/my-stats/headline-strip-view.js');
 
 /** @param {Partial<any>} [overrides] */
@@ -106,5 +106,5 @@ test('headline strip: the section names itself for assistive technology', () => 
     strip.getAttribute('aria-labelledby'),
     heading?.getAttribute('id')
   );
-  assert.equal(heading?.textContent, 'Headline figures');
+  assert.equal(heading?.textContent, COPY.heading);
 });
