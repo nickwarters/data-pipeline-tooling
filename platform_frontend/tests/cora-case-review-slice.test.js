@@ -2187,7 +2187,10 @@ test('view: Summary is rendered from store state and configured sections', () =>
   assert.ok(panel);
   assert.equal(panel.hidden, false);
   assert.match(panel.textContent, /Summary/);
-  assert.ok(panel.textContent.includes(OUTCOME_COPY.awaitingAnswers));
+  assert.ok(
+    panel.textContent.includes(OUTCOME_COPY.awaitingAnswers),
+    "the Summary panel renders the Outcome view's awaiting-answer copy"
+  );
   assert.match(panel.textContent, /Case Details/);
   assert.match(panel.textContent, /Questions/);
   assert.match(panel.textContent, /Issues/);
@@ -2255,7 +2258,10 @@ test('view: Summary shows the live Outcome after every Outcome question is answe
   const panel = view.querySelector('#case-panel-summary');
   assert.equal(state.routes.caseReview.snapshot?.allAnswered, true);
   assert.match(panel?.textContent ?? '', /Non-compliant/);
-  assert.ok(!(panel?.textContent ?? '').includes(OUTCOME_COPY.awaitingAnswers));
+  assert.ok(
+    !(panel?.textContent ?? '').includes(OUTCOME_COPY.awaitingAnswers),
+    "the Summary panel removes the Outcome view's awaiting-answer copy once answered"
+  );
 });
 
 test('view: Summary applies empty config defaults and incomplete snapshots stay inert', () => {
@@ -2275,7 +2281,10 @@ test('view: Summary applies empty config defaults and incomplete snapshots stay 
     id: 'summary',
   });
   const view = renderShippedState(state).container;
-  assert.ok(view.textContent.includes(OUTCOME_COPY.awaitingAnswers));
+  assert.ok(
+    view.textContent.includes(OUTCOME_COPY.awaitingAnswers),
+    "the Summary uses the Outcome view's awaiting-answer copy with default config"
+  );
 
   const incomplete = {
     ...minimalSummarySnapshot,

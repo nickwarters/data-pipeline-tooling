@@ -242,11 +242,9 @@ function renderTrackedRow(row, reviewerSide) {
     h(
       'p',
       {},
-      row.status === 'complete'
-        ? REMEDIATION_COPY.complete
-        : row.status
-          ? `Status: ${REMEDIATION_STATUS_LABELS[row.status]}`
-          : REMEDIATION_COPY.awaitingReviewer
+      row.status
+        ? `Status: ${REMEDIATION_STATUS_LABELS[row.status]}`
+        : REMEDIATION_COPY.awaitingReviewer
     ),
     detailed
       ? h(

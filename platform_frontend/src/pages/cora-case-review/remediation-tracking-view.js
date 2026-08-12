@@ -15,7 +15,6 @@ export const COPY = Object.freeze({
   noActionsSent: 'No remediation actions sent.',
   remediationDueNone: 'Remediation due: —',
   awaitingReviewer: 'Status: Awaiting the Reviewer',
-  complete: `Status: ${REMEDIATION_STATUS_LABELS.complete}`,
 });
 
 /** @typedef {import('../../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
@@ -185,11 +184,9 @@ function renderStatusLine(row) {
   return h(
     'p',
     { className: 'cora-tracking-status' },
-    row.status === 'complete'
-      ? COPY.complete
-      : row.status
-        ? `Status: ${REMEDIATION_STATUS_LABELS[row.status]}`
-        : COPY.awaitingReviewer
+    row.status
+      ? `Status: ${REMEDIATION_STATUS_LABELS[row.status]}`
+      : COPY.awaitingReviewer
   );
 }
 
