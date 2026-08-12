@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom, findByClass, walk } from './_dom-stub.js';
 import { makeCaseRow } from './helpers/fixtures.js';
-import { fireEvent, getByRole } from './helpers/semantic-dom.js';
+import { fireEvent, getByRole, queryAllByTag } from './helpers/semantic-dom.js';
 
 installDom();
 
@@ -341,11 +341,11 @@ test('CORAAmendOutcome: the form offers the Case Type reasons', () => {
   const reason = getByRole(el, 'combobox', { name: 'Amendment reason' });
   assert.ok(reason, 'reason select rendered');
   assert.deepEqual(
-    reason._children.map((/** @type {any} */ option) => option.value),
+    queryAllByTag(reason, 'option').map((option) => option.value),
     ['', 'qa-check', 'tm-check', 'appeal']
   );
   assert.deepEqual(
-    reason._children.map((/** @type {any} */ option) => option.textContent),
+    queryAllByTag(reason, 'option').map((option) => option.textContent),
     ['Select a reason…', 'QA Check', 'TM Check', 'Appeal']
   );
 });
@@ -358,9 +358,10 @@ test('CORAAmendOutcome: a Case Type extension is offered after the shared reason
     reasons: [...REASONS, { key: 'data-correction', label: 'Data correction' }],
   });
   assert.deepEqual(
-    getByRole(el, 'combobox', { name: 'Amendment reason' })._children.map(
-      (/** @type {any} */ option) => option.value
-    ),
+    queryAllByTag(
+      getByRole(el, 'combobox', { name: 'Amendment reason' }),
+      'option'
+    ).map((option) => option.value),
     ['', 'qa-check', 'tm-check', 'appeal', 'data-correction']
   );
 });
