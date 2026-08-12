@@ -110,7 +110,13 @@ review platform, Review Outcomes flow *back* for reporting.
   platform as a **Deliverable**.
 - *The review platform (not part of this framework) reviews the Cases.*
 - **Sync** (platform-wide) pulls the platform's state — the returned **Review
-  Outcomes** and its full picture of each Case — back in as its own Feed.
+  Outcomes** and its full picture of each Case — back in as its own Feed. It
+  runs on two cadences: an **hourly poll** into silver and a **daily publish**
+  of gold, because only **Notification** needs fresh data and only the publish
+  is expensive ([Sync polls hourly, publishes gold
+  daily](adr/0020-sync-polls-hourly-publishes-gold-daily.md)).
+- **Notification** (platform-wide) reads Sync's silver observations hourly and
+  emits a **Deliverable** telling Case participants what needs their attention.
 - **Reporting** (platform-wide) joins Review Outcomes to the selected Cases and
   emits **Deliverables**.
 

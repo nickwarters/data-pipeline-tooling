@@ -87,6 +87,15 @@ UPSTREAMS = ()
 # than the numeric id it otherwise returns, and the sub-field of each the read
 # asks for. Only the Responsible Party's display name is selected: it is the one
 # of the five a view names a person by, and the rest are matched, never shown.
+#
+# Notification tested that premise and it held. Deciding who to notify means
+# matching the author of a Conversation Message against these columns, which
+# looks like it needs every display name landed -- but the fix belongs at the
+# source, not here: a Message carries ``author.loginName`` (see the Message
+# shape in ``platform_frontend``), so the match is login-to-login against the
+# ``Name`` sub-field already selected. Matching on display names would be the
+# wrong repair anyway -- they are neither unique nor stable, and the pair most
+# likely to collide is a Responsible Party and their own Manager.
 PERSON_SUBFIELDS = {
     "AssignedReviewer": ("Name",),
     "ResponsibleParty": ("Name", "Title"),

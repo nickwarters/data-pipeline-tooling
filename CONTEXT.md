@@ -153,8 +153,24 @@ The Pipeline that reads the **CasePool** and produces the **SelectionPool** (fil
 _Avoid_: picking; **sampling** (now a defined per-group narrowing *technique* within Selection — see **Sampling** — not a synonym for this Pipeline)
 
 **Sync**:
-The Pipeline that pulls the review platform's own state — **Review Outcomes** and its full picture of each Case — into a platform-wide store; one-way inbound, no correlation. Spans all Case Types.
+The Pipeline that pulls the review platform's own state — **Review Outcomes** and its full picture of each Case — into a platform-wide store; one-way inbound, no correlation. Spans all Case Types. Runs on **two cadences, as two separately addressed pipelines**: the poll (source → raw → silver) runs hourly because **Notification** is the only thing that needs fresh data, and the publish (silver → gold) runs daily. Splitting them is what keeps an hourly cadence affordable — see [ADR-0020](docs/adr/0020-sync-polls-hourly-publishes-gold-daily.md). *(Decided, not yet built: `pipelines/sharepoint_cases` still does both in one run.)*
 _Avoid_: writeback, reconcile, import
+
+**Notification**:
+A message telling a Case participant that something on their Case needs their attention. _Here_: produced by an hourly pipeline reading **Sync**'s silver observations, and emitted as a **Deliverable** — one JSON file of many notifications in the outbox — which the notification service drains as a per-file work queue with no ordering key. Two triggers only: a Case becoming Reportable **and** carrying remediation, and a new **Conversation** **Message** (the review platform's terms — see [`platform_frontend/CONTEXT.md`](platform_frontend/CONTEXT.md)). It is **not** a **Report Feed**: a Report Feed is a published dataset, a Notification is an instruction to tell a named person something once.
+_Avoid_: alert, email; message (reserved for a Conversation entry)
+
+**Notification rule**:
+The predicate deciding *who* is notified. _Here_: one rule per trigger, each derived purely from the **current** state of the latest observation — never from a diff of what changed since the last run. Reportable notifies the **Responsible Party**. A Conversation Message notifies **the two of the three thread parties** (Assigned Reviewer, Responsible Party, Responsible Party Manager) **who did not author the last Message**. That second rule *is* the whole of the "don't notify someone who has already replied" requirement: whoever spoke last is by definition the one who does not need telling, so no message identity and no per-message diff is required. Its one accepted cost is that a Manager's courtesy post after the Responsible Party has replied re-notifies the Responsible Party — over-notifying is the safe direction.
+_Avoid_: recipient logic, routing (informal)
+
+**Notification suppression**:
+Not sending a Notification the trigger would otherwise produce. _Here_: there is no separate suppression step — it is a *property* of the **Notification rule**, which selects recipients rather than selecting-then-filtering. Stated as its own term only because the requirement arrived phrased as an exclusion ("if the receiver has already replied, do not notify"), and a future reader looking for the filter needs to be told there isn't one.
+_Avoid_: mute, snooze, debounce
+
+**Notified ledger**:
+The record of which Notifications have already been sent, keyed `(case_id, recipient, message_at)` — a recipient is notified only when the triggering event is newer than the last one they were told about. _Here_: keyed on the **domain event's own timestamp**, never on `source_observation_id` (a Case gets a new observation for unrelated edits, which would re-notify) and never on a **time window** — the Sync poll's deliberate five-minute `OVERLAP` means any window-based dedupe re-emits every pass *by design*. Distinct from the **Run store**: that records what a run did, this records what a person was told.
+_Avoid_: dedupe table, sent log
 
 **Reporting**:
 The final **stage** — a *growing family of independent pipelines*, not one Pipeline and not necessarily one `PipelineSet`. Each reads whatever upstream it needs (often a single upstream gold table, sometimes several, joining **Review Outcomes** to selected **Cases**), and each produces exactly one thing: a **Report Feed**, or a report directly. They are **individually schedulable** and separately addressed by path, because they answer unrelated questions on unrelated cadences and one failing must not hold the others up. Spans all Case Types. Read this entry as the correction it is: Reporting was defined here as a single final Pipeline, by symmetry with the other three, before any of it existed.
