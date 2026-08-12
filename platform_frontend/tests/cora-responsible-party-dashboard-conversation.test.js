@@ -104,13 +104,6 @@ test('Responsible Party unread messages render through descriptors and invoke co
   );
   open.dispatchEvent({ type: 'click' });
   assert.deepEqual(opened, ['missing-timestamp']);
-
-  // Existing DOM-stub debt retained until the shared debt ledger can move.
-  const table = /** @type {any} */ (section?.querySelector('table'));
-  assert.ok(table._listeners.keydown);
-  assert.equal(table._listeners.keydown.length, 1);
-  assert.ok(open._listeners.click);
-  assert.equal(open._listeners.click.length, 1);
 });
 
 test('without a Conversation handler the Unread Messages table renders no Open button', () => {

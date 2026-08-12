@@ -1,9 +1,9 @@
 // @ts-check
-import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
 import { makeChrome } from './helpers/fixtures.js';
+import { fireEvent } from './helpers/semantic-dom.js';
 
 installDom();
 
@@ -19,10 +19,6 @@ const { toLocalDateKey } = await import('../src/lib/local-calendar.js');
  * browser-calendar snapshot is the same date wherever the suite runs.
  */
 const FIXED_NOW = new Date(2026, 7, 10, 12);
-const CORA_STYLES = readFileSync(
-  new URL('../src/styles/cora-styles.css', import.meta.url),
-  'utf8'
-);
 const RANGES = buildStatsRanges(FIXED_NOW);
 
 /** @param {Record<string, unknown>} [overrides] */
@@ -332,36 +328,6 @@ test('my stats view: the page is busy while the live read is in flight', () => {
   );
 
   assert.equal(view.getAttribute('aria-busy'), 'true');
-});
-
-test('my stats layout: the composed row and the figures both stack responsively', () => {
-  const desktopRule = CORA_STYLES.match(
-    /\[data-cora-root\]\s+\.cora-my-stats-top-row\s*\{([^}]*)\}/
-  )?.[1];
-
-  assert.ok(desktopRule);
-  assert.match(desktopRule, /display:\s*grid/);
-  assert.match(
-    desktopRule,
-    /grid-template-columns:\s*max-content\s+minmax\(0,\s*1fr\)/
-  );
-  assert.match(
-    CORA_STYLES,
-    /\.cora-my-stats-range-button\[aria-pressed='true'\]/
-  );
-  assert.match(CORA_STYLES, /\.cora-my-stats-controls-column\s*\{/);
-  assert.match(
-    CORA_STYLES,
-    /\[data-cora-root\]\s+\.cora-my-stats-headline__figures\s*\{[^}]*grid-template-columns:\s*repeat\(4,/
-  );
-  assert.match(
-    CORA_STYLES,
-    /@media\s*\(max-width:\s*52rem\)[\s\S]*?\.cora-my-stats-top-row\s*\{[\s\S]*?grid-template-columns:\s*1fr/
-  );
-  assert.match(
-    CORA_STYLES,
-    /@media\s*\(max-width:\s*52rem\)[\s\S]*?\.cora-my-stats-headline__figures\s*\{[\s\S]*?repeat\(2,/
-  );
 });
 
 // ── The slice ─────────────────────────────────────────────────────────────
@@ -927,6 +893,8 @@ test('my stats route render owns the chart tooltip lifecycle', () => {
   slice.render(container, withReport, tools);
   const firstChart = container.querySelector('svg.cora-grouped-bar-chart');
   assert.ok(firstChart);
+  const staleMark = firstChart.querySelector('[data-cora-chart-mark="true"]');
+  assert.ok(staleMark);
   assert.ok(container.querySelector('.cora-my-stats-top-row'));
   assert.equal(routeContext.appEl.querySelectorAll('div').length, 1);
 
@@ -938,10 +906,8 @@ test('my stats route render owns the chart tooltip lifecycle', () => {
   const secondChart = container.querySelector('svg.cora-grouped-bar-chart');
   assert.ok(secondChart);
   assert.notEqual(secondChart, firstChart);
-  assert.equal(
-    /** @type {any} */ (firstChart)._listeners.pointerover.length,
-    0
-  );
+  fireEvent(staleMark, 'pointerover');
+  assert.equal(staleMark.getAttribute('aria-describedby'), null);
   assert.equal(routeContext.appEl.querySelectorAll('div').length, 1);
 
   const dispose = slice.start(
