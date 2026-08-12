@@ -1,10 +1,9 @@
 """Gold for the ``sharepoint_cases`` feed: the current Case, and three aggregates.
 
-Silver is an append-only history of *observations* -- one row per (list item,
-version) the poll ever saw, with overlapping windows re-presenting rows that did
-not change. Gold is the other shape: **one row per Case as it stands now**, and
-three counts reduced from it. Every table is rebuilt whole with ``Refresh()`` on
-every poll, so a re-drive converges rather than accumulating.
+Silver is an append-only history of *observations* across every declared Case
+list. Gold is the other shape: **one row per Case as it stands now**, over every
+list, and three counts reduced from it. Every table is rebuilt whole with
+``Refresh()`` on every poll, so a re-drive converges rather than accumulating.
 
 Four tables, and their declared grain:
 
@@ -15,24 +14,20 @@ Four tables, and their declared grain:
 ``case_throughput_daily``    ``terminal_date`` x ``terminal_status``
 ===========================  =================================================
 
-Only the first has a live grain gate; see :func:`case_current_builder` for why
-the three aggregates get none. Every grain is declared, in each builder's
-docstring and in the data dictionary.
-
 **One instant decides everything.** ``as_of`` is the candidate SharePoint window
 end -- the value the run is about to commit as its watermark -- and never
 ``utcnow()``: a re-drive of the same window must produce byte-identical gold.
-Every table carries it as ``as_of_utc``. Where a *calendar date* is needed
-(``terminal_date``, the age arithmetic) the UTC instant is converted to the
-**local** date through ``tools.observability.timestamps``, which is where this
-repository settles instants-are-UTC / dates-are-local.
+Every table carries it as ``as_of_utc``. A *calendar date* (``terminal_date``,
+the age arithmetic) is the **local** date of that instant, through
+``tools.observability.timestamps``.
+
+Every column is documented in ``docs/data-dictionary-sharepoint-cases.md``.
 """
 
 from __future__ import annotations
 
 import datetime as dt
 import re
-from collections.abc import Callable
 from functools import partial
 
 import pandas as pd
@@ -44,21 +39,27 @@ from framework.transform import DeriveKey, Stamp
 from tools.medallion import Medallion
 from tools.observability.timestamps import local_date
 
-from .schema import FEED_NAME, LIST_NAME
+from .schema import FEED_NAME, NATURAL_KEY
 
 # The silver table gold reduces, and the current-state table every aggregate is
-# then reduced from. ``GOLD_TABLES`` -- all four, in publication order -- is
-# derived from the aggregate list at the foot of this module, so it cannot drift
-# from what :func:`publish_gold` actually writes.
+# then reduced from.
 SILVER_TABLE = "case_version"
 CURRENT_TABLE = "case_current"
+
+# All four gold tables, in publication order.
+GOLD_TABLES = (
+    CURRENT_TABLE,
+    "case_counts_current",
+    "case_age_buckets_current",
+    "case_throughput_daily",
+)
 
 CASE_ID_COLUMN = "case_id"
 AS_OF_COLUMN = "as_of_utc"
 
 # A Case whose review is over, and the source-written stamp that says when it
-# ended. See :func:`case_throughput_daily_builder` for why these two stamps are
-# the business event and not an approximation of it.
+# ended. The source writes each stamp once, on the one transition into that
+# state, so it is a business event rather than an artefact of when we polled.
 TERMINAL_STATUSES = {"Completed": "completed_at", "Void": "voided_at"}
 
 # Reporting fills, not source values. Both are literal keys rather than NULL so
@@ -104,15 +105,13 @@ _NO_VERSION = -1
 def _version_parts(value: object) -> tuple[int, int]:
     """One ``source_version`` as the ``(major, minor)`` pair it sorts on.
 
-    The column holds whichever of three shapes the observation carried: a
-    SharePoint ETag (``'"3"'``, ``'W/"3"'``, ``'"4,1"'`` -- quotes included, as
-    stored), a dotted UI version (``'3.0'``, ``'512.0'``), or -- when the row
-    answered with no version at all -- the sha256 digest the Reader falls back
-    to. Only the first two order; the digest is not a version and cannot pretend
-    to be one, so it sorts at ``(-1, -1)``.
+    The column holds an ETag (``'"3"'``, ``'W/"3"'``, ``'"4,1"'``), a dotted UI
+    version (``'3.0'``), or the sha256 digest the Reader falls back to when the
+    row carried no version. Only the first two order; the digest sorts at
+    ``(-1, -1)``.
 
-    Comparing these as *text* is the thing to avoid: ``"10"`` sorts before
-    ``"9"`` lexically, so a same-``Modified`` tie would resolve backwards.
+    Parsed rather than compared as *text*: ``"10"`` sorts before ``"9"``
+    lexically, so a same-``Modified`` tie would resolve backwards.
     """
     if not isinstance(value, str):
         return (_NO_VERSION, _NO_VERSION)
@@ -134,33 +133,15 @@ def _version_parts(value: object) -> tuple[int, int]:
 def latest_case_version(dataset: Dataset) -> Dataset:
     """Reduce an accumulated observation history to the latest row per Case.
 
-    The sort key, in order: ``case_id``, the ``Modified`` instant, the parsed
-    version's major then minor part, and finally ``source_observation_id``. One
-    stable sort, then ``drop_duplicates(keep="last")``.
+    Sorted by ``case_id``, the ``Modified`` instant, the parsed version's major
+    then minor part, and finally ``source_observation_id``; then the last row of
+    each Case wins. Two versions of one item can share a ``Modified`` to the
+    second, which is why the version breaks that tie; the observation id is a
+    deterministic last resort and carries no meaning.
 
-    Why each tier exists. ``Modified`` is the source's own idea of when the item
-    last changed, so it leads. It is not a tie-break on its own -- two versions
-    of one item can share a ``Modified`` to the second, and the append-only
-    silver keyed on ``source_observation_id`` keeps both -- so the parsed
-    version decides that tie. ``source_observation_id`` is the last resort, and
-    it is deterministic rather than meaningful: a sha256 of the list name, the
-    item id and the version.
-
-    **Be honest about the last tier.** Every observation whose version could not
-    be parsed -- the digest fallback -- shares the same ``(-1, -1)`` bucket. Two
-    of *those* at the same ``Modified`` are therefore separated entirely by
-    ``source_observation_id``: the same input always picks the same winner, but
-    which one it picks carries no meaning. That is a property of a source row
-    that arrived without a version, not something this reduction can repair.
-
-    Takes ``case_id`` as already derived (``DeriveKey`` runs above it), so this
-    stays a pure reduction over columns rather than knowing how a Case is keyed.
-
-    ``source_modified_at`` is parsed **without** ``errors="coerce"``, so an
-    unparseable stamp raises here rather than becoming ``NaT``. Silver declares
-    the column non-null and typed, so there is no honest way for one to arrive;
-    coercing would sort the bad row *last* and hand it the Case, which is the
-    same NA trap ``_NO_VERSION`` exists to avoid.
+    ``source_modified_at`` is parsed **without** ``errors="coerce"``: silver
+    declares it non-null and typed, and coercing would sort a bad row *last* and
+    hand it the Case -- the NA trap ``_NO_VERSION`` also exists to avoid.
     """
     frame = dataset.to_pandas()
     parts = [_version_parts(value) for value in frame["source_version"]]
@@ -193,7 +174,7 @@ def latest_case_version(dataset: Dataset) -> Dataset:
 # --- the aggregates ---------------------------------------------------------
 
 
-def _case_counts(dataset: Dataset) -> Dataset:
+def case_counts(dataset: Dataset) -> Dataset:
     """Count current Cases by reviewer, that reviewer's manager, and status."""
     frame = dataset.to_pandas()
     # Only the two Person columns are filled; ``status`` is declared non-null in
@@ -241,7 +222,7 @@ def _age_bucket(age_days: int | None) -> tuple[str, int]:
     raise AssertionError("the last bucket is open-ended")  # pragma: no cover
 
 
-def _age_buckets(dataset: Dataset, *, as_of: dt.datetime) -> Dataset:
+def age_buckets(dataset: Dataset, *, as_of: dt.datetime) -> Dataset:
     """Count current Cases by age bucket and status."""
     frame = dataset.to_pandas()
     as_of_day = local_date(as_of)
@@ -266,7 +247,7 @@ def _age_buckets(dataset: Dataset, *, as_of: dt.datetime) -> Dataset:
     return Dataset.from_pandas(counted.reset_index(drop=True))
 
 
-def _throughput(dataset: Dataset) -> Dataset:
+def throughput(dataset: Dataset) -> Dataset:
     """Count current Cases by the local date their terminal stamp falls on."""
     frame = dataset.to_pandas()
     terminal = frame[frame["status"].isin(TERMINAL_STATUSES.keys())]
@@ -325,30 +306,22 @@ def case_current_builder(
 ) -> Pipeline:
     """Build the current-state hop. **Grain: one row per ``case_id``.**
 
-    Reads the whole silver history, derives the deterministic ``case_id`` from
-    the list item id, reduces to the latest observation of each Case, stamps the
+    Reads the whole silver history across every list, derives the deterministic
+    ``case_id``, reduces to the latest observation of each Case, stamps the
     run's ``as_of_utc``, and refreshes the table.
 
     ``UniqueValidator(CASE_ID_COLUMN)`` sits after the reduction, where it can
     never fire: ``drop_duplicates`` has just guaranteed what it checks. It is
-    kept anyway, and only here, as a **tripwire** -- the one place in this
-    feed's gold where the grain is produced by a rule rather than by a
-    ``groupby``, so the one place a future change to that rule could get it
-    wrong. The three aggregate hops get no such gate, because there the check
-    would be satisfied by construction with no rule to guard.
-
-    Every silver column is republished, including the ``answers`` /
-    ``conversation`` / ``details`` JSON blobs. They are the Case as it stands and
-    a consumer has nowhere else to read them; the cost is that a poll rewrites
-    them all, which is the price of ``Refresh()`` and cheap at this list's size.
+    kept as a **tripwire** -- this is the one hop whose grain comes from a rule
+    rather than from a ``groupby``, so the one a future change could get wrong.
     """
     p = Pipeline(f"{FEED_NAME}:gold:{CURRENT_TABLE}", run_log=run_log)
     r = p.read(reader, name="read")
     keyed = p.transform(
         DeriveKey(
             into=CASE_ID_COLUMN,
-            namespace=LIST_NAME,
-            natural_key=["source_item_id"],
+            namespace=FEED_NAME,
+            natural_key=list(NATURAL_KEY),
         ),
         r,
         name="derive-key",
@@ -364,178 +337,7 @@ def case_current_builder(
     return p
 
 
-def _aggregate_hop(
-    reader: Reader,
-    writer: Writer,
-    *,
-    table: str,
-    transform: Callable[[Dataset], Dataset],
-    step: str,
-    as_of: dt.datetime,
-    run_log: RunLog | None,
-) -> Pipeline:
-    """The wiring every aggregate hop shares: read, count, stamp, refresh.
-
-    The three aggregates differ only in what they count, so only the table they
-    publish, the transform that counts and the step's name are theirs. Each
-    keeps its own builder, because the grain and the reasoning behind it are the
-    part worth reading.
-    """
-    p = Pipeline(f"{FEED_NAME}:gold:{table}", run_log=run_log)
-    r = p.read(reader, name="read")
-    counted = p.transform(transform, r, name=step)
-    stamped = p.transform(
-        Stamp(AS_OF_COLUMN, as_of.isoformat()), counted, name="stamp-as-of"
-    )
-    p.write(writer, stamped, name="write")
-    return p
-
-
-def case_counts_current_builder(
-    reader: Reader,
-    writer: Writer,
-    *,
-    as_of: dt.datetime,
-    run_log: RunLog | None = None,
-) -> Pipeline:
-    """Build the current-count hop.
-    **Grain: ``assigned_reviewer_name`` x ``assigned_reviewer_manager_name`` x
-    ``status``.**
-
-    The Assigned Reviewer leads, because the question is who is holding what.
-    The manager is kept alongside rather than as a separate table: it is how the
-    rows roll up, and a consumer that wants counts per manager sums this table
-    instead of reading a second one that could disagree with it. Both are
-    carried under silver's own column names.
-
-    Neither is a team. The provisioned list has no team column, and what the
-    review platform calls "my team" is exactly the set of Cases whose
-    ``AssignedReviewerManagerId`` is the signed-in user. Naming a dimension
-    ``owning_team`` would assert something that does not exist, and shortening
-    the manager to ``reviewer_manager_name`` would invent a synonym for a row
-    that also carries ``responsible_party_manager_name``.
-
-    A Case with no Assigned Reviewer, or none recorded for that reviewer's
-    manager, is counted under the literal ``"(unassigned)"``. That is a
-    reporting fill and never a source value; it exists because a NULL group key
-    is a hole in the grain that a reader may silently drop, which would make the
-    table quietly fail to add up to the number of current Cases.
-    """
-    return _aggregate_hop(
-        reader,
-        writer,
-        table="case_counts_current",
-        transform=_case_counts,
-        step="count-by-reviewer-and-status",
-        as_of=as_of,
-        run_log=run_log,
-    )
-
-
-def case_age_buckets_current_builder(
-    reader: Reader,
-    writer: Writer,
-    *,
-    as_of: dt.datetime,
-    run_log: RunLog | None = None,
-) -> Pipeline:
-    """Build the age-profile hop. **Grain: ``age_bucket`` x ``status``.**
-
-    Age is whole **calendar** days from ``created`` to ``as_of``, both taken as
-    local dates. Not working days: ``tools.calendar.WorkingDayCalendar`` needs a
-    seeded holiday set and nothing in this feed supplies one, so a working-day
-    age would be a guess dressed as a measure. If a consumer asks for it, that is
-    the later change -- seed the calendar, then use it.
-
-    ``age_bucket_order`` travels with the label so a consumer can sort the
-    buckets without parsing ``"15-30 days"``. Every current Case appears in
-    exactly one bucket (``unknown`` catches a null ``created``), so this table's
-    total reconciles exactly with ``case_counts_current``.
-
-    The reviewer dimensions are deliberately absent: they are one join away in
-    ``case_current``, and carrying them here would multiply the table for a
-    breakdown nobody has asked for.
-    """
-    return _aggregate_hop(
-        reader,
-        writer,
-        table="case_age_buckets_current",
-        transform=partial(_age_buckets, as_of=as_of),
-        step="bucket-by-age",
-        as_of=as_of,
-        run_log=run_log,
-    )
-
-
-def case_throughput_daily_builder(
-    reader: Reader,
-    writer: Writer,
-    *,
-    as_of: dt.datetime,
-    run_log: RunLog | None = None,
-) -> Pipeline:
-    """Build the throughput hop. **Grain: ``terminal_date`` x ``terminal_status``.**
-
-    Measures Cases that *first entered* a terminal state on a local calendar
-    date. That event is derivable here rather than reconstructed, because the
-    source writes it: in the review platform's Case machine, ``completedAt`` has
-    exactly two writers and both refuse an already-terminal Case, no path moves
-    a Case back to ``In-progress``, and ``voidedAt`` is the same shape. So there
-    is one transition into a terminal state per Case and its stamp is
-    write-once -- which makes this a source-written business event rather than an
-    artefact of when we happened to poll. Overlapping re-reads cannot inflate it:
-    the count is taken from the *current* row, one per Case.
-
-    Two caveats, both real:
-
-    * The invariant "terminal status implies a stamp" is enforced nowhere, and a
-      list row is editable in the SharePoint web UI. A terminal Case with no
-      stamp is counted under the literal ``"(unstamped)"`` rather than dropped or
-      given a NULL date, so the table still adds up to the number of Cases
-      currently in a terminal status.
-    * It is the *source's* stamp under ``Refresh()``. A hand-edited or backdated
-      stamp therefore changes a historical count on the next poll. That is the
-      honest reading of a source that owns the event; a frozen copy would report
-      a number the source no longer agrees with.
-    """
-    return _aggregate_hop(
-        reader,
-        writer,
-        table="case_throughput_daily",
-        transform=_throughput,
-        step="count-by-terminal-date",
-        as_of=as_of,
-        run_log=run_log,
-    )
-
-
 # --- publication ------------------------------------------------------------
-
-
-def _aggregates() -> list[tuple[str, Callable[..., Pipeline]]]:
-    """The three aggregates in publication order: each table and its builder.
-
-    Resolved per call rather than bound into a module constant, so a test that
-    substitutes a builder on this module is still the builder that runs.
-    """
-    return [
-        ("case_counts_current", case_counts_current_builder),
-        ("case_age_buckets_current", case_age_buckets_current_builder),
-        ("case_throughput_daily", case_throughput_daily_builder),
-    ]
-
-
-# All four gold tables, in publication order. Derived from the pair list rather
-# than written out beside it, so the declared set and the published set are one
-# thing.
-GOLD_TABLES = (CURRENT_TABLE, *(table for table, _ in _aggregates()))
-
-
-def _publish(pipeline: Pipeline, describe: bool) -> Dataset:
-    """Print the hop's plan when asked, run it, and hand back what it produced."""
-    if describe:
-        print(pipeline.describe())
-    return pipeline.run()
 
 
 def publish_gold(
@@ -547,46 +349,49 @@ def publish_gold(
 ) -> None:
     """Rebuild all four gold tables from the accumulated silver history.
 
-    ``case_current`` is published first and its resulting dataset feeds the three
-    aggregates through a :class:`~framework.io.DatasetReader`, so silver is read
-    once and every aggregate counts exactly the rows the current table holds. The
-    aggregates commit independently, in order; a failure part-way leaves the
-    earlier ones refreshed, which is safe because the caller has not advanced the
-    watermark and the next run rebuilds all four from the same history.
+    ``case_current`` is published first and its dataset feeds the three
+    aggregates, so silver is read once and every aggregate counts exactly the
+    rows the current table holds. They commit independently, in order; a failure
+    part-way leaves the earlier ones refreshed, which is safe because the caller
+    has not advanced any watermark and the next run rebuilds all four.
 
-    Every hop runs as a bare ``p.run()``, exactly as the raw and silver hops
-    above it do, and so inherits the **ambient** run context the runner makes
-    active -- which is where a dry run's write-nothing behaviour comes from. No
-    context is passed in here because none of these hops would read it.
-
-    The first thing it does is ask whether silver has landed anything at all.
-    Only one situation answers no: a **dry run against a fresh base directory**,
-    where the silver write was previewed rather than performed, so there is no
-    table to read. Previewing no gold steps there is honest -- there is nothing
-    to reduce. A real run always creates the table, even for a quiet window, so
-    this never fires in production. It is a *probe* and not a caught
-    ``OperationalError``, which would also swallow "database is locked".
+    Each hop runs as a bare ``p.run()``, so it inherits the ambient run context
+    the runner makes active -- which is where a dry run's write-nothing
+    behaviour comes from.
     """
+    # Only a dry run against a fresh base directory has no silver table: the
+    # write was previewed rather than performed, so there is nothing to reduce.
+    # A probe rather than a caught OperationalError, which would also swallow
+    # "database is locked".
     if med.silver.columns_of(SILVER_TABLE).columns() is None:
         return
 
-    current = _publish(
-        case_current_builder(
-            med.silver.reader(SILVER_TABLE),
-            med.gold.writer(CURRENT_TABLE, Refresh()),
-            as_of=as_of,
-            run_log=run_log,
-        ),
-        describe,
+    current_p = case_current_builder(
+        med.silver.reader(SILVER_TABLE),
+        med.gold.writer(CURRENT_TABLE, Refresh()),
+        as_of=as_of,
+        run_log=run_log,
     )
+    if describe:
+        print(current_p.describe())
+    current = current_p.run()
 
-    for table, builder in _aggregates():
-        _publish(
-            builder(
-                DatasetReader(current),
-                med.gold.writer(table, Refresh()),
-                as_of=as_of,
-                run_log=run_log,
-            ),
-            describe,
+    for table, step, transform in (
+        ("case_counts_current", "count-by-reviewer-and-status", case_counts),
+        (
+            "case_age_buckets_current",
+            "bucket-by-age",
+            partial(age_buckets, as_of=as_of),
+        ),
+        ("case_throughput_daily", "count-by-terminal-date", throughput),
+    ):
+        p = Pipeline(f"{FEED_NAME}:gold:{table}", run_log=run_log)
+        node = p.read(DatasetReader(current), name="read")
+        node = p.transform(transform, node, name=step)
+        node = p.transform(
+            Stamp(AS_OF_COLUMN, as_of.isoformat()), node, name="stamp-as-of"
         )
+        p.write(med.gold.writer(table, Refresh()), node, name="write")
+        if describe:
+            print(p.describe())
+        p.run()

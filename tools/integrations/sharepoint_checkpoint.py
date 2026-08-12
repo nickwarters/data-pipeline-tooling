@@ -214,11 +214,10 @@ def _keyed_site(site: str) -> str:
     """The site as it is persisted and keyed: no trailing ``/``, no userinfo.
 
     Rebuilding the netloc from ``hostname`` drops both the ``user:pass@`` and the
-    bare ``user@`` form, so a persisted file is never where a credential survives
-    and a site addressed with and without one is a single source. The host folds
-    to lower case with it, which DNS agrees with; the path does not, because a
-    site path's case is the tenant's business and two spellings may be two
-    addresses.
+    bare ``user@`` form, so a site addressed with and without one is a single
+    source. The host folds to lower case with it, which DNS agrees with; the path
+    does not, because a site path's case is the tenant's business and two
+    spellings may be two addresses.
     """
     parts = urlsplit(site.rstrip("/"))
     host = parts.hostname or ""

@@ -10,9 +10,8 @@ Type, Detail Tables — is unique per Case Type, so the gold step is left to you
 Its shape is sketched at the foot of ``run``.
 
 Each medallion hop is its own ``*_builder`` -- a single, editable definition of
-what that hop does, composed through the public facades (``framework.core`` /
-``framework.io`` / ``framework.transform`` / ``framework.run``) and the shared
-``tools.recipes`` hop recipes.
+what that hop does, wired inline through the public facades (``framework.core``
+/ ``framework.io`` / ``framework.transform`` / ``framework.run``).
 
 Address it by its location on disk -- the framework imports
 ``pipelines.myfeed.pipeline`` and runs its ``run(context)`` callable::
@@ -34,12 +33,18 @@ import sys
 from dataclasses import fields
 from pathlib import Path
 
-from framework.core import Dataset, PipelineError, format_failure
+from framework.core import (
+    ColumnValidator,
+    Dataset,
+    PipelineError,
+    SchemaValidator,
+    format_failure,
+)
 from framework.io import AccumulateByRun, CsvReader, Reader, Writer
 from framework.run import Pipeline, RunContext, RunLog
+from framework.transform import SchemaCoercion, SchemaValueRulePartitioner
 from tools.environments import known_environments, resolve_base_dir
 from tools.medallion import medallion
-from tools.recipes import raw_to_silver, source_to_raw
 from tools.store import StoreRegistry
 
 from .schema import NAMESPACE, NATURAL_KEY, MyfeedRow  # noqa: F401
@@ -56,20 +61,16 @@ def raw_builder(
     writer: Writer,
     run_log: RunLog | None = None,
 ) -> Pipeline:
-    """Build the raw hop: faithful landing zone.
+    """Build the raw hop: gate the source's columns, then land it unchanged.
 
-    This is the standard raw hop, composed from the shared recipe: gate the
-    source's expected columns, then land the source unchanged. To customise,
-    inline the recipe's body here -- a recipe is composition, not inheritance,
-    so there is nothing to fight.
+    Edit these five lines to change the hop.
     """
-    return source_to_raw(
-        reader,
-        writer,
-        expected_columns=[f.name for f in fields(MyfeedRow)],
-        name=f"{FEED_NAME}:raw",
-        run_log=run_log,
-    )
+    p = Pipeline(f"{FEED_NAME}:raw", run_log=run_log)
+    node = p.read(reader, name="read")
+    expected = [f.name for f in fields(MyfeedRow)]
+    node = p.validate(ColumnValidator(expected), node, name="columns")
+    p.write(writer, node, name="write")
+    return p
 
 
 def silver_builder(
@@ -78,21 +79,24 @@ def silver_builder(
     reject_writer: Writer | None = None,
     run_log: RunLog | None = None,
 ) -> Pipeline:
-    """Build the silver hop: schema coercion and enforcement + quarantine.
+    """Build the silver hop: coerce, quarantine value-rule breaches, validate.
 
-    The standard silver hop, composed from the shared recipe: coerce the dtypes
-    storage loses, route value-rule breaches to ``reject_writer`` (opt-in, so
-    the good rows still land), then validate the Case Type's declared schema.
-    Inline the recipe's body here to customise it.
+    ``reject_writer`` is opt-in: given one, value-rule breaches are routed to
+    quarantine so the good rows still land. Edit these lines to change the hop.
     """
-    return raw_to_silver(
-        reader,
-        writer,
-        schema=MyfeedRow,
-        reject_writer=reject_writer,
-        name=f"{FEED_NAME}:silver",
-        run_log=run_log,
-    )
+    p = Pipeline(f"{FEED_NAME}:silver", run_log=run_log)
+    node = p.read(reader, name="read")
+    node = p.transform(SchemaCoercion(MyfeedRow), node, name="coerce")
+    if reject_writer is not None:
+        node = p.quarantine(
+            SchemaValueRulePartitioner(MyfeedRow),
+            reject_writer,
+            node,
+            name="quarantine",
+        )
+    node = p.validate(SchemaValidator(MyfeedRow), node, name="post-validate")
+    p.write(writer, node, name="write")
+    return p
 
 
 def run(context: RunContext, *, describe: bool = False) -> Dataset:

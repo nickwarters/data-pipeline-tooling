@@ -18,7 +18,7 @@ separate places:
 | Gap | Where | Effect today |
 | --- | --- | --- |
 | No organisational client | `_resolve_client` in `pipelines/sharepoint_cases/pipeline.py` | An unattended run raises `NoClientError` (`config` category) |
-| `SITE` / `LIST_ID` are placeholders | same file, near the top | No site to point a client at; no identity to key the watermark on |
+| `SITE` and every `CaseList`'s `list_id` are placeholders | `pipelines/sharepoint_cases/schema.py` | No site to point a client at; no identity to key each list's watermark on |
 | `Modified` is not indexed on the list | the tenant, not this repository | Works while the list is small; degrades past 5,000 rows |
 
 The feed is scheduled with `enabled=True` despite that. This is deliberate: a
@@ -49,20 +49,23 @@ python -m cli log    sharepoint_cases --base-dir /tmp/rehearsal --pipeline-run-i
 The point of stage 0 is that the only thing you are still learning at stage 4 is
 the tenant's behaviour, not this feed's.
 
-## Stage 1 — get the two tenant facts
+## Stage 1 — get the tenant facts, one `CaseList` entry per list
 
-`SITE` is the site collection holding the Case lists. `LIST_ID` is the list's
-GUID, from its own settings page.
+`SITE` is the site collection holding the Case lists. Then fill in one
+`CASE_LISTS` entry per provisioned list: its Case Type slug, its list name, that
+site, and the list's **GUID** from its own settings page.
 
 Neither can be copied from the review application: it derives its site from the
-page it is served from and addresses lists by title, so the GUID exists nowhere
+page it is served from and addresses lists by title, so the GUIDs exist nowhere
 in this repository or the frontend.
 
-**Take care over the GUID.** It never reaches the fetch — the list is addressed
+**Take care over each GUID.** It never reaches the fetch — the list is addressed
 by title — so a wrong one does not fail, and does not fetch the wrong rows
-either. It keys the watermark, so a wrong GUID misfiles the feed's place in the
-source and looks exactly like a first load. This is the one value in the whole
-sequence where a mistake is quiet; Rollback covers what to do about it.
+either. It keys that list's watermark, so a wrong GUID misfiles the feed's place
+in the source and looks exactly like a first load. **Two entries sharing a
+`(site, list_id)` share one watermark**, which is the same quiet failure twice
+over: while the GUIDs are placeholders they are all the nil UUID, so this is a
+real mistake to make. Rollback covers what to do about it.
 
 While you are in the list's settings, index `Modified`. It can only be indexed
 while the list is under the 5,000-row List View Threshold, so this gets harder,
@@ -185,10 +188,10 @@ Then commit for real:
 python -m cli run pipelines/sharepoint_cases --env prod
 ```
 
-Expect a **first load**: with no committed watermark the window has no start, so
-this run takes the whole current list up to the safe upper boundary, not a
-window of recent changes. On a list of any size this is the slowest run the feed
-will ever do. Verify it before going further:
+Expect a **first load per list**: with no committed watermark a list's window
+has no start, so this run takes each whole current list up to the safe upper
+boundary, not a window of recent changes. On lists of any size this is the
+slowest run the feed will ever do. Verify it before going further:
 
 ```sh
 python -m cli status --env prod
@@ -196,8 +199,9 @@ python -m cli log sharepoint_cases --env prod --pipeline-run-id <prefix>
 ```
 
 Check the four gold tables are populated, the quarantine is empty or explicable,
-and the run succeeded. **A successful run has committed the watermark**, which
-means stage 1's GUID is now baked into the feed's history — see Rollback.
+and the run succeeded. **A successful run has committed every polled list's
+watermark**, which means stage 1's GUIDs are now baked into the feed's history —
+see Rollback.
 
 ## Stage 5 — back it up before you rely on it
 
@@ -240,8 +244,10 @@ document you operate from.
 
 Do not proceed past stage 4 unless all of these hold:
 
-- [ ] `SITE` and `LIST_ID` verified against the list's own settings page, GUID
-      double-checked by a second pair of eyes.
+- [ ] `SITE` and every `CaseList`'s `list_id` verified against that list's own
+      settings page, each GUID double-checked by a second pair of eyes.
+- [ ] No two `CaseList` entries share a `(site, list_id)`, a `list_name` or a
+      `case_type`.
 - [ ] `Modified` indexed, or the list is comfortably under 5,000 rows and someone
       owns watching that.
 - [ ] `_resolve_client` returns a real client whose `server_time()` reads the
@@ -268,14 +274,22 @@ last, so a run that fails between the raw write and the commit has already lande
 append-only rows with no watermark seeded. Raw and silver are append-only by
 design, so there is no in-place correction of what they hold.
 
-**A wrong `LIST_ID` is not that failure.** The list is addressed **by title** —
-the reader is built with `LIST_NAME`, and `fetch_items` takes a list name — so
-the GUID never reaches the fetch. Its only jobs are keying the watermark and
-stamping batch provenance. A wrong GUID therefore ingests the *right* list's rows
-and files the watermark under the wrong identity: the medallion is sound, and
-only the checkpoint is misfiled. Correct the GUID and the feed simply sees an
-unknown key and does one more first load; `AppendOnly` no-ops every observation
-it has already stored. **Do not wipe the medallion for this** — it is good data.
+**A wrong `list_id` is not that failure.** The list is addressed **by title** —
+the reader is built with the entry's `list_name`, and `fetch_items` takes a list
+name — so the GUID never reaches the fetch. Its only jobs are keying the
+watermark and stamping batch provenance. A wrong GUID therefore ingests the
+*right* list's rows and files the watermark under the wrong identity: the
+medallion is sound, and only the checkpoint is misfiled. Correct the GUID and the
+feed simply sees an unknown key and does one more first load; `AppendOnly` no-ops
+every observation it has already stored. **Do not wipe the medallion for this** —
+it is good data.
+
+**Two entries sharing a `(site, list_id)` is the same shape, twice.** Both lists
+advanced one shared watermark, so each saw only the windows the other did not
+close, and the medallion holds a gap rather than wrong rows. Correct the GUIDs
+and each list resumes from an unknown key with a first load, which re-fetches the
+whole list and closes the gap; the re-reads no-op. Again, do not wipe the
+medallion.
 
 This is why stage 4 is run by hand and verified before stage 6 exists.
 

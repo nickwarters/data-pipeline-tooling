@@ -28,7 +28,7 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   `framework/_internal` (`connection`, `describe`, `locations`, `schema`: cross-cutting
   helpers with no public name)). The `python -m cli` entry point (`scaffold`
   plus the operator commands; see below) lives in the top-level `cli/` package,
-  and the cross-cutting `retry` / `calendar` / `medallion` / `recipes` /
+  and the cross-cutting `retry` / `calendar` / `medallion` /
   `deliverables` /
   `environments` / orchestration / observability utilities in the top-level
   `tools/` package — both siblings of `framework/`, not facades. `shared/`
@@ -74,7 +74,7 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   `framework.io` / `framework.transform` / `framework.run`, not the modules
   behind them (those are internal layout); the cross-cutting `tools.*` helpers
   (`tools.retry` / `tools.calendar` / `tools.orchestration` /
-  `tools.observability` / `tools.environments` / `tools.recipes` /
+  `tools.observability` / `tools.environments` /
   `tools.deliverables`) are a sibling
   utility package, not a facade. The facades are the stable contract;
   [`docs/public-api.md`](docs/public-api.md) lists the surface, the internal
@@ -152,10 +152,8 @@ and its test as `tests/pipelines/test_<feed>.py`, from the template under
 generic feed refines source -> raw -> silver -> gold, one `*_builder` per hop
 (`raw_builder` lands faithfully; `silver_builder` renames via `RENAME` + coerces + quarantines +
 validates the schema; `gold_builder` is a passthrough stub with a `TODO`) — the
-first two **compose the shared hop recipes** in `tools.recipes`
-(`source_to_raw` / `raw_to_silver`) rather than carrying a copy of the
-standard hop, so a change to the standard reaches every feed that composes it;
-a feed that must diverge inlines the recipe's body into its own builder — wired
+each builder wires its own hop inline, six or so readable lines you edit in
+place — wired
 in order by `run(context, *, describe=False)` and an argparse `main`. Pass
 `--from-feed-file <path>` to seed the scaffold from a real sample CSV: the header
 becomes the schema's fields (canonicalised to identifiers, dtypes inferred from

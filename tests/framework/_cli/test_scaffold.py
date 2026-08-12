@@ -18,7 +18,7 @@ import pytest
 
 from cli import scaffold
 from framework.run import RunContext
-from tests.framework_testing import read_rows, rows_of
+from tests.framework_testing import RecordingWriter, given_rows, read_rows, rows_of
 from tools.medallion import medallion
 from tools.store import StoreRegistry
 
@@ -76,6 +76,46 @@ def test_render_pascal_cases_a_multi_word_feed_name(tmp_path):
         encoding="utf-8"
     )
     assert "class ReviewOutcomesRow" in schema
+
+
+def test_the_rendered_hops_are_wired_inline(tmp_path):
+    repo = tmp_path / "repo"
+    scaffold.render("widgets", repo)
+    # The hops are wired in the generated feed, not composed from a shared one.
+    assert "recipe" not in (repo / "pipelines" / "widgets" / "pipeline.py").read_text(
+        "utf-8"
+    )
+
+    sys.path.insert(0, str(repo / "pipelines"))
+    try:
+        pipeline = importlib.import_module("widgets.pipeline")
+        importlib.reload(pipeline)
+        reader, writer, rejects = given_rows([]), RecordingWriter(), RecordingWriter()
+        raw_plan = pipeline.raw_builder(reader, writer).describe().splitlines()
+        silver_plan = (
+            pipeline.silver_builder(reader, writer, rejects).describe().splitlines()
+        )
+    finally:
+        sys.path.remove(str(repo / "pipelines"))
+        for name in list(sys.modules):
+            if name == "widgets" or name.startswith("widgets."):
+                del sys.modules[name]
+
+    assert raw_plan == [
+        "Pipeline: widgets:raw",
+        "  [Read] read",
+        "  [Validate] columns (depends on: read)",
+        "  [Write] write (depends on: columns)",
+    ]
+    # Scaffolded without a feed file, so RENAME is empty and no rename is planned.
+    assert silver_plan == [
+        "Pipeline: widgets:silver",
+        "  [Read] read",
+        "  [Transform] coerce (depends on: read)",
+        "  [Quarantine] quarantine (depends on: coerce)",
+        "  [Validate] post-validate (depends on: quarantine)",
+        "  [Write] write (depends on: post-validate)",
+    ]
 
 
 def test_rendered_pipeline_runs_and_lands_its_sample_feed(tmp_path):
@@ -243,8 +283,8 @@ def test_clean_identifier_columns_keep_the_schema_driven_validator(tmp_path):
 
     pipeline = (tmp_path / "pipelines" / "orders" / "pipeline.py").read_text("utf-8")
     assert "RAW_FEED_COLUMNS" not in pipeline
-    # The raw hop composes the shared recipe, gated on the schema's own fields.
-    assert "expected_columns=[f.name for f in fields(OrdersRow)]" in pipeline
+    # The raw hop's column gate is driven by the schema's own fields.
+    assert "expected = [f.name for f in fields(OrdersRow)]" in pipeline
 
 
 def test_non_identifier_columns_gate_the_validator_on_raw_names(tmp_path):
@@ -266,7 +306,7 @@ def test_non_identifier_columns_gate_the_validator_on_raw_names(tmp_path):
     assert (
         'RAW_FEED_COLUMNS = [\n    "Case Number",\n    "Adviser Name",\n]' in pipeline
     )
-    assert "expected_columns=RAW_FEED_COLUMNS" in pipeline
+    assert "expected = RAW_FEED_COLUMNS" in pipeline
     assert "fields(" not in pipeline  # schema-driven validator dropped
     # The relocated test follows: validator columns, not schema fields.
     assert (

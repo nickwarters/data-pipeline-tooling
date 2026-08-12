@@ -53,11 +53,10 @@ def test_bundled_sample_feed_refines_through_to_silver(tmp_path):
 
 
 def test_both_hops_plan_exactly_the_steps_they_always_have():
-    """Pin the composed plan, node for node, address for address.
+    """Pin the plan, node for node, address for address.
 
-    The two builders delegate to the shared hop recipes; this is the pin that
-    the delegation kept the run log's step names and addresses identical to the
-    hand-composed hops they replaced.
+    The step names and addresses are what the run log records, so a change to
+    either is a change to how a run is read back.
     """
     reader, writer, rejects = given_rows([]), RecordingWriter(), RecordingWriter()
 

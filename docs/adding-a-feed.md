@@ -40,60 +40,41 @@ pipelines/orders` imports `pipelines.orders.pipeline` and executes
 (not-yet-run) pipeline — the *one* definition of what that hop does:
 
 - **`raw_builder`** gates the source with a `ColumnValidator` and lands a
-  faithful copy. It composes the shared `tools.recipes.source_to_raw` recipe.
+  faithful copy.
 - **`silver_builder`** renames source columns to the schema's vocabulary
   (`RENAME`), coerces the dtypes storage loses (`SchemaCoercion`), partitions
   bad rows into a quarantine dataset (`SchemaValueRulePartitioner`), and validates
-  the declared schema (`SchemaValidator`). It composes the shared
-  `tools.recipes.raw_to_silver` recipe.
+  the declared schema (`SchemaValidator`).
 - **`gold_builder`** is a passthrough to start — reads silver, writes gold — with
-  a `TODO` to build the assembly, because *what* gold means is per-feed. It is
-  the one hop with no shared recipe. For a worked example of a real one, see
+  a `TODO` to build the assembly, because *what* gold means is per-feed. For a
+  worked example of a real one, see
   `pipelines/sharepoint_cases/gold.py`: a current-state reduce with a declared
   grain, plus three aggregates, all refreshed whole on every run.
 
-### Recipe-first authoring, and how to diverge
+### Each hop is wired where you can see it
 
-The first two hops are the same in every feed, so they have **one definition**:
-the hop recipes in [`tools/recipes.py`](../tools/recipes.py). A generated
-`raw_builder` is a call, not a copy:
+Every builder wires its own hop inline. There is no shared recipe to look
+through, and nothing to subclass — a generated `raw_builder` is the whole hop:
 
 ```python
-from tools.recipes import raw_to_silver, source_to_raw
-
 def raw_builder(reader, writer, run_log=None):
-    return source_to_raw(
-        reader,
-        writer,
-        expected_columns=[f.name for f in fields(OrdersRow)],
-        name=f"{FEED_NAME}:raw",
-        run_log=run_log,
-    )
+    p = Pipeline(f"{FEED_NAME}:raw", run_log=run_log)
+    node = p.read(reader, name="read")
+    expected = [f.name for f in fields(OrdersRow)]
+    node = p.validate(ColumnValidator(expected), node, name="columns")
+    p.write(writer, node, name="write")
+    return p
 ```
 
-A recipe is **composition, not inheritance**. It returns a plain, not-yet-run
-`Pipeline` that your builder owns and can go on wiring; there is no framework
-hook calling back into your feed and nothing to subclass. That keeps the whole
-point of scaffolding — a generated feed you can edit freely — while giving the
-standard hop somewhere to evolve: adding a step to the standard raw hop is a
-one-line change in `source_to_raw`, and every feed composed from it inherits the
-change without a `grep` for the feeds you'd otherwise have to hand-edit.
+To change what the hop does, edit those lines. The cost of that is real and
+accepted: a policy change to "the standard raw hop" is now a change in each
+feed, not one. It buys a feed a junior developer can read top to bottom.
 
-**To diverge, inline the recipe's body into your builder and edit it.** The
-recipes are short and deliberately readable for exactly this: copy the six or so
-lines of `raw_to_silver` into `silver_builder`, add your step, and the feed stops
-tracking the standard (which is the honest outcome — it isn't the standard hop
-any more). Reach for that when the hop genuinely differs; take the recipe's
-options (`expected_columns`, `rename`, `reject_writer`) when it doesn't.
-
-The recipes take the hop's **ports** — a `Reader` and a `Writer` — rather than a
+A builder takes the hop's **ports** — a `Reader` and a `Writer` — rather than a
 medallion profile, for two reasons: the *source* end of a raw hop isn't a
 medallion layer at all, and injecting the ports is what lets the generated test
 drive the real hop in memory against a `RecordingWriter`. `run()` wires the real
-medallion layer Writers. They live in `tools.recipes` rather than the framework
-because raw and silver are application vocabulary — the framework is kept
-domain-free ([keep the framework domain-free](adr/0013-keep-the-framework-domain-free.md))
-and the medallion moved out of it.
+medallion layer Writers.
 
 `run()` wires the real `CsvReader` and the subject's layer Writers (deriving the
 raw/silver `AccumulateByRun` strategy from the `RunContext`, so re-drives under
@@ -227,8 +208,8 @@ tests/pipelines/
   identity.
 - **It refines through the settled ingest spine** — source → raw (a faithful,
   accumulated copy, the system of record) → silver (schema coerced + validated,
-  composing `SchemaCoercion` + `SchemaValidator` onto the hop) — through the same
-  `tools.recipes` hop recipes the generic scaffold uses, importing only
+  wiring `SchemaCoercion` + `SchemaValidator` onto the hop) — the same shape the
+  generic scaffold renders, importing only
   `case_review`, `tools.*` and the public facades, never framework internals.
 
 **It deliberately stops at silver.** How accumulated silver is reduced or
@@ -290,13 +271,10 @@ shape-hardening (`schema-enforcement.md`). The step order is:
 2. **`SchemaCoercion`** — repair the dtypes storage round-trips lose.
 3. **`SchemaValidator`** (as a post-validator) — check at the silver boundary.
 
-The standard raw → silver recipe already takes this as its `rename` option —
-`raw_to_silver(reader, writer, schema=CasesRow, rename={"Case Number":
-"case_number"})` inserts the step in exactly this position. The hop is ordinary
-composition underneath, so the manual form below is what that option expands to,
-and what you'd write if the hop diverges further: a spaced feed adds a `Rename`
-*before* `SchemaCoercion` and the validator, so the renamed columns reach the
-schema check under their canonical names:
+Add a `Rename(RENAME)` node to `silver_builder`, *before* `SchemaCoercion` and
+the validator, so the renamed columns reach the schema check under their
+canonical names — which is what a feed scaffolded with `--from-feed-file` from a
+spaced header already renders:
 
 ```python
 from framework.io import Refresh
@@ -785,20 +763,29 @@ vouching for actually landed.
 
 #### A worked incremental feed — `pipelines/sharepoint_cases/`
 
-The two halves above wired into a real feed: one Case Type's SharePoint list,
-polled by its `Modified` window into append-only raw and silver, then reduced to
-gold and checkpointed. It follows the ordinary scaffold shape — a `*_builder`
-per hop composed from the shared recipes, driven by `run(context)` — and the
-first two hops are deliberately thin. Landing the list's rows as immutable
+The two halves above wired into a real feed: **every** Case list declared in
+`CASE_LISTS`, each polled by its own `Modified` window into the same append-only
+raw and silver tables, then reduced to gold once and checkpointed per list. It
+follows the ordinary scaffold shape — a `*_builder` per hop, driven by
+`run(context)` — and the first two hops are deliberately thin. Landing the list's rows as immutable
 versions is one job and interpreting them is another: raw and silver do no
 derivation and no parsing, and everything that reads meaning into a Case happens
 in the third hop (`gold.py`, four tables refreshed whole on every poll — see the
 [data dictionary](data-dictionary-sharepoint-cases.md)).
 
-**1. The read is narrowed to what raw stores.** `StorableObservations` is a
-Reader decorator (the `tools.retry` shape: forward `data_locations`, delegate
-`describe()`) that projects the response onto the source columns plus the stamped
-metadata. `Modified` and `odata.etag` are dropped — `source_modified_at` and
+**0. One declaration says what is polled.** `schema.py` holds a frozen
+`CaseList` (Case Type slug, list name, site, list GUID) and the `CASE_LISTS`
+tuple of them. All Case Types share one SharePoint list template, so every list
+gets identical processing and onboarding one is a new entry with its own GUID.
+`run(context, *, client=None, case_lists=CASE_LISTS)` loops over them, doing
+source → raw → silver per list, publishes gold once over the accumulated
+history of all of them, and only then commits each list's watermark. It returns
+one `ListPoll` per list polled — a list polled again inside the safety lag is
+skipped, not failed.
+
+**1. The read is narrowed to what raw stores.** `storable_observation` is a
+named transform in the raw hop that projects the response onto the source
+columns plus the stamped metadata. `Modified` and `odata.etag` are dropped — `source_modified_at` and
 `source_version` say the same thing in the vocabulary every hop below reads — and
 so is `observed_at`, for the reason in point 4. Note the split it has to make: an
 **empty** window comes back as the declared projection only, and this list is read
@@ -806,12 +793,12 @@ with `$select=*`, so almost every column is there because the client expanded th
 star and none of them can be present when there are no rows. An empty frame is
 therefore reindexed onto the target columns (and cast to object — `reindex` types
 a column it had to invent as float), while a populated one is selected strictly
-and any missing column is named in a `SharePointFeedError`. This decorator is the
-feed's only column gate: the raw hop composes `source_to_raw` *without*
-`expected_columns`, because a presence check downstream of a projection that
-already guarantees the columns could never fire.
+and any missing column is named in a `SharePointFeedError`. This transform is
+the feed's only column gate: the raw hop wires no `ColumnValidator`, because a
+presence check downstream of a projection that already guarantees the columns
+could never fire.
 
-The same decorator **flattens the expanded people**. SharePoint answers an
+The same transform **flattens the expanded people**. SharePoint answers an
 expanded lookup as a nested object on the property —
 `{"AssignedReviewer": {"Name": …}}` — and a role nobody holds as a plain `null`
 there, not an object of null members. The slash form the read asks with
@@ -845,7 +832,15 @@ empty batch would have been the smaller change and the wrong one — a quiet pol
 is not a different pipeline, and an operator reading the run log should see the
 same steps against the same tables, with zero rows.
 
-**3. Silver is the rename and the type contract, and nothing else.** The rename
+**3. Silver is the rename, the Case Type, and the type contract.** One
+exception to "silver derives nothing": a `case-type` node stamps the polled
+list's *declared* Case Type over the list's own `CaseType` cell. Raw keeps that
+cell as the list holds it, but the cell is nullable and editable by hand in the
+SharePoint web UI, and gold keys a Case on it — `DeriveKey` refuses a null
+natural-key value, so one blank cell would abort gold for every list. After
+silver, `case_type` is always the Case Type of the list the row came from.
+
+The rename
 is one mechanical rule rather than a curated map: split each source name on word
 boundaries and on `/`, lower-snake-case it (`DueDate` → `due_date`,
 `ResponsibleParty/Title` → `responsible_party_title`). Forty hand-written pairs
@@ -861,12 +856,22 @@ of an unchanged item look like a changed row. The same reasoning excludes the
 ingestion batch id and the pipeline run id. When we saw it lives in the run log
 and in the returned `ingestion_batch_id` instead.
 
-**5. The watermark is committed last, after gold.** Advancing it vouches for the
-window having been *published*, not merely fetched — so the commit is the final
-statement of `run`, below the raw hop, the silver hop and all four gold tables.
-A failure anywhere above leaves the watermark where it was, and the next run
-re-polls the same window and converges. `run` still returns a
-`SharePointIngestResult` carrying the window, the batch id and the row counts.
+**5. Every watermark is committed last, after gold.** Advancing one vouches for
+its window having been *published*, not merely fetched — so the commits are the
+final statement of `run`, in one block below every list's hops and all four gold
+tables. That is why they are not committed per list after its silver hop.
+
+Each list has its own watermark, keyed on `(site, list_id)`, so a newly onboarded
+list does a first load while the others resume. Where a partial failure lands:
+
+| Failure point | Committed |
+|---|---|
+| A list's raw or silver hop | The lists before it are in raw/silver (append-only, committed per hop). **No gold, no watermark advanced.** The next run re-polls every list from unchanged watermarks, `AppendOnly` no-ops the re-reads, and gold rebuilds whole. |
+| A gold table | Earlier gold tables stay refreshed. No watermark advanced — same convergence. |
+| Inside the commit loop | The lists before it advanced; the rest simply re-poll a wider window next time. Gold was already published from the whole history. |
+
+`run` returns a `ListPoll` per list, each carrying that list, its window, its
+batch id and its row counts.
 
 Under a dry run nothing is committed, and the two halves of that come from
 different places. Every hop — raw, silver, and each gold table — is a bare
@@ -885,10 +890,13 @@ does.
 Two smaller notes. The batch id is
 `f"{list_id}:{watermark.isoformat() if watermark else 'first-load'}"` —
 it identifies the *source window resumed from*, not the run, so a re-drive of a
-failed window mints the same id; and only the GUID travels in it, so no site or
-credential does. And `server_now` comes from the client's own clock
-(`client.server_time()`), never a local `utcnow`: the window bounds a predicate
-the list evaluates, so a skewed local clock silently widens or narrows it. The
+failed window mints the same id. And `server_now` comes from the client's own
+clock (`client.server_time()`), read **once per run** and shared by every list's
+window, never a local `utcnow`: the window bounds a predicate the list
+evaluates, so a skewed local clock silently widens or narrows it. Because
+`window()` derives its end as `server_now - safety_lag` independently of the
+source, every list's window ends at the same instant — which is the instant gold
+is published as of. The
 feed states that requirement as a local `CaseListClient` Protocol extending
 `SharePointListClient`, because the upstream seam declares the fetch alone.
 
@@ -899,10 +907,11 @@ feed states that requirement as a local `CaseListClient` Protocol extending
   SharePoint cannot add an index to a list already past the 5,000-row List View
   Threshold. A `Modified`-windowed poll works on a small list and starts failing
   as it grows.
-- **The site URL and list GUID are placeholders in the code.** The review
+- **The site URL and every list GUID are placeholders in the code.** The review
   application derives its site from page context and addresses lists by title, so
   no GUID exists anywhere to copy. The watermark is keyed on the GUID, and a
-  wrong one silently forks the feed's place rather than failing.
+  wrong one silently forks the feed's place rather than failing — and two
+  `CaseList` entries sharing a GUID would share one watermark.
 
 Run the bundled fixture pages offline — the feed's `LocalJsonListClient` is
 opt-in via `--sample`, because a production run that forgot its client must

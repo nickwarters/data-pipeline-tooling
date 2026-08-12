@@ -13,7 +13,7 @@ from typing import Protocol, runtime_checkable
 
 import pandas as pd
 
-from framework._internal.describe import redact_url, render
+from framework._internal.describe import render
 from framework.core.dataset import Dataset
 from framework.io.readers import GlobCsvReader
 from framework.io.strategy import AccumulateByRun, Refresh
@@ -166,9 +166,8 @@ class SharePointReader:
         return self._fetcher.fetch(self._site, self._list_name, self._auth)
 
     def describe(self) -> str:
-        # Render the site with any embedded credentials stripped and omit the
-        # auth config entirely — the plan never surfaces secrets.
-        return render(self, site=redact_url(self._site), list_name=self._list_name)
+        # The auth config is omitted from the plan.
+        return render(self, site=self._site, list_name=self._list_name)
 
 
 class SharePointWriter:
@@ -203,6 +202,5 @@ class SharePointWriter:
         )
 
     def describe(self) -> str:
-        # Strip any credentials embedded in the site URL and omit auth config
-        # entirely — the plan never surfaces secrets.
-        return render(self, site=redact_url(self._site), list_name=self._list_name)
+        # The auth config is omitted from the plan.
+        return render(self, site=self._site, list_name=self._list_name)

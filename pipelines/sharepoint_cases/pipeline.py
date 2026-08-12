@@ -1,40 +1,34 @@
 """Ingest pipeline for the ``sharepoint_cases`` feed: source -> raw -> silver -> gold.
 
-The feed polls one Case Type's SharePoint list by its ``Modified`` window and
-lands what it observes twice, then reduces the accumulated history:
+Every Case list in ``CASE_LISTS`` is polled by its own ``Modified`` window and
+refined source -> raw -> silver, all into the same two tables; gold is then
+published once, over every list's accumulated history.
 
 - ``raw_builder``    lands the observation faithfully, in SharePoint's own
   column names, keyed on the observation id so a re-read is a no-op.
-- ``silver_builder`` snake_cases those names, coerces the types, quarantines
-  value-rule breaches and validates ``CaseVersion``.
+- ``silver_builder`` snake_cases those names, settles ``case_type`` to the
+  polled list's declared one, coerces the types, quarantines value-rule
+  breaches and validates ``CaseVersion``.
 - ``gold.publish_gold`` rebuilds the current Case and three aggregates from the
   whole silver history, each with ``Refresh()``.
 
-There is very little in the second hop: getting the list's rows into the
-database as immutable versions is a separate job from interpreting them, and
-only gold interprets.
+**Every watermark is committed last**, after gold has been written, because
+advancing one is what vouches for its window having been *published*. A run that
+fails anywhere above leaves them alone and the next run re-polls and converges.
+Under a dry run nothing is committed: a hop's writes are previewed by the
+ambient run context the runner makes active, and the checkpoint -- not a
+pipeline step, so with no ambient skip to inherit -- is guarded explicitly.
 
-**The watermark is committed last**, after every gold table has been written,
-because advancing it is what vouches for the window having been *published*. A
-run that fails anywhere above leaves it alone and the next run re-polls the same
-window and converges. Under a dry run nothing is committed: every hop's writes
-are previewed by the ambient run context the runner makes active, and the
-checkpoint -- which is not a pipeline step and so has no ambient skip to inherit
--- is guarded explicitly by ``context.dry_run``.
-
-Reaching the list needs a client. ``run`` takes one so a test can hand it a fake
-and ``--sample`` can hand it the bundled fixture pages; an unattended run has
-none passed to it and asks ``_resolve_client`` for the organisation's. The feed
-is therefore addressable by its location on disk like any other::
+Reaching the lists needs a client. ``run`` takes one so a test can hand it a
+fake and ``--sample`` can hand it the bundled fixture pages; an unattended run
+has none passed to it and asks ``_resolve_client`` for the organisation's, which
+does not exist yet::
 
     python -m cli run pipelines/sharepoint_cases --base-dir BASE_DIR
     python -m pipelines.sharepoint_cases.pipeline --base-dir BASE_DIR --sample
 
 Both run from the repo root so the import-only ``framework`` package resolves on
-``sys.path``. There is no organisational client to hand back yet, so the first
-form refuses today rather than pretend to have reached a tenant; the feed is
-scheduled on working days by ``case_review.schedules``, so it is the successful
-*run* that waits on that client, not the scheduling.
+``sys.path``.
 """
 
 from __future__ import annotations
@@ -45,9 +39,9 @@ import json
 import re
 import sys
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from typing import Protocol, Sequence
-from uuid import UUID
 
 import pandas as pd
 
@@ -56,12 +50,18 @@ from framework.core import (
     ErrorCategory,
     PipelineError,
     Reader,
+    SchemaValidator,
     Writer,
     format_failure,
 )
 from framework.io import AppendOnly, DatasetReader
 from framework.run import Pipeline, RunContext, RunLog
-from framework.transform import SelectColumns
+from framework.transform import (
+    Rename,
+    SchemaCoercion,
+    SchemaValueRulePartitioner,
+    Stamp,
+)
 from tools.environments import known_environments, resolve_base_dir
 from tools.integrations.sharepoint_checkpoint import (
     SharePointCheckpointStore,
@@ -74,28 +74,14 @@ from tools.integrations.sharepoint_rest import (
     SharePointModifiedReader,
 )
 from tools.medallion import medallion
-from tools.recipes import raw_to_silver, source_to_raw
 from tools.store import StoreRegistry
 
 from .gold import publish_gold
-from .schema import FEED_NAME, LIST_NAME, CaseVersion
+from .schema import CASE_LISTS, FEED_NAME, CaseList, CaseVersion
 
 # Pipelines this feed depends on being fresh before it runs. A source feed has
 # none.
 UPSTREAMS = ()
-
-# PLACEHOLDER -- both must be filled in from the tenant before this feed can
-# reach a real list. The review application derives its site from the page it is
-# served from and addresses lists by title, so neither value exists anywhere to
-# copy: the site is whichever site collection holds the Case lists, and the GUID
-# comes from the list's own settings page. The watermark is keyed on the GUID, so
-# a wrong one silently forks the feed's place rather than failing.
-SITE = "https://sharepoint.invalid/sites/REPLACE-ME"
-LIST_ID = UUID(int=0)
-
-# ``FEED_NAME`` and ``LIST_NAME`` are declared in ``schema.py`` and re-exported
-# here, where every caller has always read them: ``gold.py`` needs both and this
-# module imports ``gold.py``.
 
 # The five Person columns, expanded so each answers with the claims login rather
 # than the numeric id it otherwise returns, and the sub-field of each the read
@@ -180,10 +166,13 @@ RAW_FEED_COLUMNS = (
 OVERLAP = dt.timedelta(minutes=5)
 SAFETY_LAG = dt.timedelta(seconds=30)
 
-SAMPLE_PAGES = (
-    Path(__file__).parent / "sample_data" / "cases_page_1.json",
-    Path(__file__).parent / "sample_data" / "cases_page_2.json",
-)
+# The bundled fixture pages ``--sample`` replays, per list.
+SAMPLE_PAGES = {
+    "Cases-Complaints": (
+        Path(__file__).parent / "sample_data" / "cases_page_1.json",
+        Path(__file__).parent / "sample_data" / "cases_page_2.json",
+    ),
+}
 
 _WORDS = re.compile(r"[A-Z]+(?![a-z])|[A-Z][a-z0-9]*|[a-z0-9]+")
 
@@ -191,13 +180,10 @@ _WORDS = re.compile(r"[A-Z]+(?![a-z])|[A-Z][a-z0-9]*|[a-z0-9]+")
 def snake_case(name: str) -> str:
     """One SharePoint column name as its canonical silver name.
 
-    Mechanical rather than curated: ``DueDate`` -> ``due_date``,
-    ``AssignedReviewerId`` -> ``assigned_reviewer_id``, and an expanded
-    sub-field's ``/`` reads as another word boundary
-    (``ResponsibleParty/Title`` -> ``responsible_party_title``). A map of
-    forty hand-written pairs would be forty chances to drift from the list.
-    Already-snake_case names pass through unchanged, so the stamped provenance
-    columns need no special case.
+    Mechanical rather than curated -- ``ResponsibleParty/Title`` ->
+    ``responsible_party_title`` -- because forty hand-written pairs would be
+    forty chances to drift from the list. An already-snake_case name passes
+    through unchanged, so the stamped provenance columns need no special case.
     """
     return "_".join(word.lower() for word in _WORDS.findall(name.replace("/", "_")))
 
@@ -207,50 +193,30 @@ RENAME = {column: snake_case(column) for column in RAW_FEED_COLUMNS}
 
 
 @dataclass(frozen=True)
-class SharePointIngestResult:
-    """What one poll fetched, and where it left the list.
+class ListPoll:
+    """What one list's poll fetched, and where it left that list.
 
     The counts are rows of the *fetched batch* that reached each write. An
     append-only target no-ops a repeat, so polling the same window twice reports
     the same counts against an unchanged table.
     """
 
+    case_list: CaseList
     window: ModifiedWindow
     ingestion_batch_id: str
     raw_rows: int
     silver_rows: int
 
 
-def batch_id_for(source: SharePointSource, watermark: dt.datetime | None) -> str:
-    """Identify the source window this poll resumes from.
-
-    Not the run id: a run that failed part-way re-polls the same window, and the
-    batch it fetches the second time is the same batch. Keying on where the poll
-    resumed from makes a re-drive mint the same id, which is what the checkpoint
-    store's opaque, caller-owned ``ingestion_batch_id`` is for. The list GUID
-    alone identifies the source, so no site or credential travels with it.
-    """
-    return f"{source.list_id}:{watermark.isoformat() if watermark else 'first-load'}"
-
-
-def _flatten_people(frame: pd.DataFrame) -> pd.DataFrame:
+def _flatten_people(frame: pd.DataFrame, list_name: str) -> pd.DataFrame:
     """Spread each expanded person across the columns the rest of the feed reads.
 
-    SharePoint answers an expanded lookup as a **nested object on the property**
-    -- ``{"AssignedReviewer": {"Name": ...}}`` -- and a role nobody holds as a
-    plain ``null`` there, not as an object of null members. The slash form the
-    read asks with is ``$select`` syntax for *which sub-field to bring back*, and
-    says nothing about the response's shape.
+    SharePoint answers an expanded lookup as a nested object on the property
+    (``{"AssignedReviewer": {"Name": ...}}``) and a role nobody holds as a plain
+    ``null`` there. A tabular carrier has nowhere to put a nested cell, so the
+    nesting is undone here.
 
-    A tabular carrier has nowhere to put a nested cell, so the nesting is undone
-    here, at the edge that already owns the read's shape. The feed owns this
-    rather than the client because it is the feed that decided to store a person
-    as columns; a client would otherwise have to know that, undocumented.
-
-    A quiet window has no person column to flatten -- the Reader declares the
-    projection's own names, which are already the flat ones -- so this is a no-op
-    there and the reindex below handles the rest.
-
+    A quiet window has no person column to flatten, so this is a no-op there.
     Consumes ``frame``: the caller's copy is spent, not preserved.
     """
     if not any(person in frame.columns for person in PERSON_SUBFIELDS):
@@ -263,26 +229,24 @@ def _flatten_people(frame: pd.DataFrame) -> pd.DataFrame:
         people = list(flattened.pop(person))
         for subfield in subfields:
             flattened[f"{person}/{subfield}"] = [
-                _person_subfield(value, person, subfield, item_id)
+                _person_subfield(value, person, subfield, item_id, list_name)
                 for value, item_id in zip(people, item_ids)
             ]
     return flattened
 
 
 def _person_subfield(
-    value: object, person: str, subfield: str, item_id: object
+    value: object, person: str, subfield: str, item_id: object, list_name: str
 ) -> object:
     """One sub-field of one expanded person, or ``None`` where nobody holds it."""
     if isinstance(value, dict):
-        # These columns are provisioned "Person or Group" but hold only people
-        # here, and an expanded person carries a claims login. So an object with
-        # no ``Name`` key at all was never expanded -- a metadata mode answering
-        # with a deferred-reference envelope, say -- and reading it as an empty
-        # role would turn a broken read into five roles nobody holds. A display
-        # name, by contrast, is genuinely optional.
+        # An expanded person always carries a claims login, so an object with no
+        # ``Name`` was never expanded; reading it as an empty role would turn a
+        # broken read into five roles nobody holds. A display name, by contrast,
+        # is genuinely optional.
         if "Name" not in value:
             raise SharePointFeedError(
-                f"SharePoint list {LIST_NAME!r}, item {item_id}: column {person!r} "
+                f"SharePoint list {list_name!r}, item {item_id}: column {person!r} "
                 "holds an object with no 'Name', so it was not expanded. Check the "
                 "read still expands it."
             )
@@ -290,75 +254,44 @@ def _person_subfield(
     if value is None or value is pd.NA or (isinstance(value, float) and pd.isna(value)):
         return None
     raise SharePointFeedError(
-        f"SharePoint list {LIST_NAME!r}, item {item_id}: column {person!r} holds "
+        f"SharePoint list {list_name!r}, item {item_id}: column {person!r} holds "
         f"a {type(value).__name__} where an expanded person object or null was "
         "expected. A Person column is read expanded, so it answers with its "
         "sub-fields or with nothing."
     )
 
 
-class StorableObservations:
+def storable_observation(dataset: Dataset, *, list_name: str) -> Dataset:
     """Narrow one SharePoint read to the observation raw stores.
 
-    A Reader decorator: it forwards what the wrapped Reader reports touching and
-    renders its plan line, so wrapping costs the plan nothing. ``observed_at`` is
-    dropped here rather than stored -- an append-only target compares every
-    non-key column, so a per-read stamp would make each overlapping re-read of an
-    unchanged item look like a contradiction.
+    ``observed_at`` is dropped rather than stored: an append-only target
+    compares every non-key column, so a per-read stamp would make each
+    overlapping re-read of an unchanged item look like a contradiction.
     """
-
-    def __init__(self, inner: Reader, columns: Sequence[str]) -> None:
-        self._inner = inner
-        self._columns = list(columns)
-
-    @property
-    def data_locations(self) -> list[dict[str, str]]:
-        return self._inner.data_locations
-
-    def describe(self) -> str:
-        return self._inner.describe()
-
-    def read(self) -> Dataset:
-        frame = _flatten_people(self._inner.read().to_pandas())
-        if frame.empty:
-            # A quiet window comes back as the *declared* projection, and this
-            # list is read with ``$select=*`` -- so almost every column arrives
-            # because the client expanded the star, and none of them can be
-            # there when there are no rows. Reindexing declares the shape raw
-            # stores rather than leaving the hop below to fail on an absence that
-            # means "nothing changed". The cast goes with it: reindex fills a
-            # column it had to invent with NaN and so types it float, and raw's
-            # columns are text.
-            frame = frame.reindex(columns=self._columns).astype("object")
-        else:
-            missing = [c for c in self._columns if c not in frame.columns]
-            if missing:
-                raise SharePointFeedError(
-                    f"SharePoint list {LIST_NAME!r} returned items without "
-                    f"{', '.join(missing)}: the observation raw stores needs "
-                    "every projected and expanded column."
-                )
-            frame = frame.loc[:, self._columns]
-        return Dataset.from_pandas(frame)
+    frame = _flatten_people(dataset.to_pandas(), list_name)
+    if frame.empty:
+        # A quiet window brings back no columns at all, because this list is
+        # read with ``$select=*``. Declare the shape raw stores rather than let
+        # the hop below fail on an absence that means "nothing changed"; the
+        # cast goes with it, since reindex types an invented column float.
+        frame = frame.reindex(columns=list(RAW_FEED_COLUMNS)).astype("object")
+    else:
+        missing = [c for c in RAW_FEED_COLUMNS if c not in frame.columns]
+        if missing:
+            raise SharePointFeedError(
+                f"SharePoint list {list_name!r} returned items without "
+                f"{', '.join(missing)}: the observation raw stores needs "
+                "every projected and expanded column."
+            )
+        frame = frame.loc[:, list(RAW_FEED_COLUMNS)]
+    return Dataset.from_pandas(frame)
 
 
 class CaseListClient(SharePointListClient, Protocol):
-    """What this feed needs of the organisational SharePoint client.
+    """The fetch, plus the list server's own clock.
 
-    ``SharePointListClient`` declares the fetch alone, because there the window
-    is the caller's to supply. This feed *computes* the window, so it needs the
-    list server's own clock as well: the bounds are a predicate the list
-    evaluates, and a skewed local clock would silently widen or narrow them.
-
-    Stated here rather than upstream because it is this feed's requirement, not
-    the Reader's -- and stated as an extension, so the fetch is declared once.
-
-    A client returns the items **as SharePoint returned them**, and owes the feed
-    no reshaping: an expanded person arrives as the nested
-    ``{"AssignedReviewer": {"Name": ...}}`` object the API answers with, or null
-    where nobody holds the role. Flattening that onto columns is the feed's own
-    doing (:func:`_flatten_people`), because it is the feed that decided to store
-    a person as columns.
+    This feed computes its own windows, and the list evaluates them, so a
+    skewed local clock would silently widen or narrow them.
     """
 
     def server_time(self) -> dt.datetime: ...
@@ -367,13 +300,13 @@ class CaseListClient(SharePointListClient, Protocol):
 class LocalJsonListClient:
     """A ``CaseListClient`` replaying the bundled fixture pages offline.
 
-    The organisational client owns paging, so the pages are concatenated before
-    they are returned. ``filters`` are ignored, which makes every read of this
-    client a first load of the whole fixture list.
+    The organisational client owns paging, so a list's pages are concatenated
+    before they are returned. ``filters`` are ignored, so every read is a first
+    load of the whole fixture list.
     """
 
-    def __init__(self, pages: Sequence[Path] = SAMPLE_PAGES) -> None:
-        self._pages = tuple(pages)
+    def __init__(self, pages: dict[str, Sequence[Path]] = SAMPLE_PAGES) -> None:
+        self._pages = dict(pages)
 
     def fetch_items(
         self,
@@ -382,8 +315,13 @@ class LocalJsonListClient:
         select_fields: Sequence[str],
         filters: Sequence[str],
     ) -> pd.DataFrame:
+        if list_name not in self._pages:
+            raise SharePointFeedError(
+                f"No bundled sample pages for SharePoint list {list_name!r}. "
+                f"Sample data exists for {', '.join(sorted(self._pages))}."
+            )
         items: list[dict] = []
-        for page in self._pages:
+        for page in self._pages[list_name]:
             items.extend(json.loads(page.read_text(encoding="utf-8")))
         return pd.DataFrame(items)
 
@@ -394,48 +332,54 @@ class LocalJsonListClient:
 def raw_builder(
     reader: Reader,
     writer: Writer,
+    case_list: CaseList,
     run_log: RunLog | None = None,
 ) -> Pipeline:
-    """Build the raw hop: faithful landing zone.
+    """Build one list's raw hop: flatten the people, keep the stored columns.
 
-    The standard raw hop, composed from the shared recipe. To diverge, inline
-    the recipe's body here and edit it: a recipe is composition, not
-    inheritance, so there is nothing to fight.
-
-    Composed **without** the recipe's ``expected_columns`` gate, unlike a file
-    feed. This source is read through ``StorableObservations``, which projects
-    the response onto exactly the columns raw stores and names any it could not
-    find; a presence check downstream of that projection is satisfied by
-    construction and could never fire. One gate, and it is the live one.
+    No column gate, unlike a file feed: ``storable_observation`` projects the
+    response onto exactly the columns raw stores and names any it could not
+    find, so a presence check below it could never fire.
     """
-    return source_to_raw(
-        reader,
-        writer,
-        name=f"{FEED_NAME}:raw",
-        run_log=run_log,
+    p = Pipeline(f"{FEED_NAME}:raw:{case_list.case_type}", run_log=run_log)
+    node = p.read(reader, name="read")
+    node = p.transform(
+        partial(storable_observation, list_name=case_list.list_name),
+        node,
+        name="observation",
     )
+    p.write(writer, node, name="write")
+    return p
 
 
 def silver_builder(
     reader: Reader,
     writer: Writer,
+    case_list: CaseList,
     reject_writer: Writer | None = None,
     run_log: RunLog | None = None,
 ) -> Pipeline:
-    """Build the silver hop: rename, coerce, quarantine, validate.
+    """Build one list's silver hop: rename, settle the Case Type, coerce, validate.
 
-    The standard silver hop, composed from the shared recipe; inline it here to
-    diverge.
+    The list's own ``CaseType`` cell is nullable and hand-editable, and gold
+    keys a Case on it, so silver replaces it with the Case Type declared for the
+    list being polled. Raw keeps the cell as the list holds it.
     """
-    return raw_to_silver(
-        reader,
-        writer,
-        schema=CaseVersion,
-        rename=RENAME,
-        reject_writer=reject_writer,
-        name=f"{FEED_NAME}:silver",
-        run_log=run_log,
-    )
+    p = Pipeline(f"{FEED_NAME}:silver:{case_list.case_type}", run_log=run_log)
+    node = p.read(reader, name="read")
+    node = p.transform(Rename(RENAME), node, name="rename")
+    node = p.transform(Stamp("case_type", case_list.case_type), node, name="case-type")
+    node = p.transform(SchemaCoercion(CaseVersion), node, name="coerce")
+    if reject_writer is not None:
+        node = p.quarantine(
+            SchemaValueRulePartitioner(CaseVersion),
+            reject_writer,
+            node,
+            name="quarantine",
+        )
+    node = p.validate(SchemaValidator(CaseVersion), node, name="post-validate")
+    p.write(writer, node, name="write")
+    return p
 
 
 def run(
@@ -443,91 +387,94 @@ def run(
     *,
     describe: bool = False,
     client: CaseListClient | None = None,
-) -> SharePointIngestResult | None:
-    """Poll the list once, refine source -> raw -> silver -> gold, then commit.
+    case_lists: Sequence[CaseList] = CASE_LISTS,
+) -> list[ListPoll]:
+    """Poll every list, refine source -> raw -> silver -> gold, then commit.
 
-    Returns ``None`` when there is nothing safe to poll yet -- a run repeated
-    sooner than the safety lag, which is ordinary operation rather than a
-    failure. Nothing is committed on that path, and nothing is written.
+    Returns one :class:`ListPoll` per list polled. A list polled again sooner
+    than the safety lag has nothing safe to read and is skipped; when every list
+    is skipped the result is empty and nothing is written.
     """
     client = _resolve_client(client)
     med = medallion(StoreRegistry(context.base_dir), FEED_NAME)
-    source = SharePointSource(SITE, LIST_ID)
     checkpoints = SharePointCheckpointStore(context.base_dir)
+    # The list evaluates the window's predicate, so the list's clock bounds it; a
+    # skewed local one would silently widen or narrow every window. Read once, so
+    # every list's window ends at the same instant.
+    server_now = client.server_time()
 
-    watermark = checkpoints.committed_watermark(source)
-    window = checkpoints.window(
-        source,
-        # The list evaluates the window's predicate, so the list's clock bounds
-        # it. A skewed local one would silently widen or narrow the window.
-        server_now=client.server_time(),
-        overlap=OVERLAP,
-        safety_lag=SAFETY_LAG,
-    )
-    if window is None:
-        return None
-    batch_id = batch_id_for(source, watermark)
+    polls = []
+    for case_list in case_lists:
+        source = SharePointSource(case_list.site, case_list.list_id)
+        watermark = checkpoints.committed_watermark(source)
+        window = checkpoints.window(
+            source, server_now=server_now, overlap=OVERLAP, safety_lag=SAFETY_LAG
+        )
+        if window is None:
+            continue
+        # Identifies the source window resumed from, not the run: a re-drive of
+        # a failed window fetches the same batch and mints the same id.
+        batch_id = (
+            f"{case_list.list_id}:"
+            f"{watermark.isoformat() if watermark else 'first-load'}"
+        )
 
-    raw_p = raw_builder(
-        reader=StorableObservations(
+        raw_p = raw_builder(
             SharePointModifiedReader(
-                SITE,
-                LIST_NAME,
+                case_list.site,
+                case_list.list_name,
                 SOURCE_COLUMNS,
                 window,
                 expand_fields=EXPAND_FIELDS,
                 client=client,
             ),
-            RAW_FEED_COLUMNS,
-        ),
-        writer=med.raw.writer("case_observation", AppendOnly("source_observation_id")),
-        run_log=context.run_log,
-    )
-    if describe:
-        print(raw_p.describe())
-    batch = raw_p.run()
+            med.raw.writer("case_observation", AppendOnly("source_observation_id")),
+            case_list,
+            run_log=context.run_log,
+        )
+        if describe:
+            print(raw_p.describe())
+        batch = raw_p.run()
 
-    # Silver normalises the batch just fetched, never the whole raw history. The
-    # projection it reads is applied here rather than as a step, so it shows up
-    # in neither plan nor run log -- the recipe owns the hop's shape, and
-    # reshaping its input is the caller's side of that bargain.
-    silver_p = silver_builder(
-        reader=DatasetReader(SelectColumns(tuple(RENAME))(batch)),
-        writer=med.silver.writer("case_version", AppendOnly("source_observation_id")),
-        reject_writer=med.silver.quarantine_writer("case_version"),
-        run_log=context.run_log,
-    )
-    if describe:
-        print(silver_p.describe())
-    silver_rows = len(silver_p.run())
-
-    # Gold is rebuilt from the whole accumulated history, not from the batch:
-    # a Case whose latest version arrived three polls ago is still current.
-    publish_gold(med, as_of=window.end, describe=describe, run_log=context.run_log)
-
-    # Visibly last, and only on a real run. Advancing the watermark is what
-    # vouches for the window having been *published*, so nothing above it may be
-    # allowed to fail silently: every hop either committed or raised before this
-    # line was reached.
-    #
-    # Not wired as a ``p.action(...)`` node on the last gold pipeline, which
-    # would inherit the dry-run skip for free: the checkpoint is source-control
-    # state rather than a data step, and burying it inside a pipeline named for
-    # an aggregate would make "visibly last" less true than this reads.
-    if not context.dry_run:
-        checkpoints.commit(
-            source,
-            window_end=window.end,
-            ingestion_batch_id=batch_id,
-            pipeline_run_id=context.pipeline_run_id,
+        # Silver normalises the batch just fetched, never the whole raw history.
+        silver_p = silver_builder(
+            DatasetReader(batch),
+            med.silver.writer("case_version", AppendOnly("source_observation_id")),
+            case_list,
+            med.silver.quarantine_writer("case_version"),
+            run_log=context.run_log,
+        )
+        if describe:
+            print(silver_p.describe())
+        polls.append(
+            ListPoll(case_list, window, batch_id, len(batch), len(silver_p.run()))
         )
 
-    return SharePointIngestResult(
-        window=window,
-        ingestion_batch_id=batch_id,
-        raw_rows=len(batch),
-        silver_rows=silver_rows,
+    if not polls:
+        return []
+
+    # Gold is rebuilt from the whole accumulated history of every list, not from
+    # the batches: a Case whose latest version arrived three polls ago is still
+    # current. Every window shares an end -- ``window()`` derives it as
+    # ``server_now - safety_lag``, independently of the source -- so any poll's
+    # end is the instant this run publishes as of.
+    publish_gold(
+        med, as_of=polls[0].window.end, describe=describe, run_log=context.run_log
     )
+
+    # Visibly last, and only on a real run. Advancing a watermark is what vouches
+    # for its window having been *published*, so nothing above may be allowed to
+    # fail silently: every hop either committed or raised before this line.
+    if not context.dry_run:
+        for poll in polls:
+            checkpoints.commit(
+                SharePointSource(poll.case_list.site, poll.case_list.list_id),
+                window_end=poll.window.end,
+                ingestion_batch_id=poll.ingestion_batch_id,
+                pipeline_run_id=context.pipeline_run_id,
+            )
+
+    return polls
 
 
 class NoClientError(PipelineError):
@@ -537,12 +484,10 @@ class NoClientError(PipelineError):
 
 
 def _resolve_client(client: CaseListClient | None) -> CaseListClient:
-    """The client to poll with, once there is an organisational one to fall on.
+    """The client to poll with; the one place to wire the organisational one in.
 
-    Where an unattended run acquires its client, and the one place that changes
-    once there is an organisational one to hand back. There is none yet, so a
-    run with nothing passed in refuses rather than pretend to have reached a
-    tenant.
+    There is none yet, so a run with nothing passed in refuses rather than
+    pretend to have reached a tenant.
     """
     if client is None:
         raise NoClientError(
@@ -558,7 +503,7 @@ def _resolve_client(client: CaseListClient | None) -> CaseListClient:
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m pipelines.sharepoint_cases.pipeline",
-        description=f"Poll the {LIST_NAME} list source -> raw -> silver -> gold.",
+        description="Poll every Case list source -> raw -> silver -> gold.",
     )
     parser.add_argument(
         "--base-dir",
@@ -591,7 +536,7 @@ def main(argv: list[str]) -> int:
 
     from framework.run import PipelineRunner
 
-    def handler(ctx: RunContext) -> SharePointIngestResult | None:
+    def handler(ctx: RunContext) -> list[ListPoll]:
         return run(
             ctx,
             describe=args.describe,
@@ -607,19 +552,24 @@ def main(argv: list[str]) -> int:
     )
 
     try:
-        result = runner.run("", FEED_NAME, base_dir=base_dir)
+        polls = runner.run("", FEED_NAME, base_dir=base_dir)
     except PipelineError as exc:
         print(format_failure(exc), file=sys.stderr)
         return 1
 
-    if result is None:
-        print("Nothing safe to poll yet; the window has not advanced.")
+    if not polls:
+        print("Nothing safe to poll yet; no window has advanced.")
         return 0
+    for poll in polls:
+        print(
+            f"Polled {poll.case_list.list_name} up to "
+            f"{poll.window.end.isoformat()} as batch {poll.ingestion_batch_id}: "
+            f"{poll.raw_rows} observation(s) -> {poll.silver_rows} case version(s)."
+        )
     print(
-        f"Polled {LIST_NAME} up to {result.window.end.isoformat()} as batch "
-        f"{result.ingestion_batch_id}: {result.raw_rows} observation(s) -> "
-        f"{result.silver_rows} case version(s) under {base_dir / FEED_NAME}, "
-        f"gold rebuilt. The watermark now sits at {result.window.end.isoformat()}."
+        f"{sum(poll.silver_rows for poll in polls)} case version(s) from "
+        f"{len(polls)} list(s) under {base_dir / FEED_NAME}, gold rebuilt; "
+        "every watermark advanced."
     )
     return 0
 
