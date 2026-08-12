@@ -62,6 +62,19 @@ python -m ruff check .
 python -m ruff format --check .
 ```
 
+To measure what one gold publication of `sharepoint_cases` costs on the storage
+it will actually run against, point the benchmark at that path:
+
+```bat
+python -m scripts.benchmark_gold --base-dir \\server\share\bench
+python -m scripts.benchmark_gold --base-dir C:\temp\bench --sweep
+```
+
+It reports the two phases separately — the `case_current` reduce over the whole
+silver history, and the aggregates over the resulting one-row-per-Case frame —
+plus the silver read on its own, which is the number a network share moves. See
+[`benchmarking-gold.md`](benchmarking-gold.md).
+
 ---
 
 ## Concepts
@@ -652,6 +665,7 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 | [`data-dictionary-sharepoint-cases.md`](data-dictionary-sharepoint-cases.md) | The template filled in for the `sharepoint_cases` feed: the raw observation, the Case version, and the four gold tables with their declared grains, all shared across every declared Case list and discriminated by `case_type`; why raw and silver do not store when we saw the row; why silver settles `case_type` to the polled list's declared value; and the two provisioning prerequisites (an index on `Modified`, and the site/GUID placeholders) that stand between it and a tenant. |
 | [`data-dictionary-reviewer-activity.md`](data-dictionary-reviewer-activity.md) | The working-day, freshness-guarded `reviewer_activity_daily` aggregate and its sparse per-Reviewer `my-stats/{account}.txt` Report Feed, reduced from Sync's `case_current`. |
 | [`sharepoint-rest-ingest.md`](sharepoint-rest-ingest.md) | The operator runbook for that feed: scheduling it, re-driving it, and what REST polling cannot tell you. |
+| [`benchmarking-gold.md`](benchmarking-gold.md) | What one gold publication costs, which phase grows, and how to measure it against the storage it will run on (`scripts/benchmark_gold.py`) — the evidence behind publishing the aggregates on the sync's schedule rather than their own. |
 | [`sharepoint-cases-going-live.md`](sharepoint-cases-going-live.md) | The one-time path from the feed as it stands to one an external scheduler drives. |
 | [`gold-accumulation.md`](gold-accumulation.md) | Gold's accumulate-by-run semantics, idempotent re-run, reading "current" — and the two shapes of current-only reduce (`LatestPerKey` by `load_date`, vs a Polling Feed's source-version ordering). |
 | [`processors.md`](processors.md) | The Selection transforms (`JoinWith`, per-group sampling), the Ingest / fan-out transforms (`SelectColumns`, `Unpivot`, `DeriveKey`, `LatestPerKey`), and the JSON blob reshapers (`ExplodeJsonMap`, `ExplodeJsonList`, `FlattenJsonObject`). |
