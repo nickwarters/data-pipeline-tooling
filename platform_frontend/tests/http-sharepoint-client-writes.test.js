@@ -628,20 +628,27 @@ test('HttpSharePointClient: patchCase writes status, answers and conversation to
  * A fake backing a Responsible Party write: the digest, an EnsureUser that
  * answers with `ensured`, the PATCH itself, and the confirmation re-read.
  *
- * @param {Response | (() => Response) | null} ensured the EnsureUser response,
- *   or null to fail it
+ * @param {Response | ((call: { body: string|null }) => Response) | null} ensured
+ *   the EnsureUser response, or null to fail it
  */
 function personWriteFetch(ensured) {
+  /** @type {{ body: string|null } | null} */
+  let ensureCall = null;
   return makeFetch([
     {
       when: (c) => c.url.endsWith('/_api/contextinfo'),
       respond: () => digestResponse('d'),
     },
     {
-      when: (c) => c.url.endsWith('/_api/web/ensureuser'),
+      when: (c) => {
+        if (!c.url.endsWith('/_api/web/ensureuser')) return false;
+        ensureCall = c;
+        return true;
+      },
       respond: () =>
-        (typeof ensured === 'function' ? ensured() : ensured) ??
-        new Response('no such user', { status: 500 }),
+        (typeof ensured === 'function'
+          ? ensured(/** @type {{ body: string|null }} */ (ensureCall))
+          : ensured) ?? new Response('no such user', { status: 500 }),
     },
     {
       when: (c) => c.method === 'PATCH',
@@ -868,9 +875,14 @@ test('HttpSharePointClient: writing the Assigned Reviewer resolves the account t
 
 test('HttpSharePointClient: allocation writes Reviewer and manager as Person ids in one PATCH', async () => {
   let nextPersonId = 14;
-  const { fetch, calls } = personWriteFetch(() =>
-    ensureUserResponse(nextPersonId++)
-  );
+  /** @type {Map<string, number>} */
+  const ensuredIds = new Map();
+  const { fetch, calls } = personWriteFetch((call) => {
+    const login = JSON.parse(String(call.body)).logonName;
+    const id = nextPersonId++;
+    ensuredIds.set(login, id);
+    return ensureUserResponse(id);
+  });
   const client = new HttpSharePointClient({
     webUrl: WEB_URL,
     fetchImpl: fetch,
@@ -896,8 +908,8 @@ test('HttpSharePointClient: allocation writes Reviewer and manager as Person ids
   );
   assert.equal(calls.filter((call) => call.method === 'PATCH').length, 1);
   assert.deepEqual(patchBody(calls), {
-    AssignedReviewerId: 14 + ensuredLogins.indexOf(reviewerLogin),
-    AssignedReviewerManagerId: 14 + ensuredLogins.indexOf(managerLogin),
+    AssignedReviewerId: ensuredIds.get(reviewerLogin),
+    AssignedReviewerManagerId: ensuredIds.get(managerLogin),
     AssignedAt: FROZEN_ASSIGNMENT,
   });
 });
