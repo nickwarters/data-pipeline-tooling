@@ -5,6 +5,10 @@ import { walk } from '../_dom-stub.js';
 
 /** @param {any} element */
 function implicitRole(element) {
+  if (/^H[1-6]$/.test(element.tagName)) return 'heading';
+  if (element.tagName === 'UL' || element.tagName === 'OL') return 'list';
+  if (element.tagName === 'LI') return 'listitem';
+  if (element.tagName === 'OPTION') return 'option';
   if (element.tagName === 'BUTTON') return 'button';
   if (element.tagName === 'TEXTAREA') return 'textbox';
   if (element.tagName === 'SELECT') return 'combobox';
@@ -186,6 +190,47 @@ export function getByText(root, expected) {
   );
   if (!leaf) throw new Error(`Unable to find text "${String(expected)}"`);
   return leaf;
+}
+
+/**
+ * Return the definition associated with one exact term in a definition list.
+ * Both the requested term and rendered term use the same whitespace
+ * normalisation as the other semantic helpers.
+ *
+ * @param {any} root
+ * @param {string} term
+ */
+export function definitionFor(root, term) {
+  const expected = term.replace(/\s+/g, ' ').trim();
+  const matches = queryAllByTag(root, 'dt').filter(
+    (candidate) => textContent(candidate) === expected
+  );
+  if (matches.length === 0) {
+    throw new Error(`Unable to find definition term "${expected}"`);
+  }
+  if (matches.length > 1) {
+    throw new Error(`Found multiple definition terms "${expected}"`);
+  }
+
+  const termNode = matches[0];
+  const list = termNode.parentNode;
+  const siblings = list?.childNodes ?? [];
+  const index = siblings.indexOf(termNode);
+  const definition =
+    index >= 0
+      ? (siblings
+          .slice(index + 1)
+          .find(
+            (/** @type {any} */ sibling) =>
+              sibling.tagName !== '#text' || textContent(sibling) !== ''
+          ) ?? null)
+      : null;
+  if (list?.tagName !== 'DL' || definition?.tagName !== 'DD') {
+    throw new Error(
+      `Definition term "${expected}" must be followed by a DD in the same DL`
+    );
+  }
+  return definition;
 }
 
 /**

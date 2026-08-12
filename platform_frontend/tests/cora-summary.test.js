@@ -3,6 +3,14 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { findAllByClass, findByClass, installDom } from './_dom-stub.js';
 import { makeCaseRow } from './helpers/fixtures.js';
+import {
+  definitionFor,
+  getByRole,
+  getByText,
+  queryAllByRole,
+  queryAllByText,
+  queryByRole,
+} from './helpers/semantic-dom.js';
 
 installDom();
 
@@ -82,10 +90,11 @@ test('summaryView renders live outcome and key dates', () => {
   });
   const root = rootOf(nodes);
 
-  assert.equal(nodes[0].textContent, 'Summary');
-  assert.match(root.textContent, /Fail/);
-  assert.match(root.textContent, /Created2026-04-01/);
-  assert.match(root.textContent, /Completed on—/);
+  assert.ok(getByRole(root, 'heading', { name: 'Summary' }));
+  assert.ok(getByRole(root, 'heading', { name: 'Outcome' }));
+  assert.ok(getByText(root, 'Fail'));
+  assert.equal(definitionFor(root, 'Created').textContent, '2026-04-01');
+  assert.equal(definitionFor(root, 'Completed on').textContent, '—');
 });
 
 test('summaryView uses frozen and amended outcomes after the reportable milestone', () => {
@@ -98,8 +107,8 @@ test('summaryView uses frozen and amended outcomes after the reportable mileston
       }),
     })
   );
-  assert.match(frozen.textContent, /Fail/);
-  assert.doesNotMatch(frozen.textContent, /previously/);
+  assert.ok(getByText(frozen, 'Fail'));
+  assert.equal(queryAllByText(frozen, /previously/).length, 0);
 
   const amended = rootOf(
     render({
@@ -115,7 +124,7 @@ test('summaryView uses frozen and amended outcomes after the reportable mileston
       }),
     })
   );
-  assert.match(amended.textContent, /Pass \(previously Fail\)/);
+  assert.ok(getByText(amended, /Pass \(previously Fail\)/));
 });
 
 test('summaryView shows no marker for an amendment with no frozen snapshot to displace', () => {
@@ -134,8 +143,8 @@ test('summaryView shows no marker for an amendment with no frozen snapshot to di
       }),
     })
   );
-  assert.match(root.textContent, /Pass/);
-  assert.doesNotMatch(root.textContent, /previously/);
+  assert.ok(getByText(root, 'Pass'));
+  assert.equal(queryAllByText(root, /previously/).length, 0);
 });
 
 test('summaryView keeps the frozen Outcome of a Case voided after Send Actions', () => {
@@ -149,7 +158,7 @@ test('summaryView keeps the frozen Outcome of a Case voided after Send Actions',
       }),
     })
   );
-  assert.match(root.textContent, /Fail/);
+  assert.ok(getByText(root, 'Fail'));
 });
 
 test('summaryView shows no Outcome at all for a Case voided before Send Actions', () => {
@@ -161,8 +170,8 @@ test('summaryView shows no Outcome at all for a Case voided before Send Actions'
       caseRow: makeCase({ status: 'Void' }),
     })
   );
-  assert.equal(findByClass(root, 'cora-outcome'), null);
-  assert.doesNotMatch(root.textContent, /Fail/);
+  assert.equal(queryByRole(root, 'heading', { name: 'Outcome' }), null);
+  assert.equal(queryAllByText(root, 'Fail').length, 0);
 });
 
 test('summaryView falls back to live outcome when no snapshot exists', () => {
@@ -172,7 +181,7 @@ test('summaryView falls back to live outcome when no snapshot exists', () => {
       caseRow: makeCase({ status: 'Completed' }),
     })
   );
-  assert.match(root.textContent, /Fail/);
+  assert.ok(getByText(root, 'Fail'));
 });
 
 test('summaryView follows the configured showInSummary sections and headings', () => {
@@ -201,13 +210,14 @@ test('summaryView follows the configured showInSummary sections and headings', (
     })
   );
 
-  assert.match(root.textContent, /Wrap-up/);
-  assert.match(root.textContent, /Overview/);
-  assert.match(root.textContent, /Customer nameJordan Lee/);
-  assert.match(root.textContent, /Assessment/);
-  assert.match(root.textContent, /Opening: 0 pass, 1 fail/);
-  assert.match(root.textContent, /Case NotesReviewer note/);
-  assert.equal(findByClass(root, 'cora-summary-remediation'), null);
+  assert.ok(getByRole(root, 'heading', { name: 'Wrap-up' }));
+  assert.ok(getByRole(root, 'heading', { name: 'Overview' }));
+  assert.equal(definitionFor(root, 'Customer name').textContent, 'Jordan Lee');
+  assert.ok(getByRole(root, 'heading', { name: 'Assessment' }));
+  assert.ok(getByText(root, 'Opening: 0 pass, 1 fail'));
+  const notes = getByRole(root, 'heading', { name: 'Case Notes' }).parentNode;
+  assert.ok(getByText(notes, 'Reviewer note'));
+  assert.equal(queryByRole(root, 'heading', { name: 'Findings' }), null);
 });
 
 test('summaryView renders failures, selected remediation and read-only capture', () => {
@@ -234,12 +244,15 @@ test('summaryView renders failures, selected remediation and read-only capture',
     })
   );
 
-  assert.match(root.textContent, /Remediation Actions: 1/);
-  assert.match(root.textContent, /Opening: Greeted?/);
-  assert.match(root.textContent, /Answer: No/);
-  assert.match(root.textContent, /Retrain\./);
-  assert.match(root.textContent, /Root cause: Rushed/);
-  assert.equal(findAllByClass(root, 'cora-summary-capture').length, 1);
+  const issues = getByRole(root, 'heading', { name: 'Issues' }).parentNode;
+  assert.ok(getByText(issues, 'Remediation Actions: 1'));
+  assert.ok(getByText(issues, 'Opening: Greeted?'));
+  assert.ok(getByText(issues, 'Answer: No'));
+  assert.ok(getByText(issues, 'Retrain.'));
+  assert.ok(getByText(issues, 'Root cause: Rushed'));
+  assert.equal(queryByRole(issues, 'textbox'), null);
+  assert.equal(queryByRole(issues, 'combobox'), null);
+  assert.equal(queryByRole(issues, 'button'), null);
   assert.equal(root.querySelector('cora-capture-groups'), null);
 });
 
@@ -250,8 +263,10 @@ test('summaryView reports empty failures without adding capture UI', () => {
       answers: { 'q-open': { value: 'Yes' } },
     })
   );
-  assert.match(root.textContent, /No failures\./);
-  assert.equal(findAllByClass(root, 'cora-summary-capture').length, 0);
+  const issues = getByRole(root, 'heading', { name: 'Issues' }).parentNode;
+  assert.ok(getByText(issues, /No failures\./));
+  assert.equal(queryAllByText(issues, /Root cause:/).length, 0);
+  assert.equal(queryByRole(issues, 'textbox'), null);
 });
 
 test('summaryView renders an ungrouped failure without invented actions or capture', () => {
@@ -277,9 +292,11 @@ test('summaryView renders an ungrouped failure without invented actions or captu
       answers: { 'q-bare': { value: 'No', capture: {} } },
     })
   );
-  assert.match(root.textContent, /Ungrouped question/);
-  assert.doesNotMatch(root.textContent, /General: Ungrouped question/);
-  assert.equal(findAllByClass(root, 'cora-summary-capture').length, 0);
+  const issues = getByRole(root, 'heading', { name: 'Issues' }).parentNode;
+  assert.ok(getByText(issues, 'Ungrouped question'));
+  assert.equal(queryAllByText(issues, 'General: Ungrouped question').length, 0);
+  assert.equal(queryAllByText(issues, /Root cause:/).length, 0);
+  assert.equal(queryByRole(issues, 'textbox'), null);
 });
 
 test('summaryView renders the empty remediation tracking state', () => {
@@ -289,8 +306,11 @@ test('summaryView renders the empty remediation tracking state', () => {
       answers: { 'q-open': { value: 'No' } },
     })
   );
-  assert.match(root.textContent, /Remediation due: —/);
-  assert.match(root.textContent, /No remediation actions sent\./);
+  const remediation = getByRole(root, 'heading', {
+    name: 'Remediation',
+  }).parentNode;
+  assert.ok(getByText(remediation, 'Remediation due: —'));
+  assert.ok(getByText(remediation, /No remediation actions sent\./));
 });
 
 test('summaryView renders an ungrouped remediation row', () => {
@@ -315,9 +335,12 @@ test('summaryView renders an ungrouped remediation row', () => {
       },
     })
   );
-  assert.match(root.textContent, /Ungrouped tracking/);
-  assert.match(root.textContent, /Close loop/);
-  assert.match(root.textContent, /Status: Partially complete/);
+  const remediation = getByRole(root, 'heading', {
+    name: 'Remediation',
+  }).parentNode;
+  assert.ok(getByText(remediation, 'Ungrouped tracking'));
+  assert.ok(getByText(remediation, 'Close loop'));
+  assert.ok(getByText(remediation, 'Status: Partially complete'));
 });
 
 test('summaryView ignores sections without a summary block and works without a row', () => {
@@ -331,7 +354,10 @@ test('summaryView ignores sections without a summary block and works without a r
     summarySections: /** @type {any} */ (['conversation']),
   });
   assert.equal(withoutRow.length, 2);
-  assert.equal(findByClass(rootOf(withoutRow), 'cora-summary-key-dates'), null);
+  assert.equal(
+    queryByRole(rootOf(withoutRow), 'heading', { name: 'Key dates' }),
+    null
+  );
 });
 
 // --- General Questions on the Summary -------------------------------
@@ -361,17 +387,21 @@ test('summaryView rolls up answered General Questions, in configured order', () 
     })
   );
 
-  const block = findByClass(root, 'cora-summary-general-questions');
-  assert.ok(block, 'the Summary carries a General Questions block');
-  assert.match(block.textContent, /General Questions/);
+  const block = getByRole(root, 'heading', {
+    name: 'General Questions',
+  }).parentNode;
   assert.equal(
-    block.textContent,
-    'General QuestionsHow was this reviewed?Call recordingObservationsHandled well'
+    definitionFor(block, 'How was this reviewed?').textContent,
+    'Call recording'
+  );
+  assert.equal(
+    definitionFor(block, 'Observations').textContent,
+    'Handled well'
   );
   // Read-only, like every other Summary block.
-  assert.equal(block.querySelectorAll('input').length, 0);
-  assert.equal(block.querySelectorAll('select').length, 0);
-  assert.equal(block.querySelectorAll('textarea').length, 0);
+  assert.equal(queryByRole(block, 'textbox'), null);
+  assert.equal(queryByRole(block, 'combobox'), null);
+  assert.equal(queryByRole(block, 'radio'), null);
 });
 
 test('summaryView omits unanswered General Questions, and the block when none is answered', () => {
@@ -382,12 +412,16 @@ test('summaryView omits unanswered General Questions, and the block when none is
     })
   );
   assert.equal(
-    findByClass(partial, 'cora-summary-general-questions').textContent,
-    'General QuestionsObservationsHandled well'
+    definitionFor(partial, 'Observations').textContent,
+    'Handled well'
   );
+  assert.equal(queryAllByText(partial, 'How was this reviewed?').length, 0);
 
   const none = rootOf(render({ generalQuestions: GENERAL_QUESTIONS }));
-  assert.equal(findByClass(none, 'cora-summary-general-questions'), null);
+  assert.equal(
+    queryByRole(none, 'heading', { name: 'General Questions' }),
+    null
+  );
 
   const blank = rootOf(
     render({
@@ -395,7 +429,10 @@ test('summaryView omits unanswered General Questions, and the block when none is
       answers: { 'general:observations': { value: '' } },
     })
   );
-  assert.equal(findByClass(blank, 'cora-summary-general-questions'), null);
+  assert.equal(
+    queryByRole(blank, 'heading', { name: 'General Questions' }),
+    null
+  );
 });
 
 test('a non-string General Question value is not rolled up', () => {
@@ -414,8 +451,14 @@ test('a non-string General Question value is not rolled up', () => {
       },
     })
   );
-  const block = findByClass(root, 'cora-summary-general-questions');
-  assert.equal(block.textContent, 'General QuestionsObservationsHandled well');
+  const block = getByRole(root, 'heading', {
+    name: 'General Questions',
+  }).parentNode;
+  assert.equal(
+    definitionFor(block, 'Observations').textContent,
+    'Handled well'
+  );
+  assert.equal(queryAllByText(block, 'How was this reviewed?').length, 0);
 });
 
 test('an answer whose General Question the Case Type no longer declares is not rolled up', () => {
@@ -432,41 +475,49 @@ test('an answer whose General Question the Case Type no longer declares is not r
       },
     })
   );
-  const block = findByClass(root, 'cora-summary-general-questions');
-  assert.equal(block.textContent, 'General QuestionsObservationsHandled well');
+  const block = getByRole(root, 'heading', {
+    name: 'General Questions',
+  }).parentNode;
+  assert.equal(
+    definitionFor(block, 'Observations').textContent,
+    'Handled well'
+  );
+  assert.equal(
+    queryAllByText(block, 'Answered before it was removed').length,
+    0
+  );
 });
 
 test('a Case Type declaring no General Questions gets no Summary block', () => {
   assert.equal(
-    findByClass(rootOf(render({})), 'cora-summary-general-questions'),
+    queryByRole(rootOf(render({})), 'heading', { name: 'General Questions' }),
     null
   );
 });
 
 test('the Summary block follows the Case Type placement, like the Review tab', () => {
   /** @param {'before'|'after'} [placement] */
-  const classNames = (placement) =>
-    render({
-      generalQuestions: GENERAL_QUESTIONS,
-      generalQuestionsPlacement: placement,
-      summarySections: ['notes'],
-      answers: { 'general:observations': { value: 'Handled well' } },
-    })
-      .slice(2) // past the Summary heading and the Outcome host
-      .map((/** @type {any} */ node) => node.className);
+  const generalBeforeNotes = (placement) => {
+    const root = rootOf(
+      render({
+        generalQuestions: GENERAL_QUESTIONS,
+        generalQuestionsPlacement: placement,
+        summarySections: ['notes'],
+        answers: { 'general:observations': { value: 'Handled well' } },
+      })
+    );
+    const headings = queryAllByRole(root, 'heading');
+    return (
+      headings.indexOf(
+        getByRole(root, 'heading', { name: 'General Questions' })
+      ) < headings.indexOf(getByRole(root, 'heading', { name: 'Notes' }))
+    );
+  };
 
-  assert.deepEqual(classNames('before'), [
-    'cora-summary-key-dates',
-    'cora-summary-general-questions',
-    'cora-summary-notes',
-  ]);
-  assert.deepEqual(classNames('after'), [
-    'cora-summary-key-dates',
-    'cora-summary-notes',
-    'cora-summary-general-questions',
-  ]);
+  assert.equal(generalBeforeNotes('before'), true);
+  assert.equal(generalBeforeNotes('after'), false);
   // Absent placement matches the Review tab's default.
-  assert.deepEqual(classNames(), classNames('after'));
+  assert.equal(generalBeforeNotes(), false);
 });
 
 test('a General Question answer does not reach the Summary counts or the Outcome', () => {
@@ -524,15 +575,21 @@ test('the Summary remediation block reads the same model as the Remediation tab'
     })
   );
 
-  assert.match(root.textContent, /Remediation due: 2026-07-16/);
-  assert.doesNotMatch(root.textContent, /No remediation actions sent\./);
+  const remediation = getByRole(root, 'heading', {
+    name: 'Remediation',
+  }).parentNode;
+  assert.ok(getByText(remediation, 'Remediation due: 2026-07-16'));
+  assert.equal(
+    queryAllByText(remediation, /No remediation actions sent\./).length,
+    0
+  );
   // Both kinds of remediation the Reviewer can attach, with the Remediation
   // tab's own resolution wording.
-  assert.match(root.textContent, /Opening: Greeted\?/);
-  assert.match(root.textContent, /Re-issue letter/);
-  assert.match(root.textContent, /Status: Complete/);
-  assert.match(root.textContent, /Call the customer back/);
-  assert.match(root.textContent, /Status: Awaiting the Reviewer/);
+  assert.ok(getByText(remediation, 'Opening: Greeted?'));
+  assert.ok(getByText(remediation, 'Re-issue letter'));
+  assert.ok(getByText(remediation, 'Status: Complete'));
+  assert.ok(getByText(remediation, 'Call the customer back'));
+  assert.ok(getByText(remediation, 'Status: Awaiting the Reviewer'));
 });
 
 /** @param {Partial<Parameters<typeof summaryView>[0]>} [overrides] */

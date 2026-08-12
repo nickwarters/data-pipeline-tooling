@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom, StubEl } from './_dom-stub.js';
 import {
+  definitionFor,
   fireEvent,
   getByTag,
   getByText,
@@ -84,6 +85,103 @@ test('semantic DOM helpers query table structure by role and tag', () => {
   assert.equal(getByTag(root, 'tbody').tagName, 'TBODY');
   assert.equal(queryAllByTag(root, 'span').length, 1);
   assert.equal(getByText(root, 'Case A').tagName, 'SPAN');
+});
+
+test('semantic DOM helpers expose native heading, list, listitem and option roles', () => {
+  for (let level = 1; level <= 6; level += 1) {
+    const heading = /** @type {any} */ (h(`h${level}`, {}, `Level ${level}`));
+    const root = /** @type {any} */ (h('div', {}, heading));
+    assert.equal(
+      getByRole(root, 'heading', { name: `Level ${level}` }),
+      heading
+    );
+  }
+
+  for (const tag of ['ul', 'ol']) {
+    const item = /** @type {any} */ (h('li', {}, 'Destination'));
+    const list = /** @type {any} */ (h(tag, {}, item));
+    const root = /** @type {any} */ (h('div', {}, list));
+    assert.equal(getByRole(root, 'list'), list);
+    assert.equal(getByRole(list, 'listitem'), item);
+  }
+
+  const option = /** @type {any} */ (h('option', {}, 'Choice'));
+  const select = /** @type {any} */ (h('select', {}, option));
+  const root = /** @type {any} */ (h('div', {}, select));
+  assert.equal(getByRole(root, 'option', { name: 'Choice' }), option);
+});
+
+test('semantic DOM helpers prefer an explicit role to a native implicit role', () => {
+  const root = /** @type {any} */ (
+    h('div', {}, h('ul', { role: 'navigation' }, h('li', {}, 'Destination')))
+  );
+
+  assert.equal(queryByRole(root, 'list'), null);
+  assert.equal(getByRole(root, 'navigation').tagName, 'UL');
+});
+
+test('definitionFor returns the following definition for an exact normalized term', () => {
+  const root = /** @type {any} */ (
+    h(
+      'div',
+      {},
+      h(
+        'dl',
+        {},
+        h('dt', {}, 'Customer   name'),
+        h('dd', {}, 'Jordan Lee'),
+        h('dt', {}, 'Customer name suffix'),
+        h('dd', {}, 'Jr')
+      )
+    )
+  );
+
+  assert.equal(
+    definitionFor(root, ' Customer name ').textContent,
+    'Jordan Lee'
+  );
+});
+
+test('definitionFor skips whitespace text before the following definition', () => {
+  const list = /** @type {any} */ (h('dl', {}, h('dt', {}, 'Created')));
+  list.append(
+    document.createTextNode('\n  '),
+    /** @type {any} */ (h('dd', {}, 'Today'))
+  );
+  const root = /** @type {any} */ (h('div', {}, list));
+
+  assert.equal(definitionFor(root, 'Created').textContent, 'Today');
+});
+
+test('definitionFor reports missing, ambiguous and malformed definitions', () => {
+  const missing = /** @type {any} */ (
+    h('div', {}, h('dl', {}, h('dt', {}, 'Created'), h('dd', {}, 'Today')))
+  );
+  assert.throws(
+    () => definitionFor(missing, 'Completed on'),
+    /Unable to find definition term "Completed on"/
+  );
+
+  const ambiguous = /** @type {any} */ (
+    h(
+      'div',
+      {},
+      h('dl', {}, h('dt', {}, 'Created'), h('dd', {}, 'Today')),
+      h('dl', {}, h('dt', {}, 'Created'), h('dd', {}, 'Yesterday'))
+    )
+  );
+  assert.throws(
+    () => definitionFor(ambiguous, 'Created'),
+    /Found multiple definition terms "Created"/
+  );
+
+  const malformed = /** @type {any} */ (
+    h('div', {}, h('dl', {}, h('dt', {}, 'Created'), h('dt', {}, 'Next')))
+  );
+  assert.throws(
+    () => definitionFor(malformed, 'Created'),
+    /must be followed by a DD in the same DL/
+  );
 });
 
 test('tableHeaders reports semantic heading state without CSS hooks', () => {
