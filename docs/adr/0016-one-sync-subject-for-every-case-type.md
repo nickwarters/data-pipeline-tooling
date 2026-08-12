@@ -14,8 +14,27 @@ subject name `cora_cases`, and the natural key is
 list item id.
 
 The contract is declared as **module-level constants in the feed's
-`schema.py`** (`NAMESPACE` / `NATURAL_KEY`), which every builder imports. There
-is no `CaseType` object in this feed.
+`schema.py`**, which every builder imports. There is no `CaseType` object in
+this feed.
+
+## Amendment — as implemented in `sharepoint_cases`
+
+Two details settled in implementation, neither changing the decision:
+
+- **The discriminator is the `case_type` column as *silver settles it*** — the
+  slug declared on the polled list's `CaseList` entry, stamped over whatever the
+  list's own `CaseType` cell held. Raw keeps the cell faithfully. The cell is
+  nullable and editable by hand in the SharePoint web UI, and `DeriveKey` refuses
+  a null natural-key value, so keying on the raw cell would let one blank cell
+  abort gold for every list.
+- **The namespace is the feed's current subject name, `sharepoint_cases`**, not
+  `cora_cases`. `NATURAL_KEY = ("case_type", "source_item_id")` is declared in
+  `schema.py`; there is no separate `NAMESPACE` constant, because the subject
+  name is already `FEED_NAME`. This **spends the free re-key below on the interim
+  name**: the later `cora_cases` rename therefore carries a *second* re-key of
+  gold, which #616 records. Renaming the subject was deliberately kept out of
+  #615, because it also moves on-disk directories, `case_review/schedules.py`'s
+  path and `reviewer_activity`'s reader.
 
 ## Why
 
@@ -58,8 +77,8 @@ is no `CaseType` object in this feed.
   nobody has asked for at the price of every cross-type query, for lists that
   are provisioned identically.
 - **Namespace = list name, natural key = `source_item_id`** — what
-  `pipelines/sharepoint_cases` ships today. Correct while exactly one list
-  exists, and it fails quietly at the second. **Superseded by this ADR.**
+  `pipelines/sharepoint_cases` shipped before #615. Correct while exactly one
+  list exists, and it fails quietly at the second. **Superseded by this ADR.**
 - **`Title` (the Case Reference) as the natural key.** Rejected: nullable, and
   its uniqueness is unconfirmed.
 - **The SharePoint list GUID as the namespace.** Rejected: it is still the
@@ -81,7 +100,9 @@ is no `CaseType` object in this feed.
 - **This re-keys the existing `sharepoint_cases` gold, and that is free exactly
   once.** Nothing has run in production, no downstream has persisted a
   `case_id`, and gold is `Refresh()` — so gold rebuilds from silver under the
-  new key at no cost. That window closes at the first production run.
+  new key at no cost. That window closes at the first production run, and #615
+  has spent it on the interim `sharepoint_cases` namespace: the `cora_cases`
+  rename (#616) is a second re-key, free only while production is still empty.
 - **A field genuinely needed by only one Case Type becomes a nullable column on
   the shared table**, not a new subject. Splitting the store to avoid one null
   would cost every cross-Case-Type query.

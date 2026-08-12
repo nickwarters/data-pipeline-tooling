@@ -4,7 +4,8 @@ The gold-only aggregate behind the per-Reviewer and Reviewer Manager Report
 Feeds. It belongs to the `reviewer_activity` Reporting subject and is rebuilt
 from the Sync subject's current `case_current` table. One row represents one
 Reviewer, one local calendar date, and one Case Type with at least one
-reportable, non-void Case.
+reportable, non-void Case. `case_current` holds every declared Case Type in one
+table, so this aggregate reads them all and groups by `case_type`.
 
 The Python contract is
 [`pipelines/reviewer_activity/schema.py`](../pipelines/reviewer_activity/schema.py);

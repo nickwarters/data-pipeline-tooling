@@ -3,7 +3,9 @@
 The filled-in entry for the `sharepoint_cases` feed, following
 [`data-dictionary-template.md`](data-dictionary-template.md). Six tables: the
 faithful raw observation, the typed Case version, and the four gold tables
-reduced from the version history — the current Case and three aggregates. The
+reduced from the version history — the current Case and three aggregates. Every
+declared Case list lands in the same six tables and is told apart by
+`case_type`. The
 Python contract is
 [`pipelines/sharepoint_cases/schema.py`](../pipelines/sharepoint_cases/schema.py);
 this page is its prose companion.
@@ -15,13 +17,14 @@ Maintainer creates a list from. The read mirrors
 
 ## Three things to know before this feed reaches a tenant
 
-**1. The site URL and list GUID are placeholders.** `SITE` and `LIST_ID` in
-`pipeline.py` are `https://sharepoint.invalid/sites/REPLACE-ME` and the nil UUID.
-Neither value exists anywhere to copy: the review application derives its site
-from the page it is served from and addresses lists by *title*, never by GUID. So
-both must be filled in from the tenant. The watermark is keyed on the GUID, and a
-wrong one does not fail — it silently forks the feed's place and looks like a
-first load.
+**1. The site URL and every list GUID are placeholders.** `SITE` and each
+`CaseList`'s `list_id` in `schema.py` are
+`https://sharepoint.invalid/sites/REPLACE-ME` and the nil UUID. Neither value
+exists anywhere to copy: the review application derives its site from the page it
+is served from and addresses lists by *title*, never by GUID. So both must be
+filled in from the tenant, per entry. The watermark is keyed on `(site,
+list_id)`, and a wrong one does not fail — it silently forks the feed's place and
+looks like a first load. Two entries sharing a GUID would share one watermark.
 
 **2. `Modified` is not an indexed column, and cannot become one later.** The
 list's 14 indexes are listed in `case-type-onboarding.md`; `Modified` is not among
@@ -31,10 +34,12 @@ and starts failing as the list grows. **Indexing `Modified` is a provisioning
 prerequisite for this feed** and has to happen while the list is under the
 threshold. Recorded here, not solved here.
 
-**3. One list per Case Type, and only Complaints is live.** Lists are named
-`Cases-{slug}`; there is no combined list and no default. This feed targets
-`Cases-Complaints` directly. A UAT tenant prefixes the same list `uat_`, so a UAT
-run needs `LIST_NAME` changed accordingly.
+**3. One list per Case Type, and only Complaints is provisioned.** Lists are
+named `Cases-{slug}`; there is no combined list and no default. All Case Types
+share one list template, so the feed polls every entry in `CASE_LISTS` with
+identical processing; onboarding a Case Type is a new entry with its own GUID.
+A UAT tenant prefixes the same list names `uat_`, so a UAT run needs each
+entry's `list_name` changed accordingly.
 
 ## Where "when we saw it" lives
 
@@ -50,9 +55,9 @@ and turn each ordinary re-read into an append-only conflict. The rows record
 When we saw it is recorded elsewhere, and is still recoverable: the **run log**
 (`<base>/_runs/sharepoint_cases.log`) timestamps every step and its
 `data_locations` name the list and every table, and the **ingestion batch id**
-returned on `SharePointIngestResult` identifies the source window the poll
+returned on each `ListPoll` identifies the source window that list's poll
 resumed from. The Reader's `observed_at` stamp is an injectable callable and is
-dropped at the storable-observation boundary for the same reason.
+dropped by the raw hop's `observation` transform for the same reason.
 
 ## `case_observation` — raw layer
 
@@ -70,8 +75,8 @@ the diagnosable, re-runnable copy of what the list returned.
 | **Grain** | one row per observation (one list item at one version) |
 | **Is this a Case Type?** | No — an ingest feed; identity is derived at gold |
 | **Natural key → `case_id`** | n/a at this layer |
-| **Source system** | SharePoint list `Cases-Complaints` (site and GUID: placeholders, see above) |
-| **Reader** | `SharePointModifiedReader`, behind the feed's `StorableObservations` projection |
+| **Source system** | every SharePoint list in `CASE_LISTS` (site and GUIDs: placeholders, see above) |
+| **Reader** | `SharePointModifiedReader` per list, projected by the raw hop's `observation` transform |
 | **Load strategy** | `AppendOnly("source_observation_id")` |
 | **Upstream dependencies** | none — source feed |
 | **Schedule / freshness** | polled; window `end = server_now - 30s`, `start = watermark - 5m` |
@@ -136,8 +141,8 @@ own question bank and that is a gold concern.
 | **Subject / Case Type** | `sharepoint_cases` |
 | **Medallion layer** | silver |
 | **Grain** | one row per observation of a Case |
-| **Is this a Case Type?** | No — no `CaseType` is declared; gold derives `case_id` from a namespace constant (see below) |
-| **Natural key → `case_id`** | `source_item_id` (the SharePoint item id), namespaced by `schema.LIST_NAME` — applied at gold, not here |
+| **Is this a Case Type?** | No — one subject holds every Case Type, discriminated by `case_type` |
+| **Natural key → `case_id`** | `schema.NATURAL_KEY` = `("case_type", "source_item_id")`, namespaced by the subject `sharepoint_cases` — applied at gold, not here |
 | **Source system** | `raw.case_observation` (the batch just fetched, not the whole history) |
 | **Reader** | `DatasetReader` over the fetched batch |
 | **Load strategy** | `AppendOnly("source_observation_id")` |
@@ -154,6 +159,13 @@ split on word boundaries and on `/`, and lower-snake-cased. `DueDate` →
 snake_case (the stamped provenance columns) pass through unchanged. There is no
 per-column mapping to keep in step with the list.
 
+**One column is not a faithful copy: `case_type`.** Raw holds the list's own
+`CaseType` cell, exactly as the list holds it. Silver replaces it with the Case
+Type declared for the list that was polled. The cell is nullable and editable by
+hand in the SharePoint web UI, and gold keys a Case on it — `DeriveKey` refuses a
+null natural-key value, so one blank cell would abort gold for every list. After
+silver, `case_type` is always the Case Type of the list the row came from.
+
 ### Part B — Field dictionary
 
 | Field | Source column | Type | Nullable | Value rules | Description | Example | Sensitivity | Notes |
@@ -165,7 +177,7 @@ per-column mapping to keep in step with the list.
 | `source_modified_at` | *(stamped)* | `datetime` | No | `NonNull` | When the source last changed the item. | `2026-08-05T08:10:00+00:00` | None | Orders the versions of one item. |
 | `id` | `Id` | `int` | No | `NonNull` | The SharePoint item id — **the Case's identity**. | `101` | Internal | Unique within the Case Type's list. |
 | `title` | `Title` | `str` | Yes | — | The human **Case Reference**. | `CMP-000101` | Internal | Nullable, and carries no format the application enforces. Unique only within a Case Type, and prefix-searchable only. A Case without one is ordinary. |
-| `case_type` | `CaseType` | `str` | Yes | — | The Case Type slug. | `complaints` | None | Constant per list. |
+| `case_type` | *(declared)* | `str` | No | `NonNull` | The Case Type of the list polled. | `complaints` | None | **Not** the list's `CaseType` cell, which raw keeps and silver overwrites — see above. Part of the natural key. |
 | `status` | `Status` | `str` | No | `NonNull`, `OneOf(In-progress, Actions In Progress, Completed, Void)` | The Case's lifecycle state at this version. | `In-progress` | None | The list's only Choice column. Note the hyphen in `In-progress` and that `Actions In Progress` has none — these are persisted values, not display copy. `Void` may be missing from older provisioned lists. |
 | `assigned_reviewer_name` | `AssignedReviewer/Name` | `str` | Yes | — | The Reviewer the Case is assigned to, as a claims login. | `i:0#.w\|CONTOSO\a.khan` | PII | See *Person columns* below. |
 | `assigned_at` | `AssignedAt` | `datetime` | Yes | — | When the Case was last handed to its Reviewer. | `2026-07-01T09:15:00+00:00` | None | |
@@ -274,8 +286,11 @@ anywhere leaves the watermark where it was and the next run rebuilds all four.
 | `case_throughput_daily` | `terminal_date` × `terminal_status` | `case_count` |
 
 Only `case_current` carries a live grain gate (`UniqueValidator("case_id")`); the
-three aggregates get none, for the reason set out in `case_current_builder`'s
-docstring. Their grain is declared here and in each builder's docstring instead.
+three aggregates get none, because a uniqueness check below the group-by that
+produced the grain is satisfied by construction. Their grain is declared here.
+
+Every gold table spans **every** declared Case list: a Reviewer holds Cases
+across Case Types, so an aggregate computed per list would not add up.
 
 ### `as_of_utc`, on every table
 
@@ -291,9 +306,9 @@ to the **local** date first, per
 | Attribute | Value |
 |-----------|-------|
 | **Grain** | one row per `case_id` |
-| **Identity** | a `sha256` over `{namespace: LIST_NAME, natural_key: {source_item_id}}`, stamped by `DeriveKey` |
+| **Identity** | a `sha256` over `{namespace: "sharepoint_cases", natural_key: {case_type, source_item_id}}`, stamped by `DeriveKey` |
 | **Load strategy** | `Refresh()` |
-| **Source** | the whole `silver.case_version` history |
+| **Source** | the whole `silver.case_version` history, across every declared list |
 | **Columns** | every silver column, plus `case_id` and `as_of_utc` |
 
 **Which version is current.** One stable sort on `case_id`,
@@ -309,10 +324,12 @@ no version at all — a sha256 digest, which is not a version and sorts below ev
 real one. Two *digest* rows at the same `Modified` are therefore separated only by
 `source_observation_id`: deterministic, but arbitrary.
 
-**The namespace is the list name, not the list GUID.** The GUID
-is still a placeholder, so keying on it would silently re-key every Case in gold
-the day the real one lands. The cost is stated plainly: **renaming the list
-re-keys history**, so a rename needs the treatment a re-key always needs.
+**The Case Type is inside the key.** Item id 101 exists in every list, so the
+item id alone does not identify a Case across Case Types. The namespace is the
+subject name, and the discriminator is `case_type` as *silver settles it* — the
+declared slug, not the list's editable cell. The cost is stated plainly:
+**renaming the subject re-keys history** ([ADR-0016](adr/0016-one-sync-subject-for-every-case-type.md)),
+so the pending `cora_cases` rename needs the treatment a re-key always needs.
 
 Two things to know about what this table holds:
 

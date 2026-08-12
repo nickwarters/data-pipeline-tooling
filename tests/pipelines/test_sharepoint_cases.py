@@ -12,44 +12,48 @@ so every test here hands the Reader a fake that replays frames.
 from __future__ import annotations
 
 import datetime as dt
+from functools import partial
+from uuid import UUID
 
 import pandas as pd
 import pytest
 
 from framework.core import ErrorCategory, ValidationError
 from framework.io import AppendOnlyConflictError
-from framework.run import RunContext, RunLog, dry_run_pipeline
+from framework.run import Pipeline, RunContext, RunLog, dry_run_pipeline
+from framework.transform import Stamp
 from pipelines.sharepoint_cases import gold
 from pipelines.sharepoint_cases.gold import (
     GOLD_TABLES,
     UNASSIGNED,
     UNSTAMPED,
-    case_age_buckets_current_builder,
-    case_counts_current_builder,
+    age_buckets,
+    case_counts,
     case_current_builder,
-    case_throughput_daily_builder,
 )
+from pipelines.sharepoint_cases.gold import throughput as throughput_transform
 from pipelines.sharepoint_cases.pipeline import (
     EXPAND_FIELDS,
     FEED_NAME,
-    LIST_ID,
-    LIST_NAME,
     PERSON_SUBFIELDS,
     RAW_FEED_COLUMNS,
     RENAME,
     SAFETY_LAG,
-    SITE,
     SOURCE_COLUMNS,
     LocalJsonListClient,
     NoClientError,
-    StorableObservations,
     main,
     raw_builder,
     run,
     silver_builder,
     snake_case,
 )
-from pipelines.sharepoint_cases.schema import CASE_STATUSES
+from pipelines.sharepoint_cases.schema import (
+    CASE_LISTS,
+    CASE_STATUSES,
+    SITE,
+    CaseList,
+)
 from tests.framework_testing import (
     RecordingRunLog,
     RecordingWriter,
@@ -76,7 +80,15 @@ SILVER_COLUMNS = tuple(RENAME.values())
 
 SERVER_NOW = dt.datetime(2026, 8, 5, 9, tzinfo=dt.timezone.utc)
 WINDOW = ModifiedWindow(start=None, end=SERVER_NOW - SAFETY_LAG)
-SOURCE = SharePointSource(SITE, LIST_ID)
+
+COMPLAINTS = CASE_LISTS[0]
+# A second list, declared here rather than in CASE_LISTS: only one Case Type is
+# provisioned today, and multi-list behaviour still has to be proven.
+OTHER = CaseList("other", "Cases-Other", SITE, UUID(int=7))
+TWO_LISTS = (COMPLAINTS, OTHER)
+
+SOURCE = SharePointSource(COMPLAINTS.site, COMPLAINTS.list_id)
+OTHER_SOURCE = SharePointSource(OTHER.site, OTHER.list_id)
 
 # How far a multi-run client's clock moves between polls. A successful run now
 # commits the watermark, and `window()` answers `None` when the safe upper bound
@@ -87,19 +99,21 @@ NEXT_POLL = dt.timedelta(minutes=10)
 # The instant gold is published as of: the candidate window end of a first poll.
 AS_OF = SERVER_NOW - SAFETY_LAG
 
-# Every pipeline one poll runs, in the run log's vocabulary.
+# Every pipeline one poll of one list runs, in the run log's vocabulary.
 EVERY_HOP = {
-    f"{FEED_NAME}:raw",
-    f"{FEED_NAME}:silver",
+    f"{FEED_NAME}:raw:{COMPLAINTS.case_type}",
+    f"{FEED_NAME}:silver:{COMPLAINTS.case_type}",
     *(f"{FEED_NAME}:gold:{table}" for table in GOLD_TABLES),
 }
 
 
 class FakeListClient:
-    """A ``CaseListClient`` replaying one frame per call, with a clock.
+    """A ``CaseListClient`` replaying frames per list, with a clock.
 
-    ``advance`` moves the clock on after each ``server_time()`` — one step per
-    poll — so a single client can serve a test that runs the feed more than once.
+    The positional frames are served in call order to whichever list asks;
+    ``by_list`` gives a named list its own. ``advance`` moves the clock on after
+    each ``server_time()`` — one step per poll — so a single client can serve a
+    test that runs the feed more than once.
     """
 
     def __init__(
@@ -107,8 +121,10 @@ class FakeListClient:
         *frames: pd.DataFrame,
         server_now: dt.datetime = SERVER_NOW,
         advance: dt.timedelta = dt.timedelta(0),
+        by_list: dict[str, list[pd.DataFrame]] | None = None,
     ):
         self._frames = list(frames) or [items()]
+        self._by_list = {name: list(f) for name, f in (by_list or {}).items()}
         self._server_now = server_now
         self._advance = advance
         self.calls: list[dict[str, object]] = []
@@ -121,7 +137,9 @@ class FakeListClient:
                 "select_fields": list(select_fields),
             }
         )
-        return self._frames[min(len(self.calls) - 1, len(self._frames) - 1)].copy()
+        frames = self._by_list.get(list_name, self._frames)
+        polled = sum(1 for call in self.calls if call["list_name"] == list_name)
+        return frames[min(polled - 1, len(frames) - 1)].copy()
 
     def server_time(self) -> dt.datetime:
         now = self._server_now
@@ -182,26 +200,38 @@ def items(*rows: dict[str, object]) -> pd.DataFrame:
     return pd.DataFrame(list(rows) or [item()])
 
 
-def observations(client: FakeListClient) -> StorableObservations:
-    """The feed's real Reader stack over a fake client."""
-    return StorableObservations(
-        SharePointModifiedReader(
-            SITE,
-            LIST_NAME,
-            SOURCE_COLUMNS,
-            WINDOW,
-            expand_fields=EXPAND_FIELDS,
-            client=client,
-        ),
-        RAW_FEED_COLUMNS,
+def source_reader(
+    client: FakeListClient, case_list: CaseList = COMPLAINTS
+) -> SharePointModifiedReader:
+    """The feed's real Reader over a fake client."""
+    return SharePointModifiedReader(
+        case_list.site,
+        case_list.list_name,
+        SOURCE_COLUMNS,
+        WINDOW,
+        expand_fields=EXPAND_FIELDS,
+        client=client,
     )
 
 
-def landed(client: FakeListClient) -> list[dict]:
+def landed(client: FakeListClient, case_list: CaseList = COMPLAINTS) -> list[dict]:
     """The rows the raw hop would store for ``client``'s response."""
     writer = RecordingWriter()
-    raw_builder(observations(client), writer).run()
+    raw_builder(source_reader(client, case_list), writer, case_list).run()
     return rows_of(writer)
+
+
+# --- the declared lists -----------------------------------------------------
+
+
+def test_the_declared_lists_are_distinct():
+    # A shared case_type would silently merge two lists' Cases in gold, which
+    # keys on it; a shared list_name would mint the same observation ids; and a
+    # shared (site, list_id) would share one watermark. The GUIDs are all
+    # placeholders today, so the last is a live mistake to make.
+    assert len({case_list.case_type for case_list in CASE_LISTS}) == len(CASE_LISTS)
+    assert len({case_list.list_name for case_list in CASE_LISTS}) == len(CASE_LISTS)
+    assert len({(c.site, c.list_id) for c in CASE_LISTS}) == len(CASE_LISTS)
 
 
 # --- the rename ------------------------------------------------------------
@@ -236,7 +266,7 @@ def test_raw_keeps_the_source_names_and_the_stamped_observation():
     assert row["Title"] == "CMP-000101"
     assert row["Status"] == "In-progress"
     assert row["Details"] is None
-    assert row["source_list_name"] == LIST_NAME
+    assert row["source_list_name"] == COMPLAINTS.list_name
     assert row["source_item_id"] == "101"
     assert row["source_version"] == '"3"'
     assert len(row["source_observation_id"]) == 64
@@ -275,7 +305,7 @@ def test_a_person_column_that_is_neither_an_object_nor_null_is_refused():
     client = FakeListClient(items(item(ResponsibleParty="i:0#.w|CONTOSO\\b.okafor")))
 
     with pytest.raises(SharePointFeedError, match="item 101.*'ResponsibleParty'"):
-        raw_builder(observations(client), RecordingWriter()).run()
+        raw_builder(source_reader(client), RecordingWriter(), COMPLAINTS).run()
 
 
 def test_a_person_with_no_display_name_keeps_the_identity_the_read_returned():
@@ -299,7 +329,7 @@ def test_an_unexpanded_person_is_refused_rather_than_read_as_nobody():
     client = FakeListClient(items(item(ResponsibleParty=deferred)))
 
     with pytest.raises(SharePointFeedError, match="was not expanded"):
-        raw_builder(observations(client), RecordingWriter()).run()
+        raw_builder(source_reader(client), RecordingWriter(), COMPLAINTS).run()
 
 
 def test_the_read_asks_for_the_star_and_expands_every_person():
@@ -324,7 +354,7 @@ def test_raw_reads_a_quiet_window_as_the_declared_shape():
     # of them can be there when there are no rows; the shape is declared anyway.
     writer = RecordingWriter()
 
-    raw_builder(observations(FakeListClient(pd.DataFrame())), writer).run()
+    raw_builder(source_reader(FakeListClient(pd.DataFrame())), writer, COMPLAINTS).run()
 
     assert rows_of(writer) == []
     assert list(writer.writes[0].to_pandas().columns) == list(RAW_FEED_COLUMNS)
@@ -337,7 +367,7 @@ def test_a_populated_response_missing_a_stored_column_is_refused():
     client = FakeListClient(items(item()).drop(columns=["Status"]))
 
     with pytest.raises(SharePointFeedError, match="Status"):
-        raw_builder(observations(client), RecordingWriter()).run()
+        raw_builder(source_reader(client), RecordingWriter(), COMPLAINTS).run()
 
 
 # --- silver ----------------------------------------------------------------
@@ -346,7 +376,7 @@ def test_a_populated_response_missing_a_stored_column_is_refused():
 def test_silver_snake_cases_coerces_and_keeps_the_provenance():
     writer = RecordingWriter()
 
-    silver_builder(given_rows(landed(FakeListClient())), writer).run()
+    silver_builder(given_rows(landed(FakeListClient())), writer, COMPLAINTS).run()
 
     [row] = rows_of(writer)
     assert row["id"] == 101
@@ -359,13 +389,30 @@ def test_silver_snake_cases_coerces_and_keeps_the_provenance():
     assert row["source_version"] == '"3"'
 
 
+@pytest.mark.parametrize("cell", [None, "misfiled", "complaints"])
+def test_silver_settles_the_case_type_to_the_polled_lists_declared_one(cell):
+    # The list's own CaseType cell is nullable and editable by hand, and gold
+    # keys a Case on it, so silver replaces it with the declared value. Raw
+    # keeps the cell as the list holds it.
+    raw = landed(
+        FakeListClient(items(item(CaseType=cell))),
+        OTHER,
+    )
+    writer = RecordingWriter()
+
+    silver_builder(given_rows(raw), writer, OTHER).run()
+
+    assert raw[0]["CaseType"] == cell
+    assert rows_of(writer)[0]["case_type"] == "other"
+
+
 def test_silver_accepts_a_case_with_no_reference_and_nobody_assigned():
     # Title is the human Case Reference: nullable, and carrying no format any
     # part of the application enforces. A row without one is an ordinary row.
     client = FakeListClient(items(item(Title=None, AssignedReviewer=None)))
     writer = RecordingWriter()
 
-    silver_builder(given_rows(landed(client)), writer).run()
+    silver_builder(given_rows(landed(client)), writer, COMPLAINTS).run()
 
     [row] = rows_of(writer)
     assert row["title"] is None
@@ -377,7 +424,9 @@ def test_silver_accepts_every_real_status(status):
     writer = RecordingWriter()
 
     silver_builder(
-        given_rows(landed(FakeListClient(items(item(Status=status))))), writer
+        given_rows(landed(FakeListClient(items(item(Status=status))))),
+        writer,
+        COMPLAINTS,
     ).run()
 
     assert rows_of(writer)[0]["status"] == status
@@ -391,7 +440,7 @@ def test_silver_quarantines_an_unknown_status_while_raw_keeps_every_row():
     writer, rejects = RecordingWriter(), RecordingWriter()
     run_log = RecordingRunLog()
 
-    silver_builder(given_rows(raw), writer, rejects, run_log=run_log).run()
+    silver_builder(given_rows(raw), writer, COMPLAINTS, rejects, run_log=run_log).run()
 
     quarantine = next(r for r in run_log.records if r["step"] == "quarantine")
     assert quarantine["rows_in"] == 2
@@ -414,7 +463,7 @@ def test_silver_aborts_when_the_id_is_missing():
     reader = given_rows([{column: None for column in RAW_FEED_COLUMNS}])
 
     with pytest.raises(ValidationError, match="'id'"):
-        silver_builder(reader, writer).run()
+        silver_builder(reader, writer, COMPLAINTS).run()
 
     assert writer.writes == []
 
@@ -436,8 +485,9 @@ def version(**overrides: object) -> dict[str, object]:
             "status": "In-progress",
             "assigned_reviewer_name": "i:0#.w|CONTOSO\\p.shah",
             "assigned_reviewer_manager_name": "i:0#.w|CONTOSO\\d.reid",
+            "case_type": COMPLAINTS.case_type,
             "created": "2026-07-01 09:14:00+00:00",
-            "source_list_name": LIST_NAME,
+            "source_list_name": COMPLAINTS.list_name,
             "source_item_id": "101",
             "source_version": '"3"',
             "source_modified_at": "2026-08-05 08:10:00+00:00",
@@ -577,8 +627,31 @@ def test_current_gold_republishes_every_silver_column():
 # --- gold: the current counts ------------------------------------------------
 
 
+def aggregate_pipeline(reader, writer, *, table: str, transform, step: str) -> Pipeline:
+    """Wire one aggregate hop exactly as ``publish_gold``'s loop does."""
+    p = Pipeline(f"{FEED_NAME}:gold:{table}")
+    node = p.read(reader, name="read")
+    node = p.transform(transform, node, name=step)
+    node = p.transform(Stamp("as_of_utc", AS_OF.isoformat()), node, name="stamp-as-of")
+    p.write(writer, node, name="write")
+    return p
+
+
+def aggregate(transform, step: str, rows: list[dict]) -> list[dict]:
+    """Drive one aggregate hop, as ``publish_gold`` wires it, over ``rows``."""
+    writer = RecordingWriter()
+    aggregate_pipeline(
+        given_rows(rows),
+        writer,
+        table="table",
+        transform=transform,
+        step=step,
+    ).run()
+    return rows_of(writer)
+
+
 def counts(*rows: dict) -> list[dict]:
-    return gold_rows(case_counts_current_builder, current(*rows))
+    return aggregate(case_counts, "count-by-reviewer-and-status", current(*rows))
 
 
 def grain(rows: list[dict]) -> list[tuple]:
@@ -650,7 +723,7 @@ def test_a_case_with_nobody_assigned_is_counted_as_unassigned():
 
 
 def aged(*rows: dict) -> list[dict]:
-    return gold_rows(case_age_buckets_current_builder, current(*rows))
+    return aggregate(partial(age_buckets, as_of=AS_OF), "bucket-by-age", current(*rows))
 
 
 def created_days_before(age: int) -> str:
@@ -709,8 +782,8 @@ def test_every_current_case_lands_in_exactly_one_age_bucket():
 # --- gold: daily throughput --------------------------------------------------
 
 
-def throughput(*rows: dict) -> list[dict]:
-    return gold_rows(case_throughput_daily_builder, current(*rows))
+def ended(*rows: dict) -> list[dict]:
+    return aggregate(throughput_transform, "count-by-terminal-date", current(*rows))
 
 
 def test_a_case_observed_many_times_but_completed_once_counts_once():
@@ -733,12 +806,12 @@ def test_a_case_observed_many_times_but_completed_once_counts_once():
 
     assert [
         (row["terminal_date"], row["terminal_status"], row["case_count"])
-        for row in throughput(*history)
+        for row in ended(*history)
     ] == [("2026-08-05", "Completed", 1)]
 
 
 def test_a_voided_case_counts_on_the_date_it_was_voided():
-    rows = throughput(
+    rows = ended(
         version(status="Void", voided_at="2026-08-04 16:00:00+00:00"),
         version(
             id=102,
@@ -758,7 +831,7 @@ def test_a_terminal_case_with_no_stamp_is_counted_as_unstamped():
     # Nothing enforces "terminal status implies a stamp" and the list row is
     # editable by hand, so the Case is counted under a literal key rather than
     # dropped out of a total.
-    rows = throughput(version(status="Completed", completed_at=None))
+    rows = ended(version(status="Completed", completed_at=None))
 
     assert [(row["terminal_date"], row["case_count"]) for row in rows] == [
         (UNSTAMPED, 1)
@@ -778,11 +851,11 @@ def test_throughput_totals_the_cases_currently_in_a_terminal_status():
         version(id=104, source_item_id="104", status="Actions In Progress"),
     )
 
-    assert sum(row["case_count"] for row in throughput(*history)) == 2
+    assert sum(row["case_count"] for row in ended(*history)) == 2
 
 
 def test_throughput_is_empty_when_nothing_has_ended():
-    assert throughput(version()) == []
+    assert ended(version()) == []
 
 
 # --- the composed plan -----------------------------------------------------
@@ -791,19 +864,23 @@ def test_throughput_is_empty_when_nothing_has_ended():
 def test_both_hops_plan_exactly_the_steps_they_always_have():
     reader, writer, rejects = given_rows([]), RecordingWriter(), RecordingWriter()
 
-    # No column gate on the raw hop, unlike a file feed: the Reader decorator
-    # projects onto exactly the stored columns, so a presence check below it
-    # could never fire.
-    assert raw_builder(reader, writer).describe().splitlines() == [
-        "Pipeline: sharepoint_cases:raw",
+    # No column gate on the raw hop, unlike a file feed: the observation
+    # transform projects onto exactly the stored columns, so a presence check
+    # below it could never fire. Each hop is named for the list it polled.
+    assert raw_builder(reader, writer, COMPLAINTS).describe().splitlines() == [
+        "Pipeline: sharepoint_cases:raw:complaints",
         "  [Read] read",
-        "  [Write] write (depends on: read)",
+        "  [Transform] observation (depends on: read)",
+        "  [Write] write (depends on: observation)",
     ]
-    assert silver_builder(reader, writer, rejects).describe().splitlines() == [
-        "Pipeline: sharepoint_cases:silver",
+    assert silver_builder(
+        reader, writer, COMPLAINTS, rejects
+    ).describe().splitlines() == [
+        "Pipeline: sharepoint_cases:silver:complaints",
         "  [Read] read",
         "  [Transform] rename (depends on: read)",
-        "  [Transform] coerce (depends on: rename)",
+        "  [Transform] case-type (depends on: rename)",
+        "  [Transform] coerce (depends on: case-type)",
         "  [Quarantine] quarantine (depends on: coerce)",
         "  [Validate] post-validate (depends on: quarantine)",
         "  [Write] write (depends on: post-validate)",
@@ -825,40 +902,31 @@ def test_the_gold_hops_plan_exactly_the_steps_they_always_have():
         "  [Validate] unique-validate (depends on: stamp-as-of)",
         "  [Write] write (depends on: unique-validate)",
     ]
-    assert case_counts_current_builder(
-        reader, writer, as_of=AS_OF
-    ).describe().splitlines() == [
-        f"Pipeline: {FEED_NAME}:gold:case_counts_current",
-        "  [Read] read",
-        "  [Transform] count-by-reviewer-and-status (depends on: read)",
-        "  [Transform] stamp-as-of (depends on: count-by-reviewer-and-status)",
-        "  [Write] write (depends on: stamp-as-of)",
-    ]
-    assert case_age_buckets_current_builder(
-        reader, writer, as_of=AS_OF
-    ).describe().splitlines() == [
-        f"Pipeline: {FEED_NAME}:gold:case_age_buckets_current",
-        "  [Read] read",
-        "  [Transform] bucket-by-age (depends on: read)",
-        "  [Transform] stamp-as-of (depends on: bucket-by-age)",
-        "  [Write] write (depends on: stamp-as-of)",
-    ]
-    assert case_throughput_daily_builder(
-        reader, writer, as_of=AS_OF
-    ).describe().splitlines() == [
-        f"Pipeline: {FEED_NAME}:gold:case_throughput_daily",
-        "  [Read] read",
-        "  [Transform] count-by-terminal-date (depends on: read)",
-        "  [Transform] stamp-as-of (depends on: count-by-terminal-date)",
-        "  [Write] write (depends on: stamp-as-of)",
-    ]
+    for table, step in (
+        ("case_counts_current", "count-by-reviewer-and-status"),
+        ("case_age_buckets_current", "bucket-by-age"),
+        ("case_throughput_daily", "count-by-terminal-date"),
+    ):
+        assert aggregate_pipeline(
+            reader,
+            writer,
+            table=table,
+            transform=case_counts,
+            step=step,
+        ).describe().splitlines() == [
+            f"Pipeline: {FEED_NAME}:gold:{table}",
+            "  [Read] read",
+            f"  [Transform] {step} (depends on: read)",
+            f"  [Transform] stamp-as-of (depends on: {step})",
+            "  [Write] write (depends on: stamp-as-of)",
+        ]
 
 
 # --- end to end ------------------------------------------------------------
 
 
 def test_the_bundled_sample_lands_every_item_across_both_pages(tmp_path):
-    result = run(
+    [poll] = run(
         RunContext(base_dir=tmp_path, pipeline=FEED_NAME), client=LocalJsonListClient()
     )
 
@@ -874,7 +942,7 @@ def test_the_bundled_sample_lands_every_item_across_both_pages(tmp_path):
     # One fixture Case carries no Case Reference at all, which is ordinary.
     assert [row["Title"] for row in landed_raw][:2] == ["CMP-000101", "CMP-000102"]
     assert pd.isna(landed_raw[2]["Title"])
-    assert (result.raw_rows, result.silver_rows) == (5, 5)
+    assert (poll.raw_rows, poll.silver_rows) == (5, 5)
     # The fixture exercises all four real statuses, so the whole vocabulary
     # passes the schema gate rather than only the one a happy path would use.
     assert {row["status"] for row in read_rows(med.silver, "case_version")} == set(
@@ -928,8 +996,8 @@ def test_a_quiet_window_writes_cleanly_and_a_later_one_still_appends(tmp_path):
     client = FakeListClient(pd.DataFrame(), items(item()), advance=NEXT_POLL)
     context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
 
-    quiet = run(context, client=client)
-    busy = run(context, client=client)
+    [quiet] = run(context, client=client)
+    [busy] = run(context, client=client)
 
     med = medallion(StoreRegistry(tmp_path), FEED_NAME)
     assert (quiet.raw_rows, quiet.silver_rows) == (0, 0)
@@ -974,7 +1042,7 @@ def test_a_quiet_window_still_runs_and_records_every_hop(tmp_path):
     records = read_run_log(log_path)
     assert {record["pipeline"] for record in records} == EVERY_HOP
     assert {row["name"] for record in records for row in record["data_locations"]} == {
-        LIST_NAME,
+        COMPLAINTS.list_name,
         "case_observation",
         "case_version",
         *GOLD_TABLES,
@@ -982,7 +1050,7 @@ def test_a_quiet_window_still_runs_and_records_every_hop(tmp_path):
     assert {record["rows_out"] for record in records} == {0}
 
 
-def test_nothing_safe_to_poll_returns_none_and_writes_nothing(tmp_path):
+def test_nothing_safe_to_poll_returns_nothing_and_writes_nothing(tmp_path):
     SharePointCheckpointStore(tmp_path).commit(
         SOURCE,
         window_end=SERVER_NOW,
@@ -992,7 +1060,7 @@ def test_nothing_safe_to_poll_returns_none_and_writes_nothing(tmp_path):
 
     assert (
         run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME), client=FakeListClient())
-        is None
+        == []
     )
     assert not (tmp_path / FEED_NAME).exists()
 
@@ -1010,14 +1078,13 @@ def test_the_run_log_identifies_the_list_and_every_table(tmp_path):
         for record in read_run_log(log_path)
         for location in record["data_locations"]
     ]
-    assert {"namespace": SITE, "name": LIST_NAME} in located
+    assert {"namespace": COMPLAINTS.site, "name": COMPLAINTS.list_name} in located
     assert {location["name"] for location in located} == {
-        LIST_NAME,
+        COMPLAINTS.list_name,
         "case_observation",
         "case_version",
         *GOLD_TABLES,
     }
-    assert not any("@" in location["namespace"] for location in located)
 
 
 def test_running_with_no_client_refuses_as_an_operator_failure(tmp_path, capsys):
@@ -1043,9 +1110,14 @@ def test_run_with_no_client_refuses_as_a_wiring_failure(tmp_path):
 
 
 def test_the_sample_client_replays_both_pages_as_one_first_load():
-    frame = LocalJsonListClient().fetch_items(LIST_NAME, (), (), ())
+    frame = LocalJsonListClient().fetch_items(COMPLAINTS.list_name, (), (), ())
 
     assert list(frame["Id"]) == [101, 102, 103, 104, 105]
+
+
+def test_the_sample_client_names_a_list_it_has_no_pages_for():
+    with pytest.raises(SharePointFeedError, match="Cases-Other"):
+        LocalJsonListClient().fetch_items(OTHER.list_name, (), (), ())
 
 
 # --- end to end: gold, and the checkpoint last -------------------------------
@@ -1066,13 +1138,13 @@ def explode(*args: object, **kwargs: object):
 
 
 def test_a_poll_publishes_every_gold_table_and_then_commits_the_watermark(tmp_path):
-    result = run(
+    [poll] = run(
         RunContext(base_dir=tmp_path, pipeline=FEED_NAME), client=FakeListClient()
     )
 
     med = medallion(StoreRegistry(tmp_path), FEED_NAME)
-    assert result.window.end == SERVER_NOW - SAFETY_LAG
-    assert result.ingestion_batch_id == f"{LIST_ID}:first-load"
+    assert poll.window.end == SERVER_NOW - SAFETY_LAG
+    assert poll.ingestion_batch_id == f"{COMPLAINTS.list_id}:first-load"
     assert landed_gold(tmp_path) == set(GOLD_TABLES)
     [case] = read_rows(med.gold, "case_current")
     assert (case["source_item_id"], case["status"]) == ("101", "In-progress")
@@ -1134,7 +1206,7 @@ def test_a_failure_in_the_last_aggregate_leaves_the_earlier_gold_and_no_checkpoi
     # Gold Writers commit independently, so an earlier table stays refreshed.
     # That is acceptable evidence: the watermark did not move, so the next run
     # rebuilds all four from the same history and converges.
-    monkeypatch.setattr(gold, "case_throughput_daily_builder", explode)
+    monkeypatch.setattr(gold, "throughput", explode)
 
     with pytest.raises(RuntimeError, match="boom"):
         run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME), client=FakeListClient())
@@ -1155,7 +1227,7 @@ def test_a_retry_after_a_partial_failure_converges_and_advances_once(
     context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
     client = FakeListClient(advance=NEXT_POLL)
     checkpoints = SharePointCheckpointStore(tmp_path)
-    monkeypatch.setattr(gold, "case_throughput_daily_builder", explode)
+    monkeypatch.setattr(gold, "throughput", explode)
 
     with pytest.raises(RuntimeError, match="boom"):
         run(context, client=client)
@@ -1172,6 +1244,160 @@ def test_a_retry_after_a_partial_failure_converges_and_advances_once(
     assert checkpoints.committed_watermark(SOURCE) == (
         SERVER_NOW + NEXT_POLL - SAFETY_LAG
     )
+
+
+# --- end to end: more than one list ------------------------------------------
+
+
+def two_list_client(**kwargs) -> FakeListClient:
+    """A client serving each list one item, both carrying item id 101."""
+    return FakeListClient(
+        by_list={
+            COMPLAINTS.list_name: [items(item())],
+            OTHER.list_name: [items(item(Title="OTH-000101"))],
+        },
+        **kwargs,
+    )
+
+
+def test_two_lists_land_in_one_observation_table_and_one_version_table(tmp_path):
+    # All Case Types share one list template, so every list refines into the
+    # same two tables and is told apart by the Case Type on the row.
+    polls = run(
+        RunContext(base_dir=tmp_path, pipeline=FEED_NAME),
+        client=two_list_client(),
+        case_lists=TWO_LISTS,
+    )
+
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    assert [poll.case_list for poll in polls] == list(TWO_LISTS)
+    assert {
+        row["source_list_name"] for row in read_rows(med.raw, "case_observation")
+    } == {
+        COMPLAINTS.list_name,
+        OTHER.list_name,
+    }
+    assert [row["case_type"] for row in read_rows(med.silver, "case_version")] == [
+        "complaints",
+        "other",
+    ]
+
+
+def test_the_same_item_id_in_two_lists_is_two_cases(tmp_path):
+    # Item 101 exists in every list, so neither the observation id nor the
+    # case_id may be derived from it alone.
+    run(
+        RunContext(base_dir=tmp_path, pipeline=FEED_NAME),
+        client=two_list_client(),
+        case_lists=TWO_LISTS,
+    )
+
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    current_cases = read_rows(med.gold, "case_current")
+    assert {row["source_item_id"] for row in current_cases} == {"101"}
+    assert len({row["case_id"] for row in current_cases}) == 2
+    assert len({row["source_observation_id"] for row in current_cases}) == 2
+
+
+def test_gold_counts_across_every_list(tmp_path):
+    # A Reviewer holds Cases across Case Types, so the aggregates are one count
+    # over the union rather than one table per list.
+    run(
+        RunContext(base_dir=tmp_path, pipeline=FEED_NAME),
+        client=two_list_client(),
+        case_lists=TWO_LISTS,
+    )
+
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    assert [
+        row["case_count"] for row in read_rows(med.gold, "case_counts_current")
+    ] == [2]
+
+
+def test_each_list_keeps_its_own_watermark(tmp_path):
+    run(
+        RunContext(base_dir=tmp_path, pipeline=FEED_NAME),
+        client=two_list_client(),
+        case_lists=TWO_LISTS,
+    )
+
+    checkpoints = SharePointCheckpointStore(tmp_path)
+    assert checkpoints.committed_watermark(SOURCE) == SERVER_NOW - SAFETY_LAG
+    assert checkpoints.committed_watermark(OTHER_SOURCE) == SERVER_NOW - SAFETY_LAG
+
+
+def test_a_list_with_nothing_safe_to_poll_is_skipped_and_the_others_still_run(tmp_path):
+    # One list polled again inside the safety lag is ordinary operation, not a
+    # failure: it is skipped and its watermark stands.
+    SharePointCheckpointStore(tmp_path).commit(
+        SOURCE,
+        window_end=SERVER_NOW,
+        ingestion_batch_id="earlier",
+        pipeline_run_id="earlier-run",
+    )
+
+    polls = run(
+        RunContext(base_dir=tmp_path, pipeline=FEED_NAME),
+        client=two_list_client(),
+        case_lists=TWO_LISTS,
+    )
+
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    assert [poll.case_list for poll in polls] == [OTHER]
+    assert [row["case_type"] for row in read_rows(med.silver, "case_version")] == [
+        "other"
+    ]
+    assert landed_gold(tmp_path) == set(GOLD_TABLES)
+    checkpoints = SharePointCheckpointStore(tmp_path)
+    assert checkpoints.committed_watermark(SOURCE) == SERVER_NOW
+    assert checkpoints.committed_watermark(OTHER_SOURCE) == SERVER_NOW - SAFETY_LAG
+
+
+def test_a_failure_polling_the_second_list_leaves_no_gold_and_no_watermark(tmp_path):
+    # Fail fast: the first list's observations are committed (append-only, per
+    # hop), but nothing is published and no watermark moves.
+    broken = FakeListClient(
+        by_list={
+            COMPLAINTS.list_name: [items(item())],
+            OTHER.list_name: [items(item(ResponsibleParty="not an object"))],
+        }
+    )
+
+    with pytest.raises(SharePointFeedError):
+        run(
+            RunContext(base_dir=tmp_path, pipeline=FEED_NAME),
+            client=broken,
+            case_lists=TWO_LISTS,
+        )
+
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    checkpoints = SharePointCheckpointStore(tmp_path)
+    assert len(read_rows(med.silver, "case_version")) == 1
+    assert landed_gold(tmp_path) == set()
+    assert checkpoints.committed_watermark(SOURCE) is None
+    assert checkpoints.committed_watermark(OTHER_SOURCE) is None
+
+
+def test_a_retry_after_a_partial_failure_converges_and_advances_both_lists(tmp_path):
+    broken = FakeListClient(
+        by_list={
+            COMPLAINTS.list_name: [items(item())],
+            OTHER.list_name: [items(item(ResponsibleParty="not an object"))],
+        }
+    )
+    context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
+
+    with pytest.raises(SharePointFeedError):
+        run(context, client=broken, case_lists=TWO_LISTS)
+    run(context, client=two_list_client(), case_lists=TWO_LISTS)
+
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    checkpoints = SharePointCheckpointStore(tmp_path)
+    # The first list's re-read is a no-op against append-only silver.
+    assert len(read_rows(med.silver, "case_version")) == 2
+    assert len(read_rows(med.gold, "case_current")) == 2
+    assert checkpoints.committed_watermark(SOURCE) == SERVER_NOW - SAFETY_LAG
+    assert checkpoints.committed_watermark(OTHER_SOURCE) == SERVER_NOW - SAFETY_LAG
 
 
 def test_a_dry_run_on_a_fresh_base_dir_writes_no_gold_and_commits_nothing(tmp_path):

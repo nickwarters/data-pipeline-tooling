@@ -1318,8 +1318,8 @@ place and `describe()` requires no changes.
 
 Each component renders its own summary through the opt-in `describe()` protocol: a component implements `describe() -> str` to surface the config it
 chooses (the framework readers/writers/validators/processors/`RunLog` do,
-self-redacting any credentials — e.g. `SharePointReader` strips `user:pass@`
-from its site URL and never shows `auth`). A component without `describe()` is
+omitting any credentials — e.g. `SharePointReader` never shows `auth`). A
+component without `describe()` is
 shown by bare class name only; the builder never introspects a component's
 attributes, so a value stored under any name cannot leak into the plan:
 

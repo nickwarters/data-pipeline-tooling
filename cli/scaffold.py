@@ -302,7 +302,7 @@ def _render_pipeline(text: str, feed: str, spec: _FeedSpec) -> str:
     cls = _pascal(feed) + "Row"
     anchor = f'SAMPLE_CSV = Path(__file__).parent / "sample_data" / "{feed}.csv"\n'
     text = text.replace(anchor, anchor + "\n" + _raw_columns_literal(spec))
-    # Gate the raw hop's recipe on RAW_FEED_COLUMNS instead of the schema fields
+    # Gate the raw hop on RAW_FEED_COLUMNS instead of the schema fields
     text = text.replace(
         f"[f.name for f in fields({cls})]",
         "RAW_FEED_COLUMNS",

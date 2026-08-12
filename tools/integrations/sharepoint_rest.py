@@ -53,7 +53,7 @@ from typing import Callable, Protocol, Sequence, runtime_checkable
 
 import pandas as pd
 
-from framework._internal.describe import redact_url, render
+from framework._internal.describe import render
 from framework._internal.identity import canonical_text, sha256_json
 from framework.core.dataset import Dataset
 from framework.core.errors import ErrorCategory, PipelineError
@@ -185,8 +185,7 @@ class SharePointModifiedReader:
     """Read the items of one SharePoint list whose ``Modified`` falls in a window.
 
     Conforms to the ``Reader`` port (``read() -> Dataset``) and records the list
-    it touched in ``data_locations``, with any credentials embedded in the site
-    URL redacted.
+    it touched in ``data_locations``.
     """
 
     def __init__(
@@ -248,7 +247,7 @@ class SharePointModifiedReader:
         if missing:
             raise SharePointFeedError(
                 f"SharePoint list {self._list_name!r} at "
-                f"{redact_url(self._site)} returned items without "
+                f"{self._site} returned items without "
                 f"{', '.join(missing)}: the item identity contract needs "
                 f"{_ITEM_ID} and {_MODIFIED} in every response."
             )
@@ -269,7 +268,7 @@ class SharePointModifiedReader:
         if duplicated:
             raise SharePointFeedError(
                 f"SharePoint list {self._list_name!r} at "
-                f"{redact_url(self._site)} returned duplicate column "
+                f"{self._site} returned duplicate column "
                 f"{'names' if len(duplicated) > 1 else 'name'} "
                 f"{', '.join(duplicated)}: a column read by name must be "
                 "unambiguous."
@@ -298,12 +297,12 @@ class SharePointModifiedReader:
         return stamped
 
     def describe(self) -> str:
-        # The site with any embedded credentials stripped; the window rendered
-        # in the exact shape it is sent, so a plan preview shows what will be
-        # asked of the list. No client config is surfaced — it holds the auth.
+        # The window is rendered in the exact shape it is sent, so a plan
+        # preview shows what will be asked of the list. The client config is
+        # omitted from the plan — it holds the auth.
         return render(
             self,
-            site=redact_url(self._site),
+            site=self._site,
             list_name=self._list_name,
             columns=", ".join(self._columns) or None,
             window=" .. ".join((self._rendered_start, _odata(self._window.end))),
