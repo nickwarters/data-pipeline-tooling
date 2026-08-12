@@ -41,7 +41,17 @@ branch is **`py-to-markdown`** — if the user names something close but wrong
    mirror(s).` The two counts match only when the merge added and removed no `.py`
    files; otherwise `M - N` should equal the net change in `.py` files the merge
    brought in. Check that difference against the merge rather than treating any
-   mismatch as a failure.
+   mismatch as a failure. Count `.py` files the way the generator does — under the
+   script's `EXCLUDED_DIRS`, and including anything untracked — or the
+   reconciliation will be off for reasons that have nothing to do with the merge.
+
+   **If it refuses with `mirror path(s) hold hand-written Markdown`,** a `.py`
+   file has acquired a hand-written `.md` sibling, which the generator will not
+   overwrite. Nothing was written or removed, so the tree is untouched. Fix it by
+   moving that Markdown into a `docs/` directory (the generator skips those) and
+   updating whatever links to it, then re-run. This is what
+   `platform_frontend/scripts/deploy_to_sharepoint.md` was — do not "resolve" it
+   by deleting the prose or by letting the mirror win.
 4. **Review** `git status --short`. Sanity-check that the changed/added/deleted
    `.md` files track the `.py` changes the merge brought in (a deleted `.py`
    should drop its `.md`; a new `.py` should add one).

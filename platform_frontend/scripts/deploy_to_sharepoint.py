@@ -16,8 +16,8 @@ bracket that sync, and each of the three is a refusal rather than a repair.
 
 See ``docs/deploy-runbook.md`` for the runbook. It deliberately does not sit
 beside this file: the repository root's ``scripts/generate_md_mirrors.py`` writes
-a Markdown mirror of every ``.py`` to its sibling ``.md`` path and would overwrite
-it.
+a Markdown mirror of every ``.py`` to its sibling ``.md`` path, so a runbook there
+would once have been overwritten and would now block the mirror run outright.
 
 Only the sync *policy* lives here. Every call that touches the library — folder
 creation, listing, upload, delete — goes through the

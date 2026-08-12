@@ -117,12 +117,14 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
 
 - **Never put hand-written Markdown at `<name>.md` beside a `<name>.py`.** The
   repository root's `scripts/generate_md_mirrors.py` writes a `.md` mirror of
-  every `.py` file to that exact sibling path, and it overwrites unconditionally.
-  It skips `docs/`, so documentation about a script belongs under `docs/` — the
-  deploy runbook lived at `scripts/deploy_to_sharepoint.md` and was silently
-  clobbered on the `py-to-markdown` branch until it moved to
-  `docs/deploy-runbook.md`. This is a root-project tool reaching across the
-  project boundary; the collision is invisible on `main`.
+  every `.py` file to that exact sibling path. It skips `docs/`, so documentation
+  about a script belongs under `docs/` — the deploy runbook lived at
+  `scripts/deploy_to_sharepoint.md` and was silently clobbered on the
+  `py-to-markdown` branch until it moved to `docs/deploy-runbook.md`. The
+  generator now **refuses** such a run rather than overwriting, so the cost has
+  changed rather than gone: prose at a mirror path blocks every mirror
+  regeneration until someone moves it. This is a root-project tool reaching
+  across the project boundary, and nothing on `main` shows you the collision.
 
 - **Question Bank artifacts are JSON stored in `.txt` files, on purpose.** `case-types/banks/*.txt` (loaded via `case-types/load-bank.js`) hold plain JSON text. This is intentional, not an oversight: SharePoint Subscription Edition has been unreliable at storing/serving `.json` files (MIME/blocking issues), so the artifact extension is `.txt` while the content stays JSON, parsed explicitly by the loader. A repo-wide search for `*.json` will not find the banks — search `case-types/banks/*.txt` instead.
 
