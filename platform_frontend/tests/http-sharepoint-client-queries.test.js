@@ -10,6 +10,28 @@ import {
 
 // Capability: list queries, filters, paging, and counts.
 
+const INDEXED_FILTER_COLUMNS = new Set([
+  'CompletedAt',
+  'VoidedAt',
+  'ReportableAt',
+  'Modified',
+]);
+
+/**
+ * SharePoint uses the first predicate to decide whether a large list can be
+ * served from an index.
+ *
+ * @param {string} url
+ */
+function assertLeadsWithIndexedPredicate(url) {
+  const filter = new URL(url).searchParams.get('$filter') ?? '';
+  const leadingColumn = filter.match(/^\(*\s*([A-Za-z]+)/)?.[1] ?? null;
+  assert.ok(
+    leadingColumn && INDEXED_FILTER_COLUMNS.has(leadingColumn),
+    `the read must lead with an indexed column, got ${leadingColumn}`
+  );
+}
+
 /**
  * A `countCases` response page: the `$select=Id` projection SharePoint returns,
  * optionally carrying an `odata.nextLink` to a further page.
@@ -409,6 +431,7 @@ test('HttpSharePointClient: listCases filters by a CompletedAt window and status
     url.includes("Status eq 'Completed'"),
     'should filter on completed status'
   );
+  assertLeadsWithIndexedPredicate(calls[0].url);
 });
 
 // --- The void report window ---
@@ -445,6 +468,7 @@ test('HttpSharePointClient: a void report filters by the VoidedAt window and sta
     'exclusive upper bound'
   );
   assert.ok(url.includes("Status eq 'Void'"), 'should filter on void status');
+  assertLeadsWithIndexedPredicate(calls[0].url);
 
   await client.listCases(
     { status: 'Void' },
@@ -505,6 +529,7 @@ test('HttpSharePointClient: a Case search filters by ReportableAt, Title prefix,
     url.includes("Status eq 'In-progress'"),
     'should filter on in-progress status'
   );
+  assertLeadsWithIndexedPredicate(calls[0].url);
 });
 
 test('HttpSharePointClient: countCases sums a bounded CompletedAt day-slice', async () => {
