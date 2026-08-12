@@ -91,7 +91,8 @@ review platform, Review Outcomes flow *back* for reporting.
 
 - **Ingest** (per Case Type) brings a Case Type's source **Feeds** in and refines
   them into **Cases**. Its clean output is the **CasePool**.
-- **Selection** (per Case Type) reads the CasePool, narrows it (filter / score /
+- **Selection** (per **Selection group** — Case Types that share a volume target
+  and a hopper; most groups hold one Case Type) reads the CasePool, narrows it (filter / score /
   sort / sample / join), and produces the **SelectionPool** — the Cases chosen
   for review — which it both lands in gold (audit) and emits to the review
   platform as a **Deliverable**.
@@ -107,8 +108,9 @@ review platform, Review Outcomes flow *back* for reporting.
 - **Reporting** (platform-wide) joins Review Outcomes to the selected Cases and
   emits **Deliverables**.
 
-**Ingest** and **Selection** are **per Case Type**; **Sync** and **Reporting**
-are **platform-wide**. Note "Pipeline" the domain phase is distinct from the
+**Ingest** is **per Case Type** and **Selection** is **per Selection group**
+([Selection plans per group](adr/0021-selection-plans-per-group-over-the-whole-eligible-pool.md));
+**Sync** and **Reporting** are **platform-wide**. Note "Pipeline" the domain phase is distinct from the
 `Pipeline` *builder class* (see Primitives) — a phase composes one or more
 builder runs.
 
