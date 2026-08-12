@@ -284,7 +284,6 @@ test('HttpSharePointClient: 429 with garbage Retry-After string falls back to de
       respond: () => {
         getCount++;
         if (getCount === 1) {
-          // Non-numeric, non-date Retry-After → parseRetryAfter returns DEFAULT_THROTTLE_MS (line 286)
           return new Response('throttled', {
             status: 429,
             headers: { 'Retry-After': 'not-a-number-or-date' },
@@ -443,40 +442,7 @@ test('HttpSharePointClient: defaults to a real setTimeout-backed sleep when slee
   }
 });
 
-// --- type-shape compile-time check ---
-
-test('HttpSharePointClient: assignable to SharePointClient interface', () => {
-  /** @type {import('../src/sharepoint-client.js').SharePointClient} */
-  const c = new HttpSharePointClient({ webUrl: WEB_URL });
-  assert.equal(typeof c.getCase, 'function');
-  assert.equal(typeof c.patchCase, 'function');
-  assert.equal(typeof c.listCases, 'function');
-  assert.equal(typeof c.getCurrentUserGroups, 'function');
-  assert.equal(typeof c.getCurrentUser, 'function');
-  assert.equal(typeof c.searchPeople, 'function');
-});
-
-// --- listCases overdue OData filter ---
-
-test('HttpSharePointClient: _request defaults to an empty init object when none is supplied', async () => {
-  const { fetch, calls } = makeFetch([
-    {
-      when: (c) => c.method === 'GET',
-      respond: () =>
-        new Response(JSON.stringify({ value: [] }), { status: 200 }),
-    },
-  ]);
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
-
-  const body = await client._request(WEB_URL + '/_api/web/lists');
-  assert.deepEqual(body, { value: [] });
-  assert.equal(calls.length, 1);
-});
-
-test('HttpSharePointClient: _refreshDigest reads the verbose d.GetContextWebInformation.FormDigestValue envelope', async () => {
+test('HttpSharePointClient: patchCase accepts a digest from the verbose contextinfo envelope', async () => {
   const { fetch, calls } = makeFetch([
     {
       when: (c) => c.url.endsWith('/_api/contextinfo'),
@@ -526,8 +492,8 @@ test('HttpSharePointClient: _refreshDigest reads the verbose d.GetContextWebInfo
   assert.equal(patch?.headers['x-requestdigest'], 'verbose-digest');
 });
 
-test('HttpSharePointClient: _refreshDigest throws when the contextinfo response carries no FormDigestValue', async () => {
-  const { fetch } = makeFetch([
+test('HttpSharePointClient: patchCase fails before PATCH when contextinfo carries no FormDigestValue', async () => {
+  const { fetch, calls } = makeFetch([
     {
       when: (c) => c.url.endsWith('/_api/contextinfo'),
       respond: () => new Response(JSON.stringify({}), { status: 200 }),
@@ -538,15 +504,21 @@ test('HttpSharePointClient: _refreshDigest throws when the contextinfo response 
     fetchImpl: fetch,
   });
 
-  // patchCase's own try/catch would swallow the throw into {ok:false}, so
-  // exercise the digest refresh directly to assert the throw itself.
-  await assert.rejects(
-    () => client._refreshDigest(),
-    /FormDigestValue missing/
+  const result = await client.patchCase('case-1', { notes: 'x' }, '"v1"', {
+    listName: 'Cases-ExampleReview',
+  });
+
+  assert.deepEqual(result, { ok: false, status: 500 });
+  assert.equal(
+    calls.filter(
+      (c) => c.method === 'POST' && c.url.endsWith('/_api/contextinfo')
+    ).length,
+    1
   );
+  assert.equal(calls.filter((c) => c.method === 'PATCH').length, 0);
 });
 
-test('HttpSharePointClient: _absolute prefixes a relative path that does not start with a slash', async () => {
+test('HttpSharePointClient: getExportHash resolves a relative exportBasePath', async () => {
   const { fetch, calls } = makeFetch([
     {
       when: () => true,

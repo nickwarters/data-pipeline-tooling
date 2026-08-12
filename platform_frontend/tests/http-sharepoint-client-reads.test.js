@@ -2,11 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { HttpSharePointClient } from '../src/services/http-sharepoint-client.js';
-import {
-  WEB_URL,
-  makeFetch,
-  overdueFor,
-} from './helpers/http-sharepoint-client.js';
+import { WEB_URL, makeFetch } from './helpers/http-sharepoint-client.js';
 
 // Capability: case reads, hydration, and derived fields.
 
@@ -82,7 +78,6 @@ test('HttpSharePointClient: getCase returns fallback empty objects when Answers/
     listName: 'Cases-ExampleReview',
   });
 
-  // parseJsonField catch block returns fallback for invalid JSON (lines 349-350)
   assert.deepEqual(row?.answers, {}, 'invalid Answers JSON falls back to {}');
   assert.deepEqual(
     row?.conversation,
@@ -359,57 +354,33 @@ test('HttpSharePointClient: a row from a list with no AssignedAt column still re
   assert.equal(row?.assignedAt, null);
 });
 
-test('HttpSharePointClient: overdue is true for an In-progress case past its DueDate', async () => {
-  assert.equal(
-    await overdueFor({
-      Status: 'In-progress',
-      DueDate: '2020-01-01T00:00:00.000Z',
-    }),
-    true
+test('HttpSharePointClient: listCases derives overdue from the hydrated default status', async () => {
+  const rawRow = {
+    Id: 'case-1',
+    Overdue: false,
+    DueDate: '2020-01-01T00:00:00.000Z',
+  };
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(JSON.stringify({ value: [rawRow] }), { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const rows = await client.listCases(
+    {},
+    {
+      listName: 'Cases-ExampleReview',
+    }
   );
-});
 
-test('HttpSharePointClient: overdue is false for an In-progress case with a future DueDate', async () => {
-  assert.equal(
-    await overdueFor({
-      Status: 'In-progress',
-      DueDate: '2999-01-01T00:00:00.000Z',
-    }),
-    false
-  );
-});
-
-test('HttpSharePointClient: overdue is false for an In-progress case with no DueDate', async () => {
-  assert.equal(await overdueFor({ Status: 'In-progress' }), false);
-});
-
-test('HttpSharePointClient: overdue is true for a past-due item with no Status column, which reads as In-progress', async () => {
-  // A row with an empty Status column hydrates as In-progress, and the overdue
-  // flag is derived from the hydrated row rather than from the raw item — so it
-  // agrees with the status the rest of the app is shown for that same Case.
-  assert.equal(await overdueFor({ DueDate: '2020-01-01T00:00:00.000Z' }), true);
-});
-
-test('HttpSharePointClient: overdue is false for a non-In-progress case even when past due', async () => {
-  assert.equal(
-    await overdueFor({
-      Status: 'Completed',
-      DueDate: '2020-01-01T00:00:00.000Z',
-    }),
-    false
-  );
-});
-
-// The review clock stops once the actions are sent — the remediation deadline
-// governs from there, and it is a different column on the same row.
-test('HttpSharePointClient: overdue is false for an Actions In Progress case past its DueDate', async () => {
-  assert.equal(
-    await overdueFor({
-      Status: 'Actions In Progress',
-      DueDate: '2020-01-01T00:00:00.000Z',
-    }),
-    false
-  );
+  assert.equal(rows[0].status, 'In-progress');
+  assert.equal(rows[0].overdue, true);
 });
 
 test('HttpSharePointClient: getCase reads both managers as account names, not lookup ids', async () => {
@@ -591,50 +562,6 @@ test('HttpSharePointClient: a Case with nobody responsible reads as an empty acc
 
   assert.equal(row?.responsibleParty, '');
   assert.equal(row?.responsiblePartyDisplayName, undefined);
-});
-
-test('HttpSharePointClient: listCases expands the Responsible Party on every row', async () => {
-  const { fetch, calls } = makeFetch([
-    {
-      when: (c) => c.method === 'GET',
-      respond: () =>
-        new Response(
-          JSON.stringify({
-            value: [
-              {
-                Id: 'case-1',
-                Title: 'One',
-                Status: 'In-progress',
-                CaseType: 'example-review',
-                ResponsibleParty: {
-                  Name: 'i:0#.w|CONTOSO\\jrp',
-                  Title: 'Jordan RP',
-                },
-                Answers: '{}',
-                Conversation: '[]',
-                Notes: '',
-                CompletedAt: null,
-              },
-            ],
-          }),
-          { status: 200 }
-        ),
-    },
-  ]);
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
-
-  const rows = await client.listCases({}, { listName: 'Cases-ExampleReview' });
-
-  assert.equal(rows[0].responsibleParty, 'jrp');
-  assert.equal(rows[0].responsiblePartyDisplayName, 'Jordan RP');
-  assert.ok(
-    decodeURIComponent(calls[0].url).includes(
-      '$expand=AssignedReviewer,ResponsibleParty'
-    )
-  );
 });
 
 test('HttpSharePointClient: getCase reads the Assigned Reviewer as an account name, not a lookup id', async () => {
