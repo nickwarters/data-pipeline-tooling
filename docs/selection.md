@@ -13,7 +13,7 @@ the SelectionPool. For the domain language behind the terms, see
 ## Where this sits
 
 ```
-  Ingest (per Case Type)            Selection (per Case Type)
+  Ingest (per Case Type)            Selection (per Selection group)
   ┌───────────────────────┐        ┌──────────────────────────────────┐
   feed → raw → silver → gold ─▶ CasePool ─▶ filter/score/sort/stamp ─▶ gold
                      (current)   (available cases)         (the SelectionPool)
@@ -193,6 +193,17 @@ handler the framework checks the latest successful upstream run in `RunRegistry`
 (caught up from every `_runs/*.log`). A stale Ingest aborts Selection before any
 SelectionPool write. A first run with no upstream history is allowed, but a
 `freshness` warn-hit is recorded so the missing baseline is visible.
+
+> **Caution — written when Ingest and Selection shared a cadence.**
+> A `FreshnessRequirement` defaults to `max_age_days=0`, i.e. *"the upstream
+> succeeded today"*. Where Ingest is **monthly** and Selection is **daily**, that
+> default blocks Selection on roughly twenty days in every twenty-one. Selection
+> reads the persisted **CasePool**, not the day's file, so the requirement should
+> either be widened (`.within_days(...)`, past the delivery interval) or dropped
+> in favour of the same-day requirement on **Sync** that Selection genuinely
+> needs — it cannot size the **Hopper** without today's unallocated count. Which
+> of the two is right is **not yet decided**; do not copy this paragraph into a
+> new feed without choosing.
 
 ## Explainability — why each Case was (or wasn't) selected
 
