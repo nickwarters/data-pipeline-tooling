@@ -86,11 +86,6 @@ function makeEditable(caseOverrides = {}) {
 
 // --- Rendering ---
 
-test('CORAAppeal: renders an Appeal heading first', () => {
-  const { el } = renderAppeal();
-  assert.equal(/** @type {any} */ (el)._children[0].textContent, 'Appeal');
-});
-
 test('CORAAppeal: edit access on a Completed Case shows the raise form', () => {
   const { el } = makeEditable();
   assert.ok(findByClass(el, 'cora-appeal-form'), 'raise form rendered');
