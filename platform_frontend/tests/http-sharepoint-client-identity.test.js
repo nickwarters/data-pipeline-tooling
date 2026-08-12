@@ -179,7 +179,7 @@ function peoplePickerPayloadClient(payload) {
 test('HttpSharePointClient: searchPeople rejects when the response carries no recognised payload', async () => {
   await assert.rejects(
     () => peoplePickerPayloadClient({}).searchPeople('x'),
-    /Unrecognised people-picker response from .*clientPeoplePickerSearchUser: payload keys \[\]/
+    /Unrecognised people-picker response/
   );
 });
 

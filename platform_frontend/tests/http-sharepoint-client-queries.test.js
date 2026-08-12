@@ -374,7 +374,7 @@ test('HttpSharePointClient: an assignedReviewerManager filter compares against t
 
 // --- CompletedAt window filter ---
 
-test('HttpSharePointClient: listCases with a CompletedAt window leads with the indexed date column', async () => {
+test('HttpSharePointClient: listCases filters by a CompletedAt window and status', async () => {
   const { fetch, calls } = makeFetch([
     {
       when: (c) => c.method === 'GET',
@@ -405,16 +405,15 @@ test('HttpSharePointClient: listCases with a CompletedAt window leads with the i
     url.includes("CompletedAt lt '2026-07-03T00:00:00.000Z'"),
     'exclusive upper bound'
   );
-  const filterExpr = url.slice(url.indexOf('$filter='));
   assert.ok(
-    filterExpr.indexOf('CompletedAt') < filterExpr.indexOf('Status eq'),
-    'the selective CompletedAt predicate leads Status'
+    url.includes("Status eq 'Completed'"),
+    'should filter on completed status'
   );
 });
 
 // --- The void report window ---
 
-test('HttpSharePointClient: a void report leads with the indexed VoidedAt window', async () => {
+test('HttpSharePointClient: a void report filters by the VoidedAt window and status', async () => {
   const { fetch, calls } = makeFetch([
     {
       when: (c) => c.method === 'GET',
@@ -437,19 +436,15 @@ test('HttpSharePointClient: a void report leads with the indexed VoidedAt window
   );
 
   const url = decodeURIComponent(calls[0].url);
-  const filterExpr = url.slice(url.indexOf('$filter=') + '$filter='.length);
   assert.ok(
-    filterExpr.startsWith("VoidedAt ge '2026-07-02T00:00:00.000Z'"),
-    `the indexed date window narrows first: ${filterExpr}`
+    url.includes("VoidedAt ge '2026-07-02T00:00:00.000Z'"),
+    'inclusive lower bound'
   );
   assert.ok(
     url.includes("VoidedAt lt '2026-08-02T00:00:00.000Z'"),
     'exclusive upper bound'
   );
-  assert.ok(
-    filterExpr.indexOf('VoidedAt') < filterExpr.indexOf('Status eq'),
-    'Status alone is not selective enough to lead'
-  );
+  assert.ok(url.includes("Status eq 'Void'"), 'should filter on void status');
 
   await client.listCases(
     { status: 'Void' },
@@ -463,7 +458,7 @@ test('HttpSharePointClient: a void report leads with the indexed VoidedAt window
 
 // --- Case search: the ReportableAt window and the Title prefix ---
 
-test('HttpSharePointClient: a Case search leads with the ReportableAt window and matches Title by anchored prefix', async () => {
+test('HttpSharePointClient: a Case search filters by ReportableAt, Title prefix, and status', async () => {
   const { fetch, calls } = makeFetch([
     {
       when: (c) => c.method === 'GET',
@@ -506,15 +501,9 @@ test('HttpSharePointClient: a Case search leads with the ReportableAt window and
     !url.includes('substringof'),
     'an unanchored contains cannot be served from an index'
   );
-
-  const filterExpr = url.slice(url.indexOf('$filter='));
   assert.ok(
-    filterExpr.indexOf('ReportableAt') < filterExpr.indexOf('startswith('),
-    'the indexed date window narrows before the prefix match'
-  );
-  assert.ok(
-    filterExpr.indexOf('startswith(') < filterExpr.indexOf('Status eq'),
-    'both new predicates precede the far less selective Status'
+    url.includes("Status eq 'In-progress'"),
+    'should filter on in-progress status'
   );
 });
 

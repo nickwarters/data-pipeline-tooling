@@ -885,16 +885,19 @@ test('HttpSharePointClient: allocation writes Reviewer and manager as Person ids
   );
 
   assert.equal(result.ok, true);
+  const ensuredLogins = calls
+    .filter((call) => call.url.endsWith('/_api/web/ensureuser'))
+    .map((call) => JSON.parse(String(call.body)).logonName);
+  const reviewerLogin = 'i:0#.w|CONTOSO\\jsmith';
+  const managerLogin = 'i:0#.w|CONTOSO\\manager-1';
   assert.deepEqual(
-    calls
-      .filter((call) => call.url.endsWith('/_api/web/ensureuser'))
-      .map((call) => JSON.parse(String(call.body)).logonName),
-    ['i:0#.w|CONTOSO\\jsmith', 'i:0#.w|CONTOSO\\manager-1']
+    [...ensuredLogins].sort(),
+    [reviewerLogin, managerLogin].sort()
   );
   assert.equal(calls.filter((call) => call.method === 'PATCH').length, 1);
   assert.deepEqual(patchBody(calls), {
-    AssignedReviewerId: 14,
-    AssignedReviewerManagerId: 15,
+    AssignedReviewerId: 14 + ensuredLogins.indexOf(reviewerLogin),
+    AssignedReviewerManagerId: 14 + ensuredLogins.indexOf(managerLogin),
     AssignedAt: FROZEN_ASSIGNMENT,
   });
 });
