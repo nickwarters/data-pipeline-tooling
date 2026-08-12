@@ -23,7 +23,7 @@ to preview the add/update/delete plan and the order the uploads would run in.
 
 Before it touches SharePoint the script runs `npm run verify` as a pre-flight gate and aborts on any
 failure; it then uploads dependencies before dependents (host page last) and re-fetches every deployed
-file afterwards to compare hashes. [`scripts/deploy_to_sharepoint.md`](./scripts/deploy_to_sharepoint.md)
+file afterwards to compare hashes. [`docs/deploy-runbook.md`](./docs/deploy-runbook.md)
 is the runbook — read it before deploying, especially the caveats about hand-uploads and edits made
 directly in the library.
 

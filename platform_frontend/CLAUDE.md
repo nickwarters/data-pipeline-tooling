@@ -112,6 +112,15 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
 
 ## Gotchas
 
+- **Never put hand-written Markdown at `<name>.md` beside a `<name>.py`.** The
+  repository root's `scripts/generate_md_mirrors.py` writes a `.md` mirror of
+  every `.py` file to that exact sibling path, and it overwrites unconditionally.
+  It skips `docs/`, so documentation about a script belongs under `docs/` — the
+  deploy runbook lived at `scripts/deploy_to_sharepoint.md` and was silently
+  clobbered on the `py-to-markdown` branch until it moved to
+  `docs/deploy-runbook.md`. This is a root-project tool reaching across the
+  project boundary; the collision is invisible on `main`.
+
 - **Question Bank artifacts are JSON stored in `.txt` files, on purpose.** `case-types/banks/*.txt` (loaded via `case-types/load-bank.js`) hold plain JSON text. This is intentional, not an oversight: SharePoint Subscription Edition has been unreliable at storing/serving `.json` files (MIME/blocking issues), so the artifact extension is `.txt` while the content stays JSON, parsed explicitly by the loader. A repo-wide search for `*.json` will not find the banks — search `case-types/banks/*.txt` instead.
 
 ## Planning: what does this change supersede?
@@ -189,7 +198,7 @@ before a deploy — there is no automated pipeline, so a deploy is only as verif
 as the commands someone ran first. The one exception is `verify`: the deploy runs
 it itself as a pre-flight gate and aborts on failure, orders its uploads from the
 graph it writes, and re-fetches every deployed file afterwards to compare hashes
-— see [`scripts/deploy_to_sharepoint.md`](./scripts/deploy_to_sharepoint.md).
+— see [`docs/deploy-runbook.md`](./docs/deploy-runbook.md).
 
 The global floor is a backstop, not a quota. Keep security, SharePoint protocol,
 concurrency, permissions, and outcome/applicability code at 100% line and branch
@@ -449,8 +458,8 @@ scripts/
   scaffold_case_type.py         # scaffolds a new Case Type module + bank artifact (ADR-0028)
   deploy_to_sharepoint.py       # the diff sync, plus its pre-flight verify gate, graph-derived
                                 #   leaf-first upload order and post-upload hash verification
-  deploy_to_sharepoint.md       # THE deploy runbook: pre-conditions, prod/UAT steps, the failure
-                                #   playbook, and the hand-upload/drive-by-edit caveats
+                                #   (its runbook is docs/deploy-runbook.md — hand-written Markdown
+                                #   must not sit beside a .py, see the note under Gotchas)
   module-graph.js               # shared import-specifier scanner: the one answer to "what does
                                 #   this file import?", used by the verify gate and the layering test
   verify-config.js              # the verify gate's configuration half: evaluates Case Type modules,
