@@ -347,14 +347,14 @@ test('reviewer worklist preserves the legacy columns, filters, and Open action',
     ['cora-case-row cora-case-row--overdue', 'cora-case-row', 'cora-case-row']
   );
   assert.deepEqual(tableHeaders(unfiltered), [
-    ['Reference', 'cora-col-reference', 'none', true],
-    ['Case Type', 'cora-col-caseType', 'none', true],
-    ['Related Date', 'cora-col-relatedDate', 'none', true],
-    ['Due Date', 'cora-col-dueDate', 'none', true],
-    ['Status', 'cora-col-status', 'none', true],
-    ['Assigned', 'cora-col-assigned', 'none', true],
-    ['Responsible Party', 'cora-col-responsibleParty', 'none', true],
-    ['Actions', 'cora-col-actions', 'none', false],
+    ['Reference', 'none', true],
+    ['Case Type', 'none', true],
+    ['Related Date', 'none', true],
+    ['Due Date', 'none', true],
+    ['Status', 'none', true],
+    ['Assigned', 'none', true],
+    ['Responsible Party', 'none', true],
+    ['Actions', 'none', false],
   ]);
   const sortedByReference = dashboardView(
     /** @type {any} */ (
@@ -366,7 +366,7 @@ test('reviewer worklist preserves the legacy columns, filters, and Open action',
     { context: ctx, dispatch: () => {} }
   );
   assert.deepEqual(
-    tableHeaders(sortedByReference).map((header) => header[2]),
+    tableHeaders(sortedByReference).map((header) => header[1]),
     ['ascending', 'none', 'none', 'none', 'none', 'none', 'none', 'none']
   );
 

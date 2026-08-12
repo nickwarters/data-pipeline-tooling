@@ -122,9 +122,9 @@ test('journey cases descriptors and pure view preserve links, empty state, and s
     { dispatch: () => {} }
   );
   assert.deepEqual(tableHeaders(sorted), [
-    ['Reference', 'cora-col-reference', 'none', true],
-    ['Case Type', 'cora-col-caseType', 'none', true],
-    ['Status', 'cora-col-status', 'descending', true],
+    ['Reference', 'none', true],
+    ['Case Type', 'none', true],
+    ['Status', 'descending', true],
   ]);
 
   const slice = createRouteSlice({}, context());

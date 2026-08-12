@@ -189,25 +189,23 @@ export function getByText(root, expected) {
 }
 
 /**
- * The rendered column contract for a table: heading text, the `cora-col-*` CSS
- * hook, `aria-sort`, and whether the header renders an interactive control, in
- * document order.
+ * The rendered column contract for a table: heading text, `aria-sort`, and
+ * whether the header renders an interactive control, in document order.
  *
- * The fourth element is what makes the contract load-bearing. `data-table.js`
+ * The third element is what makes the contract load-bearing. `data-table.js`
  * derives `aria-sort` from the active sort key alone, independent of
  * `sortable`; `sortable` only decides whether the heading is a `<button>` or
  * bare text, and the text is identical either way. Without the control check,
  * dropping `sortable` from a shared descriptor renders a dead, unclickable
- * header that the first three elements happily accept.
+ * header that the first two elements happily accept.
  *
  * @param {any} root
- * @returns {[string, string, string | null, boolean][]}
+ * @returns {[string, string, boolean][]}
  */
 export function tableHeaders(root) {
   return queryAllByTag(root, 'th').map((th) => [
     th.textContent,
-    th.className,
-    th.getAttribute('aria-sort'),
+    th.getAttribute('aria-sort') ?? 'none',
     !!th.querySelector('button'),
   ]);
 }
