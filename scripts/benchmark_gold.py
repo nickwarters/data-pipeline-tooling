@@ -297,13 +297,18 @@ def main(argv: list[str]) -> int:
     print("-" * len(HEADER))
     try:
         for lists, cases, versions in scenarios:
-            timing = measure(
-                root / f"s{lists}x{cases}x{versions}",
-                lists=lists,
-                cases=cases,
-                versions=versions,
-            )
-            print(format_row(f"{lists} x {cases:,} x {versions}", timing))
+            scenario_dir = root / f"s{lists}x{cases}x{versions}"
+            try:
+                timing = measure(
+                    scenario_dir, lists=lists, cases=cases, versions=versions
+                )
+                print(format_row(f"{lists} x {cases:,} x {versions}", timing))
+            finally:
+                # Freed as we go rather than at the end: a sweep's largest
+                # scenario is most of a gigabyte, and a share is a poor place to
+                # park every earlier one while the next runs.
+                if not args.keep:
+                    shutil.rmtree(scenario_dir, ignore_errors=True)
     finally:
         if args.keep:
             print(f"\nLeft in place: {root}")

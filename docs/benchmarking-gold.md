@@ -27,6 +27,16 @@ network share is how you measure that share**. The script creates one
 start if the subdirectory already exists rather than deleting anything it did not
 create. `--keep` leaves the databases behind.
 
+`--sweep` and `--keep` are unrelated: the first chooses *what* to measure (the
+ladder below instead of a single point, ignoring `--lists` / `--cases` /
+`--versions`), the second chooses whether to delete the databases afterwards.
+
+Mind the disk, because this data is not small. Silver runs about 0.4KB a row —
+the largest sweep rung is 640MB of silver plus 40MB of gold. Each rung is freed
+before the next one starts, so peak usage is the biggest single scenario rather
+than the ladder's total; `--keep` holds all of them, which over the full sweep is
+roughly 1.2GB.
+
 The data is synthetic but shaped like the real silver table, and the hop it times
 is the real `case_current_builder` — not a stand-in. Treat the ratios as the
 finding and the absolute seconds as specific to the machine and the disk.

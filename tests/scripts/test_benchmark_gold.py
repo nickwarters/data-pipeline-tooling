@@ -78,6 +78,26 @@ def test_keep_leaves_the_databases_behind(tmp_path):
     assert (tmp_path / "benchmark_gold").is_dir()
 
 
+def test_a_sweep_frees_each_scenario_before_running_the_next(tmp_path, monkeypatch):
+    """Peak disk is one scenario, not the whole ladder -- shares are not roomy."""
+    monkeypatch.setattr(benchmark_gold, "SWEEP", ((1, 2, 2), (1, 3, 2)))
+    seen = []
+    measure = benchmark_gold.measure
+
+    def record_live_scenarios(scenario_dir, **kwargs):
+        seen.append(sorted(p.name for p in scenario_dir.parent.iterdir()))
+        return measure(scenario_dir, **kwargs)
+
+    monkeypatch.setattr(benchmark_gold, "measure", record_live_scenarios)
+
+    assert benchmark_gold.main(["prog", "--base-dir", str(tmp_path), "--sweep"]) == 0
+
+    # Each scenario creates its own directory, so an empty parent at call time
+    # means the previous scenario was freed. Without that, the second call would
+    # see ["s1x2x2"] still sitting there.
+    assert seen == [[], []]
+
+
 def test_an_occupied_base_directory_is_refused_rather_than_written_into(tmp_path):
     """Refusing beats deleting a directory whose contents we did not create."""
     occupied = tmp_path / "benchmark_gold"
