@@ -73,7 +73,6 @@ export async function createSharePointClient(
   return new HttpSharePointClient({
     webUrl: resolveHostWebUrl(),
     listPrefix: env.listPrefix,
-    exportBasePath: env.exportBasePath,
   });
 }
 

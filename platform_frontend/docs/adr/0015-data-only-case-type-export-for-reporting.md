@@ -8,7 +8,15 @@ Accepted as amended by
 [ADR-0021](./0021-versioned-question-bank-snapshots-for-completed-cases.md). The
 function-free reporting contract remains current; the editable source is now
 the per-Case-Type bank text artifact, and reportable Cases resolve immutable
-`{slug}.{hash}.json` exports.
+versioned exports.
+
+**File names below are superseded.** ADR-0021's 2026-08 amendment moved every
+export beside its bank in `case-types/banks/`, as JSON in `.txt`:
+`{slug}.json` is now `{slug}.export.txt`, and `{slug}.{hash}.json` is now
+`{slug}.sha256-<hex>.txt` (a `:` cannot appear in a SharePoint or Windows
+filename). The **contents** of both are unchanged, which is what this ADR is
+actually about. [`docs/reporting-data-contract.md`](../reporting-data-contract.md)
+is the current word for a reporting consumer.
 
 ## Context
 

@@ -27,6 +27,10 @@ import { ROLES } from '../src/services/section-access.js';
 import { isVoidReasonKey, VOID_REASONS } from '../src/lib/void-reasons.js';
 import { ACTION_CENTRE_REASONS } from '../src/services/action-centre-model.js';
 import { CASE_TYPES, loadCaseTypeConfig } from '../case-types/manifest.js';
+import {
+  classifyBankArtifact,
+  versionFileSegment,
+} from '../src/lib/bank-artifacts.js';
 import { resolveRelative } from './module-graph.js';
 
 /** @typedef {import('./verify_build.js').Failure} Failure */
@@ -975,6 +979,15 @@ function checkOneBank(file, readText) {
   /** @param {string} message */
   const fail = (message) => failures.push({ kind: 'bank', file, message });
 
+  const filename = file.slice(file.lastIndexOf('/') + 1);
+  const artifact = classifyBankArtifact(filename);
+  if (!artifact) {
+    fail(
+      'is not a name this directory has a meaning for — a bank is `{slug}.txt`, its current export `{slug}.export.txt`, and a published version `{slug}.sha256-<64 hex>.txt`'
+    );
+    return failures;
+  }
+
   /** @type {any} */
   let bank;
   try {
@@ -989,7 +1002,7 @@ function checkOneBank(file, readText) {
     return failures;
   }
 
-  const expectedSlug = file.slice(file.lastIndexOf('/') + 1, -'.txt'.length);
+  const expectedSlug = artifact.slug;
   if (!isNonEmptyString(bank.slug)) {
     fail('declares no `slug`');
   } else if (bank.slug !== expectedSlug) {
@@ -998,6 +1011,27 @@ function checkOneBank(file, readText) {
     );
   }
   if (!isNonEmptyString(bank.label)) fail('declares no `label`');
+
+  // An export envelope carries the version identity that a Case row stamps and
+  // that its own filename is derived from. A file whose name and `hash` field
+  // disagree is the one failure mode the whole scheme cannot survive: the app
+  // looks a version up by name, so it would serve content under an identity
+  // that never produced it.
+  if (artifact.kind !== 'bank') {
+    if (!isNonEmptyString(bank.hash)) {
+      fail('is an export envelope but declares no `hash`');
+    } else if (
+      artifact.kind === 'versioned-export' &&
+      versionFileSegment(bank.hash) !== artifact.segment
+    ) {
+      fail(
+        `declares hash "${bank.hash}" but its filename says "${artifact.segment}" — a version is found by name, so the two cannot disagree`
+      );
+    }
+    if (!isNonEmptyString(bank.generatedAt)) {
+      fail('is an export envelope but declares no `generatedAt`');
+    }
+  }
 
   if (!Array.isArray(bank.questions)) {
     fail('declares no `questions` array');

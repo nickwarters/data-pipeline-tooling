@@ -8,10 +8,11 @@ import { WEB_URL, makeFetch } from './helpers/http-sharepoint-client.js';
 
 // --- legacy OData verbose format ---
 
-test('HttpSharePointClient: getExportHash fetches {slug}.json and returns the hash field', async () => {
+test('HttpSharePointClient: getExportHash reads the current export artifact and returns its hash', async () => {
   const { fetch, calls } = makeFetch([
     {
-      when: (c) => c.method === 'GET' && c.url.includes('example-review.json'),
+      when: (c) =>
+        c.method === 'GET' && c.url.includes('example-review.export.txt'),
       respond: () =>
         new Response(
           JSON.stringify({
@@ -33,8 +34,8 @@ test('HttpSharePointClient: getExportHash fetches {slug}.json and returns the ha
 
   assert.equal(hash, 'sha256:aabbccdd');
   assert.ok(
-    calls[0].url.includes('example-review.json'),
-    'fetches the {slug}.json file from the Style Library'
+    calls[0].url.endsWith('/case-types/banks/example-review.export.txt'),
+    'reads the current export artifact from the deployed banks folder'
   );
 });
 
@@ -84,7 +85,7 @@ test('HttpSharePointClient: assignable to SharePointClient interface (includes g
 
 // --- getVersionedExport ---
 
-test('HttpSharePointClient: getVersionedExport fetches {slug}.{hash}.json and returns parsed body', async () => {
+test('HttpSharePointClient: getVersionedExport reads the hash-named artifact and returns its parsed body', async () => {
   const hash = 'sha256:' + 'a'.repeat(64);
   const versionedPayload = {
     slug: 'example-review',
@@ -122,8 +123,9 @@ test('HttpSharePointClient: getVersionedExport fetches {slug}.{hash}.json and re
   assert.deepEqual(result, versionedPayload);
   assert.ok(calls[0].url.includes('example-review'), 'URL contains the slug');
   assert.ok(
-    calls[0].url.includes(encodeURIComponent(hash)),
-    'URL contains the URL-encoded hash'
+    // Filename-safe form: the identity keeps its colon, the file cannot have one.
+    calls[0].url.endsWith(`example-review.sha256-${'a'.repeat(64)}.txt`),
+    `expected the hash-named artifact, got ${calls[0].url}`
   );
 });
 

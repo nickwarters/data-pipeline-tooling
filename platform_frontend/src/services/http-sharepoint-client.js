@@ -6,6 +6,11 @@ import {
   isOverdue,
   OVERDUE_STATUSES,
 } from '../evaluators/overdue-evaluator.js';
+import {
+  BANKS_DIR,
+  currentExportName,
+  versionedExportName,
+} from '../lib/bank-artifacts.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').PersonResult} PersonResult */
@@ -26,7 +31,6 @@ import {
  * @typedef {{
  * webUrl?: string,
  * listPrefix?: string,
- * exportBasePath?: string,
  * fetchImpl?: FetchImpl,
  * sleep?: (ms: number) => Promise<void>,
  * now?: () => Date
@@ -140,8 +144,6 @@ export class HttpSharePointClient {
     // _listItemUrl/_listItemsUrl so every list access — including per-Case-Type
     // `opts.listName` overrides — lands in the environment's lists. Empty for prod.
     this._listPrefix = opts.listPrefix ?? '';
-    this._exportBasePath =
-      opts.exportBasePath ?? '/Style%20Library/case-review/case-types';
     /** @type {FetchImpl} */
     this._fetch =
       opts.fetchImpl ?? ((input, init) => globalThis.fetch(input, init));
@@ -520,45 +522,67 @@ export class HttpSharePointClient {
   }
 
   /**
-   * Reads the content-hash from the current `{slug}.json` export envelope.
-   * Returns null when the file is absent or carries no `hash` field — never
-   * hard-fails so a missing export does not block completion.
+   * Reads the content-hash from the current published export envelope. Returns
+   * null when the file is absent or carries no `hash` field — never hard-fails
+   * so a Case Type that has never been published does not block completion, it
+   * just stamps no version.
    *
    * @param {string} slug
    * @returns {Promise<string | null>}
    */
   async getExportHash(slug) {
-    const url = this._absolute(
-      `${this._exportBasePath}/${encodeURIComponent(slug)}.json`
-    );
-    try {
-      const body = await this._read(url);
-      const hash = body?.hash;
-      return typeof hash === 'string' && hash !== '' ? hash : null;
-    } catch {
-      return null;
-    }
+    const body = await this._readBankArtifact(currentExportName(slug));
+    const hash = body?.hash;
+    return typeof hash === 'string' && hash !== '' ? hash : null;
   }
 
   /**
-   * Fetches the immutable versioned export `{slug}.{hash}.json`. Returns the
-   * parsed object on success, null on any error (404, network failure) — never
-   * hard-fails so a missing file triggers the live-fallback path in the loader.
+   * Fetches one immutable published version. Returns the parsed envelope on
+   * success, null on any error (404, network failure) — never hard-fails, so a
+   * version that was stamped but never published triggers the loader's
+   * live-fallback path instead of breaking the Case.
    *
    * @param {string} slug
    * @param {string} hash
    * @returns {Promise<import('../sharepoint-client.js').VersionedExport | null>}
    */
   async getVersionedExport(slug, hash) {
-    const url = this._absolute(
-      `${this._exportBasePath}/${encodeURIComponent(slug)}.${encodeURIComponent(hash)}.json`
+    const body = await this._readBankArtifact(versionedExportName(slug, hash));
+    if (!body || typeof body !== 'object') return null;
+    return /** @type {import('../sharepoint-client.js').VersionedExport} */ (
+      body
     );
+  }
+
+  /**
+   * Reads one Question Bank artifact out of the deployed `case-types/banks/`
+   * folder, resolved against this module rather than an absolute Style Library
+   * path. That is how the current bank has always been loaded, and it is what
+   * keeps a UAT deploy reading UAT's artifacts: both environments get the
+   * folder they were deployed into, with nothing to declare and nothing to keep
+   * in step.
+   *
+   * These are static files, not list items, so this deliberately does not go
+   * through `_read`: no OData headers, no ETag handling, and the body is parsed
+   * from text because the artifacts are JSON stored in `.txt` and a `.txt`
+   * response arrives with a content type `Response.json()` has no business
+   * assuming.
+   *
+   * Returns null on any failure. Every caller here treats a missing artifact as
+   * "not published", which is a real state and not an error.
+   *
+   * @param {string} filename
+   * @returns {Promise<any | null>}
+   */
+  async _readBankArtifact(filename) {
+    const url = new URL(
+      `../../case-types/${BANKS_DIR}/${filename}`,
+      import.meta.url
+    ).href;
     try {
-      const body = await this._read(url);
-      if (!body || typeof body !== 'object') return null;
-      return /** @type {import('../sharepoint-client.js').VersionedExport} */ (
-        body
-      );
+      const res = await this._fetchWithThrottle(url, {});
+      if (!res.ok) return null;
+      return JSON.parse(await res.text());
     } catch {
       return null;
     }

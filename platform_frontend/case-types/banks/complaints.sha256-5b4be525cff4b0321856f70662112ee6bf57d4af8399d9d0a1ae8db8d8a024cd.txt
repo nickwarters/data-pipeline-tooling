@@ -1,0 +1,107 @@
+{
+  "slug": "complaints",
+  "label": "Complaints",
+  "generatedAt": "2026-01-12T09:00:00.000Z",
+  "hash": "sha256:5b4be525cff4b0321856f70662112ee6bf57d4af8399d9d0a1ae8db8d8a024cd",
+  "questions": [
+    {
+      "id": "q-cmp-0001",
+      "text": "Was the complaint logged on the register on the day of receipt?",
+      "category": null,
+      "questionGroup": "Acknowledgement",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": [
+        {
+          "id": "q-cmp-0001-ra-0",
+          "text": "Log the complaint on the register and correct the recorded date."
+        }
+      ],
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0900",
+      "text": "Was a courtesy call offered to the customer within 24 hours of receipt?",
+      "category": null,
+      "questionGroup": "Acknowledgement",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0016",
+      "text": "Was the redress calculation checked against the redress methodology?",
+      "category": null,
+      "questionGroup": "Resolution",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": [
+        {
+          "id": "q-cmp-0016-ra-0",
+          "text": "Recalculate the redress and offer it to the customer."
+        }
+      ],
+      "deprecated": false
+    }
+  ],
+  "outcomeOptions": [
+    {
+      "id": "good",
+      "wording": "Good",
+      "severity": 0
+    },
+    {
+      "id": "good-with-process-enhancement",
+      "wording": "Good with process enhancement",
+      "severity": 25
+    },
+    {
+      "id": "poor",
+      "wording": "Poor",
+      "severity": 50
+    },
+    {
+      "id": "poor-with-harm",
+      "wording": "Poor with harm",
+      "severity": 100
+    }
+  ],
+  "defaultOutcomeId": "good"
+}

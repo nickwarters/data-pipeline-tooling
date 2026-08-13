@@ -9,39 +9,57 @@ document specifies the **format** it reads and the **algorithm** it must apply.
 
 ## TL;DR
 
-- You need **two inputs**: the per-Case-Type **export** (`case-types/{slug}.json`
-  for current, `case-types/{slug}.{hash}.json` for versioned) and the **Case
-  rows** (read from the per-Case-Type SharePoint list).
+- You need **two inputs**: the per-Case-Type **export**
+  (`case-types/banks/{slug}.export.txt` for current,
+  `case-types/banks/{slug}.sha256-<hex>.txt` for versioned) and the **Case
+  rows** (read from the per-Case-Type SharePoint list). Both are JSON —
+  the `.txt` extension is a SharePoint constraint, not a format.
 - A question **failed** when its stored answer value maps (via the question's
   `optionOutcomes`) to an Outcome other than the export's `defaultOutcomeId`.
   The universal `NA` answer never fails. That's it — no JS, no functions.
 - For a **case-level verdict** (pass / refer / fail), read the
   `outcomeAtCompletion` column on the Case row. **Do not** try to recompute it.
 - For **Completed Cases with a `questionBankVersion`**: use the versioned file
-  (`{slug}.{hash}.json`) for the question catalogue and its `optionOutcomes` /
+  (`{slug}.sha256-<hex>.txt`) for the question catalogue and its `optionOutcomes` /
   `defaultOutcomeId` — this gives you the as-reviewed snapshot and avoids drift
   from later bank edits.
 
 ## What you do _not_ need
 
 - **The compiled `case-types/{slug}.js` module.** It contains `computeOutcome`, a
-  JS function you cannot parse. Ignore it. Read the `.json` sibling instead.
+  JS function you cannot parse. Ignore it. Read the export artifact instead.
 - **The outcome function, in any form.** Per-question failure is data
   (`optionOutcomes` vs `defaultOutcomeId`); case verdicts are a stored snapshot
   (`outcomeAtCompletion`). Reporting never executes Case Type logic.
 
 ## Input 1 — the Case Type export
 
-Two variants live in the Style Library beside the `.js` module:
+Two variants live in the deployed `case-types/banks/` folder, beside the bank
+they were compiled from:
 
-| File                 | Contents                                                                                                      | When to use                                                                                                                |
-| -------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `{slug}.json`        | **Current** export — always the latest bank version. Carries the `labels` table.                              | In-progress Cases; any report that reads only the latest bank.                                                             |
-| `{slug}.{hash}.json` | **Versioned** export — immutable snapshot. Carries frozen `labelIds` per question but not the `labels` table. | Completed Cases with a `questionBankVersion` — use this file to get as-reviewed wording, `optionOutcomes`, and `showWhen`. |
+| File                      | Contents                                                                                                      | When to use                                                                                                                |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `{slug}.export.txt`       | **Current** export — always the latest published bank version. Carries the `labels` table.                    | In-progress Cases; any report that reads only the latest bank.                                                             |
+| `{slug}.sha256-<hex>.txt` | **Versioned** export — immutable snapshot. Carries frozen `labelIds` per question but not the `labels` table. | Completed Cases with a `questionBankVersion` — use this file to get as-reviewed wording, `optionOutcomes`, and `showWhen`. |
+
+Both hold JSON. The `.txt` extension is deliberate: SharePoint Subscription
+Edition blocks or mis-serves `.json`, so every bank artifact is stored as text
+and parsed explicitly. Parse with `json.loads(...)`, not by trusting a content
+type.
+
+**Deriving the versioned filename from a Case row.** `questionBankVersion` is
+`sha256:<hex>`, and a `:` cannot appear in a SharePoint or Windows filename, so
+the file segment replaces it with `-`:
+
+```python
+filename = f"{slug}.{case['questionBankVersion'].replace(':', '-')}.txt"
+```
 
 Fetch by URL over the same NTLM/Kerberos auth as everything else, e.g.
-`/Style Library/case-review/case-types/complaint-review.json` or
-`/Style Library/case-review/case-types/complaint-review.sha256%3Aabc123.json`.
+`<app base>/case-types/banks/complaint-review.export.txt` or
+`<app base>/case-types/banks/complaint-review.sha256-abc123….txt`, where the app
+base is the deployed folder for the environment being reported on (prod and UAT
+have their own copies).
 
 ### Envelope
 
@@ -58,8 +76,8 @@ Fetch by URL over the same NTLM/Kerberos auth as everything else, e.g.
 }
 ```
 
-`labels` is present only in **`{slug}.json`** (the current file). Versioned files
-(`{slug}.{hash}.json`) carry the per-question `labelIds` but not the label
+`labels` is present only in **`{slug}.export.txt`** (the current file). Versioned
+files (`{slug}.sha256-<hex>.txt`) carry the per-question `labelIds` but not the label
 definitions — see **Label resolution** below.
 
 | Field         | Meaning                                                           |
@@ -127,16 +145,16 @@ Labels follow a **frozen-structure / current-presentation** split:
 
 - **`labelIds` on each question** are _structure_ — which labels a question
   carried is part of the point-in-time snapshot. They are frozen in versioned
-  files (`{slug}.{hash}.json`).
+  files (`{slug}.sha256-<hex>.txt`).
 - **Label definitions** (`id → name, color`) are _presentation_ — always read
-  from the **current** `{slug}.json`. A label rename or recolor then applies
+  from the **current** `{slug}.export.txt`. A label rename or recolor then applies
   consistently across all historical reports without needing to rewrite versioned
   files.
 
 Algorithm:
 
 ```python
-current = load_json(f"case-types/{slug}.json")
+current = load_json(f"case-types/banks/{slug}.export.txt")
 label_map = {l["id"]: l for l in current.get("labels", [])}
 
 # To get label names for a question in a versioned export:
@@ -297,11 +315,11 @@ for case in cases_modified_yesterday:           # filter on completedAt
 ## Caveats — read these
 
 1. **Use versioned exports for Completed Cases.** When a Case row carries a
-   `questionBankVersion`, fetch `{slug}.{hash}.json` for that hash instead of
-   `{slug}.json`. This gives you the exact questions, wording, and
+   `questionBankVersion`, fetch `{slug}.sha256-<hex>.txt` for that hash instead of
+   `{slug}.export.txt`. This gives you the exact questions, wording, and
    `optionOutcomes` / `defaultOutcomeId` that were in force at review time. Cases
    completed before versioned exports existed have no `questionBankVersion`; fall
-   back to the current `{slug}.json` for those (same behaviour as before).
+   back to the current `{slug}.export.txt` for those (same behaviour as before).
 
 2. **Case verdicts are different — and stable.** The _case-level_ pass/refer/fail
    is **not** re-derived from answers. Read `outcomeAtCompletion` straight off the

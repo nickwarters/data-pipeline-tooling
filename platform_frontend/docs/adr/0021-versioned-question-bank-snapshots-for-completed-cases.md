@@ -6,6 +6,33 @@ Date: 2026-06-25
 
 Accepted (amended by [ADR-0023], Jul 2026)
 
+> **Amendment (2026-08-13, artifact layout).** The artifacts below are stored
+> **beside the bank they belong to**, in `case-types/banks/`, as JSON in `.txt`
+> files — not as `.json` in a separate `/Style Library/case-review/case-types/`
+> folder. Three things forced it: SharePoint Subscription Edition blocks or
+> mis-serves `.json` (the reason the bank artifact was already `.txt`); a
+> `sha256:<hex>` hash cannot appear in a Windows or SharePoint filename, so the
+> file segment is `sha256-<hex>`; and the folder this ADR named was never where
+> the deploy actually puts the modules, so "beside the module" was not true of
+> the path as written. Names are composed in one place,
+> `src/lib/bank-artifacts.js`, and read relative to the module that reads them,
+> which retires the per-environment `exportBasePath` from [ADR-0033] — a UAT
+> deploy now reads UAT's artifacts because of where it was deployed, not
+> because it was told. The **decision** is unchanged: content-addressed
+> immutable versions, a hash stamped at the reportable milestone, live fallback
+> on a miss.
+>
+> | Role             | Was                           | Is                                               |
+> | ---------------- | ----------------------------- | ------------------------------------------------ |
+> | Current bank     | `case-types/banks/{slug}.txt` | unchanged                                        |
+> | Current export   | `{slug}.json`                 | `case-types/banks/{slug}.export.txt`             |
+> | Versioned export | `{slug}.{hash}.json`          | `case-types/banks/{slug}.sha256-<hex>.txt`       |
+> | Manifest         | `{slug}.history.json`         | not built; the versions on disk are the timeline |
+>
+> `scripts/publish-bank.js` is the local half of the publish flow: it compiles a
+> bank, writes the current pointer, and appends the versioned copy. It is
+> idempotent, and never rewrites a versioned file.
+
 > **Amendment ([ADR-0023]).** `questionBankVersion` is stamped at the **reportable**
 > milestone (Send Actions, or Complete Case on the no-actions path) rather than at final
 > `Completed` — the freeze this ADR protects now begins when the Case becomes reportable
@@ -239,3 +266,4 @@ The Python pipeline uses the **same** artifacts, gaining point-in-time stability
 [ADR-0007]: ./0007-case-storage-shape.md
 [ADR-0012]: ./0012-outcome-snapshot-at-completion-for-reporting.md
 [ADR-0015]: ./0015-data-only-case-type-export-for-reporting.md
+[ADR-0033]: ./0033-uat-environment.md
