@@ -43,14 +43,22 @@ entry's `list_name` changed accordingly.
 
 ## Where "when we saw it" lives
 
-Neither the raw nor the silver table carries an observation timestamp, an
-ingestion batch id, or a pipeline run id as a **column**, and that is
-deliberate. (Gold does carry `as_of_utc`, but that is the run's *candidate
-window end*, not when we looked — see below.) The load strategy is
-`AppendOnly`, which compares every non-key column of a re-presented row against
-the row already stored; a per-read stamp would differ on every overlapping poll
-and turn each ordinary re-read into an append-only conflict. The rows record
-*what the list said*, and only that.
+Neither the raw nor the silver table carries an observation timestamp or an
+ingestion batch id as a **column**, and that is deliberate. (Gold does carry
+`as_of_utc`, but that is the run's *candidate window end*, not when we looked —
+see below.) The load strategy is `AppendOnly`, which compares every non-key
+column of a re-presented row against the row already stored; a per-read stamp
+would differ on every overlapping poll and turn each ordinary re-read into an
+append-only conflict. The rows record *what the list said*, and only that.
+
+**The one exception is `pipeline_run_id`**, the reserved run-provenance column
+every table-backed Writer stamps
+([ADR-0020](adr/0020-writer-stamped-run-provenance-column.md)). It escapes the
+problem above by construction: the append-only comparison **excludes** it, so an
+overlapping poll still reads as unchanged. Because an unchanged row is never
+rewritten, the value is *the run that first landed the row* — not when we last
+saw it — and it is stable across re-drives. It is the framework's column, not
+the feed's: no schema declares it, and it is added after validation.
 
 When we saw it is recorded elsewhere, and is still recoverable: the **run log**
 (`<base>/_runs/sharepoint_cases.log`) timestamps every step and its
@@ -104,6 +112,7 @@ vocabulary every hop below reads.
 | `source_modified_at` | *(stamped, from `Modified`)* | text | No | The item's `Modified`, in UTC. |
 | `source_version` | *(stamped, from `odata.etag`)* | text | No | The version observed; falls back to a digest of the item's projected values where the list supplies no stamp. |
 | `source_observation_id` | *(stamped)* | text | No | A sha256 over list, item and version — the append-only key. Derived, so it replaces no source column. |
+| `pipeline_run_id` | *(stamped by the Writer)* | text | No | The run that **first landed** this observation. Excluded from the append-only comparison, so a re-read is still a no-op. See *Where "when we saw it" lives* above. |
 | *(all others)* | the list's own column names | as returned | mostly | See the `case_version` table below. |
 
 ### Part C — Row checks
@@ -171,6 +180,7 @@ silver, `case_type` is always the Case Type of the list the row came from.
 | Field | Source column | Type | Nullable | Value rules | Description | Example | Sensitivity | Notes |
 |-------|---------------|------|----------|-------------|-------------|---------|-------------|-------|
 | `source_observation_id` | *(stamped)* | `str` | No | `NonNull` | The observation's identity, and the append-only key. | *(64-char sha256)* | None | |
+| `pipeline_run_id` | *(stamped by the Writer)* | `str` | No | — | The run that **first landed** this version. Not declared by the schema — the Writer adds it after validation — and excluded from the append-only comparison. | *(32-char hex)* | None | See *Where "when we saw it" lives* above. |
 | `source_list_name` | *(stamped)* | `str` | No | `NonNull` | The list observed. | `Cases-Complaints` | None | |
 | `source_item_id` | *(stamped)* | `str` | No | `NonNull` | The list item observed, as text. | `101` | Internal | Same value as `id`, in the provenance vocabulary. |
 | `source_version` | *(stamped)* | `str` | No | `NonNull` | The version observed. | `\"3\"` | None | Opaque text. SharePoint's ETag carries its own quotes, and they are kept rather than stripped — the value is compared, never parsed. |

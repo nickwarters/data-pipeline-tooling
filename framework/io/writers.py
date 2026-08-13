@@ -824,6 +824,19 @@ class SqliteAppendOnlyWriter:
     Steps 3–6 are the shared staged-merge shape; no target row is updated or
     deleted at any point, which is the whole contract.
 
+    **The reserved provenance column takes no part in any of that.** Every row
+    is stamped with the run that wrote it
+    (:data:`~framework.core.protocols.RUN_PROVENANCE_COLUMN`), and both the
+    narrowed-batch refusal (3) and the value comparison (4) skip it. They have
+    to: the column is the framework's, not the batch's, and a poll whose window
+    overlaps the previous one re-reads rows an *earlier* run first landed — so a
+    comparison that included it would read every ordinary overlap as a changed
+    value and raise :class:`AppendOnlyConflictError`.
+
+    Because an unchanged key is never rewritten, the stored value stays as
+    whichever run first inserted the row: the column means **"the run that first
+    landed this row"**, and is stable across re-drives.
+
     Physical uniqueness on the target is **not** required: the repository's
     single-writer rule plus this Writer's one transaction is the boundary
     today, and a later schema migration can add a UNIQUE constraint without
@@ -845,7 +858,11 @@ class SqliteAppendOnlyWriter:
 
     def write(self, dataset: Dataset) -> None:
         self.data_locations = [table_location(self._db_path, self._table)]
-        frame = self._collapsed(dataset.to_pandas())
+        # Stamped after the collapse, so the run id can neither tell two
+        # otherwise-identical observations apart nor mask a real disagreement.
+        frame = _stamp_run_provenance(
+            self._collapsed(dataset.to_pandas()), _current_run_id()
+        )
 
         with _staged_merge(
             self._db_path,
@@ -918,6 +935,11 @@ class SqliteAppendOnlyWriter:
         The opposite drift — a batch carrying a column the target lacks — is
         already loud: the comparison below names that column on both sides and
         SQLite refuses the statement.
+
+        The reserved provenance column is exempt. It is this Writer's own stamp
+        rather than anything the batch declared, and a write outside a run
+        context carries no id at all — refusing that as source drift would blame
+        the feed for the framework's own column.
         """
         target_columns = [
             row[1]
@@ -925,7 +947,11 @@ class SqliteAppendOnlyWriter:
                 f"PRAGMA table_info({merge.target})"
             ).fetchall()
         ]
-        dropped = [c for c in target_columns if c not in frame.columns]
+        dropped = [
+            c
+            for c in target_columns
+            if c not in frame.columns and c != RUN_PROVENANCE_COLUMN
+        ]
         if dropped:
             raise ValueError(
                 f"append-only load of {self._table!r} refused: the incoming "
@@ -937,8 +963,19 @@ class SqliteAppendOnlyWriter:
     def _refuse_changed_rows(
         self, merge: _StagedMerge, key_match: str, frame: pd.DataFrame
     ) -> None:
-        """Raise if any staged key contradicts the row the target already holds."""
-        value_columns = [c for c in frame.columns if c not in self._key_columns]
+        """Raise if any staged key contradicts the row the target already holds.
+
+        The provenance column is excluded from the comparison — the one
+        genuinely load-bearing exclusion in the epic. An overlapping poll
+        re-presents rows a previous run first landed; those rows carry *this*
+        run's id in staging and the earlier run's in the target, so including
+        the column would make every routine overlap a conflict.
+        """
+        value_columns = [
+            c
+            for c in frame.columns
+            if c not in self._key_columns and c != RUN_PROVENANCE_COLUMN
+        ]
         if not value_columns:
             # Key-only rows carry nothing that could have changed.
             return
