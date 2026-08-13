@@ -4,7 +4,9 @@ import pandas as pd
 import pytest
 
 from framework.core.dataset import Dataset
+from framework.core.protocols import RUN_PROVENANCE_COLUMN
 from framework.io.strategy import UpsertStrategy
+from framework.run.run_context import RunContext, active_context
 from tools.store import Store
 
 
@@ -77,3 +79,29 @@ def test_upsert_rejects_missing_key_column(tmp_path):
     writer = store.writer("entities", UpsertStrategy("nonexistent_col"))
     with pytest.raises(ValueError, match="nonexistent_col"):
         writer.write(_ds({"id": 1, "name": "Alice"}))
+
+
+def test_upsert_gives_a_replaced_row_the_run_that_replaced_it(tmp_path):
+    # An upsert is a real rewrite — the target row is deleted and the incoming
+    # one inserted — so the last writer is the honest answer. A key the batch
+    # does not carry is untouched, and keeps the run that wrote it.
+    store = Store(tmp_path / "store.db")
+    writer = store.writer("entities", UpsertStrategy("id"))
+    with active_context(RunContext(pipeline_run_id="run-a")):
+        writer.write(_ds({"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}))
+
+    with active_context(RunContext(pipeline_run_id="run-b")):
+        writer.write(_ds({"id": 2, "name": "Bobby"}))
+
+    landed = store.reader("entities").read().to_pandas()
+    assert dict(zip(landed["id"], landed[RUN_PROVENANCE_COLUMN])) == {
+        1: "run-a",
+        2: "run-b",
+    }
+
+
+def test_upsert_outside_a_run_context_still_writes(tmp_path):
+    store = Store(tmp_path / "store.db")
+    store.writer("entities", UpsertStrategy("id")).write(_ds({"id": 1, "name": "A"}))
+
+    assert list(store.reader("entities").read().to_pandas()["id"]) == [1]

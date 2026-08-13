@@ -411,9 +411,22 @@ context leaves it null rather than failing. It is **never** part of a load
 strategy's value comparison — if it were, an `AppendOnly` target would raise
 `AppendOnlyConflictError` on every overlapping re-read.
 
-Which run id a row ends up holding follows from the merge — the run that last
-rebuilt a `Refresh` table, the run that *first landed* a row on an `AppendOnly`
-or `InsertIfAbsent` target, the run that last replaced it on an upsert. The file
+Which run id a row ends up holding follows from the merge, because a Writer that
+does not rewrite a row does not restamp it either:
+
+| Writer | The run id a row ends up holding |
+|--------|----------------------------------|
+| `SqliteTruncateReloadWriter` (`Refresh`) | the run that last rebuilt the table — which wrote **every** row in it |
+| `SqliteAppendOnlyWriter` (`AppendOnly`) | the run that **first landed** the row; stable across re-drives |
+| `SqliteUpsertWriter` (`UpsertStrategy`) | the run that last **replaced** the row — a real rewrite, so the last writer is the honest answer |
+| `SqliteInsertOrIgnoreWriter` (`InsertOrIgnore`) | the run that first inserted it; an ignored row is not written, so it is not restamped |
+| `SqliteInsertIfAbsentWriter` (`InsertIfAbsent`) | the run that first inserted it — "first seen", as stable as the surrogate beside it |
+
+A target that **predates** the column — landed before it existed, or created by
+hand with its own DDL — is widened in place (`ALTER TABLE … ADD COLUMN`) rather
+than refusing the write, the same additive-migration rule the run registry
+applies to its own store. Only a write that actually carries a stamp does that,
+so a run-less write never adds a column of nulls. The file
 Writers (`CsvWriter`, `ExcelWriter`, `JsonWriter`, `StdoutWriter`) do **not**
 stamp: they produce deliverables, whose columns are a contract with a downstream
 consumer, and the run record's `data_locations` already names the file a write
