@@ -7,7 +7,7 @@ without wiring temp directories or SQLite by hand.
 
 import pytest
 
-from framework.core import Dataset
+from framework.core import RUN_PROVENANCE_COLUMN, Dataset
 from framework.run import Pipeline
 from tests.framework_testing import (
     RecordingWriter,
@@ -62,7 +62,11 @@ def test_read_rows_reads_a_landed_table_back(tmp_path):
     p.write(store.writer("cases", Refresh()), read, name="write")
     p.run()
 
-    assert read_rows(store, "cases") == [{"case_id": "c1", "amount": 100}]
+    # The Writer also stamps the run that wrote the row, so the landed table
+    # carries one column the pipeline never declared — dropped here, since what
+    # this test is about is the helper collapsing the read chain.
+    landed = without_columns(read_rows(store, "cases"), RUN_PROVENANCE_COLUMN)
+    assert landed == [{"case_id": "c1", "amount": 100}]
 
 
 def test_without_columns_drops_named_columns_and_ignores_missing():

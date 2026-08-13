@@ -7,6 +7,7 @@ import pytest
 
 from framework._internal.connection import connect
 from framework.core.dataset import Dataset
+from framework.core.protocols import RUN_PROVENANCE_COLUMN
 from framework.io import writers as writers_module
 from framework.io.readers import CsvReader, ExcelReader, SqliteReader
 from framework.io.strategy import AccumulateByRun, InsertOrIgnore, Refresh
@@ -23,6 +24,7 @@ from framework.io.writers import (
     StdoutWriter,
 )
 from framework.run.builder import Pipeline
+from framework.run.run_context import RunContext, active_context
 
 FIXTURE = Path(__file__).parent.parent.parent / "fixtures" / "cases.csv"
 
@@ -531,3 +533,59 @@ def test_the_quarantine_chunk_writer_forwards_what_it_rejected_to(tmp_path):
     # A reused Writer starts each session clean rather than reporting the last.
     with writing_chunks(quarantine) as w:
         assert w.data_locations == []
+
+
+# --- the reserved run-provenance column ------------------------------------
+#
+# Every table-backed Writer stamps the run that wrote the row
+# (docs/adr/0020-writer-stamped-run-provenance-column.md). The value comes from
+# the ambient run context, so these tests put one around the write rather than
+# passing an id in — that *is* the contract.
+
+
+def test_refresh_stamps_the_run_that_rebuilt_the_table(tmp_path):
+    db = tmp_path / "gold.db"
+    with active_context(RunContext(pipeline_run_id="run-a")):
+        SqliteTruncateReloadWriter(db, "case_current").write(
+            Dataset.from_pandas(pd.DataFrame({"case_id": ["c1", "c2"]}))
+        )
+
+    landed = SqliteReader(db, "case_current").read().to_pandas()
+    # A replaced table is uniform: the run named on any row wrote all of them.
+    assert list(landed[RUN_PROVENANCE_COLUMN]) == ["run-a", "run-a"]
+
+
+def test_a_refresh_re_drive_keeps_the_data_and_moves_the_provenance(tmp_path):
+    # The property that survives the stamp: a re-drive of the same window
+    # produces identical *data*, and the column records which attempt produced
+    # it. Byte-identity does not survive, and is not what is claimed any more.
+    db = tmp_path / "gold.db"
+    rows = Dataset.from_pandas(pd.DataFrame({"case_id": ["c1"], "count": [3]}))
+
+    with active_context(RunContext(pipeline_run_id="run-a")):
+        SqliteTruncateReloadWriter(db, "case_counts").write(rows)
+    first = SqliteReader(db, "case_counts").read().to_pandas()
+
+    with active_context(RunContext(pipeline_run_id="run-b")):
+        SqliteTruncateReloadWriter(db, "case_counts").write(rows)
+    second = SqliteReader(db, "case_counts").read().to_pandas()
+
+    pd.testing.assert_frame_equal(
+        first.drop(columns=[RUN_PROVENANCE_COLUMN]),
+        second.drop(columns=[RUN_PROVENANCE_COLUMN]),
+    )
+    assert list(first[RUN_PROVENANCE_COLUMN]) == ["run-a"]
+    assert list(second[RUN_PROVENANCE_COLUMN]) == ["run-b"]
+
+
+def test_a_refresh_write_outside_any_run_context_still_works(tmp_path):
+    # The framework is import-only and its components are usable from a script
+    # or a test with no run around them; a provenance stamp must not become a
+    # reason a write fails. No context, no id, no column — and no error.
+    db = tmp_path / "raw.db"
+    SqliteTruncateReloadWriter(db, "cases").write(
+        Dataset.from_pandas(pd.DataFrame({"case_id": ["c1"]}))
+    )
+
+    landed = SqliteReader(db, "cases").read()
+    assert landed.columns == ["case_id"]

@@ -16,8 +16,12 @@ Four tables, and their declared grain:
 
 **One instant decides everything.** ``as_of`` is the candidate SharePoint window
 end -- the value the run is about to commit as its watermark -- and never
-``utcnow()``: a re-drive of the same window must produce byte-identical gold.
-Every table carries it as ``as_of_utc``. A *calendar date* (``terminal_date``,
+``utcnow()``: a re-drive of the same window must produce **identical data**.
+Every table carries it as ``as_of_utc``. Identical *data*, not identical bytes:
+every table-backed Writer stamps the reserved ``pipeline_run_id`` provenance
+column, so a re-drive's rows carry the attempt that produced them
+(``docs/adr/0020-writer-stamped-run-provenance-column.md``). ``as_of`` is what
+keeps everything else stable. A *calendar date* (``terminal_date``,
 the age arithmetic) is the **local** date of that instant, through
 ``tools.observability.timestamps``.
 
