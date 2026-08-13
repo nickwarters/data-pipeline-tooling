@@ -15,13 +15,6 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 
 import { cases } from '../dev/fixtures/cases.js';
-import {
-  PUBLISHED_BANK_VERSIONS,
-  RETIRED_QUESTION_ID,
-  COMPLAINTS_BANK_V1_HASH,
-  COMPLAINTS_BANK_V2_HASH,
-  buildQuestionBankVersions,
-} from '../dev/fixtures/question-bank-versions.js';
 import { MockSharePointClient } from '../src/services/mock-sharepoint-client.js';
 import { allApplicableAnswered } from '../src/evaluators/applicability-evaluator.js';
 import { personas } from '../dev/fixtures/personas.js';
@@ -35,21 +28,41 @@ import { isolateBrowserGlobals } from './helpers/browser-globals.js';
 
 isolateBrowserGlobals();
 
-/** @returns {Promise<MockSharePointClient>} */
-async function mockClient() {
-  const { exportHashes, versionedExports } = await buildQuestionBankVersions();
+/**
+ * The mock exactly as the dev loop builds it: no seeded versions, so every
+ * version it serves is a file in `case-types/banks/` that a deploy serves too.
+ *
+ * @returns {MockSharePointClient}
+ */
+function mockClient() {
   return new MockSharePointClient({
     personas,
-    exportHashes,
-    versionedExports,
     lists: { [/** @type {string} */ (complaintsConfig.listName)]: cases },
   });
 }
 
 const stampedCases = cases.filter((c) => c.questionBankVersion);
 
+/**
+ * The published versions the fixture Cases name, oldest first — read off the
+ * Cases rather than declared, so a Case stamped with something new cannot slip
+ * past these checks.
+ */
+const PUBLISHED_BANK_VERSIONS = [...stampedCases]
+  .sort((a, b) => String(a.completedAt).localeCompare(String(b.completedAt)))
+  .map((c) => ({
+    slug: c.caseType,
+    hash: /** @type {string} */ (c.questionBankVersion),
+  }));
+
+const [COMPLAINTS_BANK_V1_HASH, COMPLAINTS_BANK_V2_HASH] =
+  PUBLISHED_BANK_VERSIONS.map((v) => v.hash);
+
+/** The Question Definition retired between the two versions. */
+const RETIRED_QUESTION_ID = 'q-cmp-0900';
+
 test('every stamped fixture Case resolves to a version the mock serves', async () => {
-  const client = await mockClient();
+  const client = mockClient();
 
   assert.ok(
     stampedCases.length >= 2,
@@ -77,7 +90,7 @@ test('the two stamped Cases are frozen at different versions', () => {
 });
 
 test('a stamped Case only answers questions its own version asks', async () => {
-  const client = await mockClient();
+  const client = mockClient();
 
   for (const row of stampedCases) {
     const version =
@@ -102,7 +115,7 @@ test('a stamped Case answers every Question its own version makes applicable', a
   // is held to it here instead, against the catalogue it actually resolves —
   // otherwise the fixtures would only have to look complete against a bank
   // neither Case was reviewed with.
-  const client = await mockClient();
+  const client = mockClient();
 
   for (const row of stampedCases) {
     const version =
@@ -132,7 +145,7 @@ test('the January version asks a question no later version and no live bank does
     'the retired question must be absent from the live bank, or the frozen Case demonstrates nothing'
   );
 
-  const client = await mockClient();
+  const client = mockClient();
   const v1 = await client.getVersionedExport(
     'complaints',
     COMPLAINTS_BANK_V1_HASH
@@ -203,7 +216,7 @@ test('the current bank has been published', async () => {
 });
 
 test('the current bank version is served under the hash completion stamps', async () => {
-  const client = await mockClient();
+  const client = mockClient();
 
   // What completion stamps onto a Case row it completes today.
   const hash = await client.getExportHash('complaints');
@@ -234,7 +247,7 @@ test('the current bank version is served under the hash completion stamps', asyn
 test('opening the frozen Case in the dev loop renders the bank it was reviewed with', async () => {
   // The whole point of the fixture, asserted through the real path: the mock
   // client, the real CaseLoader, and the Case row as the dev loop serves it.
-  const client = await mockClient();
+  const client = mockClient();
   const loader = new CaseLoader({
     client: /** @type {any} */ (client),
     saveQueue: /** @type {any} */ ({ loadCase() {}, enqueue() {} }),
@@ -270,47 +283,24 @@ test('opening the frozen Case in the dev loop renders the bank it was reviewed w
   );
 });
 
-test('an unreadable artifact costs its own version and nothing else', async () => {
-  // A published version file that is missing is a real deploy state, and it is
-  // the state the loader's fallback exists for. It must not take the other
-  // versions — or the current one — down with it.
-  const errors = [];
-  const original = console.error;
-  console.error = (...args) => errors.push(args);
-  let result;
-  try {
-    result = await buildQuestionBankVersions([
-      ...PUBLISHED_BANK_VERSIONS,
-      { slug: 'complaints', hash: `sha256:${'f'.repeat(64)}` },
-    ]);
-  } finally {
-    console.error = original;
-  }
+test('a version with no artifact reads as unpublished, not as a failure', async () => {
+  // A stamped version whose file is missing is a real deploy state — it is the
+  // state the loader's fallback exists for — so it must answer null rather than
+  // throw, and must not take the readable versions down with it.
+  const client = mockClient();
 
-  assert.equal(errors.length, 1, 'the missing version is reported once');
-  assert.equal(result.versionedExports[`sha256:${'f'.repeat(64)}`], undefined);
-  for (const { hash } of PUBLISHED_BANK_VERSIONS) {
-    assert.ok(result.versionedExports[hash], 'every readable version survives');
+  assert.equal(
+    await client.getVersionedExport('complaints', `sha256:${'f'.repeat(64)}`),
+    null
+  );
+  for (const { slug, hash } of PUBLISHED_BANK_VERSIONS) {
+    assert.ok(await client.getVersionedExport(slug, hash));
   }
-  assert.ok(result.exportHashes.complaints, 'the current version survives too');
 });
 
-test('a Case Type with no published export simply stamps nothing', async () => {
-  const errors = [];
-  const original = console.error;
-  console.error = (...args) => errors.push(args);
-  let result;
-  try {
-    result = await buildQuestionBankVersions(PUBLISHED_BANK_VERSIONS, [
-      { slug: 'never-published' },
-    ]);
-  } finally {
-    console.error = original;
-  }
+test('a Case Type with no bank artifact simply stamps nothing', async () => {
+  const client = mockClient();
 
-  assert.deepEqual(result.exportHashes, {});
-  for (const { hash } of PUBLISHED_BANK_VERSIONS) {
-    assert.ok(result.versionedExports[hash]);
-  }
-  assert.equal(errors.length, 1);
+  assert.equal(await client.getExportHash('never-published'), null);
+  assert.ok(await client.getExportHash('complaints'));
 });

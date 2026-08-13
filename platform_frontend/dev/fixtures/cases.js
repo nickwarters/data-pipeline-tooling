@@ -7,10 +7,19 @@ import {
   ENGLAND_WALES_HOLIDAYS,
   REMEDIATION_SLA_WORKING_DAYS,
 } from '../../src/config/working-days.js';
-import {
-  COMPLAINTS_BANK_V1_HASH,
-  COMPLAINTS_BANK_V2_HASH,
-} from './question-bank-versions.js';
+
+/**
+ * The two published Question Bank versions the frozen Cases below are stamped
+ * against, each naming a real artifact in `case-types/banks/`. The mock resolves
+ * them by reading that file, exactly as a deploy does — so a hash here that no
+ * artifact answers to shows up as a Case that falls back to the live bank.
+ */
+/** The January version — before the courtesy-call check was retired. */
+const COMPLAINTS_BANK_V1_HASH =
+  'sha256:5b4be525cff4b0321856f70662112ee6bf57d4af8399d9d0a1ae8db8d8a024cd';
+/** The April version — the courtesy-call check gone, the logging question reworded. */
+const COMPLAINTS_BANK_V2_HASH =
+  'sha256:943c9dade830929aa91da20a91d34ddd4cf2ccec81b9b9c479a38a8e0ea98d4b';
 
 const _now = new Date();
 const _todayStart = new Date(
@@ -94,11 +103,10 @@ function outcomeAnswers(value) {
  *   complaints-frozen-v2 — Completed against the April version, one question
  *                       fewer and one reworded
  *
- * The two frozen Cases stamp a `questionBankVersion` served by
- * `question-bank-versions.js`, so they resolve their questions as-reviewed
- * rather than from today's bank. Their Answers therefore name only the ids
- * their own version carries; `outcomeAnswers()` would answer 46 questions
- * neither version asks.
+ * The two frozen Cases stamp a `questionBankVersion`, so they resolve their
+ * questions from that published version rather than from today's bank. Their
+ * Answers therefore name only the ids their own version carries;
+ * `outcomeAnswers()` would answer 46 questions neither version asks.
  *
  * My Team workload (read by ?asUser=reviewer-manager):
  *   complaints-team-1 — In-progress and on hold, under the first staff member

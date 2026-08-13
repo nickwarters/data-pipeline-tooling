@@ -114,9 +114,11 @@ Case Type with no bank stamps no version rather than blocking completion.
 
 #### In mock mode
 
-`dev/fixtures/question-bank-versions.js` loads **the same files** and hands them
-to `MockSharePointClient`, so the dev loop and a deploy cannot disagree about
-what a version contains. Two fixture Cases — `complaints-frozen-v1` and
+`MockSharePointClient` reads **the same artifacts** the HTTP client does, rather
+than being seeded with copies of them — there is no such thing as a mock
+Question Bank, since the files ship with the code. A test may still hand it
+explicit `exportHashes` / `versionedExports`, which win over the files; the dev
+loop passes none. Two fixture Cases — `complaints-frozen-v1` and
 `complaints-frozen-v2` — are stamped against older published versions and open
 against those catalogues; the January one answers a question retired since,
 which no other Case can display. Their Answers name only the ids their own

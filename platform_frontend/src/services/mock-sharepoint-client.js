@@ -2,6 +2,13 @@
 import { isOverdue } from '../evaluators/overdue-evaluator.js';
 import { toBareAccount } from './account-name.js';
 import { withAssignmentStamp } from './assignment-stamp.js';
+import {
+  BANKS_DIR,
+  bankArtifactName as bankName,
+  versionedExportName as versionedName,
+} from '../lib/bank-artifacts.js';
+import { bankVersionHash } from '../lib/bank-version.js';
+import { loadBank } from '../../case-types/load-bank.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').ListCasesFilter} ListCasesFilter */
@@ -381,26 +388,52 @@ export class MockSharePointClient {
   }
 
   /**
-   * Returns the content hash for the current {slug}.json export envelope, or
-   * null when no hash is configured for this slug.
+   * The version identity of the Case Type's current Question Bank — what
+   * completion stamps onto a Case row.
+   *
+   * Falls through to the bank artifact on disk, because there is no such thing
+   * as a mock Question Bank: the artifacts ship with the code and are the same
+   * files in the dev loop and in a deploy. A configured hash wins, so a test
+   * can still say what the current version is without an artifact existing.
    *
    * @param {string} slug
    * @returns {Promise<string | null>}
    */
   async getExportHash(slug) {
-    return this._exportHashes[slug] ?? null;
+    if (slug in this._exportHashes) return this._exportHashes[slug];
+    try {
+      return await bankVersionHash(await this._readArtifact(bankName(slug)));
+    } catch {
+      return null;
+    }
   }
 
   /**
-   * Returns the versioned export for the given slug+hash, or null when no
-   * matching export is configured.
+   * One published version, by the hash a Case row stamped. Configured versions
+   * win; otherwise the artifact on disk answers, exactly as it does in a
+   * deploy.
    *
-   * @param {string} _slug
+   * @param {string} slug
    * @param {string} hash
    * @returns {Promise<VersionedExport | null>}
    */
-  async getVersionedExport(_slug, hash) {
-    return this._versionedExports[hash] ?? null;
+  async getVersionedExport(slug, hash) {
+    if (hash in this._versionedExports) return this._versionedExports[hash];
+    try {
+      return await this._readArtifact(versionedName(slug, hash));
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * @param {string} filename
+   * @returns {Promise<any>}
+   */
+  _readArtifact(filename) {
+    // The loader the runtime already uses for every bank artifact: resolved
+    // against `case-types/`, read as text, parsed explicitly.
+    return loadBank(`./${BANKS_DIR}/${filename}`);
   }
 }
 
