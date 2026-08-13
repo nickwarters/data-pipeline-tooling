@@ -4,10 +4,9 @@
  *
  * Three things compose or read these names — the app's artifact read, the
  * publish script, and the repository gate — and they only agree because they
- * all call this module. The tests worth having are therefore about the two
- * things the rule exists to survive: a hash that cannot be a filename, and a
- * directory holding three kinds of artifact that must not be mistaken for each
- * other.
+ * all call this module. The tests worth having are therefore about the thing
+ * the rule exists to survive: a directory holding two kinds of artifact that
+ * must not be mistaken for each other.
  */
 
 import { test } from 'node:test';
@@ -17,33 +16,16 @@ import {
   BANKS_DIR,
   bankArtifactName,
   classifyBankArtifact,
-  versionFileSegment,
   versionedExportName,
 } from '../src/lib/bank-artifacts.js';
 
 const HEX = 'a'.repeat(64);
 
-test('the identity keeps its algorithm prefix; the filename is the digest alone', () => {
-  // `:` is illegal in a Windows path and rejected by SharePoint, so a hash
-  // pasted straight into a filename produces a file that cannot be written.
-  const hash = `sha256:${HEX}`;
-  assert.equal(versionFileSegment(hash), HEX);
-  assert.equal(versionedExportName('complaints', hash).includes(':'), false);
-  assert.equal(
-    versionedExportName('complaints', hash),
-    `complaints.${HEX}.txt`
-  );
-});
-
-test('a digest with no algorithm prefix names the same file', () => {
-  // The conversion drops everything up to the last `:`, so an identity that
-  // never had one is already its own filename segment. Nothing has to know
-  // which form it was handed.
-  assert.equal(versionFileSegment(HEX), HEX);
-  assert.equal(
-    versionedExportName('complaints', HEX),
-    versionedExportName('complaints', `sha256:${HEX}`)
-  );
+test('a version identity goes into its filename unchanged', () => {
+  // No conversion step: what a Case row stamps is what names the file. `:` is
+  // illegal in a Windows path and rejected by SharePoint, which is why the
+  // identity carries no `sha256:` prefix to have to strip here.
+  assert.equal(versionedExportName('complaints', HEX), `complaints.${HEX}.txt`);
 });
 
 test('both artifacts are .txt in one directory', () => {
@@ -52,7 +34,7 @@ test('both artifacts are .txt in one directory', () => {
   assert.equal(BANKS_DIR, 'banks');
   for (const name of [
     bankArtifactName('complaints'),
-    versionedExportName('complaints', `sha256:${HEX}`),
+    versionedExportName('complaints', HEX),
   ]) {
     assert.ok(name.endsWith('.txt'), name);
     assert.ok(name.startsWith('complaints.'), name);
@@ -66,7 +48,7 @@ test('every name the writers produce is classified back as what it is', () => {
     segment: null,
   });
   assert.deepEqual(
-    classifyBankArtifact(versionedExportName('complaints', `sha256:${HEX}`)),
+    classifyBankArtifact(versionedExportName('complaints', HEX)),
     {
       kind: 'versioned-export',
       slug: 'complaints',

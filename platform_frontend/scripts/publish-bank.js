@@ -6,30 +6,16 @@
  *
  * This is the local half of the publish flow. The Question Bank editor compiles
  * the same envelope through the same functions and will eventually write the
- * same files into SharePoint; until it does, this is what publishes a bank —
- * and how the historical versions in the repository were produced.
- *
- * There is no current-version pointer to update: the bank is the current
- * version, and the app derives its identity from its content. Publishing is
- * therefore only ever *adding* the immutable copy that identity names, which is
- * what a Case completed against today's bank will resolve.
+ * same files into SharePoint; until it does, this is what publishes a bank.
  *
  *   node scripts/publish-bank.js            # every registered Case Type
  *   node scripts/publish-bank.js complaints # one
  *
- * Publishing is idempotent and append-only. Re-running with no bank change
- * rewrites nothing: the hash is derived from the content, so identical
- * questions produce the identical version, and a versioned file that already
- * exists is never overwritten. That is the property the whole scheme rests on —
- * a version some reportable Case resolves its questions from must stay exactly
- * as it was published.
- *
- * The repository formatter reformats what this writes, because bank artifacts
- * are covered by the frontend prettier hook. That is harmless and deliberately
- * so: the hash is computed over a canonical data form rather than the
- * pretty-printed bytes, precisely so that re-formatting cannot silently
- * re-identify identical content. A published file's bytes may be tidied once,
- * on the commit that introduces it; its identity cannot move.
+ * There is no pointer file to update — publishing only ever *adds* the
+ * immutable copy the bank's identity names. It is idempotent and append-only:
+ * an unchanged bank has the same identity, and a versioned file that already
+ * exists is never overwritten. That last part is what the scheme rests on, so
+ * that a version some reportable Case resolves against stays as published.
  */
 
 import { readFile, writeFile, access } from 'node:fs/promises';

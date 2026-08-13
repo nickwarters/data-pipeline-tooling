@@ -141,39 +141,18 @@ test('Question Bank artifacts are read from the deployed banks folder, not a dec
   });
 
   await client.getExportHash('example-review');
-  await client.getVersionedExport('example-review', 'sha256:abc');
+  await client.getVersionedExport('example-review', 'abc123');
 
   assert.ok(
     calls[0].url.endsWith('/case-types/banks/example-review.txt'),
     `expected the bank artifact, got ${calls[0].url}`
   );
   assert.ok(
-    calls[1].url.endsWith('/case-types/banks/example-review.abc.txt'),
+    calls[1].url.endsWith('/case-types/banks/example-review.abc123.txt'),
     `expected the versioned artifact, got ${calls[1].url}`
   );
   // The web URL is not involved: these are not list reads.
   assert.equal(calls[0].url.startsWith(WEB_URL), false);
-});
-
-test('a version hash reaches the filename as the digest alone', async () => {
-  // `sha256:<hex>` cannot be a filename — `:` is illegal in a Windows path and
-  // rejected by SharePoint — so the name carries the digest while the identity
-  // stamped on the Case row keeps its algorithm prefix.
-  const { fetch, calls } = makeFetch(() => ok('{}'));
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
-
-  await client.getVersionedExport('example-review', `sha256:${'a'.repeat(64)}`);
-
-  assert.ok(calls[0].url.endsWith(`example-review.${'a'.repeat(64)}.txt`));
-  assert.equal(calls[0].url.includes(':'), true, 'the https: scheme survives');
-  assert.equal(
-    calls[0].url.includes('sha256:'),
-    false,
-    'the hash colon must not reach the filename'
-  );
 });
 
 test('a missing or unreadable artifact reads as "not published", never a throw', async () => {
@@ -187,7 +166,7 @@ test('a missing or unreadable artifact reads as "not published", never a throw',
   });
   assert.equal(await notPublished.getExportHash('example-review'), null);
   assert.equal(
-    await notPublished.getVersionedExport('example-review', 'sha256:abc'),
+    await notPublished.getVersionedExport('example-review', 'abc123'),
     null
   );
 
@@ -198,7 +177,7 @@ test('a missing or unreadable artifact reads as "not published", never a throw',
   });
   assert.equal(await broken.getExportHash('example-review'), null);
   assert.equal(
-    await broken.getVersionedExport('example-review', 'sha256:abc'),
+    await broken.getVersionedExport('example-review', 'abc123'),
     null
   );
 

@@ -3,33 +3,20 @@
  * A Question Bank's version identity, and the export projection it is computed
  * over.
  *
- * The identity of a bank version is **derived from the bank, not stored beside
- * it**. There is no current-version pointer file: `case-types/banks/{slug}.txt`
- * is the current version, and this is the one function that says what its
- * identity is. A stored pointer would be a second statement of the same fact,
- * and the two can disagree — a bank edited without republishing would keep
- * claiming the old version, and a Case completed against it would freeze on
- * content the Reviewer never saw. A derived identity cannot drift, because
- * there is nothing to keep in step.
+ * A version identity is just an **identifier** — a way to say "this bank" and
+ * "that other bank" and to name a file. It happens to be a hash of the
+ * published questions, which is convenient (it changes when the content does,
+ * and it is unique), but nothing depends on how it is produced. Only one thing
+ * computes one, and everything else treats it as an opaque string.
  *
- * The digest covers **semantic content only** — `slug`, the projected
- * questions, the Outcome vocabulary and the default Outcome. It deliberately
- * excludes `label`, `generatedAt` and the `hash` field itself, so republishing
- * identical questions yields the identical version regardless of when it was
- * published or how the file was formatted. That exclusion is also why an
- * artifact's `hash` field can be rewritten without moving its identity.
+ * It is **derived, not stored beside the bank**. There is no current-version
+ * pointer file: `case-types/banks/{slug}.txt` is the current version. A pointer
+ * would be a second copy of the same fact, and a bank edited without
+ * republishing would go on claiming the old version.
  *
- * This lives in `lib/` rather than with the Question Bank editor because it is
- * no longer only the compiler's concern: the SharePoint clients ask what the
- * current version is on the path that stamps a Case.
- *
- * **On recomputation.** The recorded rule is that readers treat the hash as
- * opaque and never recompute it, because JS and Python will not agree
- * byte-for-byte on a canonical form. That reasoning is about *crossing
- * languages*, and it still holds: nothing outside JavaScript computes an
- * identity. Inside JavaScript there is exactly one implementation — this one —
- * so the compiler, the app and the publish script cannot disagree with each
- * other about what a bank's version is.
+ * This lives in `lib/` rather than with the Question Bank editor because the
+ * SharePoint clients ask what the current version is on the path that stamps a
+ * Case.
  */
 
 /** @typedef {import('../pages/question-bank/question-bank-source.js').QuestionBank} QuestionBank */
@@ -117,55 +104,20 @@ export function exportQuestions(bank) {
 }
 
 /**
- * A canonical JSON string with object keys sorted alphabetically at every
- * nesting level. Arrays preserve their order.
+ * THE version identity of a Question Bank: a lower-case hex SHA-256 over what
+ * the version publishes — the slug, the projected questions, the Outcome
+ * vocabulary and the default Outcome. `label` and `generatedAt` are left out so
+ * that renaming a bank or republishing it on another day is not a new version.
  *
- * Canonical rather than pretty-printed on purpose: the digest is over a
- * normalised data form, so reformatting a file — by the repository formatter,
- * or by a change in how the emitter indents — cannot silently re-identify
- * identical content.
- *
- * @param {unknown} value
- * @returns {string}
- */
-function canonicalise(value) {
-  if (Array.isArray(value)) {
-    return '[' + value.map(canonicalise).join(',') + ']';
-  }
-  if (value !== null && typeof value === 'object') {
-    const keys = Object.keys(/** @type {object} */ (value)).sort();
-    return (
-      '{' +
-      keys
-        .map(
-          (k) =>
-            JSON.stringify(k) +
-            ':' +
-            canonicalise(/** @type {any} */ (value)[k])
-        )
-        .join(',') +
-      '}'
-    );
-  }
-  return JSON.stringify(value);
-}
-
-/**
- * THE version identity of a Question Bank: the lower-case hex SHA-256 of its
- * canonical content, and nothing else.
- *
- * No algorithm prefix. The identity is stamped on a Case row, carried in the
- * envelope, and composed into a filename, and a `sha256:` prefix would have to
- * survive all three — but `:` is illegal in a Windows path and rejected by
- * SharePoint, so it could never reach the third. One form everywhere beats a
- * form that has to be stripped at the edge. The digest's own length is what
- * says which algorithm produced it.
+ * No algorithm prefix. The same value is stamped on a Case row, carried in the
+ * envelope and composed into a filename, and `:` is illegal in a Windows path
+ * and rejected by SharePoint, so a prefixed form could never reach the third.
  *
  * @param {QuestionBank} bank
  * @returns {Promise<string>}
  */
 export async function bankVersionHash(bank) {
-  const canonical = canonicalise({
+  const content = JSON.stringify({
     slug: bank.slug,
     questions: exportQuestions(bank),
     outcomeOptions: bank.outcomeOptions ?? [],
@@ -173,7 +125,7 @@ export async function bankVersionHash(bank) {
   });
   const digest = await crypto.subtle.digest(
     'SHA-256',
-    new TextEncoder().encode(canonical)
+    new TextEncoder().encode(content)
   );
   return [...new Uint8Array(digest)]
     .map((b) => b.toString(16).padStart(2, '0'))

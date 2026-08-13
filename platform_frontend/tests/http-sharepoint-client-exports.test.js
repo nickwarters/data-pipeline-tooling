@@ -52,7 +52,8 @@ test('HttpSharePointClient: getExportHash is stable across calls for unchanged c
     ],
   };
   // Same content, different key order and formatting on the wire: the digest is
-  // over a canonical form, so neither can move a version's identity.
+  // over the projected questions rather than the bytes, so neither can move a
+  // version's identity.
   const reordered = {
     questions: bank.questions,
     label: bank.label,

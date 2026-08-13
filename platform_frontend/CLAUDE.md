@@ -128,7 +128,7 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
 
 - **Question Bank artifacts are JSON stored in `.txt` files, on purpose.** `case-types/banks/*.txt` (loaded via `case-types/load-bank.js`) hold plain JSON text. This is intentional, not an oversight: SharePoint Subscription Edition has been unreliable at storing/serving `.json` files (MIME/blocking issues), so the artifact extension is `.txt` while the content stays JSON, parsed explicitly by the loader. A repo-wide search for `*.json` will not find the banks — search `case-types/banks/*.txt` instead. The same reasoning covers published exports, which live in that directory under the same extension.
 
-- **A version identity is a bare digest — no `sha256:` prefix.** The same value is stamped on a Case row, carried in the envelope's `hash`, and composed into the filename `{slug}.<hex>.txt`, so it has to be legal in all three places; `:` is illegal in a Windows path and rejected outright by SharePoint, so a prefixed identity could never have reached the third. One form everywhere beats a form stripped at the edge, and the digest's own length is what says which algorithm produced it. `versionFileSegment` in `src/lib/bank-artifacts.js` still tolerates a prefixed value so one arriving from elsewhere finds its file; nothing parses a hash back out of a filename.
+- **A Question Bank version identity is just an identifier.** It is a hash because that changes when the content does and is unique enough to name a file — but nothing depends on how it is produced, there is no cross-language parity requirement, and every reader treats it as opaque. Only `src/lib/bank-version.js` computes one. It is a bare digest with no `sha256:` prefix, because the same value is stamped on a Case row, carried in the envelope's `hash` and composed into the filename `{slug}.<hex>.txt`, and `:` is illegal in a Windows path and rejected outright by SharePoint.
 
 ## Planning: what does this change supersede?
 
@@ -245,15 +245,12 @@ src/
     amendment-reasons.js        # AMENDMENT_REASONS: the shared Amendment Reason vocabulary a
                                 #   Case Type may extend (extraAmendmentReasons) but not re-key
     bank-artifacts.js           # THE naming rule for Question Bank artifacts in case-types/banks/:
-                                #   the bank and each published version. Owns the
-                                #   filename rule (the identity is a bare digest, so it goes in
-                                #   unchanged; a prefixed value is tolerated) and the classifier
-                                #   the verify gate reads names back with
-    bank-version.js             # THE version identity of a bank: the export projection and the
-                                #   sha256 over its canonical content. Derived, never stored beside
-                                #   the bank — a pointer file would be a second copy of the same
-                                #   fact and could disagree with it. One implementation, shared by
-                                #   the compiler, both clients and the publish script
+                                #   the bank and each published version, plus the classifier the
+                                #   verify gate reads names back with
+    bank-version.js             # THE version identity of a bank: the export projection and a
+                                #   sha256 over it. An opaque identifier, derived rather than
+                                #   stored beside the bank — a pointer file would be a second copy
+                                #   of the same fact and could disagree with it
     boot-error-panel.js         # cora-boot-error: the "boot did not finish" panel, shared by app.js and app-chrome's fatal-nav path (#575)
     capture-engine.js
     case-loader.js              # loads a Case Review page and hands it over once via toStoreSnapshot() (was case-review-view-model.js, #555)
