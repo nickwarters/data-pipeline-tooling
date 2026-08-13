@@ -93,8 +93,14 @@ purpose is being read by a human.
 The rationale for the column is **internal lineage across the medallion
 tables**. A file on its way out of the system is already answered by the run
 record's `data_locations`, which records the path a write step touched — without
-touching the file's contents. The asymmetry is a decision, not an oversight, and
-is pinned by a test.
+touching the file's contents; `python -m cli runs --run <id>` prints it.
+
+The asymmetry is a decision, not an oversight. It is pinned by a test that runs
+all four file Writers *inside* a run context and asserts the delivered columns
+are exactly the ones they were handed, so a later change to the shared write
+path cannot quietly start stamping delivered files. The rule to apply when
+adding a Writer: **a Writer that persists to a table stamps; a Writer that
+produces something a person or another system reads does not.**
 
 ## Accepted trade-off: `Refresh` loses byte-identical re-drive
 
