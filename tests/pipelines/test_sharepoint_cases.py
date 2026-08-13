@@ -18,9 +18,10 @@ from uuid import UUID
 import pandas as pd
 import pytest
 
-from framework.core import ErrorCategory, ValidationError
+from framework.core import RUN_PROVENANCE_COLUMN, ErrorCategory, ValidationError
 from framework.io import AppendOnlyConflictError
 from framework.run import Pipeline, RunContext, RunLog, dry_run_pipeline
+from framework.run.run_context import active_context
 from framework.transform import Stamp
 from pipelines.sharepoint_cases import gold
 from pipelines.sharepoint_cases.gold import (
@@ -1184,6 +1185,33 @@ def test_an_overlap_reread_does_not_double_count_gold(tmp_path):
     assert [
         row["case_count"] for row in read_rows(med.gold, "case_counts_current")
     ] == [1]
+
+
+def test_every_gold_table_names_the_run_that_rebuilt_it(tmp_path):
+    # All four gold tables are Refresh() targets, so each is uniform: the run
+    # named on any row wrote every row of that table. Under one attempt — what
+    # `python -m cli run` establishes, and what `active_context` stands in for
+    # here — all four name the *same* run, because one poll rebuilt them
+    # together. (That a re-drive keeps the data and only moves the id on is the
+    # Writer's own property, covered in tests/framework/io/test_writers.py.)
+    context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
+
+    with active_context(context):
+        run(context, client=FakeListClient())
+
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    landed = {
+        table: {row[RUN_PROVENANCE_COLUMN] for row in read_rows(med.gold, table)}
+        for table in GOLD_TABLES
+    }
+    # `case_throughput_daily` has no terminal Case in this window, so it is
+    # published empty — an empty table names no run, which is not a gap.
+    assert {table for table, ids in landed.items() if ids} == {
+        "case_current",
+        "case_counts_current",
+        "case_age_buckets_current",
+    }
+    assert set().union(*landed.values()) == {context.pipeline_run_id}
 
 
 def test_a_failure_in_current_gold_leaves_no_gold_and_no_checkpoint(

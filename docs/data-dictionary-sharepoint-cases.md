@@ -296,10 +296,29 @@ across Case Types, so an aggregate computed per list would not add up.
 
 `as_of_utc` is the **candidate SharePoint window end** — the instant this run is
 about to commit as its watermark — as ISO-8601 UTC text. Never `utcnow()`: a
-re-drive of the same window must produce identical gold. Where a *calendar date*
-is derived from it (`terminal_date`, the age arithmetic) the instant is converted
-to the **local** date first, per
+re-drive of the same window must produce identical **data**. Where a *calendar
+date* is derived from it (`terminal_date`, the age arithmetic) the instant is
+converted to the **local** date first, per
 [`tools/observability/timestamps.py`](../tools/observability/timestamps.py).
+
+### `pipeline_run_id`, on every table
+
+| Column | Type | Null? | Description |
+|--------|------|-------|-------------|
+| `pipeline_run_id` | text | No | The pipeline run that wrote the row. |
+
+The reserved run-provenance column every table-backed Writer stamps
+([ADR-0020](adr/0020-writer-stamped-run-provenance-column.md)). It is the
+framework's, not the feed's: no gold builder declares it, and it is added after
+validation, so it appears in no schema and in no grain.
+
+Because all four tables are rebuilt whole with `Refresh()`, the value is
+**uniform per table** — the run named on any row is the run that wrote all of
+them. A re-drive of the same window therefore produces identical data with a
+different `pipeline_run_id`: identical *data*, not identical bytes. Which
+attempt produced a table is also answerable without reading it, from the run
+registry — `python -m cli runs --table case_current`
+([operator CLI](operator-cli.md)).
 
 ### `case_current`
 

@@ -30,7 +30,7 @@ from framework.core.validators import ValidationError, needs_whole_dataset
 from framework.io.writers import supports_chunk_writes, writing_chunks
 from framework.run.address import RunAddress
 from framework.run.execution import PipelineExecution
-from framework.run.run_context import RunContext, current_context
+from framework.run.run_context import RunContext, active_context, current_context
 from tools.observability.run_log import NULL_RUN_LOG, RunLog
 
 log = logging.getLogger(__name__)
@@ -943,10 +943,20 @@ class Pipeline:
     def _execute(
         self, session: PipelineExecution, context: RunContext, leaf_nodes: list[Node]
     ) -> list[Any]:
-        """Drive the graph: once, or once per chunk when a source is streamed."""
-        if self._chunked_source is None:
-            return [node.execute(session, context) for node in leaf_nodes]
-        return self._execute_per_chunk(session, context, leaf_nodes)
+        """Drive the graph: once, or once per chunk when a source is streamed.
+
+        The context this run resolved to is made **ambient** for the duration of
+        the walk. The runner already does that around a handler, but a pipeline
+        run with an *explicit* context — a script, a test, a hop invoked
+        directly — would otherwise execute with no ambient context at all, and a
+        component that reads one (a Writer stamping the run that wrote the row)
+        would silently see nothing. One rule instead: while a pipeline is
+        executing, its context is the ambient one.
+        """
+        with active_context(context):
+            if self._chunked_source is None:
+                return [node.execute(session, context) for node in leaf_nodes]
+            return self._execute_per_chunk(session, context, leaf_nodes)
 
     def _execute_per_chunk(
         self, session: PipelineExecution, context: RunContext, leaf_nodes: list[Node]

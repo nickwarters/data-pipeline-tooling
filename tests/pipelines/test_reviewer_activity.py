@@ -7,7 +7,7 @@ import datetime as dt
 import pandas as pd
 import pytest
 
-from framework.core import Dataset
+from framework.core import RUN_PROVENANCE_COLUMN, Dataset
 from framework.io import Refresh
 from framework.run import FreshnessRequirement, RunContext
 from pipelines.reviewer_activity.gold import (
@@ -128,15 +128,18 @@ def test_main_reads_sync_gold_and_refreshes_the_reporting_subject(tmp_path):
 
     assert main(["prog", "--base-dir", str(tmp_path)]) == 0
 
-    assert read_rows(reporting.gold, "reviewer_activity_daily") == [
-        {
-            "reviewer_account": "a.khan",
-            "reportable_date": "2026-08-09",
-            "case_type": "claims",
-            "count": 1,
-            "as_of_utc": AS_OF,
-        }
-    ]
+    # The published row, minus the reserved provenance column every table-backed
+    # Writer stamps: the run that wrote it is asserted separately, because its
+    # value is a fresh id per run and is not part of the aggregate's contract.
+    [published] = read_rows(reporting.gold, "reviewer_activity_daily")
+    assert published.pop(RUN_PROVENANCE_COLUMN)
+    assert published == {
+        "reviewer_account": "a.khan",
+        "reportable_date": "2026-08-09",
+        "case_type": "claims",
+        "count": 1,
+        "as_of_utc": AS_OF,
+    }
 
     sync.gold.writer("case_current", Refresh()).write(
         Dataset.from_pandas(pd.DataFrame([_case(reviewer=r"CONTEXT\NEW")]))
