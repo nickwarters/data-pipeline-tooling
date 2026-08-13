@@ -46,7 +46,10 @@ module says so, and it is the one place to change if that stops being enough.
   a Responsible Party or their Manager replying clears it, anyone else changes neither
   half. The side comes from the roles Section access already resolved for the page, not
   from `Message.author` — that is a display name, while a Case stores its people by
-  account.
+  account. _Amended: `Message.author` now carries a `loginName` alongside its display
+  name, so the account objection no longer holds; the decision stands on the remaining
+  reason, that the page has already resolved which side the poster is on and re-deriving
+  it from the thread would be a second, divergent answer._
 - **The rule is knowingly coarser than the state it stands for.** It reads _"the newest
   message came from a Reviewer"_, not _"the Reviewer asked something and no reply has come
   back"_. A Reviewer posting "thanks, closing" re-arms the flag. The alternative is asking

@@ -14,7 +14,7 @@ test('makeCaseRow: two rows never share a mutable answers or conversation', () =
 
   first.answers['q1'] = { value: 'Yes' };
   first.conversation.push({
-    author: 'someone',
+    author: { loginName: 'someone', displayName: 'Someone Else' },
     timestamp: '2026-07-01T00:00:00Z',
     body: 'hello',
   });

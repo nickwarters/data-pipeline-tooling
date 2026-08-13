@@ -446,7 +446,11 @@ _Avoid_: Dispute, Complaint, Grievance, Challenge
 The thread between the **Reviewer** and the responsible-party side of one **Case** — the **Responsible Party** and their **Manager**, both of whom post. Stored as a JSON array of **Messages** in a single plain-text field on the Case row.
 
 **Message**:
-One entry in a **Conversation** — author, timestamp, body.
+One entry in a **Conversation** — author, timestamp, body. The author is a
+`{ loginName, displayName }` pair, the same shape an **Attributed Party** carries:
+`loginName` is the bare account identifying the sender, and `displayName` is the cached
+name the thread renders — a snapshot of what they were called when they posted, never
+refreshed from the directory.
 
 ### Outcome
 

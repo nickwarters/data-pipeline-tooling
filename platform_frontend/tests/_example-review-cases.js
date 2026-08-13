@@ -64,12 +64,12 @@ export const exampleReviewCases = [
     },
     conversation: [
       {
-        author: 'user-reviewer',
+        author: { loginName: 'user-reviewer', displayName: 'Alex Reviewer' },
         timestamp: '2026-05-07T09:00:00Z',
         body: 'Please confirm the greeting script used.',
       },
       {
-        author: 'user-agent-b',
+        author: { loginName: 'user-agent-b', displayName: 'Rowan Agent' },
         timestamp: '2026-05-07T09:15:00Z',
         body: 'Standard greeting was used per policy.',
       },
@@ -263,17 +263,17 @@ export const exampleReviewCases = [
     answers: {},
     conversation: [
       {
-        author: 'user-reviewer',
+        author: { loginName: 'user-reviewer', displayName: 'Alex Reviewer' },
         timestamp: '2026-05-07T09:00:00Z',
         body: 'Please clarify the greeting used.',
       },
       {
-        author: 'user-rp',
+        author: { loginName: 'user-rp', displayName: 'Jordan RP' },
         timestamp: '2026-05-07T09:30:00Z',
         body: 'Standard greeting was used.',
       },
       {
-        author: 'user-reviewer',
+        author: { loginName: 'user-reviewer', displayName: 'Alex Reviewer' },
         timestamp: '2026-05-07T10:00:00Z',
         body: 'Can you provide the exact wording?',
       },
@@ -293,7 +293,7 @@ export const exampleReviewCases = [
     answers: {},
     conversation: [
       {
-        author: 'user-reviewer',
+        author: { loginName: 'user-reviewer', displayName: 'Alex Reviewer' },
         timestamp: '2026-05-08T09:00:00Z',
         body: 'Please respond to review queries.',
       },

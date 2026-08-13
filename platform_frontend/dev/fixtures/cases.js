@@ -426,17 +426,17 @@ export const cases = [
     },
     conversation: [
       {
-        author: 'user-reviewer',
+        author: { loginName: 'user-reviewer', displayName: 'Alex Reviewer' },
         timestamp: _threeDaysAgo.toISOString(),
         body: 'Two actions are with you on this complaint: the late logging and the outstanding redress calculation.',
       },
       {
-        author: 'user-rp',
+        author: { loginName: 'user-rp', displayName: 'Jordan RP' },
         timestamp: _twoDaysAgo.toISOString(),
         body: 'The register entry has been corrected. Redress is with the calculations team.',
       },
       {
-        author: 'user-reviewer',
+        author: { loginName: 'user-reviewer', displayName: 'Alex Reviewer' },
         timestamp: _yesterday.toISOString(),
         body: 'Thanks. Please confirm the redress figure before the remediation due date.',
       },
@@ -528,7 +528,7 @@ export const cases = [
     answers: {},
     conversation: [
       {
-        author: 'Ruth Reviewer',
+        author: { loginName: 'user-reviewer', displayName: 'Alex Reviewer' },
         timestamp: _nineDaysAgo.toISOString(),
         body: 'Please confirm whether the fees were refunded.',
       },
@@ -553,12 +553,12 @@ export const cases = [
     answers: {},
     conversation: [
       {
-        author: 'Noor Agent',
+        author: { loginName: 'user-agent-c', displayName: 'Noor Agent' },
         timestamp: _nineDaysAgo.toISOString(),
         body: 'Declaration attached.',
       },
       {
-        author: 'Ruth Reviewer',
+        author: { loginName: 'user-reviewer', displayName: 'Alex Reviewer' },
         timestamp: _fiveDaysAgo.toISOString(),
         body: 'The declaration is dated after the deadline — can you explain?',
       },

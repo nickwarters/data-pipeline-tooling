@@ -206,12 +206,24 @@ test('loadKpiModel: reviewer lane buckets cases into overdue / awaiting RP / in 
     caseRow({
       id: 'a1',
       caseType: 'complaints',
-      conversation: [{ author: 'me', timestamp: PAST, body: 'ping' }],
+      conversation: [
+        {
+          author: { loginName: 'me', displayName: 'Me Reviewer' },
+          timestamp: PAST,
+          body: 'ping',
+        },
+      ],
     }),
     caseRow({
       id: 'p1',
       caseType: 'complaints',
-      conversation: [{ author: 'rp', timestamp: PAST, body: 'reply' }],
+      conversation: [
+        {
+          author: { loginName: 'rp', displayName: 'Rae Party' },
+          timestamp: PAST,
+          body: 'reply',
+        },
+      ],
     }),
     caseRow({ id: 'p2', caseType: 'conduct' }),
     // out of scope — no source for this list, never fetched

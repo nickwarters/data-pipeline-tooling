@@ -73,12 +73,12 @@ export function outstandingRemediation(row) {
 export function hasUnreadMessages(row, currentUserId) {
   if (row.conversation.length === 0) return false;
   const own = row.conversation.filter(
-    (message) => message.author === currentUserId
+    (message) => message.author.loginName === currentUserId
   );
   const lastOwn = own.at(-1)?.timestamp ?? null;
   return row.conversation.some(
     (message) =>
-      message.author !== currentUserId &&
+      message.author.loginName !== currentUserId &&
       (lastOwn == null || message.timestamp > lastOwn)
   );
 }
