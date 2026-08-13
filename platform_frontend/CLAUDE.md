@@ -76,7 +76,7 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
   the shape of a page, and the
   [render loop explainer](./docs/render-loop-explainer.html) for the runtime
   mechanics — dispatch, reducer, view, and how `render()` commits.
-- **Case Type config as JS modules; Question Bank content as SharePoint-hosted text artifacts.** One module per Case Type under `case-types/{slug}.js`, lazy-loaded via `case-types/manifest.js`. Question Bank content (Question Definitions, labels, and Outcome vocabulary) lives in `case-types/banks/{slug}.txt`, stored in the SharePoint Style Library and loaded through `case-types/load-bank.js` as part of the Case Type config. There is no shared Question Definitions list and no planned runtime join to one. `HttpSharePointClient`/`MockSharePointClient` expose `getExportHash`/`getVersionedExport` for ADR-0021's immutable, point-in-time exports on reportable Cases.
+- **Case Type config as JS modules; Question Bank content as SharePoint-hosted text artifacts.** One module per Case Type under `case-types/{slug}.js`, lazy-loaded via `case-types/manifest.js`. Question Bank content (Question Definitions, labels, and Outcome vocabulary) lives in `case-types/banks/{slug}.txt`, stored in the SharePoint Style Library and loaded through `case-types/load-bank.js` as part of the Case Type config. There is no shared Question Definitions list and no planned runtime join to one. `HttpSharePointClient`/`MockSharePointClient` expose `getExportHash`/`getVersionedExport` for ADR-0021's immutable, point-in-time exports on reportable Cases. Under `?mock=1` those come from `dev/fixtures/question-bank-versions.js`, so the freeze is demoable in the dev loop: two fixture Cases are stamped against older versions and open against the questions they were reviewed with, one of which no longer exists in the live bank.
 - **JSDoc + `tsc --checkJs` for types**. No `.ts` files; the deployed JS is the source JS. `npm run check` runs `tsc --noEmit --checkJs --allowJs`.
 - **Per-Case-Type `showWhen` graph + `outcome` function**. Applicability is data (declarative `showWhen`); outcome is code (exported function). Same module, one place to look.
 - **Case storage: everything on the Case row**. `Answers` and `Conversation` as JSON blobs on a per-Case-Type SharePoint list row. Notes as plain text. Field-level PATCH only.
@@ -486,6 +486,12 @@ dev/                            # local dev loop; not deployed
     cases.js
     people.js                   # directory people backing searchPeople
     personas.js                 # ?asUser= personas (default: reviewer)
+    question-bank-versions.js   # the published bank versions a reportable Case resolves
+                                #   as-reviewed questions from: literal frozen older
+                                #   versions (a frozen version must not move when the live
+                                #   bank is edited) plus each Case Type's current version
+                                #   compiled from its live bank, which is what getExportHash
+                                #   hands completion to stamp
     roadmap.js
 
 tests/                          # node:test unit tests — flat, one file per subject by filename

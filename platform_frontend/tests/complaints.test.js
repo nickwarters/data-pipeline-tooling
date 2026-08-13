@@ -324,6 +324,23 @@ function reportableComplaintsCases() {
   );
 }
 
+/**
+ * The Complaints Cases whose Answers this catalogue is entitled to judge —
+ * every one that is not frozen against an older Question Bank version.
+ *
+ * A Case stamped with a `questionBankVersion` resolves its questions from that
+ * version's export, so its Answers answer *that* catalogue: it may hold an
+ * Answer to a question since retired, and hold none for questions added after
+ * it was reviewed. Both read as defects against today's bank and are correct
+ * against its own. The stamped Cases are held to the same rules against the
+ * version they name, in question-bank-versions-fixture.test.js.
+ */
+function liveBankComplaintsCases() {
+  return cases.filter(
+    (c) => c.caseType === 'complaints' && !c.questionBankVersion
+  );
+}
+
 test('complaints fixtures: every reference Case with answers computes to its frozen outcomeAtCompletion', () => {
   const frozen = reportableComplaintsCases();
   assert.ok(frozen.length >= 1, 'expected a frozen-Outcome Complaints Case');
@@ -405,7 +422,9 @@ test('complaints: every outcome-type question declares a non-empty questionGroup
 
 test('complaints fixtures: the Cases past the reportable milestone answer every applicable Question', () => {
   const catalogue = config.questions.filter((q) => !q.deprecated);
-  const reportable = reportableComplaintsCases();
+  const reportable = liveBankComplaintsCases().filter((c) =>
+    isReportable(c.status)
+  );
   assert.ok(reportable.length >= 1, 'expected a reportable Complaints Case');
   for (const row of reportable) {
     assert.equal(
@@ -430,7 +449,7 @@ test('complaints fixtures: every Answer key names a Question the catalogue still
   // the app but still scores the Outcome, so a half-finished rename reads as a
   // Case whose Outcome nothing on screen explains.
   const ids = new Set(config.questions.map((q) => q.id));
-  for (const row of cases.filter((c) => c.caseType === 'complaints')) {
+  for (const row of liveBankComplaintsCases()) {
     for (const key of Object.keys(row.answers)) {
       if (key.startsWith(GENERAL_ANSWER_PREFIX)) continue;
       assert.ok(
@@ -446,7 +465,7 @@ test('complaints fixtures: no Answer is stored against a Question the Case hides
   // a hidden Question keeps scoring one the Reviewer was never shown. The
   // fixtures decide applicability for themselves, and this is what keeps that
   // decision honest as the conditional Question's rule changes.
-  for (const row of cases.filter((c) => c.caseType === 'complaints')) {
+  for (const row of liveBankComplaintsCases()) {
     const applicable = evaluate(config.questions, row.answers);
     for (const key of Object.keys(row.answers)) {
       if (key.startsWith(GENERAL_ANSWER_PREFIX)) continue;
