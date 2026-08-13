@@ -1847,7 +1847,7 @@ test('dashboard pure view composes every real panel for a multi-role user', () =
     },
     conversation: [
       {
-        author: 'reviewer',
+        author: { loginName: 'reviewer', displayName: 'Robin Reviewer' },
         timestamp: '2026-06-01T00:00:00Z',
         body: 'Update',
       },
@@ -2601,7 +2601,11 @@ test('dashboard Responsible Party panel: Open conversation navigates to the Conv
       q1: { value: 'No', remediationActions: [{ id: 'a1', text: 'Fix' }] },
     },
     conversation: [
-      { author: 'reviewer', timestamp: '2026-02-01T00:00:00Z', body: 'hi' },
+      {
+        author: { loginName: 'reviewer', displayName: 'Robin Reviewer' },
+        timestamp: '2026-02-01T00:00:00Z',
+        body: 'hi',
+      },
     ],
     etag: 'e',
   });

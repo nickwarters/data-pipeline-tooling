@@ -96,7 +96,11 @@
  */
 
 /**
- * @typedef {{ author: string, timestamp: string, body: string }} Message
+ * `author.loginName` identifies the sender — delivery and unread detection key
+ * on it. `author.displayName` is a snapshot of what they were called when they
+ * posted, and is never refreshed.
+ *
+ * @typedef {{ author: { loginName: string, displayName: string }, timestamp: string, body: string }} Message
  */
 
 /**

@@ -141,7 +141,11 @@ function panelState() {
           },
         },
         conversation: [
-          { author: 'reviewer', timestamp: '2026-02-01T00:00:00Z', body: 'hi' },
+          {
+            author: { loginName: 'reviewer', displayName: 'Robin Reviewer' },
+            timestamp: '2026-02-01T00:00:00Z',
+            body: 'hi',
+          },
         ],
         etag: 'e',
       }),
@@ -195,7 +199,11 @@ function unsortedCase(id, caseType) {
       q1: { value: 'No', remediationActions: [{ id: `a-${id}`, text: 'Fix' }] },
     },
     conversation: [
-      { author: 'reviewer', timestamp: '2026-02-01T00:00:00Z', body: 'hi' },
+      {
+        author: { loginName: 'reviewer', displayName: 'Robin Reviewer' },
+        timestamp: '2026-02-01T00:00:00Z',
+        body: 'hi',
+      },
     ],
     etag: 'e',
   });

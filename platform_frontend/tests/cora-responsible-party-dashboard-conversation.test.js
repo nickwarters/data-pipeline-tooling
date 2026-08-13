@@ -29,19 +29,39 @@ function row(id, conversation) {
 test('Responsible Party unread detection follows the last Responsible Party reply', () => {
   assert.equal(hasUnreadMessages(row('empty', []), 'rp-1'), false);
   const unread = row('unread', [
-    { author: 'reviewer', timestamp: '2026-06-02T00:00:00Z', body: 'Update' },
+    {
+      author: { loginName: 'reviewer', displayName: 'Robin Reviewer' },
+      timestamp: '2026-06-02T00:00:00Z',
+      body: 'Update',
+    },
   ]);
   const read = row('read', [
-    { author: 'reviewer', timestamp: '2026-06-01T00:00:00Z', body: 'Update' },
-    { author: 'rp-1', timestamp: '2026-06-02T00:00:00Z', body: 'Seen' },
+    {
+      author: { loginName: 'reviewer', displayName: 'Robin Reviewer' },
+      timestamp: '2026-06-01T00:00:00Z',
+      body: 'Update',
+    },
+    {
+      author: { loginName: 'rp-1', displayName: 'Jordan RP' },
+      timestamp: '2026-06-02T00:00:00Z',
+      body: 'Seen',
+    },
   ]);
   assert.equal(hasUnreadMessages(unread, 'rp-1'), true);
   assert.equal(hasUnreadMessages(read, 'rp-1'), false);
   assert.equal(
     hasUnreadMessages(
       row('new-unread', [
-        { author: 'rp-1', timestamp: '2026-06-01T00:00:00Z', body: 'Seen' },
-        { author: 'reviewer', timestamp: '2026-06-03T00:00:00Z', body: 'New' },
+        {
+          author: { loginName: 'rp-1', displayName: 'Jordan RP' },
+          timestamp: '2026-06-01T00:00:00Z',
+          body: 'Seen',
+        },
+        {
+          author: { loginName: 'reviewer', displayName: 'Robin Reviewer' },
+          timestamp: '2026-06-03T00:00:00Z',
+          body: 'New',
+        },
       ]),
       'rp-1'
     ),
@@ -49,12 +69,38 @@ test('Responsible Party unread detection follows the last Responsible Party repl
   );
 });
 
+test('Responsible Party unread detection separates two people who share a display name', () => {
+  // The Responsible Party and their Manager can be namesakes; only the account
+  // tells them apart, and getting it wrong hides a chase or invents one.
+  const namesake = row('namesake', [
+    {
+      author: { loginName: 'rp-1', displayName: 'Alex Reviewer' },
+      timestamp: '2026-06-01T00:00:00Z',
+      body: 'Seen',
+    },
+    {
+      author: { loginName: 'areviewer', displayName: 'Alex Reviewer' },
+      timestamp: '2026-06-02T00:00:00Z',
+      body: 'Any update?',
+    },
+  ]);
+  assert.equal(hasUnreadMessages(namesake, 'rp-1'), true);
+  assert.equal(hasUnreadMessages(namesake, 'areviewer'), false);
+});
+
 test('Responsible Party unread messages render through descriptors and invoke conversation navigation', () => {
   const unread = row('unread', [
-    { author: 'reviewer', timestamp: '2026-06-02T00:00:00Z', body: 'Update' },
+    {
+      author: { loginName: 'reviewer', displayName: 'Robin Reviewer' },
+      timestamp: '2026-06-02T00:00:00Z',
+      body: 'Update',
+    },
   ]);
   const missingTimestamp = row('missing-timestamp', [
-    /** @type {any} */ ({ author: 'reviewer', body: 'Update' }),
+    /** @type {any} */ ({
+      author: { loginName: 'reviewer', displayName: 'Robin Reviewer' },
+      body: 'Update',
+    }),
   ]);
   /** @type {string[]} */
   const opened = [];
@@ -124,7 +170,11 @@ test('without a Conversation handler the Unread Messages table renders no Open b
     {
       cases: [
         row('missing-timestamp', [
-          { author: 'reviewer', timestamp: '2026-06-01T00:00:00Z', body: 'hi' },
+          {
+            author: { loginName: 'reviewer', displayName: 'Robin Reviewer' },
+            timestamp: '2026-06-01T00:00:00Z',
+            body: 'hi',
+          },
         ]),
       ],
       currentUserId: 'rp-1',

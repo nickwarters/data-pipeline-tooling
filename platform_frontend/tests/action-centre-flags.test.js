@@ -18,7 +18,11 @@ import {
 
 /** @param {string} at */
 function message(at) {
-  return { author: 'Someone', timestamp: at, body: 'text' };
+  return {
+    author: { loginName: 'someone', displayName: 'Someone' },
+    timestamp: at,
+    body: 'text',
+  };
 }
 
 /** @param {string} at @param {'raised'|'resolved'} state */

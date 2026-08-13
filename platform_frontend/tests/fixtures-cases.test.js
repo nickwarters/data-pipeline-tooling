@@ -106,7 +106,9 @@ test('the sent-to-adviser Case is addressed to a Responsible Party persona', () 
   );
   // The adviser's unread-messages panel needs a message they did not write.
   assert.ok(
-    row.conversation.some((message) => message.author !== row.responsibleParty),
+    row.conversation.some(
+      (message) => message.author.loginName !== row.responsibleParty
+    ),
     'the Conversation carries a message from someone other than the adviser'
   );
 });

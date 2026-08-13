@@ -124,7 +124,11 @@ test('HttpSharePointClient: getCase parses Answers/Conversation JSON blobs and c
             ResponsiblePartyId: 'user-2',
             Answers: JSON.stringify({ 'q-welcome': { value: 'Yes' } }),
             Conversation: JSON.stringify([
-              { author: 'user-1', timestamp: 't', body: 'hi' },
+              {
+                author: { loginName: 'user-1', displayName: 'User One' },
+                timestamp: 't',
+                body: 'hi',
+              },
             ]),
             Notes: 'note',
             CompletedAt: null,
