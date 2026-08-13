@@ -51,7 +51,7 @@ rename — see CONTEXT.)
 |--------|----------------------------------------|----------------|
 | **raw** | A faithful, schema-light snapshot of the source as landed — the framework's landing zone. | **Full refresh** each run: truncate + reload from the source snapshot, so re-runs are deterministic. |
 | silver | Validated, normalised data: the **schema boundary** — a Case Type's declared columns + dtypes are enforced here as a post-validator before the data lands. Normalising *coercion* (parsing dates, casting booleans) runs as a transform step ahead of that check. | Full refresh from raw. |
-| gold   | Refined ingest outputs **and** the accumulating SelectionPool / Review Outcomes. A gold hop composes an explicit `Pipeline` whose Writer carries the load strategy. | **Current-only** (ingest gold: `Refresh`, one row per Case) **or accumulating** (Selection / Sync: `AccumulateByRun`, stamped with `logical_run_id` / `load_date` and, when context-driven, `pipeline_run_id`; idempotent re-run via delete-by-logical-run then insert; [gold-accumulation doc](gold-accumulation.md)). |
+| gold   | Refined ingest outputs **and** the accumulating SelectionPool / Review Outcomes. A gold hop composes an explicit `Pipeline` whose Writer carries the load strategy. | **Current-only** (ingest gold: `Refresh`, one row per Case) **or accumulating** (Selection / Sync: `AccumulateByRun`, stamped with `logical_run_id` / `load_date`, plus the Writer's own `pipeline_run_id` provenance column; idempotent re-run via delete-by-logical-run then insert; [gold-accumulation doc](gold-accumulation.md)). |
 
 raw stays schema-light on purpose: it mirrors the source so the landing zone is
 faithful, and schema enforcement arrives at silver and gold.
@@ -320,11 +320,12 @@ Deliverables and SQLite tables:
   lands. Emits the Selection Deliverable — one list per Case Type.
 - `SqliteTruncateReloadWriter(db_path, table)` — **full refresh** (truncate +
   reload). Used for raw/silver, which mirror a current-state source snapshot.
-- `AccumulateByRunWriter(db_path, table, logical_run_id, load_date, pipeline_run_id=None)` —
-  **accumulate by logical run** for gold: stamps each row `logical_run_id`,
-  `load_date`, and optional `pipeline_run_id`. `logical_run_id` is the
-  idempotency key; `pipeline_run_id` is the trace key that matches
-  RunLog/RunRegistry when the strategy is derived from a `RunContext`.
+- `AccumulateByRunWriter(db_path, table, logical_run_id, load_date)` —
+  **accumulate by logical run** for gold: stamps each row `logical_run_id` and
+  `load_date` (the strategy's own contract), plus the reserved
+  `pipeline_run_id` provenance column every table-backed Writer sets.
+  `logical_run_id` is the idempotency key; `pipeline_run_id` is the trace key
+  that matches RunLog/RunRegistry.
   A re-driven run is idempotent via *delete-by-logical-run then insert*. Minted by
   `med.gold.writer(table, AccumulateByRun(...))` (see
   [gold-accumulation doc](gold-accumulation.md)).
@@ -770,8 +771,8 @@ class RunLog:
 Every record of a single execution carries the same `pipeline_run_id`: the
 attempt id created by ad hoc `.run()` or supplied as `RunContext.pipeline_run_id`,
 plus the `logical_run_id` of the business run it belongs to. Accumulated rows use
-`logical_run_id` for idempotency and stamp `pipeline_run_id` for traceability when
-the writer strategy is context-derived. The record
+`logical_run_id` for idempotency; `pipeline_run_id` is on the row because the
+Writer stamps it on every table it writes. The record
 `timestamp` (the ISO-8601 UTC instant it was emitted) lets the run registry group
 and order a run without parsing free text. The builder owns no path or format
 knowledge — it just drives the sink; when no `RunLog` is composed a null sink

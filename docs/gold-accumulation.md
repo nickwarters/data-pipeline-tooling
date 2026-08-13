@@ -32,13 +32,18 @@ where an outcome genuinely changes between runs.
 
 ## Load behaviour: accumulate, stamped by run
 
-Every gold row is stamped with two columns:
+Every gold row carries three columns:
 
-| Column | Meaning |
-|--------|---------|
-| `logical_run_id` | The **logical load** this row belongs to — a stable, caller-chosen key (e.g. a business date). It is the **idempotency key**. |
-| `pipeline_run_id` | The concrete **pipeline attempt** that wrote the row — the trace key back to the run log. Stamped only when the strategy was derived from a `RunContext`. |
-| `load_date` | The date this load represents, carried as a plain column for reporting/lineage. |
+| Column | Meaning | Stamped by |
+|--------|---------|------------|
+| `logical_run_id` | The **logical load** this row belongs to — a stable, caller-chosen key (e.g. a business date). It is the **idempotency key**. | the `AccumulateByRun` strategy / Writer |
+| `load_date` | The date this load represents, carried as a plain column for reporting/lineage. | the `AccumulateByRun` strategy / Writer |
+| `pipeline_run_id` | The concrete **pipeline attempt** that wrote the row — the trace key back to the run log. | the **Writer**, on every table it writes ([ADR-0020](adr/0020-writer-stamped-run-provenance-column.md)) |
+
+The first two are this strategy's own contract. The third is not: it is the
+reserved run-provenance column every table-backed Writer sets from the ambient
+run context, so a gold table gets it exactly as a refreshed raw table does, and
+one column has one stamper.
 
 A run **accumulates**: a later run adds its rows alongside earlier runs' rather
 than replacing them, so history is kept.
@@ -83,7 +88,8 @@ them from the shared `RunContext` so `--logical-run-id` flows straight through.
 The two are *linked* without being conflated: an accumulated row also carries
 `pipeline_run_id` (matching the run-log/registry key), so an operator can
 correlate a logical load's rows back to the exact execution that wrote them via
-the `RunRegistry`.
+the `RunRegistry`. That column is the Writer's, not the strategy's — the
+strategy neither takes it nor stamps it.
 
 ## How a changing record is represented across runs
 
@@ -216,9 +222,10 @@ p.run()
 The `Store` mints the `AccumulateByRunWriter`, which owns the location and the
 delete-by-logical-run/insert accumulate behaviour; the
 pipeline makes no load decision of its own. `AccumulateByRun.from_context(context)`
-derives the `logical_run_id` / `load_date` (and the `pipeline_run_id` trace key)
-from the shared `RunContext`, so a re-drive under the same `--logical-run-id`
-replaces that load idempotently.
+derives the `logical_run_id` / `load_date` from the shared `RunContext`, so a
+re-drive under the same `--logical-run-id` replaces that load idempotently. The
+`pipeline_run_id` trace key needs no deriving: the Writer reads it from the
+ambient run context when it writes.
 
 To enforce the schema on the same footing as silver, insert a `SchemaValidator`
 validate step before the write (see

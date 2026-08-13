@@ -17,8 +17,15 @@ import sys
 import pytest
 
 from cli import scaffold
+from framework.core import RUN_PROVENANCE_COLUMN
 from framework.run import RunContext
-from tests.framework_testing import RecordingWriter, given_rows, read_rows, rows_of
+from tests.framework_testing import (
+    RecordingWriter,
+    given_rows,
+    read_rows,
+    rows_of,
+    without_columns,
+)
 from tools.medallion import medallion
 from tools.store import StoreRegistry
 
@@ -146,9 +153,12 @@ def test_rendered_pipeline_runs_and_lands_its_sample_feed(tmp_path):
     assert len(landed) == len(dataset) > 0
     # raw accumulates under the run context, so landed rows carry the run's
     # stamps (run_id / load_date / ...) on top of the source columns; the source
-    # columns themselves land faithfully.
-    source_columns = set(rows_of(dataset)[0])
-    assert [{c: row[c] for c in source_columns} for row in landed] == rows_of(dataset)
+    # columns themselves land faithfully. The provenance column is left out of
+    # the comparison: raw and gold are separate hops, and with nothing supplying
+    # a shared context each names the run that wrote *it*.
+    returned = without_columns(rows_of(dataset), RUN_PROVENANCE_COLUMN)
+    source_columns = set(returned[0])
+    assert [{c: row[c] for c in source_columns} for row in landed] == returned
 
 
 def test_rendered_pipeline_main_runs_and_records_a_run(tmp_path, capsys):

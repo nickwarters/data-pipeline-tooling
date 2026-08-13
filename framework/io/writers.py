@@ -530,6 +530,11 @@ class QuarantineWriter:
     or ``load_date`` — those come from the dataset (added by the pipeline at
     quarantine time). The ``failed_rule`` column also arrives pre-stamped by the
     partitioner.
+
+    It does stamp the reserved provenance column, exactly as every other
+    table-backed Writer does: a quarantine table is a table the framework wrote,
+    and "which run rejected this row?" is the same question asked of the rejects
+    (``docs/adr/0020-writer-stamped-run-provenance-column.md``).
     """
 
     def __init__(
@@ -545,8 +550,10 @@ class QuarantineWriter:
 
     def write(self, dataset: Dataset) -> None:
         self.data_locations = [table_location(self._db_path, self._table)]
-        frame = dataset.to_pandas()
+        frame = _stamp_run_provenance(dataset.to_pandas(), _current_run_id())
         with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
+            if RUN_PROVENANCE_COLUMN in frame.columns:
+                _ensure_provenance_column(con, self._table)
             if "logical_run_id" in frame.columns:
                 _replace_logical_run(
                     con, self._table, frame["logical_run_id"].iloc[0], frame
@@ -572,6 +579,8 @@ class QuarantineWriter:
 
     def _append(self, frame: pd.DataFrame) -> None:
         with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
+            if RUN_PROVENANCE_COLUMN in frame.columns:
+                _ensure_provenance_column(con, self._table)
             frame.to_sql(self._table, con, if_exists="append", index=False)
 
     def describe(self) -> str:
@@ -1114,10 +1123,12 @@ class AccumulateByRunWriter:
 
     Owns its target location (a single layer db file + table). Used for the gold
     layer (the accumulating SelectionPool / Review Outcomes), whose history must
-    survive across runs. Each row is stamped with the ``logical_run_id`` /
-    ``load_date`` plus ``pipeline_run_id`` when the strategy was derived from a
-    RunContext. A re-driven logical run is idempotent via delete-by-logical-run
-    then insert.
+    survive across runs. Each row is stamped with the ``logical_run_id`` and
+    ``load_date`` this Writer was built with — the strategy's own contract — and,
+    like every table-backed Writer, with the reserved provenance column naming
+    the run that wrote it. A re-driven logical run is idempotent via
+    delete-by-logical-run then insert, so a re-drive's rows carry the run that
+    actually landed them.
     """
 
     def __init__(
@@ -1126,14 +1137,12 @@ class AccumulateByRunWriter:
         table: str,
         logical_run_id: str,
         load_date: str,
-        pipeline_run_id: str | None = None,
         busy_timeout_ms: int = 5000,
     ) -> None:
         self._db_path = Path(db_path)
         self._table = table
         self._logical_run_id = logical_run_id
         self._load_date = load_date
-        self._pipeline_run_id = pipeline_run_id
         self._busy_timeout_ms = busy_timeout_ms
         self.data_locations: list[dict[str, str]] = []
 
@@ -1141,6 +1150,8 @@ class AccumulateByRunWriter:
         self.data_locations = [table_location(self._db_path, self._table)]
         frame = self._stamp(dataset.to_pandas())
         with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
+            if RUN_PROVENANCE_COLUMN in frame.columns:
+                _ensure_provenance_column(con, self._table)
             _replace_logical_run(con, self._table, self._logical_run_id, frame)
 
     @contextmanager
@@ -1173,12 +1184,16 @@ class AccumulateByRunWriter:
         )
 
     def _stamp(self, frame: pd.DataFrame) -> pd.DataFrame:
-        """Stamp this run's identity onto ``frame`` in place and return it."""
+        """Stamp this run's identity onto ``frame`` in place and return it.
+
+        The two columns this Writer owns — the idempotency key it deletes by and
+        the business date — plus the provenance column every table-backed Writer
+        sets. Read once here rather than per chunk, since ``writing_chunks``
+        hands this same callable to the chunk writer.
+        """
         frame["logical_run_id"] = self._logical_run_id
-        if self._pipeline_run_id is not None:
-            frame["pipeline_run_id"] = self._pipeline_run_id
         frame["load_date"] = self._load_date
-        return frame
+        return _stamp_run_provenance(frame, _current_run_id())
 
     def describe(self) -> str:
         return render(self, db_path=str(self._db_path), table=self._table)
