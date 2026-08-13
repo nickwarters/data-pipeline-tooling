@@ -19,7 +19,7 @@ from typing import Annotated
 import pandas as pd
 import pytest
 
-from framework.core import Pattern
+from framework.core import RUN_PROVENANCE_COLUMN, Pattern
 from framework.core.dataset import Dataset
 from framework.core.validators import RowCountValidator, ValidationError
 from framework.run.builder import Pipeline
@@ -128,6 +128,30 @@ def test_quarantine_rejects_persist_when_a_later_step_fails(tmp_path):
     steps = _by_step(records)
     assert steps["post-validate"]["status"] == "error"
     assert "write" not in steps
+
+
+def test_the_quarantine_node_hands_over_rejects_it_has_not_stamped_with_a_run(
+    tmp_path,
+):
+    # The pipeline stamps the rejects with what the quarantine table is keyed and
+    # dated by, and nothing else: the run that wrote the row is the Writer's
+    # stamp, so exactly one code path sets that column
+    # (docs/adr/0020-writer-stamped-run-provenance-column.md).
+    ds = Dataset.from_pandas(
+        pd.DataFrame({"case_ref": pd.Series(["123456789", "BAD"], dtype="string")})
+    )
+    reject_writer = CapturingWriter()
+
+    p = Pipeline("cases", run_log=RunLog(tmp_path / "cases.log"))
+    read = p.read(RecordingReader(ds), name="read")
+    p.quarantine(SchemaValueRulePartitioner(RefCase), reject_writer, read)
+    p.run()
+
+    assert reject_writer.written is not None
+    columns = reject_writer.written.columns
+    assert "logical_run_id" in columns
+    assert "load_date" in columns
+    assert RUN_PROVENANCE_COLUMN not in columns
 
 
 def test_explain_trace_persists_when_the_terminus_write_fails(tmp_path):

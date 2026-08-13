@@ -456,9 +456,12 @@ class QuarantineNode(Node):
 
         committed = False
         if len(rejected) > 0:
+            # The two the quarantine table is keyed and dated by. The run that
+            # wrote the row is not stamped here: the QuarantineWriter sets the
+            # reserved provenance column, as every table-backed Writer does, so
+            # one column has one stamper.
             frame = rejected.to_pandas()
             frame["logical_run_id"] = context.logical_run_id
-            frame["pipeline_run_id"] = context.pipeline_run_id
             frame["load_date"] = context.load_date
             enriched_rejected = Dataset.from_pandas(frame)
             self.writer.write(enriched_rejected)
