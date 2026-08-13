@@ -71,6 +71,32 @@ http://localhost:1234/SitePages/app.aspx?mock=1#/dashboard
 
 The mock client operates entirely in memory. `patchCase` writes to its internal array so that subsequent `getCase` calls return the updated row within the same page load.
 
+### Published Question Bank versions in mock mode
+
+A Case past the reportable milestone resolves its questions from the Question
+Bank version stamped on its row, not from today's bank (ADR-0021). The mock
+serves those versions from
+[`dev/fixtures/question-bank-versions.js`](../../dev/fixtures/question-bank-versions.js),
+which supplies both halves of `buildQuestionBankVersions()`:
+
+| Version                                    | Built how                                                                  | Why                                                                                                                                                         |
+| ------------------------------------------ | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Older versions (`PUBLISHED_BANK_VERSIONS`) | Literal exports with literal hashes                                        | A frozen version must not move when someone edits the live bank, or a Case stamped against it shows today's content while claiming January's                |
+| Current version                            | Compiled from the live `case-types/banks/{slug}.txt` via `compileExport()` | "Current" means the newest published version and the bank on screen are the same content; it is also what `getExportHash()` returns for completion to stamp |
+
+Two fixture Cases — `complaints-frozen-v1` and `complaints-frozen-v2` — carry a
+`questionBankVersion` and open against those older catalogues. The January one
+answers a question retired since, which no other Case can display. Their Answers
+name only the ids their own version asks, so the live-bank fixture contracts in
+`tests/complaints.test.js` deliberately skip any Case carrying a
+`questionBankVersion`; the frozen Cases are held to the same rules against the
+version they name, in `tests/question-bank-versions-fixture.test.js`.
+
+A Case completed in the dev loop stamps the compiled current hash and re-opens
+against it. Stamping a hash the fixture does not serve is not a hard failure —
+the Case falls back to the live bank behind an "as-reviewed version unavailable"
+banner — which is precisely why that wiring is covered by tests.
+
 ---
 
 ## Data shapes

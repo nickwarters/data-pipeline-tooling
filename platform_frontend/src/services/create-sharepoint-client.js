@@ -30,6 +30,7 @@ export async function createSharePointClient(
       { personas },
       { people },
       { roadmapItems },
+      { buildQuestionBankVersions },
     ] = await Promise.all([
       import('./mock-sharepoint-client.js'),
       import('../../case-types/manifest.js'),
@@ -37,6 +38,7 @@ export async function createSharePointClient(
       import('../../dev/fixtures/personas.js'),
       import('../../dev/fixtures/people.js'),
       import('../../dev/fixtures/roadmap.js'),
+      import('../../dev/fixtures/question-bank-versions.js'),
     ]);
 
     // Every Case Type declares its own SharePoint list via `listName`; its
@@ -49,12 +51,22 @@ export async function createSharePointClient(
       loadCaseTypeConfig(slug)
     );
 
+    // The published Question Bank versions a reportable Case resolves its
+    // as-reviewed questions from: the frozen older versions the fixture Cases
+    // are stamped against, plus each Case Type's current version compiled from
+    // its live bank so a Case completed in the dev loop stamps a hash that
+    // resolves.
+    const { exportHashes, versionedExports } =
+      await buildQuestionBankVersions();
+
     return new MockSharePointClient({
       personas,
       persona,
       people,
       lists,
       roadmapItems,
+      exportHashes,
+      versionedExports,
     });
   }
 
