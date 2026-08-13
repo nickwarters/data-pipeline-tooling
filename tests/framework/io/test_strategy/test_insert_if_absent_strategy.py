@@ -1,10 +1,14 @@
 """Integration tests for InsertIfAbsent via Store.writer."""
 
+import sqlite3
+
 import pandas as pd
 import pytest
 
 from framework.core.dataset import Dataset
+from framework.core.protocols import RUN_PROVENANCE_COLUMN
 from framework.io.strategy import InsertIfAbsent
+from framework.run.run_context import RunContext, active_context
 from tools.store import Store
 
 
@@ -113,3 +117,56 @@ def test_insert_if_absent_empty_batch_is_a_noop(tmp_path):
 
     result = store.reader("ref").read().to_pandas()
     assert len(result) == 1
+
+
+def test_a_reference_row_keeps_the_run_that_first_saw_it(tmp_path):
+    # Only unseen keys are inserted, so the provenance column means "first
+    # seen" — as stable as the surrogate beside it, and unchanged by a re-run.
+    store = Store(tmp_path / "store.db")
+    writer = store.writer("ref", InsertIfAbsent("value"))
+    with active_context(RunContext(pipeline_run_id="run-a")):
+        writer.write(_ds({"value": "A"}, {"value": "B"}))
+
+    with active_context(RunContext(pipeline_run_id="run-b")):
+        writer.write(_ds({"value": "A"}, {"value": "C"}))
+
+    landed = store.reader("ref").read().to_pandas()
+    assert dict(zip(landed["value"], landed[RUN_PROVENANCE_COLUMN])) == {
+        "A": "run-a",
+        "B": "run-a",
+        "C": "run-b",
+    }
+    # The surrogates are untouched by the stamp: A and B keep the ids they were
+    # first minted with.
+    assert dict(zip(landed["value"], landed["id"])) == {"A": 1, "B": 2, "C": 3}
+
+
+def test_insert_if_absent_outside_a_run_context_still_writes(tmp_path):
+    store = Store(tmp_path / "store.db")
+    store.writer("ref", InsertIfAbsent("value")).write(_ds({"value": "A"}))
+
+    assert list(store.reader("ref").read().to_pandas()["value"]) == ["A"]
+
+
+def test_a_reference_table_that_predates_the_column_is_widened(tmp_path):
+    # This Writer appends straight to the target rather than through the staged
+    # merge, so it has to widen a pre-existing table itself. The rows already
+    # there keep their surrogates and gain a null provenance.
+    db = tmp_path / "store.db"
+    con = sqlite3.connect(db)
+    con.execute("CREATE TABLE ref (id INTEGER, value TEXT)")
+    con.execute("INSERT INTO ref VALUES (1, 'A')")
+    con.commit()
+    con.close()
+
+    store = Store(db)
+    with active_context(RunContext(pipeline_run_id="run-a")):
+        store.writer("ref", InsertIfAbsent("value")).write(
+            _ds({"value": "A"}, {"value": "B"})
+        )
+
+    landed = store.reader("ref").read().to_pandas()
+    assert dict(zip(landed["value"], landed["id"])) == {"A": 1, "B": 2}
+    provenance = dict(zip(landed["value"], landed[RUN_PROVENANCE_COLUMN]))
+    assert pd.isna(provenance["A"])  # never rewritten
+    assert provenance["B"] == "run-a"
