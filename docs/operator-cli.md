@@ -608,6 +608,8 @@ $ python -m cli status --base-dir /data
 
 ```sh
 python -m cli runs [--base-dir DIR] [--env ENV] [--pipeline ingest] [--status ok] [--limit N]
+python -m cli runs [--base-dir DIR] --run <pipeline-run-id>
+python -m cli runs [--base-dir DIR] --table <name> [--namespace sqlite:/data/cases/gold.db]
 ```
 
 Lists recent run summaries from the registry, oldest-to-newest, capped to the
@@ -617,6 +619,39 @@ most recent `--limit` (default 10). `--pipeline` and `--status` narrow the list.
 $ python -m cli runs --base-dir /data --pipeline ingest --limit 5
 2026-06-10T09:39:30.627378+00:00  ingest  ok  rows_out=5  [run 5f8ff8c7]
 ```
+
+### Which run wrote what — the two lineage directions
+
+`--run` and `--table` replace the listing with a lineage answer, read from the
+`data_locations` every read and write step records ("the file(s) or table(s) a
+step actually touched"). Both filter on **committed** steps, so a read is never
+mistaken for a write and an aborted step never claims a table.
+
+`--run <id>` — what one run wrote. The id may be the eight-character prefix the
+run lines print:
+
+```console
+$ python -m cli runs --base-dir /data --run fd76eda3
+sharepoint_cases:raw:complaints        sqlite:/data/cases/raw.db -> case_observation     rows_out=5  [run fd76eda3]
+sharepoint_cases:silver:complaints     sqlite:/data/cases/silver.db -> case_version      rows_out=5  [run fd76eda3]
+sharepoint_cases:gold:case_current     sqlite:/data/cases/gold.db -> case_current        rows_out=5  [run fd76eda3]
+```
+
+`--table <name>` — the run that last committed a write to that table (or file).
+`--namespace` disambiguates the same table name in two databases:
+
+```console
+$ python -m cli runs --base-dir /data --table case_current
+2026-06-10T09:39:30.627378+00:00  sharepoint_cases  ok  rows_out=5  [run fd76eda3]
+  sharepoint_cases:gold:case_current  sqlite:/data/cases/gold.db -> case_current  rows_out=5  [run fd76eda3]
+```
+
+**When the table-level answer is the whole answer.** For a `Refresh()` target the
+table is rebuilt wholesale each run, so the last committing run wrote *every row*
+in it — `--table` is a complete row-level answer, not an approximation. All four
+`sharepoint_cases` gold tables are `Refresh()` targets. For an accumulating
+target (`AppendOnly`, `Upsert`, `InsertIfAbsent`) the same answer names only the
+last run to write, not the run behind any particular row.
 
 ## `log` — inspect a run log file
 

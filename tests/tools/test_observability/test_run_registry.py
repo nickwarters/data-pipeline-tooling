@@ -924,6 +924,66 @@ def test_data_locations_round_trip_through_ingest(tmp_path):
     ]
 
 
+def test_writes_for_run_returns_only_what_the_run_committed(tmp_path):
+    # The lineage question in the run direction: "what did this run write?" —
+    # the committed write, not the read that fed it (a read touches a location
+    # but commits nothing).
+    log_path = tmp_path / "cases.log"
+    run_id, csv_path, db_path = _run_file_to_table_pipeline(tmp_path, log_path)
+
+    registry = RunRegistry(tmp_path / "registry.db")
+    registry.ingest(log_path)
+
+    [write] = registry.writes_for_run(run_id)
+    assert write["step"] == "write"
+    assert write["data_locations"] == [
+        {"namespace": f"sqlite:{db_path.as_posix()}", "name": "orders"}
+    ]
+    assert str(csv_path) not in json.dumps(write["data_locations"])
+
+
+def test_writes_for_run_accepts_the_truncated_id_an_operator_reads(tmp_path):
+    # The console prints eight characters of the run id, so that prefix is what
+    # an operator has to hand — it must be enough to ask the question.
+    log_path = tmp_path / "cases.log"
+    run_id, _, _ = _run_file_to_table_pipeline(tmp_path, log_path)
+
+    registry = RunRegistry(tmp_path / "registry.db")
+    registry.ingest(log_path)
+
+    assert registry.writes_for_run(run_id[:8]) == registry.writes_for_run(run_id)
+
+
+def test_last_write_of_names_the_most_recent_run_to_commit_the_table(tmp_path):
+    # The reverse direction: from a table back to the run behind it. A second
+    # run over the same target wins — for a Refresh() target it wrote every row.
+    log_path = tmp_path / "cases.log"
+    _run_file_to_table_pipeline(tmp_path, log_path)
+    later_run_id, _, db_path = _run_file_to_table_pipeline(tmp_path, log_path)
+
+    registry = RunRegistry(tmp_path / "registry.db")
+    registry.ingest(log_path)
+
+    record = registry.last_write_of("orders")
+    assert record["pipeline_run_id"] == later_run_id
+    assert record["committed"] is True
+    assert registry.last_write_of("orders", namespace=f"sqlite:{db_path.as_posix()}")
+    assert registry.last_write_of("orders", namespace="sqlite:/elsewhere.db") is None
+    assert registry.last_write_of("never_written") is None
+
+
+def test_last_write_of_ignores_a_location_only_read(tmp_path):
+    # A source file is a location the run touched, not one it wrote: asking who
+    # last wrote it must not answer with the run that merely read it.
+    log_path = tmp_path / "cases.log"
+    _, csv_path, _ = _run_file_to_table_pipeline(tmp_path, log_path)
+
+    registry = RunRegistry(tmp_path / "registry.db")
+    registry.ingest(log_path)
+
+    assert registry.last_write_of(str(csv_path)) is None
+
+
 def test_ingest_migrates_a_pre_data_locations_registry_db(tmp_path):
     # A registry DB created before the `data_locations` column existed must keep
     # ingesting: _connect adds the column in place rather than erroring on the

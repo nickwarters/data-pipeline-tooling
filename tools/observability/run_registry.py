@@ -310,6 +310,52 @@ class RunRegistry:
             "WHERE logical_run_id = ? ORDER BY timestamp, rowid", (logical_run_id,)
         )
 
+    def writes_for_run(self, pipeline_run_id: str) -> list[dict]:
+        """The committed writes of one run — what it actually landed, oldest first.
+
+        A run's *outputs*, rather than all of its steps: only records that
+        committed an artifact and named at least one
+        :term:`Data Location`. ``pipeline_run_id`` may be a leading prefix of the
+        id, because the truncated eight characters the console prints are what an
+        operator has to hand.
+        """
+        records = self._select(
+            "WHERE pipeline_run_id LIKE ? AND committed = 1 ORDER BY timestamp, rowid",
+            (f"{pipeline_run_id}%",),
+        )
+        return [r for r in records if r.get("data_locations")]
+
+    def last_write_of(self, name: str, *, namespace: str | None = None) -> dict | None:
+        """The most recent run that committed a write to the table (or file) ``name``.
+
+        The reverse of :meth:`writes_for_run`: from a piece of data back to the
+        run that produced it. ``namespace`` narrows an ambiguous name — the same
+        table name in ``raw.db`` and ``silver.db`` is two locations, not one.
+
+        ``data_locations`` is stored as JSON text, so the SQL narrows by
+        substring and the exact ``{namespace, name}`` match is made on the
+        decoded record — the decode stays on the one ``_select`` path rather than
+        being re-implemented in SQL.
+
+        For a ``Refresh()`` target this is the *whole* answer: the table is
+        rebuilt wholesale each run, so the last committing run wrote every row in
+        it. For an accumulating target it names the last run to write, not the
+        run behind any particular row.
+        """
+        candidates = self._select(
+            "WHERE committed = 1 AND data_locations LIKE ? "
+            "ORDER BY timestamp DESC, rowid DESC",
+            (f'%"{name}"%',),
+        )
+        for record in candidates:
+            for location in record.get("data_locations") or []:
+                if location.get("name") != name:
+                    continue
+                if namespace is not None and location.get("namespace") != namespace:
+                    continue
+                return record
+        return None
+
     def query_runs(
         self, pipeline: str | None = None, status: str | None = None
     ) -> list[dict]:
