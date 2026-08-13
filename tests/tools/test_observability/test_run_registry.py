@@ -7,6 +7,7 @@ drive a *real* ``Pipeline`` + ``RunLog`` to produce the log, then ingest it —
 exercising the actual emitter→registry seam, never a hand-faked record shape.
 """
 
+import itertools
 import json
 import sqlite3
 from datetime import date
@@ -24,6 +25,7 @@ from framework.io.readers import CsvReader
 from framework.io.writers import SqliteTruncateReloadWriter
 from framework.run import RunAddress
 from framework.run.builder import Pipeline
+from framework.run.run_context import RunContext
 from tools.observability.run_log import RunLog
 from tools.observability.run_registry import RunRegistry
 
@@ -322,6 +324,140 @@ def test_latest_success_for_task_address_uses_latest_ok_non_run_step(tmp_path):
         )
         is None
     )
+
+
+def test_records_for_logical_run_spans_attempts_of_the_same_business_key(tmp_path):
+    # A logical run id is the *business* key — stable across re-drives — so two
+    # real attempts sharing the default `<pipeline>:<run_date>` key both come
+    # back, oldest first; a record under a different key is excluded.
+    log_path = tmp_path / "cases.log"
+    run_id_a = _run_pipeline(log_path, name="cases")
+    run_id_b = _run_pipeline(log_path, name="cases")
+    run_id_other = _run_pipeline(log_path, name="other")
+
+    registry = RunRegistry(tmp_path / "registry.db")
+    registry.ingest(log_path)
+
+    key = f"cases:{date.today().isoformat()}"
+    records = registry.records_for_logical_run(key)
+    assert {r["pipeline_run_id"] for r in records} == {run_id_a, run_id_b}
+    assert run_id_other not in {r["pipeline_run_id"] for r in records}
+    # Oldest first: the first attempt's block of records precedes the second's,
+    # not interleaved.
+    run_ids_in_order = [r["pipeline_run_id"] for r in records]
+    deduped_blocks = [k for k, _ in itertools.groupby(run_ids_in_order)]
+    assert deduped_blocks == [run_id_a, run_id_b]
+
+
+def test_records_for_logical_run_excludes_records_with_no_business_key(tmp_path):
+    # A record with no logical_run_id belongs to no business run: still
+    # findable by attempt id, but absent from both business-key queries.
+    log_path = tmp_path / "runs.log"
+    _write_records(
+        log_path,
+        [_record("run-no-key", "cases", "run", "ok", "2026-06-23T09:00:00+00:00")],
+    )
+    registry = RunRegistry(tmp_path / "registry.db")
+    registry.ingest(log_path)
+
+    assert registry.records_for_run("run-no-key")  # still findable by attempt id
+    assert registry.records_for_logical_run("cases:2026-06-23") == []
+    assert registry.succeeded_logical_run_ids("cases") == set()
+
+
+def test_succeeded_logical_run_ids_semantics(tmp_path):
+    # "Succeeded" is decided by the run summary closing ok, "any ok attempt
+    # wins".
+    log_path = tmp_path / "runs.log"
+    records = [
+        # failed-then-redriven: attempt1 errors, attempt2 (same key) ok -> present.
+        # Documented hazard: this also covers ok-then-failed-re-drive, since
+        # there is no latest-attempt-wins logic — the query never reads
+        # timestamp order, so a key with one ok summary and one error summary
+        # reads satisfied regardless of which attempt came first.
+        {
+            **_record("attempt1", "cases", "run", "error", "2026-06-23T09:00:00+00:00"),
+            "logical_run_id": "cases:2026-06-23",
+        },
+        {
+            **_record("attempt2", "cases", "run", "ok", "2026-06-23T10:00:00+00:00"),
+            "logical_run_id": "cases:2026-06-23",
+        },
+        # errored summary only -> absent
+        {
+            **_record("attempt3", "cases", "run", "error", "2026-06-23T09:00:00+00:00"),
+            "logical_run_id": "cases:2026-06-24",
+        },
+        # ok non-run step but the summary errored -> absent
+        {
+            **_record("attempt4", "cases", "read", "ok", "2026-06-23T09:00:00+00:00"),
+            "logical_run_id": "cases:2026-06-25",
+        },
+        {
+            **_record("attempt4", "cases", "run", "error", "2026-06-23T09:05:00+00:00"),
+            "logical_run_id": "cases:2026-06-25",
+        },
+    ]
+    _write_records(log_path, records)
+    registry = RunRegistry(tmp_path / "registry.db")
+    registry.ingest(log_path)
+
+    succeeded = registry.succeeded_logical_run_ids("cases")
+    assert "cases:2026-06-23" in succeeded
+    assert "cases:2026-06-24" not in succeeded
+    assert "cases:2026-06-25" not in succeeded
+
+
+def test_succeeded_logical_run_ids_bounded_form_and_pipeline_scoping(tmp_path):
+    # The bounded form is a set intersection: an unknown candidate is dropped,
+    # an empty candidate iterable returns set() without querying, and results
+    # are scoped per pipeline even when two pipelines share a key text.
+    log_path = tmp_path / "runs.log"
+    records = [
+        {
+            **_record("a1", "cases", "run", "ok", "2026-06-23T09:00:00+00:00"),
+            "logical_run_id": "shared-key",
+        },
+        {
+            **_record("a2", "other", "run", "ok", "2026-06-23T09:00:00+00:00"),
+            "logical_run_id": "shared-key",
+        },
+        {
+            **_record("a3", "cases", "run", "ok", "2026-06-23T09:00:00+00:00"),
+            "logical_run_id": "cases-only-key",
+        },
+    ]
+    _write_records(log_path, records)
+    registry = RunRegistry(tmp_path / "registry.db")
+    registry.ingest(log_path)
+
+    assert registry.succeeded_logical_run_ids(
+        "cases", ["shared-key", "unknown-key"]
+    ) == {"shared-key"}
+    assert registry.succeeded_logical_run_ids("cases", []) == set()
+    assert registry.succeeded_logical_run_ids("cases") == {
+        "shared-key",
+        "cases-only-key",
+    }
+    assert registry.succeeded_logical_run_ids("other") == {"shared-key"}
+
+
+def test_succeeded_logical_run_ids_excludes_default_key_equal_to_attempt_id(tmp_path):
+    # A context with no pipeline name falls back to the attempt uuid hex as its
+    # logical_run_id (RunContext._default_logical_run_id); such a key must
+    # never be reported as a satisfied business run.
+    log_path = tmp_path / "runs.log"
+    p = Pipeline("cases", run_log=RunLog(log_path))
+    r = p.read(
+        RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]}))), name="read"
+    )
+    p.write(CapturingWriter(), r, name="write")
+    p.run(RunContext())  # no pipeline= kwarg -> uuid-hex logical_run_id
+
+    registry = RunRegistry(tmp_path / "registry.db")
+    registry.ingest(log_path)
+
+    assert registry.succeeded_logical_run_ids("cases") == set()
 
 
 def test_ingest_preserves_the_error_triage_category(tmp_path):

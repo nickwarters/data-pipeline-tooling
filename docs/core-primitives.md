@@ -759,15 +759,17 @@ registry.latest_success(
 )
 registry.recent_row_counts("cases", limit=10)          # read volumes, newest first
 registry.recent_profiles("cases.profile", limit=10)    # per-column profiles, newest first
+registry.records_for_logical_run("cases:2026-06-23")   # every attempt of one business run
+registry.succeeded_logical_run_ids("cases")            # business keys with an ok attempt
 ```
 
 - **Ingest is idempotent**: a record's identity is `pipeline_run_id` + step (+ a
   step ordinal, because a multi-processor run emits one `process` record per
   processor — a bare `pipeline_run_id`+step would collide them), so re-reading the
   same log inserts nothing the second time (`INSERT OR IGNORE`).
-- **Queryable by `pipeline_run_id`, pipeline, status, and time.** Ordering is by the
-  record `timestamp`; "row counts over time" is `query_runs(pipeline=…)` read in
-  order.
+- **Queryable by `pipeline_run_id`, pipeline, status, and time — and by business
+  run / `logical_run_id`.** Ordering is by the record `timestamp`; "row counts
+  over time" is `query_runs(pipeline=…)` read in order.
 - **Latest success queries accept `RunAddress` labels.** A whole-pipeline
   address uses the successful `step="run"` summary record. A task/step address
   uses successful non-`run` step records with the matching `step_address`.
