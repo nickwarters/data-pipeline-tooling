@@ -55,6 +55,9 @@ Each ends in `_run_id`; the prefix names what it identifies.
 | `pipeline_run_id` | one **individual pipeline attempt** | the framework, per `.run()` (a fresh uuid) | no — fresh per attempt |
 | `logical_run_id` | the **business run / idempotency key** (`<label>:<run_date>`) | the caller / the default | **yes** — a re-drive of the same `run_date` reuses it |
 
+Queryable from the registry's side by [`records_for_logical_run` and
+`succeeded_logical_run_ids`](#querying-by-business-run-logical_run_id).
+
 Run-log `pipeline_run_id` is the concrete attempt being observed. A truly ad hoc
 `Pipeline.run()` (no runner, no ambient context) mints a fresh one and exposes it
 as `pipeline.pipeline_run_id`; `Pipeline.run(context=...)` uses the supplied
@@ -217,6 +220,53 @@ addresses read the `step="run"` summary, and task/step addresses read successful
 non-`run` records for the target `step_address`. Its `on=...` and
 `on_or_after=...` filters compare against the run-log record `timestamp` date;
 there is no separate load-date filter in this first implementation.
+
+### Querying by business run (logical_run_id)
+
+The queries above key off `pipeline_run_id` (one attempt) or `step_address`
+(a stable step). `logical_run_id` — the business run / idempotency key — was
+write-only from the registry's side until two read methods joined it:
+
+`RunRegistry.records_for_logical_run(logical_run_id)` returns every record
+sharing that business key, oldest first, deliberately spanning several
+`pipeline_run_id`s — that span is how a re-drive is tied back to the
+attempt(s) it replaces. A record with no `logical_run_id` (SQL `NULL`)
+belongs to no business run and is excluded, not an error: it is still
+findable via `records_for_run`. Unlike its sibling below, this method takes
+no `pipeline` argument, so the key is unique only by convention — the default
+`<label>:<run_date>` key embeds the pipeline label, but a caller-supplied key
+reused across two pipelines would interleave their records.
+
+`RunRegistry.succeeded_logical_run_ids(pipeline, logical_run_ids=None)`
+returns the `set[str]` of business keys of `pipeline` that have at least one
+`run` summary closed `status="ok"` — "any ok attempt wins", the same
+multi-attempt semantic as `has_successful_address`. A key equal to its own
+`pipeline_run_id` is excluded — the fallback `RunContext._default_logical_run_id`
+mints when a context has no pipeline name, which is not a business key and
+must never read as satisfied. A `NULL` key (no business run) is also never
+reported: it fails that same comparison, since SQL `NULL` never equals
+anything. Passing `logical_run_ids` bounds the result to that candidate set (an empty
+iterable returns `set()` without querying); omitted, every succeeded key for
+`pipeline` is returned. One hazard is deliberately *not* guarded against: a
+re-drive of an already-succeeded key can clear its existing rows before
+writing (`AccumulateByRun` deletes by `logical_run_id`), so a key can still
+read as succeeded here even though a later, failed re-drive attempt left no
+data rows behind — this answers "did an attempt ever close ok", not "is data
+currently present".
+
+Why this exists: a watermark (`DatedFileDiscovery.available_between`, see
+[`docs/core-primitives.md`](core-primitives.md)) silently drops a
+late-arriving artifact for a date before the mark, and `succeeded_logical_run_ids`
+is the right-hand side of the correct catch-up — discovered artifacts minus
+artifacts already successfully processed; the watermark form remains the
+older idiom for the common case where nothing arrives late.
+
+Neither method is backed by an index: the repository has zero indexes today,
+the hotter `step_address`/`pipeline` read keys are unindexed too, and the
+write path is a shared-drive SQLite file that inserts row-by-row under an
+exclusive lock with WAL unavailable — a real cost for an index to add. The
+existing `registry_migrations` ledger keeps that cheap to revisit: an index
+added later is DDL applied once, with no on-disk format change.
 
 The runner adds one domain-level opt-in step before a handler executes:
 `freshness`. It is emitted for a downstream Pipeline that declares an upstream
