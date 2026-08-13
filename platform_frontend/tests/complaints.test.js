@@ -333,7 +333,7 @@ function reportableComplaintsCases() {
  * Answer to a question since retired, and hold none for questions added after
  * it was reviewed. Both read as defects against today's bank and are correct
  * against its own. The stamped Cases are held to the same rules against the
- * version they name, in question-bank-versions-fixture.test.js.
+ * version they name, in published-bank-versions.test.js.
  */
 function liveBankComplaintsCases() {
   return cases.filter(
