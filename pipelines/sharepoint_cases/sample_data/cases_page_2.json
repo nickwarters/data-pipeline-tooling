@@ -40,7 +40,7 @@
     "CaseJustification": "Outcome amended on appeal review.",
     "Notes": "Appeal raised by the Responsible Party's manager.",
     "Answers": "{\"q-outcome\":{\"value\":\"Not upheld\"},\"q-timeliness\":{\"value\":\"No\"}}",
-    "Conversation": "[{\"author\":\"e.novak\",\"timestamp\":\"2026-08-05T08:29:00Z\",\"body\":\"Raising an appeal.\"}]",
+    "Conversation": "[{\"author\":{\"loginName\":\"e.novak\",\"displayName\":\"Eva Novak\"},\"timestamp\":\"2026-08-05T08:29:00Z\",\"body\":\"Raising an appeal.\"}]",
     "Appeals": "[{\"raisedBy\":\"e.novak\",\"raisedAt\":\"2026-08-05T08:30:00Z\",\"status\":\"open\"}]",
     "AmendedOutcome": "{\"outcome\":\"Upheld\",\"hadRemediation\":true}",
     "Details": "{\"product\":\"Credit card\",\"channel\":\"Online\"}"

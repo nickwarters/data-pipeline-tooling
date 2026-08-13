@@ -52,7 +52,7 @@ to be done **before** the upload, not after.
   unknown column with a **400**. The allocation claim is exactly such a write, so
   on a list without the column **"Request next Case" fails outright**.
 
-See the [Case Type onboarding checklist](../docs/case-type-onboarding.md) for
+See the [Case Type onboarding checklist](./case-type-onboarding.md) for
 the full column schema.
 
 ## 2. Deploy to prod

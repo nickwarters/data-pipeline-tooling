@@ -183,3 +183,13 @@ gated, and `scripts/deploy_to_sharepoint.md` has been replaced wholesale with a
 genuine runbook. Decision 2's stated limits are unchanged — the ordering removes
 dangling references, not mixed-version graphs, and the sync still has no
 atomicity.
+
+**2026-08-12 — that runbook now lives at `docs/deploy-runbook.md`.** It could not
+stay beside the script: the repository root's `scripts/generate_md_mirrors.py`
+mirrors every `.py` into a sibling `.md`, and at the time overwrote whatever was
+there, so the `py-to-markdown` branch held a stale verbatim copy of the `.py` at
+the runbook's path — reintroducing, on that branch only, the exact defect this
+amendment recorded as fixed. The generator skips `docs/`, so the move puts the
+runbook somewhere it cannot be overwritten; the generator has since been changed
+to refuse a collision rather than overwrite it, which makes the mistake loud but
+does not make it safe. Nothing about the decision changes.

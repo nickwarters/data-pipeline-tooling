@@ -99,7 +99,7 @@ One non-facade package sits inside `framework/`, and two more are top-level
 siblings beside it:
 
 - `framework/_internal/` — cross-cutting helpers with **no** public name:
-  `connection` (`connect`), `describe` (`render` / `redact_url`), `identity`
+  `connection` (`connect`), `describe` (`render`), `identity`
   (`sha256_json`), `locations` (`file_location` / `table_location`), and `schema`
   (the shared `ValueRule` protocol + the Python↔pandas type mapping and
   annotation reading both schema adapters derive from). The leading underscore
@@ -199,7 +199,6 @@ directly:
 | Import | What |
 |--------|------|
 | `tools.store` — `Store`, `StoreRegistry`, `StoreBackend`, `DirectoryStoreBackend` | Where a feed lands: namespace-scoped stores (one logical database → file). `StoreRegistry(base_dir)` mints a namespace `Store` via `store(namespace)` **and** keeps a registry of named Readers/Writers — `register(name, reader\|writer)` then `reader(name)` / `writer(name)` — so a pipeline refers to a component by name. A `Store` mints `writer(table, strategy)` / `reader(table)` over its namespace. The raw/silver/gold `tools.medallion` profile builds on it. Application infrastructure, moved out of `framework.io`. |
-| `tools.recipes` — `source_to_raw`, `raw_to_silver` | The **standard medallion hop recipes** every feed shares: `source_to_raw(reader, writer, expected_columns=…)` gates the source's shape and lands it faithfully; `raw_to_silver(reader, writer, schema=…, rename=…, reject_writer=…)` canonicalises, coerces, quarantines and validates. Each returns a plain, not-yet-run `Pipeline` the caller owns — composition, not inheritance, so a feed that must diverge inlines the recipe's body and edits it. They take the hop's **ports** rather than a medallion profile (the source end of a raw hop is not a medallion layer, and injected ports are what let a feed's test drive the real hop against a `RecordingWriter`). Application vocabulary, so `tools.*` and not `framework.*` — keeping the framework domain-free is why the medallion moved out of it. See [adding-a-feed.md](adding-a-feed.md). |
 | `tools.retry` — `RetryPolicy`, `RetryingReader`, `RetryingWriter` | Targeted retry for transient I/O-edge failures — see [retry.md](retry.md). |
 | `tools.calendar` — `WorkingDayCalendar` | Working-day availability arithmetic (pure utility). |
 | `tools.environments` — `resolve_base_dir`, `known_environments` | Resolve a run's medallion `base_dir` from a named environment (`prod` / `dev`). `DEV_ROOT` and `PROD_ROOT` are used when their per-environment OS variables are unset; those variables override the defaults. The operational env → path mapping the operator CLI and pipeline `main()`s use; see [operator-cli.md](operator-cli.md). |
@@ -239,7 +238,7 @@ without notice:
   `.run()`, against the per-run mutable state in `PipelineExecution`. Reached
   through `Pipeline`, not imported by pipeline scripts. (A second, never-wired
   step-based engine, `framework.run.pipeline_steps`, has been deleted.)
-- `framework._internal.describe` (`render`, `redact_url`) — shared helpers for the opt-in
+- `framework._internal.describe` (`render`) — shared helpers for the opt-in
   `describe()` protocol; a component implements `describe()` using these
   to render its own safe plan summary, not imported by pipeline scripts.
 - `framework._internal.identity` (`sha256_json`) — the one canonical encoding
@@ -258,8 +257,8 @@ without notice:
   `SasReader` / `SharePointReader` / `SharePointWriter` /
   `SharePointModifiedReader`; and `tools.integrations.locations`
   (`sharepoint_location`) — the one `{namespace, name}` shape those components
-  report on `data_locations`, credentials stripped, kept in one copy because a
-  second copy of that redaction is a second place to forget it. This lives in
+  report on `data_locations`, kept in one copy so the shape has one
+  definition. This lives in
   the `tools` sibling package (above), not a `framework` facade. An advanced extension
   point, documented in [adding-a-feed.md](adding-a-feed.md); not part of the day-to-day surface.
 - Other helpers inside `framework.transform.quarantine` — implementation details

@@ -28,7 +28,7 @@ test('conversation view renders messages and gates composition by access', () =>
   /** @type {string[]} */
   const sent = [];
   const message = {
-    author: 'Taylor',
+    author: { loginName: 'tmorgan', displayName: 'Taylor Morgan' },
     timestamp: '2026-07-19T08:00:00.000Z',
     body: 'Please review this evidence.',
   };
@@ -45,7 +45,9 @@ test('conversation view renders messages and gates composition by access', () =>
   textarea.value = '  New message  ';
   fireEvent(editable.querySelector('button'), 'click');
 
-  assert.match(editable.textContent, /Taylor/);
+  assert.match(editable.textContent, /Taylor Morgan/);
+  // The thread names people, it does not expose accounts.
+  assert.doesNotMatch(editable.textContent, /tmorgan/);
   assert.match(editable.textContent, /Please review this evidence/);
   assert.deepEqual(sent, ['New message']);
 
@@ -169,7 +171,10 @@ test('posting preserves JSON-blob PATCH, ETag, list routing, and queue refresh',
     },
   });
 
-  assert.equal(result.messages[0].author, 'Alex Reviewer');
+  assert.deepEqual(result.messages[0].author, {
+    loginName: 'reviewer',
+    displayName: 'Alex Reviewer',
+  });
   assert.equal(optimistic[0].body, 'New message');
   assert.equal(calls[0][0], 'patchCase');
   assert.equal(calls[0][1], 'case-1');
@@ -254,7 +259,13 @@ test('standalone page and reducer render store state without a custom element', 
   });
   const changed = slice.reducer(loaded, {
     type: 'conversation/messages-changed',
-    messages: [{ author: 'A', timestamp: '2026-07-19', body: 'B' }],
+    messages: [
+      {
+        author: { loginName: 'a-user', displayName: 'A' },
+        timestamp: '2026-07-19',
+        body: 'B',
+      },
+    ],
   });
   assert.equal(changed.routes.conversation.caseRow?.conversation[0].body, 'B');
   assert.strictEqual(

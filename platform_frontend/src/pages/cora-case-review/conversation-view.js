@@ -27,7 +27,11 @@ export function conversationView(props) {
             h(
               'li',
               { className: 'cora-conversation-message' },
-              h('p', { className: 'cora-message-author' }, message.author),
+              h(
+                'p',
+                { className: 'cora-message-author' },
+                message.author.displayName
+              ),
               h(
                 'p',
                 { className: 'cora-message-timestamp' },
@@ -113,7 +117,10 @@ function conversationCompose(onSend) {
 export async function postConversationMessage(input) {
   /** @type {Message} */
   const message = {
-    author: input.currentUser.displayName,
+    author: {
+      loginName: input.currentUser.id,
+      displayName: input.currentUser.displayName,
+    },
     timestamp: new Date().toISOString(),
     body: input.body,
   };

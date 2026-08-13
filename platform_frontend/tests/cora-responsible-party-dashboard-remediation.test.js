@@ -154,7 +154,7 @@ test('Responsible Party tables preserve missing dates and optional conversation 
   missingDate.title = '';
   missingDate.conversation = [
     {
-      author: 'reviewer',
+      author: { loginName: 'reviewer', displayName: 'Robin Reviewer' },
       timestamp: '2026-06-01T00:00:00Z',
       body: 'Please respond',
     },

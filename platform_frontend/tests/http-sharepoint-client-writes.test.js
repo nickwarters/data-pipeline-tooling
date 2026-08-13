@@ -602,7 +602,13 @@ test('HttpSharePointClient: patchCase writes status, answers and conversation to
   });
 
   const answers = { 'q-1': { value: 'Yes' } };
-  const conversation = [{ author: 'u1', timestamp: 't', body: 'hi' }];
+  const conversation = [
+    {
+      author: { loginName: 'u1', displayName: 'User One' },
+      timestamp: 't',
+      body: 'hi',
+    },
+  ];
   await client.patchCase(
     'case-1',
     {

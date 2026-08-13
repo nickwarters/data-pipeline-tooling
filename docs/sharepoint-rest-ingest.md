@@ -8,8 +8,9 @@ are linked from here rather than restated.
 ## 1. Do not attach this to an external scheduler yet
 
 The feed cannot reach a tenant: `_resolve_client` has no organisational client to
-hand back and `SITE` / `LIST_ID` are placeholders, so every working-day pass ends
-`failed` today with a `config`-category `NoClientError`.
+hand back, and the `SITE` and per-`CaseList` `list_id` values in `schema.py` are
+placeholders, so every working-day pass ends `failed` today with a
+`config`-category `NoClientError`.
 
 What must be wired first, in what order, and how to verify each step is
 [sharepoint-cases-going-live.md](sharepoint-cases-going-live.md). Everything
@@ -64,7 +65,8 @@ The generic loop (see it, diagnose it, resolve it, re-drive it) is
 [resolving-a-failed-run.md](resolving-a-failed-run.md). Its §4 rule —
 idempotent by *logical run id* — is **not** why this feed is safe. Raw and silver
 use `AppendOnly("source_observation_id")`, gold is rebuilt whole with `Refresh()`,
-and the watermark commits **last**. Three shapes:
+and **every** watermark commits last. The feed polls each list in `CASE_LISTS`,
+and each keeps its own watermark, so these shapes are per list. Four of them:
 
 - **Failure above the commit.** Nothing advanced the checkpoint, so the next run
   polls from the same watermark and covers the failed window's ground again.
@@ -76,6 +78,11 @@ and the watermark commits **last**. Three shapes:
   derived from immutable metadata, so a re-read *is* the same observation). Gold
   is then rebuilt whole from the accumulated silver history under the rerun's own
   window end. Both paths converge on the same state.
+- **A failure part-way through the lists.** The lists polled before it have
+  their observations in raw and silver (append-only, committed per hop), but
+  nothing was published to gold and **no** watermark moved. The next run
+  re-polls every list from unchanged watermarks, the re-reads no-op, and gold
+  rebuilds whole.
 - **`AppendOnlyConflictError`.** A `source_observation_id` already seen has
   arrived with a *changed* payload. This is the one failure where "just re-drive"
   is the wrong advice — the same observation cannot legitimately have two
@@ -106,7 +113,7 @@ commit-is-last, and where the checkpoint file lives — is at
 - Two places hold system-of-record state, and they must be backed up and restored
   **together**: the whole `<base>/<feed>/` directory (`quarantine.db` alongside
   `{raw,silver,gold}.db` — rejected observations cannot be re-fetched either) and
-  `<base>/_checkpoints/sharepoint.db`. Restoring data without the checkpoint, or
+  `<base>/_checkpoints/sharepoint.db`, which holds **one row per declared list**. Restoring data without the checkpoint, or
   the checkpoint without the data, forks the feed.
 - One local process, one operator at a time. There is no distributed lock; a
   second concurrent pass races the same watermark.

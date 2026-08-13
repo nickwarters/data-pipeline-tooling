@@ -67,10 +67,14 @@ These are plain functions a reducer calls — not middleware, not a
 `createSlice`-style framework, and not a mutable or proxy draft. Two branch
 kinds keep their hand-written shape:
 
-- **Identity-returning guards.** When nothing changed, `return state` — the same
-  object reference is what stops a re-render. `patchRoute` always allocates, so
-  a guard converted to a patch becomes a re-render storm that no unit test sees.
-  Assert these with `assert.strictEqual(reducer(state, action), state)`.
+- **Identity-returning guards.** When nothing changed, `return state`.
+  `dispatch` schedules a notify unconditionally — `store.js` has no equality
+  check — so the notify and the view still run either way; what returning the
+  same reference buys is that every `memo()` deps comparison hits and every
+  prop diff in `render()` finds nothing, so the commit touches no DOM.
+  `patchRoute` always allocates, so a guard converted to a patch turns that
+  into real DOM churn that no unit test sees. Assert these with
+  `assert.strictEqual(reducer(state, action), state)`.
 - **Sub-reducer delegation.** A slice reducer that signals "nothing changed" by
   returning its input is compared by reference; relay that identity. Then
   `patchRoute` only inside the changed branch if you are naming fields, or

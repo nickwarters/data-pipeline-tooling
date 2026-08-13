@@ -1,9 +1,14 @@
 """Declared silver schema for the ``sharepoint_cases`` feed.
 
-One row per observation of a Case: the ``Cases-Complaints`` list item as it stood
-at one version, with the source's column names mechanically snake_cased and the
-columns typed. Nothing is derived and nothing is reshaped -- this hop is the
-rename and the type contract, and that is all it is meant to be.
+One row per observation of a Case: a Case list item as it stood at one version,
+with the source's column names mechanically snake_cased and the columns typed.
+Nothing is derived and nothing is reshaped -- this hop is the rename and the
+type contract, and that is all it is meant to be.
+
+One exception, and it is deliberate: raw holds the list's own ``CaseType`` cell
+as the list holds it, and silver replaces it with the Case Type declared for
+that list in ``CASE_LISTS``. The cell is nullable and hand-editable, and gold
+keys a Case on it.
 
 The rules are deliberately thin. Only three things about this list are knowable
 enough to fail a run over: an observation must say where it came from, a Case
@@ -29,24 +34,39 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated
+from uuid import UUID
 
 from framework.core import NonNull, OneOf
 
 FEED_NAME = "sharepoint_cases"
 
-# One list per Case Type, named ``Cases-{slug}``; there is no combined list and
-# no default. Only Complaints is live, so this feed names it directly rather
-# than growing a per-Case-Type indirection for a second type that may never come.
-# A UAT tenant prefixes the same list ``uat_``.
-#
-# This is also the **namespace every gold ``case_id`` is minted in**, paired with
-# the natural key ``source_item_id`` (the list item id, which is what the list
-# keys a Case on). The list *name* and not the list GUID: the GUID is still the
-# ``UUID(int=0)`` placeholder, so keying on it would silently re-key every Case
-# in gold the day the real one lands. The trade is stated plainly -- *renaming
-# the list re-keys history*, and a rename would therefore need the same
-# treatment a re-key always needs, not a quiet redeploy.
-LIST_NAME = "Cases-Complaints"
+# PLACEHOLDER -- the site collection holding every Case list. The review
+# application derives its site from the page it is served from, so this value
+# exists nowhere to copy and must come from the tenant.
+SITE = "https://sharepoint.invalid/sites/REPLACE-ME"
+
+
+@dataclass(frozen=True)
+class CaseList:
+    """One Case Type's SharePoint list: what it is called and where it lives."""
+
+    case_type: str
+    list_name: str
+    site: str
+    # PLACEHOLDER -- from the list's own settings page. The watermark is keyed
+    # on it, so a wrong or shared GUID silently forks the feed's place.
+    list_id: UUID
+
+
+# Every Case list this feed polls. All Case Types share one list template, so
+# each is processed identically; onboarding one is a new entry with its own
+# GUID. A UAT tenant prefixes the same list names ``uat_``.
+CASE_LISTS = (CaseList("complaints", "Cases-Complaints", SITE, UUID(int=0)),)
+
+# What a gold ``case_id`` is minted from, in the ``FEED_NAME`` namespace. The
+# item id alone is not unique -- item 101 exists in every list -- so the Case
+# Type is part of the key.
+NATURAL_KEY = ("case_type", "source_item_id")
 
 # The Case lifecycle states, exactly as the review application persists them --
 # note the hyphen in "In-progress" and that "Actions In Progress" carries none.
@@ -70,7 +90,9 @@ class CaseVersion:
 
     id: Annotated[int, NonNull()]
     title: str
-    case_type: str
+    # The declared Case Type of the list this row was polled from, which silver
+    # stamps over the list's own cell. Non-null because gold keys a Case on it.
+    case_type: Annotated[str, NonNull()]
     status: Annotated[str, NonNull(), OneOf(*CASE_STATUSES)]
 
     # The Person columns, as the claims login the list expanded them to.

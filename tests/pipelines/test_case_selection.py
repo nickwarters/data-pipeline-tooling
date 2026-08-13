@@ -160,6 +160,30 @@ def test_select_cases_picks_one_per_adviser_and_explains_exclusions():
 
 
 # --- 3. the builder and the full run ----------------------------------------
+def test_both_hops_plan_exactly_the_steps_they_always_have():
+    """Pin the plan, node for node: these names are what the run log records."""
+    from pipelines.case_selection.pipeline import raw_builder, silver_builder
+    from pipelines.case_selection.schema import SalesRow
+    from tests.framework_testing import RecordingWriter
+
+    reader, writer = given_rows([]), RecordingWriter()
+
+    assert raw_builder(reader, writer, SalesRow).describe().splitlines() == [
+        "Pipeline: case_selection:raw",
+        "  [Read] read",
+        "  [Validate] columns (depends on: read)",
+        "  [Write] write (depends on: columns)",
+    ]
+    # These feeds declare no value rules, so the hop has no quarantine node.
+    assert silver_builder(reader, writer, SalesRow).describe().splitlines() == [
+        "Pipeline: case_selection:silver",
+        "  [Read] read",
+        "  [Transform] coerce (depends on: read)",
+        "  [Validate] post-validate (depends on: coerce)",
+        "  [Write] write (depends on: post-validate)",
+    ]
+
+
 def test_selection_builder_runs_in_memory_with_recording_writers():
     from tests.framework_testing import RecordingWriter
 

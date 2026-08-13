@@ -3,11 +3,17 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from framework.core import Dataset, PipelineError, format_failure
+from framework.core import (
+    ColumnValidator,
+    Dataset,
+    PipelineError,
+    SchemaValidator,
+    format_failure,
+)
 from framework.io import AccumulateByRun, CsvReader, Reader, Writer
 from framework.run import Pipeline, RunContext, RunLog
+from framework.transform import SchemaCoercion, SchemaValueRulePartitioner
 from tools.medallion import medallion
-from tools.recipes import raw_to_silver, source_to_raw
 from tools.store import StoreRegistry
 
 from .schema import NAMESPACE, ComplaintsARow
@@ -25,19 +31,12 @@ def raw_builder(
     writer: Writer,
     run_log: RunLog | None = None,
 ) -> Pipeline:
-    """Build the raw hop: faithful landing zone.
-
-    The standard raw hop, composed from the shared recipe. To diverge, inline
-    the recipe's body here and edit it: a recipe is composition, not
-    inheritance, so there is nothing to fight.
-    """
-    return source_to_raw(
-        reader,
-        writer,
-        expected_columns=SOURCE_COLUMNS,
-        name=f"{FEED_NAME}:raw",
-        run_log=run_log,
-    )
+    """Build the raw hop: gate the source's columns, then land it faithfully."""
+    p = Pipeline(f"{FEED_NAME}:raw", run_log=run_log)
+    node = p.read(reader, name="read")
+    node = p.validate(ColumnValidator(SOURCE_COLUMNS), node, name="columns")
+    p.write(writer, node, name="write")
+    return p
 
 
 def silver_builder(
@@ -46,19 +45,20 @@ def silver_builder(
     reject_writer: Writer | None = None,
     run_log: RunLog | None = None,
 ) -> Pipeline:
-    """Build the silver hop: schema coercion and enforcement + quarantine.
-
-    The standard silver hop, composed from the shared recipe; inline it here to
-    diverge.
-    """
-    return raw_to_silver(
-        reader,
-        writer,
-        schema=ComplaintsARow,
-        reject_writer=reject_writer,
-        name=f"{FEED_NAME}:silver",
-        run_log=run_log,
-    )
+    """Build the silver hop: coerce, quarantine value-rule breaches, validate."""
+    p = Pipeline(f"{FEED_NAME}:silver", run_log=run_log)
+    node = p.read(reader, name="read")
+    node = p.transform(SchemaCoercion(ComplaintsARow), node, name="coerce")
+    if reject_writer is not None:
+        node = p.quarantine(
+            SchemaValueRulePartitioner(ComplaintsARow),
+            reject_writer,
+            node,
+            name="quarantine",
+        )
+    node = p.validate(SchemaValidator(ComplaintsARow), node, name="post-validate")
+    p.write(writer, node, name="write")
+    return p
 
 
 def run(context: RunContext) -> Dataset:

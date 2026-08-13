@@ -28,6 +28,7 @@ from datetime import date
 from pathlib import Path
 
 from framework.core import (
+    ColumnValidator,
     Dataset,
     PipelineError,
     SchemaValidator,
@@ -44,7 +45,6 @@ from framework.io import (
 from framework.run import Pipeline, RunContext, RunLog
 from framework.transform import SchemaCoercion
 from tools.medallion import medallion
-from tools.recipes import raw_to_silver, source_to_raw
 from tools.store import StoreRegistry
 
 from .schema import CaseReviewRow, SalesRow, SelectedCase
@@ -64,26 +64,26 @@ UPSTREAMS = ()
 
 
 def raw_builder(reader: Reader, writer: Writer, schema: type) -> Pipeline:
-    """Build a raw hop: gate the source's columns, then land it faithfully.
-
-    The standard raw hop, composed from the shared recipe; inline the recipe's
-    body here to diverge.
-    """
-    return source_to_raw(
-        reader,
-        writer,
-        expected_columns=[f.name for f in fields(schema)],
-        name=f"{SUBJECT}:raw",
-    )
+    """Build a raw hop: gate the source's columns, then land it faithfully."""
+    p = Pipeline(f"{SUBJECT}:raw")
+    node = p.read(reader, name="read")
+    expected = [f.name for f in fields(schema)]
+    node = p.validate(ColumnValidator(expected), node, name="columns")
+    p.write(writer, node, name="write")
+    return p
 
 
 def silver_builder(reader: Reader, writer: Writer, schema: type) -> Pipeline:
     """Build a silver hop: coerce to the schema's dtypes, then validate them.
 
-    The standard silver hop, composed from the shared recipe. These two feeds
-    declare no value rules, so no quarantine writer is wired.
+    These two feeds declare no value rules, so nothing is quarantined.
     """
-    return raw_to_silver(reader, writer, schema=schema, name=f"{SUBJECT}:silver")
+    p = Pipeline(f"{SUBJECT}:silver")
+    node = p.read(reader, name="read")
+    node = p.transform(SchemaCoercion(schema), node, name="coerce")
+    node = p.validate(SchemaValidator(schema), node, name="post-validate")
+    p.write(writer, node, name="write")
+    return p
 
 
 def selection_builder(

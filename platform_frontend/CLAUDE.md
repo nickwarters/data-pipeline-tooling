@@ -72,7 +72,10 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
 - **Light DOM and CSS isolation.** `h()` and `svg()` create safe DOM nodes, keyed `render()`
   preserves focus/caret/scroll across renders, and the `cora-` CSS prefix remains
   the SharePoint-isolation boundary. See the current
-  [state/action/render explainer](./docs/component-anatomy-explainer.html).
+  [state/action/render explainer](./docs/component-anatomy-explainer.html) for
+  the shape of a page, and the
+  [render loop explainer](./docs/render-loop-explainer.html) for the runtime
+  mechanics — dispatch, reducer, view, and how `render()` commits.
 - **Case Type config as JS modules; Question Bank content as SharePoint-hosted text artifacts.** One module per Case Type under `case-types/{slug}.js`, lazy-loaded via `case-types/manifest.js`. Question Bank content (Question Definitions, labels, and Outcome vocabulary) lives in `case-types/banks/{slug}.txt`, stored in the SharePoint Style Library and loaded through `case-types/load-bank.js` as part of the Case Type config. There is no shared Question Definitions list and no planned runtime join to one. `HttpSharePointClient`/`MockSharePointClient` expose `getExportHash`/`getVersionedExport` for ADR-0021's immutable, point-in-time exports on reportable Cases.
 - **JSDoc + `tsc --checkJs` for types**. No `.ts` files; the deployed JS is the source JS. `npm run check` runs `tsc --noEmit --checkJs --allowJs`.
 - **Per-Case-Type `showWhen` graph + `outcome` function**. Applicability is data (declarative `showWhen`); outcome is code (exported function). Same module, one place to look.
@@ -111,6 +114,17 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
 - **Case Type descriptors express genuine Case Type variation; branching behaviour stays in code** (ADR-0035). Descriptors may select stable keys, labels, property paths, ordering, membership, and simple flags. Permission/lifecycle decisions, navigation, conditional formatting, event handling, and effects belong in code. Dashboard composition is dashboard-owned and must not be declared by Case Type configuration (ADR-0036); the dashboard consumes resolved `caseSources` only for Case data access. Case table columns are framework-owned the same way (ADR-0040): `standardCaseColumns()` is the fixed set for every Case Type, so scoping a Case table narrows its rows and never its columns. `sections` is the only Case Type presentation descriptor left.
 
 ## Gotchas
+
+- **Never put hand-written Markdown at `<name>.md` beside a `<name>.py`.** The
+  repository root's `scripts/generate_md_mirrors.py` writes a `.md` mirror of
+  every `.py` file to that exact sibling path. It skips `docs/`, so documentation
+  about a script belongs under `docs/` — the deploy runbook lived at
+  `scripts/deploy_to_sharepoint.md` and was silently clobbered on the
+  `py-to-markdown` branch until it moved to `docs/deploy-runbook.md`. The
+  generator now **refuses** such a run rather than overwriting, so the cost has
+  changed rather than gone: prose at a mirror path blocks every mirror
+  regeneration until someone moves it. This is a root-project tool reaching
+  across the project boundary, and nothing on `main` shows you the collision.
 
 - **Question Bank artifacts are JSON stored in `.txt` files, on purpose.** `case-types/banks/*.txt` (loaded via `case-types/load-bank.js`) hold plain JSON text. This is intentional, not an oversight: SharePoint Subscription Edition has been unreliable at storing/serving `.json` files (MIME/blocking issues), so the artifact extension is `.txt` while the content stays JSON, parsed explicitly by the loader. A repo-wide search for `*.json` will not find the banks — search `case-types/banks/*.txt` instead.
 
@@ -189,7 +203,7 @@ before a deploy — there is no automated pipeline, so a deploy is only as verif
 as the commands someone ran first. The one exception is `verify`: the deploy runs
 it itself as a pre-flight gate and aborts on failure, orders its uploads from the
 graph it writes, and re-fetches every deployed file afterwards to compare hashes
-— see [`scripts/deploy_to_sharepoint.md`](./scripts/deploy_to_sharepoint.md).
+— see [`docs/deploy-runbook.md`](./docs/deploy-runbook.md).
 
 The global floor is a backstop, not a quota. Keep security, SharePoint protocol,
 concurrency, permissions, and outcome/applicability code at 100% line and branch
@@ -449,8 +463,8 @@ scripts/
   scaffold_case_type.py         # scaffolds a new Case Type module + bank artifact (ADR-0028)
   deploy_to_sharepoint.py       # the diff sync, plus its pre-flight verify gate, graph-derived
                                 #   leaf-first upload order and post-upload hash verification
-  deploy_to_sharepoint.md       # THE deploy runbook: pre-conditions, prod/UAT steps, the failure
-                                #   playbook, and the hand-upload/drive-by-edit caveats
+                                #   (its runbook is docs/deploy-runbook.md — hand-written Markdown
+                                #   must not sit beside a .py, see the note under Gotchas)
   module-graph.js               # shared import-specifier scanner: the one answer to "what does
                                 #   this file import?", used by the verify gate and the layering test
   verify-config.js              # the verify gate's configuration half: evaluates Case Type modules,

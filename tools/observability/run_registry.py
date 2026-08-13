@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Iterable
 from datetime import date, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -299,6 +300,16 @@ class RunRegistry:
             "WHERE pipeline_run_id = ? ORDER BY timestamp, rowid", (pipeline_run_id,)
         )
 
+    def records_for_logical_run(self, logical_run_id: str) -> list[dict]:
+        """Every record sharing a business run / idempotency key, oldest first.
+
+        The result deliberately spans several ``pipeline_run_id``s: that span
+        is how a re-drive is tied back to the attempt(s) it replaces.
+        """
+        return self._select(
+            "WHERE logical_run_id = ? ORDER BY timestamp, rowid", (logical_run_id,)
+        )
+
     def query_runs(
         self, pipeline: str | None = None, status: str | None = None
     ) -> list[dict]:
@@ -338,6 +349,40 @@ class RunRegistry:
                 (address,),
             ).fetchone()
             return row is not None
+        finally:
+            con.close()
+
+    def succeeded_logical_run_ids(
+        self, pipeline: str, logical_run_ids: Iterable[str] | None = None
+    ) -> set[str]:
+        """Business run keys of ``pipeline`` that have at least one ok attempt.
+
+        "Succeeded" means the ``run`` summary closed ``status = 'ok'``; "any ok
+        attempt wins" — a key with a failed attempt followed by a later ok
+        attempt still reads satisfied, because this answers "did an attempt
+        ever close ok", not "is the data present". A key equal to its own
+        attempt id is excluded, as is a key with no business run at all.
+        ``logical_run_ids``, if given, bounds the result to that candidate set
+        (an empty iterable returns ``set()`` without querying).
+        """
+        candidates = tuple(logical_run_ids) if logical_run_ids is not None else None
+        if candidates is not None and not candidates:
+            return set()
+        con = self._connect()
+        try:
+            sql = """
+                SELECT DISTINCT logical_run_id
+                FROM run_records
+                WHERE step = 'run' AND status = 'ok' AND pipeline = ?
+                  AND logical_run_id IS NOT NULL
+                  AND logical_run_id != pipeline_run_id
+            """
+            params: list[object] = [pipeline]
+            if candidates is not None:
+                placeholders = ",".join("?" * len(candidates))
+                sql += f" AND logical_run_id IN ({placeholders})"
+                params.extend(candidates)
+            return {row[0] for row in con.execute(sql, tuple(params))}
         finally:
             con.close()
 

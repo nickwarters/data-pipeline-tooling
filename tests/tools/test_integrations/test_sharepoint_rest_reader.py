@@ -449,25 +449,16 @@ def test_the_stub_client_names_the_seam_to_supply():
         StubbedSharePointListClient().fetch_items(LIST_NAME, (), (), ())
 
 
-def test_credentials_in_the_site_url_survive_nowhere():
-    # describe() feeds the plan and data_locations feeds the persisted run
-    # record: neither may become the one place a secret survives.
-    site = "https://user:pass@contoso.sharepoint.com/sites/case-review"
-    client = FakeListClient()
+def test_the_reader_reports_the_list_it_read():
+    site = "https://contoso.sharepoint.com/sites/case-review"
 
     reading = SharePointModifiedReader(
-        site, LIST_NAME, ("CaseRef",), WINDOW, client=client
+        site, LIST_NAME, ("CaseRef",), WINDOW, client=FakeListClient()
     )
     reading.read()
 
-    assert reading.data_locations == [
-        {
-            "namespace": "https://<redacted>@contoso.sharepoint.com/sites/case-review",
-            "name": LIST_NAME,
-        }
-    ]
-    assert "user:pass" not in reading.describe()
-    assert "user:pass" not in str(reading.data_locations)
+    assert reading.data_locations == [{"namespace": site, "name": LIST_NAME}]
+    assert site in reading.describe()
 
 
 def test_describe_renders_the_window_without_reaching_the_list():

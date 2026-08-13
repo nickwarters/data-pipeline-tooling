@@ -40,7 +40,7 @@
     "CaseJustification": null,
     "Notes": "Awaiting the call recording from the branch.",
     "Answers": "{\"q-outcome\":{\"value\":\"Not upheld\"},\"q-timeliness\":{\"value\":\"Yes\"}}",
-    "Conversation": "[{\"author\":\"a.khan\",\"timestamp\":\"2026-08-04T16:02:00Z\",\"body\":\"Please confirm the call date.\"}]",
+    "Conversation": "[{\"author\":{\"loginName\":\"a.khan\",\"displayName\":\"Amira Khan\"},\"timestamp\":\"2026-08-04T16:02:00Z\",\"body\":\"Please confirm the call date.\"}]",
     "Appeals": "[]",
     "AmendedOutcome": null,
     "Details": "{\"product\":\"Current account\",\"channel\":\"Branch\"}"

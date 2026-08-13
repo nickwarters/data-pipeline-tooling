@@ -3,20 +3,12 @@
 A component renders its own safe summary for ``Pipeline.describe()`` by
 implementing ``describe() -> str``. The builder no longer reflects over a
 component's ``__dict__`` to guess what to show or which attribute names look
-sensitive; each component decides explicitly what is safe to surface and is
-responsible for redacting its own secrets. These helpers exist only to keep
-that rendering uniform and one obvious redaction (credentials embedded in a
-connection URL) in one place — they introspect nothing.
+sensitive; each component decides explicitly what is safe to surface, omitting
+the fields it does not want in the plan. These helpers exist only to keep
+that rendering uniform — they introspect nothing.
 """
 
 from __future__ import annotations
-
-import re
-
-# user:pass@ embedded in a connection URL — the one redaction that is a property
-# of the *value* (a URL), not of an attribute name, so it lives here rather than
-# in name-based guessing.
-_URL_CREDENTIALS = re.compile(r"(://)[^/@:\s]+:[^/@\s]+@")
 
 
 def component_summary(component: object) -> str:
@@ -46,8 +38,3 @@ def render(component: object, **fields: object) -> str:
         return type(component).__name__
     rendered = ", ".join(f"{key}={value!r}" for key, value in shown.items())
     return f"{type(component).__name__}({rendered})"
-
-
-def redact_url(url: str) -> str:
-    """Strip any ``user:pass@`` credentials embedded in a connection URL."""
-    return _URL_CREDENTIALS.sub(r"\1<redacted>@", url)

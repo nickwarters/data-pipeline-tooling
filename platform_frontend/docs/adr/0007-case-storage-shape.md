@@ -24,11 +24,16 @@ amendedBy, amendedAt } | null`, [ADR-0026]); `responsibleParty` is now Reviewer-
 > [ADR-0025]: ./0025-working-day-sla-due-dates.md
 > [ADR-0026]: ./0026-amend-outcome-case-level-and-qa-retirement.md
 
+> **Amended pre-go-live.** A **Message** in the `Conversation` blob carries
+> `author: { loginName, displayName }` rather than a bare display-name string, so the
+> sender is identified by account; its `displayName` is a snapshot of what they were
+> called when they posted and is never refreshed.
+
 A **Case** is one row in a per-Case-Type SharePoint list (`Cases-{CaseTypeSlug}`). The row carries:
 
 - **Typed columns** for case-detail fields (vary per Case Type)
 - **`Answers` (Note field, JSON)** — `{ "Q1": {value, justification?, remediationActions?[]}, "Q17": {...} }`
-- **`Conversation` (Note field, JSON array)** — `[{author, timestamp, body}, ...]`
+- **`Conversation` (Note field, JSON array)** — `[{author: {loginName, displayName}, timestamp, body}, ...]`
 - **`Notes` (multi-line text)** — free-form reviewer notes
 - **`AssignedReviewer` (User field)** — current Reviewer; reassignment history obtained from SharePoint list version history
 - **`ResponsibleParty` (User field)**

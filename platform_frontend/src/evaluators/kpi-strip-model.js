@@ -110,18 +110,15 @@ export function breachingSoonLabel(windowHours) {
 }
 
 /**
- * The author of the last Conversation message on a Case, or null when the
- * Conversation is empty. Used to detect a Reviewer waiting on the Responsible
- * Party (the last word was the Reviewer's).
+ * The login name of whoever wrote the last Conversation message on a Case, or
+ * null when the Conversation is empty. Used to detect a Reviewer waiting on the
+ * Responsible Party (the last word was the Reviewer's).
  *
  * @param {CaseRow} caseRow
  * @returns {string | null}
  */
 function lastMessageAuthor(caseRow) {
-  const conversation = caseRow.conversation ?? [];
-  return conversation.length
-    ? conversation[conversation.length - 1].author
-    : null;
+  return caseRow.conversation?.at(-1)?.author?.loginName ?? null;
 }
 
 /**
