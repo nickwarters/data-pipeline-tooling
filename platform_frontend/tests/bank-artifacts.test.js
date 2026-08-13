@@ -24,15 +24,26 @@ import {
 
 const HEX = 'a'.repeat(64);
 
-test('the version identity keeps its colon; the filename never gets one', () => {
+test('the identity keeps its algorithm prefix; the filename is the digest alone', () => {
   // `:` is illegal in a Windows path and rejected by SharePoint, so a hash
   // pasted straight into a filename produces a file that cannot be written.
   const hash = `sha256:${HEX}`;
-  assert.equal(versionFileSegment(hash), `sha256-${HEX}`);
+  assert.equal(versionFileSegment(hash), HEX);
   assert.equal(versionedExportName('complaints', hash).includes(':'), false);
   assert.equal(
     versionedExportName('complaints', hash),
-    `complaints.sha256-${HEX}.txt`
+    `complaints.${HEX}.txt`
+  );
+});
+
+test('a digest with no algorithm prefix names the same file', () => {
+  // The conversion drops everything up to the last `:`, so an identity that
+  // never had one is already its own filename segment. Nothing has to know
+  // which form it was handed.
+  assert.equal(versionFileSegment(HEX), HEX);
+  assert.equal(
+    versionedExportName('complaints', HEX),
+    versionedExportName('complaints', `sha256:${HEX}`)
   );
 });
 
@@ -66,7 +77,7 @@ test('every name the writers produce is classified back as what it is', () => {
     {
       kind: 'versioned-export',
       slug: 'complaints',
-      segment: `sha256-${HEX}`,
+      segment: HEX,
     }
   );
 });
@@ -76,9 +87,10 @@ test('a name nothing produced is refused rather than guessed at', () => {
   // a half-renamed version sit in the directory looking like a bank.
   for (const name of [
     'complaints.json', // the extension SharePoint mis-serves
-    'complaints.sha256-abc.txt', // a truncated digest
+    'complaints.abc123.txt', // a truncated digest
     `complaints.sha256:${HEX}.txt`, // the identity, unconverted
-    `complaints.${HEX}.txt`, // no algorithm
+    `complaints.sha256-${HEX}.txt`, // the algorithm prefix, left in
+    `complaints.${HEX.toUpperCase()}.txt`, // a digest that is not lower-case
     'complaints.export.json',
     '.txt',
     '.export.txt',

@@ -16,7 +16,7 @@
  * that works and a deploy that does not.
  *
  * Adding a version is therefore publishing a file, not editing this module:
- * write `case-types/banks/{slug}.{sha256-hex}.txt` and name it in the list
+ * write `case-types/banks/{slug}.{hex-digest}.txt` and name it in the list
  * below.
  */
 

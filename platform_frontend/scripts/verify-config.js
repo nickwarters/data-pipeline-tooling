@@ -983,7 +983,7 @@ function checkOneBank(file, readText) {
   const artifact = classifyBankArtifact(filename);
   if (!artifact) {
     fail(
-      'is not a name this directory has a meaning for — a bank is `{slug}.txt`, its current export `{slug}.export.txt`, and a published version `{slug}.sha256-<64 hex>.txt`'
+      'is not a name this directory has a meaning for — a bank is `{slug}.txt`, its current export `{slug}.export.txt`, and a published version `{slug}.<64 hex digits>.txt`'
     );
     return failures;
   }

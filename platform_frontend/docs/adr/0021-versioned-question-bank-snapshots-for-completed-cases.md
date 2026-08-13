@@ -12,7 +12,7 @@ Accepted (amended by [ADR-0023], Jul 2026)
 > folder. Three things forced it: SharePoint Subscription Edition blocks or
 > mis-serves `.json` (the reason the bank artifact was already `.txt`); a
 > `sha256:<hex>` hash cannot appear in a Windows or SharePoint filename, so the
-> file segment is `sha256-<hex>`; and the folder this ADR named was never where
+> file segment is the digest alone; and the folder this ADR named was never where
 > the deploy actually puts the modules, so "beside the module" was not true of
 > the path as written. Names are composed in one place,
 > `src/lib/bank-artifacts.js`, and read relative to the module that reads them,
@@ -26,7 +26,7 @@ Accepted (amended by [ADR-0023], Jul 2026)
 > | ---------------- | ----------------------------- | ------------------------------------------------ |
 > | Current bank     | `case-types/banks/{slug}.txt` | unchanged                                        |
 > | Current export   | `{slug}.json`                 | `case-types/banks/{slug}.export.txt`             |
-> | Versioned export | `{slug}.{hash}.json`          | `case-types/banks/{slug}.sha256-<hex>.txt`       |
+> | Versioned export | `{slug}.{hash}.json`          | `case-types/banks/{slug}.<hex>.txt`              |
 > | Manifest         | `{slug}.history.json`         | not built; the versions on disk are the timeline |
 >
 > `scripts/publish-bank.js` is the local half of the publish flow: it compiles a
