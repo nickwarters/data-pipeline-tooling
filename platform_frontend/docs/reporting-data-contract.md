@@ -10,7 +10,7 @@ document specifies the **format** it reads and the **algorithm** it must apply.
 ## TL;DR
 
 - You need **two inputs**: the per-Case-Type **export**
-  (`case-types/banks/{slug}.export.txt` for current,
+  (`case-types/banks/{slug}.txt` for current,
   `case-types/banks/{slug}.<hex>.txt` for versioned) and the **Case
   rows** (read from the per-Case-Type SharePoint list). Both are JSON —
   the `.txt` extension is a SharePoint constraint, not a format.
@@ -37,10 +37,10 @@ document specifies the **format** it reads and the **algorithm** it must apply.
 Two variants live in the deployed `case-types/banks/` folder, beside the bank
 they were compiled from:
 
-| File                | Contents                                                                                                      | When to use                                                                                                                |
-| ------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `{slug}.export.txt` | **Current** export — always the latest published bank version. Carries the `labels` table.                    | In-progress Cases; any report that reads only the latest bank.                                                             |
-| `{slug}.<hex>.txt`  | **Versioned** export — immutable snapshot. Carries frozen `labelIds` per question but not the `labels` table. | Completed Cases with a `questionBankVersion` — use this file to get as-reviewed wording, `optionOutcomes`, and `showWhen`. |
+| File               | Contents                                                                                                      | When to use                                                                                                                |
+| ------------------ | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `{slug}.txt`       | **Current** bank — the live content, and the current version by definition. Carries the `labels` table.       | In-progress Cases; any report that reads only the latest bank.                                                             |
+| `{slug}.<hex>.txt` | **Versioned** export — immutable snapshot. Carries frozen `labelIds` per question but not the `labels` table. | Completed Cases with a `questionBankVersion` — use this file to get as-reviewed wording, `optionOutcomes`, and `showWhen`. |
 
 Both hold JSON. The `.txt` extension is deliberate: SharePoint Subscription
 Edition blocks or mis-serves `.json`, so every bank artifact is stored as text
@@ -56,7 +56,7 @@ filename = f"{slug}.{case['questionBankVersion'].split(':')[-1]}.txt"
 ```
 
 Fetch by URL over the same NTLM/Kerberos auth as everything else, e.g.
-`<app base>/case-types/banks/complaint-review.export.txt` or
+`<app base>/case-types/banks/complaint-review.txt` or
 `<app base>/case-types/banks/complaint-review.abc123….txt`, where the app
 base is the deployed folder for the environment being reported on (prod and UAT
 have their own copies).
@@ -76,7 +76,7 @@ have their own copies).
 }
 ```
 
-`labels` is present only in **`{slug}.export.txt`** (the current file). Versioned
+`labels` is present only in **`{slug}.txt`** (the current bank). Versioned
 files (`{slug}.<hex>.txt`) carry the per-question `labelIds` but not the label
 definitions — see **Label resolution** below.
 
@@ -147,14 +147,14 @@ Labels follow a **frozen-structure / current-presentation** split:
   carried is part of the point-in-time snapshot. They are frozen in versioned
   files (`{slug}.<hex>.txt`).
 - **Label definitions** (`id → name, color`) are _presentation_ — always read
-  from the **current** `{slug}.export.txt`. A label rename or recolor then applies
+  from the **current** `{slug}.txt`. A label rename or recolor then applies
   consistently across all historical reports without needing to rewrite versioned
   files.
 
 Algorithm:
 
 ```python
-current = load_json(f"case-types/banks/{slug}.export.txt")
+current = load_json(f"case-types/banks/{slug}.txt")
 label_map = {l["id"]: l for l in current.get("labels", [])}
 
 # To get label names for a question in a versioned export:
@@ -316,10 +316,10 @@ for case in cases_modified_yesterday:           # filter on completedAt
 
 1. **Use versioned exports for Completed Cases.** When a Case row carries a
    `questionBankVersion`, fetch `{slug}.<hex>.txt` for that hash instead of
-   `{slug}.export.txt`. This gives you the exact questions, wording, and
+   `{slug}.txt`. This gives you the exact questions, wording, and
    `optionOutcomes` / `defaultOutcomeId` that were in force at review time. Cases
    completed before versioned exports existed have no `questionBankVersion`; fall
-   back to the current `{slug}.export.txt` for those (same behaviour as before).
+   back to the current `{slug}.txt` for those (same behaviour as before).
 
 2. **Case verdicts are different — and stable.** The _case-level_ pass/refer/fail
    is **not** re-derived from answers. Read `outcomeAtCompletion` straight off the

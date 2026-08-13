@@ -22,16 +22,33 @@ Accepted (amended by [ADR-0023], Jul 2026)
 > immutable versions, a hash stamped at the reportable milestone, live fallback
 > on a miss.
 >
-> | Role             | Was                           | Is                                               |
-> | ---------------- | ----------------------------- | ------------------------------------------------ |
-> | Current bank     | `case-types/banks/{slug}.txt` | unchanged                                        |
-> | Current export   | `{slug}.json`                 | `case-types/banks/{slug}.export.txt`             |
-> | Versioned export | `{slug}.{hash}.json`          | `case-types/banks/{slug}.<hex>.txt`              |
-> | Manifest         | `{slug}.history.json`         | not built; the versions on disk are the timeline |
+> | Role             | Was                           | Is                                                         |
+> | ---------------- | ----------------------------- | ---------------------------------------------------------- |
+> | Current bank     | `case-types/banks/{slug}.txt` | unchanged — and it **is** the current version              |
+> | Current export   | `{slug}.json`                 | **removed**; the current identity is derived from the bank |
+> | Versioned export | `{slug}.{hash}.json`          | `case-types/banks/{slug}.<hex>.txt`                        |
+> | Manifest         | `{slug}.history.json`         | not built; the versions on disk are the timeline           |
+>
+> **The current-version pointer is gone.** A file whose job was to state which
+> version is current is a second copy of a fact the bank already carries, and the
+> two can disagree — a bank edited without republishing keeps claiming the old
+> version, and a Case completed against it freezes on content the Reviewer never
+> saw. `src/lib/bank-version.js` derives the identity from the bank's canonical
+> content instead, so there is nothing to keep in step. Its content duplicated
+> the newest versioned file anyway, save for the labels table, which the bank
+> artifact already carries.
+>
+> This narrows rule 4 rather than breaking it. "Readers never recompute" was
+> recorded because _JS and Python_ will not agree byte-for-byte on a canonical
+> form, and that still holds: nothing outside JavaScript computes an identity.
+> Inside JavaScript there is one implementation, shared by the compiler, both
+> clients and the publish script, so they cannot disagree with each other.
 >
 > `scripts/publish-bank.js` is the local half of the publish flow: it compiles a
-> bank, writes the current pointer, and appends the versioned copy. It is
-> idempotent, and never rewrites a versioned file.
+> bank and writes the immutable copy its identity names. It is idempotent and
+> never rewrites a versioned file. Forgetting to run it does not produce stale
+> content — it produces a Case stamped with a version no file answers to, which
+> takes the documented fallback and is caught by a test.
 
 > **Amendment ([ADR-0023]).** `questionBankVersion` is stamped at the **reportable**
 > milestone (Send Actions, or Complete Case on the no-actions path) rather than at final

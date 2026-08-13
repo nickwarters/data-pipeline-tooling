@@ -8,9 +8,10 @@ import {
 } from '../evaluators/overdue-evaluator.js';
 import {
   BANKS_DIR,
-  currentExportName,
+  bankArtifactName,
   versionedExportName,
 } from '../lib/bank-artifacts.js';
+import { bankVersionHash } from '../lib/bank-version.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').PersonResult} PersonResult */
@@ -522,18 +523,35 @@ export class HttpSharePointClient {
   }
 
   /**
-   * Reads the content-hash from the current published export envelope. Returns
-   * null when the file is absent or carries no `hash` field — never hard-fails
-   * so a Case Type that has never been published does not block completion, it
-   * just stamps no version.
+   * The version identity of the Case Type's **current** Question Bank — what
+   * completion stamps onto a Case row.
+   *
+   * Derived from the bank artifact rather than read out of a pointer file
+   * beside it. The bank is the current version, so its identity is a fact about
+   * its content; a stored pointer would be a second copy of that fact, and a
+   * bank edited without republishing would go on claiming the old version.
+   *
+   * Deliberately reads the artifact rather than the Case Type config: the
+   * config exposes the bank's fields, but the publish step hashes the *file*,
+   * and a Case Type free to reshape what it exposes could otherwise produce an
+   * identity no published version answers to.
+   *
+   * Returns null when the artifact is absent or unreadable — a Case Type with
+   * no bank stamps no version rather than blocking completion.
    *
    * @param {string} slug
    * @returns {Promise<string | null>}
    */
   async getExportHash(slug) {
-    const body = await this._readBankArtifact(currentExportName(slug));
-    const hash = body?.hash;
-    return typeof hash === 'string' && hash !== '' ? hash : null;
+    const bank = await this._readBankArtifact(bankArtifactName(slug));
+    if (!bank || typeof bank !== 'object' || !Array.isArray(bank.questions)) {
+      return null;
+    }
+    try {
+      return await bankVersionHash(bank);
+    } catch {
+      return null;
+    }
   }
 
   /**

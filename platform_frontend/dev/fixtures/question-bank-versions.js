@@ -26,9 +26,10 @@ import { CASE_TYPES } from '../../case-types/manifest.js';
 import { loadBank } from '../../case-types/load-bank.js';
 import {
   BANKS_DIR,
-  currentExportName,
+  bankArtifactName,
   versionedExportName,
 } from '../../src/lib/bank-artifacts.js';
+import { bankVersionHash } from '../../src/lib/bank-version.js';
 
 /** The January version — before the courtesy-call check was retired. */
 export const COMPLAINTS_BANK_V1_HASH =
@@ -51,8 +52,8 @@ export const RETIRED_QUESTION_ID = 'q-cmp-0900';
  * pairs naming a file under `case-types/banks/`.
  *
  * Older versions only: the current one is not listed because it is not a fixed
- * hash. It is whatever `{slug}.export.txt` currently points at, which is what
- * a publish moves and what completion stamps.
+ * hash. It is whatever the bank artifact currently hashes to, which is what
+ * completion stamps and what editing the bank moves.
  *
  * @type {Array<{ slug: string, hash: string }>}
  */
@@ -74,8 +75,10 @@ function readArtifact(filename) {
 
 /**
  * Builds the mock client's version shelf out of the artifacts on disk: every
- * older version named above, plus each Case Type's current published export,
- * whose hash is what `getExportHash()` hands completion to stamp.
+ * older version named above, plus each Case Type's current version — the bank
+ * artifact's own identity, which is what `getExportHash()` hands completion to
+ * stamp, served under that hash so a Case completed in the dev loop re-opens
+ * against it.
  *
  * Contained per artifact, as the mock's Case partitioning is. A version file
  * that is missing or unparseable costs that one version — the Case stamped
@@ -111,13 +114,19 @@ export async function buildQuestionBankVersions(
 
   for (const { slug } of caseTypes) {
     try {
-      const current = await readArtifact(currentExportName(slug));
-      if (typeof current?.hash !== 'string' || current.hash === '') continue;
-      exportHashes[slug] = current.hash;
-      versionedExports[current.hash] = current;
+      const bank = await readArtifact(bankArtifactName(slug));
+      const hash = await bankVersionHash(bank);
+      exportHashes[slug] = hash;
+      // Its published copy, if the bank has been published. Absent, completing
+      // a Case in the dev loop stamps a version that resolves to nothing and
+      // falls back with a warning — which is exactly what a deploy of an
+      // unpublished bank does, so the dev loop should not paper over it.
+      versionedExports[hash] = await readArtifact(
+        versionedExportName(slug, hash)
+      );
     } catch (error) {
       console.error(
-        `[CORA] Current published export for "${slug}" could not be read; the mock serves no current version for it:`,
+        `[CORA] Current Question Bank version for "${slug}" is unavailable; the mock stamps no version for it:`,
         error
       );
     }

@@ -12,11 +12,13 @@ versioned exports.
 
 **File names below are superseded.** ADR-0021's 2026-08 amendment moved every
 export beside its bank in `case-types/banks/`, as JSON in `.txt`:
-`{slug}.json` is now `{slug}.export.txt`, and `{slug}.{hash}.json` is now
-`{slug}.<hex>.txt` (a `:` cannot appear in a SharePoint or Windows
-filename). The **contents** of both are unchanged, which is what this ADR is
-actually about. [`docs/reporting-data-contract.md`](../reporting-data-contract.md)
-is the current word for a reporting consumer.
+`{slug}.{hash}.json` is now `{slug}.<hex>.txt` (a `:` cannot appear in a
+SharePoint or Windows filename), and the current `{slug}.json` is **gone** —
+the bank artifact `{slug}.txt` is the current version, and the identity that
+names its published copy is derived from its content. The **contents** of an
+export are unchanged, which is what this ADR is actually about.
+[`docs/reporting-data-contract.md`](../reporting-data-contract.md) is the
+current word for a reporting consumer.
 
 ## Context
 

@@ -74,30 +74,43 @@ The mock client operates entirely in memory. `patchCase` writes to its internal 
 ### Published Question Bank versions
 
 A Case past the reportable milestone resolves its questions from the Question
-Bank version stamped on its row, not from today's bank (ADR-0021). Three kinds
-of artifact live in `case-types/banks/`, all JSON in `.txt`, all named by
+Bank version stamped on its row, not from today's bank (ADR-0021). Two kinds of
+artifact live in `case-types/banks/`, both JSON in `.txt`, both named by
 [`src/lib/bank-artifacts.js`](../../src/lib/bank-artifacts.js):
 
-| Artifact            | Role                                                                                                  | Mutability                   |
-| ------------------- | ----------------------------------------------------------------------------------------------------- | ---------------------------- |
-| `{slug}.txt`        | The editable current bank                                                                             | overwritten on publish       |
-| `{slug}.export.txt` | The current published export; its `hash` is what `getExportHash()` returns and what completion stamps | overwritten on publish       |
-| `{slug}.<hex>.txt`  | One immutable published version, resolved by `getVersionedExport(slug, hash)`                         | append-only, never rewritten |
+| Artifact           | Role                                                                          | Mutability                   |
+| ------------------ | ----------------------------------------------------------------------------- | ---------------------------- |
+| `{slug}.txt`       | The current bank — and therefore the current version                          | edited freely                |
+| `{slug}.<hex>.txt` | One immutable published version, resolved by `getVersionedExport(slug, hash)` | append-only, never rewritten |
+
+**There is no current-version pointer file.** `getExportHash(slug)` reads the
+bank artifact and derives its identity through
+[`src/lib/bank-version.js`](../../src/lib/bank-version.js) — a sha256 over the
+bank's canonical content. A pointer would be a second statement of the same
+fact, and the two can disagree: a bank edited without republishing would go on
+claiming the old version, and a Case completed against it would freeze on
+content the Reviewer never saw. A derived identity has nothing to keep in step.
 
 Two things follow that are easy to get wrong:
 
-- **The hash is not the filename.** A version identity is `sha256:<hex>`; `:` is
-  illegal in a Windows path and rejected by SharePoint, so the file segment is
-  the digest alone. Only `bank-artifacts.js` converts, and only in that direction.
+- **The identity is not the filename.** A version identity is `sha256:<hex>`;
+  `:` is illegal in a Windows path and rejected by SharePoint, so the file is
+  named by the digest alone. Only `bank-artifacts.js` converts, and only in that
+  direction — nothing reads a hash back out of a name.
 - **There is no environment-specific path.** Artifacts are resolved relative to
   the module that reads them, so a UAT deploy reads UAT's copies because of
   where it was deployed. `resolveEnvironment()` declares the list prefix and
   nothing else.
 
+`getExportHash` deliberately hashes the **artifact**, not the Case Type config.
+The config exposes the bank's fields, but the publish step hashes the file, and
+a Case Type free to reshape what it exposes could otherwise produce an identity
+no published version answers to.
+
 `HttpSharePointClient` reads these files directly rather than through `_read` —
 no OData headers, and the body is parsed from text, because a `.txt` response
-does not arrive with a content type worth trusting. Every failure is `null`:
-a Case Type that has never been published is a real state, not an error.
+does not arrive with a content type worth trusting. Every failure is `null`: a
+Case Type with no bank stamps no version rather than blocking completion.
 
 #### In mock mode
 
@@ -110,11 +123,11 @@ which no other Case can display. Their Answers name only the ids their own
 version asks, so the live-bank fixture contracts in `tests/complaints.test.js`
 deliberately skip any Case carrying a `questionBankVersion`.
 
-A Case completed in the dev loop stamps whatever `{slug}.export.txt` currently
-points at and re-opens against it. Stamping a hash nothing serves is not a hard
-failure — the Case falls back to the live bank behind an "as-reviewed version
-unavailable" banner — which is why the wiring is covered by tests rather than
-left to the eye.
+A Case completed in the dev loop stamps whatever the bank currently hashes to
+and re-opens against its published copy. Stamping a hash nothing serves is not a
+hard failure — the Case falls back to the live bank behind an "as-reviewed
+version unavailable" banner — which is why the wiring is covered by tests rather
+than left to the eye.
 
 #### Publishing
 
@@ -125,12 +138,14 @@ node scripts/publish-bank.js            # every registered Case Type
 node scripts/publish-bank.js complaints # one
 ```
 
-It compiles the bank, writes `{slug}.export.txt`, and appends the versioned copy
-if that content is new. It is idempotent and never rewrites a versioned file —
-a version some reportable Case resolves against has to stay exactly as
-published. A test fails if the published export has drifted from the bank beside
-it, so a bank edit cannot quietly leave the dev loop and a deploy showing
-different questions.
+It compiles the bank and writes `{slug}.<hex>.txt` if that version is not yet
+published. It is idempotent and never rewrites a versioned file — a version some
+reportable Case resolves against has to stay exactly as published.
+
+Nothing goes stale if you forget, because there is no pointer to go stale. What
+happens instead is that the bank's current identity has no file: a Case
+completed against it stamps a version that resolves to nothing, and re-opens
+behind the fallback banner. A test fails on exactly that, naming the command.
 
 ---
 

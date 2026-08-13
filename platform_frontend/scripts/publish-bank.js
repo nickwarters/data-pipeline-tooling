@@ -1,14 +1,18 @@
 #!/usr/bin/env node
 // @ts-check
 /**
- * Publish a Question Bank: compile the editable bank into its export envelope,
- * write the current pointer, and append an immutable versioned copy.
+ * Publish a Question Bank: compile the editable bank into its export envelope
+ * and write it as an immutable version, named by its own identity.
  *
  * This is the local half of the publish flow. The Question Bank editor compiles
  * the same envelope through the same functions and will eventually write the
- * same files into SharePoint; until it does, this is what keeps the artifacts on
- * disk in step with the bank beside them — and how the historical versions in
- * the repository were produced.
+ * same files into SharePoint; until it does, this is what publishes a bank —
+ * and how the historical versions in the repository were produced.
+ *
+ * There is no current-version pointer to update: the bank is the current
+ * version, and the app derives its identity from its content. Publishing is
+ * therefore only ever *adding* the immutable copy that identity names, which is
+ * what a Case completed against today's bank will resolve.
  *
  *   node scripts/publish-bank.js            # every registered Case Type
  *   node scripts/publish-bank.js complaints # one
@@ -34,7 +38,6 @@ import { fileURLToPath } from 'node:url';
 import { compileExport } from '../src/pages/question-bank/question-bank-compile.js';
 import {
   bankArtifactName,
-  currentExportName,
   versionedExportName,
 } from '../src/lib/bank-artifacts.js';
 
@@ -51,7 +54,7 @@ async function exists(url) {
 }
 
 /**
- * Compile one bank and write whatever is missing or stale.
+ * Compile one bank and write its version if that version is not yet published.
  *
  * @param {string} slug
  * @returns {Promise<string[]>} the artifacts written, relative names
@@ -68,24 +71,12 @@ export async function publishBank(slug) {
   const versionedName = versionedExportName(slug, envelope.hash);
   const versionedUrl = new URL(versionedName, BANKS);
   if (!(await exists(versionedUrl))) {
-    // Label name/color is presentation, resolved from the current export so a
+    // Label name/color is presentation, resolved from the current bank so a
     // rename applies across every historical report; the per-question labelIds
     // stay frozen here.
     const { labels: _presentation, ...versioned } = envelope;
     await writeFile(versionedUrl, JSON.stringify(versioned, null, 2) + '\n');
     written.push(versionedName);
-  }
-
-  // The current pointer always tracks the newest version. `generatedAt` moves
-  // only when the content does, so a re-run does not churn the file.
-  const currentName = currentExportName(slug);
-  const currentUrl = new URL(currentName, BANKS);
-  const published = (await exists(currentUrl))
-    ? JSON.parse(await readFile(currentUrl, 'utf8'))
-    : null;
-  if (published?.hash !== envelope.hash) {
-    await writeFile(currentUrl, JSON.stringify(envelope, null, 2) + '\n');
-    written.push(currentName);
   }
 
   return written;

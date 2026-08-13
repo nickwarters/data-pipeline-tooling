@@ -76,7 +76,7 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
   the shape of a page, and the
   [render loop explainer](./docs/render-loop-explainer.html) for the runtime
   mechanics — dispatch, reducer, view, and how `render()` commits.
-- **Case Type config as JS modules; Question Bank content as SharePoint-hosted text artifacts.** One module per Case Type under `case-types/{slug}.js`, lazy-loaded via `case-types/manifest.js`. Question Bank content (Question Definitions, labels, and Outcome vocabulary) lives in `case-types/banks/{slug}.txt`, stored in the SharePoint Style Library and loaded through `case-types/load-bank.js` as part of the Case Type config. There is no shared Question Definitions list and no planned runtime join to one. `HttpSharePointClient`/`MockSharePointClient` expose `getExportHash`/`getVersionedExport` for ADR-0021's immutable, point-in-time exports on reportable Cases. **Both read the same files**: a bank, its current export and each published version are all `.txt` artifacts in `case-types/banks/`, named by `src/lib/bank-artifacts.js` and resolved relative to the module that reads them — so a deploy reads its own artifacts and there is no second per-environment path to declare. `dev/fixtures/question-bank-versions.js` loads those same files for the mock, so the dev loop and a deploy cannot disagree about what a version contains. Two fixture Cases are stamped against older versions and open against the questions they were reviewed with, one of which no longer exists in the live bank. Editing a bank means republishing it (`node scripts/publish-bank.js`); a test fails if the published export drifts from the bank beside it.
+- **Case Type config as JS modules; Question Bank content as SharePoint-hosted text artifacts.** One module per Case Type under `case-types/{slug}.js`, lazy-loaded via `case-types/manifest.js`. Question Bank content (Question Definitions, labels, and Outcome vocabulary) lives in `case-types/banks/{slug}.txt`, stored in the SharePoint Style Library and loaded through `case-types/load-bank.js` as part of the Case Type config. There is no shared Question Definitions list and no planned runtime join to one. `HttpSharePointClient`/`MockSharePointClient` expose `getExportHash`/`getVersionedExport` for ADR-0021's immutable, point-in-time exports on reportable Cases. **Both read the same files**: the bank and each published version are `.txt` artifacts in `case-types/banks/`, named by `src/lib/bank-artifacts.js` and resolved relative to the module that reads them — so a deploy reads its own artifacts and there is no second per-environment path to declare. **There is no current-version pointer file**: the bank is the current version and `src/lib/bank-version.js` derives its identity from its content, so nothing can go stale against it. `dev/fixtures/question-bank-versions.js` loads those same files for the mock, so the dev loop and a deploy cannot disagree about what a version contains. Two fixture Cases are stamped against older versions and open against the questions they were reviewed with, one of which no longer exists in the live bank. Editing a bank means publishing the new version (`node scripts/publish-bank.js`); a test fails if the bank's current identity has no published file, because a Case completed against it would stamp a version nothing can resolve.
 - **JSDoc + `tsc --checkJs` for types**. No `.ts` files; the deployed JS is the source JS. `npm run check` runs `tsc --noEmit --checkJs --allowJs`.
 - **Per-Case-Type `showWhen` graph + `outcome` function**. Applicability is data (declarative `showWhen`); outcome is code (exported function). Same module, one place to look.
 - **Case storage: everything on the Case row**. `Answers` and `Conversation` as JSON blobs on a per-Case-Type SharePoint list row. Notes as plain text. Field-level PATCH only.
@@ -244,11 +244,16 @@ src/
     add-working-days.js
     amendment-reasons.js        # AMENDMENT_REASONS: the shared Amendment Reason vocabulary a
                                 #   Case Type may extend (extraAmendmentReasons) but not re-key
-    bank-artifacts.js           # THE naming rule for every Question Bank artifact in
-                                #   case-types/banks/: the bank, its current export, and each
-                                #   published version. Owns the `sha256:<hex>` -> `<hex>` filename
-                                #   conversion (a colon is illegal in a Windows/SharePoint name)
-                                #   and the classifier the verify gate reads names back with
+    bank-artifacts.js           # THE naming rule for Question Bank artifacts in case-types/banks/:
+                                #   the bank and each published version. Owns the
+                                #   `sha256:<hex>` -> `<hex>` filename conversion (a colon is illegal
+                                #   in a Windows/SharePoint name) and the classifier the verify gate
+                                #   reads names back with
+    bank-version.js             # THE version identity of a bank: the export projection and the
+                                #   sha256 over its canonical content. Derived, never stored beside
+                                #   the bank — a pointer file would be a second copy of the same
+                                #   fact and could disagree with it. One implementation, shared by
+                                #   the compiler, both clients and the publish script
     boot-error-panel.js         # cora-boot-error: the "boot did not finish" panel, shared by app.js and app-chrome's fatal-nav path (#575)
     capture-engine.js
     case-loader.js              # loads a Case Review page and hands it over once via toStoreSnapshot() (was case-review-view-model.js, #555)
@@ -464,19 +469,17 @@ case-types/                     # one module per Case Type, lazy-loaded via mani
   general-questions.js          # shared General Question catalogue + resolveGeneralQuestions (#489)
   complaints.js                 # the only live Case Type (#383)
   banks/                        # Question Bank content, JSON text stored as .txt (see Gotchas).
-                                #   Three kinds of artifact, all named by src/lib/bank-artifacts.js:
-    complaints.txt              #   the editable current bank
-    complaints.export.txt       #   the current published export; its `hash` is what completion
-                                #     stamps on a Case row
+                                #   Two kinds of artifact, named by src/lib/bank-artifacts.js:
+    complaints.txt              #   the current bank. It IS the current version: its identity is
+                                #     derived from its content, and that is what completion stamps
     complaints.<hex>.txt        #   one immutable published version, never overwritten — a Case
                                 #     stamped with that hash resolves its questions from this file
 
 scripts/
-  publish-bank.js               # compiles a bank into its export envelope and writes the current
-                                #   pointer + an immutable versioned copy. Idempotent and
-                                #   append-only; run it after editing a bank, or the published
-                                #   export goes stale and a Case freezes against content the
-                                #   Reviewer never saw
+  publish-bank.js               # compiles a bank into its export envelope and writes it as an
+                                #   immutable version named by its own identity. Idempotent and
+                                #   append-only; run it after editing a bank, or a Case completed
+                                #   against it stamps a version no file answers to
   scaffold_case_type.py         # scaffolds a new Case Type module + bank artifact (ADR-0028)
   deploy_to_sharepoint.py       # the diff sync, plus its pre-flight verify gate, graph-derived
                                 #   leaf-first upload order and post-upload hash verification

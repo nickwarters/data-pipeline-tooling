@@ -133,19 +133,19 @@ test('Question Bank artifacts are read from the deployed banks folder, not a dec
   // That is what makes a UAT deploy read UAT's artifacts without being told
   // which environment it is.
   const { fetch, calls } = makeFetch(() =>
-    ok(JSON.stringify({ hash: 'sha256:abc' }))
+    ok(JSON.stringify({ slug: 'example-review', questions: [] }))
   );
   const client = new HttpSharePointClient({
     webUrl: WEB_URL,
     fetchImpl: fetch,
   });
 
-  assert.equal(await client.getExportHash('example-review'), 'sha256:abc');
+  await client.getExportHash('example-review');
   await client.getVersionedExport('example-review', 'sha256:abc');
 
   assert.ok(
-    calls[0].url.endsWith('/case-types/banks/example-review.export.txt'),
-    `expected the current export artifact, got ${calls[0].url}`
+    calls[0].url.endsWith('/case-types/banks/example-review.txt'),
+    `expected the bank artifact, got ${calls[0].url}`
   );
   assert.ok(
     calls[1].url.endsWith('/case-types/banks/example-review.abc.txt'),
@@ -202,10 +202,10 @@ test('a missing or unreadable artifact reads as "not published", never a throw',
     null
   );
 
-  const empty = makeFetch(() => ok(JSON.stringify({ hash: '' })));
-  const unpublished = new HttpSharePointClient({
+  const notABank = makeFetch(() => ok(JSON.stringify({ slug: 'x' })));
+  const shapeless = new HttpSharePointClient({
     webUrl: WEB_URL,
-    fetchImpl: empty.fetch,
+    fetchImpl: notABank.fetch,
   });
-  assert.equal(await unpublished.getExportHash('example-review'), null);
+  assert.equal(await shapeless.getExportHash('example-review'), null);
 });
