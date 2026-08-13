@@ -172,6 +172,13 @@ def writing_chunks(writer: object):
     replace their target and which append. A Writer that offers no such session
     raises here, naming itself and why, instead of silently doing its
     whole-dataset thing once per chunk.
+
+    Every chunk of one drive carries the same run in its provenance column. The
+    Writers that hand back *themselves* get that for free: the ambient run
+    context is established once around the whole graph walk, so each chunk's
+    write reads the same id. The two that hand back a helper — the accumulating
+    and quarantine sessions — resolve it once when the session opens, because
+    their later chunks take a path that would otherwise not stamp at all.
     """
     if not supports_chunk_writes(writer):
         raise TypeError(
@@ -191,6 +198,10 @@ class _AppendingChunkWriter:
     Held by the session rather than by the Writer so the Writer itself stays
     stateless: whatever must happen once per load has already happened when the
     session opened, and everything from here is an append.
+
+    ``prepare`` is the per-chunk frame hook, and the session binds whatever it
+    resolved **once** — including the run that owns the drive — so every chunk
+    of one load is stamped identically rather than each re-deriving it.
     """
 
     def __init__(
@@ -550,7 +561,15 @@ class QuarantineWriter:
 
     def write(self, dataset: Dataset) -> None:
         self.data_locations = [table_location(self._db_path, self._table)]
-        frame = _stamp_run_provenance(dataset.to_pandas(), _current_run_id())
+        self._replace(_stamp_run_provenance(dataset.to_pandas(), _current_run_id()))
+
+    def _replace(self, frame: pd.DataFrame) -> None:
+        """Clear this logical run's prior rejects, then land ``frame``.
+
+        Takes an already-stamped frame, so the whole-dataset write and the first
+        chunk of a streamed one land by the same statements.
+        """
+        self.data_locations = [table_location(self._db_path, self._table)]
         with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
             if RUN_PROVENANCE_COLUMN in frame.columns:
                 _ensure_provenance_column(con, self._table)
@@ -574,8 +593,12 @@ class QuarantineWriter:
         clear happens with the first chunk that has any and every chunk after it
         appends. A run that rejects nothing writes nothing and clears nothing —
         exactly what a whole-dataset quarantine of the same run does.
+
+        The run that owns the drive is read **once**, here, and every chunk is
+        stamped with it — including the ones that take the plain append path,
+        which would otherwise land unstamped beside the first chunk's rows.
         """
-        yield _QuarantineChunkWriter(self)
+        yield _QuarantineChunkWriter(self, _current_run_id())
 
     def _append(self, frame: pd.DataFrame) -> None:
         with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
@@ -588,19 +611,26 @@ class QuarantineWriter:
 
 
 class _QuarantineChunkWriter:
-    """Clear the logical run's prior rejects with the first chunk, then append."""
+    """Clear the logical run's prior rejects with the first chunk, then append.
 
-    def __init__(self, inner: "QuarantineWriter") -> None:
+    Stamps every chunk with the run the session opened under, so the appended
+    chunks carry the same provenance as the first one rather than landing
+    unstamped beside it.
+    """
+
+    def __init__(self, inner: "QuarantineWriter", run_id: str | None) -> None:
         self._inner = inner
+        self._run_id = run_id
         self._cleared = False
         self.data_locations: list[dict[str, str]] = []
 
     def write(self, dataset: Dataset) -> None:
+        frame = _stamp_run_provenance(dataset.to_pandas(), self._run_id)
         if not self._cleared:
-            self._inner.write(dataset)
+            self._inner._replace(frame)
             self._cleared = True
         else:
-            self._inner._append(dataset.to_pandas())
+            self._inner._append(frame)
         self.data_locations = self._inner.data_locations
 
 
@@ -1148,7 +1178,7 @@ class AccumulateByRunWriter:
 
     def write(self, dataset: Dataset) -> None:
         self.data_locations = [table_location(self._db_path, self._table)]
-        frame = self._stamp(dataset.to_pandas())
+        frame = self._stamp(dataset.to_pandas(), _current_run_id())
         with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
             if RUN_PROVENANCE_COLUMN in frame.columns:
                 _ensure_provenance_column(con, self._table)
@@ -1179,21 +1209,27 @@ class AccumulateByRunWriter:
                     "WHERE logical_run_id = ?",
                     (self._logical_run_id,),
                 )
+        # The run that owns the drive is read once, here: every chunk of one
+        # load is stamped with the same value rather than each re-deriving it.
+        run_id = _current_run_id()
         yield _AppendingChunkWriter(
-            self._db_path, self._table, self._busy_timeout_ms, prepare=self._stamp
+            self._db_path,
+            self._table,
+            self._busy_timeout_ms,
+            prepare=lambda frame: self._stamp(frame, run_id),
         )
 
-    def _stamp(self, frame: pd.DataFrame) -> pd.DataFrame:
+    def _stamp(self, frame: pd.DataFrame, run_id: str | None) -> pd.DataFrame:
         """Stamp this run's identity onto ``frame`` in place and return it.
 
         The two columns this Writer owns — the idempotency key it deletes by and
         the business date — plus the provenance column every table-backed Writer
-        sets. Read once here rather than per chunk, since ``writing_chunks``
-        hands this same callable to the chunk writer.
+        sets. ``run_id`` is passed in rather than read here, so a chunked load
+        can resolve it once for the whole session.
         """
         frame["logical_run_id"] = self._logical_run_id
         frame["load_date"] = self._load_date
-        return _stamp_run_provenance(frame, _current_run_id())
+        return _stamp_run_provenance(frame, run_id)
 
     def describe(self) -> str:
         return render(self, db_path=str(self._db_path), table=self._table)
