@@ -148,17 +148,17 @@ test('Question Bank artifacts are read from the deployed banks folder, not a dec
     `expected the current export artifact, got ${calls[0].url}`
   );
   assert.ok(
-    calls[1].url.endsWith('/case-types/banks/example-review.sha256-abc.txt'),
+    calls[1].url.endsWith('/case-types/banks/example-review.abc.txt'),
     `expected the versioned artifact, got ${calls[1].url}`
   );
   // The web URL is not involved: these are not list reads.
   assert.equal(calls[0].url.startsWith(WEB_URL), false);
 });
 
-test('a version hash reaches the filename with its colon replaced', async () => {
+test('a version hash reaches the filename as the digest alone', async () => {
   // `sha256:<hex>` cannot be a filename — `:` is illegal in a Windows path and
-  // rejected by SharePoint — so the name carries a hyphen while the identity
-  // stamped on the Case row keeps its colon.
+  // rejected by SharePoint — so the name carries the digest while the identity
+  // stamped on the Case row keeps its algorithm prefix.
   const { fetch, calls } = makeFetch(() => ok('{}'));
   const client = new HttpSharePointClient({
     webUrl: WEB_URL,
@@ -167,7 +167,7 @@ test('a version hash reaches the filename with its colon replaced', async () => 
 
   await client.getVersionedExport('example-review', `sha256:${'a'.repeat(64)}`);
 
-  assert.ok(calls[0].url.endsWith(`.sha256-${'a'.repeat(64)}.txt`));
+  assert.ok(calls[0].url.endsWith(`example-review.${'a'.repeat(64)}.txt`));
   assert.equal(calls[0].url.includes(':'), true, 'the https: scheme survives');
   assert.equal(
     calls[0].url.includes('sha256:'),

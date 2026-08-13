@@ -128,7 +128,7 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
 
 - **Question Bank artifacts are JSON stored in `.txt` files, on purpose.** `case-types/banks/*.txt` (loaded via `case-types/load-bank.js`) hold plain JSON text. This is intentional, not an oversight: SharePoint Subscription Edition has been unreliable at storing/serving `.json` files (MIME/blocking issues), so the artifact extension is `.txt` while the content stays JSON, parsed explicitly by the loader. A repo-wide search for `*.json` will not find the banks — search `case-types/banks/*.txt` instead. The same reasoning covers published exports, which live in that directory under the same extension.
 
-- **A version hash is not a filename.** A version identity is `sha256:<hex>`, and `:` is illegal in a Windows path and rejected outright by SharePoint — so a published version's file is named `{slug}.sha256-<hex>.txt`, hyphen for colon. Only `src/lib/bank-artifacts.js` performs that conversion, and only in that direction: the identity stamped on a Case row, carried in the envelope's `hash`, keeps its colon everywhere else. Nothing parses a hash back out of a filename.
+- **A version identity is not a filename.** A version identity is `sha256:<hex>`, and `:` is illegal in a Windows path and rejected outright by SharePoint — so a published version's file is named `{slug}.<hex>.txt`, the digest alone. Only `src/lib/bank-artifacts.js` performs that conversion, and only in that direction: the identity stamped on a Case row, carried in the envelope's `hash`, keeps its `sha256:` prefix everywhere else. Nothing parses a hash back out of a filename.
 
 ## Planning: what does this change supersede?
 
@@ -246,7 +246,7 @@ src/
                                 #   Case Type may extend (extraAmendmentReasons) but not re-key
     bank-artifacts.js           # THE naming rule for every Question Bank artifact in
                                 #   case-types/banks/: the bank, its current export, and each
-                                #   published version. Owns the `sha256:` -> `sha256-` filename
+                                #   published version. Owns the `sha256:<hex>` -> `<hex>` filename
                                 #   conversion (a colon is illegal in a Windows/SharePoint name)
                                 #   and the classifier the verify gate reads names back with
     boot-error-panel.js         # cora-boot-error: the "boot did not finish" panel, shared by app.js and app-chrome's fatal-nav path (#575)
@@ -468,7 +468,7 @@ case-types/                     # one module per Case Type, lazy-loaded via mani
     complaints.txt              #   the editable current bank
     complaints.export.txt       #   the current published export; its `hash` is what completion
                                 #     stamps on a Case row
-    complaints.sha256-<hex>.txt #   one immutable published version, never overwritten — a Case
+    complaints.<hex>.txt        #   one immutable published version, never overwritten — a Case
                                 #     stamped with that hash resolves its questions from this file
 
 scripts/

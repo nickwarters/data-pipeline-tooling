@@ -123,8 +123,9 @@ test('HttpSharePointClient: getVersionedExport reads the hash-named artifact and
   assert.deepEqual(result, versionedPayload);
   assert.ok(calls[0].url.includes('example-review'), 'URL contains the slug');
   assert.ok(
-    // Filename-safe form: the identity keeps its colon, the file cannot have one.
-    calls[0].url.endsWith(`example-review.sha256-${'a'.repeat(64)}.txt`),
+    // Filename-safe form: the identity keeps its `sha256:` prefix, the file is
+    // named by the digest alone.
+    calls[0].url.endsWith(`example-review.${'a'.repeat(64)}.txt`),
     `expected the hash-named artifact, got ${calls[0].url}`
   );
 });

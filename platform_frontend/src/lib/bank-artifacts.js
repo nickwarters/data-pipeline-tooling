@@ -11,11 +11,11 @@
  * All three kinds sit in the same directory as the bank they belong to,
  * `case-types/banks/`, and all three are **JSON text in a `.txt` file**:
  *
- * | Artifact          | Name                        | Mutability                 |
- * | ----------------- | --------------------------- | -------------------------- |
- * | Current bank      | `{slug}.txt`                | overwritten on publish     |
- * | Current export    | `{slug}.export.txt`         | overwritten on publish     |
- * | Versioned export  | `{slug}.{segment}.txt`      | append-only, never rewritten |
+ * | Artifact          | Name                  | Mutability                   |
+ * | ----------------- | --------------------- | ---------------------------- |
+ * | Current bank      | `{slug}.txt`          | overwritten on publish       |
+ * | Current export    | `{slug}.export.txt`   | overwritten on publish       |
+ * | Versioned export  | `{slug}.{hash}.txt`   | append-only, never rewritten |
  *
  * Two constraints shape this, and both are the reason the version identity is
  * not simply pasted into the filename:
@@ -25,27 +25,28 @@
  *   and why the deploy carries an explicit carve-out for that one extension.
  *   An export is the same kind of content read the same way, so it is stored
  *   the same way.
- * - **The hash cannot be a filename as it stands.** A version hash is
- *   `sha256:<hex>`, and `:` is illegal in a Windows path and rejected outright
- *   by SharePoint. The colon is replaced by a hyphen for the filename only —
- *   `sha256:ab…` becomes `sha256-ab…`. The durable identity stamped on a Case
- *   row and carried in the envelope's `hash` field keeps its colon and is never
- *   rewritten, so nothing needs to convert a filename back into a hash.
+ * - **The identity does not go into the filename as it stands.** A version
+ *   identity is `sha256:<hex>`, and `:` is illegal in a Windows path and
+ *   rejected outright by SharePoint. The filename carries the digest alone, so
+ *   `sha256:ab…` names the file `{slug}.ab….txt`. The identity stamped on a
+ *   Case row and carried in the envelope's `hash` field keeps its algorithm
+ *   prefix and is never rewritten, so nothing reads a hash back out of a name.
  */
 
 /** The directory every bank artifact lives in, relative to `case-types/`. */
 export const BANKS_DIR = 'banks';
 
 /**
- * The filename-safe form of a version hash: the identity with its `:`
- * separator replaced, because a colon cannot appear in a Windows or SharePoint
- * filename. One-way on purpose — nothing reads a hash back out of a name.
+ * The filename-safe form of a version hash: the digest alone, without the
+ * algorithm prefix the identity carries, because a colon cannot appear in a
+ * Windows or SharePoint filename. One-way on purpose — nothing reads a hash
+ * back out of a name, so this never has to be inverted.
  *
  * @param {string} hash the durable `sha256:<hex>` version identity
  * @returns {string}
  */
 export function versionFileSegment(hash) {
-  return hash.replaceAll(':', '-');
+  return hash.slice(hash.lastIndexOf(':') + 1);
 }
 
 /**
@@ -113,7 +114,7 @@ export function classifyBankArtifact(filename) {
   if (rest === 'export') {
     return { kind: 'current-export', slug, segment: null };
   }
-  if (/^sha256-[0-9a-f]{64}$/.test(rest)) {
+  if (/^[0-9a-f]{64}$/.test(rest)) {
     return { kind: 'versioned-export', slug, segment: rest };
   }
   return null;

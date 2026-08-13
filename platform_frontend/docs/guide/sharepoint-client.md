@@ -78,17 +78,17 @@ Bank version stamped on its row, not from today's bank (ADR-0021). Three kinds
 of artifact live in `case-types/banks/`, all JSON in `.txt`, all named by
 [`src/lib/bank-artifacts.js`](../../src/lib/bank-artifacts.js):
 
-| Artifact                  | Role                                                                                                  | Mutability                   |
-| ------------------------- | ----------------------------------------------------------------------------------------------------- | ---------------------------- |
-| `{slug}.txt`              | The editable current bank                                                                             | overwritten on publish       |
-| `{slug}.export.txt`       | The current published export; its `hash` is what `getExportHash()` returns and what completion stamps | overwritten on publish       |
-| `{slug}.sha256-<hex>.txt` | One immutable published version, resolved by `getVersionedExport(slug, hash)`                         | append-only, never rewritten |
+| Artifact            | Role                                                                                                  | Mutability                   |
+| ------------------- | ----------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `{slug}.txt`        | The editable current bank                                                                             | overwritten on publish       |
+| `{slug}.export.txt` | The current published export; its `hash` is what `getExportHash()` returns and what completion stamps | overwritten on publish       |
+| `{slug}.<hex>.txt`  | One immutable published version, resolved by `getVersionedExport(slug, hash)`                         | append-only, never rewritten |
 
 Two things follow that are easy to get wrong:
 
 - **The hash is not the filename.** A version identity is `sha256:<hex>`; `:` is
   illegal in a Windows path and rejected by SharePoint, so the file segment is
-  `sha256-<hex>`. Only `bank-artifacts.js` converts, and only in that direction.
+  the digest alone. Only `bank-artifacts.js` converts, and only in that direction.
 - **There is no environment-specific path.** Artifacts are resolved relative to
   the module that reads them, so a UAT deploy reads UAT's copies because of
   where it was deployed. `resolveEnvironment()` declares the list prefix and
