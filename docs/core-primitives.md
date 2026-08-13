@@ -367,7 +367,10 @@ Deliverables and SQLite tables:
   rejects the statement). Equality is by SQLite's own **affinity** rules, not by
   pandas dtype, so a re-read that lands `1` where the target holds `1.0` — or
   the text `'1'` where it holds the integer `1` — is unchanged, not a conflict.
-  Minted by
+  The reserved provenance column is the one exclusion from both that comparison
+  and the narrowed-batch refusal — it is the Writer's own stamp, and including
+  it would make every overlapping re-read a conflict — so a row keeps the run
+  that **first landed** it. Minted by
   `store.writer(table, AppendOnly(key_columns))`. Use it for a source re-read
   many times a day whose rows are *observations* keyed by their own immutable
   id — where `AccumulateByRun` would land the same observation once per run, and
