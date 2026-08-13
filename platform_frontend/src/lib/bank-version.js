@@ -16,7 +16,8 @@
  * questions, the Outcome vocabulary and the default Outcome. It deliberately
  * excludes `label`, `generatedAt` and the `hash` field itself, so republishing
  * identical questions yields the identical version regardless of when it was
- * published or how the file was formatted.
+ * published or how the file was formatted. That exclusion is also why an
+ * artifact's `hash` field can be rewritten without moving its identity.
  *
  * This lives in `lib/` rather than with the Question Bank editor because it is
  * no longer only the compiler's concern: the SharePoint clients ask what the
@@ -150,12 +151,15 @@ function canonicalise(value) {
 }
 
 /**
- * THE version identity of a Question Bank: `sha256:<hex>` over its canonical
- * content.
+ * THE version identity of a Question Bank: the lower-case hex SHA-256 of its
+ * canonical content, and nothing else.
  *
- * The `sha256:` prefix is part of the identity — it is what a Case row stores
- * and what the envelope carries. It is not part of the **filename**, which is
- * the digest alone; see `bank-artifacts.js`.
+ * No algorithm prefix. The identity is stamped on a Case row, carried in the
+ * envelope, and composed into a filename, and a `sha256:` prefix would have to
+ * survive all three — but `:` is illegal in a Windows path and rejected by
+ * SharePoint, so it could never reach the third. One form everywhere beats a
+ * form that has to be stripped at the edge. The digest's own length is what
+ * says which algorithm produced it.
  *
  * @param {QuestionBank} bank
  * @returns {Promise<string>}
@@ -171,8 +175,7 @@ export async function bankVersionHash(bank) {
     'SHA-256',
     new TextEncoder().encode(canonical)
   );
-  const hex = [...new Uint8Array(digest)]
+  return [...new Uint8Array(digest)]
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
-  return `sha256:${hex}`;
 }

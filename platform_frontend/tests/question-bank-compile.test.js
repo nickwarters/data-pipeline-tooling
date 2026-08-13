@@ -272,9 +272,11 @@ test('compileExport: generatedAt is a valid ISO-8601 string', async () => {
   assert.match(generatedAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
 });
 
-test('compileExport: hash starts with sha256: followed by 64 hex chars (full digest)', async () => {
+test('compileExport: hash is the full 64-hex digest, with no algorithm prefix', async () => {
   const { hash } = await compileExport(exportBank);
-  assert.match(hash, /^sha256:[0-9a-f]{64}$/);
+  // No prefix: the same value is stamped on a Case row and composed into a
+  // filename, and a colon cannot appear in a SharePoint or Windows filename.
+  assert.match(hash, /^[0-9a-f]{64}$/);
 });
 
 test('compileExport: same questions+slug, different label/generatedAt → same hash', async () => {

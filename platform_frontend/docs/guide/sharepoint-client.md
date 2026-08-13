@@ -93,10 +93,12 @@ content the Reviewer never saw. A derived identity has nothing to keep in step.
 
 Two things follow that are easy to get wrong:
 
-- **The identity is not the filename.** A version identity is `sha256:<hex>`;
-  `:` is illegal in a Windows path and rejected by SharePoint, so the file is
-  named by the digest alone. Only `bank-artifacts.js` converts, and only in that
-  direction — nothing reads a hash back out of a name.
+- **The identity is the filename.** A version identity is a bare hex digest,
+  with no `sha256:` prefix, because the same value is stamped on a Case row,
+  carried in the envelope and composed into a filename — and `:` is illegal in
+  a Windows path and rejected by SharePoint, so a prefixed identity could never
+  have survived the third. `bank-artifacts.js` still tolerates a prefixed value;
+  nothing reads a hash back out of a name.
 - **There is no environment-specific path.** Artifacts are resolved relative to
   the module that reads them, so a UAT deploy reads UAT's copies because of
   where it was deployed. `resolveEnvironment()` declares the list prefix and

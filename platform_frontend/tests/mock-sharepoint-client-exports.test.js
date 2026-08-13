@@ -18,10 +18,10 @@ test('MockSharePointClient: getExportHash returns the configured hash for a know
   const client = new MockSharePointClient({
     lists: { [LIST]: CASES },
     personas: PERSONAS,
-    exportHashes: { 'example-review': 'sha256:abc123' },
+    exportHashes: { 'example-review': 'abc123' },
   });
   const hash = await client.getExportHash('example-review');
-  assert.equal(hash, 'sha256:abc123');
+  assert.equal(hash, 'abc123');
 });
 
 test('MockSharePointClient: getExportHash returns null when slug has no configured hash', async () => {
@@ -45,10 +45,7 @@ test('MockSharePointClient: getVersionedExport returns the matching export for a
 
 test('MockSharePointClient: getVersionedExport returns null for an unknown hash', async () => {
   const client = makeClient();
-  const result = await client.getVersionedExport(
-    'example-review',
-    'sha256:unknown'
-  );
+  const result = await client.getVersionedExport('example-review', 'unknown');
   assert.equal(result, null);
 });
 
@@ -56,7 +53,7 @@ test('MockSharePointClient: getVersionedExport returns null when no versionedExp
   const client = makeClient();
   const result = await client.getVersionedExport(
     'example-review',
-    'sha256:' + 'a'.repeat(64)
+    'a'.repeat(64)
   );
   assert.equal(result, null);
 });
