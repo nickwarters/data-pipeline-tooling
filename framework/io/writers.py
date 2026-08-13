@@ -36,7 +36,7 @@ from framework._internal.describe import render
 from framework._internal.locations import file_location, table_location
 from framework.core.dataset import Dataset
 from framework.core.errors import ErrorCategory, PipelineError
-from framework.core.protocols import ChunkWritable, Writer
+from framework.core.protocols import RUN_PROVENANCE_COLUMN, ChunkWritable, Writer
 from framework.io.sql import quote_identifier
 from framework.io.strategy import LoadStrategy
 
@@ -99,6 +99,37 @@ def _frame_for_strategy(
             "apply_to_frame, so it is available only to table-backed Writers."
         )
     return apply_to_frame(dataset.to_pandas(), read_existing)
+
+
+def _current_run_id() -> str | None:
+    """The ambient run's ``pipeline_run_id``, or ``None`` outside a run.
+
+    Imported lazily on purpose: ``framework.run`` composes ``framework.io``, so
+    naming the run context at module level would close the cycle. The lookup is
+    a ``ContextVar`` read, so doing it per write costs nothing worth caching.
+    """
+    from framework.run.run_context import current_context
+
+    context = current_context()
+    return None if context is None else context.pipeline_run_id
+
+
+def _stamp_run_provenance(frame: pd.DataFrame, run_id: str | None) -> pd.DataFrame:
+    """Stamp ``run_id`` onto ``frame`` as the reserved provenance column.
+
+    The one place the column is written, so "which run wrote this row?" has a
+    single implementation across every table-backed Writer
+    (``docs/adr/0020-writer-stamped-run-provenance-column.md``). Outside a run
+    context there is no id, and the frame is returned untouched rather than the
+    write failing — the framework's components stay usable from a script or a
+    test with no run around them.
+
+    The frame is mutated in place: every caller owns the frame it passes, having
+    just taken it from ``Dataset.to_pandas()``, which copies.
+    """
+    if run_id is not None:
+        frame[RUN_PROVENANCE_COLUMN] = run_id
+    return frame
 
 
 def supports_chunk_writes(writer: object) -> bool:
@@ -411,7 +442,14 @@ class StdoutWriter:
 
 
 class SqliteTruncateReloadWriter:
-    """A Writer that full-refreshes one table: truncate + reload."""
+    """A Writer that full-refreshes one table: truncate + reload.
+
+    Stamps the reserved run-provenance column
+    (:data:`~framework.core.protocols.RUN_PROVENANCE_COLUMN`) on every row it
+    writes. Because the table is replaced wholesale, the value is uniform: the
+    run named on any row of the table is the run that wrote **all** of it. A
+    write outside a run context leaves the column off rather than failing.
+    """
 
     def __init__(
         self,
@@ -426,10 +464,9 @@ class SqliteTruncateReloadWriter:
 
     def write(self, dataset: Dataset) -> None:
         self.data_locations = [table_location(self._db_path, self._table)]
+        frame = _stamp_run_provenance(dataset.to_pandas(), _current_run_id())
         with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
-            dataset.to_pandas().to_sql(
-                self._table, con, if_exists="replace", index=False
-            )
+            frame.to_sql(self._table, con, if_exists="replace", index=False)
 
     def describe(self) -> str:
         return render(self, db_path=str(self._db_path), table=self._table)
