@@ -1,3 +1,4 @@
+import io
 import json
 import sqlite3
 from pathlib import Path
@@ -588,3 +589,29 @@ def test_a_refresh_write_outside_any_run_context_still_works(tmp_path):
 
     landed = SqliteReader(db, "cases").read()
     assert landed.columns == ["case_id"]
+
+
+def test_the_file_writers_deliver_exactly_the_columns_they_were_given(tmp_path):
+    # The deliberate asymmetry, pinned. A table-backed Writer stamps the run
+    # that wrote the row; the file Writers must not, because what they produce
+    # leaves the system and its columns are a contract with whoever reads it.
+    # Run *inside* a run context, so the absence is the rule rather than the
+    # absence of an id. See docs/adr/0020-writer-stamped-run-provenance-column.md.
+    dataset = Dataset.from_pandas(pd.DataFrame({"case_id": ["c1"], "amount": [100]}))
+    csv_path = tmp_path / "out.csv"
+    excel_path = tmp_path / "out.xlsx"
+    json_path = tmp_path / "out.json"
+    console = io.StringIO()
+
+    with active_context(RunContext(pipeline_run_id="run-a")):
+        CsvWriter(csv_path, Refresh()).write(dataset)
+        ExcelWriter(excel_path, Refresh()).write(dataset)
+        JsonWriter(json_path, Refresh()).write(dataset)
+        StdoutWriter(stream=console).write(dataset)
+
+    assert csv_path.read_text(encoding="utf-8").splitlines()[0] == "case_id,amount"
+    assert list(pd.read_excel(excel_path).columns) == ["case_id", "amount"]
+    assert json.loads(json_path.read_text(encoding="utf-8")) == [
+        {"case_id": "c1", "amount": 100}
+    ]
+    assert RUN_PROVENANCE_COLUMN not in console.getvalue()
