@@ -12,6 +12,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import { cases } from '../dev/fixtures/cases.js';
 import {
@@ -25,6 +26,11 @@ import { MockSharePointClient } from '../src/services/mock-sharepoint-client.js'
 import { allApplicableAnswered } from '../src/evaluators/applicability-evaluator.js';
 import { personas } from '../dev/fixtures/personas.js';
 import { QUESTION_BANK_IMPORTERS } from '../case-types/manifest.js';
+import {
+  currentExportName,
+  versionedExportName,
+} from '../src/lib/bank-artifacts.js';
+import { compileExport } from '../src/pages/question-bank/question-bank-compile.js';
 import { CaseLoader } from '../src/lib/case-loader.js';
 import complaintsConfig from '../case-types/complaints.js';
 import { caps } from './helpers/section-access.js';
@@ -129,11 +135,14 @@ test('the January version asks a question no later version and no live bank does
     'the retired question must be absent from the live bank, or the frozen Case demonstrates nothing'
   );
 
-  const v1 = PUBLISHED_BANK_VERSIONS.find(
-    (v) => v.hash === COMPLAINTS_BANK_V1_HASH
+  const client = await mockClient();
+  const v1 = await client.getVersionedExport(
+    'complaints',
+    COMPLAINTS_BANK_V1_HASH
   );
-  const v2 = PUBLISHED_BANK_VERSIONS.find(
-    (v) => v.hash === COMPLAINTS_BANK_V2_HASH
+  const v2 = await client.getVersionedExport(
+    'complaints',
+    COMPLAINTS_BANK_V2_HASH
   );
   assert.ok(v1 && v2);
   assert.ok(v1.questions.some((q) => q.id === RETIRED_QUESTION_ID));
@@ -150,25 +159,59 @@ test('the January version asks a question no later version and no live bank does
   );
 });
 
-test('the frozen versions are literal, so editing the live bank cannot move them', async () => {
-  // A version resolved twice, either side of a bank compile, is the same
-  // object graph. This is the property that makes them safe to stamp a Case
-  // against; a derived "old" version would fail it the moment the bank moved.
-  const first = await mockClient();
-  const before = await first.getVersionedExport(
-    'complaints',
-    COMPLAINTS_BANK_V1_HASH
-  );
-  const second = await mockClient();
-  const after = await second.getVersionedExport(
-    'complaints',
-    COMPLAINTS_BANK_V1_HASH
-  );
-  assert.deepEqual(before, after);
-  assert.equal(before?.generatedAt, '2026-01-12T09:00:00.000Z');
+test('a published version is a file, named by the hash inside it', async () => {
+  // The app finds a version by composing its filename from the hash on the Case
+  // row. If a file's name and its own `hash` disagreed, the app would serve
+  // content under an identity that never produced it — so the two are checked
+  // against the bytes on disk, not against the loader that read them.
+  for (const { slug, hash } of PUBLISHED_BANK_VERSIONS) {
+    const file = new URL(
+      `../case-types/banks/${versionedExportName(slug, hash)}`,
+      import.meta.url
+    );
+    const envelope = JSON.parse(readFileSync(file, 'utf8'));
+    assert.equal(envelope.hash, hash, `${versionedExportName(slug, hash)}`);
+    assert.equal(envelope.slug, slug);
+    assert.ok(envelope.generatedAt, 'a version records when it was published');
+  }
 });
 
-test('the current version is compiled from the live bank and served under the stamping hash', async () => {
+test('the published versions are immutable, so editing the live bank cannot move them', async () => {
+  // The property that makes a version safe to stamp a Case against. The live
+  // bank is compiled here and must produce a hash that is none of the published
+  // older versions: if editing the bank could land on one of their hashes, it
+  // would rewrite what an already-completed Case shows.
+  const { default: liveBank } = await QUESTION_BANK_IMPORTERS.complaints();
+  const compiled = await compileExport(liveBank);
+  for (const { hash } of PUBLISHED_BANK_VERSIONS) {
+    assert.notEqual(compiled.hash, hash);
+  }
+});
+
+test('the current export is in step with the bank beside it', async () => {
+  // `{slug}.export.txt` is what completion stamps and what a Case then resolves
+  // against. If the bank is edited without republishing, a Case completed today
+  // freezes against content that is not what the Reviewer was shown — so the
+  // published pointer has to be regenerated whenever the bank changes.
+  const { default: liveBank } = await QUESTION_BANK_IMPORTERS.complaints();
+  const compiled = await compileExport(liveBank);
+  const published = JSON.parse(
+    readFileSync(
+      new URL(
+        `../case-types/banks/${currentExportName('complaints')}`,
+        import.meta.url
+      ),
+      'utf8'
+    )
+  );
+  assert.equal(
+    published.hash,
+    compiled.hash,
+    'the bank has changed since it was last published — run `node scripts/publish-bank.js`'
+  );
+});
+
+test('the current published version is served under the hash completion stamps', async () => {
   const client = await mockClient();
 
   // What completion stamps onto a Case row it completes today.
@@ -191,7 +234,7 @@ test('the current version is compiled from the live bank and served under the st
   assert.deepEqual(
     current.questions.map((q) => q.id),
     liveBank.questions.map((q) => q.id),
-    'the current version is the live bank; it is compiled from it rather than hand-maintained'
+    'the current published version is the current bank'
   );
   assert.notEqual(hash, COMPLAINTS_BANK_V1_HASH);
   assert.notEqual(hash, COMPLAINTS_BANK_V2_HASH);
@@ -236,23 +279,47 @@ test('opening the frozen Case in the dev loop renders the bank it was reviewed w
   );
 });
 
-test('a Case Type whose bank fails to compile loses only its current version', async () => {
+test('an unreadable artifact costs its own version and nothing else', async () => {
+  // A published version file that is missing is a real deploy state, and it is
+  // the state the loader's fallback exists for. It must not take the other
+  // versions — or the current one — down with it.
   const errors = [];
   const original = console.error;
   console.error = (...args) => errors.push(args);
+  let result;
   try {
-    const { exportHashes, versionedExports } = await buildQuestionBankVersions({
-      complaints: () => Promise.reject(new Error('bank artifact missing')),
-    });
-    assert.deepEqual(exportHashes, {});
-    for (const version of PUBLISHED_BANK_VERSIONS) {
-      assert.ok(
-        versionedExports[version.hash],
-        'the frozen versions stay served when a live bank cannot be compiled'
-      );
-    }
+    result = await buildQuestionBankVersions([
+      ...PUBLISHED_BANK_VERSIONS,
+      { slug: 'complaints', hash: `sha256:${'f'.repeat(64)}` },
+    ]);
   } finally {
     console.error = original;
+  }
+
+  assert.equal(errors.length, 1, 'the missing version is reported once');
+  assert.equal(result.versionedExports[`sha256:${'f'.repeat(64)}`], undefined);
+  for (const { hash } of PUBLISHED_BANK_VERSIONS) {
+    assert.ok(result.versionedExports[hash], 'every readable version survives');
+  }
+  assert.ok(result.exportHashes.complaints, 'the current version survives too');
+});
+
+test('a Case Type with no published export simply stamps nothing', async () => {
+  const errors = [];
+  const original = console.error;
+  console.error = (...args) => errors.push(args);
+  let result;
+  try {
+    result = await buildQuestionBankVersions(PUBLISHED_BANK_VERSIONS, [
+      { slug: 'never-published' },
+    ]);
+  } finally {
+    console.error = original;
+  }
+
+  assert.deepEqual(result.exportHashes, {});
+  for (const { hash } of PUBLISHED_BANK_VERSIONS) {
+    assert.ok(result.versionedExports[hash]);
   }
   assert.equal(errors.length, 1);
 });

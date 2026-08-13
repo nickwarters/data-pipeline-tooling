@@ -547,23 +547,40 @@ test('HttpSharePointClient: _refreshDigest throws when the contextinfo response 
 });
 
 test('HttpSharePointClient: _absolute prefixes a relative path that does not start with a slash', async () => {
+  // The one remaining caller that can hand `_absolute` a path without a leading
+  // slash is paging: `odata.nextLink` is whatever the server sends, and a
+  // server-relative form arrives without one. Every other caller passes a
+  // literal `/_api/...`, so this is the branch's real reason to exist and the
+  // only place left that can prove it.
   const { fetch, calls } = makeFetch([
+    {
+      when: (/** @type {{ url: string }} */ call) =>
+        !call.url.includes('$skiptoken'),
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            value: [{ Id: 1 }],
+            'odata.nextLink':
+              "_api/web/lists/getbytitle('Cases')/items?$skiptoken=1",
+          }),
+          { status: 200 }
+        ),
+    },
     {
       when: () => true,
       respond: () =>
-        new Response(JSON.stringify({ hash: 'h' }), { status: 200 }),
+        new Response(JSON.stringify({ value: [] }), { status: 200 }),
     },
   ]);
   const client = new HttpSharePointClient({
     webUrl: WEB_URL,
     fetchImpl: fetch,
-    exportBasePath: 'Style%20Library/case-review/case-types', // no leading slash
   });
 
-  await client.getExportHash('example-review');
+  await client.listCases({}, { listName: 'Cases' });
 
   assert.equal(
-    calls[0].url,
-    `${WEB_URL}/Style%20Library/case-review/case-types/example-review.json`
+    calls[1].url,
+    `${WEB_URL}/_api/web/lists/getbytitle('Cases')/items?$skiptoken=1`
   );
 });

@@ -185,7 +185,7 @@ test('partitionCasesByList: a Case Type contained here yields no list at all', a
   assert.deepEqual(lists, {}, 'no Cases, and no throw');
 });
 
-test('createSharePointClient: passes the environment listPrefix and exportBasePath to the HTTP client', async () => {
+test('createSharePointClient: passes the environment listPrefix to the HTTP client', async () => {
   const { resolveEnvironment } = await import('../src/config/environment.js');
   const client = /** @type {any} */ (
     await createSharePointClient(
@@ -194,10 +194,6 @@ test('createSharePointClient: passes the environment listPrefix and exportBasePa
     )
   );
   assert.equal(client._listPrefix, 'uat_');
-  assert.equal(
-    client._exportBasePath,
-    '/Style%20Library/case-review-uat/case-types'
-  );
 });
 
 test('createSharePointClient: defaults to the prod environment', async () => {
@@ -205,10 +201,6 @@ test('createSharePointClient: defaults to the prod environment', async () => {
     await createSharePointClient(new URLSearchParams(''))
   );
   assert.equal(client._listPrefix, '');
-  assert.equal(
-    client._exportBasePath,
-    '/Style%20Library/case-review/case-types'
-  );
 });
 
 test('createSharePointClient: environment does not affect the mock client', async () => {

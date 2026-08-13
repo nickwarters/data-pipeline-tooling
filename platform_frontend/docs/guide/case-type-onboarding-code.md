@@ -38,14 +38,15 @@ slug `widget-review`. Substitute your own slug (kebab-case) and display name.
 A Case Type is not one file. It is a small constellation, each piece with one
 job:
 
-| Piece                  | File                                 | Job                                                                             |
-| ---------------------- | ------------------------------------ | ------------------------------------------------------------------------------- |
-| Question Bank artifact | `case-types/banks/widget-review.txt` | The reviewable content: Question Definitions, Outcome vocabulary, Labels        |
-| Case Type module       | `case-types/widget-review.js`        | The operational config: list, groups, sections, SLA, appeal routing, outcome fn |
-| Registry entry         | `case-types/manifest.js`             | THE one registration: slug, display name, lazy `import()`, bank thunk           |
-| Dev personas           | `dev/fixtures/personas.js`           | Mock users holding the new groups, selectable via `?asUser=`                    |
-| Example Cases          | `dev/fixtures/cases.js`              | Mock Case rows served by `MockSharePointClient` under `?mock=1`                 |
-| Tests                  | `tests/widget-review.test.js`        | Contract tests for the catalogue, outcome function, and fixtures                |
+| Piece                  | File                                                                           | Job                                                                               |
+| ---------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| Question Bank artifact | `case-types/banks/widget-review.txt`                                           | The reviewable content: Question Definitions, Outcome vocabulary, Labels          |
+| Published bank version | `case-types/banks/widget-review.export.txt` + `widget-review.sha256-<hex>.txt` | Written by `node scripts/publish-bank.js`; what a reportable Case freezes against |
+| Case Type module       | `case-types/widget-review.js`                                                  | The operational config: list, groups, sections, SLA, appeal routing, outcome fn   |
+| Registry entry         | `case-types/manifest.js`                                                       | THE one registration: slug, display name, lazy `import()`, bank thunk             |
+| Dev personas           | `dev/fixtures/personas.js`                                                     | Mock users holding the new groups, selectable via `?asUser=`                      |
+| Example Cases          | `dev/fixtures/cases.js`                                                        | Mock Case rows served by `MockSharePointClient` under `?mock=1`                   |
+| Tests                  | `tests/widget-review.test.js`                                                  | Contract tests for the catalogue, outcome function, and fixtures                  |
 
 Two architectural facts explain the split:
 
@@ -170,6 +171,20 @@ Keep the first bank small — three or four questions spanning two Question
 Groups, one `showWhen`, one failure with a Remediation Action. That is enough
 to exercise every downstream surface, and the Question Bank editor is the
 right tool for growing it afterwards.
+
+Then **publish it**:
+
+```sh
+node scripts/publish-bank.js widget-review
+```
+
+That writes `case-types/banks/widget-review.export.txt` — the current published
+version — and an immutable `widget-review.sha256-<hex>.txt` beside it. A Case
+past the reportable milestone resolves its questions from the published version
+stamped on its row, so until a bank is published, completing one of its Cases
+stamps no version and the Case reads the live bank forever after. Nothing breaks
+without this; the freeze simply does not happen. Re-run it after every bank edit
+— a test fails if the published export drifts from the bank beside it.
 
 ## Step 2 — Write the Case Type module
 

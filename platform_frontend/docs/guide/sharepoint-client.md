@@ -71,31 +71,66 @@ http://localhost:1234/SitePages/app.aspx?mock=1#/dashboard
 
 The mock client operates entirely in memory. `patchCase` writes to its internal array so that subsequent `getCase` calls return the updated row within the same page load.
 
-### Published Question Bank versions in mock mode
+### Published Question Bank versions
 
 A Case past the reportable milestone resolves its questions from the Question
-Bank version stamped on its row, not from today's bank (ADR-0021). The mock
-serves those versions from
-[`dev/fixtures/question-bank-versions.js`](../../dev/fixtures/question-bank-versions.js),
-which supplies both halves of `buildQuestionBankVersions()`:
+Bank version stamped on its row, not from today's bank (ADR-0021). Three kinds
+of artifact live in `case-types/banks/`, all JSON in `.txt`, all named by
+[`src/lib/bank-artifacts.js`](../../src/lib/bank-artifacts.js):
 
-| Version                                    | Built how                                                                  | Why                                                                                                                                                         |
-| ------------------------------------------ | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Older versions (`PUBLISHED_BANK_VERSIONS`) | Literal exports with literal hashes                                        | A frozen version must not move when someone edits the live bank, or a Case stamped against it shows today's content while claiming January's                |
-| Current version                            | Compiled from the live `case-types/banks/{slug}.txt` via `compileExport()` | "Current" means the newest published version and the bank on screen are the same content; it is also what `getExportHash()` returns for completion to stamp |
+| Artifact                  | Role                                                                                                  | Mutability                   |
+| ------------------------- | ----------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `{slug}.txt`              | The editable current bank                                                                             | overwritten on publish       |
+| `{slug}.export.txt`       | The current published export; its `hash` is what `getExportHash()` returns and what completion stamps | overwritten on publish       |
+| `{slug}.sha256-<hex>.txt` | One immutable published version, resolved by `getVersionedExport(slug, hash)`                         | append-only, never rewritten |
 
-Two fixture Cases — `complaints-frozen-v1` and `complaints-frozen-v2` — carry a
-`questionBankVersion` and open against those older catalogues. The January one
-answers a question retired since, which no other Case can display. Their Answers
-name only the ids their own version asks, so the live-bank fixture contracts in
-`tests/complaints.test.js` deliberately skip any Case carrying a
-`questionBankVersion`; the frozen Cases are held to the same rules against the
-version they name, in `tests/question-bank-versions-fixture.test.js`.
+Two things follow that are easy to get wrong:
 
-A Case completed in the dev loop stamps the compiled current hash and re-opens
-against it. Stamping a hash the fixture does not serve is not a hard failure —
-the Case falls back to the live bank behind an "as-reviewed version unavailable"
-banner — which is precisely why that wiring is covered by tests.
+- **The hash is not the filename.** A version identity is `sha256:<hex>`; `:` is
+  illegal in a Windows path and rejected by SharePoint, so the file segment is
+  `sha256-<hex>`. Only `bank-artifacts.js` converts, and only in that direction.
+- **There is no environment-specific path.** Artifacts are resolved relative to
+  the module that reads them, so a UAT deploy reads UAT's copies because of
+  where it was deployed. `resolveEnvironment()` declares the list prefix and
+  nothing else.
+
+`HttpSharePointClient` reads these files directly rather than through `_read` —
+no OData headers, and the body is parsed from text, because a `.txt` response
+does not arrive with a content type worth trusting. Every failure is `null`:
+a Case Type that has never been published is a real state, not an error.
+
+#### In mock mode
+
+`dev/fixtures/question-bank-versions.js` loads **the same files** and hands them
+to `MockSharePointClient`, so the dev loop and a deploy cannot disagree about
+what a version contains. Two fixture Cases — `complaints-frozen-v1` and
+`complaints-frozen-v2` — are stamped against older published versions and open
+against those catalogues; the January one answers a question retired since,
+which no other Case can display. Their Answers name only the ids their own
+version asks, so the live-bank fixture contracts in `tests/complaints.test.js`
+deliberately skip any Case carrying a `questionBankVersion`.
+
+A Case completed in the dev loop stamps whatever `{slug}.export.txt` currently
+points at and re-opens against it. Stamping a hash nothing serves is not a hard
+failure — the Case falls back to the live bank behind an "as-reviewed version
+unavailable" banner — which is why the wiring is covered by tests rather than
+left to the eye.
+
+#### Publishing
+
+After editing a bank, republish it:
+
+```sh
+node scripts/publish-bank.js            # every registered Case Type
+node scripts/publish-bank.js complaints # one
+```
+
+It compiles the bank, writes `{slug}.export.txt`, and appends the versioned copy
+if that content is new. It is idempotent and never rewrites a versioned file —
+a version some reportable Case resolves against has to stay exactly as
+published. A test fails if the published export has drifted from the bank beside
+it, so a bank edit cannot quietly leave the dev loop and a deploy showing
+different questions.
 
 ---
 
