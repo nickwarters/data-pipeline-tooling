@@ -597,6 +597,14 @@ class SqliteUpsertWriter:
 
     Target rows whose key does NOT appear in the incoming batch are never
     read or written.
+
+    Every written row is stamped with the run that wrote it
+    (:data:`~framework.core.protocols.RUN_PROVENANCE_COLUMN`). A replaced row is
+    a **real rewrite** — the target row is deleted and the incoming one inserted
+    — so it takes the **new** run id: the last writer is the honest answer to
+    "which run wrote this row?". A key the batch does not carry is untouched and
+    keeps whatever it had. Nothing here compares stored values, so the column
+    disturbs no decision.
     """
 
     def __init__(
@@ -614,7 +622,7 @@ class SqliteUpsertWriter:
 
     def write(self, dataset: Dataset) -> None:
         self.data_locations = [table_location(self._db_path, self._table)]
-        frame = dataset.to_pandas()
+        frame = _stamp_run_provenance(dataset.to_pandas(), _current_run_id())
         missing = [c for c in self._key_columns if c not in frame.columns]
         if missing:
             raise ValueError(
@@ -673,6 +681,13 @@ class SqliteInsertOrIgnoreWriter:
 
     When the target table carries no constraints every incoming row is appended,
     which is equivalent to a plain append.
+
+    Every row that actually lands is stamped with the run that wrote it
+    (:data:`~framework.core.protocols.RUN_PROVENANCE_COLUMN`). An **ignored row
+    is not written**, so the row already in the target keeps the run that
+    inserted it — the same "first landed" reading as an append-only target.
+    Conflict resolution is the target's own constraints, which the extra column
+    takes no part in.
     """
 
     def __init__(
@@ -688,7 +703,7 @@ class SqliteInsertOrIgnoreWriter:
 
     def write(self, dataset: Dataset) -> None:
         self.data_locations = [table_location(self._db_path, self._table)]
-        frame = dataset.to_pandas()
+        frame = _stamp_run_provenance(dataset.to_pandas(), _current_run_id())
         with _staged_merge(
             self._db_path,
             self._table,
@@ -728,6 +743,12 @@ class SqliteInsertIfAbsentWriter:
     Existing rows are never modified or deleted.  Re-running the same input is a
     no-op and leaves all surrogate assignments unchanged — the reference table is
     a stable system of record across re-runs.
+
+    Each inserted row is stamped with the run that wrote it
+    (:data:`~framework.core.protocols.RUN_PROVENANCE_COLUMN`). Only unseen keys
+    are inserted, so the value means **"first seen"** and is as stable as the
+    surrogate beside it. The absent/present decision reads the key columns only,
+    so the column changes nothing about which rows are new.
     """
 
     def __init__(
@@ -747,7 +768,7 @@ class SqliteInsertIfAbsentWriter:
 
     def write(self, dataset: Dataset) -> None:
         self.data_locations = [table_location(self._db_path, self._table)]
-        frame = dataset.to_pandas()
+        frame = _stamp_run_provenance(dataset.to_pandas(), _current_run_id())
         missing = [c for c in self._key_columns if c not in frame.columns]
         if missing:
             raise ValueError(
@@ -805,6 +826,10 @@ class SqliteInsertIfAbsentWriter:
                 0, self._surrogate_column, range(max_id + 1, max_id + 1 + len(new_rows))
             )
 
+            # This Writer appends straight to the target rather than through the
+            # staged merge, so it widens a pre-existing table itself.
+            if RUN_PROVENANCE_COLUMN in new_rows.columns:
+                _ensure_provenance_column(con, self._table)
             new_rows.to_sql(self._table, con, if_exists="append", index=False)
 
     @contextmanager
