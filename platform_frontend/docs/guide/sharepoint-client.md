@@ -83,22 +83,23 @@ artifact live in `case-types/banks/`, both JSON in `.txt`, both named by
 | `{slug}.txt`       | The current bank — and therefore the current version                          | edited freely                |
 | `{slug}.<hex>.txt` | One immutable published version, resolved by `getVersionedExport(slug, hash)` | append-only, never rewritten |
 
+**A version identity is just an identifier.** It says "this bank, not that one"
+and it names a file. It is a hash so that it changes when the content does and
+stays unique, but nothing depends on how it is produced — every reader treats it
+as opaque, and there is no parity requirement with the Python side. Only
+[`src/lib/bank-version.js`](../../src/lib/bank-version.js) computes one.
+
 **There is no current-version pointer file.** `getExportHash(slug)` reads the
-bank artifact and derives its identity through
-[`src/lib/bank-version.js`](../../src/lib/bank-version.js) — a sha256 over the
-bank's canonical content. A pointer would be a second statement of the same
-fact, and the two can disagree: a bank edited without republishing would go on
-claiming the old version, and a Case completed against it would freeze on
-content the Reviewer never saw. A derived identity has nothing to keep in step.
+bank artifact and derives its identity. A pointer would be a second statement of
+the same fact, and the two can disagree: a bank edited without republishing would
+go on claiming the old version, and a Case completed against it would freeze on
+content the Reviewer never saw.
 
 Two things follow that are easy to get wrong:
 
-- **The identity is the filename.** A version identity is a bare hex digest,
-  with no `sha256:` prefix, because the same value is stamped on a Case row,
-  carried in the envelope and composed into a filename — and `:` is illegal in
-  a Windows path and rejected by SharePoint, so a prefixed identity could never
-  have survived the third. `bank-artifacts.js` still tolerates a prefixed value;
-  nothing reads a hash back out of a name.
+- **The identity is the filename**, unchanged — which is why it is a bare hex
+  digest with no `sha256:` prefix. `:` is illegal in a Windows path and rejected
+  by SharePoint, so a prefixed identity could never have reached a filename.
 - **There is no environment-specific path.** Artifacts are resolved relative to
   the module that reads them, so a UAT deploy reads UAT's copies because of
   where it was deployed. `resolveEnvironment()` declares the list prefix and

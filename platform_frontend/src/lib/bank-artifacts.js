@@ -2,59 +2,25 @@
 /**
  * THE naming rule for every Question Bank artifact on disk.
  *
- * A Case past the reportable milestone stores the version hash it was reviewed
- * against and resolves its questions by looking that hash up as a file. Three
- * things therefore have to agree on one filename — the app's read, the publish
- * write, and the repository gate that checks the artifacts — so the rule lives
- * here and nowhere else.
+ * A Case past the reportable milestone stores the version identity it was
+ * reviewed against and resolves its questions by looking that identity up as a
+ * file. Three things therefore have to agree on one filename — the app's read,
+ * the publish write, and the repository gate — so the rule lives here.
  *
- * Both kinds sit in one directory, `case-types/banks/`, and both are **JSON
- * text in a `.txt` file**:
+ * Both kinds sit in `case-types/banks/`, and both are **JSON text in a `.txt`
+ * file**, because SharePoint Subscription Edition blocks or mis-serves `.json`:
  *
  * | Artifact          | Name                  | Mutability                   |
  * | ----------------- | --------------------- | ---------------------------- |
  * | Current bank      | `{slug}.txt`          | edited freely                |
  * | Published version | `{slug}.{hash}.txt`   | append-only, never rewritten |
  *
- * There is no current-version pointer. The bank *is* the current version and
- * its identity is derived from its content (`bank-version.js`), so there is
- * nothing to keep in step with it.
- *
- * Two constraints shape this, and both are the reason the version identity is
- * not simply pasted into the filename:
- *
- * - **`.txt`, not `.json`.** SharePoint Subscription Edition blocks or
- *   mis-serves `.json`, which is why the bank artifact has always been `.txt`
- *   and why the deploy carries an explicit carve-out for that one extension.
- *   An export is the same kind of content read the same way, so it is stored
- *   the same way.
- * - **The identity goes into the filename unchanged.** A version identity is a
- *   bare hex digest — no `sha256:` prefix — precisely so that the value stamped
- *   on a Case row, carried in the envelope and composed into a filename is one
- *   value in all three places. A colon is illegal in a Windows path and
- *   rejected by SharePoint, so a prefixed identity could never have reached the
- *   filename intact. `versionFileSegment` still tolerates one, so a hash that
- *   arrives prefixed from somewhere still finds its file.
+ * There is no current-version pointer. The bank *is* the current version, and
+ * `bank-version.js` says what its identity is.
  */
 
 /** The directory every bank artifact lives in, relative to `case-types/`. */
 export const BANKS_DIR = 'banks';
-
-/**
- * The filename-safe form of a version hash. A version identity is already a
- * bare digest, so this is normally the identity itself; a value that arrives
- * carrying an algorithm prefix is reduced to its digest, because a colon cannot
- * appear in a Windows or SharePoint filename.
- *
- * One-way on purpose — nothing reads a hash back out of a name, so this never
- * has to be inverted.
- *
- * @param {string} hash the version identity
- * @returns {string}
- */
-export function versionFileSegment(hash) {
-  return hash.slice(hash.lastIndexOf(':') + 1);
-}
 
 /**
  * The editable current bank: the artifact the Question Bank editor compiles and
@@ -77,7 +43,7 @@ export function bankArtifactName(slug) {
  * @returns {string}
  */
 export function versionedExportName(slug, hash) {
-  return `${slug}.${versionFileSegment(hash)}.txt`;
+  return `${slug}.${hash}.txt`;
 }
 
 /**
