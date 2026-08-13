@@ -10,6 +10,8 @@ Run from the repository root so the import-only ``framework`` package resolves::
     python -m cli run pipelines/orders --base-dir /data --run-date 2026-05-29
     python -m cli status --base-dir /data --subject cases
     python -m cli runs --base-dir /data --pipeline cases/ingest --limit 5
+    python -m cli runs --base-dir /data --run fd76eda3
+    python -m cli runs --base-dir /data --table case_current
     python -m cli log cases --base-dir /data --pipeline-run-id <pipeline-run-id>
 
 The base directory is the option ``--base-dir`` (or ``--env <name>``, which
@@ -254,6 +256,10 @@ def _runs(args: argparse.Namespace) -> int:
     registry = _load_registry_or_report(base_dir)
     if registry is None:
         return 1
+    if args.run is not None:
+        return _runs_wrote(registry, args.run)
+    if args.table is not None:
+        return _runs_wrote_table(registry, args.table, args.namespace)
     summaries = registry.query_runs(pipeline=args.pipeline, status=args.status)
     if not summaries:
         print("no matching runs")
@@ -261,6 +267,44 @@ def _runs(args: argparse.Namespace) -> int:
     for record in summaries[-args.limit :]:
         print(_format_run(record))
     return 0
+
+
+def _runs_wrote(registry: RunRegistry, pipeline_run_id: str) -> int:
+    """``runs --run <id>``: what one run wrote, one line per location it landed."""
+    writes = registry.writes_for_run(pipeline_run_id)
+    if not writes:
+        print(f"no committed writes for run {pipeline_run_id!r}")
+        return 0
+    for record in writes:
+        for location in record.get("data_locations") or []:
+            print(_format_write(record, location))
+    return 0
+
+
+def _runs_wrote_table(registry: RunRegistry, name: str, namespace: str | None) -> int:
+    """``runs --table <name>``: the run that last committed a write to it."""
+    record = registry.last_write_of(name, namespace=namespace)
+    if record is None:
+        where = f" in namespace {namespace!r}" if namespace else ""
+        print(f"no committed write to {name!r}{where}")
+        return 0
+    print(_format_run(record))
+    for location in record.get("data_locations") or []:
+        if location.get("name") == name:
+            print(f"  {_format_write(record, location)}")
+    return 0
+
+
+def _format_write(record: dict, location: dict) -> str:
+    """One human-readable line for a location a run's step committed to."""
+    parts = [
+        record.get("step_address") or record.get("step") or "?",
+        f"{location.get('namespace', '?')} -> {location.get('name', '?')}",
+    ]
+    if record.get("rows_out") is not None:
+        parts.append(f"rows_out={record['rows_out']}")
+    parts.append(f"[run {(record.get('pipeline_run_id') or '')[:8]}]")
+    return "  ".join(parts)
 
 
 def _format_record(record: dict) -> str:
@@ -418,6 +462,25 @@ def register(sub) -> None:
     runs.add_argument("--status", help="narrow to a run status, e.g. ok or error")
     runs.add_argument(
         "--limit", type=int, default=10, help="show the most recent N (default 10)"
+    )
+    # The two lineage directions, each replacing the listing rather than
+    # narrowing it, so they are exclusive of one another.
+    direction = runs.add_mutually_exclusive_group()
+    direction.add_argument(
+        "--run",
+        metavar="RUN_ID",
+        help="instead of listing runs, show what this run wrote (id or prefix)",
+    )
+    direction.add_argument(
+        "--table",
+        metavar="NAME",
+        help="instead of listing runs, show the run that last wrote this table "
+        "(or file); for a Refresh() target that run wrote every row in it",
+    )
+    runs.add_argument(
+        "--namespace",
+        help="disambiguate --table when the same name exists in two databases, "
+        "e.g. sqlite:/data/cases/silver.db",
     )
     runs.set_defaults(func=_runs)
 
