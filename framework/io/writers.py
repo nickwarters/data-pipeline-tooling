@@ -350,6 +350,18 @@ class _FileWriter:
     An implementation detail of this module, not a base class Writers outside it
     are expected to inherit: the ``Writer`` contract stays structural, so any
     object with ``write(dataset)`` remains a Writer.
+
+    **No provenance stamp, deliberately.** Every *table*-backed Writer stamps
+    the run that wrote the row
+    (:data:`~framework.core.protocols.RUN_PROVENANCE_COLUMN`); the file Writers
+    do not. What they produce is a **Deliverable** — a file that leaves the
+    system for a person or another application — whose columns are a contract
+    with whoever reads it. An extra column would be one the recipient did not
+    ask for and cannot interpret. The question "which run produced this file?"
+    is answered without touching the file at all, by the run record's
+    ``data_locations``. The asymmetry is a decision, recorded in
+    ``docs/adr/0020-writer-stamped-run-provenance-column.md`` and pinned by a
+    test, not an omission to be tidied up later.
     """
 
     def __init__(
@@ -452,6 +464,10 @@ class StdoutWriter:
 
     An optional ``label`` is printed above the table to caption what is being
     shown when several datasets land on the same console.
+
+    Like the file Writers, it stamps no provenance column: its only purpose is
+    being read by a human, and a run id repeated down every line is noise. What
+    run printed it is the question the run log already answers.
     """
 
     def __init__(
