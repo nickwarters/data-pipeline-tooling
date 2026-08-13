@@ -220,9 +220,10 @@ test('the current bank version is served under the hash completion stamps', asyn
 
   // What completion stamps onto a Case row it completes today.
   const hash = await client.getExportHash('complaints');
-  assert.ok(
-    hash?.startsWith('sha256:'),
-    'the mock must offer a current version hash, or a Case completed in the dev loop stamps nothing'
+  assert.match(
+    /** @type {string} */ (hash),
+    /^[0-9a-f]{64}$/,
+    'the stamped identity is the digest alone — no algorithm prefix, because the same value has to be a filename'
   );
 
   const current = await client.getVersionedExport(
@@ -290,7 +291,7 @@ test('a version with no artifact reads as unpublished, not as a failure', async 
   const client = mockClient();
 
   assert.equal(
-    await client.getVersionedExport('complaints', `sha256:${'f'.repeat(64)}`),
+    await client.getVersionedExport('complaints', 'f'.repeat(64)),
     null
   );
   for (const { slug, hash } of PUBLISHED_BANK_VERSIONS) {

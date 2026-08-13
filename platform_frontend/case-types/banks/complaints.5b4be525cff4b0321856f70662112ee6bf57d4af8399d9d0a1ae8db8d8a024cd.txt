@@ -2,7 +2,7 @@
   "slug": "complaints",
   "label": "Complaints",
   "generatedAt": "2026-01-12T09:00:00.000Z",
-  "hash": "sha256:5b4be525cff4b0321856f70662112ee6bf57d4af8399d9d0a1ae8db8d8a024cd",
+  "hash": "5b4be525cff4b0321856f70662112ee6bf57d4af8399d9d0a1ae8db8d8a024cd",
   "questions": [
     {
       "id": "q-cmp-0001",

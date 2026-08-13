@@ -35,7 +35,7 @@ test('HttpSharePointClient: getExportHash derives the current version from the b
   // publish step reach it through the same function rather than agreeing on a
   // value written into a file.
   assert.equal(hash, await bankVersionHash(bank));
-  assert.match(/** @type {string} */ (hash), /^sha256:[0-9a-f]{64}$/);
+  assert.match(/** @type {string} */ (hash), /^[0-9a-f]{64}$/);
   assert.ok(
     calls[0].url.endsWith('/case-types/banks/example-review.txt'),
     'reads the bank artifact from the deployed banks folder'
@@ -127,7 +127,7 @@ test('HttpSharePointClient: assignable to SharePointClient interface (includes g
 // --- getVersionedExport ---
 
 test('HttpSharePointClient: getVersionedExport reads the hash-named artifact and returns its parsed body', async () => {
-  const hash = 'sha256:' + 'a'.repeat(64);
+  const hash = 'a'.repeat(64);
   const versionedPayload = {
     slug: 'example-review',
     hash,
@@ -164,8 +164,7 @@ test('HttpSharePointClient: getVersionedExport reads the hash-named artifact and
   assert.deepEqual(result, versionedPayload);
   assert.ok(calls[0].url.includes('example-review'), 'URL contains the slug');
   assert.ok(
-    // Filename-safe form: the identity keeps its `sha256:` prefix, the file is
-    // named by the digest alone.
+    // The identity is the digest, so it reaches the filename unchanged.
     calls[0].url.endsWith(`example-review.${'a'.repeat(64)}.txt`),
     `expected the hash-named artifact, got ${calls[0].url}`
   );
@@ -182,10 +181,7 @@ test('HttpSharePointClient: getVersionedExport returns null on 404', async () =>
     webUrl: WEB_URL,
     fetchImpl: fetch,
   });
-  const result = await client.getVersionedExport(
-    'example-review',
-    'sha256:abc'
-  );
+  const result = await client.getVersionedExport('example-review', 'abc');
   assert.equal(result, null);
 });
 
@@ -196,10 +192,7 @@ test('HttpSharePointClient: getVersionedExport returns null on network error', a
       throw new Error('Network error');
     },
   });
-  const result = await client.getVersionedExport(
-    'example-review',
-    'sha256:abc'
-  );
+  const result = await client.getVersionedExport('example-review', 'abc');
   assert.equal(result, null);
 });
 
@@ -224,9 +217,6 @@ test('HttpSharePointClient: getVersionedExport returns null when the parsed body
     fetchImpl: fetch,
   });
 
-  const result = await client.getVersionedExport(
-    'example-review',
-    'sha256:abc'
-  );
+  const result = await client.getVersionedExport('example-review', 'abc');
   assert.equal(result, null);
 });

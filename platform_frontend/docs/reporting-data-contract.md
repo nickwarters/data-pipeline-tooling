@@ -47,12 +47,12 @@ Edition blocks or mis-serves `.json`, so every bank artifact is stored as text
 and parsed explicitly. Parse with `json.loads(...)`, not by trusting a content
 type.
 
-**Deriving the versioned filename from a Case row.** `questionBankVersion` is
-`sha256:<hex>`, and a `:` cannot appear in a SharePoint or Windows filename, so
-the file segment replaces it with `-`:
+**Deriving the versioned filename from a Case row.** `questionBankVersion` is a
+bare hex digest, and so is the `hash` field inside every export, so the filename
+needs no conversion:
 
 ```python
-filename = f"{slug}.{case['questionBankVersion'].split(':')[-1]}.txt"
+filename = f"{slug}.{case['questionBankVersion']}.txt"
 ```
 
 Fetch by URL over the same NTLM/Kerberos auth as everything else, e.g.
@@ -68,7 +68,7 @@ have their own copies).
   "slug": "complaint-review",
   "label": "Complaint Review",
   "generatedAt": "2026-06-05T09:30:00Z",
-  "hash": "sha256:1a2b3c4d5e6f…",
+  "hash": "1a2b3c4d5e6f…",
   "questions": [
     /* … */
   ],
@@ -347,4 +347,4 @@ for case in cases_modified_yesterday:           # filter on completedAt
 
 Record the export `hash` (and `generatedAt`) you read alongside each report run.
 It makes a number reproducible ("derived from `complaint-review.json`
-`sha256:1a2b3c4d5e6f`") and is the hook that a future point-in-time mode would use.
+`1a2b3c4d5e6f`") and is the hook that a future point-in-time mode would use.

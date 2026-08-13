@@ -11,8 +11,10 @@ Accepted (amended by [ADR-0023], Jul 2026)
 > files — not as `.json` in a separate `/Style Library/case-review/case-types/`
 > folder. Three things forced it: SharePoint Subscription Edition blocks or
 > mis-serves `.json` (the reason the bank artifact was already `.txt`); a
-> `sha256:<hex>` hash cannot appear in a Windows or SharePoint filename, so the
-> file segment is the digest alone; and the folder this ADR named was never where
+> `sha256:`-prefixed hash cannot appear in a Windows or SharePoint filename, so
+> the identity is the bare digest — one value on the Case row, in the envelope
+> and in the filename, rather than one form stripped at the edge; and the folder
+> this ADR named was never where
 > the deploy actually puts the modules, so "beside the module" was not true of
 > the path as written. Names are composed in one place,
 > `src/lib/bank-artifacts.js`, and read relative to the module that reads them,

@@ -28,24 +28,28 @@
  *   and why the deploy carries an explicit carve-out for that one extension.
  *   An export is the same kind of content read the same way, so it is stored
  *   the same way.
- * - **The identity does not go into the filename as it stands.** A version
- *   identity is `sha256:<hex>`, and `:` is illegal in a Windows path and
- *   rejected outright by SharePoint. The filename carries the digest alone, so
- *   `sha256:ab…` names the file `{slug}.ab….txt`. The identity stamped on a
- *   Case row and carried in the envelope's `hash` field keeps its algorithm
- *   prefix and is never rewritten, so nothing reads a hash back out of a name.
+ * - **The identity goes into the filename unchanged.** A version identity is a
+ *   bare hex digest — no `sha256:` prefix — precisely so that the value stamped
+ *   on a Case row, carried in the envelope and composed into a filename is one
+ *   value in all three places. A colon is illegal in a Windows path and
+ *   rejected by SharePoint, so a prefixed identity could never have reached the
+ *   filename intact. `versionFileSegment` still tolerates one, so a hash that
+ *   arrives prefixed from somewhere still finds its file.
  */
 
 /** The directory every bank artifact lives in, relative to `case-types/`. */
 export const BANKS_DIR = 'banks';
 
 /**
- * The filename-safe form of a version hash: the digest alone, without the
- * algorithm prefix the identity carries, because a colon cannot appear in a
- * Windows or SharePoint filename. One-way on purpose — nothing reads a hash
- * back out of a name, so this never has to be inverted.
+ * The filename-safe form of a version hash. A version identity is already a
+ * bare digest, so this is normally the identity itself; a value that arrives
+ * carrying an algorithm prefix is reduced to its digest, because a colon cannot
+ * appear in a Windows or SharePoint filename.
  *
- * @param {string} hash the durable `sha256:<hex>` version identity
+ * One-way on purpose — nothing reads a hash back out of a name, so this never
+ * has to be inverted.
+ *
+ * @param {string} hash the version identity
  * @returns {string}
  */
 export function versionFileSegment(hash) {

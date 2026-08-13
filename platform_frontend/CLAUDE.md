@@ -128,7 +128,7 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
 
 - **Question Bank artifacts are JSON stored in `.txt` files, on purpose.** `case-types/banks/*.txt` (loaded via `case-types/load-bank.js`) hold plain JSON text. This is intentional, not an oversight: SharePoint Subscription Edition has been unreliable at storing/serving `.json` files (MIME/blocking issues), so the artifact extension is `.txt` while the content stays JSON, parsed explicitly by the loader. A repo-wide search for `*.json` will not find the banks — search `case-types/banks/*.txt` instead. The same reasoning covers published exports, which live in that directory under the same extension.
 
-- **A version identity is not a filename.** A version identity is `sha256:<hex>`, and `:` is illegal in a Windows path and rejected outright by SharePoint — so a published version's file is named `{slug}.<hex>.txt`, the digest alone. Only `src/lib/bank-artifacts.js` performs that conversion, and only in that direction: the identity stamped on a Case row, carried in the envelope's `hash`, keeps its `sha256:` prefix everywhere else. Nothing parses a hash back out of a filename.
+- **A version identity is a bare digest — no `sha256:` prefix.** The same value is stamped on a Case row, carried in the envelope's `hash`, and composed into the filename `{slug}.<hex>.txt`, so it has to be legal in all three places; `:` is illegal in a Windows path and rejected outright by SharePoint, so a prefixed identity could never have reached the third. One form everywhere beats a form stripped at the edge, and the digest's own length is what says which algorithm produced it. `versionFileSegment` in `src/lib/bank-artifacts.js` still tolerates a prefixed value so one arriving from elsewhere finds its file; nothing parses a hash back out of a filename.
 
 ## Planning: what does this change supersede?
 
@@ -246,9 +246,9 @@ src/
                                 #   Case Type may extend (extraAmendmentReasons) but not re-key
     bank-artifacts.js           # THE naming rule for Question Bank artifacts in case-types/banks/:
                                 #   the bank and each published version. Owns the
-                                #   `sha256:<hex>` -> `<hex>` filename conversion (a colon is illegal
-                                #   in a Windows/SharePoint name) and the classifier the verify gate
-                                #   reads names back with
+                                #   filename rule (the identity is a bare digest, so it goes in
+                                #   unchanged; a prefixed value is tolerated) and the classifier
+                                #   the verify gate reads names back with
     bank-version.js             # THE version identity of a bank: the export projection and the
                                 #   sha256 over its canonical content. Derived, never stored beside
                                 #   the bank — a pointer file would be a second copy of the same
