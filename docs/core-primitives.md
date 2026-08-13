@@ -251,6 +251,13 @@ offer no session at all, which is what makes the wiring-time refusal possible.
 `framework.io.writing_chunks(writer)` / `supports_chunk_writes(writer)` are the
 helpers.
 
+**Every chunk of one drive carries the same provenance value.** The Writers that
+hand back *themselves* get that for free — the run context is ambient for the
+whole graph walk, so each chunk's write reads the same id. The two that hand
+back a helper (the accumulating and quarantine sessions) resolve the run **once,
+when the session opens**, because their later chunks take an append path that
+would otherwise land unstamped rows beside the first chunk's.
+
 **Table and column names you configure** (the `table` and `columns=[...]` you pass
 to a `SqliteReader`/Writer) accept **any string** — spaces, hyphens, mixed case,
 and SQL reserved words are all fine. Every identifier is double-quoted at the

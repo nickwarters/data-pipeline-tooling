@@ -25,7 +25,7 @@ from typing import Annotated
 import pandas as pd
 import pytest
 
-from framework.core import Range, SchemaValidator
+from framework.core import RUN_PROVENANCE_COLUMN, Range, SchemaValidator
 from framework.core.dataset import Dataset
 from framework.core.validators import (
     RowCountValidator,
@@ -704,3 +704,81 @@ def test_a_write_under_a_streamed_source_records_its_target_once(tmp_path):
     assert record["data_locations"] == [
         {"namespace": f"sqlite:{db.as_posix()}", "name": "feed"}
     ]
+
+
+# --- the reserved run-provenance column across a streamed drive ---------------
+
+
+def test_every_chunk_of_a_streamed_accumulating_load_names_the_same_run(tmp_path):
+    # Without this the streamed path would land unstamped rows — worse than no
+    # column at all, because the column exists and looks trustworthy. One value
+    # across the whole drive, resolved once when the session opens.
+    db = tmp_path / "raw.db"
+    context = RunContext(
+        pipeline="big",
+        pipeline_run_id="run-a",
+        logical_run_id="2026-07-27",
+        load_date="2026-07-27",
+    )
+    _accumulating_pipeline(db, _rows(35), context).run(context)
+
+    landed = _landed(db)
+    assert len(landed) == 35  # four chunks
+    assert set(landed[RUN_PROVENANCE_COLUMN]) == {"run-a"}
+
+
+def test_every_chunk_of_a_streamed_append_names_the_same_run(tmp_path):
+    # The other session shape: a Writer that hands back *itself*, so each chunk
+    # writes on its own. It still reads one value, because the run context is
+    # ambient for the whole graph walk rather than per write.
+    db = tmp_path / "raw.db"
+    context = RunContext(pipeline="big", pipeline_run_id="run-a")
+    p = Pipeline("big", run_log=RecordingRunLog())
+    source = p.read_chunks(ListChunkReader(_rows(30)), name="read", chunk_size=10)
+    p.write(SqliteInsertOrIgnoreWriter(db, "feed"), source, name="write")
+    p.run(context)
+
+    landed = _landed(db)
+    assert len(landed) == 30
+    assert set(landed[RUN_PROVENANCE_COLUMN]) == {"run-a"}
+
+
+def test_every_chunk_of_a_streamed_quarantine_names_the_same_run(tmp_path):
+    # The path the other writer tickets do not touch: after the first chunk, the
+    # rejects take a plain append that used to bypass the stamp entirely, which
+    # would have left later chunks' rejects unstamped beside the first's.
+    db = tmp_path / "quarantine.db"
+    context = RunContext(
+        pipeline="big",
+        pipeline_run_id="run-a",
+        logical_run_id="2026-07-27",
+        load_date="2026-07-27",
+    )
+    p = Pipeline("big", run_log=RecordingRunLog())
+    source = p.read_chunks(ListChunkReader(_rows(40)), name="read", chunk_size=10)
+    p.quarantine(
+        SchemaValueRulePartitioner(SmallId),
+        QuarantineWriter(db, "rejects"),
+        source,
+    )
+    p.run(context)
+
+    rejects = _landed(db, "rejects")
+    assert len(rejects) == 15  # ids 25..39, across two chunks
+    assert set(rejects[RUN_PROVENANCE_COLUMN]) == {"run-a"}
+
+
+def test_the_streamed_records_still_fold_into_one_per_step(tmp_path):
+    # The stamp must not disturb what the streamed drive reports: four chunks,
+    # one write record carrying the summed rows.
+    db = tmp_path / "raw.db"
+    log = RecordingRunLog()
+    context = RunContext(pipeline="big", pipeline_run_id="run-a")
+    p = Pipeline("big", run_log=log)
+    source = p.read_chunks(ListChunkReader(_rows(35)), name="read", chunk_size=10)
+    p.write(SqliteInsertOrIgnoreWriter(db, "feed"), source, name="write")
+    p.run(context)
+
+    writes = [r for r in log.records if r["step"] == "write"]
+    assert len(writes) == 1
+    assert writes[0]["rows_in"] == 35
