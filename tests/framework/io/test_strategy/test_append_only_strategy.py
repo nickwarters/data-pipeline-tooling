@@ -5,6 +5,8 @@ key appends, a re-presented unchanged key is a no-op, a changed key is a visible
 failure, and no existing row is ever updated or deleted.
 """
 
+import sqlite3
+
 import pandas as pd
 import pytest
 
@@ -464,3 +466,33 @@ def test_a_write_with_no_run_context_lands_beside_stamped_rows(tmp_path):
     assert landed[0][RUN_PROVENANCE_COLUMN] == "run-a"
     # Read back through pandas, so the SQL NULL arrives as NaN.
     assert pd.isna(landed[1][RUN_PROVENANCE_COLUMN])
+
+
+def test_a_target_that_predates_the_column_is_widened_rather_than_refused(tmp_path):
+    # The upgrade path. A table already on disk — landed before the column
+    # existed, or created by hand with its own DDL — has no provenance column,
+    # and an INSERT naming it would fail outright. It is added in place.
+    db = tmp_path / "raw.db"
+    con = sqlite3.connect(db)
+    con.execute("CREATE TABLE observations (observation_id TEXT, status TEXT)")
+    con.execute("INSERT INTO observations VALUES ('v1', 'open')")
+    con.commit()
+    con.close()
+
+    store = Store(db)
+    writer = store.writer("observations", AppendOnly("observation_id"))
+    with active_context(RunContext(pipeline_run_id="run-a")):
+        # The pre-existing row is re-presented unchanged, so this exercises the
+        # comparison against a row whose provenance is NULL as well as the
+        # append of the new one.
+        writer.write(
+            _ds(
+                {"observation_id": "v1", "status": "open"},
+                {"observation_id": "v2", "status": "closed"},
+            )
+        )
+
+    landed = _rows(store, "observations")
+    assert [row["observation_id"] for row in landed] == ["v1", "v2"]
+    assert pd.isna(landed[0][RUN_PROVENANCE_COLUMN])  # never rewritten
+    assert landed[1][RUN_PROVENANCE_COLUMN] == "run-a"
