@@ -391,6 +391,35 @@ the Dataset shape level; exact pandas dtype inference can still differ after a
 file round-trip, so schema-sensitive flows should continue to validate after
 reading.
 
+#### The reserved run-provenance column
+
+One column name is reserved across every table the framework writes:
+
+```python
+from framework.io import RUN_PROVENANCE_COLUMN  # "pipeline_run_id"
+```
+
+It is declared beside the `Writer` protocol in `framework/core/protocols.py` and
+re-exported from both `framework.core` and `framework.io`, because stamping it is
+a **Writer's** rule: the framework has no `Layer`, and a Writer knows only that
+it is writing. The value comes from the ambient run context, so no feed wires
+anything and no `Store.writer(...)` signature changes; a write outside any run
+context leaves it null rather than failing. It is **never** part of a load
+strategy's value comparison — if it were, an `AppendOnly` target would raise
+`AppendOnlyConflictError` on every overlapping re-read.
+
+Which run id a row ends up holding follows from the merge — the run that last
+rebuilt a `Refresh` table, the run that *first landed* a row on an `AppendOnly`
+or `InsertIfAbsent` target, the run that last replaced it on an upsert. The file
+Writers (`CsvWriter`, `ExcelWriter`, `JsonWriter`, `StdoutWriter`) do **not**
+stamp: they produce deliverables, whose columns are a contract with a downstream
+consumer, and the run record's `data_locations` already names the file a write
+step touched. The rule, its rationale, and the accepted loss of byte-identical
+`Refresh` re-drive are recorded in
+[a writer-stamped run-provenance column](adr/0020-writer-stamped-run-provenance-column.md);
+the table-level counterpart an operator reads is
+`python -m cli runs --run` / `--table` ([operator CLI](operator-cli.md)).
+
 #### One transaction boundary, one staging convention
 
 The SQLite Writers above differ only in their merge statement; everything around
