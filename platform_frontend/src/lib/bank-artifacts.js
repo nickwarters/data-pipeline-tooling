@@ -8,14 +8,17 @@
  * write, and the repository gate that checks the artifacts — so the rule lives
  * here and nowhere else.
  *
- * All three kinds sit in the same directory as the bank they belong to,
- * `case-types/banks/`, and all three are **JSON text in a `.txt` file**:
+ * Both kinds sit in one directory, `case-types/banks/`, and both are **JSON
+ * text in a `.txt` file**:
  *
  * | Artifact          | Name                  | Mutability                   |
  * | ----------------- | --------------------- | ---------------------------- |
- * | Current bank      | `{slug}.txt`          | overwritten on publish       |
- * | Current export    | `{slug}.export.txt`   | overwritten on publish       |
- * | Versioned export  | `{slug}.{hash}.txt`   | append-only, never rewritten |
+ * | Current bank      | `{slug}.txt`          | edited freely                |
+ * | Published version | `{slug}.{hash}.txt`   | append-only, never rewritten |
+ *
+ * There is no current-version pointer. The bank *is* the current version and
+ * its identity is derived from its content (`bank-version.js`), so there is
+ * nothing to keep in step with it.
  *
  * Two constraints shape this, and both are the reason the version identity is
  * not simply pasted into the filename:
@@ -61,18 +64,6 @@ export function bankArtifactName(slug) {
 }
 
 /**
- * The current published export — the data-only envelope whose `hash` field is
- * the version in force, which completion stamps onto a Case row. Always equal
- * to the newest versioned export.
- *
- * @param {string} slug
- * @returns {string}
- */
-export function currentExportName(slug) {
-  return `${slug}.export.txt`;
-}
-
-/**
  * One immutable published version. Never overwritten: a version some reportable
  * Case resolves its questions from has to stay readable for as long as the Case
  * does.
@@ -86,7 +77,7 @@ export function versionedExportName(slug, hash) {
 }
 
 /**
- * @typedef {{ kind: 'bank' | 'current-export' | 'versioned-export', slug: string, segment: string | null }} BankArtifact
+ * @typedef {{ kind: 'bank' | 'versioned-export', slug: string, segment: string | null }} BankArtifact
  */
 
 /**
@@ -111,9 +102,6 @@ export function classifyBankArtifact(filename) {
   const slug = stem.slice(0, firstDot);
   const rest = stem.slice(firstDot + 1);
   if (!slug) return null;
-  if (rest === 'export') {
-    return { kind: 'current-export', slug, segment: null };
-  }
   if (/^[0-9a-f]{64}$/.test(rest)) {
     return { kind: 'versioned-export', slug, segment: rest };
   }

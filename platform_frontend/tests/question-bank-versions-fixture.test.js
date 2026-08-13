@@ -12,7 +12,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 
 import { cases } from '../dev/fixtures/cases.js';
 import {
@@ -26,11 +26,8 @@ import { MockSharePointClient } from '../src/services/mock-sharepoint-client.js'
 import { allApplicableAnswered } from '../src/evaluators/applicability-evaluator.js';
 import { personas } from '../dev/fixtures/personas.js';
 import { QUESTION_BANK_IMPORTERS } from '../case-types/manifest.js';
-import {
-  currentExportName,
-  versionedExportName,
-} from '../src/lib/bank-artifacts.js';
-import { compileExport } from '../src/pages/question-bank/question-bank-compile.js';
+import { versionedExportName } from '../src/lib/bank-artifacts.js';
+import { bankVersionHash } from '../src/lib/bank-version.js';
 import { CaseLoader } from '../src/lib/case-loader.js';
 import complaintsConfig from '../case-types/complaints.js';
 import { caps } from './helpers/section-access.js';
@@ -178,40 +175,34 @@ test('a published version is a file, named by the hash inside it', async () => {
 
 test('the published versions are immutable, so editing the live bank cannot move them', async () => {
   // The property that makes a version safe to stamp a Case against. The live
-  // bank is compiled here and must produce a hash that is none of the published
-  // older versions: if editing the bank could land on one of their hashes, it
-  // would rewrite what an already-completed Case shows.
+  // bank's identity must be none of the published older versions: if editing the
+  // bank could land on one of their hashes, it would rewrite what an
+  // already-completed Case shows.
   const { default: liveBank } = await QUESTION_BANK_IMPORTERS.complaints();
-  const compiled = await compileExport(liveBank);
+  const current = await bankVersionHash(liveBank);
   for (const { hash } of PUBLISHED_BANK_VERSIONS) {
-    assert.notEqual(compiled.hash, hash);
+    assert.notEqual(current, hash);
   }
 });
 
-test('the current export is in step with the bank beside it', async () => {
-  // `{slug}.export.txt` is what completion stamps and what a Case then resolves
-  // against. If the bank is edited without republishing, a Case completed today
-  // freezes against content that is not what the Reviewer was shown — so the
-  // published pointer has to be regenerated whenever the bank changes.
+test('the current bank has been published', async () => {
+  // There is no pointer to go stale, but there is still something to keep in
+  // step: completing a Case stamps whatever the bank hashes to *now*, and that
+  // version has to exist as a file or the Case falls back to the live bank
+  // behind a warning the moment it is re-opened.
   const { default: liveBank } = await QUESTION_BANK_IMPORTERS.complaints();
-  const compiled = await compileExport(liveBank);
-  const published = JSON.parse(
-    readFileSync(
-      new URL(
-        `../case-types/banks/${currentExportName('complaints')}`,
-        import.meta.url
-      ),
-      'utf8'
-    )
+  const current = await bankVersionHash(liveBank);
+  const file = new URL(
+    `../case-types/banks/${versionedExportName('complaints', current)}`,
+    import.meta.url
   );
-  assert.equal(
-    published.hash,
-    compiled.hash,
-    'the bank has changed since it was last published — run `node scripts/publish-bank.js`'
+  assert.ok(
+    existsSync(file),
+    `the bank has changed since it was last published — run \`node scripts/publish-bank.js\``
   );
 });
 
-test('the current published version is served under the hash completion stamps', async () => {
+test('the current bank version is served under the hash completion stamps', async () => {
   const client = await mockClient();
 
   // What completion stamps onto a Case row it completes today.
@@ -234,7 +225,7 @@ test('the current published version is served under the hash completion stamps',
   assert.deepEqual(
     current.questions.map((q) => q.id),
     liveBank.questions.map((q) => q.id),
-    'the current published version is the current bank'
+    'the current version is the current bank'
   );
   assert.notEqual(hash, COMPLAINTS_BANK_V1_HASH);
   assert.notEqual(hash, COMPLAINTS_BANK_V2_HASH);

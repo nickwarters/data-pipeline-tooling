@@ -17,7 +17,6 @@ import {
   BANKS_DIR,
   bankArtifactName,
   classifyBankArtifact,
-  currentExportName,
   versionFileSegment,
   versionedExportName,
 } from '../src/lib/bank-artifacts.js';
@@ -47,13 +46,12 @@ test('a digest with no algorithm prefix names the same file', () => {
   );
 });
 
-test('all three artifacts are .txt in one directory', () => {
+test('both artifacts are .txt in one directory', () => {
   // JSON in `.txt` because SharePoint Subscription Edition blocks or mis-serves
-  // `.json`; an export is read exactly like the bank, so it is stored like it.
+  // `.json`; a version is read exactly like the bank, so it is stored like it.
   assert.equal(BANKS_DIR, 'banks');
   for (const name of [
     bankArtifactName('complaints'),
-    currentExportName('complaints'),
     versionedExportName('complaints', `sha256:${HEX}`),
   ]) {
     assert.ok(name.endsWith('.txt'), name);
@@ -64,11 +62,6 @@ test('all three artifacts are .txt in one directory', () => {
 test('every name the writers produce is classified back as what it is', () => {
   assert.deepEqual(classifyBankArtifact(bankArtifactName('complaints')), {
     kind: 'bank',
-    slug: 'complaints',
-    segment: null,
-  });
-  assert.deepEqual(classifyBankArtifact(currentExportName('complaints')), {
-    kind: 'current-export',
     slug: 'complaints',
     segment: null,
   });
@@ -91,9 +84,10 @@ test('a name nothing produced is refused rather than guessed at', () => {
     `complaints.sha256:${HEX}.txt`, // the identity, unconverted
     `complaints.sha256-${HEX}.txt`, // the algorithm prefix, left in
     `complaints.${HEX.toUpperCase()}.txt`, // a digest that is not lower-case
+    'complaints.export.txt', // the retired current-version pointer
     'complaints.export.json',
     '.txt',
-    '.export.txt',
+    `.${HEX}.txt`, // a version with no slug in front of it
     'notes.md',
   ]) {
     assert.equal(classifyBankArtifact(name), null, name);
