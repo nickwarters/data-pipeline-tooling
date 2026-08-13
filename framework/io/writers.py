@@ -131,6 +131,29 @@ def _stamp_run_provenance(frame: pd.DataFrame, run_id: str | None) -> pd.DataFra
     return frame
 
 
+def _ensure_provenance_column(con: sqlite3.Connection, table: str) -> None:
+    """Add the provenance column to an existing target that predates it.
+
+    A table already on disk — landed before this column existed, or created by
+    hand with its own DDL and constraints — has no such column, and an
+    ``INSERT`` naming it fails outright. So the column is added in place, the
+    same additive-migration rule the run registry applies to its own store
+    (``tools.observability.record_schema.ensure_columns``): widen what is there
+    rather than re-create it, because these files live on a shared drive and are
+    not disposable.
+
+    A no-op when the table does not exist yet (the caller creates it from the
+    stamped frame, so it arrives with the column) or already has it.
+    """
+    existing = con.execute(f"PRAGMA table_info({quote_identifier(table)})").fetchall()
+    if not existing or any(row[1] == RUN_PROVENANCE_COLUMN for row in existing):
+        return
+    con.execute(
+        f"ALTER TABLE {quote_identifier(table)} "
+        f"ADD COLUMN {quote_identifier(RUN_PROVENANCE_COLUMN)} TEXT"
+    )
+
+
 def supports_chunk_writes(writer: object) -> bool:
     """Whether ``writer`` can take one source's rows as a sequence of writes.
 
@@ -262,6 +285,13 @@ def _staged_merge(
         # empty frame creates the table when it is absent and is a no-op when it
         # is already there.
         frame.iloc[:0].to_sql(table, con, if_exists="append", index=False)
+
+        # A target that predates the provenance column would refuse an INSERT
+        # naming it; widen it in place instead. Only when this write actually
+        # carries a stamp — an unstamped write (no run context) must not add a
+        # column of nulls to a table that has none.
+        if RUN_PROVENANCE_COLUMN in frame.columns:
+            _ensure_provenance_column(con, table)
 
         yield _StagedMerge(
             con=con,
