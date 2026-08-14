@@ -1,6 +1,6 @@
 """Declared silver schemas for the ``sharepoint_cases`` feed.
 
-Five schemas live here. ``CaseVersion`` is one row per observation of a Case: a
+Seven schemas live here. ``CaseVersion`` is one row per observation of a Case: a
 Case list item as it stood at one version, with the source's column names
 mechanically snake_cased and the columns typed. Nothing is derived and nothing
 is reshaped -- this hop is the rename and the type contract, and that is all it
@@ -17,10 +17,21 @@ key buried in a blob. ``AnswerCaptureRow`` and ``AnswerActionRow`` go one level
 further, each exploding one field of an individual answer -- the flat
 ``capture`` map and the ``remediationActions`` list -- into their own Detail
 Tables. ``GeneralAnswerRow`` tiles the same ``answers`` map from the other
-side: the General Question keys ``AnswerRow`` excludes. ``DETAIL_ID_VARS`` is
-what all five schemas share -- it carries ``NATURAL_KEY``'s columns so a Detail
-Table's own ``gold_detail_builder`` derives the same ``case_id`` as the parent
-Case.
+side: the General Question keys ``AnswerRow`` excludes.
+
+``ConversationMessageRow`` and ``AppealRow`` explode the other two blob columns
+``CaseVersion`` lands as unparsed text -- ``conversation`` and ``appeals``.
+Both are JSON **lists**, not maps, so ``ExplodeJsonList`` walks them rather
+than ``ExplodeJsonMap``, and neither carries a key to grain on the way a map
+does: a Conversation message has no id at all, so it grains on the blob's own
+ordinal; an Appeal does carry an id, minted by the app rather than drawn from a
+catalogue, so it grains on that instead. Both blobs hold ISO timestamps as
+**text**, not ``datetime`` -- see either row's docstring for why that is a
+deliberate decision, not an oversight.
+
+``DETAIL_ID_VARS`` is what all seven schemas share -- it carries
+``NATURAL_KEY``'s columns so a Detail Table's own ``gold_detail_builder``
+derives the same ``case_id`` as the parent Case.
 
 The rules are deliberately thin. Only three things about this list are knowable
 enough to fail a run over: an observation must say where it came from, a Case
@@ -116,6 +127,16 @@ TEXT_VALUE_KIND = "text"
 PERSON_VALUE_KIND = "person"
 CAPTURE_VALUE_KINDS = (TEXT_VALUE_KIND, PERSON_VALUE_KIND)
 UNSUPPORTED_CAPTURE_VALUE_KIND = "unsupported"
+
+# The Appeal lifecycle. ``underReview`` is deliberately a member although no
+# production path writes it -- ``openAppealOf`` (the review application's own
+# rule) treats anything but ``resolved`` as open, so it is a live domain
+# member, and excluding it would quarantine real rows the moment that
+# transition ships. Including an unwritten value costs nothing: ``OneOf`` only
+# rejects values *outside* the set. The same call ``REMEDIATION_STATUSES``
+# above already makes.
+APPEAL_STATES = ("raised", "underReview", "resolved")
+APPEAL_VERDICTS = ("agreed", "rejected")
 
 
 @dataclass
@@ -397,3 +418,122 @@ class GeneralAnswerRow:
 
     value_json: str
     value_text: str
+
+
+@dataclass
+class ConversationMessageRow:
+    """One row per observation x Conversation message, exploded from
+    ``conversation``.
+
+    The app writes no message id at all -- no read state, no thread or Appeal
+    association, no edit or delete path -- so ``seq``, the blob's own 0-based
+    ordinal, is the grain key. That is safe only while the Conversation stays
+    append-only, which it is by construction: ``postConversationMessage``
+    builds ``[...input.messages, message]``, and there is no edit or delete
+    path anywhere on ``conversation``. Within one gold publication
+    ``(case_id, seq)`` is unique as a result, but a mid-list insert would
+    renumber every later message silently. It is a durable *pointer* into an
+    append-only list, not a durable message identifier -- do not use it as
+    one.
+
+    ``author`` is a **nested** object (``{loginName, displayName}``), not a
+    scalar -- lifted here by two dotted paths rather than landed whole, or the
+    column built to remove blobs would carry one. ``author_login`` is the bare
+    account name (``a.khan``) the app stamps at post time, not the claims
+    login (``i:0#.w|CONTOSO\\a.khan``) every existing silver person column
+    holds -- joining the two directly matches nothing, silently, because a
+    Case-Type-agnostic pipeline has no business knowing the farm's AD domain.
+    Land it verbatim. ``author_display_name`` is an unrefreshed **snapshot** of
+    what the sender was called when they posted; never join it as a current
+    name.
+
+    ``posted_at`` is declared ``str``, not ``datetime`` -- the sharpest
+    decision in this schema, and deliberate. The app writes
+    ``.toISOString()`` (always ``.mmmZ``); a hand-edited fixture writes ``Z``
+    without milliseconds; both are real. ``SchemaCoercion._to_datetime`` calls
+    bare ``pd.to_datetime`` with no ``format=``, which on pandas 3.x infers one
+    format from the first non-null value and then requires every other value
+    to match it exactly -- so a batch mixing the two spellings raises and
+    aborts the *whole poll*, not just one row, because ``coerce`` sits above
+    ``quarantine``. Which rows share a batch depends on the ``Modified``
+    window, so the failure is intermittent. The rule: a typed column stays
+    typed; text inside a blob stays text. (``source_modified_at`` stays
+    ``datetime`` -- it comes from OData, is uniform, and is already typed
+    upstream.)
+
+    Plain types throughout, never ``X | None`` -- see ``AnswerRow`` for why.
+    """
+
+    # DETAIL_ID_VARS, repeated onto every row by ExplodeJsonList -- see its
+    # docstring for why this must carry NATURAL_KEY's columns.
+    case_type: Annotated[str, NonNull()]
+    source_item_id: Annotated[str, NonNull()]
+    # datetime, not str -- see AnswerRow's own field for why.
+    source_modified_at: Annotated[datetime, NonNull()]
+    source_version: Annotated[str, NonNull()]
+    source_observation_id: Annotated[str, NonNull()]
+
+    # The Conversation list's own 0-based position -- the grain key, since the
+    # app mints no message id. See the class docstring for the append-only
+    # caveat this carries.
+    seq: Annotated[int, NonNull()]
+    author_login: str
+    author_display_name: str
+    posted_at: str
+    body: str
+
+
+@dataclass
+class AppealRow:
+    """One row per observation x Appeal, exploded from ``appeals``.
+
+    Unlike a Conversation message, an Appeal carries its own identity:
+    ``appeal_id`` (``appeal-${Date.now()}``, minted by the app) is the grain
+    key, not ``appeal_seq`` -- diagnostic only, declared for the same reason
+    ``action_seq`` is on ``AnswerActionRow`` (``ExplodeJsonList``'s
+    ``ordinal_into`` is mandatory). See the data dictionary's Part D for why
+    ``appeal_id`` carries no ``Pattern``/``Unique`` rule, and what a duplicate
+    or a non-object Appeal element does to the run.
+
+    The ``resolution`` object is 1:1 -- present once an Appeal reaches
+    ``resolved``, absent otherwise -- and lifted via dotted paths into four
+    columns sharing the ``resolution_`` prefix: the four are null
+    **together**, and the shared prefix is what says so. An unresolved Appeal
+    carries nulls in all four rather than being absent as a row.
+
+    ``cited_question_ids_json`` is JSON array text of Question Definition ids
+    (joining ``answer.question_id``), never a joined string -- see
+    ``value_json`` elsewhere in this module for the same ``_json`` suffix
+    convention. **Null means the key was omitted**, not "no citations" spelled
+    ``[]``.
+
+    ``appellant`` and ``resolution_resolver`` are bare account names, the same
+    distinction ``ConversationMessageRow.author_login`` draws -- see its
+    docstring. ``raised_at`` and ``resolution_at`` stay ``str`` for the same
+    reason ``posted_at`` does; see ``ConversationMessageRow`` for the
+    mechanism.
+
+    Plain types throughout, never ``X | None`` -- see ``AnswerRow`` for why.
+    """
+
+    # DETAIL_ID_VARS, repeated onto every row by ExplodeJsonList -- see its
+    # docstring for why this must carry NATURAL_KEY's columns.
+    case_type: Annotated[str, NonNull()]
+    source_item_id: Annotated[str, NonNull()]
+    # datetime, not str -- see AnswerRow's own field for why.
+    source_modified_at: Annotated[datetime, NonNull()]
+    source_version: Annotated[str, NonNull()]
+    source_observation_id: Annotated[str, NonNull()]
+
+    appeal_id: Annotated[str, NonNull()]
+    # Diagnostic only -- appeal_id is the grain key. See the class docstring.
+    appeal_seq: Annotated[int, NonNull()]
+    appellant: str
+    raised_at: str
+    rationale: str
+    state: Annotated[str, OneOf(*APPEAL_STATES)]
+    cited_question_ids_json: str
+    resolution_verdict: Annotated[str, OneOf(*APPEAL_VERDICTS)]
+    resolution_rationale: str
+    resolution_resolver: str
+    resolution_at: str

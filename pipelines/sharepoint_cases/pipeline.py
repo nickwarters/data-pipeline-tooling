@@ -15,7 +15,10 @@ published once, over every list's accumulated history.
   and ``silver_answer_action_builder`` go one level further, each exploding one
   field of an individual answer. ``silver_general_answer_builder`` explodes the
   same ``answers`` map from the other side, into one row per General Question
-  catalogue key.
+  catalogue key. ``silver_conversation_message_builder`` and
+  ``silver_appeal_builder`` explode the batch's other two list-shaped blobs,
+  ``conversation`` and ``appeals``, one row per message and one row per Appeal
+  respectively.
 - ``gold.publish_gold`` rebuilds the current Case, the Detail Tables and three
   aggregates from the whole silver history, each with ``Refresh()``.
 
@@ -97,8 +100,10 @@ from .schema import (
     AnswerActionRow,
     AnswerCaptureRow,
     AnswerRow,
+    AppealRow,
     CaseList,
     CaseVersion,
+    ConversationMessageRow,
     GeneralAnswerRow,
 )
 
@@ -766,12 +771,125 @@ def silver_general_answer_builder(
     return p
 
 
-# Every Detail Table hanging off one answer, in the order run() drives them:
-# the table name, the builder that produces it (every one sharing
+def silver_conversation_message_builder(
+    reader: Reader,
+    writer: Writer,
+    case_list: CaseList,
+    reject_writer: Writer,
+    run_log: RunLog | None = None,
+) -> Pipeline:
+    """Build one list's silver conversation-message hop: explode
+    ``conversation`` into one row per message.
+
+    ``conversation`` is a JSON **list**, not the map ``answers`` is, so a
+    single ``ExplodeJsonList`` reaches every field in one hop -- there is no
+    second level to chain the way the capture/action hops do. Reads the
+    settled **silver** batch, never raw, for the same reason
+    ``silver_answer_builder`` does -- see its docstring.
+
+    A malformed ``conversation`` blob is a feed defect and **raises**
+    (``JsonShapeError``); this schema declares no value rule, so nothing here
+    quarantines -- the quarantine node stays wired anyway, for the same reason
+    ``silver_general_answer_builder``'s does.
+    """
+    p = Pipeline(
+        f"{FEED_NAME}:silver:{case_list.case_type}:conversation_message",
+        run_log=run_log,
+    )
+    node = p.read(reader, name="read")
+    node = p.transform(
+        ExplodeJsonList(
+            column="conversation",
+            ordinal_into="seq",
+            id_vars=list(DETAIL_ID_VARS),
+            fields={
+                "author.loginName": "author_login",
+                "author.displayName": "author_display_name",
+                "timestamp": "posted_at",
+                "body": "body",
+            },
+        ),
+        node,
+        name="explode",
+    )
+    node = p.transform(SchemaCoercion(ConversationMessageRow), node, name="coerce")
+    node = p.quarantine(
+        SchemaValueRulePartitioner(ConversationMessageRow),
+        reject_writer,
+        node,
+        name="quarantine",
+    )
+    node = p.validate(
+        SchemaValidator(ConversationMessageRow), node, name="post-validate"
+    )
+    p.write(writer, node, name="write")
+    return p
+
+
+def silver_appeal_builder(
+    reader: Reader,
+    writer: Writer,
+    case_list: CaseList,
+    reject_writer: Writer,
+    run_log: RunLog | None = None,
+) -> Pipeline:
+    """Build one list's silver appeal hop: explode ``appeals`` into one row
+    per Appeal, with its 1:1 ``resolution`` lifted onto the same row.
+
+    ``appeals`` is a JSON **list**, not the map ``answers`` is, so a single
+    ``ExplodeJsonList`` reaches every field -- including ``resolution``'s,
+    via dotted paths, exactly as ``silver_answer_builder`` lifts
+    ``remediationStatus``'s. Reads the settled **silver** batch, never raw --
+    see ``silver_answer_builder``'s docstring.
+
+    A malformed ``appeals`` blob is a feed defect and **raises**
+    (``JsonShapeError``); an out-of-vocabulary ``state`` is an ordinary bad
+    row and **quarantines**, exactly as ``silver_builder`` treats a bad
+    ``status``.
+    """
+    p = Pipeline(f"{FEED_NAME}:silver:{case_list.case_type}:appeal", run_log=run_log)
+    node = p.read(reader, name="read")
+    node = p.transform(
+        ExplodeJsonList(
+            column="appeals",
+            ordinal_into="appeal_seq",
+            id_vars=list(DETAIL_ID_VARS),
+            fields={
+                "id": "appeal_id",
+                "appellant": "appellant",
+                "at": "raised_at",
+                "rationale": "rationale",
+                "state": "state",
+                "citedAnswerKeys": "cited_question_ids_json",
+                "resolution.verdict": "resolution_verdict",
+                "resolution.rationale": "resolution_rationale",
+                "resolution.resolver": "resolution_resolver",
+                "resolution.at": "resolution_at",
+            },
+        ),
+        node,
+        name="explode",
+    )
+    node = p.transform(SchemaCoercion(AppealRow), node, name="coerce")
+    node = p.quarantine(
+        SchemaValueRulePartitioner(AppealRow),
+        reject_writer,
+        node,
+        name="quarantine",
+    )
+    node = p.validate(SchemaValidator(AppealRow), node, name="post-validate")
+    p.write(writer, node, name="write")
+    return p
+
+
+# Every Detail Table this feed publishes, in the order run() drives them: the
+# table name, the builder that produces it (every one sharing
 # silver_answer_builder's (reader, writer, case_list, reject_writer, run_log)
 # shape), and the composite AppendOnly key its grain needs -- one observation
 # yields many rows of each, so a single-column key would raise on the second.
-_ANSWER_DETAIL_HOPS = (
+# Named generically rather than "answer" -- conversation_message and appeal
+# explode a different blob entirely, not answers.
+_DETAIL_HOPS = (
     ("answer", silver_answer_builder, ("source_observation_id", "question_id")),
     (
         "answer_capture",
@@ -788,6 +906,12 @@ _ANSWER_DETAIL_HOPS = (
         silver_general_answer_builder,
         ("source_observation_id", "general_key"),
     ),
+    (
+        "conversation_message",
+        silver_conversation_message_builder,
+        ("source_observation_id", "seq"),
+    ),
+    ("appeal", silver_appeal_builder, ("source_observation_id", "appeal_id")),
 )
 
 
@@ -857,11 +981,11 @@ def run(
             print(silver_p.describe())
         versions = silver_p.run()
 
-        # Every Detail Table hanging off one answer reads this settled silver
-        # batch, not raw's own CaseType cell -- see silver_answer_builder's
-        # docstring; the same reasoning holds for the capture and action hops.
+        # Every Detail Table reads this settled silver batch, not raw's own
+        # CaseType cell -- see silver_answer_builder's docstring; the same
+        # reasoning holds for every hop below, whichever blob it explodes.
         detail_rows: dict[str, int] = {}
-        for table, builder, key_columns in _ANSWER_DETAIL_HOPS:
+        for table, builder, key_columns in _DETAIL_HOPS:
             detail_p = builder(
                 DatasetReader(versions),
                 med.silver.writer(table, AppendOnly(key_columns)),
