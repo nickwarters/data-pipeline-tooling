@@ -40,16 +40,20 @@ function makeTimer() {
   };
 }
 
-// Built once and shared by reference: several tests hand the same object to
-// loadCase twice and rely on the queue seeing one identity, not two equal rows.
-/** @type {CaseRow} */
-const BASE_ROW = makeCaseRow({
-  id: 'c1',
-  caseType: 'test',
-  title: 'Test Case',
-  assignedReviewer: 'u1',
-  responsibleParty: 'u2',
-});
+/**
+ * @param {Partial<CaseRow>} [overrides]
+ * @returns {CaseRow}
+ */
+function caseRow(overrides = {}) {
+  return makeCaseRow({
+    id: 'c1',
+    caseType: 'test',
+    title: 'Test Case',
+    assignedReviewer: 'u1',
+    responsibleParty: 'u2',
+    ...overrides,
+  });
+}
 
 /**
  * Minimal stub client. patchResponses are consumed in order; when exhausted
@@ -62,7 +66,7 @@ function makeClient({ patchResponses = [], getCaseRow } = {}) {
   const patchCalls = [];
   /** @type {{ id: string, opts?: import('../src/sharepoint-client.js').CaseListOptions }[]} */
   const getCalls = [];
-  let liveRow = { ...BASE_ROW };
+  let liveRow = caseRow();
 
   return {
     patchCalls,
@@ -138,7 +142,7 @@ test('SaveQueue: initial status is saved', () => {
 
 test('SaveQueue: status becomes saving immediately after enqueue', () => {
   const q = new SaveQueue(makeClient(), { debounceMs: 0 });
-  q.loadCase(BASE_ROW);
+  q.loadCase(caseRow());
   q.enqueue('c1', 'notes', 'hello');
   assert.equal(q.status.get(), 'saving');
 });
@@ -150,7 +154,7 @@ test('SaveQueue: subscribeStatus delivers current and future statuses until unsu
     setTimer: timer.setTimer,
     clearTimer: timer.clearTimer,
   });
-  q.loadCase(BASE_ROW);
+  q.loadCase(caseRow());
   /** @type {Array<'saved'|'saving'|'reconnecting'|'conflict'>} */
   const statuses = [];
   const unsubscribe = q.subscribeStatus((status) => statuses.push(status));
@@ -182,7 +186,7 @@ test('SaveQueue: subscribeStatus delivers current and future statuses until unsu
 test('SaveQueue: rapid calls to same field result in exactly one PATCH', async () => {
   const client = makeClient();
   const q = new SaveQueue(client, { debounceMs: 0 });
-  q.loadCase(BASE_ROW);
+  q.loadCase(caseRow());
 
   q.enqueue('c1', 'notes', 'a');
   q.enqueue('c1', 'notes', 'b');
@@ -197,7 +201,7 @@ test('SaveQueue: rapid calls to same field result in exactly one PATCH', async (
 test('SaveQueue: different fields each get their own debounced PATCH', async () => {
   const client = makeClient();
   const q = new SaveQueue(client, { debounceMs: 0 });
-  q.loadCase(BASE_ROW);
+  q.loadCase(caseRow());
 
   q.enqueue('c1', 'notes', 'my note');
   q.enqueue('c1', 'status', 'In-progress');
@@ -212,7 +216,7 @@ test('SaveQueue: different fields each get their own debounced PATCH', async () 
 test('SaveQueue: PATCH is sent with the stored ETag', async () => {
   const client = makeClient();
   const q = new SaveQueue(client, { debounceMs: 0 });
-  q.loadCase(BASE_ROW); // etag = 'etag-1'
+  q.loadCase(caseRow()); // etag = 'etag-1'
 
   q.enqueue('c1', 'notes', 'x');
   await q.whenIdle();
@@ -223,7 +227,7 @@ test('SaveQueue: PATCH is sent with the stored ETag', async () => {
 test('SaveQueue: on success the stored ETag is updated for subsequent PATCHes', async () => {
   const client = makeClient();
   const q = new SaveQueue(client, { debounceMs: 0 });
-  q.loadCase(BASE_ROW);
+  q.loadCase(caseRow());
 
   q.enqueue('c1', 'notes', 'first');
   await q.whenIdle();
@@ -240,7 +244,7 @@ test('SaveQueue: on success the stored ETag is updated for subsequent PATCHes', 
 
 test('SaveQueue: status is saved after successful PATCH', async () => {
   const q = new SaveQueue(makeClient(), { debounceMs: 0 });
-  q.loadCase(BASE_ROW);
+  q.loadCase(caseRow());
 
   q.enqueue('c1', 'notes', 'hello');
   await q.whenIdle();
@@ -263,7 +267,7 @@ test('SaveQueue: on non-412 error status becomes reconnecting', async () => {
       await retry.promise;
     },
   });
-  q.loadCase(BASE_ROW);
+  q.loadCase(caseRow());
 
   q.enqueue('c1', 'notes', 'hello');
   await retryStarted.promise;
@@ -281,7 +285,7 @@ test('SaveQueue: retries after network failure and eventually saves', async () =
     ],
   });
   const q = new SaveQueue(client, { debounceMs: 0, backoffSchedule: [0] });
-  q.loadCase(BASE_ROW);
+  q.loadCase(caseRow());
 
   q.enqueue('c1', 'notes', 'hello');
   // One completion signal covers debounce → fail → retry → fail → retry → success.
@@ -299,7 +303,7 @@ test('SaveQueue: 412 with unchanged remote answers silently retries', async () =
     patchResponses: [{ ok: false, status: 412 }],
   });
   const q = new SaveQueue(client, { debounceMs: 0 });
-  q.loadCase(BASE_ROW); // baselineAnswers = {}
+  q.loadCase(caseRow()); // baselineAnswers = {}
 
   q.enqueue('c1', 'notes', 'hello');
   await q.whenIdle();
@@ -310,13 +314,13 @@ test('SaveQueue: 412 with unchanged remote answers silently retries', async () =
 
 test('SaveQueue: 412 non-conflicting: retry uses refreshed ETag', async () => {
   // Server has etag-2 but same answers after the 412
-  const freshRow = { ...BASE_ROW, etag: 'etag-2', answers: {} };
+  const freshRow = caseRow({ etag: 'etag-2', answers: {} });
   const client = makeClient({
     patchResponses: [{ ok: false, status: 412 }],
     getCaseRow: freshRow,
   });
   const q = new SaveQueue(client, { debounceMs: 0 });
-  q.loadCase(BASE_ROW);
+  q.loadCase(caseRow());
 
   q.enqueue('c1', 'notes', 'hello');
   await q.whenIdle();
@@ -329,17 +333,16 @@ test('SaveQueue: 412 non-conflicting: retry uses refreshed ETag', async () => {
 
 test('SaveQueue: 412 with changed remote answers sets status to conflict', async () => {
   // Server now has different answers than our baseline
-  const freshRow = {
-    ...BASE_ROW,
+  const freshRow = caseRow({
     etag: 'etag-2',
     answers: { 'q-1': { value: 'Yes' } },
-  };
+  });
   const client = makeClient({
     patchResponses: [{ ok: false, status: 412 }],
     getCaseRow: freshRow,
   });
   const q = new SaveQueue(client, { debounceMs: 0 });
-  q.loadCase(BASE_ROW); // baselineAnswers = {}
+  q.loadCase(caseRow()); // baselineAnswers = {}
 
   q.enqueue('c1', 'notes', 'hello');
   await q.whenIdle();
@@ -348,17 +351,16 @@ test('SaveQueue: 412 with changed remote answers sets status to conflict', async
 });
 
 test('SaveQueue: conflict does not trigger a retry PATCH', async () => {
-  const freshRow = {
-    ...BASE_ROW,
+  const freshRow = caseRow({
     etag: 'etag-2',
     answers: { 'q-1': { value: 'Yes' } },
-  };
+  });
   const client = makeClient({
     patchResponses: [{ ok: false, status: 412 }],
     getCaseRow: freshRow,
   });
   const q = new SaveQueue(client, { debounceMs: 0 });
-  q.loadCase(BASE_ROW);
+  q.loadCase(caseRow());
 
   q.enqueue('c1', 'notes', 'hello');
   await q.whenIdle();
@@ -397,11 +399,11 @@ test('SaveQueue: patchCase exception is caught and treated as status 0 (reconnec
       return {
         ok: true,
         status: 200,
-        data: { ...BASE_ROW, etag: 'etag-after-retry' },
+        data: caseRow({ etag: 'etag-after-retry' }),
       };
     },
     async getCase() {
-      return BASE_ROW;
+      return caseRow();
     },
   };
   const retry = deferred();
@@ -413,7 +415,7 @@ test('SaveQueue: patchCase exception is caught and treated as status 0 (reconnec
       await retry.promise;
     },
   });
-  q.loadCase(BASE_ROW);
+  q.loadCase(caseRow());
 
   q.enqueue('c1', 'notes', 'boom');
   await retryStarted.promise;
@@ -427,25 +429,27 @@ test('SaveQueue: patchCase exception is caught and treated as status 0 (reconnec
   assert.equal(client.patchCalls.length, 2);
 });
 
-test('SaveQueue: _handle412 with null getCase sets status to conflict', async () => {
+test('SaveQueue: a 412 with no way to re-read the Case surfaces a conflict rather than retrying blind', async () => {
   const client = makeClient({
     patchResponses: [{ ok: false, status: 412 }],
-    getCaseRow: /** @type {any} */ (null), // getCase returns null
+    getCaseRow: /** @type {any} */ (null),
   });
   const q = new SaveQueue(client, { debounceMs: 0 });
-  q.loadCase(BASE_ROW);
+  q.loadCase(caseRow());
 
   q.enqueue('c1', 'notes', 'test');
   await q.whenIdle();
 
-  assert.equal(q.status.get(), 'conflict');
-});
-
-test('SaveQueue: loadCase with null answers sets baselineAnswers to null', () => {
-  const q = new SaveQueue(makeClient());
-  q.loadCase({ ...BASE_ROW, answers: /** @type {any} */ (null) });
-  // Should not throw; baselineAnswers = null (the `row.answers ? ... : null` false branch)
-  assert.equal(q.getEtag('c1'), BASE_ROW.etag);
+  assert.equal(
+    q.status.get(),
+    'conflict',
+    'the queue surfaces the failed re-read as a conflict'
+  );
+  assert.equal(
+    client.patchCalls.length,
+    1,
+    'the queue does not retry without a fresh Case and ETag'
+  );
 });
 
 test('SaveQueue: getEtag returns empty string for an unknown caseId', () => {
@@ -457,57 +461,48 @@ test('SaveQueue: getEtag returns empty string for an unknown caseId', () => {
   );
 });
 
-test('SaveQueue: successful flush with no data.answers preserves existing baselineAnswers', async () => {
-  const client = {
-    patchCalls: /** @type {any[]} */ ([]),
-    async patchCase(
-      /** @type {string} */ _id,
-      /** @type {any} */ fields,
-      /** @type {string} */ etag
-    ) {
-      this.patchCalls.push({ fields, etag });
-      // result.ok=true but result.data has no answers field
-      return {
+test('SaveQueue: a Case with no Answers round-trips a 412 without a false conflict', async () => {
+  const client = makeClient({
+    patchResponses: [
+      { ok: false, status: 412 },
+      {
         ok: true,
         status: 200,
-        data: {
-          ...BASE_ROW,
-          notes: 'updated',
-          etag: 'new-etag',
-          answers: null,
-        },
-      };
-    },
-    async getCase() {
-      return { ...BASE_ROW };
-    },
-  };
-  const q = new SaveQueue(/** @type {any} */ (client), { debounceMs: 0 });
-  q.loadCase(BASE_ROW);
-  q.enqueue('c1', 'notes', 'updated');
-  await q.whenIdle();
-  assert.equal(q.status.get(), 'saved');
-});
-
-test('SaveQueue: _handle412 retry with null answers on fresh row stores null baselineAnswers', async () => {
-  // Server has same baseline but fresh.answers is null
-  const freshRow = {
-    ...BASE_ROW,
-    etag: 'etag-fresh',
-    answers: /** @type {any} */ (null),
-  };
-  const client = makeClient({
-    patchResponses: [{ ok: false, status: 412 }],
-    getCaseRow: freshRow,
+        data: caseRow({
+          answers: /** @type {any} */ (null),
+          etag: 'etag-after-retry',
+        }),
+      },
+    ],
+    getCaseRow: caseRow({
+      answers: /** @type {any} */ (null),
+      etag: 'etag-fresh',
+    }),
   });
   const q = new SaveQueue(client, { debounceMs: 0 });
-  q.loadCase(BASE_ROW);
-  q.enqueue('c1', 'notes', 'x');
+  q.loadCase(caseRow({ answers: /** @type {any} */ (null) }));
+
+  q.enqueueFields('c1', { notes: 'a note' });
   await q.whenIdle();
-  assert.equal(q.status.get(), 'saved');
+
+  assert.equal(
+    q.status.get(),
+    'saved',
+    'the retry succeeded without surfacing a false conflict'
+  );
+  assert.equal(
+    client.patchCalls.length,
+    2,
+    'the write is retried once under the fresh ETag'
+  );
+  assert.deepEqual(
+    client.patchCalls.at(-1)?.fields,
+    { notes: 'a note' },
+    'the retry carries the same fields rather than a merged Answers value'
+  );
 });
 
-test('SaveQueue: loadCase called twice preserves existing pending items', async () => {
+test('SaveQueue: a second loadCase for the same Case does not discard writes already queued', async () => {
   const client = makeClient();
   const timer = makeTimer();
   const q = new SaveQueue(client, {
@@ -515,40 +510,33 @@ test('SaveQueue: loadCase called twice preserves existing pending items', async 
     setTimer: timer.setTimer,
     clearTimer: timer.clearTimer,
   });
-  q.loadCase(BASE_ROW);
-  q.enqueue('c1', 'notes', 'pending value'); // adds a pending item
+  q.loadCase(caseRow());
+  q.enqueue('c1', 'notes', 'pending value');
 
-  // Calling loadCase again with the same case should preserve the pending entry
-  q.loadCase({ ...BASE_ROW, etag: 'etag-2' });
-
-  // The pending value should still be there (covers `existing?.pending ?? {}` non-null branch)
-  assert.equal(q.getEtag('c1'), 'etag-2', 'ETag should be updated');
+  q.loadCase(caseRow({ etag: 'etag-2' }));
   await q.flushCase('c1');
-});
 
-test('SaveQueue: _handle412 with null baselineAnswers uses {} for comparison', async () => {
-  // Load with null answers → baselineAnswers = null
-  const client = makeClient({
-    patchResponses: [{ ok: false, status: 412 }],
-    // getCase returns row with same null answers → comparison {} == {} → no conflict
-    getCaseRow: {
-      ...BASE_ROW,
-      etag: 'etag-2',
-      answers: /** @type {any} */ (null),
-    },
-  });
-  const q = new SaveQueue(client, { debounceMs: 0 });
-  q.loadCase({ ...BASE_ROW, answers: /** @type {any} */ (null) }); // baselineAnswers = null
-  q.enqueue('c1', 'notes', 'x');
-  await q.whenIdle();
-  // Both sides stringify to '{}' → no conflict → retried → saved
-  assert.equal(q.status.get(), 'saved');
+  assert.equal(
+    client.patchCalls.length,
+    1,
+    'the queued write is persisted once'
+  );
+  assert.deepEqual(
+    client.patchCalls[0].fields,
+    { notes: 'pending value' },
+    'the pending write survives the second load'
+  );
+  assert.equal(
+    client.patchCalls[0].etag,
+    'etag-2',
+    'the pending write uses the ETag from the second load'
+  );
 });
 
 test('SaveQueue: flushCase immediately persists a pending debounced field', async () => {
   const client = makeClient();
   const q = new SaveQueue(client, { debounceMs: 5000 });
-  q.loadCase(BASE_ROW);
+  q.loadCase(caseRow());
 
   q.enqueue('c1', 'answers', { 'q-1': { value: 'Yes' } });
 
@@ -565,7 +553,7 @@ test('SaveQueue: flushCase immediately persists a pending debounced field', asyn
 test('SaveQueue: flushCase persists multiple pending fields under refreshed ETags', async () => {
   const client = makeClient();
   const q = new SaveQueue(client, { debounceMs: 30 });
-  q.loadCase(BASE_ROW);
+  q.loadCase(caseRow());
 
   q.enqueue('c1', 'answers', { 'q-1': { value: 'Yes' } });
   q.enqueue('c1', 'notes', 'still pending');
@@ -594,11 +582,11 @@ test('SaveQueue: flushCase waits for an already in-flight flush', async () => {
       return {
         ok: true,
         status: 200,
-        data: { ...BASE_ROW, ...fields, etag: 'etag-after-inflight' },
+        data: caseRow({ ...fields, etag: 'etag-after-inflight' }),
       };
     },
     async getCase() {
-      return { ...BASE_ROW };
+      return caseRow();
     },
   };
   const timer = makeTimer();
@@ -607,7 +595,7 @@ test('SaveQueue: flushCase waits for an already in-flight flush', async () => {
     setTimer: timer.setTimer,
     clearTimer: timer.clearTimer,
   });
-  q.loadCase(BASE_ROW);
+  q.loadCase(caseRow());
 
   q.enqueue('c1', 'answers', { 'q-1': { value: 'Yes' } });
   timer.runAll();
@@ -623,7 +611,7 @@ test('SaveQueue: flushCase waits for an already in-flight flush', async () => {
 test('SaveQueue: enqueueFields writes all fields in a single ETag-guarded PATCH', async () => {
   const client = makeClient();
   const q = new SaveQueue(client, { debounceMs: 0 });
-  q.loadCase(BASE_ROW);
+  q.loadCase(caseRow());
 
   // The reporting columns an Amended Outcome re-stamps together.
   q.enqueueFields('c1', {
@@ -665,7 +653,7 @@ test('SaveQueue: enqueueFields resets its debounce timer when re-enqueued', asyn
     setTimer: timer.setTimer,
     clearTimer: timer.clearTimer,
   });
-  q.loadCase(BASE_ROW);
+  q.loadCase(caseRow());
 
   q.enqueueFields('c1', { effectiveOutcome: 'pass' });
   q.enqueueFields('c1', { effectiveOutcome: 'fail' });
@@ -684,10 +672,10 @@ test('SaveQueue: enqueueFields resets its debounce timer when re-enqueued', asyn
 test('SaveQueue: enqueueFields retries the whole field set after a 412 with no concurrent edit', async () => {
   const client = makeClient({
     patchResponses: [{ ok: false, status: 412 }],
-    getCaseRow: { ...BASE_ROW, etag: 'etag-2' },
+    getCaseRow: caseRow({ etag: 'etag-2' }),
   });
   const q = new SaveQueue(client, { debounceMs: 0 });
-  q.loadCase(BASE_ROW);
+  q.loadCase(caseRow());
 
   q.enqueueFields('c1', { effectiveOutcome: 'pass', outcomeOverridden: true });
   await q.whenIdle();
@@ -708,10 +696,10 @@ test('SaveQueue: enqueueFields retries the whole field set after a 412 with no c
 test('SaveQueue: writes and conflict refreshes use the Case list options captured at load', async () => {
   const client = makeClient({
     patchResponses: [{ ok: false, status: 412 }],
-    getCaseRow: { ...BASE_ROW, etag: 'etag-2' },
+    getCaseRow: caseRow({ etag: 'etag-2' }),
   });
   const q = new SaveQueue(client, { debounceMs: 0 });
-  q.loadCase(BASE_ROW, { listName: 'complaints' });
+  q.loadCase(caseRow(), { listName: 'complaints' });
 
   q.enqueue('c1', 'notes', 'updated');
   await q.whenIdle();
@@ -731,7 +719,7 @@ test('SaveQueue: a queued write survives navigation — the mount signal never r
   // A page that reads with the mount-lifetime signal may hand the very same
   // options bag to loadCase. The queue must drop the signal: a Reviewer's edit
   // is persisted whether or not they are still looking at the Case.
-  q.loadCase(BASE_ROW, {
+  q.loadCase(caseRow(), {
     listName: 'complaints',
     signal: controller.signal,
   });
@@ -753,11 +741,14 @@ test('SaveQueue: a queued write survives navigation — the mount signal never r
 test('SaveQueue: a conflict re-read after navigation is not cancelled either', async () => {
   const client = makeClient({
     patchResponses: [{ ok: false, status: 412 }],
-    getCaseRow: { ...BASE_ROW, etag: 'etag-2' },
+    getCaseRow: caseRow({ etag: 'etag-2' }),
   });
   const controller = new AbortController();
   const q = new SaveQueue(client, { debounceMs: 0 });
-  q.loadCase(BASE_ROW, { listName: 'complaints', signal: controller.signal });
+  q.loadCase(caseRow(), {
+    listName: 'complaints',
+    signal: controller.signal,
+  });
 
   q.enqueue('c1', 'notes', 'updated');
   controller.abort();
