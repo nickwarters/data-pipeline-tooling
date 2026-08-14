@@ -292,3 +292,9 @@ are recorded in [ADR-0015](adr/0015-detail-tables-reduce-to-the-parents-latest-o
 The implementation is `gold_detail_builder` in `pipelines/sharepoint_cases/gold.py`,
 generic over a per-table grain, declared in `DETAIL_GRAIN` — one builder for every
 Detail Table rather than a per-table judgement about what "latest" means.
+
+Silver keys a Detail Table's own `AppendOnly` load on a **composite**
+key — `answer` on `(source_observation_id, question_id)` — because the
+observation alone is not its grain: one observation yields many child rows, one
+per question, and a single-column key would raise on the second question of
+every Case.
