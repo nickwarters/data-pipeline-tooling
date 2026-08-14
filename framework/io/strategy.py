@@ -128,9 +128,8 @@ class AccumulateByRun:
 
     It does **not** stamp ``pipeline_run_id``: the concrete attempt behind a row
     is the reserved provenance column, and the Writer stamps that for every
-    table it writes
-    (``docs/adr/0020-writer-stamped-run-provenance-column.md``). One column, one
-    stamper — an accumulating target gets it exactly as a refreshed one does.
+    table it writes. One column, one stamper — an accumulating target gets it
+    exactly as a refreshed one does.
     """
 
     logical_run_id: str
