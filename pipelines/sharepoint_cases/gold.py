@@ -5,7 +5,7 @@ Silver is an append-only history of *observations* across every declared Case
 list. Gold reduces that three ways. Every table is rebuilt whole with
 ``Refresh()`` on every poll, so a re-drive converges rather than accumulating.
 
-Ten tables, and their declared grain:
+Eleven tables, and their declared grain:
 
 ============================  =================================================
 ``case_current``              one row per ``case_id`` -- the latest observation
@@ -17,12 +17,15 @@ Detail Tables                 grain declared per table in ``DETAIL_GRAIN``
 
 The Detail Tables, named in ``DETAIL_TABLES``, each hold the child rows -- an
 answer, an Issue Capture field, a remediation action, a General Question
-answer, a conversation message, an Appeal -- of the Cases' *winning*
-observation, per ADR-0015
+answer, a conversation message, an Appeal, a Case Details field -- of the
+Cases' *winning* observation, per ADR-0015
 (``docs/adr/0015-detail-tables-reduce-to-the-parents-latest-observation.md``).
-``answer``, ``answer_capture``, ``answer_action``, ``general_answer``,
-``conversation_message`` and ``appeal`` publish today; the rest of
-``DETAIL_GRAIN`` declares grain for tables that do not exist in silver yet.
+Every entry ``DETAIL_GRAIN`` declares -- ``answer``, ``answer_capture``,
+``answer_action``, ``general_answer``, ``conversation_message``, ``appeal``
+and ``case_detail`` -- publishes today, so ``DETAIL_TABLES`` (derived from
+``GOLD_TABLES`` and ``DETAIL_GRAIN`` together) equals ``DETAIL_GRAIN`` in
+full; a table declared there but not yet in ``GOLD_TABLES`` would be the
+exception, and there is none right now.
 
 **One instant decides everything.** ``as_of`` is the candidate SharePoint window
 end -- the value the run is about to commit as its watermark -- and never
@@ -66,6 +69,7 @@ GOLD_TABLES = (
     "general_answer",
     "conversation_message",
     "appeal",
+    "case_detail",
     "case_counts_current",
     "case_age_buckets_current",
     "case_throughput_daily",

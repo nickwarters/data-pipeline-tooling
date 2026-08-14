@@ -55,6 +55,7 @@ from pipelines.sharepoint_cases.pipeline import (
     silver_answer_capture_builder,
     silver_appeal_builder,
     silver_builder,
+    silver_case_detail_builder,
     silver_conversation_message_builder,
     silver_general_answer_builder,
     snake_case,
@@ -66,6 +67,7 @@ from pipelines.sharepoint_cases.schema import (
     AnswerCaptureRow,
     AnswerRow,
     AppealRow,
+    CaseDetailRow,
     CaseList,
     ConversationMessageRow,
     GeneralAnswerRow,
@@ -103,6 +105,8 @@ GENERAL_ANSWER_COLUMNS = tuple(f.name for f in fields(GeneralAnswerRow))
 # Likewise for the two list-shaped Detail Tables.
 CONVERSATION_MESSAGE_COLUMNS = tuple(f.name for f in fields(ConversationMessageRow))
 APPEAL_COLUMNS = tuple(f.name for f in fields(AppealRow))
+# Likewise for the case-detail Detail Table, exploded from `details`.
+CASE_DETAIL_COLUMNS = tuple(f.name for f in fields(CaseDetailRow))
 
 SERVER_NOW = dt.datetime(2026, 8, 5, 9, tzinfo=dt.timezone.utc)
 WINDOW = ModifiedWindow(start=None, end=SERVER_NOW - SAFETY_LAG)
@@ -135,6 +139,7 @@ EVERY_HOP = {
     f"{FEED_NAME}:silver:{COMPLAINTS.case_type}:general_answer",
     f"{FEED_NAME}:silver:{COMPLAINTS.case_type}:conversation_message",
     f"{FEED_NAME}:silver:{COMPLAINTS.case_type}:appeal",
+    f"{FEED_NAME}:silver:{COMPLAINTS.case_type}:case_detail",
     *(f"{FEED_NAME}:gold:{table}" for table in GOLD_TABLES),
 }
 
@@ -969,6 +974,74 @@ def test_an_unknown_appeal_state_quarantines_while_the_good_appeal_lands():
     assert "state" in rejected["failed_rule"]
 
 
+# --- silver: the case-detail explode -----------------------------------------
+
+
+def silver_case_details(
+    details_json: str | None,
+    *,
+    case_list: CaseList = COMPLAINTS,
+    reject_writer: RecordingWriter | None = None,
+) -> list[dict]:
+    """Drive the silver case-detail hop, in memory, over one observation's
+    `details`."""
+    writer = RecordingWriter()
+    silver_case_detail_builder(
+        given_rows([version(details=details_json)]),
+        writer,
+        case_list,
+        reject_writer or RecordingWriter(),
+    ).run()
+    return rows_of(writer)
+
+
+def test_a_details_map_becomes_one_row_per_field_carrying_the_five_stamps():
+    rows = silver_case_details(
+        json.dumps({"complaintRef": "CMP-000101", "customerName": "Priya Shah"})
+    )
+
+    assert {row["field_key"] for row in rows} == {"complaintRef", "customerName"}
+    for row in rows:
+        assert set(row) == set(CASE_DETAIL_COLUMNS)
+        assert row["case_type"] == COMPLAINTS.case_type
+        assert row["source_item_id"] == "101"
+        assert row["source_version"] == '"3"'
+        # A str declaration would abort here if this arrived untyped.
+        assert row["source_modified_at"] == pd.Timestamp("2026-08-05 08:10:00+00:00")
+        assert len(row["source_observation_id"]) > 0
+
+
+def test_an_empty_details_map_survives_the_whole_hop_as_a_zero_row_frame():
+    # ExplodeJsonMap contributing no rows for an absent/null/blank/empty blob
+    # is covered by the framework's own suite; what only this feed's test can
+    # show is that the whole hop -- explode, encode_detail_value, coerce,
+    # quarantine, validate -- tolerates the zero-row frame that falls out the
+    # other end.
+    assert silver_case_details("{}") == []
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        pytest.param(3, "3", id="an-int"),
+        pytest.param(1.5, "1.5", id="a-float"),
+        pytest.param(True, "true", id="a-bool"),
+        pytest.param({"n": 1}, '{"n": 1}', id="an-object"),
+        pytest.param(["x"], '["x"]', id="an-array"),
+        pytest.param(None, None, id="a-json-null"),
+    ],
+)
+def test_a_non_string_detail_value_lands_as_its_json_encoding(value, expected):
+    # One key per map, so each case is also an all-one-type batch. Without
+    # encode_detail_value, the int/float/bool arms land value_text as a
+    # non-string dtype and abort the whole poll at SchemaValidator's
+    # is_string_dtype check -- only the object/null arms would happen to
+    # survive by accident.
+    [row] = silver_case_details(json.dumps({"k": value}))
+
+    assert row["value_text"] == expected
+
+
 # --- gold: the current-state rule -------------------------------------------
 
 
@@ -1529,7 +1602,7 @@ def test_throughput_is_empty_when_nothing_has_ended():
 # --- the composed plan -----------------------------------------------------
 
 
-def test_all_eight_ingest_hops_plan_exactly_the_steps_they_always_have():
+def test_all_nine_ingest_hops_plan_exactly_the_steps_they_always_have():
     reader, writer, rejects = given_rows([]), RecordingWriter(), RecordingWriter()
 
     # No column gate on the raw hop, unlike a file feed: the observation
@@ -1625,6 +1698,18 @@ def test_all_eight_ingest_hops_plan_exactly_the_steps_they_always_have():
         "  [Validate] post-validate (depends on: quarantine)",
         "  [Write] write (depends on: post-validate)",
     ]
+    assert silver_case_detail_builder(
+        reader, writer, COMPLAINTS, rejects
+    ).describe().splitlines() == [
+        "Pipeline: sharepoint_cases:silver:complaints:case_detail",
+        "  [Read] read",
+        "  [Transform] explode (depends on: read)",
+        "  [Transform] encode-value (depends on: explode)",
+        "  [Transform] coerce (depends on: encode-value)",
+        "  [Quarantine] quarantine (depends on: coerce)",
+        "  [Validate] post-validate (depends on: quarantine)",
+        "  [Write] write (depends on: post-validate)",
+    ]
 
 
 def test_the_gold_hops_plan_exactly_the_steps_they_always_have():
@@ -1710,7 +1795,10 @@ def test_the_bundled_sample_lands_every_item_across_both_pages(tmp_path, capsys)
     # deliberately mixed raised_at timestamp formats -- so appeal lands 2.
     # (resolution_at has only the one resolved appeal to draw from, so it
     # rides on raised_at's mixed-format demonstration rather than repeating
-    # it.)
+    # it.) Items 101, 102 and 105 carry the three declared complaintRef /
+    # customerName / complaintDate keys (3 each); 104 carries those three plus
+    # an undeclared sourceSystem (4); 103's details map is empty (0) -- 13
+    # case_detail rows in total.
     assert (poll.raw_rows, poll.silver_rows) == (5, 5)
     assert poll.detail_rows == {
         "answer": 6,
@@ -1719,6 +1807,7 @@ def test_the_bundled_sample_lands_every_item_across_both_pages(tmp_path, capsys)
         "general_answer": 1,
         "conversation_message": 3,
         "appeal": 2,
+        "case_detail": 13,
     }
     # The fixture exercises all four real statuses, so the whole vocabulary
     # passes the schema gate rather than only the one a happy path would use.
@@ -1735,7 +1824,7 @@ def test_the_bundled_sample_lands_every_item_across_both_pages(tmp_path, capsys)
         "5 observation(s) -> 5 case version(s), 6 answer row(s), "
         "2 answer_capture row(s), 1 answer_action row(s), "
         "1 general_answer row(s), 3 conversation_message row(s), "
-        "2 appeal row(s)."
+        "2 appeal row(s), 13 case_detail row(s)."
     ) in capsys.readouterr().out
 
 
@@ -2196,6 +2285,45 @@ def test_the_winning_observation_settles_gold_conversation_message_and_appeal(
     assert gold_appeal["resolution_resolver"] == "d.reid"
 
 
+def test_the_winning_observation_settles_gold_case_detail_and_drops_the_others(
+    tmp_path,
+):
+    # Two polls of one item: the second observation drops complaintRef and
+    # adds sourceSystem. Two keys per observation, so the composite AppendOnly
+    # key (source_observation_id, field_key) is under test -- item()'s default
+    # Details cell falls into the absent -> None sweep, so no other end-to-end
+    # test exercises this table at all otherwise.
+    early = item(
+        Details=json.dumps({"complaintRef": "CMP-000101", "customerName": "Priya Shah"})
+    )
+    later = item(
+        Details=json.dumps(
+            {"customerName": "Priya Shah", "sourceSystem": "legacy-crm"}
+        ),
+        Status="Completed",
+    )
+    later.update({"Modified": "2026-08-05T08:45:00Z", "odata.etag": '"4"'})
+    client = FakeListClient(items(early), items(later), advance=NEXT_POLL)
+    context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
+
+    run(context, client=client)
+    run(context, client=client)
+
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    # Silver accumulated both observations' fields: 2 keys + 2 keys.
+    assert len(read_rows(med.silver, "case_detail")) == 4
+
+    gold_case_detail = read_rows(med.gold, "case_detail")
+    assert {row["field_key"] for row in gold_case_detail} == {
+        "customerName",
+        "sourceSystem",
+    }
+    [winner] = read_rows(med.gold, "case_current")
+    assert {row["source_observation_id"] for row in gold_case_detail} == {
+        winner["source_observation_id"]
+    }
+
+
 @pytest.mark.parametrize("cell", [None, "misfiled", "complaints"])
 def test_gold_answer_derives_the_same_case_id_as_the_settled_case_type(tmp_path, cell):
     # Mirrors test_silver_settles_the_case_type_to_the_polled_lists_declared_one:
@@ -2231,7 +2359,29 @@ def test_a_malformed_answers_blob_raises_and_case_version_still_lands(tmp_path):
     assert SharePointCheckpointStore(tmp_path).committed_watermark(SOURCE) is None
 
 
-def test_a_quiet_first_window_commits_and_publishes_ten_empty_gold_tables(tmp_path):
+def test_a_malformed_details_blob_raises_and_case_version_details_still_holds_it(
+    tmp_path,
+):
+    client = FakeListClient(items(item(Details="not json")))
+    context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
+
+    with pytest.raises(JsonShapeError):
+        run(context, client=client)
+
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    assert landed_gold(tmp_path) == set()
+    assert SharePointCheckpointStore(tmp_path).committed_watermark(SOURCE) is None
+    # The genuinely new claim versus every other blob's malformed-blob test:
+    # the frontend's parse fallback for Details is undefined, so absent and
+    # unparseable are indistinguishable once a Case reaches the app -- silver
+    # is the only place the raw text survives.
+    [case_version] = read_rows(med.silver, "case_version")
+    assert case_version["details"] == "not json"
+
+
+def test_a_quiet_first_window_commits_and_publishes_eleven_empty_gold_tables(
+    tmp_path,
+):
     # Nothing to reduce is not nothing to publish: a consumer reading gold must
     # find the tables, empty, rather than a missing one it has to special-case.
     run(
@@ -2251,7 +2401,16 @@ def test_an_overlap_reread_does_not_double_count_gold(tmp_path):
     # The overlap re-presents rows that did not change. Silver no-ops them; gold
     # must not count the Case twice either.
     context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
-    client = FakeListClient(advance=NEXT_POLL)
+    client = FakeListClient(
+        items(
+            item(
+                Details=json.dumps(
+                    {"complaintRef": "CMP-000101", "customerName": "Priya Shah"}
+                )
+            )
+        ),
+        advance=NEXT_POLL,
+    )
 
     run(context, client=client)
     run(context, client=client)
@@ -2264,6 +2423,11 @@ def test_an_overlap_reread_does_not_double_count_gold(tmp_path):
     # The overlap re-presents the same observation, which is a no-op against
     # append-only silver; the answer rows must not double either.
     assert len(read_rows(med.silver, "answer")) == 1
+    # Two field keys, so a wrong single-column key (e.g. source_observation_id
+    # alone) would raise an AppendOnly conflict on the second key rather than
+    # silently no-op; the composite (source_observation_id, field_key) key
+    # must absorb the re-presented observation cleanly.
+    assert len(read_rows(med.silver, "case_detail")) == 2
 
 
 def test_a_failure_in_current_gold_leaves_no_gold_and_no_checkpoint(
@@ -2300,6 +2464,7 @@ def test_a_failure_in_the_last_aggregate_leaves_the_earlier_gold_and_no_checkpoi
         "general_answer",
         "conversation_message",
         "appeal",
+        "case_detail",
         "case_counts_current",
         "case_age_buckets_current",
     }
@@ -2508,14 +2673,15 @@ def test_a_dry_run_previews_every_write_and_commits_none_of_them(tmp_path):
 
     # Raw, silver, every silver Detail Table, and every gold table are
     # previewed; none is committed. The fixture item carries no capture map,
-    # remediationActions, general answer, Conversation or Appeals, so those
-    # five Detail Table writes are empty.
+    # remediationActions, general answer, Conversation, Appeals or Details, so
+    # those six Detail Table writes are empty.
     empty_detail_tables = (
         "answer_capture",
         "answer_action",
         "general_answer",
         "conversation_message",
         "appeal",
+        "case_detail",
     )
     expected = [
         ("raw case_observation", 1),

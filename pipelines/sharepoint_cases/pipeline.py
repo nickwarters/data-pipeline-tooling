@@ -18,7 +18,10 @@ published once, over every list's accumulated history.
   catalogue key. ``silver_conversation_message_builder`` and
   ``silver_appeal_builder`` explode the batch's other two list-shaped blobs,
   ``conversation`` and ``appeals``, one row per message and one row per Appeal
-  respectively.
+  respectively. ``silver_case_detail_builder`` explodes the last blob,
+  ``details``, into one row per Case Details field -- completing the blob
+  coverage: with it, every nested structure on the Case row has a normalised
+  home.
 - ``gold.publish_gold`` rebuilds the current Case, the Detail Tables and three
   aggregates from the whole silver history, each with ``Refresh()``.
 
@@ -101,6 +104,7 @@ from .schema import (
     AnswerCaptureRow,
     AnswerRow,
     AppealRow,
+    CaseDetailRow,
     CaseList,
     CaseVersion,
     ConversationMessageRow,
@@ -456,6 +460,41 @@ def derive_value_text(dataset: Dataset) -> Dataset:
                 )
                 continue
         values.append(str(cell))
+    text = pd.Series(values, index=frame.index, dtype="object")
+    frame = frame.assign(value_text=text)
+    return Dataset.from_pandas(frame)
+
+
+def encode_detail_value(dataset: Dataset) -> Dataset:
+    """Add ``value_text``, a faithful text rendering of the exploded ``details``
+    value.
+
+    ``_as_column_value`` (inside ``ExplodeJsonMap``) lands a JSON string cell
+    as itself but a JSON number, boolean or null as the Python scalar, which
+    downstream typing would otherwise treat inconsistently -- see the data
+    dictionary's Part B. The rule this function states, once and for the
+    whole column: **a JSON string lands as itself; every other JSON value
+    lands as its JSON encoding.** Null stays null; a ``str`` passes through
+    unchanged, which also stops the dict/list arm (already ``json.dumps``ed
+    by ``_as_column_value``) from being double-encoded.
+
+    ``json.dumps``, not ``derive_value_text``'s ``str()``: it spells a
+    boolean as ``true`` rather than the Python spelling ``True``.
+
+    Does not quarantine a non-string value -- see the data dictionary's Part D.
+
+    Reassigns via an explicit ``dtype="object"`` Series so the column's SQLite
+    affinity does not shift between an all-string run and one that is not.
+    """
+    frame = dataset.to_pandas()
+    values = []
+    for cell in frame["value_text"]:
+        if pd.isna(cell):
+            values.append(None)
+        elif isinstance(cell, str):
+            values.append(cell)
+        else:
+            values.append(json.dumps(cell))
     text = pd.Series(values, index=frame.index, dtype="object")
     frame = frame.assign(value_text=text)
     return Dataset.from_pandas(frame)
@@ -873,6 +912,53 @@ def silver_appeal_builder(
     return p
 
 
+def silver_case_detail_builder(
+    reader: Reader,
+    writer: Writer,
+    case_list: CaseList,
+    reject_writer: Writer,
+    run_log: RunLog | None = None,
+) -> Pipeline:
+    """Build one list's silver case-detail hop: explode ``details`` into one
+    row per Case Details field.
+
+    Reads the settled **silver** batch, never raw -- see
+    ``silver_answer_builder``'s docstring. No ``SelectColumns``: this feed's
+    Detail Table hops read the full silver batch and let the explode
+    transform project its own columns.
+
+    A malformed ``details`` blob **raises** (``JsonShapeError``); an
+    off-contract value is encoded to text rather than quarantined -- see the
+    data dictionary's Part D. The quarantine node stays wired anyway, for the
+    same reason ``silver_general_answer_builder``'s does.
+    """
+    p = Pipeline(
+        f"{FEED_NAME}:silver:{case_list.case_type}:case_detail", run_log=run_log
+    )
+    node = p.read(reader, name="read")
+    node = p.transform(
+        ExplodeJsonMap(
+            column="details",
+            key_into="field_key",
+            id_vars=list(DETAIL_ID_VARS),
+            value_into="value_text",
+        ),
+        node,
+        name="explode",
+    )
+    node = p.transform(encode_detail_value, node, name="encode-value")
+    node = p.transform(SchemaCoercion(CaseDetailRow), node, name="coerce")
+    node = p.quarantine(
+        SchemaValueRulePartitioner(CaseDetailRow),
+        reject_writer,
+        node,
+        name="quarantine",
+    )
+    node = p.validate(SchemaValidator(CaseDetailRow), node, name="post-validate")
+    p.write(writer, node, name="write")
+    return p
+
+
 # Every Detail Table this feed publishes, in the order run() drives them: the
 # table name, the builder that produces it (every one sharing
 # silver_answer_builder's (reader, writer, case_list, reject_writer, run_log)
@@ -903,6 +989,11 @@ _DETAIL_HOPS = (
         ("source_observation_id", "seq"),
     ),
     ("appeal", silver_appeal_builder, ("source_observation_id", "appeal_id")),
+    (
+        "case_detail",
+        silver_case_detail_builder,
+        ("source_observation_id", "field_key"),
+    ),
 )
 
 

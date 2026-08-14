@@ -43,7 +43,7 @@
     "Conversation": "[{\"author\":{\"loginName\":\"a.khan\",\"displayName\":\"Amira Khan\"},\"timestamp\":\"2026-08-04T16:02:00Z\",\"body\":\"Please confirm the call date.\"},{\"author\":{\"loginName\":\"b.okafor\",\"displayName\":\"Bola Okafor\"},\"timestamp\":\"2026-08-04T18:47:12.000Z\",\"body\":\"Confirmed -- the call was on the 30th.\"}]",
     "Appeals": "[]",
     "AmendedOutcome": null,
-    "Details": "{\"product\":\"Current account\",\"channel\":\"Branch\"}"
+    "Details": "{\"complaintRef\":\"CMP-000101\",\"customerName\":\"Priya Shah\",\"complaintDate\":\"2026-06-18\"}"
   },
   {
     "Id": 102,
@@ -89,7 +89,7 @@
     "Conversation": "[]",
     "Appeals": "[]",
     "AmendedOutcome": null,
-    "Details": "{\"product\":\"Mortgage\",\"channel\":\"Telephone\"}"
+    "Details": "{\"complaintRef\":\"CMP-000102\",\"customerName\":\"Noah Bennett\",\"complaintDate\":\"2026-06-25\"}"
   },
   {
     "Id": 103,
