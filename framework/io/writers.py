@@ -359,9 +359,9 @@ class _FileWriter:
     with whoever reads it. An extra column would be one the recipient did not
     ask for and cannot interpret. The question "which run produced this file?"
     is answered without touching the file at all, by the run record's
-    ``data_locations``. The asymmetry is a decision, recorded in
-    ``docs/adr/0020-writer-stamped-run-provenance-column.md`` and pinned by a
-    test, not an omission to be tidied up later.
+    ``data_locations``. The asymmetry is a decision — recorded in the
+    architecture decisions and pinned by a test — not an omission to be tidied
+    up later.
     """
 
     def __init__(
