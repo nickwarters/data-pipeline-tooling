@@ -332,6 +332,7 @@ win an observation.
 | `source_modified_at` | *(from `case_version`)* | `datetime` | No | `NonNull` | When the observation was made. | `2026-08-05T08:10:00+00:00` | None |
 | `source_version` | *(from `case_version`)* | `str` | No | `NonNull` | The version observed. | `"3"` | None |
 | `source_observation_id` | *(from `case_version`)* | `str` | No | `NonNull` | The observation's identity. | *(64-char sha256)* | None |
+| `pipeline_run_id` | *(stamped by the Writer)* | `str` | No | — | The run that wrote the row. Not declared by the schema — the Writer adds it after validation — so it appears in no schema and in no grain. | *(32-char hex)* | None |
 | `question_id` | the `answers` map's key | `str` | No | `NonNull` | The Question Definition this row answers. No `Pattern`: a question id has no documented format, so a pattern would divert real answers into quarantine to guard a namespace nobody has proposed. | `q-root-cause` | None |
 | `value_json` | `answers[question_id].value` | `str` | Yes | — | The value exactly as the source stored it — a scalar as itself, a list as JSON text. Not always parseable as a single JSON value; it is the lossless copy. | `["Process","Training"]` | Internal |
 | `value_text` | *(derived)* | `str` | Yes | — | The canonical, groupable rendering of `value_json`: a multi-select's elements joined on `\|`; anything else stringified. Not display copy — see `derive_value_text`. | `Process\|Training` | Internal |
@@ -398,6 +399,7 @@ feed does not join — Groups are presentation-only.
 | `source_modified_at` | *(from `case_version`)* | `datetime` | No | `NonNull` | When the observation was made. | `2026-08-05T08:10:00+00:00` | None |
 | `source_version` | *(from `case_version`)* | `str` | No | `NonNull` | The version observed. | `"3"` | None |
 | `source_observation_id` | *(from `case_version`)* | `str` | No | `NonNull` | The observation's identity. | *(64-char sha256)* | None |
+| `pipeline_run_id` | *(stamped by the Writer)* | `str` | No | — | The run that wrote the row. Not declared by the schema — the Writer adds it after validation — so it appears in no schema and in no grain. | *(32-char hex)* | None |
 | `question_id` | the `answers` map's key | `str` | No | `NonNull` | The Question Definition this capture value belongs to. | `q-root-cause` | None |
 | `field_key` | the `capture` map's key | `str` | No | `NonNull` | The Issue Capture Field key — unique within a Case Type by app contract, not enforced here. | `field-owner` | None |
 | `value_kind` | *(derived)* | `str` | No | `NonNull`, `OneOf(text, person)` | Which arm the value discriminated to; see `discriminate_capture_value`. A legacy `Action[]` value, a half-filled person, or any other unrecognised shape is stamped `unsupported` and quarantines on this rule, rather than earning a label of its own. | `person` | None |
@@ -469,6 +471,7 @@ the declared grain, not an ordinary bad value.
 | `source_modified_at` | *(from `case_version`)* | `datetime` | No | `NonNull` | When the observation was made. | `2026-08-05T08:10:00+00:00` | None |
 | `source_version` | *(from `case_version`)* | `str` | No | `NonNull` | The version observed. | `"3"` | None |
 | `source_observation_id` | *(from `case_version`)* | `str` | No | `NonNull` | The observation's identity. | *(64-char sha256)* | None |
+| `pipeline_run_id` | *(stamped by the Writer)* | `str` | No | — | The run that wrote the row. Not declared by the schema — the Writer adds it after validation — so it appears in no schema and in no grain. | *(32-char hex)* | None |
 | `question_id` | the `answers` map's key | `str` | No | `NonNull` | The Question Definition this action belongs to. | `q-root-cause` | None |
 | `action_seq` | the `remediationActions` list's 0-based position | `int` | No | `NonNull` | Declared (not dropped) because `ExplodeJsonList`'s `ordinal_into` is mandatory, so the column exists either way, and only a declared column is typed. Descriptive only — `action_id` is the grain. | `0` | None |
 | `action_id` | `remediationActions[].id` | `str` | No | `NonNull` | From the Remediation Action bank's own definitions. | `q-root-cause-ra-0` | None |
@@ -531,6 +534,7 @@ One row per observation × General Question catalogue key, exploded from
 | `source_modified_at` | *(from `case_version`)* | `datetime` | No | `NonNull` | When the observation was made. | `2026-08-05T08:10:00+00:00` | None |
 | `source_version` | *(from `case_version`)* | `str` | No | `NonNull` | The version observed. | `"3"` | None |
 | `source_observation_id` | *(from `case_version`)* | `str` | No | `NonNull` | The observation's identity. | *(64-char sha256)* | None |
+| `pipeline_run_id` | *(stamped by the Writer)* | `str` | No | — | The run that wrote the row. Not declared by the schema — the Writer adds it after validation — so it appears in no schema and in no grain. | *(32-char hex)* | None |
 | `general_key` | the `answers` map's key, `general:` prefix stripped | `str` | No | `NonNull` | The General Question catalogue key. No `OneOf`/`Pattern` — rationale in `GeneralAnswerRow`'s docstring. | `complaint-channel` | None |
 | `value_json` | `answers[key].value` | `str` | Yes | — | The value exactly as the source stored it — a scalar as itself, a list as JSON text. Carried even though the app contract says plain string: see *Part D*. | `"Phone"` | Internal |
 | `value_text` | *(derived)* | `str` | Yes | — | The canonical, groupable rendering of `value_json` — reuses `derive_value_text` unchanged, giving `answer` and `general_answer` one identical value contract. | `Phone` | Internal |
@@ -593,6 +597,7 @@ carries. Reads the settled silver batch, never raw, for the same reason
 | `source_modified_at` | *(from `case_version`)* | `datetime` | No | `NonNull` | When the observation was made. | `2026-08-05T08:10:00+00:00` | None |
 | `source_version` | *(from `case_version`)* | `str` | No | `NonNull` | The version observed. | `"3"` | None |
 | `source_observation_id` | *(from `case_version`)* | `str` | No | `NonNull` | The observation's identity. | *(64-char sha256)* | None |
+| `pipeline_run_id` | *(stamped by the Writer)* | `str` | No | — | The run that wrote the row. Not declared by the schema — the Writer adds it after validation — so it appears in no schema and in no grain. | *(32-char hex)* | None |
 | `seq` | the `conversation` list's 0-based position | `int` | No | `NonNull` | The grain key — the app mints no message id. A durable *pointer* only while the Conversation stays append-only: a mid-list insert would renumber every later message silently. | `0` | None |
 | `author_login` | `conversation[].author.loginName` | `str` | Yes | — | The bare account name the app stamped at post time — see *Bare account logins vs. claims logins*, below. | `a.khan` | Internal |
 | `author_display_name` | `conversation[].author.displayName` | `str` | Yes | — | An **unrefreshed snapshot** of what the sender was called when they posted; never join it as a current name. | `Amira Khan` | Internal |
@@ -652,6 +657,7 @@ this table reads silver, not raw* above.
 | `source_modified_at` | *(from `case_version`)* | `datetime` | No | `NonNull` | When the observation was made. | `2026-08-05T08:10:00+00:00` | None |
 | `source_version` | *(from `case_version`)* | `str` | No | `NonNull` | The version observed. | `"3"` | None |
 | `source_observation_id` | *(from `case_version`)* | `str` | No | `NonNull` | The observation's identity. | *(64-char sha256)* | None |
+| `pipeline_run_id` | *(stamped by the Writer)* | `str` | No | — | The run that wrote the row. Not declared by the schema — the Writer adds it after validation — so it appears in no schema and in no grain. | *(32-char hex)* | None |
 | `appeal_id` | `appeals[].id` | `str` | No | `NonNull` | The grain key, minted by the app as `appeal-${Date.now()}`. No `Pattern`/`Unique` — see *Part D*. | `appeal-1754210400000` | None |
 | `appeal_seq` | the `appeals` list's 0-based position | `int` | No | `NonNull` | Declared, not dropped, for the same reason `answer_action.action_seq` is — `ExplodeJsonList`'s ordinal is mandatory and typed either way. Descriptive only; `appeal_id` is the key. | `0` | None |
 | `appellant` | `appeals[].appellant` | `str` | Yes | — | A bare account name — see *Bare account logins vs. claims logins*, below. | `e.novak` | Internal |
@@ -749,6 +755,7 @@ does — see *Why this table reads silver, not raw* above.
 | `source_modified_at` | *(from `case_version`)* | `datetime` | No | `NonNull` | When the observation was made. | `2026-08-05T08:10:00+00:00` | None |
 | `source_version` | *(from `case_version`)* | `str` | No | `NonNull` | The version observed. | `"3"` | None |
 | `source_observation_id` | *(from `case_version`)* | `str` | No | `NonNull` | The observation's identity. | *(64-char sha256)* | None |
+| `pipeline_run_id` | *(stamped by the Writer)* | `str` | No | — | The run that wrote the row. Not declared by the schema — the Writer adds it after validation — so it appears in no schema and in no grain. | *(32-char hex)* | None |
 | `field_key` | the `details` map's key | `str` | No | `NonNull` | The Case Details field key — declared per Case Type in frontend config this feed does not join; an undeclared key still lands. No `Pattern`/`Length` for the same reason `question_id` has none. | `complaintRef` | None |
 | `value_text` | the `details` map's value, encoded by `encode_detail_value` | `str` | Yes | — | The value as the source wrote it — a JSON string lands as itself, any other JSON value (number, boolean) lands as its JSON encoding, so a boolean reads `true`, not the Python spelling `True`. Not normalised: a date is `"2026-06-18"`, not a `datetime`. | `CMP-000101` | Internal |
 
@@ -993,7 +1000,7 @@ The reserved run-provenance column every table-backed Writer stamps
 framework's, not the feed's: no gold builder declares it, and it is added after
 validation, so it appears in no schema and in no grain.
 
-Because all four tables are rebuilt whole with `Refresh()`, the value is
+Because every gold table is rebuilt whole with `Refresh()`, the value is
 **uniform per table** — the run named on any row is the run that wrote all of
 them. A re-drive of the same window therefore produces identical data with a
 different `pipeline_run_id`: identical *data*, not identical bytes. Which
