@@ -118,8 +118,7 @@ def _stamp_run_provenance(frame: pd.DataFrame, run_id: str | None) -> pd.DataFra
     """Stamp ``run_id`` onto ``frame`` as the reserved provenance column.
 
     The one place the column is written, so "which run wrote this row?" has a
-    single implementation across every table-backed Writer
-    (``docs/adr/0020-writer-stamped-run-provenance-column.md``). Outside a run
+    single implementation across every table-backed Writer. Outside a run
     context there is no id, and the frame is returned untouched rather than the
     write failing — the framework's components stay usable from a script or a
     test with no run around them.
