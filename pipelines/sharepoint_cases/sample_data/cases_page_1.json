@@ -40,7 +40,7 @@
     "CaseJustification": null,
     "Notes": "Awaiting the call recording from the branch.",
     "Answers": "{\"q-outcome\":{\"value\":\"Not upheld\"},\"q-timeliness\":{\"value\":\"Yes\"},\"q-root-cause\":{\"value\":[\"Process\",\"Training\"],\"justification\":\"Multiple factors contributed to the delay.\",\"remediationRequired\":\"yes\",\"remediationActions\":[{\"id\":\"q-root-cause-ra-0\",\"text\":\"Retrain the branch team on call handling.\"}],\"remediationStatus\":{\"status\":\"partial\",\"details\":\"Training scheduled for next quarter.\"},\"capture\":{\"field-note\":\"Called back within SLA.\",\"field-owner\":{\"loginName\":\"user-rp\",\"displayName\":\"Bola Okafor\"}}},\"general:complaint-channel\":{\"value\":\"Phone\"}}",
-    "Conversation": "[{\"author\":{\"loginName\":\"a.khan\",\"displayName\":\"Amira Khan\"},\"timestamp\":\"2026-08-04T16:02:00Z\",\"body\":\"Please confirm the call date.\"}]",
+    "Conversation": "[{\"author\":{\"loginName\":\"a.khan\",\"displayName\":\"Amira Khan\"},\"timestamp\":\"2026-08-04T16:02:00Z\",\"body\":\"Please confirm the call date.\"},{\"author\":{\"loginName\":\"b.okafor\",\"displayName\":\"Bola Okafor\"},\"timestamp\":\"2026-08-04T18:47:12.000Z\",\"body\":\"Confirmed -- the call was on the 30th.\"}]",
     "Appeals": "[]",
     "AmendedOutcome": null,
     "Details": "{\"product\":\"Current account\",\"channel\":\"Branch\"}"
