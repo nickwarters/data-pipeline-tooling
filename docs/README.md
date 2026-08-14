@@ -102,7 +102,7 @@ review platform, Review Outcomes flow *back* for reporting.
   runs on two cadences: an **hourly poll** into silver and a **daily publish**
   of gold, because only **Notification** needs fresh data and only the publish
   is expensive ([Sync polls hourly, publishes gold
-  daily](adr/0020-sync-polls-hourly-publishes-gold-daily.md)).
+  daily](adr/0023-sync-polls-hourly-publishes-gold-daily.md)).
 - **Notification** (platform-wide) reads Sync's silver observations hourly and
   emits a **Deliverable** telling Case participants what needs their attention.
 - **Reporting** (platform-wide) joins Review Outcomes to the selected Cases and
