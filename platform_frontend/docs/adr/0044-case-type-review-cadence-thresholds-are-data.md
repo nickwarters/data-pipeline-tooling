@@ -182,3 +182,14 @@ the second argument.
 - The holiday calendar stays global. Per-region holidays remain ADR-0025's open
   follow-up and are not addressed here: a Case Type can now choose _how many_
   working days it gets, not _which_ days are working days.
+
+## Amendment — issue #571, 2026-08-14
+
+The Action Centre gained an On Hold reason (ADR-0030 as amended), and with it
+`actionCentreSlaDays.onHold` became a valid key — automatically, because the
+config check validates keys against the reason table rather than a second
+list. Its framework default is 14 days, a deliberately conservative
+placeholder pending a product answer on what "parked too long" means. Zero is
+the one value to avoid: it would badge every parked Case as breached the
+moment it is parked, which defeats a group whose point is _not otherwise
+urgent_.

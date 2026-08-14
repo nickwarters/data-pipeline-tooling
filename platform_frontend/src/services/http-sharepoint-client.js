@@ -1035,6 +1035,18 @@ function buildFilterExpr(filter) {
       (status) => `Status eq '${escapeOData(status)}'`
     );
     conds.push(`(${statuses.join(' or ')})`);
+  } else if (filter.overdue === false) {
+    // The negation of the rule above, built from the same status list so the
+    // two can never drift. A null DueDate is not overdue — a Case with no
+    // review date has no clock to have passed. Kept as one ORed group so the
+    // indexed, selective terms a caller ANDs alongside it still lead the
+    // query.
+    const notInReview = OVERDUE_STATUSES.map(
+      (status) => `Status ne '${escapeOData(status)}'`
+    ).join(' and ');
+    conds.push(
+      `(${notInReview} or DueDate eq null or DueDate ge '${new Date().toISOString()}')`
+    );
   }
   // Action Centre reason flags — indexed boolean columns hoisted onto the Case
   // row so a reason count is a cheap `$count`, never a blob parse.

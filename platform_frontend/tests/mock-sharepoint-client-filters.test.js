@@ -252,6 +252,72 @@ test('MockSharePointClient: listCases with overdue:true excludes an Actions In P
   );
 });
 
+test('MockSharePointClient: listCases with overdue:false returns only non-overdue cases, null dueDate included', async () => {
+  const client = new MockSharePointClient({
+    lists: {
+      [LIST]: [
+        reasonCase('past-due', {
+          status: 'In-progress',
+          dueDate: '2020-01-01T00:00:00Z',
+        }),
+        reasonCase('future-due', {
+          status: 'In-progress',
+          dueDate: '2099-01-01T00:00:00Z',
+        }),
+        // A Case with no review date has no clock to have passed.
+        reasonCase('no-due-date', { status: 'In-progress', dueDate: null }),
+        reasonCase('completed-late', {
+          status: 'Completed',
+          dueDate: '2020-01-01T00:00:00Z',
+        }),
+      ],
+    },
+    personas: PERSONAS,
+  });
+
+  const rows = await client.listCases({ overdue: false }, { listName: LIST });
+  assert.deepEqual(
+    rows.map((c) => c.id),
+    ['future-due', 'no-due-date', 'completed-late']
+  );
+});
+
+test('MockSharePointClient: onHold:true with overdue:false keeps a parked Case out of both groups at once', async () => {
+  const client = new MockSharePointClient({
+    lists: {
+      [LIST]: [
+        reasonCase('parked', {
+          status: 'In-progress',
+          onHold: true,
+          placedOnHoldAt: '2026-06-01T00:00:00Z',
+          dueDate: '2099-01-01T00:00:00Z',
+        }),
+        reasonCase('parked-and-overdue', {
+          status: 'In-progress',
+          onHold: true,
+          placedOnHoldAt: '2026-06-01T00:00:00Z',
+          dueDate: '2020-01-01T00:00:00Z',
+        }),
+      ],
+    },
+    personas: PERSONAS,
+  });
+
+  const held = await client.listCases(
+    { onHold: true, overdue: false },
+    { listName: LIST }
+  );
+  assert.deepEqual(
+    held.map((c) => c.id),
+    ['parked']
+  );
+  const overdue = await client.listCases({ overdue: true }, { listName: LIST });
+  assert.deepEqual(
+    overdue.map((c) => c.id),
+    ['parked-and-overdue']
+  );
+});
+
 test('MockSharePointClient: listCases derives the overdue flag, ignoring a contradictory stored value', async () => {
   const client = new MockSharePointClient({
     lists: {

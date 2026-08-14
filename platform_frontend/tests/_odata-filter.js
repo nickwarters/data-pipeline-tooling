@@ -9,7 +9,7 @@
  * client produces and nothing else: `and`-joined terms, where a term is an
  * atomic `Column op value` comparison, a `startswith(Column,'literal')` call, or
  * a parenthesised group of `or`-ed expressions, and a value is either a
- * single-quoted string or a bare number.
+ * single-quoted string, a bare number, or the bare literal `null`.
  * Anything outside that throws rather than guessing, so a query form that grows
  * a new shape is a loud failure here rather than a silently wrong answer.
  *
@@ -70,15 +70,24 @@ function matchesTerm(term, item) {
       .startsWith(literal.replaceAll("''", "'").toLowerCase());
   }
 
-  const parsed = /^(\w+) (eq|lt|ge) (.+)$/.exec(term);
+  const parsed = /^(\w+) (eq|ne|lt|ge) (.+)$/.exec(term);
   if (!parsed) throw new Error(`Unsupported $filter term: ${term}`);
   const [, column, op, literal] = parsed;
+  const actual = item[column];
+  // `null` is the one value an empty column DOES match: `Column eq null` is
+  // how the client asks for the rows the empty-column rule below excludes.
+  if (literal === 'null') {
+    const isNull = actual === undefined || actual === null;
+    if (op === 'eq') return isNull;
+    if (op === 'ne') return !isNull;
+    throw new Error(`Unsupported $filter term: ${term}`);
+  }
   const expected = literal.startsWith("'")
     ? literal.slice(1, -1).replaceAll("''", "'")
     : Number(literal);
-  const actual = item[column];
   if (actual === undefined || actual === null) return false;
   if (op === 'eq') return actual === expected;
+  if (op === 'ne') return actual !== expected;
   if (op === 'lt') return /** @type {any} */ (actual) < expected;
   return /** @type {any} */ (actual) >= expected;
 }
