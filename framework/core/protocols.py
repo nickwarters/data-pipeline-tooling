@@ -31,8 +31,7 @@ DEFAULT_CHUNK_SIZE = 10_000
 # *Writer's* rule: the framework has no notion of raw/silver/gold, and a Writer
 # knows only that it is writing. The value is read from the ambient run context,
 # so no feed wires anything and no ``Store.writer(...)`` signature changes; it is
-# never part of a load strategy's value comparison. See
-# ``docs/adr/0020-writer-stamped-run-provenance-column.md``.
+# never part of a load strategy's value comparison.
 RUN_PROVENANCE_COLUMN = "pipeline_run_id"
 
 
