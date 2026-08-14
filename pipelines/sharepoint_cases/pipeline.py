@@ -9,19 +9,11 @@ published once, over every list's accumulated history.
 - ``silver_builder`` snake_cases those names, settles ``case_type`` to the
   polled list's declared one, coerces the types, quarantines value-rule
   breaches and validates ``CaseVersion``.
-- ``silver_answer_builder`` explodes that same batch's ``answers`` JSON map
-  into one row per observation x Question Definition, quarantining a bad value
-  the same way while a malformed blob raises. ``silver_answer_capture_builder``
-  and ``silver_answer_action_builder`` go one level further, each exploding one
-  field of an individual answer. ``silver_general_answer_builder`` explodes the
-  same ``answers`` map from the other side, into one row per General Question
-  catalogue key. ``silver_conversation_message_builder`` and
-  ``silver_appeal_builder`` explode the batch's other two list-shaped blobs,
-  ``conversation`` and ``appeals``, one row per message and one row per Appeal
-  respectively. ``silver_case_detail_builder`` explodes the last blob,
-  ``details``, into one row per Case Details field -- completing the blob
-  coverage: with it, every nested structure on the Case row has a normalised
-  home.
+- The seven ``silver_*_builder`` Detail Table hops (``answer``,
+  ``answer_capture``, ``answer_action``, ``general_answer``,
+  ``conversation_message``, ``appeal``, ``case_detail``) each explode one
+  blob -- or one level further into one -- of that same silver batch into
+  one row per child structure; see each builder's own docstring.
 - ``gold.publish_gold`` rebuilds the current Case, the Detail Tables and five
   aggregates from the whole silver history, each with ``Refresh()`` -- three
   reduced from ``case_current``, and two from a Detail Table.
@@ -439,19 +431,11 @@ VALUE_TEXT_SEPARATOR = "|"
 def derive_value_text(dataset: Dataset) -> Dataset:
     """Add ``value_text``, the canonical rendering of ``value_json``.
 
-    ``_as_column_value`` (inside ``ExplodeJsonMap``) lands a scalar cell as
-    itself and anything else -- a list, an object -- as JSON text, so this
-    re-detects which happened rather than trusting the cell's own type: a cell
-    is treated as a multi-select only when it is text starting with ``[`` that
-    parses as a JSON list, and its elements are then stringified and joined on
-    ``VALUE_TEXT_SEPARATOR``. Everything else is the cell **stringified**
-    (``str(cell)``), not passed through -- a JSON ``true``/``3`` lands in
-    ``value_json`` as a Python ``bool``/``int``, and passing it through would
-    put ``True`` in the one column meant to be canonical text, which SQLite
-    would then store as ``1``. Null in, null out.
-
-    The column is created even on a zero-row frame, or ``SchemaCoercion`` has
-    no column left to type on the empty-frame path.
+    A cell is treated as a multi-select only when it is JSON-list-shaped
+    text; its elements are stringified and joined on
+    ``VALUE_TEXT_SEPARATOR``. Everything else is ``str(cell)`` -- not passed
+    through, since a JSON ``true``/``3`` would otherwise land here as
+    Python's ``True``/``3``. Null in, null out.
     """
     frame = dataset.to_pandas()
     values = []
@@ -477,24 +461,11 @@ def derive_value_text(dataset: Dataset) -> Dataset:
 
 def encode_detail_value(dataset: Dataset) -> Dataset:
     """Add ``value_text``, a faithful text rendering of the exploded ``details``
-    value.
+    value: a JSON string lands as itself, everything else as its JSON
+    encoding -- see the data dictionary's Part B/D.
 
-    ``_as_column_value`` (inside ``ExplodeJsonMap``) lands a JSON string cell
-    as itself but a JSON number, boolean or null as the Python scalar, which
-    downstream typing would otherwise treat inconsistently -- see the data
-    dictionary's Part B. The rule this function states, once and for the
-    whole column: **a JSON string lands as itself; every other JSON value
-    lands as its JSON encoding.** Null stays null; a ``str`` passes through
-    unchanged, which also stops the dict/list arm (already ``json.dumps``ed
-    by ``_as_column_value``) from being double-encoded.
-
-    ``json.dumps``, not ``derive_value_text``'s ``str()``: it spells a
-    boolean as ``true`` rather than the Python spelling ``True``.
-
-    Does not quarantine a non-string value -- see the data dictionary's Part D.
-
-    Reassigns via an explicit ``dtype="object"`` Series so the column's SQLite
-    affinity does not shift between an all-string run and one that is not.
+    ``str`` passthrough also stops the dict/list arm (already JSON-encoded by
+    ``ExplodeJsonMap``) from being double-encoded.
     """
     frame = dataset.to_pandas()
     values = []
@@ -512,35 +483,12 @@ def encode_detail_value(dataset: Dataset) -> Dataset:
 
 def discriminate_capture_value(dataset: Dataset) -> Dataset:
     """Add ``value_kind`` / ``value_text`` / ``person_login`` / ``person_display``,
-    discriminating one Issue Capture field's ``raw_value``.
+    discriminating one Issue Capture field's ``raw_value`` into ``text``,
+    ``person`` or ``unsupported`` -- see the data dictionary for the arms.
 
-    Total over every row: ``value_kind`` is never null. A value rule masks on
-    ``notna()``, so a null ``value_kind`` would slip past quarantine untouched
-    and then abort the *whole run* at ``SchemaValidator``'s ``NonNull`` check --
-    there is deliberately no null arm. An absent field contributes no row at
-    all (``ExplodeJsonMap`` only emits present keys), but a capture field
-    explicitly holding a JSON ``null`` reaches here as ``raw_value is None``
-    and is stamped ``UNSUPPORTED_CAPTURE_VALUE_KIND`` with nothing else filled.
-
-    Re-detects the arm from ``raw_value``'s **text**, exactly as
-    ``derive_value_text`` does and for the same reason: ``_as_column_value``
-    (inside ``ExplodeJsonMap``) round-trips a JSON object or array through this
-    column as a ``str``, so the type it started as is already gone by the time
-    this runs. The same residual ambiguity ``derive_value_text`` lives with
-    follows here too -- a genuine text answer that also happens to be valid
-    JSON (say, the literal text ``"true"``) is indistinguishable from a value
-    that started life as JSON, and both land in the text arm.
-
-    A field the Case Type's own configuration declares ``person``-typed but
-    which holds a bare string still takes the **text** arm: this feed does not
-    join that configuration, so discrimination is on the value alone, never on
-    a declared type this feed cannot see -- matching the review application's
-    own reader, which is deliberately total and type-blind. Which shapes land
-    ``unsupported`` and quarantine is settled by ``AnswerCaptureRow.value_kind``,
-    not repeated here.
-
-    All four columns are created even over a zero-row frame, or
-    ``SchemaCoercion`` has nothing left to type on the empty-frame path.
+    Must be **total**: ``value_kind`` is never null. A value rule masks on
+    ``notna()``, so a null ``value_kind`` would slip past quarantine and then
+    abort the whole run at ``SchemaValidator``'s ``NonNull`` check.
     """
     frame = dataset.to_pandas()
     kinds, texts, logins, displays = [], [], [], []
@@ -593,23 +541,13 @@ def silver_answer_builder(
     """Build one list's silver answer hop: explode ``answers`` into one row per
     question.
 
-    Reads the **silver** batch this poll just settled, not raw: silver has
-    already stamped the Case Type the run has decided on, and only silver's
-    ``case_type`` mints the ``case_id`` gold's Detail Tables can semi-join
-    against (see ``run``'s docstring for why raw would silently produce zero
-    rows). It also means silver has already renamed the column to ``answers``,
-    and a Case quarantined out of ``case_version`` contributes no answer rows
-    at all -- which is right, since a quarantined Case can never win an
-    observation.
-
-    ``case_list`` names the hop and nothing else: it runs inside the per-list
-    poll loop, alongside every other hop there, and the Case Type itself
-    arrives already settled on the row.
-
-    A malformed ``answers`` blob is a feed defect and **raises**
-    (``JsonShapeError``); a well-formed but out-of-vocabulary value --
-    e.g. an unrecognised ``remediation_status`` -- is an ordinary bad row and
-    **quarantines**, exactly as ``silver_builder`` treats a bad ``status``.
+    Reads the settled **silver** batch, not raw: raw's ``CaseType`` cell is
+    nullable and hand-editable, so an answer row built over it could mint a
+    different ``case_id`` than the parent Case's, and the gold semi-join
+    would then silently land zero rows. A malformed ``answers`` blob is a
+    feed defect and **raises** (``JsonShapeError``); a well-formed but
+    out-of-vocabulary value **quarantines**, exactly as ``silver_builder``
+    treats a bad ``status``.
     """
     p = Pipeline(f"{FEED_NAME}:silver:{case_list.case_type}:answer", run_log=run_log)
     node = p.read(reader, name="read")
@@ -654,17 +592,9 @@ def silver_answer_capture_builder(
     """Build one list's silver answer-capture hop: explode ``answers`` and then
     each answer's flat ``capture`` map, one row per Issue Capture Field.
 
-    Reaching two levels down is two chained explodes. The first lands each
-    answer's nested ``capture`` object as JSON text via ``_as_column_value``
-    (``ExplodeJsonMap`` builds its output frame as
-    ``[*id_vars, key_into, *output]``, so ``capture_json`` never reaches this
-    hop's own output); the second reads that text straight back, because
-    ``_decode`` accepts JSON text as readily as an already-decoded value. An
-    absent or empty ``capture`` map yields zero rows for that answer, not an
-    error.
-
-    Reads the settled **silver** batch, never raw, for the same reason
-    ``silver_answer_builder`` does -- see its docstring.
+    Two chained ``ExplodeJsonMap`` hops reach the second level -- see the
+    data dictionary for the mechanism. Reads silver, not raw, as
+    ``silver_answer_builder``.
     """
     p = Pipeline(
         f"{FEED_NAME}:silver:{case_list.case_type}:answer_capture", run_log=run_log
@@ -699,11 +629,8 @@ def silver_answer_capture_builder(
         node,
         name="quarantine",
     )
-    # After the quarantine, deliberately: QuarantineNode writes the whole
-    # rejected partition and returns only the good one, so raw_value would
-    # reach silver untyped without this drop -- and dropping it before the
-    # quarantine would strip the offending value out of the reject table,
-    # which is strictly worse for diagnosing a legacy Action[] row.
+    # Dropped after quarantine, not before, so the reject table still keeps
+    # the offending raw_value for diagnosis.
     node = p.transform(DropColumns(["raw_value"]), node, name="drop-raw-value")
     node = p.validate(SchemaValidator(AnswerCaptureRow), node, name="post-validate")
     p.write(writer, node, name="write")
@@ -770,15 +697,9 @@ def silver_general_answer_builder(
     """Build one list's silver general-answer hop: explode ``answers`` into one
     row per General Question catalogue key.
 
-    Reads the settled **silver** batch, never raw -- see
-    ``silver_answer_builder``'s docstring; the same reasoning holds here
-    unchanged. ``case_list`` names the hop and nothing else.
-
-    A malformed ``answers`` blob is a feed defect and **raises**
-    (``JsonShapeError``); a well-formed value quarantines on a value-rule
-    breach the same way ``silver_answer_builder`` does -- except that, today,
-    no value rule on ``GeneralAnswerRow`` can fire: the quarantine node stays
-    wired anyway, since ``SchemaValueRulePartitioner`` is schema-derived and
+    Reads silver, not raw, as ``silver_answer_builder``. No value rule on
+    ``GeneralAnswerRow`` can fire today, but the quarantine node stays wired
+    anyway: ``SchemaValueRulePartitioner`` is schema-derived and
     ``QuarantineNode`` writes only when rejects exist, so a future rule needs
     no rewiring and this one costs nothing on disk.
     """
@@ -821,16 +742,10 @@ def silver_conversation_message_builder(
     """Build one list's silver conversation-message hop: explode
     ``conversation`` into one row per message.
 
-    ``conversation`` is a JSON **list**, not the map ``answers`` is, so a
-    single ``ExplodeJsonList`` reaches every field in one hop -- there is no
-    second level to chain the way the capture/action hops do. Reads the
-    settled **silver** batch, never raw, for the same reason
-    ``silver_answer_builder`` does -- see its docstring.
-
-    A malformed ``conversation`` blob is a feed defect and **raises**
-    (``JsonShapeError``); this schema declares no value rule, so nothing here
-    quarantines -- the quarantine node stays wired anyway, for the same reason
-    ``silver_general_answer_builder``'s does.
+    ``conversation`` is a JSON list, so one ``ExplodeJsonList`` reaches every
+    field -- no second level to chain. Reads silver, not raw, as
+    ``silver_answer_builder``; quarantine node stays wired anyway, as
+    ``silver_general_answer_builder``.
     """
     p = Pipeline(
         f"{FEED_NAME}:silver:{case_list.case_type}:conversation_message",
@@ -874,18 +789,12 @@ def silver_appeal_builder(
     run_log: RunLog | None = None,
 ) -> Pipeline:
     """Build one list's silver appeal hop: explode ``appeals`` into one row
-    per Appeal, with its 1:1 ``resolution`` lifted onto the same row.
+    per Appeal, with its 1:1 ``resolution`` lifted onto the same row via
+    dotted paths, exactly as ``silver_answer_builder`` lifts
+    ``remediationStatus``'s.
 
-    ``appeals`` is a JSON **list**, not the map ``answers`` is, so a single
-    ``ExplodeJsonList`` reaches every field -- including ``resolution``'s,
-    via dotted paths, exactly as ``silver_answer_builder`` lifts
-    ``remediationStatus``'s. Reads the settled **silver** batch, never raw --
-    see ``silver_answer_builder``'s docstring.
-
-    A malformed ``appeals`` blob is a feed defect and **raises**
-    (``JsonShapeError``); an out-of-vocabulary ``state`` is an ordinary bad
-    row and **quarantines**, exactly as ``silver_builder`` treats a bad
-    ``status``.
+    Reads silver, not raw, as ``silver_answer_builder``. A malformed blob
+    **raises**; an out-of-vocabulary ``state`` **quarantines**.
     """
     p = Pipeline(f"{FEED_NAME}:silver:{case_list.case_type}:appeal", run_log=run_log)
     node = p.read(reader, name="read")
@@ -932,15 +841,10 @@ def silver_case_detail_builder(
     """Build one list's silver case-detail hop: explode ``details`` into one
     row per Case Details field.
 
-    Reads the settled **silver** batch, never raw -- see
-    ``silver_answer_builder``'s docstring. No ``SelectColumns``: this feed's
-    Detail Table hops read the full silver batch and let the explode
-    transform project its own columns.
-
-    A malformed ``details`` blob **raises** (``JsonShapeError``); an
-    off-contract value is encoded to text rather than quarantined -- see the
-    data dictionary's Part D. The quarantine node stays wired anyway, for the
-    same reason ``silver_general_answer_builder``'s does.
+    Reads silver, not raw, as ``silver_answer_builder``. A malformed blob
+    **raises**; an off-contract value is encoded to text rather than
+    quarantined -- see the data dictionary. Quarantine node stays wired
+    anyway, as ``silver_general_answer_builder``.
     """
     p = Pipeline(
         f"{FEED_NAME}:silver:{case_list.case_type}:case_detail", run_log=run_log

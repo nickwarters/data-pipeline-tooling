@@ -103,16 +103,11 @@ from tools.store import StoreRegistry
 # feed's rename map read the other way round.
 SILVER_COLUMNS = tuple(RENAME.values())
 
-# Every column the silver answer hop lands, straight off AnswerRow's own fields.
 ANSWER_COLUMNS = tuple(f.name for f in fields(AnswerRow))
-# Likewise for the capture Detail Table one level further down.
 CAPTURE_COLUMNS = tuple(f.name for f in fields(AnswerCaptureRow))
-# Likewise for the general-answer Detail Table.
 GENERAL_ANSWER_COLUMNS = tuple(f.name for f in fields(GeneralAnswerRow))
-# Likewise for the two list-shaped Detail Tables.
 CONVERSATION_MESSAGE_COLUMNS = tuple(f.name for f in fields(ConversationMessageRow))
 APPEAL_COLUMNS = tuple(f.name for f in fields(AppealRow))
-# Likewise for the case-detail Detail Table, exploded from `details`.
 CASE_DETAIL_COLUMNS = tuple(f.name for f in fields(CaseDetailRow))
 
 SERVER_NOW = dt.datetime(2026, 8, 5, 9, tzinfo=dt.timezone.utc)
@@ -419,12 +414,10 @@ def test_silver_aborts_when_the_id_is_missing():
     assert writer.writes == []
 
 
-# --- silver: the answer explode ----------------------------------------------
+# Reuses `version()`, defined below: its stamps are exactly DETAIL_ID_VARS,
+# which is the point under test.
 
-# One silver CaseVersion-shaped row carrying the given `answers` blob, for the
-# answer hop's own builder-level tests. Reuses `version()`, defined below: its
-# stamps (case_type, source_item_id, ...) are exactly DETAIL_ID_VARS, which is
-# the point being tested.
+# --- silver: the Detail Table explodes ---------------------------------------
 
 
 def silver_answers(
@@ -445,8 +438,8 @@ def silver_answers(
 
 
 def test_an_answer_map_becomes_one_row_per_question_carrying_the_five_stamps():
-    # general:complaint-channel belongs to the General Question table, not this
-    # one, and must not survive the explode.
+    # general:complaint-channel must not survive the explode -- it belongs to
+    # the General Question table.
     rows = silver_answers(
         json.dumps(
             {
@@ -518,12 +511,6 @@ def test_an_unknown_remediation_status_quarantines_while_the_good_answer_lands()
     assert "remediation_status" in rejected["failed_rule"]
 
 
-# --- silver: the capture and action explodes ---------------------------------
-
-# Reuses version(), defined below: its stamps (case_type, source_item_id, ...)
-# are exactly DETAIL_ID_VARS, which is the point being tested.
-
-
 def silver_captures(
     answers_json: str,
     *,
@@ -545,8 +532,7 @@ def silver_captures(
 
 
 def test_a_capture_map_becomes_one_row_per_field_carrying_the_five_stamps():
-    # The two-level chain: the answers map's own explode, then the capture
-    # map's -- raw_value and capture_json must never reach the writer.
+    # raw_value and capture_json must never reach the writer.
     rows = silver_captures(
         json.dumps(
             {
@@ -617,9 +603,8 @@ _REJECTED_AS_NAN = object()
         pytest.param(
             None,
             None,
-            # A JSON null lands as a pandas NaN, not the string "null" a
-            # json.dumps-derived expectation would assume -- and NaN != NaN,
-            # so the assertion below special-cases this marker with pd.isna().
+            # A JSON null lands as pandas NaN, not the string "null" -- hence
+            # the sentinel rather than a plain equality expectation.
             _REJECTED_AS_NAN,
             id="a-json-null",
         ),
@@ -634,9 +619,7 @@ _REJECTED_AS_NAN = object()
 def test_discriminate_capture_value_places_every_shape(
     capture_value, expected, rejected_raw_value
 ):
-    # A control field alongside the field under test, so a quarantined shape
-    # is proven to leave its sibling field landing rather than aborting the
-    # whole answer.
+    # field-control proves a quarantined sibling doesn't abort the whole answer.
     rejects = RecordingWriter()
     run_log = RecordingRunLog()
     rows = silver_captures(
@@ -662,11 +645,9 @@ def test_discriminate_capture_value_places_every_shape(
         [rejected] = rows_of(rejects)
         assert rejected["field_key"] == "field-target"
         assert "value_kind" in rejected["failed_rule"]
-        # Pins DropColumns sitting after quarantine: the offending value must
-        # still be there to diagnose. Carried explicitly rather than derived
-        # with json.dumps(capture_value): a JSON null lands as NaN, not the
-        # text "null", and a bare number lands as its own Python scalar, not
-        # stringified -- see discriminate_capture_value.
+        # raw_value must survive quarantine to diagnose; carried explicitly
+        # rather than json.dumps(capture_value) since a null lands as NaN and
+        # a number stays a Python scalar -- see discriminate_capture_value.
         if rejected_raw_value is _REJECTED_AS_NAN:
             assert pd.isna(rejected["raw_value"])
         else:
@@ -680,9 +661,6 @@ def test_discriminate_capture_value_places_every_shape(
         assert target["value_text"] == value_text
         assert target["person_login"] == login
         assert target["person_display"] == display
-
-
-# --- silver: the general answer explode ---------------------------------------
 
 
 def silver_general_answers(
@@ -704,11 +682,9 @@ def silver_general_answers(
 
 
 def test_the_answer_and_general_answer_tables_tile_one_blob_with_no_loss_or_overlap():
-    # The central invariant this slice exists for: driving one blob through
-    # both builders must partition its keys exactly, catch-all side included.
-    # A plain "general" key (no colon) carries no prefix and belongs to the
-    # catch-all -- answer, the exclude side. "general:" (empty key) is the
-    # other edge -- included, and lands with general_key == "".
+    # Driving one blob through both builders must partition its keys exactly.
+    # A plain "general" key (no colon) belongs to the catch-all (answer); the
+    # edge case "general:" (empty key) is included, landing as general_key == "".
     blob = {
         "q1": {"value": "A"},
         "q2": {"value": "B"},
@@ -738,9 +714,6 @@ def test_an_array_general_answer_is_canonicalised_rather_than_refused():
 
     assert row["value_text"] == "Current account|Savings"
     assert json.loads(row["value_json"]) == ["Current account", "Savings"]
-
-
-# --- silver: the conversation-message explode ---------------------------------
 
 
 def silver_conversation_messages(
@@ -780,9 +753,8 @@ def test_a_conversation_becomes_one_row_per_message_carrying_the_five_stamps():
     )
 
     assert [row["seq"] for row in rows] == [0, 1]
-    # author is a nested object ({loginName, displayName}); landing it whole
-    # would put a JSON blob in the table built to remove them, so it is
-    # lifted by two dotted paths instead.
+    # author is a nested object, lifted by two dotted paths rather than landed
+    # as a JSON blob.
     assert rows[0]["author_login"] == "a.khan"
     assert rows[0]["author_display_name"] == "Amira Khan"
     for row in rows:
@@ -792,9 +764,6 @@ def test_a_conversation_becomes_one_row_per_message_carrying_the_five_stamps():
         assert row["source_version"] == '"3"'
         assert row["source_modified_at"] == pd.Timestamp("2026-08-05 08:10:00+00:00")
         assert len(row["source_observation_id"]) > 0
-
-
-# --- silver: the appeal explode ------------------------------------------------
 
 
 def silver_appeals(
@@ -838,8 +807,6 @@ def test_an_appeal_becomes_one_row_keyed_by_its_own_id_with_appeal_seq():
 
 
 def test_an_unresolved_appeal_carries_nulls_in_every_resolution_column():
-    # Absent, not a missing row: an Appeal without a resolution key must not
-    # crash the coercion, and must still land as a row.
     [row] = silver_appeals(json.dumps([appeal(state="raised")]))
 
     assert row["resolution_verdict"] is None
@@ -849,9 +816,8 @@ def test_an_unresolved_appeal_carries_nulls_in_every_resolution_column():
 
 
 def test_cited_answer_keys_is_json_text_null_only_when_the_key_is_omitted():
-    # The mechanism (ExplodeJsonList's JSON encoding) is proven by its own
-    # suite -- what this pins is feed semantics: an omitted key is null, not
-    # "no citations" spelled "[]", which the app never writes.
+    # Feed semantics, not the encoding mechanism (covered by ExplodeJsonList's
+    # own suite): an omitted key is null, never "[]", which the app never writes.
     omitted, present = silver_appeals(
         json.dumps(
             [
@@ -864,9 +830,8 @@ def test_cited_answer_keys_is_json_text_null_only_when_the_key_is_omitted():
         )
     )
 
-    # A mixed column (one row null, one populated) lands the null as NaN
-    # rather than None -- see the _REJECTED_AS_NAN sentinel above for the same
-    # pandas quirk.
+    # A mixed column lands the null as NaN, not None -- same quirk as
+    # _REJECTED_AS_NAN above.
     assert pd.isna(omitted["cited_question_ids_json"])
     assert json.loads(present["cited_question_ids_json"]) == [
         "q-outcome",
@@ -886,9 +851,6 @@ def test_an_unknown_appeal_state_quarantines_while_the_good_appeal_lands():
     [rejected] = rows_of(rejects)
     assert rejected["appeal_id"] == "appeal-2"
     assert "state" in rejected["failed_rule"]
-
-
-# --- silver: the case-detail explode -----------------------------------------
 
 
 def silver_case_details(
@@ -926,11 +888,8 @@ def test_a_details_map_becomes_one_row_per_field_carrying_the_five_stamps():
 
 
 def test_an_empty_details_map_survives_the_whole_hop_as_a_zero_row_frame():
-    # ExplodeJsonMap contributing no rows for an absent/null/blank/empty blob
-    # is covered by the framework's own suite; what only this feed's test can
-    # show is that the whole hop -- explode, encode_detail_value, coerce,
-    # quarantine, validate -- tolerates the zero-row frame that falls out the
-    # other end.
+    # ExplodeJsonMap's own suite covers the zero-row output; only this feed's
+    # test shows the whole hop tolerates that zero-row frame downstream.
     assert silver_case_details("{}") == []
 
 
@@ -946,11 +905,8 @@ def test_an_empty_details_map_survives_the_whole_hop_as_a_zero_row_frame():
     ],
 )
 def test_a_non_string_detail_value_lands_as_its_json_encoding(value, expected):
-    # One key per map, so each case is also an all-one-type batch. Without
-    # encode_detail_value, the int/float/bool arms land value_text as a
-    # non-string dtype and abort the whole poll at SchemaValidator's
-    # is_string_dtype check -- only the object/null arms would happen to
-    # survive by accident.
+    # Without encode_detail_value, the int/float/bool arms land value_text as
+    # a non-string dtype and abort at SchemaValidator's is_string_dtype check.
     [row] = silver_case_details(json.dumps({"k": value}))
 
     assert row["value_text"] == expected
@@ -1112,11 +1068,11 @@ def test_current_gold_republishes_every_silver_column():
     assert set(row) - set(SILVER_COLUMNS) == {"case_id", "as_of_utc"}
 
 
-# --- gold: the Detail Table reduction ----------------------------------------
-
 # One representative grain: the builder is generic over DETAIL_GRAIN, and these
 # tests exercise the composition, not a per-table peculiarity.
 DETAIL_TABLE = "answer"
+
+# --- gold: the Detail Table reduction ----------------------------------------
 
 
 def winning_reader(*rows: dict) -> Reader:
@@ -1170,8 +1126,6 @@ def details(
 
 
 def test_a_child_stripped_from_the_winning_observation_does_not_survive():
-    # Two observations of one Case; the second strips question 2's child row
-    # and adds question 3. Every surviving row must carry the winner's id.
     v1 = version(
         source_observation_id="obs-1",
         source_version='"3"',
@@ -1521,10 +1475,7 @@ def test_throughput_is_empty_when_nothing_has_ended():
     assert ended(version()) == []
 
 
-# --- gold: the answer remediation aggregate ----------------------------------
-
-# Reuses winning_reader() and details(), defined above for the Detail Table
-# reduction tests -- this aggregate reads gold `answer`, so proving it comes
+# Reuses winning_reader() and details() above: proving this aggregate comes
 # from the winning observation means driving the same reduction, not hand
 # building already-reduced rows.
 
@@ -1549,6 +1500,9 @@ def answer_child(
     }
 
 
+# --- gold: aggregates over the Detail Tables ---------------------------------
+
+
 def gold_answer(children: list[dict], winners: Reader) -> list[dict]:
     """The gold ``answer`` Detail Table rows a child history reduces to."""
     return details(children, winners, grain=DETAIL_GRAIN["answer"])
@@ -1559,8 +1513,6 @@ def remediation(rows: list[dict]) -> list[dict]:
 
 
 def test_remediation_counts_come_from_the_winning_observation():
-    # Two observations of one Case: the second clears q1's remediation
-    # decision and status entirely -- the deleted-key tri-state case.
     v1 = version(
         source_observation_id="obs-1",
         source_version='"3"',
@@ -1610,8 +1562,7 @@ def test_an_undecided_remediation_is_counted_and_the_total_matches_gold_answer()
         (row["remediation_required"], row["remediation_status"], row["answer_count"])
         for row in rows
     ]
-    # sum(answer_count) is an answer count, not a Case count -- it equals gold
-    # answer's own row count.
+    # answer_count sums to gold answer's row count, not a Case count.
     assert sum(row["answer_count"] for row in rows) == len(answer_rows)
 
 
@@ -1652,8 +1603,7 @@ def test_two_case_types_do_not_share_a_question_id():
 
     rows = remediation(gold_answer(children, winners))
 
-    # Same source_item_id and question_id, distinct case_type -- summing them
-    # as one question would be meaningless: ids are per-Case-Type bank.
+    # Question ids are per-Case-Type bank, so distinct case_types must not merge.
     assert len(rows) == 2
     assert {row["case_type"] for row in rows} == {
         COMPLAINTS.case_type,
@@ -1679,9 +1629,6 @@ def test_remediation_is_empty_when_nothing_was_answered():
         "as_of_utc",
     ]
     assert len(frame) == 0
-
-
-# --- gold: the appeal outcomes aggregate --------------------------------------
 
 
 def appeal_child(
@@ -1714,9 +1661,7 @@ def outcomes(rows: list[dict]) -> list[dict]:
 
 
 def test_appeal_outcomes_come_from_the_winning_observation():
-    # One Appeal, raised in the first observation and resolved in the second
-    # -- gold appeal's semi-join has already picked the winner, so this must
-    # count once, as resolved/agreed, never twice.
+    # Must count once, as resolved/agreed -- never twice across both observations.
     v1 = version(
         source_observation_id="obs-1",
         source_version='"3"',
@@ -1752,8 +1697,7 @@ def test_appeal_outcomes_come_from_the_winning_observation():
 
 
 def test_an_unresolved_appeal_counts_under_a_literal_and_totals_to_gold_appeal():
-    # Also proves a null state counts as unstated: both fills exercised on the
-    # same single row.
+    # Also proves a null state counts as unstated.
     winners = winning_reader(version(source_observation_id="obs-1"))
     children = [
         appeal_child(
@@ -1771,9 +1715,6 @@ def test_an_unresolved_appeal_counts_under_a_literal_and_totals_to_gold_appeal()
         (row["state"], row["resolution_verdict"], row["appeal_count"]) for row in rows
     ] == [(UNSTATED, UNRESOLVED, 1)]
     assert sum(row["appeal_count"] for row in rows) == len(appeal_rows)
-
-
-# --- gold: declaration and publication order ----------------------------------
 
 
 def test_an_aggregate_is_never_mistaken_for_a_detail_table():
@@ -1966,22 +1907,9 @@ def test_the_bundled_sample_lands_every_item_across_both_pages(tmp_path, capsys)
     # One fixture Case carries no Case Reference at all, which is ordinary.
     assert [row["Title"] for row in landed_raw][:2] == ["CMP-000101", "CMP-000102"]
     assert pd.isna(landed_raw[2]["Title"])
-    # Item 101 carries three questions (one a multi-select), 102 one and 104
-    # two, 103 and 105 an empty answers map -- 6 answer rows in total. Only
-    # item 101's q-root-cause carries a capture map (2 fields) and a
-    # remediationActions list (1 action), so those tables land 2 and 1. Only
-    # item 101 carries a General Question answer (general:complaint-channel),
-    # so general_answer lands 1. Item 101 carries two Conversation messages
-    # (deliberately mixed timestamp formats -- see cases_page_1.json) and item
-    # 104 one, so conversation_message lands 3. Only item 104 carries any
-    # Appeals -- one resolved with citations, one raised without, also with
-    # deliberately mixed raised_at timestamp formats -- so appeal lands 2.
-    # (resolution_at has only the one resolved appeal to draw from, so it
-    # rides on raised_at's mixed-format demonstration rather than repeating
-    # it.) Items 101, 102 and 105 carry the three declared complaintRef /
-    # customerName / complaintDate keys (3 each); 104 carries those three plus
-    # an undeclared sourceSystem (4); 103's details map is empty (0) -- 13
-    # case_detail rows in total.
+    # Counts below are derived from cases_page_1.json / cases_page_2.json's
+    # per-item content -- see those fixtures for the breakdown. Both Conversation
+    # and Appeals timestamps there deliberately mix formats.
     assert (poll.raw_rows, poll.silver_rows) == (5, 5)
     assert poll.detail_rows == {
         "answer": 6,
@@ -1997,8 +1925,7 @@ def test_the_bundled_sample_lands_every_item_across_both_pages(tmp_path, capsys)
     assert {row["status"] for row in read_rows(med.silver, "case_version")} == set(
         CASE_STATUSES
     )
-    # Both Detail Table aggregates total to their source table's row count --
-    # a single poll, so every Case's only observation is its winning one.
+    # A single poll, so every Case's only observation is its winning one.
     assert sum(
         row["answer_count"] for row in read_rows(med.gold, "answer_remediation_current")
     ) == len(read_rows(med.gold, "answer"))
@@ -2128,8 +2055,7 @@ def test_a_quiet_window_still_runs_and_records_every_hop(tmp_path):
     assert any(ns.endswith("gold.db") for ns in answer_namespaces)
     assert {record["rows_out"] for record in records} == {0}
 
-    # Gold publishes in the declared order: GOLD_TABLES ties the declaration
-    # to what actually ran.
+    # Gold publishes in GOLD_TABLES's declared order.
     gold_names = [
         record["pipeline"]
         for record in records
@@ -2257,7 +2183,6 @@ def test_a_poll_publishes_every_gold_table_and_then_commits_the_watermark(tmp_pa
 
 
 def test_the_winning_observation_settles_gold_answer_and_drops_the_others(tmp_path):
-    # Two polls of one item: the second observation strips q2 and adds q3.
     early = item(Answers=json.dumps({"q1": {"value": "A"}, "q2": {"value": "X"}}))
     later = item(
         Answers=json.dumps({"q1": {"value": "B"}, "q3": {"value": "Y"}}),
@@ -2271,7 +2196,7 @@ def test_the_winning_observation_settles_gold_answer_and_drops_the_others(tmp_pa
     run(context, client=client)
 
     med = medallion(StoreRegistry(tmp_path), FEED_NAME)
-    # Silver accumulated both observations' answers: 2 questions + 2 questions.
+    # Silver is append-only: it keeps both observations, not just the winner.
     assert len(read_rows(med.silver, "answer")) == 4
 
     gold_answer = read_rows(med.gold, "answer")
@@ -2285,8 +2210,6 @@ def test_the_winning_observation_settles_gold_answer_and_drops_the_others(tmp_pa
 def test_the_winning_observation_settles_gold_general_answer_and_drops_the_others(
     tmp_path,
 ):
-    # Two polls of one item: the second observation changes general:a's value
-    # and swaps general:b for general:c.
     early = item(
         Answers=json.dumps(
             {"general:a": {"value": "first"}, "general:b": {"value": "X"}}
@@ -2306,7 +2229,7 @@ def test_the_winning_observation_settles_gold_general_answer_and_drops_the_other
     run(context, client=client)
 
     med = medallion(StoreRegistry(tmp_path), FEED_NAME)
-    # Silver accumulated both observations' general answers: 2 keys + 2 keys.
+    # Silver is append-only: it keeps both observations, not just the winner.
     assert len(read_rows(med.silver, "general_answer")) == 4
 
     gold_general_answer = read_rows(med.gold, "general_answer")
@@ -2320,10 +2243,8 @@ def test_the_winning_observation_settles_gold_general_answer_and_drops_the_other
 def test_the_winning_observation_settles_gold_capture_and_action_and_drops_the_others(
     tmp_path,
 ):
-    # Item 101: q1 fails in poll 1, carrying a capture map and one action; poll
-    # 2 sets remediationRequired to "no", the app's own trigger for deleting
-    # both -- q1 stops failing and its capture/action rows must not survive
-    # into gold, the exact case a child-keyed reduce is structurally blind to.
+    # Poll 2 sets remediationRequired to "no", the app's trigger for deleting
+    # both -- the exact deletion a child-keyed reduce is structurally blind to.
     stripped_early = item(
         Id=101,
         Answers=json.dumps(
@@ -2346,8 +2267,8 @@ def test_the_winning_observation_settles_gold_capture_and_action_and_drops_the_o
     )
     stripped_later.update({"Modified": "2026-08-05T08:45:00Z", "odata.etag": '"4"'})
 
-    # Item 102: q1 fails in both polls, and poll 2 adds a genuinely new capture
-    # field -- proves gold reflects an addition and is not just always empty.
+    # Item 102 adds a genuinely new capture field on poll 2, proving gold
+    # reflects an addition rather than always landing empty.
     grown_early = item(
         Id=102, Answers=json.dumps({"q1": {"value": "A", "remediationRequired": "yes"}})
     )
@@ -2377,21 +2298,17 @@ def test_the_winning_observation_settles_gold_capture_and_action_and_drops_the_o
     run(context, client=client)
 
     med = medallion(StoreRegistry(tmp_path), FEED_NAME)
-    # Silver accumulated both observations' rows for both items: 101's
-    # field-a/ra-0 from poll 1 plus 102's field-added from poll 2.
     assert len(read_rows(med.silver, "answer_capture")) == 2
     assert len(read_rows(med.silver, "answer_action")) == 1
 
     gold_capture = read_rows(med.gold, "answer_capture")
     gold_action = read_rows(med.gold, "answer_action")
 
-    # Item 101's capture and action are gone: the winning (second) observation
-    # carries neither, and the semi-join reads that absence correctly rather
-    # than keeping a stale row a per-child reduce would have no reason to drop.
+    # The semi-join reads the winner's absence correctly, rather than keeping
+    # a stale row a per-child reduce would have no reason to drop.
     assert not [row for row in gold_capture if row["source_item_id"] == "101"]
     assert not [row for row in gold_action if row["source_item_id"] == "101"]
 
-    # Item 102's field added on the second poll is present.
     [added] = [row for row in gold_capture if row["source_item_id"] == "102"]
     assert added["field_key"] == "field-added"
 
@@ -2399,15 +2316,10 @@ def test_the_winning_observation_settles_gold_capture_and_action_and_drops_the_o
 def test_the_winning_observation_settles_gold_conversation_message_and_appeal(
     tmp_path,
 ):
-    # The resurrection anchor: conversation_message's key is positional
-    # (seq, the blob's own ordinal), not drawn from a JSON map key or a
+    # conversation_message's key is positional (seq), not a JSON map key or a
     # minted id, so an observation-spanning superset collides on the grain
-    # itself, with no deletion to read the way the answer-derived tables have.
-    # Observation 1 has 2 messages, observation 2 appends a third -- 3
-    # messages sharing seq 0 and 1 with observation 1's own. Without the
-    # semi-join, gold would see (case_id, 0) and (case_id, 1) twice each, and
-    # UniqueValidator would abort the hop -- so a weakened reduction fails
-    # loudly here, not silently.
+    # itself -- without the semi-join, UniqueValidator would abort the hop, so
+    # a weakened reduction fails loudly here, not silently.
     message_1 = {
         "author": {"loginName": "a.khan", "displayName": "Amira Khan"},
         "timestamp": "2026-08-04T16:02:00Z",
@@ -2430,8 +2342,7 @@ def test_the_winning_observation_settles_gold_conversation_message_and_appeal(
     )
     later.update({"Modified": "2026-08-05T08:45:00Z", "odata.etag": '"4"'})
 
-    # Companion: one Appeal, raised in the first observation and resolved in
-    # the second -- the shape resolveAppeal() writes in the real app.
+    # Companion: an Appeal in the shape resolveAppeal() writes in the real app.
     early["Appeals"] = json.dumps(
         [
             {
@@ -2467,7 +2378,6 @@ def test_the_winning_observation_settles_gold_conversation_message_and_appeal(
     run(context, client=client)
 
     med = medallion(StoreRegistry(tmp_path), FEED_NAME)
-    # Silver accumulated both observations' messages: 2 + 3.
     assert len(read_rows(med.silver, "conversation_message")) == 5
     [winner] = read_rows(med.gold, "case_current")
 
@@ -2477,8 +2387,7 @@ def test_the_winning_observation_settles_gold_conversation_message_and_appeal(
         winner["source_observation_id"]
     }
 
-    # Companion: silver accumulated both observations of the one Appeal, but
-    # gold holds it once, resolved, with every resolution_* column filled.
+    # Gold holds the Appeal once, resolved, with every resolution_* column filled.
     assert len(read_rows(med.silver, "appeal")) == 2
     [gold_appeal] = read_rows(med.gold, "appeal")
     assert gold_appeal["appeal_id"] == "appeal-1"
@@ -2490,11 +2399,9 @@ def test_the_winning_observation_settles_gold_conversation_message_and_appeal(
 def test_the_winning_observation_settles_gold_case_detail_and_drops_the_others(
     tmp_path,
 ):
-    # Two polls of one item: the second observation drops complaintRef and
-    # adds sourceSystem. Two keys per observation, so the composite AppendOnly
-    # key (source_observation_id, field_key) is under test -- item()'s default
-    # Details cell falls into the absent -> None sweep, so no other end-to-end
-    # test exercises this table at all otherwise.
+    # The composite AppendOnly key (source_observation_id, field_key) is under
+    # test -- no other end-to-end test exercises this table otherwise, since
+    # item()'s default Details cell falls into the absent -> None sweep.
     early = item(
         Details=json.dumps({"complaintRef": "CMP-000101", "customerName": "Priya Shah"})
     )
@@ -2512,7 +2419,6 @@ def test_the_winning_observation_settles_gold_case_detail_and_drops_the_others(
     run(context, client=client)
 
     med = medallion(StoreRegistry(tmp_path), FEED_NAME)
-    # Silver accumulated both observations' fields: 2 keys + 2 keys.
     assert len(read_rows(med.silver, "case_detail")) == 4
 
     gold_case_detail = read_rows(med.gold, "case_detail")
@@ -2573,10 +2479,9 @@ def test_a_malformed_details_blob_raises_and_case_version_details_still_holds_it
     med = medallion(StoreRegistry(tmp_path), FEED_NAME)
     assert landed_gold(tmp_path) == set()
     assert SharePointCheckpointStore(tmp_path).committed_watermark(SOURCE) is None
-    # The genuinely new claim versus every other blob's malformed-blob test:
-    # the frontend's parse fallback for Details is undefined, so absent and
-    # unparseable are indistinguishable once a Case reaches the app -- silver
-    # is the only place the raw text survives.
+    # The frontend's Details parse fallback is undefined, so absent and
+    # unparseable are indistinguishable downstream -- silver is the only place
+    # the raw text survives.
     [case_version] = read_rows(med.silver, "case_version")
     assert case_version["details"] == "not json"
 
@@ -2622,13 +2527,10 @@ def test_an_overlap_reread_does_not_double_count_gold(tmp_path):
     assert [
         row["case_count"] for row in read_rows(med.gold, "case_counts_current")
     ] == [1]
-    # The overlap re-presents the same observation, which is a no-op against
-    # append-only silver; the answer rows must not double either.
     assert len(read_rows(med.silver, "answer")) == 1
-    # Two field keys, so a wrong single-column key (e.g. source_observation_id
-    # alone) would raise an AppendOnly conflict on the second key rather than
-    # silently no-op; the composite (source_observation_id, field_key) key
-    # must absorb the re-presented observation cleanly.
+    # Proves the composite (source_observation_id, field_key) key: a wrong
+    # single-column key would raise an AppendOnly conflict here instead of a
+    # clean no-op.
     assert len(read_rows(med.silver, "case_detail")) == 2
 
 
@@ -2652,7 +2554,7 @@ def test_a_failure_in_the_last_aggregate_leaves_the_earlier_gold_and_no_checkpoi
     # Gold Writers commit independently, so an earlier table stays refreshed.
     # That is acceptable evidence: the watermark did not move, so the next run
     # rebuilds everything from the same history and converges. appeal_outcomes
-    # is the last table GOLD_TABLES declares today.
+    # is the last table GOLD_TABLES declares.
     monkeypatch.setattr(gold, "appeal_outcomes", explode)
 
     with pytest.raises(RuntimeError, match="boom"):
@@ -2876,10 +2778,8 @@ def test_a_dry_run_previews_every_write_and_commits_none_of_them(tmp_path):
 
     report = dry_run_pipeline(lambda ctx: run(ctx, client=client), FEED_NAME, tmp_path)
 
-    # Raw, silver, every silver Detail Table, and every gold table are
-    # previewed; none is committed. The fixture item carries no capture map,
-    # remediationActions, general answer, Conversation, Appeals or Details, so
-    # those six Detail Table writes are empty.
+    # The fixture item carries no capture map, remediationActions, general
+    # answer, Conversation, Appeals or Details, so these six preview empty.
     empty_detail_tables = (
         "answer_capture",
         "answer_action",
@@ -2899,9 +2799,8 @@ def test_a_dry_run_previews_every_write_and_commits_none_of_them(tmp_path):
         ("gold case_counts_current", 1),
         ("gold case_age_buckets_current", 1),
         ("gold case_throughput_daily", 0),
-        # The fixture's one answer row carries no remediation decision at all,
-        # so it lands under the UNDECIDED/UNRESOLVED fills; no Appeals means
-        # appeal_outcomes_current previews empty.
+        # The fixture's one answer row is undecided, so it lands under the
+        # UNDECIDED/UNRESOLVED fills; no Appeals means the next row is empty.
         ("gold answer_remediation_current", 1),
         ("gold appeal_outcomes_current", 0),
     ]
