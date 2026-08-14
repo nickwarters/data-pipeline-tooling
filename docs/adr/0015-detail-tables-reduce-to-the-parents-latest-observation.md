@@ -51,9 +51,10 @@ even though that is the reduction the table's own shape suggests.
   such guarantee — it assembles a Case that never existed, from the newest
   fragment of each child independently.
 
-- **It is one rule for N tables.** Eight Detail Tables reduce identically,
+- **It is one rule for N tables.** Seven Detail Tables reduce identically,
   through one generic `gold_detail_builder` driven by a per-table grain
-  registry, rather than eight per-table judgements about what "latest" means.
+  registry, rather than a per-table judgement about what "latest" means for
+  each.
 
 - **It is not derivable from the child table alone,** which is why it is an ADR
   and not a comment. The obvious reduction is the wrong one, the wrongness never
