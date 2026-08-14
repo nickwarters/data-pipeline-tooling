@@ -297,8 +297,10 @@ Silver keys a Detail Table's own `AppendOnly` load on a **composite**
 key — `answer` on `(source_observation_id, question_id)`, `answer_capture` on
 `(source_observation_id, question_id, field_key)`, `answer_action` on
 `(source_observation_id, question_id, action_id)`, `general_answer` on
-`(source_observation_id, general_key)` — because the observation alone is not
-its grain: one observation yields many child rows, one per question or
-catalogue key (and, for the two field-level tables, one per field or action
-within that question), and a single-column key would raise on the second of
-any of them for the same Case.
+`(source_observation_id, general_key)`, `conversation_message` on
+`(source_observation_id, seq)`, `appeal` on
+`(source_observation_id, appeal_id)` — because the observation alone is not
+its grain: one observation yields many child rows, one per question,
+catalogue key, message or Appeal (and, for the two field-level tables, one per
+field or action within that question), and a single-column key would raise on
+the second of any of them for the same Case.

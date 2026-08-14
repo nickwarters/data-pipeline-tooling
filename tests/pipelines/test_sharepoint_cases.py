@@ -53,7 +53,9 @@ from pipelines.sharepoint_cases.pipeline import (
     silver_answer_action_builder,
     silver_answer_builder,
     silver_answer_capture_builder,
+    silver_appeal_builder,
     silver_builder,
+    silver_conversation_message_builder,
     silver_general_answer_builder,
     snake_case,
 )
@@ -63,7 +65,9 @@ from pipelines.sharepoint_cases.schema import (
     SITE,
     AnswerCaptureRow,
     AnswerRow,
+    AppealRow,
     CaseList,
+    ConversationMessageRow,
     GeneralAnswerRow,
 )
 from tests.framework_testing import (
@@ -96,6 +100,9 @@ ANSWER_COLUMNS = tuple(f.name for f in fields(AnswerRow))
 CAPTURE_COLUMNS = tuple(f.name for f in fields(AnswerCaptureRow))
 # Likewise for the general-answer Detail Table.
 GENERAL_ANSWER_COLUMNS = tuple(f.name for f in fields(GeneralAnswerRow))
+# Likewise for the two list-shaped Detail Tables.
+CONVERSATION_MESSAGE_COLUMNS = tuple(f.name for f in fields(ConversationMessageRow))
+APPEAL_COLUMNS = tuple(f.name for f in fields(AppealRow))
 
 SERVER_NOW = dt.datetime(2026, 8, 5, 9, tzinfo=dt.timezone.utc)
 WINDOW = ModifiedWindow(start=None, end=SERVER_NOW - SAFETY_LAG)
@@ -126,6 +133,8 @@ EVERY_HOP = {
     f"{FEED_NAME}:silver:{COMPLAINTS.case_type}:answer_capture",
     f"{FEED_NAME}:silver:{COMPLAINTS.case_type}:answer_action",
     f"{FEED_NAME}:silver:{COMPLAINTS.case_type}:general_answer",
+    f"{FEED_NAME}:silver:{COMPLAINTS.case_type}:conversation_message",
+    f"{FEED_NAME}:silver:{COMPLAINTS.case_type}:appeal",
     *(f"{FEED_NAME}:gold:{table}" for table in GOLD_TABLES),
 }
 
@@ -812,6 +821,154 @@ def test_an_array_general_answer_is_canonicalised_rather_than_refused():
     assert json.loads(row["value_json"]) == ["Current account", "Savings"]
 
 
+# --- silver: the conversation-message explode ---------------------------------
+
+
+def silver_conversation_messages(
+    conversation_json: str,
+    *,
+    case_list: CaseList = COMPLAINTS,
+    reject_writer: RecordingWriter | None = None,
+) -> list[dict]:
+    """Drive the silver conversation-message hop, in memory, over one
+    observation's `conversation`."""
+    writer = RecordingWriter()
+    silver_conversation_message_builder(
+        given_rows([version(conversation=conversation_json)]),
+        writer,
+        case_list,
+        reject_writer or RecordingWriter(),
+    ).run()
+    return rows_of(writer)
+
+
+def test_a_conversation_becomes_one_row_per_message_carrying_the_five_stamps():
+    rows = silver_conversation_messages(
+        json.dumps(
+            [
+                {
+                    "author": {"loginName": "a.khan", "displayName": "Amira Khan"},
+                    "timestamp": "2026-08-04T16:02:00Z",
+                    "body": "Please confirm the call date.",
+                },
+                {
+                    "author": {"loginName": "b.okafor", "displayName": "Bola Okafor"},
+                    "timestamp": "2026-08-04T18:47:12.000Z",
+                    "body": "Confirmed -- the call was on the 30th.",
+                },
+            ]
+        )
+    )
+
+    assert [row["seq"] for row in rows] == [0, 1]
+    # author is a nested object ({loginName, displayName}); landing it whole
+    # would put a JSON blob in the table built to remove them, so it is
+    # lifted by two dotted paths instead.
+    assert rows[0]["author_login"] == "a.khan"
+    assert rows[0]["author_display_name"] == "Amira Khan"
+    for row in rows:
+        assert set(row) == set(CONVERSATION_MESSAGE_COLUMNS)
+        assert row["case_type"] == COMPLAINTS.case_type
+        assert row["source_item_id"] == "101"
+        assert row["source_version"] == '"3"'
+        assert row["source_modified_at"] == pd.Timestamp("2026-08-05 08:10:00+00:00")
+        assert len(row["source_observation_id"]) > 0
+
+
+# --- silver: the appeal explode ------------------------------------------------
+
+
+def silver_appeals(
+    appeals_json: str,
+    *,
+    case_list: CaseList = COMPLAINTS,
+    reject_writer: RecordingWriter | None = None,
+) -> list[dict]:
+    """Drive the silver appeal hop, in memory, over one observation's `appeals`."""
+    writer = RecordingWriter()
+    silver_appeal_builder(
+        given_rows([version(appeals=appeals_json)]),
+        writer,
+        case_list,
+        reject_writer or RecordingWriter(),
+    ).run()
+    return rows_of(writer)
+
+
+def appeal(**overrides: object) -> dict[str, object]:
+    """One Appeal element in the shape the app writes it: raised, no
+    citations, no resolution -- overridden per test."""
+    row: dict[str, object] = {
+        "id": "appeal-1754040000000",
+        "appellant": "e.novak",
+        "at": "2026-08-01T09:00:00Z",
+        "rationale": "The redress figure had already been paid directly.",
+        "state": "raised",
+    }
+    row.update(overrides)
+    return row
+
+
+def test_an_appeal_becomes_one_row_keyed_by_its_own_id_with_appeal_seq():
+    rows = silver_appeals(json.dumps([appeal(id="appeal-1"), appeal(id="appeal-2")]))
+
+    assert {row["appeal_id"] for row in rows} == {"appeal-1", "appeal-2"}
+    assert {row["appeal_seq"] for row in rows} == {0, 1}
+    for row in rows:
+        assert set(row) == set(APPEAL_COLUMNS)
+
+
+def test_an_unresolved_appeal_carries_nulls_in_every_resolution_column():
+    # Absent, not a missing row: an Appeal without a resolution key must not
+    # crash the coercion, and must still land as a row.
+    [row] = silver_appeals(json.dumps([appeal(state="raised")]))
+
+    assert row["resolution_verdict"] is None
+    assert row["resolution_rationale"] is None
+    assert row["resolution_resolver"] is None
+    assert row["resolution_at"] is None
+
+
+def test_cited_answer_keys_is_json_text_null_only_when_the_key_is_omitted():
+    # The mechanism (ExplodeJsonList's JSON encoding) is proven by its own
+    # suite -- what this pins is feed semantics: an omitted key is null, not
+    # "no citations" spelled "[]", which the app never writes.
+    omitted, present = silver_appeals(
+        json.dumps(
+            [
+                appeal(id="appeal-1"),
+                appeal(
+                    id="appeal-2",
+                    citedAnswerKeys=["q-outcome", "q-timeliness"],
+                ),
+            ]
+        )
+    )
+
+    # A mixed column (one row null, one populated) lands the null as NaN
+    # rather than None -- see the _REJECTED_AS_NAN sentinel above for the same
+    # pandas quirk.
+    assert pd.isna(omitted["cited_question_ids_json"])
+    assert json.loads(present["cited_question_ids_json"]) == [
+        "q-outcome",
+        "q-timeliness",
+    ]
+
+
+def test_an_unknown_appeal_state_quarantines_while_the_good_appeal_lands():
+    rejects = RecordingWriter()
+
+    rows = silver_appeals(
+        json.dumps([appeal(id="appeal-1"), appeal(id="appeal-2", state="withdrawn")]),
+        reject_writer=rejects,
+    )
+
+    assert [row["appeal_id"] for row in rows] == ["appeal-1"]
+    [rejected] = rows_of(rejects)
+    assert rejected["appeal_id"] == "appeal-2"
+    assert "state" in rejected["failed_rule"]
+
+
 # --- gold: the current-state rule -------------------------------------------
 
 
@@ -1372,7 +1529,7 @@ def test_throughput_is_empty_when_nothing_has_ended():
 # --- the composed plan -----------------------------------------------------
 
 
-def test_all_six_ingest_hops_plan_exactly_the_steps_they_always_have():
+def test_all_eight_ingest_hops_plan_exactly_the_steps_they_always_have():
     reader, writer, rejects = given_rows([]), RecordingWriter(), RecordingWriter()
 
     # No column gate on the raw hop, unlike a file feed: the observation
@@ -1442,6 +1599,28 @@ def test_all_six_ingest_hops_plan_exactly_the_steps_they_always_have():
         "  [Transform] explode (depends on: read)",
         "  [Transform] value-text (depends on: explode)",
         "  [Transform] coerce (depends on: value-text)",
+        "  [Quarantine] quarantine (depends on: coerce)",
+        "  [Validate] post-validate (depends on: quarantine)",
+        "  [Write] write (depends on: post-validate)",
+    ]
+    assert silver_conversation_message_builder(
+        reader, writer, COMPLAINTS, rejects
+    ).describe().splitlines() == [
+        "Pipeline: sharepoint_cases:silver:complaints:conversation_message",
+        "  [Read] read",
+        "  [Transform] explode (depends on: read)",
+        "  [Transform] coerce (depends on: explode)",
+        "  [Quarantine] quarantine (depends on: coerce)",
+        "  [Validate] post-validate (depends on: quarantine)",
+        "  [Write] write (depends on: post-validate)",
+    ]
+    assert silver_appeal_builder(
+        reader, writer, COMPLAINTS, rejects
+    ).describe().splitlines() == [
+        "Pipeline: sharepoint_cases:silver:complaints:appeal",
+        "  [Read] read",
+        "  [Transform] explode (depends on: read)",
+        "  [Transform] coerce (depends on: explode)",
         "  [Quarantine] quarantine (depends on: coerce)",
         "  [Validate] post-validate (depends on: quarantine)",
         "  [Write] write (depends on: post-validate)",
@@ -1524,13 +1703,22 @@ def test_the_bundled_sample_lands_every_item_across_both_pages(tmp_path, capsys)
     # item 101's q-root-cause carries a capture map (2 fields) and a
     # remediationActions list (1 action), so those tables land 2 and 1. Only
     # item 101 carries a General Question answer (general:complaint-channel),
-    # so general_answer lands 1.
+    # so general_answer lands 1. Item 101 carries two Conversation messages
+    # (deliberately mixed timestamp formats -- see cases_page_1.json) and item
+    # 104 one, so conversation_message lands 3. Only item 104 carries any
+    # Appeals -- one resolved with citations, one raised without, also with
+    # deliberately mixed raised_at timestamp formats -- so appeal lands 2.
+    # (resolution_at has only the one resolved appeal to draw from, so it
+    # rides on raised_at's mixed-format demonstration rather than repeating
+    # it.)
     assert (poll.raw_rows, poll.silver_rows) == (5, 5)
     assert poll.detail_rows == {
         "answer": 6,
         "answer_capture": 2,
         "answer_action": 1,
         "general_answer": 1,
+        "conversation_message": 3,
+        "appeal": 2,
     }
     # The fixture exercises all four real statuses, so the whole vocabulary
     # passes the schema gate rather than only the one a happy path would use.
@@ -1546,7 +1734,8 @@ def test_the_bundled_sample_lands_every_item_across_both_pages(tmp_path, capsys)
     assert (
         "5 observation(s) -> 5 case version(s), 6 answer row(s), "
         "2 answer_capture row(s), 1 answer_action row(s), "
-        "1 general_answer row(s)."
+        "1 general_answer row(s), 3 conversation_message row(s), "
+        "2 appeal row(s)."
     ) in capsys.readouterr().out
 
 
@@ -1916,6 +2105,97 @@ def test_the_winning_observation_settles_gold_capture_and_action_and_drops_the_o
     assert added["field_key"] == "field-added"
 
 
+def test_the_winning_observation_settles_gold_conversation_message_and_appeal(
+    tmp_path,
+):
+    # The resurrection anchor: conversation_message's key is positional
+    # (seq, the blob's own ordinal), not drawn from a JSON map key or a
+    # minted id, so an observation-spanning superset collides on the grain
+    # itself, with no deletion to read the way the answer-derived tables have.
+    # Observation 1 has 2 messages, observation 2 appends a third -- 3
+    # messages sharing seq 0 and 1 with observation 1's own. Without the
+    # semi-join, gold would see (case_id, 0) and (case_id, 1) twice each, and
+    # UniqueValidator would abort the hop -- so a weakened reduction fails
+    # loudly here, not silently.
+    message_1 = {
+        "author": {"loginName": "a.khan", "displayName": "Amira Khan"},
+        "timestamp": "2026-08-04T16:02:00Z",
+        "body": "Please confirm the call date.",
+    }
+    message_2 = {
+        "author": {"loginName": "b.okafor", "displayName": "Bola Okafor"},
+        "timestamp": "2026-08-04T18:47:12.000Z",
+        "body": "Confirmed -- the call was on the 30th.",
+    }
+    message_3 = {
+        "author": {"loginName": "a.khan", "displayName": "Amira Khan"},
+        "timestamp": "2026-08-05T08:00:00.000Z",
+        "body": "Thanks, closing this out.",
+    }
+    early = item(Conversation=json.dumps([message_1, message_2]))
+    later = item(
+        Conversation=json.dumps([message_1, message_2, message_3]),
+        Status="Completed",
+    )
+    later.update({"Modified": "2026-08-05T08:45:00Z", "odata.etag": '"4"'})
+
+    # Companion: one Appeal, raised in the first observation and resolved in
+    # the second -- the shape resolveAppeal() writes in the real app.
+    early["Appeals"] = json.dumps(
+        [
+            {
+                "id": "appeal-1",
+                "appellant": "e.novak",
+                "at": "2026-08-04T09:00:00Z",
+                "rationale": "Reconsider the outcome.",
+                "state": "raised",
+            }
+        ]
+    )
+    later["Appeals"] = json.dumps(
+        [
+            {
+                "id": "appeal-1",
+                "appellant": "e.novak",
+                "at": "2026-08-04T09:00:00Z",
+                "rationale": "Reconsider the outcome.",
+                "state": "resolved",
+                "resolution": {
+                    "verdict": "agreed",
+                    "rationale": "The amended statement changes the outcome.",
+                    "resolver": "d.reid",
+                    "at": "2026-08-05T08:44:00Z",
+                },
+            }
+        ]
+    )
+    client = FakeListClient(items(early), items(later), advance=NEXT_POLL)
+    context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
+
+    run(context, client=client)
+    run(context, client=client)
+
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    # Silver accumulated both observations' messages: 2 + 3.
+    assert len(read_rows(med.silver, "conversation_message")) == 5
+    [winner] = read_rows(med.gold, "case_current")
+
+    gold_messages = read_rows(med.gold, "conversation_message")
+    assert [row["seq"] for row in gold_messages] == [0, 1, 2]
+    assert {row["source_observation_id"] for row in gold_messages} == {
+        winner["source_observation_id"]
+    }
+
+    # Companion: silver accumulated both observations of the one Appeal, but
+    # gold holds it once, resolved, with every resolution_* column filled.
+    assert len(read_rows(med.silver, "appeal")) == 2
+    [gold_appeal] = read_rows(med.gold, "appeal")
+    assert gold_appeal["appeal_id"] == "appeal-1"
+    assert gold_appeal["state"] == "resolved"
+    assert gold_appeal["resolution_verdict"] == "agreed"
+    assert gold_appeal["resolution_resolver"] == "d.reid"
+
+
 @pytest.mark.parametrize("cell", [None, "misfiled", "complaints"])
 def test_gold_answer_derives_the_same_case_id_as_the_settled_case_type(tmp_path, cell):
     # Mirrors test_silver_settles_the_case_type_to_the_polled_lists_declared_one:
@@ -1951,7 +2231,7 @@ def test_a_malformed_answers_blob_raises_and_case_version_still_lands(tmp_path):
     assert SharePointCheckpointStore(tmp_path).committed_watermark(SOURCE) is None
 
 
-def test_a_quiet_first_window_commits_and_publishes_eight_empty_gold_tables(tmp_path):
+def test_a_quiet_first_window_commits_and_publishes_ten_empty_gold_tables(tmp_path):
     # Nothing to reduce is not nothing to publish: a consumer reading gold must
     # find the tables, empty, rather than a missing one it has to special-case.
     run(
@@ -2018,6 +2298,8 @@ def test_a_failure_in_the_last_aggregate_leaves_the_earlier_gold_and_no_checkpoi
         "answer_capture",
         "answer_action",
         "general_answer",
+        "conversation_message",
+        "appeal",
         "case_counts_current",
         "case_age_buckets_current",
     }
@@ -2226,9 +2508,15 @@ def test_a_dry_run_previews_every_write_and_commits_none_of_them(tmp_path):
 
     # Raw, silver, every silver Detail Table, and every gold table are
     # previewed; none is committed. The fixture item carries no capture map,
-    # remediationActions or general answer, so those five Detail Table writes
-    # are empty.
-    empty_detail_tables = ("answer_capture", "answer_action", "general_answer")
+    # remediationActions, general answer, Conversation or Appeals, so those
+    # five Detail Table writes are empty.
+    empty_detail_tables = (
+        "answer_capture",
+        "answer_action",
+        "general_answer",
+        "conversation_message",
+        "appeal",
+    )
     expected = [
         ("raw case_observation", 1),
         ("silver case_version", 1),

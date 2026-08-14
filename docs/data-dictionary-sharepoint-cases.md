@@ -1,11 +1,12 @@
 # Data dictionary — `sharepoint_cases`
 
 The filled-in entry for the `sharepoint_cases` feed, following
-[`data-dictionary-template.md`](data-dictionary-template.md). Fourteen tables:
+[`data-dictionary-template.md`](data-dictionary-template.md). Eighteen tables:
 the faithful raw observation, the typed Case version and its silver `answer`,
-`answer_capture`, `answer_action` and `general_answer` Detail Tables, and the
-eight gold tables reduced from the version history — the current Case, those
-same four Detail Tables, and three aggregates. Every declared Case list lands
+`answer_capture`, `answer_action`, `general_answer`, `conversation_message` and
+`appeal` Detail Tables, and the ten gold tables reduced from the version
+history — the current Case, those same six Detail Tables, and three
+aggregates. Every declared Case list lands
 in the same tables and is told apart by
 `case_type`. The
 Python contract is
@@ -543,6 +544,169 @@ None.
 - The `"general:"`-exactly key lands with `general_key == ""`, visible rather
   than quarantined — proven by the tiling test.
 
+## `conversation_message` — silver layer (Detail Table)
+
+One row per observation × Conversation message, exploded from
+`case_version`'s `conversation` JSON **list** — the feed's first Detail Table
+off a blob other than `answers`. The app writes no message id, no read state,
+no thread or Appeal association, and no edit or delete path, so `seq`, the
+blob's own 0-based ordinal, is the grain key rather than anything the message
+carries. Reads the settled silver batch, never raw, for the same reason
+`answer` does — see *Why this table reads silver, not raw* above.
+
+### Part A — Table / Feed overview
+
+| Attribute | Value |
+|-----------|-------|
+| **Table / Feed name** | `conversation_message` |
+| **Subject / Case Type** | `sharepoint_cases` |
+| **Medallion layer** | silver |
+| **Grain** | one row per observation × Conversation message |
+| **Is this a Case Type?** | No — a Detail Table hanging off `case_version` |
+| **Natural key → `case_id`** | `schema.NATURAL_KEY`, via `DETAIL_ID_VARS` — applied at gold, not here |
+| **Source system** | the settled `case_version` batch just fetched (not the whole silver history) |
+| **Reader** | `DatasetReader` over that batch |
+| **Load strategy** | `AppendOnly(("source_observation_id", "seq"))` — composite, because one observation yields many message rows |
+| **Upstream dependencies** | none declared — the batch is in memory, not reread from silver |
+| **Schedule / freshness** | with the poll, alongside the other Detail Tables |
+| **Owner / data steward** | *<team>* |
+| **Source of truth doc** | `pipelines/sharepoint_cases/schema.py` |
+| **Last reviewed** | 2026-08-14 |
+
+### Part B — Field dictionary
+
+| Field | Source path | Type | Nullable | Value rules | Description | Example | Sensitivity |
+|-------|--------------|------|----------|-------------|-------------|---------|-------------|
+| `case_type` | *(from `case_version`)* | `str` | No | `NonNull` | The settled Case Type. | `complaints` | None |
+| `source_item_id` | *(from `case_version`)* | `str` | No | `NonNull` | The list item observed. | `101` | Internal |
+| `source_modified_at` | *(from `case_version`)* | `datetime` | No | `NonNull` | When the observation was made. | `2026-08-05T08:10:00+00:00` | None |
+| `source_version` | *(from `case_version`)* | `str` | No | `NonNull` | The version observed. | `"3"` | None |
+| `source_observation_id` | *(from `case_version`)* | `str` | No | `NonNull` | The observation's identity. | *(64-char sha256)* | None |
+| `seq` | the `conversation` list's 0-based position | `int` | No | `NonNull` | The grain key — the app mints no message id. A durable *pointer* only while the Conversation stays append-only: a mid-list insert would renumber every later message silently. | `0` | None |
+| `author_login` | `conversation[].author.loginName` | `str` | Yes | — | The bare account name the app stamped at post time — see *Bare account logins vs. claims logins*, below. | `a.khan` | Internal |
+| `author_display_name` | `conversation[].author.displayName` | `str` | Yes | — | An **unrefreshed snapshot** of what the sender was called when they posted; never join it as a current name. | `Amira Khan` | Internal |
+| `posted_at` | `conversation[].timestamp` | `str` | Yes | — | Kept as text on purpose — see *Blob timestamps stay text*, below. | `2026-08-04T16:02:00Z` | None |
+| `body` | `conversation[].body` | `str` | Yes | — | Free text, unmoderated. | `Please confirm the call date.` | Internal |
+
+### Part C — Row checks
+
+None.
+
+### Part D — Quarantine & data quality
+
+- No value rule is declared on this schema, so nothing here quarantines; the
+  quarantine node stays wired anyway, for the same reason
+  `silver_general_answer_builder`'s does.
+- A malformed `conversation` blob (text that is not JSON, or JSON that is not
+  an array) is a feed defect, not a bad value: `ExplodeJsonList` raises
+  `JsonShapeError` and aborts the run before anything from that batch commits.
+- A structural breach — a missing column, a wrong dtype, a null provenance
+  column — still aborts the run.
+
+## `appeal` — silver layer (Detail Table)
+
+One row per observation × Appeal, exploded from `case_version`'s `appeals`
+JSON **list**, with the Appeal's 1:1 `resolution` object lifted onto the same
+row via dotted paths — exactly as `answer` lifts `remediationStatus`. Unlike a
+Conversation message, an Appeal *does* carry its own identity: `appeal_id`
+(`appeal-${Date.now()}`, minted by the app) is the grain key, and `appeal_seq`
+is descriptive only. Reads the settled silver batch, never raw — see *Why
+this table reads silver, not raw* above.
+
+### Part A — Table / Feed overview
+
+| Attribute | Value |
+|-----------|-------|
+| **Table / Feed name** | `appeal` |
+| **Subject / Case Type** | `sharepoint_cases` |
+| **Medallion layer** | silver |
+| **Grain** | one row per observation × Appeal |
+| **Is this a Case Type?** | No — a Detail Table hanging off `case_version` |
+| **Natural key → `case_id`** | `schema.NATURAL_KEY`, via `DETAIL_ID_VARS` — applied at gold, not here |
+| **Source system** | the settled `case_version` batch just fetched (not the whole silver history) |
+| **Reader** | `DatasetReader` over that batch |
+| **Load strategy** | `AppendOnly(("source_observation_id", "appeal_id"))` — composite, because one observation yields many Appeal rows |
+| **Upstream dependencies** | none declared — the batch is in memory, not reread from silver |
+| **Schedule / freshness** | with the poll, alongside the other Detail Tables |
+| **Owner / data steward** | *<team>* |
+| **Source of truth doc** | `pipelines/sharepoint_cases/schema.py` |
+| **Last reviewed** | 2026-08-14 |
+
+### Part B — Field dictionary
+
+| Field | Source path | Type | Nullable | Value rules | Description | Example | Sensitivity |
+|-------|--------------|------|----------|-------------|-------------|---------|-------------|
+| `case_type` | *(from `case_version`)* | `str` | No | `NonNull` | The settled Case Type. | `complaints` | None |
+| `source_item_id` | *(from `case_version`)* | `str` | No | `NonNull` | The list item observed. | `101` | Internal |
+| `source_modified_at` | *(from `case_version`)* | `datetime` | No | `NonNull` | When the observation was made. | `2026-08-05T08:10:00+00:00` | None |
+| `source_version` | *(from `case_version`)* | `str` | No | `NonNull` | The version observed. | `"3"` | None |
+| `source_observation_id` | *(from `case_version`)* | `str` | No | `NonNull` | The observation's identity. | *(64-char sha256)* | None |
+| `appeal_id` | `appeals[].id` | `str` | No | `NonNull` | The grain key, minted by the app as `appeal-${Date.now()}`. No `Pattern`/`Unique` — see *Part D*. | `appeal-1754210400000` | None |
+| `appeal_seq` | the `appeals` list's 0-based position | `int` | No | `NonNull` | Declared, not dropped, for the same reason `answer_action.action_seq` is — `ExplodeJsonList`'s ordinal is mandatory and typed either way. Descriptive only; `appeal_id` is the key. | `0` | None |
+| `appellant` | `appeals[].appellant` | `str` | Yes | — | A bare account name — see *Bare account logins vs. claims logins*, below. | `e.novak` | Internal |
+| `raised_at` | `appeals[].at` | `str` | Yes | — | Kept as text — see *Blob timestamps stay text*. | `2026-08-05T08:30:00Z` | None |
+| `rationale` | `appeals[].rationale` | `str` | Yes | — | Free text. | | Internal |
+| `state` | `appeals[].state` | `str` | Yes | `OneOf(raised, underReview, resolved)` | `underReview` is included although unwritten today — `openAppealOf` treats anything but `resolved` as open, so excluding it would quarantine real rows the moment that transition ships. | `raised` | None |
+| `cited_question_ids_json` | `appeals[].citedAnswerKeys` | `str` | Yes | — | JSON array text of Question Definition ids, joining `answer.question_id` — never a joined string. **Null means the key was omitted**, which is what "no citations" looks like; the app never writes `[]`. | `["q-outcome","q-timeliness"]` | Internal |
+| `resolution_verdict` | `appeals[].resolution.verdict` | `str` | Yes | `OneOf(agreed, rejected)` | Null while unresolved — see the `resolution_*` group note below. | `agreed` | None |
+| `resolution_rationale` | `appeals[].resolution.rationale` | `str` | Yes | — | Free text. Null while unresolved. | | Internal |
+| `resolution_resolver` | `appeals[].resolution.resolver` | `str` | Yes | — | A bare account name — see *Bare account logins vs. claims logins*, below. Null while unresolved. | `d.reid` | Internal |
+| `resolution_at` | `appeals[].resolution.at` | `str` | Yes | — | Kept as text — see *Blob timestamps stay text*. Null while unresolved. | `2026-08-04T10:00:00Z` | None |
+
+The four `resolution_*` columns are null **together**: the shared prefix says
+so, rather than `resolver`/`resolved_at` sitting beside `raised_at` as if they
+were its siblings. An unresolved Appeal carries nulls in all four rather than
+being absent as a row.
+
+### Part C — Row checks
+
+None.
+
+### Part D — Quarantine & data quality
+
+- Only `state` and `resolution_verdict` carry a value rule (`OneOf`); every
+  other column is free text and cannot quarantine a row.
+- No `Pattern` on `appeal_id`: `appeal-${Date.now()}` is one function's
+  implementation detail, nothing enforces it, and a hand-edited blob would
+  quarantine a real Appeal for failing to look like one. No `Unique` either —
+  that rule is per-column over a whole batch spanning many Cases, and grain
+  uniqueness is `UniqueValidator`'s job at gold.
+- `appeal_id` **can repeat** within one observation where a JSON map key
+  cannot — this is the second Detail grain (after `answer_action.action_id`)
+  drawn from a list rather than a map. The app's own UI forbids a duplicate,
+  but this feed cannot enforce an application-level rule; a hand-edited
+  duplicate therefore **aborts** the run (`AppendOnly`'s conflict at silver,
+  or `UniqueValidator` at gold) rather than quarantining.
+- A malformed `appeals` blob (text that is not JSON, or JSON that is not an
+  array) is a feed defect, not a bad value: `ExplodeJsonList` raises
+  `JsonShapeError` and aborts the run before anything from that batch commits.
+- A structural breach — a missing column, a wrong dtype, a null provenance
+  column, or an Appeal element that is not an object at all (every field
+  lifts to `None`, so `appeal_id` lands null) — still aborts the run.
+
+## Two prose points shared across both new Detail Tables
+
+**Bare account logins vs. claims logins.** `conversation_message.author_login`,
+`appeal.appellant` and `appeal.resolution_resolver` are bare account names
+(`a.khan`) — what the app itself stamps — never the claims login
+(`i:0#.w|CONTOSO\a.khan`) every `case_version` Person column holds. The two
+vocabularies do not join: matching one against the other silently matches
+nothing. This feed lands each verbatim rather than guessing at a farm's AD
+domain, which is Case-Type-agnostic and has no business knowing it.
+
+**Blob timestamps stay text on purpose.** `posted_at`, `raised_at` and
+`resolution_at` are declared `str`, not `datetime`. `SchemaCoercion`'s
+datetime coercion calls bare `pd.to_datetime` with no `format=`, which on
+pandas 3.x infers one format from the first non-null value in the batch and
+then requires every other value to match it exactly. Both spellings these
+blobs carry are real — the app writes `.toISOString()` (`.mmmZ`), a
+hand-edited row can write `Z` without milliseconds — and mixing them in one
+batch raises and aborts the *whole poll*, intermittently, since which rows
+share a batch depends on the `Modified` window. The rule: a typed column
+stays typed; text inside a blob stays text. (`source_modified_at` stays
+`datetime` because it comes from OData, is uniform, and is already typed
+upstream — it is not one of these blob fields.)
+
 ## Gold — the current Case, its Detail Tables, and three aggregates
 
 Silver accumulates *observations*; gold answers *what is true now*. Every
@@ -560,6 +724,8 @@ everything.
 | `answer_capture` | `case_id` × `question_id` × `field_key` | the winning observation's Issue Capture rows |
 | `answer_action` | `case_id` × `question_id` × `action_id` | the winning observation's Remediation Action rows |
 | `general_answer` | `case_id` × `general_key` | the winning observation's General Question answer rows |
+| `conversation_message` | `case_id` × `seq` | the winning observation's Conversation messages |
+| `appeal` | `case_id` × `appeal_id` | the winning observation's Appeals |
 | `case_counts_current` | `assigned_reviewer_name` × `assigned_reviewer_manager_name` × `status` | `case_count` |
 | `case_age_buckets_current` | `age_bucket` × `status` | `case_count` |
 | `case_throughput_daily` | `terminal_date` × `terminal_status` | `case_count` |
@@ -640,6 +806,41 @@ Reduced by the same `gold_detail_builder`, per the same rule as `answer`
 above. A General Question answer a reviewer's app pruned between observations
 (the question dropped from the Case Type's config) is genuinely absent from
 the winning observation's map, and the semi-join reads that absence correctly.
+
+### `conversation_message`
+
+| Attribute | Value |
+|-----------|-------|
+| **Grain** | `case_id` × `seq` |
+| **Load strategy** | `Refresh()` |
+| **Source** | silver `conversation_message`'s accumulated history, semi-joined to `case_current`'s winning `(case_id, source_observation_id)` pairs |
+| **Columns** | every silver `conversation_message` column, plus `case_id` and `as_of_utc` |
+
+Reduced by the same `gold_detail_builder`, per the same rule as `answer`
+above — the winning observation's full message list, and nothing carried over
+from an earlier one. Because a Conversation only ever grows, this table's
+semi-join has no deletion to read correctly the way the answer-derived tables
+do; what it guarantees instead is that a Case whose thread grew *between*
+observations shows only the latest observation's full list, not an
+observation-spanning superset a per-message reduce would produce by never
+knowing to stop.
+
+### `appeal`
+
+| Attribute | Value |
+|-----------|-------|
+| **Grain** | `case_id` × `appeal_id` |
+| **Load strategy** | `Refresh()` |
+| **Source** | silver `appeal`'s accumulated history, semi-joined to `case_current`'s winning `(case_id, source_observation_id)` pairs |
+| **Columns** | every silver `appeal` column, plus `case_id` and `as_of_utc` |
+
+Reduced by the same `gold_detail_builder`, per the same rule as `answer`
+above. `appeals` is additive and its own elements are never deleted, but an
+Appeal's row still changes shape in place — `raised` gains a full
+`resolution` the moment Controls resolves it — so the semi-join is what
+guarantees gold shows the *latest* state of each Appeal (one row, not two)
+rather than whichever observation a naive per-`appeal_id` reduce happened to
+prefer.
 
 ### `as_of_utc`, on every table
 
