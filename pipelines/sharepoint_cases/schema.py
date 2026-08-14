@@ -1,63 +1,19 @@
 """Declared silver schemas for the ``sharepoint_cases`` feed.
 
-Eight schemas live here. ``CaseVersion`` is one row per observation of a Case: a
-Case list item as it stood at one version, with the source's column names
-mechanically snake_cased and the columns typed. Nothing is derived and nothing
-is reshaped -- this hop is the rename and the type contract, and that is all it
-is meant to be.
+``CaseVersion`` is one row per observation of a Case: the source's column
+names mechanically snake_cased and the columns typed, with nothing derived or
+reshaped. ``AnswerRow``, ``AnswerCaptureRow``, ``AnswerActionRow`` and
+``GeneralAnswerRow`` explode ``CaseVersion.answers``; ``ConversationMessageRow``
+and ``AppealRow`` explode ``conversation`` and ``appeals``; ``CaseDetailRow``
+explodes ``details``. See ``docs/data-dictionary-sharepoint-cases.md`` for the
+full field-level contract -- this module states the type declarations and the
+few non-obvious constraints behind them.
 
-One exception, and it is deliberate: raw holds the list's own ``CaseType`` cell
-as the list holds it, and silver replaces it with the Case Type declared for
-that list in ``CASE_LISTS``. The cell is nullable and hand-editable, and gold
-keys a Case on it.
-
-``AnswerRow`` is one row per observation x Question Definition: the ``Answers``
-JSON map, exploded so each question's response is its own row rather than a
-key buried in a blob. ``AnswerCaptureRow`` and ``AnswerActionRow`` go one level
-further, each exploding one field of an individual answer -- the flat
-``capture`` map and the ``remediationActions`` list -- into their own Detail
-Tables. ``GeneralAnswerRow`` tiles the same ``answers`` map from the other
-side: the General Question keys ``AnswerRow`` excludes.
-
-``ConversationMessageRow`` and ``AppealRow`` explode the other two blob columns
-``CaseVersion`` lands as unparsed text -- ``conversation`` and ``appeals``.
-Both are JSON **lists**, not maps, so ``ExplodeJsonList`` walks them rather
-than ``ExplodeJsonMap``, and neither carries a key to grain on the way a map
-does: a Conversation message has no id at all, so it grains on the blob's own
-ordinal; an Appeal does carry an id, minted by the app rather than drawn from a
-catalogue, so it grains on that instead. Both blobs hold ISO timestamps as
-**text**, not ``datetime`` -- see either row's docstring for why that is a
-deliberate decision, not an oversight.
-
-``CaseDetailRow`` explodes the last of the five blob columns, ``details``: a
-flat ``key -> string`` map of Case Details field values, deliberately
-key/value rather than typed per Case Type -- the field set is declared in the
-review application's own config, which this feed never joins. It is the
-smallest Detail Table, and the one with the least contract behind it: the
-review application never writes ``Details`` at all, so there is no writer
-contract to cite the way every other blob's docstring cites one.
-
-``DETAIL_ID_VARS`` is what all eight schemas share -- it carries
-``NATURAL_KEY``'s columns so a Detail Table's own ``gold_detail_builder``
-derives the same ``case_id`` as the parent Case.
-
-The rules are deliberately thin. Only three things about this list are knowable
-enough to fail a run over: an observation must say where it came from, a Case
-must carry the id the list keys it on, and ``Status`` is a Choice column with a
-closed vocabulary. Everything else is typed and left alone: ``Title`` is the
-human Case Reference and carries no format anyone has ever enforced, and the
-outcome/void/justification columns are free text whose constraints live in the
-review application, not here.
-
-What is deliberately *not* here: when we saw the row. An append-only target
-compares every non-key column, so a per-read stamp would make each overlapping
-re-read look like a changed row. Observation time lives in the run log and the
-ingestion batch id instead.
-
-Alongside the schema this module holds the feed's **declarations** -- the names
-it is known by and the identity a Case is keyed on. They live here rather than
-in ``pipeline.py`` because ``gold.py`` needs them and ``pipeline.py`` imports
-``gold.py``; a declaration both hops read belongs below both.
+Alongside the schemas, this module holds the feed's **declarations** -- the
+names it is known by and the identity a Case is keyed on. They live here
+rather than in ``pipeline.py`` because ``gold.py`` needs them and
+``pipeline.py`` imports ``gold.py``; a declaration both hops read belongs
+below both.
 """
 
 from __future__ import annotations
@@ -71,9 +27,8 @@ from framework.core import NonNull, OneOf
 
 FEED_NAME = "sharepoint_cases"
 
-# PLACEHOLDER -- the site collection holding every Case list. The review
-# application derives its site from the page it is served from, so this value
-# exists nowhere to copy and must come from the tenant.
+# PLACEHOLDER -- must come from the tenant; see the data dictionary's "Three
+# things to know" for why no real value exists to copy here.
 SITE = "https://sharepoint.invalid/sites/REPLACE-ME"
 
 
@@ -89,8 +44,7 @@ class CaseList:
     list_id: UUID
 
 
-# Every Case list this feed polls. All Case Types share one list template, so
-# each is processed identically; onboarding one is a new entry with its own
+# Every Case list this feed polls; onboarding one is a new entry with its own
 # GUID. A UAT tenant prefixes the same list names ``uat_``.
 CASE_LISTS = (CaseList("complaints", "Cases-Complaints", SITE, UUID(int=0)),)
 
@@ -101,14 +55,12 @@ NATURAL_KEY = ("case_type", "source_item_id")
 
 # The Case lifecycle states, exactly as the review application persists them --
 # note the hyphen in "In-progress" and that "Actions In Progress" carries none.
-# A fifth value means the list's Choice column changed under us, and quarantine
-# is where that should surface rather than silently in a report.
 CASE_STATUSES = ("In-progress", "Actions In Progress", "Completed", "Void")
 
-# The columns an AnswerRow (and every other Detail Table) repeats onto every
-# exploded row -- exactly NATURAL_KEY's columns plus the provenance a Detail
-# row needs to join back to its winning observation. Declared once so a Detail
-# Table's derived case_id can never drift from the parent Case's.
+# The columns every Detail Table repeats onto every exploded row -- exactly
+# NATURAL_KEY's columns plus the provenance needed to join back to the winning
+# observation. Declared once so a Detail Table's derived case_id can never
+# drift from the parent Case's.
 DETAIL_ID_VARS = (
     "case_type",
     "source_item_id",
@@ -117,32 +69,18 @@ DETAIL_ID_VARS = (
     "source_observation_id",
 )
 
-# The remediation vocabulary. Statuses are the full framework set -- a Case
-# Type narrowing its offer (Complaints shows only two) is display-only, and
-# what is stored is always validated against the full vocabulary. Decisions
-# are the tri-state's two spellings; absence is the undecided third state and
-# is deliberately not a member here.
+# The remediation vocabulary.
 REMEDIATION_STATUSES = ("complete", "partial", "cancelled")
 REMEDIATION_DECISIONS = ("yes", "no")
 
-# The two Issue Capture value shapes this feed actually writes. Deliberately
-# not six: a half-filled person, a legacy Action[] list and every other
-# unrecognised shape all collapse onto UNSUPPORTED_CAPTURE_VALUE_KIND below
-# rather than earning a label of their own -- a finer-grained reject reason
-# would be a second spelling of what the reject row's own raw_value already
-# says.
+# CAPTURE_VALUE_KINDS deliberately holds two labels, not one per unsupported
+# shape -- everything else collapses onto UNSUPPORTED_CAPTURE_VALUE_KIND.
 TEXT_VALUE_KIND = "text"
 PERSON_VALUE_KIND = "person"
 CAPTURE_VALUE_KINDS = (TEXT_VALUE_KIND, PERSON_VALUE_KIND)
 UNSUPPORTED_CAPTURE_VALUE_KIND = "unsupported"
 
-# The Appeal lifecycle. ``underReview`` is deliberately a member although no
-# production path writes it -- ``openAppealOf`` (the review application's own
-# rule) treats anything but ``resolved`` as open, so it is a live domain
-# member, and excluding it would quarantine real rows the moment that
-# transition ships. Including an unwritten value costs nothing: ``OneOf`` only
-# rejects values *outside* the set. The same call ``REMEDIATION_STATUSES``
-# above already makes.
+# The Appeal lifecycle.
 APPEAL_STATES = ("raised", "underReview", "resolved")
 APPEAL_VERDICTS = ("agreed", "rejected")
 
@@ -223,57 +161,37 @@ class CaseVersion:
 class AnswerRow:
     """One row per observation x Question Definition, exploded from ``answers``.
 
-    ``general:``-prefixed keys belong to the General Question table, not this
-    one, and are excluded before this schema ever sees them.
-    ``remediation_required`` is tri-state -- ``"yes"``, ``"no"``, or the key
-    absent entirely -- and absence is meaningful: it means undecided, and must
-    stay distinguishable from a reviewer having chosen ``"no"``. A key is
-    *deleted*, not nulled, when a reviewer changes their mind, so an
-    observation's answer map only ever holds the questions it currently has an
-    opinion on.
-
-    ``value_json`` is the value as the source held it: verbatim text for a
-    scalar, JSON text for a list. A JSON boolean or number would land as its
-    Python scalar rather than verbatim text -- not a shape this feed's answers
-    produce. ``value_text`` is its canonical, groupable rendering (see
-    ``derive_value_text``), joined on ``VALUE_TEXT_SEPARATOR`` for a
-    multi-select.
+    ``general:``-prefixed keys belong to the General Question table and are
+    excluded before this schema ever sees them. ``value_json`` is the value
+    verbatim; ``value_text`` is its canonical, groupable rendering (see
+    ``derive_value_text``).
 
     Plain types throughout, never ``X | None``: ``SchemaValidator`` cannot
     construct a schema declaring a ``types.UnionType``, so nullability is
-    expressed with ``NonNull()`` and its absence (the default) rather than a
-    union with ``None``.
+    expressed with ``NonNull()`` and its absence rather than a union with
+    ``None``.
     """
 
     # DETAIL_ID_VARS, repeated onto every row by ExplodeJsonMap -- see its
     # docstring for why this must carry NATURAL_KEY's columns.
     case_type: Annotated[str, NonNull()]
     source_item_id: Annotated[str, NonNull()]
-    # datetime, not str: the silver batch this hop reads has already been typed
-    # by SchemaCoercion(CaseVersion), and ExplodeJsonMap repeats an id_var
-    # verbatim -- declaring str here would make SchemaCoercion leave a non-empty
-    # datetime column alone and then have SchemaValidator abort on the dtype
-    # mismatch.
+    # datetime, not str: the batch is already typed by SchemaCoercion(CaseVersion)
+    # -- a str declaration here aborts SchemaValidator on the dtype mismatch.
     source_modified_at: Annotated[datetime, NonNull()]
     source_version: Annotated[str, NonNull()]
     source_observation_id: Annotated[str, NonNull()]
 
-    # A Question Definition id has no documented format, so no Pattern rule: one
-    # would divert real answers into quarantine to guard a namespace nobody has
-    # proposed.
     question_id: Annotated[str, NonNull()]
 
     value_json: str
     value_text: str
     justification: str
 
-    # OneOf masks on notna(), so an absent remediationRequired passes through
-    # untouched and the tri-state survives; the rule only catches a boolean if
-    # the app ever writes one instead of the string.
+    # remediation_required is tri-state text -- absence means undecided, never
+    # a boolean.
     remediation_required: Annotated[str, OneOf(*REMEDIATION_DECISIONS)]
     free_form_remediation: str
-    # All three statuses are validated even though a given Case Type may offer
-    # fewer -- see REMEDIATION_STATUSES.
     remediation_status: Annotated[str, OneOf(*REMEDIATION_STATUSES)]
     remediation_status_details: str
 
@@ -286,15 +204,8 @@ class AnswerCaptureRow:
     A capture value is polymorphic -- plain text, or a person as
     ``{loginName, displayName}`` -- so the row is discriminated by
     ``value_kind`` rather than modelled as a union column; see
-    ``discriminate_capture_value``. There is no ``value_json`` twin the way
-    ``AnswerRow`` keeps one: once the unsupported arms are quarantined (see
-    ``value_kind`` below), ``text`` is fully carried by ``value_text`` and
-    ``person`` by the two person columns below, so a verbatim copy would be a
-    permanently derivable second spelling of the same value.
-
-    Issue Capture **Groups are presentation-only and appear nowhere here**:
-    knowing which group a field belongs to needs the Case Type's own
-    configuration, which this ingest feed does not join.
+    ``discriminate_capture_value``. Issue Capture Groups are presentation-only
+    and appear nowhere here.
     """
 
     # DETAIL_ID_VARS, repeated onto every row by the two chained
@@ -308,23 +219,18 @@ class AnswerCaptureRow:
     source_observation_id: Annotated[str, NonNull()]
 
     question_id: Annotated[str, NonNull()]
-    # Unique within a Case Type by app contract; no Pattern rule for the same
-    # reason question_id has none.
     field_key: Annotated[str, NonNull()]
 
-    # The legacy Action[] arm (and anything else discriminate_capture_value
-    # cannot place) is stamped UNSUPPORTED_CAPTURE_VALUE_KIND, which OneOf
-    # here does not allow -- so it quarantines rather than validating as a
-    # third kind. See discriminate_capture_value's docstring: this field is
-    # never null, so the OneOf breach is always what routes a reject row here.
+    # value_kind's reject label (UNSUPPORTED_CAPTURE_VALUE_KIND) must stay
+    # outside the OneOf, or an unmodelled shape validates instead of
+    # quarantining.
     value_kind: Annotated[str, NonNull(), OneOf(*CAPTURE_VALUE_KINDS)]
     value_text: str
 
     # The person arm: a bare account login, e.g. ``user-rp`` -- not the
-    # claims login (``i:0#.w|CONTOSO\...``) case_version's Person columns
-    # hold. The two vocabularies do not join.
+    # claims login case_version's Person columns hold. The two vocabularies
+    # do not join.
     person_login: str
-    # Cached at selection time; the app's own copy, not looked up here.
     person_display: str
 
 
@@ -333,13 +239,9 @@ class AnswerActionRow:
     """One row per observation x Question Definition x ticked Remediation
     Action, exploded from one answer's ``remediationActions`` list.
 
-    This is the feed's first Detail Table exploded from a **list**, not a map
-    key, so ``action_id`` *can* repeat within one answer -- the review
-    application's own selection UI forbids it, but this feed has no way to
-    enforce an application-level rule. A hand-edited duplicate therefore
-    **aborts** the run (``AppendOnly``'s conflict at silver, or
-    ``UniqueValidator`` at gold) rather than quarantining: it is a structural
-    breach of the declared grain, not an ordinary bad value.
+    Exploded from a **list**, not a map key, so ``action_id`` *can* repeat
+    within one answer -- a hand-edited duplicate **aborts** the run rather
+    than quarantining, since it is a structural breach of the declared grain.
     """
 
     # DETAIL_ID_VARS, repeated onto every row by ExplodeJsonMap plus
@@ -353,17 +255,10 @@ class AnswerActionRow:
     source_observation_id: Annotated[str, NonNull()]
 
     question_id: Annotated[str, NonNull()]
-    # The list's 0-based position of this action within the answer's
-    # remediationActions array. Declared (not dropped): ExplodeJsonList's
-    # ordinal_into is mandatory, so the column exists whether or not it is
-    # declared, and SchemaCoercion only types a declared column -- an
-    # undeclared one would reach the writer untyped. It is descriptive only;
-    # action_id, from the bank's own definitions, is the grain.
+    # action_seq is positional and descriptive only; action_id, from the
+    # bank's own definitions, is the grain.
     action_seq: Annotated[int, NonNull()]
     action_id: Annotated[str, NonNull()]
-    # Denormalised from the Remediation Action bank at selection time, so it
-    # is a snapshot: a later rename in the bank does not reach a row already
-    # written here.
     action_text: str
 
 
@@ -372,42 +267,12 @@ class GeneralAnswerRow:
     """One row per observation x General Question catalogue key, exploded from
     the same ``answers`` map ``AnswerRow`` reads -- from the other side of it.
 
-    General Question answers live in ``answers`` under a ``general:``-prefixed
-    key, come from a shared catalogue rather than a Question Definition id, are
-    plain strings by app contract, are never outcome-driving, and carry no
-    ``capture`` / ``remediationActions`` / ``justification`` -- which is why
-    this schema is short next to ``AnswerRow``. ``silver_answer_builder``
-    **excludes** the ``general:`` prefix; ``silver_general_answer_builder``
-    **includes** it and strips it, so the two tables tile the blob with no
-    overlap and no loss.
-
-    **Both value columns are carried, even though the app contract says plain
-    string.** ``_as_column_value`` (inside ``ExplodeJsonMap``) lands a scalar
-    cell as itself and anything else as JSON text, so an array *cannot* fail --
-    the only choice is whether the stored text is honest about it. With one
-    column named ``value_text``, an array would land as raw JSON in the column
-    whose documented meaning is "canonical groupable rendering". Worse, a JSON
-    ``true``/``3`` passes ``SchemaCoercion`` and ``SchemaValidator`` untouched
-    as a Python ``bool``/``int``, and SQLite stores ``True`` as ``1`` -- exactly
-    what ``derive_value_text`` exists to prevent. Reusing it unchanged here gets
-    both, for zero new production code, and gives both answer tables one
-    identical value contract: a consumer unioning them reads one column with
-    one meaning.
-
-    No ``OneOf`` on ``general_key``: the catalogue lives in Case Type config
-    this pipeline never sees and changes without a pipeline release. A
-    vocabulary would quarantine a newly shipped General Question's answers on
-    day one, and it would contradict the requirement that an answer to a
-    General Question later *removed* from config keeps syncing while it is
-    still present in the blob. No ``Pattern`` either, for the same reason
-    ``AnswerRow.question_id`` has none.
-
-    The tiling survives only because ``answer`` is the exclude side of
-    ``ExplodeJsonMap``'s include/exclude prefix asymmetry -- see its docstring
-    before either builder's prefix argument is touched.
-
-    The ``"general:"``-exactly key lands with ``general_key == ""``, visible
-    rather than quarantined -- see the tiling test for the proof.
+    ``silver_answer_builder`` excludes the ``general:`` prefix;
+    ``silver_general_answer_builder`` includes it and strips it, so the two
+    tables tile the blob with no overlap and no loss. Both value columns are
+    carried even though the app contract says plain string -- see
+    ``_as_column_value``/``derive_value_text`` for why an array or a JSON
+    scalar still needs a faithful text rendering.
 
     Plain types throughout, never ``X | None`` -- see ``AnswerRow`` for why.
     """
@@ -433,41 +298,20 @@ class ConversationMessageRow:
     """One row per observation x Conversation message, exploded from
     ``conversation``.
 
-    The app writes no message id at all -- no read state, no thread or Appeal
-    association, no edit or delete path -- so ``seq``, the blob's own 0-based
-    ordinal, is the grain key. That is safe only while the Conversation stays
-    append-only, which it is by construction: ``postConversationMessage``
-    builds ``[...input.messages, message]``, and there is no edit or delete
-    path anywhere on ``conversation``. Within one gold publication
-    ``(case_id, seq)`` is unique as a result, but a mid-list insert would
-    renumber every later message silently. It is a durable *pointer* into an
-    append-only list, not a durable message identifier -- do not use it as
-    one.
+    The app writes no message id, so ``seq``, the blob's own 0-based ordinal,
+    is the grain key -- a durable *pointer* into an append-only list, not a
+    durable message identifier.
 
-    ``author`` is a **nested** object (``{loginName, displayName}``), not a
-    scalar -- lifted here by two dotted paths rather than landed whole, or the
-    column built to remove blobs would carry one. ``author_login`` is the bare
-    account name (``a.khan``) the app stamps at post time, not the claims
-    login (``i:0#.w|CONTOSO\\a.khan``) every existing silver person column
-    holds -- joining the two directly matches nothing, silently, because a
-    Case-Type-agnostic pipeline has no business knowing the farm's AD domain.
-    Land it verbatim. ``author_display_name`` is an unrefreshed **snapshot** of
-    what the sender was called when they posted; never join it as a current
-    name.
+    ``author_login`` is the bare account name the app stamps at post time, not
+    the claims login every other silver person column holds -- the two
+    vocabularies do not join. ``author_display_name`` is an unrefreshed
+    snapshot of what the sender was called when they posted.
 
-    ``posted_at`` is declared ``str``, not ``datetime`` -- the sharpest
-    decision in this schema, and deliberate. The app writes
-    ``.toISOString()`` (always ``.mmmZ``); a hand-edited fixture writes ``Z``
-    without milliseconds; both are real. ``SchemaCoercion._to_datetime`` calls
-    bare ``pd.to_datetime`` with no ``format=``, which on pandas 3.x infers one
-    format from the first non-null value and then requires every other value
-    to match it exactly -- so a batch mixing the two spellings raises and
-    aborts the *whole poll*, not just one row, because ``coerce`` sits above
-    ``quarantine``. Which rows share a batch depends on the ``Modified``
-    window, so the failure is intermittent. The rule: a typed column stays
-    typed; text inside a blob stays text. (``source_modified_at`` stays
-    ``datetime`` -- it comes from OData, is uniform, and is already typed
-    upstream.)
+    ``posted_at`` is declared ``str``, not ``datetime``, deliberately: the app
+    and a hand-edited fixture write two different real ISO spellings, and
+    coercing a batch mixing both aborts the whole poll (``pd.to_datetime``
+    infers one format and rejects the other). ``source_modified_at`` stays
+    ``datetime`` because it comes from OData and is already typed upstream.
 
     Plain types throughout, never ``X | None`` -- see ``AnswerRow`` for why.
     """
@@ -481,9 +325,6 @@ class ConversationMessageRow:
     source_version: Annotated[str, NonNull()]
     source_observation_id: Annotated[str, NonNull()]
 
-    # The Conversation list's own 0-based position -- the grain key, since the
-    # app mints no message id. See the class docstring for the append-only
-    # caveat this carries.
     seq: Annotated[int, NonNull()]
     author_login: str
     author_display_name: str
@@ -496,30 +337,15 @@ class AppealRow:
     """One row per observation x Appeal, exploded from ``appeals``.
 
     Unlike a Conversation message, an Appeal carries its own identity:
-    ``appeal_id`` (``appeal-${Date.now()}``, minted by the app) is the grain
-    key, not ``appeal_seq`` -- diagnostic only, declared for the same reason
-    ``action_seq`` is on ``AnswerActionRow`` (``ExplodeJsonList``'s
-    ``ordinal_into`` is mandatory). See the data dictionary's Part D for why
-    ``appeal_id`` carries no ``Pattern``/``Unique`` rule, and what a duplicate
-    or a non-object Appeal element does to the run.
+    ``appeal_id`` (minted by the app) is the grain key, not ``appeal_seq``.
 
-    The ``resolution`` object is 1:1 -- present once an Appeal reaches
-    ``resolved``, absent otherwise -- and lifted via dotted paths into four
-    columns sharing the ``resolution_`` prefix: the four are null
-    **together**, and the shared prefix is what says so. An unresolved Appeal
-    carries nulls in all four rather than being absent as a row.
-
-    ``cited_question_ids_json`` is JSON array text of Question Definition ids
-    (joining ``answer.question_id``), never a joined string -- see
-    ``value_json`` elsewhere in this module for the same ``_json`` suffix
-    convention. **Null means the key was omitted**, not "no citations" spelled
-    ``[]``.
-
-    ``appellant`` and ``resolution_resolver`` are bare account names, the same
-    distinction ``ConversationMessageRow.author_login`` draws -- see its
-    docstring. ``raised_at`` and ``resolution_at`` stay ``str`` for the same
-    reason ``posted_at`` does; see ``ConversationMessageRow`` for the
-    mechanism.
+    The ``resolution`` object is lifted into four columns sharing the
+    ``resolution_`` prefix, null **together** while the Appeal is unresolved.
+    ``cited_question_ids_json`` is JSON array text; null means the key was
+    omitted, not "no citations" spelled ``[]``. ``appellant`` and
+    ``resolution_resolver`` are bare account names (see
+    ``ConversationMessageRow.author_login``); ``raised_at`` and
+    ``resolution_at`` stay ``str`` for the same reason ``posted_at`` does.
 
     Plain types throughout, never ``X | None`` -- see ``AnswerRow`` for why.
     """
@@ -534,7 +360,7 @@ class AppealRow:
     source_observation_id: Annotated[str, NonNull()]
 
     appeal_id: Annotated[str, NonNull()]
-    # Diagnostic only -- appeal_id is the grain key. See the class docstring.
+    # Descriptive only -- appeal_id is the grain key.
     appeal_seq: Annotated[int, NonNull()]
     appellant: str
     raised_at: str
@@ -553,15 +379,8 @@ class CaseDetailRow:
 
     This blob carries less contract than any other this feed lands -- see the
     data dictionary's "Why this blob has less contract behind it than the
-    others" for the structural reasons (no writer contract, no key
-    vocabulary this pipeline can see).
-
-    Two facts that live only here: values are whatever string the writer
-    used and are **not normalised** (a date lands as ``"2026-06-18"``, not an
-    ISO ``datetime`` -- parsing it is a Reporting concern); and there is
-    **no ``value_json`` twin**, unlike ``AnswerRow``, because ``details`` is a
-    flat ``key -> string`` map, so for every value the contract admits, a twin
-    would be byte-identical to ``value_text``.
+    others". Values are not normalised, and there is no ``value_json`` twin
+    the way ``AnswerRow`` keeps one.
 
     Plain types throughout, never ``X | None`` -- see ``AnswerRow`` for why.
     """

@@ -1,15 +1,9 @@
 """Shared ``sharepoint_cases`` test scaffolding: a fake list client and a
 baseline SharePoint list item.
 
-Both `tests/pipelines/test_sharepoint_cases.py` (one hop, one table at a time)
-and `tests/integration/test_sharepoint_cases_whole_feed.py` (the whole feed,
-one system) drive the real pipeline against a fake ``CaseListClient`` built
-from the same two pieces: ``FakeListClient`` replays frames per list with an
-advancing clock, and ``item()`` fills in every ``RAW_FEED_COLUMNS`` entry a
-real ``$select=*`` read carries. Kept in one place, per the repo's convention
-of shared test helpers living at the `tests/` root (see
-`tests/_schema_fixtures.py`), so each test module describes its own fixture
-payload rather than this scaffolding, twice.
+``FakeListClient`` replays frames per list with an advancing clock, and
+``item()`` fills in every ``RAW_FEED_COLUMNS`` entry a real ``$select=*`` read
+carries.
 """
 
 from __future__ import annotations
@@ -26,10 +20,9 @@ SERVER_NOW = dt.datetime(2026, 8, 5, 9, tzinfo=dt.timezone.utc)
 class FakeListClient:
     """A ``CaseListClient`` replaying frames per list, with a clock.
 
-    The positional frames are served in call order to whichever list asks;
-    ``by_list`` gives a named list its own. ``advance`` moves the clock on after
-    each ``server_time()`` — one step per poll — so a single client can serve a
-    test that runs the feed more than once.
+    Positional frames are served in call order to whichever list asks;
+    ``by_list`` gives a named list its own. ``advance`` moves the clock on
+    after each ``server_time()`` call.
     """
 
     def __init__(
@@ -64,13 +57,9 @@ class FakeListClient:
 
 
 def item(**overrides: object) -> dict[str, object]:
-    """One list item in the shape SharePoint returns it.
-
-    A real read leads with ``$select=*``, so every column is present; and an
-    expanded Person answers as a **nested object** on the property, or ``null``
-    where nobody holds the role. The fake must not be tidier than the payload, or
-    the tests stop proving anything about the real path. Unmentioned columns are
-    null, which is what most of them are on a live row.
+    """One list item in the shape SharePoint returns it: every column present
+    (a real read leads with ``$select=*``), an expanded Person as a nested
+    object or ``null``, and unmentioned columns null.
     """
     row: dict[str, object] = {
         "Id": 101,
@@ -95,8 +84,6 @@ def item(**overrides: object) -> dict[str, object]:
         "Notes": "Awaiting the call recording.",
         "Answers": '{"q-outcome":{"value":"Not upheld"}}',
     }
-    # Every stored column the fixture did not name, minus the ones the feed
-    # derives: the persons arrive nested above, and the provenance is stamped.
     flattened = {
         f"{person}/{sub}" for person, subs in PERSON_SUBFIELDS.items() for sub in subs
     }

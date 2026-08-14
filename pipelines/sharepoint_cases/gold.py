@@ -4,32 +4,11 @@ and five aggregates.
 Silver is an append-only history of *observations* across every declared Case
 list. Gold reduces that three ways. Every table is rebuilt whole with
 ``Refresh()`` on every poll, so a re-drive converges rather than accumulating.
+Every table's declared grain is in ``docs/data-dictionary-sharepoint-cases.md``.
 
-Thirteen tables, and their declared grain:
-
-=================================  =============================================
-``case_current``                   one row per ``case_id`` -- the latest observation
-Detail Tables                      grain declared per table in ``DETAIL_GRAIN``
-``case_counts_current``            reviewer x that reviewer's manager x ``status``
-``case_age_buckets_current``       ``age_bucket`` x ``status``
-``case_throughput_daily``          ``terminal_date`` x ``terminal_status``
-``answer_remediation_current``     ``case_type`` x ``question_id`` x
-                                    ``remediation_required`` x ``remediation_status``
-``appeal_outcomes_current``        ``case_type`` x ``state`` x ``resolution_verdict``
-=================================  =============================================
-
-The Detail Tables, named in ``DETAIL_TABLES``, each hold the child rows -- an
-answer, an Issue Capture field, a remediation action, a General Question
-answer, a conversation message, an Appeal, a Case Details field -- of the
-Cases' *winning* observation, per ADR-0015
-(``docs/adr/0015-detail-tables-reduce-to-the-parents-latest-observation.md``).
-Every entry ``DETAIL_GRAIN`` declares -- ``answer``, ``answer_capture``,
-``answer_action``, ``general_answer``, ``conversation_message``, ``appeal``
-and ``case_detail`` -- publishes today, so ``DETAIL_TABLES`` (derived from
-``GOLD_TABLES`` and ``DETAIL_GRAIN`` together) equals ``DETAIL_GRAIN`` in
-full; a table declared there but not yet in ``GOLD_TABLES`` would be the
-exception, and there is none right now.
-
+The Detail Tables, named in ``DETAIL_TABLES`` (derived from ``GOLD_TABLES`` and
+``DETAIL_GRAIN``), hold the child rows of the Cases' *winning* observation, per
+ADR-0015 (``docs/adr/0015-detail-tables-reduce-to-the-parents-latest-observation.md``).
 Two of the five aggregates -- ``answer_remediation_current`` and
 ``appeal_outcomes_current`` -- reduce from a Detail Table (``answer`` and
 ``appeal`` respectively) rather than from ``case_current``, per
@@ -87,12 +66,8 @@ GOLD_TABLES = (
 
 CASE_ID_COLUMN = "case_id"
 
-# What "one row per" means for each Detail Table -- the grain gold_detail_builder
-# guards with UniqueValidator, and the grain the silver Detail Tables write rows
-# to. Every entry leads with CASE_ID_COLUMN: a Detail row's identity is always
-# the parent Case plus whatever distinguishes it within that Case. Declared for
-# every Detail Table this feed may ever grow, whether or not its silver table
-# exists yet; DETAIL_TABLES below is the subset that actually publishes.
+# The grain of each Detail Table, declared for every one this feed may ever
+# grow; DETAIL_TABLES below is the subset that actually publishes.
 DETAIL_GRAIN: dict[str, tuple[str, ...]] = {
     "answer": (CASE_ID_COLUMN, "question_id"),
     "answer_capture": (CASE_ID_COLUMN, "question_id", "field_key"),
@@ -104,25 +79,18 @@ DETAIL_GRAIN: dict[str, tuple[str, ...]] = {
 }
 
 # The Detail Tables that actually publish today, derived from GOLD_TABLES so
-# the two cannot drift apart as a new Detail Table lands -- adding one to
-# GOLD_TABLES and DETAIL_GRAIN is then the only edit that makes it publish.
+# the two cannot drift apart.
 DETAIL_TABLES: tuple[str, ...] = tuple(t for t in GOLD_TABLES if t in DETAIL_GRAIN)
 
-# An aggregate that reduces from a Detail Table rather than from case_current,
-# named to the Detail Table it reduces. An aggregate absent from this mapping
-# reduces case_current, as the first three (case_counts_current,
-# case_age_buckets_current, case_throughput_daily) do. The values drive both
-# the source lookup in publish_gold's aggregate loop and which Detail Tables'
-# datasets that loop needs to retain in memory.
+# Aggregates that reduce from a Detail Table rather than case_current, named to
+# the Detail Table each reduces.
 DETAIL_AGGREGATES: dict[str, str] = {
     "answer_remediation_current": "answer",
     "appeal_outcomes_current": "appeal",
 }
 
 AS_OF_COLUMN = "as_of_utc"
-# The pair a Detail row's semi-join keys on: the winning Case and the one
-# observation that won it. Declared beside AS_OF_COLUMN because both are things
-# every gold hop reads off case_current, not values a Detail row derives itself.
+# The pair a Detail row's semi-join keys on.
 WINNER_COLUMNS = (CASE_ID_COLUMN, "source_observation_id")
 
 # A Case whose review is over, and the source-written stamp that says when it
@@ -135,12 +103,8 @@ TERMINAL_STATUSES = {"Completed": "completed_at", "Void": "voided_at"}
 # reader may silently drop, losing rows from a total.
 UNASSIGNED = "(unassigned)"
 UNSTAMPED = "(unstamped)"
-# ``remediation_required``'s absent key is *not* a fill for missing data -- it
-# is the tri-state's real third state (see AnswerRow), and must stay
-# countable and distinct from a reviewer having chosen "no".
+# The tri-state's real third state (see AnswerRow), not a fill for missing data.
 UNDECIDED = "(undecided)"
-# One meaning, shared by remediation_status and resolution_verdict: no
-# resolution recorded yet.
 UNRESOLVED = "(unresolved)"
 UNSTATED = "(unstated)"
 
@@ -153,10 +117,9 @@ COUNT_DIMENSIONS = (
     "status",
 )
 
-# The grain of ``answer_remediation_current``, in the order it groups and sorts
-# by. ``case_type`` leads for correctness, not convenience: question_ids are
-# drawn from a per-Case-Type question bank, so "q1" in two banks names two
-# different questions, and grouping without case_type would sum them as one.
+# The grain of ``answer_remediation_current``. ``case_type`` leads: question_ids
+# are drawn from a per-Case-Type question bank, so grouping without it would sum
+# two different questions as one.
 ANSWER_REMEDIATION_DIMENSIONS = (
     "case_type",
     "question_id",
@@ -164,9 +127,8 @@ ANSWER_REMEDIATION_DIMENSIONS = (
     "remediation_status",
 )
 
-# The grain of ``appeal_outcomes_current``, in the order it groups and sorts
-# by. ``case_type`` leads for the same correctness reason it leads
-# ANSWER_REMEDIATION_DIMENSIONS.
+# The grain of ``appeal_outcomes_current``; ``case_type`` leads for the same
+# reason as above.
 APPEAL_OUTCOME_DIMENSIONS = ("case_type", "state", "resolution_verdict")
 
 # ``(exclusive upper bound in days, label)``, tried in order; the last entry is
@@ -264,16 +226,8 @@ def latest_case_version(dataset: Dataset) -> Dataset:
 
 
 def winning_observations(observations: Reader) -> Dataset:
-    """Gold ``case_current``, projected to the pair a Detail row's semi-join needs.
-
-    This projection is what makes ``gold_detail_builder``'s join a **semi**-join,
-    and it is non-optional rather than tidy: silver Detail rows and
-    ``case_current`` share ``case_type``, ``source_item_id``, ``source_version``,
-    ``source_modified_at`` and the load stamps, so an unprojected merge would
-    suffix every one of them ``_x``/``_y`` instead of joining cleanly on
-    ``WINNER_COLUMNS``.
-
-    No ``drop_duplicates()``: ``UniqueValidator(CASE_ID_COLUMN)`` in
+    """Gold ``case_current``, projected to ``WINNER_COLUMNS`` so the join is a
+    semi-join. No ``drop_duplicates()``: ``UniqueValidator(CASE_ID_COLUMN)`` in
     ``case_current_builder`` already makes a duplicate winning pair impossible.
     """
     frame = observations.read().to_pandas()
@@ -409,11 +363,8 @@ def _counted(
 ) -> Dataset:
     """Group ``frame`` by ``dimensions`` into one row per combination, counted.
 
-    Each column named in ``fills`` is filled with its literal via
-    ``frame[c].where(frame[c].notna(), literal)`` -- **``.where``, not
-    ``fillna``** -- matching ``case_counts``'s idiom, so an all-null float64
-    column lands as ``object`` rather than staying float64 with the literal
-    coerced to NaN.
+    ``.where``, not ``fillna``, so an all-null float64 ``fills`` column lands as
+    ``object`` rather than staying float64 with the literal coerced to NaN.
     """
     filled = {
         column: frame[column].where(frame[column].notna(), literal)
@@ -510,17 +461,11 @@ def gold_detail_builder(
     """Build one Detail Table's gold hop. **Grain: one row per ``grain``.**
 
     Reduces a silver Detail Table's accumulated history to the child rows of
-    the Cases' *winning* observation, per ADR-0015.
-
-    This builder never orders and never breaks a tie. ``latest_case_version``
-    (via ``observations``, gold ``case_current``) has already picked the
-    winner; applying any ordering here would be a second reduction path that
-    can disagree with the parent about which observation won for a Case.
-
-    **Precondition**: a Detail row's ``case_type`` must be the settled one
-    silver ``case_version`` stamps, not the raw list cell. A wrong ``case_type``
-    mints a different ``case_id`` than the parent's, so the semi-join matches
-    nothing and gold lands zero rows with no error.
+    the Cases' *winning* observation, per ADR-0015. It never orders and never
+    breaks a tie -- ``latest_case_version`` has already picked the winner, and a
+    second ordering path here could disagree with it. **Precondition**: a
+    Detail row's ``case_type`` must be the settled one, or the semi-join
+    matches nothing and gold lands zero rows silently.
     """
     p = Pipeline(name, run_log=run_log)
     r = p.read(reader, name="read")
@@ -570,36 +515,16 @@ def publish_gold(
     reduces exactly the current table's own rows. They commit independently,
     in order; a failure part-way leaves the earlier ones refreshed, which is
     safe because the caller has not advanced any watermark and the next run
-    rebuilds everything.
-
-    Each Detail Table's ``observations=`` is ``DatasetReader(current)`` --
-    ``current`` is already materialised in memory, so re-reading
-    ``med.gold.reader(CURRENT_TABLE)`` would be a wasted round trip and, under a
-    dry run where ``Refresh()`` wrote nothing, would hand the semi-join the
-    *previous* run's winners or a missing table.
-
-    A Detail Table's published dataset is kept in memory only when
-    ``DETAIL_AGGREGATES`` names it as an aggregate's source -- holding all
-    seven would raise peak memory by a full ``answer`` frame plus six more
-    nobody reduces from. An aggregate over a Detail
-    Table then reads that hop's already-materialised dataset for exactly the
-    reason ``observations=DatasetReader(current)`` does above: it counts
-    exactly the rows ``Refresh()`` just published, and a dry run cannot be
-    handed a stale or missing table.
+    rebuilds everything. See ``docs/gold-accumulation.md`` for why each source
+    is read from memory rather than re-read from disk.
 
     Each hop runs as a bare ``p.run()``, so it inherits the ambient run context
     the runner makes active -- which is where a dry run's write-nothing
     behaviour comes from.
     """
-    # Only a dry run has any of these silver tables missing: a real run always
-    # writes case_version and every Detail Table (even zero rows) before this is
-    # reached, but a dry run against a base directory from before a Detail Table
-    # existed can have case_version without it. One probe up front, covering
-    # every table this hop is about to read, rather than a skip inside the loop
-    # below -- a per-table skip would let gold silently under-publish, which is
-    # exactly the failure this feed's grain guarantees rule out. A probe rather
-    # than a caught OperationalError, which would also swallow "database is
-    # locked".
+    # Only a dry run can have any of these silver tables missing; one probe up
+    # front, rather than a per-table skip, so a partial silver history cannot
+    # make gold silently under-publish.
     if any(
         med.silver.columns_of(table).columns() is None
         for table in (SILVER_TABLE, *DETAIL_TABLES)
