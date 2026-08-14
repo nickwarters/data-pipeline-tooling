@@ -22,8 +22,9 @@ published once, over every list's accumulated history.
   ``details``, into one row per Case Details field -- completing the blob
   coverage: with it, every nested structure on the Case row has a normalised
   home.
-- ``gold.publish_gold`` rebuilds the current Case, the Detail Tables and three
-  aggregates from the whole silver history, each with ``Refresh()``.
+- ``gold.publish_gold`` rebuilds the current Case, the Detail Tables and five
+  aggregates from the whole silver history, each with ``Refresh()`` -- three
+  reduced from ``case_current``, and two from a Detail Table.
 
 **Every watermark is committed last**, after gold has been written, because
 advancing one is what vouches for its window having been *published*. A run that
