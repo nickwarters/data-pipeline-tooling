@@ -313,3 +313,28 @@ catalogue key, message, Appeal or Case Details field (and, for the two
 field-level answer tables, one per field or action within that question), and
 a single-column key would raise on
 the second of any of them for the same Case.
+
+### Aggregating a Detail Table
+
+An Aggregate table normally reduces `case_current` (see `case_counts` above).
+Two of `pipelines/sharepoint_cases/gold.py`'s five aggregates —
+`answer_remediation_current` and `appeal_outcomes_current` — reduce from a
+Detail Table instead: `answer` and `appeal` respectively, named in
+`DETAIL_AGGREGATES`.
+
+The source is that hop's **in-memory published dataset**, not silver and not
+a re-read of gold — the same reason a Detail Table's own reduction reads
+`observations=DatasetReader(current)` rather than re-reading
+`case_current` from disk (see *And a shape where neither reduce is right:
+Detail Tables*, above). Reading the in-memory dataset means the aggregate
+counts exactly the winning observation's rows the Detail hop just wrote, and
+works correctly under a dry run, where `Refresh()` writes nothing and a
+re-read from disk would see a stale or missing table.
+
+`publish_gold` runs one loop for every aggregate, Detail-sourced or not:
+`DETAIL_AGGREGATES.get(table, CURRENT_TABLE)` picks the in-memory dataset
+each `(table, step, transform)` entry reads, so the loop needs no branch —
+only a table naming a Detail Table as its source is looked up any
+differently. A Detail Table's dataset is kept in memory only when
+`DETAIL_AGGREGATES` names it as a source, so the other five Detail Tables'
+frames are freed once written rather than held for nobody to read.
