@@ -1061,11 +1061,108 @@ def test_every_current_row_carries_the_candidate_window_end():
     assert row["as_of_utc"] == AS_OF.isoformat()
 
 
+AMENDED_COLUMNS = (
+    "amended_outcome_id",
+    "amended_reason",
+    "amended_justification",
+    "amended_by",
+    "amended_at",
+    "amended_from_appeal_id",
+)
+
+
 def test_current_gold_republishes_every_silver_column():
     [row] = current(version())
 
     assert set(SILVER_COLUMNS) <= set(row)
-    assert set(row) - set(SILVER_COLUMNS) == {"case_id", "as_of_utc"}
+    assert set(row) - set(SILVER_COLUMNS) == {
+        "case_id",
+        "as_of_utc",
+        *AMENDED_COLUMNS,
+    }
+
+
+def test_a_reason_carrying_amendment_flattens_onto_the_current_row():
+    # The qa-check/tm-check provenance arm: a reason key, no source Appeal.
+    blob = json.dumps(
+        {
+            "outcome": "poor-with-harm",
+            "reason": "qa-check",
+            "justification": "The missed needs check was immaterial.",
+            "amendedBy": "user-controls",
+            "amendedAt": "2026-06-12T00:00:00.000Z",
+        }
+    )
+
+    [row] = current(version(amended_outcome=blob))
+
+    assert row["amended_outcome_id"] == "poor-with-harm"
+    assert row["amended_reason"] == "qa-check"
+    assert row["amended_justification"] == "The missed needs check was immaterial."
+    assert row["amended_by"] == "user-controls"
+    # ISO text, verbatim: text inside a blob stays text.
+    assert row["amended_at"] == "2026-06-12T00:00:00.000Z"
+    assert pd.isna(row["amended_from_appeal_id"])
+    # The blob column itself still republishes beside its flattened columns;
+    # dropping it is #656's decision.
+    assert row["amended_outcome"] == blob
+
+
+def test_an_appeal_derived_amendment_carries_the_appeal_id_and_no_reason():
+    # The other provenance arm: fromAppealId (which joins appeal.appeal_id) is
+    # present iff the amendment came from agreeing an Appeal, and the app then
+    # writes no reason key.
+    blob = json.dumps(
+        {
+            "outcome": "poor-no-harm",
+            "justification": "Appeal agreed.",
+            "amendedBy": "user-controls",
+            "amendedAt": "2026-06-12T00:00:00Z",
+            "fromAppealId": "appeal-1754390400000",
+        }
+    )
+
+    [row] = current(version(amended_outcome=blob))
+
+    assert row["amended_outcome_id"] == "poor-no-harm"
+    assert row["amended_from_appeal_id"] == "appeal-1754390400000"
+    assert pd.isna(row["amended_reason"])
+
+
+@pytest.mark.parametrize(
+    "blob",
+    [
+        pytest.param(None, id="never-written"),
+        pytest.param("", id="empty"),
+        pytest.param("null", id="explicitly-cleared"),
+    ],
+)
+def test_a_case_with_no_amendment_carries_nulls_not_a_crash(blob):
+    # The column holds the JSON literal "null" when explicitly cleared and is
+    # empty or absent if never written; all three land identically.
+    [row] = current(version(amended_outcome=blob))
+
+    assert all(pd.isna(row[column]) for column in AMENDED_COLUMNS)
+
+
+def test_a_malformed_amendment_in_a_losing_observation_cannot_abort_gold():
+    # The flatten sits after the reduction, so only each Case's winning blob is
+    # ever parsed: a malformed blob in superseded history stays recoverable in
+    # silver without holding the rebuild hostage.
+    rows = current(
+        version(
+            source_version='"3"',
+            source_modified_at="2026-08-05 08:10:00+00:00",
+            amended_outcome="{not json",
+        ),
+        version(
+            source_version='"4"',
+            source_modified_at="2026-08-05 08:45:00+00:00",
+            amended_outcome=json.dumps({"outcome": "good"}),
+        ),
+    )
+
+    assert [row["amended_outcome_id"] for row in rows] == ["good"]
 
 
 # One representative grain: the builder is generic over DETAIL_GRAIN, and these
@@ -1845,7 +1942,8 @@ def test_the_gold_hops_plan_exactly_the_steps_they_always_have():
         "  [Read] read",
         "  [Transform] derive-key (depends on: read)",
         "  [Transform] latest-version (depends on: derive-key)",
-        "  [Transform] stamp-as-of (depends on: latest-version)",
+        "  [Transform] flatten-amended-outcome (depends on: latest-version)",
+        "  [Transform] stamp-as-of (depends on: flatten-amended-outcome)",
         "  [Validate] unique-validate (depends on: stamp-as-of)",
         "  [Write] write (depends on: unique-validate)",
     ]

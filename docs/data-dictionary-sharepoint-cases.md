@@ -259,7 +259,11 @@ it to a bare account name, or joining it to a person, is a gold concern.
 #### JSON blob columns
 
 `answers`, `conversation`, `appeals`, `amended_outcome` and `details` land as
-text and are never parsed by this feed. They are deliberately un-indexed and
+text and are never parsed *at this layer*: silver keeps each blob exactly as
+the list holds it, which is what makes a malformed one recoverable. Their
+normalised homes are downstream — the Detail Tables for the first four (and
+`details`), and the flattened `amended_*` columns on gold `case_current` for
+`amended_outcome`. They are deliberately un-indexed and
 never queried on the source side either: the reason-defining data is hoisted onto
 the flag and date columns precisely so nothing has to scan a blob.
 
@@ -1016,7 +1020,7 @@ registry — `python -m cli runs --table case_current`
 | **Identity** | a `sha256` over `{namespace: "sharepoint_cases", natural_key: {case_type, source_item_id}}`, stamped by `DeriveKey` |
 | **Load strategy** | `Refresh()` |
 | **Source** | the whole `silver.case_version` history, across every declared list |
-| **Columns** | every silver column, plus `case_id` and `as_of_utc` |
+| **Columns** | every silver column, plus `case_id`, `as_of_utc`, and the six columns flattened out of `amended_outcome` (below) |
 
 **Which version is current.** One stable sort on `case_id`,
 `source_modified_at` (parsed UTC), the parsed source version's major then minor
@@ -1038,18 +1042,43 @@ declared slug, not the list's editable cell. The cost is stated plainly:
 **renaming the subject re-keys history** ([ADR-0016](adr/0016-one-sync-subject-for-every-case-type.md)),
 so the pending `cora_cases` rename needs the treatment a re-key always needs.
 
+**The flattened Amended Outcome.** `amended_outcome` is 1:1 with the Case —
+a table built from it would have exactly one row per Case, which is a wide
+Case row wearing a join — so its normalised home is columns on this row,
+lifted by `FlattenJsonObject` **after** the current-state reduction (only
+each Case's *winning* blob is ever parsed; a malformed blob in superseded
+history cannot abort the rebuild). The flatten happens at gold, not silver:
+`case_version` is the rename and the type contract and nothing else, and
+keeps every blob as landed text. Every name carries an `amended_` prefix so
+none can be read as the scalar `outcome` / `effective_outcome` columns
+beside them.
+
+| Column | Blob field | Notes |
+|--------|------------|-------|
+| `amended_outcome_id` | `outcome` | an `OutcomeOption` **id** (`poor-with-harm`), not the display wording |
+| `amended_reason` | `reason` | an Amendment Reason key (`qa-check` \| `tm-check` \| `appeal`, plus per-Case-Type extras). **No `OneOf`**: Case Types may declare `extraAmendmentReasons` in frontend config this pipeline cannot see — the same argument that left `general_answer.general_key` unruled. Absent on pre-field amendments and **always** absent on appeal-derived ones |
+| `amended_justification` | `justification` | free text |
+| `amended_by` | `amendedBy` | a **bare account login** (`user-controls`), not the claims login the Person columns hold — the two vocabularies do not join (see the shared prose point above) |
+| `amended_at` | `amendedAt` | ISO text, verbatim — text inside a blob stays text, as every Detail Table's blob timestamp does |
+| `amended_from_appeal_id` | `fromAppealId` | present **iff** the amendment came from agreeing an Appeal; **joins the gold `appeal` table's `appeal_id`**. Mutually exclusive with `amended_reason` in practice |
+
+A Case never amended (`amended_outcome` empty or absent) and one explicitly
+cleared (the column holds the JSON literal `"null"`) land identically: all
+six columns null. The Current Outcome rule the app itself applies is
+`amended_outcome_id ?? outcome_at_completion` — but prefer the source's own
+`effective_outcome` projection, which the app writes in the same PATCH.
+
 Two things to know about what this table holds:
 
-- It republishes **every** silver column, including the `answers`,
-  `conversation`, `appeals` and `details` JSON blobs, on every poll. A
-  consumer has nowhere else to read them; the price is that `Refresh()`
-  rewrites them each time. Every one of those blobs is now *also* normalised
-  elsewhere: `answers` into the gold `answer`, `answer_capture`,
-  `answer_action` and `general_answer` Detail Tables, `conversation` into
-  `conversation_message`, `appeals` into `appeal`, and — with this slice —
-  `details` into `case_detail`, joining the rest as normalised elsewhere.
-  Dropping the raw blobs from `case_current` once every consumer has moved
-  onto the Detail Tables is tracked in #656, not done here.
+- It republishes **every** silver column, including the five JSON blobs, on
+  every poll; the price is that `Refresh()` rewrites them each time. Every
+  blob now has a normalised home: `answers` in the gold `answer`,
+  `answer_capture`, `answer_action` and `general_answer` Detail Tables,
+  `conversation` in `conversation_message`, `appeals` in `appeal`, `details`
+  in `case_detail`, and — with this slice — `amended_outcome` in the
+  flattened `amended_*` columns on this very table. Dropping the raw blobs
+  from `case_current` now that nothing lives only in one is tracked in #656,
+  not done here.
 - **A Case deleted from the list stays here forever.** The poll asks for items
   modified in a window, and a deleted item is not returned by anything —
   deletion inference is out of scope for this feed. `case_current` is "every

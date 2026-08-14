@@ -35,7 +35,7 @@ import pandas as pd
 from framework.core import Dataset, Reader, UniqueValidator, Writer
 from framework.io import DatasetReader, Refresh
 from framework.run import Pipeline, RunLog
-from framework.transform import DeriveKey, JoinWith, Stamp
+from framework.transform import DeriveKey, FlattenJsonObject, JoinWith, Stamp
 from tools.medallion import Medallion
 from tools.observability.timestamps import local_date
 
@@ -86,6 +86,27 @@ DETAIL_TABLES: tuple[str, ...] = tuple(t for t in GOLD_TABLES if t in DETAIL_GRA
 DETAIL_AGGREGATES: dict[str, str] = {
     "answer_remediation_current": "answer",
     "appeal_outcomes_current": "appeal",
+}
+
+# The amended_outcome blob, flattened onto the case_current row -- it is 1:1
+# with the Case, so it wants columns, not a Detail Table. Every name carries an
+# amended_ prefix so none can be read as the scalar outcome / effective_outcome
+# columns beside them. amended_outcome_id holds an OutcomeOption *id*
+# (poor-with-harm), not display wording; amended_reason is an Amendment Reason
+# key with no OneOf, because Case Types may declare extraAmendmentReasons in
+# frontend config this pipeline cannot see (the same argument that left
+# general_key unruled); amended_at stays ISO text -- text inside a blob stays
+# text, as every Detail Table's blob timestamp does; amended_from_appeal_id
+# joins the gold appeal table's appeal_id, and is present iff the amendment came
+# from agreeing an Appeal (amended_reason is then absent). amended_by is a bare
+# account login, not the claims login the Person columns hold.
+AMENDED_OUTCOME_FIELDS = {
+    "outcome": "amended_outcome_id",
+    "reason": "amended_reason",
+    "justification": "amended_justification",
+    "amendedBy": "amended_by",
+    "amendedAt": "amended_at",
+    "fromAppealId": "amended_from_appeal_id",
 }
 
 AS_OF_COLUMN = "as_of_utc"
@@ -424,6 +445,17 @@ def case_current_builder(
     never fire: ``drop_duplicates`` has just guaranteed what it checks. It is
     kept as a **tripwire** -- this is the one hop whose grain comes from a rule
     rather than from a ``groupby``, so the one a future change could get wrong.
+
+    The ``amended_outcome`` blob is flattened **here, not at silver**:
+    ``case_version`` is the rename and the type contract and nothing else, and
+    keeps every blob as landed text -- the faithful observation history, and
+    the only place a malformed blob is recoverable. So ``case_current`` derives
+    the ``AMENDED_OUTCOME_FIELDS`` columns no silver row carries, exactly as
+    the Detail Tables derive typed rows from the other four blobs -- this blob
+    is 1:1 with the Case, so its normalised home is columns on the Case row
+    rather than a one-row-per-Case table wearing a join. Flattened after the
+    reduction, so only each Case's winning blob is ever parsed -- and a
+    malformed blob in a *losing* observation cannot abort the rebuild.
     """
     p = Pipeline(f"{FEED_NAME}:gold:{CURRENT_TABLE}", run_log=run_log)
     r = p.read(reader, name="read")
@@ -437,8 +469,17 @@ def case_current_builder(
         name="derive-key",
     )
     latest = p.transform(latest_case_version, keyed, name="latest-version")
+    # drop=False: whether the blob column itself keeps republishing beside its
+    # flattened columns is #656's decision, not this hop's.
+    flattened = p.transform(
+        FlattenJsonObject(
+            column="amended_outcome", fields=AMENDED_OUTCOME_FIELDS, drop=False
+        ),
+        latest,
+        name="flatten-amended-outcome",
+    )
     stamped = p.transform(
-        Stamp(AS_OF_COLUMN, as_of.isoformat()), latest, name="stamp-as-of"
+        Stamp(AS_OF_COLUMN, as_of.isoformat()), flattened, name="stamp-as-of"
     )
     validated = p.validate(
         UniqueValidator(CASE_ID_COLUMN), stamped, name="unique-validate"
