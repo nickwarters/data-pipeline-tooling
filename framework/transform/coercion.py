@@ -97,8 +97,16 @@ class SchemaCoercion:
         return Dataset.from_pandas(frame)
 
     def _to_datetime(self, series: "pd.Series", name: str) -> "pd.Series":
+        # format="ISO8601", not inference: bare pd.to_datetime infers one format
+        # from the first non-null value and then rejects every other spelling of
+        # the same ISO instant, so a batch mixing `...T09:00:00Z` with
+        # `...T09:00:00.000Z` — both real in this system — would abort the hop,
+        # intermittently, as a function of which rows share a batch. A value
+        # that is not ISO-8601 at all still raises: turning it into a null
+        # (errors="coerce") would silently lose it, which is worse than failing
+        # loudly.
         try:
-            return pd.to_datetime(series)
+            return pd.to_datetime(series, format="ISO8601")
         except (ValueError, TypeError) as exc:
             raise self._error(name, f"not a parseable date ({exc})") from exc
 

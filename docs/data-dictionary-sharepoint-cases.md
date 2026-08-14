@@ -805,15 +805,15 @@ nothing. This feed lands each verbatim rather than guessing at a farm's AD
 domain, which is Case-Type-agnostic and has no business knowing it.
 
 **Blob timestamps stay text on purpose.** `posted_at`, `raised_at` and
-`resolution_at` are declared `str`, not `datetime`. `SchemaCoercion`'s
-datetime coercion calls bare `pd.to_datetime` with no `format=`, which on
-pandas 3.x infers one format from the first non-null value in the batch and
-then requires every other value to match it exactly. Both spellings these
-blobs carry are real — the app writes `.toISOString()` (`.mmmZ`), a
-hand-edited row can write `Z` without milliseconds — and mixing them in one
-batch raises and aborts the *whole poll*, intermittently, since which rows
-share a batch depends on the `Modified` window. The rule: a typed column
-stays typed; text inside a blob stays text. (`source_modified_at` stays
+`resolution_at` are declared `str`, not `datetime`. `SchemaCoercion` now
+parses datetimes with `format="ISO8601"`, so the two real spellings these
+blobs carry — the app's `.toISOString()` (`.mmmZ`) and a hand-edited `Z`
+without milliseconds — coexist in one batch. What has not changed is that
+the coerce step sits *above* quarantine: a value that is not ISO-8601 at
+all (a hand-edited `05/08/2026`) still raises and aborts the *whole poll*,
+and blob text is exactly where a hand edit can put one. The rule: a typed
+column stays typed; text inside a blob stays text, until there is evidence
+the blobs are clean enough to re-type. (`source_modified_at` stays
 `datetime` because it comes from OData, is uniform, and is already typed
 upstream — it is not one of these blob fields.)
 

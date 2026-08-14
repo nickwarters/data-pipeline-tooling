@@ -725,8 +725,12 @@ SQLite round-trip, so they pass through untouched and stay the validator's gate;
 undeclared columns are left alone. The one exception is a **zero-row** frame,
 where every declared column is typed — there is no value to carry the type, and
 the dtypes of an empty write are what fix a created table's column affinity (see
-[schema enforcement](schema-enforcement.md#a-zero-row-frame-satisfies-any-declared-schema)). A value it cannot cast (an unparseable date,
-an unknown boolean encoding) raises a **`CoercionError`** with one located
+[schema enforcement](schema-enforcement.md#a-zero-row-frame-satisfies-any-declared-schema)). Dates and datetimes are parsed as **ISO-8601**
+(`format="ISO8601"`), so mixed precision in one column — `Z` beside `.000Z` —
+coerces cleanly rather than depending on which value came first; a non-ISO
+spelling (`05/08/2026`) is deliberately unparseable, since a guessed format
+would land a wrong instant silently. A value it cannot cast (an unparseable
+date, an unknown boolean encoding) raises a **`CoercionError`** with one located
 message naming the column. The raw→silver hop composes it ahead of the
 `SchemaValidator`, so the per-run order is **read → coerce (transform) →
 post-validate (schema) → write**.
