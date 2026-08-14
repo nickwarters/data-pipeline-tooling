@@ -179,6 +179,103 @@ test('checkCaseTypes fails a duplicate Question Definition id', async () => {
   assert.match(failures[0].message, /duplicate/i);
 });
 
+test('checkCaseTypes requires authored and Outcome choices to offer options', async () => {
+  for (const responseType of ['single-choice', 'multi-choice', 'outcome']) {
+    const failures = await checkCaseTypes({
+      caseTypes: [
+        demoEntry(
+          demoConfig({
+            questions: [
+              {
+                id: `q-${responseType}`,
+                text: 'Choose',
+                responseType,
+                options: [],
+              },
+            ],
+          })
+        ),
+      ],
+    });
+
+    assert.equal(failures.length, 1, joined(failures));
+    assert.match(failures[0].message, new RegExp(`q-${responseType}`));
+    assert.match(failures[0].message, /options/);
+    assert.match(failures[0].message, /nothing to choose/);
+  }
+});
+
+test('checkCaseTypes resolves fixed Yes, No and NA options for showWhen values', async () => {
+  const failures = await checkCaseTypes({
+    caseTypes: [
+      demoEntry(
+        demoConfig({
+          questions: [
+            { id: 'q-gate', text: 'Gate', responseType: 'yes-no-na' },
+            {
+              id: 'q-dependent',
+              text: 'Dependent',
+              responseType: 'yes-no-na',
+              showWhen: {
+                $or: [
+                  { 'q-gate': { equals: 'Yes' } },
+                  {
+                    $or: [
+                      { 'q-gate': { equals: 'No' } },
+                      { 'q-gate': { in: ['NA'] } },
+                    ],
+                  },
+                ],
+              },
+            },
+          ],
+        })
+      ),
+    ],
+  });
+
+  assert.deepEqual(failures, [], joined(failures));
+});
+
+test('checkCaseTypes rejects impossible equals and in values inside nested showWhen rules', async () => {
+  const failures = await checkCaseTypes({
+    caseTypes: [
+      demoEntry(
+        demoConfig({
+          questions: [
+            {
+              id: 'q-gate',
+              text: 'Gate',
+              responseType: 'single-choice',
+              options: ['Available'],
+            },
+            {
+              id: 'q-dependent',
+              text: 'Dependent',
+              responseType: 'yes-no-na',
+              showWhen: {
+                $and: [
+                  { 'q-gate': { equals: 'Misspelled' } },
+                  { $or: [{ 'q-gate': { in: ['Available', 'Missing'] } }] },
+                ],
+              },
+            },
+          ],
+        })
+      ),
+    ],
+  });
+
+  assert.equal(failures.length, 2, joined(failures));
+  for (const failure of failures) {
+    assert.match(failure.message, /q-dependent/);
+    assert.match(failure.message, /q-gate/);
+    assert.match(failure.message, /Reviewer response options/);
+  }
+  assert.match(joined(failures), /Misspelled/);
+  assert.match(joined(failures), /Missing/);
+});
+
 test('checkCaseTypes fails a showWhen cycle', async () => {
   const failures = await checkCaseTypes({
     caseTypes: [

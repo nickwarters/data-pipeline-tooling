@@ -26,6 +26,7 @@ import { sectionIds } from '../src/lib/section-registry.js';
 import { ROLES } from '../src/services/section-access.js';
 import { isVoidReasonKey, VOID_REASONS } from '../src/lib/void-reasons.js';
 import { ACTION_CENTRE_REASONS } from '../src/services/action-centre-model.js';
+import { reviewerResponseOptions } from '../src/lib/response-options.js';
 import { CASE_TYPES, loadCaseTypeConfig } from '../case-types/manifest.js';
 import { resolveRelative } from './module-graph.js';
 
@@ -422,6 +423,22 @@ function checkQuestions(slug, file, config) {
     ids.add(id);
   }
 
+  // A choice the Reviewer cannot choose is not a Question Definition. The
+  // fixed yes/no vocabulary is resolved in `reviewerResponseOptions`, so only
+  // authored and Outcome-derived choices carry an `options` list here.
+  for (const question of questions) {
+    if (
+      ['single-choice', 'multi-choice', 'outcome'].includes(
+        question?.responseType
+      ) &&
+      (!Array.isArray(question?.options) || question.options.length === 0)
+    ) {
+      fail(
+        `question "${question.id}" is a ${question.responseType} with no \`options\`, so the Reviewer has nothing to choose`
+      );
+    }
+  }
+
   const beforeShapeChecks = failures.length;
   for (const question of questions) {
     for (const problem of malformedNodes(question?.showWhen)) {
@@ -448,6 +465,26 @@ function checkQuestions(slug, file, config) {
     }
   }
 
+  // `showWhen` is authored in terms of stored Answer values. A typo is valid
+  // condition syntax but can never become true, leaving a Question silently
+  // hidden. Compare against the same resolved vocabulary the Reviewer sees,
+  // including fixed Yes/No and the universal NA response.
+  const questionsById = new Map(
+    questions.map((/** @type {any} */ question) => [question.id, question])
+  );
+  for (const question of questions) {
+    for (const { ref, value } of showWhenValueComparisons(question?.showWhen)) {
+      const referenced = questionsById.get(ref);
+      if (!referenced) continue; // The dangling-reference failure above owns it.
+      const options = reviewerResponseOptions(referenced);
+      if (typeof value !== 'string' || !options.includes(value)) {
+        fail(
+          `question "${question.id}" has a showWhen expecting "${ref}" to hold ${JSON.stringify(value)}, which is not one of its Reviewer response options (${options.join(', ')})`
+        );
+      }
+    }
+  }
+
   for (const question of questions) {
     for (const keys of ignoredSiblingKeys(question?.showWhen)) {
       fail(
@@ -460,6 +497,39 @@ function checkQuestions(slug, file, config) {
     fail('its showWhen graph contains a cycle');
   }
   return failures;
+}
+
+/**
+ * Every concrete value named by an `equals` or `in` showWhen leaf. Combinators
+ * can nest arbitrarily, so this follows the same tree as the evaluator rather
+ * than assuming the one-level shape the first Case Type happened to use.
+ *
+ * Shape failures are returned before this helper is called. Only an actual
+ * array supplies `in` values; another value cannot be enumerated as concrete
+ * responses by this rule.
+ *
+ * @param {Record<string, unknown> | undefined} cond
+ * @returns {{ ref: string, value: unknown }[]}
+ */
+function showWhenValueComparisons(cond) {
+  if (!cond) return [];
+  /** @type {{ ref: string, value: unknown }[]} */
+  const comparisons = [];
+  for (const [ref, rawRule] of Object.entries(cond)) {
+    if (ref === '$and' || ref === '$or') {
+      for (const child of /** @type {Record<string, unknown>[]} */ (rawRule)) {
+        comparisons.push(...showWhenValueComparisons(child));
+      }
+      continue;
+    }
+    if (!rawRule || typeof rawRule !== 'object') continue;
+    const rule = /** @type {Record<string, unknown>} */ (rawRule);
+    if ('equals' in rule) comparisons.push({ ref, value: rule.equals });
+    if (Array.isArray(rule.in)) {
+      for (const value of rule.in) comparisons.push({ ref, value });
+    }
+  }
+  return comparisons;
 }
 
 /**

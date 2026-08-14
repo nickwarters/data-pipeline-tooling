@@ -585,54 +585,24 @@ surface you care about has nothing to show.
 
 Create `tests/widget-review.test.js` (flat `tests/` directory, filename =
 subject). Mirror [tests/complaints.test.js](../../tests/complaints.test.js) —
-the assertions worth having, all cheap:
+keep code-owned configuration and dynamic fixture/integration contracts here.
+The generic configuration gate already checks non-empty choice and Outcome
+options, `showWhen` references and values, and cycles for every registered Case
+Type. Do not restate those checks or pin a question count, catalogue inventory,
+list name, response wording, or authored Outcome example in this suite.
 
 ```js
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import config from '../case-types/widget-review.js';
-import { detectCycles } from '../src/evaluators/applicability-evaluator.js';
 import { cases } from '../dev/fixtures/cases.js';
 
-/** @typedef {import('../src/sharepoint-client.js').Answer} Answer */
-
-/** @param {string} value @returns {Answer} */
-function ans(value) {
-  return { value };
-}
-
-test('widget-review: every choice question carries a non-empty options[]', () => {
-  for (const q of config.questions) {
-    if (
-      q.responseType === 'single-choice' ||
-      q.responseType === 'multi-choice'
-    ) {
-      assert.ok(Array.isArray(q.options) && q.options.length > 0, q.id);
-    }
+test('widget-review: Case Details fields expose stable keys and labels', () => {
+  for (const field of config.detailFields ?? []) {
+    assert.ok(field.key, 'field key');
+    assert.ok(field.label, `${field.key} label`);
   }
-});
-
-test('widget-review: no cycles in showWhen graph', () => {
-  assert.strictEqual(detectCycles(config.questions), false);
-});
-
-test('widget-review: declares its own list like every Case Type', () => {
-  assert.equal(config.listName, 'Cases-WidgetReview');
-});
-
-test('widget-review computeOutcome: empty answers → default outcome', () => {
-  assert.equal(config.computeOutcome({}).outcome, 'pass');
-});
-
-test('widget-review computeOutcome: the highest-scoring applicable outcome wins', () => {
-  assert.equal(
-    config.computeOutcome({
-      'q-wr-spec': ans('No'),
-      'q-wr-tested': ans('No'),
-    }).outcome,
-    'fail'
-  );
 });
 
 test('widget-review fixtures: an outstanding, an unassigned, and a completed Case exist', () => {
@@ -662,8 +632,9 @@ test('widget-review fixtures: the Completed Case answers compute to its frozen o
 });
 ```
 
-Add whatever is distinctive about your type on top (appeal routing, section
-set, Question Group spread — see the complaints tests for the fuller menu).
+Add only invariants distinctive to code-owned configuration or the way fixtures
+exercise the application. Express them over the configured data rather than
+naming particular Questions, Groups, Outcomes or wordings.
 
 **You must also update the pinned known-slug tests.** Three existing tests in
 [tests/case-type-manifest.test.js](../../tests/case-type-manifest.test.js)
@@ -690,7 +661,8 @@ config module restates `displayName` (Step 2), or if the module declares no
 failure, not as a silently empty dashboard.
 
 Your module counts toward the coverage floor the moment it exists under
-`case-types/`, which is one reason the outcome tests above are not optional.
+`case-types/`; the dynamic completed-fixture contract above exercises its
+Outcome calculation without pinning an authored response example.
 
 ## Step 8 — Run the dev harness and tour every surface
 
