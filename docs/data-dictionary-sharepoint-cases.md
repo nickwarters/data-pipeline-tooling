@@ -1042,7 +1042,8 @@ item id alone does not identify a Case across Case Types. The namespace is the
 subject name, and the discriminator is `case_type` as *silver settles it* — the
 declared slug, not the list's editable cell. The cost is stated plainly:
 **renaming the subject re-keys history** ([ADR-0016](adr/0016-one-sync-subject-for-every-case-type.md)),
-so the pending `cora_cases` rename needs the treatment a re-key always needs.
+which is why the subject name is a contract and not a label — any future rename
+needs the treatment a re-key always needs.
 
 **The flattened Amended Outcome.** `amended_outcome` is 1:1 with the Case —
 a table built from it would have exactly one row per Case, which is a wide

@@ -2,14 +2,14 @@
 status: accepted
 ---
 
-# One Sync subject (`cora_cases`) for every Case Type, keyed by `(case_type, source_item_id)`
+# One Sync subject (`sharepoint_cases`) for every Case Type, keyed by `(case_type, source_item_id)`
 
-The **Sync** store is **one medallion subject**, `cora_cases`, holding every
-Case Type's Cases and Detail Tables in shared tables discriminated by a
+The **Sync** store is **one medallion subject**, `sharepoint_cases`, holding
+every Case Type's Cases and Detail Tables in shared tables discriminated by a
 `case_type` column — not one subject per Case Type list.
 
 A Case's identity contract follows from that: the `case_id` namespace is the
-subject name `cora_cases`, and the natural key is
+subject name `sharepoint_cases`, and the natural key is
 `("case_type", "source_item_id")` — the Case Type **slug** plus the SharePoint
 list item id.
 
@@ -27,14 +27,16 @@ Two details settled in implementation, neither changing the decision:
   nullable and editable by hand in the SharePoint web UI, and `DeriveKey` refuses
   a null natural-key value, so keying on the raw cell would let one blank cell
   abort gold for every list.
-- **The namespace is the feed's current subject name, `sharepoint_cases`**, not
-  `cora_cases`. `NATURAL_KEY = ("case_type", "source_item_id")` is declared in
-  `schema.py`; there is no separate `NAMESPACE` constant, because the subject
-  name is already `FEED_NAME`. This **spends the free re-key below on the interim
-  name**: the later `cora_cases` rename therefore carries a *second* re-key of
-  gold, which #616 records. Renaming the subject was deliberately kept out of
-  #615, because it also moves on-disk directories, `case_review/schedules.py`'s
-  path and `reviewer_activity`'s reader.
+- **The subject is named `sharepoint_cases`.** An earlier draft of this ADR
+  proposed `cora_cases` and treated the feed's existing name as interim. That
+  rename was considered on its own merits and **declined**: it moves on-disk
+  directories, `case_review/schedules.py`'s pipeline path, `reviewer_activity`'s
+  reader and two data dictionaries, and re-keys gold across thirteen tables — all
+  to swap one accurate name for another. The name is now settled, and the free
+  re-key below is spent on it deliberately rather than provisionally.
+- **`NATURAL_KEY = ("case_type", "source_item_id")` is declared in `schema.py`**;
+  there is no separate `NAMESPACE` constant, because the subject name is already
+  `FEED_NAME`. One declaration, no second string to keep in step.
 
 ## Why
 
@@ -93,16 +95,17 @@ Two details settled in implementation, neither changing the decision:
 
 ## Consequences
 
-- **`cora_cases` and the Case Type slugs are a stable contract.** Renaming the
-  subject re-keys everything; renaming a slug re-keys that Case Type's history.
-  This is the same accepted shortfall ADR-0009 records, attached to different
-  strings, and we again do not engineer a pinned-namespace escape hatch.
-- **This re-keys the existing `sharepoint_cases` gold, and that is free exactly
-  once.** Nothing has run in production, no downstream has persisted a
-  `case_id`, and gold is `Refresh()` — so gold rebuilds from silver under the
-  new key at no cost. That window closes at the first production run, and #615
-  has spent it on the interim `sharepoint_cases` namespace: the `cora_cases`
-  rename (#616) is a second re-key, free only while production is still empty.
+- **`sharepoint_cases` and the Case Type slugs are a stable contract.** Renaming
+  the subject re-keys everything; renaming a slug re-keys that Case Type's
+  history. This is the same accepted shortfall ADR-0009 records, attached to
+  different strings, and we again do not engineer a pinned-namespace escape
+  hatch.
+- **Adopting this key re-keyed gold, and that was free exactly once.** Nothing
+  had run in production, no downstream had persisted a `case_id`, and gold is
+  `Refresh()` — so gold rebuilt from silver under the new key at no cost. #615
+  spent that window, and declining the rename means it is not spent twice. The
+  subject name is now a contract like any other: changing it after the first
+  production run is a migration, not a rename.
 - **A field genuinely needed by only one Case Type becomes a nullable column on
   the shared table**, not a new subject. Splitting the store to avoid one null
   would cost every cross-Case-Type query.
