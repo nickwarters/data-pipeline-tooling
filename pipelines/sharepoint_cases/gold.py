@@ -35,7 +35,13 @@ import pandas as pd
 from framework.core import Dataset, Reader, UniqueValidator, Writer
 from framework.io import DatasetReader, Refresh
 from framework.run import Pipeline, RunLog
-from framework.transform import DeriveKey, FlattenJsonObject, JoinWith, Stamp
+from framework.transform import (
+    DeriveKey,
+    DropColumns,
+    FlattenJsonObject,
+    JoinWith,
+    Stamp,
+)
 from tools.medallion import Medallion
 from tools.observability.timestamps import local_date
 
@@ -108,6 +114,16 @@ AMENDED_OUTCOME_FIELDS = {
     "amendedAt": "amended_at",
     "fromAppealId": "amended_from_appeal_id",
 }
+
+# The four blob columns whose data now lives in a Detail Table, dropped from
+# case_current rather than republished: a consumer reading the same data two
+# ways -- an unnormalised text blob beside the typed table built from it -- is
+# exactly the duplication the normalisation removes, and the blob is the arm no
+# schema enforcement, value rule or grain validation can say anything about.
+# The fifth blob, amended_outcome, is consumed by its flatten below. Silver
+# keeps all five as landed text: it is the faithful observation history, and
+# the only place a malformed blob is recoverable.
+DETAIL_BLOB_COLUMNS = ("answers", "conversation", "appeals", "details")
 
 AS_OF_COLUMN = "as_of_utc"
 # The pair a Detail row's semi-join keys on.
@@ -456,6 +472,10 @@ def case_current_builder(
     rather than a one-row-per-Case table wearing a join. Flattened after the
     reduction, so only each Case's winning blob is ever parsed -- and a
     malformed blob in a *losing* observation cannot abort the rebuild.
+
+    No raw blob column is republished: the flatten consumes
+    ``amended_outcome``, and ``DETAIL_BLOB_COLUMNS`` are dropped -- see the
+    comment there for why.
     """
     p = Pipeline(f"{FEED_NAME}:gold:{CURRENT_TABLE}", run_log=run_log)
     r = p.read(reader, name="read")
@@ -469,17 +489,18 @@ def case_current_builder(
         name="derive-key",
     )
     latest = p.transform(latest_case_version, keyed, name="latest-version")
-    # drop=False: whether the blob column itself keeps republishing beside its
-    # flattened columns is #656's decision, not this hop's.
+    # The flatten consumes amended_outcome (drop is the default); the other
+    # four blobs are dropped explicitly -- see DETAIL_BLOB_COLUMNS.
     flattened = p.transform(
-        FlattenJsonObject(
-            column="amended_outcome", fields=AMENDED_OUTCOME_FIELDS, drop=False
-        ),
+        FlattenJsonObject(column="amended_outcome", fields=AMENDED_OUTCOME_FIELDS),
         latest,
         name="flatten-amended-outcome",
     )
+    unblobbed = p.transform(
+        DropColumns(list(DETAIL_BLOB_COLUMNS)), flattened, name="drop-blobs"
+    )
     stamped = p.transform(
-        Stamp(AS_OF_COLUMN, as_of.isoformat()), flattened, name="stamp-as-of"
+        Stamp(AS_OF_COLUMN, as_of.isoformat()), unblobbed, name="stamp-as-of"
     )
     validated = p.validate(
         UniqueValidator(CASE_ID_COLUMN), stamped, name="unique-validate"

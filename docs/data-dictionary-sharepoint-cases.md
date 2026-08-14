@@ -1020,7 +1020,7 @@ registry — `python -m cli runs --table case_current`
 | **Identity** | a `sha256` over `{namespace: "sharepoint_cases", natural_key: {case_type, source_item_id}}`, stamped by `DeriveKey` |
 | **Load strategy** | `Refresh()` |
 | **Source** | the whole `silver.case_version` history, across every declared list |
-| **Columns** | every silver column, plus `case_id`, `as_of_utc`, and the six columns flattened out of `amended_outcome` (below) |
+| **Columns** | every silver column **except the five raw JSON blobs**, plus `case_id`, `as_of_utc`, and the six columns flattened out of `amended_outcome` (below) |
 
 **Which version is current.** One stable sort on `case_id`,
 `source_modified_at` (parsed UTC), the parsed source version's major then minor
@@ -1070,15 +1070,18 @@ six columns null. The Current Outcome rule the app itself applies is
 
 Two things to know about what this table holds:
 
-- It republishes **every** silver column, including the five JSON blobs, on
-  every poll; the price is that `Refresh()` rewrites them each time. Every
-  blob now has a normalised home: `answers` in the gold `answer`,
-  `answer_capture`, `answer_action` and `general_answer` Detail Tables,
-  `conversation` in `conversation_message`, `appeals` in `appeal`, `details`
-  in `case_detail`, and — with this slice — `amended_outcome` in the
-  flattened `amended_*` columns on this very table. Dropping the raw blobs
-  from `case_current` now that nothing lives only in one is tracked in #656,
-  not done here.
+- It republishes every silver column **except the five raw JSON blobs**,
+  which are dropped rather than published beside the tables built from them:
+  a consumer reading the same data two ways — an unnormalised text blob
+  beside its typed rows — is exactly the duplication the normalisation
+  removes, and the blob is the arm no schema enforcement, value rule or
+  grain validation can say anything about. Where each blob's data now
+  lives: `answers` in the gold `answer`, `answer_capture`, `answer_action`
+  and `general_answer` Detail Tables; `conversation` in
+  `conversation_message`; `appeals` in `appeal`; `details` in `case_detail`;
+  `amended_outcome` in the flattened `amended_*` columns on this very table.
+  The landed blob text itself remains readable in silver `case_version`,
+  the faithful observation history.
 - **A Case deleted from the list stays here forever.** The poll asks for items
   modified in a window, and a deleted item is not returned by anything —
   deletion inference is out of scope for this feed. `case_current` is "every
