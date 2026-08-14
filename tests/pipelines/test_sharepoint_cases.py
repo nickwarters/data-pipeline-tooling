@@ -1071,10 +1071,16 @@ AMENDED_COLUMNS = (
 )
 
 
-def test_current_gold_republishes_every_silver_column():
+# The five raw JSON blob columns, which gold does not republish: each one's
+# data lives in its normalised home (the Detail Tables; the amended_* columns),
+# and silver case_version keeps the landed text.
+BLOB_COLUMNS = ("answers", "conversation", "appeals", "amended_outcome", "details")
+
+
+def test_current_gold_republishes_every_silver_column_except_the_blobs():
     [row] = current(version())
 
-    assert set(SILVER_COLUMNS) <= set(row)
+    assert set(SILVER_COLUMNS) - set(row) == set(BLOB_COLUMNS)
     assert set(row) - set(SILVER_COLUMNS) == {
         "case_id",
         "as_of_utc",
@@ -1103,9 +1109,9 @@ def test_a_reason_carrying_amendment_flattens_onto_the_current_row():
     # ISO text, verbatim: text inside a blob stays text.
     assert row["amended_at"] == "2026-06-12T00:00:00.000Z"
     assert pd.isna(row["amended_from_appeal_id"])
-    # The blob column itself still republishes beside its flattened columns;
-    # dropping it is #656's decision.
-    assert row["amended_outcome"] == blob
+    # The flatten consumes the blob: the columns are its only gold home now,
+    # and silver case_version keeps the landed text.
+    assert "amended_outcome" not in row
 
 
 def test_an_appeal_derived_amendment_carries_the_appeal_id_and_no_reason():
@@ -1943,7 +1949,8 @@ def test_the_gold_hops_plan_exactly_the_steps_they_always_have():
         "  [Transform] derive-key (depends on: read)",
         "  [Transform] latest-version (depends on: derive-key)",
         "  [Transform] flatten-amended-outcome (depends on: latest-version)",
-        "  [Transform] stamp-as-of (depends on: flatten-amended-outcome)",
+        "  [Transform] drop-blobs (depends on: flatten-amended-outcome)",
+        "  [Transform] stamp-as-of (depends on: drop-blobs)",
         "  [Validate] unique-validate (depends on: stamp-as-of)",
         "  [Write] write (depends on: unique-validate)",
     ]
