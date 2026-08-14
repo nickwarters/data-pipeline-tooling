@@ -1,6 +1,6 @@
 """Declared silver schemas for the ``sharepoint_cases`` feed.
 
-Two schemas live here. ``CaseVersion`` is one row per observation of a Case: a
+Four schemas live here. ``CaseVersion`` is one row per observation of a Case: a
 Case list item as it stood at one version, with the source's column names
 mechanically snake_cased and the columns typed. Nothing is derived and nothing
 is reshaped -- this hop is the rename and the type contract, and that is all it
@@ -13,8 +13,11 @@ keys a Case on it.
 
 ``AnswerRow`` is one row per observation x Question Definition: the ``Answers``
 JSON map, exploded so each question's response is its own row rather than a
-key buried in a blob. ``DETAIL_ID_VARS`` is what both schemas share -- it
-carries ``NATURAL_KEY``'s columns so the Detail Table's own ``gold_detail_builder``
+key buried in a blob. ``AnswerCaptureRow`` and ``AnswerActionRow`` go one level
+further, each exploding one field of an individual answer -- the flat
+``capture`` map and the ``remediationActions`` list -- into their own Detail
+Tables. ``DETAIL_ID_VARS`` is what all four schemas share -- it carries
+``NATURAL_KEY``'s columns so a Detail Table's own ``gold_detail_builder``
 derives the same ``case_id`` as the parent Case.
 
 The rules are deliberately thin. Only three things about this list are knowable
@@ -100,6 +103,17 @@ DETAIL_ID_VARS = (
 # is deliberately not a member here.
 REMEDIATION_STATUSES = ("complete", "partial", "cancelled")
 REMEDIATION_DECISIONS = ("yes", "no")
+
+# The two Issue Capture value shapes this feed actually writes. Deliberately
+# not six: a half-filled person, a legacy Action[] list and every other
+# unrecognised shape all collapse onto UNSUPPORTED_CAPTURE_VALUE_KIND below
+# rather than earning a label of their own -- a finer-grained reject reason
+# would be a second spelling of what the reject row's own raw_value already
+# says.
+TEXT_VALUE_KIND = "text"
+PERSON_VALUE_KIND = "person"
+CAPTURE_VALUE_KINDS = (TEXT_VALUE_KIND, PERSON_VALUE_KIND)
+UNSUPPORTED_CAPTURE_VALUE_KIND = "unsupported"
 
 
 @dataclass
@@ -231,3 +245,92 @@ class AnswerRow:
     # fewer -- see REMEDIATION_STATUSES.
     remediation_status: Annotated[str, OneOf(*REMEDIATION_STATUSES)]
     remediation_status_details: str
+
+
+@dataclass
+class AnswerCaptureRow:
+    """One row per observation x Question Definition x Issue Capture Field,
+    exploded from one answer's flat ``capture`` map.
+
+    A capture value is polymorphic -- plain text, or a person as
+    ``{loginName, displayName}`` -- so the row is discriminated by
+    ``value_kind`` rather than modelled as a union column; see
+    ``discriminate_capture_value``. There is no ``value_json`` twin the way
+    ``AnswerRow`` keeps one: once the unsupported arms are quarantined (see
+    ``value_kind`` below), ``text`` is fully carried by ``value_text`` and
+    ``person`` by the two person columns below, so a verbatim copy would be a
+    permanently derivable second spelling of the same value.
+
+    Issue Capture **Groups are presentation-only and appear nowhere here**:
+    knowing which group a field belongs to needs the Case Type's own
+    configuration, which this ingest feed does not join.
+    """
+
+    # DETAIL_ID_VARS, repeated onto every row by the two chained
+    # ExplodeJsonMap hops -- see its docstring for why this must carry
+    # NATURAL_KEY's columns.
+    case_type: Annotated[str, NonNull()]
+    source_item_id: Annotated[str, NonNull()]
+    # datetime, not str -- see AnswerRow's own field for why.
+    source_modified_at: Annotated[datetime, NonNull()]
+    source_version: Annotated[str, NonNull()]
+    source_observation_id: Annotated[str, NonNull()]
+
+    question_id: Annotated[str, NonNull()]
+    # Unique within a Case Type by app contract; no Pattern rule for the same
+    # reason question_id has none.
+    field_key: Annotated[str, NonNull()]
+
+    # The legacy Action[] arm (and anything else discriminate_capture_value
+    # cannot place) is stamped UNSUPPORTED_CAPTURE_VALUE_KIND, which OneOf
+    # here does not allow -- so it quarantines rather than validating as a
+    # third kind. See discriminate_capture_value's docstring: this field is
+    # never null, so the OneOf breach is always what routes a reject row here.
+    value_kind: Annotated[str, NonNull(), OneOf(*CAPTURE_VALUE_KINDS)]
+    value_text: str
+
+    # The person arm: a bare account login, e.g. ``user-rp`` -- not the
+    # claims login (``i:0#.w|CONTOSO\...``) case_version's Person columns
+    # hold. The two vocabularies do not join.
+    person_login: str
+    # Cached at selection time; the app's own copy, not looked up here.
+    person_display: str
+
+
+@dataclass
+class AnswerActionRow:
+    """One row per observation x Question Definition x ticked Remediation
+    Action, exploded from one answer's ``remediationActions`` list.
+
+    This is the feed's first Detail Table exploded from a **list**, not a map
+    key, so ``action_id`` *can* repeat within one answer -- the review
+    application's own selection UI forbids it, but this feed has no way to
+    enforce an application-level rule. A hand-edited duplicate therefore
+    **aborts** the run (``AppendOnly``'s conflict at silver, or
+    ``UniqueValidator`` at gold) rather than quarantining: it is a structural
+    breach of the declared grain, not an ordinary bad value.
+    """
+
+    # DETAIL_ID_VARS, repeated onto every row by ExplodeJsonMap plus
+    # ExplodeJsonList -- see its docstring for why this must carry
+    # NATURAL_KEY's columns.
+    case_type: Annotated[str, NonNull()]
+    source_item_id: Annotated[str, NonNull()]
+    # datetime, not str -- see AnswerRow's own field for why.
+    source_modified_at: Annotated[datetime, NonNull()]
+    source_version: Annotated[str, NonNull()]
+    source_observation_id: Annotated[str, NonNull()]
+
+    question_id: Annotated[str, NonNull()]
+    # The list's 0-based position of this action within the answer's
+    # remediationActions array. Declared (not dropped): ExplodeJsonList's
+    # ordinal_into is mandatory, so the column exists whether or not it is
+    # declared, and SchemaCoercion only types a declared column -- an
+    # undeclared one would reach the writer untyped. It is descriptive only;
+    # action_id, from the bank's own definitions, is the grain.
+    action_seq: Annotated[int, NonNull()]
+    action_id: Annotated[str, NonNull()]
+    # Denormalised from the Remediation Action bank at selection time, so it
+    # is a snapshot: a later rename in the bank does not reach a row already
+    # written here.
+    action_text: str
