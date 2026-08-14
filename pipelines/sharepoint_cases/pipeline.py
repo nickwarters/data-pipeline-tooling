@@ -11,7 +11,9 @@ published once, over every list's accumulated history.
   breaches and validates ``CaseVersion``.
 - ``silver_answer_builder`` explodes that same batch's ``answers`` JSON map
   into one row per observation x Question Definition, quarantining a bad value
-  the same way while a malformed blob raises.
+  the same way while a malformed blob raises. ``silver_answer_capture_builder``
+  and ``silver_answer_action_builder`` go one level further, each exploding one
+  field of an individual answer.
 - ``gold.publish_gold`` rebuilds the current Case, the Detail Tables and three
   aggregates from the whole silver history, each with ``Refresh()``.
 
@@ -44,7 +46,7 @@ import sys
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
-from typing import Protocol, Sequence
+from typing import Mapping, Protocol, Sequence
 
 import pandas as pd
 
@@ -60,6 +62,8 @@ from framework.core import (
 from framework.io import AppendOnly, DatasetReader
 from framework.run import Pipeline, RunContext, RunLog
 from framework.transform import (
+    DropColumns,
+    ExplodeJsonList,
     ExplodeJsonMap,
     Rename,
     SchemaCoercion,
@@ -85,6 +89,11 @@ from .schema import (
     CASE_LISTS,
     DETAIL_ID_VARS,
     FEED_NAME,
+    PERSON_VALUE_KIND,
+    TEXT_VALUE_KIND,
+    UNSUPPORTED_CAPTURE_VALUE_KIND,
+    AnswerActionRow,
+    AnswerCaptureRow,
     AnswerRow,
     CaseList,
     CaseVersion,
@@ -210,6 +219,10 @@ class ListPoll:
     The counts are rows of the *fetched batch* that reached each write. An
     append-only target no-ops a repeat, so polling the same window twice reports
     the same counts against an unchanged table.
+
+    ``detail_rows`` is keyed by table name rather than one field per table:
+    every Detail Table this feed grows next only adds an entry here, not a new
+    field every reader of ``ListPoll`` has to learn about.
     """
 
     case_list: CaseList
@@ -217,7 +230,7 @@ class ListPoll:
     ingestion_batch_id: str
     raw_rows: int
     silver_rows: int
-    answer_rows: int
+    detail_rows: Mapping[str, int]
 
 
 def _flatten_people(frame: pd.DataFrame, list_name: str) -> pd.DataFrame:
@@ -440,6 +453,79 @@ def derive_value_text(dataset: Dataset) -> Dataset:
     return Dataset.from_pandas(frame)
 
 
+def discriminate_capture_value(dataset: Dataset) -> Dataset:
+    """Add ``value_kind`` / ``value_text`` / ``person_login`` / ``person_display``,
+    discriminating one Issue Capture field's ``raw_value``.
+
+    Total over every row: ``value_kind`` is never null. A value rule masks on
+    ``notna()``, so a null ``value_kind`` would slip past quarantine untouched
+    and then abort the *whole run* at ``SchemaValidator``'s ``NonNull`` check --
+    there is deliberately no null arm. An absent field contributes no row at
+    all (``ExplodeJsonMap`` only emits present keys), but a capture field
+    explicitly holding a JSON ``null`` reaches here as ``raw_value is None``
+    and is stamped ``UNSUPPORTED_CAPTURE_VALUE_KIND`` with nothing else filled.
+
+    Re-detects the arm from ``raw_value``'s **text**, exactly as
+    ``derive_value_text`` does and for the same reason: ``_as_column_value``
+    (inside ``ExplodeJsonMap``) round-trips a JSON object or array through this
+    column as a ``str``, so the type it started as is already gone by the time
+    this runs. The same residual ambiguity ``derive_value_text`` lives with
+    follows here too -- a genuine text answer that also happens to be valid
+    JSON (say, the literal text ``"true"``) is indistinguishable from a value
+    that started life as JSON, and both land in the text arm.
+
+    A field the Case Type's own configuration declares ``person``-typed but
+    which holds a bare string still takes the **text** arm: this feed does not
+    join that configuration, so discrimination is on the value alone, never on
+    a declared type this feed cannot see -- matching the review application's
+    own reader, which is deliberately total and type-blind. Which shapes land
+    ``unsupported`` and quarantine is settled by ``AnswerCaptureRow.value_kind``,
+    not repeated here.
+
+    All four columns are created even over a zero-row frame, or
+    ``SchemaCoercion`` has nothing left to type on the empty-frame path.
+    """
+    frame = dataset.to_pandas()
+    kinds, texts, logins, displays = [], [], [], []
+    for cell in frame["raw_value"]:
+        kind = UNSUPPORTED_CAPTURE_VALUE_KIND
+        text = login = display = None
+        if pd.isna(cell):
+            pass
+        elif isinstance(cell, str):
+            try:
+                decoded = json.loads(cell)
+                parses = True
+            except ValueError:
+                decoded = None
+                parses = False
+            if parses and isinstance(decoded, dict):
+                login_value = decoded.get("loginName")
+                display_value = decoded.get("displayName")
+                if login_value and display_value:
+                    kind = PERSON_VALUE_KIND
+                    login, display = login_value, display_value
+                # else: a half-filled person -- stays unsupported.
+            elif parses and isinstance(decoded, list):
+                pass  # the legacy Action[] arm -- stays unsupported.
+            else:
+                kind = TEXT_VALUE_KIND
+                text = cell
+        # else: a non-text scalar (a raw JSON number or boolean) -- stays
+        # unsupported; this feed's capture values are never one.
+        kinds.append(kind)
+        texts.append(text)
+        logins.append(login)
+        displays.append(display)
+    frame = frame.assign(
+        value_kind=pd.Series(kinds, index=frame.index, dtype="object"),
+        value_text=pd.Series(texts, index=frame.index, dtype="object"),
+        person_login=pd.Series(logins, index=frame.index, dtype="object"),
+        person_display=pd.Series(displays, index=frame.index, dtype="object"),
+    )
+    return Dataset.from_pandas(frame)
+
+
 def silver_answer_builder(
     reader: Reader,
     writer: Writer,
@@ -499,6 +585,142 @@ def silver_answer_builder(
     node = p.validate(SchemaValidator(AnswerRow), node, name="post-validate")
     p.write(writer, node, name="write")
     return p
+
+
+def silver_answer_capture_builder(
+    reader: Reader,
+    writer: Writer,
+    case_list: CaseList,
+    reject_writer: Writer,
+    run_log: RunLog | None = None,
+) -> Pipeline:
+    """Build one list's silver answer-capture hop: explode ``answers`` and then
+    each answer's flat ``capture`` map, one row per Issue Capture Field.
+
+    Reaching two levels down is two chained explodes. The first lands each
+    answer's nested ``capture`` object as JSON text via ``_as_column_value``
+    (``ExplodeJsonMap`` builds its output frame as
+    ``[*id_vars, key_into, *output]``, so ``capture_json`` never reaches this
+    hop's own output); the second reads that text straight back, because
+    ``_decode`` accepts JSON text as readily as an already-decoded value. An
+    absent or empty ``capture`` map yields zero rows for that answer, not an
+    error.
+
+    Reads the settled **silver** batch, never raw, for the same reason
+    ``silver_answer_builder`` does -- see its docstring.
+    """
+    p = Pipeline(
+        f"{FEED_NAME}:silver:{case_list.case_type}:answer_capture", run_log=run_log
+    )
+    node = p.read(reader, name="read")
+    node = p.transform(
+        ExplodeJsonMap(
+            column="answers",
+            key_into="question_id",
+            id_vars=list(DETAIL_ID_VARS),
+            exclude_key_prefix="general:",
+            fields={"capture": "capture_json"},
+        ),
+        node,
+        name="explode-answers",
+    )
+    node = p.transform(
+        ExplodeJsonMap(
+            column="capture_json",
+            key_into="field_key",
+            id_vars=[*DETAIL_ID_VARS, "question_id"],
+            value_into="raw_value",
+        ),
+        node,
+        name="explode-capture",
+    )
+    node = p.transform(discriminate_capture_value, node, name="discriminate")
+    node = p.transform(SchemaCoercion(AnswerCaptureRow), node, name="coerce")
+    node = p.quarantine(
+        SchemaValueRulePartitioner(AnswerCaptureRow),
+        reject_writer,
+        node,
+        name="quarantine",
+    )
+    # After the quarantine, deliberately: QuarantineNode writes the whole
+    # rejected partition and returns only the good one, so raw_value would
+    # reach silver untyped without this drop -- and dropping it before the
+    # quarantine would strip the offending value out of the reject table,
+    # which is strictly worse for diagnosing a legacy Action[] row.
+    node = p.transform(DropColumns(["raw_value"]), node, name="drop-raw-value")
+    node = p.validate(SchemaValidator(AnswerCaptureRow), node, name="post-validate")
+    p.write(writer, node, name="write")
+    return p
+
+
+def silver_answer_action_builder(
+    reader: Reader,
+    writer: Writer,
+    case_list: CaseList,
+    reject_writer: Writer,
+    run_log: RunLog | None = None,
+) -> Pipeline:
+    """Build one list's silver answer-action hop: explode ``answers`` and then
+    each answer's ``remediationActions`` list, one row per ticked action.
+
+    ``{id, text}`` is the real frontend contract for one action -- a third
+    ``completed`` field some docs describe is stale there, not here.
+    """
+    p = Pipeline(
+        f"{FEED_NAME}:silver:{case_list.case_type}:answer_action", run_log=run_log
+    )
+    node = p.read(reader, name="read")
+    node = p.transform(
+        ExplodeJsonMap(
+            column="answers",
+            key_into="question_id",
+            id_vars=list(DETAIL_ID_VARS),
+            exclude_key_prefix="general:",
+            fields={"remediationActions": "actions_json"},
+        ),
+        node,
+        name="explode-answers",
+    )
+    node = p.transform(
+        ExplodeJsonList(
+            column="actions_json",
+            ordinal_into="action_seq",
+            id_vars=[*DETAIL_ID_VARS, "question_id"],
+            fields={"id": "action_id", "text": "action_text"},
+        ),
+        node,
+        name="explode-actions",
+    )
+    node = p.transform(SchemaCoercion(AnswerActionRow), node, name="coerce")
+    node = p.quarantine(
+        SchemaValueRulePartitioner(AnswerActionRow),
+        reject_writer,
+        node,
+        name="quarantine",
+    )
+    node = p.validate(SchemaValidator(AnswerActionRow), node, name="post-validate")
+    p.write(writer, node, name="write")
+    return p
+
+
+# Every Detail Table hanging off one answer, in the order run() drives them:
+# the table name, the builder that produces it (every one sharing
+# silver_answer_builder's (reader, writer, case_list, reject_writer, run_log)
+# shape), and the composite AppendOnly key its grain needs -- one observation
+# yields many rows of each, so a single-column key would raise on the second.
+_ANSWER_DETAIL_HOPS = (
+    ("answer", silver_answer_builder, ("source_observation_id", "question_id")),
+    (
+        "answer_capture",
+        silver_answer_capture_builder,
+        ("source_observation_id", "question_id", "field_key"),
+    ),
+    (
+        "answer_action",
+        silver_answer_action_builder,
+        ("source_observation_id", "question_id", "action_id"),
+    ),
+)
 
 
 def run(
@@ -567,23 +789,21 @@ def run(
             print(silver_p.describe())
         versions = silver_p.run()
 
-        # The answer hop reads this settled silver batch, not raw's own
-        # CaseType cell -- see silver_answer_builder's docstring. One
-        # observation yields many answer rows, so the append-only key is
-        # composite: a single-column key would raise on the second question of
-        # every Case.
-        answer_p = silver_answer_builder(
-            DatasetReader(versions),
-            med.silver.writer(
-                "answer", AppendOnly(("source_observation_id", "question_id"))
-            ),
-            case_list,
-            med.silver.quarantine_writer("answer"),
-            run_log=context.run_log,
-        )
-        if describe:
-            print(answer_p.describe())
-        answers = answer_p.run()
+        # Every Detail Table hanging off one answer reads this settled silver
+        # batch, not raw's own CaseType cell -- see silver_answer_builder's
+        # docstring; the same reasoning holds for the capture and action hops.
+        detail_rows: dict[str, int] = {}
+        for table, builder, key_columns in _ANSWER_DETAIL_HOPS:
+            detail_p = builder(
+                DatasetReader(versions),
+                med.silver.writer(table, AppendOnly(key_columns)),
+                case_list,
+                med.silver.quarantine_writer(table),
+                run_log=context.run_log,
+            )
+            if describe:
+                print(detail_p.describe())
+            detail_rows[table] = len(detail_p.run())
         polls.append(
             ListPoll(
                 case_list,
@@ -591,7 +811,7 @@ def run(
                 batch_id,
                 len(batch),
                 len(versions),
-                len(answers),
+                detail_rows,
             )
         )
 
@@ -706,11 +926,16 @@ def main(argv: list[str]) -> int:
         print("Nothing safe to poll yet; no window has advanced.")
         return 0
     for poll in polls:
+        # Derived from detail_rows rather than one field per table, so a new
+        # Detail Table this feed grows shows up here with no edit to main().
+        detail_summary = ", ".join(
+            f"{count} {table} row(s)" for table, count in poll.detail_rows.items()
+        )
         print(
             f"Polled {poll.case_list.list_name} up to "
             f"{poll.window.end.isoformat()} as batch {poll.ingestion_batch_id}: "
             f"{poll.raw_rows} observation(s) -> {poll.silver_rows} case version(s), "
-            f"{poll.answer_rows} answer row(s)."
+            f"{detail_summary}."
         )
     print(
         f"{sum(poll.silver_rows for poll in polls)} case version(s) from "
