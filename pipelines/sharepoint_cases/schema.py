@@ -1,14 +1,21 @@
-"""Declared silver schema for the ``sharepoint_cases`` feed.
+"""Declared silver schemas for the ``sharepoint_cases`` feed.
 
-One row per observation of a Case: a Case list item as it stood at one version,
-with the source's column names mechanically snake_cased and the columns typed.
-Nothing is derived and nothing is reshaped -- this hop is the rename and the
-type contract, and that is all it is meant to be.
+Two schemas live here. ``CaseVersion`` is one row per observation of a Case: a
+Case list item as it stood at one version, with the source's column names
+mechanically snake_cased and the columns typed. Nothing is derived and nothing
+is reshaped -- this hop is the rename and the type contract, and that is all it
+is meant to be.
 
 One exception, and it is deliberate: raw holds the list's own ``CaseType`` cell
 as the list holds it, and silver replaces it with the Case Type declared for
 that list in ``CASE_LISTS``. The cell is nullable and hand-editable, and gold
 keys a Case on it.
+
+``AnswerRow`` is one row per observation x Question Definition: the ``Answers``
+JSON map, exploded so each question's response is its own row rather than a
+key buried in a blob. ``DETAIL_ID_VARS`` is what both schemas share -- it
+carries ``NATURAL_KEY``'s columns so the Detail Table's own ``gold_detail_builder``
+derives the same ``case_id`` as the parent Case.
 
 The rules are deliberately thin. Only three things about this list are knowable
 enough to fail a run over: an observation must say where it came from, a Case
@@ -73,6 +80,26 @@ NATURAL_KEY = ("case_type", "source_item_id")
 # A fifth value means the list's Choice column changed under us, and quarantine
 # is where that should surface rather than silently in a report.
 CASE_STATUSES = ("In-progress", "Actions In Progress", "Completed", "Void")
+
+# The columns an AnswerRow (and every other Detail Table) repeats onto every
+# exploded row -- exactly NATURAL_KEY's columns plus the provenance a Detail
+# row needs to join back to its winning observation. Declared once so a Detail
+# Table's derived case_id can never drift from the parent Case's.
+DETAIL_ID_VARS = (
+    "case_type",
+    "source_item_id",
+    "source_modified_at",
+    "source_version",
+    "source_observation_id",
+)
+
+# The remediation vocabulary. Statuses are the full framework set -- a Case
+# Type narrowing its offer (Complaints shows only two) is display-only, and
+# what is stored is always validated against the full vocabulary. Decisions
+# are the tri-state's two spellings; absence is the undecided third state and
+# is deliberately not a member here.
+REMEDIATION_STATUSES = ("complete", "partial", "cancelled")
+REMEDIATION_DECISIONS = ("yes", "no")
 
 
 @dataclass
@@ -145,3 +172,62 @@ class CaseVersion:
     appeals: str
     amended_outcome: str
     details: str
+
+
+@dataclass
+class AnswerRow:
+    """One row per observation x Question Definition, exploded from ``answers``.
+
+    ``general:``-prefixed keys belong to the General Question table, not this
+    one, and are excluded before this schema ever sees them.
+    ``remediation_required`` is tri-state -- ``"yes"``, ``"no"``, or the key
+    absent entirely -- and absence is meaningful: it means undecided, and must
+    stay distinguishable from a reviewer having chosen ``"no"``. A key is
+    *deleted*, not nulled, when a reviewer changes their mind, so an
+    observation's answer map only ever holds the questions it currently has an
+    opinion on.
+
+    ``value_json`` is the value as the source held it: verbatim text for a
+    scalar, JSON text for a list. A JSON boolean or number would land as its
+    Python scalar rather than verbatim text -- not a shape this feed's answers
+    produce. ``value_text`` is its canonical, groupable rendering (see
+    ``derive_value_text``), joined on ``VALUE_TEXT_SEPARATOR`` for a
+    multi-select.
+
+    Plain types throughout, never ``X | None``: ``SchemaValidator`` cannot
+    construct a schema declaring a ``types.UnionType``, so nullability is
+    expressed with ``NonNull()`` and its absence (the default) rather than a
+    union with ``None``.
+    """
+
+    # DETAIL_ID_VARS, repeated onto every row by ExplodeJsonMap -- see its
+    # docstring for why this must carry NATURAL_KEY's columns.
+    case_type: Annotated[str, NonNull()]
+    source_item_id: Annotated[str, NonNull()]
+    # datetime, not str: the silver batch this hop reads has already been typed
+    # by SchemaCoercion(CaseVersion), and ExplodeJsonMap repeats an id_var
+    # verbatim -- declaring str here would make SchemaCoercion leave a non-empty
+    # datetime column alone and then have SchemaValidator abort on the dtype
+    # mismatch.
+    source_modified_at: Annotated[datetime, NonNull()]
+    source_version: Annotated[str, NonNull()]
+    source_observation_id: Annotated[str, NonNull()]
+
+    # A Question Definition id has no documented format, so no Pattern rule: one
+    # would divert real answers into quarantine to guard a namespace nobody has
+    # proposed.
+    question_id: Annotated[str, NonNull()]
+
+    value_json: str
+    value_text: str
+    justification: str
+
+    # OneOf masks on notna(), so an absent remediationRequired passes through
+    # untouched and the tri-state survives; the rule only catches a boolean if
+    # the app ever writes one instead of the string.
+    remediation_required: Annotated[str, OneOf(*REMEDIATION_DECISIONS)]
+    free_form_remediation: str
+    # All three statuses are validated even though a given Case Type may offer
+    # fewer -- see REMEDIATION_STATUSES.
+    remediation_status: Annotated[str, OneOf(*REMEDIATION_STATUSES)]
+    remediation_status_details: str

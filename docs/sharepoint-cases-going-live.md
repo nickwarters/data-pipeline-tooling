@@ -198,7 +198,7 @@ python -m cli status --env prod
 python -m cli log sharepoint_cases --env prod --pipeline-run-id <prefix>
 ```
 
-Check the four gold tables are populated, the quarantine is empty or explicable,
+Check the gold tables are populated, the quarantine is empty or explicable,
 and the run succeeded. **A successful run has committed every polled list's
 watermark**, which means stage 1's GUIDs are now baked into the feed's history —
 see Rollback.

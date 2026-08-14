@@ -39,7 +39,7 @@
     "QuestionBankVersion": "complaints-2026.07",
     "CaseJustification": null,
     "Notes": "Awaiting the call recording from the branch.",
-    "Answers": "{\"q-outcome\":{\"value\":\"Not upheld\"},\"q-timeliness\":{\"value\":\"Yes\"}}",
+    "Answers": "{\"q-outcome\":{\"value\":\"Not upheld\"},\"q-timeliness\":{\"value\":\"Yes\"},\"q-root-cause\":{\"value\":[\"Process\",\"Training\"],\"justification\":\"Multiple factors contributed to the delay.\",\"remediationRequired\":\"yes\",\"remediationActions\":[{\"id\":\"q-root-cause-ra-0\",\"text\":\"Retrain the branch team on call handling.\"}],\"remediationStatus\":{\"status\":\"partial\",\"details\":\"Training scheduled for next quarter.\"}},\"general:complaint-channel\":{\"value\":\"Phone\"}}",
     "Conversation": "[{\"author\":{\"loginName\":\"a.khan\",\"displayName\":\"Amira Khan\"},\"timestamp\":\"2026-08-04T16:02:00Z\",\"body\":\"Please confirm the call date.\"}]",
     "Appeals": "[]",
     "AmendedOutcome": null,

@@ -1,18 +1,26 @@
-"""Gold for the ``sharepoint_cases`` feed: the current Case, and three aggregates.
+"""Gold for the ``sharepoint_cases`` feed: the current Case, its Detail Tables,
+and three aggregates.
 
 Silver is an append-only history of *observations* across every declared Case
-list. Gold is the other shape: **one row per Case as it stands now**, over every
-list, and three counts reduced from it. Every table is rebuilt whole with
+list. Gold reduces that three ways. Every table is rebuilt whole with
 ``Refresh()`` on every poll, so a re-drive converges rather than accumulating.
 
-Four tables, and their declared grain:
+Five tables, and their declared grain:
 
-===========================  =================================================
-``case_current``             one row per ``case_id`` -- the latest observation
-``case_counts_current``      reviewer x that reviewer's manager x ``status``
-``case_age_buckets_current`` ``age_bucket`` x ``status``
-``case_throughput_daily``    ``terminal_date`` x ``terminal_status``
-===========================  =================================================
+============================  =================================================
+``case_current``              one row per ``case_id`` -- the latest observation
+Detail Tables                 grain declared per table in ``DETAIL_GRAIN``
+``case_counts_current``       reviewer x that reviewer's manager x ``status``
+``case_age_buckets_current``  ``age_bucket`` x ``status``
+``case_throughput_daily``     ``terminal_date`` x ``terminal_status``
+============================  =================================================
+
+The Detail Tables, named in ``DETAIL_TABLES``, each hold the child rows -- an
+answer, a remediation action, a conversation message -- of the Cases'
+*winning* observation, per ADR-0015
+(``docs/adr/0015-detail-tables-reduce-to-the-parents-latest-observation.md``).
+Only ``answer`` publishes today; the rest of ``DETAIL_GRAIN`` declares grain
+for tables that do not exist in silver yet.
 
 **One instant decides everything.** ``as_of`` is the candidate SharePoint window
 end -- the value the run is about to commit as its watermark -- and never
@@ -47,9 +55,10 @@ from .schema import FEED_NAME, NATURAL_KEY
 SILVER_TABLE = "case_version"
 CURRENT_TABLE = "case_current"
 
-# All four gold tables, in publication order.
+# Every gold table, in publication order.
 GOLD_TABLES = (
     CURRENT_TABLE,
+    "answer",
     "case_counts_current",
     "case_age_buckets_current",
     "case_throughput_daily",
@@ -60,7 +69,9 @@ CASE_ID_COLUMN = "case_id"
 # What "one row per" means for each Detail Table -- the grain gold_detail_builder
 # guards with UniqueValidator, and the grain the silver Detail Tables write rows
 # to. Every entry leads with CASE_ID_COLUMN: a Detail row's identity is always
-# the parent Case plus whatever distinguishes it within that Case.
+# the parent Case plus whatever distinguishes it within that Case. Declared for
+# every Detail Table this feed may ever grow, whether or not its silver table
+# exists yet; DETAIL_TABLES below is the subset that actually publishes.
 DETAIL_GRAIN: dict[str, tuple[str, ...]] = {
     "answer": (CASE_ID_COLUMN, "question_id"),
     "answer_capture": (CASE_ID_COLUMN, "question_id", "field_key"),
@@ -70,6 +81,11 @@ DETAIL_GRAIN: dict[str, tuple[str, ...]] = {
     "appeal": (CASE_ID_COLUMN, "appeal_id"),
     "case_detail": (CASE_ID_COLUMN, "field_key"),
 }
+
+# The Detail Tables that actually publish today, derived from GOLD_TABLES so
+# the two cannot drift apart as a new Detail Table lands -- adding one to
+# GOLD_TABLES and DETAIL_GRAIN is then the only edit that makes it publish.
+DETAIL_TABLES: tuple[str, ...] = tuple(t for t in GOLD_TABLES if t in DETAIL_GRAIN)
 
 AS_OF_COLUMN = "as_of_utc"
 # The pair a Detail row's semi-join keys on: the winning Case and the one
@@ -441,23 +457,38 @@ def publish_gold(
     describe: bool = False,
     run_log: RunLog | None = None,
 ) -> None:
-    """Rebuild all four gold tables from the accumulated silver history.
+    """Rebuild every gold table from the accumulated silver history.
 
-    ``case_current`` is published first and its dataset feeds the three
-    aggregates, so silver is read once and every aggregate counts exactly the
-    rows the current table holds. They commit independently, in order; a failure
-    part-way leaves the earlier ones refreshed, which is safe because the caller
-    has not advanced any watermark and the next run rebuilds all four.
+    ``case_current`` is published first and its dataset feeds the Detail Tables
+    and the three aggregates, so silver is read once and each of them reduces
+    exactly the current table's own rows. They commit independently, in order;
+    a failure part-way leaves the earlier ones refreshed, which is safe because
+    the caller has not advanced any watermark and the next run rebuilds
+    everything.
+
+    Each Detail Table's ``observations=`` is ``DatasetReader(current)`` --
+    ``current`` is already materialised in memory, so re-reading
+    ``med.gold.reader(CURRENT_TABLE)`` would be a wasted round trip and, under a
+    dry run where ``Refresh()`` wrote nothing, would hand the semi-join the
+    *previous* run's winners or a missing table.
 
     Each hop runs as a bare ``p.run()``, so it inherits the ambient run context
     the runner makes active -- which is where a dry run's write-nothing
     behaviour comes from.
     """
-    # Only a dry run against a fresh base directory has no silver table: the
-    # write was previewed rather than performed, so there is nothing to reduce.
-    # A probe rather than a caught OperationalError, which would also swallow
-    # "database is locked".
-    if med.silver.columns_of(SILVER_TABLE).columns() is None:
+    # Only a dry run has any of these silver tables missing: a real run always
+    # writes case_version and every Detail Table (even zero rows) before this is
+    # reached, but a dry run against a base directory from before a Detail Table
+    # existed can have case_version without it. One probe up front, covering
+    # every table this hop is about to read, rather than a skip inside the loop
+    # below -- a per-table skip would let gold silently under-publish, which is
+    # exactly the failure this feed's grain guarantees rule out. A probe rather
+    # than a caught OperationalError, which would also swallow "database is
+    # locked".
+    if any(
+        med.silver.columns_of(table).columns() is None
+        for table in (SILVER_TABLE, *DETAIL_TABLES)
+    ):
         return
 
     current_p = case_current_builder(
@@ -469,6 +500,20 @@ def publish_gold(
     if describe:
         print(current_p.describe())
     current = current_p.run()
+
+    for table in DETAIL_TABLES:
+        p = gold_detail_builder(
+            med.silver.reader(table),
+            med.gold.writer(table, Refresh()),
+            grain=DETAIL_GRAIN[table],
+            observations=DatasetReader(current),
+            as_of=as_of,
+            name=f"{FEED_NAME}:gold:{table}",
+            run_log=run_log,
+        )
+        if describe:
+            print(p.describe())
+        p.run()
 
     for table, step, transform in (
         ("case_counts_current", "count-by-reviewer-and-status", case_counts),
