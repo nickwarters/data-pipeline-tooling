@@ -54,6 +54,14 @@ and create each `uat_*` list with the same schema as its prod counterpart (addin
 later means adding its `uat_*` copy too). A fixed "UAT environment" banner renders at boot on
 any non-prod environment.
 
+## Testing
+
+Run the deterministic default suite with `npm test`. The 500-question
+wall-clock rendering gates are opt-in so machine load does not make the default
+suite flaky; run both with `npm run test:perf`. Performance tests belong under
+`tests/perf/` with the `*.perf.js` suffix and are not discovered by the default
+command.
+
 ## Main Components
 
 ### Dashboard page
