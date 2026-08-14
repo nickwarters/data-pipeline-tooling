@@ -1,13 +1,14 @@
 # Data dictionary — `sharepoint_cases`
 
 The filled-in entry for the `sharepoint_cases` feed, following
-[`data-dictionary-template.md`](data-dictionary-template.md). Twenty tables:
-the faithful raw observation, the typed Case version and its silver `answer`,
-`answer_capture`, `answer_action`, `general_answer`, `conversation_message`,
-`appeal` and `case_detail` Detail Tables, and the eleven gold tables reduced
-from the version history — the current Case, those same seven Detail Tables,
-and three aggregates. Every declared Case list lands
-in the same tables and is told apart by
+[`data-dictionary-template.md`](data-dictionary-template.md). Twenty-two
+tables: the faithful raw observation, the typed Case version and its silver
+`answer`, `answer_capture`, `answer_action`, `general_answer`,
+`conversation_message`, `appeal` and `case_detail` Detail Tables, and the
+thirteen gold tables reduced from the version history — the current Case,
+those same seven Detail Tables, and five aggregates, two of which reduce from
+a Detail Table rather than from the current Case. Every declared Case list
+lands in the same tables and is told apart by
 `case_type`. The
 Python contract is
 [`pipelines/sharepoint_cases/schema.py`](../pipelines/sharepoint_cases/schema.py);
@@ -799,7 +800,7 @@ stays typed; text inside a blob stays text. (`source_modified_at` stays
 `datetime` because it comes from OData, is uniform, and is already typed
 upstream — it is not one of these blob fields.)
 
-## Gold — the current Case, its Detail Tables, and three aggregates
+## Gold — the current Case, its Detail Tables, and five aggregates
 
 Silver accumulates *observations*; gold answers *what is true now*. Every
 table is rebuilt whole with `Refresh()` on every poll from the entire silver
@@ -822,13 +823,22 @@ everything.
 | `case_counts_current` | `assigned_reviewer_name` × `assigned_reviewer_manager_name` × `status` | `case_count` |
 | `case_age_buckets_current` | `age_bucket` × `status` | `case_count` |
 | `case_throughput_daily` | `terminal_date` × `terminal_status` | `case_count` |
+| `answer_remediation_current` | `case_type` × `question_id` × `remediation_required` × `remediation_status` | `answer_count` |
+| `appeal_outcomes_current` | `case_type` × `state` × `resolution_verdict` | `appeal_count` |
 
 Only `case_current` carries a live grain gate (`UniqueValidator("case_id")`);
 each Detail Table carries one too (e.g. `UniqueValidator(("case_id",
 "question_id", "field_key"))` for `answer_capture`, via
-`gold_detail_builder`'s generic `grain=`); the three aggregates get none,
+`gold_detail_builder`'s generic `grain=`); the five aggregates get none,
 because a uniqueness check below the group-by that produced the grain is
 satisfied by construction. Their grain is declared here.
+
+The first three aggregates reduce from `case_current`; the last two —
+`answer_remediation_current` and `appeal_outcomes_current` — reduce from a
+published gold Detail Table instead (`answer` and `appeal` respectively), per
+`DETAIL_AGGREGATES` in `gold.py`. See their own sections below for why that
+source and grain earn a table while three other candidates were refused —
+also recorded in *What is deliberately not aggregated*, below.
 
 Every gold table spans **every** declared Case list: a Reviewer holds Cases
 across Case Types, so an aggregate computed per list would not add up.
@@ -1093,3 +1103,113 @@ Two caveats, both real:
   therefore **changes a historical count on the next poll**. That is the honest
   reading of a source that owns the event; a frozen copy would report a number
   the source no longer agrees with.
+
+### `answer_remediation_current`
+
+| Attribute | Value |
+|-----------|-------|
+| **Grain** | `case_type` × `question_id` × `remediation_required` × `remediation_status` |
+| **Source** | the published gold `answer` Detail Table, read from that hop's already-materialised dataset — not silver, and not a re-read of gold |
+| **Columns** | `case_type`, `question_id`, `remediation_required`, `remediation_status`, `answer_count`, `as_of_utc` |
+
+Counts the winning observation's answer rows (gold `answer`) by the
+remediation decision recorded against each question and the status of that
+remediation. `case_type` **leads the grain**, and this is a correctness
+requirement rather than a convenience: `question_id`s are drawn from a
+per-Case-Type question bank, so `q1` in two banks names two different
+questions, and grouping without `case_type` would silently sum them as one.
+
+**`answer_count` within one `(case_type, question_id)` group is a Case
+count** — gold `answer` holds exactly one row per Case × question, per
+ADR-0015. Summed *across* every `question_id`, though, it counts *answers*,
+not Cases: a Case that answered three questions contributes three rows. The
+identity that always holds is `sum(answer_count) == ` the row count of gold
+`answer` — never the current Case count.
+
+Two literal fills, not source values, for the same reason `case_counts`'s
+`(unassigned)` is one — a NULL group key is a hole in the grain a reader may
+silently drop:
+
+- `remediation_required` is filled `(undecided)` where the source key is
+  absent. This is **not a fill for missing data** — it is the tri-state's
+  real third state (`AnswerRow.remediation_required`'s docstring), and it
+  must stay distinguishable from a reviewer having explicitly chosen `"no"`.
+- `remediation_status` is filled `(unresolved)` where absent — which covers
+  both a question never marked for remediation at all, and one marked
+  `remediation_required="yes"` with no status recorded yet (e.g. `"yes"`
+  paired with a null status counts under `(unresolved)`, not dropped).
+
+**Stated limitation.** This table cannot be filtered to open Cases. A gold
+Detail row carries nothing from its parent beyond the two winner columns it
+semi-joined on (`gold_detail_builder`'s semi-join is deliberately narrow — see
+*Part B*'s `answer` field dictionary above); reading `case_current.status`
+alongside it would need a two-input transform this feed has never needed. A
+consumer wanting "open Cases with an undecided remediation" joins this table
+to `case_current` itself.
+
+### `appeal_outcomes_current`
+
+| Attribute | Value |
+|-----------|-------|
+| **Grain** | `case_type` × `state` × `resolution_verdict` |
+| **Source** | the published gold `appeal` Detail Table, read from that hop's already-materialised dataset — not silver, and not a re-read of gold |
+| **Columns** | `case_type`, `state`, `resolution_verdict`, `appeal_count`, `as_of_utc` |
+
+Counts the winning observation's Appeal rows (gold `appeal`) by lifecycle
+state and resolution verdict. `case_type` leads the grain for the same
+correctness reason it leads `answer_remediation_current`'s.
+
+**`appeal_count` counts Appeals, not Cases** — a Case may raise several, so
+this table does not answer "how many Cases have an open appeal". That
+question is `case_current.has_open_appeal`, source-written, and is
+deliberately not restated here. An Appeal that gains its `resolution` between
+observations is counted **once**: gold `appeal`'s own semi-join has already
+picked the winning observation's row for that `appeal_id` (see the `appeal`
+section above), so this transform never sees both states of one Appeal.
+
+Two literal fills, the same convention as `answer_remediation_current`'s:
+
+- `state` is filled `(unstated)` where absent.
+- `resolution_verdict` is filled `(unresolved)` where absent — **the same
+  literal** `answer_remediation_current` uses for its own unresolved case,
+  because both mean one thing: no resolution recorded.
+
+`sum(appeal_count)` equals gold `appeal`'s own row count — every Appeal lands
+in exactly one `(state, resolution_verdict)` group, dropped or fill, never
+both.
+
+**Stated limitation.** Carries the same `status`-filter limitation as
+`answer_remediation_current` — see its own note above.
+
+## What is deliberately not aggregated
+
+Three of the issue's five proposed aggregates are refused here, deliberately,
+rather than deferred quietly. Each earns its refusal on its own terms.
+
+- **Answer outcomes** (`case_type` × `question_id` × `value_text`) — deferred
+  to #383, not built against a stub. Without the Question Definition
+  dimension, there is no wording, Question Group or Category to roll
+  an answer's raw value up to, so the only available grouping is the stored
+  `value_text` — and for a multi-select, `value_text` is the selected values
+  *joined* on `|` (see `derive_value_text`), so grouping on it counts
+  combinations of values, not the values themselves. A grain built on that
+  would need re-doing the moment #383 lands, not extending.
+- **Capture field values** (`case_type` × `field_key` × `value_text`) —
+  refused outright. `field_key` cardinality is unbounded: a free-text Issue
+  Capture field yields close to one distinct value per Case, so a grain on it
+  is not an aggregate in any useful sense — it approaches the row count of
+  `answer_capture` itself. The `person` arm has nowhere to go in a count at
+  all — a login is an identity, not a measure. Its real home is the Reporting
+  pipeline's per-Case-Type pivots, which can shape a typed, per-field view
+  this Case-Type-agnostic ingest feed cannot.
+- **Conversation latency** (`case_id`, or `case_type` × author side) —
+  refused. `case_current.awaiting_responsible_party` and
+  `case_current.awaiting_since` are already source-written and already answer
+  the latency question directly, so an aggregate here would be a second,
+  derived spelling of a fact the source already states. Splitting by author
+  side would also need the bare-account-to-claims-login join
+  `conversation_message.author_login` and `case_current`'s Person columns
+  deliberately do not support (see *Bare account logins vs. claims logins*,
+  above) — this feed refuses that join on principle, not for lack of time.
+  #356, the in-app clock, is the related inverse and should be read before
+  re-proposing this.

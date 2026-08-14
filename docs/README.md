@@ -71,9 +71,13 @@ python -m scripts.benchmark_gold --base-dir C:\temp\bench --sweep
 ```
 
 It reports the two phases separately — the `case_current` reduce over the whole
-silver history, and the aggregates over the resulting one-row-per-Case frame —
-plus the silver read on its own, which is the number a network share moves. See
-[`benchmarking-gold.md`](benchmarking-gold.md).
+silver history, and the three `case_current`-sourced aggregates over the
+resulting one-row-per-Case frame — plus the silver read on its own, which is
+the number a network share moves. It does **not** measure the two aggregates
+that reduce from a Detail Table (`answer_remediation_current`,
+`appeal_outcomes_current`): the synthetic silver it seeds writes empty JSON
+blobs, so every Detail Table publishes zero rows and there is nothing for
+those two to count. See [`benchmarking-gold.md`](benchmarking-gold.md).
 
 ---
 
@@ -662,7 +666,7 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 | [`adding-a-feed.md`](adding-a-feed.md) | Every Reader, the stubbed remote (SAS / SharePoint) seams, the SharePoint `Modified` checkpoint (`SharePointCheckpointStore`) that computes the next polling window, and the worked incremental feed that wires the two halves together. |
 | [`schema-enforcement.md`](schema-enforcement.md) | `Schema` / `SchemaValidator` / `SchemaCoercion`, value-level rules, composing the schema boundary onto a pipeline. |
 | [`data-dictionary-template.md`](data-dictionary-template.md) | The Confluence-ready template for documenting what every table/Feed and each of its fields means — the prose companion to `schema.py`. |
-| [`data-dictionary-sharepoint-cases.md`](data-dictionary-sharepoint-cases.md) | The template filled in for the `sharepoint_cases` feed: the raw observation, the Case version, the `answer`/`answer_capture`/`answer_action`/`general_answer`/`conversation_message`/`appeal`/`case_detail` silver Detail Tables, and the eleven gold tables with their declared grains, all shared across every declared Case list and discriminated by `case_type`; why raw and silver do not store when we saw the row; why silver settles `case_type` to the polled list's declared value; and the two provisioning prerequisites (an index on `Modified`, and the site/GUID placeholders) that stand between it and a tenant. |
+| [`data-dictionary-sharepoint-cases.md`](data-dictionary-sharepoint-cases.md) | The template filled in for the `sharepoint_cases` feed: the raw observation, the Case version, the `answer`/`answer_capture`/`answer_action`/`general_answer`/`conversation_message`/`appeal`/`case_detail` silver Detail Tables, and the thirteen gold tables with their declared grains — including the two aggregates reduced from a Detail Table rather than `case_current` — all shared across every declared Case list and discriminated by `case_type`; why raw and silver do not store when we saw the row; why silver settles `case_type` to the polled list's declared value; the two provisioning prerequisites (an index on `Modified`, and the site/GUID placeholders) that stand between it and a tenant; and which further aggregates were deliberately refused, and why. |
 | [`data-dictionary-reviewer-activity.md`](data-dictionary-reviewer-activity.md) | The working-day, freshness-guarded `reviewer_activity_daily` aggregate and its sparse per-Reviewer `my-stats/{account}.txt` Report Feed, reduced from Sync's `case_current`. |
 | [`sharepoint-rest-ingest.md`](sharepoint-rest-ingest.md) | The operator runbook for that feed: scheduling it, re-driving it, and what REST polling cannot tell you. |
 | [`benchmarking-gold.md`](benchmarking-gold.md) | What one gold publication costs, which phase grows, and how to measure it against the storage it will run on (`scripts/benchmark_gold.py`) — the evidence behind publishing the aggregates on the sync's schedule rather than their own. |

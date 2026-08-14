@@ -1,19 +1,22 @@
 """Gold for the ``sharepoint_cases`` feed: the current Case, its Detail Tables,
-and three aggregates.
+and five aggregates.
 
 Silver is an append-only history of *observations* across every declared Case
 list. Gold reduces that three ways. Every table is rebuilt whole with
 ``Refresh()`` on every poll, so a re-drive converges rather than accumulating.
 
-Eleven tables, and their declared grain:
+Thirteen tables, and their declared grain:
 
-============================  =================================================
-``case_current``              one row per ``case_id`` -- the latest observation
-Detail Tables                 grain declared per table in ``DETAIL_GRAIN``
-``case_counts_current``       reviewer x that reviewer's manager x ``status``
-``case_age_buckets_current``  ``age_bucket`` x ``status``
-``case_throughput_daily``     ``terminal_date`` x ``terminal_status``
-============================  =================================================
+=================================  =============================================
+``case_current``                   one row per ``case_id`` -- the latest observation
+Detail Tables                      grain declared per table in ``DETAIL_GRAIN``
+``case_counts_current``            reviewer x that reviewer's manager x ``status``
+``case_age_buckets_current``       ``age_bucket`` x ``status``
+``case_throughput_daily``          ``terminal_date`` x ``terminal_status``
+``answer_remediation_current``     ``case_type`` x ``question_id`` x
+                                    ``remediation_required`` x ``remediation_status``
+``appeal_outcomes_current``        ``case_type`` x ``state`` x ``resolution_verdict``
+=================================  =============================================
 
 The Detail Tables, named in ``DETAIL_TABLES``, each hold the child rows -- an
 answer, an Issue Capture field, a remediation action, a General Question
@@ -26,6 +29,11 @@ and ``case_detail`` -- publishes today, so ``DETAIL_TABLES`` (derived from
 ``GOLD_TABLES`` and ``DETAIL_GRAIN`` together) equals ``DETAIL_GRAIN`` in
 full; a table declared there but not yet in ``GOLD_TABLES`` would be the
 exception, and there is none right now.
+
+Two of the five aggregates -- ``answer_remediation_current`` and
+``appeal_outcomes_current`` -- reduce from a Detail Table (``answer`` and
+``appeal`` respectively) rather than from ``case_current``, per
+``DETAIL_AGGREGATES`` below.
 
 **One instant decides everything.** ``as_of`` is the candidate SharePoint window
 end -- the value the run is about to commit as its watermark -- and never
@@ -73,6 +81,8 @@ GOLD_TABLES = (
     "case_counts_current",
     "case_age_buckets_current",
     "case_throughput_daily",
+    "answer_remediation_current",
+    "appeal_outcomes_current",
 )
 
 CASE_ID_COLUMN = "case_id"
@@ -98,6 +108,17 @@ DETAIL_GRAIN: dict[str, tuple[str, ...]] = {
 # GOLD_TABLES and DETAIL_GRAIN is then the only edit that makes it publish.
 DETAIL_TABLES: tuple[str, ...] = tuple(t for t in GOLD_TABLES if t in DETAIL_GRAIN)
 
+# An aggregate that reduces from a Detail Table rather than from case_current,
+# named to the Detail Table it reduces. An aggregate absent from this mapping
+# reduces case_current, as the first three (case_counts_current,
+# case_age_buckets_current, case_throughput_daily) do. The values drive both
+# the source lookup in publish_gold's aggregate loop and which Detail Tables'
+# datasets that loop needs to retain in memory.
+DETAIL_AGGREGATES: dict[str, str] = {
+    "answer_remediation_current": "answer",
+    "appeal_outcomes_current": "appeal",
+}
+
 AS_OF_COLUMN = "as_of_utc"
 # The pair a Detail row's semi-join keys on: the winning Case and the one
 # observation that won it. Declared beside AS_OF_COLUMN because both are things
@@ -114,6 +135,14 @@ TERMINAL_STATUSES = {"Completed": "completed_at", "Void": "voided_at"}
 # reader may silently drop, losing rows from a total.
 UNASSIGNED = "(unassigned)"
 UNSTAMPED = "(unstamped)"
+# ``remediation_required``'s absent key is *not* a fill for missing data -- it
+# is the tri-state's real third state (see AnswerRow), and must stay
+# countable and distinct from a reviewer having chosen "no".
+UNDECIDED = "(undecided)"
+# One meaning, shared by remediation_status and resolution_verdict: no
+# resolution recorded yet.
+UNRESOLVED = "(unresolved)"
+UNSTATED = "(unstated)"
 
 # The grain of ``case_counts_current``, in the order it groups and sorts by. The
 # Assigned Reviewer leads: the question this table answers is "who is holding
@@ -123,6 +152,22 @@ COUNT_DIMENSIONS = (
     "assigned_reviewer_manager_name",
     "status",
 )
+
+# The grain of ``answer_remediation_current``, in the order it groups and sorts
+# by. ``case_type`` leads for correctness, not convenience: question_ids are
+# drawn from a per-Case-Type question bank, so "q1" in two banks names two
+# different questions, and grouping without case_type would sum them as one.
+ANSWER_REMEDIATION_DIMENSIONS = (
+    "case_type",
+    "question_id",
+    "remediation_required",
+    "remediation_status",
+)
+
+# The grain of ``appeal_outcomes_current``, in the order it groups and sorts
+# by. ``case_type`` leads for the same correctness reason it leads
+# ANSWER_REMEDIATION_DIMENSIONS.
+APPEAL_OUTCOME_DIMENSIONS = ("case_type", "state", "resolution_verdict")
 
 # ``(exclusive upper bound in days, label)``, tried in order; the last entry is
 # the open-ended bucket and its bound is ignored. A bucket's sort order is its
@@ -241,21 +286,17 @@ def winning_observations(observations: Reader) -> Dataset:
 
 def case_counts(dataset: Dataset) -> Dataset:
     """Count current Cases by reviewer, that reviewer's manager, and status."""
-    frame = dataset.to_pandas()
     # Only the two Person columns are filled; ``status`` is declared non-null in
     # silver and a null there is a schema breach, not a reporting gap.
-    filled = {
-        column: frame[column].where(frame[column].notna(), UNASSIGNED)
-        for column in ("assigned_reviewer_name", "assigned_reviewer_manager_name")
-    }
-    counted = (
-        frame.assign(**filled)
-        .groupby(list(COUNT_DIMENSIONS))
-        .size()
-        .reset_index(name="case_count")
-        .sort_values(list(COUNT_DIMENSIONS), kind="stable")
+    return _counted(
+        dataset.to_pandas(),
+        COUNT_DIMENSIONS,
+        fills={
+            "assigned_reviewer_name": UNASSIGNED,
+            "assigned_reviewer_manager_name": UNASSIGNED,
+        },
+        measure="case_count",
     )
-    return Dataset.from_pandas(counted.reset_index(drop=True))
 
 
 def _age_in_days(created: pd.Timestamp | None, as_of_day: dt.date) -> int | None:
@@ -357,6 +398,60 @@ def throughput(dataset: Dataset) -> Dataset:
         .sort_values(["terminal_date", "terminal_status"], kind="stable")
     )
     return Dataset.from_pandas(counted.reset_index(drop=True))
+
+
+def _counted(
+    frame: pd.DataFrame,
+    dimensions: Sequence[str],
+    *,
+    fills: dict[str, str],
+    measure: str,
+) -> Dataset:
+    """Group ``frame`` by ``dimensions`` into one row per combination, counted.
+
+    Each column named in ``fills`` is filled with its literal via
+    ``frame[c].where(frame[c].notna(), literal)`` -- **``.where``, not
+    ``fillna``** -- matching ``case_counts``'s idiom, so an all-null float64
+    column lands as ``object`` rather than staying float64 with the literal
+    coerced to NaN.
+    """
+    filled = {
+        column: frame[column].where(frame[column].notna(), literal)
+        for column, literal in fills.items()
+    }
+    counted = (
+        frame.assign(**filled)
+        .groupby(list(dimensions))
+        .size()
+        .reset_index(name=measure)
+        .sort_values(list(dimensions), kind="stable")
+    )
+    return Dataset.from_pandas(counted.reset_index(drop=True))
+
+
+def answer_remediation(dataset: Dataset) -> Dataset:
+    """Count the gold ``answer`` Detail Table by remediation decision and status."""
+    frame = dataset.to_pandas()
+    return _counted(
+        frame,
+        ANSWER_REMEDIATION_DIMENSIONS,
+        fills={
+            "remediation_required": UNDECIDED,
+            "remediation_status": UNRESOLVED,
+        },
+        measure="answer_count",
+    )
+
+
+def appeal_outcomes(dataset: Dataset) -> Dataset:
+    """Count the gold ``appeal`` Detail Table by state and resolution verdict."""
+    frame = dataset.to_pandas()
+    return _counted(
+        frame,
+        APPEAL_OUTCOME_DIMENSIONS,
+        fills={"state": UNSTATED, "resolution_verdict": UNRESOLVED},
+        measure="appeal_count",
+    )
 
 
 # --- the builders -----------------------------------------------------------
@@ -470,18 +565,27 @@ def publish_gold(
 ) -> None:
     """Rebuild every gold table from the accumulated silver history.
 
-    ``case_current`` is published first and its dataset feeds the Detail Tables
-    and the three aggregates, so silver is read once and each of them reduces
-    exactly the current table's own rows. They commit independently, in order;
-    a failure part-way leaves the earlier ones refreshed, which is safe because
-    the caller has not advanced any watermark and the next run rebuilds
-    everything.
+    ``case_current`` is published first and its dataset feeds the Detail
+    Tables and the five aggregates, so silver is read once and each of them
+    reduces exactly the current table's own rows. They commit independently,
+    in order; a failure part-way leaves the earlier ones refreshed, which is
+    safe because the caller has not advanced any watermark and the next run
+    rebuilds everything.
 
     Each Detail Table's ``observations=`` is ``DatasetReader(current)`` --
     ``current`` is already materialised in memory, so re-reading
     ``med.gold.reader(CURRENT_TABLE)`` would be a wasted round trip and, under a
     dry run where ``Refresh()`` wrote nothing, would hand the semi-join the
     *previous* run's winners or a missing table.
+
+    A Detail Table's published dataset is kept in memory only when
+    ``DETAIL_AGGREGATES`` names it as an aggregate's source -- holding all
+    seven would raise peak memory by a full ``answer`` frame plus six more
+    nobody reduces from. An aggregate over a Detail
+    Table then reads that hop's already-materialised dataset for exactly the
+    reason ``observations=DatasetReader(current)`` does above: it counts
+    exactly the rows ``Refresh()`` just published, and a dry run cannot be
+    handed a stale or missing table.
 
     Each hop runs as a bare ``p.run()``, so it inherits the ambient run context
     the runner makes active -- which is where a dry run's write-nothing
@@ -512,6 +616,7 @@ def publish_gold(
         print(current_p.describe())
     current = current_p.run()
 
+    sources: dict[str, Dataset] = {CURRENT_TABLE: current}
     for table in DETAIL_TABLES:
         p = gold_detail_builder(
             med.silver.reader(table),
@@ -524,7 +629,9 @@ def publish_gold(
         )
         if describe:
             print(p.describe())
-        p.run()
+        dataset = p.run()
+        if table in DETAIL_AGGREGATES.values():
+            sources[table] = dataset
 
     for table, step, transform in (
         ("case_counts_current", "count-by-reviewer-and-status", case_counts),
@@ -534,9 +641,16 @@ def publish_gold(
             partial(age_buckets, as_of=as_of),
         ),
         ("case_throughput_daily", "count-by-terminal-date", throughput),
+        (
+            "answer_remediation_current",
+            "count-by-remediation",
+            answer_remediation,
+        ),
+        ("appeal_outcomes_current", "count-by-outcome", appeal_outcomes),
     ):
         p = Pipeline(f"{FEED_NAME}:gold:{table}", run_log=run_log)
-        node = p.read(DatasetReader(current), name="read")
+        source = sources[DETAIL_AGGREGATES.get(table, CURRENT_TABLE)]
+        node = p.read(DatasetReader(source), name="read")
         node = p.transform(transform, node, name=step)
         node = p.transform(
             Stamp(AS_OF_COLUMN, as_of.isoformat()), node, name="stamp-as-of"

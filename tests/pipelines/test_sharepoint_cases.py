@@ -21,17 +21,24 @@ from uuid import UUID
 import pandas as pd
 import pytest
 
-from framework.core import ErrorCategory, Reader, ValidationError
-from framework.io import AppendOnlyConflictError
+from framework.core import Dataset, ErrorCategory, Reader, ValidationError
+from framework.io import AppendOnlyConflictError, DatasetReader
 from framework.run import Pipeline, RunContext, RunLog, dry_run_pipeline
 from framework.transform import JsonShapeError, Stamp
 from pipelines.sharepoint_cases import gold
 from pipelines.sharepoint_cases.gold import (
+    ANSWER_REMEDIATION_DIMENSIONS,
     DETAIL_GRAIN,
+    DETAIL_TABLES,
     GOLD_TABLES,
     UNASSIGNED,
+    UNDECIDED,
+    UNRESOLVED,
     UNSTAMPED,
+    UNSTATED,
     age_buckets,
+    answer_remediation,
+    appeal_outcomes,
     case_counts,
     case_current_builder,
     gold_detail_builder,
@@ -1368,6 +1375,14 @@ def test_current_gold_carries_the_join_key_for_detail_tables():
 # --- gold: the current counts ------------------------------------------------
 
 
+def given_columns(*names: str) -> Reader:
+    """A zero-**row**, declared-column source -- what a quiet poll really hands
+    an aggregate transform, unlike ``given_rows([])``'s zero-**column** frame,
+    which no production path emits.
+    """
+    return DatasetReader(Dataset.from_pandas(pd.DataFrame(columns=list(names))))
+
+
 def aggregate_pipeline(reader, writer, *, table: str, transform, step: str) -> Pipeline:
     """Wire one aggregate hop exactly as ``publish_gold``'s loop does."""
     p = Pipeline(f"{FEED_NAME}:gold:{table}")
@@ -1599,6 +1614,265 @@ def test_throughput_is_empty_when_nothing_has_ended():
     assert ended(version()) == []
 
 
+# --- gold: the answer remediation aggregate ----------------------------------
+
+# Reuses winning_reader() and details(), defined above for the Detail Table
+# reduction tests -- this aggregate reads gold `answer`, so proving it comes
+# from the winning observation means driving the same reduction, not hand
+# building already-reduced rows.
+
+
+def answer_child(
+    *,
+    source_item_id: str = "101",
+    case_type: str = COMPLAINTS.case_type,
+    source_observation_id: str,
+    question_id: str = "q1",
+    remediation_required: str | None = None,
+    remediation_status: str | None = None,
+) -> dict:
+    """One row of an ``answer`` Detail Table child history, remediation-shaped."""
+    return {
+        "source_item_id": source_item_id,
+        "case_type": case_type,
+        "source_observation_id": source_observation_id,
+        "question_id": question_id,
+        "remediation_required": remediation_required,
+        "remediation_status": remediation_status,
+    }
+
+
+def gold_answer(children: list[dict], winners: Reader) -> list[dict]:
+    """The gold ``answer`` Detail Table rows a child history reduces to."""
+    return details(children, winners, grain=DETAIL_GRAIN["answer"])
+
+
+def remediation(rows: list[dict]) -> list[dict]:
+    return aggregate(answer_remediation, "count-by-remediation", rows)
+
+
+def test_remediation_counts_come_from_the_winning_observation():
+    # Two observations of one Case: the second clears q1's remediation
+    # decision and status entirely -- the deleted-key tri-state case.
+    v1 = version(
+        source_observation_id="obs-1",
+        source_version='"3"',
+        source_modified_at="2026-08-05 08:10:00+00:00",
+    )
+    v2 = version(
+        source_observation_id="obs-2",
+        source_version='"4"',
+        source_modified_at="2026-08-05 08:45:00+00:00",
+        status="Completed",
+    )
+    winners = winning_reader(v1, v2)
+    children = [
+        answer_child(
+            source_observation_id="obs-1",
+            question_id="q1",
+            remediation_required="yes",
+            remediation_status="partial",
+        ),
+        answer_child(source_observation_id="obs-2", question_id="q1"),
+    ]
+
+    rows = remediation(gold_answer(children, winners))
+
+    assert [
+        (row["remediation_required"], row["remediation_status"], row["answer_count"])
+        for row in rows
+    ] == [(UNDECIDED, UNRESOLVED, 1)]
+
+
+def test_an_undecided_remediation_is_counted_and_the_total_matches_gold_answer():
+    winners = winning_reader(version(source_observation_id="obs-1"))
+    children = [
+        answer_child(source_observation_id="obs-1", question_id="q1"),
+        answer_child(
+            source_observation_id="obs-1",
+            question_id="q2",
+            remediation_required="yes",
+            remediation_status="complete",
+        ),
+    ]
+    answer_rows = gold_answer(children, winners)
+
+    rows = remediation(answer_rows)
+
+    assert (UNDECIDED, UNRESOLVED, 1) in [
+        (row["remediation_required"], row["remediation_status"], row["answer_count"])
+        for row in rows
+    ]
+    # sum(answer_count) is an answer count, not a Case count -- it equals gold
+    # answer's own row count.
+    assert sum(row["answer_count"] for row in rows) == len(answer_rows)
+
+
+def test_a_decided_remediation_with_no_status_counts_as_unresolved():
+    winners = winning_reader(version(source_observation_id="obs-1"))
+    [row] = remediation(
+        gold_answer(
+            [
+                answer_child(
+                    source_observation_id="obs-1",
+                    remediation_required="yes",
+                    remediation_status=None,
+                )
+            ],
+            winners,
+        )
+    )
+
+    assert (row["remediation_required"], row["remediation_status"]) == (
+        "yes",
+        UNRESOLVED,
+    )
+
+
+def test_two_case_types_do_not_share_a_question_id():
+    v1 = version(source_observation_id="obs-1")
+    v2 = version(
+        id=101,
+        source_item_id="101",
+        case_type=OTHER.case_type,
+        source_observation_id="obs-2",
+    )
+    winners = winning_reader(v1, v2)
+    children = [
+        answer_child(source_observation_id="obs-1", case_type=COMPLAINTS.case_type),
+        answer_child(source_observation_id="obs-2", case_type=OTHER.case_type),
+    ]
+
+    rows = remediation(gold_answer(children, winners))
+
+    # Same source_item_id and question_id, distinct case_type -- summing them
+    # as one question would be meaningless: ids are per-Case-Type bank.
+    assert len(rows) == 2
+    assert {row["case_type"] for row in rows} == {
+        COMPLAINTS.case_type,
+        OTHER.case_type,
+    }
+    assert all(row["answer_count"] == 1 for row in rows)
+
+
+def test_remediation_is_empty_when_nothing_was_answered():
+    writer = RecordingWriter()
+    aggregate_pipeline(
+        given_columns(*ANSWER_REMEDIATION_DIMENSIONS),
+        writer,
+        table="table",
+        transform=answer_remediation,
+        step="count-by-remediation",
+    ).run()
+
+    frame = writer.dataset.to_pandas()
+    assert list(frame.columns) == [
+        *ANSWER_REMEDIATION_DIMENSIONS,
+        "answer_count",
+        "as_of_utc",
+    ]
+    assert len(frame) == 0
+
+
+# --- gold: the appeal outcomes aggregate --------------------------------------
+
+
+def appeal_child(
+    *,
+    source_item_id: str = "101",
+    case_type: str = COMPLAINTS.case_type,
+    source_observation_id: str,
+    appeal_id: str = "appeal-1",
+    state: str | None = "raised",
+    resolution_verdict: str | None = None,
+) -> dict:
+    """One row of an ``appeal`` Detail Table child history, outcome-shaped."""
+    return {
+        "source_item_id": source_item_id,
+        "case_type": case_type,
+        "source_observation_id": source_observation_id,
+        "appeal_id": appeal_id,
+        "state": state,
+        "resolution_verdict": resolution_verdict,
+    }
+
+
+def gold_appeal(children: list[dict], winners: Reader) -> list[dict]:
+    """The gold ``appeal`` Detail Table rows a child history reduces to."""
+    return details(children, winners, grain=DETAIL_GRAIN["appeal"])
+
+
+def outcomes(rows: list[dict]) -> list[dict]:
+    return aggregate(appeal_outcomes, "count-by-outcome", rows)
+
+
+def test_appeal_outcomes_come_from_the_winning_observation():
+    # One Appeal, raised in the first observation and resolved in the second
+    # -- gold appeal's semi-join has already picked the winner, so this must
+    # count once, as resolved/agreed, never twice.
+    v1 = version(
+        source_observation_id="obs-1",
+        source_version='"3"',
+        source_modified_at="2026-08-05 08:10:00+00:00",
+    )
+    v2 = version(
+        source_observation_id="obs-2",
+        source_version='"4"',
+        source_modified_at="2026-08-05 08:45:00+00:00",
+        status="Completed",
+    )
+    winners = winning_reader(v1, v2)
+    children = [
+        appeal_child(
+            source_observation_id="obs-1",
+            appeal_id="appeal-1",
+            state="raised",
+            resolution_verdict=None,
+        ),
+        appeal_child(
+            source_observation_id="obs-2",
+            appeal_id="appeal-1",
+            state="resolved",
+            resolution_verdict="agreed",
+        ),
+    ]
+
+    rows = outcomes(gold_appeal(children, winners))
+
+    assert [
+        (row["state"], row["resolution_verdict"], row["appeal_count"]) for row in rows
+    ] == [("resolved", "agreed", 1)]
+
+
+def test_an_unresolved_appeal_counts_under_a_literal_and_totals_to_gold_appeal():
+    # Also proves a null state counts as unstated: both fills exercised on the
+    # same single row.
+    winners = winning_reader(version(source_observation_id="obs-1"))
+    children = [
+        appeal_child(
+            source_observation_id="obs-1",
+            appeal_id="appeal-1",
+            state=None,
+            resolution_verdict=None,
+        )
+    ]
+    appeal_rows = gold_appeal(children, winners)
+
+    rows = outcomes(appeal_rows)
+
+    assert [
+        (row["state"], row["resolution_verdict"], row["appeal_count"]) for row in rows
+    ] == [(UNSTATED, UNRESOLVED, 1)]
+    assert sum(row["appeal_count"] for row in rows) == len(appeal_rows)
+
+
+# --- gold: declaration and publication order ----------------------------------
+
+
+def test_an_aggregate_is_never_mistaken_for_a_detail_table():
+    assert set(DETAIL_TABLES) == set(DETAIL_GRAIN)
+
+
 # --- the composed plan -----------------------------------------------------
 
 
@@ -1747,6 +2021,8 @@ def test_the_gold_hops_plan_exactly_the_steps_they_always_have():
         ("case_counts_current", "count-by-reviewer-and-status"),
         ("case_age_buckets_current", "bucket-by-age"),
         ("case_throughput_daily", "count-by-terminal-date"),
+        ("answer_remediation_current", "count-by-remediation"),
+        ("appeal_outcomes_current", "count-by-outcome"),
     ):
         assert aggregate_pipeline(
             reader,
@@ -1814,6 +2090,14 @@ def test_the_bundled_sample_lands_every_item_across_both_pages(tmp_path, capsys)
     assert {row["status"] for row in read_rows(med.silver, "case_version")} == set(
         CASE_STATUSES
     )
+    # Both Detail Table aggregates total to their source table's row count --
+    # a single poll, so every Case's only observation is its winning one.
+    assert sum(
+        row["answer_count"] for row in read_rows(med.gold, "answer_remediation_current")
+    ) == len(read_rows(med.gold, "answer"))
+    assert sum(
+        row["appeal_count"] for row in read_rows(med.gold, "appeal_outcomes_current")
+    ) == len(read_rows(med.gold, "appeal"))
 
     # main()'s per-poll line is derived from detail_rows and otherwise
     # unpinned; exercise the CLI path once, against a separate base dir, to
@@ -1936,6 +2220,17 @@ def test_a_quiet_window_still_runs_and_records_every_hop(tmp_path):
     assert any(ns.endswith("silver.db") for ns in answer_namespaces)
     assert any(ns.endswith("gold.db") for ns in answer_namespaces)
     assert {record["rows_out"] for record in records} == {0}
+
+    # Gold publishes in the declared order: GOLD_TABLES ties the declaration
+    # to what actually ran.
+    gold_names = [
+        record["pipeline"]
+        for record in records
+        if record["pipeline"].startswith(f"{FEED_NAME}:gold:")
+    ]
+    assert list(dict.fromkeys(gold_names)) == [
+        f"{FEED_NAME}:gold:{table}" for table in GOLD_TABLES
+    ]
 
 
 def test_nothing_safe_to_poll_returns_nothing_and_writes_nothing(tmp_path):
@@ -2379,7 +2674,7 @@ def test_a_malformed_details_blob_raises_and_case_version_details_still_holds_it
     assert case_version["details"] == "not json"
 
 
-def test_a_quiet_first_window_commits_and_publishes_eleven_empty_gold_tables(
+def test_a_quiet_first_window_commits_and_publishes_thirteen_empty_gold_tables(
     tmp_path,
 ):
     # Nothing to reduce is not nothing to publish: a consumer reading gold must
@@ -2449,8 +2744,9 @@ def test_a_failure_in_the_last_aggregate_leaves_the_earlier_gold_and_no_checkpoi
 ):
     # Gold Writers commit independently, so an earlier table stays refreshed.
     # That is acceptable evidence: the watermark did not move, so the next run
-    # rebuilds everything from the same history and converges.
-    monkeypatch.setattr(gold, "throughput", explode)
+    # rebuilds everything from the same history and converges. appeal_outcomes
+    # is the last table GOLD_TABLES declares today.
+    monkeypatch.setattr(gold, "appeal_outcomes", explode)
 
     with pytest.raises(RuntimeError, match="boom"):
         run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME), client=FakeListClient())
@@ -2467,6 +2763,8 @@ def test_a_failure_in_the_last_aggregate_leaves_the_earlier_gold_and_no_checkpoi
         "case_detail",
         "case_counts_current",
         "case_age_buckets_current",
+        "case_throughput_daily",
+        "answer_remediation_current",
     }
     assert checkpoints.committed_watermark(SOURCE) is None
     assert not checkpoints.path.exists()
@@ -2694,6 +2992,11 @@ def test_a_dry_run_previews_every_write_and_commits_none_of_them(tmp_path):
         ("gold case_counts_current", 1),
         ("gold case_age_buckets_current", 1),
         ("gold case_throughput_daily", 0),
+        # The fixture's one answer row carries no remediation decision at all,
+        # so it lands under the UNDECIDED/UNRESOLVED fills; no Appeals means
+        # appeal_outcomes_current previews empty.
+        ("gold answer_remediation_current", 1),
+        ("gold appeal_outcomes_current", 0),
     ]
     assert [step.note for step in report.steps if step.node_type == "Write"] == [
         f"would write {n} row(s)" for _, n in expected
