@@ -307,11 +307,13 @@ class ConversationMessageRow:
     vocabularies do not join. ``author_display_name`` is an unrefreshed
     snapshot of what the sender was called when they posted.
 
-    ``posted_at`` is declared ``str``, not ``datetime``, deliberately: the app
-    and a hand-edited fixture write two different real ISO spellings, and
-    coercing a batch mixing both aborts the whole poll (``pd.to_datetime``
-    infers one format and rejects the other). ``source_modified_at`` stays
-    ``datetime`` because it comes from OData and is already typed upstream.
+    ``posted_at`` is declared ``str``, not ``datetime``, deliberately: the
+    coerce step sits above quarantine, so a hand-edited non-ISO value inside
+    the blob would abort the whole poll rather than divert one row.
+    ``SchemaCoercion`` parses ISO-8601 in any precision now, but blob text is
+    exactly where a hand edit lands; re-typing waits on evidence the blobs
+    are clean. ``source_modified_at`` stays ``datetime`` because it comes
+    from OData and is already typed upstream.
 
     Plain types throughout, never ``X | None`` -- see ``AnswerRow`` for why.
     """
