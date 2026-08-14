@@ -13,7 +13,9 @@ published once, over every list's accumulated history.
   into one row per observation x Question Definition, quarantining a bad value
   the same way while a malformed blob raises. ``silver_answer_capture_builder``
   and ``silver_answer_action_builder`` go one level further, each exploding one
-  field of an individual answer.
+  field of an individual answer. ``silver_general_answer_builder`` explodes the
+  same ``answers`` map from the other side, into one row per General Question
+  catalogue key.
 - ``gold.publish_gold`` rebuilds the current Case, the Detail Tables and three
   aggregates from the whole silver history, each with ``Refresh()``.
 
@@ -97,6 +99,7 @@ from .schema import (
     AnswerRow,
     CaseList,
     CaseVersion,
+    GeneralAnswerRow,
 )
 
 # Pipelines this feed depends on being fresh before it runs. A source feed has
@@ -703,6 +706,57 @@ def silver_answer_action_builder(
     return p
 
 
+def silver_general_answer_builder(
+    reader: Reader,
+    writer: Writer,
+    case_list: CaseList,
+    reject_writer: Writer,
+    run_log: RunLog | None = None,
+) -> Pipeline:
+    """Build one list's silver general-answer hop: explode ``answers`` into one
+    row per General Question catalogue key.
+
+    Reads the settled **silver** batch, never raw -- see
+    ``silver_answer_builder``'s docstring; the same reasoning holds here
+    unchanged. ``case_list`` names the hop and nothing else.
+
+    A malformed ``answers`` blob is a feed defect and **raises**
+    (``JsonShapeError``); a well-formed value quarantines on a value-rule
+    breach the same way ``silver_answer_builder`` does -- except that, today,
+    no value rule on ``GeneralAnswerRow`` can fire: the quarantine node stays
+    wired anyway, since ``SchemaValueRulePartitioner`` is schema-derived and
+    ``QuarantineNode`` writes only when rejects exist, so a future rule needs
+    no rewiring and this one costs nothing on disk.
+    """
+    p = Pipeline(
+        f"{FEED_NAME}:silver:{case_list.case_type}:general_answer", run_log=run_log
+    )
+    node = p.read(reader, name="read")
+    node = p.transform(
+        ExplodeJsonMap(
+            column="answers",
+            key_into="general_key",
+            id_vars=list(DETAIL_ID_VARS),
+            include_key_prefix="general:",
+            strip_key_prefix=True,
+            fields={"value": "value_json"},
+        ),
+        node,
+        name="explode",
+    )
+    node = p.transform(derive_value_text, node, name="value-text")
+    node = p.transform(SchemaCoercion(GeneralAnswerRow), node, name="coerce")
+    node = p.quarantine(
+        SchemaValueRulePartitioner(GeneralAnswerRow),
+        reject_writer,
+        node,
+        name="quarantine",
+    )
+    node = p.validate(SchemaValidator(GeneralAnswerRow), node, name="post-validate")
+    p.write(writer, node, name="write")
+    return p
+
+
 # Every Detail Table hanging off one answer, in the order run() drives them:
 # the table name, the builder that produces it (every one sharing
 # silver_answer_builder's (reader, writer, case_list, reject_writer, run_log)
@@ -719,6 +773,11 @@ _ANSWER_DETAIL_HOPS = (
         "answer_action",
         silver_answer_action_builder,
         ("source_observation_id", "question_id", "action_id"),
+    ),
+    (
+        "general_answer",
+        silver_general_answer_builder,
+        ("source_observation_id", "general_key"),
     ),
 )
 

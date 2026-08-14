@@ -54,6 +54,7 @@ from pipelines.sharepoint_cases.pipeline import (
     silver_answer_builder,
     silver_answer_capture_builder,
     silver_builder,
+    silver_general_answer_builder,
     snake_case,
 )
 from pipelines.sharepoint_cases.schema import (
@@ -63,6 +64,7 @@ from pipelines.sharepoint_cases.schema import (
     AnswerCaptureRow,
     AnswerRow,
     CaseList,
+    GeneralAnswerRow,
 )
 from tests.framework_testing import (
     RecordingRunLog,
@@ -92,6 +94,8 @@ SILVER_COLUMNS = tuple(RENAME.values())
 ANSWER_COLUMNS = tuple(f.name for f in fields(AnswerRow))
 # Likewise for the capture Detail Table one level further down.
 CAPTURE_COLUMNS = tuple(f.name for f in fields(AnswerCaptureRow))
+# Likewise for the general-answer Detail Table.
+GENERAL_ANSWER_COLUMNS = tuple(f.name for f in fields(GeneralAnswerRow))
 
 SERVER_NOW = dt.datetime(2026, 8, 5, 9, tzinfo=dt.timezone.utc)
 WINDOW = ModifiedWindow(start=None, end=SERVER_NOW - SAFETY_LAG)
@@ -121,6 +125,7 @@ EVERY_HOP = {
     f"{FEED_NAME}:silver:{COMPLAINTS.case_type}:answer",
     f"{FEED_NAME}:silver:{COMPLAINTS.case_type}:answer_capture",
     f"{FEED_NAME}:silver:{COMPLAINTS.case_type}:answer_action",
+    f"{FEED_NAME}:silver:{COMPLAINTS.case_type}:general_answer",
     *(f"{FEED_NAME}:gold:{table}" for table in GOLD_TABLES),
 }
 
@@ -749,6 +754,64 @@ def test_discriminate_capture_value_places_every_shape(
         assert target["person_display"] == display
 
 
+# --- silver: the general answer explode ---------------------------------------
+
+
+def silver_general_answers(
+    answers_json: str,
+    *,
+    case_list: CaseList = COMPLAINTS,
+    reject_writer: RecordingWriter | None = None,
+) -> list[dict]:
+    """Drive the silver general-answer hop, in memory, over one observation's
+    `answers`."""
+    writer = RecordingWriter()
+    silver_general_answer_builder(
+        given_rows([version(answers=answers_json)]),
+        writer,
+        case_list,
+        reject_writer or RecordingWriter(),
+    ).run()
+    return rows_of(writer)
+
+
+def test_the_answer_and_general_answer_tables_tile_one_blob_with_no_loss_or_overlap():
+    # The central invariant this slice exists for: driving one blob through
+    # both builders must partition its keys exactly, catch-all side included.
+    # A plain "general" key (no colon) carries no prefix and belongs to the
+    # catch-all -- answer, the exclude side. "general:" (empty key) is the
+    # other edge -- included, and lands with general_key == "".
+    blob = {
+        "q1": {"value": "A"},
+        "q2": {"value": "B"},
+        "general": {"value": "no prefix here"},
+        "general:complaint-channel": {"value": "Phone"},
+        "general:relationship": {"value": "Customer"},
+        "general:": {"value": "empty key"},
+    }
+    answers_json = json.dumps(blob)
+
+    question_ids = {row["question_id"] for row in silver_answers(answers_json)}
+    general_rows = silver_general_answers(answers_json)
+    assert set(general_rows[0]) == set(GENERAL_ANSWER_COLUMNS)
+    # Re-prefixed, to compare in the blob's own vocabulary rather than the
+    # stripped one the general_answer table stores.
+    general_keys = {f"general:{row['general_key']}" for row in general_rows}
+
+    assert "general" in question_ids
+    assert question_ids & general_keys == set()
+    assert question_ids | general_keys == set(blob)
+
+
+def test_an_array_general_answer_is_canonicalised_rather_than_refused():
+    [row] = silver_general_answers(
+        json.dumps({"general:products": {"value": ["Current account", "Savings"]}})
+    )
+
+    assert row["value_text"] == "Current account|Savings"
+    assert json.loads(row["value_json"]) == ["Current account", "Savings"]
+
+
 # --- gold: the current-state rule -------------------------------------------
 
 
@@ -1309,7 +1372,7 @@ def test_throughput_is_empty_when_nothing_has_ended():
 # --- the composed plan -----------------------------------------------------
 
 
-def test_all_five_ingest_hops_plan_exactly_the_steps_they_always_have():
+def test_all_six_ingest_hops_plan_exactly_the_steps_they_always_have():
     reader, writer, rejects = given_rows([]), RecordingWriter(), RecordingWriter()
 
     # No column gate on the raw hop, unlike a file feed: the observation
@@ -1367,6 +1430,18 @@ def test_all_five_ingest_hops_plan_exactly_the_steps_they_always_have():
         "  [Transform] explode-answers (depends on: read)",
         "  [Transform] explode-actions (depends on: explode-answers)",
         "  [Transform] coerce (depends on: explode-actions)",
+        "  [Quarantine] quarantine (depends on: coerce)",
+        "  [Validate] post-validate (depends on: quarantine)",
+        "  [Write] write (depends on: post-validate)",
+    ]
+    assert silver_general_answer_builder(
+        reader, writer, COMPLAINTS, rejects
+    ).describe().splitlines() == [
+        "Pipeline: sharepoint_cases:silver:complaints:general_answer",
+        "  [Read] read",
+        "  [Transform] explode (depends on: read)",
+        "  [Transform] value-text (depends on: explode)",
+        "  [Transform] coerce (depends on: value-text)",
         "  [Quarantine] quarantine (depends on: coerce)",
         "  [Validate] post-validate (depends on: quarantine)",
         "  [Write] write (depends on: post-validate)",
@@ -1447,9 +1522,16 @@ def test_the_bundled_sample_lands_every_item_across_both_pages(tmp_path, capsys)
     # Item 101 carries three questions (one a multi-select), 102 one and 104
     # two, 103 and 105 an empty answers map -- 6 answer rows in total. Only
     # item 101's q-root-cause carries a capture map (2 fields) and a
-    # remediationActions list (1 action), so those tables land 2 and 1.
+    # remediationActions list (1 action), so those tables land 2 and 1. Only
+    # item 101 carries a General Question answer (general:complaint-channel),
+    # so general_answer lands 1.
     assert (poll.raw_rows, poll.silver_rows) == (5, 5)
-    assert poll.detail_rows == {"answer": 6, "answer_capture": 2, "answer_action": 1}
+    assert poll.detail_rows == {
+        "answer": 6,
+        "answer_capture": 2,
+        "answer_action": 1,
+        "general_answer": 1,
+    }
     # The fixture exercises all four real statuses, so the whole vocabulary
     # passes the schema gate rather than only the one a happy path would use.
     assert {row["status"] for row in read_rows(med.silver, "case_version")} == set(
@@ -1463,7 +1545,8 @@ def test_the_bundled_sample_lands_every_item_across_both_pages(tmp_path, capsys)
     assert exit_code == 0
     assert (
         "5 observation(s) -> 5 case version(s), 6 answer row(s), "
-        "2 answer_capture row(s), 1 answer_action row(s)."
+        "2 answer_capture row(s), 1 answer_action row(s), "
+        "1 general_answer row(s)."
     ) in capsys.readouterr().out
 
 
@@ -1719,6 +1802,41 @@ def test_the_winning_observation_settles_gold_answer_and_drops_the_others(tmp_pa
     }
 
 
+def test_the_winning_observation_settles_gold_general_answer_and_drops_the_others(
+    tmp_path,
+):
+    # Two polls of one item: the second observation changes general:a's value
+    # and swaps general:b for general:c.
+    early = item(
+        Answers=json.dumps(
+            {"general:a": {"value": "first"}, "general:b": {"value": "X"}}
+        )
+    )
+    later = item(
+        Answers=json.dumps(
+            {"general:a": {"value": "second"}, "general:c": {"value": "Y"}}
+        ),
+        Status="Completed",
+    )
+    later.update({"Modified": "2026-08-05T08:45:00Z", "odata.etag": '"4"'})
+    client = FakeListClient(items(early), items(later), advance=NEXT_POLL)
+    context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
+
+    run(context, client=client)
+    run(context, client=client)
+
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    # Silver accumulated both observations' general answers: 2 keys + 2 keys.
+    assert len(read_rows(med.silver, "general_answer")) == 4
+
+    gold_general_answer = read_rows(med.gold, "general_answer")
+    assert {row["general_key"] for row in gold_general_answer} == {"a", "c"}
+    [winner] = read_rows(med.gold, "case_current")
+    assert {row["source_observation_id"] for row in gold_general_answer} == {
+        winner["source_observation_id"]
+    }
+
+
 def test_the_winning_observation_settles_gold_capture_and_action_and_drops_the_others(
     tmp_path,
 ):
@@ -1833,7 +1951,7 @@ def test_a_malformed_answers_blob_raises_and_case_version_still_lands(tmp_path):
     assert SharePointCheckpointStore(tmp_path).committed_watermark(SOURCE) is None
 
 
-def test_a_quiet_first_window_commits_and_publishes_seven_empty_gold_tables(tmp_path):
+def test_a_quiet_first_window_commits_and_publishes_eight_empty_gold_tables(tmp_path):
     # Nothing to reduce is not nothing to publish: a consumer reading gold must
     # find the tables, empty, rather than a missing one it has to special-case.
     run(
@@ -1899,6 +2017,7 @@ def test_a_failure_in_the_last_aggregate_leaves_the_earlier_gold_and_no_checkpoi
         "answer",
         "answer_capture",
         "answer_action",
+        "general_answer",
         "case_counts_current",
         "case_age_buckets_current",
     }
@@ -2106,21 +2225,24 @@ def test_a_dry_run_previews_every_write_and_commits_none_of_them(tmp_path):
     report = dry_run_pipeline(lambda ctx: run(ctx, client=client), FEED_NAME, tmp_path)
 
     # Raw, silver, every silver Detail Table, and every gold table are
-    # previewed; none is committed. The fixture item carries no capture map or
-    # remediationActions, so those four Detail Table writes are empty.
+    # previewed; none is committed. The fixture item carries no capture map,
+    # remediationActions or general answer, so those five Detail Table writes
+    # are empty.
+    empty_detail_tables = ("answer_capture", "answer_action", "general_answer")
+    expected = [
+        ("raw case_observation", 1),
+        ("silver case_version", 1),
+        ("silver answer", 1),
+        *((f"silver {t}", 0) for t in empty_detail_tables),
+        ("gold case_current", 1),
+        ("gold answer", 1),
+        *((f"gold {t}", 0) for t in empty_detail_tables),
+        ("gold case_counts_current", 1),
+        ("gold case_age_buckets_current", 1),
+        ("gold case_throughput_daily", 0),
+    ]
     assert [step.note for step in report.steps if step.node_type == "Write"] == [
-        "would write 1 row(s)",  # raw case_observation
-        "would write 1 row(s)",  # silver case_version
-        "would write 1 row(s)",  # silver answer
-        "would write 0 row(s)",  # silver answer_capture
-        "would write 0 row(s)",  # silver answer_action
-        "would write 1 row(s)",  # gold case_current
-        "would write 1 row(s)",  # gold answer
-        "would write 0 row(s)",  # gold answer_capture
-        "would write 0 row(s)",  # gold answer_action
-        "would write 1 row(s)",  # gold case_counts_current
-        "would write 1 row(s)",  # gold case_age_buckets_current
-        "would write 0 row(s)",  # gold case_throughput_daily
+        f"would write {n} row(s)" for _, n in expected
     ]
     assert read_rows(med.gold, "case_current") == before
     # The real run's watermark stands; the preview did not move it on.

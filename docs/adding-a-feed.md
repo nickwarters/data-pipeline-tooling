@@ -770,7 +770,7 @@ follows the ordinary scaffold shape — a `*_builder` per hop, driven by
 `run(context)` — and the first two hops are deliberately thin. Landing the list's rows as immutable
 versions is one job and interpreting them is another: raw and silver do no
 derivation and no parsing, and everything that reads meaning into a Case happens
-in the third hop (`gold.py`, seven tables refreshed whole on every poll — see the
+in the third hop (`gold.py`, eight tables refreshed whole on every poll — see the
 [data dictionary](data-dictionary-sharepoint-cases.md)).
 
 **0. One declaration says what is polled.** `schema.py` holds a frozen

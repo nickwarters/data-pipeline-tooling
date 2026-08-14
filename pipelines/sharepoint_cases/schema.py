@@ -1,6 +1,6 @@
 """Declared silver schemas for the ``sharepoint_cases`` feed.
 
-Four schemas live here. ``CaseVersion`` is one row per observation of a Case: a
+Five schemas live here. ``CaseVersion`` is one row per observation of a Case: a
 Case list item as it stood at one version, with the source's column names
 mechanically snake_cased and the columns typed. Nothing is derived and nothing
 is reshaped -- this hop is the rename and the type contract, and that is all it
@@ -16,9 +16,11 @@ JSON map, exploded so each question's response is its own row rather than a
 key buried in a blob. ``AnswerCaptureRow`` and ``AnswerActionRow`` go one level
 further, each exploding one field of an individual answer -- the flat
 ``capture`` map and the ``remediationActions`` list -- into their own Detail
-Tables. ``DETAIL_ID_VARS`` is what all four schemas share -- it carries
-``NATURAL_KEY``'s columns so a Detail Table's own ``gold_detail_builder``
-derives the same ``case_id`` as the parent Case.
+Tables. ``GeneralAnswerRow`` tiles the same ``answers`` map from the other
+side: the General Question keys ``AnswerRow`` excludes. ``DETAIL_ID_VARS`` is
+what all five schemas share -- it carries ``NATURAL_KEY``'s columns so a Detail
+Table's own ``gold_detail_builder`` derives the same ``case_id`` as the parent
+Case.
 
 The rules are deliberately thin. Only three things about this list are knowable
 enough to fail a run over: an observation must say where it came from, a Case
@@ -334,3 +336,64 @@ class AnswerActionRow:
     # is a snapshot: a later rename in the bank does not reach a row already
     # written here.
     action_text: str
+
+
+@dataclass
+class GeneralAnswerRow:
+    """One row per observation x General Question catalogue key, exploded from
+    the same ``answers`` map ``AnswerRow`` reads -- from the other side of it.
+
+    General Question answers live in ``answers`` under a ``general:``-prefixed
+    key, come from a shared catalogue rather than a Question Definition id, are
+    plain strings by app contract, are never outcome-driving, and carry no
+    ``capture`` / ``remediationActions`` / ``justification`` -- which is why
+    this schema is short next to ``AnswerRow``. ``silver_answer_builder``
+    **excludes** the ``general:`` prefix; ``silver_general_answer_builder``
+    **includes** it and strips it, so the two tables tile the blob with no
+    overlap and no loss.
+
+    **Both value columns are carried, even though the app contract says plain
+    string.** ``_as_column_value`` (inside ``ExplodeJsonMap``) lands a scalar
+    cell as itself and anything else as JSON text, so an array *cannot* fail --
+    the only choice is whether the stored text is honest about it. With one
+    column named ``value_text``, an array would land as raw JSON in the column
+    whose documented meaning is "canonical groupable rendering". Worse, a JSON
+    ``true``/``3`` passes ``SchemaCoercion`` and ``SchemaValidator`` untouched
+    as a Python ``bool``/``int``, and SQLite stores ``True`` as ``1`` -- exactly
+    what ``derive_value_text`` exists to prevent. Reusing it unchanged here gets
+    both, for zero new production code, and gives both answer tables one
+    identical value contract: a consumer unioning them reads one column with
+    one meaning.
+
+    No ``OneOf`` on ``general_key``: the catalogue lives in Case Type config
+    this pipeline never sees and changes without a pipeline release. A
+    vocabulary would quarantine a newly shipped General Question's answers on
+    day one, and it would contradict the requirement that an answer to a
+    General Question later *removed* from config keeps syncing while it is
+    still present in the blob. No ``Pattern`` either, for the same reason
+    ``AnswerRow.question_id`` has none.
+
+    The tiling survives only because ``answer`` is the exclude side of
+    ``ExplodeJsonMap``'s include/exclude prefix asymmetry -- see its docstring
+    before either builder's prefix argument is touched.
+
+    The ``"general:"``-exactly key lands with ``general_key == ""``, visible
+    rather than quarantined -- see the tiling test for the proof.
+
+    Plain types throughout, never ``X | None`` -- see ``AnswerRow`` for why.
+    """
+
+    # DETAIL_ID_VARS, repeated onto every row by ExplodeJsonMap -- see its
+    # docstring for why this must carry NATURAL_KEY's columns.
+    case_type: Annotated[str, NonNull()]
+    source_item_id: Annotated[str, NonNull()]
+    # datetime, not str -- see AnswerRow's own field for why.
+    source_modified_at: Annotated[datetime, NonNull()]
+    source_version: Annotated[str, NonNull()]
+    source_observation_id: Annotated[str, NonNull()]
+
+    # The General Question catalogue key, with the "general:" prefix stripped.
+    general_key: Annotated[str, NonNull()]
+
+    value_json: str
+    value_text: str

@@ -1,12 +1,12 @@
 # Data dictionary — `sharepoint_cases`
 
 The filled-in entry for the `sharepoint_cases` feed, following
-[`data-dictionary-template.md`](data-dictionary-template.md). Twelve tables:
+[`data-dictionary-template.md`](data-dictionary-template.md). Fourteen tables:
 the faithful raw observation, the typed Case version and its silver `answer`,
-`answer_capture` and `answer_action` Detail Tables, and the seven gold tables
-reduced from the version history — the current Case, those same three Detail
-Tables, and three aggregates. Every declared Case list lands in the same
-tables and is told apart by
+`answer_capture`, `answer_action` and `general_answer` Detail Tables, and the
+eight gold tables reduced from the version history — the current Case, those
+same four Detail Tables, and three aggregates. Every declared Case list lands
+in the same tables and is told apart by
 `case_type`. The
 Python contract is
 [`pipelines/sharepoint_cases/schema.py`](../pipelines/sharepoint_cases/schema.py);
@@ -275,9 +275,10 @@ guessed at here would quarantine real data.
 ## `answer` — silver layer (Detail Table)
 
 One row per observation × Question Definition, exploded from `case_version`'s
-`answers` JSON map. `general:`-prefixed keys belong to the General Question
-table (a separate concern) and are excluded before this table ever sees them;
-`remediationActions` and `capture` are separate Detail Tables of their own.
+`answers` JSON map. `general:`-prefixed keys belong to the
+[`general_answer`](#general_answer--silver-layer-detail-table) table and are
+excluded before this table ever sees them; `remediationActions` and `capture`
+are separate Detail Tables of their own.
 
 ### Why this table reads silver, not raw
 
@@ -476,6 +477,72 @@ None.
   `ExplodeJsonMap`/`ExplodeJsonList` raise `JsonShapeError` and abort the run
   before anything from that batch commits.
 
+## `general_answer` — silver layer (Detail Table)
+
+**Why two tables tile one blob.** General Question answers live in the *same*
+`answers` JSON map as real answers, under keys prefixed `general:` — but they
+come from a shared catalogue rather than a Question Definition id, are plain
+strings by app contract, are never outcome-driving, and never fail. `answer`
+above excludes the `general:` prefix; this table includes it and strips it, so
+the two tables partition one blob with no key landing in both and none lost.
+
+One row per observation × General Question catalogue key, exploded from
+`case_version`'s `answers` JSON map — from the other side of the same explode
+`answer` reads. Reads the settled silver batch, never raw, for the same reason
+`answer` does — see *Why this table reads silver, not raw* above.
+
+### Part A — Table / Feed overview
+
+| Attribute | Value |
+|-----------|-------|
+| **Table / Feed name** | `general_answer` |
+| **Subject / Case Type** | `sharepoint_cases` |
+| **Medallion layer** | silver |
+| **Grain** | one row per observation × General Question catalogue key |
+| **Is this a Case Type?** | No — a Detail Table hanging off `case_version` |
+| **Natural key → `case_id`** | `schema.NATURAL_KEY`, via `DETAIL_ID_VARS` — applied at gold, not here |
+| **Source system** | the settled `case_version` batch just fetched (not the whole silver history) |
+| **Reader** | `DatasetReader` over that batch |
+| **Load strategy** | `AppendOnly(("source_observation_id", "general_key"))` — composite, because one observation yields many general-answer rows |
+| **Upstream dependencies** | none declared — the batch is in memory, not reread from silver |
+| **Schedule / freshness** | with the poll, alongside the other Detail Tables |
+| **Owner / data steward** | *<team>* |
+| **Source of truth doc** | `pipelines/sharepoint_cases/schema.py` |
+| **Last reviewed** | 2026-08-14 |
+
+### Part B — Field dictionary
+
+| Field | Source path | Type | Nullable | Value rules | Description | Example | Sensitivity |
+|-------|--------------|------|----------|-------------|-------------|---------|-------------|
+| `case_type` | *(from `case_version`)* | `str` | No | `NonNull` | The settled Case Type. | `complaints` | None |
+| `source_item_id` | *(from `case_version`)* | `str` | No | `NonNull` | The list item observed. | `101` | Internal |
+| `source_modified_at` | *(from `case_version`)* | `datetime` | No | `NonNull` | When the observation was made. | `2026-08-05T08:10:00+00:00` | None |
+| `source_version` | *(from `case_version`)* | `str` | No | `NonNull` | The version observed. | `"3"` | None |
+| `source_observation_id` | *(from `case_version`)* | `str` | No | `NonNull` | The observation's identity. | *(64-char sha256)* | None |
+| `general_key` | the `answers` map's key, `general:` prefix stripped | `str` | No | `NonNull` | The General Question catalogue key. No `OneOf`/`Pattern` — rationale in `GeneralAnswerRow`'s docstring. | `complaint-channel` | None |
+| `value_json` | `answers[key].value` | `str` | Yes | — | The value exactly as the source stored it — a scalar as itself, a list as JSON text. Carried even though the app contract says plain string: see *Part D*. | `"Phone"` | Internal |
+| `value_text` | *(derived)* | `str` | Yes | — | The canonical, groupable rendering of `value_json` — reuses `derive_value_text` unchanged, giving `answer` and `general_answer` one identical value contract. | `Phone` | Internal |
+
+### Part C — Row checks
+
+None.
+
+### Part D — Quarantine & data quality
+
+- No value rule on this schema can quarantine a row today — see
+  `silver_general_answer_builder`'s docstring for why the quarantine node
+  stays wired anyway.
+- A malformed `answers` blob (text that is not JSON, or JSON that is not an
+  object) is a feed defect, not a bad value: `ExplodeJsonMap` raises
+  `JsonShapeError` and aborts the run before anything from that batch commits.
+- A structural breach — a missing column, a wrong dtype, a null provenance
+  column — still aborts the run.
+- The tiling asymmetry between this table's include filter and `answer`'s
+  exclude filter is documented on `GeneralAnswerRow` and tested by
+  `ExplodeJsonMap`'s own suite, not here.
+- The `"general:"`-exactly key lands with `general_key == ""`, visible rather
+  than quarantined — proven by the tiling test.
+
 ## Gold — the current Case, its Detail Tables, and three aggregates
 
 Silver accumulates *observations*; gold answers *what is true now*. Every
@@ -492,6 +559,7 @@ everything.
 | `answer` | `case_id` × `question_id` | the winning observation's answer rows |
 | `answer_capture` | `case_id` × `question_id` × `field_key` | the winning observation's Issue Capture rows |
 | `answer_action` | `case_id` × `question_id` × `action_id` | the winning observation's Remediation Action rows |
+| `general_answer` | `case_id` × `general_key` | the winning observation's General Question answer rows |
 | `case_counts_current` | `assigned_reviewer_name` × `assigned_reviewer_manager_name` × `status` | `case_count` |
 | `case_age_buckets_current` | `age_bucket` × `status` | `case_count` |
 | `case_throughput_daily` | `terminal_date` × `terminal_status` | `case_count` |
@@ -558,6 +626,20 @@ above. Unticking the last Remediation Action on a question removes the whole
 `remediationActions` list the same way resolving the question removes
 `capture` — the semi-join drops those rows from gold rather than keeping a
 stale action a per-child reduce would have no reason to prefer over.
+
+### `general_answer`
+
+| Attribute | Value |
+|-----------|-------|
+| **Grain** | `case_id` × `general_key` |
+| **Load strategy** | `Refresh()` |
+| **Source** | silver `general_answer`'s accumulated history, semi-joined to `case_current`'s winning `(case_id, source_observation_id)` pairs |
+| **Columns** | every silver `general_answer` column, plus `case_id` and `as_of_utc` |
+
+Reduced by the same `gold_detail_builder`, per the same rule as `answer`
+above. A General Question answer a reviewer's app pruned between observations
+(the question dropped from the Case Type's config) is genuinely absent from
+the winning observation's map, and the semi-join reads that absence correctly.
 
 ### `as_of_utc`, on every table
 
