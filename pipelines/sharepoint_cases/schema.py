@@ -1,6 +1,6 @@
 """Declared silver schemas for the ``sharepoint_cases`` feed.
 
-Seven schemas live here. ``CaseVersion`` is one row per observation of a Case: a
+Eight schemas live here. ``CaseVersion`` is one row per observation of a Case: a
 Case list item as it stood at one version, with the source's column names
 mechanically snake_cased and the columns typed. Nothing is derived and nothing
 is reshaped -- this hop is the rename and the type contract, and that is all it
@@ -29,7 +29,15 @@ catalogue, so it grains on that instead. Both blobs hold ISO timestamps as
 **text**, not ``datetime`` -- see either row's docstring for why that is a
 deliberate decision, not an oversight.
 
-``DETAIL_ID_VARS`` is what all seven schemas share -- it carries
+``CaseDetailRow`` explodes the last of the five blob columns, ``details``: a
+flat ``key -> string`` map of Case Details field values, deliberately
+key/value rather than typed per Case Type -- the field set is declared in the
+review application's own config, which this feed never joins. It is the
+smallest Detail Table, and the one with the least contract behind it: the
+review application never writes ``Details`` at all, so there is no writer
+contract to cite the way every other blob's docstring cites one.
+
+``DETAIL_ID_VARS`` is what all eight schemas share -- it carries
 ``NATURAL_KEY``'s columns so a Detail Table's own ``gold_detail_builder``
 derives the same ``case_id`` as the parent Case.
 
@@ -537,3 +545,35 @@ class AppealRow:
     resolution_rationale: str
     resolution_resolver: str
     resolution_at: str
+
+
+@dataclass
+class CaseDetailRow:
+    """One row per observation x Case Details field, exploded from ``details``.
+
+    This blob carries less contract than any other this feed lands -- see the
+    data dictionary's "Why this blob has less contract behind it than the
+    others" for the structural reasons (no writer contract, no key
+    vocabulary this pipeline can see).
+
+    Two facts that live only here: values are whatever string the writer
+    used and are **not normalised** (a date lands as ``"2026-06-18"``, not an
+    ISO ``datetime`` -- parsing it is a Reporting concern); and there is
+    **no ``value_json`` twin**, unlike ``AnswerRow``, because ``details`` is a
+    flat ``key -> string`` map, so for every value the contract admits, a twin
+    would be byte-identical to ``value_text``.
+
+    Plain types throughout, never ``X | None`` -- see ``AnswerRow`` for why.
+    """
+
+    # DETAIL_ID_VARS, repeated onto every row by ExplodeJsonMap -- see its
+    # docstring for why this must carry NATURAL_KEY's columns.
+    case_type: Annotated[str, NonNull()]
+    source_item_id: Annotated[str, NonNull()]
+    # datetime, not str -- see AnswerRow's own field for why.
+    source_modified_at: Annotated[datetime, NonNull()]
+    source_version: Annotated[str, NonNull()]
+    source_observation_id: Annotated[str, NonNull()]
+
+    field_key: Annotated[str, NonNull()]
+    value_text: str
