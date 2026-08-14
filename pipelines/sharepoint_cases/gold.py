@@ -7,8 +7,7 @@ list. Gold reduces that three ways. Every table is rebuilt whole with
 Every table's declared grain is in ``docs/data-dictionary-sharepoint-cases.md``.
 
 The Detail Tables, named in ``DETAIL_TABLES`` (derived from ``GOLD_TABLES`` and
-``DETAIL_GRAIN``), hold the child rows of the Cases' *winning* observation, per
-ADR-0015 (``docs/adr/0015-detail-tables-reduce-to-the-parents-latest-observation.md``).
+``DETAIL_GRAIN``), hold the child rows of the Cases' *winning* observation.
 Two of the five aggregates -- ``answer_remediation_current`` and
 ``appeal_outcomes_current`` -- reduce from a Detail Table (``answer`` and
 ``appeal`` respectively) rather than from ``case_current``, per
@@ -461,9 +460,9 @@ def gold_detail_builder(
     """Build one Detail Table's gold hop. **Grain: one row per ``grain``.**
 
     Reduces a silver Detail Table's accumulated history to the child rows of
-    the Cases' *winning* observation, per ADR-0015. It never orders and never
-    breaks a tie -- ``latest_case_version`` has already picked the winner, and a
-    second ordering path here could disagree with it. **Precondition**: a
+    the Cases' *winning* observation. It never orders and never breaks a tie --
+    ``latest_case_version`` has already picked the winner, and a second
+    ordering path here could disagree with it. **Precondition**: a
     Detail row's ``case_type`` must be the settled one, or the semi-join
     matches nothing and gold lands zero rows silently.
     """
