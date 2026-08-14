@@ -533,8 +533,8 @@ class QuarantineWriter:
 
     It does stamp the reserved provenance column, exactly as every other
     table-backed Writer does: a quarantine table is a table the framework wrote,
-    and "which run rejected this row?" is the same question asked of the rejects
-    (``docs/adr/0020-writer-stamped-run-provenance-column.md``).
+    and "which run rejected this row?" is the same question asked of the
+    rejects.
     """
 
     def __init__(

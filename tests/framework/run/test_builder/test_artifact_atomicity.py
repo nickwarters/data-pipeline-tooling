@@ -135,8 +135,7 @@ def test_the_quarantine_node_hands_over_rejects_it_has_not_stamped_with_a_run(
 ):
     # The pipeline stamps the rejects with what the quarantine table is keyed and
     # dated by, and nothing else: the run that wrote the row is the Writer's
-    # stamp, so exactly one code path sets that column
-    # (docs/adr/0020-writer-stamped-run-provenance-column.md).
+    # stamp, so exactly one code path sets that column.
     ds = Dataset.from_pandas(
         pd.DataFrame({"case_ref": pd.Series(["123456789", "BAD"], dtype="string")})
     )
