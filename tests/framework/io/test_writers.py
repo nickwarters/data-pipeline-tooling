@@ -596,7 +596,7 @@ def test_the_file_writers_deliver_exactly_the_columns_they_were_given(tmp_path):
     # that wrote the row; the file Writers must not, because what they produce
     # leaves the system and its columns are a contract with whoever reads it.
     # Run *inside* a run context, so the absence is the rule rather than the
-    # absence of an id. See docs/adr/0020-writer-stamped-run-provenance-column.md.
+    # absence of an id.
     dataset = Dataset.from_pandas(pd.DataFrame({"case_id": ["c1"], "amount": [100]}))
     csv_path = tmp_path / "out.csv"
     excel_path = tmp_path / "out.xlsx"
