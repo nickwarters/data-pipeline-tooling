@@ -4,8 +4,11 @@ import assert from 'node:assert/strict';
 import { HttpSharePointClient } from '../src/services/http-sharepoint-client.js';
 import {
   WEB_URL,
+  caseRowResponse,
   digestResponse,
+  ensureUserResponse,
   makeFetch,
+  personWriteClient,
 } from './helpers/http-sharepoint-client.js';
 
 // Capability: case serialization, writes, and optimistic concurrency.
@@ -24,21 +27,10 @@ test('HttpSharePointClient: patchCase serialises CaseRow.details to the Details 
     {
       when: (c) => c.method === 'GET',
       respond: () =>
-        new Response(
-          JSON.stringify({
-            Id: 'case-1',
-            Title: 'T',
-            Status: 'In-progress',
-            AssignedReviewerId: 'u1',
-            ResponsiblePartyId: 'u2',
-            Answers: '{}',
-            Conversation: '[]',
-            Notes: '',
-            CompletedAt: null,
-            CaseType: 'example-review',
-          }),
-          { status: 200, headers: { ETag: '"v2"' } }
-        ),
+        new Response(JSON.stringify(caseRowResponse({ Title: 'T' })), {
+          status: 200,
+          headers: { ETag: '"v2"' },
+        }),
     },
   ]);
   const client = new HttpSharePointClient({
@@ -72,18 +64,7 @@ test('HttpSharePointClient: PATCH sends If-Match header with the supplied ETag',
       when: (c) => c.method === 'GET',
       respond: () =>
         new Response(
-          JSON.stringify({
-            Id: 'case-1',
-            Title: 'T',
-            Status: 'In-progress',
-            AssignedReviewerId: 'u1',
-            ResponsiblePartyId: 'u2',
-            Answers: '{}',
-            Conversation: '[]',
-            Notes: 'n',
-            CompletedAt: null,
-            CaseType: 'example-review',
-          }),
+          JSON.stringify(caseRowResponse({ Title: 'T', Notes: 'n' })),
           { status: 200, headers: { ETag: '"v2"' } }
         ),
     },
@@ -138,16 +119,13 @@ test('HttpSharePointClient: patchCase writes mutable CaseRow fields to SharePoin
       when: (c) => c.method === 'GET',
       respond: () =>
         new Response(
-          JSON.stringify({
-            Id: 'case-1',
-            Title: 'T',
-            Status: 'Completed',
-            Answers: '{}',
-            Conversation: '[]',
-            Notes: 'n',
-            CompletedAt: '2026-06-01T10:00:00.000Z',
-            CaseType: 'example-review',
-          }),
+          JSON.stringify(
+            caseRowResponse({
+              Status: 'Completed',
+              Notes: 'n',
+              CompletedAt: '2026-06-01T10:00:00.000Z',
+            })
+          ),
           { status: 200, headers: { ETag: '"v2"' } }
         ),
     },
@@ -235,18 +213,7 @@ test('HttpSharePointClient: patchCase writes Action Centre state flags + clocks 
       when: (c) => c.method === 'GET',
       respond: () =>
         new Response(
-          JSON.stringify({
-            Id: 'case-1',
-            Title: 'T',
-            Status: 'In-progress',
-            AssignedReviewerId: 'u1',
-            ResponsiblePartyId: 'u2',
-            Answers: '{}',
-            Conversation: '[]',
-            Notes: 'n',
-            CompletedAt: null,
-            CaseType: 'example-review',
-          }),
+          JSON.stringify(caseRowResponse({ Title: 'T', Notes: 'n' })),
           { status: 200, headers: { ETag: '"v2"' } }
         ),
     },
@@ -296,18 +263,7 @@ test('HttpSharePointClient: patchCase result.data.etag reflects the new ETag fro
       when: (c) => c.method === 'GET',
       respond: () =>
         new Response(
-          JSON.stringify({
-            Id: 'case-1',
-            Title: 'T',
-            Status: 'In-progress',
-            AssignedReviewerId: 'u1',
-            ResponsiblePartyId: 'u2',
-            Answers: '{}',
-            Conversation: '[]',
-            Notes: 'n',
-            CompletedAt: null,
-            CaseType: 'example-review',
-          }),
+          JSON.stringify(caseRowResponse({ Title: 'T', Notes: 'n' })),
           { status: 200, headers: { ETag: '"server-new"' } }
         ),
     },
@@ -326,18 +282,7 @@ test('HttpSharePointClient: patchCase result.data.etag reflects the new ETag fro
 });
 
 test('HttpSharePointClient: patchCase handles 200 response with JSON body (no separate getCase)', async () => {
-  const patchBody = {
-    Id: 'case-1',
-    Title: 'Updated',
-    Status: 'In-progress',
-    AssignedReviewerId: 'u1',
-    ResponsiblePartyId: 'u2',
-    Answers: '{}',
-    Conversation: '[]',
-    Notes: 'n',
-    CompletedAt: null,
-    CaseType: 'example-review',
-  };
+  const patchBody = caseRowResponse({ Title: 'Updated', Notes: 'n' });
   const { fetch } = makeFetch([
     {
       when: (c) => c.url.endsWith('/_api/contextinfo'),
@@ -375,18 +320,13 @@ test('HttpSharePointClient: patchCase can target a supplied SharePoint list', as
       when: (c) => c.method === 'PATCH',
       respond: () =>
         new Response(
-          JSON.stringify({
-            Id: 'case-1',
-            Title: 'Complaint Case',
-            Status: 'In-progress',
-            AssignedReviewerId: 'u1',
-            ResponsiblePartyId: 'u2',
-            Answers: '{}',
-            Conversation: '[]',
-            Notes: 'done',
-            CompletedAt: null,
-            CaseType: 'product-sale-review',
-          }),
+          JSON.stringify(
+            caseRowResponse({
+              Title: 'Complaint Case',
+              Notes: 'done',
+              CaseType: 'product-sale-review',
+            })
+          ),
           { status: 200, headers: { ETag: '"v2"' } }
         ),
     },
@@ -412,11 +352,7 @@ test('HttpSharePointClient: writing the managers resolves each account to its nu
   // The manager columns are Person columns like the other two: SharePoint
   // takes the id, and the account string it would otherwise receive is an
   // invalid person value that fails the save.
-  const { fetch, calls } = personWriteFetch(ensureUserResponse(14));
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
+  const { client, calls } = personWriteClient();
 
   const result = await client.patchCase(
     'case-1',
@@ -447,11 +383,7 @@ test('HttpSharePointClient: clearing the managers writes null, whichever way nob
   // The row speaks both dialects — the managers allow an explicit null where
   // the other two person fields use the empty string — and SharePoint clears
   // a Person column with null either way.
-  const { fetch, calls } = personWriteFetch(ensureUserResponse(14));
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
+  const { client, calls } = personWriteClient();
 
   await client.patchCase(
     'case-1',
@@ -524,16 +456,7 @@ test('HttpSharePointClient: patchCase 200 response with neither an ETag header n
       when: (c) => c.method === 'PATCH',
       respond: () =>
         new Response(
-          JSON.stringify({
-            Id: 'case-1',
-            Title: 'T',
-            Status: 'In-progress',
-            Answers: '{}',
-            Conversation: '[]',
-            Notes: 'n',
-            CompletedAt: null,
-            CaseType: 'example-review',
-          }),
+          JSON.stringify(caseRowResponse({ Title: 'T', Notes: 'n' })),
           { status: 200 } // no ETag header, no odata.etag field — readEtag(data) is ''
         ),
     },
@@ -582,16 +505,12 @@ test('HttpSharePointClient: patchCase writes status, answers and conversation to
       when: (c) => c.method === 'GET',
       respond: () =>
         new Response(
-          JSON.stringify({
-            Id: 'case-1',
-            Title: 'T',
-            Status: 'Completed',
-            Answers: '{}',
-            Conversation: '[]',
-            Notes: 'n',
-            CompletedAt: null,
-            CaseType: 'example-review',
-          }),
+          JSON.stringify(
+            caseRowResponse({
+              Status: 'Completed',
+              Notes: 'n',
+            })
+          ),
           { status: 200, headers: { ETag: '"v2"' } }
         ),
     },
@@ -630,78 +549,11 @@ test('HttpSharePointClient: patchCase writes status, answers and conversation to
 
 // --- The Responsible Party person column ---
 
-/**
- * A fake backing a Responsible Party write: the digest, an EnsureUser that
- * answers with `ensured`, the PATCH itself, and the confirmation re-read.
- *
- * @param {Response | ((call: { body: string|null }) => Response) | null} ensured
- *   the EnsureUser response, or null to fail it
- */
-function personWriteFetch(ensured) {
-  /** @type {{ body: string|null } | null} */
-  let ensureCall = null;
-  return makeFetch([
-    {
-      when: (c) => c.url.endsWith('/_api/contextinfo'),
-      respond: () => digestResponse('d'),
-    },
-    {
-      when: (c) => {
-        if (!c.url.endsWith('/_api/web/ensureuser')) return false;
-        ensureCall = c;
-        return true;
-      },
-      respond: () =>
-        (typeof ensured === 'function'
-          ? ensured(/** @type {{ body: string|null }} */ (ensureCall))
-          : ensured) ?? new Response('no such user', { status: 500 }),
-    },
-    {
-      when: (c) => c.method === 'PATCH',
-      respond: () =>
-        new Response(null, { status: 204, headers: { ETag: '"v2"' } }),
-    },
-    {
-      when: (c) => c.method === 'GET',
-      respond: () =>
-        new Response(
-          JSON.stringify({
-            Id: 'case-1',
-            Title: 'T',
-            Status: 'In-progress',
-            CaseType: 'example-review',
-            ResponsibleParty: {
-              Name: 'i:0#.w|CONTOSO\\jsmith',
-              Title: 'John Smith',
-            },
-            Answers: '{}',
-            Conversation: '[]',
-            Notes: '',
-            CompletedAt: null,
-          }),
-          { status: 200, headers: { ETag: '"v2"' } }
-        ),
-    },
-  ]);
-}
-
-/** @param {number} id */
-function ensureUserResponse(id) {
-  return new Response(JSON.stringify({ Id: id, Title: 'John Smith' }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
-
 test('HttpSharePointClient: writing the Responsible Party resolves the account to its numeric id', async () => {
   // A Person column is written by id, not by name, so the account the app holds
   // has to be turned into one first. EnsureUser is also what adds a directory
   // user to this site's User Information List if they are not in it yet.
-  const { fetch, calls } = personWriteFetch(ensureUserResponse(14));
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
+  const { client, calls } = personWriteClient();
 
   const result = await client.patchCase(
     'case-1',
@@ -729,11 +581,7 @@ test('HttpSharePointClient: writing the Responsible Party resolves the account t
 });
 
 test('HttpSharePointClient: an account is resolved once and reused for later saves', async () => {
-  const { fetch, calls } = personWriteFetch(ensureUserResponse(14));
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
+  const { client, calls } = personWriteClient();
 
   await client.patchCase('case-1', { responsibleParty: 'jsmith' }, '"v1"', {
     listName: 'Cases-ExampleReview',
@@ -750,11 +598,7 @@ test('HttpSharePointClient: an account is resolved once and reused for later sav
 });
 
 test('HttpSharePointClient: clearing the Responsible Party writes null, not an empty account', async () => {
-  const { fetch, calls } = personWriteFetch(ensureUserResponse(14));
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
+  const { client, calls } = personWriteClient();
 
   await client.patchCase('case-1', { responsibleParty: '' }, '"v1"', {
     listName: 'Cases-ExampleReview',
@@ -772,11 +616,7 @@ test('HttpSharePointClient: clearing the Responsible Party writes null, not an e
 });
 
 test('HttpSharePointClient: an unresolvable account fails the save instead of writing a wrong one', async () => {
-  const { fetch, calls } = personWriteFetch(null);
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
+  const { client, calls } = personWriteClient(null);
 
   const result = await client.patchCase(
     'case-1',
@@ -795,16 +635,12 @@ test('HttpSharePointClient: an unresolvable account fails the save instead of wr
 });
 
 test('HttpSharePointClient: an EnsureUser answer with no id is a failed save, not a NaN write', async () => {
-  const { fetch, calls } = personWriteFetch(
+  const { client, calls } = personWriteClient(
     new Response(JSON.stringify({ Title: 'John Smith' }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     })
   );
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
 
   const result = await client.patchCase(
     'case-1',
@@ -822,16 +658,12 @@ test('HttpSharePointClient: an EnsureUser answer with no id is a failed save, no
 });
 
 test('HttpSharePointClient: a legacy verbose EnsureUser envelope still yields the id', async () => {
-  const { fetch, calls } = personWriteFetch(
+  const { client, calls } = personWriteClient(
     new Response(JSON.stringify({ d: { Id: 21 } }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     })
   );
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
 
   await client.patchCase('case-1', { responsibleParty: 'jsmith' }, '"v1"', {
     listName: 'Cases-ExampleReview',
@@ -848,11 +680,7 @@ test('HttpSharePointClient: a legacy verbose EnsureUser envelope still yields th
 test('HttpSharePointClient: writing the Assigned Reviewer resolves the account to its numeric id', async () => {
   // Self-allocation writes this field today, so the wrong shape here is a live
   // failed save rather than a latent one.
-  const { fetch, calls } = personWriteFetch(ensureUserResponse(14));
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
+  const { client, calls } = personWriteClient();
 
   const result = await client.patchCase(
     'case-1',
@@ -883,17 +711,15 @@ test('HttpSharePointClient: allocation writes Reviewer and manager as Person ids
   let nextPersonId = 14;
   /** @type {Map<string, number>} */
   const ensuredIds = new Map();
-  const { fetch, calls } = personWriteFetch((call) => {
-    const login = JSON.parse(String(call.body)).logonName;
-    const id = nextPersonId++;
-    ensuredIds.set(login, id);
-    return ensureUserResponse(id);
-  });
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-    now: frozenNow,
-  });
+  const { client, calls } = personWriteClient(
+    (call) => {
+      const login = JSON.parse(String(call.body)).logonName;
+      const id = nextPersonId++;
+      ensuredIds.set(login, id);
+      return ensureUserResponse(id);
+    },
+    { now: frozenNow }
+  );
 
   const result = await client.patchCase(
     'case-1',
@@ -921,11 +747,7 @@ test('HttpSharePointClient: allocation writes Reviewer and manager as Person ids
 });
 
 test('HttpSharePointClient: clearing the Assigned Reviewer writes null, not an empty account', async () => {
-  const { fetch, calls } = personWriteFetch(ensureUserResponse(14));
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
+  const { client, calls } = personWriteClient();
 
   await client.patchCase('case-1', { assignedReviewer: '' }, '"v1"', {
     listName: 'Cases-ExampleReview',
@@ -943,12 +765,7 @@ test('HttpSharePointClient: clearing the Assigned Reviewer writes null, not an e
 });
 
 test('HttpSharePointClient: allocation with a null manager omits manager EnsureUser and writes explicit null', async () => {
-  const { fetch, calls } = personWriteFetch(ensureUserResponse(14));
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-    now: frozenNow,
-  });
+  const { client, calls } = personWriteClient(undefined, { now: frozenNow });
 
   const result = await client.patchCase(
     'case-1',
@@ -978,12 +795,7 @@ function patchBody(calls) {
 }
 
 test('HttpSharePointClient: assigning a Reviewer stamps the assignment time', async () => {
-  const { fetch, calls } = personWriteFetch(ensureUserResponse(14));
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-    now: frozenNow,
-  });
+  const { client, calls } = personWriteClient(undefined, { now: frozenNow });
 
   await client.patchCase('case-1', { assignedReviewer: 'jsmith' }, '"v1"', {
     listName: 'Cases-ExampleReview',
@@ -993,12 +805,7 @@ test('HttpSharePointClient: assigning a Reviewer stamps the assignment time', as
 });
 
 test('HttpSharePointClient: clearing the Assigned Reviewer clears the assignment time', async () => {
-  const { fetch, calls } = personWriteFetch(ensureUserResponse(14));
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-    now: frozenNow,
-  });
+  const { client, calls } = personWriteClient(undefined, { now: frozenNow });
 
   await client.patchCase('case-1', { assignedReviewer: '' }, '"v1"', {
     listName: 'Cases-ExampleReview',
@@ -1008,12 +815,7 @@ test('HttpSharePointClient: clearing the Assigned Reviewer clears the assignment
 });
 
 test('HttpSharePointClient: a save that names no Reviewer carries no assignment time at all', async () => {
-  const { fetch, calls } = personWriteFetch(ensureUserResponse(14));
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-    now: frozenNow,
-  });
+  const { client, calls } = personWriteClient(undefined, { now: frozenNow });
 
   await client.patchCase('case-1', { notes: 'x' }, '"v1"', {
     listName: 'Cases-ExampleReview',
@@ -1025,11 +827,7 @@ test('HttpSharePointClient: a save that names no Reviewer carries no assignment 
 });
 
 test('HttpSharePointClient: both person columns in one save resolve the shared account once', async () => {
-  const { fetch, calls } = personWriteFetch(ensureUserResponse(14));
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
+  const { client, calls } = personWriteClient();
 
   await client.patchCase(
     'case-1',
@@ -1053,16 +851,12 @@ test('HttpSharePointClient: both person columns in one save resolve the shared a
 test('HttpSharePointClient: an EnsureUser answer of zero is no person at all', async () => {
   // Ids are allocated from 1. Accepting a zero would put a falsy id into a
   // filter condition, where it reads as "nobody named" and drops the condition.
-  const { fetch, calls } = personWriteFetch(
+  const { client, calls } = personWriteClient(
     new Response(JSON.stringify({ Id: 0 }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     })
   );
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
 
   const result = await client.patchCase(
     'case-1',
@@ -1097,16 +891,12 @@ test('HttpSharePointClient: patchCase writes the void columns, and omits them wh
       when: (/** @type {any} */ c) => c.method === 'GET',
       respond: () =>
         new Response(
-          JSON.stringify({
-            Id: 'case-1',
-            Title: 'T',
-            Status: 'Void',
-            Answers: '{}',
-            Conversation: '[]',
-            Notes: 'n',
-            CompletedAt: null,
-            CaseType: 'example-review',
-          }),
+          JSON.stringify(
+            caseRowResponse({
+              Status: 'Void',
+              Notes: 'n',
+            })
+          ),
           { status: 200, headers: { ETag: '"v2"' } }
         ),
     },

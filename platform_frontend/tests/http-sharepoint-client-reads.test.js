@@ -2,40 +2,24 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { HttpSharePointClient } from '../src/services/http-sharepoint-client.js';
-import { WEB_URL, makeFetch } from './helpers/http-sharepoint-client.js';
+import {
+  WEB_URL,
+  caseRowResponse,
+  makeFetch,
+  readsClient,
+} from './helpers/http-sharepoint-client.js';
 
 // Capability: case reads, hydration, and derived fields.
 
 test('HttpSharePointClient: getCase parses the Details JSON blob into CaseRow.details', async () => {
-  const { fetch } = makeFetch([
-    {
-      when: (c) => c.method === 'GET',
-      respond: () =>
-        new Response(
-          JSON.stringify({
-            Id: 'case-1',
-            Title: 'T',
-            Status: 'In-progress',
-            AssignedReviewerId: 'u1',
-            ResponsiblePartyId: 'u2',
-            Answers: '{}',
-            Conversation: '[]',
-            Details: JSON.stringify({
-              customerName: 'Jordan Lee',
-              accountNumber: 'ACC-4471',
-            }),
-            Notes: '',
-            CompletedAt: null,
-            CaseType: 'example-review',
-          }),
-          { status: 200, headers: { ETag: '"v1"' } }
-        ),
-    },
-  ]);
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
+  const client = readsClient(
+    caseRowResponse({
+      Details: JSON.stringify({
+        customerName: 'Jordan Lee',
+        accountNumber: 'ACC-4471',
+      }),
+    })
+  );
 
   const row = await client.getCase('case-1', {
     listName: 'Cases-ExampleReview',
@@ -48,31 +32,14 @@ test('HttpSharePointClient: getCase parses the Details JSON blob into CaseRow.de
 });
 
 test('HttpSharePointClient: getCase returns fallback empty objects when Answers/Conversation are invalid JSON', async () => {
-  const { fetch } = makeFetch([
-    {
-      when: (c) => c.method === 'GET',
-      respond: () =>
-        new Response(
-          JSON.stringify({
-            Id: 'case-bad',
-            Title: 'Bad JSON',
-            Status: 'In-progress',
-            CaseType: 'example-review',
-            AssignedReviewerId: 'u1',
-            ResponsiblePartyId: 'u2',
-            Answers: 'not valid json {{{',
-            Conversation: 'also invalid',
-            Notes: '',
-            CompletedAt: null,
-          }),
-          { status: 200, headers: { ETag: '"v1"' } }
-        ),
-    },
-  ]);
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
+  const client = readsClient(
+    caseRowResponse({
+      Id: 'case-bad',
+      Title: 'Bad JSON',
+      Answers: 'not valid json {{{',
+      Conversation: 'also invalid',
+    })
+  );
 
   const row = await client.getCase('case-bad', {
     listName: 'Cases-ExampleReview',
@@ -110,24 +77,23 @@ test('HttpSharePointClient: getCase parses Answers/Conversation JSON blobs and c
       when: (c) => c.method === 'GET',
       respond: () =>
         new Response(
-          JSON.stringify({
-            Id: 'case-1',
-            Title: 'Hello',
-            Status: 'In-progress',
-            CaseType: 'example-review',
-            AssignedReviewer: { Name: 'i:0#.w|CONTOSO\\user-1' },
-            ResponsiblePartyId: 'user-2',
-            Answers: JSON.stringify({ 'q-welcome': { value: 'Yes' } }),
-            Conversation: JSON.stringify([
-              {
-                author: { loginName: 'user-1', displayName: 'User One' },
-                timestamp: 't',
-                body: 'hi',
-              },
-            ]),
-            Notes: 'note',
-            CompletedAt: null,
-          }),
+          JSON.stringify(
+            caseRowResponse({
+              Id: 'case-1',
+              Title: 'Hello',
+              AssignedReviewer: { Name: 'i:0#.w|CONTOSO\\user-1' },
+              ResponsiblePartyId: 'user-2',
+              Answers: JSON.stringify({ 'q-welcome': { value: 'Yes' } }),
+              Conversation: JSON.stringify([
+                {
+                  author: { loginName: 'user-1', displayName: 'User One' },
+                  timestamp: 't',
+                  body: 'hi',
+                },
+              ]),
+              Notes: 'note',
+            })
+          ),
           { status: 200, headers: { ETag: '"v7"' } }
         ),
     },
@@ -154,35 +120,7 @@ test('HttpSharePointClient: listCases rows carry an empty etag', async () => {
   // — and no response-level `ETag` header either, since the payload is many
   // rows rather than one. A caller that needs an `If-Match` has to read the
   // single row for it.
-  const { fetch } = makeFetch([
-    {
-      when: (c) => c.method === 'GET',
-      respond: () =>
-        new Response(
-          JSON.stringify({
-            value: [
-              {
-                Id: 'case-1',
-                Title: 'One',
-                Status: 'In-progress',
-                CaseType: 'example-review',
-                AssignedReviewerId: 'u1',
-                ResponsiblePartyId: 'u2',
-                Answers: '{}',
-                Conversation: '[]',
-                Notes: '',
-                CompletedAt: null,
-              },
-            ],
-          }),
-          { status: 200 }
-        ),
-    },
-  ]);
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
+  const client = readsClient(caseRowResponse({ Title: 'One' }));
 
   const rows = await client.listCases({}, { listName: 'Cases-ExampleReview' });
 
@@ -195,18 +133,13 @@ test('HttpSharePointClient: getCase can target a supplied SharePoint list', asyn
       when: (c) => c.method === 'GET',
       respond: () =>
         new Response(
-          JSON.stringify({
-            Id: 'case-1',
-            Title: 'Complaint Case',
-            Status: 'In-progress',
-            AssignedReviewerId: 'u1',
-            ResponsiblePartyId: 'u2',
-            Answers: '{}',
-            Conversation: '[]',
-            Notes: '',
-            CompletedAt: null,
-            CaseType: 'product-sale-review',
-          }),
+          JSON.stringify(
+            caseRowResponse({
+              Id: 'case-1',
+              Title: 'Complaint Case',
+              CaseType: 'product-sale-review',
+            })
+          ),
           { status: 200, headers: { ETag: '"v1"' } }
         ),
     },
@@ -235,58 +168,46 @@ test('HttpSharePointClient: getCase hydrates the full CaseRow contract', async (
       state: 'raised',
     },
   ];
-  const { fetch } = makeFetch([
-    {
-      when: (c) => c.method === 'GET',
-      respond: () =>
-        new Response(
-          JSON.stringify({
-            Id: 'case-1',
-            Title: 'Full row',
-            Status: 'Completed',
-            CaseType: 'example-review',
-            AssignedReviewer: { Name: 'i:0#.w|CONTOSO\\reviewer-1' },
-            AssignedReviewerManager: {
-              Name: 'i:0#.w|CONTOSO\\reviewer-manager',
-            },
-            ResponsibleParty: { Name: 'i:0#.w|CONTOSO\\rp-1' },
-            ResponsiblePartyManager: { Name: 'i:0#.w|CONTOSO\\rp-manager' },
-            Answers: '{}',
-            Conversation: '[]',
-            Notes: 'note',
-            CaseJustification: 'documented rationale',
-            ReportableAt: '2026-06-02T10:00:00.000Z',
-            RemediationDueDate: '2026-06-16',
-            CompletedAt: '2026-06-03T10:00:00.000Z',
-            Outcome: 'fail',
-            OutcomeAtCompletion: 'refer',
-            QuestionBankVersion: 'hash-123',
-            HadRemediation: true,
-            EffectiveOutcome: 'pass',
-            EffectiveHadRemediation: false,
-            OutcomeOverridden: true,
-            AmendedOutcome: JSON.stringify({
-              outcome: 'pass',
-              justification: 'Corrected after appeal',
-              amendedBy: 'controls-1',
-              amendedAt: '2026-06-12T10:00:00.000Z',
-            }),
-            Appeals: JSON.stringify(appeals),
-            DueDate: '2026-06-10T10:00:00.000Z',
-            RelatedDate: '2026-06-04T10:00:00.000Z',
-            AssignedAt: '2026-06-01T11:00:00.000Z',
-            OnHold: true,
-            PlacedOnHoldAt: '2026-06-05T10:00:00.000Z',
-            Created: '2026-06-01T09:00:00.000Z',
-          }),
-          { status: 200, headers: { ETag: '"v7"' } }
-        ),
-    },
-  ]);
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
+  const client = readsClient(
+    caseRowResponse({
+      Id: 'case-1',
+      Title: 'Full row',
+      Status: 'Completed',
+      AssignedReviewer: { Name: 'i:0#.w|CONTOSO\\reviewer-1' },
+      AssignedReviewerManager: {
+        Name: 'i:0#.w|CONTOSO\\reviewer-manager',
+      },
+      ResponsibleParty: { Name: 'i:0#.w|CONTOSO\\rp-1' },
+      ResponsiblePartyManager: { Name: 'i:0#.w|CONTOSO\\rp-manager' },
+      Answers: '{}',
+      Conversation: '[]',
+      Notes: 'note',
+      CaseJustification: 'documented rationale',
+      ReportableAt: '2026-06-02T10:00:00.000Z',
+      RemediationDueDate: '2026-06-16',
+      CompletedAt: '2026-06-03T10:00:00.000Z',
+      Outcome: 'fail',
+      OutcomeAtCompletion: 'refer',
+      QuestionBankVersion: 'hash-123',
+      HadRemediation: true,
+      EffectiveOutcome: 'pass',
+      EffectiveHadRemediation: false,
+      OutcomeOverridden: true,
+      AmendedOutcome: JSON.stringify({
+        outcome: 'pass',
+        justification: 'Corrected after appeal',
+        amendedBy: 'controls-1',
+        amendedAt: '2026-06-12T10:00:00.000Z',
+      }),
+      Appeals: JSON.stringify(appeals),
+      DueDate: '2026-06-10T10:00:00.000Z',
+      RelatedDate: '2026-06-04T10:00:00.000Z',
+      AssignedAt: '2026-06-01T11:00:00.000Z',
+      OnHold: true,
+      PlacedOnHoldAt: '2026-06-05T10:00:00.000Z',
+      Created: '2026-06-01T09:00:00.000Z',
+    })
+  );
 
   const row = await client.getCase('case-1', {
     listName: 'Cases-ExampleReview',
@@ -327,29 +248,7 @@ test('HttpSharePointClient: a row from a list with no AssignedAt column still re
   // column yet simply answers without it. That is what makes deploying the
   // frontend ahead of the column safe on the *read* side: the row hydrates with
   // no assignment time rather than failing.
-  const { fetch } = makeFetch([
-    {
-      when: (c) => c.method === 'GET',
-      respond: () =>
-        new Response(
-          JSON.stringify({
-            Id: 'case-1',
-            Title: 'Unprovisioned list',
-            Status: 'In-progress',
-            CaseType: 'example-review',
-            Answers: '{}',
-            Conversation: '[]',
-            Notes: '',
-            CompletedAt: null,
-          }),
-          { status: 200 }
-        ),
-    },
-  ]);
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
+  const client = readsClient(caseRowResponse({ Title: 'Unprovisioned list' }));
 
   const row = await client.getCase('case-1', {
     listName: 'Cases-ExampleReview',
@@ -397,22 +296,18 @@ test('HttpSharePointClient: getCase reads both managers as account names, not lo
       when: (c) => c.method === 'GET',
       respond: () =>
         new Response(
-          JSON.stringify({
-            Id: 'case-x',
-            Title: 'X',
-            Status: 'In-progress',
-            CaseType: 'example-review',
-            // The numbers the unexpanded read would have handed back, left
-            // here on purpose: taking either would look like it worked.
-            AssignedReviewerManagerId: 44,
-            ResponsiblePartyManagerId: 45,
-            AssignedReviewerManager: { Name: 'i:0#.w|CONTOSO\\mgr-r' },
-            ResponsiblePartyManager: { Name: 'i:0#.w|CONTOSO\\mgr-rp' },
-            Answers: '{}',
-            Conversation: '[]',
-            Notes: '',
-            CompletedAt: null,
-          }),
+          JSON.stringify(
+            caseRowResponse({
+              Id: 'case-x',
+              Title: 'X',
+              // The numbers the unexpanded read would have handed back, left
+              // here on purpose: taking either would look like it worked.
+              AssignedReviewerManagerId: 44,
+              ResponsiblePartyManagerId: 45,
+              AssignedReviewerManager: { Name: 'i:0#.w|CONTOSO\\mgr-r' },
+              ResponsiblePartyManager: { Name: 'i:0#.w|CONTOSO\\mgr-rp' },
+            })
+          ),
           { status: 200 }
         ),
     },
@@ -451,30 +346,13 @@ test('HttpSharePointClient: getCase reads both managers as account names, not lo
 });
 
 test('HttpSharePointClient: a Case with no managers reads them as absent, not empty accounts', async () => {
-  const { fetch } = makeFetch([
-    {
-      when: (c) => c.method === 'GET',
-      respond: () =>
-        new Response(
-          JSON.stringify({
-            Id: 'case-x',
-            Title: 'X',
-            Status: 'In-progress',
-            CaseType: 'example-review',
-            AssignedReviewerManager: null,
-            Answers: '{}',
-            Conversation: '[]',
-            Notes: '',
-            CompletedAt: null,
-          }),
-          { status: 200 }
-        ),
-    },
-  ]);
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
+  const client = readsClient(
+    caseRowResponse({
+      Id: 'case-x',
+      Title: 'X',
+      AssignedReviewerManager: null,
+    })
+  );
   const row = await client.getCase('case-x', {
     listName: 'Cases-ExampleReview',
   });
@@ -492,22 +370,18 @@ test('HttpSharePointClient: getCase reads the Responsible Party as an account na
       when: (c) => c.method === 'GET',
       respond: () =>
         new Response(
-          JSON.stringify({
-            Id: 'case-rp',
-            Title: 'T',
-            Status: 'In-progress',
-            CaseType: 'example-review',
-            AssignedReviewerId: 'user-r',
-            ResponsiblePartyId: 27,
-            ResponsibleParty: {
-              Name: 'i:0#.w|CONTOSO\\jrp',
-              Title: 'Jordan RP',
-            },
-            Answers: '{}',
-            Conversation: '[]',
-            Notes: '',
-            CompletedAt: null,
-          }),
+          JSON.stringify(
+            caseRowResponse({
+              Id: 'case-rp',
+              Title: 'T',
+              AssignedReviewerId: 'user-r',
+              ResponsiblePartyId: 27,
+              ResponsibleParty: {
+                Name: 'i:0#.w|CONTOSO\\jrp',
+                Title: 'Jordan RP',
+              },
+            })
+          ),
           { status: 200 }
         ),
     },
@@ -535,30 +409,9 @@ test('HttpSharePointClient: getCase reads the Responsible Party as an account na
 });
 
 test('HttpSharePointClient: a Case with nobody responsible reads as an empty account', async () => {
-  const { fetch } = makeFetch([
-    {
-      when: (c) => c.method === 'GET',
-      respond: () =>
-        new Response(
-          JSON.stringify({
-            Id: 'case-none',
-            Title: 'T',
-            Status: 'In-progress',
-            CaseType: 'example-review',
-            ResponsibleParty: null,
-            Answers: '{}',
-            Conversation: '[]',
-            Notes: '',
-            CompletedAt: null,
-          }),
-          { status: 200 }
-        ),
-    },
-  ]);
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
+  const client = readsClient(
+    caseRowResponse({ Id: 'case-none', Title: 'T', ResponsibleParty: null })
+  );
 
   const row = await client.getCase('case-none', {
     listName: 'Cases-ExampleReview',
@@ -577,23 +430,19 @@ test('HttpSharePointClient: getCase reads the Assigned Reviewer as an account na
       when: (c) => c.method === 'GET',
       respond: () =>
         new Response(
-          JSON.stringify({
-            Id: 'case-ar',
-            Title: 'T',
-            Status: 'In-progress',
-            CaseType: 'example-review',
-            // The number the unexpanded read would have handed back, left here
-            // on purpose: taking it would look like a working account name.
-            AssignedReviewerId: 27,
-            AssignedReviewer: {
-              Name: 'i:0#.w|CONTOSO\\jrev',
-              Title: 'Jordan Reviewer',
-            },
-            Answers: '{}',
-            Conversation: '[]',
-            Notes: '',
-            CompletedAt: null,
-          }),
+          JSON.stringify(
+            caseRowResponse({
+              Id: 'case-ar',
+              Title: 'T',
+              // The number the unexpanded read would have handed back, left here
+              // on purpose: taking it would look like a working account name.
+              AssignedReviewerId: 27,
+              AssignedReviewer: {
+                Name: 'i:0#.w|CONTOSO\\jrev',
+                Title: 'Jordan Reviewer',
+              },
+            })
+          ),
           { status: 200 }
         ),
     },
@@ -620,30 +469,9 @@ test('HttpSharePointClient: getCase reads the Assigned Reviewer as an account na
 });
 
 test('HttpSharePointClient: a Case with nobody assigned reads as an empty account', async () => {
-  const { fetch } = makeFetch([
-    {
-      when: (c) => c.method === 'GET',
-      respond: () =>
-        new Response(
-          JSON.stringify({
-            Id: 'case-none',
-            Title: 'T',
-            Status: 'In-progress',
-            CaseType: 'example-review',
-            AssignedReviewer: null,
-            Answers: '{}',
-            Conversation: '[]',
-            Notes: '',
-            CompletedAt: null,
-          }),
-          { status: 200 }
-        ),
-    },
-  ]);
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
+  const client = readsClient(
+    caseRowResponse({ Id: 'case-none', Title: 'T', AssignedReviewer: null })
+  );
 
   const row = await client.getCase('case-none', {
     listName: 'Cases-ExampleReview',
@@ -660,11 +488,9 @@ test('HttpSharePointClient: listCases expands both person columns on every row',
         new Response(
           JSON.stringify({
             value: [
-              {
+              caseRowResponse({
                 Id: 'case-1',
                 Title: 'One',
-                Status: 'In-progress',
-                CaseType: 'example-review',
                 AssignedReviewer: {
                   Name: 'i:0#.w|CONTOSO\\jrev',
                   Title: 'Jordan Reviewer',
@@ -673,11 +499,7 @@ test('HttpSharePointClient: listCases expands both person columns on every row',
                   Name: 'i:0#.w|CONTOSO\\jrp',
                   Title: 'Jordan RP',
                 },
-                Answers: '{}',
-                Conversation: '[]',
-                Notes: '',
-                CompletedAt: null,
-              },
+              }),
             ],
           }),
           { status: 200 }
@@ -749,29 +571,9 @@ test('HttpSharePointClient: getCase falls back to an empty id when SP omits Id',
 });
 
 test('HttpSharePointClient: getCase passes through an already-parsed (non-string) Answers value unchanged', async () => {
-  const { fetch } = makeFetch([
-    {
-      when: (c) => c.method === 'GET',
-      respond: () =>
-        new Response(
-          JSON.stringify({
-            Id: 'case-1',
-            Title: 'T',
-            Status: 'In-progress',
-            Answers: { 'q-1': { value: 'Yes' } },
-            Conversation: '[]',
-            Notes: '',
-            CompletedAt: null,
-            CaseType: 'example-review',
-          }),
-          { status: 200 }
-        ),
-    },
-  ]);
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
+  const client = readsClient(
+    caseRowResponse({ Answers: { 'q-1': { value: 'Yes' } } })
+  );
 
   const row = await client.getCase('case-1', {
     listName: 'Cases-ExampleReview',
@@ -780,46 +582,17 @@ test('HttpSharePointClient: getCase passes through an already-parsed (non-string
 });
 
 test('HttpSharePointClient: listCases maps the void columns onto the Case Row', async () => {
-  const { fetch } = makeFetch([
-    {
-      when: (c) => c.method === 'GET',
-      respond: () =>
-        new Response(
-          JSON.stringify({
-            value: [
-              {
-                Id: 'case-void',
-                Title: 'Voided',
-                Status: 'Void',
-                CaseType: 'example-review',
-                Answers: '{}',
-                Conversation: '[]',
-                Notes: '',
-                CompletedAt: null,
-                VoidReason: 'duplicate',
-                VoidedAt: '2026-06-04T10:00:00.000Z',
-                VoidedBy: { Name: 'i:0#.w|CONTOSO\\reviewer-1' },
-              },
-              {
-                Id: 'case-live',
-                Title: 'Live',
-                Status: 'In-progress',
-                CaseType: 'example-review',
-                Answers: '{}',
-                Conversation: '[]',
-                Notes: '',
-                CompletedAt: null,
-              },
-            ],
-          }),
-          { status: 200 }
-        ),
-    },
-  ]);
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
+  const client = readsClient(
+    caseRowResponse({
+      Id: 'case-void',
+      Title: 'Voided',
+      Status: 'Void',
+      VoidReason: 'duplicate',
+      VoidedAt: '2026-06-04T10:00:00.000Z',
+      VoidedBy: { Name: 'i:0#.w|CONTOSO\\reviewer-1' },
+    }),
+    caseRowResponse({ Id: 'case-live', Title: 'Live' })
+  );
 
   const rows = await client.listCases({}, { listName: 'Cases-ExampleReview' });
 
