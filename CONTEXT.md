@@ -206,7 +206,7 @@ The recorded outcome of considering one **Adviser** on one person-targeted Selec
 _Avoid_: reason (that is the located phrase inside a verdict), status, exclusion (only some verdicts exclude)
 
 **Sync**:
-The Pipeline that pulls the review platform's own state — **Review Outcomes** and its full picture of each Case — into a platform-wide store; one-way inbound, no correlation. Spans all Case Types. Runs on **two cadences, as two separately addressed pipelines**: the poll (source → raw → silver) runs hourly because **Notification** is the only thing that needs fresh data, and the publish (silver → gold) runs daily. Splitting them is what keeps an hourly cadence affordable — see [ADR-0020](docs/adr/0020-sync-polls-hourly-publishes-gold-daily.md). *(Decided, not yet built: `pipelines/sharepoint_cases` still does both in one run.)*
+The Pipeline that pulls the review platform's own state — **Review Outcomes** and its full picture of each Case — into a platform-wide store; one-way inbound, no correlation. Spans all Case Types. Runs on **two cadences, as two separately addressed pipelines**: the poll (source → raw → silver) runs hourly because **Notification** is the only thing that needs fresh data, and the publish (silver → gold) runs daily. Splitting them is what keeps an hourly cadence affordable — see [ADR-0023](docs/adr/0023-sync-polls-hourly-publishes-gold-daily.md). *(Decided, not yet built: `pipelines/sharepoint_cases` still does both in one run.)*
 _Avoid_: writeback, reconcile, import
 
 **Notification**:
