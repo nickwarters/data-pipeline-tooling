@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { HttpSharePointClient } from '../src/services/http-sharepoint-client.js';
 import {
   WEB_URL,
+  emptyPageClient,
   makeFetch,
   peopleFilterFetch,
 } from './helpers/http-sharepoint-client.js';
@@ -149,17 +150,7 @@ test('HttpSharePointClient: listCases applies status and assignedReviewer filter
 });
 
 test('HttpSharePointClient: listCases targets the explicitly supplied listName (there is no default Case list)', async () => {
-  const { fetch, calls } = makeFetch([
-    {
-      when: (c) => c.method === 'GET',
-      respond: () =>
-        new Response(JSON.stringify({ value: [] }), { status: 200 }),
-    },
-  ]);
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
+  const { client, calls } = emptyPageClient();
 
   await client.listCases({}, { listName: 'Cases-ExampleReview' });
 
@@ -181,17 +172,7 @@ test('HttpSharePointClient: listCases throws when called without a listName', as
 });
 
 test('HttpSharePointClient: listCases can target a supplied SharePoint list', async () => {
-  const { fetch, calls } = makeFetch([
-    {
-      when: (c) => c.method === 'GET',
-      respond: () =>
-        new Response(JSON.stringify({ value: [] }), { status: 200 }),
-    },
-  ]);
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
+  const { client, calls } = emptyPageClient();
 
   await client.listCases({ status: 'In-progress' }, { listName: 'complaints' });
 
@@ -246,17 +227,7 @@ test('HttpSharePointClient: _getAllPages handles legacy d.results OData format',
 // --- HTTP-date Retry-After ---
 
 test('HttpSharePointClient: listCases with overdue:true adds DueDate lt and Status eq In-progress OData conditions', async () => {
-  const { fetch, calls } = makeFetch([
-    {
-      when: (c) => c.method === 'GET',
-      respond: () =>
-        new Response(JSON.stringify({ value: [] }), { status: 200 }),
-    },
-  ]);
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
+  const { client, calls } = emptyPageClient();
 
   await client.listCases(
     { overdue: true },
@@ -273,17 +244,7 @@ test('HttpSharePointClient: listCases with overdue:true adds DueDate lt and Stat
 });
 
 test('HttpSharePointClient: listCases without overdue filter omits DueDate condition', async () => {
-  const { fetch, calls } = makeFetch([
-    {
-      when: (c) => c.method === 'GET',
-      respond: () =>
-        new Response(JSON.stringify({ value: [] }), { status: 200 }),
-    },
-  ]);
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
+  const { client, calls } = emptyPageClient();
 
   await client.listCases({}, { listName: 'Cases-ExampleReview' });
 
@@ -295,17 +256,7 @@ test('HttpSharePointClient: listCases without overdue filter omits DueDate condi
 });
 
 test('HttpSharePointClient: listCases with effectiveOutcome filters server-side on EffectiveOutcome', async () => {
-  const { fetch, calls } = makeFetch([
-    {
-      when: (c) => c.method === 'GET',
-      respond: () =>
-        new Response(JSON.stringify({ value: [] }), { status: 200 }),
-    },
-  ]);
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
+  const { client, calls } = emptyPageClient();
 
   await client.listCases(
     { effectiveOutcome: 'fail' },
@@ -320,17 +271,7 @@ test('HttpSharePointClient: listCases with effectiveOutcome filters server-side 
 });
 
 test('HttpSharePointClient: listCases with outcomeOverridden filters on the OutcomeOverridden flag', async () => {
-  const { fetch, calls } = makeFetch([
-    {
-      when: (c) => c.method === 'GET',
-      respond: () =>
-        new Response(JSON.stringify({ value: [] }), { status: 200 }),
-    },
-  ]);
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
+  const { client, calls } = emptyPageClient();
 
   await client.listCases(
     { outcomeOverridden: true },
@@ -397,17 +338,7 @@ test('HttpSharePointClient: an assignedReviewerManager filter compares against t
 // --- CompletedAt window filter ---
 
 test('HttpSharePointClient: listCases filters by a CompletedAt window and status', async () => {
-  const { fetch, calls } = makeFetch([
-    {
-      when: (c) => c.method === 'GET',
-      respond: () =>
-        new Response(JSON.stringify({ value: [] }), { status: 200 }),
-    },
-  ]);
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
+  const { client, calls } = emptyPageClient();
 
   await client.listCases(
     {
@@ -437,17 +368,7 @@ test('HttpSharePointClient: listCases filters by a CompletedAt window and status
 // --- The void report window ---
 
 test('HttpSharePointClient: a void report filters by the VoidedAt window and status', async () => {
-  const { fetch, calls } = makeFetch([
-    {
-      when: (c) => c.method === 'GET',
-      respond: () =>
-        new Response(JSON.stringify({ value: [] }), { status: 200 }),
-    },
-  ]);
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
+  const { client, calls } = emptyPageClient();
 
   await client.listCases(
     {
@@ -483,17 +404,7 @@ test('HttpSharePointClient: a void report filters by the VoidedAt window and sta
 // --- Case search: the ReportableAt window and the Title prefix ---
 
 test('HttpSharePointClient: a Case search filters by ReportableAt, Title prefix, and status', async () => {
-  const { fetch, calls } = makeFetch([
-    {
-      when: (c) => c.method === 'GET',
-      respond: () =>
-        new Response(JSON.stringify({ value: [] }), { status: 200 }),
-    },
-  ]);
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
+  const { client, calls } = emptyPageClient();
 
   await client.listCases(
     {
@@ -562,17 +473,7 @@ test('HttpSharePointClient: countCases sums a bounded CompletedAt day-slice', as
 });
 
 test('HttpSharePointClient: listCases without a CompletedAt window omits the CompletedAt condition', async () => {
-  const { fetch, calls } = makeFetch([
-    {
-      when: (c) => c.method === 'GET',
-      respond: () =>
-        new Response(JSON.stringify({ value: [] }), { status: 200 }),
-    },
-  ]);
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
+  const { client, calls } = emptyPageClient();
 
   await client.listCases(
     { status: 'In-progress' },
@@ -819,17 +720,7 @@ test('HttpSharePointClient: a paged read of an unrecognised body yields no rows'
 });
 
 test('HttpSharePointClient: listCases orderBy desc appends the desc direction', async () => {
-  const { fetch, calls } = makeFetch([
-    {
-      when: (c) => c.method === 'GET',
-      respond: () =>
-        new Response(JSON.stringify({ value: [] }), { status: 200 }),
-    },
-  ]);
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
+  const { client, calls } = emptyPageClient();
 
   await client.listCases(
     {},
@@ -846,17 +737,7 @@ test('HttpSharePointClient: listCases orderBy desc appends the desc direction', 
 });
 
 test('HttpSharePointClient: listCases maps every CaseRow sort key to its internal column name', async () => {
-  const { fetch, calls } = makeFetch([
-    {
-      when: (c) => c.method === 'GET',
-      respond: () =>
-        new Response(JSON.stringify({ value: [] }), { status: 200 }),
-    },
-  ]);
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
+  const { client, calls } = emptyPageClient();
 
   /** @type {[string, string][]} */
   const pairs = [
@@ -891,17 +772,7 @@ test('HttpSharePointClient: listCases maps every CaseRow sort key to its interna
 });
 
 test('HttpSharePointClient: listCases rejects an orderBy key with no internal column', async () => {
-  const { fetch, calls } = makeFetch([
-    {
-      when: (c) => c.method === 'GET',
-      respond: () =>
-        new Response(JSON.stringify({ value: [] }), { status: 200 }),
-    },
-  ]);
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
+  const { client, calls } = emptyPageClient();
 
   await assert.rejects(
     () =>

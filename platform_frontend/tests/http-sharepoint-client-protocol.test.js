@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { HttpSharePointClient } from '../src/services/http-sharepoint-client.js';
 import {
   WEB_URL,
+  caseRowResponse,
   digestResponse,
   makeFetch,
   makeSleep,
@@ -28,21 +29,10 @@ test('HttpSharePointClient: form digest is fetched lazily and reused across writ
     {
       when: (c) => c.method === 'GET',
       respond: () =>
-        new Response(
-          JSON.stringify({
-            Id: 'case-1',
-            Title: 'X',
-            Status: 'In-progress',
-            AssignedReviewerId: 'u1',
-            ResponsiblePartyId: 'u2',
-            Answers: '{}',
-            Conversation: '[]',
-            Notes: '',
-            CompletedAt: null,
-            CaseType: 'example-review',
-          }),
-          { status: 200, headers: { ETag: '"new-etag"' } }
-        ),
+        new Response(JSON.stringify(caseRowResponse({ Title: 'X' })), {
+          status: 200,
+          headers: { ETag: '"new-etag"' },
+        }),
     },
   ]);
   const client = new HttpSharePointClient({
@@ -91,18 +81,7 @@ test('HttpSharePointClient: 403 on write triggers digest refresh and one retry',
       when: (c) => c.method === 'GET',
       respond: () =>
         new Response(
-          JSON.stringify({
-            Id: 'case-1',
-            Title: 'X',
-            Status: 'In-progress',
-            AssignedReviewerId: 'u1',
-            ResponsiblePartyId: 'u2',
-            Answers: '{}',
-            Conversation: '[]',
-            Notes: 'done',
-            CompletedAt: null,
-            CaseType: 'example-review',
-          }),
+          JSON.stringify(caseRowResponse({ Title: 'X', Notes: 'done' })),
           { status: 200, headers: { ETag: '"after-refresh"' } }
         ),
     },
@@ -203,21 +182,10 @@ test('HttpSharePointClient: 429 with Retry-After waits the indicated seconds bef
             headers: { 'Retry-After': '3' },
           });
         }
-        return new Response(
-          JSON.stringify({
-            Id: 'case-1',
-            Title: 'OK',
-            Status: 'In-progress',
-            AssignedReviewerId: 'u1',
-            ResponsiblePartyId: 'u2',
-            Answers: '{}',
-            Conversation: '[]',
-            Notes: '',
-            CompletedAt: null,
-            CaseType: 'example-review',
-          }),
-          { status: 200, headers: { ETag: '"ok"' } }
-        );
+        return new Response(JSON.stringify(caseRowResponse({ Title: 'OK' })), {
+          status: 200,
+          headers: { ETag: '"ok"' },
+        });
       },
     },
   ]);
@@ -245,21 +213,10 @@ test('HttpSharePointClient: 429 without Retry-After falls back to a default dela
       respond: () => {
         getCount++;
         if (getCount === 1) return new Response('throttled', { status: 429 });
-        return new Response(
-          JSON.stringify({
-            Id: 'case-1',
-            Title: 'OK',
-            Status: 'In-progress',
-            AssignedReviewerId: 'u1',
-            ResponsiblePartyId: 'u2',
-            Answers: '{}',
-            Conversation: '[]',
-            Notes: '',
-            CompletedAt: null,
-            CaseType: 'example-review',
-          }),
-          { status: 200, headers: { ETag: '"ok"' } }
-        );
+        return new Response(JSON.stringify(caseRowResponse({ Title: 'OK' })), {
+          status: 200,
+          headers: { ETag: '"ok"' },
+        });
       },
     },
   ]);
@@ -289,21 +246,10 @@ test('HttpSharePointClient: 429 with garbage Retry-After string falls back to de
             headers: { 'Retry-After': 'not-a-number-or-date' },
           });
         }
-        return new Response(
-          JSON.stringify({
-            Id: 'case-1',
-            Title: 'OK',
-            Status: 'In-progress',
-            AssignedReviewerId: 'u1',
-            ResponsiblePartyId: 'u2',
-            Answers: '{}',
-            Conversation: '[]',
-            Notes: '',
-            CompletedAt: null,
-            CaseType: 'example-review',
-          }),
-          { status: 200, headers: { ETag: '"ok"' } }
-        );
+        return new Response(JSON.stringify(caseRowResponse({ Title: 'OK' })), {
+          status: 200,
+          headers: { ETag: '"ok"' },
+        });
       },
     },
   ]);
@@ -340,21 +286,10 @@ test('HttpSharePointClient: 429 with HTTP-date Retry-After waits until that time
             headers: { 'Retry-After': httpDate },
           });
         }
-        return new Response(
-          JSON.stringify({
-            Id: 'case-1',
-            Title: 'OK',
-            Status: 'In-progress',
-            AssignedReviewerId: 'u1',
-            ResponsiblePartyId: 'u2',
-            Answers: '{}',
-            Conversation: '[]',
-            Notes: '',
-            CompletedAt: null,
-            CaseType: 'example-review',
-          }),
-          { status: 200, headers: { ETag: '"ok"' } }
-        );
+        return new Response(JSON.stringify(caseRowResponse({ Title: 'OK' })), {
+          status: 200,
+          headers: { ETag: '"ok"' },
+        });
       },
     },
   ]);
@@ -465,16 +400,7 @@ test('HttpSharePointClient: patchCase accepts a digest from the verbose contexti
       when: (c) => c.method === 'GET',
       respond: () =>
         new Response(
-          JSON.stringify({
-            Id: 'case-1',
-            Title: 'T',
-            Status: 'In-progress',
-            Answers: '{}',
-            Conversation: '[]',
-            Notes: 'n',
-            CompletedAt: null,
-            CaseType: 'example-review',
-          }),
+          JSON.stringify(caseRowResponse({ Title: 'T', Notes: 'n' })),
           { status: 200, headers: { ETag: '"v2"' } }
         ),
     },
