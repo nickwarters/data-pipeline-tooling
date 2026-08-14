@@ -262,6 +262,7 @@ test('checkCaseTypes accepts declared review-cadence thresholds', async () => {
           // Zero is meaningful for Overdue: it is breached the moment it lands.
           actionCentreSlaDays: { overdue: 0, awaitingFrontline: 30 },
           breachWindowHours: 48,
+          reviewSlaWorkingDays: 5,
           remediationSlaWorkingDays: 5,
         })
       ),
@@ -291,15 +292,17 @@ test('checkCaseTypes fails nonsensical threshold numbers tsc would accept', asyn
         demoConfig({
           actionCentreSlaDays: { appeals: -1 },
           breachWindowHours: 0,
+          reviewSlaWorkingDays: 0,
           remediationSlaWorkingDays: 2.5,
         })
       ),
     ],
   });
 
-  assert.equal(failures.length, 3);
+  assert.equal(failures.length, 4);
   assert.match(joined(failures), /actionCentreSlaDays\.appeals/);
   assert.match(joined(failures), /breachWindowHours` must be a positive/);
+  assert.match(joined(failures), /reviewSlaWorkingDays` must be a positive/);
   assert.match(
     joined(failures),
     /remediationSlaWorkingDays` must be a positive/

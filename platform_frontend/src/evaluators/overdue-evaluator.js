@@ -27,9 +27,10 @@ export const OVERDUE_STATUSES = Object.freeze([CASE_STATUS.IN_PROGRESS]);
 
 /**
  * Returns true when a Case is past its review due date while still under
- * review. The due date is read off the Case row — it is written when the Case
- * is created and never derived here from Case Type configuration, so no config
- * is needed to answer the question. `now` is injectable for testing.
+ * review. The due date is read off the Case row verbatim — it is stamped once
+ * at the allocation claim, from the Case Type's review SLA in working days, and
+ * never recomputed here, so no Case Type configuration reaches this evaluator.
+ * `now` is injectable for testing.
  *
  * @param {CaseRow} caseRow
  * @param {Date} [now]

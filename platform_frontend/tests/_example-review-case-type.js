@@ -25,11 +25,12 @@ const config = {
   // must not model what the scaffold refuses to generate: access comes from the
   // derived `Reviewers - Example Review` and its two siblings.
   listName: 'Cases-ExampleReview',
-  // Review-cadence thresholds, all three deliberately different from the
+  // Review-cadence thresholds, all four deliberately different from the
   // framework defaults so this fixture proves a Case Type CAN diverge —
   // Complaints declares none and must keep the defaults.
   actionCentreSlaDays: { awaitingFrontline: 30 },
   breachWindowHours: 48,
+  reviewSlaWorkingDays: 8,
   remediationSlaWorkingDays: 5,
   // Case Type-specific Case Details fields. Values live
   // in the CaseRow.details JSON blob keyed by `key`; the Case Details and

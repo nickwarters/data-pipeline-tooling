@@ -280,11 +280,8 @@ What each field does, and how to choose its value:
   Before claiming a Case, the framework counts this Reviewer's `In-progress`
   Cases whose `OnHold` value is No. Omit the field to leave allocation
   unlimited for this Case Type.
-- **Review cadence** — three optional thresholds. Each has a framework default,
-  and omitting a key means "use the default", never "no threshold". There is
-  deliberately no per-Case-Type _review_ SLA: whether a Case is **overdue** is
-  decided solely by the `dueDate` written on the Case row, which this frontend
-  reads and never computes.
+- **Review cadence** — four optional thresholds. Each has a framework default,
+  and omitting a key means "use the default", never "no threshold".
   - **`actionCentreSlaDays`** — how long a Case may sit in each Action Centre
     reason group before its waiting chip reads as breached, e.g.
     `{ awaitingFrontline: 14 }`. Partial: name only the reasons you differ on.
@@ -295,6 +292,16 @@ What each field does, and how to choose its value:
   - **`breachWindowHours`** — how far ahead the dashboard's Owner "At risk" tile
     looks for a Case about to breach its due date. Positive integer; default 24.
     The tile's sub-reason label states the window it applied, so it stays honest.
+  - **`reviewSlaWorkingDays`** — working days from the **allocation claim** to
+    the Case's review Due Date, the date **overdue** is judged against.
+    Positive integer; default 5. **Changing it moves no date already written.**
+    The due date is computed once when the Reviewer claims the Case and stored
+    on the Case row, so Cases already in someone's worklist keep the date they
+    were given and only later claims see the new number. A Case that was never
+    claimed through the app carries no review due date and can never read as
+    overdue. The date is stored date-only, so a Case reads as overdue from
+    midnight _on_ its due date — an SLA of 5 is four full working days plus an
+    overdue fifth, the same semantics `remediationDueDate` already has.
   - **`remediationSlaWorkingDays`** — working days from **Send Actions** to the
     Remediation Due Date. Positive integer; default 10. **Changing it moves no
     date already written.** The due date is computed once at Send Actions and
