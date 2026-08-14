@@ -537,9 +537,8 @@ def test_the_quarantine_chunk_writer_forwards_what_it_rejected_to(tmp_path):
 
 # --- the reserved run-provenance column ------------------------------------
 #
-# Every table-backed Writer stamps the run that wrote the row
-# (docs/adr/0020-writer-stamped-run-provenance-column.md). The value comes from
-# the ambient run context, so these tests put one around the write rather than
+# Every table-backed Writer stamps the run that wrote the row. The value comes
+# from the ambient run context, so these tests put one around the write rather than
 # passing an id in — that *is* the contract.
 
 
