@@ -1,6 +1,16 @@
 // @ts-check
 
 /**
+ * The review SLA: **5 working days after the allocation claim**. This is the
+ * Assigned Reviewer's own clock — the date Overdue is judged against — started
+ * when the Case is claimed, because that is the moment a Reviewer becomes
+ * answerable for it. Computed once at the claim and stored on the Case row; it
+ * is never recomputed on read, so moving the number moves no date already
+ * written.
+ */
+export const REVIEW_SLA_WORKING_DAYS = 5;
+
+/**
  * The remediation SLA: **10 working days after Send Actions**. The
  * due date is computed once at the reportable milestone and stored on the Case
  * row; it is never recomputed on read.

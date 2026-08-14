@@ -148,10 +148,15 @@ weekends **and** public holidays. The holiday source is an **in-code array**,
 [`src/config/working-days.js`](../../src/config/working-days.js) — England &
 Wales public holidays as ISO `YYYY-MM-DD` dates.
 
+The same list also drives the **review** SLA — `DueDate`, stamped when a
+Reviewer claims a Case through allocation — so a stale list produces early dates
+for two SLAs, not just `RemediationDueDate`.
+
 **This list is a maintenance burden the Maintainer owns.** Refresh it **annually**
 (or whenever holidays change): a stale list silently produces **early** due
-dates. Because `RemediationDueDate` is computed once at Send Actions and never
-recomputed, refreshing the list only affects Cases sent afterwards — it never
+dates. Both dates are computed once — `DueDate` at the allocation claim,
+`RemediationDueDate` at Send Actions — and neither is ever recomputed. So
+refreshing the list only affects Cases claimed or sent afterwards; it never
 retroactively moves an already-set due date.
 
 Switching the source to a maintainable SharePoint list later is a boot-time

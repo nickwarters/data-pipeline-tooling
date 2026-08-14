@@ -137,7 +137,7 @@ answer values across every question.
 Intentionally **absent**: `computeOutcome` (code), `remediationActions` /
 `disallowFreeFormRemediation` (authoring templates — the remediation actually _taken_
 lives on the Answer, below), and Case-Type config (`eligibleGroups`, `actionCentreSlaDays`,
-`breachWindowHours`, `remediationSlaWorkingDays`).
+`breachWindowHours`, `reviewSlaWorkingDays`, `remediationSlaWorkingDays`).
 
 ### Label resolution
 

@@ -513,7 +513,8 @@ export const cases = [
     },
     notes: '',
     completedAt: null,
-    dueDate: _nextWeek.toISOString(),
+    // Left null so the claim can be seen to stamp it.
+    dueDate: null,
     created: _fiveDaysAgo.toISOString(),
     assignedAt: null,
     etag: 'etag-cm6-v1',

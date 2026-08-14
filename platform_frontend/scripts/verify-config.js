@@ -757,7 +757,11 @@ function checkThresholds(slug, file, config) {
     }
   }
 
-  for (const key of ['breachWindowHours', 'remediationSlaWorkingDays']) {
+  for (const key of [
+    'breachWindowHours',
+    'reviewSlaWorkingDays',
+    'remediationSlaWorkingDays',
+  ]) {
     const value = config?.[key];
     if (value === undefined) continue;
     if (!Number.isInteger(value) || value <= 0) {
