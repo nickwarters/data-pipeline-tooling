@@ -55,27 +55,27 @@ const NOW = new Date('2026-07-04T00:00:00Z');
 test('ACTION_CENTRE_REASONS: fixed priority order, labels, roles, tones', () => {
   assert.deepEqual(
     ACTION_CENTRE_REASONS.map((r) => r.id),
-    ['overdue', 'awaitingFrontline', 'appeals']
+    ['overdue', 'awaitingFrontline', 'onHold', 'appeals']
   );
   assert.deepEqual(
     ACTION_CENTRE_REASONS.map((r) => r.label),
-    ['Overdue', 'Awaiting Frontline', 'Appeals to work']
+    ['Overdue', 'Awaiting Frontline', 'On Hold', 'Appeals to work']
   );
   assert.deepEqual(
     ACTION_CENTRE_REASONS.map((r) => r.role),
-    ['Reviewer', 'Reviewer', 'Controls']
+    ['Reviewer', 'Reviewer', 'Reviewer', 'Controls']
   );
   assert.deepEqual(
     ACTION_CENTRE_REASONS.map((r) => r.tone),
-    ['overdue', 'awaiting', 'appeal']
+    ['overdue', 'awaiting', 'hold', 'appeal']
   );
 });
 
-test('reasonsForCapabilities: reviewer sees the two reviewer reasons', () => {
+test('reasonsForCapabilities: reviewer sees the three reviewer reasons', () => {
   const ids = reasonsForCapabilities(caps({ isReviewer: true })).map(
     (r) => r.id
   );
-  assert.deepEqual(ids, ['overdue', 'awaitingFrontline']);
+  assert.deepEqual(ids, ['overdue', 'awaitingFrontline', 'onHold']);
 });
 
 // Appeals are switched off in this build, so the reason stays in the table —
@@ -106,7 +106,7 @@ test('reasonsForCapabilities: multi-role user sees the union', () => {
   ).map((r) => r.id);
   // 'appeals' is absent only because the feature switch is off; restore it to
   // the tail of this list when the switch goes.
-  assert.deepEqual(ids, ['overdue', 'awaitingFrontline']);
+  assert.deepEqual(ids, ['overdue', 'awaitingFrontline', 'onHold']);
 });
 
 test('reasonsForCapabilities: a visitor sees no reasons', () => {
@@ -117,11 +117,11 @@ test('visibleReasons: with no tail-only reason in the table, both toggle states 
   const reasons = reasonsForCapabilities(caps({ isReviewer: true }));
   assert.deepEqual(
     visibleReasons(reasons, true).map((r) => r.id),
-    ['overdue', 'awaitingFrontline']
+    ['overdue', 'awaitingFrontline', 'onHold']
   );
   assert.deepEqual(
     visibleReasons(reasons, false).map((r) => r.id),
-    ['overdue', 'awaitingFrontline']
+    ['overdue', 'awaitingFrontline', 'onHold']
   );
 });
 
@@ -130,6 +130,64 @@ test('activeFilter: reviewer reasons are scoped to the current reviewer', () => 
     overdue: true,
     assignedReviewer: 'u1',
   });
+});
+
+test('activeFilter: On Hold is reviewer-scoped and excludes overdue Cases', () => {
+  // Overdue wins: a Case that is both parked and overdue belongs in the
+  // Overdue group only, so the On Hold filter says `overdue: false` and the
+  // header count, peek and paged rows all agree.
+  assert.deepEqual(activeFilter(reason('onHold'), 'u1'), {
+    onHold: true,
+    overdue: false,
+    assignedReviewer: 'u1',
+  });
+});
+
+test('worstFirstOrder: On Hold sorts longest-parked first on placedOnHoldAt', () => {
+  assert.deepEqual(worstFirstOrder(reason('onHold')), {
+    orderBy: 'placedOnHoldAt',
+    orderDir: 'asc',
+  });
+});
+
+test('waitingInfo: the On Hold chip counts days on hold, singular guarded', () => {
+  const parked = waitingInfo(
+    caseRow({ placedOnHoldAt: '2026-06-13T00:00:00Z' }),
+    reason('onHold'),
+    NOW
+  );
+  assert.deepEqual(parked, {
+    days: 21,
+    label: '21 days on hold',
+    breached: true,
+  });
+
+  assert.equal(
+    waitingInfo(
+      caseRow({ placedOnHoldAt: '2026-07-03T00:00:00Z' }),
+      reason('onHold'),
+      NOW
+    ).label,
+    '1 day on hold'
+  );
+});
+
+test('waitingInfo: On Hold breaches at its default cadence, overridable per Case Type', () => {
+  const onHold = reason('onHold');
+  // Zero would mark every parked Case breached the moment it is parked, which
+  // would defeat the point of a separate non-urgent group.
+  assert.ok(onHold.defaultSlaDays > 0);
+  const row = caseRow({ placedOnHoldAt: '2026-06-30T00:00:00Z' }); // 4 days
+  assert.equal(waitingInfo(row, onHold, NOW).breached, false);
+  assert.equal(waitingInfo(row, onHold, NOW, 4).breached, true);
+});
+
+test('secondaryReasons: an overdue Case that is also on hold notes it inline', () => {
+  const c = caseRow({ overdue: true, onHold: true });
+  assert.deepEqual(
+    secondaryReasons(c, 'overdue').map((r) => r.id),
+    ['onHold']
+  );
 });
 
 test('activeFilter: the Controls reason stays unscoped', () => {

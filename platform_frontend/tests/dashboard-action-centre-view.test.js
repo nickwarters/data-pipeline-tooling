@@ -43,7 +43,7 @@ test('Action Centre state derives its reason descriptors from unchanged model fl
   );
   assert.deepEqual(
     reviewer.reasons.map((reason) => reason.id),
-    ['overdue', 'awaitingFrontline']
+    ['overdue', 'awaitingFrontline', 'onHold']
   );
   const multiRole = initialActionCentreState(
     capabilities({
@@ -57,7 +57,7 @@ test('Action Centre state derives its reason descriptors from unchanged model fl
   // it to the tail of this list when the switch goes.
   assert.deepEqual(
     multiRole.reasons.map((reason) => reason.id),
-    ['overdue', 'awaitingFrontline']
+    ['overdue', 'awaitingFrontline', 'onHold']
   );
 });
 
@@ -300,6 +300,62 @@ test('Action Centre asks nothing at all for a viewer with no reasons', async () 
 
   assert.equal(asked, 0);
   assert.deepEqual(result, { counts: {}, peeks: {}, headline: 0 });
+});
+
+test('Action Centre renders the On Hold group below Awaiting Frontline with its own tone and wording', () => {
+  const now = new Date('2026-07-04T00:00:00Z');
+  const state = initialActionCentreState(
+    capabilities({ isReviewer: true }),
+    [],
+    now
+  );
+  const parked = {
+    ...row('h1'),
+    overdue: false,
+    dueDate: null,
+    onHold: true,
+    placedOnHoldAt: '2026-06-13T00:00:00Z', // 21 days — past the 14-day cadence
+  };
+  state.counts = { overdue: 0, awaitingFrontline: 0, onHold: 6 };
+  state.headline = 6;
+  state.peeks = { onHold: parked };
+  state.expanded = new Set(['onHold']);
+  state.pages = { onHold: [parked] };
+  const view = ActionCentreView(state, {
+    onToggleNeedsAction: () => {},
+    onToggleGroup: () => {},
+    onShowMore: () => {},
+    onOpenCase: () => {},
+  });
+
+  const groups = [...view.querySelectorAll('.cora-ac-group')].map((group) =>
+    group.getAttribute('data-reason')
+  );
+  assert.deepEqual(groups, ['overdue', 'awaitingFrontline', 'onHold']);
+
+  const holdGroup = [...view.querySelectorAll('.cora-ac-group')].find(
+    (group) => group.getAttribute('data-reason') === 'onHold'
+  );
+  assert.equal(
+    holdGroup?.querySelector('.cora-ac-count')?.className,
+    'cora-ac-count cora-ac-count--hold'
+  );
+  assert.equal(
+    holdGroup?.querySelector('.cora-ac-dot')?.className,
+    'cora-ac-dot cora-ac-dot--hold'
+  );
+  assert.match(
+    holdGroup?.querySelector('.cora-ac-wait')?.textContent ?? '',
+    /21 days on hold/
+  );
+  assert.equal(
+    holdGroup?.querySelector('.cora-ac-wait')?.className,
+    'cora-ac-wait cora-ac-wait--hold'
+  );
+  assert.equal(
+    holdGroup?.querySelector('.cora-ac-more')?.textContent,
+    'Show 5 more on hold →'
+  );
 });
 
 test("Action Centre judges a row's wait against its own Case Type's cadence", () => {

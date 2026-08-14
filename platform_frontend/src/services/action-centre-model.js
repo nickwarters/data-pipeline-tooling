@@ -32,9 +32,9 @@
  * id: string,
  * label: string,
  * role: string,
- * tone: 'overdue' | 'awaiting' | 'appeal',
- * clockField: 'dueDate' | 'awaitingSince' | 'appealRaisedAt',
- * flagField: 'overdue' | 'awaitingResponsibleParty' | 'hasOpenAppeal',
+ * tone: 'overdue' | 'awaiting' | 'hold' | 'appeal',
+ * clockField: 'dueDate' | 'awaitingSince' | 'placedOnHoldAt' | 'appealRaisedAt',
+ * flagField: 'overdue' | 'awaitingResponsibleParty' | 'onHold' | 'hasOpenAppeal',
  * filter: ListCasesFilter,
  * defaultSlaDays: number,
  * reviewerScoped: boolean,
@@ -79,7 +79,7 @@ function assigneeSubLine(caseRow) {
 
 /**
  * The reason table, in fixed priority order (Overdue → Awaiting Frontline →
- * Appeals). Group ordering is this fixed priority;
+ * On Hold → Appeals). Group ordering is this fixed priority;
  * the primary reason of a multi-reason case is the earliest match here.
  *
  * `defaultSlaDays` is the framework cadence for a reason — what a Case Type
@@ -120,6 +120,28 @@ export const ACTION_CENTRE_REASONS = [
     tailOnly: false,
     requires: (c) => c.isReviewer,
     waitingLabel: (days) => `${dayCount(days)} no reply`,
+    subLine: assigneeSubLine,
+  },
+  {
+    id: 'onHold',
+    label: 'On Hold',
+    role: 'Reviewer',
+    tone: 'hold',
+    clockField: 'placedOnHoldAt',
+    flagField: 'onHold',
+    // Overdue wins: a parked Case that has also blown its review date is
+    // urgent, not parked, and belongs in exactly one group. Expressed in the
+    // filter rather than at render time so the header count, the collapsed
+    // peek and the paged rows all agree.
+    filter: { onHold: true, overdue: false },
+    // A placeholder cadence for "parked too long", pending a product answer.
+    // Zero would read every parked Case as breached, which would defeat the
+    // point of a separate non-urgent group.
+    defaultSlaDays: 14,
+    reviewerScoped: true,
+    tailOnly: false,
+    requires: (c) => c.isReviewer,
+    waitingLabel: (days) => `${dayCount(days)} on hold`,
     subLine: assigneeSubLine,
   },
   {
