@@ -29,13 +29,14 @@ from __future__ import annotations
 import datetime as dt
 import re
 from functools import partial
+from typing import Sequence
 
 import pandas as pd
 
 from framework.core import Dataset, Reader, UniqueValidator, Writer
 from framework.io import DatasetReader, Refresh
 from framework.run import Pipeline, RunLog
-from framework.transform import DeriveKey, Stamp
+from framework.transform import DeriveKey, JoinWith, Stamp
 from tools.medallion import Medallion
 from tools.observability.timestamps import local_date
 
@@ -55,7 +56,26 @@ GOLD_TABLES = (
 )
 
 CASE_ID_COLUMN = "case_id"
+
+# What "one row per" means for each Detail Table -- the grain gold_detail_builder
+# guards with UniqueValidator, and the grain the silver Detail Tables write rows
+# to. Every entry leads with CASE_ID_COLUMN: a Detail row's identity is always
+# the parent Case plus whatever distinguishes it within that Case.
+DETAIL_GRAIN: dict[str, tuple[str, ...]] = {
+    "answer": (CASE_ID_COLUMN, "question_id"),
+    "answer_capture": (CASE_ID_COLUMN, "question_id", "field_key"),
+    "answer_action": (CASE_ID_COLUMN, "question_id", "action_id"),
+    "general_answer": (CASE_ID_COLUMN, "general_key"),
+    "conversation_message": (CASE_ID_COLUMN, "seq"),
+    "appeal": (CASE_ID_COLUMN, "appeal_id"),
+    "case_detail": (CASE_ID_COLUMN, "field_key"),
+}
+
 AS_OF_COLUMN = "as_of_utc"
+# The pair a Detail row's semi-join keys on: the winning Case and the one
+# observation that won it. Declared beside AS_OF_COLUMN because both are things
+# every gold hop reads off case_current, not values a Detail row derives itself.
+WINNER_COLUMNS = (CASE_ID_COLUMN, "source_observation_id")
 
 # A Case whose review is over, and the source-written stamp that says when it
 # ended. The source writes each stamp once, on the one transition into that
@@ -169,6 +189,24 @@ def latest_case_version(dataset: Dataset) -> Dataset:
         columns=["_modified_at_utc", "_version_major", "_version_minor"]
     )
     return Dataset.from_pandas(current.reset_index(drop=True))
+
+
+def winning_observations(observations: Reader) -> Dataset:
+    """Gold ``case_current``, projected to the pair a Detail row's semi-join needs.
+
+    This projection is what makes ``gold_detail_builder``'s join a **semi**-join,
+    and it is non-optional rather than tidy: silver Detail rows and
+    ``case_current`` share ``case_type``, ``source_item_id``, ``source_version``,
+    ``source_modified_at`` and the load stamps, so an unprojected merge would
+    suffix every one of them ``_x``/``_y`` instead of joining cleanly on
+    ``WINNER_COLUMNS``.
+
+    No ``drop_duplicates()``: ``UniqueValidator(CASE_ID_COLUMN)`` in
+    ``case_current_builder`` already makes a duplicate winning pair impossible.
+    """
+    frame = observations.read().to_pandas()
+    projected = frame.loc[:, list(WINNER_COLUMNS)].reset_index(drop=True)
+    return Dataset.from_pandas(projected)
 
 
 # --- the aggregates ---------------------------------------------------------
@@ -332,6 +370,62 @@ def case_current_builder(
     )
     validated = p.validate(
         UniqueValidator(CASE_ID_COLUMN), stamped, name="unique-validate"
+    )
+    p.write(writer, validated, name="write")
+    return p
+
+
+def gold_detail_builder(
+    reader: Reader,
+    writer: Writer,
+    *,
+    grain: Sequence[str],
+    observations: Reader,
+    as_of: dt.datetime,
+    name: str,
+    run_log: RunLog | None = None,
+) -> Pipeline:
+    """Build one Detail Table's gold hop. **Grain: one row per ``grain``.**
+
+    Reduces a silver Detail Table's accumulated history to the child rows of
+    the Cases' *winning* observation, per ADR-0015.
+
+    This builder never orders and never breaks a tie. ``latest_case_version``
+    (via ``observations``, gold ``case_current``) has already picked the
+    winner; applying any ordering here would be a second reduction path that
+    can disagree with the parent about which observation won for a Case.
+
+    **Precondition**: a Detail row's ``case_type`` must be the settled one
+    silver ``case_version`` stamps, not the raw list cell. A wrong ``case_type``
+    mints a different ``case_id`` than the parent's, so the semi-join matches
+    nothing and gold lands zero rows with no error.
+    """
+    p = Pipeline(name, run_log=run_log)
+    r = p.read(reader, name="read")
+    keyed = p.transform(
+        DeriveKey(
+            into=CASE_ID_COLUMN,
+            namespace=FEED_NAME,
+            natural_key=list(NATURAL_KEY),
+        ),
+        r,
+        name="derive-key",
+    )
+    current = p.transform(
+        JoinWith(
+            partial(winning_observations, observations),
+            on=list(WINNER_COLUMNS),
+            how="inner",
+            name="winning-observations",
+        ),
+        keyed,
+        name="latest-observation",
+    )
+    stamped = p.transform(
+        Stamp(AS_OF_COLUMN, as_of.isoformat()), current, name="stamp-as-of"
+    )
+    validated = p.validate(
+        UniqueValidator(list(grain)), stamped, name="unique-validate"
     )
     p.write(writer, validated, name="write")
     return p

@@ -18,18 +18,20 @@ from uuid import UUID
 import pandas as pd
 import pytest
 
-from framework.core import ErrorCategory, ValidationError
+from framework.core import ErrorCategory, Reader, ValidationError
 from framework.io import AppendOnlyConflictError
 from framework.run import Pipeline, RunContext, RunLog, dry_run_pipeline
 from framework.transform import Stamp
 from pipelines.sharepoint_cases import gold
 from pipelines.sharepoint_cases.gold import (
+    DETAIL_GRAIN,
     GOLD_TABLES,
     UNASSIGNED,
     UNSTAMPED,
     age_buckets,
     case_counts,
     case_current_builder,
+    gold_detail_builder,
 )
 from pipelines.sharepoint_cases.gold import throughput as throughput_transform
 from pipelines.sharepoint_cases.pipeline import (
@@ -624,6 +626,173 @@ def test_current_gold_republishes_every_silver_column():
     assert set(row) - set(SILVER_COLUMNS) == {"case_id", "as_of_utc"}
 
 
+# --- gold: the Detail Table reduction ----------------------------------------
+
+# One representative grain: the builder is generic over DETAIL_GRAIN, and these
+# tests exercise the composition, not a per-table peculiarity.
+DETAIL_TABLE = "answer"
+
+
+def winning_reader(*rows: dict) -> Reader:
+    """The gold ``case_current`` a parent observation history would produce.
+
+    Composes the real ``case_current_builder`` rather than hand-building the
+    winning pairs: the invariant worth testing is that a Detail row agrees with
+    whichever observation the parent's own reduction picked, not that an inner
+    join drops non-matching rows.
+    """
+    return given_rows(current(*rows))
+
+
+def child(
+    *,
+    source_item_id: str = "101",
+    case_type: str = COMPLAINTS.case_type,
+    source_observation_id: str,
+    question_id: str = "q1",
+) -> dict:
+    """One row of a child history, in the shape a silver Detail Table would carry.
+
+    ``case_type``/``source_item_id`` match ``version()``'s defaults, so the
+    derived ``case_id`` lines up with the parent's for the same Case.
+    """
+    return {
+        "source_item_id": source_item_id,
+        "case_type": case_type,
+        "source_observation_id": source_observation_id,
+        "question_id": question_id,
+        "field_value": "Not upheld",
+    }
+
+
+def details(
+    children: list[dict],
+    winners: Reader,
+    *,
+    grain: tuple[str, ...] = DETAIL_GRAIN[DETAIL_TABLE],
+) -> list[dict]:
+    """Drive ``gold_detail_builder`` over a child history, in memory."""
+    return gold_rows(
+        partial(
+            gold_detail_builder,
+            grain=grain,
+            observations=winners,
+            name=f"{FEED_NAME}:gold:detail:{DETAIL_TABLE}",
+        ),
+        children,
+    )
+
+
+def test_a_child_stripped_from_the_winning_observation_does_not_survive():
+    # Two observations of one Case; the second strips question 2's child row
+    # and adds question 3. Every surviving row must carry the winner's id.
+    v1 = version(
+        source_observation_id="obs-1",
+        source_version='"3"',
+        source_modified_at="2026-08-05 08:10:00+00:00",
+    )
+    v2 = version(
+        source_observation_id="obs-2",
+        source_version='"4"',
+        source_modified_at="2026-08-05 08:45:00+00:00",
+        status="Completed",
+    )
+    winners = winning_reader(v1, v2)
+    children = [
+        child(source_observation_id="obs-1", question_id="q1"),
+        child(source_observation_id="obs-1", question_id="q2"),
+        child(source_observation_id="obs-2", question_id="q1"),
+        child(source_observation_id="obs-2", question_id="q3"),
+    ]
+
+    rows = details(children, winners)
+
+    assert {row["question_id"] for row in rows} == {"q1", "q3"}
+    assert {row["source_observation_id"] for row in rows} == {"obs-2"}
+
+
+def _two_observations(item_id: str, prefix: str) -> tuple[dict, dict]:
+    """An early and a winning observation of one Case, ids prefixed for a test."""
+    early = version(
+        id=int(item_id),
+        source_item_id=item_id,
+        source_observation_id=f"{prefix}-1",
+        source_version='"3"',
+        source_modified_at="2026-08-05 08:10:00+00:00",
+    )
+    late = version(
+        id=int(item_id),
+        source_item_id=item_id,
+        source_observation_id=f"{prefix}-2",
+        source_version='"4"',
+        source_modified_at="2026-08-05 08:45:00+00:00",
+        status="Completed",
+    )
+    return early, late
+
+
+def test_two_cases_do_not_take_each_others_children():
+    a1, a2 = _two_observations("101", "a")
+    b1, b2 = _two_observations("102", "b")
+    winners = winning_reader(a1, a2, b1, b2)
+    children = [
+        child(source_item_id="101", source_observation_id="a-1", question_id="stale"),
+        child(source_item_id="101", source_observation_id="a-2", question_id="q1"),
+        child(source_item_id="102", source_observation_id="b-1", question_id="stale"),
+        child(source_item_id="102", source_observation_id="b-2", question_id="q1"),
+    ]
+
+    rows = details(children, winners)
+
+    assert len(rows) == 2
+    assert len({row["case_id"] for row in rows}) == 2
+    assert {row["source_observation_id"] for row in rows} == {"a-2", "b-2"}
+
+
+def test_a_gold_detail_row_is_the_childs_columns_plus_case_id_and_as_of():
+    # The semi-join guarantee: a Detail row carries nothing from the parent
+    # beyond the two winner columns it joined on.
+    winners = winning_reader(version(source_observation_id="obs-1"))
+    [row] = details([child(source_observation_id="obs-1")], winners)
+
+    assert set(row) == set(child(source_observation_id="obs-1")) | {
+        "case_id",
+        "as_of_utc",
+    }
+    assert "status" not in row
+
+
+def test_a_repeated_grain_value_in_the_winning_observation_aborts_the_hop():
+    winners = winning_reader(version(source_observation_id="obs-1"))
+    writer = RecordingWriter()
+    children = [
+        child(source_observation_id="obs-1", question_id="q1"),
+        child(source_observation_id="obs-1", question_id="q1"),
+    ]
+
+    with pytest.raises(ValidationError, match="question_id"):
+        gold_detail_builder(
+            given_rows(children),
+            writer,
+            grain=DETAIL_GRAIN[DETAIL_TABLE],
+            observations=winners,
+            as_of=AS_OF,
+            name=f"{FEED_NAME}:gold:detail:{DETAIL_TABLE}",
+        ).run()
+
+    assert writer.writes == []
+
+
+def test_current_gold_carries_the_join_key_for_detail_tables():
+    # Nothing else states this column is load-bearing for a second table:
+    # winning_observations projects case_current down to it, so a future
+    # change to latest_case_version that dropped it would silently break
+    # every Detail Table's join with no error to catch it.
+    [row] = current(version())
+
+    assert "source_observation_id" in row
+
+
 # --- gold: the current counts ------------------------------------------------
 
 
@@ -899,6 +1068,22 @@ def test_the_gold_hops_plan_exactly_the_steps_they_always_have():
         "  [Transform] derive-key (depends on: read)",
         "  [Transform] latest-version (depends on: derive-key)",
         "  [Transform] stamp-as-of (depends on: latest-version)",
+        "  [Validate] unique-validate (depends on: stamp-as-of)",
+        "  [Write] write (depends on: unique-validate)",
+    ]
+    assert gold_detail_builder(
+        reader,
+        writer,
+        grain=DETAIL_GRAIN[DETAIL_TABLE],
+        observations=reader,
+        as_of=AS_OF,
+        name=f"{FEED_NAME}:gold:detail",
+    ).describe().splitlines() == [
+        f"Pipeline: {FEED_NAME}:gold:detail",
+        "  [Read] read",
+        "  [Transform] derive-key (depends on: read)",
+        "  [Transform] latest-observation (depends on: derive-key)",
+        "  [Transform] stamp-as-of (depends on: latest-observation)",
         "  [Validate] unique-validate (depends on: stamp-as-of)",
         "  [Write] write (depends on: unique-validate)",
     ]

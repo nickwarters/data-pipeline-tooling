@@ -288,3 +288,7 @@ is assembled from one coherent snapshot.
 
 The rule and its precondition — the observation must carry the *whole* parent —
 are recorded in [ADR-0015](adr/0015-detail-tables-reduce-to-the-parents-latest-observation.md).
+
+The implementation is `gold_detail_builder` in `pipelines/sharepoint_cases/gold.py`,
+generic over a per-table grain, declared in `DETAIL_GRAIN` — one builder for every
+Detail Table rather than a per-table judgement about what "latest" means.
