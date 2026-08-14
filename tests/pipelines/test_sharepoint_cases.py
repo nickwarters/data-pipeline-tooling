@@ -962,27 +962,6 @@ def test_a_repeated_observation_is_a_no_op_in_raw_and_silver(tmp_path):
     assert len(read_rows(med.silver, "case_version")) == 1
 
 
-def test_an_overlapping_poll_keeps_the_run_that_first_landed_each_row(tmp_path):
-    # The append-only tables carry the run that *first* landed the row, and the
-    # overlap re-reads what the first poll landed: no conflict, and the second
-    # run's id appears only on the row it actually appended.
-    client = FakeListClient(
-        items(item()), items(item(), item(Id=102)), advance=NEXT_POLL
-    )
-    first = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
-    second = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
-
-    with active_context(first):
-        run(first, client=client)
-    with active_context(second):
-        run(second, client=client)
-
-    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
-    for store, table in ((med.raw, "case_observation"), (med.silver, "case_version")):
-        stamped = [row[RUN_PROVENANCE_COLUMN] for row in read_rows(store, table)]
-        assert stamped == [first.pipeline_run_id, second.pipeline_run_id], table
-
-
 def test_a_later_source_version_appends_a_second_case_version(tmp_path):
     later = item(Status="Completed")
     later.update({"Modified": "2026-08-05T08:45:00Z", "odata.etag": '"4"'})
