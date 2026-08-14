@@ -50,7 +50,9 @@ from pipelines.sharepoint_cases.pipeline import (
     main,
     raw_builder,
     run,
+    silver_answer_action_builder,
     silver_answer_builder,
+    silver_answer_capture_builder,
     silver_builder,
     snake_case,
 )
@@ -58,6 +60,7 @@ from pipelines.sharepoint_cases.schema import (
     CASE_LISTS,
     CASE_STATUSES,
     SITE,
+    AnswerCaptureRow,
     AnswerRow,
     CaseList,
 )
@@ -87,6 +90,8 @@ SILVER_COLUMNS = tuple(RENAME.values())
 
 # Every column the silver answer hop lands, straight off AnswerRow's own fields.
 ANSWER_COLUMNS = tuple(f.name for f in fields(AnswerRow))
+# Likewise for the capture Detail Table one level further down.
+CAPTURE_COLUMNS = tuple(f.name for f in fields(AnswerCaptureRow))
 
 SERVER_NOW = dt.datetime(2026, 8, 5, 9, tzinfo=dt.timezone.utc)
 WINDOW = ModifiedWindow(start=None, end=SERVER_NOW - SAFETY_LAG)
@@ -114,6 +119,8 @@ EVERY_HOP = {
     f"{FEED_NAME}:raw:{COMPLAINTS.case_type}",
     f"{FEED_NAME}:silver:{COMPLAINTS.case_type}",
     f"{FEED_NAME}:silver:{COMPLAINTS.case_type}:answer",
+    f"{FEED_NAME}:silver:{COMPLAINTS.case_type}:answer_capture",
+    f"{FEED_NAME}:silver:{COMPLAINTS.case_type}:answer_action",
     *(f"{FEED_NAME}:gold:{table}" for table in GOLD_TABLES),
 }
 
@@ -576,6 +583,170 @@ def test_an_unknown_remediation_status_quarantines_while_the_good_answer_lands()
     [rejected] = rows_of(rejects)
     assert rejected["question_id"] == "q2"
     assert "remediation_status" in rejected["failed_rule"]
+
+
+# --- silver: the capture and action explodes ---------------------------------
+
+# Reuses version(), defined below: its stamps (case_type, source_item_id, ...)
+# are exactly DETAIL_ID_VARS, which is the point being tested.
+
+
+def silver_captures(
+    answers_json: str,
+    *,
+    case_list: CaseList = COMPLAINTS,
+    reject_writer: RecordingWriter | None = None,
+    run_log: RunLog | None = None,
+) -> list[dict]:
+    """Drive the silver answer-capture hop, in memory, over one observation's
+    `answers`."""
+    writer = RecordingWriter()
+    silver_answer_capture_builder(
+        given_rows([version(answers=answers_json)]),
+        writer,
+        case_list,
+        reject_writer or RecordingWriter(),
+        run_log,
+    ).run()
+    return rows_of(writer)
+
+
+def test_a_capture_map_becomes_one_row_per_field_carrying_the_five_stamps():
+    # The two-level chain: the answers map's own explode, then the capture
+    # map's -- raw_value and capture_json must never reach the writer.
+    rows = silver_captures(
+        json.dumps(
+            {
+                "q1": {
+                    "value": "A",
+                    "capture": {
+                        "field-note": "Called back within SLA.",
+                        "field-owner": {
+                            "loginName": "user-rp",
+                            "displayName": "Bola Okafor",
+                        },
+                    },
+                }
+            }
+        )
+    )
+
+    assert {row["field_key"] for row in rows} == {"field-note", "field-owner"}
+    for row in rows:
+        assert set(row) == set(CAPTURE_COLUMNS)
+        assert row["question_id"] == "q1"
+        assert row["case_type"] == COMPLAINTS.case_type
+        assert row["source_item_id"] == "101"
+        assert row["source_version"] == '"3"'
+        assert row["source_modified_at"] == pd.Timestamp("2026-08-05 08:10:00+00:00")
+        assert len(row["source_observation_id"]) > 0
+
+
+# A sentinel for the null-capture-value param below: pandas lands a wholly-null
+# object column as NaN rather than None, and NaN != NaN, so equality can't
+# carry the expectation the way it does for every other shape.
+_REJECTED_AS_NAN = object()
+
+
+@pytest.mark.parametrize(
+    "capture_value, expected, rejected_raw_value",
+    [
+        pytest.param(
+            {"loginName": "user-rp", "displayName": "Bola Okafor"},
+            ("person", None, "user-rp", "Bola Okafor"),
+            None,
+            id="a-whole-person",
+        ),
+        pytest.param(
+            "Called back within SLA.",
+            ("text", "Called back within SLA.", None, None),
+            None,
+            id="text",
+        ),
+        pytest.param(
+            "user-rp",
+            ("text", "user-rp", None, None),
+            None,
+            id="a-person-field-holding-a-bare-string",
+        ),
+        pytest.param(
+            {"loginName": "user-rp"},
+            None,
+            json.dumps({"loginName": "user-rp"}),
+            id="a-half-filled-person",
+        ),
+        pytest.param(
+            [{"id": "legacy-action-0", "text": "Old-style action"}],
+            None,
+            json.dumps([{"id": "legacy-action-0", "text": "Old-style action"}]),
+            id="a-legacy-action-array",
+        ),
+        pytest.param(
+            None,
+            None,
+            # A JSON null lands as a pandas NaN, not the string "null" a
+            # json.dumps-derived expectation would assume -- and NaN != NaN,
+            # so the assertion below special-cases this marker with pd.isna().
+            _REJECTED_AS_NAN,
+            id="a-json-null",
+        ),
+        pytest.param(
+            42,
+            None,
+            42,
+            id="a-bare-json-number",
+        ),
+    ],
+)
+def test_discriminate_capture_value_places_every_shape(
+    capture_value, expected, rejected_raw_value
+):
+    # A control field alongside the field under test, so a quarantined shape
+    # is proven to leave its sibling field landing rather than aborting the
+    # whole answer.
+    rejects = RecordingWriter()
+    run_log = RecordingRunLog()
+    rows = silver_captures(
+        json.dumps(
+            {
+                "q1": {
+                    "value": "A",
+                    "capture": {
+                        "field-control": "Always fine.",
+                        "field-target": capture_value,
+                    },
+                }
+            }
+        ),
+        reject_writer=rejects,
+        run_log=run_log,
+    )
+
+    if expected is None:
+        [control] = [row for row in rows if row["field_key"] == "field-control"]
+        assert control["value_kind"] == "text"
+        assert {row["field_key"] for row in rows} == {"field-control"}
+        [rejected] = rows_of(rejects)
+        assert rejected["field_key"] == "field-target"
+        assert "value_kind" in rejected["failed_rule"]
+        # Pins DropColumns sitting after quarantine: the offending value must
+        # still be there to diagnose. Carried explicitly rather than derived
+        # with json.dumps(capture_value): a JSON null lands as NaN, not the
+        # text "null", and a bare number lands as its own Python scalar, not
+        # stringified -- see discriminate_capture_value.
+        if rejected_raw_value is _REJECTED_AS_NAN:
+            assert pd.isna(rejected["raw_value"])
+        else:
+            assert rejected["raw_value"] == rejected_raw_value
+        quarantine = next(r for r in run_log.records if r["step"] == "quarantine")
+        assert quarantine["rows_quarantined"] >= 1
+    else:
+        kind, value_text, login, display = expected
+        [target] = [row for row in rows if row["field_key"] == "field-target"]
+        assert target["value_kind"] == kind
+        assert target["value_text"] == value_text
+        assert target["person_login"] == login
+        assert target["person_display"] == display
 
 
 # --- gold: the current-state rule -------------------------------------------
@@ -1138,7 +1309,7 @@ def test_throughput_is_empty_when_nothing_has_ended():
 # --- the composed plan -----------------------------------------------------
 
 
-def test_all_three_ingest_hops_plan_exactly_the_steps_they_always_have():
+def test_all_five_ingest_hops_plan_exactly_the_steps_they_always_have():
     reader, writer, rejects = given_rows([]), RecordingWriter(), RecordingWriter()
 
     # No column gate on the raw hop, unlike a file feed: the observation
@@ -1170,6 +1341,32 @@ def test_all_three_ingest_hops_plan_exactly_the_steps_they_always_have():
         "  [Transform] explode (depends on: read)",
         "  [Transform] value-text (depends on: explode)",
         "  [Transform] coerce (depends on: value-text)",
+        "  [Quarantine] quarantine (depends on: coerce)",
+        "  [Validate] post-validate (depends on: quarantine)",
+        "  [Write] write (depends on: post-validate)",
+    ]
+    assert silver_answer_capture_builder(
+        reader, writer, COMPLAINTS, rejects
+    ).describe().splitlines() == [
+        "Pipeline: sharepoint_cases:silver:complaints:answer_capture",
+        "  [Read] read",
+        "  [Transform] explode-answers (depends on: read)",
+        "  [Transform] explode-capture (depends on: explode-answers)",
+        "  [Transform] discriminate (depends on: explode-capture)",
+        "  [Transform] coerce (depends on: discriminate)",
+        "  [Quarantine] quarantine (depends on: coerce)",
+        "  [Transform] drop-raw-value (depends on: quarantine)",
+        "  [Validate] post-validate (depends on: drop-raw-value)",
+        "  [Write] write (depends on: post-validate)",
+    ]
+    assert silver_answer_action_builder(
+        reader, writer, COMPLAINTS, rejects
+    ).describe().splitlines() == [
+        "Pipeline: sharepoint_cases:silver:complaints:answer_action",
+        "  [Read] read",
+        "  [Transform] explode-answers (depends on: read)",
+        "  [Transform] explode-actions (depends on: explode-answers)",
+        "  [Transform] coerce (depends on: explode-actions)",
         "  [Quarantine] quarantine (depends on: coerce)",
         "  [Validate] post-validate (depends on: quarantine)",
         "  [Write] write (depends on: post-validate)",
@@ -1230,7 +1427,7 @@ def test_the_gold_hops_plan_exactly_the_steps_they_always_have():
 # --- end to end ------------------------------------------------------------
 
 
-def test_the_bundled_sample_lands_every_item_across_both_pages(tmp_path):
+def test_the_bundled_sample_lands_every_item_across_both_pages(tmp_path, capsys):
     [poll] = run(
         RunContext(base_dir=tmp_path, pipeline=FEED_NAME), client=LocalJsonListClient()
     )
@@ -1248,13 +1445,26 @@ def test_the_bundled_sample_lands_every_item_across_both_pages(tmp_path):
     assert [row["Title"] for row in landed_raw][:2] == ["CMP-000101", "CMP-000102"]
     assert pd.isna(landed_raw[2]["Title"])
     # Item 101 carries three questions (one a multi-select), 102 one and 104
-    # two, 103 and 105 an empty answers map -- 6 answer rows in total.
-    assert (poll.raw_rows, poll.silver_rows, poll.answer_rows) == (5, 5, 6)
+    # two, 103 and 105 an empty answers map -- 6 answer rows in total. Only
+    # item 101's q-root-cause carries a capture map (2 fields) and a
+    # remediationActions list (1 action), so those tables land 2 and 1.
+    assert (poll.raw_rows, poll.silver_rows) == (5, 5)
+    assert poll.detail_rows == {"answer": 6, "answer_capture": 2, "answer_action": 1}
     # The fixture exercises all four real statuses, so the whole vocabulary
     # passes the schema gate rather than only the one a happy path would use.
     assert {row["status"] for row in read_rows(med.silver, "case_version")} == set(
         CASE_STATUSES
     )
+
+    # main()'s per-poll line is derived from detail_rows and otherwise
+    # unpinned; exercise the CLI path once, against a separate base dir, to
+    # lock its shape down.
+    exit_code = main(["prog", "--base-dir", str(tmp_path / "via-cli"), "--sample"])
+    assert exit_code == 0
+    assert (
+        "5 observation(s) -> 5 case version(s), 6 answer row(s), "
+        "2 answer_capture row(s), 1 answer_action row(s)."
+    ) in capsys.readouterr().out
 
 
 def test_a_repeated_observation_is_a_no_op_in_raw_and_silver(tmp_path):
@@ -1509,6 +1719,85 @@ def test_the_winning_observation_settles_gold_answer_and_drops_the_others(tmp_pa
     }
 
 
+def test_the_winning_observation_settles_gold_capture_and_action_and_drops_the_others(
+    tmp_path,
+):
+    # Item 101: q1 fails in poll 1, carrying a capture map and one action; poll
+    # 2 sets remediationRequired to "no", the app's own trigger for deleting
+    # both -- q1 stops failing and its capture/action rows must not survive
+    # into gold, the exact case a child-keyed reduce is structurally blind to.
+    stripped_early = item(
+        Id=101,
+        Answers=json.dumps(
+            {
+                "q1": {
+                    "value": "A",
+                    "remediationRequired": "yes",
+                    "remediationActions": [
+                        {"id": "ra-0", "text": "Retrain the branch team."}
+                    ],
+                    "capture": {"field-a": "Old note."},
+                }
+            }
+        ),
+    )
+    stripped_later = item(
+        Id=101,
+        Answers=json.dumps({"q1": {"value": "A", "remediationRequired": "no"}}),
+        Status="Completed",
+    )
+    stripped_later.update({"Modified": "2026-08-05T08:45:00Z", "odata.etag": '"4"'})
+
+    # Item 102: q1 fails in both polls, and poll 2 adds a genuinely new capture
+    # field -- proves gold reflects an addition and is not just always empty.
+    grown_early = item(
+        Id=102, Answers=json.dumps({"q1": {"value": "A", "remediationRequired": "yes"}})
+    )
+    grown_later = item(
+        Id=102,
+        Answers=json.dumps(
+            {
+                "q1": {
+                    "value": "A",
+                    "remediationRequired": "yes",
+                    "capture": {"field-added": "Added on the second poll."},
+                }
+            }
+        ),
+        Status="Completed",
+    )
+    grown_later.update({"Modified": "2026-08-05T08:45:00Z", "odata.etag": '"4"'})
+
+    client = FakeListClient(
+        items(stripped_early, grown_early),
+        items(stripped_later, grown_later),
+        advance=NEXT_POLL,
+    )
+    context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
+
+    run(context, client=client)
+    run(context, client=client)
+
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    # Silver accumulated both observations' rows for both items: 101's
+    # field-a/ra-0 from poll 1 plus 102's field-added from poll 2.
+    assert len(read_rows(med.silver, "answer_capture")) == 2
+    assert len(read_rows(med.silver, "answer_action")) == 1
+
+    gold_capture = read_rows(med.gold, "answer_capture")
+    gold_action = read_rows(med.gold, "answer_action")
+
+    # Item 101's capture and action are gone: the winning (second) observation
+    # carries neither, and the semi-join reads that absence correctly rather
+    # than keeping a stale row a per-child reduce would have no reason to drop.
+    assert not [row for row in gold_capture if row["source_item_id"] == "101"]
+    assert not [row for row in gold_action if row["source_item_id"] == "101"]
+
+    # Item 102's field added on the second poll is present.
+    [added] = [row for row in gold_capture if row["source_item_id"] == "102"]
+    assert added["field_key"] == "field-added"
+
+
 @pytest.mark.parametrize("cell", [None, "misfiled", "complaints"])
 def test_gold_answer_derives_the_same_case_id_as_the_settled_case_type(tmp_path, cell):
     # Mirrors test_silver_settles_the_case_type_to_the_polled_lists_declared_one:
@@ -1544,7 +1833,7 @@ def test_a_malformed_answers_blob_raises_and_case_version_still_lands(tmp_path):
     assert SharePointCheckpointStore(tmp_path).committed_watermark(SOURCE) is None
 
 
-def test_a_quiet_first_window_commits_and_publishes_five_empty_gold_tables(tmp_path):
+def test_a_quiet_first_window_commits_and_publishes_seven_empty_gold_tables(tmp_path):
     # Nothing to reduce is not nothing to publish: a consumer reading gold must
     # find the tables, empty, rather than a missing one it has to special-case.
     run(
@@ -1608,6 +1897,8 @@ def test_a_failure_in_the_last_aggregate_leaves_the_earlier_gold_and_no_checkpoi
     assert landed_gold(tmp_path) == {
         "case_current",
         "answer",
+        "answer_capture",
+        "answer_action",
         "case_counts_current",
         "case_age_buckets_current",
     }
@@ -1814,17 +2105,22 @@ def test_a_dry_run_previews_every_write_and_commits_none_of_them(tmp_path):
 
     report = dry_run_pipeline(lambda ctx: run(ctx, client=client), FEED_NAME, tmp_path)
 
-    # Raw, silver, silver answer, and every gold table are previewed; none is
-    # committed.
+    # Raw, silver, every silver Detail Table, and every gold table are
+    # previewed; none is committed. The fixture item carries no capture map or
+    # remediationActions, so those four Detail Table writes are empty.
     assert [step.note for step in report.steps if step.node_type == "Write"] == [
-        "would write 1 row(s)",
-        "would write 1 row(s)",
-        "would write 1 row(s)",
-        "would write 1 row(s)",
-        "would write 1 row(s)",
-        "would write 1 row(s)",
-        "would write 1 row(s)",
-        "would write 0 row(s)",
+        "would write 1 row(s)",  # raw case_observation
+        "would write 1 row(s)",  # silver case_version
+        "would write 1 row(s)",  # silver answer
+        "would write 0 row(s)",  # silver answer_capture
+        "would write 0 row(s)",  # silver answer_action
+        "would write 1 row(s)",  # gold case_current
+        "would write 1 row(s)",  # gold answer
+        "would write 0 row(s)",  # gold answer_capture
+        "would write 0 row(s)",  # gold answer_action
+        "would write 1 row(s)",  # gold case_counts_current
+        "would write 1 row(s)",  # gold case_age_buckets_current
+        "would write 0 row(s)",  # gold case_throughput_daily
     ]
     assert read_rows(med.gold, "case_current") == before
     # The real run's watermark stands; the preview did not move it on.
