@@ -356,10 +356,9 @@ def test_append_only_requires_at_least_one_key_column():
 #
 # Every row carries the run that first landed it, and that column takes no part
 # in the comparison that decides unseen / unchanged / conflict. Excluding it is
-# the one genuinely load-bearing rule of
-# docs/adr/0020-writer-stamped-run-provenance-column.md: an overlapping poll
-# re-reads rows an earlier run landed, so a comparison that included the column
-# would turn routine operation into AppendOnlyConflictError.
+# load-bearing: an overlapping poll re-reads rows an earlier run landed, so a
+# comparison that included the column would turn routine operation into
+# AppendOnlyConflictError.
 
 
 def test_an_appended_row_names_the_run_that_first_landed_it(tmp_path):
