@@ -12,6 +12,9 @@ so every test here hands the Reader a fake that replays frames.
 from __future__ import annotations
 
 import datetime as dt
+import json
+import sqlite3
+from dataclasses import fields
 from functools import partial
 from uuid import UUID
 
@@ -21,7 +24,7 @@ import pytest
 from framework.core import ErrorCategory, Reader, ValidationError
 from framework.io import AppendOnlyConflictError
 from framework.run import Pipeline, RunContext, RunLog, dry_run_pipeline
-from framework.transform import Stamp
+from framework.transform import JsonShapeError, Stamp
 from pipelines.sharepoint_cases import gold
 from pipelines.sharepoint_cases.gold import (
     DETAIL_GRAIN,
@@ -47,6 +50,7 @@ from pipelines.sharepoint_cases.pipeline import (
     main,
     raw_builder,
     run,
+    silver_answer_builder,
     silver_builder,
     snake_case,
 )
@@ -54,6 +58,7 @@ from pipelines.sharepoint_cases.schema import (
     CASE_LISTS,
     CASE_STATUSES,
     SITE,
+    AnswerRow,
     CaseList,
 )
 from tests.framework_testing import (
@@ -80,6 +85,9 @@ from tools.store import StoreRegistry
 # feed's rename map read the other way round.
 SILVER_COLUMNS = tuple(RENAME.values())
 
+# Every column the silver answer hop lands, straight off AnswerRow's own fields.
+ANSWER_COLUMNS = tuple(f.name for f in fields(AnswerRow))
+
 SERVER_NOW = dt.datetime(2026, 8, 5, 9, tzinfo=dt.timezone.utc)
 WINDOW = ModifiedWindow(start=None, end=SERVER_NOW - SAFETY_LAG)
 
@@ -105,6 +113,7 @@ AS_OF = SERVER_NOW - SAFETY_LAG
 EVERY_HOP = {
     f"{FEED_NAME}:raw:{COMPLAINTS.case_type}",
     f"{FEED_NAME}:silver:{COMPLAINTS.case_type}",
+    f"{FEED_NAME}:silver:{COMPLAINTS.case_type}:answer",
     *(f"{FEED_NAME}:gold:{table}" for table in GOLD_TABLES),
 }
 
@@ -468,6 +477,105 @@ def test_silver_aborts_when_the_id_is_missing():
         silver_builder(reader, writer, COMPLAINTS).run()
 
     assert writer.writes == []
+
+
+# --- silver: the answer explode ----------------------------------------------
+
+# One silver CaseVersion-shaped row carrying the given `answers` blob, for the
+# answer hop's own builder-level tests. Reuses `version()`, defined below: its
+# stamps (case_type, source_item_id, ...) are exactly DETAIL_ID_VARS, which is
+# the point being tested.
+
+
+def silver_answers(
+    answers_json: str,
+    *,
+    case_list: CaseList = COMPLAINTS,
+    reject_writer: RecordingWriter | None = None,
+) -> list[dict]:
+    """Drive the silver answer hop, in memory, over one observation's `answers`."""
+    writer = RecordingWriter()
+    silver_answer_builder(
+        given_rows([version(answers=answers_json)]),
+        writer,
+        case_list,
+        reject_writer or RecordingWriter(),
+    ).run()
+    return rows_of(writer)
+
+
+def test_an_answer_map_becomes_one_row_per_question_carrying_the_five_stamps():
+    # general:complaint-channel belongs to the General Question table, not this
+    # one, and must not survive the explode.
+    rows = silver_answers(
+        json.dumps(
+            {
+                "q1": {"value": "A"},
+                "q2": {"value": "B"},
+                "general:complaint-channel": {"value": "Phone"},
+            }
+        )
+    )
+
+    assert {row["question_id"] for row in rows} == {"q1", "q2"}
+    for row in rows:
+        assert set(row) == set(ANSWER_COLUMNS)
+        assert row["case_type"] == COMPLAINTS.case_type
+        assert row["source_item_id"] == "101"
+        assert row["source_version"] == '"3"'
+        assert row["source_modified_at"] == pd.Timestamp("2026-08-05 08:10:00+00:00")
+        assert len(row["source_observation_id"]) > 0
+
+
+@pytest.mark.parametrize(
+    "answers_json, expected",
+    [
+        ('{"q1":{"value":"A","remediationRequired":"yes"}}', "yes"),
+        ('{"q1":{"value":"A","remediationRequired":"no"}}', "no"),
+        ('{"q1":{"value":"A"}}', None),
+    ],
+)
+def test_remediation_required_is_tri_state_and_survives_the_explode(
+    answers_json, expected
+):
+    [row] = silver_answers(answers_json)
+
+    assert row["remediation_required"] == expected
+
+
+def test_a_multi_select_answer_joins_value_text_on_the_separator():
+    [row] = silver_answers('{"q1":{"value":["Process","Training"]}}')
+
+    assert row["value_text"] == "Process|Training"
+    assert json.loads(row["value_json"]) == ["Process", "Training"]
+
+
+def test_a_scalar_answer_has_matching_value_text_and_value_json():
+    [row] = silver_answers('{"q1":{"value":"Not upheld"}}')
+
+    assert row["value_text"] == row["value_json"] == "Not upheld"
+
+
+def test_an_unknown_remediation_status_quarantines_while_the_good_answer_lands():
+    rejects = RecordingWriter()
+
+    rows = silver_answers(
+        json.dumps(
+            {
+                "q1": {"value": "A"},
+                "q2": {
+                    "value": "B",
+                    "remediationStatus": {"status": "resolved"},
+                },
+            }
+        ),
+        reject_writer=rejects,
+    )
+
+    assert [row["question_id"] for row in rows] == ["q1"]
+    [rejected] = rows_of(rejects)
+    assert rejected["question_id"] == "q2"
+    assert "remediation_status" in rejected["failed_rule"]
 
 
 # --- gold: the current-state rule -------------------------------------------
@@ -1030,7 +1138,7 @@ def test_throughput_is_empty_when_nothing_has_ended():
 # --- the composed plan -----------------------------------------------------
 
 
-def test_both_hops_plan_exactly_the_steps_they_always_have():
+def test_all_three_ingest_hops_plan_exactly_the_steps_they_always_have():
     reader, writer, rejects = given_rows([]), RecordingWriter(), RecordingWriter()
 
     # No column gate on the raw hop, unlike a file feed: the observation
@@ -1050,6 +1158,18 @@ def test_both_hops_plan_exactly_the_steps_they_always_have():
         "  [Transform] rename (depends on: read)",
         "  [Transform] case-type (depends on: rename)",
         "  [Transform] coerce (depends on: case-type)",
+        "  [Quarantine] quarantine (depends on: coerce)",
+        "  [Validate] post-validate (depends on: quarantine)",
+        "  [Write] write (depends on: post-validate)",
+    ]
+    assert silver_answer_builder(
+        reader, writer, COMPLAINTS, rejects
+    ).describe().splitlines() == [
+        "Pipeline: sharepoint_cases:silver:complaints:answer",
+        "  [Read] read",
+        "  [Transform] explode (depends on: read)",
+        "  [Transform] value-text (depends on: explode)",
+        "  [Transform] coerce (depends on: value-text)",
         "  [Quarantine] quarantine (depends on: coerce)",
         "  [Validate] post-validate (depends on: quarantine)",
         "  [Write] write (depends on: post-validate)",
@@ -1127,7 +1247,9 @@ def test_the_bundled_sample_lands_every_item_across_both_pages(tmp_path):
     # One fixture Case carries no Case Reference at all, which is ordinary.
     assert [row["Title"] for row in landed_raw][:2] == ["CMP-000101", "CMP-000102"]
     assert pd.isna(landed_raw[2]["Title"])
-    assert (poll.raw_rows, poll.silver_rows) == (5, 5)
+    # Item 101 carries three questions (one a multi-select), 102 one and 104
+    # two, 103 and 105 an empty answers map -- 6 answer rows in total.
+    assert (poll.raw_rows, poll.silver_rows, poll.answer_rows) == (5, 5, 6)
     # The fixture exercises all four real statuses, so the whole vocabulary
     # passes the schema gate rather than only the one a happy path would use.
     assert {row["status"] for row in read_rows(med.silver, "case_version")} == set(
@@ -1216,7 +1338,7 @@ def test_a_quiet_first_window_still_types_the_columns_it_creates(tmp_path):
 
 def test_a_quiet_window_still_runs_and_records_every_hop(tmp_path):
     # A quiet poll is not a different pipeline: an operator reading the run log
-    # still sees all six hops, against every table, with zero rows.
+    # still sees every hop, against every table, with zero rows.
     log_path = tmp_path / "runs.log"
     context = RunContext(
         base_dir=tmp_path, pipeline=FEED_NAME, run_log=RunLog(log_path)
@@ -1226,12 +1348,22 @@ def test_a_quiet_window_still_runs_and_records_every_hop(tmp_path):
 
     records = read_run_log(log_path)
     assert {record["pipeline"] for record in records} == EVERY_HOP
-    assert {row["name"] for record in records for row in record["data_locations"]} == {
+    locations = [
+        location for record in records for location in record["data_locations"]
+    ]
+    assert {location["name"] for location in locations} == {
         COMPLAINTS.list_name,
         "case_observation",
         "case_version",
         *GOLD_TABLES,
     }
+    # "answer" is a table in both silver.db (the exploded rows) and gold.db
+    # (the Detail Table's reduction) -- the same name, two different bases.
+    answer_namespaces = {
+        location["namespace"] for location in locations if location["name"] == "answer"
+    }
+    assert any(ns.endswith("silver.db") for ns in answer_namespaces)
+    assert any(ns.endswith("gold.db") for ns in answer_namespaces)
     assert {record["rows_out"] for record in records} == {0}
 
 
@@ -1309,13 +1441,25 @@ def test_the_sample_client_names_a_list_it_has_no_pages_for():
 
 
 def landed_gold(tmp_path) -> set[str]:
-    """Which gold tables exist under ``tmp_path`` — not how many rows they hold."""
-    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
-    return {
-        table
-        for table in GOLD_TABLES
-        if med.gold.columns_of(table).columns() is not None
-    }
+    """Which tables actually exist in the gold database under ``tmp_path``.
+
+    Reads ``sqlite_master`` directly rather than iterating ``GOLD_TABLES`` and
+    probing each: probing the registry can only ever confirm the registry, and
+    would never catch a table published without also being added to it. Empty
+    when the database itself is absent (nothing published yet).
+    """
+    db_path = tmp_path / FEED_NAME / "gold.db"
+    if not db_path.exists():
+        return set()
+    connection = sqlite3.connect(db_path)
+    try:
+        rows = connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name NOT LIKE 'sqlite_%'"
+        ).fetchall()
+    finally:
+        connection.close()
+    return {row[0] for row in rows}
 
 
 def explode(*args: object, **kwargs: object):
@@ -1339,7 +1483,68 @@ def test_a_poll_publishes_every_gold_table_and_then_commits_the_watermark(tmp_pa
     )
 
 
-def test_a_quiet_first_window_commits_and_publishes_four_empty_gold_tables(tmp_path):
+def test_the_winning_observation_settles_gold_answer_and_drops_the_others(tmp_path):
+    # Two polls of one item: the second observation strips q2 and adds q3.
+    early = item(Answers=json.dumps({"q1": {"value": "A"}, "q2": {"value": "X"}}))
+    later = item(
+        Answers=json.dumps({"q1": {"value": "B"}, "q3": {"value": "Y"}}),
+        Status="Completed",
+    )
+    later.update({"Modified": "2026-08-05T08:45:00Z", "odata.etag": '"4"'})
+    client = FakeListClient(items(early), items(later), advance=NEXT_POLL)
+    context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
+
+    run(context, client=client)
+    run(context, client=client)
+
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    # Silver accumulated both observations' answers: 2 questions + 2 questions.
+    assert len(read_rows(med.silver, "answer")) == 4
+
+    gold_answer = read_rows(med.gold, "answer")
+    assert {row["question_id"] for row in gold_answer} == {"q1", "q3"}
+    [winner] = read_rows(med.gold, "case_current")
+    assert {row["source_observation_id"] for row in gold_answer} == {
+        winner["source_observation_id"]
+    }
+
+
+@pytest.mark.parametrize("cell", [None, "misfiled", "complaints"])
+def test_gold_answer_derives_the_same_case_id_as_the_settled_case_type(tmp_path, cell):
+    # Mirrors test_silver_settles_the_case_type_to_the_polled_lists_declared_one:
+    # OTHER's declared case_type is "other", never whatever this raw cell says.
+    client = FakeListClient(items(item(CaseType=cell)))
+
+    run(
+        RunContext(base_dir=tmp_path, pipeline=FEED_NAME),
+        client=client,
+        case_lists=(OTHER,),
+    )
+
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    [case] = read_rows(med.gold, "case_current")
+    [row] = read_rows(med.gold, "answer")
+    # Fails with zero rows (the semi-join matches nothing) or an IdentityError
+    # if the answer hop ever reads raw's own CaseType cell instead of the one
+    # silver settled.
+    assert row["case_id"] == case["case_id"]
+    assert row["case_type"] == OTHER.case_type
+
+
+def test_a_malformed_answers_blob_raises_and_case_version_still_lands(tmp_path):
+    client = FakeListClient(items(item(Answers="not json")))
+    context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
+
+    with pytest.raises(JsonShapeError):
+        run(context, client=client)
+
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    assert len(read_rows(med.silver, "case_version")) == 1
+    assert landed_gold(tmp_path) == set()
+    assert SharePointCheckpointStore(tmp_path).committed_watermark(SOURCE) is None
+
+
+def test_a_quiet_first_window_commits_and_publishes_five_empty_gold_tables(tmp_path):
     # Nothing to reduce is not nothing to publish: a consumer reading gold must
     # find the tables, empty, rather than a missing one it has to special-case.
     run(
@@ -1369,6 +1574,9 @@ def test_an_overlap_reread_does_not_double_count_gold(tmp_path):
     assert [
         row["case_count"] for row in read_rows(med.gold, "case_counts_current")
     ] == [1]
+    # The overlap re-presents the same observation, which is a no-op against
+    # append-only silver; the answer rows must not double either.
+    assert len(read_rows(med.silver, "answer")) == 1
 
 
 def test_a_failure_in_current_gold_leaves_no_gold_and_no_checkpoint(
@@ -1390,7 +1598,7 @@ def test_a_failure_in_the_last_aggregate_leaves_the_earlier_gold_and_no_checkpoi
 ):
     # Gold Writers commit independently, so an earlier table stays refreshed.
     # That is acceptable evidence: the watermark did not move, so the next run
-    # rebuilds all four from the same history and converges.
+    # rebuilds everything from the same history and converges.
     monkeypatch.setattr(gold, "throughput", explode)
 
     with pytest.raises(RuntimeError, match="boom"):
@@ -1399,6 +1607,7 @@ def test_a_failure_in_the_last_aggregate_leaves_the_earlier_gold_and_no_checkpoi
     checkpoints = SharePointCheckpointStore(tmp_path)
     assert landed_gold(tmp_path) == {
         "case_current",
+        "answer",
         "case_counts_current",
         "case_age_buckets_current",
     }
@@ -1605,8 +1814,11 @@ def test_a_dry_run_previews_every_write_and_commits_none_of_them(tmp_path):
 
     report = dry_run_pipeline(lambda ctx: run(ctx, client=client), FEED_NAME, tmp_path)
 
-    # Raw, silver and all four gold tables are previewed; none is committed.
+    # Raw, silver, silver answer, and every gold table are previewed; none is
+    # committed.
     assert [step.note for step in report.steps if step.node_type == "Write"] == [
+        "would write 1 row(s)",
+        "would write 1 row(s)",
         "would write 1 row(s)",
         "would write 1 row(s)",
         "would write 1 row(s)",
