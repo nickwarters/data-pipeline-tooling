@@ -4,6 +4,54 @@ import { HttpSharePointClient } from '../../src/services/http-sharepoint-client.
 /** @typedef {{ method: string, url: string, headers: Record<string, string>, body: string|null }} CapturedCall */
 
 /**
+ * @typedef {Object} PersonColumn
+ * @property {string} field
+ * @property {string} column
+ * @property {string} idColumn
+ * @property {''|null} clearValue
+ * @property {''|undefined} emptyValue
+ */
+
+/** @type {PersonColumn[]} */
+export const PERSON_COLUMNS = [
+  {
+    field: 'assignedReviewer',
+    column: 'AssignedReviewer',
+    idColumn: 'AssignedReviewerId',
+    clearValue: '',
+    emptyValue: '',
+  },
+  {
+    field: 'responsibleParty',
+    column: 'ResponsibleParty',
+    idColumn: 'ResponsiblePartyId',
+    clearValue: '',
+    emptyValue: '',
+  },
+  {
+    field: 'assignedReviewerManager',
+    column: 'AssignedReviewerManager',
+    idColumn: 'AssignedReviewerManagerId',
+    clearValue: null,
+    emptyValue: undefined,
+  },
+  {
+    field: 'responsiblePartyManager',
+    column: 'ResponsiblePartyManager',
+    idColumn: 'ResponsiblePartyManagerId',
+    clearValue: null,
+    emptyValue: undefined,
+  },
+  {
+    field: 'voidedBy',
+    column: 'VoidedBy',
+    idColumn: 'VoidedById',
+    clearValue: null,
+    emptyValue: undefined,
+  },
+];
+
+/**
  * Build a fake fetch that returns the response for the first matching rule.
  * Every request is recorded for protocol assertions.
  *
