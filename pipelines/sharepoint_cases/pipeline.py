@@ -9,8 +9,11 @@ published once, over every list's accumulated history.
 - ``silver_builder`` snake_cases those names, settles ``case_type`` to the
   polled list's declared one, coerces the types, quarantines value-rule
   breaches and validates ``CaseVersion``.
-- ``gold.publish_gold`` rebuilds the current Case and three aggregates from the
-  whole silver history, each with ``Refresh()``.
+- ``silver_answer_builder`` explodes that same batch's ``answers`` JSON map
+  into one row per observation x Question Definition, quarantining a bad value
+  the same way while a malformed blob raises.
+- ``gold.publish_gold`` rebuilds the current Case, the Detail Tables and three
+  aggregates from the whole silver history, each with ``Refresh()``.
 
 **Every watermark is committed last**, after gold has been written, because
 advancing one is what vouches for its window having been *published*. A run that
@@ -57,6 +60,7 @@ from framework.core import (
 from framework.io import AppendOnly, DatasetReader
 from framework.run import Pipeline, RunContext, RunLog
 from framework.transform import (
+    ExplodeJsonMap,
     Rename,
     SchemaCoercion,
     SchemaValueRulePartitioner,
@@ -77,7 +81,14 @@ from tools.medallion import medallion
 from tools.store import StoreRegistry
 
 from .gold import publish_gold
-from .schema import CASE_LISTS, FEED_NAME, CaseList, CaseVersion
+from .schema import (
+    CASE_LISTS,
+    DETAIL_ID_VARS,
+    FEED_NAME,
+    AnswerRow,
+    CaseList,
+    CaseVersion,
+)
 
 # Pipelines this feed depends on being fresh before it runs. A source feed has
 # none.
@@ -215,6 +226,7 @@ class ListPoll:
     ingestion_batch_id: str
     raw_rows: int
     silver_rows: int
+    answer_rows: int
 
 
 def _flatten_people(frame: pd.DataFrame, list_name: str) -> pd.DataFrame:
@@ -391,6 +403,113 @@ def silver_builder(
     return p
 
 
+# A canonical, groupable rendering of a multi-select answer -- not display
+# copy. An option label plausibly contains a comma, so that would be a poor
+# separator; value_json stays the lossless representation for anything that
+# needs the exact value back.
+VALUE_TEXT_SEPARATOR = "|"
+
+
+def derive_value_text(dataset: Dataset) -> Dataset:
+    """Add ``value_text``, the canonical rendering of ``value_json``.
+
+    ``_as_column_value`` (inside ``ExplodeJsonMap``) lands a scalar cell as
+    itself and anything else -- a list, an object -- as JSON text, so this
+    re-detects which happened rather than trusting the cell's own type: a cell
+    is treated as a multi-select only when it is text starting with ``[`` that
+    parses as a JSON list, and its elements are then stringified and joined on
+    ``VALUE_TEXT_SEPARATOR``. Everything else is the cell **stringified**
+    (``str(cell)``), not passed through -- a JSON ``true``/``3`` lands in
+    ``value_json`` as a Python ``bool``/``int``, and passing it through would
+    put ``True`` in the one column meant to be canonical text, which SQLite
+    would then store as ``1``. Null in, null out.
+
+    The column is created even on a zero-row frame, or ``SchemaCoercion`` has
+    no column left to type on the empty-frame path.
+    """
+    frame = dataset.to_pandas()
+    values = []
+    for cell in frame["value_json"]:
+        if pd.isna(cell):
+            values.append(None)
+            continue
+        if isinstance(cell, str) and cell.startswith("["):
+            try:
+                decoded = json.loads(cell)
+            except ValueError:
+                decoded = None
+            if isinstance(decoded, list):
+                values.append(
+                    VALUE_TEXT_SEPARATOR.join(str(element) for element in decoded)
+                )
+                continue
+        values.append(str(cell))
+    text = pd.Series(values, index=frame.index, dtype="object")
+    frame = frame.assign(value_text=text)
+    return Dataset.from_pandas(frame)
+
+
+def silver_answer_builder(
+    reader: Reader,
+    writer: Writer,
+    case_list: CaseList,
+    reject_writer: Writer,
+    run_log: RunLog | None = None,
+) -> Pipeline:
+    """Build one list's silver answer hop: explode ``answers`` into one row per
+    question.
+
+    Reads the **silver** batch this poll just settled, not raw: silver has
+    already stamped the Case Type the run has decided on, and only silver's
+    ``case_type`` mints the ``case_id`` gold's Detail Tables can semi-join
+    against (see ``run``'s docstring for why raw would silently produce zero
+    rows). It also means silver has already renamed the column to ``answers``,
+    and a Case quarantined out of ``case_version`` contributes no answer rows
+    at all -- which is right, since a quarantined Case can never win an
+    observation.
+
+    ``case_list`` names the hop and nothing else: it runs inside the per-list
+    poll loop, alongside every other hop there, and the Case Type itself
+    arrives already settled on the row.
+
+    A malformed ``answers`` blob is a feed defect and **raises**
+    (``JsonShapeError``); a well-formed but out-of-vocabulary value --
+    e.g. an unrecognised ``remediation_status`` -- is an ordinary bad row and
+    **quarantines**, exactly as ``silver_builder`` treats a bad ``status``.
+    """
+    p = Pipeline(f"{FEED_NAME}:silver:{case_list.case_type}:answer", run_log=run_log)
+    node = p.read(reader, name="read")
+    node = p.transform(
+        ExplodeJsonMap(
+            column="answers",
+            key_into="question_id",
+            id_vars=list(DETAIL_ID_VARS),
+            exclude_key_prefix="general:",
+            fields={
+                "value": "value_json",
+                "justification": "justification",
+                "remediationRequired": "remediation_required",
+                "freeFormRemediation": "free_form_remediation",
+                "remediationStatus.status": "remediation_status",
+                "remediationStatus.details": "remediation_status_details",
+            },
+        ),
+        node,
+        name="explode",
+    )
+    node = p.transform(derive_value_text, node, name="value-text")
+    node = p.transform(SchemaCoercion(AnswerRow), node, name="coerce")
+    node = p.quarantine(
+        SchemaValueRulePartitioner(AnswerRow),
+        reject_writer,
+        node,
+        name="quarantine",
+    )
+    node = p.validate(SchemaValidator(AnswerRow), node, name="post-validate")
+    p.write(writer, node, name="write")
+    return p
+
+
 def run(
     context: RunContext,
     *,
@@ -455,8 +574,34 @@ def run(
         )
         if describe:
             print(silver_p.describe())
+        versions = silver_p.run()
+
+        # The answer hop reads this settled silver batch, not raw's own
+        # CaseType cell -- see silver_answer_builder's docstring. One
+        # observation yields many answer rows, so the append-only key is
+        # composite: a single-column key would raise on the second question of
+        # every Case.
+        answer_p = silver_answer_builder(
+            DatasetReader(versions),
+            med.silver.writer(
+                "answer", AppendOnly(("source_observation_id", "question_id"))
+            ),
+            case_list,
+            med.silver.quarantine_writer("answer"),
+            run_log=context.run_log,
+        )
+        if describe:
+            print(answer_p.describe())
+        answers = answer_p.run()
         polls.append(
-            ListPoll(case_list, window, batch_id, len(batch), len(silver_p.run()))
+            ListPoll(
+                case_list,
+                window,
+                batch_id,
+                len(batch),
+                len(versions),
+                len(answers),
+            )
         )
 
     if not polls:
@@ -573,7 +718,8 @@ def main(argv: list[str]) -> int:
         print(
             f"Polled {poll.case_list.list_name} up to "
             f"{poll.window.end.isoformat()} as batch {poll.ingestion_batch_id}: "
-            f"{poll.raw_rows} observation(s) -> {poll.silver_rows} case version(s)."
+            f"{poll.raw_rows} observation(s) -> {poll.silver_rows} case version(s), "
+            f"{poll.answer_rows} answer row(s)."
         )
     print(
         f"{sum(poll.silver_rows for poll in polls)} case version(s) from "
