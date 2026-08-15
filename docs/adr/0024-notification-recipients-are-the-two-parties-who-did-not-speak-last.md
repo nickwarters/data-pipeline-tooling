@@ -155,6 +155,15 @@ see the go-live checklist in
   whatever that publish left. Any cadence is correct; the cadence chosen only
   decides how promptly a Message is reported. Nothing schedules it in this
   change.
+- **The two schedules are independent, coupled only by same-day freshness.**
+  `UPSTREAMS` declares Sync at the default `max_age_days=0`, so a run before
+  today's Sync has landed fails its freshness check rather than notifying from
+  yesterday's gold, and every run after it that owes nobody anything writes no
+  file. That is the intended shape: Sync may be made more frequent — including
+  by splitting the aggregations out of its publish — without Notification's
+  schedule having to know, and vice versa. The floor is *at least once a day,
+  before Notification runs*. Widening the window would buy a quieter run log at
+  the price of notifying from stale state.
 - **A party who is absent or unresolvable is skipped, never substituted.** A
   Case with no Responsible Party, or a Responsible Party with no directory row,
   yields fewer recipients — never a fallback recipient, and never an
